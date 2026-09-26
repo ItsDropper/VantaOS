@@ -768,15 +768,20 @@ void graphics_mouse_release(int button)
 
 void graphics_draw_cursor(void)
 {
+    /*
+     * The framebuffer is the complete GUI surface. The cursor is
+     * drawn here only as a visual indicator of the same coordinates
+     * used by graphics_mouse_click(). It must never be treated as a
+     * second input device.
+     */
     if (!initialized)
         return;
 
-    graphics_fill_rect(cursor_x, cursor_y, 2, 20, 0xFFFFFFFF);
-    graphics_fill_rect(cursor_x, cursor_y, 12, 2, 0xFFFFFFFF);
-    graphics_fill_rect(cursor_x + 2, cursor_y + 4, 8, 2, 0xFFFFFFFF);
-    graphics_fill_rect(cursor_x + 2, cursor_y + 6, 6, 2, 0xFFFFFFFF);
-    graphics_fill_rect(cursor_x + 2, cursor_y + 8, 4, 2, 0xFFFFFFFF);
-    graphics_fill_rect(cursor_x + 2, cursor_y + 10, 2, 8, 0xFFFFFFFF);
+    graphics_fill_rect(cursor_x, cursor_y, 2, 16, 0x00FFFFFF);
+    graphics_fill_rect(cursor_x, cursor_y, 10, 2, 0x00FFFFFF);
+    graphics_fill_rect(cursor_x + 2, cursor_y + 4, 6, 2, 0x00FFFFFF);
+    graphics_fill_rect(cursor_x + 2, cursor_y + 6, 4, 2, 0x00FFFFFF);
+    graphics_fill_rect(cursor_x + 2, cursor_y + 8, 2, 6, 0x00FFFFFF);
 }
 
 void graphics_present(void)

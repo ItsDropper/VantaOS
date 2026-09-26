@@ -418,20 +418,65 @@ int filesystem_create_directory(const char* path)
     if (!initialized || !path || !path[0])
         return -1;
 
-    const char* slash = path;
-    const char* last = path;
+    unsigned int length = 0;
 
-    while (*slash)
-    {
-        if (*slash == '/')
-            last = slash + 1;
-        slash++;
-    }
+    while (path[length])
+        length++;
 
-    if (!*last || fs_find_child(filesystem_root(), last) >= 0)
+    unsigned int start = length;
+
+    while (start > 0 && path[start - 1] != '/')
+        start--;
+
+    if (start == length || length - start > FS_NAME_MAX)
         return -1;
 
-    return -1;
+    char name[FS_NAME_MAX + 1];
+
+    for (unsigned int i = 0; i < length - start; i++)
+        name[i] = path[start + i];
+
+    name[length - start] = 0;
+
+    uint32_t parent = filesystem_root();
+
+    if (start > 0)
+    {
+        char parent_path[FS_PATH_MAX];
+        unsigned int count = start - 1;
+
+        if (count >= FS_PATH_MAX)
+            return -1;
+
+        for (unsigned int i = 0; i < count; i++)
+            parent_path[i] = path[i];
+
+        parent_path[count] = 0;
+
+        int id = filesystem_lookup(parent_path);
+
+        if (id < 0)
+            return -1;
+
+        const fs_node_t* parent_node =
+            filesystem_get_node((uint32_t)id);
+
+        if (!parent_node ||
+            parent_node->type != FS_NODE_DIRECTORY)
+            return -1;
+
+        parent = (uint32_t)id;
+    }
+
+    if (fs_find_child(parent, name) >= 0)
+        return -1;
+
+    return fs_add_node(
+        parent,
+        FS_NODE_DIRECTORY,
+        name,
+        0
+    );
 }
 
 int filesystem_create_file(const char* path)

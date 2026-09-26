@@ -115,7 +115,14 @@ void kernel_main(multiboot_info_t* mbd)
                     terminal_scroll_up();
             }
 
-            if (graphics_ready)
+            /*
+             * Mouse movement only updates the logical pointer position.
+             * Do not redraw the entire framebuffer for every packet;
+             * that causes visible flashing while the pointer moves.
+             * The screen is redrawn on clicks, wheel events, and keyboard
+             * activity instead.
+             */
+            if (graphics_ready && mouse_has_wheel_event())
                 graphics_present();
 
             continue;

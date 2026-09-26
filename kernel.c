@@ -99,7 +99,7 @@ static void terminal_window_draw(void)
         window_y = 10;
     }
 
-    /* Shadow and outer frame. */
+    /* Clean Vanta terminal chrome. Every visible control has a real action. */
     graphics_fill_rect(
         window_x + 8, window_y + 10,
         window_w, window_h,
@@ -109,70 +109,89 @@ static void terminal_window_draw(void)
     graphics_fill_rect(
         window_x, window_y,
         window_w, window_h,
-        0x00111111
+        0x000B1118
     );
 
-    /* Windows-style title/tab row. */
+    /* Title bar. */
     graphics_fill_rect(
         window_x, window_y,
-        window_w, 42,
-        0x00202020
+        window_w, 44,
+        0x0017222D
     );
 
     graphics_fill_rect(
-        window_x, window_y + 42,
-        window_w, 34,
-        0x000C0C0C
+        window_x, window_y + 43,
+        window_w, 1,
+        0x002B80C9
     );
 
-    /* Active terminal tab. */
+    /* Terminal identity. */
     graphics_fill_rect(
-        window_x + 8, window_y + 45,
-        210, 31,
-        0x001A1A1A
-    );
-
-    graphics_fill_rect(
-        window_x + 8, window_y + 74,
-        210, 2,
-        0x003B82F6
+        window_x + 14, window_y + 10,
+        24, 24,
+        0x001E3A50
     );
 
     graphics_draw_text(
-        window_x + 22, window_y + 13,
-        "VantaOS Terminal",
-        0x00F2F2F2, 1
+        window_x + 20, window_y + 16,
+        "V",
+        0x005AA9E6, 1
     );
 
     graphics_draw_text(
-        window_x + 24, window_y + 54,
+        window_x + 48, window_y + 14,
+        "Terminal",
+        0x00F2F5F8, 1
+    );
+
+    graphics_draw_text(
+        window_x + 48, window_y + 27,
         "VantaOS",
-        0x00E6E6E6, 1
+        0x007F95A8, 1
     );
 
-    /* New-tab and window controls. */
-    graphics_draw_text(
-        window_x + 232, window_y + 53,
-        "+",
-        0x00B8B8B8, 1
-    );
-
+    /* Window controls: minimize, maximize/restore, close. */
     graphics_draw_text(
         window_x + window_w - 118, window_y + 14,
         "_",
-        0x00B8B8B8, 1
+        0x00B7C5D1, 1
     );
 
     graphics_draw_text(
-        window_x + window_w - 84, window_y + 14,
+        window_x + window_w - 84, window_y + 13,
         "[]",
-        0x00B8B8B8, 1
+        0x00B7C5D1, 1
     );
 
     graphics_draw_text(
         window_x + window_w - 38, window_y + 13,
         "X",
-        0x00F2F2F2, 1
+        0x00F2F5F8, 1
+    );
+
+    /* Thin terminal tab strip. */
+    graphics_fill_rect(
+        window_x, window_y + 44,
+        window_w, 34,
+        0x000E171F
+    );
+
+    graphics_fill_rect(
+        window_x + 14, window_y + 49,
+        180, 29,
+        0x001A2A37
+    );
+
+    graphics_fill_rect(
+        window_x + 14, window_y + 76,
+        180, 2,
+        0x003B82F6
+    );
+
+    graphics_draw_text(
+        window_x + 28, window_y + 58,
+        "VantaOS",
+        0x00E7EEF4, 1
     );
 
     /* Terminal content. */
@@ -184,7 +203,7 @@ static void terminal_window_draw(void)
     graphics_fill_rect(
         content_x, content_y,
         content_w, content_h,
-        0x000C0C0C
+        0x000B1118
     );
 
     /*

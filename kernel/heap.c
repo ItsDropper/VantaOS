@@ -1,11 +1,13 @@
 #include "heap.h"
+#include "paging.h"
+#include "pmm.h"
 
 #include <stdint.h>
 #include <stddef.h>
 
-#define HEAP_SIZE (64 * 1024)
 #define BLOCK_FREE 0
 #define BLOCK_USED 1
+#define HEAP_INITIAL_PAGES 16
 
 typedef struct heap_block
 {
@@ -14,9 +16,10 @@ typedef struct heap_block
     struct heap_block* next;
 } heap_block_t;
 
-static uint8_t heap_area[HEAP_SIZE] __attribute__((aligned(HEAP_ALIGNMENT)));
 static heap_block_t* first_block;
 static size_t heap_used;
+static size_t heap_size;
+static uint32_t heap_pages;
 static int heap_initialized;
 
 static size_t align_up(size_t value)
@@ -64,14 +67,81 @@ static void merge_free_blocks(void)
     }
 }
 
+static int heap_add_page(void)
+{
+    if (heap_pages * PAGE_SIZE >= HEAP_MAX_SIZE)
+        return 0;
+
+    void* physical = pmm_alloc_block();
+
+    if (!physical)
+        return 0;
+
+    uintptr_t virtual_address =
+        HEAP_VIRTUAL_BASE +
+        (uintptr_t)heap_pages * PAGE_SIZE;
+
+    if (!paging_map_page(virtual_address, (uintptr_t)physical))
+    {
+        pmm_free_block(physical);
+        return 0;
+    }
+
+    heap_pages++;
+    heap_size += PAGE_SIZE;
+
+    if (!first_block)
+    {
+        first_block = (heap_block_t*)virtual_address;
+        first_block->size = PAGE_SIZE - sizeof(heap_block_t);
+        first_block->status = BLOCK_FREE;
+        first_block->next = NULL;
+        return 1;
+    }
+
+    heap_block_t* block = first_block;
+
+    while (block->next)
+        block = block->next;
+
+    uintptr_t expected =
+        (uintptr_t)block +
+        sizeof(heap_block_t) +
+        block->size;
+
+    if (block->status == BLOCK_FREE &&
+        expected == virtual_address)
+    {
+        block->size += PAGE_SIZE;
+    }
+    else
+    {
+        heap_block_t* next =
+            (heap_block_t*)virtual_address;
+
+        next->size = PAGE_SIZE - sizeof(heap_block_t);
+        next->status = BLOCK_FREE;
+        next->next = NULL;
+        block->next = next;
+    }
+
+    return 1;
+}
+
 void heap_initialize(void)
 {
-    first_block = (heap_block_t*)heap_area;
-    first_block->size = HEAP_SIZE - sizeof(heap_block_t);
-    first_block->status = BLOCK_FREE;
-    first_block->next = NULL;
-
+    first_block = NULL;
     heap_used = 0;
+    heap_size = 0;
+    heap_pages = 0;
+    heap_initialized = 0;
+
+    for (uint32_t i = 0; i < HEAP_INITIAL_PAGES; i++)
+    {
+        if (!heap_add_page())
+            return;
+    }
+
     heap_initialized = 1;
 }
 
@@ -82,24 +152,29 @@ void* kmalloc(size_t size)
 
     size = align_up(size);
 
-    heap_block_t* block = first_block;
-
-    while (block)
+    while (1)
     {
-        if (block->status == BLOCK_FREE &&
-            block->size >= size)
-        {
-            split_block(block, size);
-            block->status = BLOCK_USED;
-            heap_used += size;
+        heap_block_t* block = first_block;
 
-            return (void*)((uint8_t*)block + sizeof(heap_block_t));
+        while (block)
+        {
+            if (block->status == BLOCK_FREE &&
+                block->size >= size)
+            {
+                split_block(block, size);
+                block->status = BLOCK_USED;
+                heap_used += size;
+
+                return (void*)((uint8_t*)block +
+                               sizeof(heap_block_t));
+            }
+
+            block = block->next;
         }
 
-        block = block->next;
+        if (!heap_add_page())
+            return NULL;
     }
-
-    return NULL;
 }
 
 void kfree(void* ptr)
@@ -107,8 +182,10 @@ void kfree(void* ptr)
     if (!heap_initialized || !ptr)
         return;
 
-    if ((uintptr_t)ptr < (uintptr_t)heap_area ||
-        (uintptr_t)ptr >= (uintptr_t)heap_area + HEAP_SIZE)
+    uintptr_t address = (uintptr_t)ptr;
+
+    if (address < HEAP_VIRTUAL_BASE + sizeof(heap_block_t) ||
+        address >= HEAP_VIRTUAL_BASE + heap_size)
         return;
 
     heap_block_t* block =
@@ -125,7 +202,16 @@ void kfree(void* ptr)
 
 size_t heap_get_total_size(void)
 {
-    return HEAP_SIZE;
+    size_t total = 0;
+    heap_block_t* block = first_block;
+
+    while (block)
+    {
+        total += block->size;
+        block = block->next;
+    }
+
+    return total;
 }
 
 size_t heap_get_used_size(void)
@@ -135,7 +221,18 @@ size_t heap_get_used_size(void)
 
 size_t heap_get_free_size(void)
 {
-    return HEAP_SIZE - sizeof(heap_block_t) - heap_used;
+    size_t free_size = 0;
+    heap_block_t* block = first_block;
+
+    while (block)
+    {
+        if (block->status == BLOCK_FREE)
+            free_size += block->size;
+
+        block = block->next;
+    }
+
+    return free_size;
 }
 
 int heap_is_initialized(void)

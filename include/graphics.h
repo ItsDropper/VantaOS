@@ -26,6 +26,7 @@ void graphics_draw_text(
 
 void graphics_mouse_move(int dx, int dy);
 void graphics_mouse_click(int button);
+void graphics_mouse_release(int button);
 void graphics_draw_cursor(void);
 
 int graphics_is_initialized(void);
@@ -34,6 +35,9 @@ int graphics_terminal_close_requested(void);
 void graphics_select_panel(int panel);
 int graphics_terminal_is_maximized(void);
 void graphics_terminal_toggle_maximized(void);
+int graphics_terminal_is_dragging(void);
+int graphics_get_terminal_x(void);
+int graphics_get_terminal_y(void);
 uint32_t graphics_get_width(void);
 uint32_t graphics_get_height(void);
 

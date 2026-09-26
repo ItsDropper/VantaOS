@@ -58,6 +58,7 @@ static void terminal_open_window(void)
 {
     terminal_window_open = 1;
     terminal_window_prompted = 0;
+    graphics_set_terminal_running(1);
 
     if (terminal_pid >= 0)
         process_wake((uint32_t)terminal_pid);
@@ -296,6 +297,7 @@ static void terminal_process_step(void)
         {
             terminal_window_open = 0;
             terminal_window_prompted = 0;
+            graphics_set_terminal_running(0);
 
             if (graphics_ready_global)
             {
@@ -428,6 +430,7 @@ void kernel_main(multiboot_info_t* mbd)
         {
             terminal_window_open = 0;
             terminal_window_prompted = 0;
+            graphics_set_terminal_running(0);
             graphics_select_panel(0);
             gui_present();
         }

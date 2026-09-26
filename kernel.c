@@ -100,10 +100,6 @@ void kernel_main(multiboot_info_t* mbd)
         {
             keyboard_event_t event = keyboard_get_event();
 
-        if (keyboard_has_event())
-        {
-            keyboard_event_t event = keyboard_get_event();
-
             if (event == KEY_EVENT_PAGE_UP)
                 terminal_scroll_up();
             else if (event == KEY_EVENT_PAGE_DOWN)

@@ -39,6 +39,21 @@ static int terminal_window_prompted = 0;
 static int terminal_pid = -1;
 static int graphics_ready_global = 0;
 
+static void terminal_open_window(void)
+{
+    terminal_window_open = 1;
+    terminal_window_prompted = 0;
+
+    if (terminal_pid >= 0)
+        process_wake((uint32_t)terminal_pid);
+
+    if (graphics_ready_global)
+    {
+        graphics_present();
+        terminal_window_draw();
+    }
+}
+
 static void terminal_window_draw(void)
 {
     if (!graphics_ready_global || !terminal_window_open)
@@ -254,8 +269,8 @@ void kernel_main(multiboot_info_t* mbd)
     );
     terminal_write(
         process_is_initialized() ?
-        "Process scheduler: online.\n" :
-        "Process scheduler: offline.\n"
+        "Process manager: online.\n" :
+        "Process manager: offline.\n"
     );
     terminal_write(
         "Paging: enabled (identity-mapped 16 MiB).\n"
@@ -270,11 +285,10 @@ void kernel_main(multiboot_info_t* mbd)
     while (1)
     {
         /*
-         * Until the low-level context-switch mechanism is complete,
-         * the desktop remains the known-good execution context.
-         * The terminal process is still represented by PID 1 and
-         * receives cooperative execution here rather than risking
-         * the graphics stack with an unsafe IRQ stack switch.
+         * The desktop remains the execution context until the
+         * low-level context switch path is complete.  PID 1 is
+         * the terminal application record and its work is run
+         * cooperatively from the stable desktop context.
          */
         if (terminal_window_open)
             terminal_process_step();
@@ -285,16 +299,27 @@ void kernel_main(multiboot_info_t* mbd)
          * becomes active so opening it does not depend on the mouse
          * event surviving another layer of the desktop loop.
          */
-        if (graphics_get_active_panel() == 3 &&
+            if (graphics_get_active_panel() == 3 &&
             !terminal_window_open)
         {
-            terminal_window_open = 1;
-            terminal_window_prompted = 0;
+            terminal_open_window();
+        }
 
-            if (graphics_ready_global)
+        /*
+         * The GUI must remain usable even when the relative PS/2
+         * pointer is not aligned with the host pointer.  T is the
+         * keyboard launch shortcut for the Terminal application.
+         */
+        if (!terminal_window_open &&
+            keyboard_has_char())
+        {
+            char desktop_char = keyboard_get_char();
+
+            if (desktop_char == 't' ||
+                desktop_char == 'T')
             {
-                graphics_present();
-                terminal_window_draw();
+                terminal_open_window();
+                continue;
             }
         }
 

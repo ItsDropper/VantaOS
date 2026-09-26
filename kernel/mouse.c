@@ -20,6 +20,7 @@
 
 static unsigned char mouse_packet[4];
 static unsigned int mouse_packet_index = 0;
+static unsigned int mouse_packet_size = 3;
 
 static volatile int mouse_wheel_delta = 0;
 static volatile int mouse_moved = 0;
@@ -183,6 +184,7 @@ static unsigned char mouse_enable_wheel(void)
 void mouse_initialize(void)
 {
     mouse_packet_index = 0;
+    mouse_packet_size = 3;
     mouse_wheel_delta = 0;
     mouse_moved = 0;
 
@@ -199,10 +201,12 @@ void mouse_initialize(void)
 
     /*
      * ID 3 = IntelliMouse / wheel mouse.
+     * ID 0 = standard 3-byte PS/2 mouse.
+     *
+     * QEMU's default PS/2 mouse is commonly ID 0, so do not
+     * disable the mouse just because wheel support is absent.
      */
-    if (mouse_id != 3)
-        return;
-
+    mouse_packet_size = (mouse_id == 3) ? 4 : 3;
     mouse_enable_reporting();
 }
 
@@ -238,7 +242,7 @@ void mouse_handle_interrupt(void)
     mouse_packet[mouse_packet_index] = value;
     mouse_packet_index++;
 
-    if (mouse_packet_index < 4)
+    if (mouse_packet_index < mouse_packet_size)
         return;
 
     mouse_packet_index = 0;
@@ -264,14 +268,17 @@ void mouse_handle_interrupt(void)
         }
     }
 
-    int wheel =
-        (int)(mouse_packet[3] & 0x0F);
+    if (mouse_packet_size == 4)
+    {
+        int wheel =
+            (int)(mouse_packet[3] & 0x0F);
 
-    if (wheel & 0x08)
-        wheel -= 16;
+        if (wheel & 0x08)
+            wheel -= 16;
 
-    if (wheel != 0)
-        mouse_wheel_delta += wheel;
+        if (wheel != 0)
+            mouse_wheel_delta += wheel;
+    }
 }
 
 bool mouse_has_event(void)

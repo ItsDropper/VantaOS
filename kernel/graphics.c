@@ -28,6 +28,13 @@ static int cursor_y;
 static int active_panel;
 static int terminal_close_requested;
 static int terminal_maximized;
+static int terminal_dragging;
+static int terminal_x;
+static int terminal_y;
+static int terminal_restore_x;
+static int terminal_restore_y;
+static int terminal_drag_offset_x;
+static int terminal_drag_offset_y;
 
 static const uint8_t font[36][7] =
 {
@@ -335,6 +342,11 @@ static int graphics_initialize_bochs(void)
 
     cursor_x = (int)framebuffer_width / 2;
     cursor_y = (int)framebuffer_height / 2;
+    terminal_x = (int)framebuffer_width / 2 - 440;
+    terminal_y = 64;
+    terminal_restore_x = terminal_x;
+    terminal_restore_y = terminal_y;
+    terminal_dragging = 0;
 
     initialized = 1;
     return 1;
@@ -387,6 +399,11 @@ int graphics_initialize(multiboot_info_t* mbd)
 
             cursor_x = (int)framebuffer_width / 2;
             cursor_y = (int)framebuffer_height / 2;
+            terminal_x = (int)framebuffer_width / 2 - 440;
+            terminal_y = 64;
+            terminal_restore_x = terminal_x;
+            terminal_restore_y = terminal_y;
+            terminal_dragging = 0;
 
             initialized = 1;
             return 1;
@@ -436,7 +453,34 @@ void graphics_terminal_toggle_maximized(void)
     if (!initialized)
         return;
 
-    terminal_maximized = !terminal_maximized;
+    if (!terminal_maximized)
+    {
+        terminal_restore_x = terminal_x;
+        terminal_restore_y = terminal_y;
+        terminal_maximized = 1;
+        terminal_dragging = 0;
+    }
+    else
+    {
+        terminal_maximized = 0;
+        terminal_x = terminal_restore_x;
+        terminal_y = terminal_restore_y;
+    }
+}
+
+int graphics_terminal_is_dragging(void)
+{
+    return terminal_dragging;
+}
+
+int graphics_get_terminal_x(void)
+{
+    return terminal_x;
+}
+
+int graphics_get_terminal_y(void)
+{
+    return terminal_y;
 }
 
 uint32_t graphics_get_width(void)
@@ -605,7 +649,25 @@ void graphics_mouse_click(int button)
             cursor_y >= terminal_y + 6 &&
             cursor_y < terminal_y + 44)
         {
-            terminal_maximized = !terminal_maximized;
+            graphics_terminal_toggle_maximized();
+            return;
+        }
+
+        /*
+         * Start a real window drag from the title bar.  The grab is
+         * retained until the physical mouse button is released, so
+         * the window follows relative mouse movement instead of
+         * behaving like a one-shot button.
+         */
+        if (!terminal_maximized &&
+            cursor_x >= terminal_x &&
+            cursor_x < terminal_x + terminal_w - 140 &&
+            cursor_y >= terminal_y &&
+            cursor_y < terminal_y + 42)
+        {
+            terminal_dragging = 1;
+            terminal_drag_offset_x = cursor_x - terminal_x;
+            terminal_drag_offset_y = cursor_y - terminal_y;
             return;
         }
 
@@ -663,6 +725,36 @@ void graphics_mouse_move(int dx, int dy)
         cursor_x = (int)framebuffer_width - 1;
     if (cursor_y >= (int)framebuffer_height)
         cursor_y = (int)framebuffer_height - 1;
+
+    if (terminal_dragging && !terminal_maximized)
+    {
+        terminal_x = cursor_x - terminal_drag_offset_x;
+        terminal_y = cursor_y - terminal_drag_offset_y;
+
+        if (terminal_x < 0)
+            terminal_x = 0;
+        if (terminal_y < 0)
+            terminal_y = 0;
+
+        if (terminal_x + 880 > (int)framebuffer_width)
+            terminal_x = (int)framebuffer_width - 880;
+
+        if (terminal_y + 620 > (int)framebuffer_height)
+            terminal_y = (int)framebuffer_height - 620;
+
+        if (terminal_x < 0)
+            terminal_x = 0;
+        if (terminal_y < 0)
+            terminal_y = 0;
+    }
+}
+
+void graphics_mouse_release(int button)
+{
+    if (!initialized || button != 1)
+        return;
+
+    terminal_dragging = 0;
 }
 
 void graphics_draw_cursor(void)

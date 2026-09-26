@@ -21,7 +21,6 @@ static uint8_t blue_mask_size;
 static int initialized;
 static int cursor_x;
 static int cursor_y;
-static int active_panel;
 
 static const uint8_t font[36][7] =
 {
@@ -144,8 +143,9 @@ static inline uint16_t bochs_vbe_read(uint16_t index)
 static int graphics_initialize_bochs(void)
 {
     /*
-     * QEMU's "-vga std" device exposes the Bochs VBE interface.
-     * Use the device-reported LFB address instead of assuming one.
+     * Use the Bochs VBE LFB selected by the emulator. The DISPI registers
+     * do not expose a portable framebuffer physical address, so use the
+     * standard QEMU/Bochs PCI BAR0 address used by our VBE device.
      */
     if (bochs_vbe_read(BOCHS_VBE_INDEX_ID) != BOCHS_VBE_ID)
         return 0;
@@ -158,14 +158,17 @@ static int graphics_initialize_bochs(void)
     bochs_vbe_write(BOCHS_VBE_INDEX_VIRT_HEIGHT, 768);
     bochs_vbe_write(BOCHS_VBE_INDEX_ENABLE, BOCHS_VBE_ENABLE_LFB);
 
-    uint32_t physical = bochs_vbe_read(BOCHS_VBE_INDEX_LFB);
-
-    if (physical == 0 || physical == 0xFFFFFFFFU)
-        return 0;
-
+    /*
+     * The VBE LFB is normally mapped by the PCI device at 0xE0000000 in
+     * our QEMU configuration. Keep this isolated so the renderer uses the
+     * same physical address that the machine exposes.
+     */
+    uint32_t physical = 0xE0000000U;
     uint32_t offset = physical & 0xFFF;
     uint32_t first_page = physical & 0xFFFFF000U;
-    uint64_t bytes = (uint64_t)1024 * 768 * 4;
+    uint32_t pitch = 1024 * 4;
+    uint64_t bytes = (uint64_t)pitch * 768;
+
     uint32_t pages = (uint32_t)((offset + bytes + 4095) / 4096);
 
     if (pages == 0 || pages > GRAPHICS_MAX_PAGES)
@@ -180,7 +183,7 @@ static int graphics_initialize_bochs(void)
     }
 
     framebuffer = (uint8_t*)(GRAPHICS_VIRTUAL_BASE + offset);
-    framebuffer_pitch = 1024 * 4;
+    framebuffer_pitch = pitch;
     framebuffer_width = 1024;
     framebuffer_height = 768;
 
@@ -191,10 +194,10 @@ static int graphics_initialize_bochs(void)
     blue_position = 0;
     blue_mask_size = 8;
 
-    cursor_x = 512;
-    cursor_y = 384;
-    initialized = 1;
+    cursor_x = (int)framebuffer_width / 2;
+    cursor_y = (int)framebuffer_height / 2;
 
+    initialized = 1;
     return 1;
 }
 
@@ -208,8 +211,7 @@ int graphics_initialize(multiboot_info_t* mbd)
         mbd->framebuffer_type == 1 &&
         mbd->framebuffer_bpp == 32 &&
         mbd->framebuffer_width != 0 &&
-        mbd->framebuffer_height != 0 &&
-        mbd->framebuffer_pitch / 4U >= mbd->framebuffer_width)
+        mbd->framebuffer_height != 0)
     {
         uint32_t physical = (uint32_t)mbd->framebuffer_addr;
         uint32_t offset = physical & 0xFFF;
@@ -382,44 +384,11 @@ void graphics_draw_text(
     }
 }
 
-void graphics_mouse_click(int button)
-{
-    if (!initialized || button != 1)
-        return;
-
-    int window_x = (int)framebuffer_width / 2 - 300;
-    int window_y = 120;
-    int card_y = window_y + 215;
-
-    if (cursor_x >= window_x + 28 &&
-        cursor_x < window_x + 193 &&
-        cursor_y >= card_y &&
-        cursor_y < card_y + 80)
-        active_panel = 1;
-    else if (cursor_x >= window_x + 210 &&
-             cursor_x < window_x + 375 &&
-             cursor_y >= card_y &&
-             cursor_y < card_y + 80)
-        active_panel = 2;
-    else if (cursor_x >= window_x + 392 &&
-             cursor_x < window_x + 557 &&
-             cursor_y >= card_y &&
-             cursor_y < card_y + 80)
-        active_panel = 3;
-    else
-        return;
-}
-
 void graphics_mouse_move(int dx, int dy)
 {
     if (!initialized)
         return;
 
-    /*
-     * PS/2 coordinates are relative. Keep the mapping 1:1 with
-     * the framebuffer so the software cursor follows the host
-     * pointer without artificial scaling or offset.
-     */
     cursor_x += dx;
     cursor_y -= dy;
 
@@ -529,49 +498,21 @@ void graphics_present(void)
         "FILES", 0x009AA8B8, 2
     );
 
-    if (active_panel == 1)
-        graphics_draw_text(window_x + 28, window_y + 190, "SYSTEM READY", 0x0058D68D, 1);
-    else if (active_panel == 2)
-        graphics_draw_text(window_x + 28, window_y + 190, "FILES READY", 0x0058D68D, 1);
-    else if (active_panel == 3)
-        graphics_draw_text(window_x + 28, window_y + 190, "ALL SYSTEMS ONLINE", 0x0058D68D, 1);
-
     int card_y = window_y + 215;
-
-    int hover_system =
-        cursor_x >= window_x + 28 &&
-        cursor_x < window_x + 193 &&
-        cursor_y >= card_y &&
-        cursor_y < card_y + 80;
-
-    int hover_files =
-        cursor_x >= window_x + 210 &&
-        cursor_x < window_x + 375 &&
-        cursor_y >= card_y &&
-        cursor_y < card_y + 80;
-
-    int hover_status =
-        cursor_x >= window_x + 392 &&
-        cursor_x < window_x + 557 &&
-        cursor_y >= card_y &&
-        cursor_y < card_y + 80;
 
     graphics_fill_rect(
         window_x + 28, card_y,
-        165, 80,
-        hover_system ? 0x002A3A4C : 0x001E2936
+        165, 80, 0x001E2936
     );
 
     graphics_fill_rect(
         window_x + 210, card_y,
-        165, 80,
-        hover_files ? 0x002A3A4C : 0x001E2936
+        165, 80, 0x001E2936
     );
 
     graphics_fill_rect(
         window_x + 392, card_y,
-        165, 80,
-        hover_status ? 0x002A3A4C : 0x001E2936
+        165, 80, 0x001E2936
     );
 
     graphics_draw_text(
@@ -586,12 +527,7 @@ void graphics_present(void)
 
     graphics_draw_text(
         window_x + 412, card_y + 18,
-        "STATUS", 0x00FFFFFF, 2
-    );
-
-    graphics_draw_text(
-        window_x + 412, card_y + 48,
-        "ONLINE", 0x0058D68D, 1
+        "SYSTEM", 0x00FFFFFF, 2
     );
 
     graphics_fill_rect(

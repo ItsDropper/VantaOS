@@ -241,6 +241,9 @@ static void terminal_window_draw(void)
         );
     }
 }
+
+    /* Keep the mouse cursor above the terminal window. */
+    graphics_draw_cursor();
 static void terminal_process_step(void)
 {
     if (!terminal_window_open)
@@ -282,7 +285,10 @@ static void terminal_process_step(void)
             terminal_window_prompted = 0;
 
             if (graphics_ready_global)
+            {
+                graphics_select_panel(0);
                 graphics_present();
+            }
 
             return;
         }
@@ -469,10 +475,11 @@ void kernel_main(multiboot_info_t* mbd)
                  graphics_terminal_is_dragging()))
             {
                 /*
-                 * Mouse controls are handled by graphics_mouse_click()
-                 * in the mouse IRQ. Redraw immediately so state changes
-                 * such as maximize/restore become visible.
+                 * The terminal is drawn directly into the framebuffer.
+                 * Repaint the desktop first so dragging does not leave
+                 * the old window behind, then draw the terminal and cursor.
                  */
+                graphics_present();
                 terminal_window_draw();
             }
             else if (graphics_ready_global &&

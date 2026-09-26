@@ -628,15 +628,16 @@ void graphics_mouse_click(int button)
     {
         int terminal_w = terminal_maximized ?
             (int)framebuffer_width : 880;
-        int terminal_x = terminal_maximized ?
-            0 : (int)framebuffer_width / 2 - 440;
-        int terminal_y = terminal_maximized ? 0 : 64;
+        int terminal_x_current = terminal_maximized ?
+            0 : terminal_x;
+        int terminal_y_current = terminal_maximized ?
+            0 : terminal_y;
 
         /* Minimize: return to the desktop without destroying the app. */
-        if (cursor_x >= terminal_x + terminal_w - 140 &&
-            cursor_x < terminal_x + terminal_w - 96 &&
-            cursor_y >= terminal_y + 4 &&
-            cursor_y < terminal_y + 42)
+        if (cursor_x >= terminal_x_current + terminal_w - 140 &&
+            cursor_x < terminal_x_current + terminal_w - 96 &&
+            cursor_y >= terminal_y_current + 4 &&
+            cursor_y < terminal_y_current + 42)
         {
             terminal_close_requested = 1;
             active_panel = 0;
@@ -644,10 +645,10 @@ void graphics_mouse_click(int button)
         }
 
         /* Maximize/restore. */
-        if (cursor_x >= terminal_x + terminal_w - 96 &&
-            cursor_x < terminal_x + terminal_w - 48 &&
-            cursor_y >= terminal_y + 4 &&
-            cursor_y < terminal_y + 42)
+        if (cursor_x >= terminal_x_current + terminal_w - 96 &&
+            cursor_x < terminal_x_current + terminal_w - 48 &&
+            cursor_y >= terminal_y_current + 4 &&
+            cursor_y < terminal_y_current + 42)
         {
             graphics_terminal_toggle_maximized();
             return;
@@ -660,10 +661,10 @@ void graphics_mouse_click(int button)
          * behaving like a one-shot button.
          */
         if (!terminal_maximized &&
-            cursor_x >= terminal_x + 8 &&
-            cursor_x < terminal_x + terminal_w - 140 &&
-            cursor_y >= terminal_y + 4 &&
-            cursor_y < terminal_y + 42)
+            cursor_x >= terminal_x_current + 8 &&
+            cursor_x < terminal_x_current + terminal_w - 140 &&
+            cursor_y >= terminal_y_current + 4 &&
+            cursor_y < terminal_y_current + 42)
         {
             terminal_dragging = 1;
             terminal_drag_offset_x = cursor_x - terminal_x;
@@ -672,10 +673,10 @@ void graphics_mouse_click(int button)
         }
 
         /* Close. */
-        if (cursor_x >= terminal_x + terminal_w - 48 &&
-            cursor_x < terminal_x + terminal_w &&
-            cursor_y >= terminal_y + 4 &&
-            cursor_y < terminal_y + 42)
+        if (cursor_x >= terminal_x_current + terminal_w - 48 &&
+            cursor_x < terminal_x_current + terminal_w &&
+            cursor_y >= terminal_y_current + 4 &&
+            cursor_y < terminal_y_current + 42)
         {
             terminal_close_requested = 1;
             active_panel = 0;

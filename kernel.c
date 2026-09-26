@@ -72,7 +72,7 @@ void kernel_main(multiboot_info_t* mbd)
     terminal_write(graphics_ready ? "YES\n" : "NO\n");
 
     heap_initialize();
-    filesystem_initialize();
+    filesystem_initialize(mbd);
     process_initialize();
     boot_memory = read_tsc();
     boot_interrupts = boot_memory;

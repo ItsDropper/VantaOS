@@ -51,11 +51,6 @@ int filesystem_create_file(const char* path);
 int filesystem_write_file(const char* path, const char* data);
 int filesystem_file_exists(const char* path);
 
-int filesystem_create_directory(const char* path);
-int filesystem_create_file(const char* path);
-int filesystem_write_file(const char* path, const char* data);
-int filesystem_file_exists(const char* path);
-
 uint32_t filesystem_root(void);
 
 #endif

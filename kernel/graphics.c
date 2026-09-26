@@ -568,43 +568,22 @@ void graphics_present(void)
 
     int card_y = window_y + 215;
 
-    int hover_system =
-        cursor_x >= window_x + 28 &&
-        cursor_x < window_x + 193 &&
-        cursor_y >= card_y &&
-        cursor_y < card_y + 80;
-
-    int hover_files =
-        cursor_x >= window_x + 210 &&
-        cursor_x < window_x + 375 &&
-        cursor_y >= card_y &&
-        cursor_y < card_y + 80;
-
-    int hover_status =
-        cursor_x >= window_x + 392 &&
-        cursor_x < window_x + 557 &&
-        cursor_y >= card_y &&
-        cursor_y < card_y + 80;
-
     graphics_fill_rect(
         window_x + 28, card_y,
         165, 80,
-        active_panel == 1 ? 0x00304458 :
-        hover_system ? 0x002A3A4C : 0x001E2936
+        active_panel == 1 ? 0x00304458 : 0x001E2936
     );
 
     graphics_fill_rect(
         window_x + 210, card_y,
         165, 80,
-        active_panel == 2 ? 0x00304458 :
-        hover_files ? 0x002A3A4C : 0x001E2936
+        active_panel == 2 ? 0x00304458 : 0x001E2936
     );
 
     graphics_fill_rect(
         window_x + 392, card_y,
         165, 80,
-        active_panel == 3 ? 0x00304458 :
-        hover_status ? 0x002A3A4C : 0x001E2936
+        active_panel == 3 ? 0x00304458 : 0x001E2936
     );
 
     graphics_draw_text(

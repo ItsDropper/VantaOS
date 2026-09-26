@@ -635,8 +635,8 @@ void graphics_mouse_click(int button)
         /* Minimize: return to the desktop without destroying the app. */
         if (cursor_x >= terminal_x + terminal_w - 140 &&
             cursor_x < terminal_x + terminal_w - 96 &&
-            cursor_y >= terminal_y + 6 &&
-            cursor_y < terminal_y + 44)
+            cursor_y >= terminal_y + 4 &&
+            cursor_y < terminal_y + 42)
         {
             terminal_close_requested = 1;
             active_panel = 0;
@@ -646,8 +646,8 @@ void graphics_mouse_click(int button)
         /* Maximize/restore. */
         if (cursor_x >= terminal_x + terminal_w - 96 &&
             cursor_x < terminal_x + terminal_w - 48 &&
-            cursor_y >= terminal_y + 6 &&
-            cursor_y < terminal_y + 44)
+            cursor_y >= terminal_y + 4 &&
+            cursor_y < terminal_y + 42)
         {
             graphics_terminal_toggle_maximized();
             return;
@@ -660,9 +660,9 @@ void graphics_mouse_click(int button)
          * behaving like a one-shot button.
          */
         if (!terminal_maximized &&
-            cursor_x >= terminal_x &&
+            cursor_x >= terminal_x + 8 &&
             cursor_x < terminal_x + terminal_w - 140 &&
-            cursor_y >= terminal_y &&
+            cursor_y >= terminal_y + 4 &&
             cursor_y < terminal_y + 42)
         {
             terminal_dragging = 1;
@@ -674,8 +674,8 @@ void graphics_mouse_click(int button)
         /* Close. */
         if (cursor_x >= terminal_x + terminal_w - 48 &&
             cursor_x < terminal_x + terminal_w &&
-            cursor_y >= terminal_y + 6 &&
-            cursor_y < terminal_y + 44)
+            cursor_y >= terminal_y + 4 &&
+            cursor_y < terminal_y + 42)
         {
             terminal_close_requested = 1;
             active_panel = 0;
@@ -736,11 +736,19 @@ void graphics_mouse_move(int dx, int dy)
         if (terminal_y < 0)
             terminal_y = 0;
 
-        if (terminal_x + 880 > (int)framebuffer_width)
-            terminal_x = (int)framebuffer_width - 880;
+        int drag_width = 880;
+        int drag_height = 620;
 
-        if (terminal_y + 620 > (int)framebuffer_height)
-            terminal_y = (int)framebuffer_height - 620;
+        if (drag_width > (int)framebuffer_width)
+            drag_width = (int)framebuffer_width;
+        if (drag_height > (int)framebuffer_height)
+            drag_height = (int)framebuffer_height;
+
+        if (terminal_x + drag_width > (int)framebuffer_width)
+            terminal_x = (int)framebuffer_width - drag_width;
+
+        if (terminal_y + drag_height > (int)framebuffer_height)
+            terminal_y = (int)framebuffer_height - drag_height;
 
         if (terminal_x < 0)
             terminal_x = 0;

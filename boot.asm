@@ -2,9 +2,6 @@ bits 32
 
 section .multiboot
 align 4
-    ; Do not request a Multiboot v1 graphics mode here.
-    ; GRUB selects the graphical mode through gfxmode/gfxpayload
-    ; and supplies the resulting framebuffer in multiboot_info.
     dd 0x1BADB002
     dd 0x00000000
     dd -(0x1BADB002 + 0x00000000)

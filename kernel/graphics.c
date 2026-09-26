@@ -412,42 +412,6 @@ void graphics_mouse_click(int button)
     int window_y = 120;
     int card_y = window_y + 215;
 
-    int hover_system =
-        cursor_x >= window_x + 28 &&
-        cursor_x < window_x + 193 &&
-        cursor_y >= card_y &&
-        cursor_y < card_y + 80;
-
-    int hover_files =
-        cursor_x >= window_x + 210 &&
-        cursor_x < window_x + 375 &&
-        cursor_y >= card_y &&
-        cursor_y < card_y + 80;
-
-    int hover_status =
-        cursor_x >= window_x + 392 &&
-        cursor_x < window_x + 557 &&
-        cursor_y >= card_y &&
-        cursor_y < card_y + 80;
-
-    int hover_system =
-        cursor_x >= window_x + 28 &&
-        cursor_x < window_x + 193 &&
-        cursor_y >= card_y &&
-        cursor_y < card_y + 80;
-
-    int hover_files =
-        cursor_x >= window_x + 210 &&
-        cursor_x < window_x + 375 &&
-        cursor_y >= card_y &&
-        cursor_y < card_y + 80;
-
-    int hover_status =
-        cursor_x >= window_x + 392 &&
-        cursor_x < window_x + 557 &&
-        cursor_y >= card_y &&
-        cursor_y < card_y + 80;
-
     if (cursor_x >= window_x + 28 &&
         cursor_x < window_x + 193 &&
         cursor_y >= card_y &&
@@ -603,6 +567,24 @@ void graphics_present(void)
         );
 
     int card_y = window_y + 215;
+
+    int hover_system =
+        cursor_x >= window_x + 28 &&
+        cursor_x < window_x + 193 &&
+        cursor_y >= card_y &&
+        cursor_y < card_y + 80;
+
+    int hover_files =
+        cursor_x >= window_x + 210 &&
+        cursor_x < window_x + 375 &&
+        cursor_y >= card_y &&
+        cursor_y < card_y + 80;
+
+    int hover_status =
+        cursor_x >= window_x + 392 &&
+        cursor_x < window_x + 557 &&
+        cursor_y >= card_y &&
+        cursor_y < card_y + 80;
 
     graphics_fill_rect(
         window_x + 28, card_y,

@@ -41,74 +41,40 @@ global exception31_stub
 
 extern interrupt_handler
 extern exception_handler
-extern process_schedule
-
-; =========================================================================
-; IRQ 0 - PIT timer + preemptive scheduler
-; =========================================================================
 
 irq0_stub:
     pusha
-
     push dword 32
     call interrupt_handler
     add esp, 4
-
-    push esp
-    call process_schedule
-    add esp, 4
-
-    mov esp, eax
-
     popa
     iretd
-
-; =========================================================================
-; IRQ 1 - PS/2 keyboard
-; =========================================================================
 
 irq1_stub:
     pusha
-
     push dword 33
     call interrupt_handler
     add esp, 4
-
     popa
     iretd
-
-; =========================================================================
-; IRQ 12 - PS/2 mouse
-; =========================================================================
 
 irq12_stub:
     pusha
-
     push dword 44
     call interrupt_handler
     add esp, 4
-
     popa
     iretd
-
-; =========================================================================
-; CPU exceptions
-; =========================================================================
 
 %macro EXCEPTION_NO_ERROR 1
 exception%1_stub:
     pusha
-
-    ; Fake error code so all exception frames have the same layout.
     push dword 0
-
     push esp
     push dword %1
     call exception_handler
     add esp, 8
-
     add esp, 4
-
     popa
     iretd
 %endmacro
@@ -116,16 +82,11 @@ exception%1_stub:
 %macro EXCEPTION_ERROR 1
 exception%1_stub:
     pusha
-
-    ; CPU already pushed the real error code.
-
     push esp
     push dword %1
     call exception_handler
     add esp, 8
-
     add esp, 4
-
     popa
     iretd
 %endmacro
@@ -147,7 +108,7 @@ EXCEPTION_ERROR    13
 EXCEPTION_ERROR    14
 EXCEPTION_NO_ERROR 15
 EXCEPTION_NO_ERROR 16
-EXCEPTION_ERROR    17
+EXCEPTION_NO_ERROR 17
 EXCEPTION_NO_ERROR 18
 EXCEPTION_NO_ERROR 19
 EXCEPTION_NO_ERROR 20

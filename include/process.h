@@ -5,6 +5,9 @@
 
 #define PROCESS_MAX 32
 #define PROCESS_NAME_MAX 31
+#define PROCESS_STACK_SIZE 16384
+
+typedef void (*process_entry_t)(void);
 
 typedef enum
 {
@@ -21,18 +24,33 @@ typedef struct
     uint32_t parent_pid;
     process_state_t state;
     char name[PROCESS_NAME_MAX + 1];
+
+    uint32_t stack_pointer;
+    process_entry_t entry;
 } process_t;
 
 void process_initialize(void);
 
 int process_is_initialized(void);
 
-int process_create(
+int process_create_kernel(
+    const char* name,
+    uint32_t parent_pid,
+    process_entry_t entry
+);
+
+int process_attach_current(
     const char* name,
     uint32_t parent_pid
 );
 
 int process_set_running(uint32_t pid);
+
+int process_wake(uint32_t pid);
+
+void process_block_current(void);
+
+uint32_t process_schedule(uint32_t current_stack);
 
 const process_t* process_get(uint32_t pid);
 

@@ -21,6 +21,7 @@ void mouse_handle_interrupt(void);
 bool mouse_has_event(void);
 bool mouse_has_wheel_event(void);
 bool mouse_has_click_event(void);
+bool mouse_has_move_event(void);
 void mouse_clear_event_flags(void);
 
 /*

@@ -210,6 +210,25 @@ const struct pci_device* pci_get_device(int index)
     return &devices[index];
 }
 
+int pci_get_bar0(const struct pci_device* device, uint32_t* bar)
+{
+    if (!device || !bar)
+        return 0;
+
+    uint32_t value = pci_read_config(
+        device->bus,
+        device->slot,
+        device->function,
+        0x10
+    );
+
+    if (value & 1U)
+        return 0;
+
+    *bar = value & 0xFFFFFFF0U;
+    return *bar != 0;
+}
+
 const char* pci_get_vendor_name(uint16_t vendor_id)
 {
     switch (vendor_id)

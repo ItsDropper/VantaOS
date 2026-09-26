@@ -161,33 +161,10 @@ void filesystem_initialize(multiboot_info_t* mbd)
     if (system < 0 || etc < 0)
         return;
 
-    fs_add_node(
-        (uint32_t)system,
-        FS_NODE_FILE,
-        "version",
-        "VantaOS 0.1\n"
-    );
-
-    fs_add_node(
-        (uint32_t)system,
-        FS_NODE_FILE,
-        "kernel",
-        "VantaOS kernel\nArchitecture: x86 32-bit\n"
-    );
-
-    fs_add_node(
-        (uint32_t)system,
-        FS_NODE_FILE,
-        "memory",
-        "Physical memory information is provided by the kernel.\n"
-    );
-
-    fs_add_node(
-        (uint32_t)system,
-        FS_NODE_FILE,
-        "boot",
-        "Boot information is provided by the Multiboot loader.\n"
-    );
+    fs_add_node((uint32_t)system, FS_NODE_VIRTUAL, "version", 0);
+    fs_add_node((uint32_t)system, FS_NODE_VIRTUAL, "kernel", 0);
+    fs_add_node((uint32_t)system, FS_NODE_VIRTUAL, "memory", 0);
+    fs_add_node((uint32_t)system, FS_NODE_VIRTUAL, "boot", 0);
 
     fs_add_node(
         (uint32_t)etc,

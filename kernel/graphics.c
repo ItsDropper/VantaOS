@@ -161,7 +161,8 @@ int graphics_initialize(multiboot_info_t* mbd)
         mbd->framebuffer_type == 1 &&
         mbd->framebuffer_bpp == 32 &&
         mbd->framebuffer_width != 0 &&
-        mbd->framebuffer_height != 0)
+        mbd->framebuffer_height != 0 &&
+        mbd->framebuffer_pitch >= mbd->framebuffer_width * 4U)
     {
         uint32_t physical = (uint32_t)mbd->framebuffer_addr;
         uint32_t offset = physical & 0xFFF;

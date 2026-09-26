@@ -2,6 +2,7 @@
 #define TERMINAL_H
 
 #include <stdint.h>
+#include <stddef.h>
 
 void terminal_initialize(void);
 
@@ -34,5 +35,8 @@ void terminal_redraw_input(const char* text);
  * the current shell input.
  */
 void terminal_set_input_cursor(unsigned int offset);
+
+size_t terminal_history_count(void);
+int terminal_history_line(size_t line, char* buffer, size_t buffer_size);
 
 #endif

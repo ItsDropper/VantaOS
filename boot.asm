@@ -2,16 +2,12 @@ bits 32
 
 section .multiboot
 align 4
-    ; Multiboot v1 graphics request.
-    ; With only flag bit 2 set, the graphics fields follow
-    ; the magic/flags/checksum directly.
+    ; Do not request a Multiboot v1 graphics mode here.
+    ; GRUB selects the graphical mode through gfxmode/gfxpayload
+    ; and supplies the resulting framebuffer in multiboot_info.
     dd 0x1BADB002
-    dd 0x00000004
-    dd -(0x1BADB002 + 0x00000004)
-    dd 0
-    dd 1024
-    dd 768
-    dd 32
+    dd 0x00000000
+    dd -(0x1BADB002 + 0x00000000)
 
 section .bss
 align 16

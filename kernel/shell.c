@@ -458,6 +458,8 @@ static void shell_help(void)
     terminal_write("  boot     - Show boot timing information\n");
     terminal_write("  uptime   - Show system uptime\n");
     terminal_write("  mem      - Show physical memory status\n");
+    terminal_write("  heap     - Show kernel heap status and test allocation\n");
+    terminal_write("  history  - Show command history\n");
     terminal_write("  fault    - Trigger a test page fault\n");
     terminal_write("  echo     - Print text\n");
     terminal_write("  reboot   - Reboot the system\n");
@@ -867,6 +869,28 @@ static void shell_heap(void)
     terminal_write(" bytes\n");
 }
 
+static void shell_history(void)
+{
+    terminal_write("\nCommand history:\n");
+
+    if (shell_history_count == 0)
+    {
+        terminal_write("  (empty)\n");
+        return;
+    }
+
+    for (unsigned int i = 0;
+         i < shell_history_count;
+         i++)
+    {
+        terminal_write("  ");
+        shell_print_decimal(i + 1);
+        terminal_write("  ");
+        terminal_write(shell_history[i]);
+        terminal_putchar('\\n');
+    }
+}
+
 static void shell_fault(void)
 {
     terminal_write("\nTriggering a test page fault...\n");
@@ -985,6 +1009,12 @@ static void shell_execute(void)
                  "heap"))
     {
         shell_heap();
+    }
+    else if (shell_string_equals(
+                 shell_buffer,
+                 "history"))
+    {
+        shell_history();
     }
     else if (shell_string_equals(
                  shell_buffer,

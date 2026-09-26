@@ -259,8 +259,19 @@ void mouse_handle_interrupt(void)
      * 0x0E = -2
      * etc.
      */
-    int delta_x = (int)(int8_t)mouse_packet[1];
-    int delta_y = (int)(int8_t)mouse_packet[2];
+    /*
+     * PS/2 X/Y movement is a signed 9-bit value. The high sign
+     * bits live in the first packet byte, so treating bytes 1/2
+     * as signed 8-bit values causes large jumps and cursor drift.
+     */
+    int delta_x = (int)mouse_packet[1];
+    int delta_y = (int)mouse_packet[2];
+
+    if (mouse_packet[0] & 0x10)
+        delta_x -= 0x100;
+
+    if (mouse_packet[0] & 0x20)
+        delta_y -= 0x100;
 
     if (!(mouse_packet[0] & 0x40) &&
         !(mouse_packet[0] & 0x80))

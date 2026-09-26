@@ -71,8 +71,8 @@ static void terminal_window_draw(void)
 
     int window_w = graphics_terminal_is_maximized() ? width : 880;
     int window_h = graphics_terminal_is_maximized() ? height : 620;
-    int window_x = graphics_terminal_is_maximized() ? 0 : width / 2 - window_w / 2;
-    int window_y = graphics_terminal_is_maximized() ? 0 : 64;
+    int window_x = graphics_terminal_is_maximized() ? 0 : graphics_get_terminal_x();
+    int window_y = graphics_terminal_is_maximized() ? 0 : graphics_get_terminal_y();
 
     if (!graphics_terminal_is_maximized() && window_w > width - 20)
     {
@@ -465,7 +465,8 @@ void kernel_main(multiboot_info_t* mbd)
 
             if (graphics_ready_global &&
                 terminal_window_open &&
-                (wheel_event || click_event))
+                (wheel_event || click_event ||
+                 graphics_terminal_is_dragging()))
             {
                 /*
                  * Mouse controls are handled by graphics_mouse_click()

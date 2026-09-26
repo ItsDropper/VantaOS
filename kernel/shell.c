@@ -592,7 +592,9 @@ static void shell_cat(const char* argument)
     const fs_node_t* file =
         filesystem_get_node((uint32_t)file_id);
 
-    if (file == 0 || file->type != FS_NODE_FILE)
+    if (file == 0 ||
+        (file->type != FS_NODE_FILE &&
+         file->type != FS_NODE_VIRTUAL))
     {
         terminal_write("\ncat: not a file\n");
         return;
@@ -727,6 +729,134 @@ static void shell_cd(const char* argument)
         shell_cwd[length - 1] = 0;
         length--;
     }
+}
+
+static void shell_mkdir(const char* argument)
+{
+    if (argument == 0 || argument[0] == 0)
+    {
+        terminal_write("\nmkdir: missing path");
+        return;
+    }
+
+    char path[FS_PATH_MAX];
+    shell_resolve_path(argument, path);
+
+    if (filesystem_create_directory(path) < 0)
+    {
+        terminal_write("\nmkdir: cannot create ");
+        terminal_write(argument);
+        return;
+    }
+
+    terminal_write("\ncreated directory ");
+    terminal_write(path);
+}
+
+static void shell_touch(const char* argument)
+{
+    if (argument == 0 || argument[0] == 0)
+    {
+        terminal_write("\ntouch: missing path");
+        return;
+    }
+
+    char path[FS_PATH_MAX];
+    shell_resolve_path(argument, path);
+
+    int existing = filesystem_lookup(path);
+
+    if (existing >= 0)
+    {
+        const fs_node_t* node =
+            filesystem_get_node((uint32_t)existing);
+
+        if (node != 0 && node->type == FS_NODE_FILE)
+        {
+            terminal_write("\ntouch: ");
+            terminal_write(path);
+            terminal_write(" already exists");
+            return;
+        }
+
+        terminal_write("\ntouch: path already exists");
+        return;
+    }
+
+    if (filesystem_create_file(path) < 0)
+    {
+        terminal_write("\ntouch: cannot create ");
+        terminal_write(argument);
+        return;
+    }
+
+    terminal_write("\ncreated file ");
+    terminal_write(path);
+}
+
+static void shell_write_file(const char* arguments)
+{
+    if (arguments == 0 || arguments[0] == 0)
+    {
+        terminal_write("\nwrite: usage: write <file> <text>");
+        return;
+    }
+
+    char path[FS_PATH_MAX];
+    unsigned int i = 0;
+
+    while (arguments[i] != 0 &&
+           arguments[i] != ' ' &&
+           i < FS_PATH_MAX - 1)
+    {
+        path[i] = arguments[i];
+        i++;
+    }
+
+    path[i] = 0;
+
+    if (path[0] == 0 || arguments[i] == 0)
+    {
+        terminal_write("\nwrite: usage: write <file> <text>");
+        return;
+    }
+
+    while (arguments[i] == ' ')
+        i++;
+
+    if (arguments[i] == 0)
+    {
+        terminal_write("\nwrite: missing text");
+        return;
+    }
+
+    char resolved[FS_PATH_MAX];
+    shell_resolve_path(path, resolved);
+
+    if (!filesystem_file_exists(resolved))
+    {
+        terminal_write("\nwrite: file does not exist");
+        return;
+    }
+
+    int result =
+        filesystem_write_file(resolved, &arguments[i]);
+
+    if (result == -2)
+    {
+        terminal_write("\nwrite: file is too large");
+        return;
+    }
+
+    if (result < 0)
+    {
+        terminal_write("\nwrite: write failed");
+        return;
+    }
+
+    terminal_write("\nwrote ");
+    shell_print_decimal((unsigned int)result);
+    terminal_write(" bytes");
 }
 
 static void shell_help(void)
@@ -1374,6 +1504,33 @@ static void shell_execute(void)
                  "ps"))
     {
         shell_ps();
+    }
+    else if (shell_buffer[0] == 'm' &&
+             shell_buffer[1] == 'k' &&
+             shell_buffer[2] == 'd' &&
+             shell_buffer[3] == 'i' &&
+             shell_buffer[4] == 'r' &&
+             shell_buffer[5] == ' ')
+    {
+        shell_mkdir(&shell_buffer[6]);
+    }
+    else if (shell_buffer[0] == 't' &&
+             shell_buffer[1] == 'o' &&
+             shell_buffer[2] == 'u' &&
+             shell_buffer[3] == 'c' &&
+             shell_buffer[4] == 'h' &&
+             shell_buffer[5] == ' ')
+    {
+        shell_touch(&shell_buffer[6]);
+    }
+    else if (shell_buffer[0] == 'w' &&
+             shell_buffer[1] == 'r' &&
+             shell_buffer[2] == 'i' &&
+             shell_buffer[3] == 't' &&
+             shell_buffer[4] == 'e' &&
+             shell_buffer[5] == ' ')
+    {
+        shell_write_file(&shell_buffer[6]);
     }
     else if (shell_buffer[0] == 'e' &&
              shell_buffer[1] == 'c' &&

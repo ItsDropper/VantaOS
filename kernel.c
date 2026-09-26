@@ -226,7 +226,7 @@ void kernel_main(multiboot_info_t* mbd)
         process_create_kernel(
             "terminal",
             0,
-            terminal_process_main
+            terminal_process_step
         );
 
     process_attach_current(

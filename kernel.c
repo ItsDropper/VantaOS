@@ -53,6 +53,22 @@ void kernel_main(multiboot_info_t* mbd)
     int graphics_ready =
         graphics_initialize(mbd);
 
+    terminal_write("Graphics diagnostics:\n");
+    terminal_write("  Multiboot flags: ");
+    terminal_write_hex(mbd ? mbd->flags : 0);
+    terminal_write("\n");
+    terminal_write("  Framebuffer: ");
+    terminal_write_hex(mbd ? (uint32_t)mbd->framebuffer_addr : 0);
+    terminal_write("\n");
+    terminal_write("  Type: ");
+    terminal_write_hex(mbd ? mbd->framebuffer_type : 0);
+    terminal_write("\n");
+    terminal_write("  BPP: ");
+    terminal_write_hex(mbd ? mbd->framebuffer_bpp : 0);
+    terminal_write("\n");
+    terminal_write("  Graphics init: ");
+    terminal_write(graphics_ready ? "YES\n" : "NO\n");
+
     heap_initialize();
     boot_memory = read_tsc();
     boot_interrupts = boot_memory;

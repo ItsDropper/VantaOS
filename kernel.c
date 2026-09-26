@@ -34,6 +34,91 @@ static unsigned long long boot_mouse;
 static unsigned long long boot_memory;
 static unsigned long long boot_shell;
 
+static int terminal_window_open = 0;
+
+static void terminal_window_draw(void)
+{
+    if (!graphics_is_initialized() || !terminal_window_open)
+        return;
+
+    int width = (int)graphics_get_width();
+    int height = (int)graphics_get_height();
+    int window_w = 760;
+    int window_h = 520;
+    int window_x = width / 2 - window_w / 2;
+    int window_y = 80;
+
+    graphics_fill_rect(
+        window_x + 8, window_y + 10,
+        window_w, window_h, 0x00070A0F
+    );
+
+    graphics_fill_rect(
+        window_x, window_y,
+        window_w, window_h, 0x00101820
+    );
+
+    graphics_fill_rect(
+        window_x, window_y,
+        window_w, 44, 0x00212C3A
+    );
+
+    graphics_draw_text(
+        window_x + 18, window_y + 14,
+        "TERMINAL", 0x00FFFFFF, 2
+    );
+
+    graphics_fill_rect(
+        window_x + window_w - 42,
+        window_y + 10,
+        28, 28, 0x00374452
+    );
+
+    graphics_draw_text(
+        window_x + window_w - 34,
+        window_y + 15,
+        "X", 0x00FFFFFF, 2
+    );
+
+    graphics_fill_rect(
+        window_x + 16, window_y + 58,
+        window_w - 32, window_h - 74,
+        0x00070A0F
+    );
+
+    size_t count = terminal_history_count();
+    size_t first = count > 27 ? count - 27 : 0;
+    char line[81];
+    int text_y = window_y + 70;
+
+    for (size_t i = first;
+         i < count && text_y < window_y + window_h - 24;
+         i++)
+    {
+        if (!terminal_history_line(i, line, sizeof(line)))
+            continue;
+
+        for (unsigned int j = 0; line[j]; j++)
+        {
+            if (line[j] >= 'a' && line[j] <= 'z')
+                line[j] =
+                    (char)(line[j] - 'a' + 'A');
+        }
+
+        graphics_draw_text(
+            window_x + 26,
+            text_y,
+            line,
+            0x00D7DEE7,
+            1
+        );
+
+        text_y += 18;
+    }
+
+    (void)height;
+}
+
 void kernel_main(multiboot_info_t* mbd)
 {
     boot_start = read_tsc();
@@ -118,21 +203,24 @@ void kernel_main(multiboot_info_t* mbd)
                     terminal_scroll_up();
             }
 
-            /*
-             * Mouse movement only updates the logical pointer position.
-             * Do not redraw the entire framebuffer for every packet;
-             * that causes visible flashing while the pointer moves.
-             * Redraw only when the mouse actually changes UI state.
-             */
             if (graphics_ready && (wheel_event || click_event))
+            {
                 graphics_present();
 
+                if (terminal_window_open)
+                    terminal_window_draw();
+            }
+
             if (click_event &&
-                graphics_get_active_panel() == 3)
+                graphics_get_active_panel() == 3 &&
+                !terminal_window_open)
             {
+                terminal_window_open = 1;
                 process_set_running(1);
-                terminal_write("\n[GUI] Terminal focused (PID 1).\n");
+                terminal_write("\n[GUI] Terminal window opened (PID 1).\n");
                 shell_show_prompt();
+
+                terminal_window_draw();
             }
 
             mouse_clear_event_flags();
@@ -150,6 +238,9 @@ void kernel_main(multiboot_info_t* mbd)
             else
                 shell_handle_event(event);
 
+            if (terminal_window_open)
+                terminal_window_draw();
+
             continue;
         }
 
@@ -161,7 +252,20 @@ void kernel_main(multiboot_info_t* mbd)
             continue;
         }
 
+        if (c == 27)
+        {
+            terminal_window_open = 0;
+
+            if (graphics_ready)
+                graphics_present();
+
+            continue;
+        }
+
         shell_handle_char(c);
+
+        if (terminal_window_open)
+            terminal_window_draw();
     }
 }
 

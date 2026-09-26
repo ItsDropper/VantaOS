@@ -65,7 +65,8 @@ void pmm_initialize(multiboot_info_t* mbd)
     bitmap_size = 0;
     free_blocks = 0;
 
-    if (!mbd || !(mbd->flags & MULTIBOOT_INFO_MEM_MAP))
+    if (!mbd || !(mbd->flags & MULTIBOOT_INFO_MEM_MAP) ||
+        mbd->mmap_addr == 0 || mbd->mmap_length < sizeof(uint32_t))
         return;
 
     uint64_t highest_addr = 0;
@@ -75,6 +76,10 @@ void pmm_initialize(multiboot_info_t* mbd)
 
     while ((uint32_t)mmap < mmap_end)
     {
+        if (mmap->size < 20 ||
+            (uint32_t)mmap + mmap->size + sizeof(mmap->size) > mmap_end)
+            break;
+
         if (mmap->type == MULTIBOOT_MEMORY_AVAILABLE)
         {
             uint64_t top = mmap->addr + mmap->len;
@@ -114,6 +119,10 @@ void pmm_initialize(multiboot_info_t* mbd)
 
     while ((uint32_t)mmap < mmap_end)
     {
+        if (mmap->size < 20 ||
+            (uint32_t)mmap + mmap->size + sizeof(mmap->size) > mmap_end)
+            break;
+
         if (mmap->type == MULTIBOOT_MEMORY_AVAILABLE)
         {
             uint64_t region_start = mmap->addr;

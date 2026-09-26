@@ -38,7 +38,6 @@ static int terminal_window_open = 0;
 static int terminal_window_prompted = 0;
 static int terminal_pid = -1;
 static int graphics_ready_global = 0;
-static int terminal_window_maximized = 0;
 
 static void terminal_window_draw(void);
 
@@ -70,18 +69,18 @@ static void terminal_window_draw(void)
     int width = (int)graphics_get_width();
     int height = (int)graphics_get_height();
 
-    int window_w = terminal_window_maximized ? width : 880;
-    int window_h = terminal_window_maximized ? height : 620;
-    int window_x = terminal_window_maximized ? 0 : width / 2 - window_w / 2;
-    int window_y = terminal_window_maximized ? 0 : 64;
+    int window_w = graphics_terminal_is_maximized() ? width : 880;
+    int window_h = graphics_terminal_is_maximized() ? height : 620;
+    int window_x = graphics_terminal_is_maximized() ? 0 : width / 2 - window_w / 2;
+    int window_y = graphics_terminal_is_maximized() ? 0 : 64;
 
-    if (!terminal_window_maximized && window_w > width - 20)
+    if (!graphics_terminal_is_maximized() && window_w > width - 20)
     {
         window_w = width - 20;
         window_x = 10;
     }
 
-    if (!terminal_window_maximized && window_h > height - 20)
+    if (!graphics_terminal_is_maximized() && window_h > height - 20)
     {
         window_h = height - 20;
         window_y = 10;

@@ -1,4 +1,5 @@
 #include "mouse.h"
+#include "graphics.h"
 #include "terminal.h"
 
 #define PS2_DATA_PORT       0x60
@@ -248,6 +249,15 @@ void mouse_handle_interrupt(void)
      * 0x0E = -2
      * etc.
      */
+    int delta_x = (int)(int8_t)mouse_packet[1];
+    int delta_y = (int)(int8_t)mouse_packet[2];
+
+    if (!(mouse_packet[0] & 0x40) &&
+        !(mouse_packet[0] & 0x80))
+    {
+        graphics_mouse_move(delta_x, delta_y);
+    }
+
     int wheel =
         (int)(mouse_packet[3] & 0x0F);
 

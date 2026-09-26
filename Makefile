@@ -16,6 +16,7 @@ OBJS = boot.o \
        timer.o \
        pmm.o \
        paging.o \
+       graphics.o \
        heap.o \
        shell.o \
        pci.o
@@ -54,6 +55,9 @@ pmm.o: kernel/pmm.c
 
 paging.o: kernel/paging.c
 	$(CC) $(CFLAGS) -c kernel/paging.c -o paging.o
+
+graphics.o: kernel/graphics.c
+	$(CC) $(CFLAGS) -c kernel/graphics.c -o graphics.o
 
 heap.o: kernel/heap.c
 	$(CC) $(CFLAGS) -c kernel/heap.c -o heap.o

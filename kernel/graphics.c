@@ -541,22 +541,38 @@ void graphics_mouse_click(int button)
      */
     if (active_panel == 3)
     {
-        int terminal_x = (int)framebuffer_width / 2 - 440;
-        int terminal_y = 64;
+        int terminal_w = terminal_maximized ?
+            (int)framebuffer_width : 880;
+        int terminal_x = terminal_maximized ?
+            0 : (int)framebuffer_width / 2 - 440;
+        int terminal_y = terminal_maximized ? 0 : 64;
 
-        if (cursor_x >= terminal_x + 820 &&
-            cursor_x < terminal_x + 852 &&
-            cursor_y >= terminal_y + 8 &&
-            cursor_y < terminal_y + 42)
+        /* Minimize: return to the desktop without destroying the app. */
+        if (cursor_x >= terminal_x + terminal_w - 140 &&
+            cursor_x < terminal_x + terminal_w - 96 &&
+            cursor_y >= terminal_y + 6 &&
+            cursor_y < terminal_y + 44)
+        {
+            terminal_close_requested = 1;
+            active_panel = 0;
+            return;
+        }
+
+        /* Maximize/restore. */
+        if (cursor_x >= terminal_x + terminal_w - 96 &&
+            cursor_x < terminal_x + terminal_w - 48 &&
+            cursor_y >= terminal_y + 6 &&
+            cursor_y < terminal_y + 44)
         {
             terminal_maximized = !terminal_maximized;
             return;
         }
 
-        if (cursor_x >= terminal_x + 852 &&
-            cursor_x < terminal_x + 880 &&
-            cursor_y >= terminal_y + 8 &&
-            cursor_y < terminal_y + 42)
+        /* Close. */
+        if (cursor_x >= terminal_x + terminal_w - 48 &&
+            cursor_x < terminal_x + terminal_w &&
+            cursor_y >= terminal_y + 6 &&
+            cursor_y < terminal_y + 44)
         {
             terminal_close_requested = 1;
             active_panel = 0;

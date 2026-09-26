@@ -25,6 +25,7 @@ void graphics_draw_text(
 );
 
 void graphics_mouse_move(int dx, int dy);
+void graphics_mouse_click(int button);
 void graphics_draw_cursor(void);
 
 int graphics_is_initialized(void);

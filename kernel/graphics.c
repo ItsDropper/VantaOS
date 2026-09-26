@@ -36,6 +36,14 @@ static int terminal_restore_y;
 static int terminal_drag_offset_x;
 static int terminal_drag_offset_y;
 
+#define CURSOR_SAVE_SIZE 20
+static uint32_t cursor_saved[CURSOR_SAVE_SIZE * CURSOR_SAVE_SIZE];
+static int cursor_saved_x;
+static int cursor_saved_y;
+static int cursor_saved_width;
+static int cursor_saved_height;
+static int cursor_saved_valid;
+
 static const uint8_t font[36][7] =
 {
     {0x0E,0x11,0x11,0x1F,0x11,0x11,0x11},
@@ -766,21 +774,63 @@ void graphics_mouse_release(int button)
     terminal_dragging = 0;
 }
 
+static void graphics_cursor_restore(void)
+{
+    if (!initialized || !cursor_saved_valid)
+        return;
+
+    for (int y = 0; y < cursor_saved_height; y++)
+    {
+        volatile uint32_t* row =
+            (volatile uint32_t*)(framebuffer +
+                (cursor_saved_y + y) * framebuffer_pitch);
+
+        for (int x = 0; x < cursor_saved_width; x++)
+            row[cursor_saved_x + x] =
+                cursor_saved[y * CURSOR_SAVE_SIZE + x];
+    }
+
+    cursor_saved_valid = 0;
+}
+
 void graphics_draw_cursor(void)
 {
-    /*
-     * Keep input coordinates unchanged, but render the pointer a few
-     * pixels northeast so its visible hotspot sits naturally at the
-     * tip of the arrow. The cursor is visual-only; click hit testing
-     * continues to use cursor_x/cursor_y.
-     */
     if (!initialized)
         return;
 
-    int x = cursor_x + 5;
-    int y = cursor_y - 15;
+    /* The logical pointer is the visual pointer. No host/window offset. */
+    int x = cursor_x;
+    int y = cursor_y;
 
-    /* Black outline: a compact Windows-style arrow pointer. */
+    graphics_cursor_restore();
+
+    cursor_saved_x = x;
+    cursor_saved_y = y;
+    cursor_saved_width = CURSOR_SAVE_SIZE;
+    cursor_saved_height = CURSOR_SAVE_SIZE;
+
+    if (cursor_saved_x + cursor_saved_width > (int)framebuffer_width)
+        cursor_saved_width = (int)framebuffer_width - cursor_saved_x;
+
+    if (cursor_saved_y + cursor_saved_height > (int)framebuffer_height)
+        cursor_saved_height = (int)framebuffer_height - cursor_saved_y;
+
+    if (cursor_saved_width <= 0 || cursor_saved_height <= 0)
+        return;
+
+    for (int py = 0; py < cursor_saved_height; py++)
+    {
+        volatile uint32_t* row =
+            (volatile uint32_t*)(framebuffer +
+                (cursor_saved_y + py) * framebuffer_pitch);
+
+        for (int px = 0; px < cursor_saved_width; px++)
+            cursor_saved[py * CURSOR_SAVE_SIZE + px] =
+                row[cursor_saved_x + px];
+    }
+
+    cursor_saved_valid = 1;
+
     graphics_fill_rect(x, y, 2, 19, 0x00000000);
     graphics_fill_rect(x, y, 4, 2, 0x00000000);
     graphics_fill_rect(x + 2, y + 2, 4, 2, 0x00000000);
@@ -792,7 +842,6 @@ void graphics_draw_cursor(void)
     graphics_fill_rect(x + 12, y + 14, 2, 5, 0x00000000);
     graphics_fill_rect(x + 10, y + 16, 3, 2, 0x00000000);
 
-    /* White interior. */
     graphics_fill_rect(x + 2, y + 2, 2, 13, 0x00FFFFFF);
     graphics_fill_rect(x + 4, y + 4, 2, 13, 0x00FFFFFF);
     graphics_fill_rect(x + 6, y + 6, 2, 11, 0x00FFFFFF);
@@ -800,11 +849,12 @@ void graphics_draw_cursor(void)
     graphics_fill_rect(x + 10, y + 10, 2, 6, 0x00FFFFFF);
     graphics_fill_rect(x + 12, y + 12, 1, 3, 0x00FFFFFF);
 }
-
 void graphics_present(void)
 {
     if (!initialized)
         return;
+
+    graphics_cursor_restore();
 
     uint32_t w = framebuffer_width;
     uint32_t h = framebuffer_height;
@@ -1057,6 +1107,4 @@ void graphics_present(void)
         "VANTAOS", 0x00FFFFFF, 2
     );
 
-
-    graphics_draw_cursor();
 }

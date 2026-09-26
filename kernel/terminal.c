@@ -514,3 +514,30 @@ void terminal_write_hex(uint32_t value)
         );
     }
 }
+
+size_t terminal_history_count(void)
+{
+    return history_count;
+}
+
+int terminal_history_line(
+    size_t logical_line,
+    char* buffer,
+    size_t buffer_size
+)
+{
+    if (!buffer || buffer_size == 0 || logical_line >= history_count)
+        return 0;
+
+    uint16_t* line = history_line(logical_line);
+    size_t count = buffer_size - 1;
+
+    if (count > VGA_WIDTH)
+        count = VGA_WIDTH;
+
+    for (size_t i = 0; i < count; i++)
+        buffer[i] = (char)(line[i] & 0xFF);
+
+    buffer[count] = 0;
+    return 1;
+}

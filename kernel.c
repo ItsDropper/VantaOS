@@ -35,10 +35,13 @@ static unsigned long long boot_memory;
 static unsigned long long boot_shell;
 
 static int terminal_window_open = 0;
+static int terminal_window_prompted = 0;
+static int terminal_pid = -1;
+static int graphics_ready_global = 0;
 
 static void terminal_window_draw(void)
 {
-    if (!graphics_is_initialized() || !terminal_window_open)
+    if (!graphics_ready_global || !terminal_window_open)
         return;
 
     int width = (int)graphics_get_width();
@@ -119,6 +122,71 @@ static void terminal_window_draw(void)
     (void)height;
 }
 
+static void terminal_process_main(void)
+{
+    while (1)
+    {
+        if (!terminal_window_open)
+        {
+            terminal_window_prompted = 0;
+            process_block_current();
+            continue;
+        }
+
+        if (!terminal_window_prompted)
+        {
+            terminal_write(
+                "\n[GUI] Terminal process started (PID 1).\n"
+            );
+            shell_show_prompt();
+            terminal_window_prompted = 1;
+            terminal_window_draw();
+        }
+
+        int changed = 0;
+
+        if (keyboard_has_event())
+        {
+            keyboard_event_t event =
+                keyboard_get_event();
+
+            if (event == KEY_EVENT_PAGE_UP)
+                terminal_scroll_up();
+            else if (event == KEY_EVENT_PAGE_DOWN)
+                terminal_scroll_down();
+            else
+                shell_handle_event(event);
+
+            changed = 1;
+        }
+
+        char c = keyboard_get_char();
+
+        if (c != 0)
+        {
+            if (c == 27)
+            {
+                terminal_window_open = 0;
+                terminal_window_prompted = 0;
+
+                if (graphics_ready_global)
+                    graphics_present();
+
+                process_block_current();
+                continue;
+            }
+
+            shell_handle_char(c);
+            changed = 1;
+        }
+
+        if (changed)
+            terminal_window_draw();
+
+        __asm__ volatile ("hlt");
+    }
+}
+
 void kernel_main(multiboot_info_t* mbd)
 {
     boot_start = read_tsc();
@@ -140,7 +208,7 @@ void kernel_main(multiboot_info_t* mbd)
 
     pci_initialize();
 
-    int graphics_ready =
+    graphics_ready_global =
         graphics_initialize(mbd);
 
     terminal_write("Graphics diagnostics:\n");
@@ -157,11 +225,25 @@ void kernel_main(multiboot_info_t* mbd)
     terminal_write_hex(mbd ? mbd->framebuffer_bpp : 0);
     terminal_write("\n");
     terminal_write("  Graphics init: ");
-    terminal_write(graphics_ready ? "YES\n" : "NO\n");
+    terminal_write(graphics_ready_global ? "YES\n" : "NO\n");
 
     heap_initialize();
     filesystem_initialize(mbd);
+
     process_initialize();
+
+    terminal_pid =
+        process_create_kernel(
+            "terminal",
+            0,
+            terminal_process_main
+        );
+
+    process_attach_current(
+        "desktop",
+        0
+    );
+
     boot_memory = read_tsc();
     boot_interrupts = boot_memory;
 
@@ -175,26 +257,40 @@ void kernel_main(multiboot_info_t* mbd)
     __asm__ volatile ("sti");
 
     terminal_write("\nKernel initialized successfully.\n");
-    terminal_write(filesystem_is_initialized() ? "Filesystem: online.\n" : "Filesystem: offline.\n");
-    terminal_write(process_is_initialized() ? "Process manager: online.\n" : "Process manager: offline.\n");
-    terminal_write("Paging: enabled (identity-mapped 16 MiB).\n");
-    terminal_write("Type 'help' for available commands.\n\n");
+    terminal_write(
+        filesystem_is_initialized() ?
+        "Filesystem: online.\n" :
+        "Filesystem: offline.\n"
+    );
+    terminal_write(
+        process_is_initialized() ?
+        "Process scheduler: online.\n" :
+        "Process scheduler: offline.\n"
+    );
+    terminal_write(
+        "Paging: enabled (identity-mapped 16 MiB).\n"
+    );
+    terminal_write(
+        "Type 'help' in the Terminal app.\n\n"
+    );
 
-    if (graphics_ready)
+    if (graphics_ready_global)
         graphics_present();
-
-    shell_show_prompt();
 
     while (1)
     {
         if (mouse_has_event())
         {
-            int wheel_event = mouse_has_wheel_event();
-            int click_event = mouse_has_click_event();
+            int wheel_event =
+                mouse_has_wheel_event();
+
+            int click_event =
+                mouse_has_click_event();
 
             if (wheel_event)
             {
-                int wheel_delta = mouse_get_wheel_delta();
+                int wheel_delta =
+                    mouse_get_wheel_delta();
 
                 if (wheel_delta > 0)
                     terminal_scroll_down();
@@ -203,7 +299,25 @@ void kernel_main(multiboot_info_t* mbd)
                     terminal_scroll_up();
             }
 
-            if (graphics_ready && (wheel_event || click_event))
+            if (click_event &&
+                graphics_get_active_panel() == 3 &&
+                !terminal_window_open)
+            {
+                terminal_window_open = 1;
+                terminal_window_prompted = 0;
+
+                process_wake(
+                    (uint32_t)terminal_pid
+                );
+
+                if (graphics_ready_global)
+                {
+                    graphics_present();
+                    terminal_window_draw();
+                }
+            }
+            else if (graphics_ready_global &&
+                     (wheel_event || click_event))
             {
                 graphics_present();
 
@@ -211,61 +325,11 @@ void kernel_main(multiboot_info_t* mbd)
                     terminal_window_draw();
             }
 
-            if (click_event &&
-                graphics_get_active_panel() == 3 &&
-                !terminal_window_open)
-            {
-                terminal_window_open = 1;
-                process_set_running(1);
-                terminal_write("\n[GUI] Terminal window opened (PID 1).\n");
-                shell_show_prompt();
-
-                terminal_window_draw();
-            }
-
             mouse_clear_event_flags();
             continue;
         }
 
-        if (keyboard_has_event())
-        {
-            keyboard_event_t event = keyboard_get_event();
-
-            if (event == KEY_EVENT_PAGE_UP)
-                terminal_scroll_up();
-            else if (event == KEY_EVENT_PAGE_DOWN)
-                terminal_scroll_down();
-            else
-                shell_handle_event(event);
-
-            if (terminal_window_open)
-                terminal_window_draw();
-
-            continue;
-        }
-
-        char c = keyboard_get_char();
-
-        if (c == 0)
-        {
-            __asm__ volatile ("hlt");
-            continue;
-        }
-
-        if (c == 27)
-        {
-            terminal_window_open = 0;
-
-            if (graphics_ready)
-                graphics_present();
-
-            continue;
-        }
-
-        shell_handle_char(c);
-
-        if (terminal_window_open)
-            terminal_window_draw();
+        __asm__ volatile ("hlt");
     }
 }
 

@@ -29,7 +29,6 @@ typedef struct multiboot_info
     uint32_t num;
     uint32_t size;
     uint32_t addr;
-    uint32_t shndx;
     uint32_t mmap_length;
     uint32_t mmap_addr;
 

@@ -39,6 +39,8 @@ static int terminal_window_prompted = 0;
 static int terminal_pid = -1;
 static int graphics_ready_global = 0;
 
+static void terminal_window_draw(void);
+
 static void terminal_open_window(void)
 {
     terminal_window_open = 1;

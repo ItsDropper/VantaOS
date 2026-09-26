@@ -785,6 +785,23 @@ static void shell_mem(void)
     shell_print_decimal(pmm_get_free_blocks());
     terminal_putchar('\n');
 
+    terminal_write("\nKernel heap:\n");
+
+    terminal_write("  Status        : ");
+    terminal_write(heap_is_initialized() ? "online\n" : "offline\n");
+
+    terminal_write("  Total         : ");
+    shell_print_decimal((unsigned int)heap_get_total_size());
+    terminal_write(" bytes\n");
+
+    terminal_write("  Used          : ");
+    shell_print_decimal((unsigned int)heap_get_used_size());
+    terminal_write(" bytes\n");
+
+    terminal_write("  Free          : ");
+    shell_print_decimal((unsigned int)heap_get_free_size());
+    terminal_write(" bytes\n");
+
     void* block = pmm_alloc_block();
 
     if (block == 0)

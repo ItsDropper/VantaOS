@@ -322,6 +322,11 @@ bool mouse_has_click_event(void)
     return mouse_clicked != 0;
 }
 
+bool mouse_has_move_event(void)
+{
+    return mouse_moved != 0;
+}
+
 void mouse_clear_event_flags(void)
 {
     mouse_moved = 0;

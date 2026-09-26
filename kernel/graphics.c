@@ -142,34 +142,31 @@ static inline uint16_t bochs_vbe_read(uint16_t index)
 
 static int graphics_initialize_bochs(void)
 {
-    /*
-     * Use the Bochs VBE LFB selected by the emulator. The DISPI registers
-     * do not expose a portable framebuffer physical address, so use the
-     * standard QEMU/Bochs PCI BAR0 address used by our VBE device.
-     */
     if (bochs_vbe_read(BOCHS_VBE_INDEX_ID) != BOCHS_VBE_ID)
         return 0;
 
     bochs_vbe_write(BOCHS_VBE_INDEX_ENABLE, 0);
+
     bochs_vbe_write(BOCHS_VBE_INDEX_XRES, 1024);
     bochs_vbe_write(BOCHS_VBE_INDEX_YRES, 768);
     bochs_vbe_write(BOCHS_VBE_INDEX_BPP, 32);
     bochs_vbe_write(BOCHS_VBE_INDEX_VIRT_WIDTH, 1024);
     bochs_vbe_write(BOCHS_VBE_INDEX_VIRT_HEIGHT, 768);
+
     bochs_vbe_write(BOCHS_VBE_INDEX_ENABLE, BOCHS_VBE_ENABLE_LFB);
 
-    /*
-     * The VBE LFB is normally mapped by the PCI device at 0xE0000000 in
-     * our QEMU configuration. Keep this isolated so the renderer uses the
-     * same physical address that the machine exposes.
-     */
-    uint32_t physical = 0xE0000000U;
+    uint32_t physical = (uint32_t)bochs_vbe_read(BOCHS_VBE_INDEX_LFB) << 16;
+
+    if (physical == 0)
+        physical = 0xFD000000U;
+
     uint32_t offset = physical & 0xFFF;
     uint32_t first_page = physical & 0xFFFFF000U;
     uint32_t pitch = 1024 * 4;
     uint64_t bytes = (uint64_t)pitch * 768;
 
-    uint32_t pages = (uint32_t)((offset + bytes + 4095) / 4096);
+    uint32_t pages =
+        (uint32_t)((offset + bytes + 4095) / 4096);
 
     if (pages == 0 || pages > GRAPHICS_MAX_PAGES)
         return 0;

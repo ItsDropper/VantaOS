@@ -30,6 +30,7 @@ static int start_menu_open;
 static uint32_t files_current_dir;
 static int files_open_file = -1;
 static int terminal_close_requested;
+static int terminal_running;
 static int terminal_maximized;
 static int terminal_dragging;
 static int terminal_x;
@@ -443,6 +444,16 @@ int graphics_terminal_close_requested(void)
     return 1;
 }
 
+void graphics_set_terminal_running(int running)
+{
+    terminal_running = running ? 1 : 0;
+}
+
+int graphics_terminal_is_running(void)
+{
+    return terminal_running;
+}
+
 void graphics_select_panel(int panel)
 {
     if (!initialized)
@@ -693,16 +704,17 @@ void graphics_mouse_click(int button)
         return;
     }
 
-    if (cursor_x >= 18 && cursor_x < 74 &&
-        cursor_y >= taskbar_y + 8 && cursor_y < taskbar_y + 56)
-    {
-        start_menu_open = 1;
-        return;
-    }
-
     if (cursor_y >= taskbar_y + 8 && cursor_y < taskbar_y + 56)
     {
-        if (cursor_x >= 86 && cursor_x < 154)
+        int center = width / 2;
+
+        if (cursor_x >= center - 190 && cursor_x < center - 142)
+        {
+            start_menu_open = 1;
+            return;
+        }
+
+        if (cursor_x >= center - 132 && cursor_x < center - 64)
         {
             active_panel = 2;
             files_current_dir = filesystem_root();
@@ -710,7 +722,7 @@ void graphics_mouse_click(int button)
             return;
         }
 
-        if (cursor_x >= 162 && cursor_x < 230)
+        if (cursor_x >= center - 56 && cursor_x < center + 12)
         {
             active_panel = 3;
             return;
@@ -723,16 +735,18 @@ void graphics_mouse_click(int button)
         int terminal_x_current = terminal_maximized ? 0 : terminal_x;
         int terminal_y_current = terminal_maximized ? 0 : terminal_y;
 
+        /* Minimize: keep the terminal process alive and hide its window. */
         if (cursor_x >= terminal_x_current + terminal_w - 140 &&
             cursor_x < terminal_x_current + terminal_w - 96 &&
             cursor_y >= terminal_y_current + 4 &&
             cursor_y < terminal_y_current + 42)
         {
-            terminal_close_requested = 1;
             active_panel = 0;
+            terminal_dragging = 0;
             return;
         }
 
+        /* Maximize / restore. */
         if (cursor_x >= terminal_x_current + terminal_w - 96 &&
             cursor_x < terminal_x_current + terminal_w - 48 &&
             cursor_y >= terminal_y_current + 4 &&
@@ -742,6 +756,18 @@ void graphics_mouse_click(int button)
             return;
         }
 
+        /* Actual close button. */
+        if (cursor_x >= terminal_x_current + terminal_w - 48 &&
+            cursor_x < terminal_x_current + terminal_w &&
+            cursor_y >= terminal_y_current + 4 &&
+            cursor_y < terminal_y_current + 42)
+        {
+            terminal_close_requested = 1;
+            terminal_running = 0;
+            active_panel = 0;
+            terminal_dragging = 0;
+            return;
+        }
         if (!terminal_maximized &&
             cursor_x >= terminal_x_current + 8 &&
             cursor_x < terminal_x_current + terminal_w - 140 &&
@@ -1011,22 +1037,32 @@ static void graphics_draw_panel(int x, int y, int w, int h)
 
 static void graphics_draw_taskbar(int taskbar_y, int width)
 {
-    graphics_fill_rect(0, taskbar_y, width, 64, 0x00151B23);
-    graphics_fill_rect(0, taskbar_y, width, 1, 0x00334A60);
+    int center = width / 2;
 
-    /* Vanta logo replaces the Windows logo. */
-    graphics_fill_rect(18, taskbar_y + 8, 48, 48, 0x00202C39);
-    graphics_draw_vanta_logo(28, taskbar_y + 17, 28);
+    graphics_fill_rect(0, taskbar_y, width, 64, 0x00101822);
+    graphics_fill_rect(0, taskbar_y, width, 1, 0x002B3B4C);
 
-    graphics_fill_rect(86, taskbar_y + 8, 68, 48,
-        active_panel == 2 ? 0x002B4D69 : 0x001F2934);
-    graphics_draw_text(101, taskbar_y + 25, "FILES", 0x00F2F5F8, 1);
+    /* Start / Vanta. */
+    graphics_fill_rect(center - 190, taskbar_y + 8, 48, 48, 0x001A2633);
+    graphics_draw_vanta_logo(center - 180, taskbar_y + 18, 28);
 
-    graphics_fill_rect(162, taskbar_y + 8, 68, 48,
-        active_panel == 3 ? 0x002B4D69 : 0x001F2934);
-    graphics_draw_text(172, taskbar_y + 25, "TERM", 0x00F2F5F8, 1);
+    /* Files. */
+    graphics_fill_rect(center - 132, taskbar_y + 8, 68, 48,
+        active_panel == 2 ? 0x00263B50 : 0x001A2633);
+    graphics_fill_rect(center - 112, taskbar_y + 20, 26, 18, 0x005AA9E6);
+    graphics_fill_rect(center - 108, taskbar_y + 17, 12, 5, 0x005AA9E6);
+    graphics_draw_text(center - 98, taskbar_y + 46, "FILES", 0x00D8E2EA, 1);
 
-    graphics_draw_text(252, taskbar_y + 25, "VANTAOS", 0x008EA0B3, 1);
+    /* Terminal. */
+    graphics_fill_rect(center - 56, taskbar_y + 8, 68, 48,
+        active_panel == 3 ? 0x00263B50 : 0x001A2633);
+    graphics_fill_rect(center - 40, taskbar_y + 19, 36, 25, 0x000C141D);
+    graphics_draw_text(center - 34, taskbar_y + 26, ">_", 0x005AA9E6, 1);
+
+    if (terminal_running)
+        graphics_fill_rect(center - 56, taskbar_y + 54, 68, 2, 0x00FFFFFF);
+
+    graphics_draw_vanta_logo(width - 48, taskbar_y + 19, 24);
 }
 
 void graphics_present(void)
@@ -1040,22 +1076,29 @@ void graphics_present(void)
     int h = (int)framebuffer_height;
     int taskbar_y = h - 64;
 
-    /* Clean dark Vanta desktop. */
-    graphics_clear(0x000B1420);
-    graphics_fill_rect(0, 0, w, h / 2, 0x000E1B2A);
+    /* Restrained Vanta desktop: no fake widgets, only real app shortcuts. */
+    graphics_clear(0x000A111A);
+    graphics_fill_rect(0, 0, w, h - 64, 0x000D1823);
+    graphics_fill_rect(0, 0, w, 2, 0x002B80C9);
+    graphics_fill_rect(0, 2, 420, h - 66, 0x000E1C29);
+    graphics_fill_rect(420, 2, 1, h - 66, 0x00142330);
 
-    /* Desktop shortcuts. */
-    graphics_fill_rect(28, 34, 64, 52, 0x001E4B73);
-    graphics_fill_rect(43, 46, 34, 25, 0x004CA8E8);
-    graphics_draw_text(32, 94, "SYSTEM", 0x00F2F5F8, 1);
+    graphics_fill_rect(32, 34, 72, 58, 0x00182A39);
+    graphics_fill_rect(50, 49, 36, 25, 0x004B9CD3);
+    graphics_fill_rect(50, 46, 15, 5, 0x004B9CD3);
+    graphics_draw_text(43, 102, "SYSTEM", 0x00E7EEF4, 1);
 
-    graphics_fill_rect(140, 34, 64, 52, 0x001E5A40);
-    graphics_fill_rect(154, 46, 36, 28, 0x0059D28D);
-    graphics_draw_text(148, 94, "FILES", 0x00F2F5F8, 1);
+    graphics_fill_rect(128, 34, 72, 58, 0x00182A39);
+    graphics_fill_rect(147, 49, 36, 25, 0x0057B77E);
+    graphics_fill_rect(147, 46, 15, 5, 0x0057B77E);
+    graphics_draw_text(146, 102, "FILES", 0x00E7EEF4, 1);
 
-    graphics_fill_rect(252, 34, 64, 52, 0x002A3748);
-    graphics_fill_rect(266, 46, 36, 28, 0x0095A8BF);
-    graphics_draw_text(258, 94, "TERMINAL", 0x00F2F5F8, 1);
+    graphics_fill_rect(224, 34, 72, 58, 0x00182A39);
+    graphics_fill_rect(242, 48, 38, 27, 0x00131D28);
+    graphics_draw_text(249, 56, ">_", 0x005AA9E6, 1);
+    graphics_draw_text(236, 102, "TERMINAL", 0x00E7EEF4, 1);
+
+    graphics_draw_text(34, h - 92, "VANTAOS", 0x003E617A, 1);
 
     if (active_panel == 1)
     {
@@ -1189,10 +1232,10 @@ void graphics_present(void)
         }
     }
 
+    graphics_draw_taskbar(taskbar_y, w);
+
     if (active_panel == 3)
         return;
-
-    graphics_draw_taskbar(taskbar_y, w);
 
     if (start_menu_open)
     {

@@ -541,3 +541,14 @@ int terminal_history_line(
     buffer[count] = 0;
     return 1;
 }
+
+
+size_t terminal_get_cursor_line(void)
+{
+    return cursor_line;
+}
+
+size_t terminal_get_cursor_column(void)
+{
+    return cursor_column;
+}

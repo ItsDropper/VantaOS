@@ -1040,4 +1040,6 @@ void graphics_present(void)
         "VANTAOS", 0x00FFFFFF, 2
     );
 
+
+    graphics_draw_cursor();
 }

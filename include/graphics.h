@@ -32,6 +32,8 @@ int graphics_is_initialized(void);
 int graphics_get_active_panel(void);
 int graphics_terminal_close_requested(void);
 void graphics_select_panel(int panel);
+int graphics_terminal_is_maximized(void);
+void graphics_terminal_toggle_maximized(void);
 uint32_t graphics_get_width(void);
 uint32_t graphics_get_height(void);
 

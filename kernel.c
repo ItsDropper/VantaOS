@@ -464,9 +464,14 @@ void kernel_main(multiboot_info_t* mbd)
             }
 
             if (graphics_ready_global &&
-                wheel_event &&
-                terminal_window_open)
+                terminal_window_open &&
+                (wheel_event || click_event))
             {
+                /*
+                 * Mouse controls are handled by graphics_mouse_click()
+                 * in the mouse IRQ. Redraw immediately so state changes
+                 * such as maximize/restore become visible.
+                 */
                 terminal_window_draw();
             }
             else if (graphics_ready_global &&

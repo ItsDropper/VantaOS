@@ -58,84 +58,189 @@ static void terminal_window_draw(void)
     if (!graphics_ready_global || !terminal_window_open)
         return;
 
+    /*
+     * This is a real terminal surface, not a fake status panel:
+     * dark content area, title/tab row, monospace grid, prompt,
+     * scrolling history and an application cursor.
+     *
+     * Windows Terminal uses a dark title/tab row and black terminal
+     * content by default; VantaOS follows that visual model here.
+     */
     int width = (int)graphics_get_width();
     int height = (int)graphics_get_height();
-    int window_w = 760;
-    int window_h = 520;
-    int window_x = width / 2 - window_w / 2;
-    int window_y = 80;
 
+    int window_w = 880;
+    int window_h = 620;
+    int window_x = width / 2 - window_w / 2;
+    int window_y = 64;
+
+    if (window_w > width - 20)
+    {
+        window_w = width - 20;
+        window_x = 10;
+    }
+
+    if (window_h > height - 20)
+    {
+        window_h = height - 20;
+        window_y = 10;
+    }
+
+    /* Shadow and outer frame. */
     graphics_fill_rect(
         window_x + 8, window_y + 10,
-        window_w, window_h, 0x00070A0F
+        window_w, window_h,
+        0x00000000
     );
 
     graphics_fill_rect(
         window_x, window_y,
-        window_w, window_h, 0x00101820
+        window_w, window_h,
+        0x00111111
     );
 
+    /* Windows-style title/tab row. */
     graphics_fill_rect(
         window_x, window_y,
-        window_w, 44, 0x00212C3A
-    );
-
-    graphics_draw_text(
-        window_x + 18, window_y + 14,
-        "TERMINAL", 0x00FFFFFF, 2
+        window_w, 42,
+        0x00202020
     );
 
     graphics_fill_rect(
-        window_x + window_w - 42,
-        window_y + 10,
-        28, 28, 0x00374452
+        window_x, window_y + 42,
+        window_w, 34,
+        0x000C0C0C
     );
 
-    graphics_draw_text(
-        window_x + window_w - 34,
-        window_y + 15,
-        "X", 0x00FFFFFF, 2
+    /* Active terminal tab. */
+    graphics_fill_rect(
+        window_x + 8, window_y + 45,
+        210, 31,
+        0x001A1A1A
     );
 
     graphics_fill_rect(
-        window_x + 16, window_y + 58,
-        window_w - 32, window_h - 74,
-        0x00070A0F
+        window_x + 8, window_y + 74,
+        210, 2,
+        0x003B82F6
     );
 
+    graphics_draw_text(
+        window_x + 22, window_y + 13,
+        "VantaOS Terminal",
+        0x00F2F2F2, 1
+    );
+
+    graphics_draw_text(
+        window_x + 24, window_y + 54,
+        "VantaOS",
+        0x00E6E6E6, 1
+    );
+
+    /* New-tab and window controls. */
+    graphics_draw_text(
+        window_x + 232, window_y + 53,
+        "+",
+        0x00B8B8B8, 1
+    );
+
+    graphics_draw_text(
+        window_x + window_w - 118, window_y + 14,
+        "_",
+        0x00B8B8B8, 1
+    );
+
+    graphics_draw_text(
+        window_x + window_w - 84, window_y + 14,
+        "[]",
+        0x00B8B8B8, 1
+    );
+
+    graphics_draw_text(
+        window_x + window_w - 38, window_y + 13,
+        "X",
+        0x00F2F2F2, 1
+    );
+
+    /* Terminal content. */
+    int content_x = window_x + 18;
+    int content_y = window_y + 88;
+    int content_w = window_w - 36;
+    int content_h = window_h - 104;
+
+    graphics_fill_rect(
+        content_x, content_y,
+        content_w, content_h,
+        0x000C0C0C
+    );
+
+    /*
+     * The existing shell history is the terminal's backing store.
+     * One graphics character cell is 6x8 at scale 1, giving the
+     * terminal a dense monospace layout instead of a giant UI font.
+     */
     size_t count = terminal_history_count();
-    size_t first = count > 27 ? count - 27 : 0;
+    size_t visible_lines = (size_t)(content_h / 10);
+
+    if (visible_lines > 55)
+        visible_lines = 55;
+
+    size_t first = count > visible_lines ?
+        count - visible_lines : 0;
+
     char line[81];
-    int text_y = window_y + 70;
+    int text_y = content_y + 8;
 
     for (size_t i = first;
-         i < count && text_y < window_y + window_h - 24;
+         i < count && text_y < content_y + content_h - 4;
          i++)
     {
-        if (!terminal_history_line(i, line, sizeof(line)))
+        if (!terminal_history_line(
+                i, line, sizeof(line)))
             continue;
 
-        for (unsigned int j = 0; line[j]; j++)
-        {
-            if (line[j] >= 'a' && line[j] <= 'z')
-                line[j] =
-                    (char)(line[j] - 'a' + 'A');
-        }
-
         graphics_draw_text(
-            window_x + 26,
+            content_x + 10,
             text_y,
             line,
-            0x00D7DEE7,
+            0x00F2F2F2,
             1
         );
 
-        text_y += 18;
+        text_y += 10;
     }
 
-    (void)height;
-}
+    /*
+     * Draw a terminal-style bar cursor at the shell's actual
+     * editing position.  Blink is driven by the kernel tick
+     * counter rather than continuously repainting the window.
+     */
+    size_t cursor_line = terminal_get_cursor_line();
+    size_t cursor_column = terminal_get_cursor_column();
 
+    size_t cursor_first = count > visible_lines ?
+        count - visible_lines : 0;
+
+    if (cursor_line >= cursor_first &&
+        cursor_line < cursor_first + visible_lines &&
+        ((interrupts_get_ticks() / 50) & 1U) == 0)
+    {
+        int cursor_x =
+            content_x + 10 + (int)cursor_column * 6;
+
+        int cursor_y =
+            content_y + 8 +
+            (int)(cursor_line - cursor_first) * 10;
+
+        graphics_fill_rect(
+            cursor_x,
+            cursor_y,
+            2,
+            8,
+            0x00F2F2F2
+        );
+    }
+}
 static void terminal_process_step(void)
 {
     if (!terminal_window_open)
@@ -144,7 +249,7 @@ static void terminal_process_step(void)
     if (!terminal_window_prompted)
     {
         terminal_write(
-            "\n[GUI] Terminal opened (PID 1).\n"
+            "\nVantaOS Terminal\n"
         );
         shell_show_prompt();
         terminal_window_prompted = 1;
@@ -298,6 +403,15 @@ void kernel_main(multiboot_info_t* mbd)
             !terminal_window_open)
         {
             terminal_open_window();
+        }
+
+        if (terminal_window_open &&
+            graphics_terminal_close_requested())
+        {
+            terminal_window_open = 0;
+            terminal_window_prompted = 0;
+            graphics_select_panel(0);
+            graphics_present();
         }
 
         if (terminal_window_open)

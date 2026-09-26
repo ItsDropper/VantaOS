@@ -2,6 +2,7 @@
 #define FILESYSTEM_H
 
 #include <stdint.h>
+#include "multiboot.h"
 
 #define FS_MAX_NODES 64
 #define FS_NAME_MAX 31
@@ -25,7 +26,7 @@ typedef struct
     uint32_t size;
 } fs_node_t;
 
-void filesystem_initialize(struct multiboot_info* mbd);
+void filesystem_initialize(multiboot_info_t* mbd);
 
 int filesystem_is_initialized(void);
 
@@ -44,6 +45,11 @@ int filesystem_read(
     char* buffer,
     unsigned int capacity
 );
+
+int filesystem_create_directory(const char* path);
+int filesystem_create_file(const char* path);
+int filesystem_write_file(const char* path, const char* data);
+int filesystem_file_exists(const char* path);
 
 int filesystem_create_directory(const char* path);
 int filesystem_create_file(const char* path);

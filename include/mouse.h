@@ -18,6 +18,7 @@ void mouse_handle_interrupt(void);
 /*
  * Check whether the mouse has accumulated wheel movement.
  */
+bool mouse_has_event(void);
 bool mouse_has_wheel_event(void);
 
 /*

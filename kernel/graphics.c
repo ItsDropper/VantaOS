@@ -21,6 +21,7 @@ static uint8_t blue_mask_size;
 static int initialized;
 static int cursor_x;
 static int cursor_y;
+static int active_panel;
 
 static const uint8_t font[36][7] =
 {
@@ -333,6 +334,34 @@ void graphics_draw_text(
     }
 }
 
+void graphics_mouse_click(int button)
+{
+    if (!initialized || button != 1)
+        return;
+
+    int window_x = (int)framebuffer_width / 2 - 300;
+    int window_y = 120;
+    int card_y = window_y + 215;
+
+    if (cursor_x >= window_x + 28 &&
+        cursor_x < window_x + 193 &&
+        cursor_y >= card_y &&
+        cursor_y < card_y + 80)
+        active_panel = 1;
+    else if (cursor_x >= window_x + 210 &&
+             cursor_x < window_x + 375 &&
+             cursor_y >= card_y &&
+             cursor_y < card_y + 80)
+        active_panel = 2;
+    else if (cursor_x >= window_x + 392 &&
+             cursor_x < window_x + 557 &&
+             cursor_y >= card_y &&
+             cursor_y < card_y + 80)
+        active_panel = 3;
+    else
+        return;
+}
+
 void graphics_mouse_move(int dx, int dy)
 {
     if (!initialized)
@@ -451,6 +480,13 @@ void graphics_present(void)
         window_x + 28, window_y + 164,
         "FILES", 0x009AA8B8, 2
     );
+
+    if (active_panel == 1)
+        graphics_draw_text(window_x + 28, window_y + 190, "SYSTEM READY", 0x0058D68D, 1);
+    else if (active_panel == 2)
+        graphics_draw_text(window_x + 28, window_y + 190, "FILES READY", 0x0058D68D, 1);
+    else if (active_panel == 3)
+        graphics_draw_text(window_x + 28, window_y + 190, "ALL SYSTEMS ONLINE", 0x0058D68D, 1);
 
     int card_y = window_y + 215;
 

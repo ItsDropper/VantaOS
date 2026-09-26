@@ -292,6 +292,9 @@ void mouse_handle_interrupt(void)
         mouse_clicked = 1;
     }
 
+    if (!left_down && mouse_left_down)
+        graphics_mouse_release(1);
+
     mouse_left_down = left_down;
 
     if (mouse_packet_size == 4)

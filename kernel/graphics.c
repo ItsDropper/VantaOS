@@ -1,5 +1,6 @@
 #include "graphics.h"
 #include "paging.h"
+#include "pci.h"
 
 #include <stdint.h>
 
@@ -162,7 +163,24 @@ static int graphics_initialize_bochs(void)
      * is X_OFFSET, not the framebuffer address, so reading it here
      * produces a bogus physical address and can corrupt rendering.
      */
-    uint32_t physical = 0xE0000000U;
+    uint32_t physical = 0;
+
+    for (int i = 0; i < pci_get_device_count(); i++)
+    {
+        const struct pci_device* device = pci_get_device(i);
+
+        if (!device ||
+            device->vendor_id != 0x1234 ||
+            device->device_id != 0x1111 ||
+            device->class_code != 0x03)
+            continue;
+
+        if (pci_get_bar0(device, &physical))
+            break;
+    }
+
+    if (physical == 0)
+        return 0;
 
     uint32_t offset = physical & 0xFFF;
     uint32_t first_page = physical & 0xFFFFF000U;

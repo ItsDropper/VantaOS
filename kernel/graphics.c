@@ -27,6 +27,7 @@ static int cursor_x;
 static int cursor_y;
 static int active_panel;
 static int terminal_close_requested;
+static int terminal_maximized;
 
 static const uint8_t font[36][7] =
 {
@@ -387,6 +388,19 @@ void graphics_select_panel(int panel)
     active_panel = panel;
 }
 
+int graphics_terminal_is_maximized(void)
+{
+    return terminal_maximized;
+}
+
+void graphics_terminal_toggle_maximized(void)
+{
+    if (!initialized)
+        return;
+
+    terminal_maximized = !terminal_maximized;
+}
+
 uint32_t graphics_get_width(void)
 {
     return framebuffer_width;
@@ -531,7 +545,16 @@ void graphics_mouse_click(int button)
         int terminal_y = 64;
 
         if (cursor_x >= terminal_x + 820 &&
-            cursor_x < terminal_x + 872 &&
+            cursor_x < terminal_x + 852 &&
+            cursor_y >= terminal_y + 8 &&
+            cursor_y < terminal_y + 42)
+        {
+            terminal_maximized = !terminal_maximized;
+            return;
+        }
+
+        if (cursor_x >= terminal_x + 852 &&
+            cursor_x < terminal_x + 880 &&
             cursor_y >= terminal_y + 8 &&
             cursor_y < terminal_y + 42)
         {

@@ -41,9 +41,10 @@ global exception31_stub
 
 extern interrupt_handler
 extern exception_handler
+extern process_schedule
 
 ; =========================================================================
-; IRQ 0 - PIT timer
+; IRQ 0 - PIT timer + preemptive scheduler
 ; =========================================================================
 
 irq0_stub:
@@ -52,6 +53,12 @@ irq0_stub:
     push dword 32
     call interrupt_handler
     add esp, 4
+
+    push esp
+    call process_schedule
+    add esp, 4
+
+    mov esp, eax
 
     popa
     iretd

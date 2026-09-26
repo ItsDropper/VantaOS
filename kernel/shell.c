@@ -456,7 +456,8 @@ static void shell_help(void)
     terminal_write("  specs    - Show system specifications\n");
     terminal_write("  boot     - Show boot timing information\n");
     terminal_write("  uptime   - Show system uptime\n");
-    terminal_write("  mem      - Test physical memory allocation\n");
+    terminal_write("  mem      - Show physical memory status\n");
+    terminal_write("  fault    - Trigger a test page fault\n");
     terminal_write("  echo     - Print text\n");
     terminal_write("  reboot   - Reboot the system\n");
 }
@@ -764,42 +765,47 @@ static void shell_mem(void)
 {
     if (!pmm_initialized)
     {
-        terminal_write(
-            "\nInitializing physical memory manager...\n"
-        );
-
-        pmm_initialize(
-            multiboot_info
-        );
-
-        pmm_initialized = 1;
+        pmm_initialize(multiboot_info);
+        pmm_initialized = pmm_is_initialized();
     }
 
-    terminal_write(
-        "\nPhysical memory manager:\n"
-    );
+    terminal_write("\nPhysical memory manager:\n");
 
-    void* block =
-        pmm_alloc_block();
+    terminal_write("  Status        : ");
+    terminal_write(pmm_is_initialized() ? "online\n" : "offline\n");
+
+    terminal_write("  Total pages   : ");
+    shell_print_decimal(pmm_get_total_blocks());
+    terminal_putchar('\n');
+
+    terminal_write("  Free pages    : ");
+    shell_print_decimal(pmm_get_free_blocks());
+    terminal_putchar('\n');
+
+    void* block = pmm_alloc_block();
 
     if (block == 0)
     {
-        terminal_write(
-            "  PMM: allocation failed\n"
-        );
-
+        terminal_write("  Allocation    : failed\n");
         return;
     }
 
-    terminal_write(
-        "  PMM: online\n"
-    );
-
-    terminal_write(
-        "  Allocation test: passed\n"
-    );
+    terminal_write("  Allocation    : passed\n");
 
     pmm_free_block(block);
+
+    terminal_write("  Free test     : passed\n");
+}
+
+static void shell_fault(void)
+{
+    terminal_write("\nTriggering a test page fault...\n");
+
+    volatile unsigned int* unmapped =
+        (volatile unsigned int*)0xC0000000;
+
+    unsigned int value = *unmapped;
+    (void)value;
 }
 
 static void shell_reboot(void)
@@ -906,6 +912,12 @@ static void shell_execute(void)
     }
     else if (shell_string_equals(
                  shell_buffer,
+                 "fault"))
+    {
+        shell_fault();
+    }
+    else if (shell_string_equals(
+                 shell_buffer,
                  "reboot"))
     {
         shell_reboot();
@@ -952,6 +964,8 @@ void shell_set_multiboot_info(
 
 void shell_initialize(void)
 {
+    pmm_initialized = pmm_is_initialized();
+
     shell_clear_buffer();
 
     shell_history_count = 0;

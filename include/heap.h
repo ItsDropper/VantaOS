@@ -5,6 +5,8 @@
 #include <stdint.h>
 
 #define HEAP_ALIGNMENT 8
+#define HEAP_VIRTUAL_BASE 0x40000000U
+#define HEAP_MAX_SIZE (4 * 1024 * 1024)
 
 void heap_initialize(void);
 void* kmalloc(size_t size);

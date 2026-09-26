@@ -769,19 +769,36 @@ void graphics_mouse_release(int button)
 void graphics_draw_cursor(void)
 {
     /*
-     * The framebuffer is the complete GUI surface. The cursor is
-     * drawn here only as a visual indicator of the same coordinates
-     * used by graphics_mouse_click(). It must never be treated as a
-     * second input device.
+     * Keep input coordinates unchanged, but render the pointer a few
+     * pixels northeast so its visible hotspot sits naturally at the
+     * tip of the arrow. The cursor is visual-only; click hit testing
+     * continues to use cursor_x/cursor_y.
      */
     if (!initialized)
         return;
 
-    graphics_fill_rect(cursor_x, cursor_y, 2, 16, 0x00FFFFFF);
-    graphics_fill_rect(cursor_x, cursor_y, 10, 2, 0x00FFFFFF);
-    graphics_fill_rect(cursor_x + 2, cursor_y + 4, 6, 2, 0x00FFFFFF);
-    graphics_fill_rect(cursor_x + 2, cursor_y + 6, 4, 2, 0x00FFFFFF);
-    graphics_fill_rect(cursor_x + 2, cursor_y + 8, 2, 6, 0x00FFFFFF);
+    int x = cursor_x + 5;
+    int y = cursor_y - 5;
+
+    /* Black outline: a compact Windows-style arrow pointer. */
+    graphics_fill_rect(x, y, 2, 19, 0x00000000);
+    graphics_fill_rect(x, y, 4, 2, 0x00000000);
+    graphics_fill_rect(x + 2, y + 2, 4, 2, 0x00000000);
+    graphics_fill_rect(x + 4, y + 4, 4, 2, 0x00000000);
+    graphics_fill_rect(x + 6, y + 6, 4, 2, 0x00000000);
+    graphics_fill_rect(x + 8, y + 8, 4, 2, 0x00000000);
+    graphics_fill_rect(x + 10, y + 10, 4, 2, 0x00000000);
+    graphics_fill_rect(x + 12, y + 12, 3, 2, 0x00000000);
+    graphics_fill_rect(x + 12, y + 14, 2, 5, 0x00000000);
+    graphics_fill_rect(x + 10, y + 16, 3, 2, 0x00000000);
+
+    /* White interior. */
+    graphics_fill_rect(x + 2, y + 2, 2, 13, 0x00FFFFFF);
+    graphics_fill_rect(x + 4, y + 4, 2, 13, 0x00FFFFFF);
+    graphics_fill_rect(x + 6, y + 6, 2, 11, 0x00FFFFFF);
+    graphics_fill_rect(x + 8, y + 8, 2, 9, 0x00FFFFFF);
+    graphics_fill_rect(x + 10, y + 10, 2, 6, 0x00FFFFFF);
+    graphics_fill_rect(x + 12, y + 12, 1, 3, 0x00FFFFFF);
 }
 
 void graphics_present(void)

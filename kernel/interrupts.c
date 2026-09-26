@@ -264,6 +264,42 @@ void exception_handler(
     terminal_write("\n\nError Code: ");
     terminal_write_hex(frame->error_code);
 
+    if (exception_number == 14)
+    {
+        unsigned int fault_address;
+
+        __asm__ volatile (
+            "mov %%cr2, %0"
+            : "=r"(fault_address)
+        );
+
+        terminal_write("\n\nPage Fault Address: ");
+        terminal_write_hex(fault_address);
+
+        terminal_write("\nAccess: ");
+        terminal_write(
+            (frame->error_code & 0x2) ? "write" : "read"
+        );
+
+        terminal_write("\nPrivilege: ");
+        terminal_write(
+            (frame->error_code & 0x4) ? "user" : "kernel"
+        );
+
+        terminal_write("\nCause: ");
+        terminal_write(
+            (frame->error_code & 0x1) ?
+            "protection violation" :
+            "non-present page"
+        );
+
+        if (frame->error_code & 0x8)
+            terminal_write("\nReserved-bit violation.");
+
+        if (frame->error_code & 0x10)
+            terminal_write("\nInstruction fetch.");
+    }
+
     terminal_write("\n\nEIP:    ");
     terminal_write_hex(frame->eip);
 

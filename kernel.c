@@ -1,4 +1,5 @@
 #include "gdt.h"
+#include "graphics.h"
 #include "heap.h"
 #include "interrupts.h"
 #include "keyboard.h"
@@ -48,6 +49,10 @@ void kernel_main(multiboot_info_t* mbd)
     interrupts_initialize();
 
     paging_initialize();
+
+    int graphics_ready =
+        graphics_initialize(mbd);
+
     heap_initialize();
     boot_memory = read_tsc();
     boot_interrupts = boot_memory;
@@ -65,22 +70,35 @@ void kernel_main(multiboot_info_t* mbd)
     terminal_write("Paging: enabled (identity-mapped 16 MiB).\n");
     terminal_write("Type 'help' for available commands.\n\n");
 
+    if (graphics_ready)
+        graphics_present();
+
     shell_show_prompt();
 
     while (1)
     {
-        if (mouse_has_wheel_event())
+        if (mouse_has_event())
         {
-            int wheel_delta = mouse_get_wheel_delta();
+            if (mouse_has_wheel_event())
+            {
+                int wheel_delta = mouse_get_wheel_delta();
 
-            if (wheel_delta > 0)
-                terminal_scroll_down();
+                if (wheel_delta > 0)
+                    terminal_scroll_down();
 
-            if (wheel_delta < 0)
-                terminal_scroll_up();
+                if (wheel_delta < 0)
+                    terminal_scroll_up();
+            }
+
+            if (graphics_ready)
+                graphics_present();
 
             continue;
         }
+
+        if (keyboard_has_event())
+        {
+            keyboard_event_t event = keyboard_get_event();
 
         if (keyboard_has_event())
         {

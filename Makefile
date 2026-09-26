@@ -16,6 +16,7 @@ OBJS = boot.o \
        timer.o \
        pmm.o \
        paging.o \
+       heap.o \
        shell.o \
        pci.o
 

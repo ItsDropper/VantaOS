@@ -24,6 +24,7 @@ static unsigned int mouse_packet_size = 3;
 
 static volatile int mouse_wheel_delta = 0;
 static volatile int mouse_moved = 0;
+static volatile int mouse_clicked = 0;
 
 static inline unsigned char ps2_read_status(void)
 {
@@ -187,6 +188,7 @@ void mouse_initialize(void)
     mouse_packet_size = 3;
     mouse_wheel_delta = 0;
     mouse_moved = 0;
+    mouse_clicked = 0;
 
     /*
      * Remove stale controller data before configuring
@@ -268,6 +270,12 @@ void mouse_handle_interrupt(void)
         }
     }
 
+    if (mouse_packet[0] & 0x01)
+    {
+        graphics_mouse_click(1);
+        mouse_clicked = 1;
+    }
+
     if (mouse_packet_size == 4)
     {
         int wheel =
@@ -285,9 +293,11 @@ bool mouse_has_event(void)
 {
     int has_event =
         mouse_wheel_delta != 0 ||
-        mouse_moved != 0;
+        mouse_moved != 0 ||
+        mouse_clicked != 0;
 
     mouse_moved = 0;
+    mouse_clicked = 0;
 
     return has_event;
 }

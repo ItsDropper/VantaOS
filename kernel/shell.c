@@ -6,6 +6,8 @@
 #include "pci.h"
 #include "pmm.h"
 #include "terminal.h"
+#include "filesystem.h"
+#include "process.h"
 
 #include <stdint.h>
 
@@ -37,6 +39,8 @@ static multiboot_info_t* multiboot_info = 0;
 
 static int pmm_initialized = 0;
 static int pci_initialized = 0;
+
+static char shell_cwd[FS_PATH_MAX] = "/";
 
 extern unsigned long long kernel_boot_start(void);
 extern unsigned long long kernel_boot_gdt(void);
@@ -447,6 +451,284 @@ static void shell_history_down(void)
     shell_restore_draft();
 }
 
+static void shell_copy_path(char* destination, const char* source)
+{
+    unsigned int i = 0;
+
+    while (source[i] != 0 && i < FS_PATH_MAX - 1)
+    {
+        destination[i] = source[i];
+        i++;
+    }
+
+    destination[i] = 0;
+}
+
+static void shell_append_path(
+    char* destination,
+    const char* source
+)
+{
+    unsigned int length = 0;
+
+    while (destination[length] != 0 &&
+           length < FS_PATH_MAX - 1)
+        length++;
+
+    unsigned int i = 0;
+
+    while (source[i] != 0 &&
+           length < FS_PATH_MAX - 1)
+        destination[length++] = source[i++];
+
+    destination[length] = 0;
+}
+
+static int shell_resolve_path(
+    const char* argument,
+    char* resolved
+)
+{
+    if (argument == 0 || argument[0] == 0)
+    {
+        shell_copy_path(resolved, shell_cwd);
+        return 1;
+    }
+
+    if (argument[0] == '/')
+    {
+        shell_copy_path(resolved, argument);
+        return 1;
+    }
+
+    shell_copy_path(resolved, shell_cwd);
+
+    if (resolved[1] != 0)
+        shell_append_path(resolved, "/");
+    else
+        shell_append_path(resolved, "");
+
+    shell_append_path(resolved, argument);
+
+    return 1;
+}
+
+static void shell_ls(const char* argument)
+{
+    char path[FS_PATH_MAX];
+    shell_resolve_path(argument, path);
+
+    int directory_id =
+        filesystem_lookup(path);
+
+    if (directory_id < 0)
+    {
+        terminal_write("\nls: path not found: ");
+        terminal_write(argument ? argument : "");
+        terminal_putchar('\n');
+        return;
+    }
+
+    const fs_node_t* directory =
+        filesystem_get_node((uint32_t)directory_id);
+
+    if (directory == 0 ||
+        directory->type != FS_NODE_DIRECTORY)
+    {
+        terminal_write("\nls: not a directory\n");
+        return;
+    }
+
+    uint32_t ids[FS_MAX_NODES];
+    int count = filesystem_list(
+        (uint32_t)directory_id,
+        ids,
+        FS_MAX_NODES
+    );
+
+    terminal_write("\n");
+
+    for (int i = 0; i < count; i++)
+    {
+        const fs_node_t* node =
+            filesystem_get_node(ids[i]);
+
+        if (node == 0)
+            continue;
+
+        terminal_write(node->name);
+
+        if (node->type == FS_NODE_DIRECTORY)
+            terminal_putchar('/');
+
+        terminal_write("  ");
+    }
+
+    terminal_putchar('\n');
+}
+
+static void shell_cat(const char* argument)
+{
+    if (argument == 0 || argument[0] == 0)
+    {
+        terminal_write("\ncat: missing file\n");
+        return;
+    }
+
+    char path[FS_PATH_MAX];
+    shell_resolve_path(argument, path);
+
+    int file_id =
+        filesystem_lookup(path);
+
+    if (file_id < 0)
+    {
+        terminal_write("\ncat: file not found: ");
+        terminal_write(argument);
+        terminal_putchar('\n');
+        return;
+    }
+
+    const fs_node_t* file =
+        filesystem_get_node((uint32_t)file_id);
+
+    if (file == 0 || file->type != FS_NODE_FILE)
+    {
+        terminal_write("\ncat: not a file\n");
+        return;
+    }
+
+    char buffer[FS_FILE_MAX];
+
+    if (filesystem_read(
+            (uint32_t)file_id,
+            buffer,
+            FS_FILE_MAX) < 0)
+    {
+        terminal_write("\ncat: read failed\n");
+        return;
+    }
+
+    terminal_putchar('\n');
+    terminal_write(buffer);
+
+    if (file->size == 0 ||
+        buffer[file->size - 1] != '\n')
+        terminal_putchar('\n');
+}
+
+static void shell_pwd(void)
+{
+    terminal_write("\n");
+    terminal_write(shell_cwd);
+    terminal_putchar('\n');
+}
+
+static const char* shell_process_state(
+    process_state_t state
+)
+{
+    switch (state)
+    {
+        case PROCESS_READY:
+            return "READY";
+        case PROCESS_RUNNING:
+            return "RUNNING";
+        case PROCESS_SLEEPING:
+            return "SLEEPING";
+        case PROCESS_TERMINATED:
+            return "TERMINATED";
+        default:
+            return "UNKNOWN";
+    }
+}
+
+static void shell_ps(void)
+{
+    terminal_write("\nPID  PPID  STATE      NAME\n");
+    terminal_write("---  ----  ---------  ----------------\n");
+
+    for (uint32_t pid = 0; pid < PROCESS_MAX; pid++)
+    {
+        const process_t* process =
+            process_get(pid);
+
+        if (process == 0)
+            continue;
+
+        terminal_write("   ");
+
+        if (pid < 10)
+            terminal_putchar('0');
+
+        shell_print_decimal(pid);
+
+        terminal_write("    ");
+
+        shell_print_decimal(
+            process->parent_pid
+        );
+
+        terminal_write("   ");
+        terminal_write(
+            shell_process_state(process->state)
+        );
+
+        terminal_write("   ");
+        terminal_write(process->name);
+        terminal_putchar('\n');
+    }
+}
+
+static void shell_cd(const char* argument)
+{
+    char path[FS_PATH_MAX];
+
+    if (argument == 0 || argument[0] == 0)
+        shell_copy_path(path, "/");
+    else
+        shell_resolve_path(argument, path);
+
+    int directory_id =
+        filesystem_lookup(path);
+
+    if (directory_id < 0)
+    {
+        terminal_write("\ncd: path not found: ");
+        terminal_write(argument ? argument : "");
+        terminal_putchar('\n');
+        return;
+    }
+
+    const fs_node_t* directory =
+        filesystem_get_node((uint32_t)directory_id);
+
+    if (directory == 0 ||
+        directory->type != FS_NODE_DIRECTORY)
+    {
+        terminal_write("\ncd: not a directory\n");
+        return;
+    }
+
+    if (path[0] == 0)
+        shell_copy_path(shell_cwd, "/");
+    else
+        shell_copy_path(shell_cwd, path);
+
+    if (shell_cwd[1] == 0)
+        return;
+
+    unsigned int length = 0;
+    while (shell_cwd[length] != 0)
+        length++;
+
+    while (length > 1 && shell_cwd[length - 1] == '/')
+    {
+        shell_cwd[length - 1] = 0;
+        length--;
+    }
+}
+
 static void shell_help(void)
 {
     terminal_write("\n");
@@ -463,6 +745,11 @@ static void shell_help(void)
     terminal_write("  fault    - Trigger a test page fault\n");
     terminal_write("  echo     - Print text\n");
     terminal_write("  reboot   - Reboot the system\n");
+    terminal_write("  pwd      - Show current directory\n");
+    terminal_write("  ls       - List files and directories\n");
+    terminal_write("  cd       - Change directory\n");
+    terminal_write("  cat      - Read a system file\n");
+    terminal_write("  ps       - Show processes\n");
 }
 
 static void shell_about(void)
@@ -1045,6 +1332,49 @@ static void shell_execute(void)
     {
         shell_reboot();
     }
+    else if (shell_string_equals(
+                 shell_buffer,
+                 "pwd"))
+    {
+        shell_pwd();
+    }
+    else if (shell_string_equals(
+                 shell_buffer,
+                 "ls"))
+    {
+        shell_ls(0);
+    }
+    else if (shell_buffer[0] == 'l' &&
+             shell_buffer[1] == 's' &&
+             shell_buffer[2] == ' ')
+    {
+        shell_ls(&shell_buffer[3]);
+    }
+    else if (shell_buffer[0] == 'c' &&
+             shell_buffer[1] == 'd' &&
+             shell_buffer[2] == 0)
+    {
+        shell_cd(0);
+    }
+    else if (shell_buffer[0] == 'c' &&
+             shell_buffer[1] == 'd' &&
+             shell_buffer[2] == ' ')
+    {
+        shell_cd(&shell_buffer[3]);
+    }
+    else if (shell_buffer[0] == 'c' &&
+             shell_buffer[1] == 'a' &&
+             shell_buffer[2] == 't' &&
+             shell_buffer[3] == ' ')
+    {
+        shell_cat(&shell_buffer[4]);
+    }
+    else if (shell_string_equals(
+                 shell_buffer,
+                 "ps"))
+    {
+        shell_ps();
+    }
     else if (shell_buffer[0] == 'e' &&
              shell_buffer[1] == 'c' &&
              shell_buffer[2] == 'h' &&
@@ -1095,6 +1425,7 @@ void shell_initialize(void)
     shell_history_position = 0;
 
     shell_history_draft_length = 0;
+    shell_copy_path(shell_cwd, "/");
 
     for (unsigned int i = 0;
          i < SHELL_HISTORY_SIZE;

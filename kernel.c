@@ -50,10 +50,7 @@ static void terminal_open_window(void)
         process_wake((uint32_t)terminal_pid);
 
     if (graphics_ready_global)
-    {
-        graphics_present();
         terminal_window_draw();
-    }
 }
 
 static void terminal_window_draw(void)
@@ -292,20 +289,19 @@ void kernel_main(multiboot_info_t* mbd)
          * the terminal application record and its work is run
          * cooperatively from the stable desktop context.
          */
-        if (terminal_window_open)
-            terminal_process_step();
-
         /*
-         * The Terminal card is an application launcher, not merely
-         * a selected desktop panel.  Open it as soon as the panel
-         * becomes active so opening it does not depend on the mouse
-         * event surviving another layer of the desktop loop.
+         * Launch the Terminal directly from the card selection.
+         * Do not rebuild the desktop first: the terminal window
+         * draws over the existing desktop surface in one pass.
          */
-            if (graphics_get_active_panel() == 3 &&
+        if (graphics_get_active_panel() == 3 &&
             !terminal_window_open)
         {
             terminal_open_window();
         }
+
+        if (terminal_window_open)
+            terminal_process_step();
 
         /*
          * The GUI must remain usable even when the relative PS/2
@@ -354,12 +350,16 @@ void kernel_main(multiboot_info_t* mbd)
             }
 
             if (graphics_ready_global &&
-                     (wheel_event || click_event))
+                wheel_event &&
+                terminal_window_open)
+            {
+                terminal_window_draw();
+            }
+            else if (graphics_ready_global &&
+                     click_event &&
+                     !terminal_window_open)
             {
                 graphics_present();
-
-                if (terminal_window_open)
-                    terminal_window_draw();
             }
 
             mouse_clear_event_flags();

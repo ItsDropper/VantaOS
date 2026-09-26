@@ -91,7 +91,7 @@ void* kmalloc(size_t size)
         {
             split_block(block, size);
             block->status = BLOCK_USED;
-            heap_used += block->size;
+            heap_used += size;
 
             return (void*)((uint8_t*)block + sizeof(heap_block_t));
         }

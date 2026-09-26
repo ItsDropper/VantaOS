@@ -161,10 +161,29 @@ void filesystem_initialize(multiboot_info_t* mbd)
     if (system < 0 || etc < 0)
         return;
 
+    int drivers = fs_add_node((uint32_t)system, FS_NODE_DIRECTORY, "drivers", 0);
+    int devices = fs_add_node((uint32_t)system, FS_NODE_DIRECTORY, "devices", 0);
+    int home = fs_add_node((uint32_t)root, FS_NODE_DIRECTORY, "home", 0);
+    int user = fs_add_node((uint32_t)home, FS_NODE_DIRECTORY, "user", 0);
+
     fs_add_node((uint32_t)system, FS_NODE_VIRTUAL, "version", 0);
     fs_add_node((uint32_t)system, FS_NODE_VIRTUAL, "kernel", 0);
     fs_add_node((uint32_t)system, FS_NODE_VIRTUAL, "memory", 0);
     fs_add_node((uint32_t)system, FS_NODE_VIRTUAL, "boot", 0);
+
+    if (drivers >= 0)
+    {
+        fs_add_node((uint32_t)drivers, FS_NODE_FILE, "keyboard", "ps2 keyboard\n");
+        fs_add_node((uint32_t)drivers, FS_NODE_FILE, "mouse", "ps2 mouse\n");
+        fs_add_node((uint32_t)drivers, FS_NODE_FILE, "graphics", "framebuffer\n");
+        fs_add_node((uint32_t)drivers, FS_NODE_FILE, "pci", "pci bus\n");
+    }
+
+    if (devices >= 0)
+    {
+        fs_add_node((uint32_t)devices, FS_NODE_VIRTUAL, "framebuffer", 0);
+        fs_add_node((uint32_t)devices, FS_NODE_VIRTUAL, "memory", 0);
+    }
 
     fs_add_node(
         (uint32_t)etc,
@@ -177,8 +196,25 @@ void filesystem_initialize(multiboot_info_t* mbd)
         (uint32_t)etc,
         FS_NODE_FILE,
         "os-release",
-        "NAME=VantaOS\nVERSION=0.1\nARCH=x86\n"
+        "NAME=VantaOS\nVERSION=0.1\nARCH=x86-32\n"
     );
+
+    fs_add_node(
+        (uint32_t)etc,
+        FS_NODE_FILE,
+        "motd",
+        "Welcome to VantaOS.\n"
+    );
+
+    if (user >= 0)
+    {
+        fs_add_node(
+            (uint32_t)user,
+            FS_NODE_FILE,
+            "README",
+            "VantaOS user home.\n"
+        );
+    }
 
     initialized = 1;
 }

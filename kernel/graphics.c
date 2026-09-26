@@ -143,47 +143,12 @@ static inline uint16_t bochs_vbe_read(uint16_t index)
 static int graphics_initialize_bochs(void)
 {
     /*
-     * Use the Bochs VBE LFB selected by the emulator. The DISPI registers
-     * do not expose a portable framebuffer physical address, so use the
-     * standard QEMU/Bochs PCI BAR0 address used by our VBE device.
+     * GRUB is now explicitly asked for a 1024x768x32 Multiboot
+     * framebuffer. Keep the Bochs VBE fallback disabled until we have
+     * a real physical LFB address instead of guessing one.
      */
-    if (bochs_vbe_read(BOCHS_VBE_INDEX_ID) != BOCHS_VBE_ID)
-        uint32_t physical = bochs_vbe_read(BOCHS_VBE_INDEX_LFB) << 16;
-    if (physical == 0) {
-        return 0;
-    }
-
-    uint32_t offset = physical & 0xFFF;
-    uint32_t first_page = physical & 0xFFFFF000U;
-    uint32_t bytes = pitch * height;
-    uint32_t pages = (offset + bytes + 4095U) / 4096U;
-
-    if (pages > GRAPHICS_MAX_PAGES) {
-        return 0;
-    }
-
-    for (uint32_t i = 0; i < pages; i++) {
-        if (!paging_map_page(
-                GRAPHICS_VIRTUAL_BASE + i * 4096U,
-                first_page + i * 4096U,
-                3)) {
-            return 0;
-        }
-    }
-
-    framebuffer = (volatile uint8_t *)(GRAPHICS_VIRTUAL_BASE + offset);
-    width = 1024;
-    height = 768;
-    red_position = 16;
-    green_position = 8;
-    blue_position = 0;
-    red_mask = 8;
-    green_mask = 8;
-    blue_mask = 8;
-    cursor_x = width / 2;
-    cursor_y = height / 2;
-    initialized = 1;
-    return 1;
+    return 0;
+}
 
 int graphics_initialize(multiboot_info_t* mbd)
 {

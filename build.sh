@@ -13,7 +13,7 @@ rm -rf isodir/boot/kernel.bin
 cp kernel.bin isodir/boot/kernel.bin
 
 echo "==> Creating ISO..."
-grub-mkrescue -o VantaOS.iso isodir
+grub-mkrescue -o VantaOS.iso --modules="video video_bochs vbe gfxterm" isodir
 
 echo "==> Build complete!"
 echo "    VantaOS.iso"

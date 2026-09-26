@@ -401,7 +401,11 @@ int filesystem_create_directory(const char* path)
     unsigned int length = 0;
 
     while (path[length])
+    {
+        if (length >= FS_PATH_MAX - 1)
+            return -1;
         length++;
+    }
 
     unsigned int start = length;
 

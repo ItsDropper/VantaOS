@@ -104,7 +104,10 @@ void kernel_main(multiboot_info_t* mbd)
     {
         if (mouse_has_event())
         {
-            if (mouse_has_wheel_event())
+            int wheel_event = mouse_has_wheel_event();
+            int click_event = mouse_has_click_event();
+
+            if (wheel_event)
             {
                 int wheel_delta = mouse_get_wheel_delta();
 
@@ -119,12 +122,12 @@ void kernel_main(multiboot_info_t* mbd)
              * Mouse movement only updates the logical pointer position.
              * Do not redraw the entire framebuffer for every packet;
              * that causes visible flashing while the pointer moves.
-             * The screen is redrawn on clicks, wheel events, and keyboard
-             * activity instead.
+             * Redraw only when the mouse actually changes UI state.
              */
-            if (graphics_ready && mouse_has_wheel_event())
+            if (graphics_ready && (wheel_event || click_event))
                 graphics_present();
 
+            mouse_clear_event_flags();
             continue;
         }
 

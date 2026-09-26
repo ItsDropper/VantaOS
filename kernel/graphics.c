@@ -148,58 +148,42 @@ static int graphics_initialize_bochs(void)
      * standard QEMU/Bochs PCI BAR0 address used by our VBE device.
      */
     if (bochs_vbe_read(BOCHS_VBE_INDEX_ID) != BOCHS_VBE_ID)
+        uint32_t physical = bochs_vbe_read(BOCHS_VBE_INDEX_LFB) << 16;
+    if (physical == 0) {
         return 0;
-
-    bochs_vbe_write(BOCHS_VBE_INDEX_ENABLE, 0);
-    bochs_vbe_write(BOCHS_VBE_INDEX_XRES, 1024);
-    bochs_vbe_write(BOCHS_VBE_INDEX_YRES, 768);
-    bochs_vbe_write(BOCHS_VBE_INDEX_BPP, 32);
-    bochs_vbe_write(BOCHS_VBE_INDEX_VIRT_WIDTH, 1024);
-    bochs_vbe_write(BOCHS_VBE_INDEX_VIRT_HEIGHT, 768);
-    bochs_vbe_write(BOCHS_VBE_INDEX_ENABLE, BOCHS_VBE_ENABLE_LFB);
-
-    /*
-     * QEMU/Bochs exposes the LFB through the VBE DISPI interface. The
-     * framebuffer address is supplied by the Multiboot framebuffer info;
-     * this fallback is only used when GRUB did not provide one.
-     */
-    return 0;
-    uint32_t offset = physical & 0xFFF;
-    uint32_t first_page = physical & 0xFFFFF000U;
-    uint32_t pitch = 1024 * 4;
-    uint64_t bytes = (uint64_t)pitch * 768;
-
-    uint32_t pages = (uint32_t)((offset + bytes + 4095) / 4096);
-
-    if (pages == 0 || pages > GRAPHICS_MAX_PAGES)
-        return 0;
-
-    for (uint32_t i = 0; i < pages; i++)
-    {
-        if (!paging_map_page(
-                GRAPHICS_VIRTUAL_BASE + i * 4096,
-                first_page + i * 4096))
-            return 0;
     }
 
-    framebuffer = (uint8_t*)(GRAPHICS_VIRTUAL_BASE + offset);
-    framebuffer_pitch = pitch;
-    framebuffer_width = 1024;
-    framebuffer_height = 768;
+    uint32_t offset = physical & 0xFFF;
+    uint32_t first_page = physical & 0xFFFFF000U;
+    uint32_t bytes = pitch * height;
+    uint32_t pages = (offset + bytes + 4095U) / 4096U;
 
+    if (pages > GRAPHICS_MAX_PAGES) {
+        return 0;
+    }
+
+    for (uint32_t i = 0; i < pages; i++) {
+        if (!paging_map_page(
+                GRAPHICS_VIRTUAL_BASE + i * 4096U,
+                first_page + i * 4096U,
+                3)) {
+            return 0;
+        }
+    }
+
+    framebuffer = (volatile uint8_t *)(GRAPHICS_VIRTUAL_BASE + offset);
+    width = 1024;
+    height = 768;
     red_position = 16;
-    red_mask_size = 8;
     green_position = 8;
-    green_mask_size = 8;
     blue_position = 0;
-    blue_mask_size = 8;
-
-    cursor_x = (int)framebuffer_width / 2;
-    cursor_y = (int)framebuffer_height / 2;
-
+    red_mask = 8;
+    green_mask = 8;
+    blue_mask = 8;
+    cursor_x = width / 2;
+    cursor_y = height / 2;
     initialized = 1;
     return 1;
-}
 
 int graphics_initialize(multiboot_info_t* mbd)
 {

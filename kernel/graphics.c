@@ -1,6 +1,9 @@
 #include "graphics.h"
 #include "paging.h"
 #include "pci.h"
+#include "filesystem.h"
+#include "pmm.h"
+#include "process.h"
 
 #include <stdint.h>
 
@@ -281,6 +284,11 @@ int graphics_is_initialized(void)
     return initialized;
 }
 
+int graphics_get_active_panel(void)
+{
+    return active_panel;
+}
+
 uint32_t graphics_get_width(void)
 {
     return framebuffer_width;
@@ -546,25 +554,128 @@ void graphics_present(void)
     );
 
     /*
-     * Show the result of clicking a card. The old click handler
-     * updated active_panel, but the renderer never displayed it,
-     * making the buttons appear non-functional.
+     * The cards act as simple desktop applications:
+     * System = system information
+     * Files  = the current VFS root
+     * Terminal = the existing shell process
      */
     if (active_panel == 1)
+    {
         graphics_draw_text(
             window_x + 28, window_y + 190,
-            "SYSTEM READY", 0x0058D68D, 1
+            "SYSTEM", 0x0058D68D, 1
         );
+
+        graphics_draw_text(
+            window_x + 28, window_y + 208,
+            "KERNEL ONLINE", 0x00D7DEE7, 1
+        );
+
+        graphics_draw_text(
+            window_x + 28, window_y + 226,
+            "MEMORY PAGES", 0x009AA8B8, 1
+        );
+
+        graphics_draw_text(
+            window_x + 28, window_y + 244,
+            "PROCESSES", 0x009AA8B8, 1
+        );
+    }
     else if (active_panel == 2)
+    {
         graphics_draw_text(
             window_x + 28, window_y + 190,
-            "FILES READY", 0x0058D68D, 1
+            "FILES", 0x0058D68D, 1
         );
+
+        uint32_t ids[12];
+        int count = filesystem_list(
+            filesystem_root(), ids, 12
+        );
+
+        if (count < 0)
+            count = 0;
+
+        if (count > 12)
+            count = 12;
+
+        int file_y = window_y + 210;
+
+        for (int i = 0; i < count; i++)
+        {
+            const fs_node_t* node =
+                filesystem_get_node(ids[i]);
+
+            if (!node)
+                continue;
+
+            char name[FS_NAME_MAX + 1];
+            unsigned int n = 0;
+
+            while (node->name[n] &&
+                   n < FS_NAME_MAX)
+            {
+                char c = node->name[n];
+
+                if (c >= 'a' && c <= 'z')
+                    c = (char)(c - 'a' + 'A');
+
+                name[n++] = c;
+            }
+
+            name[n] = 0;
+
+            graphics_draw_text(
+                window_x + 36, file_y,
+                node->type == FS_NODE_DIRECTORY ?
+                "DIR" : "FILE",
+                0x009AA8B8, 1
+            );
+
+            graphics_draw_text(
+                window_x + 82, file_y,
+                name, 0x00FFFFFF, 1
+            );
+
+            file_y += 18;
+
+            if (file_y > window_y + 350)
+                break;
+        }
+
+        if (count == 0)
+            graphics_draw_text(
+                window_x + 36, file_y,
+                "EMPTY", 0x009AA8B8, 1
+            );
+    }
     else if (active_panel == 3)
+    {
         graphics_draw_text(
             window_x + 28, window_y + 190,
-            "ALL SYSTEMS ONLINE", 0x0058D68D, 1
+            "TERMINAL", 0x0058D68D, 1
         );
+
+        graphics_draw_text(
+            window_x + 28, window_y + 212,
+            "PROCESS 1", 0x00D7DEE7, 1
+        );
+
+        graphics_draw_text(
+            window_x + 28, window_y + 230,
+            "RUNNING", 0x0058D68D, 1
+        );
+
+        graphics_draw_text(
+            window_x + 28, window_y + 252,
+            "THE EXISTING SHELL IS ACTIVE", 0x009AA8B8, 1
+        );
+
+        graphics_draw_text(
+            window_x + 28, window_y + 274,
+            "TYPE COMMANDS IN THE TERMINAL", 0x009AA8B8, 1
+        );
+    }
 
     int card_y = window_y + 215;
 
@@ -598,7 +709,7 @@ void graphics_present(void)
 
     graphics_draw_text(
         window_x + 412, card_y + 18,
-        "SYSTEM", 0x00FFFFFF, 2
+        "TERMINAL", 0x00FFFFFF, 2
     );
 
     graphics_fill_rect(

@@ -869,7 +869,7 @@ static void shell_heap(void)
     terminal_write(" bytes\n");
 }
 
-static void shell_history(void)
+static void shell_show_history(void)
 {
     terminal_write("\nCommand history:\n");
 
@@ -887,7 +887,7 @@ static void shell_history(void)
         shell_print_decimal(i + 1);
         terminal_write("  ");
         terminal_write(shell_history[i]);
-        terminal_putchar('\\n');
+        terminal_putchar('\n');
     }
 }
 
@@ -1014,7 +1014,7 @@ static void shell_execute(void)
                  shell_buffer,
                  "history"))
     {
-        shell_history();
+        shell_show_history();
     }
     else if (shell_string_equals(
                  shell_buffer,

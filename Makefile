@@ -55,6 +55,9 @@ pmm.o: kernel/pmm.c
 paging.o: kernel/paging.c
 	$(CC) $(CFLAGS) -c kernel/paging.c -o paging.o
 
+heap.o: kernel/heap.c
+	$(CC) $(CFLAGS) -c kernel/heap.c -o heap.o
+
 shell.o: kernel/shell.c
 	$(CC) $(CFLAGS) -c kernel/shell.c -o shell.o
 

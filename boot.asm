@@ -3,14 +3,8 @@ bits 32
 section .multiboot
 align 4
     dd 0x1BADB002
-    dd 0x00000004
-    dd -(0x1BADB002 + 0x00000004)
-
-    ; Request a 1024x768x32 linear graphical framebuffer.
-    dd 0
-    dd 1024
-    dd 768
-    dd 32
+    dd 0x00000000
+    dd -(0x1BADB002 + 0x00000000)
 
 section .bss
 align 16

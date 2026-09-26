@@ -11,7 +11,8 @@
 typedef enum
 {
     FS_NODE_FILE = 1,
-    FS_NODE_DIRECTORY = 2
+    FS_NODE_DIRECTORY = 2,
+    FS_NODE_VIRTUAL = 3
 } fs_node_type_t;
 
 typedef struct
@@ -24,7 +25,7 @@ typedef struct
     uint32_t size;
 } fs_node_t;
 
-void filesystem_initialize(void);
+void filesystem_initialize(struct multiboot_info* mbd);
 
 int filesystem_is_initialized(void);
 
@@ -43,6 +44,11 @@ int filesystem_read(
     char* buffer,
     unsigned int capacity
 );
+
+int filesystem_create_directory(const char* path);
+int filesystem_create_file(const char* path);
+int filesystem_write_file(const char* path, const char* data);
+int filesystem_file_exists(const char* path);
 
 uint32_t filesystem_root(void);
 

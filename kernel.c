@@ -1,4 +1,5 @@
 #include "gdt.h"
+#include "heap.h"
 #include "interrupts.h"
 #include "keyboard.h"
 #include "multiboot.h"
@@ -47,6 +48,7 @@ void kernel_main(multiboot_info_t* mbd)
     interrupts_initialize();
 
     paging_initialize();
+    heap_initialize();
     boot_memory = read_tsc();
     boot_interrupts = boot_memory;
 

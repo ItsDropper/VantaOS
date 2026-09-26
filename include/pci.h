@@ -20,6 +20,8 @@ struct pci_device
 
 void pci_initialize(void);
 
+int pci_get_bar0(const struct pci_device* device, uint32_t* bar);
+
 int pci_get_device_count(void);
 
 const struct pci_device* pci_get_device(int index);

@@ -8,6 +8,7 @@ static int initialized = 0;
 static multiboot_info_t* boot_info = 0;
 
 static int fs_find_child(uint32_t parent, const char* name);
+static int fs_virtual_read(const fs_node_t* node, char* buffer, unsigned int capacity);
 
 static void fs_copy_string(
     char* destination,

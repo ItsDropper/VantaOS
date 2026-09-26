@@ -2,11 +2,22 @@ bits 32
 
 section .multiboot
 align 4
-    ; Request a linear framebuffer from GRUB.
-    ; mode_type = 0, width = 1024, height = 768, depth = 32.
+    ; Multiboot v1 graphics request.
+    ; The five address fields occupy offsets 12-28 even when
+    ; flag 16 is not set; graphics fields begin at offset 32.
     dd 0x1BADB002
     dd 0x00000004
     dd -(0x1BADB002 + 0x00000004)
+
+    ; Multiboot address fields (unused for ELF, but reserved
+    ; in the fixed header layout).
+    dd 0
+    dd 0
+    dd 0
+    dd 0
+    dd 0
+
+    ; Request 1024x768x32 linear graphics.
     dd 0
     dd 1024
     dd 768

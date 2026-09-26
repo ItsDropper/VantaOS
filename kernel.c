@@ -127,6 +127,14 @@ void kernel_main(multiboot_info_t* mbd)
             if (graphics_ready && (wheel_event || click_event))
                 graphics_present();
 
+            if (click_event &&
+                graphics_get_active_panel() == 3)
+            {
+                process_set_running(1);
+                terminal_write("\n[GUI] Terminal focused (PID 1).\n");
+                shell_show_prompt();
+            }
+
             mouse_clear_event_flags();
             continue;
         }

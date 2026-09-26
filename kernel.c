@@ -240,7 +240,6 @@ static void terminal_window_draw(void)
             0x00F2F2F2
         );
     }
-    }
 
     /* Keep the mouse cursor above the terminal window. */
     graphics_draw_cursor();

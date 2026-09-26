@@ -276,8 +276,13 @@ void mouse_handle_interrupt(void)
 
 bool mouse_has_event(void)
 {
-    return mouse_wheel_delta != 0 ||
-           mouse_moved != 0;
+    int has_event =
+        mouse_wheel_delta != 0 ||
+        mouse_moved != 0;
+
+    mouse_moved = 0;
+
+    return has_event;
 }
 
 bool mouse_has_wheel_event(void)

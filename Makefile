@@ -19,7 +19,9 @@ OBJS = boot.o \
        graphics.o \
        heap.o \
        shell.o \
-       pci.o
+       pci.o \
+       filesystem.o \
+       process.o
 
 all: kernel.bin
 
@@ -67,6 +69,12 @@ shell.o: kernel/shell.c
 
 pci.o: kernel/pci.c
 	$(CC) $(CFLAGS) -c kernel/pci.c -o pci.o
+
+filesystem.o: kernel/filesystem.c
+	$(CC) $(CFLAGS) -c kernel/filesystem.c -o filesystem.o
+
+process.o: kernel/process.c
+	$(CC) $(CFLAGS) -c kernel/process.c -o process.o
 
 kernel.bin: $(OBJS)
 	$(LD) $(LDFLAGS) $(OBJS) -o kernel.bin

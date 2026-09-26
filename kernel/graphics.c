@@ -545,21 +545,48 @@ void graphics_present(void)
         "FILES", 0x009AA8B8, 2
     );
 
+    /*
+     * Show the result of clicking a card. The old click handler
+     * updated active_panel, but the renderer never displayed it,
+     * making the buttons appear non-functional.
+     */
+    if (active_panel == 1)
+        graphics_draw_text(
+            window_x + 28, window_y + 190,
+            "SYSTEM READY", 0x0058D68D, 1
+        );
+    else if (active_panel == 2)
+        graphics_draw_text(
+            window_x + 28, window_y + 190,
+            "FILES READY", 0x0058D68D, 1
+        );
+    else if (active_panel == 3)
+        graphics_draw_text(
+            window_x + 28, window_y + 190,
+            "ALL SYSTEMS ONLINE", 0x0058D68D, 1
+        );
+
     int card_y = window_y + 215;
 
     graphics_fill_rect(
         window_x + 28, card_y,
-        165, 80, 0x001E2936
+        165, 80,
+        active_panel == 1 ? 0x00304458 :
+        hover_system ? 0x002A3A4C : 0x001E2936
     );
 
     graphics_fill_rect(
         window_x + 210, card_y,
-        165, 80, 0x001E2936
+        165, 80,
+        active_panel == 2 ? 0x00304458 :
+        hover_files ? 0x002A3A4C : 0x001E2936
     );
 
     graphics_fill_rect(
         window_x + 392, card_y,
-        165, 80, 0x001E2936
+        165, 80,
+        active_panel == 3 ? 0x00304458 :
+        hover_status ? 0x002A3A4C : 0x001E2936
     );
 
     graphics_draw_text(

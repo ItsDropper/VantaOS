@@ -7,6 +7,8 @@ static unsigned int node_count = 0;
 static int initialized = 0;
 static multiboot_info_t* boot_info = 0;
 
+static int fs_find_child(uint32_t parent, const char* name);
+
 static void fs_copy_string(
     char* destination,
     const char* source

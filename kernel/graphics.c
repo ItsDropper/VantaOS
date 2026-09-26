@@ -155,10 +155,13 @@ static int graphics_initialize_bochs(void)
 
     bochs_vbe_write(BOCHS_VBE_INDEX_ENABLE, BOCHS_VBE_ENABLE_LFB);
 
-    uint32_t physical = (uint32_t)bochs_vbe_read(BOCHS_VBE_INDEX_LFB) << 16;
-
-    if (physical == 0)
-        physical = 0xFD000000U;
+    /*
+     * Bochs/QEMU VBE exposes the linear framebuffer at the standard
+     * PCI/VBE LFB address 0xE0000000.  The VBE DISPI register at 0x0D
+     * is X_OFFSET, not the framebuffer address, so reading it here
+     * produces a bogus physical address and can corrupt rendering.
+     */
+    uint32_t physical = 0xE0000000U;
 
     uint32_t offset = physical & 0xFFF;
     uint32_t first_page = physical & 0xFFFFF000U;

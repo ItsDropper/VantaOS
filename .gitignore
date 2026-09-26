@@ -1,0 +1,11 @@
+# Build artifacts
+*.o
+kernel.bin
+VantaOS.iso
+
+# Temporary/build directories
+isodir/boot/kernel.bin
+
+# OS/editor files
+*.swp
+*.tmp

@@ -289,6 +289,17 @@ int graphics_get_active_panel(void)
     return active_panel;
 }
 
+void graphics_select_panel(int panel)
+{
+    if (!initialized)
+        return;
+
+    if (panel < 0 || panel > 3)
+        return;
+
+    active_panel = panel;
+}
+
 uint32_t graphics_get_width(void)
 {
     return framebuffer_width;
@@ -420,20 +431,20 @@ void graphics_mouse_click(int button)
     int window_y = 120;
     int card_y = window_y + 215;
 
-    if (cursor_x >= window_x + 28 &&
-        cursor_x < window_x + 193 &&
-        cursor_y >= card_y &&
-        cursor_y < card_y + 80)
+    if (cursor_x >= window_x + 12 &&
+        cursor_x < window_x + 205 &&
+        cursor_y >= card_y - 12 &&
+        cursor_y < card_y + 92)
         active_panel = 1;
-    else if (cursor_x >= window_x + 210 &&
-             cursor_x < window_x + 375 &&
-             cursor_y >= card_y &&
-             cursor_y < card_y + 80)
+    else if (cursor_x >= window_x + 195 &&
+             cursor_x < window_x + 387 &&
+             cursor_y >= card_y - 12 &&
+             cursor_y < card_y + 92)
         active_panel = 2;
-    else if (cursor_x >= window_x + 392 &&
-             cursor_x < window_x + 557 &&
-             cursor_y >= card_y &&
-             cursor_y < card_y + 80)
+    else if (cursor_x >= window_x + 375 &&
+             cursor_x < window_x + 585 &&
+             cursor_y >= card_y - 12 &&
+             cursor_y < card_y + 92)
         active_panel = 3;
     else
         return;

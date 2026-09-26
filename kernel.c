@@ -6,6 +6,7 @@
 #include "multiboot.h"
 #include "paging.h"
 #include "pmm.h"
+#include "pci.h"
 #include "shell.h"
 #include "terminal.h"
 #include "mouse.h"
@@ -51,6 +52,8 @@ void kernel_main(multiboot_info_t* mbd)
     interrupts_initialize();
 
     paging_initialize();
+
+    pci_initialize();
 
     int graphics_ready =
         graphics_initialize(mbd);

@@ -26,6 +26,7 @@ static int initialized;
 static int cursor_x;
 static int cursor_y;
 static int active_panel;
+static int terminal_close_requested;
 
 static const uint8_t font[36][7] =
 {
@@ -368,7 +369,11 @@ int graphics_get_active_panel(void)
 
 int graphics_terminal_close_requested(void)
 {
-    return active_panel == 0;
+    if (!terminal_close_requested)
+        return 0;
+
+    terminal_close_requested = 0;
+    return 1;
 }
 
 void graphics_select_panel(int panel)
@@ -530,6 +535,7 @@ void graphics_mouse_click(int button)
             cursor_y >= terminal_y + 8 &&
             cursor_y < terminal_y + 42)
         {
+            terminal_close_requested = 1;
             active_panel = 0;
             return;
         }

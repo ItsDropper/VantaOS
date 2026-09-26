@@ -41,6 +41,19 @@ static int graphics_ready_global = 0;
 
 static void terminal_window_draw(void);
 
+static void gui_present(void)
+{
+    if (!graphics_ready_global)
+        return;
+
+    graphics_present();
+
+    if (terminal_window_open)
+        terminal_window_draw();
+    else
+        graphics_draw_cursor();
+}
+
 static void terminal_open_window(void)
 {
     terminal_window_open = 1;
@@ -49,8 +62,7 @@ static void terminal_open_window(void)
     if (terminal_pid >= 0)
         process_wake((uint32_t)terminal_pid);
 
-    if (graphics_ready_global)
-        terminal_window_draw();
+    gui_present();
 }
 
 static void terminal_window_draw(void)
@@ -288,7 +300,7 @@ static void terminal_process_step(void)
             if (graphics_ready_global)
             {
                 graphics_select_panel(0);
-                graphics_present();
+                gui_present();
             }
 
             return;
@@ -390,8 +402,7 @@ void kernel_main(multiboot_info_t* mbd)
         "Type 'help' in the Terminal app.\n\n"
     );
 
-    if (graphics_ready_global)
-        graphics_present();
+    gui_present();
 
     while (1)
     {
@@ -418,7 +429,7 @@ void kernel_main(multiboot_info_t* mbd)
             terminal_window_open = 0;
             terminal_window_prompted = 0;
             graphics_select_panel(0);
-            graphics_present();
+            gui_present();
         }
 
         if (terminal_window_open)
@@ -470,24 +481,23 @@ void kernel_main(multiboot_info_t* mbd)
                 );
             }
 
-            if (graphics_ready_global &&
-                terminal_window_open &&
-                (wheel_event || click_event || mouse_has_move_event() ||
-                 graphics_terminal_is_dragging()))
+            if (graphics_ready_global)
             {
                 /*
-                 * The terminal is drawn directly into the framebuffer.
-                 * Repaint the desktop first so dragging does not leave
-                 * the old window behind, then draw the terminal and cursor.
+                 * Normal pointer movement only redraws the cursor.
+                 * Full-frame rendering is reserved for actual UI
+                 * changes and window dragging.
                  */
-                graphics_present();
-                terminal_window_draw();
-            }
-            else if (graphics_ready_global &&
-                     (click_event || mouse_has_move_event()) &&
-                     !terminal_window_open)
-            {
-                graphics_present();
+                if (graphics_terminal_is_dragging() ||
+                    click_event ||
+                    (wheel_event && terminal_window_open))
+                {
+                    gui_present();
+                }
+                else if (mouse_has_move_event())
+                {
+                    graphics_draw_cursor();
+                }
             }
 
             mouse_clear_event_flags();

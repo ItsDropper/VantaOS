@@ -145,9 +145,7 @@ static int graphics_initialize_bochs(void)
 {
     /*
      * QEMU's "-vga std" device exposes the Bochs VBE interface.
-     * Use the device-reported LFB address instead of assuming a fixed
-     * physical address. This also gives us a reliable fallback when
-     * GRUB leaves the Multiboot framebuffer in text mode.
+     * Use the device-reported LFB address instead of assuming one.
      */
     if (bochs_vbe_read(BOCHS_VBE_INDEX_ID) != BOCHS_VBE_ID)
         return 0;
@@ -160,34 +158,14 @@ static int graphics_initialize_bochs(void)
     bochs_vbe_write(BOCHS_VBE_INDEX_VIRT_HEIGHT, 768);
     bochs_vbe_write(BOCHS_VBE_INDEX_ENABLE, BOCHS_VBE_ENABLE_LFB);
 
-    uint32_t physical =
-        (uint32_t)bochs_vbe_read(BOCHS_VBE_INDEX_LFB);
+    bochs_vbe_write(BOCHS_VBE_INDEX_LFB, BOCHS_VBE_INDEX_LFB);
+    uint32_t physical = bochs_vbe_read(BOCHS_VBE_INDEX_LFB);
 
-    /* The LFB register is a 32-bit physical address split across
-       two 16-bit VBE reads. */
-    bochs_vbe_write(BOCHS_VBE_INDEX_LFB, 0);
-    uint16_t low = bochs_vbe_read(BOCHS_VBE_INDEX_LFB);
-    (void)physical;
-    physical = (uint32_t)low;
-
-    /* QEMU/Bochs exposes the LFB address through the VBE DISPI
-       interface as a 32-bit register. */
-    bochs_vbe_write(BOCHS_VBE_INDEX_LFB, 0x0D);
-    uint16_t lfb_low = bochs_vbe_read(BOCHS_VBE_INDEX_LFB);
-    (void)lfb_low;
-
-    /*
-     * The DISPI LFB register is normally 0xE0000000 on QEMU std VGA.
-     * Read the complete value using the 16-bit register interface.
-     */
-    bochs_vbe_write(BOCHS_VBE_INDEX_LFB, 0x0D);
-    uint32_t lfb = (uint32_t)bochs_vbe_read(BOCHS_VBE_INDEX_LFB);
-
-    if (lfb == 0 || lfb == 0xFFFFFFFFU)
+    if (physical == 0 || physical == 0xFFFFFFFFU)
         return 0;
 
-    uint32_t offset = lfb & 0xFFF;
-    uint32_t first_page = lfb & 0xFFFFF000U;
+    uint32_t offset = physical & 0xFFF;
+    uint32_t first_page = physical & 0xFFFFF000U;
     uint64_t bytes = (uint64_t)1024 * 768 * 4;
     uint32_t pages = (uint32_t)((offset + bytes + 4095) / 4096);
 

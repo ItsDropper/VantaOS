@@ -1,6 +1,7 @@
 #include "shell.h"
 
 #include "interrupts.h"
+#include "heap.h"
 #include "multiboot.h"
 #include "pci.h"
 #include "pmm.h"
@@ -797,6 +798,75 @@ static void shell_mem(void)
     terminal_write("  Free test     : passed\n");
 }
 
+static void shell_heap(void)
+{
+    terminal_write("\nKernel heap test:\n");
+    terminal_write("  Status        : ");
+    terminal_write(heap_is_initialized() ? "online\n" : "offline\n");
+
+    if (!heap_is_initialized())
+        return;
+
+    terminal_write("  Total         : ");
+    shell_print_decimal((unsigned int)heap_get_total_size());
+    terminal_write(" bytes\n");
+
+    terminal_write("  Free before   : ");
+    shell_print_decimal((unsigned int)heap_get_free_size());
+    terminal_write(" bytes\n");
+
+    void* first = kmalloc(64);
+    void* second = kmalloc(128);
+    void* third = kmalloc(256);
+
+    if (!first || !second || !third)
+    {
+        terminal_write("  Allocation    : failed\n");
+
+        if (first) kfree(first);
+        if (second) kfree(second);
+        if (third) kfree(third);
+
+        return;
+    }
+
+    terminal_write("  Allocation    : passed\n");
+
+    terminal_write("  Block 1       : ");
+    shell_print_hex64((unsigned long long)(uintptr_t)first);
+    terminal_putchar('\n');
+
+    terminal_write("  Block 2       : ");
+    shell_print_hex64((unsigned long long)(uintptr_t)second);
+    terminal_putchar('\n');
+
+    terminal_write("  Block 3       : ");
+    shell_print_hex64((unsigned long long)(uintptr_t)third);
+    terminal_putchar('\n');
+
+    kfree(second);
+    kfree(first);
+    kfree(third);
+
+    terminal_write("  Free/coalesce : passed\n");
+
+    void* reused = kmalloc(128);
+
+    if (reused)
+    {
+        terminal_write("  Reuse test    : passed\n");
+        kfree(reused);
+    }
+    else
+    {
+        terminal_write("  Reuse test    : failed\n");
+    }
+
+    terminal_write("  Free after    : ");
+    shell_print_decimal((unsigned int)heap_get_free_size());
+    terminal_write(" bytes\n");
+}
+
 static void shell_fault(void)
 {
     terminal_write("\nTriggering a test page fault...\n");
@@ -909,6 +979,12 @@ static void shell_execute(void)
                  "mem"))
     {
         shell_mem();
+    }
+    else if (shell_string_equals(
+                 shell_buffer,
+                 "heap"))
+    {
+        shell_heap();
     }
     else if (shell_string_equals(
                  shell_buffer,

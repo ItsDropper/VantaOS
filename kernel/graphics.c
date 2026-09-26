@@ -289,6 +289,11 @@ int graphics_get_active_panel(void)
     return active_panel;
 }
 
+int graphics_terminal_close_requested(void)
+{
+    return active_panel == 0;
+}
+
 void graphics_select_panel(int panel)
 {
     if (!initialized)
@@ -426,6 +431,28 @@ void graphics_mouse_click(int button)
 {
     if (!initialized || button != 1)
         return;
+
+    /*
+     * When Terminal is active, its title-bar close button owns
+     * the click.  Returning to panel 0 lets the desktop reopen
+     * cleanly without rebuilding the GUI before the next frame.
+     */
+    if (active_panel == 3)
+    {
+        int terminal_x = (int)framebuffer_width / 2 - 440;
+        int terminal_y = 64;
+
+        if (cursor_x >= terminal_x + 820 &&
+            cursor_x < terminal_x + 872 &&
+            cursor_y >= terminal_y + 8 &&
+            cursor_y < terminal_y + 42)
+        {
+            active_panel = 0;
+            return;
+        }
+
+        return;
+    }
 
     int window_x = (int)framebuffer_width / 2 - 300;
     int window_y = 120;

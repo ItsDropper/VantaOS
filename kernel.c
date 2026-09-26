@@ -472,7 +472,7 @@ void kernel_main(multiboot_info_t* mbd)
 
             if (graphics_ready_global &&
                 terminal_window_open &&
-                (wheel_event || click_event ||
+                (wheel_event || click_event || mouse_has_move_event() ||
                  graphics_terminal_is_dragging()))
             {
                 /*
@@ -484,7 +484,7 @@ void kernel_main(multiboot_info_t* mbd)
                 terminal_window_draw();
             }
             else if (graphics_ready_global &&
-                     click_event &&
+                     (click_event || mouse_has_move_event()) &&
                      !terminal_window_open)
             {
                 graphics_present();

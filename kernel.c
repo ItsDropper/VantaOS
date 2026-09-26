@@ -122,70 +122,60 @@ static void terminal_window_draw(void)
     (void)height;
 }
 
-static void terminal_process_main(void)
+static void terminal_process_step(void)
 {
-    while (1)
+    if (!terminal_window_open)
+        return;
+
+    if (!terminal_window_prompted)
     {
-        if (!terminal_window_open)
-        {
-            terminal_window_prompted = 0;
-            process_block_current();
-            continue;
-        }
-
-        if (!terminal_window_prompted)
-        {
-            terminal_write(
-                "\n[GUI] Terminal process started (PID 1).\n"
-            );
-            shell_show_prompt();
-            terminal_window_prompted = 1;
-            terminal_window_draw();
-        }
-
-        int changed = 0;
-
-        if (keyboard_has_event())
-        {
-            keyboard_event_t event =
-                keyboard_get_event();
-
-            if (event == KEY_EVENT_PAGE_UP)
-                terminal_scroll_up();
-            else if (event == KEY_EVENT_PAGE_DOWN)
-                terminal_scroll_down();
-            else
-                shell_handle_event(event);
-
-            changed = 1;
-        }
-
-        char c = keyboard_get_char();
-
-        if (c != 0)
-        {
-            if (c == 27)
-            {
-                terminal_window_open = 0;
-                terminal_window_prompted = 0;
-
-                if (graphics_ready_global)
-                    graphics_present();
-
-                process_block_current();
-                continue;
-            }
-
-            shell_handle_char(c);
-            changed = 1;
-        }
-
-        if (changed)
-            terminal_window_draw();
-
-        __asm__ volatile ("hlt");
+        terminal_write(
+            "\n[GUI] Terminal opened (PID 1).\n"
+        );
+        shell_show_prompt();
+        terminal_window_prompted = 1;
     }
+
+    int changed = 0;
+
+    if (keyboard_has_event())
+    {
+        keyboard_event_t event =
+            keyboard_get_event();
+
+        if (event == KEY_EVENT_PAGE_UP)
+            terminal_scroll_up();
+        else if (event == KEY_EVENT_PAGE_DOWN)
+            terminal_scroll_down();
+        else
+            shell_handle_event(event);
+
+        changed = 1;
+    }
+
+    char character = keyboard_get_char();
+
+    if (character != 0)
+    {
+        if (character == 27)
+        {
+            terminal_window_open = 0;
+            terminal_window_prompted = 0;
+
+            if (graphics_ready_global)
+                graphics_present();
+
+            return;
+        }
+
+        shell_handle_char(character);
+        changed = 1;
+    }
+
+    if (changed)
+        terminal_window_draw();
 }
+
 
 void kernel_main(multiboot_info_t* mbd)
 {
@@ -279,6 +269,16 @@ void kernel_main(multiboot_info_t* mbd)
 
     while (1)
     {
+        /*
+         * Until the low-level context-switch mechanism is complete,
+         * the desktop remains the known-good execution context.
+         * The terminal process is still represented by PID 1 and
+         * receives cooperative execution here rather than risking
+         * the graphics stack with an unsafe IRQ stack switch.
+         */
+        if (terminal_window_open)
+            terminal_process_step();
+
         if (mouse_has_event())
         {
             int wheel_event =

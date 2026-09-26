@@ -279,6 +279,25 @@ void kernel_main(multiboot_info_t* mbd)
         if (terminal_window_open)
             terminal_process_step();
 
+        /*
+         * The Terminal card is an application launcher, not merely
+         * a selected desktop panel.  Open it as soon as the panel
+         * becomes active so opening it does not depend on the mouse
+         * event surviving another layer of the desktop loop.
+         */
+        if (graphics_get_active_panel() == 3 &&
+            !terminal_window_open)
+        {
+            terminal_window_open = 1;
+            terminal_window_prompted = 0;
+
+            if (graphics_ready_global)
+            {
+                graphics_present();
+                terminal_window_draw();
+            }
+        }
+
         if (mouse_has_event())
         {
             int wheel_event =
@@ -300,23 +319,14 @@ void kernel_main(multiboot_info_t* mbd)
             }
 
             if (click_event &&
-                graphics_get_active_panel() == 3 &&
-                !terminal_window_open)
+                graphics_get_active_panel() == 3)
             {
-                terminal_window_open = 1;
-                terminal_window_prompted = 0;
-
                 process_wake(
                     (uint32_t)terminal_pid
                 );
-
-                if (graphics_ready_global)
-                {
-                    graphics_present();
-                    terminal_window_draw();
-                }
             }
-            else if (graphics_ready_global &&
+
+            if (graphics_ready_global &&
                      (wheel_event || click_event))
             {
                 graphics_present();

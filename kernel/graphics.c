@@ -26,6 +26,7 @@ static int initialized;
 static int cursor_x;
 static int cursor_y;
 static int active_panel;
+static int start_menu_open;
 static int terminal_close_requested;
 static int terminal_maximized;
 static int terminal_dragging;
@@ -627,21 +628,92 @@ void graphics_mouse_click(int button)
     if (!initialized || button != 1)
         return;
 
-    /*
-     * When Terminal is active, its title-bar close button owns
-     * the click.  Returning to panel 0 lets the desktop reopen
-     * cleanly without rebuilding the GUI before the next frame.
-     */
+    int width = (int)framebuffer_width;
+    int height = (int)framebuffer_height;
+    int taskbar_y = height - 64;
+
+    /* Start menu is a real launcher for the applications implemented below. */
+    if (start_menu_open)
+    {
+        int menu_x = width / 2 - 230;
+        int menu_y = height - 520;
+
+        if (cursor_x >= menu_x + 24 &&
+            cursor_x < menu_x + 436 &&
+            cursor_y >= menu_y + 110 &&
+            cursor_y < menu_y + 164)
+        {
+            active_panel = 3;
+            start_menu_open = 0;
+            return;
+        }
+
+        if (cursor_x >= menu_x + 24 &&
+            cursor_x < menu_x + 436 &&
+            cursor_y >= menu_y + 164 &&
+            cursor_y < menu_y + 218)
+        {
+            active_panel = 2;
+            start_menu_open = 0;
+            return;
+        }
+
+        if (cursor_x >= menu_x + 24 &&
+            cursor_x < menu_x + 436 &&
+            cursor_y >= menu_y + 218 &&
+            cursor_y < menu_y + 272)
+        {
+            active_panel = 1;
+            start_menu_open = 0;
+            return;
+        }
+
+        if (!(cursor_x >= menu_x &&
+              cursor_x < menu_x + 460 &&
+              cursor_y >= menu_y &&
+              cursor_y < height - 8))
+            start_menu_open = 0;
+
+        return;
+    }
+
+    /* Start button. */
+    if (cursor_x >= 18 &&
+        cursor_x < 74 &&
+        cursor_y >= taskbar_y + 8 &&
+        cursor_y < taskbar_y + 56)
+    {
+        start_menu_open = 1;
+        return;
+    }
+
+    /* Running application buttons. */
+    if (cursor_y >= taskbar_y + 8 &&
+        cursor_y < taskbar_y + 56)
+    {
+        if (cursor_x >= 86 && cursor_x < 154)
+        {
+            active_panel = 2;
+            return;
+        }
+
+        if (cursor_x >= 162 && cursor_x < 230)
+        {
+            active_panel = 3;
+            return;
+        }
+    }
+
+    /* Terminal owns its complete title bar while open. */
     if (active_panel == 3)
     {
         int terminal_w = terminal_maximized ?
-            (int)framebuffer_width : 880;
+            width : 880;
         int terminal_x_current = terminal_maximized ?
             0 : terminal_x;
         int terminal_y_current = terminal_maximized ?
             0 : terminal_y;
 
-        /* Minimize: return to the desktop without destroying the app. */
         if (cursor_x >= terminal_x_current + terminal_w - 140 &&
             cursor_x < terminal_x_current + terminal_w - 96 &&
             cursor_y >= terminal_y_current + 4 &&
@@ -652,7 +724,6 @@ void graphics_mouse_click(int button)
             return;
         }
 
-        /* Maximize/restore. */
         if (cursor_x >= terminal_x_current + terminal_w - 96 &&
             cursor_x < terminal_x_current + terminal_w - 48 &&
             cursor_y >= terminal_y_current + 4 &&
@@ -662,12 +733,6 @@ void graphics_mouse_click(int button)
             return;
         }
 
-        /*
-         * Start a real window drag from the title bar.  The grab is
-         * retained until the physical mouse button is released, so
-         * the window follows relative mouse movement instead of
-         * behaving like a one-shot button.
-         */
         if (!terminal_maximized &&
             cursor_x >= terminal_x_current + 8 &&
             cursor_x < terminal_x_current + terminal_w - 140 &&
@@ -680,7 +745,6 @@ void graphics_mouse_click(int button)
             return;
         }
 
-        /* Close. */
         if (cursor_x >= terminal_x_current + terminal_w - 48 &&
             cursor_x < terminal_x_current + terminal_w &&
             cursor_y >= terminal_y_current + 4 &&
@@ -694,29 +758,48 @@ void graphics_mouse_click(int button)
         return;
     }
 
-    int window_x = (int)framebuffer_width / 2 - 300;
-    int window_y = 120;
-    int card_y = window_y + 215;
+    /* System and Files are real application windows. */
+    if (active_panel == 1 || active_panel == 2)
+    {
+        int window_w = 760;
+        int window_h = 480;
+        int window_x = width / 2 - window_w / 2;
+        int window_y = height / 2 - window_h / 2;
 
-    if (cursor_x >= window_x + 12 &&
-        cursor_x < window_x + 205 &&
-        cursor_y >= card_y - 12 &&
-        cursor_y < card_y + 92)
-        active_panel = 1;
-    else if (cursor_x >= window_x + 195 &&
-             cursor_x < window_x + 387 &&
-             cursor_y >= card_y - 12 &&
-             cursor_y < card_y + 92)
-        active_panel = 2;
-    else if (cursor_x >= window_x + 375 &&
-             cursor_x < window_x + 585 &&
-             cursor_y >= card_y - 12 &&
-             cursor_y < card_y + 92)
-        active_panel = 3;
-    else
+        if (cursor_x >= window_x + window_w - 52 &&
+            cursor_x < window_x + window_w &&
+            cursor_y >= window_y &&
+            cursor_y < window_y + 44)
+        {
+            active_panel = 0;
+            return;
+        }
+
         return;
-}
+    }
 
+    /* Desktop icons launch the same real applications as Start. */
+    if (cursor_x >= 28 && cursor_x < 120 &&
+        cursor_y >= 30 && cursor_y < 118)
+    {
+        active_panel = 1;
+        return;
+    }
+
+    if (cursor_x >= 140 && cursor_x < 232 &&
+        cursor_y >= 30 && cursor_y < 118)
+    {
+        active_panel = 2;
+        return;
+    }
+
+    if (cursor_x >= 252 && cursor_x < 344 &&
+        cursor_y >= 30 && cursor_y < 118)
+    {
+        active_panel = 3;
+        return;
+    }
+}
 void graphics_mouse_move(int dx, int dy)
 {
     if (!initialized)
@@ -858,253 +941,222 @@ void graphics_present(void)
 
     uint32_t w = framebuffer_width;
     uint32_t h = framebuffer_height;
+    int taskbar_y = (int)h - 64;
 
-    graphics_clear(0x00101820);
+    /* Windows-like desktop: simple wallpaper, real desktop shortcuts, real taskbar. */
+    graphics_clear(0x000B1726);
 
-    graphics_fill_rect(0, 0, (int)w, 52, 0x0018202C);
-    graphics_fill_rect(0, 52, (int)w, 2, 0x002A3544);
+    /* Subtle wallpaper bands; no non-functional widgets. */
+    graphics_fill_rect(0, 0, (int)w, (int)h, 0x000B1726);
+    graphics_fill_rect(0, 0, (int)w, (int)h / 2, 0x000D1D30);
 
-    graphics_fill_rect(0, (int)h - 64, (int)w, 64, 0x0018202C);
-    graphics_fill_rect(0, (int)h - 66, (int)w, 2, 0x002A3544);
+    /* Desktop shortcuts. */
+    graphics_fill_rect(28, 34, 64, 52, 0x001C4D7A);
+    graphics_fill_rect(44, 46, 32, 24, 0x005AA9E6);
+    graphics_draw_text(32, 94, "SYSTEM", 0x00FFFFFF, 1);
 
-    graphics_fill_rect(18, 14, 24, 24, 0x003B82F6);
-    graphics_fill_rect(24, 20, 12, 12, 0x00FFFFFF);
+    graphics_fill_rect(140, 34, 64, 52, 0x001D5B3A);
+    graphics_fill_rect(154, 46, 36, 28, 0x0058D68D);
+    graphics_draw_text(148, 94, "FILES", 0x00FFFFFF, 1);
 
-    graphics_draw_text(56, 17, "VANTAOS", 0x00FFFFFF, 3);
-    graphics_draw_text((int)w - 112, 18, "SYSTEM", 0x009AA8B8, 2);
+    graphics_fill_rect(252, 34, 64, 52, 0x002B3550);
+    graphics_fill_rect(266, 46, 36, 28, 0x0099A8C2);
+    graphics_draw_text(258, 94, "TERMINAL", 0x00FFFFFF, 1);
 
-    int window_x = (int)w / 2 - 300;
-    int window_y = 120;
-    int window_w = 600;
-    int window_h = 390;
-
-    graphics_fill_rect(
-        window_x + 6, window_y + 8,
-        window_w, window_h, 0x000A0E14
-    );
-
-    graphics_fill_rect(
-        window_x, window_y,
-        window_w, window_h, 0x00151D27
-    );
-
-    graphics_fill_rect(
-        window_x, window_y,
-        window_w, 42, 0x00212C3A
-    );
-
-    graphics_fill_rect(
-        window_x + 18, window_y + 13,
-        14, 14, 0x003B82F6
-    );
-
-    graphics_draw_text(
-        window_x + 48, window_y + 12,
-        "TERMINAL", 0x00FFFFFF, 2
-    );
-
-    graphics_fill_rect(
-        window_x + window_w - 78, window_y + 13,
-        12, 12, 0x009AA8B8
-    );
-
-    graphics_fill_rect(
-        window_x + window_w - 52, window_y + 13,
-        12, 12, 0x009AA8B8
-    );
-
-    graphics_fill_rect(
-        window_x + 28, window_y + 72,
-        window_w - 56, 2, 0x002A3544
-    );
-
-    graphics_draw_text(
-        window_x + 28, window_y + 98,
-        "VANTAOS", 0x003B82F6, 3
-    );
-
-    graphics_draw_text(
-        window_x + 28, window_y + 134,
-        "SYSTEM", 0x00D7DEE7, 2
-    );
-
-    graphics_draw_text(
-        window_x + 28, window_y + 164,
-        "FILES", 0x009AA8B8, 2
-    );
-
-    /*
-     * The cards act as simple desktop applications:
-     * System = system information
-     * Files  = the current VFS root
-     * Terminal = the existing shell process
-     */
+    /* System window. */
     if (active_panel == 1)
     {
-        graphics_draw_text(
-            window_x + 28, window_y + 190,
-            "SYSTEM", 0x0058D68D, 1
-        );
+        int window_w = 760;
+        int window_h = 480;
+        int window_x = (int)w / 2 - window_w / 2;
+        int window_y = (int)h / 2 - window_h / 2;
 
-        graphics_draw_text(
-            window_x + 28, window_y + 208,
-            "KERNEL ONLINE", 0x00D7DEE7, 1
-        );
+        graphics_fill_rect(window_x + 8, window_y + 10,
+                           window_w, window_h, 0x00000000);
+        graphics_fill_rect(window_x, window_y,
+                           window_w, window_h, 0x00151D27);
+        graphics_fill_rect(window_x, window_y,
+                           window_w, 44, 0x00202A36);
 
-        graphics_draw_text(
-            window_x + 28, window_y + 226,
-            "MEMORY PAGES", 0x009AA8B8, 1
-        );
+        graphics_draw_text(window_x + 18, window_y + 15,
+                           "SYSTEM", 0x00FFFFFF, 2);
+        graphics_draw_text(window_x + window_w - 28, window_y + 15,
+                           "X", 0x00FFFFFF, 2);
 
-        graphics_draw_text(
-            window_x + 28, window_y + 244,
-            "PROCESSES", 0x009AA8B8, 1
-        );
+        graphics_draw_text(window_x + 28, window_y + 78,
+                           "VANTAOS SYSTEM", 0x003B82F6, 3);
+        graphics_draw_text(window_x + 28, window_y + 124,
+                           "GRAPHICS", 0x00D7DEE7, 2);
+
+        char resolution[32];
+        unsigned int rw = w;
+        unsigned int rh = h;
+        resolution[0] = 'R';
+        resolution[1] = 'E';
+        resolution[2] = 'S';
+        resolution[3] = ':';
+        resolution[4] = ' ';
+        resolution[5] = (char)('0' + ((rw / 1000) % 10));
+        resolution[6] = (char)('0' + ((rw / 100) % 10));
+        resolution[7] = (char)('0' + ((rw / 10) % 10));
+        resolution[8] = (char)('0' + (rw % 10));
+        resolution[9] = 'x';
+        resolution[10] = (char)('0' + ((rh / 1000) % 10));
+        resolution[11] = (char)('0' + ((rh / 100) % 10));
+        resolution[12] = (char)('0' + ((rh / 10) % 10));
+        resolution[13] = (char)('0' + (rh % 10));
+        resolution[14] = 0;
+
+        graphics_draw_text(window_x + 28, window_y + 154,
+                           resolution, 0x009AA8B8, 1);
+        graphics_draw_text(window_x + 28, window_y + 190,
+                           "FILESYSTEM", 0x00D7DEE7, 2);
+        graphics_draw_text(window_x + 28, window_y + 220,
+                           filesystem_is_initialized() ?
+                           "ONLINE" : "OFFLINE",
+                           0x0058D68D, 1);
+        graphics_draw_text(window_x + 28, window_y + 256,
+                           "PROCESS MANAGER", 0x00D7DEE7, 2);
+        graphics_draw_text(window_x + 28, window_y + 286,
+                           process_is_initialized() ?
+                           "ONLINE" : "OFFLINE",
+                           0x0058D68D, 1);
+        graphics_draw_text(window_x + 28, window_y + 322,
+                           "FRAMEBUFFER", 0x00D7DEE7, 2);
+        graphics_draw_text(window_x + 28, window_y + 352,
+                           "ACTIVE", 0x0058D68D, 1);
     }
-    else if (active_panel == 2)
-    {
-        graphics_draw_text(
-            window_x + 28, window_y + 190,
-            "FILES", 0x0058D68D, 1
-        );
 
-        uint32_t ids[12];
-        int count = filesystem_list(
-            filesystem_root(), ids, 12
-        );
+    /* Files window. */
+    if (active_panel == 2)
+    {
+        int window_w = 760;
+        int window_h = 480;
+        int window_x = (int)w / 2 - window_w / 2;
+        int window_y = (int)h / 2 - window_h / 2;
+
+        graphics_fill_rect(window_x + 8, window_y + 10,
+                           window_w, window_h, 0x00000000);
+        graphics_fill_rect(window_x, window_y,
+                           window_w, window_h, 0x00151D27);
+        graphics_fill_rect(window_x, window_y,
+                           window_w, 44, 0x00202A36);
+
+        graphics_draw_text(window_x + 18, window_y + 15,
+                           "FILES", 0x00FFFFFF, 2);
+        graphics_draw_text(window_x + window_w - 28, window_y + 15,
+                           "X", 0x00FFFFFF, 2);
+
+        graphics_draw_text(window_x + 28, window_y + 78,
+                           "VANTAOS FILES", 0x003B82F6, 3);
+        graphics_draw_text(window_x + 28, window_y + 118,
+                           "ROOT", 0x00D7DEE7, 2);
+
+        uint32_t ids[18];
+        int count = filesystem_list(filesystem_root(), ids, 18);
 
         if (count < 0)
             count = 0;
+        if (count > 18)
+            count = 18;
 
-        if (count > 12)
-            count = 12;
-
-        int file_y = window_y + 210;
+        int file_y = window_y + 154;
 
         for (int i = 0; i < count; i++)
         {
-            const fs_node_t* node =
-                filesystem_get_node(ids[i]);
-
+            const fs_node_t* node = filesystem_get_node(ids[i]);
             if (!node)
                 continue;
 
             char name[FS_NAME_MAX + 1];
             unsigned int n = 0;
 
-            while (node->name[n] &&
-                   n < FS_NAME_MAX)
+            while (node->name[n] && n < FS_NAME_MAX)
             {
-                char c = node->name[n];
-
-                if (c >= 'a' && c <= 'z')
-                    c = (char)(c - 'a' + 'A');
-
-                name[n++] = c;
+                char ch = node->name[n];
+                if (ch >= 'a' && ch <= 'z')
+                    ch = (char)(ch - 'a' + 'A');
+                name[n++] = ch;
             }
-
             name[n] = 0;
 
-            graphics_draw_text(
-                window_x + 36, file_y,
-                node->type == FS_NODE_DIRECTORY ?
-                "DIR" : "FILE",
-                0x009AA8B8, 1
-            );
+            graphics_fill_rect(window_x + 30, file_y - 3,
+                               12, 12,
+                               node->type == FS_NODE_DIRECTORY ?
+                               0x005AA9E6 : 0x009AA8C2);
+            graphics_draw_text(window_x + 54, file_y,
+                               name, 0x00FFFFFF, 1);
+            file_y += 22;
 
-            graphics_draw_text(
-                window_x + 82, file_y,
-                name, 0x00FFFFFF, 1
-            );
-
-            file_y += 18;
-
-            if (file_y > window_y + 350)
+            if (file_y > window_y + 420)
                 break;
         }
 
         if (count == 0)
-            graphics_draw_text(
-                window_x + 36, file_y,
-                "EMPTY", 0x009AA8B8, 1
-            );
+            graphics_draw_text(window_x + 30, file_y,
+                               "EMPTY", 0x009AA8B8, 1);
     }
-    else if (active_panel == 3)
+
+    /* Terminal is still handled by the real terminal window renderer. */
+    if (active_panel == 3)
+        return;
+
+    /* Windows 11-style taskbar: only real application launchers are shown. */
+    graphics_fill_rect(0, taskbar_y, (int)w, 64, 0x00161D27);
+    graphics_fill_rect(0, taskbar_y, (int)w, 1, 0x00304458);
+
+    graphics_fill_rect(18, taskbar_y + 8, 48, 48, 0x003B82F6);
+    graphics_fill_rect(29, taskbar_y + 19, 10, 10, 0x00FFFFFF);
+    graphics_fill_rect(42, taskbar_y + 19, 10, 10, 0x00FFFFFF);
+    graphics_fill_rect(29, taskbar_y + 32, 10, 10, 0x00FFFFFF);
+    graphics_fill_rect(42, taskbar_y + 32, 10, 10, 0x00FFFFFF);
+
+    graphics_fill_rect(86, taskbar_y + 8, 68, 48,
+                       active_panel == 2 ? 0x002A4A63 : 0x00202A36);
+    graphics_draw_text(101, taskbar_y + 25, "FILES", 0x00FFFFFF, 1);
+
+    graphics_fill_rect(162, taskbar_y + 8, 68, 48,
+                       active_panel == 3 ? 0x002A4A63 : 0x00202A36);
+    graphics_draw_text(172, taskbar_y + 25, "TERM", 0x00FFFFFF, 1);
+
+    graphics_draw_text(252, taskbar_y + 25,
+                       "VANTAOS", 0x009AA8B8, 1);
+
+    if (start_menu_open)
     {
-        graphics_draw_text(
-            window_x + 28, window_y + 190,
-            "TERMINAL", 0x0058D68D, 1
-        );
+        int menu_w = 460;
+        int menu_h = 500;
+        int menu_x = (int)w / 2 - menu_w / 2;
+        int menu_y = (int)h - menu_h - 8;
 
-        graphics_draw_text(
-            window_x + 28, window_y + 212,
-            "PROCESS 1", 0x00D7DEE7, 1
-        );
+        graphics_fill_rect(menu_x + 8, menu_y + 10,
+                           menu_w, menu_h, 0x00000000);
+        graphics_fill_rect(menu_x, menu_y,
+                           menu_w, menu_h, 0x001A222D);
 
-        graphics_draw_text(
-            window_x + 28, window_y + 230,
-            "RUNNING", 0x0058D68D, 1
-        );
+        graphics_draw_text(menu_x + 24, menu_y + 28,
+                           "VANTAOS", 0x00FFFFFF, 3);
+        graphics_draw_text(menu_x + 24, menu_y + 66,
+                           "APPLICATIONS", 0x009AA8B8, 1);
 
-        graphics_draw_text(
-            window_x + 28, window_y + 252,
-            "THE EXISTING SHELL IS ACTIVE", 0x009AA8B8, 1
-        );
+        graphics_fill_rect(menu_x + 24, menu_y + 110,
+                           412, 54, 0x00212C3A);
+        graphics_draw_text(menu_x + 42, menu_y + 129,
+                           "TERMINAL", 0x00FFFFFF, 2);
 
-        graphics_draw_text(
-            window_x + 28, window_y + 274,
-            "TYPE COMMANDS IN THE TERMINAL", 0x009AA8B8, 1
-        );
+        graphics_fill_rect(menu_x + 24, menu_y + 164,
+                           412, 54, 0x00212C3A);
+        graphics_draw_text(menu_x + 42, menu_y + 183,
+                           "FILES", 0x00FFFFFF, 2);
+
+        graphics_fill_rect(menu_x + 24, menu_y + 218,
+                           412, 54, 0x00212C3A);
+        graphics_draw_text(menu_x + 42, menu_y + 237,
+                           "SYSTEM", 0x00FFFFFF, 2);
+
+        graphics_draw_text(menu_x + 24, menu_y + 460,
+                           "Select an application", 0x009AA8B8, 1);
     }
 
-    int card_y = window_y + 215;
-
-    graphics_fill_rect(
-        window_x + 28, card_y,
-        165, 80,
-        active_panel == 1 ? 0x00304458 : 0x001E2936
-    );
-
-    graphics_fill_rect(
-        window_x + 210, card_y,
-        165, 80,
-        active_panel == 2 ? 0x00304458 : 0x001E2936
-    );
-
-    graphics_fill_rect(
-        window_x + 392, card_y,
-        165, 80,
-        active_panel == 3 ? 0x00304458 : 0x001E2936
-    );
-
-    graphics_draw_text(
-        window_x + 48, card_y + 18,
-        "SYSTEM", 0x00FFFFFF, 2
-    );
-
-    graphics_draw_text(
-        window_x + 230, card_y + 18,
-        "FILES", 0x00FFFFFF, 2
-    );
-
-    graphics_draw_text(
-        window_x + 412, card_y + 18,
-        "TERMINAL", 0x00FFFFFF, 2
-    );
-
-    graphics_fill_rect(
-        22, (int)h - 52,
-        40, 40, 0x003B82F6
-    );
-
-    graphics_fill_rect(
-        32, (int)h - 42,
-        20, 20, 0x00FFFFFF
-    );
-
-    graphics_draw_text(
-        82, (int)h - 47,
-        "VANTAOS", 0x00FFFFFF, 2
-    );
-
+    graphics_draw_cursor();
 }

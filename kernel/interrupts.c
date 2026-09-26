@@ -1,9 +1,11 @@
 #include "interrupts.h"
 #include "keyboard.h"
+#include "mouse.h"
 #include "terminal.h"
 
 extern void irq0_stub(void);
 extern void irq1_stub(void);
+extern void irq12_stub(void);
 
 extern void exception0_stub(void);
 extern void exception1_stub(void);
@@ -130,8 +132,26 @@ static void pic_remap(void)
         "outb %%al, $0x21\n"
         "outb %%al, $0xA1\n"
 
-        "movb $0x00, %%al\n"
+        /*
+         * Master PIC:
+         * IRQ0 = timer       enabled
+         * IRQ1 = keyboard    enabled
+         * IRQ2 = slave PIC   enabled
+         * IRQ3-7             masked
+         *
+         * 11111000 = 0xF8
+         *
+         * Slave PIC:
+         * IRQ12 = mouse      enabled
+         * Everything else    masked
+         *
+         * IRQ12 is bit 4 on the slave PIC.
+         * 11101111 = 0xEF
+         */
+        "movb $0xF8, %%al\n"
         "outb %%al, $0x21\n"
+
+        "movb $0xEF, %%al\n"
         "outb %%al, $0xA1\n"
         :
         :
@@ -161,6 +181,37 @@ static void pit_initialize(void)
     );
 }
 
+static void pic_send_eoi(unsigned int interrupt_number)
+{
+    /*
+     * IRQs 8-15 originate from the slave PIC.
+     *
+     * The slave must receive an EOI first, followed by
+     * the master PIC's cascade IRQ2 EOI.
+     */
+    if (interrupt_number >= 40)
+    {
+        __asm__ volatile (
+            "movb $0x20, %%al\n"
+            "outb %%al, $0xA0\n"
+            "outb %%al, $0x20\n"
+            :
+            :
+            : "al"
+        );
+    }
+    else
+    {
+        __asm__ volatile (
+            "movb $0x20, %%al\n"
+            "outb %%al, $0x20\n"
+            :
+            :
+            : "al"
+        );
+    }
+}
+
 void interrupt_handler(unsigned int interrupt_number)
 {
     if (interrupt_number == 32)
@@ -171,14 +222,12 @@ void interrupt_handler(unsigned int interrupt_number)
     {
         keyboard_handle_interrupt();
     }
+    else if (interrupt_number == 44)
+    {
+        mouse_handle_interrupt();
+    }
 
-    __asm__ volatile (
-        "movb $0x20, %%al\n"
-        "outb %%al, $0x20\n"
-        :
-        :
-        : "al"
-    );
+    pic_send_eoi(interrupt_number);
 }
 
 unsigned int interrupts_get_ticks(void)
@@ -293,8 +342,9 @@ void interrupts_initialize(void)
     idt_set_gate(30, (unsigned int)exception30_stub, 0x08, 0x8E);
     idt_set_gate(31, (unsigned int)exception31_stub, 0x08, 0x8E);
 
-    idt_set_gate(32, (unsigned int)irq0_stub, 0x08, 0x8E);
-    idt_set_gate(33, (unsigned int)irq1_stub, 0x08, 0x8E);
+    idt_set_gate(32, (unsigned int)irq0_stub,  0x08, 0x8E);
+    idt_set_gate(33, (unsigned int)irq1_stub,  0x08, 0x8E);
+    idt_set_gate(44, (unsigned int)irq12_stub, 0x08, 0x8E);
 
     idt_pointer.limit = sizeof(idt) - 1;
     idt_pointer.base = (unsigned int)&idt;

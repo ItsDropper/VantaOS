@@ -4,6 +4,7 @@ section .text
 
 global irq0_stub
 global irq1_stub
+global irq12_stub
 
 global exception0_stub
 global exception1_stub
@@ -41,6 +42,9 @@ global exception31_stub
 extern interrupt_handler
 extern exception_handler
 
+; =========================================================================
+; IRQ 0 - PIT timer
+; =========================================================================
 
 irq0_stub:
     pusha
@@ -52,6 +56,9 @@ irq0_stub:
     popa
     iretd
 
+; =========================================================================
+; IRQ 1 - PS/2 keyboard
+; =========================================================================
 
 irq1_stub:
     pusha
@@ -63,28 +70,41 @@ irq1_stub:
     popa
     iretd
 
+; =========================================================================
+; IRQ 12 - PS/2 mouse
+; =========================================================================
+
+irq12_stub:
+    pusha
+
+    push dword 44
+    call interrupt_handler
+    add esp, 4
+
+    popa
+    iretd
+
+; =========================================================================
+; CPU exceptions
+; =========================================================================
 
 %macro EXCEPTION_NO_ERROR 1
 exception%1_stub:
     pusha
 
-    ; Add a fake error code so every exception
-    ; has the same stack layout.
+    ; Fake error code so all exception frames have the same layout.
     push dword 0
 
-    ; Pass exception number and pointer to saved frame.
     push esp
     push dword %1
     call exception_handler
     add esp, 8
 
-    ; Remove fake error code.
     add esp, 4
 
     popa
     iretd
 %endmacro
-
 
 %macro EXCEPTION_ERROR 1
 exception%1_stub:
@@ -92,19 +112,16 @@ exception%1_stub:
 
     ; CPU already pushed the real error code.
 
-    ; Pass exception number and pointer to saved frame.
     push esp
     push dword %1
     call exception_handler
     add esp, 8
 
-    ; Remove CPU-provided error code.
     add esp, 4
 
     popa
     iretd
 %endmacro
-
 
 EXCEPTION_NO_ERROR 0
 EXCEPTION_NO_ERROR 1
@@ -138,6 +155,5 @@ EXCEPTION_NO_ERROR 28
 EXCEPTION_NO_ERROR 29
 EXCEPTION_NO_ERROR 30
 EXCEPTION_NO_ERROR 31
-
 
 section .note.GNU-stack noalloc noexec nowrite progbits

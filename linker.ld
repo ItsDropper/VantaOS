@@ -2,26 +2,36 @@ ENTRY(_start)
 
 SECTIONS
 {
+    /* The kernel is loaded at 1 MiB by GRUB/multiboot */
     . = 1M;
 
-    .text :
+    /* Multiboot header must come first, followed by .text */
+    .text BLOCK(4K) : ALIGN(4K)
     {
         *(.multiboot)
         *(.text)
     }
 
-    .rodata :
+    /* Read-only data */
+    .rodata BLOCK(4K) : ALIGN(4K)
     {
         *(.rodata)
     }
 
-    .data :
+    /* Read-write initialized data */
+    .data BLOCK(4K) : ALIGN(4K)
     {
         *(.data)
     }
 
-    .bss :
+    /* Read-write uninitialized data and stack */
+    .bss BLOCK(4K) : ALIGN(4K)
     {
+        *(COMMON)
         *(.bss)
     }
+
+    /* Define 'end' symbol right after the last kernel section */
+    _end = .;
+    end = .;
 }

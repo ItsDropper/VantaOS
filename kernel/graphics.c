@@ -158,7 +158,6 @@ static int graphics_initialize_bochs(void)
     bochs_vbe_write(BOCHS_VBE_INDEX_VIRT_HEIGHT, 768);
     bochs_vbe_write(BOCHS_VBE_INDEX_ENABLE, BOCHS_VBE_ENABLE_LFB);
 
-    bochs_vbe_write(BOCHS_VBE_INDEX_LFB, BOCHS_VBE_INDEX_LFB);
     uint32_t physical = bochs_vbe_read(BOCHS_VBE_INDEX_LFB);
 
     if (physical == 0 || physical == 0xFFFFFFFFU)

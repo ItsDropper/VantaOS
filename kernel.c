@@ -9,6 +9,8 @@
 #include "shell.h"
 #include "terminal.h"
 #include "mouse.h"
+#include "filesystem.h"
+#include "process.h"
 
 extern void shell_set_multiboot_info(multiboot_info_t* mbd);
 
@@ -70,6 +72,8 @@ void kernel_main(multiboot_info_t* mbd)
     terminal_write(graphics_ready ? "YES\n" : "NO\n");
 
     heap_initialize();
+    filesystem_initialize();
+    process_initialize();
     boot_memory = read_tsc();
     boot_interrupts = boot_memory;
 
@@ -83,6 +87,8 @@ void kernel_main(multiboot_info_t* mbd)
     __asm__ volatile ("sti");
 
     terminal_write("\nKernel initialized successfully.\n");
+    terminal_write(filesystem_is_initialized() ? "Filesystem: online.\n" : "Filesystem: offline.\n");
+    terminal_write(process_is_initialized() ? "Process manager: online.\n" : "Process manager: offline.\n");
     terminal_write("Paging: enabled (identity-mapped 16 MiB).\n");
     terminal_write("Type 'help' for available commands.\n\n");
 

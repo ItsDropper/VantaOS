@@ -8,6 +8,7 @@
 
 #define PAGE_TABLE_COUNT 4
 #define HEAP_PAGE_TABLE_INDEX 256
+#define GRAPHICS_PAGE_TABLE_INDEX 258
 
 static uint32_t page_directory[1024]
     __attribute__((aligned(4096)));
@@ -16,6 +17,9 @@ static uint32_t page_tables[PAGE_TABLE_COUNT][1024]
     __attribute__((aligned(4096)));
 
 static uint32_t heap_page_table[1024]
+    __attribute__((aligned(4096)));
+
+static uint32_t graphics_page_table[1024]
     __attribute__((aligned(4096)));
 
 static inline void load_page_directory(uint32_t* directory)
@@ -68,6 +72,9 @@ static uint32_t* get_page_table(uintptr_t virtual_address)
     if (directory_index == HEAP_PAGE_TABLE_INDEX)
         return heap_page_table;
 
+    if (directory_index == GRAPHICS_PAGE_TABLE_INDEX)
+        return graphics_page_table;
+
     return NULL;
 }
 
@@ -94,7 +101,10 @@ void paging_initialize(void)
     }
 
     for (uint32_t entry = 0; entry < 1024; entry++)
+    {
         heap_page_table[entry] = 0;
+        graphics_page_table[entry] = 0;
+    }
 
     load_page_directory(page_directory);
     enable_paging();
@@ -125,6 +135,15 @@ int paging_map_page(
     {
         page_directory[directory_index] =
             (uint32_t)&heap_page_table[0]
+            | PAGE_PRESENT
+            | PAGE_WRITE;
+    }
+
+    if (directory_index == GRAPHICS_PAGE_TABLE_INDEX &&
+        !(page_directory[directory_index] & PAGE_PRESENT))
+    {
+        page_directory[directory_index] =
+            (uint32_t)&graphics_page_table[0]
             | PAGE_PRESENT
             | PAGE_WRITE;
     }

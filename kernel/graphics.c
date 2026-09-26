@@ -338,6 +338,11 @@ void graphics_mouse_move(int dx, int dy)
     if (!initialized)
         return;
 
+    /*
+     * PS/2 coordinates are relative. Keep the mapping 1:1 with
+     * the framebuffer so the software cursor follows the host
+     * pointer without artificial scaling or offset.
+     */
     cursor_x += dx;
     cursor_y -= dy;
 
@@ -449,19 +454,40 @@ void graphics_present(void)
 
     int card_y = window_y + 215;
 
+    int hover_system =
+        cursor_x >= window_x + 28 &&
+        cursor_x < window_x + 193 &&
+        cursor_y >= card_y &&
+        cursor_y < card_y + 80;
+
+    int hover_files =
+        cursor_x >= window_x + 210 &&
+        cursor_x < window_x + 375 &&
+        cursor_y >= card_y &&
+        cursor_y < card_y + 80;
+
+    int hover_status =
+        cursor_x >= window_x + 392 &&
+        cursor_x < window_x + 557 &&
+        cursor_y >= card_y &&
+        cursor_y < card_y + 80;
+
     graphics_fill_rect(
         window_x + 28, card_y,
-        165, 80, 0x001E2936
+        165, 80,
+        hover_system ? 0x002A3A4C : 0x001E2936
     );
 
     graphics_fill_rect(
         window_x + 210, card_y,
-        165, 80, 0x001E2936
+        165, 80,
+        hover_files ? 0x002A3A4C : 0x001E2936
     );
 
     graphics_fill_rect(
         window_x + 392, card_y,
-        165, 80, 0x001E2936
+        165, 80,
+        hover_status ? 0x002A3A4C : 0x001E2936
     );
 
     graphics_draw_text(
@@ -476,7 +502,12 @@ void graphics_present(void)
 
     graphics_draw_text(
         window_x + 412, card_y + 18,
-        "SYSTEM", 0x00FFFFFF, 2
+        "STATUS", 0x00FFFFFF, 2
+    );
+
+    graphics_draw_text(
+        window_x + 412, card_y + 48,
+        "ONLINE", 0x0058D68D, 1
     );
 
     graphics_fill_rect(

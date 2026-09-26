@@ -87,6 +87,9 @@ static uint32_t pack_color(uint32_t color)
 
 static int font_index(char c)
 {
+    if (c >= 'a' && c <= 'z')
+        c = (char)(c - 'a' + 'A');
+
     if (c >= 'A' && c <= 'Z')
         return c - 'A';
 
@@ -94,6 +97,80 @@ static int font_index(char c)
         return 26 + (c - '0');
 
     return -1;
+}
+
+static const uint8_t glyph_slash[7] =
+{
+    0x01, 0x02, 0x02, 0x04, 0x08, 0x08, 0x10
+};
+
+static const uint8_t glyph_dot[7] =
+{
+    0, 0, 0, 0, 0, 0x0C, 0x0C
+};
+
+static const uint8_t glyph_dash[7] =
+{
+    0, 0, 0, 0x1F, 0, 0, 0
+};
+
+static const uint8_t glyph_underscore[7] =
+{
+    0, 0, 0, 0, 0, 0, 0x1F
+};
+
+static const uint8_t glyph_colon[7] =
+{
+    0, 0x0C, 0x0C, 0, 0, 0x0C, 0x0C
+};
+
+static const uint8_t glyph_plus[7] =
+{
+    0, 0x04, 0x04, 0x1F, 0x04, 0x04, 0
+};
+
+static const uint8_t glyph_equal[7] =
+{
+    0, 0x1F, 0, 0x1F, 0, 0, 0
+};
+
+static const uint8_t glyph_greater[7] =
+{
+    0x10, 0x08, 0x04, 0x02, 0x04, 0x08, 0x10
+};
+
+static const uint8_t glyph_less[7] =
+{
+    0x01, 0x02, 0x04, 0x08, 0x04, 0x02, 0x01
+};
+
+static const uint8_t glyph_bracket_open[7] =
+{
+    0x0E, 0x08, 0x08, 0x08, 0x08, 0x08, 0x0E
+};
+
+static const uint8_t glyph_bracket_close[7] =
+{
+    0x0E, 0x02, 0x02, 0x02, 0x02, 0x02, 0x0E
+};
+
+static const uint8_t* symbol_glyph(char c)
+{
+    switch (c)
+    {
+        case '/': return glyph_slash;
+        case '.': return glyph_dot;
+        case '-': return glyph_dash;
+        case '_': return glyph_underscore;
+        case ':': return glyph_colon;
+        case '+': return glyph_plus;
+        case '=': return glyph_equal;
+        case '>': return glyph_greater;
+        case '<': return glyph_less;
+        case '[': return glyph_bracket_open;
+        case ']': return glyph_bracket_close;
+        default: return 0;
+    }
 }
 
 #define BOCHS_VBE_INDEX 0x01CE
@@ -399,8 +476,14 @@ void graphics_draw_text(
         }
 
         int index = font_index(c);
+        const uint8_t* glyph = 0;
 
-        if (index < 0)
+        if (index >= 0)
+            glyph = font[index];
+        else
+            glyph = symbol_glyph(c);
+
+        if (!glyph)
         {
             x += 6 * (int)scale;
             continue;
@@ -408,7 +491,7 @@ void graphics_draw_text(
 
         for (int row = 0; row < 7; row++)
         {
-            uint8_t bits = font[index][row];
+            uint8_t bits = glyph[row];
 
             for (int col = 0; col < 5; col++)
             {

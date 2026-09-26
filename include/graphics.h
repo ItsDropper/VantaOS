@@ -30,6 +30,7 @@ void graphics_draw_cursor(void);
 
 int graphics_is_initialized(void);
 int graphics_get_active_panel(void);
+int graphics_terminal_close_requested(void);
 uint32_t graphics_get_width(void);
 uint32_t graphics_get_height(void);
 

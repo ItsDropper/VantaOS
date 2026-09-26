@@ -159,11 +159,11 @@ static int graphics_initialize_bochs(void)
     bochs_vbe_write(BOCHS_VBE_INDEX_ENABLE, BOCHS_VBE_ENABLE_LFB);
 
     /*
-     * The VBE LFB is normally mapped by the PCI device at 0xE0000000 in
-     * our QEMU configuration. Keep this isolated so the renderer uses the
-     * same physical address that the machine exposes.
+     * QEMU/Bochs exposes the LFB through the VBE DISPI interface. The
+     * framebuffer address is supplied by the Multiboot framebuffer info;
+     * this fallback is only used when GRUB did not provide one.
      */
-    uint32_t physical = 0xE0000000U;
+    return 0;
     uint32_t offset = physical & 0xFFF;
     uint32_t first_page = physical & 0xFFFFF000U;
     uint32_t pitch = 1024 * 4;

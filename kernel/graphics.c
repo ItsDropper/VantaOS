@@ -778,7 +778,7 @@ void graphics_draw_cursor(void)
         return;
 
     int x = cursor_x + 5;
-    int y = cursor_y - 5;
+    int y = cursor_y - 15;
 
     /* Black outline: a compact Windows-style arrow pointer. */
     graphics_fill_rect(x, y, 2, 19, 0x00000000);

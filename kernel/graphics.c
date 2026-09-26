@@ -144,11 +144,81 @@ static inline uint16_t bochs_vbe_read(uint16_t index)
 static int graphics_initialize_bochs(void)
 {
     /*
-     * GRUB is now explicitly asked for a 1024x768x32 Multiboot
-     * framebuffer. Keep the Bochs VBE fallback disabled until we have
-     * a real physical LFB address instead of guessing one.
+     * QEMU's "-vga std" device exposes the Bochs VBE interface.
+     * Use the device-reported LFB address instead of assuming a fixed
+     * physical address. This also gives us a reliable fallback when
+     * GRUB leaves the Multiboot framebuffer in text mode.
      */
-    return 0;
+    if (bochs_vbe_read(BOCHS_VBE_INDEX_ID) != BOCHS_VBE_ID)
+        return 0;
+
+    bochs_vbe_write(BOCHS_VBE_INDEX_ENABLE, 0);
+    bochs_vbe_write(BOCHS_VBE_INDEX_XRES, 1024);
+    bochs_vbe_write(BOCHS_VBE_INDEX_YRES, 768);
+    bochs_vbe_write(BOCHS_VBE_INDEX_BPP, 32);
+    bochs_vbe_write(BOCHS_VBE_INDEX_VIRT_WIDTH, 1024);
+    bochs_vbe_write(BOCHS_VBE_INDEX_VIRT_HEIGHT, 768);
+    bochs_vbe_write(BOCHS_VBE_INDEX_ENABLE, BOCHS_VBE_ENABLE_LFB);
+
+    uint32_t physical =
+        (uint32_t)bochs_vbe_read(BOCHS_VBE_INDEX_LFB);
+
+    /* The LFB register is a 32-bit physical address split across
+       two 16-bit VBE reads. */
+    bochs_vbe_write(BOCHS_VBE_INDEX_LFB, 0);
+    uint16_t low = bochs_vbe_read(BOCHS_VBE_INDEX_LFB);
+    (void)physical;
+    physical = (uint32_t)low;
+
+    /* QEMU/Bochs exposes the LFB address through the VBE DISPI
+       interface as a 32-bit register. */
+    bochs_vbe_write(BOCHS_VBE_INDEX_LFB, 0x0D);
+    uint16_t lfb_low = bochs_vbe_read(BOCHS_VBE_INDEX_LFB);
+    (void)lfb_low;
+
+    /*
+     * The DISPI LFB register is normally 0xE0000000 on QEMU std VGA.
+     * Read the complete value using the 16-bit register interface.
+     */
+    bochs_vbe_write(BOCHS_VBE_INDEX_LFB, 0x0D);
+    uint32_t lfb = (uint32_t)bochs_vbe_read(BOCHS_VBE_INDEX_LFB);
+
+    if (lfb == 0 || lfb == 0xFFFFFFFFU)
+        return 0;
+
+    uint32_t offset = lfb & 0xFFF;
+    uint32_t first_page = lfb & 0xFFFFF000U;
+    uint64_t bytes = (uint64_t)1024 * 768 * 4;
+    uint32_t pages = (uint32_t)((offset + bytes + 4095) / 4096);
+
+    if (pages == 0 || pages > GRAPHICS_MAX_PAGES)
+        return 0;
+
+    for (uint32_t i = 0; i < pages; i++)
+    {
+        if (!paging_map_page(
+                GRAPHICS_VIRTUAL_BASE + i * 4096,
+                first_page + i * 4096))
+            return 0;
+    }
+
+    framebuffer = (uint8_t*)(GRAPHICS_VIRTUAL_BASE + offset);
+    framebuffer_pitch = 1024 * 4;
+    framebuffer_width = 1024;
+    framebuffer_height = 768;
+
+    red_position = 16;
+    red_mask_size = 8;
+    green_position = 8;
+    green_mask_size = 8;
+    blue_position = 0;
+    blue_mask_size = 8;
+
+    cursor_x = 512;
+    cursor_y = 384;
+    initialized = 1;
+
+    return 1;
 }
 
 int graphics_initialize(multiboot_info_t* mbd)

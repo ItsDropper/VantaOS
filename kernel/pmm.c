@@ -164,6 +164,19 @@ void pmm_initialize(multiboot_info_t* mbd)
         (uint64_t)mbd->mmap_addr + mbd->mmap_length
     );
 
+    if (mbd->flags & MULTIBOOT_INFO_FRAMEBUFFER)
+    {
+        uint64_t framebuffer_end =
+            mbd->framebuffer_addr +
+            (uint64_t)mbd->framebuffer_pitch *
+            mbd->framebuffer_height;
+
+        pmm_reserve_range(
+            mbd->framebuffer_addr,
+            framebuffer_end
+        );
+    }
+
     for (uint32_t block = total_blocks;
          block < bitmap_size * 32;
          block++)

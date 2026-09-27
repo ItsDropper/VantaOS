@@ -18,7 +18,10 @@ struct exception_frame
 };
 
 void interrupts_initialize(void);
-void interrupt_handler(unsigned int interrupt_number);
+unsigned int interrupt_handler(
+    unsigned int interrupt_number,
+    unsigned int saved_stack
+);
 unsigned int interrupts_get_ticks(void);
 
 #endif

@@ -1,7 +1,16 @@
 bits 32
 
-section .text.start
+section .multiboot
 align 4
+global multiboot_header
+
+multiboot_header:
+    dd 0x1BADB002
+    dd 0x00000000
+    dd -(0x1BADB002 + 0x00000000)
+
+section .text.start
+align 16
 global _start
 global stack_bottom
 global stack_top
@@ -9,15 +18,6 @@ extern kernel_main
 
 _start:
     cli
-    jmp multiboot_entry
-
-    align 4
-multiboot_header:
-    dd 0x1BADB002
-    dd 0x00000000
-    dd -(0x1BADB002 + 0x00000000)
-
-multiboot_entry:
     mov esp, stack_top
     push ebx
     call kernel_main

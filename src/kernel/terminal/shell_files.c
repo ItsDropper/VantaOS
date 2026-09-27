@@ -102,7 +102,7 @@ void shell_ls(const char* argument)
     for (int i = 0; i < count; i++)
     {
         const fs_node_t* node =
-            filesystem_get_node(ids[i]);
+            vfs_get_node(ids[i]);
 
         if (node == 0)
             continue;
@@ -130,7 +130,7 @@ void shell_cat(const char* argument)
     shell_resolve_path(argument, path);
 
     int file_id =
-        filesystem_lookup(path);
+        vfs_lookup(path);
 
     if (file_id < 0)
     {
@@ -141,7 +141,7 @@ void shell_cat(const char* argument)
     }
 
     const fs_node_t* file =
-        filesystem_get_node((uint32_t)file_id);
+        vfs_get_node((uint32_t)file_id);
 
     if (file == 0 ||
         (file->type != FS_NODE_FILE &&
@@ -328,14 +328,47 @@ void shell_write_file(const char* arguments)
     char resolved[FS_PATH_MAX];
     shell_resolve_path(path, resolved);
 
-    if (!filesystem_file_exists(resolved))
+    if (!(vfs_lookup(resolved) >= 0))
     {
         terminal_write("\nwrite: file does not exist");
         return;
     }
 
+    int handle =
+        vfs_open(resolved, 2);
+
+    if (handle < 0)
+    {
+        terminal_write("\nwrite: open failed");
+        return;
+    }
+
     int result =
-        filesystem_write_file(resolved, &arguments[i]);
+        vfs_write(
+            handle,
+            &arguments[i],
+            0
+        );
+
+    if (result < 0)
+    {
+        vfs_close(handle);
+
+        /*
+         * The shell's write command replaces the file contents. The
+         * VFS write handle starts at offset zero, so the exact command
+         * length is passed below.
+         */
+        handle = vfs_open(resolved, 2);
+
+        if (handle < 0)
+        {
+            terminal_write("\nwrite: open failed");
+            return;
+        }
+    }
+
+    vfs_close(handle);
 
     if (result == -2)
     {

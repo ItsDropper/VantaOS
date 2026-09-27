@@ -23,6 +23,11 @@ static int explorer_initialized;
 
 static int explorer_directory_for_path(const char* path)
 {
+    int id = filesystem_lookup(path);
+
+    if (id >= 0)
+        return id;
+
     return filesystem_ensure_directory(path);
 }
 
@@ -163,6 +168,8 @@ void file_explorer_initialize(void)
     explorer_file = -1;
 
     explorer_dragging = 0;
+    explorer_drag_offset_x = 0;
+    explorer_drag_offset_y = 0;
     explorer_maximized = 0;
     explorer_x = -1;
     explorer_y = -1;

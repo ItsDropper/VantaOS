@@ -76,7 +76,7 @@ terminal.o: src/kernel/terminal/terminal.c
 	$(CC) $(CFLAGS) -c src/kernel/terminal/terminal.c -o terminal.o
 
 keyboard.o: src/kernel/drivers/input/keyboard.c
-	$(CC) $(CFLAGS) -c src/kernel/drivers/input/keyboard.c -o mouse.o
+	$(CC) $(CFLAGS) -c src/kernel/drivers/input/keyboard.c -o keyboard.o
 
 mouse.o: src/kernel/drivers/input/mouse.c
 	$(CC) $(CFLAGS) -c src/kernel/drivers/input/mouse.c -o mouse.o
@@ -143,9 +143,6 @@ graphics_text.o: src/kernel/graphics/graphics_text.c
 
 graphics_input.o: src/kernel/graphics/graphics_input.c
 	$(CC) $(CFLAGS) -c src/kernel/graphics/graphics_input.c -o graphics_input.o
-
-graphics_ui.o: src/kernel/graphics/graphics_ui.c
-	$(CC) $(CFLAGS) -c src/kernel/graphics/graphics_ui.c -o graphics_ui.o
 
 graphics_ui.o: src/kernel/graphics/graphics_ui.c
 	$(CC) $(CFLAGS) -c src/kernel/graphics/graphics_ui.c -o graphics_ui.o

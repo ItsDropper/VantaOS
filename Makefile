@@ -8,6 +8,7 @@ LDFLAGS = -m elf_i386 --no-warn-rwx-segments -T build/linker.ld
 OBJS = boot.o \
        isr.o \
        kernel.o \
+       desktop.o \
        gdt.o \
        terminal.o \
        keyboard.o \
@@ -33,6 +34,9 @@ isr.o: src/kernel/arch/x86/isr.asm
 
 kernel.o: src/kernel/kernel.c
 	$(CC) $(CFLAGS) -c src/kernel/kernel.c -o kernel.o
+
+desktop.o: src/kernel/desktop.c
+	$(CC) $(CFLAGS) -c src/kernel/desktop.c -o desktop.o
 
 gdt.o: src/kernel/arch/x86/gdt.c
 	$(CC) $(CFLAGS) -c src/kernel/arch/x86/gdt.c -o gdt.o

@@ -156,11 +156,11 @@ void kernel_main(multiboot_info_t* mbd)
     __asm__ volatile ("sti");
 
     /*
-     * The boot context is now only the idle task. Desktop execution
-     * happens on its own scheduler-managed kernel stack.
+     * Transfer execution to the desktop on the already-established boot
+     * stack. The scheduler may interrupt it normally, but it will not
+     * fabricate the first desktop IRET frame yet.
      */
-    while (1)
-        __asm__ volatile ("hlt");
+    desktop_process_run();
 }
 
 unsigned long long kernel_boot_start(void)

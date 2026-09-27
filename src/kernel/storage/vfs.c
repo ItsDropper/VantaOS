@@ -87,6 +87,26 @@ int vfs_open(
         open_files[i].flags = flags;
         open_files[i].used = 1;
 
+        if (flags & VFS_OPEN_TRUNCATE)
+        {
+            char path[FS_PATH_MAX];
+
+            if (!vfs_node_path(
+                    (uint32_t)node_id,
+                    path,
+                    sizeof(path)))
+            {
+                open_files[i].used = 0;
+                return -1;
+            }
+
+            if (filesystem_write_file(path, "") < 0)
+            {
+                open_files[i].used = 0;
+                return -1;
+            }
+        }
+
         return (int)i;
     }
 

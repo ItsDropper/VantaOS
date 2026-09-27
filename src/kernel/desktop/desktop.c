@@ -301,27 +301,6 @@ void desktop_present(void)
 void desktop_update(void)
 {
     /*
-     * Desktop-level keyboard events are consumed before application
-     * input. This makes the Terminal shortcut an actual desktop action
-     * instead of something the shell can accidentally consume.
-     */
-    if (!terminal_window_open && keyboard_has_event())
-    {
-        keyboard_event_t event = keyboard_get_event();
-
-        if (event == KEY_EVENT_TERMINAL)
-        {
-            desktop_try_launch_terminal();
-            return;
-        }
-
-        /*
-         * Preserve unrelated desktop events. They belong to the
-         * application layer once an application is active.
-         */
-    }
-
-    /*
      * Mouse handlers select the application panel immediately from
      * the input interrupt. Launch the selected desktop application
      * here on the next kernel iteration.

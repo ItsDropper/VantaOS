@@ -1,5 +1,6 @@
 #include "graphics_internal.h"
-#include "filesystem.h"\n#include "file_explorer.h"
+#include "filesystem.h"
+#include "file_explorer.h"
 #include "terminal.h"
 #include "process.h"
 #include "pmm.h"

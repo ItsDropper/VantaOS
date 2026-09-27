@@ -5,6 +5,7 @@ section .text
 global irq0_stub
 global irq1_stub
 global irq12_stub
+global process_entry_trampoline
 
 global exception0_stub
 global exception1_stub
@@ -41,6 +42,16 @@ global exception31_stub
 
 extern interrupt_handler
 extern exception_handler
+extern process_entry_dispatch
+
+process_entry_trampoline:
+    cld
+    call process_entry_dispatch
+    cli
+
+.process_exit_halt:
+    hlt
+    jmp .process_exit_halt
 
 %macro IRQ_STUB 2
 %1:

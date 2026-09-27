@@ -27,6 +27,7 @@ extern uint32_t files_current_dir;
 extern int files_open_file;
 extern int terminal_close_requested;
 extern int terminal_running;
+extern int terminal_open_requested;
 extern int terminal_maximized;
 extern int terminal_dragging;
 extern int terminal_x;

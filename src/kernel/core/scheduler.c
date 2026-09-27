@@ -54,12 +54,27 @@ uint32_t scheduler_tick(uint32_t current_stack)
     if (current_pid >= PROCESS_MAX)
         return current_stack;
 
-    process_save_stack(
-        current_pid,
-        current_stack
-    );
+    /*
+     * PID 0 is the boot context, not a process. It has no scheduler-owned
+     * stack frame and must never be restored through IRET.
+     */
+    if (current_pid != 0)
+    {
+        process_save_stack(
+            current_pid,
+            current_stack
+        );
+    }
 
     quantum_ticks++;
+
+    /*
+     * The first real process is entered directly from the boot context.
+     * There is no reason to spend five timer ticks returning to a stack
+     * that belongs to kernel_main/_start.
+     */
+    if (current_pid == 0)
+        quantum_ticks = SCHEDULER_QUANTUM_TICKS;
 
     if (quantum_ticks < SCHEDULER_QUANTUM_TICKS)
         return current_stack;
@@ -72,13 +87,10 @@ uint32_t scheduler_tick(uint32_t current_stack)
     if (next_pid == current_pid)
         return current_stack;
 
-    const process_t* current =
-        process_get(current_pid);
-
     const process_t* next =
         process_get(next_pid);
 
-    if (!current || !next)
+    if (!next)
         return current_stack;
 
     if (!process_stack_is_valid(next_pid))
@@ -99,8 +111,15 @@ uint32_t scheduler_tick(uint32_t current_stack)
         );
     }
 
-    if (current->state == PROCESS_TERMINATED)
-        process_reap(current_pid);
+    if (current_pid != 0)
+    {
+        const process_t* current =
+            process_get(current_pid);
+
+        if (current &&
+            current->state == PROCESS_TERMINATED)
+            process_reap(current_pid);
+    }
 
     return process_get_stack(next_pid);
 }

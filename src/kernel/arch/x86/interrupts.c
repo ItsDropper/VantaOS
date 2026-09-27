@@ -87,12 +87,15 @@ unsigned int interrupt_handler(
     switch (interrupt_number)
     {
         case IRQ0_VECTOR:
-            timer_handle_interrupt();
+            /*
+             * IRQ0 is intentionally isolated while diagnosing the
+             * invalid control-flow return at 0x0001000D.
+             *
+             * Keep acknowledging the interrupt so the PIC does not
+             * remain blocked, but do not touch the timer or scheduler.
+             */
             pic_send_eoi(0);
-
-            return scheduler_tick(
-                saved_stack
-            );
+            return saved_stack;
 
         case IRQ1_VECTOR:
             keyboard_handle_interrupt();

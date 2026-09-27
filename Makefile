@@ -9,6 +9,7 @@ OBJS = boot.o \
        isr.o \
        kernel.o \
        desktop.o \
+       file_explorer.o \
        gdt.o \
        idt.o \
        pic.o \
@@ -51,6 +52,9 @@ kernel.o: src/kernel/kernel.c
 
 desktop.o: src/kernel/desktop/desktop.c
 	$(CC) $(CFLAGS) -c src/kernel/desktop/desktop.c -o desktop.o
+
+file_explorer.o: src/kernel/desktop/file_explorer.c
+	$(CC) $(CFLAGS) -c src/kernel/desktop/file_explorer.c -o file_explorer.o
 
 idt.o: src/kernel/arch/x86/idt.c
 	$(CC) $(CFLAGS) -c src/kernel/arch/x86/idt.c -o idt.o

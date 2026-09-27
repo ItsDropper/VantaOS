@@ -59,10 +59,24 @@ uint32_t scheduler_tick(uint32_t current_stack)
     if (current_pid >= PROCESS_MAX)
         return current_stack;
 
-    process_save_stack(
-        current_pid,
-        current_stack
-    );
+    /*
+     * PID 1 is the boot context, not a scheduler-owned thread.
+     *
+     * Its stack pointer was captured while kernel_main was executing,
+     * so it is not an IRET frame that can safely be restored later.
+     * Saving that stack and subsequently treating it as a task context
+     * can make IRET consume arbitrary kernel-stack data as EIP.
+     *
+     * Real kernel threads own synthetic IRQ frames and are the only
+     * contexts that the scheduler saves/restores.
+     */
+    if (current_pid != 1)
+    {
+        process_save_stack(
+            current_pid,
+            current_stack
+        );
+    }
 
     quantum_ticks++;
 
@@ -73,6 +87,14 @@ uint32_t scheduler_tick(uint32_t current_stack)
 
     uint32_t next_pid =
         scheduler_next_ready(current_pid);
+
+    /*
+     * Never switch back to the boot context. PID 1 has no scheduler-
+     * owned IRET frame. If every real kernel thread is stopped, leave
+     * the current frame alone rather than restoring an invalid stack.
+     */
+    if (next_pid == 1)
+        return current_stack;
 
     if (next_pid == current_pid)
         return current_stack;

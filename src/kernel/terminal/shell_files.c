@@ -129,10 +129,10 @@ void shell_cat(const char* argument)
     char path[FS_PATH_MAX];
     shell_resolve_path(argument, path);
 
-    int file_id =
-        vfs_lookup(path);
+    int handle =
+        vfs_open(path, VFS_OPEN_READ);
 
-    if (file_id < 0)
+    if (handle < 0)
     {
         terminal_write("\ncat: file not found: ");
         terminal_write(argument);
@@ -140,33 +140,29 @@ void shell_cat(const char* argument)
         return;
     }
 
-    const fs_node_t* file =
-        vfs_get_node((uint32_t)file_id);
-
-    if (file == 0 ||
-        (file->type != FS_NODE_FILE &&
-         file->type != FS_NODE_VIRTUAL))
-    {
-        terminal_write("\ncat: not a file\n");
-        return;
-    }
-
     char buffer[FS_FILE_MAX];
-
-    if (filesystem_read(
-            (uint32_t)file_id,
+    int result =
+        vfs_read(
+            handle,
             buffer,
-            FS_FILE_MAX) < 0)
+            FS_FILE_MAX - 1
+        );
+
+    vfs_close(handle);
+
+    if (result < 0)
     {
         terminal_write("\ncat: read failed\n");
         return;
     }
 
+    buffer[result] = 0;
+
     terminal_putchar('\n');
     terminal_write(buffer);
 
-    if (file->size == 0 ||
-        buffer[file->size - 1] != '\n')
+    if (result == 0 ||
+        buffer[result - 1] != '\n')
         terminal_putchar('\n');
 }
 
@@ -187,7 +183,7 @@ void shell_cd(const char* argument)
         shell_resolve_path(argument, path);
 
     int directory_id =
-        filesystem_lookup(path);
+        vfs_lookup(path);
 
     if (directory_id < 0)
     {
@@ -198,7 +194,7 @@ void shell_cd(const char* argument)
     }
 
     const fs_node_t* directory =
-        filesystem_get_node((uint32_t)directory_id);
+        vfs_get_node((uint32_t)directory_id);
 
     if (directory == 0 ||
         directory->type != FS_NODE_DIRECTORY)
@@ -264,7 +260,7 @@ void shell_touch(const char* argument)
     if (existing >= 0)
     {
         const fs_node_t* node =
-            filesystem_get_node((uint32_t)existing);
+            vfs_get_node((uint32_t)existing);
 
         if (node != 0 && node->type == FS_NODE_FILE)
         {

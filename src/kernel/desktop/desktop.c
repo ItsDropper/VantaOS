@@ -58,6 +58,7 @@ static void terminal_close_window(void)
 {
     terminal_window_open = 0;
     terminal_window_prompted = 0;
+    graphics_clear_terminal_open_request();
     file_explorer_initialize();
 
     graphics_set_terminal_running(0);
@@ -166,8 +167,9 @@ void desktop_present(void)
 
 void desktop_update(void)
 {
-    if (graphics_get_active_panel() == 3 && !terminal_window_open)
+    if (!terminal_window_open && graphics_terminal_open_requested())
     {
+        graphics_clear_terminal_open_request();
         if (!desktop_launch_terminal())
             return;
     }

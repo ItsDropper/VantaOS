@@ -70,39 +70,10 @@ void graphics_mouse_click(int button)
      */
     if (active_panel == 2)
     {
-        if (cursor_y >= taskbar_y + 8 && cursor_y < taskbar_y + 56)
-        {
-            int center = width / 2;
-
-            if (cursor_x >= center - 190 && cursor_x < center - 142)
-            {
-                start_menu_open = 1;
-                return;
-            }
-
-            if (cursor_x >= center - 132 && cursor_x < center - 64)
-            {
-                file_explorer_initialize();
-                return;
-            }
-
-            if (cursor_x >= center - 56 && cursor_x < center + 12)
-            {
-                active_panel = 3;
-                graphics_request_terminal_open();
-                return;
-            }
-        }
-
-        /*
-         * Explorer handles its own window, including the close button.
-         * Keep this as the only mouse route for the Explorer so clicks
-         * cannot fall through to desktop shortcuts.
-         */
-        if (file_explorer_click(cursor_x, cursor_y, width, height))
+        if (file_explorer_click(
+                cursor_x, cursor_y, width, height))
         {
             active_panel = 0;
-            return;
         }
 
         return;

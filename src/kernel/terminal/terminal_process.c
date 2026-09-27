@@ -116,6 +116,14 @@ int terminal_process_start(uint32_t parent_pid)
 void terminal_process_request_exit(void)
 {
     exit_requested = 1;
+
+    /*
+     * The desktop currently owns the main execution loop, so the
+     * terminal thread may not get scheduled again to reach its normal
+     * process_terminate_current() path. Mark it terminated immediately.
+     */
+    if (terminal_pid != 0)
+        process_terminate(terminal_pid);
 }
 
 int terminal_process_consume_redraw(void)

@@ -17,45 +17,52 @@ static void terminal_prepare_session(void)
     shell_show_prompt();
 }
 
+void terminal_process_poll_input(void)
+{
+    if (!terminal_process_is_running())
+        return;
+
+    int changed = 0;
+
+    while (keyboard_has_event())
+    {
+        keyboard_event_t event =
+            keyboard_get_event();
+
+        if (event == KEY_EVENT_PAGE_UP)
+            terminal_scroll_up();
+        else if (event == KEY_EVENT_PAGE_DOWN)
+            terminal_scroll_down();
+        else
+            shell_handle_event(event);
+
+        changed = 1;
+    }
+
+    while (keyboard_has_char())
+    {
+        char character =
+            keyboard_get_char();
+
+        if (character == 27)
+        {
+            exit_requested = 1;
+            break;
+        }
+
+        shell_handle_char(character);
+        changed = 1;
+    }
+
+    if (changed)
+        redraw_requested = 1;
+}
+
 static void terminal_process_main(void)
 {
     while (!exit_requested)
     {
-        int changed = 0;
-
-        if (keyboard_has_event())
-        {
-            keyboard_event_t event =
-                keyboard_get_event();
-
-            if (event == KEY_EVENT_PAGE_UP)
-                terminal_scroll_up();
-            else if (event == KEY_EVENT_PAGE_DOWN)
-                terminal_scroll_down();
-            else
-                shell_handle_event(event);
-
-            changed = 1;
-        }
-
-        char character =
-            keyboard_get_char();
-
-        if (character != 0)
-        {
-            if (character == 27)
-            {
-                exit_requested = 1;
-                break;
-            }
-
-            shell_handle_char(character);
-            changed = 1;
-        }
-
-        if (changed)
-            redraw_requested = 1;
-
+        terminal_process_poll_input();
         __asm__ volatile ("hlt");
     }
 

@@ -88,24 +88,24 @@ unsigned int interrupt_handler(
     {
         case IRQ0_VECTOR:
             /*
-             * IRQ0 is intentionally isolated while diagnosing the
-             * invalid control-flow return at 0x0001000D.
-             *
-             * Keep acknowledging the interrupt so the PIC does not
-             * remain blocked, but do not touch the timer or scheduler.
+             * IRQ0 isolated: no timer or scheduler code.
              */
             pic_send_eoi(0);
             return saved_stack;
 
         case IRQ1_VECTOR:
-            keyboard_handle_interrupt();
+            /*
+             * IRQ1 isolated: no keyboard handler.
+             */
             pic_send_eoi(1);
-            break;
+            return saved_stack;
 
         case IRQ12_VECTOR:
-            mouse_handle_interrupt();
+            /*
+             * IRQ12 isolated: no mouse handler.
+             */
             pic_send_eoi(12);
-            break;
+            return saved_stack;
 
         default:
             if (interrupt_number >= 32 &&

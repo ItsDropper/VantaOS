@@ -33,7 +33,10 @@ OBJS = boot.o \
        shell_commands.o \
        pci.o \
        filesystem.o \
-       process.o
+       process.o \
+       scheduler.o \
+       vfs.o \
+       terminal_process.o
 
 all: kernel.bin
 
@@ -99,6 +102,15 @@ filesystem.o: src/kernel/storage/filesystem.c
 
 process.o: src/kernel/core/process.c
 	$(CC) $(CFLAGS) -c src/kernel/core/process.c -o process.o
+
+scheduler.o: src/kernel/core/scheduler.c
+	$(CC) $(CFLAGS) -c src/kernel/core/scheduler.c -o scheduler.o
+
+vfs.o: src/kernel/storage/vfs.c
+	$(CC) $(CFLAGS) -c src/kernel/storage/vfs.c -o vfs.o
+
+terminal_process.o: src/kernel/terminal/terminal_process.c
+	$(CC) $(CFLAGS) -c src/kernel/terminal/terminal_process.c -o terminal_process.o
 
 kernel.bin: $(OBJS)
 	$(LD) $(LDFLAGS) $(OBJS) -o kernel.bin

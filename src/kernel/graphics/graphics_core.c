@@ -102,6 +102,15 @@ int graphics_initialize_bochs(void)
             return 0;
     }
 
+    /*
+     * Do not mark graphics initialized until the first framebuffer page
+     * can be resolved through the active page tables. This makes the
+     * graphics layer fail closed instead of rendering through an invalid
+     * virtual mapping.
+     */
+    if (paging_get_physical(GRAPHICS_VIRTUAL_BASE) != first_page)
+        return 0;
+
     framebuffer = (uint8_t*)(GRAPHICS_VIRTUAL_BASE + offset);
     framebuffer_pitch = pitch;
     framebuffer_width = 1024;
@@ -169,6 +178,9 @@ int graphics_initialize(multiboot_info_t* mbd)
                         first_page + i * 4096U))
                     return 0;
             }
+
+            if (paging_get_physical(GRAPHICS_VIRTUAL_BASE) != first_page)
+                return 0;
 
             framebuffer = (uint8_t*)(GRAPHICS_VIRTUAL_BASE + offset);
             framebuffer_pitch = mbd->framebuffer_pitch;

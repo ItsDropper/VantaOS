@@ -186,18 +186,27 @@ void desktop_update(void)
         {
             terminal_close_window();
         }
-        else if (terminal_process_consume_redraw())
+        else if (graphics_get_active_panel() == 3)
         {
-            terminal_window_draw();
+            if (terminal_process_consume_redraw())
+            {
+                terminal_window_draw();
+            }
+            else
+            {
+                unsigned int blink_state = interrupts_get_ticks() / 50U;
+                if (blink_state != terminal_last_blink_state)
+                {
+                    terminal_last_blink_state = blink_state;
+                    terminal_window_draw();
+                }
+            }
         }
         else
         {
-            unsigned int blink_state = interrupts_get_ticks() / 50U;
-            if (blink_state != terminal_last_blink_state)
-            {
-                terminal_last_blink_state = blink_state;
-                terminal_window_draw();
-            }
+            /* The terminal is minimized; keep the process alive but do not
+             * paint the window over the desktop. Keep redraw state for when
+             * the terminal is restored from the taskbar. */
         }
     }
 

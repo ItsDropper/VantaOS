@@ -44,6 +44,7 @@ extern exception_handler
 
 %macro IRQ_STUB 2
 %1:
+    cld
     pusha
     mov eax, esp
     push eax
@@ -61,6 +62,7 @@ IRQ_STUB irq12_stub, 44
 
 %macro EXCEPTION_NO_ERROR 1
 exception%1_stub:
+    cld
     push dword 0
     pusha
     mov eax, esp
@@ -75,6 +77,7 @@ exception%1_stub:
 
 %macro EXCEPTION_ERROR 1
 exception%1_stub:
+    cld
     pusha
     mov eax, esp
     push eax

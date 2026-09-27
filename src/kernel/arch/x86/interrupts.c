@@ -2,6 +2,7 @@
 #include "keyboard.h"
 #include "mouse.h"
 #include "terminal.h"
+#include "graphics.h"
 
 extern void irq0_stub(void);
 extern void irq1_stub(void);
@@ -235,102 +236,315 @@ unsigned int interrupts_get_ticks(void)
     return timer_ticks;
 }
 
+static void panic_draw_hex(
+    int x,
+    int y,
+    unsigned int value
+)
+{
+    const char* hex = "0123456789ABCDEF";
+    char text[11];
+
+    text[0] = '0';
+    text[1] = 'x';
+
+    for (int i = 0; i < 8; i++)
+        text[2 + i] = hex[(value >> (28 - i * 4)) & 0xF];
+
+    text[10] = 0;
+
+    graphics_draw_text(
+        x,
+        y,
+        text,
+        0x00F2F5F8,
+        1
+    );
+}
+
+static void panic_draw_line(
+    int x,
+    int y,
+    const char* label,
+    const char* value
+)
+{
+    graphics_draw_text(
+        x,
+        y,
+        label,
+        0x00AEB8C2,
+        1
+    );
+
+    graphics_draw_text(
+        x + 132,
+        y,
+        value,
+        0x00F2F5F8,
+        1
+    );
+}
+
+void kernel_panic(
+    const char* reason,
+    unsigned int exception_number,
+    struct exception_frame* frame,
+    unsigned int fault_address,
+    int has_fault_address
+)
+{
+    __asm__ volatile ("cli");
+
+    if (graphics_is_initialized())
+    {
+        int width = (int)graphics_get_width();
+        int height = (int)graphics_get_height();
+
+        graphics_clear(0x00000000);
+
+        int x = width >= 900 ? 70 : 32;
+        int y = height >= 600 ? 48 : 28;
+
+        graphics_draw_text(
+            x,
+            y,
+            "VANTAOS KERNEL PANIC",
+            0x00F2F5F8,
+            2
+        );
+
+        graphics_draw_text(
+            x,
+            y + 28,
+            "The kernel encountered a fatal error and has stopped.",
+            0x00C7CFD7,
+            1
+        );
+
+        graphics_fill_rect(
+            x,
+            y + 48,
+            width - x * 2,
+            1,
+            0x004A525A
+        );
+
+        graphics_draw_text(
+            x,
+            y + 68,
+            "REASON",
+            0x00F2F5F8,
+            1
+        );
+
+        graphics_draw_text(
+            x,
+            y + 84,
+            reason ? reason : "Unknown kernel failure",
+            0x00C7CFD7,
+            1
+        );
+
+        int info_y = y + 116;
+
+        if (exception_number == 0xFFFFFFFFU)
+        {
+            panic_draw_line(
+                x,
+                info_y,
+                "STOP CODE",
+                "VANTAOS TEST FAULT"
+            );
+        }
+        else
+        {
+            panic_draw_line(
+                x,
+                info_y,
+                "EXCEPTION",
+                exception_names[exception_number < 32 ?
+                    exception_number : 31]
+            );
+
+            panic_draw_line(
+                x,
+                info_y + 18,
+                "NUMBER",
+                "see value below"
+            );
+
+            panic_draw_hex(
+                x + 132,
+                info_y + 36,
+                exception_number
+            );
+        }
+
+        if (frame != 0)
+        {
+            panic_draw_line(
+                x,
+                info_y + 60,
+                "ERROR CODE",
+                ""
+            );
+
+            panic_draw_hex(
+                x + 132,
+                info_y + 60,
+                frame->error_code
+            );
+
+            panic_draw_line(
+                x,
+                info_y + 78,
+                "EIP",
+                ""
+            );
+
+            panic_draw_hex(
+                x + 132,
+                info_y + 78,
+                frame->eip
+            );
+
+            panic_draw_line(
+                x,
+                info_y + 96,
+                "CS",
+                ""
+            );
+
+            panic_draw_hex(
+                x + 132,
+                info_y + 96,
+                frame->cs
+            );
+
+            panic_draw_line(
+                x,
+                info_y + 114,
+                "EFLAGS",
+                ""
+            );
+
+            panic_draw_hex(
+                x + 132,
+                info_y + 114,
+                frame->eflags
+            );
+
+            if (has_fault_address)
+            {
+                panic_draw_line(
+                    x,
+                    info_y + 132,
+                    "FAULT ADDRESS",
+                    ""
+                );
+
+                panic_draw_hex(
+                    x + 132,
+                    info_y + 132,
+                    fault_address
+                );
+            }
+        }
+
+        int footer_y = height - 54;
+
+        graphics_draw_text(
+            x,
+            footer_y,
+            "SYSTEM HALTED",
+            0x00F2F5F8,
+            1
+        );
+
+        graphics_draw_text(
+            x,
+            footer_y + 16,
+            "The kernel will not continue execution.",
+            0x00AEB8C2,
+            1
+        );
+
+        return;
+    }
+
+    terminal_reset();
+
+    terminal_write("\nVANTAOS KERNEL PANIC\n\n");
+    terminal_write("Reason: ");
+    terminal_write(reason ? reason : "Unknown kernel failure");
+    terminal_write("\n");
+
+    if (exception_number != 0xFFFFFFFFU)
+    {
+        terminal_write("Exception: ");
+
+        if (exception_number < 32)
+            terminal_write(exception_names[exception_number]);
+        else
+            terminal_write("Unknown");
+
+        terminal_write("\n");
+    }
+
+    if (frame != 0)
+    {
+        terminal_write("Error Code: ");
+        terminal_write_hex(frame->error_code);
+
+        terminal_write("\nEIP: ");
+        terminal_write_hex(frame->eip);
+
+        terminal_write("\nCS: ");
+        terminal_write_hex(frame->cs);
+
+        terminal_write("\nEFLAGS: ");
+        terminal_write_hex(frame->eflags);
+
+        if (has_fault_address)
+        {
+            terminal_write("\nFault Address: ");
+            terminal_write_hex(fault_address);
+        }
+
+        terminal_write("\n");
+    }
+
+    terminal_write("\nSYSTEM HALTED\n");
+}
+
 void exception_handler(
     unsigned int exception_number,
     struct exception_frame* frame
 )
 {
-    __asm__ volatile ("cli");
-
-    terminal_write("\n\n");
-    terminal_write("==============================\n");
-    terminal_write("       VANTAOS KERNEL PANIC\n");
-    terminal_write("==============================\n\n");
-
-    terminal_write("Exception: ");
-
-    if (exception_number < 32)
-    {
-        terminal_write(exception_names[exception_number]);
-    }
-    else
-    {
-        terminal_write("Unknown");
-    }
-
-    terminal_write("\nException Number: ");
-    terminal_write_hex(exception_number);
-
-    terminal_write("\n\nError Code: ");
-    terminal_write_hex(frame->error_code);
+    unsigned int fault_address = 0;
+    int has_fault_address = 0;
 
     if (exception_number == 14)
     {
-        unsigned int fault_address;
-
         __asm__ volatile (
             "mov %%cr2, %0"
             : "=r"(fault_address)
         );
 
-        terminal_write("\n\nPage Fault Address: ");
-        terminal_write_hex(fault_address);
-
-        terminal_write("\nAccess: ");
-        terminal_write(
-            (frame->error_code & 0x2) ? "write" : "read"
-        );
-
-        terminal_write("\nPrivilege: ");
-        terminal_write(
-            (frame->error_code & 0x4) ? "user" : "kernel"
-        );
-
-        terminal_write("\nCause: ");
-        terminal_write(
-            (frame->error_code & 0x1) ?
-            "protection violation" :
-            "non-present page"
-        );
-
-        if (frame->error_code & 0x8)
-            terminal_write("\nReserved-bit violation.");
-
-        if (frame->error_code & 0x10)
-            terminal_write("\nInstruction fetch.");
+        has_fault_address = 1;
     }
 
-    terminal_write("\n\nEIP:    ");
-    terminal_write_hex(frame->eip);
-
-    terminal_write("\nCS:     ");
-    terminal_write_hex(frame->cs);
-
-    terminal_write("\nEFLAGS: ");
-    terminal_write_hex(frame->eflags);
-
-    terminal_write("\n\nEAX:    ");
-    terminal_write_hex(frame->eax);
-
-    terminal_write("\nEBX:    ");
-    terminal_write_hex(frame->ebx);
-
-    terminal_write("\nECX:    ");
-    terminal_write_hex(frame->ecx);
-
-    terminal_write("\nEDX:    ");
-    terminal_write_hex(frame->edx);
-
-    terminal_write("\n\nESI:    ");
-    terminal_write_hex(frame->esi);
-
-    terminal_write("\nEDI:    ");
-    terminal_write_hex(frame->edi);
-
-    terminal_write("\nEBP:    ");
-    terminal_write_hex(frame->ebp);
-
-    terminal_write("\n\nSystem halted.");
+    kernel_panic(
+        exception_number < 32 ?
+            exception_names[exception_number] :
+            "Unknown CPU exception",
+        exception_number,
+        frame,
+        fault_address,
+        has_fault_address
+    );
 
     while (1)
     {

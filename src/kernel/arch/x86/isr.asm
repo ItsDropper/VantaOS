@@ -57,32 +57,15 @@ process_entry_trampoline:
     cld
     pusha
 
-%if %2 == 44
-    mov al, 0x20
-    out 0xA0, al
-    out 0x20, al
-%else
-    mov al, 0x20
-    out 0x20, al
-%endif
+    mov eax, esp
+    push eax
+    push dword %2
+    call interrupt_handler
+    add esp, 8
 
-    ; The CPU return frame follows the pusha frame:
-    ; [esp+32] = EIP, [esp+36] = CS, [esp+40] = EFLAGS.
-    ; Never execute iretd with a return address outside the kernel image.
-    cmp dword [esp + 32], 0x00100000
-    jb .bad_return
-
-    cmp dword [esp + 32], 0x0021E3F0
-    jae .bad_return
-
+    mov esp, eax
     popa
     iretd
-
-.bad_return:
-    cli
-.hang:
-    hlt
-    jmp .hang
 %endmacro
 
 IRQ_STUB irq0_stub, 32

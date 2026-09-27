@@ -1,5 +1,6 @@
 #include "shell_internal.h"
 #include "terminal.h"
+#include "vfs.h"
 
 void shell_copy_path(char* destination, const char* source)
 {
@@ -69,7 +70,7 @@ void shell_ls(const char* argument)
     shell_resolve_path(argument, path);
 
     int directory_id =
-        filesystem_lookup(path);
+        vfs_lookup(path);
 
     if (directory_id < 0)
     {
@@ -80,7 +81,7 @@ void shell_ls(const char* argument)
     }
 
     const fs_node_t* directory =
-        filesystem_get_node((uint32_t)directory_id);
+        vfs_get_node((uint32_t)directory_id);
 
     if (directory == 0 ||
         directory->type != FS_NODE_DIRECTORY)
@@ -90,7 +91,7 @@ void shell_ls(const char* argument)
     }
 
     uint32_t ids[FS_MAX_NODES];
-    int count = filesystem_list(
+    int count = vfs_list(
         (uint32_t)directory_id,
         ids,
         FS_MAX_NODES
@@ -236,7 +237,7 @@ void shell_mkdir(const char* argument)
     char path[FS_PATH_MAX];
     shell_resolve_path(argument, path);
 
-    if (filesystem_create_directory(path) < 0)
+    if (vfs_create_directory(path) < 0)
     {
         terminal_write("\nmkdir: cannot create ");
         terminal_write(argument);
@@ -277,7 +278,7 @@ void shell_touch(const char* argument)
         return;
     }
 
-    if (filesystem_create_file(path) < 0)
+    if (vfs_create_file(path) < 0)
     {
         terminal_write("\ntouch: cannot create ");
         terminal_write(argument);

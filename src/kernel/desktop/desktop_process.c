@@ -24,6 +24,7 @@ void desktop_process_initialize(void)
 {
     desktop_pid = 0;
     file_explorer_process_initialize();
+    file_explorer_process_start(process_current_pid());
 }
 
 int desktop_process_start(uint32_t parent_pid)

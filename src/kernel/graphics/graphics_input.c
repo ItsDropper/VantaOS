@@ -25,6 +25,7 @@ void graphics_mouse_click(int button)
             cursor_y >= menu_y + 110 && cursor_y < menu_y + 164)
         {
             active_panel = 3;
+            graphics_request_terminal_open();
             start_menu_open = 0;
             return;
         }
@@ -80,6 +81,7 @@ void graphics_mouse_click(int button)
         if (cursor_x >= center - 56 && cursor_x < center + 12)
         {
             active_panel = 3;
+            graphics_request_terminal_open();
             return;
         }
     }
@@ -218,6 +220,7 @@ void graphics_mouse_click(int button)
         cursor_y >= 26 && cursor_y < 108)
     {
         active_panel = 3;
+        graphics_request_terminal_open();
         return;
     }
 }

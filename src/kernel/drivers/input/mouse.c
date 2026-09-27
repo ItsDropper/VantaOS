@@ -214,6 +214,15 @@ void mouse_initialize(void)
     mouse_enable_reporting();
 }
 
+static uint32_t mouse_scale_width = 1024;
+static uint32_t mouse_scale_height = 768;
+
+void mouse_set_resolution_scale(uint32_t width, uint32_t height)
+{
+    mouse_scale_width = width ? width : 1024;
+    mouse_scale_height = height ? height : 768;
+}
+
 void mouse_handle_interrupt(void)
 {
     unsigned char status =
@@ -276,6 +285,11 @@ void mouse_handle_interrupt(void)
     if (!(mouse_packet[0] & 0x40) &&
         !(mouse_packet[0] & 0x80))
     {
+        delta_x =
+            (delta_x * (int)mouse_scale_width + 512) / 1024;
+        delta_y =
+            (delta_y * (int)mouse_scale_height + 384) / 768;
+
         if (delta_x != 0 || delta_y != 0)
         {
             graphics_mouse_move(delta_x, delta_y);

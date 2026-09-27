@@ -1,4 +1,5 @@
 #include "shell_internal.h"
+#include "pmm.h"
 
 char shell_buffer[SHELL_BUFFER_SIZE];
 unsigned int shell_length;

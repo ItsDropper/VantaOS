@@ -11,6 +11,7 @@ struct exception_frame
     unsigned int edx;
     unsigned int ecx;
     unsigned int eax;
+    unsigned int error_code;
     unsigned int eip;
     unsigned int cs;
     unsigned int eflags;

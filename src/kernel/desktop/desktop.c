@@ -300,7 +300,6 @@ void desktop_present(void)
 
 void desktop_update(void)
 {
-    mouse_set_resolution_scale(graphics_get_width(), graphics_get_height());
     /*
      * Desktop-level keyboard events are consumed before application
      * input. This makes the Terminal shortcut an actual desktop action

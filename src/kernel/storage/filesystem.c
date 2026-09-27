@@ -191,27 +191,21 @@ void filesystem_initialize(multiboot_info_t* mbd)
      */
     fs_load_directory(filesystem_root());
 
-    int system_id = filesystem_lookup("/system");
-    if (system_id < 0)
-        system_id = fs_add_virtual_directory(filesystem_root(), "system");
+    int system_id = filesystem_ensure_directory("/system");
 
     if (system_id >= 0)
     {
         const fs_node_t* system = filesystem_get_node((uint32_t)system_id);
         if (system && system->type == FS_NODE_DIRECTORY)
         {
-            if (filesystem_lookup("/system/drivers") < 0)
-                fs_add_virtual_directory((uint32_t)system_id, "drivers");
-            if (filesystem_lookup("/system/devices") < 0)
-                fs_add_virtual_directory((uint32_t)system_id, "devices");
+            filesystem_ensure_directory("/system/drivers");
+            filesystem_ensure_directory("/system/devices");
         }
     }
 
-    if (filesystem_lookup("/home") < 0)
-        fs_add_virtual_directory(filesystem_root(), "home");
-
-    if (filesystem_lookup("/etc") < 0)
-        fs_add_virtual_directory(filesystem_root(), "etc");
+    filesystem_ensure_directory("/home");
+    filesystem_ensure_directory("/home/user");
+    filesystem_ensure_directory("/etc");
 }
 
 int filesystem_is_initialized(void)
@@ -285,7 +279,7 @@ int filesystem_list(
 
     for (unsigned int i = 0; i < node_count; i++)
     {
-        if (nodes[i].parent != directory_id)
+        if (nodes[i].parent != directory_id || nodes[i].id == directory_id)
             continue;
 
         if (ids && count < capacity)

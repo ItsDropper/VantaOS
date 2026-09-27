@@ -153,6 +153,76 @@ int vfs_read(
     return (int)length;
 }
 
+static int vfs_node_path(
+    uint32_t node_id,
+    char* path,
+    unsigned int capacity
+)
+{
+    if (!path || capacity < 2)
+        return 0;
+
+    path[0] = 0;
+
+    uint32_t current = node_id;
+
+    while (current != filesystem_root())
+    {
+        const fs_node_t* node =
+            filesystem_get_node(current);
+
+        if (!node || node->name[0] == 0)
+            return 0;
+
+        char segment[FS_NAME_MAX + 2];
+        unsigned int segment_length = 0;
+
+        segment[segment_length++] = '/';
+
+        while (node->name[segment_length - 1] != 0 &&
+               segment_length <= FS_NAME_MAX)
+        {
+            segment[segment_length] =
+                node->name[segment_length - 1];
+
+            segment_length++;
+        }
+
+        segment[segment_length] = 0;
+
+        unsigned int current_length = 0;
+        while (path[current_length] != 0)
+            current_length++;
+
+        if (current_length +
+            segment_length >= capacity)
+            return 0;
+
+        for (int i = (int)current_length;
+             i >= 0;
+             i--)
+        {
+            path[
+                i + segment_length
+            ] = path[i];
+        }
+
+        for (unsigned int i = 0;
+             i < segment_length;
+             i++)
+        {
+            path[i] = segment[i];
+        }
+
+        current = node->parent;
+    }
+
+    if (path[0] == 0)
+        path[0] = '/';
+
+    return 1;
+}
+
 int vfs_write(
     int handle,
     const char* data,
@@ -178,7 +248,6 @@ int vfs_write(
         return -1;
 
     char temporary[FS_FILE_MAX];
-    unsigned int existing = 0;
 
     int result =
         filesystem_read(
@@ -190,7 +259,8 @@ int vfs_write(
     if (result < 0)
         return -1;
 
-    existing = (unsigned int)result;
+    unsigned int existing =
+        (unsigned int)result;
 
     if (open_files[handle].position > existing)
         return -1;
@@ -214,20 +284,26 @@ int vfs_write(
 
     temporary[final_size] = 0;
 
+    char path[FS_PATH_MAX];
+
+    if (!vfs_node_path(
+            node->id,
+            path,
+            sizeof(path)))
+        return -1;
+
     result =
         filesystem_write_file(
-            node->name,
+            path,
             temporary
         );
 
-    /*
-     * The current filesystem backend accepts absolute paths rather
-     * than node IDs. Resolve the node path through its parent chain
-     * once the persistent backend is introduced. For now, reject
-     * writes here instead of pretending the node name is a path.
-     */
-    (void)result;
-    return -1;
+    if (result < 0)
+        return -1;
+
+    open_files[handle].position += length;
+
+    return (int)length;
 }
 
 int vfs_close(int handle)

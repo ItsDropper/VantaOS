@@ -146,36 +146,11 @@ void graphics_mouse_click(int button)
             return;
         }
 
-        sidebar_y = ey + title;
-
-        if (cursor_x >= ex && cursor_x < ex + sidebar)
-        {
-            if (cursor_y >= sidebar_y + 38 &&
-                cursor_y < sidebar_y + 72)
-            {
-                file_explorer_open_directory(filesystem_root());
-                return;
-            }
-
-            if (cursor_y >= sidebar_y + 76 &&
-                cursor_y < sidebar_y + 110)
-            {
-                int id = filesystem_ensure_directory("/system");
-                if (id >= 0)
-                    file_explorer_open_directory((uint32_t)id);
-                return;
-            }
-
-            if (cursor_y >= sidebar_y + 114 &&
-                cursor_y < sidebar_y + 148)
-            {
-                int id = filesystem_ensure_directory("/home");
-                if (id >= 0)
-                    file_explorer_open_directory((uint32_t)id);
-                return;
-            }
-        }
-
+        /*
+         * Filesystem/sidebar/content hit testing stays inside Explorer.
+         * graphics_input only owns the window chrome and drag state, exactly
+         * like the Terminal path below.
+         */
         file_explorer_click(cursor_x, cursor_y, width, height);
         return;
     }

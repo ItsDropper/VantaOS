@@ -72,53 +72,6 @@ static void terminal_close_window(void)
 static void terminal_window_draw(void);
 
 
-static void desktop_gui_present(void)
-{
-    if (!graphics_is_initialized())
-        return;
-
-    graphics_present();
-
-    if (terminal_window_open &&
-        graphics_get_active_panel() == 3)
-        terminal_window_draw();
-    else
-        graphics_draw_cursor();
-}
-
-static int desktop_try_launch_terminal(void)
-{
-    if (terminal_window_open)
-        return 1;
-
-    /*
-     * Terminal is currently driven cooperatively by desktop_update().
-     * It is not a scheduled process yet, so do not create a kernel
-     * process/address space just to open the window.
-     */
-    terminal_prepare_session();
-    terminal_window_open = 1;
-
-    graphics_set_terminal_running(1);
-    graphics_select_panel(3);
-    desktop_gui_present();
-
-    return 1;
-}
-
-static void terminal_close_window(void)
-{
-    terminal_window_open = 0;
-    terminal_window_prompted = 0;
-    graphics_set_terminal_running(0);
-
-    terminal_reset();
-    shell_initialize();
-    graphics_select_panel(0);
-    desktop_gui_present();
-}
-
-
 static void terminal_window_draw(void)
 {
     if (!graphics_is_initialized() || !terminal_window_open)

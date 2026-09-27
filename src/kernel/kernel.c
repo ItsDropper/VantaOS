@@ -40,6 +40,7 @@ static int terminal_pid = -1;
 static int graphics_ready_global = 0;
 
 static void terminal_window_draw(void);
+static void terminal_process_step(void);
 
 static void gui_present(void)
 {

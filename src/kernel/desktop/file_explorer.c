@@ -13,7 +13,7 @@
 
 static uint32_t explorer_directory;
 static int explorer_file = -1;
-static int initialized;
+static int explorer_initialized;
 
 static void explorer_set_directory(uint32_t id)
 {
@@ -108,14 +108,14 @@ static void explorer_draw_sidebar_item(
 
 void file_explorer_initialize(void)
 {
-    initialized = 1;
+    explorer_initialized = 1;
     explorer_directory = filesystem_root();
     explorer_file = -1;
 }
 
 void file_explorer_draw(int width, int height)
 {
-    if (!initialized)
+    if (!explorer_initialized)
         file_explorer_initialize();
 
     int ww = width - FILES_WINDOW_MARGIN * 2;

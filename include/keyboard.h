@@ -17,8 +17,7 @@ typedef enum
 
     KEY_EVENT_HOME,
     KEY_EVENT_END,
-    KEY_EVENT_DELETE,
-    KEY_EVENT_TERMINAL
+    KEY_EVENT_DELETE
 } keyboard_event_t;
 
 /*

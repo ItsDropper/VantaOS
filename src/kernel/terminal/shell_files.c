@@ -324,14 +324,40 @@ void shell_write_file(const char* arguments)
     char resolved[FS_PATH_MAX];
     shell_resolve_path(path, resolved);
 
-    if (!(vfs_lookup(resolved) >= 0))
+    int existing =
+        vfs_lookup(resolved);
+
+    if (existing < 0)
     {
         terminal_write("\nwrite: file does not exist");
         return;
     }
 
+    const fs_node_t* node =
+        vfs_get_node((uint32_t)existing);
+
+    if (!node || node->type != FS_NODE_FILE)
+    {
+        terminal_write("\nwrite: not a file");
+        return;
+    }
+
+    unsigned int text_length = 0;
+
+    while (arguments[i + text_length] != 0)
+        text_length++;
+
+    if (text_length >= FS_FILE_MAX)
+    {
+        terminal_write("\nwrite: file is too large");
+        return;
+    }
+
     int handle =
-        vfs_open(resolved, 2);
+        vfs_open(
+            resolved,
+            VFS_OPEN_WRITE | VFS_OPEN_TRUNCATE
+        );
 
     if (handle < 0)
     {
@@ -343,34 +369,10 @@ void shell_write_file(const char* arguments)
         vfs_write(
             handle,
             &arguments[i],
-            0
+            text_length
         );
 
-    if (result < 0)
-    {
-        vfs_close(handle);
-
-        /*
-         * The shell's write command replaces the file contents. The
-         * VFS write handle starts at offset zero, so the exact command
-         * length is passed below.
-         */
-        handle = vfs_open(resolved, 2);
-
-        if (handle < 0)
-        {
-            terminal_write("\nwrite: open failed");
-            return;
-        }
-    }
-
     vfs_close(handle);
-
-    if (result == -2)
-    {
-        terminal_write("\nwrite: file is too large");
-        return;
-    }
 
     if (result < 0)
     {

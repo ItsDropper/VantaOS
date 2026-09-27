@@ -68,6 +68,7 @@ int process_attach_current(
 int process_set_running(uint32_t pid);
 
 int process_wake(uint32_t pid);
+int process_terminate(uint32_t pid);
 
 void process_block_current(void);
 void process_terminate_current(void);

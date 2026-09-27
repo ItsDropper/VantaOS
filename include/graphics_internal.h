@@ -4,8 +4,8 @@
 #include "graphics.h"
 #include <stdint.h>
 
-#define GRAPHICS_VIRTUAL_BASE 0x40800000U
-#define GRAPHICS_MAX_PAGES 1024
+#define GRAPHICS_VIRTUAL_BASE 0xD0000000U
+#define GRAPHICS_MAX_PAGES 4096
 #define CURSOR_SAVE_SIZE 20
 
 extern uint8_t* framebuffer;

@@ -119,6 +119,14 @@ void kernel_main(multiboot_info_t* mbd)
     if (desktop_process_start(0) < 0)
         terminal_write("Desktop process initialization failed.\n");
 
+    /*
+     * Draw the first complete desktop frame while the boot context is
+     * still running. Once interrupts are enabled, the scheduler may
+     * immediately switch to the desktop process and the boot context
+     * must not be relied upon for the first render.
+     */
+    desktop_present();
+
     __asm__ volatile ("sti");
 
     terminal_write("\nKernel initialized successfully.\n");
@@ -142,8 +150,6 @@ void kernel_main(multiboot_info_t* mbd)
     terminal_write(
         "Type 'help' in the Terminal app.\n\n"
     );
-
-    desktop_present();
 
     /*
      * The boot context is PID 0 only. Desktop execution begins on its

@@ -23,6 +23,7 @@ bool mouse_has_wheel_event(void);
 bool mouse_has_click_event(void);
 bool mouse_has_move_event(void);
 void mouse_clear_event_flags(void);
+void mouse_set_resolution_scale(uint32_t width, uint32_t height);
 
 /*
  * Get and consume accumulated wheel movement.

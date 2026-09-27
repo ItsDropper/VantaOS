@@ -140,8 +140,7 @@ static void terminal_window_draw(void)
     size_t cursor_first = count > visible_lines ? count - visible_lines : 0;
 
     if (cursor_line >= cursor_first &&
-        cursor_line < cursor_first + visible_lines &&
-        (((interrupts_get_ticks() / 50U) & 1U) == 0 || terminal_window_prompted))
+        cursor_line < cursor_first + visible_lines)
     {
         int cursor_x = content_x + 10 + (int)cursor_column * 6;
         int cursor_y = content_y + 8 + (int)(cursor_line - cursor_first) * 10;
@@ -175,7 +174,11 @@ void desktop_update(void)
     }
 
     if (terminal_window_open && graphics_terminal_close_requested())
+    {
         terminal_process_request_exit();
+        terminal_close_window();
+        return;
+    }
 
     if (terminal_window_open)
     {

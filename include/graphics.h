@@ -44,5 +44,7 @@ int graphics_get_terminal_x(void);
 int graphics_get_terminal_y(void);
 uint32_t graphics_get_width(void);
 uint32_t graphics_get_height(void);
+uint32_t graphics_get_terminal_width(void);
+uint32_t graphics_get_terminal_height(void);
 
 #endif

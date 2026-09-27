@@ -44,6 +44,7 @@ void graphics_clear_terminal_open_request(void);
 int graphics_terminal_is_maximized(void);
 void graphics_terminal_toggle_maximized(void);
 int graphics_terminal_is_dragging(void);
+int graphics_explorer_is_dragging(void);
 int graphics_get_terminal_x(void);
 int graphics_get_terminal_y(void);
 uint32_t graphics_get_width(void);

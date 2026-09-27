@@ -5,7 +5,6 @@
 #include "keyboard.h"
 #include "mouse.h"
 #include "panic.h"
-#include "scheduler.h"
 
 extern void irq0_stub(void);
 extern void irq1_stub(void);
@@ -86,11 +85,6 @@ unsigned int interrupt_handler(
 {
     switch (interrupt_number)
     {
-        case IRQ0_VECTOR:
-            timer_handle_interrupt();
-            pic_send_eoi(0);
-            return saved_stack;
-
         case IRQ1_VECTOR:
             keyboard_handle_interrupt();
             pic_send_eoi(1);

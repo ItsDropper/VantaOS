@@ -45,13 +45,11 @@ void graphics_mouse_click(int button)
         {
             if (active_panel == 2)
             {
-                active_panel = 0;
-                explorer_dragging = 0;
+                file_explorer_minimize();
             }
             else
             {
-                active_panel = 2;
-                file_explorer_initialize();
+                file_explorer_restore();
             }
             return;
         }

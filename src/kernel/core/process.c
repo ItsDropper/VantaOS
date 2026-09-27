@@ -125,25 +125,19 @@ static void process_prepare_stack(
         (uint32_t*)stack_top;
 
     /*
-     * This is the exact stack layout consumed by the IRQ stub:
+     * The scheduler restores this as an IRQ frame:
      *
-     *   popa
-     *   iretd
+     *   PUSHA
+     *   EIP
+     *   CS
+     *   EFLAGS
      *
-     * PUSHA saves EDI, ESI, EBP, a skipped ESP slot, EBX,
-     * EDX, ECX and EAX. The CPU return frame follows it.
+     * The timer IRQ stub does POPA followed directly by IRETD.
      */
     *(--stack) = 0x202U;
     *(--stack) = 0x08U;
     *(--stack) =
         (uint32_t)(uintptr_t)process_entry_trampoline;
-
-    /*
-     * Exception/IRQ frames exposed to C contain an error-code slot.
-     * Exceptions without a hardware error code synthesize zero, so
-     * scheduler-created frames must have the same slot.
-     */
-    *(--stack) = 0;
 
     *(--stack) = 0;
     *(--stack) = 0;
@@ -167,7 +161,6 @@ static void process_prepare_stack(
     process->context.cs = 0x08U;
     process->context.ss = 0x10U;
 }
-
 void process_initialize(void)
 {
     initialized = 0;
@@ -468,7 +461,7 @@ int process_stack_is_valid(uint32_t pid)
         (uintptr_t)process->stack_pointer;
 
     if (frame < stack_base ||
-        frame + 48U > stack_end)
+        frame + 44U > stack_end)
         return 0;
 
     uint32_t* values =
@@ -476,7 +469,7 @@ int process_stack_is_valid(uint32_t pid)
 
     /*
      * Both attached and synthetic kernel processes return through the
-     * same IRQ epilogue: POPA, discard error code, then IRETD.
+     * same IRQ epilogue: POPA followed directly by IRETD.
      */
     if (values[9] != 0x08U ||
         (values[10] & 0x00000200U) == 0)

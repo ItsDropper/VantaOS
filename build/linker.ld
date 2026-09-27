@@ -3,27 +3,14 @@ ENTRY(_start)
 SECTIONS
 {
     /*
-     * Keep the Multiboot header at the beginning of the loaded image.
-     * GRUB requires the complete header to be within the first 8192
-     * bytes and 32-bit aligned.
+     * Keep the Multiboot header and the ELF entry point in the same
+     * first loaded text segment. This follows the layout used by the
+     * GRUB Multiboot reference example.
      */
-    .multiboot 1M :
-    {
-        KEEP(*(.multiboot))
-    }
-
-    /*
-     * Start executable kernel code on its own aligned section.
-     *
-     * Previously .multiboot and .text were merged into one output
-     * section. That put _start immediately after the 12-byte header.
-     * Keeping the boot entry in a dedicated section makes the ELF
-     * entry address unambiguous and prevents the CPU from ever being
-     * directed into the middle of the Multiboot header/startup bytes.
-     */
-    .text ALIGN(4K) :
+    .text 1M :
     {
         KEEP(*(.text.start))
+        KEEP(*(.multiboot))
         *(.text)
     }
 

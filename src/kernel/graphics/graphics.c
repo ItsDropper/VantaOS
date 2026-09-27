@@ -1175,18 +1175,18 @@ static void graphics_draw_taskbar(int taskbar_y, int width)
     graphics_fill_rect(0, taskbar_y, width, 1, 0x002B3B4C);
 
     /* Start / Vanta. */
-    graphics_fill_rect(center - 190, taskbar_y + 8, 48, 48, 0x001A2633);
+    graphics_fill_rounded_rect(center - 190, taskbar_y + 8, 48, 48, 10, 0x001A2633);
     graphics_draw_vanta_logo(center - 180, taskbar_y + 18, 28);
 
     /* Files. */
-    graphics_fill_rect(center - 132, taskbar_y + 8, 68, 48,
+    graphics_fill_rounded_rect(center - 132, taskbar_y + 8, 68, 48, 10,
         active_panel == 2 ? 0x00263B50 : 0x001A2633);
     graphics_fill_rect(center - 112, taskbar_y + 20, 26, 18, 0x005AA9E6);
     graphics_fill_rect(center - 108, taskbar_y + 17, 12, 5, 0x005AA9E6);
     graphics_draw_text(center - 98, taskbar_y + 46, "FILES", 0x00D8E2EA, 1);
 
     /* Terminal. */
-    graphics_fill_rect(center - 56, taskbar_y + 8, 68, 48,
+    graphics_fill_rounded_rect(center - 56, taskbar_y + 8, 68, 48, 10,
         active_panel == 3 ? 0x00263B50 : 0x001A2633);
     graphics_fill_rect(center - 40, taskbar_y + 19, 36, 25, 0x000C141D);
     graphics_draw_text(center - 34, taskbar_y + 26, ">_", 0x005AA9E6, 1);
@@ -1209,8 +1209,8 @@ void graphics_present(void)
     int taskbar_y = h - 64;
 
     /* Restrained Vanta desktop: no fake widgets, only real app shortcuts. */
-    graphics_clear(0x000A111A);
-    graphics_fill_rect(0, 0, w, h - 64, 0x000D1823);
+    /* Keep the framebuffer on the final background while the desktop is redrawn. */
+    graphics_fill_rect(0, 0, w, h, 0x000D1823);
     graphics_fill_rect(0, 0, w, 2, 0x002B80C9);
     graphics_fill_rect(0, 2, 420, h - 66, 0x000E1C29);
     graphics_fill_rect(420, 2, 1, h - 66, 0x00142330);
@@ -1403,7 +1403,7 @@ void graphics_present(void)
         int my = h - menu_h - 8;
 
         graphics_fill_rect(mx + 8, my + 10, menu_w, menu_h, 0x00000000);
-        graphics_fill_rect(mx, my, menu_w, menu_h, 0x001A222D);
+        graphics_fill_rounded_rect(mx, my, menu_w, menu_h, 14, 0x001A222D);
         graphics_fill_rect(mx, my, menu_w, 1, 0x003B82F6);
 
         graphics_draw_vanta_logo(mx + 24, my + 24, 34);
@@ -1416,8 +1416,10 @@ void graphics_present(void)
         graphics_fill_rect(mx + 24, my + 164, 412, 54, 0x00212C3A);
         graphics_draw_text(mx + 42, my + 183, "FILES", 0x00FFFFFF, 2);
 
-        graphics_fill_rect(mx + 24, my + 218, 412, 54, 0x00212C3A);
+        graphics_fill_rounded_rect(mx + 24, my + 218, 412, 54, 10, 0x00212C3A);
         graphics_draw_text(mx + 42, my + 237, "SYSTEM", 0x00FFFFFF, 2);
+        graphics_fill_rounded_rect(mx + 24, my + 272, 412, 54, 10, 0x00212C3A);
+        graphics_draw_text(mx + 42, my + 291, "SETTINGS", 0x00FFFFFF, 2);
 
         graphics_draw_text(mx + 24, my + 460,
             "Built-in applications", 0x008EA0B3, 1);

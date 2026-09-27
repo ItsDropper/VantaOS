@@ -12,7 +12,8 @@ stack_bottom:
     resb 65536
 stack_top:
 
-section .text
+section .text.start
+align 16
 global _start
 global stack_bottom
 global stack_top

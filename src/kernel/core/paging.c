@@ -128,8 +128,20 @@ void paging_initialize(void)
         graphics_page_table[entry] = 0;
     }
 
-    kernel_page_directory[PAGING_KERNEL_DIRECTORY_INDEX] = 0;
-    kernel_page_directory[PAGING_GRAPHICS_DIRECTORY_INDEX] = 0;
+    kernel_page_directory[PAGING_KERNEL_DIRECTORY_INDEX] =
+        (uint32_t)&heap_page_table[0] |
+        PAGE_PRESENT |
+        PAGE_WRITE;
+
+    /*
+     * Install the graphics PDE during page-directory construction.
+     * Graphics mapping must not depend on paging_map_page() lazily
+     * creating the directory entry after paging is already active.
+     */
+    kernel_page_directory[PAGING_GRAPHICS_DIRECTORY_INDEX] =
+        (uint32_t)&graphics_page_table[0] |
+        PAGE_PRESENT |
+        PAGE_WRITE;
 
     kernel_address_space.directory =
         kernel_page_directory;

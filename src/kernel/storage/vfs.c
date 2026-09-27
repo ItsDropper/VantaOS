@@ -5,6 +5,12 @@
 static vfs_file_t open_files[VFS_MAX_OPEN_FILES];
 static int initialized;
 
+static int vfs_node_path(
+    uint32_t node_id,
+    char* path,
+    unsigned int capacity
+);
+
 void vfs_initialize(void)
 {
     for (unsigned int i = 0; i < VFS_MAX_OPEN_FILES; i++)
@@ -172,6 +178,8 @@ int vfs_read(
 
     return (int)length;
 }
+
+
 
 static int vfs_node_path(
     uint32_t node_id,

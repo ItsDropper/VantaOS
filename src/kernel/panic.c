@@ -4,6 +4,7 @@
 #include "interrupts.h"
 #include "terminal.h"
 #include "process.h"
+#include "fault_trace.h"
 
 static const char* exception_names[] =
 {
@@ -122,33 +123,28 @@ void kernel_panic(
         0x00C7CFD7,1
     );
 
-    int info_y=y+120;
+    int info_y = y + 120;
 
-    if(exception_number==0xFFFFFFFFU)
-        panic_draw_field(x,info_y,"STOP CODE","MANUAL KERNEL PANIC");
-    else
+    if (exception_number == 0xFFFFFFFFU)
     {
         panic_draw_field(
-            x,info_y,"EXCEPTION",
-            panic_exception_name(exception_number)
+            x,
+            info_y,
+            "STOP CODE",
+            "MANUAL KERNEL PANIC"
         );
-        panic_draw_hex_field(x,info_y+18,"NUMBER",exception_number);
     }
-
-    graphics_draw_text(x,info_y+38,"CURRENT PID",0x008E9AA5,1);
-    panic_draw_hex(x+132,info_y+38,process_current_pid());
-
-    if(frame != 0)
+    else
     {
-        panic_draw_hex_field(x,info_y+52,"ERROR CODE",frame->error_code);
-        panic_draw_hex_field(x,info_y+70,"EIP",frame->eip);
-        panic_draw_hex_field(x,info_y+88,"CS",frame->cs);
-        panic_draw_hex_field(x,info_y+106,"EFLAGS",frame->eflags);
-
-        if(has_fault_address)
-            panic_draw_hex_field(
-                x,info_y+124,"FAULT ADDRESS",fault_address
-            );
+        fault_trace_draw(
+            x,
+            info_y,
+            width - x * 2,
+            exception_number,
+            frame,
+            fault_address,
+            has_fault_address
+        );
     }
 
     graphics_draw_text(

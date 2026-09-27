@@ -1,7 +1,7 @@
 #include "graphics_internal.h"
 #include "filesystem.h"
 #include "terminal.h"
-#include "process.h"
+#include "process.h"\n#include "file_explorer.h"
 #include "pmm.h"
 
 void graphics_mouse_click(int button)
@@ -192,71 +192,11 @@ void graphics_mouse_click(int button)
 
     if (active_panel == 2)
     {
-        int window_w = 760;
-        int window_h = 480;
-        int window_x = graphics_files_window_x();
-        int window_y = graphics_files_window_y();
-
-        if (cursor_x >= window_x + window_w - 52 &&
-            cursor_x < window_x + window_w &&
-            cursor_y >= window_y && cursor_y < window_y + 44)
+        if (file_explorer_click(
+                cursor_x, cursor_y, width, height))
         {
             active_panel = 0;
-            files_open_file = -1;
-            return;
         }
-
-        /* Back/up control. */
-        if (cursor_x >= window_x + 24 && cursor_x < window_x + 92 &&
-            cursor_y >= window_y + 52 && cursor_y < window_y + 88)
-        {
-            const fs_node_t* current =
-                filesystem_get_node(files_current_dir);
-
-            if (current && current->parent != current->id)
-                files_current_dir = current->parent;
-
-            files_open_file = -1;
-            return;
-        }
-
-        /* File rows are real filesystem entries. */
-        uint32_t ids[18];
-        int count = filesystem_list(files_current_dir, ids, 18);
-
-        if (count < 0)
-            count = 0;
-        if (count > 18)
-            count = 18;
-
-        int row_y = window_y + 126;
-
-        for (int i = 0; i < count; i++)
-        {
-            int top = row_y + i * 20;
-
-            if (cursor_x < window_x + 18 || cursor_x >= window_x + 500 ||
-                cursor_y < top || cursor_y >= top + 20)
-                continue;
-
-            const fs_node_t* node = filesystem_get_node(ids[i]);
-
-            if (!node)
-                return;
-
-            if (node->type == FS_NODE_DIRECTORY)
-            {
-                files_current_dir = node->id;
-                files_open_file = -1;
-            }
-            else
-            {
-                files_open_file = (int)node->id;
-            }
-
-            return;
-        }
-
         return;
     }
 

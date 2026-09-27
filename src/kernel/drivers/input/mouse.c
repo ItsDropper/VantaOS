@@ -25,6 +25,10 @@ static unsigned int mouse_packet_size = 3;
 static volatile int mouse_wheel_delta = 0;
 static volatile int mouse_moved = 0;
 static volatile int mouse_clicked = 0;
+static volatile int mouse_pending_dx = 0;
+static volatile int mouse_pending_dy = 0;
+static volatile int mouse_pending_press = 0;
+static volatile int mouse_pending_release = 0;
 static unsigned char mouse_left_down = 0;
 static uint32_t mouse_scale_x = 1024;
 static uint32_t mouse_scale_y = 768;
@@ -192,6 +196,10 @@ void mouse_initialize(void)
     mouse_wheel_delta = 0;
     mouse_moved = 0;
     mouse_clicked = 0;
+    mouse_pending_dx = 0;
+    mouse_pending_dy = 0;
+    mouse_pending_press = 0;
+    mouse_pending_release = 0;
     mouse_left_down = 0;
     mouse_scale_x = 1024;
     mouse_scale_y = 768;
@@ -288,7 +296,8 @@ void mouse_handle_interrupt(void)
             if (scaled_x == 0 && delta_x != 0) scaled_x = delta_x > 0 ? 1 : -1;
             if (scaled_y == 0 && delta_y != 0) scaled_y = delta_y > 0 ? 1 : -1;
 
-            graphics_mouse_move(scaled_x, scaled_y);
+            mouse_pending_dx += scaled_x;
+            mouse_pending_dy += scaled_y;
             mouse_moved = 1;
         }
     }
@@ -298,12 +307,12 @@ void mouse_handle_interrupt(void)
 
     if (left_down && !mouse_left_down)
     {
-        graphics_mouse_click(1);
+        mouse_pending_press = 1;
         mouse_clicked = 1;
     }
 
     if (!left_down && mouse_left_down)
-        graphics_mouse_release(1);
+        mouse_pending_release = 1;
 
     mouse_left_down = left_down;
 
@@ -356,6 +365,28 @@ int mouse_get_wheel_delta(void)
     mouse_wheel_delta = 0;
 
     return delta;
+}
+
+void mouse_process_events(void)
+{
+    int dx = mouse_pending_dx;
+    int dy = mouse_pending_dy;
+    int press = mouse_pending_press;
+    int release = mouse_pending_release;
+
+    mouse_pending_dx = 0;
+    mouse_pending_dy = 0;
+    mouse_pending_press = 0;
+    mouse_pending_release = 0;
+
+    if (dx != 0 || dy != 0)
+        graphics_mouse_move(dx, dy);
+
+    if (press)
+        graphics_mouse_click(1);
+
+    if (release)
+        graphics_mouse_release(1);
 }
 
 void mouse_set_resolution_scale(uint32_t width, uint32_t height)

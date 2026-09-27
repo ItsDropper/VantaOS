@@ -13,12 +13,10 @@
 
 static int terminal_window_open;
 static int terminal_window_prompted;
-static int terminal_pid = -1;
-static int files_pid = -1;
+
 
 static void terminal_window_draw(void);
-static void terminal_process_step(void);
-static void files_process_step(void);
+
 
 static void desktop_gui_present(void)
 {
@@ -39,20 +37,11 @@ static int desktop_try_launch_terminal(void)
     if (terminal_window_open)
         return 1;
 
-    if (terminal_pid < 0 ||
-        process_get((uint32_t)terminal_pid) == NULL ||
-        process_get((uint32_t)terminal_pid)->state == PROCESS_TERMINATED)
-    {
-        terminal_pid = process_create_kernel(
-            "terminal",
-            process_current_pid(),
-            terminal_process_step
-        );
-    }
-
-    if (terminal_pid < 0)
-        return 0;
-
+    /*
+     * Terminal is currently driven cooperatively by desktop_update().
+     * It is not a scheduled process yet, so do not create a kernel
+     * process/address space just to open the window.
+     */
     terminal_reset();
     shell_initialize();
 
@@ -61,15 +50,9 @@ static int desktop_try_launch_terminal(void)
 
     graphics_set_terminal_running(1);
     graphics_select_panel(3);
-    process_mark_running((uint32_t)terminal_pid);
-
     desktop_gui_present();
-    return 1;
-}
 
-static void terminal_open_window(void)
-{
-    (void)desktop_try_launch_terminal();
+    return 1;
 }
 
 static void terminal_close_window(void)
@@ -78,23 +61,12 @@ static void terminal_close_window(void)
     terminal_window_prompted = 0;
     graphics_set_terminal_running(0);
 
-    if (terminal_pid >= 0)
-    {
-        process_terminate((uint32_t)terminal_pid);
-        terminal_pid = -1;
-    }
-
     terminal_reset();
     shell_initialize();
     graphics_select_panel(0);
     desktop_gui_present();
 }
 
-static void files_process_step(void)
-{
-    if (graphics_get_active_panel() != 2)
-        return;
-}
 
 static void terminal_window_draw(void)
 {
@@ -319,23 +291,6 @@ void desktop_initialize(multiboot_info_t* mbd)
 
     terminal_window_open = 0;
     terminal_window_prompted = 0;
-    terminal_pid = -1;
-    files_pid = -1;
-
-    terminal_pid = process_create_kernel(
-        "terminal",
-        process_current_pid(),
-        terminal_process_step
-    );
-
-    files_pid = process_create_kernel(
-        "files",
-        process_current_pid(),
-        files_process_step
-    );
-
-    if (terminal_pid < 0 || files_pid < 0)
-        terminal_write("Application process initialization failed.\n");
 }
 
 void desktop_present(void)
@@ -385,30 +340,10 @@ void desktop_update(void)
         return;
     }
 
-    if (files_pid >= 0)
-    {
-        if (graphics_get_active_panel() == 2)
-        {
-            process_mark_running((uint32_t)files_pid);
-            files_process_step();
-            process_mark_ready((uint32_t)files_pid);
-        }
-        else
-        {
-            process_mark_ready((uint32_t)files_pid);
-        }
-    }
-
     if (terminal_window_open)
     {
         terminal_process_step();
 
-        if (terminal_pid >= 0 && terminal_window_open)
-            process_mark_ready((uint32_t)terminal_pid);
-    }
-    else if (terminal_pid >= 0)
-    {
-        process_mark_ready((uint32_t)terminal_pid);
     }
 
     if (mouse_has_event())
@@ -425,13 +360,6 @@ void desktop_update(void)
 
             if (wheel_delta < 0)
                 terminal_scroll_up();
-        }
-
-        if (click_event &&
-            graphics_get_active_panel() == 3 &&
-            terminal_pid >= 0)
-        {
-            process_wake((uint32_t)terminal_pid);
         }
 
         if (graphics_is_initialized())

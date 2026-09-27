@@ -57,9 +57,6 @@ process_entry_trampoline:
     cld
     pusha
 
-    ; External IRQs do not enter C while the interrupt return path is
-    ; being stabilized. A hardware EOI is sufficient here and keeps the
-    ; CPU-created IRET frame completely untouched.
 %if %2 == 44
     mov al, 0x20
     out 0xA0, al
@@ -69,8 +66,23 @@ process_entry_trampoline:
     out 0x20, al
 %endif
 
+    ; The CPU return frame follows the pusha frame:
+    ; [esp+32] = EIP, [esp+36] = CS, [esp+40] = EFLAGS.
+    ; Never execute iretd with a return address outside the kernel image.
+    cmp dword [esp + 32], 0x00100000
+    jb .bad_return
+
+    cmp dword [esp + 32], 0x0021E3F0
+    jae .bad_return
+
     popa
     iretd
+
+.bad_return:
+    cli
+.hang:
+    hlt
+    jmp .hang
 %endmacro
 
 IRQ_STUB irq0_stub, 32

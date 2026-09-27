@@ -5,6 +5,7 @@
 #include "keyboard.h"
 #include "mouse.h"
 #include "panic.h"
+#include "scheduler.h"
 
 extern void irq0_stub(void);
 extern void irq1_stub(void);
@@ -78,14 +79,20 @@ void interrupts_initialize(void)
     idt_load();
 }
 
-void interrupt_handler(unsigned int interrupt_number)
+unsigned int interrupt_handler(
+    unsigned int interrupt_number,
+    unsigned int saved_stack
+)
 {
     switch (interrupt_number)
     {
         case IRQ0_VECTOR:
             timer_handle_interrupt();
             pic_send_eoi(0);
-            break;
+
+            return scheduler_tick(
+                saved_stack
+            );
 
         case IRQ1_VECTOR:
             keyboard_handle_interrupt();
@@ -98,10 +105,17 @@ void interrupt_handler(unsigned int interrupt_number)
             break;
 
         default:
-            if (interrupt_number >= 32 && interrupt_number <= 47)
-                pic_send_eoi(interrupt_number - 32);
+            if (interrupt_number >= 32 &&
+                interrupt_number <= 47)
+            {
+                pic_send_eoi(
+                    interrupt_number - 32
+                );
+            }
             break;
     }
+
+    return saved_stack;
 }
 
 unsigned int interrupts_get_ticks(void)

@@ -3,6 +3,7 @@
 #include "filesystem.h"
 #include "graphics.h"
 #include "graphics_internal.h"
+#include "desktop.h"
 
 #define FILES_WINDOW_MARGIN 24
 #define FILES_SIDEBAR_WIDTH 190
@@ -49,6 +50,39 @@ static const char* explorer_directory_name(void)
         return "C:";
 
     return node->name;
+}
+
+static const char* explorer_file_type(const char* name)
+{
+    const char* dot = 0;
+
+    for (unsigned int i = 0; name[i]; i++)
+    {
+        if (name[i] == '.')
+            dot = &name[i];
+    }
+
+    if (!dot || !dot[1])
+        return "File";
+
+    if (dot[1] == 'v' && dot[2] == 'x' && dot[3] == 0)
+        return "Vanta Executable";
+    if (dot[1] == 't' && dot[2] == 'x' && dot[3] == 't')
+        return "Text File";
+    if (dot[1] == 'c' && dot[2] == 'f' && dot[3] == 'g')
+        return "Configuration";
+    if (dot[1] == 's' && dot[2] == 'y' && dot[3] == 's')
+        return "System File";
+
+    return "File";
+}
+
+static int explorer_is_terminal(const char* name)
+{
+    return name[0] == 't' && name[1] == 'e' && name[2] == 'r' &&
+           name[3] == 'm' && name[4] == 'i' && name[5] == 'n' &&
+           name[6] == 'a' && name[7] == 'l' && name[8] == '.' &&
+           name[9] == 'v' && name[10] == 'x' && name[11] == 0;
 }
 
 static void explorer_draw_icon(
@@ -355,7 +389,7 @@ void file_explorer_draw(int width, int height)
             row_y + 10,
             node->type == FS_NODE_DIRECTORY ?
             "Folder" :
-            "File",
+            explorer_file_type(node->name),
             0x007F95A8, 1
         );
 
@@ -522,9 +556,18 @@ int file_explorer_click(
         return 0;
 
     if (node->type == FS_NODE_DIRECTORY)
+    {
         explorer_set_directory(node->id);
+    }
+    else if (explorer_is_terminal(node->name))
+    {
+        explorer_file = -1;
+        desktop_launch_terminal();
+    }
     else
+    {
         explorer_file = (int)node->id;
+    }
 
     return 0;
 }

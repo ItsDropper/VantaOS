@@ -60,6 +60,15 @@ uint32_t scheduler_tick(uint32_t current_stack)
         return current_stack;
 
     /*
+     * Keep the boot context completely out of scheduler switching while
+     * the kernel is still validating kernel-thread context restoration.
+     * PID 1 is executing the desktop directly on the known-good boot
+     * stack, so IRQ0 must not replace its IRET frame with PID 2's frame.
+     */
+    if (current_pid == 1)
+        return current_stack;
+
+    /*
      * PID 1 is the boot context, not a scheduler-owned thread.
      *
      * Its stack pointer was captured while kernel_main was executing,

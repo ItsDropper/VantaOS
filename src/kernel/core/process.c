@@ -1,11 +1,13 @@
 #include "process.h"
 #include "heap.h"
 
+#include <stddef.h>
+#include <stdint.h>
+
 static process_t processes[PROCESS_MAX];
 
-static int initialized = 0;
-static uint32_t current_pid = 0;
-static uint32_t scheduler_cursor = 1;
+static int initialized;
+static uint32_t current_pid;
 
 static void process_copy_name(
     char* destination,
@@ -14,8 +16,8 @@ static void process_copy_name(
 {
     unsigned int i = 0;
 
-    while (source != 0 &&
-           source[i] != 0 &&
+    while (source &&
+           source[i] &&
            i < PROCESS_NAME_MAX)
     {
         destination[i] = source[i];
@@ -25,36 +27,56 @@ static void process_copy_name(
     destination[i] = 0;
 }
 
-static int process_slot_available(uint32_t pid)
+static void process_reset_record(process_t* process)
 {
-    return processes[pid].state == PROCESS_UNUSED ||
-           processes[pid].state == PROCESS_TERMINATED;
+    process->parent_pid = 0;
+    process->state = PROCESS_UNUSED;
+    process->name[0] = 0;
+    process->stack_pointer = 0;
+    process->entry = NULL;
+    process->kernel_stack = NULL;
+    process->address_space = NULL;
+
+    process->context.edi = 0;
+    process->context.esi = 0;
+    process->context.ebp = 0;
+    process->context.esp = 0;
+    process->context.ebx = 0;
+    process->context.edx = 0;
+    process->context.ecx = 0;
+    process->context.eax = 0;
+    process->context.eip = 0;
+    process->context.eflags = 0x202U;
+    process->context.cs = 0x08U;
+    process->context.ss = 0x10U;
 }
 
-static int process_allocate_kernel_stack(process_t* process)
+static int process_allocate_common(
+    process_t* process,
+    const char* name,
+    uint32_t parent_pid
+)
 {
-    if (!process || !heap_is_initialized())
+    if (!process ||
+        !name ||
+        !name[0] ||
+        !paging_get_kernel_address_space())
         return 0;
 
-    void* stack = kmalloc(PROCESS_STACK_SIZE);
+    process_reset_record(process);
 
-    if (!stack)
-        return 0;
+    process->parent_pid = parent_pid;
+    process->state = PROCESS_READY;
+    process_copy_name(process->name, name);
 
-    uintptr_t base = (uintptr_t)stack;
-    uintptr_t top = base + PROCESS_STACK_SIZE;
+    process->address_space =
+        paging_create_address_space();
 
-    if (top <= base ||
-        top > 0xFFFFFFFFU)
+    if (!process->address_space)
     {
-        kfree(stack);
+        process_reset_record(process);
         return 0;
     }
-
-    process->kernel_stack_base = base;
-    process->kernel_stack_top = top;
-    process->stack_pointer =
-        (uint32_t)(top & ~(uintptr_t)0xFU);
 
     return 1;
 }
@@ -63,18 +85,11 @@ void process_initialize(void)
 {
     initialized = 0;
     current_pid = 0;
-    scheduler_cursor = 1;
 
-    for (unsigned int i = 0; i < PROCESS_MAX; i++)
+    for (uint32_t i = 0; i < PROCESS_MAX; i++)
     {
         processes[i].pid = i;
-        processes[i].parent_pid = 0;
-        processes[i].state = PROCESS_UNUSED;
-        processes[i].name[0] = 0;
-        processes[i].stack_pointer = 0;
-        processes[i].kernel_stack_base = 0;
-        processes[i].kernel_stack_top = 0;
-        processes[i].entry = 0;
+        process_reset_record(&processes[i]);
     }
 
     initialized = 1;
@@ -82,7 +97,7 @@ void process_initialize(void)
 
 int process_is_initialized(void)
 {
-    return initialized;
+    return initialized != 0;
 }
 
 int process_attach_current(
@@ -91,15 +106,27 @@ int process_attach_current(
 )
 {
     if (!initialized ||
-        name == 0 ||
-        name[0] == 0)
+        !name ||
+        !name[0])
         return -1;
 
     for (uint32_t pid = 1; pid < PROCESS_MAX; pid++)
     {
-        if (!process_slot_available(pid))
+        if (processes[pid].state != PROCESS_UNUSED &&
+            processes[pid].state != PROCESS_TERMINATED)
             continue;
 
+        process_t* process = &processes[pid];
+
+        if (!process_allocate_common(
+                process, name, parent_pid))
+            return -1;
+
+        /*
+         * The desktop already exists on the kernel's current stack.
+         * Capture that stack pointer instead of fabricating a new
+         * execution context.
+         */
         uint32_t current_stack;
 
         __asm__ volatile (
@@ -107,25 +134,17 @@ int process_attach_current(
             : "=r"(current_stack)
         );
 
-        processes[pid].pid = pid;
-        processes[pid].parent_pid = parent_pid;
-        processes[pid].state = PROCESS_RUNNING;
-        processes[pid].stack_pointer = current_stack;
-        processes[pid].kernel_stack_base = 0;
-        processes[pid].kernel_stack_top = 0;
-        processes[pid].entry = 0;
+        process->state = PROCESS_RUNNING;
+        process->stack_pointer = current_stack;
+        process->context.esp = current_stack;
+        process->context.eip = 0;
+        process->context.eip =
+            (uint32_t)(uintptr_t)__builtin_return_address(0);
 
-        process_copy_name(
-            processes[pid].name,
-            name
-        );
+        process->context.cs = 0x08U;
+        process->context.ss = 0x10U;
 
         current_pid = pid;
-        scheduler_cursor = pid + 1;
-
-        if (scheduler_cursor >= PROCESS_MAX)
-            scheduler_cursor = 1;
-
         return (int)pid;
     }
 
@@ -139,36 +158,59 @@ int process_create_kernel(
 )
 {
     if (!initialized ||
-        name == 0 ||
-        name[0] == 0 ||
-        entry == 0)
+        !name ||
+        !name[0] ||
+        !entry ||
+        !heap_is_initialized())
         return -1;
 
     for (uint32_t pid = 1; pid < PROCESS_MAX; pid++)
     {
-        if (!process_slot_available(pid))
+        if (processes[pid].state != PROCESS_UNUSED &&
+            processes[pid].state != PROCESS_TERMINATED)
             continue;
 
-        processes[pid].pid = pid;
-        processes[pid].parent_pid = parent_pid;
-        processes[pid].state = PROCESS_READY;
-        processes[pid].stack_pointer = 0;
-        processes[pid].kernel_stack_base = 0;
-        processes[pid].kernel_stack_top = 0;
-        processes[pid].entry = entry;
-        processes[pid].name[0] = 0;
+        process_t* process = &processes[pid];
 
-        if (!process_allocate_kernel_stack(
-                &processes[pid]))
+        if (!process_allocate_common(
+                process, name, parent_pid))
+            return -1;
+
+        process->kernel_stack =
+            kmalloc(PROCESS_STACK_SIZE);
+
+        if (!process->kernel_stack)
         {
-            processes[pid].state = PROCESS_UNUSED;
+            paging_destroy_address_space(
+                process->address_space
+            );
+            process_reset_record(process);
             return -1;
         }
 
-        process_copy_name(
-            processes[pid].name,
-            name
-        );
+        process->entry = entry;
+
+        uintptr_t stack_top =
+            (uintptr_t)process->kernel_stack +
+            PROCESS_STACK_SIZE;
+
+        stack_top &= ~0x0FU;
+
+        process->stack_pointer =
+            (uint32_t)stack_top;
+
+        /*
+         * This is a prepared kernel execution context. It is not
+         * executed yet; process_schedule() remains deliberately
+         * non-switching until the assembly context-switch path is
+         * introduced and verified separately.
+         */
+        process->context.esp = (uint32_t)stack_top;
+        process->context.eip =
+            (uint32_t)(uintptr_t)entry;
+        process->context.eflags = 0x202U;
+        process->context.cs = 0x08U;
+        process->context.ss = 0x10U;
 
         return (int)pid;
     }
@@ -179,27 +221,17 @@ int process_create_kernel(
 int process_set_running(uint32_t pid)
 {
     if (!initialized ||
-        pid >= PROCESS_MAX)
+        pid >= PROCESS_MAX ||
+        processes[pid].state == PROCESS_UNUSED ||
+        processes[pid].state == PROCESS_TERMINATED)
         return 0;
 
-    if (processes[pid].state != PROCESS_READY &&
-        processes[pid].state != PROCESS_RUNNING)
-        return 0;
+    if (processes[current_pid].state == PROCESS_RUNNING &&
+        current_pid != pid)
+        processes[current_pid].state = PROCESS_READY;
 
     current_pid = pid;
     processes[pid].state = PROCESS_RUNNING;
-
-    for (uint32_t i = 1; i < PROCESS_MAX; i++)
-    {
-        if (i != pid &&
-            processes[i].state == PROCESS_RUNNING)
-            processes[i].state = PROCESS_READY;
-    }
-
-    scheduler_cursor = pid + 1;
-
-    if (scheduler_cursor >= PROCESS_MAX)
-        scheduler_cursor = 1;
 
     return 1;
 }
@@ -223,59 +255,64 @@ void process_block_current(void)
         current_pid >= PROCESS_MAX)
         return;
 
-    if (processes[current_pid].state ==
-        PROCESS_RUNNING)
-    {
-        processes[current_pid].state =
-            PROCESS_SLEEPING;
-    }
+    processes[current_pid].state = PROCESS_SLEEPING;
 }
 
-uint32_t process_pick_next(void)
+void process_terminate_current(void)
 {
-    if (!initialized)
-        return 0;
+    if (!initialized ||
+        current_pid == 0 ||
+        current_pid >= PROCESS_MAX)
+        return;
 
-    for (uint32_t offset = 0;
-         offset < PROCESS_MAX - 1;
-         offset++)
+    process_t* process = &processes[current_pid];
+
+    if (process->state == PROCESS_UNUSED)
+        return;
+
+    process->state = PROCESS_TERMINATED;
+
+    if (process->address_space)
     {
-        uint32_t pid =
-            scheduler_cursor + offset;
-
-        while (pid >= PROCESS_MAX)
-            pid -= PROCESS_MAX;
-
-        if (pid == 0)
-            continue;
-
-        if (processes[pid].state ==
-            PROCESS_READY)
-            return pid;
+        paging_destroy_address_space(
+            process->address_space
+        );
+        process->address_space = NULL;
     }
 
-    return current_pid;
+    if (process->kernel_stack)
+    {
+        kfree(process->kernel_stack);
+        process->kernel_stack = NULL;
+    }
+
+    process->stack_pointer = 0;
+    process->entry = NULL;
 }
 
 uint32_t process_schedule(uint32_t current_stack)
 {
     /*
-     * Scheduler selection is now deterministic, but the actual
-     * register/stack switch remains disabled until its assembly
-     * frame is implemented and verified.
+     * Scheduling metadata is now real, including per-process kernel
+     * stacks and address spaces. Actual CPU context switching is kept
+     * disabled until the dedicated assembly switch path is added.
      */
-    (void)process_pick_next();
+    if (!initialized ||
+        current_pid >= PROCESS_MAX)
+        return current_stack;
+
+    processes[current_pid].stack_pointer = current_stack;
+    processes[current_pid].context.esp = current_stack;
+
     return current_stack;
 }
 
 const process_t* process_get(uint32_t pid)
 {
     if (!initialized ||
-        pid >= PROCESS_MAX)
-        return 0;
-
-    if (processes[pid].state == PROCESS_UNUSED)
-        return 0;
+        pid >= PROCESS_MAX ||
+        processes[pid].state == PROCESS_UNUSED)
+        return NULL;
 
     return &processes[pid];
 }
@@ -287,9 +324,7 @@ unsigned int process_count(void)
 
     unsigned int count = 0;
 
-    for (unsigned int i = 0;
-         i < PROCESS_MAX;
-         i++)
+    for (uint32_t i = 0; i < PROCESS_MAX; i++)
     {
         if (processes[i].state != PROCESS_UNUSED &&
             processes[i].state != PROCESS_TERMINATED)

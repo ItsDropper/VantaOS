@@ -20,16 +20,23 @@ int scheduler_is_initialized(void)
 
 static uint32_t scheduler_next_ready(uint32_t current_pid)
 {
+    /*
+     * PID 1 is the boot/idle context. It owns the original kernel stack
+     * and must never be selected while another runnable kernel process
+     * exists. Real processes always get their own managed stack.
+     */
     for (uint32_t offset = 1; offset < PROCESS_MAX; offset++)
     {
         uint32_t pid =
             (current_pid + offset) % PROCESS_MAX;
 
+        if (pid == 1)
+            continue;
+
         const process_t* process =
             process_get(pid);
 
-        if (process &&
-            process->state == PROCESS_READY)
+        if (process && process->state == PROCESS_READY)
             return pid;
     }
 
@@ -38,8 +45,7 @@ static uint32_t scheduler_next_ready(uint32_t current_pid)
 
 uint32_t scheduler_tick(uint32_t current_stack)
 {
-    if (!initialized ||
-        !process_is_initialized())
+    if (!initialized || !process_is_initialized())
         return current_stack;
 
     uint32_t current_pid =
@@ -48,21 +54,12 @@ uint32_t scheduler_tick(uint32_t current_stack)
     if (current_pid >= PROCESS_MAX)
         return current_stack;
 
-    /*
-     * PID 0 is the boot context. It has no process record and therefore
-     * never has a scheduler-owned stack to save.
-     */
-    if (current_pid != 0)
-        process_save_stack(current_pid, current_stack);
+    process_save_stack(
+        current_pid,
+        current_stack
+    );
 
     quantum_ticks++;
-
-    /*
-     * The first timer interrupt is the bootstrap point from the boot
-     * context into the first real kernel process.
-     */
-    if (current_pid == 0)
-        quantum_ticks = SCHEDULER_QUANTUM_TICKS;
 
     if (quantum_ticks < SCHEDULER_QUANTUM_TICKS)
         return current_stack;
@@ -75,16 +72,25 @@ uint32_t scheduler_tick(uint32_t current_stack)
     if (next_pid == current_pid)
         return current_stack;
 
+    const process_t* current =
+        process_get(current_pid);
+
     const process_t* next =
         process_get(next_pid);
 
-    if (!next ||
-        !process_stack_is_valid(next_pid))
+    if (!current || !next)
+        return current_stack;
+
+    if (!process_stack_is_valid(next_pid))
         return current_stack;
 
     if (!process_switch_to(next_pid))
         return current_stack;
 
+    /*
+     * Kernel threads currently share the kernel address space.
+     * Do not load a per-process CR3 until user address spaces are real.
+     */
     if (next->address_space !=
         paging_get_current_address_space())
     {
@@ -93,21 +99,19 @@ uint32_t scheduler_tick(uint32_t current_stack)
         );
     }
 
-    if (current_pid != 0)
-    {
-        const process_t* current =
-            process_get(current_pid);
-
-        if (current &&
-            current->state == PROCESS_TERMINATED)
-            process_reap(current_pid);
-    }
+    if (current->state == PROCESS_TERMINATED)
+        process_reap(current_pid);
 
     return process_get_stack(next_pid);
 }
 
 void scheduler_yield(void)
 {
+    /*
+     * Kernel code cannot safely change stacks synchronously from C.
+     * Marking the task ready lets the next timer interrupt perform the
+     * actual register and address-space switch.
+     */
     uint32_t pid = process_current_pid();
 
     if (pid != 0)

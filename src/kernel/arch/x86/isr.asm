@@ -62,16 +62,33 @@ process_entry_trampoline:
     ; * ESP with an arbitrary C return value. Only a real scheduler switch
     ; * is allowed to provide a different frame.
     ;
+    ; Preserve the CPU-created return frame before entering C code.
+    ; The C path must never be able to accidentally alter the EIP/CS/
+    ; EFLAGS that IRETD will consume.
+    sub esp, 12
+    mov eax, [esp + 44]
+    mov [esp], eax
+    mov eax, [esp + 48]
+    mov [esp + 4], eax
+    mov eax, [esp + 52]
+    mov [esp + 8], eax
+
     mov eax, esp
+    add eax, 12
     push eax
     push dword %2
     call interrupt_handler
     add esp, 8
 
-    ; * For ordinary IRQ handling, return through the frame that was
-    ; * created by this interrupt. This is especially important for the
-    ; * boot context: its stack is not a scheduler-owned task frame.
-    ;
+    ; Restore the original return frame from the protected copy.
+    mov eax, [esp]
+    mov [esp + 44], eax
+    mov eax, [esp + 4]
+    mov [esp + 48], eax
+    mov eax, [esp + 8]
+    mov [esp + 52], eax
+    add esp, 12
+
     popa
     iretd
 %endmacro

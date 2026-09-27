@@ -34,6 +34,7 @@ int graphics_set_resolution(uint32_t width,uint32_t height);
 int graphics_is_initialized(void);
 int graphics_get_active_panel(void);
 int graphics_terminal_close_requested(void);
+void graphics_clear_terminal_close_requested(void);
 void graphics_set_terminal_running(int running);
 int graphics_terminal_is_running(void);
 void graphics_select_panel(int panel);

@@ -35,7 +35,7 @@ isr.o: src/kernel/arch/x86/isr.asm
 kernel.o: src/kernel/kernel.c
 	$(CC) $(CFLAGS) -c src/kernel/kernel.c -o kernel.o
 
-desktop.o: src/kernel/desktop.c
+desktop.o: src/kernel/desktop/desktop.c
 	$(CC) $(CFLAGS) -c src/kernel/desktop.c -o desktop.o
 
 gdt.o: src/kernel/arch/x86/gdt.c

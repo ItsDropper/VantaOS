@@ -82,55 +82,16 @@ void graphics_mouse_click(int button)
      */
     if (active_panel == 2)
     {
-        int ew, eh, ex, ey;
-        file_explorer_window_geometry(width, height, &ex, &ey, &ew, &eh);
-
-        /* Explorer controls use the exact same 48px title-button model as Terminal. */
-        if (cursor_y >= ey && cursor_y < ey + 48)
+        /*
+         * Explorer is a self-contained window. Its renderer and hit testing
+         * share one geometry function, exactly like the Terminal path.
+         */
+        if (file_explorer_click(
+                cursor_x, cursor_y, width, height))
         {
-            if (cursor_x >= ex + ew - 48 && cursor_x < ex + ew)
-            {
-                active_panel = 0;
-                explorer_dragging = 0;
-                return;
-            }
-
-            if (cursor_x >= ex + ew - 96 && cursor_x < ex + ew - 48)
-            {
-                explorer_dragging = 0;
-                if (!explorer_maximized)
-                {
-                    explorer_restore_x = ex;
-                    explorer_restore_y = ey;
-                    explorer_maximized = 1;
-                }
-                else
-                {
-                    explorer_maximized = 0;
-                    explorer_x = explorer_restore_x;
-                    explorer_y = explorer_restore_y;
-                }
-                return;
-            }
-
-            if (cursor_x >= ex + ew - 144 && cursor_x < ex + ew - 96)
-            {
-                active_panel = 0;
-                explorer_dragging = 0;
-                return;
-            }
-
-            if (!explorer_maximized && cursor_x >= ex && cursor_x < ex + ew - 144)
-            {
-                explorer_dragging = 1;
-                explorer_drag_offset_x = cursor_x - ex;
-                explorer_drag_offset_y = cursor_y - ey;
-                return;
-            }
+            active_panel = 0;
         }
 
-        if (file_explorer_click(cursor_x, cursor_y, width, height))
-            active_panel = 0;
         return;
     }
 
@@ -330,15 +291,22 @@ void graphics_mouse_move(int dx, int dy)
         if (explorer_x < 0) explorer_x = 0;
         if (explorer_y < 0) explorer_y = 0;
 
-        int ew = (int)framebuffer_width - 48;
-        int eh = (int)framebuffer_height - 100;
-        if (ew > 920) ew = 920;
-        if (eh > 560) eh = 560;
+        int ew, eh, ex, ey;
+        file_explorer_window_geometry(
+            (int)framebuffer_width,
+            (int)framebuffer_height,
+            &ex, &ey, &ew, &eh
+        );
 
         if (explorer_x + ew > (int)framebuffer_width)
             explorer_x = (int)framebuffer_width - ew;
         if (explorer_y + eh > (int)framebuffer_height)
             explorer_y = (int)framebuffer_height - eh;
+
+        if (explorer_x < 0)
+            explorer_x = 0;
+        if (explorer_y < 0)
+            explorer_y = 0;
     }
 
     if (terminal_dragging && !terminal_maximized)

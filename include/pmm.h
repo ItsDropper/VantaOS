@@ -5,7 +5,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define PAGE_SIZE 4096
+#define PAGE_SIZE 4096U
+#define PMM_MAX_PHYSICAL_ADDRESS 0x100000000ULL
+#define PMM_MAX_BLOCKS 1048576U
+#define PMM_BITMAP_WORDS (PMM_MAX_BLOCKS / 32U)
 
 void pmm_initialize(multiboot_info_t* mbd);
 void* pmm_alloc_block(void);

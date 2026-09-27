@@ -55,6 +55,7 @@ void shell_uptime(void);
 void shell_mem(void);
 void shell_heap(void);
 void shell_show_history(void);
+void shell_add_history(void);
 void shell_fault(void);
 void shell_reboot(void);
 void shell_print_decimal(unsigned int value);

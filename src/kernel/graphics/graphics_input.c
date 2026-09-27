@@ -276,7 +276,7 @@ void graphics_mouse_move(int dx, int dy)
         if (explorer_x < 0) explorer_x = 0;
         if (explorer_y < 0) explorer_y = 0;
 
-        int ew = (int)framebuffer_width - FILES_WINDOW_MARGIN * 2;
+        int ew = (int)framebuffer_width - 48;
         int eh = (int)framebuffer_height - 100;
         if (ew > 920) ew = 920;
         if (eh > 560) eh = 560;

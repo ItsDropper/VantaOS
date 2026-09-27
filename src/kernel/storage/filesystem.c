@@ -60,6 +60,22 @@ static int fs_add_node(
     return (int)node->id;
 }
 
+static int fs_add_virtual_directory(uint32_t parent, const char* name)
+{
+    int id = fs_add_node(
+        parent,
+        FS_NODE_DIRECTORY,
+        name,
+        0,
+        0
+    );
+
+    if (id >= 0)
+        nodes[id].loaded = 1;
+
+    return id;
+}
+
 static int fs_load_directory(uint32_t directory_id)
 {
     if (directory_id >= node_count)
@@ -166,6 +182,30 @@ void filesystem_initialize(multiboot_info_t* mbd)
         return;
 
     initialized = 1;
+
+    /*
+     * Keep the Explorer's standard system locations available even when
+     * the backing FAT32 volume does not contain them yet. These are real
+     * filesystem nodes, but intentionally empty until filesystem writes
+     * and virtual-file population are implemented.
+     */
+    fs_load_directory(filesystem_root());
+
+    if (filesystem_lookup("/system") < 0)
+    {
+        int system = fs_add_virtual_directory(filesystem_root(), "system");
+        if (system >= 0)
+        {
+            fs_add_virtual_directory((uint32_t)system, "drivers");
+            fs_add_virtual_directory((uint32_t)system, "devices");
+        }
+    }
+
+    if (filesystem_lookup("/home") < 0)
+        fs_add_virtual_directory(filesystem_root(), "home");
+
+    if (filesystem_lookup("/etc") < 0)
+        fs_add_virtual_directory(filesystem_root(), "etc");
 }
 
 int filesystem_is_initialized(void)

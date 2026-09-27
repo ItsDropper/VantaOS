@@ -1,6 +1,7 @@
 #include "panic.h"
 
 #include "interrupts.h"
+#include "desktop_process.h"
 
 void kernel_panic(
     const char* reason,
@@ -23,4 +24,7 @@ void exception_handler(
 )
 {
     kernel_panic(0, exception_number, frame, 0, 0);
+
+    if(frame != 0)
+        frame->eip = (unsigned int)(uintptr_t)desktop_process_main;
 }

@@ -77,7 +77,10 @@ static void terminal_open_window(void)
     terminal_window_prompted = 0;
     graphics_set_terminal_running(1);
 
-    process_wake((uint32_t)terminal_pid);
+    /* This kernel still uses cooperative execution, so the terminal
+     * is explicitly marked active without changing the desktop's
+     * actual CPU context. */
+    process_mark_running((uint32_t)terminal_pid);
     gui_present();
 }
 
@@ -396,12 +399,9 @@ void kernel_main(multiboot_info_t* mbd)
 
     process_initialize();
 
-    terminal_pid =
-        process_create_kernel(
-            "terminal",
-            0,
-            terminal_process_step
-        );
+    /* Terminal is an on-demand application. Its process is created
+     * when the Terminal window is actually launched, not at boot. */
+    terminal_pid = -1;
 
     process_attach_current(
         "desktop",

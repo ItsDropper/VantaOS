@@ -3,6 +3,7 @@
 #include "desktop.h"
 #include "process.h"
 #include "mouse.h"
+#include "terminal_process.h"
 
 static uint32_t desktop_pid;
 
@@ -11,6 +12,7 @@ void desktop_process_main(void)
     while (1)
     {
         mouse_process_events();
+        terminal_process_poll_input();
         desktop_update();
         __asm__ volatile ("hlt");
     }
@@ -26,11 +28,6 @@ int desktop_process_start(uint32_t parent_pid)
     if (desktop_pid != 0)
         return (int)desktop_pid;
 
-    /*
-     * Desktop is a normal kernel thread. It gets its own scheduler-owned
-     * stack and starts through the same synthetic IRQ frame used by every
-     * other kernel process.
-     */
     int pid =
         process_create_kernel(
             "desktop",
@@ -44,4 +41,3 @@ int desktop_process_start(uint32_t parent_pid)
     desktop_pid = (uint32_t)pid;
     return pid;
 }
-

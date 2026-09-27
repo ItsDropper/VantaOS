@@ -479,7 +479,15 @@ void kernel_main(multiboot_info_t* mbd)
         }
 
         if (terminal_window_open)
+        {
+            if (terminal_pid >= 0)
+                process_mark_running((uint32_t)terminal_pid);
+
             terminal_process_step();
+
+            if (terminal_pid >= 0 && terminal_window_open)
+                process_mark_ready((uint32_t)terminal_pid);
+        }
 
         /*
          * The GUI must remain usable even when the relative PS/2

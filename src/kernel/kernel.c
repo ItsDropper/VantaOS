@@ -12,6 +12,9 @@
 #include "terminal.h"
 #include "filesystem.h"
 #include "process.h"
+#include "scheduler.h"
+#include "vfs.h"
+#include "terminal_process.h"
 #include "desktop.h"
 
 extern void shell_set_multiboot_info(multiboot_info_t* mbd);
@@ -89,6 +92,7 @@ void kernel_main(multiboot_info_t* mbd)
 
     heap_initialize();
     filesystem_initialize(mbd);
+    vfs_initialize();
     process_initialize();
 
     if (process_attach_current("desktop", 0) < 0)

@@ -43,6 +43,8 @@ global exception31_stub
 extern interrupt_handler
 extern exception_handler
 extern process_entry_dispatch
+extern timer_handle_interrupt
+extern pic_send_eoi
 
 process_entry_trampoline:
     cld
@@ -52,14 +54,27 @@ process_entry_trampoline:
     hlt
     jmp .process_exit_halt
 
+; Timer IRQ deliberately has no C return value or scheduler path.
+; Keep the interrupt frame untouched so iretd always consumes the
+; exact frame pushed by the CPU.
+irq0_stub:
+    cld
+    pusha
+
+    call timer_handle_interrupt
+
+    push dword 0
+    call pic_send_eoi
+    add esp, 4
+
+    popa
+    iretd
+
 %macro IRQ_STUB 2
 %1:
     cld
     pusha
 
-    ; Pass the current register frame to C, but never replace ESP
-    ; with the C handler's return value. The CPU interrupt frame must
-    ; remain directly below the saved registers for iretd.
     push esp
     push dword %2
     call interrupt_handler
@@ -69,7 +84,6 @@ process_entry_trampoline:
     iretd
 %endmacro
 
-IRQ_STUB irq0_stub, 32
 IRQ_STUB irq1_stub, 33
 IRQ_STUB irq12_stub, 44
 

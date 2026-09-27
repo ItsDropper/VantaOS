@@ -3,6 +3,7 @@
 #include "graphics.h"
 #include "interrupts.h"
 #include "terminal.h"
+#include "process.h"
 
 static const char* exception_names[] =
 {
@@ -77,6 +78,10 @@ void kernel_panic(
             terminal_write("\n");
         }
 
+        terminal_write("Current PID: ");
+        terminal_write_hex(process_current_pid());
+        terminal_write("\n");
+
         if(frame != 0)
         {
             terminal_write("Error Code: "); terminal_write_hex(frame->error_code);
@@ -129,6 +134,9 @@ void kernel_panic(
         );
         panic_draw_hex_field(x,info_y+18,"NUMBER",exception_number);
     }
+
+    graphics_draw_text(x,info_y+38,"CURRENT PID",0x008E9AA5,1);
+    panic_draw_hex(x+132,info_y+38,process_current_pid());
 
     if(frame != 0)
     {

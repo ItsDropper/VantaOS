@@ -73,6 +73,9 @@ uint32_t scheduler_tick(uint32_t current_stack)
     if (!current || !next)
         return current_stack;
 
+    if (!process_stack_is_valid(next_pid))
+        return current_stack;
+
     if (!process_switch_to(next_pid))
         return current_stack;
 

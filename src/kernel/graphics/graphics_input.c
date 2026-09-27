@@ -33,8 +33,7 @@ void graphics_mouse_click(int button)
             cursor_y >= menu_y + 164 && cursor_y < menu_y + 218)
         {
             active_panel = 2;
-            files_current_dir = filesystem_root();
-            files_open_file = -1;
+            file_explorer_initialize();
             start_menu_open = 0;
             return;
         }
@@ -74,8 +73,7 @@ void graphics_mouse_click(int button)
         if (cursor_x >= center - 132 && cursor_x < center - 64)
         {
             active_panel = 2;
-            files_current_dir = filesystem_root();
-            files_open_file = -1;
+            file_explorer_initialize();
             return;
         }
 

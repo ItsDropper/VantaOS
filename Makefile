@@ -19,6 +19,7 @@ OBJS = boot.o \
        ata.o \
        interrupts.o \
        panic.o \
+       fault_trace.o \
        timer.o \
        pmm.o \
        paging.o \

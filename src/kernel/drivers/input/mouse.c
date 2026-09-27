@@ -26,6 +26,8 @@ static volatile int mouse_wheel_delta = 0;
 static volatile int mouse_moved = 0;
 static volatile int mouse_clicked = 0;
 static unsigned char mouse_left_down = 0;
+static uint32_t mouse_scale_x = 1024;
+static uint32_t mouse_scale_y = 768;
 
 static inline unsigned char ps2_read_status(void)
 {
@@ -191,6 +193,8 @@ void mouse_initialize(void)
     mouse_moved = 0;
     mouse_clicked = 0;
     mouse_left_down = 0;
+    mouse_scale_x = 1024;
+    mouse_scale_y = 768;
 
     /*
      * Remove stale controller data before configuring
@@ -278,7 +282,13 @@ void mouse_handle_interrupt(void)
     {
         if (delta_x != 0 || delta_y != 0)
         {
-            graphics_mouse_move(delta_x, delta_y);
+            int scaled_x = (delta_x * (int)mouse_scale_x) / 1024;
+            int scaled_y = (delta_y * (int)mouse_scale_y) / 768;
+
+            if (scaled_x == 0 && delta_x != 0) scaled_x = delta_x > 0 ? 1 : -1;
+            if (scaled_y == 0 && delta_y != 0) scaled_y = delta_y > 0 ? 1 : -1;
+
+            graphics_mouse_move(scaled_x, scaled_y);
             mouse_moved = 1;
         }
     }
@@ -346,4 +356,13 @@ int mouse_get_wheel_delta(void)
     mouse_wheel_delta = 0;
 
     return delta;
+}
+
+void mouse_set_resolution_scale(uint32_t width, uint32_t height)
+{
+    if (width == 0 || height == 0)
+        return;
+
+    mouse_scale_x = width;
+    mouse_scale_y = height;
 }

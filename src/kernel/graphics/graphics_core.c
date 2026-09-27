@@ -381,6 +381,11 @@ int graphics_terminal_is_dragging(void)
     return terminal_dragging;
 }
 
+int graphics_explorer_is_dragging(void)
+{
+    return explorer_dragging;
+}
+
 int graphics_get_terminal_x(void)
 {
     return terminal_x;

@@ -61,31 +61,43 @@ void graphics_mouse_click(int button)
         return;
     }
 
+    /*
+     * Explorer owns its complete input surface while it is active.
+     * Do not duplicate its window geometry here: the renderer and the
+     * Explorer hit-testing must have exactly one source of truth.
+     * The old outer rectangle could reject valid clicks when the display
+     * geometry changed, causing a redraw with no UI action.
+     */
     if (active_panel == 2)
     {
-        int explorer_w = width - 48;
-        int explorer_h = height - 100;
-
-        if (explorer_w > 920)
-            explorer_w = 920;
-        if (explorer_h > 560)
-            explorer_h = 560;
-
-        int explorer_x = width / 2 - explorer_w / 2;
-        int explorer_y = height / 2 - explorer_h / 2;
-
-        if (cursor_x >= explorer_x &&
-            cursor_x < explorer_x + explorer_w &&
-            cursor_y >= explorer_y &&
-            cursor_y < explorer_y + explorer_h)
+        if (cursor_y >= taskbar_y + 8 && cursor_y < taskbar_y + 56)
         {
-            if (file_explorer_click(
-                    cursor_x, cursor_y, width, height))
+            int center = width / 2;
+
+            if (cursor_x >= center - 190 && cursor_x < center - 142)
             {
-                active_panel = 0;
+                start_menu_open = 1;
+                return;
             }
-            return;
+
+            if (cursor_x >= center - 132 && cursor_x < center - 64)
+            {
+                file_explorer_initialize();
+                return;
+            }
+
+            if (cursor_x >= center - 56 && cursor_x < center + 12)
+            {
+                active_panel = 3;
+                graphics_request_terminal_open();
+                return;
+            }
         }
+
+        if (file_explorer_click(cursor_x, cursor_y, width, height))
+            active_panel = 0;
+
+        return;
     }
 
     if (cursor_y >= taskbar_y + 8 && cursor_y < taskbar_y + 56)

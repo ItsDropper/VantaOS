@@ -37,10 +37,12 @@ static unsigned long long boot_shell;
 static int terminal_window_open = 0;
 static int terminal_window_prompted = 0;
 static int terminal_pid = -1;
+static int files_pid = -1;
 static int graphics_ready_global = 0;
 
 static void terminal_window_draw(void);
 static void terminal_process_step(void);
+static void files_process_step(void);
 
 static void gui_present(void)
 {
@@ -83,6 +85,18 @@ static void terminal_open_window(void)
      * actual CPU context. */
     process_mark_running((uint32_t)terminal_pid);
     gui_present();
+}
+
+static void files_process_step(void)
+{
+    /*
+     * Files is a desktop application process. Filesystem operations
+     * are performed by the real Files window handlers; this cooperative
+     * step is the application lifecycle hook until CPU context switching
+     * is implemented.
+     */
+    if (graphics_get_active_panel() != 2)
+        return;
 }
 
 static void terminal_window_draw(void)
@@ -400,14 +414,30 @@ void kernel_main(multiboot_info_t* mbd)
 
     process_initialize();
 
-    /* Terminal is an on-demand application. Its process is created
-     * when the Terminal window is actually launched, not at boot. */
-    terminal_pid = -1;
-
     process_attach_current(
         "desktop",
         0
     );
+
+    /*
+     * Desktop applications have persistent process records. They remain
+     * READY while closed and are marked RUNNING while their application
+     * surface is active.
+     */
+    terminal_pid = process_create_kernel(
+        "terminal",
+        process_current_pid(),
+        terminal_process_step
+    );
+
+    files_pid = process_create_kernel(
+        "files",
+        process_current_pid(),
+        files_process_step
+    );
+
+    if (terminal_pid < 0 || files_pid < 0)
+        terminal_write("Application process initialization failed.\n");
 
     boot_memory = read_tsc();
     boot_interrupts = boot_memory;
@@ -479,6 +509,18 @@ void kernel_main(multiboot_info_t* mbd)
             gui_present();
         }
 
+        if (graphics_get_active_panel() == 2 &&
+            files_pid >= 0)
+        {
+            process_mark_running((uint32_t)files_pid);
+            files_process_step();
+            process_mark_ready((uint32_t)files_pid);
+        }
+        else if (files_pid >= 0)
+        {
+            process_mark_ready((uint32_t)files_pid);
+        }
+
         if (terminal_window_open)
         {
             if (terminal_pid >= 0)
@@ -488,6 +530,10 @@ void kernel_main(multiboot_info_t* mbd)
 
             if (terminal_pid >= 0 && terminal_window_open)
                 process_mark_ready((uint32_t)terminal_pid);
+        }
+        else if (terminal_pid >= 0)
+        {
+            process_mark_ready((uint32_t)terminal_pid);
         }
 
         /*

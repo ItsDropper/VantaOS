@@ -437,6 +437,9 @@ int file_explorer_click(
     int height
 )
 {
+    if (!explorer_initialized)
+        file_explorer_initialize();
+
     int ww = width - FILES_WINDOW_MARGIN * 2;
     int wh = height - 100;
 
@@ -469,12 +472,10 @@ int file_explorer_click(
         if (y >= sidebar_y + 76 &&
             y < sidebar_y + 110)
         {
-            int id = filesystem_lookup("/system");
+            int id = filesystem_ensure_directory("/system");
             if (id >= 0)
-            {
                 explorer_set_directory((uint32_t)id);
-                return 0;
-            }
+            return 0;
 
             /*
              * These quick-access entries are only valid when the real
@@ -487,12 +488,10 @@ int file_explorer_click(
         if (y >= sidebar_y + 114 &&
             y < sidebar_y + 148)
         {
-            int id = filesystem_lookup("/home");
+            int id = filesystem_ensure_directory("/home");
             if (id >= 0)
-            {
                 explorer_set_directory((uint32_t)id);
-                return 0;
-            }
+            return 0;
 
             return 0;
         }
@@ -500,7 +499,7 @@ int file_explorer_click(
         if (y >= sidebar_y + 188 &&
             y < sidebar_y + 212)
         {
-            int id = filesystem_lookup("/etc");
+            int id = filesystem_ensure_directory("/etc");
             if (id >= 0)
                 explorer_set_directory((uint32_t)id);
             return 0;
@@ -509,7 +508,7 @@ int file_explorer_click(
         if (y >= sidebar_y + 212 &&
             y < sidebar_y + 236)
         {
-            int id = filesystem_lookup("/system/drivers");
+            int id = filesystem_ensure_directory("/system/drivers");
             if (id >= 0)
                 explorer_set_directory((uint32_t)id);
             return 0;
@@ -518,7 +517,7 @@ int file_explorer_click(
         if (y >= sidebar_y + 236 &&
             y < sidebar_y + 260)
         {
-            int id = filesystem_lookup("/system/devices");
+            int id = filesystem_ensure_directory("/system/devices");
             if (id >= 0)
                 explorer_set_directory((uint32_t)id);
             return 0;

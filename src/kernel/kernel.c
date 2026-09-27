@@ -152,15 +152,15 @@ void kernel_main(multiboot_info_t* mbd)
     desktop_update();
     desktop_present();
 
-    /* Only now is it safe to let the timer-driven scheduler run. */
+    /*
+     * PID 2 owns the real desktop thread and its private kernel stack.
+     * PID 1 must remain a pure idle context; executing desktop_process_run()
+     * here would create a second desktop instance on the boot stack.
+     */
     __asm__ volatile ("sti");
 
-    /*
-     * Transfer execution to the desktop on the already-established boot
-     * stack. The scheduler may interrupt it normally, but it will not
-     * fabricate the first desktop IRET frame yet.
-     */
-    desktop_process_run();
+    while (1)
+        __asm__ volatile ("hlt");
 }
 
 unsigned long long kernel_boot_start(void)

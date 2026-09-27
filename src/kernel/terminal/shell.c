@@ -872,7 +872,7 @@ static void shell_help(void)
     terminal_write("  mem      - Show physical memory status\n");
     terminal_write("  heap     - Show kernel heap status and test allocation\n");
     terminal_write("  history  - Show command history\n");
-    terminal_write("  fault    - Trigger a test page fault\n");
+    terminal_write("  fault    - Trigger a kernel panic test\n");
     terminal_write("  echo     - Print text\n");
     terminal_write("  reboot   - Reboot the system\n");
     terminal_write("  pwd      - Show current directory\n");
@@ -1327,13 +1327,16 @@ static void shell_show_history(void)
 
 static void shell_fault(void)
 {
-    terminal_write("\nTriggering a test page fault...\n");
+    kernel_panic(
+        "Manual kernel fault requested by the fault command.",
+        0xFFFFFFFFU,
+        0,
+        0,
+        0
+    );
 
-    volatile unsigned int* unmapped =
-        (volatile unsigned int*)0xC0000000;
-
-    unsigned int value = *unmapped;
-    (void)value;
+    while (1)
+        __asm__ volatile ("hlt");
 }
 
 static void shell_reboot(void)

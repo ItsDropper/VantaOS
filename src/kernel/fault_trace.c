@@ -294,6 +294,87 @@ static void draw_raw_frame(
     draw_field(x, y + 208, "FRAME PTR", (uint32_t)(uintptr_t)frame);
 }
 
+static void draw_interrupted_stack(
+    int x,
+    int y,
+    unsigned int exception_number,
+    const struct exception_frame* frame
+)
+{
+    graphics_draw_text(
+        x, y,
+        "INTERRUPTED STACK",
+        0x00F2F5F8, 1
+    );
+
+    /*
+     * For a no-error-code exception, frame->esp is the value saved
+     * by PUSHA after the stub pushed the synthetic error code.
+     * Therefore the ESP at the moment the CPU took the exception
+     * is frame->esp + 16.
+     *
+     * For an error-code exception the CPU supplied the error code,
+     * so the interrupted ESP is frame->esp + 12.
+     */
+    unsigned int interrupted_esp =
+        frame->esp +
+        (exception_number == 8 ||
+         (exception_number >= 10 && exception_number <= 14) ? 12U : 16U);
+
+    draw_field(x, y + 16, "INTERRUPTED ESP", interrupted_esp);
+    draw_field(
+        x, y + 32,
+        "STACK EIP",
+        *(volatile unsigned int*)(interrupted_esp - 12U)
+    );
+    draw_field(
+        x, y + 48,
+        "STACK CS",
+        *(volatile unsigned int*)(interrupted_esp - 8U)
+    );
+    draw_field(
+        x, y + 64,
+        "STACK FLAGS",
+        *(volatile unsigned int*)(interrupted_esp - 4U)
+    );
+
+    draw_field(
+        x, y + 80,
+        "ESP +00",
+        *(volatile unsigned int*)interrupted_esp
+    );
+    draw_field(
+        x, y + 96,
+        "ESP +04",
+        *(volatile unsigned int*)(interrupted_esp + 4U)
+    );
+    draw_field(
+        x, y + 112,
+        "ESP +08",
+        *(volatile unsigned int*)(interrupted_esp + 8U)
+    );
+    draw_field(
+        x, y + 128,
+        "ESP +0C",
+        *(volatile unsigned int*)(interrupted_esp + 12U)
+    );
+
+    unsigned int found = 0;
+    for (unsigned int i = 0; i < 32; i++)
+    {
+        unsigned int value =
+            *(volatile unsigned int*)(interrupted_esp + i * 4U);
+
+        if (value == frame->eip)
+        {
+            found = interrupted_esp + i * 4U;
+            break;
+        }
+    }
+
+    draw_field(x, y + 144, "EIP ON STACK", found);
+}
+
 void fault_trace_draw(
     int x,
     int y,
@@ -334,10 +415,5 @@ void fault_trace_draw(
 
     draw_machine_state(x, lower_y);
     draw_raw_frame(right_x, lower_y, frame);
-
-    /*
-     * Everything is deliberately kept inside the two-column layout.
-     * The previous version placed machine/raw diagnostics below the
-     * viewport on common 600px framebuffer modes.
-     */
+    draw_interrupted_stack(right_x, lower_y + 218, exception_number, frame);
 }

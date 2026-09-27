@@ -253,9 +253,6 @@ static void terminal_process_step(void)
     {
         keyboard_event_t event = keyboard_get_event();
 
-        if (event == KEY_EVENT_TERMINAL)
-            return;
-
         if (event == KEY_EVENT_PAGE_UP)
             terminal_scroll_up();
         else if (event == KEY_EVENT_PAGE_DOWN)

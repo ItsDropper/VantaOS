@@ -30,7 +30,7 @@ if command -v mkfs.fat >/dev/null 2>&1; then
 
     if command -v mmd >/dev/null 2>&1 && command -v mcopy >/dev/null 2>&1; then
         mmd -i vantaos.img ::/system 2>/dev/null || true
-        printf 'VANTA EXECUTABLE\\nname=Terminal\\nentry=terminal\\nversion=1\\n' > /tmp/vanta-terminal.vx
+        printf 'VANTA EXECUTABLE\nname=Terminal\nentry=terminal\nversion=1\n' > /tmp/vanta-terminal.vx
         mcopy -o -i vantaos.img /tmp/vanta-terminal.vx ::/system/terminal.vx >/dev/null
         rm -f /tmp/vanta-terminal.vx
         echo "    Installed /system/terminal.vx"

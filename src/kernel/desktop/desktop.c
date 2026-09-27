@@ -8,6 +8,7 @@
 #include "terminal_process.h"
 #include "shell.h"
 #include "terminal.h"
+#include "file_explorer.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -59,6 +60,7 @@ static void terminal_close_window(void)
 {
     terminal_window_open = 0;
     terminal_window_prompted = 0;
+    file_explorer_initialize();
 
     graphics_set_terminal_running(0);
 

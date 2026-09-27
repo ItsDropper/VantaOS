@@ -1,7 +1,8 @@
 #include "graphics_internal.h"
 #include "filesystem.h"
 #include "terminal.h"
-#include "process.h"\n#include "file_explorer.h"
+#include "process.h"
+#include "file_explorer.h"
 #include "pmm.h"
 
 void graphics_mouse_click(int button)
@@ -52,7 +53,6 @@ void graphics_mouse_click(int button)
             start_menu_open = 0;
             return;
         }
-
 
         if (!(cursor_x >= menu_x && cursor_x < menu_x + menu_w &&
               cursor_y >= menu_y && cursor_y < height - 8))

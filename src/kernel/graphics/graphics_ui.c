@@ -50,6 +50,9 @@ void graphics_draw_taskbar(int taskbar_y, int width)
     graphics_fill_rect(center - 108, taskbar_y + 17, 12, 5, 0x005AA9E6);
     graphics_draw_text(center - 98, taskbar_y + 46, "FILES", 0x00D8E2EA, 1);
 
+    if (active_panel == 2)
+        graphics_fill_rect(center - 132, taskbar_y + 54, 68, 2, 0x00FFFFFF);
+
     /* Terminal. */
     graphics_fill_rounded_rect(center - 56, taskbar_y + 8, 68, 48, 10,
         active_panel == 3 ? 0x00263B50 : 0x001A2633);

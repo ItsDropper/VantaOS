@@ -138,6 +138,13 @@ static void process_prepare_stack(
     *(--stack) =
         (uint32_t)(uintptr_t)process_entry_trampoline;
 
+    /*
+     * Exception/IRQ frames exposed to C contain an error-code slot.
+     * Exceptions without a hardware error code synthesize zero, so
+     * scheduler-created frames must have the same slot.
+     */
+    *(--stack) = 0;
+
     *(--stack) = 0;
     *(--stack) = 0;
     *(--stack) = 0;
@@ -461,7 +468,7 @@ int process_stack_is_valid(uint32_t pid)
         (uintptr_t)process->stack_pointer;
 
     if (frame < stack_base ||
-        frame + 44U > stack_end)
+        frame + 48U > stack_end)
         return 0;
 
     uint32_t* values =
@@ -469,7 +476,7 @@ int process_stack_is_valid(uint32_t pid)
 
     /*
      * Both attached and synthetic kernel processes return through the
-     * same IRQ epilogue: POPA followed by IRETD.
+     * same IRQ epilogue: POPA, discard error code, then IRETD.
      */
     if (values[9] != 0x08U ||
         (values[10] & 0x00000200U) == 0)

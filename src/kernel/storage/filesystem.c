@@ -191,13 +191,19 @@ void filesystem_initialize(multiboot_info_t* mbd)
      */
     fs_load_directory(filesystem_root());
 
-    if (filesystem_lookup("/system") < 0)
+    int system_id = filesystem_lookup("/system");
+    if (system_id < 0)
+        system_id = fs_add_virtual_directory(filesystem_root(), "system");
+
+    if (system_id >= 0)
     {
-        int system = fs_add_virtual_directory(filesystem_root(), "system");
-        if (system >= 0)
+        const fs_node_t* system = filesystem_get_node((uint32_t)system_id);
+        if (system && system->type == FS_NODE_DIRECTORY)
         {
-            fs_add_virtual_directory((uint32_t)system, "drivers");
-            fs_add_virtual_directory((uint32_t)system, "devices");
+            if (filesystem_lookup("/system/drivers") < 0)
+                fs_add_virtual_directory((uint32_t)system_id, "drivers");
+            if (filesystem_lookup("/system/devices") < 0)
+                fs_add_virtual_directory((uint32_t)system_id, "devices");
         }
     }
 

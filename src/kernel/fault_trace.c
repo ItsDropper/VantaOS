@@ -292,6 +292,17 @@ void fault_trace_draw(
         frame->error_code
     );
 
+    /*
+     * Keep a raw frame sanity check in the panic screen. This deliberately
+     * does not use the process/scheduler state, because those may be the
+     * subsystem that corrupted the frame in the first place.
+     */
+    draw_field(
+        x, y + 72,
+        "FRAME PTR",
+        (unsigned int)(uintptr_t)frame
+    );
+
     if (has_fault_address)
         draw_field(
             x, y + 72,

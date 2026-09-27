@@ -82,16 +82,101 @@ void graphics_mouse_click(int button)
      */
     if (active_panel == 2)
     {
-        /*
-         * Explorer is a self-contained window. Its renderer and hit testing
-         * share one geometry function, exactly like the Terminal path.
-         */
-        if (file_explorer_click(
-                cursor_x, cursor_y, width, height))
+        int ew, eh, ex, ey;
+        int title = 46;
+        int button = 46;
+        int sidebar = 188;
+        int sidebar_y;
+
+        file_explorer_window_geometry(
+            width, height, &ex, &ey, &ew, &eh);
+
+        /* Window controls and dragging intentionally mirror Terminal. */
+        if (cursor_y >= ey && cursor_y < ey + title)
         {
-            active_panel = 0;
+            int close_x = ex + ew - button;
+            int max_x = close_x - button;
+            int min_x = max_x - button;
+
+            if (cursor_x >= close_x && cursor_x < ex + ew)
+            {
+                explorer_dragging = 0;
+                active_panel = 0;
+                return;
+            }
+
+            if (cursor_x >= max_x && cursor_x < close_x)
+            {
+                explorer_dragging = 0;
+
+                if (!explorer_maximized)
+                {
+                    explorer_restore_x = ex;
+                    explorer_restore_y = ey;
+                    explorer_maximized = 1;
+                }
+                else
+                {
+                    explorer_maximized = 0;
+                    explorer_x = explorer_restore_x;
+                    explorer_y = explorer_restore_y;
+                }
+
+                return;
+            }
+
+            if (cursor_x >= min_x && cursor_x < max_x)
+            {
+                /* Minimize only. The Explorer process remains alive. */
+                explorer_dragging = 0;
+                active_panel = 0;
+                return;
+            }
+
+            if (!explorer_maximized &&
+                cursor_x >= ex + 8 &&
+                cursor_x < min_x)
+            {
+                explorer_dragging = 1;
+                explorer_drag_offset_x = cursor_x - ex;
+                explorer_drag_offset_y = cursor_y - ey;
+                return;
+            }
+
+            return;
         }
 
+        sidebar_y = ey + title;
+
+        if (cursor_x >= ex && cursor_x < ex + sidebar)
+        {
+            if (cursor_y >= sidebar_y + 38 &&
+                cursor_y < sidebar_y + 72)
+            {
+                file_explorer_open_directory(filesystem_root());
+                return;
+            }
+
+            if (cursor_y >= sidebar_y + 76 &&
+                cursor_y < sidebar_y + 110)
+            {
+                int id = filesystem_ensure_directory("/system");
+                if (id >= 0)
+                    file_explorer_open_directory((uint32_t)id);
+                return;
+            }
+
+            if (cursor_y >= sidebar_y + 114 &&
+                cursor_y < sidebar_y + 148)
+            {
+                int id = filesystem_ensure_directory("/home");
+                if (id >= 0)
+                    file_explorer_open_directory((uint32_t)id);
+                return;
+            }
+        }
+
+        file_explorer_click(cursor_x, cursor_y, width, height);
         return;
     }
 

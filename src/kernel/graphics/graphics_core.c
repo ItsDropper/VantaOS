@@ -151,6 +151,19 @@ int graphics_initialize(multiboot_info_t* mbd)
 {
     initialized = 0;
 
+    /*
+     * On QEMU Standard VGA, PCI BAR0 is the authoritative framebuffer
+     * location. Prefer it over the Multiboot framebuffer address so the
+     * kernel does not depend on whichever mode GRUB happened to leave
+     * active. QEMU documents PCI region 0 as the framebuffer BAR.
+     */
+    if (graphics_initialize_bochs())
+        return 1;
+
+    /*
+     * Keep the Multiboot framebuffer as a fallback for non-QEMU
+     * framebuffer-capable boot environments.
+     */
     if (mbd &&
         (mbd->flags & MULTIBOOT_INFO_FRAMEBUFFER) &&
         mbd->framebuffer_addr <= 0xFFFFFFFFULL &&
@@ -160,7 +173,7 @@ int graphics_initialize(multiboot_info_t* mbd)
         mbd->framebuffer_height != 0)
     {
         uint32_t physical = (uint32_t)mbd->framebuffer_addr;
-        uint32_t offset = physical & 0xFFF;
+        uint32_t offset = physical & 0xFFFU;
         uint32_t first_page = physical & 0xFFFFF000U;
 
         uint64_t bytes =
@@ -168,19 +181,20 @@ int graphics_initialize(multiboot_info_t* mbd)
             mbd->framebuffer_height;
 
         uint32_t pages =
-            (uint32_t)((offset + bytes + 4095) / 4096);
+            (uint32_t)((offset + bytes + 4095U) / 4096U);
 
         if (pages != 0 && pages <= GRAPHICS_MAX_PAGES)
         {
             for (uint32_t i = 0; i < pages; i++)
             {
                 if (!paging_map_page(
-                        GRAPHICS_VIRTUAL_BASE + i * 4096,
-                        first_page + i * 4096))
+                        GRAPHICS_VIRTUAL_BASE + i * 4096U,
+                        first_page + i * 4096U))
                     return 0;
             }
 
-            framebuffer = (uint8_t*)(GRAPHICS_VIRTUAL_BASE + offset);
+            framebuffer =
+                (uint8_t*)(GRAPHICS_VIRTUAL_BASE + offset);
             framebuffer_pitch = mbd->framebuffer_pitch;
             framebuffer_width = mbd->framebuffer_width;
             framebuffer_height = mbd->framebuffer_height;
@@ -205,253 +219,6 @@ int graphics_initialize(multiboot_info_t* mbd)
         }
     }
 
-    return graphics_initialize_bochs();
+    return 0;
 }
 
-int graphics_is_initialized(void)
-{
-    return initialized;
-}
-
-int graphics_get_active_panel(void)
-{
-    return active_panel;
-}
-
-int graphics_terminal_close_requested(void)
-{
-    if (!terminal_close_requested)
-        return 0;
-
-    terminal_close_requested = 0;
-    return 1;
-}
-
-void graphics_set_terminal_running(int running)
-{
-    terminal_running = running ? 1 : 0;
-}
-
-int graphics_terminal_is_running(void)
-{
-    return terminal_running;
-}
-
-void graphics_select_panel(int panel)
-{
-    if (!initialized)
-        return;
-
-    if (panel < 0 || panel > 4)
-        return;
-
-    active_panel = panel;
-}
-
-int graphics_set_resolution(uint32_t width, uint32_t height)
-{
-    if (!initialized || width < 640 || height < 480 || width > 1600 || height > 900)
-        return 0;
-
-    uint64_t bytes = (uint64_t)width * 4U * height;
-    uint32_t pages = (uint32_t)((bytes + 4095) / 4096);
-    if (pages == 0 || pages > GRAPHICS_MAX_PAGES)
-        return 0;
-
-    uint32_t physical = 0;
-    for (int i = 0; i < pci_get_device_count(); i++)
-    {
-        const struct pci_device* device = pci_get_device(i);
-        if (!device || device->vendor_id != 0x1234 ||
-            device->device_id != 0x1111 || device->class_code != 0x03)
-            continue;
-        if (pci_get_bar0(device, &physical))
-            break;
-    }
-    if (physical == 0)
-        return 0;
-
-    bochs_vbe_write(BOCHS_VBE_INDEX_ENABLE, 0);
-    bochs_vbe_write(BOCHS_VBE_INDEX_XRES, (uint16_t)width);
-    bochs_vbe_write(BOCHS_VBE_INDEX_YRES, (uint16_t)height);
-    bochs_vbe_write(BOCHS_VBE_INDEX_BPP, 32);
-    bochs_vbe_write(BOCHS_VBE_INDEX_VIRT_WIDTH, (uint16_t)width);
-    bochs_vbe_write(BOCHS_VBE_INDEX_VIRT_HEIGHT, (uint16_t)height);
-    bochs_vbe_write(BOCHS_VBE_INDEX_ENABLE, BOCHS_VBE_ENABLE_LFB);
-
-    for (uint32_t i = 0; i < pages; i++)
-        if (!paging_map_page(GRAPHICS_VIRTUAL_BASE + i * 4096,
-                             (physical & 0xFFFFF000U) + i * 4096))
-            return 0;
-
-    framebuffer = (uint8_t*)(GRAPHICS_VIRTUAL_BASE + (physical & 0xFFF));
-    framebuffer_pitch = width * 4;
-    framebuffer_width = width;
-    framebuffer_height = height;
-    mouse_set_resolution_scale(width, height);
-    red_position = 16; red_mask_size = 8;
-    green_position = 8; green_mask_size = 8;
-    blue_position = 0; blue_mask_size = 8;
-    cursor_x = (int)width / 2;
-    cursor_y = (int)height / 2;
-    terminal_x = (int)width / 2 - 440;
-    if (terminal_x < 10) terminal_x = 10;
-    terminal_y = 64;
-    terminal_restore_x = terminal_x;
-    terminal_restore_y = terminal_y;
-    terminal_maximized = 0;
-    terminal_dragging = 0;
-    cursor_saved_valid = 0;
-    active_panel = 0;
-    return 1;
-}
-
-int graphics_terminal_is_maximized(void)
-{
-    return terminal_maximized;
-}
-
-void graphics_terminal_toggle_maximized(void)
-{
-    if (!initialized)
-        return;
-
-    if (!terminal_maximized)
-    {
-        terminal_restore_x = terminal_x;
-        terminal_restore_y = terminal_y;
-        terminal_maximized = 1;
-        terminal_dragging = 0;
-    }
-    else
-    {
-        terminal_maximized = 0;
-        terminal_x = terminal_restore_x;
-        terminal_y = terminal_restore_y;
-    }
-}
-
-int graphics_terminal_is_dragging(void)
-{
-    return terminal_dragging;
-}
-
-int graphics_get_terminal_x(void)
-{
-    return terminal_x;
-}
-
-int graphics_get_terminal_y(void)
-{
-    return terminal_y;
-}
-
-uint32_t graphics_get_width(void)
-{
-    return framebuffer_width;
-}
-
-uint32_t graphics_get_height(void)
-{
-    return framebuffer_height;
-}
-
-uint32_t graphics_get_terminal_width(void)
-{
-    return terminal_maximized ? framebuffer_width :
-        (framebuffer_width < 900 ? framebuffer_width - 20 : 880);
-}
-
-uint32_t graphics_get_terminal_height(void)
-{
-    return terminal_maximized ? framebuffer_height :
-        (framebuffer_height < 640 ? framebuffer_height - 20 : 620);
-}
-
-void graphics_clear(uint32_t color)
-{
-    if (!initialized)
-        return;
-
-    uint32_t packed = graphics_pack_color(color);
-
-    for (uint32_t y = 0; y < framebuffer_height; y++)
-    {
-        volatile uint32_t* row =
-            (volatile uint32_t*)(framebuffer + y * framebuffer_pitch);
-
-        for (uint32_t x = 0; x < framebuffer_width; x++)
-            row[x] = packed;
-    }
-}
-
-void graphics_fill_rect(
-    int x,
-    int y,
-    int width,
-    int height,
-    uint32_t color
-)
-{
-    if (!initialized || width <= 0 || height <= 0)
-        return;
-
-    int x0 = x < 0 ? 0 : x;
-    int y0 = y < 0 ? 0 : y;
-    int x1 = x + width;
-    int y1 = y + height;
-
-    if (x1 > (int)framebuffer_width)
-        x1 = framebuffer_width;
-    if (y1 > (int)framebuffer_height)
-        y1 = framebuffer_height;
-
-    if (x0 >= x1 || y0 >= y1)
-        return;
-
-    uint32_t packed = graphics_pack_color(color);
-
-    for (int py = y0; py < y1; py++)
-    {
-        volatile uint32_t* row =
-            (volatile uint32_t*)(framebuffer + py * framebuffer_pitch);
-
-        for (int px = x0; px < x1; px++)
-            row[px] = packed;
-    }
-}
-
-void graphics_fill_rounded_rect(int x,int y,int width,int height,int radius,uint32_t color)
-{
-    if (!initialized || width <= 0 || height <= 0)
-        return;
-    if (radius <= 0) { graphics_fill_rect(x,y,width,height,color); return; }
-    if (radius * 2 > width) radius = width / 2;
-    if (radius * 2 > height) radius = height / 2;
-
-    uint32_t packed = graphics_pack_color(color);
-    int x0 = x < 0 ? 0 : x;
-    int y0 = y < 0 ? 0 : y;
-    int x1 = x + width;
-    int y1 = y + height;
-    if (x1 > (int)framebuffer_width) x1 = (int)framebuffer_width;
-    if (y1 > (int)framebuffer_height) y1 = (int)framebuffer_height;
-
-    int r2 = radius * radius;
-    for (int py = y0; py < y1; py++)
-    {
-        volatile uint32_t* row =
-            (volatile uint32_t*)(framebuffer + py * framebuffer_pitch);
-        for (int px = x0; px < x1; px++)
-        {
-            int cx = px < x + radius ? x + radius :
-                (px >= x + width - radius ? x + width - radius - 1 : px);
-            int cy = py < y + radius ? y + radius :
-                (py >= y + height - radius ? y + height - radius - 1 : py);
-            int dx = px - cx;
-            int dy = py - cy;
-            if (dx * dx + dy * dy <= r2)
-                row[px] = packed;
-        }
-    }
-}

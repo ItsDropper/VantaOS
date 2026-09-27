@@ -8,6 +8,7 @@ global stack_top
 extern kernel_main
 
 _start:
+    cli
     jmp multiboot_entry
 
     align 4

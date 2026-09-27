@@ -48,7 +48,8 @@ static void gui_present(void)
 
     graphics_present();
 
-    if (terminal_window_open)
+    if (terminal_window_open &&
+        graphics_get_active_panel() == 3)
         terminal_window_draw();
     else
         graphics_draw_cursor();

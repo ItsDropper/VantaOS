@@ -20,10 +20,18 @@ int scheduler_is_initialized(void)
 
 static uint32_t scheduler_next_ready(uint32_t current_pid)
 {
+    /*
+     * PID 1 is the boot/idle context. It owns the original kernel stack
+     * and must never be selected while another runnable kernel process
+     * exists. Real processes always get their own managed stack.
+     */
     for (uint32_t offset = 1; offset < PROCESS_MAX; offset++)
     {
         uint32_t pid =
             (current_pid + offset) % PROCESS_MAX;
+
+        if (pid == 1)
+            continue;
 
         const process_t* process =
             process_get(pid);

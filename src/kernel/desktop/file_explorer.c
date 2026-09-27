@@ -22,6 +22,15 @@ static void explorer_set_directory(uint32_t id)
     if (!node || node->type != FS_NODE_DIRECTORY)
         return;
 
+    /*
+     * Directory nodes backed by FAT32 are lazy-loaded. Open the directory
+     * through the filesystem layer before changing Explorer state so a
+     * directory that cannot be read is never presented as successfully
+     * opened.
+     */
+    if (filesystem_list(id, 0, 0) < 0)
+        return;
+
     explorer_directory = id;
     explorer_file = -1;
 }

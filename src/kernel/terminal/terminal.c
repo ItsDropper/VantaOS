@@ -566,3 +566,9 @@ size_t terminal_get_cursor_column(void)
 {
     return cursor_column;
 }
+
+
+void terminal_render_for_desktop(void)
+{
+    terminal_render();
+}

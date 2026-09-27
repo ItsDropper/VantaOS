@@ -63,8 +63,7 @@ void kernel_main(multiboot_info_t* mbd)
     int graphics_ready =
         graphics_initialize(mbd);
 
-    terminal_write("Graphics diagnostics:
-");
+    terminal_write("Graphics diagnostics:\n");
     terminal_write("  Multiboot flags: ");
     terminal_write_hex(mbd ? mbd->flags : 0);
     terminal_write("\n");

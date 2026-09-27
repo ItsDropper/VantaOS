@@ -81,6 +81,23 @@ static int process_allocate_common(
     return 1;
 }
 
+static void process_entry_trampoline(void)
+{
+    uint32_t pid =
+        process_current_pid();
+
+    const process_t* process =
+        process_get(pid);
+
+    if (process && process->entry)
+        process->entry();
+
+    process_terminate_current();
+
+    while (1)
+        __asm__ volatile ("hlt");
+}
+
 static void process_prepare_stack(
     process_t* process,
     uintptr_t stack_top
@@ -100,7 +117,8 @@ static void process_prepare_stack(
      */
     *(--stack) = 0x202U;
     *(--stack) = 0x08U;
-    *(--stack) = (uint32_t)(uintptr_t)process->entry;
+    *(--stack) =
+        (uint32_t)(uintptr_t)process_entry_trampoline;
 
     *(--stack) = 0;
     *(--stack) = 0;
@@ -118,7 +136,7 @@ static void process_prepare_stack(
         process->stack_pointer;
 
     process->context.eip =
-        (uint32_t)(uintptr_t)process->entry;
+        (uint32_t)(uintptr_t)process_entry_trampoline;
 
     process->context.eflags = 0x202U;
     process->context.cs = 0x08U;

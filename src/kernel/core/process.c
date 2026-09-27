@@ -258,6 +258,43 @@ void process_block_current(void)
     processes[current_pid].state = PROCESS_SLEEPING;
 }
 
+int process_terminate(uint32_t pid)
+{
+    if (!initialized ||
+        pid == 0 ||
+        pid >= PROCESS_MAX)
+        return 0;
+
+    process_t* process = &processes[pid];
+
+    if (process->state == PROCESS_UNUSED ||
+        process->state == PROCESS_TERMINATED)
+        return 0;
+
+    process->state = PROCESS_TERMINATED;
+
+    if (process->address_space)
+    {
+        paging_destroy_address_space(
+            process->address_space
+        );
+        process->address_space = NULL;
+    }
+
+    if (process->kernel_stack)
+    {
+        kfree(process->kernel_stack);
+        process->kernel_stack = NULL;
+    }
+
+    process->stack_pointer = 0;
+    process->entry = NULL;
+    process->context.esp = 0;
+    process->context.eip = 0;
+
+    return 1;
+}
+
 void process_terminate_current(void)
 {
     if (!initialized ||

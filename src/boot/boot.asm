@@ -19,6 +19,12 @@ extern kernel_main
 _start:
     cli
     mov esp, stack_top
+
+    ; Keep the kernel entry ABI 16-byte aligned.
+    ; stack_top is 16-byte aligned, so reserve 8 bytes before
+    ; pushing the single kernel_main argument. CALL then leaves
+    ; ESP 16-byte aligned at kernel_main entry.
+    sub esp, 8
     push ebx
     call kernel_main
 

@@ -152,19 +152,19 @@ int graphics_initialize(multiboot_info_t* mbd)
     initialized = 0;
 
     /*
-     * Prefer the QEMU/Bochs PCI framebuffer when the device is present.
-     * Multiboot remains the fallback for other framebuffer-capable boots.
+     * GRUB already selected the display mode and gives us the exact
+     * framebuffer physical address, pitch, dimensions and RGB layout.
+     * Use that as the primary path. This is the path VantaOS used before
+     * the PCI/Bochs framebuffer changes.
      */
-    if (graphics_initialize_bochs())
-        return 1;
-
     if (mbd &&
         (mbd->flags & MULTIBOOT_INFO_FRAMEBUFFER) &&
         mbd->framebuffer_addr <= 0xFFFFFFFFULL &&
         mbd->framebuffer_type == 1 &&
         mbd->framebuffer_bpp == 32 &&
         mbd->framebuffer_width != 0 &&
-        mbd->framebuffer_height != 0)
+        mbd->framebuffer_height != 0 &&
+        mbd->framebuffer_pitch >= mbd->framebuffer_width * 4U)
     {
         uint32_t physical = (uint32_t)mbd->framebuffer_addr;
         uint32_t offset = physical & 0xFFFU;
@@ -187,7 +187,9 @@ int graphics_initialize(multiboot_info_t* mbd)
                     return 0;
             }
 
-            framebuffer = (uint8_t*)(GRAPHICS_VIRTUAL_BASE + offset);
+            framebuffer =
+                (uint8_t*)(GRAPHICS_VIRTUAL_BASE + offset);
+
             framebuffer_pitch = mbd->framebuffer_pitch;
             framebuffer_width = mbd->framebuffer_width;
             framebuffer_height = mbd->framebuffer_height;
@@ -202,19 +204,27 @@ int graphics_initialize(multiboot_info_t* mbd)
             cursor_x = (int)framebuffer_width / 2;
             cursor_y = (int)framebuffer_height / 2;
             terminal_x = (int)framebuffer_width / 2 - 440;
+
+            if (terminal_x < 10)
+                terminal_x = 10;
+
             terminal_y = 64;
             terminal_restore_x = terminal_x;
             terminal_restore_y = terminal_y;
             terminal_dragging = 0;
+            cursor_saved_valid = 0;
 
             initialized = 1;
             return 1;
         }
     }
 
-    return 0;
+    /*
+     * Fall back to the QEMU/Bochs device only when GRUB did not provide
+     * a usable direct-RGB framebuffer.
+     */
+    return graphics_initialize_bochs();
 }
-
 
 int graphics_is_initialized(void)
 {

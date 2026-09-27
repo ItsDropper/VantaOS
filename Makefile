@@ -19,8 +19,16 @@ OBJS = boot.o \
        pmm.o \
        paging.o \
        graphics.o \
+       graphics_core.o \
+       graphics_text.o \
+       graphics_input.o \
+       graphics_ui.o \
        heap.o \
        shell.o \
+       shell_core.o \
+       shell_files.o \
+       shell_system.o \
+       shell_commands.o \
        pci.o \
        filesystem.o \
        process.o
@@ -89,3 +97,27 @@ kernel.bin: $(OBJS)
 
 clean:
 	rm -f *.o kernel.bin
+
+graphics_core.o: src/kernel/graphics/graphics_core.c
+	$(CC) $(CFLAGS) -c src/kernel/graphics/graphics_core.c -o graphics_core.o
+
+graphics_text.o: src/kernel/graphics/graphics_text.c
+	$(CC) $(CFLAGS) -c src/kernel/graphics/graphics_text.c -o graphics_text.o
+
+graphics_input.o: src/kernel/graphics/graphics_input.c
+	$(CC) $(CFLAGS) -c src/kernel/graphics/graphics_input.c -o graphics_input.o
+
+graphics_ui.o: src/kernel/graphics/graphics_ui.c
+	$(CC) $(CFLAGS) -c src/kernel/graphics/graphics_ui.c -o graphics_ui.o
+
+shell_core.o: src/kernel/terminal/shell_core.c
+	$(CC) $(CFLAGS) -c src/kernel/terminal/shell_core.c -o shell_core.o
+
+shell_files.o: src/kernel/terminal/shell_files.c
+	$(CC) $(CFLAGS) -c src/kernel/terminal/shell_files.c -o shell_files.o
+
+shell_system.o: src/kernel/terminal/shell_system.c
+	$(CC) $(CFLAGS) -c src/kernel/terminal/shell_system.c -o shell_system.o
+
+shell_commands.o: src/kernel/terminal/shell_commands.c
+	$(CC) $(CFLAGS) -c src/kernel/terminal/shell_commands.c -o shell_commands.o

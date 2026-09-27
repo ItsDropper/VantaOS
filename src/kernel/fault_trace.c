@@ -418,28 +418,9 @@ void fault_trace_draw(
         frame
     );
 
-    if (exception_number == 14)
-    {
-        draw_page_fault_details(
-            right_x,
-            y + 116,
-            frame->error_code
-        );
-    }
-    else
-    {
-        graphics_draw_text(
-            right_x,
-            y + 116,
-            "EXCEPTION DETAILS",
-            0x00F2F5F8, 1
-        );
-
-        graphics_draw_text(
-            right_x,
-            y + 134,
-            exception_name(exception_number),
-            0x00C7CFD7, 1
-        );
-    }
+    draw_raw_diagnostics(
+        right_x,
+        y + 116,
+        frame
+    );
 }

@@ -130,19 +130,23 @@ static void terminal_set_hardware_cursor(
         );
 
     __asm__ volatile (
-        "movb $0x0F, %%al\n"
-        "outb %%al, $0x3D4\n"
-        "movb %0, %%al\n"
-        "outb %%al, $0x3D5\n"
+        "movw $0x3D4, %%dx\\n"
+        "movb $0x0F, %%al\\n"
+        "outb %%al, %%dx\\n"
+        "movb %0, %%al\\n"
+        "movw $0x3D5, %%dx\\n"
+        "outb %%al, %%dx\\n"
 
-        "movb $0x0E, %%al\n"
-        "outb %%al, $0x3D4\n"
-        "movb %1, %%al\n"
-        "outb %%al, $0x3D5\n"
+        "movw $0x3D4, %%dx\\n"
+        "movb $0x0E, %%al\\n"
+        "outb %%al, %%dx\\n"
+        "movb %1, %%al\\n"
+        "movw $0x3D5, %%dx\\n"
+        "outb %%al, %%dx\\n"
         :
         : "r"(low),
           "r"(high)
-        : "al"
+        : "ax", "dx"
     );
 }
 

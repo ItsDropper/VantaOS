@@ -164,25 +164,19 @@ void exception_handler(
     struct exception_frame* frame
 )
 {
-    unsigned int fault_address=0;
-    int has_fault_address=0;
+    /*
+     * TEMPORARY DEBUG MODE:
+     * Bypass the panic renderer completely so faults can be distinguished
+     * from failures inside the panic/graphics path.
+     *
+     * Do not return with IRETD: for an invalid opcode/page fault that would
+     * simply execute the same bad instruction again.
+     */
+    (void)exception_number;
+    (void)frame;
 
-    if(exception_number==14)
-    {
-        __asm__ volatile(
-            "mov %%cr2, %0"
-            : "=r"(fault_address)
-        );
-        has_fault_address=1;
-    }
+    __asm__ volatile("cli");
 
-    kernel_panic(
-        exception_number < 31 ?
-            exception_names[exception_number] :
-            "Unknown CPU exception",
-        exception_number,
-        frame,
-        fault_address,
-        has_fault_address
-    );
+    while (1)
+        __asm__ volatile("hlt");
 }

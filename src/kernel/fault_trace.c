@@ -308,18 +308,17 @@ static void draw_interrupted_stack(
     );
 
     /*
-     * For a no-error-code exception, frame->esp is the value saved
-     * by PUSHA after the stub pushed the synthetic error code.
-     * Therefore the ESP at the moment the CPU took the exception
-     * is frame->esp + 16.
+     * frame->esp points to the first word saved by PUSHA.
      *
-     * For an error-code exception the CPU supplied the error code,
-     * so the interrupted ESP is frame->esp + 12.
+     * PUSHA contributes 32 bytes, then the stub contributes the
+     * synthetic error code for no-error exceptions. The CPU frame
+     * is therefore 32 bytes above frame->esp for this handler.
+     * For CPU-supplied error-code exceptions it is 28 bytes above.
      */
     unsigned int interrupted_esp =
         frame->esp +
         (exception_number == 8 ||
-         (exception_number >= 10 && exception_number <= 14) ? 12U : 16U);
+         (exception_number >= 10 && exception_number <= 14) ? 28U : 32U);
 
     draw_field(x, y + 16, "INTERRUPTED ESP", interrupted_esp);
     draw_field(

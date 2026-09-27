@@ -57,13 +57,14 @@ process_entry_trampoline:
     cld
     pusha
 
-    mov eax, esp
-    push eax
+    ; Pass the current register frame to C, but never replace ESP
+    ; with the C handler's return value. The CPU interrupt frame must
+    ; remain directly below the saved registers for iretd.
+    push esp
     push dword %2
     call interrupt_handler
     add esp, 8
 
-    mov esp, eax
     popa
     iretd
 %endmacro

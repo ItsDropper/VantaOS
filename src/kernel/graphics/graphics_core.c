@@ -287,6 +287,7 @@ int graphics_set_resolution(uint32_t width, uint32_t height)
     framebuffer_pitch = width * 4;
     framebuffer_width = width;
     framebuffer_height = height;
+    mouse_set_resolution_scale(width, height);
     red_position = 16; red_mask_size = 8;
     green_position = 8; green_mask_size = 8;
     blue_position = 0; blue_mask_size = 8;

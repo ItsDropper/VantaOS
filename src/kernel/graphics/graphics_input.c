@@ -14,6 +14,8 @@ extern int explorer_y;
 extern int explorer_drag_offset_x;
 extern int explorer_drag_offset_y;
 extern int explorer_maximized;
+extern int explorer_restore_x;
+extern int explorer_restore_y;
 
 void graphics_mouse_click(int button)
 {

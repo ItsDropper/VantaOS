@@ -26,8 +26,7 @@ void terminal_process_poll_input(void)
 
     while (keyboard_has_event())
     {
-        keyboard_event_t event =
-            keyboard_get_event();
+        keyboard_event_t event = keyboard_get_event();
 
         if (event == KEY_EVENT_PAGE_UP)
             terminal_scroll_up();
@@ -41,8 +40,7 @@ void terminal_process_poll_input(void)
 
     while (keyboard_has_char())
     {
-        char character =
-            keyboard_get_char();
+        char character = keyboard_get_char();
 
         if (character == 27)
         {
@@ -82,18 +80,31 @@ void terminal_process_initialize(void)
 int terminal_process_start(uint32_t parent_pid)
 {
     if (terminal_pid != 0)
-        return (int)terminal_pid;
+    {
+        if (!terminal_process_is_running())
+            terminal_pid = 0;
+        else if (exit_requested)
+        {
+            exit_requested = 0;
+            redraw_requested = 1;
+            terminal_prepare_session();
+            return (int)terminal_pid;
+        }
+        else
+        {
+            return (int)terminal_pid;
+        }
+    }
 
     exit_requested = 0;
     redraw_requested = 1;
     terminal_prepare_session();
 
-    int pid =
-        process_create_kernel(
-            "terminal",
-            parent_pid,
-            terminal_process_main
-        );
+    int pid = process_create_kernel(
+        "terminal",
+        parent_pid,
+        terminal_process_main
+    );
 
     if (pid < 0)
         return -1;
@@ -121,8 +132,7 @@ int terminal_process_is_running(void)
     if (terminal_pid == 0)
         return 0;
 
-    const process_t* process =
-        process_get(terminal_pid);
+    const process_t* process = process_get(terminal_pid);
 
     if (!process)
     {

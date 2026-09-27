@@ -14,6 +14,15 @@
 static int terminal_window_open;
 static int terminal_window_prompted;
 
+static void terminal_prepare_session(void)
+{
+    terminal_reset();
+    shell_initialize();
+    terminal_write("\nVantaOS Terminal\n");
+    shell_show_prompt();
+    terminal_window_prompted = 1;
+}
+
 
 static void terminal_window_draw(void);
 
@@ -42,11 +51,8 @@ static int desktop_try_launch_terminal(void)
      * It is not a scheduled process yet, so do not create a kernel
      * process/address space just to open the window.
      */
-    terminal_reset();
-    shell_initialize();
-
+    terminal_prepare_session();
     terminal_window_open = 1;
-    terminal_window_prompted = 0;
 
     graphics_set_terminal_running(1);
     graphics_select_panel(3);
@@ -241,13 +247,6 @@ static void terminal_process_step(void)
     if (!terminal_window_open)
         return;
 
-    if (!terminal_window_prompted)
-    {
-        terminal_write("\nVantaOS Terminal\n");
-        shell_show_prompt();
-        terminal_window_prompted = 1;
-    }
-
     int changed = 0;
 
     if (keyboard_has_event())
@@ -291,6 +290,7 @@ void desktop_initialize(multiboot_info_t* mbd)
 
     terminal_window_open = 0;
     terminal_window_prompted = 0;
+    terminal_prepare_session();
 }
 
 void desktop_present(void)

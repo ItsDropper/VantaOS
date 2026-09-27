@@ -101,12 +101,9 @@ void kernel_main(multiboot_info_t* mbd)
     desktop_process_initialize();
 
     /*
-     * PID 1 is the kernel idle context. It owns the boot stack and is
-     * never used as the desktop's execution stack.
+     * PID 0 is reserved for the boot context. It is not a schedulable
+     * process and its temporary boot stack is never restored by IRET.
      */
-    if (process_attach_current("idle", 0) < 0)
-        terminal_write("Idle process initialization failed.\n");
-
     boot_memory = read_tsc();
     boot_interrupts = boot_memory;
 
@@ -149,8 +146,8 @@ void kernel_main(multiboot_info_t* mbd)
     desktop_present();
 
     /*
-     * The boot context is now only the idle task. Desktop execution
-     * happens on its own scheduler-managed kernel stack.
+     * The boot context is PID 0 only. Desktop execution begins on its
+     * scheduler-managed kernel stack during the first timer tick.
      */
     while (1)
         __asm__ volatile ("hlt");

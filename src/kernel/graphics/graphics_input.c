@@ -5,8 +5,6 @@
 #include "file_explorer.h"
 #include "pmm.h"
 
-#define FILES_WINDOW_MARGIN 24
-
 /* Explorer window state used by mouse interaction. */
 extern int explorer_dragging;
 extern int explorer_x;
@@ -26,10 +24,57 @@ void graphics_mouse_click(int button)
     int height = (int)framebuffer_height;
     int taskbar_y = height - 64;
 
+    /*
+     * Taskbar owns task switching. This must run before an active-window
+     * handler, otherwise the Explorer window consumes clicks that are
+     * actually on the taskbar.
+     */
+    if (cursor_y >= taskbar_y + 8 && cursor_y < taskbar_y + 56)
+    {
+        int center = width / 2;
+
+        if (cursor_x >= center - 190 && cursor_x < center - 142)
+        {
+            start_menu_open = 1;
+            explorer_dragging = 0;
+            terminal_dragging = 0;
+            return;
+        }
+
+        if (cursor_x >= center - 132 && cursor_x < center - 64)
+        {
+            if (active_panel == 2)
+            {
+                active_panel = 0;
+                explorer_dragging = 0;
+            }
+            else
+            {
+                active_panel = 2;
+                file_explorer_initialize();
+            }
+            return;
+        }
+
+        if (cursor_x >= center - 56 && cursor_x < center + 12)
+        {
+            active_panel = 3;
+            explorer_dragging = 0;
+            graphics_request_terminal_open();
+            return;
+        }
+    }
+
     if (start_menu_open)
     {
-        int menu_w = width-32; if(menu_w>460) menu_w=460;
-        int menu_h = height-72; if(menu_h>500) menu_h=500;
+        int menu_w = width - 32;
+        int menu_h = height - 72;
+
+        if (menu_w > 460)
+            menu_w = 460;
+        if (menu_h > 500)
+            menu_h = 500;
+
         int menu_x = width / 2 - menu_w / 2;
         int menu_y = height - menu_h - 8;
 
@@ -58,6 +103,7 @@ void graphics_mouse_click(int button)
             start_menu_open = 0;
             return;
         }
+
         if (cursor_x >= menu_x + 24 && cursor_x < menu_x + 436 &&
             cursor_y >= menu_y + 272 && cursor_y < menu_y + 326)
         {
@@ -74,110 +120,13 @@ void graphics_mouse_click(int button)
     }
 
     /*
-     * Explorer owns its complete input surface while it is active.
-     * Do not duplicate its window geometry here: the renderer and the
-     * Explorer hit-testing must have exactly one source of truth.
-     * The old outer rectangle could reject valid clicks when the display
-     * geometry changed, causing a redraw with no UI action.
+     * Explorer has one input owner. Its hit-testing, title-bar controls,
+     * sidebar, toolbar and file list all use the same geometry as drawing.
      */
     if (active_panel == 2)
     {
-        int ew, eh, ex, ey;
-        int title = 46;
-        int button = 46;
-        int sidebar = 188;
-        int sidebar_y;
-
-        file_explorer_window_geometry(
-            width, height, &ex, &ey, &ew, &eh);
-
-        /* Window controls and dragging intentionally mirror Terminal. */
-        if (cursor_y >= ey && cursor_y < ey + title)
-        {
-            int close_x = ex + ew - button;
-            int max_x = close_x - button;
-            int min_x = max_x - button;
-
-            if (cursor_x >= close_x && cursor_x < ex + ew)
-            {
-                explorer_dragging = 0;
-                active_panel = 0;
-                return;
-            }
-
-            if (cursor_x >= max_x && cursor_x < close_x)
-            {
-                explorer_dragging = 0;
-
-                if (!explorer_maximized)
-                {
-                    explorer_restore_x = ex;
-                    explorer_restore_y = ey;
-                    explorer_maximized = 1;
-                }
-                else
-                {
-                    explorer_maximized = 0;
-                    explorer_x = explorer_restore_x;
-                    explorer_y = explorer_restore_y;
-                }
-
-                return;
-            }
-
-            if (cursor_x >= min_x && cursor_x < max_x)
-            {
-                /* Minimize only. The Explorer process remains alive. */
-                explorer_dragging = 0;
-                active_panel = 0;
-                return;
-            }
-
-            if (!explorer_maximized &&
-                cursor_x >= ex + 8 &&
-                cursor_x < min_x)
-            {
-                explorer_dragging = 1;
-                explorer_drag_offset_x = cursor_x - ex;
-                explorer_drag_offset_y = cursor_y - ey;
-                return;
-            }
-
-            return;
-        }
-
-        /*
-         * Filesystem/sidebar/content hit testing stays inside Explorer.
-         * graphics_input only owns the window chrome and drag state, exactly
-         * like the Terminal path below.
-         */
         file_explorer_click(cursor_x, cursor_y, width, height);
         return;
-    }
-
-    if (cursor_y >= taskbar_y + 8 && cursor_y < taskbar_y + 56)
-    {
-        int center = width / 2;
-
-        if (cursor_x >= center - 190 && cursor_x < center - 142)
-        {
-            start_menu_open = 1;
-            return;
-        }
-
-        if (cursor_x >= center - 132 && cursor_x < center - 64)
-        {
-            active_panel = 2;
-            file_explorer_initialize();
-            return;
-        }
-
-        if (cursor_x >= center - 56 && cursor_x < center + 12)
-        {
-            active_panel = 3;
-            graphics_request_terminal_open();
-            return;
-        }
     }
 
     if (active_panel == 3)
@@ -199,7 +148,6 @@ void graphics_mouse_click(int button)
             terminal_y_current = 10;
         }
 
-        /* Minimize: keep the terminal process alive and hide its window. */
         if (cursor_x >= terminal_x_current + terminal_w - 140 &&
             cursor_x < terminal_x_current + terminal_w - 96 &&
             cursor_y >= terminal_y_current + 4 &&
@@ -210,7 +158,6 @@ void graphics_mouse_click(int button)
             return;
         }
 
-        /* Maximize / restore. */
         if (cursor_x >= terminal_x_current + terminal_w - 96 &&
             cursor_x < terminal_x_current + terminal_w - 48 &&
             cursor_y >= terminal_y_current + 4 &&
@@ -220,7 +167,6 @@ void graphics_mouse_click(int button)
             return;
         }
 
-        /* Actual close button. */
         if (cursor_x >= terminal_x_current + terminal_w - 48 &&
             cursor_x < terminal_x_current + terminal_w &&
             cursor_y >= terminal_y_current + 4 &&
@@ -232,6 +178,7 @@ void graphics_mouse_click(int button)
             terminal_dragging = 0;
             return;
         }
+
         if (!terminal_maximized &&
             cursor_x >= terminal_x_current + 8 &&
             cursor_x < terminal_x_current + terminal_w - 140 &&
@@ -256,7 +203,8 @@ void graphics_mouse_click(int button)
 
         if (cursor_x >= window_x + window_w - 52 &&
             cursor_x < window_x + window_w &&
-            cursor_y >= window_y && cursor_y < window_y + 44)
+            cursor_y >= window_y &&
+            cursor_y < window_y + 44)
         {
             active_panel = 0;
             return;
@@ -267,38 +215,49 @@ void graphics_mouse_click(int button)
 
     if (active_panel == 4)
     {
-        int window_w=width-32; if(window_w>760) window_w=760;
-        int window_h=height-96; if(window_h>480) window_h=480;
-        int window_x=width/2-window_w/2;
-        int window_y=height/2-window_h/2;
+        int window_w = width - 32;
+        int window_h = height - 96;
 
-        if (cursor_x>=window_x+window_w-52 && cursor_x<window_x+window_w &&
-            cursor_y>=window_y && cursor_y<window_y+44)
+        if (window_w > 760)
+            window_w = 760;
+        if (window_h > 480)
+            window_h = 480;
+
+        int window_x = width / 2 - window_w / 2;
+        int window_y = height / 2 - window_h / 2;
+
+        if (cursor_x >= window_x + window_w - 52 &&
+            cursor_x < window_x + window_w &&
+            cursor_y >= window_y &&
+            cursor_y < window_y + 44)
         {
-            active_panel=0;
+            active_panel = 0;
             return;
         }
 
-        if (cursor_y>=window_y+156 && cursor_y<window_y+210)
+        if (cursor_y >= window_y + 156 &&
+            cursor_y < window_y + 210)
         {
-            for(int i=0;i<3;i++)
+            for (int i = 0; i < 3; i++)
             {
-                int gap=10;
-                int bw=(window_w-56-gap*2)/3;
-                int bx=window_x+28+i*(bw+gap);
-                if(cursor_x>=bx && cursor_x<bx+bw)
+                int gap = 10;
+                int bw = (window_w - 56 - gap * 2) / 3;
+                int bx = window_x + 28 + i * (bw + gap);
+
+                if (cursor_x >= bx && cursor_x < bx + bw)
                 {
-                    settings_resolution_index=i;
-                    graphics_set_resolution(settings_widths[i],settings_heights[i]);
+                    settings_resolution_index = i;
+                    graphics_set_resolution(
+                        settings_widths[i],
+                        settings_heights[i]
+                    );
                     return;
                 }
             }
         }
+
         return;
     }
-
-    if (active_panel == 2)
-        return;
 
     if (cursor_x >= 24 && cursor_x < 112 &&
         cursor_y >= 26 && cursor_y < 108)
@@ -311,8 +270,7 @@ void graphics_mouse_click(int button)
         cursor_y >= 26 && cursor_y < 108)
     {
         active_panel = 2;
-        files_current_dir = filesystem_root();
-        files_open_file = -1;
+        file_explorer_initialize();
         return;
     }
 
@@ -343,23 +301,30 @@ void graphics_mouse_move(int dx, int dy)
     if (cursor_y >= (int)framebuffer_height)
         cursor_y = (int)framebuffer_height - 1;
 
-    if (explorer_dragging && !explorer_maximized && active_panel == 2)
+    if (explorer_dragging && !explorer_maximized)
     {
         explorer_x = cursor_x - explorer_drag_offset_x;
         explorer_y = cursor_y - explorer_drag_offset_y;
 
-        if (explorer_x < 0) explorer_x = 0;
-        if (explorer_y < 0) explorer_y = 0;
-
         int ew, eh, ex, ey;
+
         file_explorer_window_geometry(
             (int)framebuffer_width,
             (int)framebuffer_height,
-            &ex, &ey, &ew, &eh
+            &ex,
+            &ey,
+            &ew,
+            &eh
         );
+
+        if (explorer_x < 0)
+            explorer_x = 0;
+        if (explorer_y < 0)
+            explorer_y = 0;
 
         if (explorer_x + ew > (int)framebuffer_width)
             explorer_x = (int)framebuffer_width - ew;
+
         if (explorer_y + eh > (int)framebuffer_height)
             explorer_y = (int)framebuffer_height - eh;
 
@@ -417,8 +382,10 @@ void graphics_cursor_restore(void)
     for (int y = 0; y < cursor_saved_height; y++)
     {
         volatile uint32_t* row =
-            (volatile uint32_t*)(framebuffer +
-                (cursor_saved_y + y) * framebuffer_pitch);
+            (volatile uint32_t*)(
+                framebuffer +
+                (cursor_saved_y + y) * framebuffer_pitch
+            );
 
         for (int x = 0; x < cursor_saved_width; x++)
             row[cursor_saved_x + x] =
@@ -433,7 +400,6 @@ void graphics_draw_cursor(void)
     if (!initialized)
         return;
 
-    /* The logical pointer is the visual pointer. No host/window offset. */
     int x = cursor_x;
     int y = cursor_y;
 
@@ -456,8 +422,10 @@ void graphics_draw_cursor(void)
     for (int py = 0; py < cursor_saved_height; py++)
     {
         volatile uint32_t* row =
-            (volatile uint32_t*)(framebuffer +
-                (cursor_saved_y + py) * framebuffer_pitch);
+            (volatile uint32_t*)(
+                framebuffer +
+                (cursor_saved_y + py) * framebuffer_pitch
+            );
 
         for (int px = 0; px < cursor_saved_width; px++)
             cursor_saved[py * CURSOR_SAVE_SIZE + px] =

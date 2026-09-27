@@ -20,6 +20,7 @@ static uint32_t explorer_previous_directory;
 static int explorer_has_history;
 static int explorer_file = -1;
 static int explorer_initialized;
+static int explorer_minimized;
 
 static int explorer_directory_for_path(const char* path)
 {
@@ -166,6 +167,7 @@ void file_explorer_initialize(void)
     explorer_previous_directory = explorer_directory;
     explorer_has_history = 0;
     explorer_file = -1;
+    explorer_minimized = 0;
 
     explorer_dragging = 0;
     explorer_drag_offset_x = 0;
@@ -183,6 +185,22 @@ void file_explorer_initialize(void)
 int file_explorer_is_dragging(void)
 {
     return explorer_dragging;
+}
+
+void file_explorer_minimize(void)
+{
+    explorer_dragging = 0;
+    explorer_minimized = 1;
+    active_panel = 0;
+}
+
+void file_explorer_restore(void)
+{
+    if (!explorer_initialized)
+        file_explorer_initialize();
+
+    explorer_minimized = 0;
+    active_panel = 2;
 }
 
 void file_explorer_open_directory(uint32_t id)

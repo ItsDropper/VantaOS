@@ -450,54 +450,46 @@ int file_explorer_click(
 
     int wx = width / 2 - ww / 2;
     int wy = height / 2 - wh / 2;
+    int sidebar_y = wy + FILES_HEADER_HEIGHT;
+    int content_x = wx + FILES_SIDEBAR_WIDTH;
+    int list_y = sidebar_y + FILES_TOOLBAR_HEIGHT;
 
+    /*
+     * Every Explorer click is resolved against the same rectangles used
+     * by file_explorer_draw(). No filesystem lookup is performed until
+     * after the UI hit has been identified.
+     */
     if (x >= wx + ww - 52 &&
         x < wx + ww &&
         y >= wy &&
         y < wy + FILES_HEADER_HEIGHT)
         return 1;
 
-    int sidebar_y = wy + FILES_HEADER_HEIGHT;
-
-    if (x >= wx &&
-        x < wx + FILES_SIDEBAR_WIDTH)
+    if (x >= wx && x < wx + FILES_SIDEBAR_WIDTH)
     {
-        if (y >= sidebar_y + 38 &&
-            y < sidebar_y + 72)
+        if (y >= sidebar_y + 30 && y < sidebar_y + 72)
         {
             explorer_set_directory(filesystem_root());
             return 0;
         }
 
-        if (y >= sidebar_y + 76 &&
-            y < sidebar_y + 110)
+        if (y >= sidebar_y + 72 && y < sidebar_y + 110)
         {
             int id = filesystem_ensure_directory("/system");
             if (id >= 0)
                 explorer_set_directory((uint32_t)id);
             return 0;
-
-            /*
-             * These quick-access entries are only valid when the real
-             * filesystem contains them. Never consume the click as if the
-             * navigation succeeded.
-             */
-            return 0;
         }
 
-        if (y >= sidebar_y + 114 &&
-            y < sidebar_y + 148)
+        if (y >= sidebar_y + 110 && y < sidebar_y + 148)
         {
             int id = filesystem_ensure_directory("/home");
             if (id >= 0)
                 explorer_set_directory((uint32_t)id);
             return 0;
-
-            return 0;
         }
 
-        if (y >= sidebar_y + 188 &&
-            y < sidebar_y + 212)
+        if (y >= sidebar_y + 176 && y < sidebar_y + 212)
         {
             int id = filesystem_ensure_directory("/etc");
             if (id >= 0)
@@ -505,8 +497,7 @@ int file_explorer_click(
             return 0;
         }
 
-        if (y >= sidebar_y + 212 &&
-            y < sidebar_y + 236)
+        if (y >= sidebar_y + 212 && y < sidebar_y + 236)
         {
             int id = filesystem_ensure_directory("/system/drivers");
             if (id >= 0)
@@ -514,8 +505,7 @@ int file_explorer_click(
             return 0;
         }
 
-        if (y >= sidebar_y + 236 &&
-            y < sidebar_y + 260)
+        if (y >= sidebar_y + 236 && y < sidebar_y + 260)
         {
             int id = filesystem_ensure_directory("/system/devices");
             if (id >= 0)
@@ -526,22 +516,19 @@ int file_explorer_click(
         return 0;
     }
 
-    int content_x = wx + FILES_SIDEBAR_WIDTH;
-    int list_y = sidebar_y + FILES_TOOLBAR_HEIGHT;
-
-    if (x >= content_x + 12 &&
-        x < content_x + 46 &&
-        y >= sidebar_y + 6 &&
-        y < sidebar_y + 36)
+    if (x >= content_x + 8 &&
+        x < content_x + 48 &&
+        y >= sidebar_y &&
+        y < sidebar_y + FILES_TOOLBAR_HEIGHT)
     {
         explorer_go_up();
         return 0;
     }
 
-    if (x >= content_x + 52 &&
-        x < content_x + 86 &&
-        y >= sidebar_y + 6 &&
-        y < sidebar_y + 36)
+    if (x >= content_x + 48 &&
+        x < content_x + 92 &&
+        y >= sidebar_y &&
+        y < sidebar_y + FILES_TOOLBAR_HEIGHT)
     {
         explorer_go_up();
         return 0;
@@ -550,13 +537,9 @@ int file_explorer_click(
     if (explorer_file >= 0)
         return 0;
 
-    /*
-     * The clickable list starts exactly where the first row is drawn.
-     * Keep the hit-test independent from the text/icon positions so the
-     * whole row behaves like a real file-manager item.
-     */
     int list_top = list_y + 30;
-    int list_bottom = list_top + FILES_MAX_VISIBLE * FILES_ROW_HEIGHT;
+    int list_bottom =
+        list_top + FILES_MAX_VISIBLE * FILES_ROW_HEIGHT;
 
     if (x < content_x ||
         x >= wx + ww ||
@@ -566,15 +549,14 @@ int file_explorer_click(
 
     int row = (y - list_top) / FILES_ROW_HEIGHT;
 
-    if (row < 0 || row >= FILES_MAX_VISIBLE)
-        return 0;
-
     uint32_t ids[FS_MAX_NODES];
     int count = filesystem_list(
-        explorer_directory, ids, FS_MAX_NODES
+        explorer_directory,
+        ids,
+        FS_MAX_NODES
     );
 
-    if (count < 0 || row >= count)
+    if (count <= 0 || row < 0 || row >= count)
         return 0;
 
     const fs_node_t* node =
@@ -586,16 +568,16 @@ int file_explorer_click(
     if (node->type == FS_NODE_DIRECTORY)
     {
         explorer_set_directory(node->id);
+        return 0;
     }
-    else if (explorer_is_terminal(node->name))
+
+    if (explorer_is_terminal(node->name))
     {
         explorer_file = -1;
         desktop_launch_terminal();
-    }
-    else
-    {
-        explorer_file = (int)node->id;
+        return 0;
     }
 
+    explorer_file = (int)node->id;
     return 0;
 }

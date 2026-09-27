@@ -4,6 +4,7 @@
 #include "process.h"
 #include "mouse.h"
 #include "terminal_process.h"
+#include "file_explorer_process.h"
 
 static uint32_t desktop_pid;
 
@@ -14,6 +15,7 @@ void desktop_process_main(void)
         mouse_process_events();
         terminal_process_poll_input();
         desktop_update();
+        file_explorer_process_step();
         __asm__ volatile ("hlt");
     }
 }
@@ -21,12 +23,15 @@ void desktop_process_main(void)
 void desktop_process_initialize(void)
 {
     desktop_pid = 0;
+    file_explorer_process_initialize();
 }
 
 int desktop_process_start(uint32_t parent_pid)
 {
     if (desktop_pid != 0)
         return (int)desktop_pid;
+
+    file_explorer_process_start(parent_pid);
 
     int pid =
         process_create_kernel(

@@ -454,7 +454,9 @@ int process_stack_is_valid(uint32_t pid)
     uintptr_t stack_base =
         (uintptr_t)process->kernel_stack;
     uintptr_t stack_end =
-        stack_base + PROCESS_STACK_SIZE;
+        process->entry != NULL ?
+        stack_base + PROCESS_STACK_SIZE :
+        (uintptr_t)&stack_top;
     uintptr_t frame =
         (uintptr_t)process->stack_pointer;
 

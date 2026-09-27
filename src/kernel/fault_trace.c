@@ -5,6 +5,16 @@
 
 extern unsigned char _start;
 extern unsigned char _end;
+extern unsigned char _kernel_text_start;
+extern unsigned char _kernel_text_end;
+extern unsigned char stack_bottom;
+extern unsigned char stack_top;
+
+struct descriptor_pointer
+{
+    unsigned short limit;
+    unsigned int base;
+} __attribute__((packed));
 
 static void draw_hex(int x, int y, unsigned int value)
 {
@@ -185,53 +195,74 @@ static void draw_execution_context(
     draw_field(x, y + 234, "EBP", frame->ebp);
 }
 
-static void draw_raw_diagnostics(
+static void draw_instruction_diagnostics(
     int x,
     int y,
     const struct exception_frame* frame
 )
 {
-    extern unsigned char _kernel_text_start;
-    extern unsigned char _kernel_text_end;
-
-    uintptr_t code_start = (uintptr_t)&_kernel_text_start;
-    uintptr_t code_end = (uintptr_t)&_kernel_text_end;
+    uintptr_t image_start = (uintptr_t)&_start;
+    uintptr_t image_end = (uintptr_t)&_end;
+    uintptr_t text_start = (uintptr_t)&_kernel_text_start;
+    uintptr_t text_end = (uintptr_t)&_kernel_text_end;
     uintptr_t eip = (uintptr_t)frame->eip;
 
     graphics_draw_text(
         x, y,
-        "RAW EXECUTION DIAGNOSTICS",
+        "INSTRUCTION DIAGNOSTICS",
         0x00F2F5F8, 1
     );
 
     draw_field(
         x, y + 18,
-        "TEXT START",
-        (unsigned int)code_start
+        "IMAGE START",
+        (unsigned int)image_start
     );
 
     draw_field(
         x, y + 36,
-        "TEXT END",
-        (unsigned int)code_end
+        "IMAGE END",
+        (unsigned int)image_end
     );
 
     draw_field(
         x, y + 54,
-        "EIP OFFSET",
-        eip >= code_start && eip < code_end ?
-            (unsigned int)(eip - code_start) :
+        "TEXT START",
+        (unsigned int)text_start
+    );
+
+    draw_field(
+        x, y + 72,
+        "TEXT END",
+        (unsigned int)text_end
+    );
+
+    draw_field(
+        x, y + 90,
+        "EIP IMAGE OFF",
+        eip >= image_start && eip < image_end ?
+            (unsigned int)(eip - image_start) :
+            0xFFFFFFFFU
+    );
+
+    draw_field(
+        x, y + 108,
+        "EIP TEXT OFF",
+        eip >= text_start && eip < text_end ?
+            (unsigned int)(eip - text_start) :
             0xFFFFFFFFU
     );
 
     /*
-     * Read instruction bytes only when the saved EIP is inside the
-     * executable text range and the whole diagnostic window is mapped.
-     * This keeps the panic path from causing a second page fault.
+     * The previous diagnostic only read bytes when EIP was inside .text.
+     * That hid the most useful evidence for an EIP such as 0x1000D,
+     * because that address is inside the kernel image but before .text.
+     * Reading inside the complete linked image lets us inspect the exact
+     * bytes the CPU was executing, including boot/header corruption.
      */
-    if (eip >= code_start &&
-        eip < code_end &&
-        eip <= code_end - 8U)
+    if (eip >= image_start &&
+        eip < image_end &&
+        eip <= image_end - 8U)
     {
         const unsigned char* bytes =
             (const unsigned char*)eip;
@@ -248,35 +279,17 @@ static void draw_raw_diagnostics(
             ((unsigned int)bytes[6] << 16) |
             ((unsigned int)bytes[7] << 24);
 
-        draw_field(x, y + 72, "CODE BYTES 0", packed0);
-        draw_field(x, y + 90, "CODE BYTES 4", packed1);
+        draw_field(x, y + 126, "BYTES +00", packed0);
+        draw_field(x, y + 144, "BYTES +04", packed1);
     }
     else
     {
         graphics_draw_text(
-            x, y + 72,
+            x, y + 126,
             "CODE BYTES: unavailable",
             0x00FFB4A2, 1
         );
     }
-
-    /*
-     * These are the literal words the exception handler received.
-     * They bypass process/scheduler state entirely and let the next
-     * panic distinguish a bad CPU frame from a bad interpretation.
-     */
-    draw_field(x, y + 108, "RAW +00 EDI", frame->edi);
-    draw_field(x, y + 126, "RAW +04 ESI", frame->esi);
-    draw_field(x, y + 144, "RAW +08 EBP", frame->ebp);
-    draw_field(x, y + 162, "RAW +0C ESP", frame->esp);
-    draw_field(x, y + 180, "RAW +10 EBX", frame->ebx);
-    draw_field(x, y + 198, "RAW +14 EDX", frame->edx);
-    draw_field(x, y + 216, "RAW +18 ECX", frame->ecx);
-    draw_field(x, y + 234, "RAW +1C EAX", frame->eax);
-    draw_field(x, y + 252, "RAW +20 ERR", frame->error_code);
-    draw_field(x, y + 270, "RAW +24 EIP", frame->eip);
-    draw_field(x, y + 288, "RAW +28 CS", frame->cs);
-    draw_field(x, y + 306, "RAW +2C FLAGS", frame->eflags);
 }
 
 static void draw_process_context(
@@ -330,23 +343,138 @@ static void draw_process_context(
         process->stack_pointer
     );
 
+    draw_field(
+        x, y + 90,
+        "PARENT PID",
+        process->parent_pid
+    );
+
+    draw_field(
+        x, y + 108,
+        "ENTRY",
+        (unsigned int)(uintptr_t)process->entry
+    );
+
+    draw_field(
+        x, y + 126,
+        "KSTACK",
+        (unsigned int)(uintptr_t)process->kernel_stack
+    );
+
     if (frame->eip < (uint32_t)(uintptr_t)&_start ||
         frame->eip >= (uint32_t)(uintptr_t)&_end)
     {
         graphics_draw_text(
-            x, y + 90,
+            x, y + 144,
             "EIP IS OUTSIDE KERNEL IMAGE",
             0x00FFB4A2, 1
+        );
+    }
+    else if (
+        frame->eip >= (uint32_t)(uintptr_t)&_kernel_text_start &&
+        frame->eip < (uint32_t)(uintptr_t)&_kernel_text_end)
+    {
+        graphics_draw_text(
+            x, y + 144,
+            "EIP IS INSIDE .TEXT",
+            0x00C7CFD7, 1
         );
     }
     else
     {
         graphics_draw_text(
-            x, y + 90,
-            "EIP IS INSIDE KERNEL IMAGE",
-            0x00C7CFD7, 1
+            x, y + 144,
+            "EIP IS IMAGE DATA/BOOT AREA",
+            0x00FFB4A2, 1
         );
     }
+}
+
+static void draw_machine_state(
+    int x,
+    int y
+)
+{
+    unsigned int cr0;
+    unsigned int cr2;
+    unsigned int cr3;
+    unsigned int cr4;
+    unsigned int ds;
+    unsigned int es;
+    unsigned int fs;
+    unsigned int gs;
+    unsigned int ss;
+    unsigned int tr;
+    unsigned int ldtr;
+    struct descriptor_pointer gdtr;
+    struct descriptor_pointer idtr;
+
+    __asm__ volatile("mov %%cr0, %0" : "=r"(cr0));
+    __asm__ volatile("mov %%cr2, %0" : "=r"(cr2));
+    __asm__ volatile("mov %%cr3, %0" : "=r"(cr3));
+    __asm__ volatile("mov %%cr4, %0" : "=r"(cr4));
+
+    __asm__ volatile("mov %%ds, %0" : "=r"(ds));
+    __asm__ volatile("mov %%es, %0" : "=r"(es));
+    __asm__ volatile("mov %%fs, %0" : "=r"(fs));
+    __asm__ volatile("mov %%gs, %0" : "=r"(gs));
+    __asm__ volatile("mov %%ss, %0" : "=r"(ss));
+    __asm__ volatile("str %0" : "=r"(tr));
+    __asm__ volatile("sldt %0" : "=r"(ldtr));
+
+    __asm__ volatile("sgdt %0" : "=m"(gdtr));
+    __asm__ volatile("sidt %0" : "=m"(idtr));
+
+    graphics_draw_text(
+        x, y,
+        "MACHINE STATE",
+        0x00F2F5F8, 1
+    );
+
+    draw_field(x, y + 18, "CR0", cr0);
+    draw_field(x, y + 36, "CR2", cr2);
+    draw_field(x, y + 54, "CR3", cr3);
+    draw_field(x, y + 72, "CR4", cr4);
+
+    draw_field(x, y + 90, "DS", ds);
+    draw_field(x, y + 108, "ES", es);
+    draw_field(x, y + 126, "FS", fs);
+    draw_field(x, y + 144, "GS", gs);
+
+    draw_field(x, y + 162, "SS", ss);
+    draw_field(x, y + 180, "TR", tr);
+    draw_field(x, y + 198, "LDTR", ldtr);
+    draw_field(x, y + 216, "GDTR BASE", gdtr.base);
+    draw_field(x, y + 234, "GDTR LIMIT", gdtr.limit);
+    draw_field(x, y + 252, "IDTR BASE", idtr.base);
+    draw_field(x, y + 270, "IDTR LIMIT", idtr.limit);
+}
+
+static void draw_raw_frame(
+    int x,
+    int y,
+    const struct exception_frame* frame
+)
+{
+    graphics_draw_text(
+        x, y,
+        "RAW EXCEPTION FRAME",
+        0x00F2F5F8, 1
+    );
+
+    draw_field(x, y + 18, "RAW +00 EDI", frame->edi);
+    draw_field(x, y + 36, "RAW +04 ESI", frame->esi);
+    draw_field(x, y + 54, "RAW +08 EBP", frame->ebp);
+    draw_field(x, y + 72, "RAW +0C ESP", frame->esp);
+    draw_field(x, y + 90, "RAW +10 EBX", frame->ebx);
+    draw_field(x, y + 108, "RAW +14 EDX", frame->edx);
+    draw_field(x, y + 126, "RAW +18 ECX", frame->ecx);
+    draw_field(x, y + 144, "RAW +1C EAX", frame->eax);
+    draw_field(x, y + 162, "RAW +20 ERR", frame->error_code);
+    draw_field(x, y + 180, "RAW +24 EIP", frame->eip);
+    draw_field(x, y + 198, "RAW +28 CS", frame->cs);
+    draw_field(x, y + 216, "RAW +2C FLAGS", frame->eflags);
+    draw_field(x, y + 234, "FRAME PTR", (unsigned int)(uintptr_t)frame);
 }
 
 void fault_trace_draw(
@@ -386,17 +514,6 @@ void fault_trace_draw(
         frame->error_code
     );
 
-    /*
-     * Keep a raw frame sanity check in the panic screen. This deliberately
-     * does not use the process/scheduler state, because those may be the
-     * subsystem that corrupted the frame in the first place.
-     */
-    draw_field(
-        x, y + 72,
-        "FRAME PTR",
-        (unsigned int)(uintptr_t)frame
-    );
-
     if (has_fault_address)
         draw_field(
             x, y + 72,
@@ -418,9 +535,20 @@ void fault_trace_draw(
         frame
     );
 
-    draw_raw_diagnostics(
+    draw_instruction_diagnostics(
         right_x,
-        y + 116,
+        y + 164,
+        frame
+    );
+
+    draw_machine_state(
+        x,
+        y + 370
+    );
+
+    draw_raw_frame(
+        right_x,
+        y + 370,
         frame
     );
 }

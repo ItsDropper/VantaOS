@@ -61,14 +61,15 @@ IRQ_STUB irq12_stub, 44
 
 %macro EXCEPTION_NO_ERROR 1
 exception%1_stub:
+    push dword 0
     pusha
     mov eax, esp
-    push dword 0
     push eax
     push dword %1
     call exception_handler
-    add esp, 12
+    add esp, 8
     popa
+    add esp, 4
     iretd
 %endmacro
 
@@ -81,6 +82,7 @@ exception%1_stub:
     call exception_handler
     add esp, 8
     popa
+    add esp, 4
     iretd
 %endmacro
 

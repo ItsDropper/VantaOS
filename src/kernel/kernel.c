@@ -60,17 +60,24 @@ static void gui_present(void)
 
 static void terminal_open_window(void)
 {
-    if (terminal_pid < 0)
+    /*
+     * The window is an application surface; its visibility must not
+     * depend on a stale process record. If the process was terminated,
+     * create a fresh one before exposing the window.
+     */
+    if (terminal_pid < 0 ||
+        process_get((uint32_t)terminal_pid) == NULL ||
+        process_get((uint32_t)terminal_pid)->state == PROCESS_TERMINATED)
     {
         terminal_pid = process_create_kernel(
             "terminal",
             process_current_pid(),
             terminal_process_step
         );
-
-        if (terminal_pid < 0)
-            return;
     }
+
+    if (terminal_pid < 0)
+        return;
 
     terminal_reset();
     shell_initialize();
@@ -547,6 +554,11 @@ void kernel_main(multiboot_info_t* mbd)
 
             if (desktop_event == KEY_EVENT_TERMINAL)
             {
+                /*
+                 * Route the desktop hotkey through the same application
+                 * launcher used by the GUI. Do not depend on the active
+                 * panel having been changed first.
+                 */
                 terminal_open_window();
                 continue;
             }

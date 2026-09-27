@@ -6,7 +6,10 @@ SECTIONS
     {
         KEEP(*(.text.start))
         KEEP(*(.multiboot))
+
+        _kernel_text_start = .;
         *(.text)
+        _kernel_text_end = .;
     }
 
     .rodata ALIGN(4K) :

@@ -38,6 +38,8 @@ void terminal_redraw_input(const char* text);
  */
 void terminal_set_input_cursor(unsigned int offset);
 
+void terminal_render_for_desktop(void);
+
 size_t terminal_history_count(void);
 int terminal_history_line(size_t line, char* buffer, size_t buffer_size);
 

@@ -371,7 +371,7 @@ void graphics_clear(uint32_t color)
     if (!initialized)
         return;
 
-    uint32_t packed = pack_color(color);
+    uint32_t packed = graphics_pack_color(color);
 
     for (uint32_t y = 0; y < framebuffer_height; y++)
     {
@@ -407,7 +407,7 @@ void graphics_fill_rect(
     if (x0 >= x1 || y0 >= y1)
         return;
 
-    uint32_t packed = pack_color(color);
+    uint32_t packed = graphics_pack_color(color);
 
     for (int py = y0; py < y1; py++)
     {
@@ -427,7 +427,7 @@ void graphics_fill_rounded_rect(int x,int y,int width,int height,int radius,uint
     if (radius * 2 > width) radius = width / 2;
     if (radius * 2 > height) radius = height / 2;
 
-    uint32_t packed = pack_color(color);
+    uint32_t packed = graphics_pack_color(color);
     int x0 = x < 0 ? 0 : x;
     int y0 = y < 0 ? 0 : y;
     int x1 = x + width;

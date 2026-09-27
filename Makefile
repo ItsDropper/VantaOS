@@ -9,6 +9,7 @@ OBJS = boot.o \
        isr.o \
        kernel.o \
        desktop.o \
+       desktop_process.o \
        file_explorer.o \
        gdt.o \
        idt.o \
@@ -56,6 +57,9 @@ kernel.o: src/kernel/kernel.c
 desktop.o: src/kernel/desktop/desktop.c
 	$(CC) $(CFLAGS) -c src/kernel/desktop/desktop.c -o desktop.o
 
+desktop_process.o: src/kernel/desktop/desktop_process.c
+	$(CC) $(CFLAGS) -c src/kernel/desktop/desktop_process.c -o desktop_process.o
+
 file_explorer.o: src/kernel/desktop/file_explorer.c
 	$(CC) $(CFLAGS) -c src/kernel/desktop/file_explorer.c -o file_explorer.o
 
@@ -72,7 +76,7 @@ terminal.o: src/kernel/terminal/terminal.c
 	$(CC) $(CFLAGS) -c src/kernel/terminal/terminal.c -o terminal.o
 
 keyboard.o: src/kernel/drivers/input/keyboard.c
-	$(CC) $(CFLAGS) -c src/kernel/drivers/input/keyboard.c -o keyboard.o
+	$(CC) $(CFLAGS) -c src/kernel/drivers/input/keyboard.c -o mouse.o
 
 mouse.o: src/kernel/drivers/input/mouse.c
 	$(CC) $(CFLAGS) -c src/kernel/drivers/input/mouse.c -o mouse.o
@@ -139,6 +143,9 @@ graphics_text.o: src/kernel/graphics/graphics_text.c
 
 graphics_input.o: src/kernel/graphics/graphics_input.c
 	$(CC) $(CFLAGS) -c src/kernel/graphics/graphics_input.c -o graphics_input.o
+
+graphics_ui.o: src/kernel/graphics/graphics_ui.c
+	$(CC) $(CFLAGS) -c src/kernel/graphics/graphics_ui.c -o graphics_ui.o
 
 graphics_ui.o: src/kernel/graphics/graphics_ui.c
 	$(CC) $(CFLAGS) -c src/kernel/graphics/graphics_ui.c -o graphics_ui.o

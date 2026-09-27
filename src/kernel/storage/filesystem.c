@@ -351,6 +351,39 @@ int filesystem_file_exists(const char* path)
     return filesystem_lookup(path) >= 0;
 }
 
+int filesystem_ensure_directory(const char* path)
+{
+    if (!initialized || !path || path[0] != '/')
+        return -1;
+
+    uint32_t current = filesystem_root();
+    const char* cursor = path;
+    char component[FS_NAME_MAX + 1];
+
+    while (fs_next_component(&cursor, component))
+    {
+        int child = fs_find_child(current, component);
+
+        if (child >= 0)
+        {
+            const fs_node_t* node = filesystem_get_node((uint32_t)child);
+            if (!node || node->type != FS_NODE_DIRECTORY)
+                return -1;
+            current = (uint32_t)child;
+            continue;
+        }
+
+        child = fs_add_node(current, FS_NODE_DIRECTORY, component, 0, 0);
+        if (child < 0)
+            return -1;
+
+        nodes[child].loaded = 1;
+        current = (uint32_t)child;
+    }
+
+    return (int)current;
+}
+
 uint32_t filesystem_root(void)
 {
     return 0;

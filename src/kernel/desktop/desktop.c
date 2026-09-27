@@ -69,8 +69,6 @@ static void terminal_close_window(void)
     desktop_gui_present();
 }
 
-static void terminal_window_draw(void);
-
 
 static void terminal_window_draw(void)
 {
@@ -238,45 +236,6 @@ static void terminal_window_draw(void)
     }
 
     graphics_draw_cursor();
-}
-
-static void terminal_process_step(void)
-{
-    if (!terminal_window_open)
-        return;
-
-    int changed = 0;
-
-    if (keyboard_has_event())
-    {
-        keyboard_event_t event = keyboard_get_event();
-
-        if (event == KEY_EVENT_PAGE_UP)
-            terminal_scroll_up();
-        else if (event == KEY_EVENT_PAGE_DOWN)
-            terminal_scroll_down();
-        else
-            shell_handle_event(event);
-
-        changed = 1;
-    }
-
-    char character = keyboard_get_char();
-
-    if (character != 0)
-    {
-        if (character == 27)
-        {
-            terminal_close_window();
-            return;
-        }
-
-        shell_handle_char(character);
-        changed = 1;
-    }
-
-    if (changed)
-        terminal_window_draw();
 }
 
 void desktop_initialize(multiboot_info_t* mbd)

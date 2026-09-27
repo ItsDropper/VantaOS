@@ -154,3 +154,6 @@ shell_system.o: src/kernel/terminal/shell_system.c
 
 shell_commands.o: src/kernel/terminal/shell_commands.c
 	$(CC) $(CFLAGS) -c src/kernel/terminal/shell_commands.c -o shell_commands.o
+
+fault_trace.o: src/kernel/fault_trace.c
+	gcc -m32 -ffreestanding -fno-pie -fno-stack-protector -nostdlib -Iinclude -c src/kernel/fault_trace.c -o fault_trace.o

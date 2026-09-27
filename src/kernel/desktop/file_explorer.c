@@ -20,12 +20,23 @@ static int explorer_initialized;
 
 void file_explorer_window_geometry(int width, int height, int* x, int* y, int* w, int* h)
 {
+    if (explorer_maximized)
+    {
+        *x = 0;
+        *y = 0;
+        *w = width;
+        *h = height - 64;
+        return;
+    }
+
     *w = width - FILES_WINDOW_MARGIN * 2;
     *h = height - 100;
+
     if (*w > 920) *w = 920;
     if (*h > 560) *h = 560;
-    *x = explorer_maximized ? 0 : (explorer_x >= 0 ? explorer_x : width / 2 - *w / 2);
-    *y = explorer_maximized ? 0 : (explorer_y >= 0 ? explorer_y : height / 2 - *h / 2);
+
+    *x = explorer_x >= 0 ? explorer_x : width / 2 - *w / 2;
+    *y = explorer_y >= 0 ? explorer_y : height / 2 - *h / 2;
 }
 
 
@@ -137,6 +148,10 @@ void file_explorer_initialize(void)
     explorer_y = -1;
     explorer_restore_x = -1;
     explorer_restore_y = -1;
+
+    /* Built-in locations are real filesystem nodes, not UI-only entries. */
+    filesystem_ensure_directory("/system");
+    filesystem_ensure_directory("/home");
 }
 
 void file_explorer_open_directory(uint32_t id)
@@ -469,18 +484,18 @@ int file_explorer_click(
 
     int sidebar_y = wy + FILES_HEADER_HEIGHT;
 
-    if (x >= wx &&
-        x < wx + FILES_SIDEBAR_WIDTH)
+    if (x >= wx && x < wx + FILES_SIDEBAR_WIDTH &&
+        y >= sidebar_y && y < wy + wh)
     {
-        if (y >= sidebar_y + 38 &&
-            y < sidebar_y + 72)
+        int item = (y - sidebar_y - 30) / 38;
+
+        if (item == 0)
         {
             explorer_set_directory(filesystem_root());
             return 0;
         }
 
-        if (y >= sidebar_y + 76 &&
-            y < sidebar_y + 110)
+        if (item == 1)
         {
             int id = filesystem_ensure_directory("/system");
             if (id >= 0)
@@ -488,8 +503,7 @@ int file_explorer_click(
             return 0;
         }
 
-        if (y >= sidebar_y + 114 &&
-            y < sidebar_y + 148)
+        if (item == 2)
         {
             int id = filesystem_ensure_directory("/home");
             if (id >= 0)
@@ -517,7 +531,7 @@ int file_explorer_click(
         y >= sidebar_y + 6 &&
         y < sidebar_y + 36)
     {
-        explorer_go_up();
+        /* Forward is intentionally a no-op until Explorer has history. */
         return 0;
     }
 

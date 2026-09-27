@@ -541,13 +541,11 @@ void kernel_main(multiboot_info_t* mbd)
          * pointer is not aligned with the host pointer.  T is the
          * keyboard launch shortcut for the Terminal application.
          */
-        if (!terminal_window_open &&
-            keyboard_has_char())
+        if (!terminal_window_open && keyboard_has_event())
         {
-            char desktop_char = keyboard_get_char();
+            keyboard_event_t desktop_event = keyboard_get_event();
 
-            if (desktop_char == 't' ||
-                desktop_char == 'T')
+            if (desktop_event == KEY_EVENT_TERMINAL)
             {
                 terminal_open_window();
                 continue;

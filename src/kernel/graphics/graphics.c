@@ -574,6 +574,17 @@ uint32_t graphics_get_height(void)
 {
     return framebuffer_height;
 }
+uint32_t graphics_get_terminal_width(void)
+{
+    return terminal_maximized ? framebuffer_width :
+        (framebuffer_width < 900 ? framebuffer_width - 20 : 880);
+}
+
+uint32_t graphics_get_terminal_height(void)
+{
+    return terminal_maximized ? framebuffer_height :
+        (framebuffer_height < 640 ? framebuffer_height - 20 : 620);
+}
 
 void graphics_clear(uint32_t color)
 {
@@ -761,8 +772,8 @@ void graphics_mouse_click(int button)
 
     if (start_menu_open)
     {
-        int menu_w = 460;
-        int menu_h = 500;
+        int menu_w = width-32; if(menu_w>460) menu_w=460;
+        int menu_h = height-72; if(menu_h>500) menu_h=500;
         int menu_x = width / 2 - menu_w / 2;
         int menu_y = height - menu_h - 8;
 
@@ -834,7 +845,7 @@ void graphics_mouse_click(int button)
 
     if (active_panel == 3)
     {
-        int terminal_w = terminal_maximized ? width : 880;
+        int terminal_w = (int)graphics_get_terminal_width();
         int terminal_x_current = terminal_maximized ? 0 : terminal_x;
         int terminal_y_current = terminal_maximized ? 0 : terminal_y;
 
@@ -906,7 +917,8 @@ void graphics_mouse_click(int button)
 
     if (active_panel == 4)
     {
-        int window_w=760, window_h=480;
+        int window_w=width-32; if(window_w>760) window_w=760;
+        int window_h=height-96; if(window_h>480) window_h=480;
         int window_x=width/2-window_w/2;
         int window_y=height/2-window_h/2;
 
@@ -921,8 +933,10 @@ void graphics_mouse_click(int button)
         {
             for(int i=0;i<3;i++)
             {
-                int bx=window_x+28+i*224;
-                if(cursor_x>=bx && cursor_x<bx+200)
+                int gap=10;
+                int bw=(window_w-56-gap*2)/3;
+                int bx=window_x+28+i*(bw+gap);
+                if(cursor_x>=bx && cursor_x<bx+bw)
                 {
                     settings_resolution_index=i;
                     graphics_set_resolution(settings_widths[i],settings_heights[i]);
@@ -1055,8 +1069,8 @@ void graphics_mouse_move(int dx, int dy)
         if (terminal_y < 0)
             terminal_y = 0;
 
-        int drag_width = 880;
-        int drag_height = 620;
+        int drag_width = (int)graphics_get_terminal_width();
+        int drag_height = (int)graphics_get_terminal_height();
 
         if (drag_width > (int)framebuffer_width)
             drag_width = (int)framebuffer_width;
@@ -1212,8 +1226,9 @@ void graphics_present(void)
     /* Keep the framebuffer on the final background while the desktop is redrawn. */
     graphics_fill_rect(0, 0, w, h, 0x000D1823);
     graphics_fill_rect(0, 0, w, 2, 0x002B80C9);
-    graphics_fill_rect(0, 2, 420, h - 66, 0x000E1C29);
-    graphics_fill_rect(420, 2, 1, h - 66, 0x00142330);
+    int side_w=w<860?w/2:420;
+    graphics_fill_rect(0, 2, side_w, h - 66, 0x000E1C29);
+    graphics_fill_rect(side_w, 2, 1, h - 66, 0x00142330);
 
     graphics_fill_rounded_rect(32, 34, 72, 58, 10, 0x00182A39);
     graphics_fill_rect(50, 49, 36, 25, 0x004B9CD3);
@@ -1234,7 +1249,8 @@ void graphics_present(void)
 
     if (active_panel == 4)
     {
-        int ww=760, wh=480;
+        int ww=w-32; if(ww>760) ww=760;
+        int wh=h-96; if(wh>480) wh=480;
         int wx=w/2-ww/2, wy=h/2-wh/2;
         graphics_fill_rounded_rect(wx,wy,ww,wh,14,0x00161E28);
         graphics_fill_rounded_rect(wx,wy,ww,44,14,0x00212B37);
@@ -1245,10 +1261,11 @@ void graphics_present(void)
         const char* labels[3]={"800x600","1024x768","1280x720"};
         for(int i=0;i<3;i++)
         {
-            int bx=wx+28+i*224;
-            graphics_fill_rounded_rect(bx,wy+156,200,54,10,
+            int gap=10; int bw=(ww-56-gap*2)/3;
+            int bx=wx+28+i*(bw+gap);
+            graphics_fill_rounded_rect(bx,wy+156,bw,54,10,
                 settings_resolution_index==i?0x002B80C9:0x00202C39);
-            graphics_draw_text(bx+54,wy+177,labels[i],0x00FFFFFF,1);
+            graphics_draw_text(bx+18,wy+177,labels[i],0x00FFFFFF,1);
         }
         graphics_draw_text(wx+28,wy+250,"Display mode",0x008EA0B3,1);
         graphics_draw_text(wx+190,wy+250,"VBE framebuffer",0x00F2F5F8,1);

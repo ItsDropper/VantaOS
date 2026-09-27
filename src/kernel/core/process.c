@@ -7,6 +7,7 @@ extern unsigned char stack_bottom;
 extern unsigned char stack_top;
 extern unsigned char _start;
 extern unsigned char _end;
+extern void process_entry_trampoline(void);
 
 static process_t processes[PROCESS_MAX];
 
@@ -99,7 +100,7 @@ static int process_allocate_common(
     return 1;
 }
 
-static void process_entry_trampoline(void)
+void process_entry_dispatch(void)
 {
     uint32_t pid =
         process_current_pid();
@@ -111,11 +112,7 @@ static void process_entry_trampoline(void)
         process->entry();
 
     process_terminate_current();
-
-    while (1)
-        __asm__ volatile ("hlt");
 }
-
 static void process_prepare_stack(
     process_t* process,
     uintptr_t stack_top
@@ -132,15 +129,10 @@ static void process_prepare_stack(
      *   CS
      *   EFLAGS
      *
-     * IRETD then leaves ESP at the first word after the frame.
-     * Reserve that word as the synthetic return-address slot expected
-     * by a normal i386 C function entry. The entry trampoline itself
-     * does not return, but keeping a valid C entry stack makes its
-     * prologue/stack alignment deterministic.
+     * The entry point is a pure assembly trampoline. It performs a
+     * normal CALL into the C process dispatcher, so the C ABI receives
+     * a real return address instead of pretending that IRET was a CALL.
      */
-    stack = (uint32_t*)((uintptr_t)stack - 4U);
-    *stack = 0;
-
     *(--stack) = 0x202U;
     *(--stack) = 0x08U;
     *(--stack) =
@@ -468,15 +460,15 @@ int process_stack_is_valid(uint32_t pid)
         (uintptr_t)process->stack_pointer;
 
     if (frame < stack_base ||
-        frame + 48U > stack_end)
+        frame + 44U > stack_end)
         return 0;
 
     uint32_t* values =
         (uint32_t*)frame;
 
     /*
-     * Both attached and synthetic kernel processes return through the
-     * same IRQ epilogue: POPA followed directly by IRETD.
+     * The scheduler restores a complete IRQ frame and returns through
+     * POPA followed by IRETD.
      */
     if (values[9] != 0x08U ||
         (values[10] & 0x00000200U) == 0)
@@ -492,9 +484,8 @@ int process_stack_is_valid(uint32_t pid)
     }
 
     /*
-     * The desktop process is attached to the boot stack. Its saved frame
-     * is a real timer IRQ frame rather than a synthetic process frame.
-     * Never restore it unless the return address is inside the kernel.
+     * Attached kernel contexts resume from a real timer IRQ frame.
+     * Never restore one unless its return address is inside the kernel.
      */
     uintptr_t eip = (uintptr_t)values[8];
     uintptr_t kernel_start = (uintptr_t)&_start;

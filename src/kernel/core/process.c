@@ -3,18 +3,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-extern unsigned char stack_bottom;
-extern unsigned char stack_top;
-extern unsigned char _start;
-extern unsigned char _end;
-
 static process_t processes[PROCESS_MAX];
 
-/*
- * Kernel thread stacks live in the statically mapped kernel image area.
- * This avoids depending on the virtual heap while the scheduler itself
- * is still bringing process execution online.
- */
 static uint8_t process_stacks[PROCESS_MAX][PROCESS_STACK_SIZE]
     __attribute__((aligned(16)));
 
@@ -80,13 +70,6 @@ static int process_allocate_common(
     process->parent_pid = parent_pid;
     process->state = PROCESS_READY;
     process_copy_name(process->name, name);
-
-    /*
-     * Kernel threads execute entirely in the kernel address space.
-     * Separate CR3/user mappings are not enabled until the user-memory
-     * layer exists. Switching a kernel thread into an empty user
-     * address space would invalidate the kernel's executable mappings.
-     */
     process->address_space =
         paging_get_kernel_address_space();
 
@@ -101,11 +84,8 @@ static int process_allocate_common(
 
 static void process_entry_trampoline(void)
 {
-    uint32_t pid =
-        process_current_pid();
-
-    const process_t* process =
-        process_get(pid);
+    uint32_t pid = process_current_pid();
+    const process_t* process = process_get(pid);
 
     if (process && process->entry)
         process->entry();
@@ -116,6 +96,20 @@ static void process_entry_trampoline(void)
         __asm__ volatile ("hlt");
 }
 
+/*
+ * Build exactly the stack consumed by irq0_stub:
+ *
+ *   PUSHA
+ *   EIP
+ *   CS
+ *   EFLAGS
+ *
+ * IRETD leaves ESP at the first word after that frame. That word is
+ * reserved as the synthetic return-address slot expected by a normal
+ * i386 C function entry. GCC documents a 16-byte preferred stack
+ * boundary for i386, so the process enters with ESP == 12 mod 16,
+ * matching a normal call-return boundary.
+ */
 static void process_prepare_stack(
     process_t* process,
     uintptr_t stack_top
@@ -124,16 +118,9 @@ static void process_prepare_stack(
     uint32_t* stack =
         (uint32_t*)stack_top;
 
-    /*
-     * The scheduler restores this as an IRQ frame:
-     *
-     *   PUSHA
-     *   EIP
-     *   CS
-     *   EFLAGS
-     *
-     * The timer IRQ stub does POPA followed directly by IRETD.
-     */
+    stack = (uint32_t*)((uintptr_t)stack - 4U);
+    *stack = 0;
+
     *(--stack) = 0x202U;
     *(--stack) = 0x08U;
     *(--stack) =
@@ -156,11 +143,11 @@ static void process_prepare_stack(
 
     process->context.eip =
         (uint32_t)(uintptr_t)process_entry_trampoline;
-
     process->context.eflags = 0x202U;
     process->context.cs = 0x08U;
     process->context.ss = 0x10U;
 }
+
 void process_initialize(void)
 {
     initialized = 0;
@@ -178,53 +165,6 @@ void process_initialize(void)
 int process_is_initialized(void)
 {
     return initialized != 0;
-}
-
-int process_attach_current(
-    const char* name,
-    uint32_t parent_pid
-)
-{
-    if (!initialized ||
-        !name ||
-        !name[0])
-        return -1;
-
-    for (uint32_t pid = 1; pid < PROCESS_MAX; pid++)
-    {
-        if (processes[pid].state != PROCESS_UNUSED &&
-            processes[pid].state != PROCESS_TERMINATED)
-            continue;
-
-        process_t* process = &processes[pid];
-
-        if (!process_allocate_common(
-                process, name, parent_pid))
-            return -1;
-
-        uint32_t current_stack;
-
-        __asm__ volatile (
-            "mov %%esp, %0"
-            : "=r"(current_stack)
-        );
-
-        process->state = PROCESS_RUNNING;
-        process->stack_pointer = current_stack;
-        process->context.esp = current_stack;
-        process->context.eip =
-            (uint32_t)(uintptr_t)
-            __builtin_return_address(0);
-
-        process->context.cs = 0x08U;
-        process->context.ss = 0x10U;
-        process->kernel_stack = (void*)(uintptr_t)&stack_bottom;
-
-        current_pid = pid;
-        return (int)pid;
-    }
-
-    return -1;
 }
 
 int process_create_kernel(
@@ -253,7 +193,6 @@ int process_create_kernel(
 
         process->kernel_stack =
             process_stacks[pid];
-
         process->entry = entry;
 
         uintptr_t stack_top =
@@ -306,13 +245,15 @@ int process_mark_ready(uint32_t pid)
 int process_set_running(uint32_t pid)
 {
     if (!initialized ||
+        pid == 0 ||
         pid >= PROCESS_MAX ||
         processes[pid].state == PROCESS_UNUSED ||
         processes[pid].state == PROCESS_TERMINATED)
         return 0;
 
-    if (processes[current_pid].state == PROCESS_RUNNING &&
-        current_pid != pid)
+    if (current_pid != 0 &&
+        current_pid != pid &&
+        processes[current_pid].state == PROCESS_RUNNING)
         processes[current_pid].state = PROCESS_READY;
 
     current_pid = pid;
@@ -332,12 +273,11 @@ int process_switch_to(uint32_t pid)
         processes[pid].state != PROCESS_RUNNING)
         return 0;
 
-    if (current_pid != pid &&
+    if (current_pid != 0 &&
+        current_pid != pid &&
         current_pid < PROCESS_MAX &&
         processes[current_pid].state == PROCESS_RUNNING)
-    {
         processes[current_pid].state = PROCESS_READY;
-    }
 
     current_pid = pid;
     processes[pid].state = PROCESS_RUNNING;
@@ -361,6 +301,7 @@ int process_wake(uint32_t pid)
 void process_block_current(void)
 {
     if (!initialized ||
+        current_pid == 0 ||
         current_pid >= PROCESS_MAX)
         return;
 
@@ -380,13 +321,10 @@ int process_terminate(uint32_t pid)
         process->state == PROCESS_TERMINATED)
         return 0;
 
-    if (pid == current_pid)
-    {
-        process->state = PROCESS_TERMINATED;
-        return 1;
-    }
-
     process->state = PROCESS_TERMINATED;
+
+    if (pid == current_pid)
+        return 1;
 
     return process_reap(pid);
 }
@@ -398,16 +336,8 @@ void process_terminate_current(void)
         current_pid >= PROCESS_MAX)
         return;
 
-    process_t* process = &processes[current_pid];
-
-    if (process->state == PROCESS_UNUSED)
-        return;
-
-    /*
-     * A running process cannot free its own kernel stack or page
-     * directory. The scheduler reaps it after switching away.
-     */
-    process->state = PROCESS_TERMINATED;
+    if (processes[current_pid].state != PROCESS_UNUSED)
+        processes[current_pid].state = PROCESS_TERMINATED;
 }
 
 void process_save_stack(
@@ -416,20 +346,19 @@ void process_save_stack(
 )
 {
     if (!initialized ||
+        pid == 0 ||
         pid >= PROCESS_MAX ||
         processes[pid].state == PROCESS_UNUSED)
         return;
 
-    processes[pid].stack_pointer =
-        stack_pointer;
-
-    processes[pid].context.esp =
-        stack_pointer;
+    processes[pid].stack_pointer = stack_pointer;
+    processes[pid].context.esp = stack_pointer;
 }
 
 uint32_t process_get_stack(uint32_t pid)
 {
     if (!initialized ||
+        pid == 0 ||
         pid >= PROCESS_MAX ||
         processes[pid].state == PROCESS_UNUSED)
         return 0;
@@ -448,52 +377,28 @@ int process_stack_is_valid(uint32_t pid)
 
     if (process->state == PROCESS_UNUSED ||
         process->stack_pointer == 0 ||
-        process->kernel_stack == NULL)
+        process->kernel_stack == NULL ||
+        process->entry == NULL)
         return 0;
 
     uintptr_t stack_base =
         (uintptr_t)process->kernel_stack;
     uintptr_t stack_end =
-        process->entry != NULL ?
-        stack_base + PROCESS_STACK_SIZE :
-        (uintptr_t)&stack_top;
+        stack_base + PROCESS_STACK_SIZE;
     uintptr_t frame =
         (uintptr_t)process->stack_pointer;
 
     if (frame < stack_base ||
-        frame + 44U > stack_end)
+        frame + 48U > stack_end)
         return 0;
 
     uint32_t* values =
         (uint32_t*)frame;
 
-    /*
-     * Both attached and synthetic kernel processes return through the
-     * same IRQ epilogue: POPA followed directly by IRETD.
-     */
-    if (values[9] != 0x08U ||
+    if (values[8] !=
+            (uint32_t)(uintptr_t)process_entry_trampoline ||
+        values[9] != 0x08U ||
         (values[10] & 0x00000200U) == 0)
-        return 0;
-
-    if (process->entry != NULL)
-    {
-        if (values[8] !=
-                (uint32_t)(uintptr_t)process_entry_trampoline)
-            return 0;
-
-        return 1;
-    }
-
-    /*
-     * The desktop process is attached to the boot stack. Its saved frame
-     * is a real timer IRQ frame rather than a synthetic process frame.
-     * Never restore it unless the return address is inside the kernel.
-     */
-    uintptr_t eip = (uintptr_t)values[8];
-    uintptr_t kernel_start = (uintptr_t)&_start;
-    uintptr_t kernel_end = (uintptr_t)&_end;
-
-    if (eip < kernel_start || eip >= kernel_end)
         return 0;
 
     return 1;
@@ -512,32 +417,13 @@ int process_reap(uint32_t pid)
     if (process->state != PROCESS_TERMINATED)
         return 0;
 
-    /*
-     * Kernel processes share the kernel address space and therefore do
-     * not own a page directory to destroy.
-     */
     process->address_space = NULL;
-
     process->kernel_stack = NULL;
 
     process_reset_record(process);
     process->pid = pid;
 
     return 1;
-}
-
-uint32_t process_schedule(uint32_t current_stack)
-{
-    if (!initialized ||
-        current_pid >= PROCESS_MAX)
-        return current_stack;
-
-    process_save_stack(
-        current_pid,
-        current_stack
-    );
-
-    return current_stack;
 }
 
 const process_t* process_get(uint32_t pid)

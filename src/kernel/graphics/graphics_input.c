@@ -61,6 +61,33 @@ void graphics_mouse_click(int button)
         return;
     }
 
+    if (active_panel == 2)
+    {
+        int explorer_w = width - 48;
+        int explorer_h = height - 100;
+
+        if (explorer_w > 920)
+            explorer_w = 920;
+        if (explorer_h > 560)
+            explorer_h = 560;
+
+        int explorer_x = width / 2 - explorer_w / 2;
+        int explorer_y = height / 2 - explorer_h / 2;
+
+        if (cursor_x >= explorer_x &&
+            cursor_x < explorer_x + explorer_w &&
+            cursor_y >= explorer_y &&
+            cursor_y < explorer_y + explorer_h)
+        {
+            if (file_explorer_click(
+                    cursor_x, cursor_y, width, height))
+            {
+                active_panel = 0;
+            }
+            return;
+        }
+    }
+
     if (cursor_y >= taskbar_y + 8 && cursor_y < taskbar_y + 56)
     {
         int center = width / 2;
@@ -89,8 +116,21 @@ void graphics_mouse_click(int button)
     if (active_panel == 3)
     {
         int terminal_w = (int)graphics_get_terminal_width();
+        int terminal_h = (int)graphics_get_terminal_height();
         int terminal_x_current = terminal_maximized ? 0 : terminal_x;
         int terminal_y_current = terminal_maximized ? 0 : terminal_y;
+
+        if (!terminal_maximized && terminal_w > width - 20)
+        {
+            terminal_w = width - 20;
+            terminal_x_current = 10;
+        }
+
+        if (!terminal_maximized && terminal_h > height - 20)
+        {
+            terminal_h = height - 20;
+            terminal_y_current = 10;
+        }
 
         /* Minimize: keep the terminal process alive and hide its window. */
         if (cursor_x >= terminal_x_current + terminal_w - 140 &&
@@ -191,14 +231,7 @@ void graphics_mouse_click(int button)
     }
 
     if (active_panel == 2)
-    {
-        if (file_explorer_click(
-                cursor_x, cursor_y, width, height))
-        {
-            active_panel = 0;
-        }
         return;
-    }
 
     if (cursor_x >= 24 && cursor_x < 112 &&
         cursor_y >= 26 && cursor_y < 108)

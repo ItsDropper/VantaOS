@@ -16,6 +16,7 @@
 #include "vfs.h"
 #include "terminal_process.h"
 #include "desktop.h"
+#include "desktop_process.h"
 
 extern void shell_set_multiboot_info(multiboot_info_t* mbd);
 
@@ -93,12 +94,18 @@ void kernel_main(multiboot_info_t* mbd)
     heap_initialize();
     filesystem_initialize(mbd);
     vfs_initialize();
+
     process_initialize();
     scheduler_initialize();
     terminal_process_initialize();
+    desktop_process_initialize();
 
-    if (process_attach_current("desktop", 0) < 0)
-        terminal_write("Desktop process initialization failed.\n");
+    /*
+     * PID 1 is the kernel idle context. It owns the boot stack and is
+     * never used as the desktop's execution stack.
+     */
+    if (process_attach_current("idle", 0) < 0)
+        terminal_write("Idle process initialization failed.\n");
 
     boot_memory = read_tsc();
     boot_interrupts = boot_memory;
@@ -111,6 +118,9 @@ void kernel_main(multiboot_info_t* mbd)
     boot_shell = read_tsc();
 
     desktop_initialize(mbd);
+
+    if (desktop_process_start(0) < 0)
+        terminal_write("Desktop process initialization failed.\n");
 
     __asm__ volatile ("sti");
 
@@ -138,11 +148,12 @@ void kernel_main(multiboot_info_t* mbd)
 
     desktop_present();
 
+    /*
+     * The boot context is now only the idle task. Desktop execution
+     * happens on its own scheduler-managed kernel stack.
+     */
     while (1)
-    {
-        desktop_update();
         __asm__ volatile ("hlt");
-    }
 }
 
 unsigned long long kernel_boot_start(void)

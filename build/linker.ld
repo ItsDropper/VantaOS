@@ -2,11 +2,6 @@ ENTRY(_start)
 
 SECTIONS
 {
-    /*
-     * Keep the Multiboot header and the ELF entry point in the same
-     * first loaded text segment. This follows the layout used by the
-     * GRUB Multiboot reference example.
-     */
     .text 1M :
     {
         KEEP(*(.text.start))

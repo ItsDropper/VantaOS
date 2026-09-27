@@ -571,6 +571,10 @@ size_t terminal_get_cursor_column(void)
     return cursor_column;
 }
 
+size_t terminal_get_scroll_offset(void)
+{
+    return scroll_offset;
+}
 
 void terminal_render_for_desktop(void)
 {

@@ -1,5 +1,5 @@
 #include "graphics_internal.h"
-#include "filesystem.h"
+#include "filesystem.h"\n#include "file_explorer.h"
 #include "terminal.h"
 #include "process.h"
 #include "pmm.h"
@@ -181,82 +181,7 @@ void graphics_present(void)
     }
 
     if (active_panel == 2)
-    {
-        int ww = 760, wh = 480;
-        int wx = graphics_files_window_x();
-        int wy = graphics_files_window_y();
-
-        graphics_draw_panel(wx, wy, ww, wh);
-
-        graphics_draw_text(wx + 18, wy + 15, "FILES", 0x00FFFFFF, 2);
-        graphics_draw_text(wx + ww - 28, wy + 15, "X", 0x00FFFFFF, 2);
-
-        graphics_fill_rect(wx + 18, wy + 52, 74, 34, 0x00202C39);
-        graphics_draw_text(wx + 34, wy + 64, "<", 0x00FFFFFF, 1);
-
-        const fs_node_t* current =
-            filesystem_get_node(files_current_dir);
-
-        graphics_draw_text(wx + 108, wy + 64,
-            current && current->name[0] ? current->name : "SYSTEM",
-            0x00F2F5F8, 1);
-
-        if (files_open_file >= 0)
-        {
-            const fs_node_t* file =
-                filesystem_get_node((uint32_t)files_open_file);
-
-            if (file)
-            {
-                graphics_draw_text(wx + 28, wy + 112,
-                    file->name, 0x003B82F6, 2);
-
-                char content[FS_FILE_MAX];
-                int bytes = filesystem_read(
-                    file->id, content, sizeof(content));
-
-                if (bytes < 0)
-                    graphics_draw_text(wx + 28, wy + 148,
-                        "Unable to read file.", 0x00F2F5F8, 1);
-                else
-                    graphics_draw_text(wx + 28, wy + 148,
-                        content, 0x00F2F5F8, 1);
-            }
-        }
-        else
-        {
-            uint32_t ids[18];
-            int count = filesystem_list(files_current_dir, ids, 18);
-            if (count < 0) count = 0;
-            if (count > 18) count = 18;
-
-            int row_y = wy + 112;
-
-            for (int i = 0; i < count; i++)
-            {
-                const fs_node_t* node =
-                    filesystem_get_node(ids[i]);
-
-                if (!node)
-                    continue;
-
-                graphics_fill_rect(
-                    wx + 24, row_y + i * 20,
-                    10, 10,
-                    node->type == FS_NODE_DIRECTORY ?
-                    0x005AA9E6 : 0x0095A8BF);
-
-                graphics_draw_text(
-                    wx + 46, row_y + i * 20,
-                    node->name[0] ? node->name : "/",
-                    0x00F2F5F8, 1);
-            }
-
-            if (count == 0)
-                graphics_draw_text(wx + 24, row_y,
-                    "EMPTY", 0x008EA0B3, 1);
-        }
-    }
+        file_explorer_draw(w, h);
 
     graphics_draw_taskbar(taskbar_y, w);
 

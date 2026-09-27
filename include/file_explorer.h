@@ -1,6 +1,8 @@
 #ifndef FILE_EXPLORER_H
 #define FILE_EXPLORER_H
 
+#include <stdint.h>
+
 void file_explorer_initialize(void);
 void file_explorer_open_directory(uint32_t id);
 void file_explorer_draw(int width, int height);

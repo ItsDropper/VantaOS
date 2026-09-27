@@ -1,0 +1,42 @@
+#ifndef SHELL_INTERNAL_H
+#define SHELL_INTERNAL_H
+
+#include "shell.h"
+#include "filesystem.h"
+#include "multiboot.h"
+#include "process.h"
+#include "keyboard.h"
+
+#define SHELL_BUFFER_SIZE 128
+#define SHELL_HISTORY_SIZE 32
+
+extern char shell_buffer[SHELL_BUFFER_SIZE];
+extern unsigned int shell_length;
+extern unsigned int shell_cursor;
+extern char shell_history[SHELL_HISTORY_SIZE][SHELL_BUFFER_SIZE];
+extern unsigned int shell_history_count;
+extern unsigned int shell_history_position;
+extern char shell_history_draft[SHELL_BUFFER_SIZE];
+extern unsigned int shell_history_draft_length;
+extern multiboot_info_t* multiboot_info;
+extern int pmm_initialized;
+extern int pci_initialized;
+extern char shell_cwd[FS_PATH_MAX];
+
+void shell_clear_buffer(void);
+void shell_history_up(void);
+void shell_history_down(void);
+void shell_move_left(void);
+void shell_move_right(void);
+void shell_move_home(void);
+void shell_move_end(void);
+void shell_delete(void);
+void shell_backspace(void);
+void shell_insert_char(char c);
+void shell_execute(void);
+void shell_ps(void);
+void shell_print_decimal(unsigned int value);
+void shell_print_hex64(unsigned long long value);
+int shell_string_equals(const char* a, const char* b);
+
+#endif

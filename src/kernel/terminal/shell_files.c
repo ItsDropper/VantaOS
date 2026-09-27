@@ -255,7 +255,7 @@ void shell_touch(const char* argument)
     char path[FS_PATH_MAX];
     shell_resolve_path(argument, path);
 
-    int existing = filesystem_lookup(path);
+    int existing = vfs_lookup(path);
 
     if (existing >= 0)
     {

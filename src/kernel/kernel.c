@@ -153,14 +153,13 @@ void kernel_main(multiboot_info_t* mbd)
     desktop_present();
 
     /*
-     * PID 2 owns the real desktop thread and its private kernel stack.
-     * PID 1 must remain a pure idle context; executing desktop_process_run()
-     * here would create a second desktop instance on the boot stack.
+     * Run the desktop directly on the known-good boot context for now.
+     * IRQs remain enabled, so keyboard/mouse/timer interrupts still work,
+     * but IRQ0 cannot replace this context while the scheduler is isolated.
      */
     __asm__ volatile ("sti");
 
-    while (1)
-        __asm__ volatile ("hlt");
+    desktop_process_main();
 }
 
 unsigned long long kernel_boot_start(void)

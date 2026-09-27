@@ -340,22 +340,22 @@ static void draw_interrupted_stack(
     draw_field(
         x, y + 80,
         "ESP +00",
-        *(volatile unsigned int*)interrupted_esp
+        *(volatile unsigned int*)(interrupted_esp + 12U)
     );
     draw_field(
         x, y + 96,
         "ESP +04",
-        *(volatile unsigned int*)(interrupted_esp + 4U)
+        *(volatile unsigned int*)(interrupted_esp + 16U)
     );
     draw_field(
         x, y + 112,
         "ESP +08",
-        *(volatile unsigned int*)(interrupted_esp + 8U)
+        *(volatile unsigned int*)(interrupted_esp + 20U)
     );
     draw_field(
         x, y + 128,
         "ESP +0C",
-        *(volatile unsigned int*)(interrupted_esp + 12U)
+        *(volatile unsigned int*)(interrupted_esp + 24U)
     );
 
     unsigned int found = 0;

@@ -57,23 +57,21 @@ process_entry_trampoline:
     cld
     pusha
 
-    /*
-     * Keep the CPU-created return frame at a fixed location. The IRQ
-     * handler may inspect it, but the normal IRQ path must never replace
-     * ESP with an arbitrary C return value. Only a real scheduler switch
-     * is allowed to provide a different frame.
-     */
+    ; * Keep the CPU-created return frame at a fixed location. The IRQ
+    ; * handler may inspect it, but the normal IRQ path must never replace
+    ; * ESP with an arbitrary C return value. Only a real scheduler switch
+    ; * is allowed to provide a different frame.
+    ;
     mov eax, esp
     push eax
     push dword %2
     call interrupt_handler
     add esp, 8
 
-    /*
-     * For ordinary IRQ handling, return through the frame that was
-     * created by this interrupt. This is especially important for the
-     * boot context: its stack is not a scheduler-owned task frame.
-     */
+    ; * For ordinary IRQ handling, return through the frame that was
+    ; * created by this interrupt. This is especially important for the
+    ; * boot context: its stack is not a scheduler-owned task frame.
+    ;
     popa
     iretd
 %endmacro

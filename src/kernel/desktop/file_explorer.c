@@ -323,10 +323,17 @@ void file_explorer_draw(int width, int height)
             );
 
             if (bytes >= 0)
+            {
+                if ((unsigned int)bytes >= sizeof(content))
+                    bytes = (int)sizeof(content) - 1;
+
+                content[bytes] = 0;
+
                 graphics_draw_text(
                     content_x + 18, list_y + 116,
                     content, 0x00F2F5F8, 1
                 );
+            }
             else
                 graphics_draw_text(
                     content_x + 18, list_y + 116,
@@ -531,12 +538,21 @@ int file_explorer_click(
     if (explorer_file >= 0)
         return 0;
 
+    /*
+     * The clickable list starts exactly where the first row is drawn.
+     * Keep the hit-test independent from the text/icon positions so the
+     * whole row behaves like a real file-manager item.
+     */
+    int list_top = list_y + 30;
+    int list_bottom = list_top + FILES_MAX_VISIBLE * FILES_ROW_HEIGHT;
+
     if (x < content_x ||
         x >= wx + ww ||
-        y < list_y + 30)
+        y < list_top ||
+        y >= list_bottom)
         return 0;
 
-    int row = (y - list_y - 30) / FILES_ROW_HEIGHT;
+    int row = (y - list_top) / FILES_ROW_HEIGHT;
 
     if (row < 0 || row >= FILES_MAX_VISIBLE)
         return 0;

@@ -5,20 +5,85 @@
 #include "graphics_internal.h"
 #include <stdint.h>
 
-#define FILES_WINDOW_MARGIN 24
-#define FILES_SIDEBAR_WIDTH 190
-#define FILES_HEADER_HEIGHT 48
-#define FILES_TOOLBAR_HEIGHT 42
-#define FILES_ROW_HEIGHT 32
-#define FILES_MAX_VISIBLE 12
-#define FILES_TITLE_HEIGHT 44
-#define FILES_BUTTON_WIDTH 48
+#define EXPLORER_MARGIN 24
+#define EXPLORER_MAX_WIDTH 960
+#define EXPLORER_MAX_HEIGHT 560
+#define EXPLORER_TITLE 46
+#define EXPLORER_SIDEBAR 188
+#define EXPLORER_TOOLBAR 44
+#define EXPLORER_ROW 34
+#define EXPLORER_BUTTON 46
+#define EXPLORER_MAX_ROWS 12
 
 static uint32_t explorer_directory;
+static uint32_t explorer_previous_directory;
+static int explorer_has_history;
 static int explorer_file = -1;
 static int explorer_initialized;
 
-void file_explorer_window_geometry(int width, int height, int* x, int* y, int* w, int* h)
+static int explorer_directory_for_path(const char* path)
+{
+    return filesystem_ensure_directory(path);
+}
+
+static void explorer_set_directory(uint32_t id, int remember)
+{
+    const fs_node_t* node = filesystem_get_node(id);
+
+    if (!node || node->type != FS_NODE_DIRECTORY)
+        return;
+
+    if (remember && explorer_directory != id)
+    {
+        explorer_previous_directory = explorer_directory;
+        explorer_has_history = 1;
+    }
+
+    explorer_directory = id;
+    explorer_file = -1;
+}
+
+static void explorer_go_back(void)
+{
+    if (!explorer_has_history)
+        return;
+
+    {
+        uint32_t current = explorer_directory;
+        explorer_directory = explorer_previous_directory;
+        explorer_previous_directory = current;
+        explorer_has_history = 0;
+        explorer_file = -1;
+    }
+}
+
+static void explorer_go_up(void)
+{
+    const fs_node_t* node = filesystem_get_node(explorer_directory);
+
+    if (!node || node->id == filesystem_root())
+        return;
+
+    explorer_set_directory(node->parent, 1);
+}
+
+static const char* explorer_location_name(void)
+{
+    const fs_node_t* node;
+
+    if (explorer_directory == filesystem_root())
+        return "C:";
+
+    node = filesystem_get_node(explorer_directory);
+    if (!node || !node->name[0])
+        return "C:";
+
+    return node->name;
+}
+
+void file_explorer_window_geometry(
+    int width, int height,
+    int* x, int* y, int* w, int* h)
 {
     if (explorer_maximized)
     {
@@ -29,119 +94,30 @@ void file_explorer_window_geometry(int width, int height, int* x, int* y, int* w
         return;
     }
 
-    *w = width - FILES_WINDOW_MARGIN * 2;
+    *w = width - EXPLORER_MARGIN * 2;
     *h = height - 100;
 
-    if (*w > 920) *w = 920;
-    if (*h > 560) *h = 560;
+    if (*w > EXPLORER_MAX_WIDTH)
+        *w = EXPLORER_MAX_WIDTH;
+
+    if (*h > EXPLORER_MAX_HEIGHT)
+        *h = EXPLORER_MAX_HEIGHT;
 
     *x = explorer_x >= 0 ? explorer_x : width / 2 - *w / 2;
     *y = explorer_y >= 0 ? explorer_y : height / 2 - *h / 2;
 }
 
-
-static void explorer_set_directory(uint32_t id)
-{
-    const fs_node_t* node = filesystem_get_node(id);
-
-    if (!node || node->type != FS_NODE_DIRECTORY)
-        return;
-
-    /*
-     * Directory nodes backed by FAT32 are lazy-loaded. Open the directory
-     * through the filesystem layer before changing Explorer state so a
-     * directory that cannot be read is never presented as successfully
-     * opened.
-     */
-    explorer_directory = id;
-    explorer_file = -1;
-}
-
-static void explorer_go_up(void)
-{
-    const fs_node_t* node =
-        filesystem_get_node(explorer_directory);
-
-    if (!node || node->id == filesystem_root())
-        return;
-
-    explorer_set_directory(node->parent);
-}
-
-static const char* explorer_directory_name(void)
-{
-    if (explorer_directory == filesystem_root())
-        return "C:";
-
-    const fs_node_t* node =
-        filesystem_get_node(explorer_directory);
-
-    if (!node || !node->name[0])
-        return "C:";
-
-    return node->name;
-}
-
-static void explorer_draw_icon(
-    int x,
-    int y,
-    int directory
-)
-{
-    if (directory)
-    {
-        graphics_fill_rect(x, y + 4, 18, 13, 0x005AA9E6);
-        graphics_fill_rect(x + 2, y + 1, 8, 5, 0x005AA9E6);
-        return;
-    }
-
-    graphics_fill_rect(x + 2, y, 14, 18, 0x0095A8BF);
-    graphics_fill_rect(x + 5, y + 3, 8, 2, 0x00161E28);
-    graphics_fill_rect(x + 5, y + 7, 8, 2, 0x00161E28);
-    graphics_fill_rect(x + 5, y + 11, 6, 2, 0x00161E28);
-}
-
-static void explorer_draw_sidebar_item(
-    int x,
-    int y,
-    const char* label,
-    int selected,
-    int icon_type
-)
-{
-    if (selected)
-        graphics_fill_rounded_rect(
-            x, y, FILES_SIDEBAR_WIDTH - 24, 34, 7,
-            0x00263B50
-        );
-
-    if (icon_type == 0)
-    {
-        graphics_fill_rect(x + 12, y + 9, 14, 12, 0x005AA9E6);
-        graphics_fill_rect(x + 14, y + 7, 7, 4, 0x005AA9E6);
-    }
-    else if (icon_type == 1)
-    {
-        graphics_fill_rect(x + 12, y + 7, 16, 16, 0x003B82F6);
-        graphics_draw_text(x + 15, y + 10, "C", 0x00FFFFFF, 1);
-    }
-    else
-    {
-        graphics_fill_rect(x + 12, y + 7, 16, 16, 0x0057B77E);
-        graphics_draw_text(x + 15, y + 10, "~", 0x00FFFFFF, 1);
-    }
-
-    graphics_draw_text(
-        x + 38, y + 11, label,
-        selected ? 0x00FFFFFF : 0x00B7C5D1, 1
-    );
-}
-
 void file_explorer_initialize(void)
 {
+    if (explorer_initialized)
+        return;
+
     explorer_initialized = 1;
     explorer_directory = filesystem_root();
+    explorer_previous_directory = explorer_directory;
+    explorer_has_history = 0;
     explorer_file = -1;
+
     explorer_dragging = 0;
     explorer_maximized = 0;
     explorer_x = -1;
@@ -149,7 +125,6 @@ void file_explorer_initialize(void)
     explorer_restore_x = -1;
     explorer_restore_y = -1;
 
-    /* Built-in locations are real filesystem nodes, not UI-only entries. */
     filesystem_ensure_directory("/system");
     filesystem_ensure_directory("/home");
 }
@@ -159,262 +134,253 @@ void file_explorer_open_directory(uint32_t id)
     if (!explorer_initialized)
         file_explorer_initialize();
 
-    explorer_set_directory(id);
+    explorer_set_directory(id, 0);
+}
+
+static void explorer_icon(int x, int y, int directory, int selected)
+{
+    uint32_t icon = directory ? 0x005AA9E6 : 0x008EA3B7;
+
+    if (selected)
+        graphics_fill_rounded_rect(
+            x - 6, y - 5, 30, 30, 6, 0x00263B50);
+
+    if (directory)
+    {
+        graphics_fill_rect(x, y + 5, 18, 13, icon);
+        graphics_fill_rect(x + 2, y + 2, 9, 5, icon);
+    }
+    else
+    {
+        graphics_fill_rect(x + 2, y, 14, 18, icon);
+        graphics_fill_rect(x + 5, y + 4, 8, 2, 0x00131D28);
+        graphics_fill_rect(x + 5, y + 8, 8, 2, 0x00131D28);
+        graphics_fill_rect(x + 5, y + 12, 6, 2, 0x00131D28);
+    }
+}
+
+static void explorer_sidebar_item(
+    int x, int y, const char* label, int selected, int type)
+{
+    if (selected)
+        graphics_fill_rounded_rect(
+            x, y, EXPLORER_SIDEBAR - 24, 34, 7, 0x00263B50);
+
+    if (type == 0)
+    {
+        graphics_fill_rect(x + 12, y + 9, 16, 12, 0x005AA9E6);
+        graphics_fill_rect(x + 14, y + 6, 8, 5, 0x005AA9E6);
+    }
+    else if (type == 1)
+    {
+        graphics_fill_rounded_rect(
+            x + 11, y + 7, 18, 18, 4, 0x003B82F6);
+        graphics_draw_text(x + 16, y + 11, "C", 0x00FFFFFF, 1);
+    }
+    else
+    {
+        graphics_fill_rounded_rect(
+            x + 11, y + 7, 18, 18, 4, 0x0057B77E);
+        graphics_draw_text(x + 15, y + 11, "~", 0x00FFFFFF, 1);
+    }
+
+    graphics_draw_text(
+        x + 38, y + 11, label,
+        selected ? 0x00FFFFFF : 0x00B7C5D1, 1);
+}
+
+static void explorer_title(int x, int y, int w)
+{
+    graphics_fill_rect(x, y, w, EXPLORER_TITLE, 0x0019232D);
+    graphics_draw_text(x + 18, y + 15, "FILES", 0x00FFFFFF, 2);
+
+    graphics_fill_rect(x + w - EXPLORER_BUTTON * 3, y,
+        EXPLORER_BUTTON, EXPLORER_TITLE, 0x001D2A36);
+    graphics_fill_rect(x + w - EXPLORER_BUTTON * 2, y,
+        EXPLORER_BUTTON, EXPLORER_TITLE, 0x001D2A36);
+    graphics_fill_rect(x + w - EXPLORER_BUTTON, y,
+        EXPLORER_BUTTON, EXPLORER_TITLE, 0x002A2024);
+
+    graphics_draw_text(
+        x + w - EXPLORER_BUTTON * 3 + 19, y + 16, "_",
+        0x00D8E2EA, 2);
+    graphics_draw_text(
+        x + w - EXPLORER_BUTTON * 2 + 16, y + 15, "[]",
+        0x00D8E2EA, 1);
+    graphics_draw_text(
+        x + w - EXPLORER_BUTTON + 18, y + 15, "X",
+        0x00FFFFFF, 2);
+
+    graphics_fill_rect(x, y + EXPLORER_TITLE - 1, w, 1, 0x003B82F6);
+}
+
+static void explorer_toolbar(int x, int y, int w)
+{
+    int content = x + EXPLORER_SIDEBAR;
+
+    graphics_fill_rect(
+        content, y, w - EXPLORER_SIDEBAR,
+        EXPLORER_TOOLBAR, 0x00141F29);
+
+    graphics_fill_rounded_rect(
+        content + 10, y + 6, 32, 30, 6, 0x00202C39);
+    graphics_draw_text(
+        content + 21, y + 14, "<",
+        explorer_has_history ? 0x00FFFFFF : 0x00677B8D, 1);
+
+    graphics_fill_rounded_rect(
+        content + 48, y + 6, 32, 30, 6, 0x00202C39);
+    graphics_draw_text(
+        content + 59, y + 14, "^", 0x00FFFFFF, 1);
+
+    graphics_fill_rect(
+        content + 90, y + 6,
+        w - EXPLORER_SIDEBAR - 104, 30,
+        0x00202C39);
+
+    graphics_draw_text(
+        content + 103, y + 14,
+        explorer_location_name(), 0x00E7EEF4, 1);
 }
 
 void file_explorer_draw(int width, int height)
 {
+    int ww, wh, wx, wy;
+    int sidebar_y;
+    int content_x;
+    int content_w;
+    int list_y;
+    uint32_t ids[FS_MAX_NODES];
+    int count;
+    int i;
+
     if (!explorer_initialized)
         file_explorer_initialize();
 
-    int ww, wh, wx, wy;
-    explorer_window_geometry(width, height, &wx, &wy, &ww, &wh);
+    file_explorer_window_geometry(
+        width, height, &wx, &wy, &ww, &wh);
 
     graphics_fill_rounded_rect(
-        wx + 7, wy + 9, ww, wh, 12, 0x00000000
-    );
-
+        wx + 7, wy + 9, ww, wh, 12, 0x00000000);
     graphics_fill_rounded_rect(
-        wx, wy, ww, wh, 12, 0x00161E28
-    );
+        wx, wy, ww, wh, 12, 0x00101922);
+
+    explorer_title(wx, wy, ww);
+
+    sidebar_y = wy + EXPLORER_TITLE;
 
     graphics_fill_rect(
-        wx, wy, ww, FILES_HEADER_HEIGHT,
-        0x00212B37
-    );
-
-    graphics_draw_text(wx + 20, wy + 15, "File Explorer", 0x00FFFFFF, 2);
-    graphics_draw_text(wx + ww - 126, wy + 15, "_", 0x00B7C5D1, 2);
-    graphics_draw_text(wx + ww - 82, wy + 14, "[]", 0x00B7C5D1, 1);
-    graphics_draw_text(wx + ww - 30, wy + 15, "X", 0x00FFFFFF, 2);
-    graphics_fill_rect(wx, wy + FILES_TITLE_HEIGHT - 1, ww, 1, 0x003B82F6);
-
-    int sidebar_x = wx;
-    int sidebar_y = wy + FILES_HEADER_HEIGHT;
-    int sidebar_h = wh - FILES_HEADER_HEIGHT;
-
-    graphics_fill_rect(
-        sidebar_x, sidebar_y,
-        FILES_SIDEBAR_WIDTH, sidebar_h,
-        0x00121B24
-    );
+        wx, sidebar_y, EXPLORER_SIDEBAR,
+        wh - EXPLORER_TITLE, 0x00121B24);
 
     graphics_draw_text(
-        sidebar_x + 16, sidebar_y + 22,
-        "QUICK ACCESS", 0x007F95A8, 1
-    );
+        wx + 16, sidebar_y + 22,
+        "LOCATIONS", 0x007F95A8, 1);
 
-    explorer_draw_sidebar_item(
-        sidebar_x + 12, sidebar_y + 38,
-        "C:", explorer_directory == filesystem_root(), 1
-    );
-
-    int system_id = filesystem_ensure_directory("/system");
-    explorer_draw_sidebar_item(
-        sidebar_x + 12, sidebar_y + 76,
-        "System",
-        system_id >= 0 &&
-        explorer_directory == (uint32_t)system_id,
-        0
-    );
-
-    int home_id = filesystem_ensure_directory("/home");
-    explorer_draw_sidebar_item(
-        sidebar_x + 12, sidebar_y + 114,
-        "Home",
-        home_id >= 0 &&
-        explorer_directory == (uint32_t)home_id,
-        2
-    );
-
-    graphics_draw_text(
-        sidebar_x + 16, sidebar_y + 170,
-        "SYSTEM FILES", 0x007F95A8, 1
-    );
-
-    graphics_draw_text(
-        sidebar_x + 16, sidebar_y + 194,
-        "etc", 0x00B7C5D1, 1
-    );
-    graphics_draw_text(
-        sidebar_x + 16, sidebar_y + 218,
-        "drivers", 0x00B7C5D1, 1
-    );
-    graphics_draw_text(
-        sidebar_x + 16, sidebar_y + 242,
-        "devices", 0x00B7C5D1, 1
-    );
-
-    int content_x = wx + FILES_SIDEBAR_WIDTH;
-    int content_w = ww - FILES_SIDEBAR_WIDTH;
-
-    graphics_fill_rect(
-        content_x, sidebar_y,
-        content_w, FILES_TOOLBAR_HEIGHT,
-        0x0019232D
-    );
-
-    graphics_fill_rounded_rect(
-        content_x + 12, sidebar_y + 6, 34, 30, 6,
-        0x00202C39
-    );
-    graphics_draw_text(
-        content_x + 24, sidebar_y + 14,
-        "<", 0x00FFFFFF, 1
-    );
-
-    graphics_fill_rounded_rect(
-        content_x + 52, sidebar_y + 6, 34, 30, 6,
-        0x00202C39
-    );
-    graphics_draw_text(
-        content_x + 64, sidebar_y + 14,
-        "^", 0x00FFFFFF, 1
-    );
-
-    graphics_fill_rect(
-        content_x + 98, sidebar_y + 6,
-        content_w - 112, 30,
-        0x00202C39
-    );
-
-    graphics_draw_text(
-        content_x + 110, sidebar_y + 14,
-        explorer_directory_name(),
-        0x00E7EEF4, 1
-    );
-
-    int list_y = sidebar_y + FILES_TOOLBAR_HEIGHT;
-    graphics_fill_rect(
-        content_x, list_y, content_w,
-        30, 0x001A2633
-    );
-
-    graphics_draw_text(
-        content_x + 18, list_y + 9,
-        "Name", 0x007F95A8, 1
-    );
-    graphics_draw_text(
-        content_x + content_w - 150, list_y + 9,
-        "Type", 0x007F95A8, 1
-    );
-    graphics_draw_text(
-        content_x + content_w - 68, list_y + 9,
-        "Size", 0x007F95A8, 1
-    );
-
-    if (explorer_file >= 0)
     {
-        const fs_node_t* file =
-            filesystem_get_node((uint32_t)explorer_file);
+        int system_id = explorer_directory_for_path("/system");
+        int home_id = explorer_directory_for_path("/home");
 
-        if (file)
-        {
-            graphics_draw_text(
-                content_x + 18, list_y + 54,
-                file->name, 0x005AA9E6, 2
-            );
+        explorer_sidebar_item(
+            wx + 12, sidebar_y + 38,
+            "C:", explorer_directory == filesystem_root(), 1);
 
-            graphics_draw_text(
-                content_x + 18, list_y + 88,
-                "File contents", 0x007F95A8, 1
-            );
+        explorer_sidebar_item(
+            wx + 12, sidebar_y + 76,
+            "System",
+            system_id >= 0 &&
+            explorer_directory == (uint32_t)system_id, 0);
 
-            char content[FS_FILE_MAX];
-            int bytes = filesystem_read(
-                file->id, content, sizeof(content)
-            );
-
-            if (bytes >= 0)
-                graphics_draw_text(
-                    content_x + 18, list_y + 116,
-                    content, 0x00F2F5F8, 1
-                );
-            else
-                graphics_draw_text(
-                    content_x + 18, list_y + 116,
-                    "Unable to read this file.",
-                    0x00F2F5F8, 1
-                );
-
-            graphics_draw_text(
-                content_x + 18, list_y + 150,
-                "Click Up to return to the directory.",
-                0x007F95A8, 1
-            );
-        }
-
-        return;
+        explorer_sidebar_item(
+            wx + 12, sidebar_y + 114,
+            "Home",
+            home_id >= 0 &&
+            explorer_directory == (uint32_t)home_id, 2);
     }
 
-    uint32_t ids[FS_MAX_NODES];
-    int count = filesystem_list(
-        explorer_directory, ids, FS_MAX_NODES
-    );
+    graphics_draw_text(
+        wx + 16, sidebar_y + 172,
+        "SYSTEM", 0x007F95A8, 1);
+    graphics_draw_text(
+        wx + 16, sidebar_y + 198,
+        "/etc", 0x00B7C5D1, 1);
+    graphics_draw_text(
+        wx + 16, sidebar_y + 222,
+        "/drivers", 0x00B7C5D1, 1);
+    graphics_draw_text(
+        wx + 16, sidebar_y + 246,
+        "/devices", 0x00B7C5D1, 1);
 
+    explorer_toolbar(wx, sidebar_y, ww);
+
+    content_x = wx + EXPLORER_SIDEBAR;
+    content_w = ww - EXPLORER_SIDEBAR;
+    list_y = sidebar_y + EXPLORER_TOOLBAR;
+
+    graphics_fill_rect(
+        content_x, list_y, content_w, 32, 0x001A2633);
+    graphics_draw_text(
+        content_x + 18, list_y + 10, "NAME",
+        0x007F95A8, 1);
+    graphics_draw_text(
+        content_x + content_w - 150, list_y + 10, "TYPE",
+        0x007F95A8, 1);
+    graphics_draw_text(
+        content_x + content_w - 66, list_y + 10, "SIZE",
+        0x007F95A8, 1);
+
+    count = filesystem_list(explorer_directory, ids, FS_MAX_NODES);
     if (count < 0)
         count = 0;
+    if (count > EXPLORER_MAX_ROWS)
+        count = EXPLORER_MAX_ROWS;
 
-    if (count > FILES_MAX_VISIBLE)
-        count = FILES_MAX_VISIBLE;
-
-    for (int i = 0; i < count; i++)
+    for (i = 0; i < count; i++)
     {
-        const fs_node_t* node =
-            filesystem_get_node(ids[i]);
+        const fs_node_t* node = filesystem_get_node(ids[i]);
+        int row_y = list_y + 32 + i * EXPLORER_ROW;
 
         if (!node)
             continue;
 
-        int row_y = list_y + 30 + i * FILES_ROW_HEIGHT;
-
         if ((i & 1) == 0)
             graphics_fill_rect(
-                content_x, row_y,
-                content_w, FILES_ROW_HEIGHT,
-                0x0019232D
-            );
+                content_x, row_y, content_w,
+                EXPLORER_ROW, 0x00151F29);
 
-        explorer_draw_icon(
-            content_x + 18,
-            row_y + 7,
-            node->type == FS_NODE_DIRECTORY
-        );
+        explorer_icon(
+            content_x + 18, row_y + 8,
+            node->type == FS_NODE_DIRECTORY,
+            explorer_file == (int)node->id);
 
         graphics_draw_text(
-            content_x + 46, row_y + 10,
+            content_x + 48, row_y + 11,
             node->name[0] ? node->name : "C:",
-            0x00E7EEF4, 1
-        );
+            0x00E7EEF4, 1);
 
         graphics_draw_text(
-            content_x + content_w - 150,
-            row_y + 10,
-            node->type == FS_NODE_DIRECTORY ?
-            "Folder" :
-            "File",
-            0x007F95A8, 1
-        );
+            content_x + content_w - 150, row_y + 11,
+            node->type == FS_NODE_DIRECTORY ? "Folder" : "File",
+            0x007F95A8, 1);
 
         if (node->type != FS_NODE_DIRECTORY)
         {
             char size_text[12];
             unsigned int size = node->size;
-            int pos = 0;
+            int p = 0;
 
             if (size >= 100)
-                size_text[pos++] = (char)('0' + (size / 100) % 10);
-            if (size >= 10 || pos)
-                size_text[pos++] = (char)('0' + (size / 10) % 10);
-            size_text[pos++] = (char)('0' + size % 10);
-            size_text[pos++] = 'B';
-            size_text[pos] = 0;
+                size_text[p++] = (char)('0' + (size / 100) % 10);
+            if (size >= 10 || p)
+                size_text[p++] = (char)('0' + (size / 10) % 10);
+            size_text[p++] = (char)('0' + size % 10);
+            size_text[p++] = 'B';
+            size_text[p] = 0;
 
             graphics_draw_text(
-                content_x + content_w - 68,
-                row_y + 10,
-                size_text, 0x007F95A8, 1
-            );
+                content_x + content_w - 66,
+                row_y + 11, size_text,
+                0x007F95A8, 1);
         }
     }
 
@@ -422,35 +388,41 @@ void file_explorer_draw(int width, int height)
         graphics_draw_text(
             content_x + 20, list_y + 58,
             "This folder is empty.",
-            0x007F95A8, 1
-        );
+            0x007F95A8, 1);
 }
 
-int file_explorer_click(
-    int x,
-    int y,
-    int width,
-    int height
-)
+int file_explorer_click(int x, int y, int width, int height)
 {
     int ww, wh, wx, wy;
-    explorer_window_geometry(width, height, &wx, &wy, &ww, &wh);
+    int sidebar_y;
+    int content_x;
+    int list_y;
 
-    if (y >= wy && y < wy + FILES_HEADER_HEIGHT)
+    if (!explorer_initialized)
+        file_explorer_initialize();
+
+    file_explorer_window_geometry(
+        width, height, &wx, &wy, &ww, &wh);
+
+    if (x < wx || x >= wx + ww || y < wy || y >= wy + wh)
+        return 0;
+
+    if (y < wy + EXPLORER_TITLE)
     {
-        int close_x = wx + ww - FILES_BUTTON_WIDTH;
-        int maximize_x = close_x - FILES_BUTTON_WIDTH;
-        int minimize_x = maximize_x - FILES_BUTTON_WIDTH;
+        int close_x = wx + ww - EXPLORER_BUTTON;
+        int max_x = close_x - EXPLORER_BUTTON;
+        int min_x = max_x - EXPLORER_BUTTON;
 
-        if (x >= close_x && x < wx + ww)
+        if (x >= close_x)
         {
             explorer_dragging = 0;
             return 1;
         }
 
-        if (x >= maximize_x && x < close_x)
+        if (x >= max_x)
         {
             explorer_dragging = 0;
+
             if (!explorer_maximized)
             {
                 explorer_restore_x = wx;
@@ -463,62 +435,69 @@ int file_explorer_click(
                 explorer_x = explorer_restore_x;
                 explorer_y = explorer_restore_y;
             }
+
             return 0;
         }
 
-        if (x >= minimize_x && x < maximize_x)
+        if (x >= min_x)
         {
             explorer_dragging = 0;
             active_panel = 0;
             return 0;
         }
 
-        if (!explorer_maximized && x >= wx && x < minimize_x)
+        if (!explorer_maximized)
         {
             explorer_dragging = 1;
             explorer_drag_offset_x = x - wx;
             explorer_drag_offset_y = y - wy;
         }
+
         return 0;
     }
 
-    int sidebar_y = wy + FILES_HEADER_HEIGHT;
+    sidebar_y = wy + EXPLORER_TITLE;
 
-    if (x >= wx && x < wx + FILES_SIDEBAR_WIDTH &&
-        y >= sidebar_y && y < wy + wh)
+    if (x < wx + EXPLORER_SIDEBAR &&
+        y >= sidebar_y + 38 &&
+        y < sidebar_y + 148)
     {
-        int item = (y - sidebar_y - 30) / 38;
+        int item = (y - sidebar_y - 38) / 38;
 
         if (item == 0)
-        {
-            explorer_set_directory(filesystem_root());
-            return 0;
-        }
+            explorer_set_directory(filesystem_root(), 1);
 
         if (item == 1)
         {
-            int id = filesystem_ensure_directory("/system");
+            int id = explorer_directory_for_path("/system");
             if (id >= 0)
-                explorer_set_directory((uint32_t)id);
-            return 0;
+                explorer_set_directory((uint32_t)id, 1);
         }
 
         if (item == 2)
         {
-            int id = filesystem_ensure_directory("/home");
+            int id = explorer_directory_for_path("/home");
             if (id >= 0)
-                explorer_set_directory((uint32_t)id);
-            return 0;
+                explorer_set_directory((uint32_t)id, 1);
         }
 
         return 0;
     }
 
-    int content_x = wx + FILES_SIDEBAR_WIDTH;
-    int list_y = sidebar_y + FILES_TOOLBAR_HEIGHT;
+    content_x = wx + EXPLORER_SIDEBAR;
+    list_y = sidebar_y + EXPLORER_TOOLBAR;
 
-    if (x >= content_x + 12 &&
-        x < content_x + 46 &&
+    if (x >= content_x + 10 &&
+        x < content_x + 42 &&
+        y >= sidebar_y + 6 &&
+        y < sidebar_y + 36)
+    {
+        explorer_go_back();
+        return 0;
+    }
+
+    if (x >= content_x + 48 &&
+        x < content_x + 80 &&
         y >= sidebar_y + 6 &&
         y < sidebar_y + 36)
     {
@@ -526,46 +505,37 @@ int file_explorer_click(
         return 0;
     }
 
-    if (x >= content_x + 52 &&
-        x < content_x + 86 &&
-        y >= sidebar_y + 6 &&
-        y < sidebar_y + 36)
-    {
-        /* Forward is intentionally a no-op until Explorer has history. */
-        return 0;
-    }
-
-    if (explorer_file >= 0)
-        return 0;
-
     if (x < content_x ||
-        x >= wx + ww ||
-        y < list_y + 30)
+        y < list_y + 32)
         return 0;
 
-    int row = (y - list_y - 30) / FILES_ROW_HEIGHT;
+    {
+        int row = (y - list_y - 32) / EXPLORER_ROW;
+        uint32_t ids[FS_MAX_NODES];
+        int count;
 
-    if (row < 0 || row >= FILES_MAX_VISIBLE)
-        return 0;
+        if (row < 0 || row >= EXPLORER_MAX_ROWS)
+            return 0;
 
-    uint32_t ids[FS_MAX_NODES];
-    int count = filesystem_list(
-        explorer_directory, ids, FS_MAX_NODES
-    );
+        count = filesystem_list(
+            explorer_directory, ids, FS_MAX_NODES);
 
-    if (count < 0 || row >= count)
-        return 0;
+        if (count < 0 || row >= count)
+            return 0;
 
-    const fs_node_t* node =
-        filesystem_get_node(ids[row]);
+        {
+            const fs_node_t* node =
+                filesystem_get_node(ids[row]);
 
-    if (!node)
-        return 0;
+            if (!node)
+                return 0;
 
-    if (node->type == FS_NODE_DIRECTORY)
-        explorer_set_directory(node->id);
-    else
-        explorer_file = (int)node->id;
+            if (node->type == FS_NODE_DIRECTORY)
+                explorer_set_directory(node->id, 1);
+            else
+                explorer_file = (int)node->id;
+        }
+    }
 
     return 0;
 }

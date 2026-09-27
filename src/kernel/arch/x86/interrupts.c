@@ -371,12 +371,12 @@ void kernel_panic(
                 x,
                 info_y + 18,
                 "NUMBER",
-                "see value below"
+                ""
             );
 
             panic_draw_hex(
                 x + 132,
-                info_y + 36,
+                info_y + 18,
                 exception_number
             );
         }
@@ -470,7 +470,8 @@ void kernel_panic(
             1
         );
 
-        return;
+        while (1)
+            __asm__ volatile ("hlt");
     }
 
     terminal_reset();
@@ -516,6 +517,9 @@ void kernel_panic(
     }
 
     terminal_write("\nSYSTEM HALTED\n");
+
+    while (1)
+        __asm__ volatile ("hlt");
 }
 
 void exception_handler(

@@ -3,6 +3,7 @@
 #include "filesystem.h"
 #include "graphics.h"
 #include "graphics_internal.h"
+#include <stdint.h>
 
 #define FILES_WINDOW_MARGIN 24
 #define FILES_SIDEBAR_WIDTH 190
@@ -120,6 +121,14 @@ void file_explorer_initialize(void)
     explorer_initialized = 1;
     explorer_directory = filesystem_root();
     explorer_file = -1;
+}
+
+void file_explorer_open_directory(uint32_t id)
+{
+    if (!explorer_initialized)
+        file_explorer_initialize();
+
+    explorer_set_directory(id);
 }
 
 void file_explorer_draw(int width, int height)

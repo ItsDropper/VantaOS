@@ -2,13 +2,6 @@
 
 #include "interrupts.h"
 
-static void panic_halt(void)
-{
-    __asm__ volatile("cli");
-    while(1)
-        __asm__ volatile("hlt");
-}
-
 void kernel_panic(
     const char* reason,
     unsigned int exception_number,
@@ -22,8 +15,6 @@ void kernel_panic(
     (void)frame;
     (void)fault_address;
     (void)has_fault_address;
-
-    panic_halt();
 }
 
 void exception_handler(
@@ -31,8 +22,5 @@ void exception_handler(
     struct exception_frame* frame
 )
 {
-    (void)exception_number;
-    (void)frame;
-
-    panic_halt();
+    kernel_panic(0, exception_number, frame, 0, 0);
 }

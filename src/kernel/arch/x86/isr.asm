@@ -42,39 +42,29 @@ global exception31_stub
 extern interrupt_handler
 extern exception_handler
 
-irq0_stub:
+%macro IRQ_STUB 2
+%1:
     pusha
-    push dword 32
+    push dword %2
     call interrupt_handler
     add esp, 4
     popa
     iretd
+%endmacro
 
-irq1_stub:
-    pusha
-    push dword 33
-    call interrupt_handler
-    add esp, 4
-    popa
-    iretd
-
-irq12_stub:
-    pusha
-    push dword 44
-    call interrupt_handler
-    add esp, 4
-    popa
-    iretd
+IRQ_STUB irq0_stub, 32
+IRQ_STUB irq1_stub, 33
+IRQ_STUB irq12_stub, 44
 
 %macro EXCEPTION_NO_ERROR 1
 exception%1_stub:
     pusha
+    mov eax, esp
     push dword 0
-    push esp
+    push eax
     push dword %1
     call exception_handler
-    add esp, 8
-    add esp, 4
+    add esp, 12
     popa
     iretd
 %endmacro
@@ -82,11 +72,11 @@ exception%1_stub:
 %macro EXCEPTION_ERROR 1
 exception%1_stub:
     pusha
-    push esp
+    mov eax, esp
+    push eax
     push dword %1
     call exception_handler
     add esp, 8
-    add esp, 4
     popa
     iretd
 %endmacro

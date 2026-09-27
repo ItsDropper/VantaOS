@@ -230,8 +230,7 @@ int process_create_kernel(
     if (!initialized ||
         !name ||
         !name[0] ||
-        !entry ||
-        !heap_is_initialized())
+        !entry)
         return -1;
 
     for (uint32_t pid = 1; pid < PROCESS_MAX; pid++)

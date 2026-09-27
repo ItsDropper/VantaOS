@@ -308,17 +308,14 @@ static void draw_interrupted_stack(
     );
 
     /*
-     * frame->esp points to the first word saved by PUSHA.
+     * Every exception stub reaches this point with one error-code
+     * word immediately below the CPU frame, either synthetic or
+     * supplied by the CPU. PUSHA then adds 32 bytes.
      *
-     * PUSHA contributes 32 bytes, then the stub contributes the
-     * synthetic error code for no-error exceptions. The CPU frame
-     * is therefore 32 bytes above frame->esp for this handler.
-     * For CPU-supplied error-code exceptions it is 28 bytes above.
+     * Therefore the original ESP is always frame->esp + 48.
+     * The CPU-saved EIP/CS/EFLAGS are at original ESP - 12/-8/-4.
      */
-    unsigned int interrupted_esp =
-        frame->esp +
-        (exception_number == 8 ||
-         (exception_number >= 10 && exception_number <= 14) ? 28U : 32U);
+    unsigned int interrupted_esp = frame->esp + 48U;
 
     draw_field(x, y + 16, "INTERRUPTED ESP", interrupted_esp);
     draw_field(
@@ -340,22 +337,22 @@ static void draw_interrupted_stack(
     draw_field(
         x, y + 80,
         "ESP +00",
-        *(volatile unsigned int*)(interrupted_esp + 12U)
+        *(volatile unsigned int*)(interrupted_esp)
     );
     draw_field(
         x, y + 96,
         "ESP +04",
-        *(volatile unsigned int*)(interrupted_esp + 16U)
+        *(volatile unsigned int*)(interrupted_esp + 4U)
     );
     draw_field(
         x, y + 112,
         "ESP +08",
-        *(volatile unsigned int*)(interrupted_esp + 20U)
+        *(volatile unsigned int*)(interrupted_esp + 8U)
     );
     draw_field(
         x, y + 128,
         "ESP +0C",
-        *(volatile unsigned int*)(interrupted_esp + 24U)
+        *(volatile unsigned int*)(interrupted_esp + 12U)
     );
 
     unsigned int found = 0;

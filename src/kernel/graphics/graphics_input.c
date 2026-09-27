@@ -94,8 +94,16 @@ void graphics_mouse_click(int button)
             }
         }
 
+        /*
+         * Explorer handles its own window, including the close button.
+         * Keep this as the only mouse route for the Explorer so clicks
+         * cannot fall through to desktop shortcuts.
+         */
         if (file_explorer_click(cursor_x, cursor_y, width, height))
+        {
             active_panel = 0;
+            return;
+        }
 
         return;
     }

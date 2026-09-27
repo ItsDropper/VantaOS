@@ -132,8 +132,15 @@ static void process_prepare_stack(
      *   CS
      *   EFLAGS
      *
-     * The timer IRQ stub does POPA followed directly by IRETD.
+     * IRETD then leaves ESP at the first word after the frame.
+     * Reserve that word as the synthetic return-address slot expected
+     * by a normal i386 C function entry. The entry trampoline itself
+     * does not return, but keeping a valid C entry stack makes its
+     * prologue/stack alignment deterministic.
      */
+    stack = (uint32_t*)((uintptr_t)stack - 4U);
+    *stack = 0;
+
     *(--stack) = 0x202U;
     *(--stack) = 0x08U;
     *(--stack) =
@@ -461,7 +468,7 @@ int process_stack_is_valid(uint32_t pid)
         (uintptr_t)process->stack_pointer;
 
     if (frame < stack_base ||
-        frame + 44U > stack_end)
+        frame + 48U > stack_end)
         return 0;
 
     uint32_t* values =

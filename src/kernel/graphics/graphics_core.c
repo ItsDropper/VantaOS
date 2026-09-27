@@ -1,6 +1,7 @@
 #include "graphics_internal.h"
 #include "paging.h"
 #include "pci.h"
+#include "mouse.h"
 #include <stdint.h>
 
 #define BOCHS_VBE_INDEX 0x01CE
@@ -35,7 +36,7 @@ void bochs_vbe_write(uint16_t index, uint16_t value)
 
 
 
-inline uint16_t bochs_vbe_read(uint16_t index)
+static inline uint16_t bochs_vbe_read(uint16_t index)
 {
     uint16_t value;
 

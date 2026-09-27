@@ -45,8 +45,6 @@ int terminal_history_line(size_t line, char* buffer, size_t buffer_size);
 
 size_t terminal_get_cursor_line(void);
 size_t terminal_get_cursor_column(void);
-
-size_t terminal_history_count(void);
-int terminal_history_line(size_t line, char* buffer, size_t buffer_size);
+size_t terminal_get_scroll_offset(void);
 
 #endif

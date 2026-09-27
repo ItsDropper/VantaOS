@@ -4,6 +4,10 @@
 #include <stdint.h>
 #include "filesystem.h"
 
+#define VFS_OPEN_READ    0x01U
+#define VFS_OPEN_WRITE   0x02U
+#define VFS_OPEN_TRUNCATE 0x04U
+
 typedef struct
 {
     uint32_t node_id;

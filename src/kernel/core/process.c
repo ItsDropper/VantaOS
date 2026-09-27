@@ -218,6 +218,36 @@ int process_create_kernel(
     return -1;
 }
 
+int process_mark_running(uint32_t pid)
+{
+    if (!initialized ||
+        pid == 0 ||
+        pid >= PROCESS_MAX)
+        return 0;
+
+    if (processes[pid].state == PROCESS_UNUSED ||
+        processes[pid].state == PROCESS_TERMINATED)
+        return 0;
+
+    processes[pid].state = PROCESS_RUNNING;
+    return 1;
+}
+
+int process_mark_ready(uint32_t pid)
+{
+    if (!initialized ||
+        pid == 0 ||
+        pid >= PROCESS_MAX)
+        return 0;
+
+    if (processes[pid].state == PROCESS_UNUSED ||
+        processes[pid].state == PROCESS_TERMINATED)
+        return 0;
+
+    processes[pid].state = PROCESS_READY;
+    return 1;
+}
+
 int process_set_running(uint32_t pid)
 {
     if (!initialized ||

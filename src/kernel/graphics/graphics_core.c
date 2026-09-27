@@ -70,47 +70,26 @@ int graphics_initialize_bochs(void)
         return 0;
 
     bochs_vbe_write(BOCHS_VBE_INDEX_ENABLE, 0);
-
     bochs_vbe_write(BOCHS_VBE_INDEX_XRES, 1024);
     bochs_vbe_write(BOCHS_VBE_INDEX_YRES, 768);
     bochs_vbe_write(BOCHS_VBE_INDEX_BPP, 32);
     bochs_vbe_write(BOCHS_VBE_INDEX_VIRT_WIDTH, 1024);
     bochs_vbe_write(BOCHS_VBE_INDEX_VIRT_HEIGHT, 768);
-
     bochs_vbe_write(BOCHS_VBE_INDEX_ENABLE, BOCHS_VBE_ENABLE_LFB);
 
     /*
-     * Bochs/QEMU VBE exposes the linear framebuffer at the standard
-     * PCI/VBE LFB address 0xE0000000.  The VBE DISPI register at 0x0D
-     * is X_OFFSET, not the framebuffer address, so reading it here
-     * produces a bogus physical address and can corrupt rendering.
+     * This is the framebuffer path used by the known-good graphics
+     * implementation before the later PCI framebuffer changes.
+     * Keep it deterministic instead of depending on PCI enumeration.
      */
-    uint32_t physical = 0;
-
-    for (int i = 0; i < pci_get_device_count(); i++)
-    {
-        const struct pci_device* device = pci_get_device(i);
-
-        if (!device ||
-            device->vendor_id != 0x1234 ||
-            device->device_id != 0x1111 ||
-            device->class_code != 0x03)
-            continue;
-
-        if (pci_get_bar0(device, &physical))
-            break;
-    }
-
-    if (physical == 0)
-        return 0;
-
-    uint32_t offset = physical & 0xFFF;
+    uint32_t physical = 0xE0000000U;
+    uint32_t offset = physical & 0xFFFU;
     uint32_t first_page = physical & 0xFFFFF000U;
-    uint32_t pitch = 1024 * 4;
-    uint64_t bytes = (uint64_t)pitch * 768;
+    uint32_t pitch = 1024U * 4U;
+    uint64_t bytes = (uint64_t)pitch * 768U;
 
     uint32_t pages =
-        (uint32_t)((offset + bytes + 4095) / 4096);
+        (uint32_t)((offset + bytes + 4095U) / 4096U);
 
     if (pages == 0 || pages > GRAPHICS_MAX_PAGES)
         return 0;
@@ -118,8 +97,8 @@ int graphics_initialize_bochs(void)
     for (uint32_t i = 0; i < pages; i++)
     {
         if (!paging_map_page(
-                GRAPHICS_VIRTUAL_BASE + i * 4096,
-                first_page + i * 4096))
+                GRAPHICS_VIRTUAL_BASE + i * 4096U,
+                first_page + i * 4096U))
             return 0;
     }
 
@@ -142,6 +121,7 @@ int graphics_initialize_bochs(void)
     terminal_restore_x = terminal_x;
     terminal_restore_y = terminal_y;
     terminal_dragging = 0;
+    cursor_saved_valid = 0;
 
     initialized = 1;
     return 1;
@@ -152,10 +132,14 @@ int graphics_initialize(multiboot_info_t* mbd)
     initialized = 0;
 
     /*
-     * GRUB already selected the display mode and gives us the exact
-     * framebuffer physical address, pitch, dimensions and RGB layout.
-     * Use that as the primary path. This is the path VantaOS used before
-     * the PCI/Bochs framebuffer changes.
+     * Prefer the deterministic Bochs/QEMU path that was used by the
+     * previously working graphics implementation.
+     */
+    if (graphics_initialize_bochs())
+        return 1;
+
+    /*
+     * GRUB framebuffer is a fallback for non-Bochs framebuffer boots.
      */
     if (mbd &&
         (mbd->flags & MULTIBOOT_INFO_FRAMEBUFFER) &&
@@ -169,7 +153,6 @@ int graphics_initialize(multiboot_info_t* mbd)
         uint32_t physical = (uint32_t)mbd->framebuffer_addr;
         uint32_t offset = physical & 0xFFFU;
         uint32_t first_page = physical & 0xFFFFF000U;
-
         uint64_t bytes =
             (uint64_t)mbd->framebuffer_pitch *
             mbd->framebuffer_height;
@@ -187,9 +170,7 @@ int graphics_initialize(multiboot_info_t* mbd)
                     return 0;
             }
 
-            framebuffer =
-                (uint8_t*)(GRAPHICS_VIRTUAL_BASE + offset);
-
+            framebuffer = (uint8_t*)(GRAPHICS_VIRTUAL_BASE + offset);
             framebuffer_pitch = mbd->framebuffer_pitch;
             framebuffer_width = mbd->framebuffer_width;
             framebuffer_height = mbd->framebuffer_height;
@@ -204,10 +185,8 @@ int graphics_initialize(multiboot_info_t* mbd)
             cursor_x = (int)framebuffer_width / 2;
             cursor_y = (int)framebuffer_height / 2;
             terminal_x = (int)framebuffer_width / 2 - 440;
-
             if (terminal_x < 10)
                 terminal_x = 10;
-
             terminal_y = 64;
             terminal_restore_x = terminal_x;
             terminal_restore_y = terminal_y;
@@ -219,11 +198,7 @@ int graphics_initialize(multiboot_info_t* mbd)
         }
     }
 
-    /*
-     * Fall back to the QEMU/Bochs device only when GRUB did not provide
-     * a usable direct-RGB framebuffer.
-     */
-    return graphics_initialize_bochs();
+    return 0;
 }
 
 int graphics_is_initialized(void)

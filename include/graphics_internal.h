@@ -34,6 +34,7 @@ extern int terminal_restore_x;
 extern int terminal_restore_y;
 extern int terminal_drag_offset_x;
 extern int terminal_drag_offset_y;
+/* File Explorer window state shared with the graphics input and renderer. */
 extern int explorer_dragging;
 extern int explorer_x;
 extern int explorer_y;

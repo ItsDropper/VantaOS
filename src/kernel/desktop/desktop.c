@@ -82,8 +82,8 @@ static void terminal_window_draw(void)
     int width = (int)graphics_get_width();
     int height = (int)graphics_get_height();
 
-    int window_w = graphics_terminal_is_maximized() ? width : 880;
-    int window_h = graphics_terminal_is_maximized() ? height : 620;
+    int window_w = (int)graphics_get_terminal_width();
+    int window_h = (int)graphics_get_terminal_height();
     int window_x = graphics_terminal_is_maximized() ? 0 : graphics_get_terminal_x();
     int window_y = graphics_terminal_is_maximized() ? 0 : graphics_get_terminal_y();
 
@@ -300,6 +300,7 @@ void desktop_present(void)
 
 void desktop_update(void)
 {
+    mouse_set_resolution_scale(graphics_get_width(), graphics_get_height());
     /*
      * Desktop-level keyboard events are consumed before application
      * input. This makes the Terminal shortcut an actual desktop action

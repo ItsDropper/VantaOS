@@ -16,6 +16,11 @@ int pmm_initialized;
 int pci_initialized;
 char shell_cwd[FS_PATH_MAX] = "/";
 
+void shell_set_multiboot_info(multiboot_info_t* mbd)
+{
+    multiboot_info = mbd;
+}
+
 void shell_initialize(void)
 {
     pmm_initialized = pmm_is_initialized();

@@ -2,36 +2,47 @@ ENTRY(_start)
 
 SECTIONS
 {
-    /* The kernel is loaded at 1 MiB by GRUB/multiboot */
-    . = 1M;
-
-    /* Multiboot header must come first, followed by .text */
-    .text BLOCK(4K) : ALIGN(4K)
+    /*
+     * Keep the Multiboot header at the beginning of the loaded image.
+     * GRUB requires the complete header to be within the first 8192
+     * bytes and 32-bit aligned.
+     */
+    .multiboot 1M :
     {
-        *(.multiboot)
+        KEEP(*(.multiboot))
+    }
+
+    /*
+     * Start executable kernel code on its own aligned section.
+     *
+     * Previously .multiboot and .text were merged into one output
+     * section. That put _start immediately after the 12-byte header.
+     * Keeping the boot entry in a dedicated section makes the ELF
+     * entry address unambiguous and prevents the CPU from ever being
+     * directed into the middle of the Multiboot header/startup bytes.
+     */
+    .text ALIGN(4K) :
+    {
+        KEEP(*(.text.start))
         *(.text)
     }
 
-    /* Read-only data */
-    .rodata BLOCK(4K) : ALIGN(4K)
+    .rodata ALIGN(4K) :
     {
         *(.rodata)
     }
 
-    /* Read-write initialized data */
-    .data BLOCK(4K) : ALIGN(4K)
+    .data ALIGN(4K) :
     {
         *(.data)
     }
 
-    /* Read-write uninitialized data and stack */
-    .bss BLOCK(4K) : ALIGN(4K)
+    .bss ALIGN(4K) :
     {
         *(COMMON)
         *(.bss)
     }
 
-    /* Define 'end' symbol right after the last kernel section */
     _end = .;
     end = .;
 }

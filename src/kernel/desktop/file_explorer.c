@@ -24,8 +24,8 @@ static void explorer_window_geometry(int width, int height, int* x, int* y, int*
     *h = height - 100;
     if (*w > 920) *w = 920;
     if (*h > 560) *h = 560;
-    *x = explorer_maximized ? 0 : (explorer_x != 0 ? explorer_x : width / 2 - *w / 2);
-    *y = explorer_maximized ? 0 : (explorer_y != 0 ? explorer_y : height / 2 - *h / 2);
+    *x = explorer_maximized ? 0 : (explorer_x >= 0 ? explorer_x : width / 2 - *w / 2);
+    *y = explorer_maximized ? 0 : (explorer_y >= 0 ? explorer_y : height / 2 - *h / 2);
 }
 
 
@@ -42,9 +42,6 @@ static void explorer_set_directory(uint32_t id)
      * directory that cannot be read is never presented as successfully
      * opened.
      */
-    if (filesystem_list(id, 0, 0) < 0)
-        return;
-
     explorer_directory = id;
     explorer_file = -1;
 }
@@ -136,8 +133,10 @@ void file_explorer_initialize(void)
     explorer_file = -1;
     explorer_dragging = 0;
     explorer_maximized = 0;
-    explorer_x = 0;
-    explorer_y = 0;
+    explorer_x = -1;
+    explorer_y = -1;
+    explorer_restore_x = -1;
+    explorer_restore_y = -1;
 }
 
 void file_explorer_open_directory(uint32_t id)
@@ -422,30 +421,44 @@ int file_explorer_click(
     int ww, wh, wx, wy;
     explorer_window_geometry(width, height, &wx, &wy, &ww, &wh);
 
-    if (y >= wy && y < wy + FILES_TITLE_HEIGHT)
+    if (y >= wy && y < wy + FILES_HEADER_HEIGHT)
     {
-        if (x >= wx + ww - FILES_BUTTON_WIDTH && x < wx + ww)
-            return 1;
+        int close_x = wx + ww - FILES_BUTTON_WIDTH;
+        int maximize_x = close_x - FILES_BUTTON_WIDTH;
+        int minimize_x = maximize_x - FILES_BUTTON_WIDTH;
 
-        if (x >= wx + ww - FILES_BUTTON_WIDTH * 2 &&
-            x < wx + ww - FILES_BUTTON_WIDTH)
+        if (x >= close_x && x < wx + ww)
         {
-            explorer_maximized = !explorer_maximized;
             explorer_dragging = 0;
+            return 1;
+        }
+
+        if (x >= maximize_x && x < close_x)
+        {
+            explorer_dragging = 0;
+            if (!explorer_maximized)
+            {
+                explorer_restore_x = wx;
+                explorer_restore_y = wy;
+                explorer_maximized = 1;
+            }
+            else
+            {
+                explorer_maximized = 0;
+                explorer_x = explorer_restore_x;
+                explorer_y = explorer_restore_y;
+            }
             return 0;
         }
 
-        if (x >= wx + ww - FILES_BUTTON_WIDTH * 3 &&
-            x < wx + ww - FILES_BUTTON_WIDTH * 2)
+        if (x >= minimize_x && x < maximize_x)
         {
             explorer_dragging = 0;
             active_panel = 0;
             return 0;
         }
 
-        if (!explorer_maximized &&
-            x >= wx + 8 &&
-            x < wx + ww - FILES_BUTTON_WIDTH * 3)
+        if (!explorer_maximized && x >= wx && x < minimize_x)
         {
             explorer_dragging = 1;
             explorer_drag_offset_x = x - wx;

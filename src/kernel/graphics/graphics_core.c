@@ -152,18 +152,12 @@ int graphics_initialize(multiboot_info_t* mbd)
     initialized = 0;
 
     /*
-     * On QEMU Standard VGA, PCI BAR0 is the authoritative framebuffer
-     * location. Prefer it over the Multiboot framebuffer address so the
-     * kernel does not depend on whichever mode GRUB happened to leave
-     * active. QEMU documents PCI region 0 as the framebuffer BAR.
+     * Prefer the QEMU/Bochs PCI framebuffer when the device is present.
+     * Multiboot remains the fallback for other framebuffer-capable boots.
      */
     if (graphics_initialize_bochs())
         return 1;
 
-    /*
-     * Keep the Multiboot framebuffer as a fallback for non-QEMU
-     * framebuffer-capable boot environments.
-     */
     if (mbd &&
         (mbd->flags & MULTIBOOT_INFO_FRAMEBUFFER) &&
         mbd->framebuffer_addr <= 0xFFFFFFFFULL &&
@@ -193,8 +187,7 @@ int graphics_initialize(multiboot_info_t* mbd)
                     return 0;
             }
 
-            framebuffer =
-                (uint8_t*)(GRAPHICS_VIRTUAL_BASE + offset);
+            framebuffer = (uint8_t*)(GRAPHICS_VIRTUAL_BASE + offset);
             framebuffer_pitch = mbd->framebuffer_pitch;
             framebuffer_width = mbd->framebuffer_width;
             framebuffer_height = mbd->framebuffer_height;
@@ -221,4 +214,3 @@ int graphics_initialize(multiboot_info_t* mbd)
 
     return 0;
 }
-

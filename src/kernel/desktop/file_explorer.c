@@ -18,7 +18,7 @@ static uint32_t explorer_directory;
 static int explorer_file = -1;
 static int explorer_initialized;
 
-static void explorer_window_geometry(int width, int height, int* x, int* y, int* w, int* h)
+void file_explorer_window_geometry(int width, int height, int* x, int* y, int* w, int* h)
 {
     *w = width - FILES_WINDOW_MARGIN * 2;
     *h = height - 100;

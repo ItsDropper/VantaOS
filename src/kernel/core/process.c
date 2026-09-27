@@ -431,6 +431,54 @@ uint32_t process_get_stack(uint32_t pid)
     return processes[pid].stack_pointer;
 }
 
+int process_stack_is_valid(uint32_t pid)
+{
+    if (!initialized ||
+        pid == 0 ||
+        pid >= PROCESS_MAX)
+        return 0;
+
+    process_t* process = &processes[pid];
+
+    if (process->state == PROCESS_UNUSED ||
+        process->stack_pointer == 0 ||
+        process->kernel_stack == NULL ||
+        process->entry == NULL)
+        return 0;
+
+    uintptr_t stack_base =
+        (uintptr_t)process->kernel_stack;
+
+    uintptr_t stack_end =
+        stack_base + PROCESS_STACK_SIZE;
+
+    uintptr_t frame =
+        (uintptr_t)process->stack_pointer;
+
+    if (frame < stack_base ||
+        frame + 44U > stack_end)
+        return 0;
+
+    uint32_t* values =
+        (uint32_t*)frame;
+
+    /*
+     * The scheduler restores this exact layout:
+     *
+     * 0..7   = POPAD/PUSHA register frame
+     * 8      = EIP
+     * 9      = CS
+     * 10     = EFLAGS
+     */
+    if (values[8] !=
+            (uint32_t)(uintptr_t)process_entry_trampoline ||
+        values[9] != 0x08U ||
+        (values[10] & 0x00000200U) == 0)
+        return 0;
+
+    return 1;
+}
+
 int process_reap(uint32_t pid)
 {
     if (!initialized ||

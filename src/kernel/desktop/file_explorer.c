@@ -24,8 +24,8 @@ static void explorer_window_geometry(int width, int height, int* x, int* y, int*
     *h = height - 100;
     if (*w > 920) *w = 920;
     if (*h > 560) *h = 560;
-    *x = explorer_maximized ? 0 : width / 2 - *w / 2;
-    *y = explorer_maximized ? 0 : height / 2 - *h / 2;
+    *x = explorer_maximized ? 0 : (explorer_x != 0 ? explorer_x : width / 2 - *w / 2);
+    *y = explorer_maximized ? 0 : (explorer_y != 0 ? explorer_y : height / 2 - *h / 2);
 }
 
 

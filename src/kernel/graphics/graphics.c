@@ -871,15 +871,15 @@ void graphics_mouse_click(int button)
         return;
     }
 
-    if (cursor_x >= 28 && cursor_x < 120 &&
-        cursor_y >= 30 && cursor_y < 118)
+    if (cursor_x >= 24 && cursor_x < 112 &&
+        cursor_y >= 26 && cursor_y < 108)
     {
         active_panel = 1;
         return;
     }
 
-    if (cursor_x >= 140 && cursor_x < 232 &&
-        cursor_y >= 30 && cursor_y < 118)
+    if (cursor_x >= 120 && cursor_x < 208 &&
+        cursor_y >= 26 && cursor_y < 108)
     {
         active_panel = 2;
         files_current_dir = filesystem_root();
@@ -887,8 +887,8 @@ void graphics_mouse_click(int button)
         return;
     }
 
-    if (cursor_x >= 252 && cursor_x < 344 &&
-        cursor_y >= 30 && cursor_y < 118)
+    if (cursor_x >= 216 && cursor_x < 304 &&
+        cursor_y >= 26 && cursor_y < 108)
     {
         active_panel = 3;
         return;

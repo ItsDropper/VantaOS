@@ -76,6 +76,7 @@ static void terminal_open_window(void)
     terminal_window_open = 1;
     terminal_window_prompted = 0;
     graphics_set_terminal_running(1);
+    graphics_select_panel(3);
 
     /* This kernel still uses cooperative execution, so the terminal
      * is explicitly marked active without changing the desktop's

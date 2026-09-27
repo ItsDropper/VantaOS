@@ -8,6 +8,7 @@ void terminal_process_initialize(void);
 int terminal_process_start(uint32_t parent_pid);
 void terminal_process_request_exit(void);
 int terminal_process_is_running(void);
+int terminal_process_consume_redraw(void);
 uint32_t terminal_process_pid(void);
 
 #endif

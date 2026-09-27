@@ -131,6 +131,7 @@ void graphics_mouse_click(int button)
         {
             active_panel = 0;
             terminal_dragging = 0;
+    explorer_dragging = 0;
             return;
         }
 
@@ -266,6 +267,25 @@ void graphics_mouse_move(int dx, int dy)
         cursor_x = (int)framebuffer_width - 1;
     if (cursor_y >= (int)framebuffer_height)
         cursor_y = (int)framebuffer_height - 1;
+
+    if (explorer_dragging && !explorer_maximized && active_panel == 2)
+    {
+        explorer_x = cursor_x - explorer_drag_offset_x;
+        explorer_y = cursor_y - explorer_drag_offset_y;
+
+        if (explorer_x < 0) explorer_x = 0;
+        if (explorer_y < 0) explorer_y = 0;
+
+        int ew = (int)framebuffer_width - FILES_WINDOW_MARGIN * 2;
+        int eh = (int)framebuffer_height - 100;
+        if (ew > 920) ew = 920;
+        if (eh > 560) eh = 560;
+
+        if (explorer_x + ew > (int)framebuffer_width)
+            explorer_x = (int)framebuffer_width - ew;
+        if (explorer_y + eh > (int)framebuffer_height)
+            explorer_y = (int)framebuffer_height - eh;
+    }
 
     if (terminal_dragging && !terminal_maximized)
     {

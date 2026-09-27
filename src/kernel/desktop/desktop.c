@@ -243,7 +243,9 @@ void desktop_update(void)
 
         if (graphics_is_initialized())
         {
-            if (graphics_terminal_is_dragging() || click_event)
+            if (graphics_terminal_is_dragging() ||
+                graphics_explorer_is_dragging() ||
+                click_event)
                 desktop_gui_present();
             else if (mouse_has_move_event())
                 graphics_draw_cursor();

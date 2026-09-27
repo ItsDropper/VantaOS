@@ -476,9 +476,14 @@ int file_explorer_click(int x, int y, int width, int height)
         int max_x = close_x - EXPLORER_BUTTON;
         int min_x = max_x - EXPLORER_BUTTON;
 
+        /*
+         * Window chrome is handled here, not in graphics_input.c.
+         * This gives drawing and hit-testing one owner and one geometry.
+         */
         if (x >= close_x)
         {
             explorer_dragging = 0;
+            active_panel = 0;
             return 1;
         }
 
@@ -499,14 +504,18 @@ int file_explorer_click(int x, int y, int width, int height)
                 explorer_y = explorer_restore_y;
             }
 
-            return 0;
+            return 1;
         }
 
         if (x >= min_x)
         {
+            /*
+             * Minimize is strictly a window-state operation. It never
+             * touches the Explorer process or filesystem state.
+             */
             explorer_dragging = 0;
             active_panel = 0;
-            return 0;
+            return 1;
         }
 
         if (!explorer_maximized)
@@ -516,7 +525,7 @@ int file_explorer_click(int x, int y, int width, int height)
             explorer_drag_offset_y = y - wy;
         }
 
-        return 0;
+        return 1;
     }
 
     sidebar_y = wy + EXPLORER_TITLE;

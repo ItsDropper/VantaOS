@@ -81,6 +81,50 @@ static int process_allocate_common(
     return 1;
 }
 
+static void process_prepare_stack(
+    process_t* process,
+    uintptr_t stack_top
+)
+{
+    uint32_t* stack =
+        (uint32_t*)stack_top;
+
+    /*
+     * This is the exact stack layout consumed by the IRQ stub:
+     *
+     *   popa
+     *   iretd
+     *
+     * PUSHA saves EDI, ESI, EBP, a skipped ESP slot, EBX,
+     * EDX, ECX and EAX. The CPU return frame follows it.
+     */
+    *(--stack) = 0x202U;
+    *(--stack) = 0x08U;
+    *(--stack) = (uint32_t)(uintptr_t)process->entry;
+
+    *(--stack) = 0;
+    *(--stack) = 0;
+    *(--stack) = 0;
+    *(--stack) = 0;
+    *(--stack) = 0;
+    *(--stack) = 0;
+    *(--stack) = 0;
+    *(--stack) = 0;
+
+    process->stack_pointer =
+        (uint32_t)(uintptr_t)stack;
+
+    process->context.esp =
+        process->stack_pointer;
+
+    process->context.eip =
+        (uint32_t)(uintptr_t)process->entry;
+
+    process->context.eflags = 0x202U;
+    process->context.cs = 0x08U;
+    process->context.ss = 0x10U;
+}
+
 void process_initialize(void)
 {
     initialized = 0;
@@ -122,11 +166,6 @@ int process_attach_current(
                 process, name, parent_pid))
             return -1;
 
-        /*
-         * The desktop already exists on the kernel's current stack.
-         * Capture that stack pointer instead of fabricating a new
-         * execution context.
-         */
         uint32_t current_stack;
 
         __asm__ volatile (
@@ -137,9 +176,9 @@ int process_attach_current(
         process->state = PROCESS_RUNNING;
         process->stack_pointer = current_stack;
         process->context.esp = current_stack;
-        process->context.eip = 0;
         process->context.eip =
-            (uint32_t)(uintptr_t)__builtin_return_address(0);
+            (uint32_t)(uintptr_t)
+            __builtin_return_address(0);
 
         process->context.cs = 0x08U;
         process->context.ss = 0x10U;
@@ -196,21 +235,10 @@ int process_create_kernel(
 
         stack_top &= ~0x0FU;
 
-        process->stack_pointer =
-            (uint32_t)stack_top;
-
-        /*
-         * This is a prepared kernel execution context. It is not
-         * executed yet; process_schedule() remains deliberately
-         * non-switching until the assembly context-switch path is
-         * introduced and verified separately.
-         */
-        process->context.esp = (uint32_t)stack_top;
-        process->context.eip =
-            (uint32_t)(uintptr_t)entry;
-        process->context.eflags = 0x202U;
-        process->context.cs = 0x08U;
-        process->context.ss = 0x10U;
+        process_prepare_stack(
+            process,
+            stack_top
+        );
 
         return (int)pid;
     }
@@ -266,6 +294,30 @@ int process_set_running(uint32_t pid)
     return 1;
 }
 
+int process_switch_to(uint32_t pid)
+{
+    if (!initialized ||
+        pid == 0 ||
+        pid >= PROCESS_MAX)
+        return 0;
+
+    if (processes[pid].state != PROCESS_READY &&
+        processes[pid].state != PROCESS_RUNNING)
+        return 0;
+
+    if (current_pid != pid &&
+        current_pid < PROCESS_MAX &&
+        processes[current_pid].state == PROCESS_RUNNING)
+    {
+        processes[current_pid].state = PROCESS_READY;
+    }
+
+    current_pid = pid;
+    processes[pid].state = PROCESS_RUNNING;
+
+    return 1;
+}
+
 int process_wake(uint32_t pid)
 {
     if (!initialized ||
@@ -301,28 +353,15 @@ int process_terminate(uint32_t pid)
         process->state == PROCESS_TERMINATED)
         return 0;
 
+    if (pid == current_pid)
+    {
+        process->state = PROCESS_TERMINATED;
+        return 1;
+    }
+
     process->state = PROCESS_TERMINATED;
 
-    if (process->address_space)
-    {
-        paging_destroy_address_space(
-            process->address_space
-        );
-        process->address_space = NULL;
-    }
-
-    if (process->kernel_stack)
-    {
-        kfree(process->kernel_stack);
-        process->kernel_stack = NULL;
-    }
-
-    process->stack_pointer = 0;
-    process->entry = NULL;
-    process->context.esp = 0;
-    process->context.eip = 0;
-
-    return 1;
+    return process_reap(pid);
 }
 
 void process_terminate_current(void)
@@ -337,7 +376,52 @@ void process_terminate_current(void)
     if (process->state == PROCESS_UNUSED)
         return;
 
+    /*
+     * A running process cannot free its own kernel stack or page
+     * directory. The scheduler reaps it after switching away.
+     */
     process->state = PROCESS_TERMINATED;
+}
+
+void process_save_stack(
+    uint32_t pid,
+    uint32_t stack_pointer
+)
+{
+    if (!initialized ||
+        pid >= PROCESS_MAX ||
+        processes[pid].state == PROCESS_UNUSED)
+        return;
+
+    processes[pid].stack_pointer =
+        stack_pointer;
+
+    processes[pid].context.esp =
+        stack_pointer;
+}
+
+uint32_t process_get_stack(uint32_t pid)
+{
+    if (!initialized ||
+        pid >= PROCESS_MAX ||
+        processes[pid].state == PROCESS_UNUSED)
+        return 0;
+
+    return processes[pid].stack_pointer;
+}
+
+int process_reap(uint32_t pid)
+{
+    if (!initialized ||
+        pid == 0 ||
+        pid >= PROCESS_MAX ||
+        pid == current_pid)
+        return 0;
+
+    process_t* process = &processes[pid];
+
+    if (process->state != PROCESS_TERMINATED)
+        return 0;
 
     if (process->address_space)
     {
@@ -353,23 +437,22 @@ void process_terminate_current(void)
         process->kernel_stack = NULL;
     }
 
-    process->stack_pointer = 0;
-    process->entry = NULL;
+    process_reset_record(process);
+    process->pid = pid;
+
+    return 1;
 }
 
 uint32_t process_schedule(uint32_t current_stack)
 {
-    /*
-     * Scheduling metadata is now real, including per-process kernel
-     * stacks and address spaces. Actual CPU context switching is kept
-     * disabled until the dedicated assembly switch path is added.
-     */
     if (!initialized ||
         current_pid >= PROCESS_MAX)
         return current_stack;
 
-    processes[current_pid].stack_pointer = current_stack;
-    processes[current_pid].context.esp = current_stack;
+    process_save_stack(
+        current_pid,
+        current_stack
+    );
 
     return current_stack;
 }

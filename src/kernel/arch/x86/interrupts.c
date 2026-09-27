@@ -1,4 +1,7 @@
 #include "interrupts.h"
+#include "idt.h"
+#include "pic.h"
+#include "timer.h"
 #include "keyboard.h"
 #include "mouse.h"
 #include "panic.h"
@@ -40,79 +43,68 @@ extern void exception29_stub(void);
 extern void exception30_stub(void);
 extern void exception31_stub(void);
 
-struct idt_entry
+#define IRQ0_VECTOR 32
+#define IRQ1_VECTOR 33
+#define IRQ12_VECTOR 44
+
+static void install_exceptions(void)
 {
-    unsigned short offset_low;
-    unsigned short selector;
-    unsigned char zero;
-    unsigned char type_attr;
-    unsigned short offset_high;
-} __attribute__((packed));
+    void (*stubs[32])(void) = {
+        exception0_stub, exception1_stub, exception2_stub, exception3_stub,
+        exception4_stub, exception5_stub, exception6_stub, exception7_stub,
+        exception8_stub, exception9_stub, exception10_stub, exception11_stub,
+        exception12_stub, exception13_stub, exception14_stub, exception15_stub,
+        exception16_stub, exception17_stub, exception18_stub, exception19_stub,
+        exception20_stub, exception21_stub, exception22_stub, exception23_stub,
+        exception24_stub, exception25_stub, exception26_stub, exception27_stub,
+        exception28_stub, exception29_stub, exception30_stub, exception31_stub
+    };
 
-struct idt_ptr
-{
-    unsigned short limit;
-    unsigned int base;
-} __attribute__((packed));
-
-static struct idt_entry idt[256];
-static struct idt_ptr idt_pointer;
-
-static volatile unsigned int timer_ticks = 0;
+    for (int i = 0; i < 32; i++)
+        idt_set_gate(i, (unsigned int)stubs[i], 0x08, 0x8E);
+}
 
 void interrupts_initialize(void)
 {
-    for (int i = 0; i < 256; i++)
-    {
-        idt_set_gate(i, 0, 0x08, 0x8E);
-    }
+    idt_initialize();
+    install_exceptions();
 
-    idt_set_gate(0,  (unsigned int)exception0_stub,  0x08, 0x8E);
-    idt_set_gate(1,  (unsigned int)exception1_stub,  0x08, 0x8E);
-    idt_set_gate(2,  (unsigned int)exception2_stub,  0x08, 0x8E);
-    idt_set_gate(3,  (unsigned int)exception3_stub,  0x08, 0x8E);
-    idt_set_gate(4,  (unsigned int)exception4_stub,  0x08, 0x8E);
-    idt_set_gate(5,  (unsigned int)exception5_stub,  0x08, 0x8E);
-    idt_set_gate(6,  (unsigned int)exception6_stub,  0x08, 0x8E);
-    idt_set_gate(7,  (unsigned int)exception7_stub,  0x08, 0x8E);
-    idt_set_gate(8,  (unsigned int)exception8_stub,  0x08, 0x8E);
-    idt_set_gate(9,  (unsigned int)exception9_stub,  0x08, 0x8E);
-    idt_set_gate(10, (unsigned int)exception10_stub, 0x08, 0x8E);
-    idt_set_gate(11, (unsigned int)exception11_stub, 0x08, 0x8E);
-    idt_set_gate(12, (unsigned int)exception12_stub, 0x08, 0x8E);
-    idt_set_gate(13, (unsigned int)exception13_stub, 0x08, 0x8E);
-    idt_set_gate(14, (unsigned int)exception14_stub, 0x08, 0x8E);
-    idt_set_gate(15, (unsigned int)exception15_stub, 0x08, 0x8E);
-    idt_set_gate(16, (unsigned int)exception16_stub, 0x08, 0x8E);
-    idt_set_gate(17, (unsigned int)exception17_stub, 0x08, 0x8E);
-    idt_set_gate(18, (unsigned int)exception18_stub, 0x08, 0x8E);
-    idt_set_gate(19, (unsigned int)exception19_stub, 0x08, 0x8E);
-    idt_set_gate(20, (unsigned int)exception20_stub, 0x08, 0x8E);
-    idt_set_gate(21, (unsigned int)exception21_stub, 0x08, 0x8E);
-    idt_set_gate(22, (unsigned int)exception22_stub, 0x08, 0x8E);
-    idt_set_gate(23, (unsigned int)exception23_stub, 0x08, 0x8E);
-    idt_set_gate(24, (unsigned int)exception24_stub, 0x08, 0x8E);
-    idt_set_gate(25, (unsigned int)exception25_stub, 0x08, 0x8E);
-    idt_set_gate(26, (unsigned int)exception26_stub, 0x08, 0x8E);
-    idt_set_gate(27, (unsigned int)exception27_stub, 0x08, 0x8E);
-    idt_set_gate(28, (unsigned int)exception28_stub, 0x08, 0x8E);
-    idt_set_gate(29, (unsigned int)exception29_stub, 0x08, 0x8E);
-    idt_set_gate(30, (unsigned int)exception30_stub, 0x08, 0x8E);
-    idt_set_gate(31, (unsigned int)exception31_stub, 0x08, 0x8E);
-
-    idt_set_gate(32, (unsigned int)irq0_stub,  0x08, 0x8E);
-    idt_set_gate(33, (unsigned int)irq1_stub,  0x08, 0x8E);
-    idt_set_gate(44, (unsigned int)irq12_stub, 0x08, 0x8E);
-
-    idt_pointer.limit = sizeof(idt) - 1;
-    idt_pointer.base = (unsigned int)&idt;
+    idt_set_gate(IRQ0_VECTOR, (unsigned int)irq0_stub, 0x08, 0x8E);
+    idt_set_gate(IRQ1_VECTOR, (unsigned int)irq1_stub, 0x08, 0x8E);
+    idt_set_gate(IRQ12_VECTOR, (unsigned int)irq12_stub, 0x08, 0x8E);
 
     pic_remap();
-    pit_initialize();
+    timer_initialize(100);
+    idt_load();
+}
 
-    __asm__ volatile (
-        "lidt %0"
-        :
-        : "m"(idt_pointer)
-    );
+void interrupt_handler(unsigned int interrupt_number)
+{
+    switch (interrupt_number)
+    {
+        case IRQ0_VECTOR:
+            timer_handle_interrupt();
+            pic_send_eoi(0);
+            break;
+
+        case IRQ1_VECTOR:
+            keyboard_handle_interrupt();
+            pic_send_eoi(1);
+            break;
+
+        case IRQ12_VECTOR:
+            mouse_handle_interrupt();
+            pic_send_eoi(12);
+            break;
+
+        default:
+            if (interrupt_number >= 32 && interrupt_number <= 47)
+                pic_send_eoi(interrupt_number - 32);
+            break;
+    }
+}
+
+unsigned int interrupts_get_ticks(void)
+{
+    return timer_get_ticks();
 }

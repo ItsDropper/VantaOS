@@ -10,13 +10,11 @@ extern kernel_main
 _start:
     jmp multiboot_entry
 
-section .multiboot
-align 4
+    align 4
+multiboot_header:
     dd 0x1BADB002
     dd 0x00000000
     dd -(0x1BADB002 + 0x00000000)
-
-section .text.start
 
 multiboot_entry:
     mov esp, stack_top

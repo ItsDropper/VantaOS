@@ -41,6 +41,8 @@ extern int explorer_y;
 extern int explorer_drag_offset_x;
 extern int explorer_drag_offset_y;
 extern int explorer_maximized;
+extern int explorer_restore_x;
+extern int explorer_restore_y;
 extern int settings_resolution_index;
 extern const uint32_t settings_widths[3];
 extern const uint32_t settings_heights[3];

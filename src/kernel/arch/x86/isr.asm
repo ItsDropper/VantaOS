@@ -47,7 +47,6 @@ extern process_entry_dispatch
 process_entry_trampoline:
     cld
     call process_entry_dispatch
-    cli
 
 .process_exit_halt:
     hlt

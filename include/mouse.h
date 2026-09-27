@@ -14,6 +14,7 @@ void mouse_initialize(void);
  * Called by IRQ12 when the mouse sends a byte.
  */
 void mouse_handle_interrupt(void);
+void mouse_process_events(void);
 
 /*
  * Check whether the mouse has accumulated wheel movement.

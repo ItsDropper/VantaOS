@@ -443,6 +443,33 @@ int file_explorer_click(
             return 0;
         }
 
+        if (y >= sidebar_y + 188 &&
+            y < sidebar_y + 212)
+        {
+            int id = filesystem_lookup("/etc");
+            if (id >= 0)
+                explorer_set_directory((uint32_t)id);
+            return 0;
+        }
+
+        if (y >= sidebar_y + 212 &&
+            y < sidebar_y + 236)
+        {
+            int id = filesystem_lookup("/system/drivers");
+            if (id >= 0)
+                explorer_set_directory((uint32_t)id);
+            return 0;
+        }
+
+        if (y >= sidebar_y + 236 &&
+            y < sidebar_y + 260)
+        {
+            int id = filesystem_lookup("/system/devices");
+            if (id >= 0)
+                explorer_set_directory((uint32_t)id);
+            return 0;
+        }
+
         return 0;
     }
 

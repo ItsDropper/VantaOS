@@ -16,6 +16,7 @@ OBJS = boot.o \
        terminal.o \
        keyboard.o \
        mouse.o \
+       ata.o \
        interrupts.o \
        panic.o \
        timer.o \
@@ -34,6 +35,7 @@ OBJS = boot.o \
        shell_commands.o \
        pci.o \
        filesystem.o \
+       fat32.o \
        process.o \
        scheduler.o \
        vfs.o \
@@ -74,6 +76,9 @@ keyboard.o: src/kernel/drivers/input/keyboard.c
 mouse.o: src/kernel/drivers/input/mouse.c
 	$(CC) $(CFLAGS) -c src/kernel/drivers/input/mouse.c -o mouse.o
 
+ata.o: src/kernel/drivers/storage/ata.c
+	$(CC) $(CFLAGS) -c src/kernel/drivers/storage/ata.c -o ata.o
+
 interrupts.o: src/kernel/arch/x86/interrupts.c
 	$(CC) $(CFLAGS) -c src/kernel/arch/x86/interrupts.c -o interrupts.o
 
@@ -103,6 +108,9 @@ pci.o: src/kernel/drivers/pci/pci.c
 
 filesystem.o: src/kernel/storage/filesystem.c
 	$(CC) $(CFLAGS) -c src/kernel/storage/filesystem.c -o filesystem.o
+
+fat32.o: src/kernel/storage/fat32.c
+	$(CC) $(CFLAGS) -c src/kernel/storage/fat32.c -o fat32.o
 
 process.o: src/kernel/core/process.c
 	$(CC) $(CFLAGS) -c src/kernel/core/process.c -o process.o

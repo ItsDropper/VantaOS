@@ -57,13 +57,26 @@ static void gui_present(void)
 
 static void terminal_open_window(void)
 {
+    if (terminal_pid < 0)
+    {
+        terminal_pid = process_create_kernel(
+            "terminal",
+            process_current_pid(),
+            terminal_process_step
+        );
+
+        if (terminal_pid < 0)
+            return;
+    }
+
+    terminal_reset();
+    shell_initialize();
+
     terminal_window_open = 1;
     terminal_window_prompted = 0;
     graphics_set_terminal_running(1);
 
-    if (terminal_pid >= 0)
-        process_wake((uint32_t)terminal_pid);
-
+    process_wake((uint32_t)terminal_pid);
     gui_present();
 }
 
@@ -451,6 +464,15 @@ void kernel_main(multiboot_info_t* mbd)
             terminal_window_open = 0;
             terminal_window_prompted = 0;
             graphics_set_terminal_running(0);
+
+            if (terminal_pid >= 0)
+            {
+                process_terminate((uint32_t)terminal_pid);
+                terminal_pid = -1;
+            }
+
+            terminal_reset();
+            shell_initialize();
             graphics_select_panel(0);
             gui_present();
         }

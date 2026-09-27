@@ -2,18 +2,19 @@
 #include "paging.h"
 #include "pmm.h"
 
-#include <stdint.h>
 #include <stddef.h>
+#include <stdint.h>
 
-#define BLOCK_FREE 0
-#define BLOCK_USED 1
-#define HEAP_INITIAL_PAGES 16
-#define HEAP_MAX_PAGES (HEAP_MAX_SIZE / PAGE_SIZE)
+#define BLOCK_FREE 0U
+#define BLOCK_USED 1U
+#define BLOCK_MAGIC 0x56414E54U
+#define HEAP_INITIAL_PAGES 16U
 
 typedef struct heap_block
 {
     size_t size;
     uint32_t status;
+    uint32_t magic;
     struct heap_block* next;
 } heap_block_t;
 
@@ -23,19 +24,34 @@ static size_t heap_size;
 static uint32_t heap_pages;
 static int heap_initialized;
 
-static uintptr_t heap_physical_pages[HEAP_MAX_PAGES];
-
 static size_t align_up(size_t value)
 {
-    if (value > (size_t)-1 - (HEAP_ALIGNMENT - 1))
+    return (value + (HEAP_ALIGNMENT - 1U)) &
+           ~(HEAP_ALIGNMENT - 1U);
+}
+
+static int block_is_valid(const heap_block_t* block)
+{
+    if (!block ||
+        block->magic != BLOCK_MAGIC ||
+        (block->status != BLOCK_FREE &&
+         block->status != BLOCK_USED) ||
+        block->size == 0)
         return 0;
 
-    return (value + (HEAP_ALIGNMENT - 1)) &
-           ~(size_t)(HEAP_ALIGNMENT - 1);
+    uintptr_t address = (uintptr_t)block;
+
+    return address >= HEAP_VIRTUAL_BASE &&
+           address < HEAP_VIRTUAL_BASE + heap_size;
 }
 
 static void split_block(heap_block_t* block, size_t size)
 {
+    if (!block_is_valid(block) ||
+        block->status != BLOCK_FREE ||
+        block->size < size)
+        return;
+
     size_t remaining = block->size - size;
 
     if (remaining <= sizeof(heap_block_t) + HEAP_ALIGNMENT)
@@ -45,8 +61,10 @@ static void split_block(heap_block_t* block, size_t size)
         (heap_block_t*)((uint8_t*)block +
                         sizeof(heap_block_t) + size);
 
-    next->size = remaining - sizeof(heap_block_t);
+    next->size =
+        remaining - sizeof(heap_block_t);
     next->status = BLOCK_FREE;
+    next->magic = BLOCK_MAGIC;
     next->next = block->next;
 
     block->size = size;
@@ -59,12 +77,25 @@ static void merge_free_blocks(void)
 
     while (block && block->next)
     {
+        if (!block_is_valid(block))
+            break;
+
         heap_block_t* next = block->next;
 
+        if (!block_is_valid(next))
+            break;
+
+        uintptr_t expected =
+            (uintptr_t)block +
+            sizeof(heap_block_t) +
+            block->size;
+
         if (block->status == BLOCK_FREE &&
-            next->status == BLOCK_FREE)
+            next->status == BLOCK_FREE &&
+            expected == (uintptr_t)next)
         {
-            block->size += sizeof(heap_block_t) + next->size;
+            block->size +=
+                sizeof(heap_block_t) + next->size;
             block->next = next->next;
             continue;
         }
@@ -75,7 +106,7 @@ static void merge_free_blocks(void)
 
 static int heap_add_page(void)
 {
-    if (heap_pages >= HEAP_MAX_PAGES)
+    if (heap_pages >= HEAP_MAX_SIZE / PAGE_SIZE)
         return 0;
 
     void* physical = pmm_alloc_block();
@@ -87,18 +118,12 @@ static int heap_add_page(void)
         HEAP_VIRTUAL_BASE +
         (uintptr_t)heap_pages * PAGE_SIZE;
 
-    if (virtual_address < HEAP_VIRTUAL_BASE ||
-        virtual_address + PAGE_SIZE < virtual_address ||
-        !paging_map_page(
-            virtual_address,
-            (uintptr_t)physical))
+    if (!paging_map_page(virtual_address,
+                         (uintptr_t)physical))
     {
         pmm_free_block(physical);
         return 0;
     }
-
-    heap_physical_pages[heap_pages] =
-        (uintptr_t)physical;
 
     heap_pages++;
     heap_size += PAGE_SIZE;
@@ -109,6 +134,7 @@ static int heap_add_page(void)
         first_block->size =
             PAGE_SIZE - sizeof(heap_block_t);
         first_block->status = BLOCK_FREE;
+        first_block->magic = BLOCK_MAGIC;
         first_block->next = NULL;
         return 1;
     }
@@ -116,7 +142,12 @@ static int heap_add_page(void)
     heap_block_t* block = first_block;
 
     while (block->next)
+    {
+        if (!block_is_valid(block))
+            return 0;
+
         block = block->next;
+    }
 
     uintptr_t expected =
         (uintptr_t)block +
@@ -136,35 +167,12 @@ static int heap_add_page(void)
         next->size =
             PAGE_SIZE - sizeof(heap_block_t);
         next->status = BLOCK_FREE;
+        next->magic = BLOCK_MAGIC;
         next->next = NULL;
         block->next = next;
     }
 
     return 1;
-}
-
-static void heap_release_pages(void)
-{
-    for (uint32_t i = 0; i < heap_pages; i++)
-    {
-        uintptr_t virtual_address =
-            HEAP_VIRTUAL_BASE +
-            (uintptr_t)i * PAGE_SIZE;
-
-        paging_unmap_page(virtual_address);
-
-        if (heap_physical_pages[i] != 0)
-            pmm_free_block(
-                (void*)heap_physical_pages[i]
-            );
-
-        heap_physical_pages[i] = 0;
-    }
-
-    heap_pages = 0;
-    heap_size = 0;
-    first_block = NULL;
-    heap_used = 0;
 }
 
 void heap_initialize(void)
@@ -175,16 +183,10 @@ void heap_initialize(void)
     heap_pages = 0;
     heap_initialized = 0;
 
-    for (uint32_t i = 0; i < HEAP_MAX_PAGES; i++)
-        heap_physical_pages[i] = 0;
-
     for (uint32_t i = 0; i < HEAP_INITIAL_PAGES; i++)
     {
         if (!heap_add_page())
-        {
-            heap_release_pages();
             return;
-        }
     }
 
     heap_initialized = 1;
@@ -195,10 +197,10 @@ void* kmalloc(size_t size)
     if (!heap_initialized || size == 0)
         return NULL;
 
-    size = align_up(size);
-
-    if (size == 0)
+    if (size > HEAP_MAX_SIZE - sizeof(heap_block_t))
         return NULL;
+
+    size = align_up(size);
 
     while (1)
     {
@@ -206,12 +208,15 @@ void* kmalloc(size_t size)
 
         while (block)
         {
+            if (!block_is_valid(block))
+                return NULL;
+
             if (block->status == BLOCK_FREE &&
                 block->size >= size)
             {
                 split_block(block, size);
                 block->status = BLOCK_USED;
-                heap_used += size;
+                heap_used += block->size;
 
                 return (void*)((uint8_t*)block +
                                sizeof(heap_block_t));
@@ -236,45 +241,26 @@ void kfree(void* ptr)
         address >= HEAP_VIRTUAL_BASE + heap_size)
         return;
 
-    heap_block_t* block = first_block;
+    if ((address - HEAP_VIRTUAL_BASE) % HEAP_ALIGNMENT != 0)
+        return;
 
-    while (block)
-    {
-        uintptr_t payload =
-            (uintptr_t)block + sizeof(heap_block_t);
+    heap_block_t* block =
+        (heap_block_t*)((uint8_t*)ptr -
+                        sizeof(heap_block_t));
 
-        if (payload == address)
-            break;
-
-        block = block->next;
-    }
-
-    if (!block ||
+    if (!block_is_valid(block) ||
         block->status != BLOCK_USED)
         return;
 
     block->status = BLOCK_FREE;
-
-    if (heap_used >= block->size)
-        heap_used -= block->size;
-    else
-        heap_used = 0;
+    heap_used -= block->size;
 
     merge_free_blocks();
 }
 
 size_t heap_get_total_size(void)
 {
-    size_t total = 0;
-    heap_block_t* block = first_block;
-
-    while (block)
-    {
-        total += block->size;
-        block = block->next;
-    }
-
-    return total;
+    return heap_size;
 }
 
 size_t heap_get_used_size(void)
@@ -289,6 +275,9 @@ size_t heap_get_free_size(void)
 
     while (block)
     {
+        if (!block_is_valid(block))
+            break;
+
         if (block->status == BLOCK_FREE)
             free_size += block->size;
 

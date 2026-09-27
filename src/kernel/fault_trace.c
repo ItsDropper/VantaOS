@@ -308,14 +308,15 @@ static void draw_interrupted_stack(
     );
 
     /*
-     * Every exception stub reaches this point with one error-code
-     * word immediately below the CPU frame, either synthetic or
-     * supplied by the CPU. PUSHA then adds 32 bytes.
+     * frame->esp is the original ESP captured by PUSHA, immediately
+     * after the exception stub pushed its error-code word.
+     * The CPU exception frame is therefore 4 bytes below it.
      *
-     * Therefore the original ESP is always frame->esp + 48.
-     * The CPU-saved EIP/CS/EFLAGS are at original ESP - 12/-8/-4.
+     * For a no-error exception the original interrupted ESP is
+     * frame->esp + 16: 4 bytes for the synthetic error code and
+     * 12 bytes for EIP/CS/EFLAGS.
      */
-    unsigned int interrupted_esp = frame->esp + 48U;
+    unsigned int interrupted_esp = frame->esp + 16U;
 
     draw_field(x, y + 16, "INTERRUPTED ESP", interrupted_esp);
     draw_field(

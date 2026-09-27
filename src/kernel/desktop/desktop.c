@@ -33,7 +33,7 @@ static void desktop_gui_present(void)
         graphics_draw_cursor();
 }
 
-static int desktop_try_launch_terminal(void)
+int desktop_launch_terminal(void)
 {
     if (terminal_window_open)
         return 1;
@@ -258,7 +258,7 @@ void desktop_update(void)
     if (graphics_get_active_panel() == 3 &&
         !terminal_window_open)
     {
-        if (!desktop_try_launch_terminal())
+        if (!desktop_launch_terminal())
             return;
     }
 

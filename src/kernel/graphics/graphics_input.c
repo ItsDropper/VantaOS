@@ -7,6 +7,14 @@
 
 #define FILES_WINDOW_MARGIN 24
 
+/* Explorer window state used by mouse interaction. */
+extern int explorer_dragging;
+extern int explorer_x;
+extern int explorer_y;
+extern int explorer_drag_offset_x;
+extern int explorer_drag_offset_y;
+extern int explorer_maximized;
+
 void graphics_mouse_click(int button)
 {
     if (!initialized || button != 1)

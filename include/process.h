@@ -58,6 +58,8 @@ int process_wake(uint32_t pid);
 
 void process_block_current(void);
 
+uint32_t process_pick_next(void);
+
 uint32_t process_schedule(uint32_t current_stack);
 
 const process_t* process_get(uint32_t pid);

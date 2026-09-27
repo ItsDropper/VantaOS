@@ -65,8 +65,6 @@ static void terminal_process_main(void)
         __asm__ volatile ("hlt");
 }
 
-int terminal_process_consume_redraw(void);
-
 void terminal_process_initialize(void)
 {
     terminal_pid = 0;

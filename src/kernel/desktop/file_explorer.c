@@ -11,10 +11,23 @@
 #define FILES_TOOLBAR_HEIGHT 42
 #define FILES_ROW_HEIGHT 32
 #define FILES_MAX_VISIBLE 12
+#define FILES_TITLE_HEIGHT 44
+#define FILES_BUTTON_WIDTH 48
 
 static uint32_t explorer_directory;
 static int explorer_file = -1;
 static int explorer_initialized;
+
+static void explorer_window_geometry(int width, int height, int* x, int* y, int* w, int* h)
+{
+    *w = width - FILES_WINDOW_MARGIN * 2;
+    *h = height - 100;
+    if (*w > 920) *w = 920;
+    if (*h > 560) *h = 560;
+    *x = explorer_maximized ? 0 : width / 2 - *w / 2;
+    *y = explorer_maximized ? 0 : height / 2 - *h / 2;
+}
+
 
 static void explorer_set_directory(uint32_t id)
 {
@@ -121,6 +134,10 @@ void file_explorer_initialize(void)
     explorer_initialized = 1;
     explorer_directory = filesystem_root();
     explorer_file = -1;
+    explorer_dragging = 0;
+    explorer_maximized = 0;
+    explorer_x = 0;
+    explorer_y = 0;
 }
 
 void file_explorer_open_directory(uint32_t id)
@@ -136,16 +153,8 @@ void file_explorer_draw(int width, int height)
     if (!explorer_initialized)
         file_explorer_initialize();
 
-    int ww = width - FILES_WINDOW_MARGIN * 2;
-    int wh = height - 100;
-
-    if (ww > 920)
-        ww = 920;
-    if (wh > 560)
-        wh = 560;
-
-    int wx = width / 2 - ww / 2;
-    int wy = height / 2 - wh / 2;
+    int ww, wh, wx, wy;
+    explorer_window_geometry(width, height, &wx, &wy, &ww, &wh);
 
     graphics_fill_rounded_rect(
         wx + 7, wy + 9, ww, wh, 12, 0x00000000
@@ -160,15 +169,11 @@ void file_explorer_draw(int width, int height)
         0x00212B37
     );
 
-    graphics_draw_text(
-        wx + 20, wy + 15, "File Explorer",
-        0x00FFFFFF, 2
-    );
-
-    graphics_draw_text(
-        wx + ww - 30, wy + 15, "X",
-        0x00FFFFFF, 2
-    );
+    graphics_draw_text(wx + 20, wy + 15, "File Explorer", 0x00FFFFFF, 2);
+    graphics_draw_text(wx + ww - 126, wy + 15, "_", 0x00B7C5D1, 2);
+    graphics_draw_text(wx + ww - 82, wy + 14, "[]", 0x00B7C5D1, 1);
+    graphics_draw_text(wx + ww - 30, wy + 15, "X", 0x00FFFFFF, 2);
+    graphics_fill_rect(wx, wy + FILES_TITLE_HEIGHT - 1, ww, 1, 0x003B82F6);
 
     int sidebar_x = wx;
     int sidebar_y = wy + FILES_HEADER_HEIGHT;
@@ -414,22 +419,40 @@ int file_explorer_click(
     int height
 )
 {
-    int ww = width - FILES_WINDOW_MARGIN * 2;
-    int wh = height - 100;
+    int ww, wh, wx, wy;
+    explorer_window_geometry(width, height, &wx, &wy, &ww, &wh);
 
-    if (ww > 920)
-        ww = 920;
-    if (wh > 560)
-        wh = 560;
+    if (y >= wy && y < wy + FILES_TITLE_HEIGHT)
+    {
+        if (x >= wx + ww - FILES_BUTTON_WIDTH && x < wx + ww)
+            return 1;
 
-    int wx = width / 2 - ww / 2;
-    int wy = height / 2 - wh / 2;
+        if (x >= wx + ww - FILES_BUTTON_WIDTH * 2 &&
+            x < wx + ww - FILES_BUTTON_WIDTH)
+        {
+            explorer_maximized = !explorer_maximized;
+            explorer_dragging = 0;
+            return 0;
+        }
 
-    if (x >= wx + ww - 52 &&
-        x < wx + ww &&
-        y >= wy &&
-        y < wy + FILES_HEADER_HEIGHT)
-        return 1;
+        if (x >= wx + ww - FILES_BUTTON_WIDTH * 3 &&
+            x < wx + ww - FILES_BUTTON_WIDTH * 2)
+        {
+            explorer_dragging = 0;
+            active_panel = 0;
+            return 0;
+        }
+
+        if (!explorer_maximized &&
+            x >= wx + 8 &&
+            x < wx + ww - FILES_BUTTON_WIDTH * 3)
+        {
+            explorer_dragging = 1;
+            explorer_drag_offset_x = x - wx;
+            explorer_drag_offset_y = y - wy;
+        }
+        return 0;
+    }
 
     int sidebar_y = wy + FILES_HEADER_HEIGHT;
 

@@ -21,6 +21,7 @@ uint32_t files_current_dir;
 int files_open_file = -1;
 int terminal_close_requested;
 int terminal_running;
+int terminal_open_requested;
 int terminal_maximized;
 int terminal_dragging;
 int terminal_x;
@@ -44,4 +45,19 @@ int cursor_saved_valid;
 void graphics_clear_terminal_close_requested(void)
 {
     terminal_close_requested = 0;
+}
+
+int graphics_terminal_open_requested(void)
+{
+    return terminal_open_requested;
+}
+
+void graphics_request_terminal_open(void)
+{
+    terminal_open_requested = 1;
+}
+
+void graphics_clear_terminal_open_request(void)
+{
+    terminal_open_requested = 0;
 }

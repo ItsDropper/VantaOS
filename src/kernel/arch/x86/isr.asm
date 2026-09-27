@@ -40,10 +40,11 @@ global exception29_stub
 global exception30_stub
 global exception31_stub
 
-extern interrupt_handler
 extern exception_handler
 extern process_entry_dispatch
 extern timer_handle_interrupt
+extern keyboard_handle_interrupt
+extern mouse_handle_interrupt
 extern pic_send_eoi
 
 process_entry_trampoline:
@@ -54,38 +55,35 @@ process_entry_trampoline:
     hlt
     jmp .process_exit_halt
 
-; Timer IRQ deliberately has no C return value or scheduler path.
-; Keep the interrupt frame untouched so iretd always consumes the
-; exact frame pushed by the CPU.
 irq0_stub:
     cld
     pusha
-
     call timer_handle_interrupt
-
     push dword 0
     call pic_send_eoi
     add esp, 4
-
     popa
     iretd
 
-%macro IRQ_STUB 2
-%1:
+irq1_stub:
     cld
     pusha
-
-    push esp
-    push dword %2
-    call interrupt_handler
-    add esp, 8
-
+    call keyboard_handle_interrupt
+    push dword 1
+    call pic_send_eoi
+    add esp, 4
     popa
     iretd
-%endmacro
 
-IRQ_STUB irq1_stub, 33
-IRQ_STUB irq12_stub, 44
+irq12_stub:
+    cld
+    pusha
+    call mouse_handle_interrupt
+    push dword 12
+    call pic_send_eoi
+    add esp, 4
+    popa
+    iretd
 
 %macro EXCEPTION_NO_ERROR 1
 exception%1_stub:
@@ -124,13 +122,13 @@ EXCEPTION_NO_ERROR 4
 EXCEPTION_NO_ERROR 5
 EXCEPTION_NO_ERROR 6
 EXCEPTION_NO_ERROR 7
-EXCEPTION_ERROR    8
+EXCEPTION_ERROR 8
 EXCEPTION_NO_ERROR 9
-EXCEPTION_ERROR    10
-EXCEPTION_ERROR    11
-EXCEPTION_ERROR    12
-EXCEPTION_ERROR    13
-EXCEPTION_ERROR    14
+EXCEPTION_ERROR 10
+EXCEPTION_ERROR 11
+EXCEPTION_ERROR 12
+EXCEPTION_ERROR 13
+EXCEPTION_ERROR 14
 EXCEPTION_NO_ERROR 15
 EXCEPTION_NO_ERROR 16
 EXCEPTION_NO_ERROR 17

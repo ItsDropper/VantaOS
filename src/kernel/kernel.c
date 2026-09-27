@@ -94,6 +94,8 @@ void kernel_main(multiboot_info_t* mbd)
     filesystem_initialize(mbd);
     vfs_initialize();
     process_initialize();
+    scheduler_initialize();
+    terminal_process_initialize();
 
     if (process_attach_current("desktop", 0) < 0)
         terminal_write("Desktop process initialization failed.\n");

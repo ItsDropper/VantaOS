@@ -401,9 +401,6 @@ void desktop_update(void)
 
     if (terminal_window_open)
     {
-        if (terminal_pid >= 0)
-            process_mark_running((uint32_t)terminal_pid);
-
         terminal_process_step();
 
         if (terminal_pid >= 0 && terminal_window_open)

@@ -34,9 +34,14 @@ static void desktop_gui_present(void)
         graphics_draw_cursor();
 }
 
-static void terminal_open_window(void)
+static int desktop_try_launch_terminal(void)
 {
-    if (terminal_pid < 0)
+    if (terminal_window_open)
+        return 1;
+
+    if (terminal_pid < 0 ||
+        process_get((uint32_t)terminal_pid) == NULL ||
+        process_get((uint32_t)terminal_pid)->state == PROCESS_TERMINATED)
     {
         terminal_pid = process_create_kernel(
             "terminal",
@@ -46,7 +51,7 @@ static void terminal_open_window(void)
     }
 
     if (terminal_pid < 0)
-        return;
+        return 0;
 
     terminal_reset();
     shell_initialize();
@@ -56,9 +61,15 @@ static void terminal_open_window(void)
 
     graphics_set_terminal_running(1);
     graphics_select_panel(3);
-
     process_mark_running((uint32_t)terminal_pid);
+
     desktop_gui_present();
+    return 1;
+}
+
+static void terminal_open_window(void)
+{
+    (void)desktop_try_launch_terminal();
 }
 
 static void terminal_close_window(void)
@@ -345,14 +356,27 @@ void desktop_update(void)
 
         if (event == KEY_EVENT_TERMINAL)
         {
-            terminal_open_window();
+            desktop_try_launch_terminal();
             return;
         }
+
+        /*
+         * Preserve unrelated desktop events. They belong to the
+         * application layer once an application is active.
+         */
     }
 
+    /*
+     * Mouse handlers select the application panel immediately from
+     * the input interrupt. Launch the selected desktop application
+     * here on the next kernel iteration.
+     */
     if (graphics_get_active_panel() == 3 &&
         !terminal_window_open)
-        terminal_open_window();
+    {
+        if (!desktop_try_launch_terminal())
+            return;
+    }
 
     if (terminal_window_open &&
         graphics_terminal_close_requested())

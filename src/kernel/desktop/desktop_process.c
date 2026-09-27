@@ -5,12 +5,19 @@
 
 static uint32_t desktop_pid;
 
+static void desktop_process_main(void)
+{
+    while (1)
+    {
+        desktop_update();
+        __asm__ volatile ("hlt");
+    }
+}
+
 void desktop_process_initialize(void)
 {
     desktop_pid = 0;
 }
-
-int desktop_process_start(uint32_t parent_pid);
 
 int desktop_process_start(uint32_t parent_pid)
 {
@@ -26,7 +33,7 @@ int desktop_process_start(uint32_t parent_pid)
         process_create_kernel(
             "desktop",
             parent_pid,
-            desktop_process_run
+            desktop_process_main
         );
 
     if (pid < 0)
@@ -36,14 +43,3 @@ int desktop_process_start(uint32_t parent_pid)
     return pid;
 }
 
-void desktop_process_run(void)
-{
-    if (desktop_pid == 0)
-        return;
-
-    while (1)
-    {
-        desktop_update();
-        __asm__ volatile ("hlt");
-    }
-}

@@ -2,10 +2,14 @@ ENTRY(_start)
 
 SECTIONS
 {
-    .text 1M :
+    .multiboot 1M :
+    {
+        KEEP(*(.multiboot))
+    }
+
+    .text ALIGN(16) :
     {
         KEEP(*(.text.start))
-        KEEP(*(.multiboot))
 
         _kernel_text_start = .;
         *(.text)

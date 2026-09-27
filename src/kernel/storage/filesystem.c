@@ -165,6 +165,9 @@ void filesystem_initialize(multiboot_info_t* mbd)
     int devices = fs_add_node((uint32_t)system, FS_NODE_DIRECTORY, "devices", 0);
     int home = fs_add_node((uint32_t)root, FS_NODE_DIRECTORY, "home", 0);
     int user = fs_add_node((uint32_t)home, FS_NODE_DIRECTORY, "user", 0);
+    int bin = fs_add_node((uint32_t)root, FS_NODE_DIRECTORY, "bin", 0);
+    int tmp = fs_add_node((uint32_t)root, FS_NODE_DIRECTORY, "tmp", 0);
+    int var = fs_add_node((uint32_t)root, FS_NODE_DIRECTORY, "var", 0);
 
     fs_add_node((uint32_t)system, FS_NODE_VIRTUAL, "version", 0);
     fs_add_node((uint32_t)system, FS_NODE_VIRTUAL, "kernel", 0);
@@ -208,13 +211,60 @@ void filesystem_initialize(multiboot_info_t* mbd)
 
     if (user >= 0)
     {
+        int documents = fs_add_node(
+            (uint32_t)user, FS_NODE_DIRECTORY, "Documents", 0
+        );
+        int downloads = fs_add_node(
+            (uint32_t)user, FS_NODE_DIRECTORY, "Downloads", 0
+        );
+
         fs_add_node(
             (uint32_t)user,
             FS_NODE_FILE,
             "README",
             "VantaOS user home.\n"
         );
+
+        if (documents >= 0)
+            fs_add_node(
+                (uint32_t)documents,
+                FS_NODE_FILE,
+                "README",
+                "User documents.\n"
+            );
+
+        if (downloads >= 0)
+            fs_add_node(
+                (uint32_t)downloads,
+                FS_NODE_FILE,
+                "README",
+                "Downloaded files.\n"
+            );
     }
+
+    if (bin >= 0)
+        fs_add_node(
+            (uint32_t)bin,
+            FS_NODE_FILE,
+            "shell",
+            "VantaOS shell executable.\n"
+        );
+
+    if (tmp >= 0)
+        fs_add_node(
+            (uint32_t)tmp,
+            FS_NODE_FILE,
+            ".keep",
+            "Temporary filesystem area.\n"
+        );
+
+    if (var >= 0)
+        fs_add_node(
+            (uint32_t)var,
+            FS_NODE_DIRECTORY,
+            "log",
+            0
+        );
 
     initialized = 1;
 }

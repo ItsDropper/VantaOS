@@ -3,10 +3,10 @@
 #include "keyboard.h"
 #include "shell.h"
 #include "terminal.h"
-#include "mouse.h"
 
 static uint32_t terminal_pid;
 static volatile int exit_requested;
+static volatile int redraw_requested;
 
 static void terminal_prepare_session(void)
 {
@@ -54,7 +54,7 @@ static void terminal_process_main(void)
         }
 
         if (changed)
-            terminal_render_for_desktop();
+            redraw_requested = 1;
 
         __asm__ volatile ("hlt");
     }
@@ -65,10 +65,13 @@ static void terminal_process_main(void)
         __asm__ volatile ("hlt");
 }
 
+int terminal_process_consume_redraw(void);
+
 void terminal_process_initialize(void)
 {
     terminal_pid = 0;
     exit_requested = 0;
+    redraw_requested = 0;
 }
 
 int terminal_process_start(uint32_t parent_pid)
@@ -77,6 +80,7 @@ int terminal_process_start(uint32_t parent_pid)
         return (int)terminal_pid;
 
     exit_requested = 0;
+    redraw_requested = 1;
     terminal_prepare_session();
 
     int pid =
@@ -96,6 +100,15 @@ int terminal_process_start(uint32_t parent_pid)
 void terminal_process_request_exit(void)
 {
     exit_requested = 1;
+}
+
+int terminal_process_consume_redraw(void)
+{
+    if (!redraw_requested)
+        return 0;
+
+    redraw_requested = 0;
+    return 1;
 }
 
 int terminal_process_is_running(void)

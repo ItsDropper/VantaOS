@@ -69,8 +69,14 @@ static int process_allocate_common(
     process->state = PROCESS_READY;
     process_copy_name(process->name, name);
 
+    /*
+     * Kernel threads execute entirely in the kernel address space.
+     * Separate CR3/user mappings are not enabled until the user-memory
+     * layer exists. Switching a kernel thread into an empty user
+     * address space would invalidate the kernel's executable mappings.
+     */
     process->address_space =
-        paging_create_address_space();
+        paging_get_kernel_address_space();
 
     if (!process->address_space)
     {
@@ -441,13 +447,11 @@ int process_reap(uint32_t pid)
     if (process->state != PROCESS_TERMINATED)
         return 0;
 
-    if (process->address_space)
-    {
-        paging_destroy_address_space(
-            process->address_space
-        );
-        process->address_space = NULL;
-    }
+    /*
+     * Kernel processes share the kernel address space and therefore do
+     * not own a page directory to destroy.
+     */
+    process->address_space = NULL;
 
     if (process->kernel_stack)
     {

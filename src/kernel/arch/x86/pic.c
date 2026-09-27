@@ -15,11 +15,6 @@ static inline void outb(uint16_t port, uint8_t value)
 
 void pic_remap(void)
 {
-    uint8_t mask1, mask2;
-
-    __asm__ volatile ("inb %1, %0" : "=a"(mask1) : "Nd"((uint16_t)PIC1_DATA));
-    __asm__ volatile ("inb %1, %0" : "=a"(mask2) : "Nd"((uint16_t)PIC2_DATA));
-
     outb(PIC1_COMMAND, 0x11);
     outb(PIC2_COMMAND, 0x11);
 
@@ -32,21 +27,12 @@ void pic_remap(void)
     outb(PIC1_DATA, 0x01);
     outb(PIC2_DATA, 0x01);
 
-    /* Only IRQ0, IRQ1, and IRQ12 have handlers. Keep every other PIC IRQ masked. IRQ2 is required for the slave PIC cascade. */
-    (void)mask1;
-    (void)mask2;
+    /*
+     * Only IRQ0, IRQ1, and IRQ12 have handlers.
+     * IRQ2 must remain enabled for the slave PIC cascade.
+     */
     outb(PIC1_DATA, 0xF8);
     outb(PIC2_DATA, 0xEF);
-
-    /*
-     * IRQ12 arrives through the slave PIC's cascade on master IRQ2.
-     * The cascade must therefore be unmasked whenever any slave IRQ
-     * is enabled. Leaving IRQ2 masked makes the PIC configuration
-     * internally inconsistent and can leave pending slave interrupts
-     * stuck while the kernel is already accepting interrupts.
-     */
-    outb(PIC1_DATA, (uint8_t)(mask1 & (uint8_t)~0x07));
-    outb(PIC2_DATA, (uint8_t)(mask2 & (uint8_t)~0x10));
 }
 
 void pic_send_eoi(unsigned int irq)

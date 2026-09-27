@@ -67,6 +67,50 @@ static void explorer_go_up(void)
     explorer_set_directory(node->parent, 1);
 }
 
+static int explorer_sidebar_hit(int x, int y, int wx, int wy)
+{
+    int sidebar_y = wy + EXPLORER_TITLE;
+
+    if (x < wx || x >= wx + EXPLORER_SIDEBAR)
+        return -1;
+
+    /*
+     * These rectangles are deliberately identical to the three rendered
+     * sidebar buttons. Do not derive the hit test from text or icon sizes.
+     */
+    if (y >= sidebar_y + 38 && y < sidebar_y + 72)
+        return 0;
+
+    if (y >= sidebar_y + 76 && y < sidebar_y + 110)
+        return 1;
+
+    if (y >= sidebar_y + 114 && y < sidebar_y + 148)
+        return 2;
+
+    return -1;
+}
+
+static void explorer_sidebar_select(int item)
+{
+    int id;
+
+    if (item == 0)
+    {
+        explorer_set_directory(filesystem_root(), 1);
+        return;
+    }
+
+    if (item == 1)
+        id = explorer_directory_for_path("/system");
+    else if (item == 2)
+        id = explorer_directory_for_path("/home");
+    else
+        return;
+
+    if (id >= 0)
+        explorer_set_directory((uint32_t)id, 1);
+}
+
 static const char* explorer_location_name(void)
 {
     const fs_node_t* node;
@@ -311,6 +355,18 @@ void file_explorer_draw(int width, int height)
         wx + 16, sidebar_y + 246,
         "/devices", 0x00B7C5D1, 1);
 
+    /*
+     * Show the active location explicitly. This also makes it obvious that
+     * a sidebar click changed Explorer state even when the directory is
+     * currently empty.
+     */
+    graphics_fill_rect(
+        wx + 12, sidebar_y + wh - EXPLORER_TITLE - 42,
+        EXPLORER_SIDEBAR - 24, 1, 0x00263B50);
+    graphics_draw_text(
+        wx + 16, sidebar_y + wh - EXPLORER_TITLE - 28,
+        explorer_location_name(), 0x006F879A, 1);
+
     explorer_toolbar(wx, sidebar_y, ww);
 
     content_x = wx + EXPLORER_SIDEBAR;
@@ -458,30 +514,14 @@ int file_explorer_click(int x, int y, int width, int height)
 
     sidebar_y = wy + EXPLORER_TITLE;
 
-    if (x < wx + EXPLORER_SIDEBAR &&
-        y >= sidebar_y + 38 &&
-        y < sidebar_y + 148)
     {
-        int item = (y - sidebar_y - 38) / 38;
+        int sidebar_item = explorer_sidebar_hit(x, y, wx, wy);
 
-        if (item == 0)
-            explorer_set_directory(filesystem_root(), 1);
-
-        if (item == 1)
+        if (sidebar_item >= 0)
         {
-            int id = explorer_directory_for_path("/system");
-            if (id >= 0)
-                explorer_set_directory((uint32_t)id, 1);
+            explorer_sidebar_select(sidebar_item);
+            return 0;
         }
-
-        if (item == 2)
-        {
-            int id = explorer_directory_for_path("/home");
-            if (id >= 0)
-                explorer_set_directory((uint32_t)id, 1);
-        }
-
-        return 0;
     }
 
     content_x = wx + EXPLORER_SIDEBAR;

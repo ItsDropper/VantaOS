@@ -82,12 +82,55 @@ void graphics_mouse_click(int button)
      */
     if (active_panel == 2)
     {
-        if (file_explorer_click(
-                cursor_x, cursor_y, width, height))
+        int ew, eh, ex, ey;
+        file_explorer_window_geometry(width, height, &ex, &ey, &ew, &eh);
+
+        /* Explorer controls use the exact same 48px title-button model as Terminal. */
+        if (cursor_y >= ey && cursor_y < ey + 48)
         {
-            active_panel = 0;
+            if (cursor_x >= ex + ew - 48 && cursor_x < ex + ew)
+            {
+                active_panel = 0;
+                explorer_dragging = 0;
+                return;
+            }
+
+            if (cursor_x >= ex + ew - 96 && cursor_x < ex + ew - 48)
+            {
+                explorer_dragging = 0;
+                if (!explorer_maximized)
+                {
+                    explorer_restore_x = ex;
+                    explorer_restore_y = ey;
+                    explorer_maximized = 1;
+                }
+                else
+                {
+                    explorer_maximized = 0;
+                    explorer_x = explorer_restore_x;
+                    explorer_y = explorer_restore_y;
+                }
+                return;
+            }
+
+            if (cursor_x >= ex + ew - 144 && cursor_x < ex + ew - 96)
+            {
+                active_panel = 0;
+                explorer_dragging = 0;
+                return;
+            }
+
+            if (!explorer_maximized && cursor_x >= ex && cursor_x < ex + ew - 144)
+            {
+                explorer_dragging = 1;
+                explorer_drag_offset_x = cursor_x - ex;
+                explorer_drag_offset_y = cursor_y - ey;
+                return;
+            }
         }
 
+        if (file_explorer_click(cursor_x, cursor_y, width, height))
+            active_panel = 0;
         return;
     }
 

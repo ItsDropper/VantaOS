@@ -281,6 +281,20 @@ void terminal_initialize(void)
     terminal_putchar('\n');
 }
 
+void terminal_reset(void)
+{
+    history_start = 0;
+    history_count = 0;
+    cursor_line = 0;
+    cursor_column = 0;
+    input_start_line = 0;
+    input_start_column = 0;
+    scroll_offset = 0;
+
+    terminal_add_line();
+}
+
+
 void terminal_begin_input(void)
 {
     if (history_count == 0)

@@ -45,9 +45,12 @@ extern exception_handler
 %macro IRQ_STUB 2
 %1:
     pusha
+    mov eax, esp
+    push eax
     push dword %2
     call interrupt_handler
-    add esp, 4
+    add esp, 8
+    mov esp, eax
     popa
     iretd
 %endmacro

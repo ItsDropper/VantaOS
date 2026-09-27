@@ -122,8 +122,6 @@ void kernel_main(multiboot_info_t* mbd)
     if (desktop_process_start(0) < 0)
         terminal_write("Desktop process initialization failed.\n");
 
-    __asm__ volatile ("sti");
-
     terminal_write("\nKernel initialized successfully.\n");
 
     terminal_write(
@@ -146,7 +144,16 @@ void kernel_main(multiboot_info_t* mbd)
         "Type 'help' in the Terminal app.\n\n"
     );
 
+    /*
+     * Render one complete desktop frame while we are still on the known
+     * good boot stack. Timer interrupts stay disabled until this frame is
+     * visible, so the scheduler cannot interrupt the first graphics path.
+     */
+    desktop_update();
     desktop_present();
+
+    /* Only now is it safe to let the timer-driven scheduler run. */
+    __asm__ volatile ("sti");
 
     /*
      * The boot context is now only the idle task. Desktop execution

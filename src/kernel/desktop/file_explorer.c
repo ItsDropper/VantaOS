@@ -180,6 +180,11 @@ void file_explorer_initialize(void)
     filesystem_ensure_directory("/home");
 }
 
+int file_explorer_is_dragging(void)
+{
+    return explorer_dragging;
+}
+
 void file_explorer_open_directory(uint32_t id)
 {
     if (!explorer_initialized)

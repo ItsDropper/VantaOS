@@ -7,6 +7,8 @@ extern unsigned char stack_bottom;
 extern unsigned char stack_top;
 extern unsigned char _start;
 extern unsigned char _end;
+extern unsigned char _kernel_text_start;
+extern unsigned char _kernel_text_end;
 extern void process_entry_trampoline(void);
 
 static process_t processes[PROCESS_MAX];
@@ -481,14 +483,19 @@ int process_stack_is_valid(uint32_t pid)
      * forms, but never accept an address outside the kernel image.
      */
     uintptr_t eip = (uintptr_t)values[8];
-    uintptr_t kernel_start = (uintptr_t)&_start;
-    uintptr_t kernel_end = (uintptr_t)&_end;
+    uintptr_t code_start = (uintptr_t)&_kernel_text_start;
+    uintptr_t code_end = (uintptr_t)&_kernel_text_end;
 
-    if (process->entry != NULL &&
-        eip == (uintptr_t)process_entry_trampoline)
-        return 1;
-
-    if (eip < kernel_start || eip >= kernel_end)
+    /*
+     * Never resume a saved context in the Multiboot header, data,
+     * BSS, or any other non-code part of the kernel image.
+     *
+     * The previous check used _start.._end, which included the
+     * Multiboot header at the beginning of the image. That allowed
+     * an EIP such as 0x0010000D to pass validation even though it
+     * points into raw header data.
+     */
+    if (eip < code_start || eip >= code_end)
         return 0;
 
     return 1;

@@ -51,7 +51,6 @@ typedef struct
 } process_t;
 
 void process_initialize(void);
-
 int process_is_initialized(void);
 
 int process_create_kernel(
@@ -60,18 +59,12 @@ int process_create_kernel(
     process_entry_t entry
 );
 
-int process_attach_current(
-    const char* name,
-    uint32_t parent_pid
-);
-
 int process_set_running(uint32_t pid);
 int process_mark_running(uint32_t pid);
 int process_mark_ready(uint32_t pid);
 
 int process_wake(uint32_t pid);
 int process_terminate(uint32_t pid);
-
 void process_block_current(void);
 void process_terminate_current(void);
 
@@ -81,12 +74,8 @@ int process_stack_is_valid(uint32_t pid);
 int process_switch_to(uint32_t pid);
 int process_reap(uint32_t pid);
 
-uint32_t process_schedule(uint32_t current_stack);
-
 const process_t* process_get(uint32_t pid);
-
 unsigned int process_count(void);
-
 uint32_t process_current_pid(void);
 
 #endif

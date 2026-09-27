@@ -35,8 +35,14 @@ void pic_remap(void)
     outb(PIC1_DATA, mask1);
     outb(PIC2_DATA, mask2);
 
-    /* IRQ0, IRQ1 and IRQ12 are the devices VantaOS currently consumes. */
-    outb(PIC1_DATA, (uint8_t)(mask1 & (uint8_t)~0x03));
+    /*
+     * IRQ12 arrives through the slave PIC's cascade on master IRQ2.
+     * The cascade must therefore be unmasked whenever any slave IRQ
+     * is enabled. Leaving IRQ2 masked makes the PIC configuration
+     * internally inconsistent and can leave pending slave interrupts
+     * stuck while the kernel is already accepting interrupts.
+     */
+    outb(PIC1_DATA, (uint8_t)(mask1 & (uint8_t)~0x07));
     outb(PIC2_DATA, (uint8_t)(mask2 & (uint8_t)~0x10));
 }
 

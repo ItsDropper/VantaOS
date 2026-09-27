@@ -474,22 +474,19 @@ int process_stack_is_valid(uint32_t pid)
         (values[10] & 0x00000200U) == 0)
         return 0;
 
-    if (process->entry != NULL)
-    {
-        if (values[8] !=
-                (uint32_t)(uintptr_t)process_entry_trampoline)
-            return 0;
-
-        return 1;
-    }
-
     /*
-     * Attached kernel contexts resume from a real timer IRQ frame.
-     * Never restore one unless its return address is inside the kernel.
+     * A newly-created kernel thread starts at the assembly trampoline.
+     * After its first timer preemption, however, its saved EIP is the
+     * actual instruction where the thread was interrupted. Accept both
+     * forms, but never accept an address outside the kernel image.
      */
     uintptr_t eip = (uintptr_t)values[8];
     uintptr_t kernel_start = (uintptr_t)&_start;
     uintptr_t kernel_end = (uintptr_t)&_end;
+
+    if (process->entry != NULL &&
+        eip == (uintptr_t)process_entry_trampoline)
+        return 1;
 
     if (eip < kernel_start || eip >= kernel_end)
         return 0;

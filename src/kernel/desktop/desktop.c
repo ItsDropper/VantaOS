@@ -139,11 +139,12 @@ static void terminal_window_draw(void)
 
     if (cursor_line >= cursor_first &&
         cursor_line < cursor_first + visible_lines &&
-        ((interrupts_get_ticks() / 50U) & 1U) == 0)
+        (((interrupts_get_ticks() / 50U) & 1U) == 0 || terminal_window_prompted))
     {
         int cursor_x = content_x + 10 + (int)cursor_column * 6;
         int cursor_y = content_y + 8 + (int)(cursor_line - cursor_first) * 10;
         graphics_fill_rect(cursor_x, cursor_y, 2, 8, 0x00F2F5F8);
+        terminal_window_prompted = 0;
     }
 
     graphics_draw_cursor();

@@ -5,6 +5,8 @@
 #include "file_explorer.h"
 #include "pmm.h"
 
+#define FILES_WINDOW_MARGIN 24
+
 void graphics_mouse_click(int button)
 {
     if (!initialized || button != 1)

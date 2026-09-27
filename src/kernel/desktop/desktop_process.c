@@ -2,6 +2,7 @@
 
 #include "desktop.h"
 #include "process.h"
+#include "mouse.h"
 
 static uint32_t desktop_pid;
 
@@ -9,6 +10,7 @@ void desktop_process_main(void)
 {
     while (1)
     {
+        mouse_process_events();
         desktop_update();
         __asm__ volatile ("hlt");
     }

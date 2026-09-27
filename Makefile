@@ -14,6 +14,7 @@ OBJS = boot.o \
        keyboard.o \
        mouse.o \
        interrupts.o \
+       panic.o \
        timer.o \
        pmm.o \
        paging.o \
@@ -52,6 +53,9 @@ mouse.o: src/kernel/drivers/input/mouse.c
 
 interrupts.o: src/kernel/arch/x86/interrupts.c
 	$(CC) $(CFLAGS) -c src/kernel/arch/x86/interrupts.c -o interrupts.o
+
+panic.o: src/kernel/panic.c
+	$(CC) $(CFLAGS) -c src/kernel/panic.c -o panic.o
 
 timer.o: src/kernel/core/timer.c
 	$(CC) $(CFLAGS) -c src/kernel/core/timer.c -o timer.o

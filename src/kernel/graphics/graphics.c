@@ -36,6 +36,8 @@ int explorer_y;
 int explorer_drag_offset_x;
 int explorer_drag_offset_y;
 int explorer_maximized;
+int explorer_restore_x;
+int explorer_restore_y;
 int settings_resolution_index;
 
 const uint32_t settings_widths[3] = {800, 1024, 1280};

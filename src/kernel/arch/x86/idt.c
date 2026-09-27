@@ -37,8 +37,10 @@ void idt_set_gate(
 
 void idt_initialize(void)
 {
+    /* Leave unused vectors non-present. A present gate with offset 0
+     * turns any unexpected vector into a jump through address 0. */
     for (int i = 0; i < 256; i++)
-        idt_set_gate(i, 0, 0x08, 0x8E);
+        idt_set_gate(i, 0, 0x08, 0x00);
 
     idt_pointer.limit = sizeof(idt) - 1;
     idt_pointer.base = (unsigned int)&idt;

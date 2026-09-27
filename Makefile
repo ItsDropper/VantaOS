@@ -10,6 +10,8 @@ OBJS = boot.o \
        kernel.o \
        desktop.o \
        gdt.o \
+       idt.o \
+       pic.o \
        terminal.o \
        keyboard.o \
        mouse.o \
@@ -46,6 +48,12 @@ kernel.o: src/kernel/kernel.c
 
 desktop.o: src/kernel/desktop/desktop.c
 	$(CC) $(CFLAGS) -c src/kernel/desktop/desktop.c -o desktop.o
+
+idt.o: src/kernel/arch/x86/idt.c
+	$(CC) $(CFLAGS) -c src/kernel/arch/x86/idt.c -o idt.o
+
+pic.o: src/kernel/arch/x86/pic.c
+	$(CC) $(CFLAGS) -c src/kernel/arch/x86/pic.c -o pic.o
 
 gdt.o: src/kernel/arch/x86/gdt.c
 	$(CC) $(CFLAGS) -c src/kernel/arch/x86/gdt.c -o gdt.o

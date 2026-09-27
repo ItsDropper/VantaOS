@@ -333,7 +333,7 @@ void fault_trace_draw(
     draw_instruction_diagnostics(right_x, y + 150, frame);
 
     draw_machine_state(x, lower_y);
-    draw_raw_frame(right_x, lower_y);
+    draw_raw_frame(right_x, lower_y, frame);
 
     /*
      * Everything is deliberately kept inside the two-column layout.

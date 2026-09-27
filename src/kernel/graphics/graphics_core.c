@@ -2,6 +2,7 @@
 #include "paging.h"
 #include "pci.h"
 #include "mouse.h"
+#include "file_explorer.h"
 #include <stdint.h>
 
 #define BOCHS_VBE_INDEX 0x01CE
@@ -383,7 +384,7 @@ int graphics_terminal_is_dragging(void)
 
 int graphics_explorer_is_dragging(void)
 {
-    return explorer_dragging;
+    return file_explorer_is_dragging();
 }
 
 int graphics_get_terminal_x(void)

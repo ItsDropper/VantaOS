@@ -5,7 +5,7 @@
 
 static uint32_t desktop_pid;
 
-static void desktop_process_main(void)
+void desktop_process_main(void)
 {
     while (1)
     {

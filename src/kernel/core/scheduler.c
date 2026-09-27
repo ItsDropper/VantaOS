@@ -76,9 +76,17 @@ uint32_t scheduler_tick(uint32_t current_stack)
     if (!process_switch_to(next_pid))
         return current_stack;
 
-    paging_switch_address_space(
-        next->address_space
-    );
+    /*
+     * Kernel threads currently share the kernel address space.
+     * Do not load a per-process CR3 until user address spaces are real.
+     */
+    if (next->address_space !=
+        paging_get_current_address_space())
+    {
+        paging_switch_address_space(
+            next->address_space
+        );
+    }
 
     if (current->state == PROCESS_TERMINATED)
         process_reap(current_pid);

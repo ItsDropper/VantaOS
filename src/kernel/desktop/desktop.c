@@ -44,6 +44,7 @@ int desktop_launch_terminal(void)
 
     terminal_window_open = 1;
     terminal_window_prompted = 1;
+    graphics_clear_terminal_close_requested();
     terminal_last_blink_state = interrupts_get_ticks() / 50U;
 
     graphics_set_terminal_running(1);

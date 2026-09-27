@@ -87,23 +87,17 @@ unsigned int interrupt_handler(
     switch (interrupt_number)
     {
         case IRQ0_VECTOR:
-            /*
-             * IRQ0 isolated: no timer or scheduler code.
-             */
+            timer_handle_interrupt();
             pic_send_eoi(0);
             return saved_stack;
 
         case IRQ1_VECTOR:
-            /*
-             * IRQ1 isolated: no keyboard handler.
-             */
+            keyboard_handle_interrupt();
             pic_send_eoi(1);
             return saved_stack;
 
         case IRQ12_VECTOR:
-            /*
-             * IRQ12 isolated: no mouse handler.
-             */
+            mouse_handle_interrupt();
             pic_send_eoi(12);
             return saved_stack;
 

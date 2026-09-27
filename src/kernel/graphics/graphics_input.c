@@ -133,7 +133,6 @@ void graphics_mouse_click(int button)
         {
             active_panel = 0;
             terminal_dragging = 0;
-    explorer_dragging = 0;
             return;
         }
 
@@ -326,6 +325,7 @@ void graphics_mouse_release(int button)
         return;
 
     terminal_dragging = 0;
+    explorer_dragging = 0;
 }
 
 void graphics_cursor_restore(void)

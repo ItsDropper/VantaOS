@@ -63,7 +63,8 @@ void kernel_main(multiboot_info_t* mbd)
     int graphics_ready =
         graphics_initialize(mbd);
 
-    terminal_write("Graphics diagnostics:\n");
+    terminal_write("Graphics diagnostics:
+");
     terminal_write("  Multiboot flags: ");
     terminal_write_hex(mbd ? mbd->flags : 0);
     terminal_write("\n");
@@ -95,17 +96,16 @@ void kernel_main(multiboot_info_t* mbd)
     filesystem_initialize(mbd);
     vfs_initialize();
 
+    /*
+     * Process/thread creation is intentionally isolated from the boot
+     * context while the kernel control-flow fault is being repaired.
+     * Creating synthetic process stacks here cannot affect the known-good
+     * kernel stack or desktop execution path.
+     */
     process_initialize();
     scheduler_initialize();
     terminal_process_initialize();
     desktop_process_initialize();
-
-    /*
-     * PID 1 is the kernel idle context. It owns the boot stack and is
-     * never used as the desktop's execution stack.
-     */
-    if (process_attach_current("idle", 0) < 0)
-        terminal_write("Idle process initialization failed.\n");
 
     boot_memory = read_tsc();
     boot_interrupts = boot_memory;
@@ -118,9 +118,6 @@ void kernel_main(multiboot_info_t* mbd)
     boot_shell = read_tsc();
 
     desktop_initialize(mbd);
-
-    if (desktop_process_start(0) < 0)
-        terminal_write("Desktop process initialization failed.\n");
 
     terminal_write("\nKernel initialized successfully.\n");
 
@@ -145,18 +142,12 @@ void kernel_main(multiboot_info_t* mbd)
     );
 
     /*
-     * Render one complete desktop frame while we are still on the known
-     * good boot stack. Timer interrupts stay disabled until this frame is
-     * visible, so the scheduler cannot interrupt the first graphics path.
+     * Keep execution entirely on the original boot stack. No synthetic
+     * process context is started and no scheduler context switch occurs.
      */
     desktop_update();
     desktop_present();
 
-    /*
-     * Run the desktop directly on the known-good boot context for now.
-     * IRQs remain enabled, so keyboard/mouse/timer interrupts still work,
-     * but IRQ0 cannot replace this context while the scheduler is isolated.
-     */
     __asm__ volatile ("sti");
 
     desktop_process_main();

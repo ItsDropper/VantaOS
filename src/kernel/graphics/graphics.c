@@ -40,3 +40,8 @@ int cursor_saved_y;
 int cursor_saved_width;
 int cursor_saved_height;
 int cursor_saved_valid;
+
+void graphics_clear_terminal_close_requested(void)
+{
+    terminal_close_requested = 0;
+}

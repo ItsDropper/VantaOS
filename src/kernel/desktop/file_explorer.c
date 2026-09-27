@@ -190,7 +190,7 @@ void file_explorer_draw(int width, int height)
         "C:", explorer_directory == filesystem_root(), 1
     );
 
-    int system_id = filesystem_lookup("/system");
+    int system_id = filesystem_ensure_directory("/system");
     explorer_draw_sidebar_item(
         sidebar_x + 12, sidebar_y + 76,
         "System",
@@ -199,7 +199,7 @@ void file_explorer_draw(int width, int height)
         0
     );
 
-    int home_id = filesystem_lookup("/home");
+    int home_id = filesystem_ensure_directory("/home");
     explorer_draw_sidebar_item(
         sidebar_x + 12, sidebar_y + 114,
         "Home",
@@ -446,7 +446,7 @@ int file_explorer_click(
         if (y >= sidebar_y + 76 &&
             y < sidebar_y + 110)
         {
-            int id = filesystem_lookup("/system");
+            int id = filesystem_ensure_directory("/system");
             if (id >= 0)
                 explorer_set_directory((uint32_t)id);
             return 0;
@@ -455,7 +455,7 @@ int file_explorer_click(
         if (y >= sidebar_y + 114 &&
             y < sidebar_y + 148)
         {
-            int id = filesystem_lookup("/home");
+            int id = filesystem_ensure_directory("/home");
             if (id >= 0)
                 explorer_set_directory((uint32_t)id);
             return 0;

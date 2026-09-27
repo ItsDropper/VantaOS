@@ -28,6 +28,8 @@ void graphics_mouse_move(int dx, int dy);
 void graphics_mouse_click(int button);
 void graphics_mouse_release(int button);
 void graphics_draw_cursor(void);
+void graphics_fill_rounded_rect(int x,int y,int width,int height,int radius,uint32_t color);
+int graphics_set_resolution(uint32_t width,uint32_t height);
 
 int graphics_is_initialized(void);
 int graphics_get_active_panel(void);

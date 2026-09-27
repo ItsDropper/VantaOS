@@ -1,10 +1,17 @@
 #include "process.h"
-#include "heap.h"
 
 #include <stddef.h>
 #include <stdint.h>
 
 static process_t processes[PROCESS_MAX];
+
+/*
+ * Kernel thread stacks live in the statically mapped kernel image area.
+ * This avoids depending on the virtual heap while the scheduler itself
+ * is still bringing process execution online.
+ */
+static uint8_t process_stacks[PROCESS_MAX][PROCESS_STACK_SIZE]
+    __attribute__((aligned(16)));
 
 static int initialized;
 static uint32_t current_pid;
@@ -240,16 +247,7 @@ int process_create_kernel(
             return -1;
 
         process->kernel_stack =
-            kmalloc(PROCESS_STACK_SIZE);
-
-        if (!process->kernel_stack)
-        {
-            paging_destroy_address_space(
-                process->address_space
-            );
-            process_reset_record(process);
-            return -1;
-        }
+            process_stacks[pid];
 
         process->entry = entry;
 
@@ -453,11 +451,7 @@ int process_reap(uint32_t pid)
      */
     process->address_space = NULL;
 
-    if (process->kernel_stack)
-    {
-        kfree(process->kernel_stack);
-        process->kernel_stack = NULL;
-    }
+    process->kernel_stack = NULL;
 
     process_reset_record(process);
     process->pid = pid;

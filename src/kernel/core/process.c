@@ -3,6 +3,11 @@
 #include <stddef.h>
 #include <stdint.h>
 
+extern unsigned char stack_bottom;
+extern unsigned char stack_top;
+extern unsigned char _start;
+extern unsigned char _end;
+
 static process_t processes[PROCESS_MAX];
 
 /*
@@ -213,6 +218,7 @@ int process_attach_current(
 
         process->context.cs = 0x08U;
         process->context.ss = 0x10U;
+        process->kernel_stack = (void*)(uintptr_t)&stack_bottom;
 
         current_pid = pid;
         return (int)pid;
@@ -442,16 +448,13 @@ int process_stack_is_valid(uint32_t pid)
 
     if (process->state == PROCESS_UNUSED ||
         process->stack_pointer == 0 ||
-        process->kernel_stack == NULL ||
-        process->entry == NULL)
+        process->kernel_stack == NULL)
         return 0;
 
     uintptr_t stack_base =
         (uintptr_t)process->kernel_stack;
-
     uintptr_t stack_end =
         stack_base + PROCESS_STACK_SIZE;
-
     uintptr_t frame =
         (uintptr_t)process->stack_pointer;
 
@@ -463,17 +466,32 @@ int process_stack_is_valid(uint32_t pid)
         (uint32_t*)frame;
 
     /*
-     * The scheduler restores this exact layout:
-     *
-     * 0..7   = POPAD/PUSHA register frame
-     * 8      = EIP
-     * 9      = CS
-     * 10     = EFLAGS
+     * Both attached and synthetic kernel processes return through the
+     * same IRQ epilogue: POPA followed by IRETD.
      */
-    if (values[8] !=
-            (uint32_t)(uintptr_t)process_entry_trampoline ||
-        values[9] != 0x08U ||
+    if (values[9] != 0x08U ||
         (values[10] & 0x00000200U) == 0)
+        return 0;
+
+    if (process->entry != NULL)
+    {
+        if (values[8] !=
+                (uint32_t)(uintptr_t)process_entry_trampoline)
+            return 0;
+
+        return 1;
+    }
+
+    /*
+     * The desktop process is attached to the boot stack. Its saved frame
+     * is a real timer IRQ frame rather than a synthetic process frame.
+     * Never restore it unless the return address is inside the kernel.
+     */
+    uintptr_t eip = (uintptr_t)values[8];
+    uintptr_t kernel_start = (uintptr_t)&_start;
+    uintptr_t kernel_end = (uintptr_t)&_end;
+
+    if (eip < kernel_start || eip >= kernel_end)
         return 0;
 
     return 1;

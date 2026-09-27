@@ -5,6 +5,7 @@
 #include "keyboard.h"
 #include "mouse.h"
 #include "process.h"
+#include "terminal_process.h"
 #include "shell.h"
 #include "terminal.h"
 
@@ -14,15 +15,59 @@
 static int terminal_window_open;
 static int terminal_window_prompted;
 
-static void terminal_prepare_session(void)
+static void terminal_window_draw(void);
+
+
+static void desktop_gui_present(void)
 {
-    terminal_reset();
-    shell_initialize();
-    terminal_write("\nVantaOS Terminal\n");
-    shell_show_prompt();
-    terminal_window_prompted = 1;
+    if (!graphics_is_initialized())
+        return;
+
+    graphics_present();
+
+    if (terminal_window_open &&
+        graphics_get_active_panel() == 3)
+        terminal_window_draw();
+    else
+        graphics_draw_cursor();
 }
 
+static int desktop_try_launch_terminal(void)
+{
+    if (terminal_window_open)
+        return 1;
+
+    int pid =
+        terminal_process_start(
+            process_current_pid()
+        );
+
+    if (pid < 0)
+        return 0;
+
+    terminal_window_open = 1;
+    terminal_window_prompted = 1;
+
+    graphics_set_terminal_running(1);
+    graphics_select_panel(3);
+    desktop_gui_present();
+
+    return 1;
+}
+
+static void terminal_close_window(void)
+{
+    terminal_window_open = 0;
+    terminal_window_prompted = 0;
+
+    graphics_set_terminal_running(0);
+
+    terminal_reset();
+    shell_initialize();
+
+    graphics_select_panel(0);
+    desktop_gui_present();
+}
 
 static void terminal_window_draw(void);
 
@@ -287,7 +332,6 @@ void desktop_initialize(multiboot_info_t* mbd)
 
     terminal_window_open = 0;
     terminal_window_prompted = 0;
-    terminal_prepare_session();
 }
 
 void desktop_present(void)
@@ -297,11 +341,6 @@ void desktop_present(void)
 
 void desktop_update(void)
 {
-    /*
-     * Mouse handlers select the application panel immediately from
-     * the input interrupt. Launch the selected desktop application
-     * here on the next kernel iteration.
-     */
     if (graphics_get_active_panel() == 3 &&
         !terminal_window_open)
     {
@@ -312,14 +351,19 @@ void desktop_update(void)
     if (terminal_window_open &&
         graphics_terminal_close_requested())
     {
-        terminal_close_window();
-        return;
+        terminal_process_request_exit();
     }
 
     if (terminal_window_open)
     {
-        terminal_process_step();
-
+        if (!terminal_process_is_running())
+        {
+            terminal_close_window();
+        }
+        else if (terminal_process_consume_redraw())
+        {
+            terminal_window_draw();
+        }
     }
 
     if (mouse_has_event())
@@ -327,22 +371,25 @@ void desktop_update(void)
         int wheel_event = mouse_has_wheel_event();
         int click_event = mouse_has_click_event();
 
-        if (wheel_event)
+        if (wheel_event &&
+            terminal_window_open)
         {
-            int wheel_delta = mouse_get_wheel_delta();
+            int wheel_delta =
+                mouse_get_wheel_delta();
 
             if (wheel_delta > 0)
                 terminal_scroll_down();
 
             if (wheel_delta < 0)
                 terminal_scroll_up();
+
+            terminal_window_draw();
         }
 
         if (graphics_is_initialized())
         {
             if (graphics_terminal_is_dragging() ||
-                click_event ||
-                (wheel_event && terminal_window_open))
+                click_event)
                 desktop_gui_present();
             else if (mouse_has_move_event())
                 graphics_draw_cursor();

@@ -39,6 +39,9 @@ static int terminal_restore_x;
 static int terminal_restore_y;
 static int terminal_drag_offset_x;
 static int terminal_drag_offset_y;
+static int settings_resolution_index;
+static const uint32_t settings_widths[3] = {800, 1024, 1280};
+static const uint32_t settings_heights[3] = {600, 768, 720};
 
 #define CURSOR_SAVE_SIZE 20
 static uint32_t cursor_saved[CURSOR_SAVE_SIZE * CURSOR_SAVE_SIZE];
@@ -459,10 +462,67 @@ void graphics_select_panel(int panel)
     if (!initialized)
         return;
 
-    if (panel < 0 || panel > 3)
+    if (panel < 0 || panel > 4)
         return;
 
     active_panel = panel;
+}
+
+int graphics_set_resolution(uint32_t width, uint32_t height)
+{
+    if (!initialized || width < 640 || height < 480 || width > 1600 || height > 900)
+        return 0;
+
+    uint64_t bytes = (uint64_t)width * 4U * height;
+    uint32_t pages = (uint32_t)((bytes + 4095) / 4096);
+    if (pages == 0 || pages > GRAPHICS_MAX_PAGES)
+        return 0;
+
+    uint32_t physical = 0;
+    for (int i = 0; i < pci_get_device_count(); i++)
+    {
+        const struct pci_device* device = pci_get_device(i);
+        if (!device || device->vendor_id != 0x1234 ||
+            device->device_id != 0x1111 || device->class_code != 0x03)
+            continue;
+        if (pci_get_bar0(device, &physical))
+            break;
+    }
+    if (physical == 0)
+        return 0;
+
+    bochs_vbe_write(BOCHS_VBE_INDEX_ENABLE, 0);
+    bochs_vbe_write(BOCHS_VBE_INDEX_XRES, (uint16_t)width);
+    bochs_vbe_write(BOCHS_VBE_INDEX_YRES, (uint16_t)height);
+    bochs_vbe_write(BOCHS_VBE_INDEX_BPP, 32);
+    bochs_vbe_write(BOCHS_VBE_INDEX_VIRT_WIDTH, (uint16_t)width);
+    bochs_vbe_write(BOCHS_VBE_INDEX_VIRT_HEIGHT, (uint16_t)height);
+    bochs_vbe_write(BOCHS_VBE_INDEX_ENABLE, BOCHS_VBE_ENABLE_LFB);
+
+    for (uint32_t i = 0; i < pages; i++)
+        if (!paging_map_page(GRAPHICS_VIRTUAL_BASE + i * 4096,
+                             (physical & 0xFFFFF000U) + i * 4096))
+            return 0;
+
+    framebuffer = (uint8_t*)(GRAPHICS_VIRTUAL_BASE + (physical & 0xFFF));
+    framebuffer_pitch = width * 4;
+    framebuffer_width = width;
+    framebuffer_height = height;
+    red_position = 16; red_mask_size = 8;
+    green_position = 8; green_mask_size = 8;
+    blue_position = 0; blue_mask_size = 8;
+    cursor_x = (int)width / 2;
+    cursor_y = (int)height / 2;
+    terminal_x = (int)width / 2 - 440;
+    if (terminal_x < 10) terminal_x = 10;
+    terminal_y = 64;
+    terminal_restore_x = terminal_x;
+    terminal_restore_y = terminal_y;
+    terminal_maximized = 0;
+    terminal_dragging = 0;
+    cursor_saved_valid = 0;
+    active_panel = 0;
+    return 1;
 }
 
 int graphics_terminal_is_maximized(void)
@@ -636,6 +696,41 @@ void graphics_draw_text(
     }
 }
 
+void graphics_fill_rounded_rect(int x,int y,int width,int height,int radius,uint32_t color)
+{
+    if (!initialized || width <= 0 || height <= 0)
+        return;
+    if (radius <= 0) { graphics_fill_rect(x,y,width,height,color); return; }
+    if (radius * 2 > width) radius = width / 2;
+    if (radius * 2 > height) radius = height / 2;
+
+    uint32_t packed = pack_color(color);
+    int x0 = x < 0 ? 0 : x;
+    int y0 = y < 0 ? 0 : y;
+    int x1 = x + width;
+    int y1 = y + height;
+    if (x1 > (int)framebuffer_width) x1 = (int)framebuffer_width;
+    if (y1 > (int)framebuffer_height) y1 = (int)framebuffer_height;
+
+    int r2 = radius * radius;
+    for (int py = y0; py < y1; py++)
+    {
+        volatile uint32_t* row =
+            (volatile uint32_t*)(framebuffer + py * framebuffer_pitch);
+        for (int px = x0; px < x1; px++)
+        {
+            int cx = px < x + radius ? x + radius :
+                (px >= x + width - radius ? x + width - radius - 1 : px);
+            int cy = py < y + radius ? y + radius :
+                (py >= y + height - radius ? y + height - radius - 1 : py);
+            int dx = px - cx;
+            int dy = py - cy;
+            if (dx * dx + dy * dy <= r2)
+                row[px] = packed;
+        }
+    }
+}
+
 static void graphics_draw_vanta_logo(int x, int y, int size)
 {
     /* Original Vanta mark: a clean geometric V built from two angled bars. */
@@ -696,6 +791,14 @@ void graphics_mouse_click(int button)
             start_menu_open = 0;
             return;
         }
+        if (cursor_x >= menu_x + 24 && cursor_x < menu_x + 436 &&
+            cursor_y >= menu_y + 272 && cursor_y < menu_y + 326)
+        {
+            active_panel = 4;
+            start_menu_open = 0;
+            return;
+        }
+
 
         if (!(cursor_x >= menu_x && cursor_x < menu_x + menu_w &&
               cursor_y >= menu_y && cursor_y < height - 8))
@@ -798,6 +901,35 @@ void graphics_mouse_click(int button)
             return;
         }
 
+        return;
+    }
+
+    if (active_panel == 4)
+    {
+        int window_w=760, window_h=480;
+        int window_x=width/2-window_w/2;
+        int window_y=height/2-window_h/2;
+
+        if (cursor_x>=window_x+window_w-52 && cursor_x<window_x+window_w &&
+            cursor_y>=window_y && cursor_y<window_y+44)
+        {
+            active_panel=0;
+            return;
+        }
+
+        if (cursor_y>=window_y+156 && cursor_y<window_y+210)
+        {
+            for(int i=0;i<3;i++)
+            {
+                int bx=window_x+28+i*224;
+                if(cursor_x>=bx && cursor_x<bx+200)
+                {
+                    settings_resolution_index=i;
+                    graphics_set_resolution(settings_widths[i],settings_heights[i]);
+                    return;
+                }
+            }
+        }
         return;
     }
 
@@ -1083,22 +1215,49 @@ void graphics_present(void)
     graphics_fill_rect(0, 2, 420, h - 66, 0x000E1C29);
     graphics_fill_rect(420, 2, 1, h - 66, 0x00142330);
 
-    graphics_fill_rect(32, 34, 72, 58, 0x00182A39);
+    graphics_fill_rounded_rect(32, 34, 72, 58, 10, 0x00182A39);
     graphics_fill_rect(50, 49, 36, 25, 0x004B9CD3);
     graphics_fill_rect(50, 46, 15, 5, 0x004B9CD3);
     graphics_draw_text(43, 102, "SYSTEM", 0x00E7EEF4, 1);
 
-    graphics_fill_rect(128, 34, 72, 58, 0x00182A39);
+    graphics_fill_rounded_rect(128, 34, 72, 58, 10, 0x00182A39);
     graphics_fill_rect(147, 49, 36, 25, 0x0057B77E);
     graphics_fill_rect(147, 46, 15, 5, 0x0057B77E);
     graphics_draw_text(146, 102, "FILES", 0x00E7EEF4, 1);
 
-    graphics_fill_rect(224, 34, 72, 58, 0x00182A39);
+    graphics_fill_rounded_rect(224, 34, 72, 58, 10, 0x00182A39);
     graphics_fill_rect(242, 48, 38, 27, 0x00131D28);
     graphics_draw_text(249, 56, ">_", 0x005AA9E6, 1);
     graphics_draw_text(236, 102, "TERMINAL", 0x00E7EEF4, 1);
 
     graphics_draw_text(34, h - 92, "VANTAOS", 0x003E617A, 1);
+
+    if (active_panel == 4)
+    {
+        int ww=760, wh=480;
+        int wx=w/2-ww/2, wy=h/2-wh/2;
+        graphics_fill_rounded_rect(wx,wy,ww,wh,14,0x00161E28);
+        graphics_fill_rounded_rect(wx,wy,ww,44,14,0x00212B37);
+        graphics_draw_text(wx+24,wy+15,"SETTINGS",0x00FFFFFF,2);
+        graphics_draw_text(wx+ww-28,wy+15,"X",0x00FFFFFF,2);
+        graphics_draw_text(wx+28,wy+92,"DISPLAY",0x003B82F6,2);
+        graphics_draw_text(wx+28,wy+126,"Resolution",0x00D8E2EA,1);
+        const char* labels[3]={"800x600","1024x768","1280x720"};
+        for(int i=0;i<3;i++)
+        {
+            int bx=wx+28+i*224;
+            graphics_fill_rounded_rect(bx,wy+156,200,54,10,
+                settings_resolution_index==i?0x002B80C9:0x00202C39);
+            graphics_draw_text(bx+54,wy+177,labels[i],0x00FFFFFF,1);
+        }
+        graphics_draw_text(wx+28,wy+250,"Display mode",0x008EA0B3,1);
+        graphics_draw_text(wx+190,wy+250,"VBE framebuffer",0x00F2F5F8,1);
+        graphics_draw_text(wx+28,wy+286,"Appearance",0x003B82F6,2);
+        graphics_draw_text(wx+28,wy+320,"Rounded corners",0x008EA0B3,1);
+        graphics_draw_text(wx+190,wy+320,"ON",0x00F2F5F8,1);
+        graphics_draw_text(wx+28,wy+360,"Resolution changes are applied immediately",0x008EA0B3,1);
+        graphics_draw_text(wx+28,wy+382,"when the VBE display is available.",0x008EA0B3,1);
+    }
 
     if (active_panel == 1)
     {

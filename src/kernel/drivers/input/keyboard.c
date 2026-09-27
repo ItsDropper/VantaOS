@@ -249,6 +249,13 @@ static void handle_key_press(uint8_t scancode)
     if (scancode >= sizeof(keyboard_map_lowercase))
         return;
 
+    /* Desktop Terminal hotkey is an event, not terminal input. */
+    if (scancode == 0x14 && !ctrl_pressed && !alt_pressed)
+    {
+        keyboard_event_push(KEY_EVENT_TERMINAL);
+        return;
+    }
+
     bool shift = shift_pressed();
 
     char normal =

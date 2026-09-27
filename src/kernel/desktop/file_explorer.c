@@ -471,7 +471,16 @@ int file_explorer_click(
         {
             int id = filesystem_lookup("/system");
             if (id >= 0)
+            {
                 explorer_set_directory((uint32_t)id);
+                return 0;
+            }
+
+            /*
+             * These quick-access entries are only valid when the real
+             * filesystem contains them. Never consume the click as if the
+             * navigation succeeded.
+             */
             return 0;
         }
 
@@ -480,7 +489,11 @@ int file_explorer_click(
         {
             int id = filesystem_lookup("/home");
             if (id >= 0)
+            {
                 explorer_set_directory((uint32_t)id);
+                return 0;
+            }
+
             return 0;
         }
 

@@ -32,8 +32,11 @@ void pic_remap(void)
     outb(PIC1_DATA, 0x01);
     outb(PIC2_DATA, 0x01);
 
-    outb(PIC1_DATA, mask1);
-    outb(PIC2_DATA, mask2);
+    /* Only IRQ0, IRQ1, and IRQ12 have handlers. Keep every other PIC IRQ masked. IRQ2 is required for the slave PIC cascade. */
+    (void)mask1;
+    (void)mask2;
+    outb(PIC1_DATA, 0xF8);
+    outb(PIC2_DATA, 0xEF);
 
     /*
      * IRQ12 arrives through the slave PIC's cascade on master IRQ2.

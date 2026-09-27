@@ -35,6 +35,28 @@ void shell_backspace(void);
 void shell_insert_char(char c);
 void shell_execute(void);
 void shell_ps(void);
+
+void shell_copy_path(char* destination, const char* source);
+void shell_append_path(char* destination, const char* source);
+int shell_resolve_path(const char* argument, char* resolved);
+void shell_ls(const char* argument);
+void shell_cat(const char* argument);
+void shell_pwd(void);
+void shell_cd(const char* argument);
+void shell_mkdir(const char* argument);
+void shell_touch(const char* argument);
+void shell_write_file(const char* argument);
+
+void shell_help(void);
+void shell_about(void);
+void shell_specs(void);
+void shell_boot(void);
+void shell_uptime(void);
+void shell_mem(void);
+void shell_heap(void);
+void shell_show_history(void);
+void shell_fault(void);
+void shell_reboot(void);
 void shell_print_decimal(unsigned int value);
 void shell_print_hex64(unsigned long long value);
 int shell_string_equals(const char* a, const char* b);

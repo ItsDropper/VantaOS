@@ -9,7 +9,7 @@
 #define PAGE_USER    0x004U
 
 #define PAGING_KERNEL_DIRECTORY_INDEX 256U
-#define PAGING_GRAPHICS_DIRECTORY_INDEX 258U
+#define PAGING_GRAPHICS_DIRECTORY_INDEX 832U
 
 typedef struct paging_address_space
 {

@@ -122,7 +122,11 @@ static void terminal_window_draw(void)
     if (visible_lines > 55)
         visible_lines = 55;
 
-    size_t first = count > visible_lines ? count - visible_lines : 0;
+    size_t live_start = count > visible_lines ? count - visible_lines : 0;
+    size_t scroll_offset = terminal_get_scroll_offset();
+    if (scroll_offset > live_start)
+        scroll_offset = live_start;
+    size_t first = live_start - scroll_offset;
     char line[81];
     int text_y = content_y + 8;
 
@@ -137,9 +141,10 @@ static void terminal_window_draw(void)
 
     size_t cursor_line = terminal_get_cursor_line();
     size_t cursor_column = terminal_get_cursor_column();
-    size_t cursor_first = count > visible_lines ? count - visible_lines : 0;
+    size_t cursor_first = live_start - scroll_offset;
 
-    if (cursor_line >= cursor_first &&
+    if (scroll_offset == 0 &&
+        cursor_line >= cursor_first &&
         cursor_line < cursor_first + visible_lines)
     {
         int cursor_x = content_x + 10 + (int)cursor_column * 6;
@@ -215,7 +220,7 @@ void desktop_update(void)
         int wheel_event = mouse_has_wheel_event();
         int click_event = mouse_has_click_event();
 
-        if (wheel_event && terminal_window_open)
+        if (wheel_event && terminal_window_open && graphics_get_active_panel() == 3)
         {
             int wheel_delta = mouse_get_wheel_delta();
             if (wheel_delta > 0)

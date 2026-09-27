@@ -3,59 +3,53 @@
 #include <stdint.h>
 #include <stddef.h>
 
-extern uint32_t end;
+/*
+ * The PMM metadata lives in the kernel's BSS instead of being placed
+ * immediately after the linked kernel image. This makes its location
+ * independent of the kernel size and prevents it from overlapping
+ * Multiboot data or other early allocations.
+ *
+ * 4 GiB / 4 KiB = 1,048,576 physical frames.
+ * One bit per frame therefore needs 128 KiB.
+ */
+static uint32_t pmm_bitmap[PMM_BITMAP_WORDS]
+    __attribute__((aligned(4096)));
 
-#define MULTIBOOT_INFO_CMDLINE       (1 << 2)
-#define MULTIBOOT_INFO_MODS          (1 << 3)
-#define MULTIBOOT_INFO_BOOT_LOADER   (1 << 9)
-#define MULTIBOOT_INFO_VBE           (1 << 11)
+static uint32_t pmm_reserved_bitmap[PMM_BITMAP_WORDS]
+    __attribute__((aligned(4096)));
 
-typedef struct
-{
-    uint32_t mod_start;
-    uint32_t mod_end;
-    uint32_t string;
-    uint32_t reserved;
-} __attribute__((packed)) multiboot_module_t;
-
-static uint32_t* pmm_bitmap;
-static uint32_t* pmm_reserved_bitmap;
 static uint32_t total_blocks;
-static uint32_t bitmap_size;
 static uint32_t free_blocks;
+static int initialized;
 
 static inline void bitmap_set(uint32_t* bitmap, uint32_t bit)
 {
-    bitmap[bit / 32] |= (1U << (bit % 32));
+    bitmap[bit / 32U] |= (1U << (bit % 32U));
 }
 
 static inline void bitmap_clear(uint32_t* bitmap, uint32_t bit)
 {
-    bitmap[bit / 32] &= ~(1U << (bit % 32));
+    bitmap[bit / 32U] &= ~(1U << (bit % 32U));
 }
 
 static inline int bitmap_test(const uint32_t* bitmap, uint32_t bit)
 {
-    return (bitmap[bit / 32] & (1U << (bit % 32))) != 0;
+    return (bitmap[bit / 32U] & (1U << (bit % 32U))) != 0;
 }
 
 static void pmm_reserve_range(uint64_t start, uint64_t end_address)
 {
-    if (!pmm_bitmap ||
-        !pmm_reserved_bitmap ||
-        start >= 0x100000000ULL ||
+    if (!initialized ||
+        start >= PMM_MAX_PHYSICAL_ADDRESS ||
         end_address <= start)
         return;
 
-    if (end_address > 0x100000000ULL)
-        end_address = 0x100000000ULL;
+    if (end_address > PMM_MAX_PHYSICAL_ADDRESS)
+        end_address = PMM_MAX_PHYSICAL_ADDRESS;
 
     uint32_t first = (uint32_t)(start / PAGE_SIZE);
     uint32_t last =
-        (uint32_t)((end_address + PAGE_SIZE - 1) / PAGE_SIZE);
-
-    if (first >= total_blocks)
-        return;
+        (uint32_t)((end_address + PAGE_SIZE - 1U) / PAGE_SIZE);
 
     if (last > total_blocks)
         last = total_blocks;
@@ -74,32 +68,17 @@ static void pmm_reserve_range(uint64_t start, uint64_t end_address)
     }
 }
 
-static void pmm_reserve_cstring(uint32_t address)
-{
-    if (address == 0)
-        return;
-
-    uint32_t length = 0;
-
-    while (length < 4096 && *((const char*)(uintptr_t)address + length))
-        length++;
-
-    if (length < 4096)
-        length++;
-
-    pmm_reserve_range(
-        address,
-        (uint64_t)address + length
-    );
-}
-
 void pmm_initialize(multiboot_info_t* mbd)
 {
-    pmm_bitmap = NULL;
-    pmm_reserved_bitmap = NULL;
+    initialized = 0;
     total_blocks = 0;
-    bitmap_size = 0;
     free_blocks = 0;
+
+    for (uint32_t i = 0; i < PMM_BITMAP_WORDS; i++)
+    {
+        pmm_bitmap[i] = 0xFFFFFFFFU;
+        pmm_reserved_bitmap[i] = 0xFFFFFFFFU;
+    }
 
     if (!mbd ||
         !(mbd->flags & MULTIBOOT_INFO_MEM_MAP) ||
@@ -107,28 +86,18 @@ void pmm_initialize(multiboot_info_t* mbd)
         mbd->mmap_length < sizeof(uint32_t))
         return;
 
-    uint64_t mmap_start = mbd->mmap_addr;
-    uint64_t mmap_end_address =
-        mmap_start + mbd->mmap_length;
-
-    if (mmap_end_address > 0x100000000ULL ||
-        mmap_end_address <= mmap_start)
-        return;
-
     uint64_t highest_addr = 0;
+    uint32_t mmap_start = mbd->mmap_addr;
+    uint32_t mmap_end = mbd->mmap_addr + mbd->mmap_length;
     multiboot_memory_map_t* mmap =
-        (multiboot_memory_map_t*)(uintptr_t)mmap_start;
+        (multiboot_memory_map_t*)mmap_start;
 
-    while ((uint64_t)(uintptr_t)mmap < mmap_end_address)
+    while ((uint32_t)mmap < mmap_end)
     {
-        uint64_t entry_start = (uint64_t)(uintptr_t)mmap;
-        uint64_t entry_end =
-            entry_start + mmap->size + sizeof(mmap->size);
-
         if (mmap->size < 20 ||
-            entry_end > mmap_end_address ||
-            entry_end <= entry_start)
-            return;
+            (uint32_t)mmap + mmap->size +
+                sizeof(mmap->size) > mmap_end)
+            break;
 
         if (mmap->type == MULTIBOOT_MEMORY_AVAILABLE)
         {
@@ -138,84 +107,61 @@ void pmm_initialize(multiboot_info_t* mbd)
                 highest_addr = top;
         }
 
-        mmap = (multiboot_memory_map_t*)(uintptr_t)entry_end;
+        mmap = (multiboot_memory_map_t*)
+            ((uint32_t)mmap + mmap->size +
+             sizeof(mmap->size));
     }
 
-    if (highest_addr > 0x100000000ULL)
-        highest_addr = 0x100000000ULL;
+    if (highest_addr > PMM_MAX_PHYSICAL_ADDRESS)
+        highest_addr = PMM_MAX_PHYSICAL_ADDRESS;
 
     total_blocks =
-        (uint32_t)((highest_addr + PAGE_SIZE - 1) / PAGE_SIZE);
+        (uint32_t)((highest_addr + PAGE_SIZE - 1U) / PAGE_SIZE);
+
+    if (total_blocks > PMM_MAX_BLOCKS)
+        total_blocks = PMM_MAX_BLOCKS;
 
     if (total_blocks == 0)
-    {
-        total_blocks = 0;
         return;
-    }
 
-    bitmap_size = (total_blocks + 31) / 32;
+    initialized = 1;
 
-    uintptr_t bitmap_address =
-        ((uintptr_t)&end + PAGE_SIZE - 1) &
-        ~(uintptr_t)(PAGE_SIZE - 1);
+    /*
+     * Start with every frame unavailable, then release only frames
+     * explicitly reported by the firmware as usable RAM.
+     */
+    mmap = (multiboot_memory_map_t*)mmap_start;
 
-    uintptr_t reserved_bitmap_address =
-        bitmap_address +
-        (uintptr_t)bitmap_size * sizeof(uint32_t);
-
-    uintptr_t bitmap_end =
-        reserved_bitmap_address +
-        (uintptr_t)bitmap_size * sizeof(uint32_t);
-
-    if (bitmap_end <= bitmap_address ||
-        (uint64_t)bitmap_end > highest_addr)
+    while ((uint32_t)mmap < mmap_end)
     {
-        total_blocks = 0;
-        bitmap_size = 0;
-        return;
-    }
-
-    pmm_bitmap = (uint32_t*)bitmap_address;
-    pmm_reserved_bitmap =
-        (uint32_t*)reserved_bitmap_address;
-
-    for (uint32_t i = 0; i < bitmap_size; i++)
-    {
-        pmm_bitmap[i] = 0xFFFFFFFF;
-        pmm_reserved_bitmap[i] = 0xFFFFFFFF;
-    }
-
-    mmap = (multiboot_memory_map_t*)(uintptr_t)mmap_start;
-
-    while ((uint64_t)(uintptr_t)mmap < mmap_end_address)
-    {
-        uint64_t entry_start = (uint64_t)(uintptr_t)mmap;
-        uint64_t entry_end =
-            entry_start + mmap->size + sizeof(mmap->size);
-
         if (mmap->size < 20 ||
-            entry_end > mmap_end_address ||
-            entry_end <= entry_start)
-            return;
+            (uint32_t)mmap + mmap->size +
+                sizeof(mmap->size) > mmap_end)
+            break;
 
         if (mmap->type == MULTIBOOT_MEMORY_AVAILABLE)
         {
             uint64_t region_start = mmap->addr;
             uint64_t region_end = mmap->addr + mmap->len;
 
-            if (region_start < 0x100000000ULL &&
+            if (region_start < PMM_MAX_PHYSICAL_ADDRESS &&
                 region_end > region_start)
             {
-                if (region_end > 0x100000000ULL)
-                    region_end = 0x100000000ULL;
+                if (region_end > PMM_MAX_PHYSICAL_ADDRESS)
+                    region_end = PMM_MAX_PHYSICAL_ADDRESS;
 
                 uint32_t start_block =
-                    (uint32_t)(region_start / PAGE_SIZE);
+                    (uint32_t)((region_start + PAGE_SIZE - 1U) /
+                               PAGE_SIZE);
+
                 uint32_t end_block =
                     (uint32_t)(region_end / PAGE_SIZE);
 
+                if (end_block > total_blocks)
+                    end_block = total_blocks;
+
                 for (uint32_t block = start_block;
-                     block < end_block && block < total_blocks;
+                     block < end_block;
                      block++)
                 {
                     if (bitmap_test(pmm_bitmap, block))
@@ -228,24 +174,26 @@ void pmm_initialize(multiboot_info_t* mbd)
             }
         }
 
-        mmap = (multiboot_memory_map_t*)(uintptr_t)entry_end;
+        mmap = (multiboot_memory_map_t*)
+            ((uint32_t)mmap + mmap->size +
+             sizeof(mmap->size));
     }
 
-    /* Low memory is never available to the general allocator. */
+    /*
+     * Reserve the first MiB for firmware/boot structures and keep
+     * the kernel image itself unavailable to the allocator.
+     *
+     * The linker-provided 'end' symbol is safe here because the PMM
+     * bitmap itself is already part of the kernel image/BSS.
+     */
+    extern uint32_t end;
+
     pmm_reserve_range(0, 0x100000);
+    pmm_reserve_range(0x100000, (uintptr_t)&end);
 
-    /* Kernel image and PMM metadata are permanently reserved. */
-    pmm_reserve_range(
-        0x100000,
-        (uint64_t)(uintptr_t)&end
-    );
-
-    pmm_reserve_range(
-        bitmap_address,
-        bitmap_end
-    );
-
-    /* Multiboot structures must remain valid for the kernel. */
+    /*
+     * Reserve the Multiboot structures we directly reference.
+     */
     pmm_reserve_range(
         (uint64_t)(uintptr_t)mbd,
         (uint64_t)(uintptr_t)mbd + sizeof(multiboot_info_t)
@@ -255,44 +203,6 @@ void pmm_initialize(multiboot_info_t* mbd)
         mbd->mmap_addr,
         (uint64_t)mbd->mmap_addr + mbd->mmap_length
     );
-
-    if (mbd->flags & MULTIBOOT_INFO_CMDLINE)
-        pmm_reserve_cstring(mbd->cmdline);
-
-    if (mbd->flags & MULTIBOOT_INFO_BOOT_LOADER)
-        pmm_reserve_cstring(mbd->boot_loader_name);
-
-    if (mbd->flags & MULTIBOOT_INFO_MODS)
-    {
-        uint64_t modules_size =
-            (uint64_t)mbd->mods_count *
-            sizeof(multiboot_module_t);
-
-        pmm_reserve_range(
-            mbd->mods_addr,
-            (uint64_t)mbd->mods_addr + modules_size
-        );
-
-        if (modules_size <= 0x100000 &&
-            mbd->mods_addr != 0)
-        {
-            multiboot_module_t* modules =
-                (multiboot_module_t*)(uintptr_t)mbd->mods_addr;
-
-            for (uint32_t i = 0; i < mbd->mods_count; i++)
-            {
-                if (modules[i].mod_end > modules[i].mod_start)
-                {
-                    pmm_reserve_range(
-                        modules[i].mod_start,
-                        modules[i].mod_end
-                    );
-
-                    pmm_reserve_cstring(modules[i].string);
-                }
-            }
-        }
-    }
 
     if (mbd->flags & MULTIBOOT_INFO_FRAMEBUFFER)
     {
@@ -307,21 +217,12 @@ void pmm_initialize(multiboot_info_t* mbd)
         );
     }
 
-    if (mbd->flags & MULTIBOOT_INFO_VBE)
-    {
-        pmm_reserve_range(
-            mbd->vbe_control_info,
-            (uint64_t)mbd->vbe_control_info + 512
-        );
-
-        pmm_reserve_range(
-            mbd->vbe_mode_info,
-            (uint64_t)mbd->vbe_mode_info + 256
-        );
-    }
-
+    /*
+     * Frames above the reported physical limit are permanently
+     * unavailable because they are outside the usable address space.
+     */
     for (uint32_t block = total_blocks;
-         block < bitmap_size * 32;
+         block < PMM_MAX_BLOCKS;
          block++)
     {
         bitmap_set(pmm_bitmap, block);
@@ -331,19 +232,21 @@ void pmm_initialize(multiboot_info_t* mbd)
 
 void* pmm_alloc_block(void)
 {
-    if (!pmm_bitmap ||
-        !pmm_reserved_bitmap ||
-        total_blocks == 0)
+    if (!initialized || total_blocks == 0)
         return NULL;
 
-    for (uint32_t i = 0; i < bitmap_size; i++)
+    for (uint32_t word = 0;
+         word < (total_blocks + 31U) / 32U;
+         word++)
     {
-        if (pmm_bitmap[i] == 0xFFFFFFFF)
+        uint32_t bits = pmm_bitmap[word];
+
+        if (bits == 0xFFFFFFFFU)
             continue;
 
-        for (uint32_t j = 0; j < 32; j++)
+        for (uint32_t bit = 0; bit < 32U; bit++)
         {
-            uint32_t block = i * 32 + j;
+            uint32_t block = word * 32U + bit;
 
             if (block >= total_blocks)
                 break;
@@ -356,7 +259,8 @@ void* pmm_alloc_block(void)
                 if (free_blocks > 0)
                     free_blocks--;
 
-                return (void*)(uintptr_t)(block * PAGE_SIZE);
+                return (void*)(uintptr_t)
+                    (block * PAGE_SIZE);
             }
         }
     }
@@ -366,24 +270,20 @@ void* pmm_alloc_block(void)
 
 void pmm_free_block(void* ptr)
 {
-    if (!pmm_bitmap ||
-        !pmm_reserved_bitmap ||
-        !ptr)
+    if (!initialized || !ptr)
         return;
 
     uintptr_t address = (uintptr_t)ptr;
 
-    if ((address % PAGE_SIZE) != 0)
+    if ((address % PAGE_SIZE) != 0 ||
+        address >= PMM_MAX_PHYSICAL_ADDRESS)
         return;
 
-    uint32_t block =
-        (uint32_t)(address / PAGE_SIZE);
+    uint32_t block = (uint32_t)(address / PAGE_SIZE);
 
-    if (block >= total_blocks)
-        return;
-
-    if (!bitmap_test(pmm_bitmap, block) ||
-        bitmap_test(pmm_reserved_bitmap, block))
+    if (block >= total_blocks ||
+        bitmap_test(pmm_reserved_bitmap, block) ||
+        !bitmap_test(pmm_bitmap, block))
         return;
 
     bitmap_clear(pmm_bitmap, block);
@@ -407,7 +307,5 @@ uint32_t pmm_get_free_blocks(void)
 
 int pmm_is_initialized(void)
 {
-    return pmm_bitmap != NULL &&
-           pmm_reserved_bitmap != NULL &&
-           total_blocks != 0;
+    return initialized != 0;
 }

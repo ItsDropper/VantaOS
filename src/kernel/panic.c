@@ -71,7 +71,7 @@ void kernel_panic(
             terminal_write("\nCS: ");
             terminal_write_hex(frame->cs);
             terminal_write("\nEFLAGS: ");
-            terminal_write_hex(frame->eflags);
+            terminal_write_hex(frame->rflags);
             terminal_write("\n");
         }
 

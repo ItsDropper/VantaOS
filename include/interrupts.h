@@ -1,27 +1,20 @@
 #ifndef INTERRUPTS_H
 #define INTERRUPTS_H
 
+#include <stdint.h>
+
 struct exception_frame
 {
-    unsigned int edi;
-    unsigned int esi;
-    unsigned int ebp;
-    unsigned int esp;
-    unsigned int ebx;
-    unsigned int edx;
-    unsigned int ecx;
-    unsigned int eax;
-    unsigned int error_code;
-    unsigned int eip;
-    unsigned int cs;
-    unsigned int eflags;
+    uint64_t r15, r14, r13, r12, r11, r10, r9, r8;
+    uint64_t rsi, rdi, rbp, rdx, rcx, rbx, rax;
+    uint64_t error_code;
+    uint64_t rip;
+    uint64_t cs;
+    uint64_t rflags;
 };
 
 void interrupts_initialize(void);
-unsigned int interrupt_handler(
-    unsigned int interrupt_number,
-    unsigned int saved_stack
-);
+uint64_t interrupt_handler(uint64_t interrupt_number, uint64_t saved_stack);
 unsigned int interrupts_get_ticks(void);
 
 #endif

@@ -226,8 +226,15 @@ int ata_read_sectors(
 
     uint8_t* destination = (uint8_t*)buffer;
 
+    /*
+     * IDENTIFY uses 0xA0/0xB0, but READ SECTORS must set the
+     * LBA bit (0x40). Preserve the selected master/slave bit and
+     * add the upper four LBA bits.
+     */
     outb(active_channel.base + 6,
-         (uint8_t)(active_drive | ((lba >> 24) & 0x0F)));
+         (uint8_t)(active_drive |
+                   0x40 |
+                   ((lba >> 24) & 0x0F)));
 
     ata_wait_400ns(&active_channel);
 

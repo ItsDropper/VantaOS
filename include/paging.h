@@ -4,16 +4,14 @@
 #include <stdint.h>
 
 #define PAGE_SIZE 4096U
-#define PAGE_PRESENT 0x001U
-#define PAGE_WRITE   0x002U
-#define PAGE_USER    0x004U
-
-#define PAGING_KERNEL_DIRECTORY_INDEX 256U
-#define PAGING_GRAPHICS_DIRECTORY_INDEX 832U
+#define PAGE_PRESENT 0x001ULL
+#define PAGE_WRITE   0x002ULL
+#define PAGE_USER    0x004ULL
+#define PAGE_LARGE   0x080ULL
 
 typedef struct paging_address_space
 {
-    uint32_t* directory;
+    uint64_t* directory;
     uintptr_t directory_physical;
     int used;
 } paging_address_space_t;

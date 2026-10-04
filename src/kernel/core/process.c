@@ -106,6 +106,20 @@ static void process_prepare_stack(
      */
     stack_top &= ~(uintptr_t)0x0FU;
 
+    /*
+     * Build exactly the frame consumed by irq0_stub:
+     * 15 saved GPRs followed by an IRET frame.
+     */
+    stack_top -= 3U * sizeof(uint64_t);
+    uint64_t* iret_frame = (uint64_t*)stack_top;
+    iret_frame[0] = (uint64_t)(uintptr_t)process_entry_trampoline;
+    iret_frame[1] = 0x08U;
+    iret_frame[2] = 0x202U;
+
+    stack_top -= 15U * sizeof(uint64_t);
+    for (unsigned int i = 0; i < 15; i++)
+        ((uint64_t*)stack_top)[i] = 0;
+
     process->stack_pointer = stack_top;
     process->context.rip =
         (uint64_t)(uintptr_t)process_entry_trampoline;

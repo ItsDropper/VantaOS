@@ -8,6 +8,8 @@
 #include "mouse.h"
 #include "process.h"
 #include "scheduler.h"
+#include "syscall.h"
+#include "user_mode.h"
 #include "shell.h"
 #include "terminal.h"
 #include "terminal_process.h"
@@ -76,7 +78,13 @@ void os_initialize(multiboot_info_t* mbd)
     vfs_initialize();
 
     process_initialize();
+
+    if (process_attach_current("desktop", 0) < 0)
+        return;
+
     scheduler_initialize();
+    syscall_initialize();
+    user_mode_initialize();
     terminal_process_initialize();
     desktop_process_initialize();
 

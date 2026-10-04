@@ -4,44 +4,23 @@
 #include "timer.h"
 #include "keyboard.h"
 #include "mouse.h"
-#include "panic.h"
 
 extern void irq0_stub(void);
 extern void irq1_stub(void);
 extern void irq12_stub(void);
 
-extern void exception0_stub(void);
-extern void exception1_stub(void);
-extern void exception2_stub(void);
-extern void exception3_stub(void);
-extern void exception4_stub(void);
-extern void exception5_stub(void);
-extern void exception6_stub(void);
-extern void exception7_stub(void);
-extern void exception8_stub(void);
-extern void exception9_stub(void);
-extern void exception10_stub(void);
-extern void exception11_stub(void);
-extern void exception12_stub(void);
-extern void exception13_stub(void);
-extern void exception14_stub(void);
-extern void exception15_stub(void);
-extern void exception16_stub(void);
-extern void exception17_stub(void);
-extern void exception18_stub(void);
-extern void exception19_stub(void);
-extern void exception20_stub(void);
-extern void exception21_stub(void);
-extern void exception22_stub(void);
-extern void exception23_stub(void);
-extern void exception24_stub(void);
-extern void exception25_stub(void);
-extern void exception26_stub(void);
-extern void exception27_stub(void);
-extern void exception28_stub(void);
-extern void exception29_stub(void);
-extern void exception30_stub(void);
-extern void exception31_stub(void);
+#define DECLARE_EXCEPTION(n) extern void exception##n##_stub(void);
+DECLARE_EXCEPTION(0) DECLARE_EXCEPTION(1) DECLARE_EXCEPTION(2)
+DECLARE_EXCEPTION(3) DECLARE_EXCEPTION(4) DECLARE_EXCEPTION(5)
+DECLARE_EXCEPTION(6) DECLARE_EXCEPTION(7) DECLARE_EXCEPTION(8)
+DECLARE_EXCEPTION(9) DECLARE_EXCEPTION(10) DECLARE_EXCEPTION(11)
+DECLARE_EXCEPTION(12) DECLARE_EXCEPTION(13) DECLARE_EXCEPTION(14)
+DECLARE_EXCEPTION(15) DECLARE_EXCEPTION(16) DECLARE_EXCEPTION(17)
+DECLARE_EXCEPTION(18) DECLARE_EXCEPTION(19) DECLARE_EXCEPTION(20)
+DECLARE_EXCEPTION(21) DECLARE_EXCEPTION(22) DECLARE_EXCEPTION(23)
+DECLARE_EXCEPTION(24) DECLARE_EXCEPTION(25) DECLARE_EXCEPTION(26)
+DECLARE_EXCEPTION(27) DECLARE_EXCEPTION(28) DECLARE_EXCEPTION(29)
+DECLARE_EXCEPTION(30) DECLARE_EXCEPTION(31)
 
 #define IRQ0_VECTOR 32
 #define IRQ1_VECTOR 33
@@ -61,7 +40,7 @@ static void install_exceptions(void)
     };
 
     for (int i = 0; i < 32; i++)
-        idt_set_gate(i, (unsigned int)stubs[i], 0x08, 0x8E);
+        idt_set_gate(i, (uint64_t)(uintptr_t)stubs[i], 0x08, 0x8E);
 }
 
 void interrupts_initialize(void)
@@ -69,40 +48,30 @@ void interrupts_initialize(void)
     idt_initialize();
     install_exceptions();
 
-    idt_set_gate(IRQ0_VECTOR, (unsigned int)irq0_stub, 0x08, 0x8E);
-    idt_set_gate(IRQ1_VECTOR, (unsigned int)irq1_stub, 0x08, 0x8E);
-    idt_set_gate(IRQ12_VECTOR, (unsigned int)irq12_stub, 0x08, 0x8E);
+    idt_set_gate(IRQ0_VECTOR, (uint64_t)(uintptr_t)irq0_stub, 0x08, 0x8E);
+    idt_set_gate(IRQ1_VECTOR, (uint64_t)(uintptr_t)irq1_stub, 0x08, 0x8E);
+    idt_set_gate(IRQ12_VECTOR, (uint64_t)(uintptr_t)irq12_stub, 0x08, 0x8E);
 
     pic_remap();
     timer_initialize(100);
     idt_load();
 }
 
-unsigned int interrupt_handler(
-    unsigned int interrupt_number,
-    unsigned int saved_stack
-)
+uint64_t interrupt_handler(uint64_t interrupt_number, uint64_t saved_stack)
 {
     switch (interrupt_number)
     {
         case IRQ1_VECTOR:
             keyboard_handle_interrupt();
             pic_send_eoi(1);
-            return saved_stack;
-
+            break;
         case IRQ12_VECTOR:
             mouse_handle_interrupt();
             pic_send_eoi(12);
-            return saved_stack;
-
+            break;
         default:
-            if (interrupt_number >= 32 &&
-                interrupt_number <= 47)
-            {
-                pic_send_eoi(
-                    interrupt_number - 32
-                );
-            }
+            if (interrupt_number >= 32 && interrupt_number <= 47)
+                pic_send_eoi((unsigned int)(interrupt_number - 32));
             break;
     }
 

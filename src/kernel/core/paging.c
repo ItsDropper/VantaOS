@@ -12,7 +12,7 @@ static uint64_t kernel_pml4[TABLE_ENTRIES] __attribute__((aligned(4096)));
 static uint64_t kernel_pdpt[TABLE_ENTRIES] __attribute__((aligned(4096)));
 static uint64_t kernel_pd[TABLE_ENTRIES] __attribute__((aligned(4096)));
 static uint64_t heap_pd[TABLE_ENTRIES] __attribute__((aligned(4096)));
-static uint64_t graphics_pd[TABLE_ENTRIES] __attribute__((aligned(4096)));
+static uint64_t high_pd[TABLE_ENTRIES] __attribute__((aligned(4096)));
 static uint64_t heap_pt[TABLE_ENTRIES] __attribute__((aligned(4096)));
 static uint64_t graphics_pt[TABLE_ENTRIES] __attribute__((aligned(4096)));
 
@@ -38,7 +38,7 @@ static uint64_t* table_for(uintptr_t virtual_address)
     uint64_t pdpt_index = (virtual_address >> 30) & 0x1FFU;
     uint64_t pd_index = (virtual_address >> 21) & 0x1FFU;
 
-    if (pdpt_index != 0)
+    if (pdpt_index != 3)
         return NULL;
 
     if (pd_index == ((0xC0000000ULL >> 21) & 0x1FFU))
@@ -68,16 +68,12 @@ void paging_initialize(void)
         kernel_pdpt[i] = 0;
         kernel_pd[i] = 0;
         heap_pd[i] = 0;
-        graphics_pd[i] = 0;
+        high_pd[i] = 0;
         heap_pt[i] = 0;
         graphics_pt[i] = 0;
     }
 
     /* Identity-map the first 1 GiB with 2 MiB pages. */
-    kernel_pml4[0] =
-        (uint64_t)(uintptr_t)kernel_pdpt |
-        PAGE_PRESENT | PAGE_WRITE;
-
     kernel_pdpt[0] =
         (uint64_t)(uintptr_t)kernel_pd |
         PAGE_PRESENT | PAGE_WRITE;
@@ -91,8 +87,16 @@ void paging_initialize(void)
      * Keep the existing high virtual windows used by the heap and
      * framebuffer. Both are backed by ordinary 4 KiB page tables.
      */
-    map_high_region(kernel_pd, heap_pt, 0xC0000000ULL);
-    map_high_region(kernel_pd, graphics_pt, 0xD0000000ULL);
+    kernel_pml4[0] =
+        (uint64_t)(uintptr_t)kernel_pdpt |
+        PAGE_PRESENT | PAGE_WRITE;
+
+    kernel_pdpt[3] =
+        (uint64_t)(uintptr_t)high_pd |
+        PAGE_PRESENT | PAGE_WRITE;
+
+    map_high_region(high_pd, heap_pt, 0xC0000000ULL);
+    map_high_region(high_pd, graphics_pt, 0xD0000000ULL);
 
     kernel_address_space.directory = kernel_pml4;
     kernel_address_space.directory_physical =

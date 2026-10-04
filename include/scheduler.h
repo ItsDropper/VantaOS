@@ -10,7 +10,7 @@ int scheduler_is_initialized(void);
  * Called from the timer interrupt with the address of the PUSHA frame.
  * The returned value is the stack pointer the IRQ stub must restore.
  */
-uint32_t scheduler_tick(uint32_t current_stack);
+uint64_t scheduler_tick(uint64_t current_stack);
 
 /*
  * Mark the current task as ready and request a switch on the next

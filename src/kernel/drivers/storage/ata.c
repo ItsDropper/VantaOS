@@ -1,16 +1,5 @@
 #include "ata.h"
 
-#define ATA_DATA         0x1F0
-#define ATA_ERROR        0x1F1
-#define ATA_SECTOR_COUNT 0x1F2
-#define ATA_LBA_LOW      0x1F3
-#define ATA_LBA_MID      0x1F4
-#define ATA_LBA_HIGH     0x1F5
-#define ATA_DRIVE        0x1F6
-#define ATA_STATUS       0x1F7
-#define ATA_COMMAND      0x1F7
-#define ATA_CONTROL      0x3F6
-
 #define ATA_CMD_IDENTIFY 0xEC
 #define ATA_CMD_READ_PIO 0x20
 
@@ -19,7 +8,14 @@
 #define ATA_STATUS_ERR   0x01
 #define ATA_STATUS_DF    0x20
 
+typedef struct
+{
+    uint16_t base;
+    uint16_t control;
+} ata_channel_t;
+
 static int available;
+static ata_channel_t active_channel;
 static uint8_t last_status;
 static uint8_t last_error;
 static uint8_t last_signature_mid;
@@ -44,111 +40,131 @@ static inline uint16_t inw(uint16_t port)
     return value;
 }
 
-static void ata_wait_400ns(void)
+static void ata_wait_400ns(const ata_channel_t* channel)
 {
-    (void)inb(ATA_CONTROL);
-    (void)inb(ATA_CONTROL);
-    (void)inb(ATA_CONTROL);
-    (void)inb(ATA_CONTROL);
+    (void)inb(channel->control);
+    (void)inb(channel->control);
+    (void)inb(channel->control);
+    (void)inb(channel->control);
 }
 
-static int ata_wait_not_busy(void)
+static int ata_wait_not_busy(const ata_channel_t* channel)
 {
     for (unsigned int i = 0; i < 1000000; i++)
     {
-        uint8_t status = inb(ATA_STATUS);
+        uint8_t status = inb(channel->base + 7);
 
         if (status & (ATA_STATUS_ERR | ATA_STATUS_DF))
+        {
+            last_status = status;
+            last_error = inb(channel->base + 1);
             return 0;
+        }
 
         if (!(status & ATA_STATUS_BSY))
+        {
+            last_status = status;
             return 1;
+        }
     }
 
+    last_status = inb(channel->base + 7);
+    last_error = inb(channel->base + 1);
     return 0;
 }
 
-static int ata_wait_data(void)
+static int ata_wait_data(const ata_channel_t* channel)
 {
     for (unsigned int i = 0; i < 1000000; i++)
     {
-        uint8_t status = inb(ATA_STATUS);
+        uint8_t status = inb(channel->base + 7);
 
         if (status & (ATA_STATUS_ERR | ATA_STATUS_DF))
+        {
+            last_status = status;
+            last_error = inb(channel->base + 1);
             return 0;
+        }
 
         if (status & ATA_STATUS_DRQ)
+        {
+            last_status = status;
             return 1;
+        }
     }
 
+    last_status = inb(channel->base + 7);
+    last_error = inb(channel->base + 1);
     return 0;
+}
+
+static int ata_probe_channel(const ata_channel_t* channel)
+{
+    outb(channel->base + 6, 0xA0);
+    ata_wait_400ns(channel);
+
+    uint8_t status = inb(channel->base + 7);
+    last_status = status;
+
+    if (status == 0x00 || status == 0xFF)
+        return 0;
+
+    outb(channel->base + 2, 0);
+    outb(channel->base + 3, 0);
+    outb(channel->base + 4, 0);
+    outb(channel->base + 5, 0);
+    outb(channel->base + 7, ATA_CMD_IDENTIFY);
+
+    if (!ata_wait_not_busy(channel))
+        return 0;
+
+    last_signature_mid = inb(channel->base + 4);
+    last_signature_high = inb(channel->base + 5);
+
+    /*
+     * 0x14/0xEB is the standard ATAPI signature. VantaOS needs
+     * a block ATA disk, so skip optical/ATAPI devices.
+     */
+    if (last_signature_mid != 0 || last_signature_high != 0)
+        return 0;
+
+    if (!ata_wait_data(channel))
+        return 0;
+
+    for (unsigned int word = 0; word < 256; word++)
+        (void)inw(channel->base);
+
+    active_channel = *channel;
+    available = 1;
+    return 1;
 }
 
 void ata_initialize(void)
 {
+    static const ata_channel_t channels[] =
+    {
+        {0x1F0, 0x3F6},
+        {0x170, 0x376}
+    };
+
     available = 0;
+    active_channel.base = 0;
+    active_channel.control = 0;
     last_status = 0;
     last_error = 0;
     last_signature_mid = 0;
     last_signature_high = 0;
 
     /*
-     * VantaOS currently uses the primary IDE channel's master device.
-     * Select it and allow the device status to settle before IDENTIFY.
+     * QEMU's optical ISO can occupy the primary IDE master while
+     * vantaos.img is attached to the secondary IDE channel. Probe
+     * both channels instead of assuming the disk is primary master.
      */
-    outb(ATA_DRIVE, 0xA0);
-    ata_wait_400ns();
-
-    uint8_t status = inb(ATA_STATUS);
-    last_status = status;
-
-    if (status == 0x00 || status == 0xFF)
-        return;
-
-    outb(ATA_SECTOR_COUNT, 0);
-    outb(ATA_LBA_LOW, 0);
-    outb(ATA_LBA_MID, 0);
-    outb(ATA_LBA_HIGH, 0);
-    outb(ATA_COMMAND, ATA_CMD_IDENTIFY);
-
-    status = inb(ATA_STATUS);
-    last_status = status;
-
-    if (status == 0x00 || status == 0xFF)
-        return;
-
-    /*
-     * A non-zero LBA mid/high pair after IDENTIFY normally indicates an
-     * ATAPI/non-ATA device rather than the ATA disk we support here.
-     */
-    last_signature_mid = inb(ATA_LBA_MID);
-    last_signature_high = inb(ATA_LBA_HIGH);
-
-    if (last_signature_mid != 0 || last_signature_high != 0)
-        return;
-
-    if (!ata_wait_not_busy())
+    for (unsigned int i = 0; i < 2; i++)
     {
-        last_status = inb(ATA_STATUS);
-        last_error = inb(ATA_ERROR);
-        return;
+        if (ata_probe_channel(&channels[i]))
+            return;
     }
-
-    if (!ata_wait_data())
-    {
-        last_status = inb(ATA_STATUS);
-        last_error = inb(ATA_ERROR);
-        return;
-    }
-
-    /*
-     * Consume the 512-byte IDENTIFY response. We only need successful
-     * identification here; capacity/feature parsing can be added later.
-     */
-    for (unsigned int word = 0; word < 256; word++)
-        (void)inw(ATA_DATA);
-
-    available = 1;
 }
 
 int ata_is_available(void)
@@ -185,36 +201,33 @@ int ata_read_sectors(
     if (!available || count == 0 || !buffer)
         return 0;
 
-    /*
-     * This driver uses LBA28. count is uint8_t, so its maximum is 255.
-     */
     if (lba > 0x0FFFFFFFU)
         return 0;
 
     uint8_t* destination = (uint8_t*)buffer;
 
-    outb(ATA_DRIVE,
+    outb(active_channel.base + 6,
          (uint8_t)(0xE0 | ((lba >> 24) & 0x0F)));
 
-    ata_wait_400ns();
+    ata_wait_400ns(&active_channel);
 
-    outb(ATA_SECTOR_COUNT, count);
-    outb(ATA_LBA_LOW, (uint8_t)lba);
-    outb(ATA_LBA_MID, (uint8_t)(lba >> 8));
-    outb(ATA_LBA_HIGH, (uint8_t)(lba >> 16));
-    outb(ATA_COMMAND, ATA_CMD_READ_PIO);
+    outb(active_channel.base + 2, count);
+    outb(active_channel.base + 3, (uint8_t)lba);
+    outb(active_channel.base + 4, (uint8_t)(lba >> 8));
+    outb(active_channel.base + 5, (uint8_t)(lba >> 16));
+    outb(active_channel.base + 7, ATA_CMD_READ_PIO);
 
     for (unsigned int sector = 0; sector < count; sector++)
     {
-        if (!ata_wait_not_busy())
+        if (!ata_wait_not_busy(&active_channel))
             return 0;
 
-        if (!ata_wait_data())
+        if (!ata_wait_data(&active_channel))
             return 0;
 
         for (unsigned int word = 0; word < 256; word++)
         {
-            uint16_t value = inw(ATA_DATA);
+            uint16_t value = inw(active_channel.base);
 
             destination[sector * 512 + word * 2] =
                 (uint8_t)value;
@@ -223,6 +236,6 @@ int ata_read_sectors(
         }
     }
 
-    ata_wait_400ns();
+    ata_wait_400ns(&active_channel);
     return 1;
 }

@@ -51,6 +51,6 @@ void shell_uptime(void);
 void shell_mem(void);
 void shell_heap(void);
 void shell_fault(void);
-void shell_reboot(void);
+void shell_reboot(void);\nvoid shell_storage(void);
 
 #endif

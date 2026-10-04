@@ -102,6 +102,9 @@ shell_files.o:
 shell_system.o:
 	$(CC) $(CFLAGS) -c src/os/terminal/shell_system.c -o shell_system.o
 
+shell_storage.o:
+	$(CC) $(CFLAGS) -c src/os/terminal/shell_storage.c -o shell_storage.o
+
 shell_commands.o:
 	$(CC) $(CFLAGS) -c src/os/terminal/shell_commands.c -o shell_commands.o
 

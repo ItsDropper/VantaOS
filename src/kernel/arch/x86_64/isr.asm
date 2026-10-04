@@ -102,6 +102,8 @@ irq0_stub:
     call scheduler_tick
     mov rsp, rax
     RESTORE_ALL
+    ; In long mode IRETQ consumes the full 5-qword frame:
+    ; RIP, CS, RFLAGS, RSP, SS.
     iretq
 
 irq1_stub:

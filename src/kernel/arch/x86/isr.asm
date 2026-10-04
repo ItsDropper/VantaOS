@@ -1,4 +1,4 @@
-bits 32
+bits 64
 
 section .text
 
@@ -47,71 +47,120 @@ extern keyboard_handle_interrupt
 extern mouse_handle_interrupt
 extern pic_send_eoi
 
+; Save the complete general-purpose register set.
+; The resulting memory layout matches struct exception_frame:
+;
+;   +000 r15
+;   +008 r14
+;   +016 r13
+;   +024 r12
+;   +032 r11
+;   +040 r10
+;   +048 r9
+;   +056 r8
+;   +064 rdi
+;   +072 rsi
+;   +080 rbp
+;   +088 rdx
+;   +096 rcx
+;   +104 rbx
+;   +112 rax
+;
+%macro PUSH_REGS 0
+    push rax
+    push rbx
+    push rcx
+    push rdx
+    push rbp
+    push rsi
+    push rdi
+    push r8
+    push r9
+    push r10
+    push r11
+    push r12
+    push r13
+    push r14
+    push r15
+%endmacro
+
+%macro POP_REGS 0
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop r11
+    pop r10
+    pop r9
+    pop r8
+    pop rdi
+    pop rsi
+    pop rbp
+    pop rdx
+    pop rcx
+    pop rbx
+    pop rax
+%endmacro
+
 process_entry_trampoline:
     cld
     call process_entry_dispatch
 
 .process_exit_halt:
+    cli
     hlt
     jmp .process_exit_halt
 
 irq0_stub:
     cld
-    pusha
+    PUSH_REGS
     call timer_handle_interrupt
-    push dword 0
+    mov edi, 0
     call pic_send_eoi
-    add esp, 4
-    popa
-    iretd
+    POP_REGS
+    iretq
 
 irq1_stub:
     cld
-    pusha
+    PUSH_REGS
     call keyboard_handle_interrupt
-    push dword 1
+    mov edi, 1
     call pic_send_eoi
-    add esp, 4
-    popa
-    iretd
+    POP_REGS
+    iretq
 
 irq12_stub:
     cld
-    pusha
+    PUSH_REGS
     call mouse_handle_interrupt
-    push dword 12
+    mov edi, 12
     call pic_send_eoi
-    add esp, 4
-    popa
-    iretd
+    POP_REGS
+    iretq
 
 %macro EXCEPTION_NO_ERROR 1
 exception%1_stub:
     cld
-    push dword 0
-    pusha
-    mov eax, esp
-    push eax
-    push dword %1
+    push qword 0
+    PUSH_REGS
+    mov rsi, rsp
+    mov edi, %1
     call exception_handler
-    add esp, 8
-    popa
-    add esp, 4
-    iretd
+    POP_REGS
+    add rsp, 8
+    iretq
 %endmacro
 
 %macro EXCEPTION_ERROR 1
 exception%1_stub:
     cld
-    pusha
-    mov eax, esp
-    push eax
-    push dword %1
+    PUSH_REGS
+    mov rsi, rsp
+    mov edi, %1
     call exception_handler
-    add esp, 8
-    popa
-    add esp, 4
-    iretd
+    POP_REGS
+    add rsp, 8
+    iretq
 %endmacro
 
 EXCEPTION_NO_ERROR 0
@@ -131,7 +180,7 @@ EXCEPTION_ERROR 13
 EXCEPTION_ERROR 14
 EXCEPTION_NO_ERROR 15
 EXCEPTION_NO_ERROR 16
-EXCEPTION_NO_ERROR 17
+EXCEPTION_ERROR 17
 EXCEPTION_NO_ERROR 18
 EXCEPTION_NO_ERROR 19
 EXCEPTION_NO_ERROR 20

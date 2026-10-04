@@ -90,11 +90,16 @@ static void process_prepare_stack(process_t* process, uintptr_t stack_top)
 {
     uint64_t* stack = (uint64_t*)stack_top;
 
-    /* Frame consumed by RESTORE_ALL + IRETQ:
-       15 GPRs, RIP, CS, RFLAGS. */
-    *(--stack) = 0x202U;
-    *(--stack) = 0x08U;
-    *(--stack) = (uint64_t)(uintptr_t)process_entry_trampoline;
+    /*
+     * x86_64 IRETQ always consumes the complete long-mode interrupt
+     * frame: RIP, CS, RFLAGS, RSP, SS. Build that frame below the
+     * 15 saved GPRs so RESTORE_ALL + IRETQ can enter the process safely.
+     */
+    *(--stack) = 0x10U; /* SS */
+    *(--stack) = (uint64_t)stack_top; /* RSP after IRETQ */
+    *(--stack) = 0x202U; /* RFLAGS: IF enabled */
+    *(--stack) = 0x08U; /* CS */
+    *(--stack) = (uint64_t)(uintptr_t)process_entry_trampoline; /* RIP */
 
     for (int i = 0; i < 15; i++)
         *(--stack) = 0;
@@ -331,13 +336,14 @@ int process_stack_is_valid(uint32_t pid)
         (uintptr_t)&stack_top;
     uintptr_t frame = (uintptr_t)process->stack_pointer;
 
-    if (frame < stack_base || frame + 144U > stack_end)
+    if (frame < stack_base || frame + 160U > stack_end)
         return 0;
 
     uint64_t* values = (uint64_t*)frame;
 
     if (values[16] != 0x08U ||
-        (values[17] & 0x00000200U) == 0)
+        (values[17] & 0x00000200U) == 0 ||
+        values[19] != 0x10U)
         return 0;
 
     uintptr_t rip = (uintptr_t)values[15];

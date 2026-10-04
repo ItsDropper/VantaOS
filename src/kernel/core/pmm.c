@@ -80,48 +80,85 @@ void pmm_initialize(multiboot_info_t* mbd)
         pmm_reserved_bitmap[i] = 0xFFFFFFFFU;
     }
 
-    if (!mbd ||
-        !(mbd->flags & MULTIBOOT_INFO_MEM_MAP) ||
-        mbd->mmap_addr == 0 ||
-        mbd->mmap_length < sizeof(uint32_t))
+    if (!mbd)
         return;
 
     uint64_t highest_addr = 0;
-    uint64_t mmap_start = mbd->mmap_addr;
-    uint64_t mmap_end_address =
-        mmap_start + mbd->mmap_length;
+    uint64_t mmap_start = 0;
+    uint64_t mmap_end_address = 0;
+    int use_mmap = 0;
 
-    if (mmap_end_address <= mmap_start ||
-        mmap_end_address > PMM_MAX_PHYSICAL_ADDRESS)
-        return;
-
-    multiboot_memory_map_t* mmap =
-        (multiboot_memory_map_t*)(uintptr_t)mmap_start;
-
-    while ((uint64_t)(uintptr_t)mmap < mmap_end_address)
+    /*
+     * Multiboot 1 normally supplies the full firmware memory map, but
+     * some boot paths only provide the legacy mem_upper field. Do not
+     * leave the PMM completely offline just because the mmap handoff is
+     * unavailable or malformed.
+     */
+    if ((mbd->flags & MULTIBOOT_INFO_MEM_MAP) &&
+        mbd->mmap_addr != 0 &&
+        mbd->mmap_length >= sizeof(uint32_t))
     {
-        uint64_t entry_start = (uint64_t)(uintptr_t)mmap;
-        uint64_t entry_end =
-            entry_start + mmap->size + sizeof(mmap->size);
+        mmap_start = mbd->mmap_addr;
+        mmap_end_address =
+            mmap_start + mbd->mmap_length;
 
-        if (mmap->size < 20 ||
-            entry_end <= entry_start ||
-            entry_end > mmap_end_address)
-            return;
-
-        if (mmap->type == MULTIBOOT_MEMORY_AVAILABLE)
+        if (mmap_end_address > mmap_start &&
+            mmap_end_address <= PMM_MAX_PHYSICAL_ADDRESS)
         {
-            uint64_t top = mmap->addr + mmap->len;
+            multiboot_memory_map_t* mmap =
+                (multiboot_memory_map_t*)(uintptr_t)mmap_start;
 
-            if (top > highest_addr)
-                highest_addr = top;
+            use_mmap = 1;
+
+            while ((uint64_t)(uintptr_t)mmap < mmap_end_address)
+            {
+                uint64_t entry_start =
+                    (uint64_t)(uintptr_t)mmap;
+                uint64_t entry_end =
+                    entry_start +
+                    mmap->size +
+                    sizeof(mmap->size);
+
+                if (mmap->size < 20 ||
+                    entry_end <= entry_start ||
+                    entry_end > mmap_end_address)
+                {
+                    use_mmap = 0;
+                    break;
+                }
+
+                if (mmap->type == MULTIBOOT_MEMORY_AVAILABLE)
+                {
+                    uint64_t top = mmap->addr + mmap->len;
+
+                    if (top > highest_addr)
+                        highest_addr = top;
+                }
+
+                mmap =
+                    (multiboot_memory_map_t*)(uintptr_t)entry_end;
+            }
         }
-
-        mmap = (multiboot_memory_map_t*)(uintptr_t)entry_end;
     }
 
-    if (highest_addr > PMM_MAX_PHYSICAL_ADDRESS)
+    /*
+     * Legacy Multiboot memory information reports memory above 1 MiB
+     * in KiB. It is less precise than the memory map, but it is a safe
+     * fallback for early boot and is enough to bring the PMM online.
+     */
+    if (!use_mmap)
+    {
+        highest_addr =
+            0x100000ULL +
+            ((uint64_t)mbd->mem_upper * 1024ULL);
+
+        if (highest_addr > PMM_MAX_PHYSICAL_ADDRESS)
+            highest_addr = PMM_MAX_PHYSICAL_ADDRESS;
+    }
+    else if (highest_addr > PMM_MAX_PHYSICAL_ADDRESS)
+    {
         highest_addr = PMM_MAX_PHYSICAL_ADDRESS;
+    }
 
     total_blocks =
         (uint32_t)((highest_addr + PAGE_SIZE - 1U) / PAGE_SIZE);

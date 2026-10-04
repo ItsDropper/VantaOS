@@ -172,58 +172,85 @@ void pmm_initialize(multiboot_info_t* mbd)
     initialized = 1;
 
     /*
-     * Start with every frame unavailable, then release only frames
-     * explicitly reported by the firmware as usable RAM.
+     * Start with every frame unavailable, then release usable RAM.
+     * With a full memory map, release only MULTIBOOT_MEMORY_AVAILABLE
+     * regions. With the legacy fallback, the reported RAM above 1 MiB
+     * is treated as usable until the reported physical limit.
      */
-    mmap = (multiboot_memory_map_t*)(uintptr_t)mmap_start;
-
-    while ((uint64_t)(uintptr_t)mmap < mmap_end_address)
+    if (use_mmap)
     {
-        uint64_t entry_start = (uint64_t)(uintptr_t)mmap;
-        uint64_t entry_end =
-            entry_start + mmap->size + sizeof(mmap->size);
+        multiboot_memory_map_t* mmap =
+            (multiboot_memory_map_t*)(uintptr_t)mmap_start;
 
-        if (mmap->size < 20 ||
-            entry_end <= entry_start ||
-            entry_end > mmap_end_address)
-            return;
-
-        if (mmap->type == MULTIBOOT_MEMORY_AVAILABLE)
+        while ((uint64_t)(uintptr_t)mmap < mmap_end_address)
         {
-            uint64_t region_start = mmap->addr;
-            uint64_t region_end = mmap->addr + mmap->len;
+            uint64_t entry_start =
+                (uint64_t)(uintptr_t)mmap;
+            uint64_t entry_end =
+                entry_start +
+                mmap->size +
+                sizeof(mmap->size);
 
-            if (region_start < PMM_MAX_PHYSICAL_ADDRESS &&
-                region_end > region_start)
+            if (mmap->size < 20 ||
+                entry_end <= entry_start ||
+                entry_end > mmap_end_address)
+                return;
+
+            if (mmap->type == MULTIBOOT_MEMORY_AVAILABLE)
             {
-                if (region_end > PMM_MAX_PHYSICAL_ADDRESS)
-                    region_end = PMM_MAX_PHYSICAL_ADDRESS;
+                uint64_t region_start = mmap->addr;
+                uint64_t region_end = mmap->addr + mmap->len;
 
-                uint32_t start_block =
-                    (uint32_t)((region_start + PAGE_SIZE - 1U) /
-                               PAGE_SIZE);
-
-                uint32_t end_block =
-                    (uint32_t)(region_end / PAGE_SIZE);
-
-                if (end_block > total_blocks)
-                    end_block = total_blocks;
-
-                for (uint32_t block = start_block;
-                     block < end_block;
-                     block++)
+                if (region_start < PMM_MAX_PHYSICAL_ADDRESS &&
+                    region_end > region_start)
                 {
-                    if (bitmap_test(pmm_bitmap, block))
+                    if (region_end > PMM_MAX_PHYSICAL_ADDRESS)
+                        region_end = PMM_MAX_PHYSICAL_ADDRESS;
+
+                    uint32_t start_block =
+                        (uint32_t)((region_start + PAGE_SIZE - 1U) /
+                                   PAGE_SIZE);
+
+                    uint32_t end_block =
+                        (uint32_t)(region_end / PAGE_SIZE);
+
+                    if (end_block > total_blocks)
+                        end_block = total_blocks;
+
+                    for (uint32_t block = start_block;
+                         block < end_block;
+                         block++)
                     {
-                        bitmap_clear(pmm_bitmap, block);
-                        bitmap_clear(pmm_reserved_bitmap, block);
-                        free_blocks++;
+                        if (bitmap_test(pmm_bitmap, block))
+                        {
+                            bitmap_clear(pmm_bitmap, block);
+                            bitmap_clear(pmm_reserved_bitmap, block);
+                            free_blocks++;
+                        }
                     }
                 }
             }
-        }
 
-        mmap = (multiboot_memory_map_t*)(uintptr_t)entry_end;
+            mmap =
+                (multiboot_memory_map_t*)(uintptr_t)entry_end;
+        }
+    }
+    else
+    {
+        uint32_t start_block =
+            (uint32_t)((0x100000ULL + PAGE_SIZE - 1U) / PAGE_SIZE);
+
+        for (uint32_t block = start_block;
+             block < total_blocks;
+             block++)
+        {
+            if (bitmap_test(pmm_bitmap, block))
+            {
+                bitmap_clear(pmm_bitmap, block);
+                bitmap_clear(pmm_reserved_bitmap, block);
+                free_blocks++;
+            }
+        }
     }
 
     /*

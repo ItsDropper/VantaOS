@@ -1,4 +1,4 @@
-bits 32
+bits 64
 
 section .text
 
@@ -51,80 +51,102 @@ extern scheduler_tick
 process_entry_trampoline:
     cld
     call process_entry_dispatch
-
-.process_exit_halt:
+.halt:
+    cli
     hlt
-    jmp .process_exit_halt
+    jmp .halt
+
+%macro SAVE_ALL 0
+    push r15
+    push r14
+    push r13
+    push r12
+    push r11
+    push r10
+    push r9
+    push r8
+    push rsi
+    push rdi
+    push rbp
+    push rdx
+    push rcx
+    push rbx
+    push rax
+%endmacro
+
+%macro RESTORE_ALL 0
+    pop rax
+    pop rbx
+    pop rcx
+    pop rdx
+    pop rbp
+    pop rdi
+    pop rsi
+    pop r8
+    pop r9
+    pop r10
+    pop r11
+    pop r12
+    pop r13
+    pop r14
+    pop r15
+%endmacro
 
 irq0_stub:
     cld
-    pusha
+    SAVE_ALL
     call timer_handle_interrupt
-
-    /* Acknowledge the PIT before scheduling. */
-    push dword 0
+    mov edi, 0
     call pic_send_eoi
-    add esp, 4
-
-    /*
-     * scheduler_tick() receives the address of the complete PUSHA
-     * frame and returns the frame that should be restored.
-     */
-    push esp
+    mov rdi, rsp
     call scheduler_tick
-    add esp, 4
-    mov esp, eax
-
-    popa
-    iretd
+    mov rsp, rax
+    RESTORE_ALL
+    ; In long mode IRETQ consumes the full 5-qword frame:
+    ; RIP, CS, RFLAGS, RSP, SS.
+    iretq
 
 irq1_stub:
     cld
-    pusha
+    SAVE_ALL
     call keyboard_handle_interrupt
-    push dword 1
+    mov edi, 1
     call pic_send_eoi
-    add esp, 4
-    popa
-    iretd
+    RESTORE_ALL
+    iretq
 
 irq12_stub:
     cld
-    pusha
+    SAVE_ALL
     call mouse_handle_interrupt
-    push dword 12
+    mov edi, 12
     call pic_send_eoi
-    add esp, 4
-    popa
-    iretd
+    RESTORE_ALL
+    iretq
 
 %macro EXCEPTION_NO_ERROR 1
 exception%1_stub:
     cld
-    push dword 0
-    pusha
-    mov eax, esp
-    push eax
-    push dword %1
+    push qword 0
+    SAVE_ALL
+    mov rsi, rsp
+    mov edi, %1
     call exception_handler
-    add esp, 8
-    popa
-    add esp, 4
-    iretd
+    RESTORE_ALL
+    add rsp, 8
+    iretq
 %endmacro
 
 %macro EXCEPTION_ERROR 1
 exception%1_stub:
     cld
-    pusha
-    mov eax, esp
-    push eax
-    push dword %1
+    SAVE_ALL
+    mov rsi, rsp
+    mov edi, %1
     call exception_handler
-    add esp, 8
-    popa
-    add esp, 4
-    iretd
+    RESTORE_ALL
+    add rsp, 8
+    iretq
 %endmacro
 
 EXCEPTION_NO_ERROR 0
@@ -144,7 +166,7 @@ EXCEPTION_ERROR 13
 EXCEPTION_ERROR 14
 EXCEPTION_NO_ERROR 15
 EXCEPTION_NO_ERROR 16
-EXCEPTION_NO_ERROR 17
+EXCEPTION_ERROR 17
 EXCEPTION_NO_ERROR 18
 EXCEPTION_NO_ERROR 19
 EXCEPTION_NO_ERROR 20

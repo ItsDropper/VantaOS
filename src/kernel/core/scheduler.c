@@ -48,7 +48,7 @@ static uint32_t scheduler_next_ready(uint32_t current_pid)
     return current_pid;
 }
 
-uint32_t scheduler_tick(uint32_t current_stack)
+uint64_t scheduler_tick(uint64_t current_stack)
 {
     if (!initialized || !process_is_initialized())
         return current_stack;

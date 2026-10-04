@@ -92,6 +92,7 @@ void shell_help(void)
     terminal_write("  cd       - Change directory\n");
     terminal_write("  cat      - Read a system file\n");
     terminal_write("  ps       - Show processes\n");
+    terminal_write("  storage  - Show ATA/FAT32 storage status\n");
 }
 
 void shell_about(void)

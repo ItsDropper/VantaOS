@@ -1,3 +1,4 @@
+#include "ata.h"
 #include "gdt.h"
 #include "heap.h"
 #include "interrupts.h"
@@ -35,6 +36,7 @@ static void kernel_initialize(multiboot_info_t* mbd)
 
     paging_initialize();
     pci_initialize();
+    ata_initialize();
     heap_initialize();
 }
 

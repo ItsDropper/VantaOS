@@ -61,7 +61,7 @@ static void install_exceptions(void)
     };
 
     for (int i = 0; i < 32; i++)
-        idt_set_gate(i, (unsigned int)stubs[i], 0x08, 0x8E);
+        idt_set_gate(i, (unsigned long)stubs[i], 0x08, 0x8E);
 }
 
 void interrupts_initialize(void)
@@ -69,18 +69,18 @@ void interrupts_initialize(void)
     idt_initialize();
     install_exceptions();
 
-    idt_set_gate(IRQ0_VECTOR, (unsigned int)irq0_stub, 0x08, 0x8E);
-    idt_set_gate(IRQ1_VECTOR, (unsigned int)irq1_stub, 0x08, 0x8E);
-    idt_set_gate(IRQ12_VECTOR, (unsigned int)irq12_stub, 0x08, 0x8E);
+    idt_set_gate(IRQ0_VECTOR, (unsigned long)irq0_stub, 0x08, 0x8E);
+    idt_set_gate(IRQ1_VECTOR, (unsigned long)irq1_stub, 0x08, 0x8E);
+    idt_set_gate(IRQ12_VECTOR, (unsigned long)irq12_stub, 0x08, 0x8E);
 
     pic_remap();
     timer_initialize(100);
     idt_load();
 }
 
-unsigned int interrupt_handler(
-    unsigned int interrupt_number,
-    unsigned int saved_stack
+uint64_t interrupt_handler(
+    uint64_t interrupt_number,
+    uint64_t saved_stack
 )
 {
     switch (interrupt_number)
@@ -88,19 +88,19 @@ unsigned int interrupt_handler(
         case IRQ1_VECTOR:
             keyboard_handle_interrupt();
             pic_send_eoi(1);
-            return saved_stack;
+            break;
 
         case IRQ12_VECTOR:
             mouse_handle_interrupt();
             pic_send_eoi(12);
-            return saved_stack;
+            break;
 
         default:
             if (interrupt_number >= 32 &&
                 interrupt_number <= 47)
             {
                 pic_send_eoi(
-                    interrupt_number - 32
+                    (unsigned int)(interrupt_number - 32)
                 );
             }
             break;

@@ -16,7 +16,7 @@ void terminal_write(const char* text);
 
 void terminal_writestring(const char* text);
 
-void terminal_write_hex(uint32_t value);
+void terminal_write_hex(uint64_t value);
 
 void terminal_scroll_up(void);
 

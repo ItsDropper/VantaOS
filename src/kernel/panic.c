@@ -1,4 +1,5 @@
 #include "panic.h"
+#include <stdint.h>
 
 #include "graphics.h"
 #include "interrupts.h"
@@ -35,7 +36,7 @@ void kernel_panic(
     const char* reason,
     unsigned int exception_number,
     struct exception_frame* frame,
-    unsigned int fault_address,
+    uint64_t fault_address,
     int has_fault_address
 )
 {
@@ -65,8 +66,8 @@ void kernel_panic(
         {
             terminal_write("Error Code: ");
             terminal_write_hex(frame->error_code);
-            terminal_write("\nEIP: ");
-            terminal_write_hex(frame->eip);
+            terminal_write("\nRIP: ");
+            terminal_write_hex(frame->rip);
             terminal_write("\nCS: ");
             terminal_write_hex(frame->cs);
             terminal_write("\nEFLAGS: ");
@@ -149,7 +150,7 @@ void exception_handler(
     struct exception_frame* frame
 )
 {
-    unsigned int fault_address = 0;
+    uint64_t fault_address = 0;
     int has_fault_address = 0;
 
     if (exception_number == 14)

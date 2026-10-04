@@ -21,15 +21,34 @@ static int explorer_has_history;
 static int explorer_file = -1;
 static int explorer_initialized;
 static int explorer_minimized;
+static int explorer_system_id = -1;
+static int explorer_home_id = -1;
+static int explorer_etc_id = -1;
+static int explorer_drivers_id = -1;
+static int explorer_devices_id = -1;
 
 static int explorer_directory_for_path(const char* path)
 {
-    int id = filesystem_lookup(path);
+    int id = filesystem_ensure_directory(path);
+    const fs_node_t* node;
 
-    if (id >= 0)
-        return id;
+    if (id < 0)
+        return -1;
 
-    return filesystem_ensure_directory(path);
+    node = filesystem_get_node((uint32_t)id);
+    if (!node || node->type != FS_NODE_DIRECTORY)
+        return -1;
+
+    return id;
+}
+
+static void explorer_ensure_standard_directories(void)
+{
+    explorer_system_id = explorer_directory_for_path("/system");
+    explorer_home_id = explorer_directory_for_path("/home");
+    explorer_etc_id = explorer_directory_for_path("/etc");
+    explorer_drivers_id = explorer_directory_for_path("/system/drivers");
+    explorer_devices_id = explorer_directory_for_path("/system/devices");
 }
 
 static void explorer_set_directory(uint32_t id, int remember)
@@ -118,15 +137,15 @@ static void explorer_sidebar_select(int item)
     }
 
     if (item == 1)
-        id = explorer_directory_for_path("/system");
+        id = explorer_system_id;
     else if (item == 2)
-        id = explorer_directory_for_path("/home");
+        id = explorer_home_id;
     else if (item == 3)
-        id = explorer_directory_for_path("/etc");
+        id = explorer_etc_id;
     else if (item == 4)
-        id = explorer_directory_for_path("/system/drivers");
+        id = explorer_drivers_id;
     else if (item == 5)
-        id = explorer_directory_for_path("/system/devices");
+        id = explorer_devices_id;
 
     if (id >= 0)
         explorer_set_directory((uint32_t)id, 1);
@@ -193,8 +212,7 @@ void file_explorer_initialize(void)
     explorer_restore_x = -1;
     explorer_restore_y = -1;
 
-    filesystem_ensure_directory("/system");
-    filesystem_ensure_directory("/home");
+    explorer_ensure_standard_directories();
 }
 
 int file_explorer_is_dragging(void)

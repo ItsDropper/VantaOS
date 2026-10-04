@@ -206,24 +206,21 @@ void filesystem_initialize(multiboot_info_t* mbd)
         nodes[0].loaded = 0;
 
         /*
-         * A failed FAT32 directory read must not destroy the in-memory
-         * namespace. Standard VantaOS directories are seeded below.
+         * Import the real FAT32 root first. This gives Explorer access to
+         * files that were installed into vantaos.img by the build system.
          */
         fs_load_directory(filesystem_root());
     }
 
     /*
-     * These are real VantaOS namespace nodes. They remain available
-     * even if persistent storage is temporarily unavailable.
+     * Keep the standard namespace available even when storage is offline.
+     * Existing on-disk directories are reused by ensure_directory(), so
+     * their children remain real FAT32 nodes rather than duplicate virtual
+     * nodes.
      */
-    int system_id = filesystem_ensure_directory("/system");
-
-    if (system_id >= 0)
-    {
-        filesystem_ensure_directory("/system/drivers");
-        filesystem_ensure_directory("/system/devices");
-    }
-
+    filesystem_ensure_directory("/system");
+    filesystem_ensure_directory("/system/drivers");
+    filesystem_ensure_directory("/system/devices");
     filesystem_ensure_directory("/home");
     filesystem_ensure_directory("/home/user");
     filesystem_ensure_directory("/etc");

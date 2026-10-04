@@ -5,7 +5,7 @@ LD = ld
 CFLAGS = -m64 -march=x86-64 -mtune=generic -ffreestanding -fno-pie -fno-stack-protector -mno-red-zone -mgeneral-regs-only -mcmodel=small -nostdlib -Iinclude
 LDFLAGS = -m elf_x86_64 --no-warn-rwx-segments -T build/linker.ld
 
-OBJS = boot.o isr.o kernel.o os.o desktop.o desktop_process.o file_explorer.o file_explorer_process.o gdt.o idt.o pic.o terminal.o keyboard.o mouse.o ata.o interrupts.o panic.o fault_trace.o timer.o pmm.o paging.o graphics.o graphics_core.o graphics_text.o graphics_input.o graphics_ui.o heap.o shell.o shell_core.o shell_files.o shell_system.o shell_storage.o shell_commands.o pci.o filesystem.o fat32.o process.o scheduler.o vfs.o terminal_process.o
+OBJS = boot.o isr.o kernel.o os.o desktop.o desktop_process.o file_explorer.o file_explorer_process.o gdt.o idt.o pic.o terminal.o keyboard.o mouse.o ata.o interrupts.o panic.o fault_trace.o timer.o pmm.o paging.o graphics.o graphics_core.o graphics_text.o graphics_input.o graphics_ui.o heap.o shell.o shell_core.o shell_files.o shell_system.o shell_storage.o shell_commands.o pci.o filesystem.o fat32.o process.o scheduler.o syscall.o user_mode.o vfs.o terminal_process.o
 
 all: kernel.bin
 
@@ -122,6 +122,12 @@ process.o:
 
 scheduler.o:
 	$(CC) $(CFLAGS) -c src/kernel/core/scheduler.c -o scheduler.o
+
+syscall.o:
+	$(CC) $(CFLAGS) -c src/kernel/core/syscall.c -o syscall.o
+
+user_mode.o:
+	$(CC) $(CFLAGS) -c src/kernel/core/user_mode.c -o user_mode.o
 
 vfs.o:
 	$(CC) $(CFLAGS) -c src/kernel/storage/vfs.c -o vfs.o

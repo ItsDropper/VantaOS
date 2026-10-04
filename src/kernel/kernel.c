@@ -24,10 +24,8 @@ static unsigned long long boot_start;
 static unsigned long long boot_gdt;
 static unsigned long long boot_interrupts;
 
-void kernel_main(multiboot_info_t* mbd)
+static void kernel_initialize(multiboot_info_t* mbd)
 {
-    boot_start = read_tsc();
-
     gdt_initialize();
     boot_gdt = read_tsc();
 
@@ -38,9 +36,20 @@ void kernel_main(multiboot_info_t* mbd)
     paging_initialize();
     pci_initialize();
     heap_initialize();
+}
 
+static void kernel_start_os(multiboot_info_t* mbd)
+{
     os_initialize(mbd);
     os_run();
+}
+
+void kernel_main(multiboot_info_t* mbd)
+{
+    boot_start = read_tsc();
+
+    kernel_initialize(mbd);
+    kernel_start_os(mbd);
 }
 
 

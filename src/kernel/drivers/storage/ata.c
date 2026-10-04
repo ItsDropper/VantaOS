@@ -20,6 +20,10 @@
 #define ATA_STATUS_DF    0x20
 
 static int available;
+static uint8_t last_status;
+static uint8_t last_error;
+static uint8_t last_signature_mid;
+static uint8_t last_signature_high;
 
 static inline void outb(uint16_t port, uint8_t value)
 {
@@ -83,6 +87,10 @@ static int ata_wait_data(void)
 void ata_initialize(void)
 {
     available = 0;
+    last_status = 0;
+    last_error = 0;
+    last_signature_mid = 0;
+    last_signature_high = 0;
 
     /*
      * VantaOS currently uses the primary IDE channel's master device.
@@ -92,6 +100,7 @@ void ata_initialize(void)
     ata_wait_400ns();
 
     uint8_t status = inb(ATA_STATUS);
+    last_status = status;
 
     if (status == 0x00 || status == 0xFF)
         return;
@@ -103,6 +112,7 @@ void ata_initialize(void)
     outb(ATA_COMMAND, ATA_CMD_IDENTIFY);
 
     status = inb(ATA_STATUS);
+    last_status = status;
 
     if (status == 0x00 || status == 0xFF)
         return;
@@ -111,14 +121,25 @@ void ata_initialize(void)
      * A non-zero LBA mid/high pair after IDENTIFY normally indicates an
      * ATAPI/non-ATA device rather than the ATA disk we support here.
      */
-    if (inb(ATA_LBA_MID) != 0 || inb(ATA_LBA_HIGH) != 0)
+    last_signature_mid = inb(ATA_LBA_MID);
+    last_signature_high = inb(ATA_LBA_HIGH);
+
+    if (last_signature_mid != 0 || last_signature_high != 0)
         return;
 
     if (!ata_wait_not_busy())
+    {
+        last_status = inb(ATA_STATUS);
+        last_error = inb(ATA_ERROR);
         return;
+    }
 
     if (!ata_wait_data())
+    {
+        last_status = inb(ATA_STATUS);
+        last_error = inb(ATA_ERROR);
         return;
+    }
 
     /*
      * Consume the 512-byte IDENTIFY response. We only need successful
@@ -133,6 +154,26 @@ void ata_initialize(void)
 int ata_is_available(void)
 {
     return available;
+}
+
+uint8_t ata_status(void)
+{
+    return last_status;
+}
+
+uint8_t ata_error(void)
+{
+    return last_error;
+}
+
+uint8_t ata_signature_mid(void)
+{
+    return last_signature_mid;
+}
+
+uint8_t ata_signature_high(void)
+{
+    return last_signature_high;
 }
 
 int ata_read_sectors(

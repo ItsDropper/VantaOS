@@ -518,14 +518,14 @@ void terminal_writestring(const char* text)
     terminal_write(text);
 }
 
-void terminal_write_hex(uint32_t value)
+void terminal_write_hex(uint64_t value)
 {
     const char* hex =
         "0123456789ABCDEF";
 
     terminal_write("0x");
 
-    for (int i = 7; i >= 0; i--)
+    for (int i = 15; i >= 0; i--)
     {
         terminal_putchar(
             hex[(value >> (i * 4)) & 0xF]

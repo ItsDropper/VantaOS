@@ -11,7 +11,7 @@ void fault_trace_draw(
     int width,
     unsigned int exception_number,
     const struct exception_frame* frame,
-    unsigned int fault_address,
+    uint64_t fault_address,
     int has_fault_address
 );
 

@@ -76,14 +76,16 @@ static void explorer_go_up(void)
 static int explorer_sidebar_hit(int x, int y, int wx, int wy)
 {
     int sidebar_y = wy + EXPLORER_TITLE;
-
-    if (x < wx || x >= wx + EXPLORER_SIDEBAR)
-        return -1;
+    int button_x = wx + 12;
+    int button_w = EXPLORER_SIDEBAR - 24;
 
     /*
-     * These rectangles are deliberately identical to the three rendered
-     * sidebar buttons. Do not derive the hit test from text or icon sizes.
+     * Use the actual rendered button rectangles, not the whole sidebar.
+     * Items 0-2 are the location buttons; 3-5 are the system shortcuts.
      */
+    if (x < button_x || x >= button_x + button_w)
+        return -1;
+
     if (y >= sidebar_y + 38 && y < sidebar_y + 72)
         return 0;
 
@@ -93,12 +95,21 @@ static int explorer_sidebar_hit(int x, int y, int wx, int wy)
     if (y >= sidebar_y + 114 && y < sidebar_y + 148)
         return 2;
 
+    if (y >= sidebar_y + 188 && y < sidebar_y + 212)
+        return 3;
+
+    if (y >= sidebar_y + 212 && y < sidebar_y + 236)
+        return 4;
+
+    if (y >= sidebar_y + 236 && y < sidebar_y + 260)
+        return 5;
+
     return -1;
 }
 
 static void explorer_sidebar_select(int item)
 {
-    int id;
+    int id = -1;
 
     if (item == 0)
     {
@@ -110,8 +121,12 @@ static void explorer_sidebar_select(int item)
         id = explorer_directory_for_path("/system");
     else if (item == 2)
         id = explorer_directory_for_path("/home");
-    else
-        return;
+    else if (item == 3)
+        id = explorer_directory_for_path("/etc");
+    else if (item == 4)
+        id = explorer_directory_for_path("/system/drivers");
+    else if (item == 5)
+        id = explorer_directory_for_path("/system/devices");
 
     if (id >= 0)
         explorer_set_directory((uint32_t)id, 1);
@@ -375,14 +390,18 @@ void file_explorer_draw(int width, int height)
     graphics_draw_text(
         wx + 16, sidebar_y + 172,
         "SYSTEM", 0x007F95A8, 1);
+
+    graphics_fill_rect(
+        wx + 12, sidebar_y + 188,
+        EXPLORER_SIDEBAR - 24, 24, 0x00121B24);
     graphics_draw_text(
-        wx + 16, sidebar_y + 198,
+        wx + 16, sidebar_y + 194,
         "/etc", 0x00B7C5D1, 1);
     graphics_draw_text(
-        wx + 16, sidebar_y + 222,
+        wx + 16, sidebar_y + 218,
         "/drivers", 0x00B7C5D1, 1);
     graphics_draw_text(
-        wx + 16, sidebar_y + 246,
+        wx + 16, sidebar_y + 242,
         "/devices", 0x00B7C5D1, 1);
 
     /*
@@ -559,7 +578,7 @@ int file_explorer_click(int x, int y, int width, int height)
         if (sidebar_item >= 0)
         {
             explorer_sidebar_select(sidebar_item);
-            return 0;
+            return 1;
         }
     }
 

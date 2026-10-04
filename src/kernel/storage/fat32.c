@@ -15,6 +15,7 @@ static uint16_t bytes_per_sector;
 static uint8_t fat_count;
 
 static uint8_t sector_buffer[512];
+static uint8_t boot_sector_buffer[512];
 
 static uint16_t fat16(const uint8_t* p)
 {
@@ -49,18 +50,20 @@ static int valid_boot_sector(const uint8_t* b)
 
 static int mount_partition(uint32_t lba)
 {
-    if (!read_sector(lba, sector_buffer))
+    if (!read_sector(lba, boot_sector_buffer))
         return 0;
 
-    if (!valid_boot_sector(sector_buffer))
+    const uint8_t* boot = boot_sector_buffer;
+
+    if (!valid_boot_sector(boot))
         return 0;
 
-    bytes_per_sector = fat16(&sector_buffer[11]);
-    sectors_per_cluster = sector_buffer[13];
-    uint16_t reserved = fat16(&sector_buffer[14]);
-    fat_count = sector_buffer[16];
-    sectors_per_fat = fat32(&sector_buffer[36]);
-    root_cluster = fat32(&sector_buffer[44]);
+    bytes_per_sector = fat16(&boot[11]);
+    sectors_per_cluster = boot[13];
+    uint16_t reserved = fat16(&boot[14]);
+    fat_count = boot[16];
+    sectors_per_fat = fat32(&boot[36]);
+    root_cluster = fat32(&boot[44]);
 
     if (bytes_per_sector != 512 ||
         sectors_per_cluster == 0 ||

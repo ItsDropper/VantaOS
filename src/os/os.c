@@ -76,6 +76,15 @@ void os_initialize(multiboot_info_t* mbd)
     vfs_initialize();
 
     process_initialize();
+
+    /*
+     * Register the boot/desktop execution context as PID 1 before any
+     * application processes are created. Its stack is the real kernel
+     * boot stack, and the first timer IRQ will replace its saved ESP
+     * with a genuine PUSHA/IRET frame.
+     */
+    process_attach_current("desktop", 0);
+
     scheduler_initialize();
     terminal_process_initialize();
     desktop_process_initialize();

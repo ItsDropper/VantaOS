@@ -46,6 +46,7 @@ extern timer_handle_interrupt
 extern keyboard_handle_interrupt
 extern mouse_handle_interrupt
 extern pic_send_eoi
+extern scheduler_tick
 
 ; Save the complete general-purpose register set.
 ; The resulting memory layout matches struct exception_frame:
@@ -117,6 +118,11 @@ irq0_stub:
     call timer_handle_interrupt
     mov edi, 0
     call pic_send_eoi
+
+    mov rdi, rsp
+    call scheduler_tick
+    mov rsp, rax
+
     POP_REGS
     iretq
 

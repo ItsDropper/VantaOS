@@ -87,17 +87,27 @@ void pmm_initialize(multiboot_info_t* mbd)
         return;
 
     uint64_t highest_addr = 0;
-    uint32_t mmap_start = mbd->mmap_addr;
-    uint32_t mmap_end = mbd->mmap_addr + mbd->mmap_length;
-    multiboot_memory_map_t* mmap =
-        (multiboot_memory_map_t*)mmap_start;
+    uint64_t mmap_start = mbd->mmap_addr;
+    uint64_t mmap_end_address =
+        mmap_start + mbd->mmap_length;
 
-    while ((uint32_t)mmap < mmap_end)
+    if (mmap_end_address <= mmap_start ||
+        mmap_end_address > PMM_MAX_PHYSICAL_ADDRESS)
+        return;
+
+    multiboot_memory_map_t* mmap =
+        (multiboot_memory_map_t*)(uintptr_t)mmap_start;
+
+    while ((uint64_t)(uintptr_t)mmap < mmap_end_address)
     {
+        uint64_t entry_start = (uint64_t)(uintptr_t)mmap;
+        uint64_t entry_end =
+            entry_start + mmap->size + sizeof(mmap->size);
+
         if (mmap->size < 20 ||
-            (uint32_t)mmap + mmap->size +
-                sizeof(mmap->size) > mmap_end)
-            break;
+            entry_end <= entry_start ||
+            entry_end > mmap_end_address)
+            return;
 
         if (mmap->type == MULTIBOOT_MEMORY_AVAILABLE)
         {
@@ -107,9 +117,7 @@ void pmm_initialize(multiboot_info_t* mbd)
                 highest_addr = top;
         }
 
-        mmap = (multiboot_memory_map_t*)
-            ((uint32_t)mmap + mmap->size +
-             sizeof(mmap->size));
+        mmap = (multiboot_memory_map_t*)(uintptr_t)entry_end;
     }
 
     if (highest_addr > PMM_MAX_PHYSICAL_ADDRESS)
@@ -130,14 +138,18 @@ void pmm_initialize(multiboot_info_t* mbd)
      * Start with every frame unavailable, then release only frames
      * explicitly reported by the firmware as usable RAM.
      */
-    mmap = (multiboot_memory_map_t*)mmap_start;
+    mmap = (multiboot_memory_map_t*)(uintptr_t)mmap_start;
 
-    while ((uint32_t)mmap < mmap_end)
+    while ((uint64_t)(uintptr_t)mmap < mmap_end_address)
     {
+        uint64_t entry_start = (uint64_t)(uintptr_t)mmap;
+        uint64_t entry_end =
+            entry_start + mmap->size + sizeof(mmap->size);
+
         if (mmap->size < 20 ||
-            (uint32_t)mmap + mmap->size +
-                sizeof(mmap->size) > mmap_end)
-            break;
+            entry_end <= entry_start ||
+            entry_end > mmap_end_address)
+            return;
 
         if (mmap->type == MULTIBOOT_MEMORY_AVAILABLE)
         {
@@ -174,9 +186,7 @@ void pmm_initialize(multiboot_info_t* mbd)
             }
         }
 
-        mmap = (multiboot_memory_map_t*)
-            ((uint32_t)mmap + mmap->size +
-             sizeof(mmap->size));
+        mmap = (multiboot_memory_map_t*)(uintptr_t)entry_end;
     }
 
     /*

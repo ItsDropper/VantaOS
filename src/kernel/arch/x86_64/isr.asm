@@ -92,36 +92,64 @@ process_entry_trampoline:
     pop r15
 %endmacro
 
+/*
+ * Long-mode interrupt delivery aligns RSP to 16 bytes before building
+ * the CPU return frame. SAVE_ALL pushes 15 qwords, leaving RSP misaligned
+ * for a normal SysV C call. Keep one padding qword with the saved context
+ * so every C call made from a hardware IRQ has the ABI-required alignment.
+ *
+ * The saved context layout becomes:
+ *   +0   padding
+ *   +8   rax
+ *   ...
+ *   +112 r15
+ *   +120 RIP
+ *   +128 CS
+ *   +136 RFLAGS
+ *   +144 RSP
+ *   +152 SS
+ */
+%macro SAVE_IRQ_ALL 0
+    SAVE_ALL
+    push qword 0
+%endmacro
+
+%macro RESTORE_IRQ_ALL 0
+    pop rax
+    /* discard the IRQ alignment padding */
+    RESTORE_ALL
+%endmacro
+
 irq0_stub:
     cld
-    SAVE_ALL
+    SAVE_IRQ_ALL
     call timer_handle_interrupt
     mov edi, 0
     call pic_send_eoi
-    mov rdi, rsp
+    lea rdi, [rsp + 8]
     call scheduler_tick
     mov rsp, rax
+    sub rsp, 8
+    pop rax
     RESTORE_ALL
-    ; In long mode IRETQ consumes the full 5-qword frame:
-    ; RIP, CS, RFLAGS, RSP, SS.
     iretq
 
 irq1_stub:
     cld
-    SAVE_ALL
+    SAVE_IRQ_ALL
     call keyboard_handle_interrupt
     mov edi, 1
     call pic_send_eoi
-    RESTORE_ALL
+    RESTORE_IRQ_ALL
     iretq
 
 irq12_stub:
     cld
-    SAVE_ALL
+    SAVE_IRQ_ALL
     call mouse_handle_interrupt
     mov edi, 12
     call pic_send_eoi
-    RESTORE_ALL
+    RESTORE_IRQ_ALL
     iretq
 
 %macro EXCEPTION_NO_ERROR 1

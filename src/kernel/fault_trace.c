@@ -17,16 +17,16 @@ struct descriptor_pointer
 static void draw_hex(int x, int y, unsigned int value)
 {
     const char* hex = "0123456789ABCDEF";
-    char text[11];
+    char text[19];
 
     text[0] = '0';
     text[1] = 'x';
 
-    for (int i = 0; i < 8; i++)
+    for (int i = 0; i < 16; i++)
         text[2 + i] =
-            hex[(value >> (28 - i * 4)) & 0x0F];
+            hex[(value >> (60 - i * 4)) & 0x0F];
 
-    text[10] = 0;
+    text[18] = 0;
 
     graphics_draw_text(x, y, text, 0x00F2F5F8, 1);
 }
@@ -40,7 +40,7 @@ static void draw_field(
     int x,
     int y,
     const char* label,
-    unsigned int value
+    uintptr_t value
 )
 {
     draw_label(x, y, label);
@@ -228,7 +228,7 @@ static void draw_instruction_diagnostics(
 
 static void draw_machine_state(int x, int y)
 {
-    unsigned int cr0, cr2, cr3, cr4;
+    uintptr_t cr0, cr2, cr3, cr4;
     unsigned int ds, es, fs, gs, ss, tr, ldtr;
     struct descriptor_pointer gdtr;
     struct descriptor_pointer idtr;
@@ -378,7 +378,7 @@ void fault_trace_draw(
     int width,
     unsigned int exception_number,
     const struct exception_frame* frame,
-    unsigned int fault_address,
+    uintptr_t fault_address,
     int has_fault_address
 )
 {

@@ -4,215 +4,131 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define PAGE_TABLE_COUNT 4U
 #define ADDRESS_SPACE_MAX 32U
+#define TABLE_ENTRIES 512U
+#define PAGE_2M 0x200000ULL
 
-static uint32_t kernel_page_directory[1024]
-    __attribute__((aligned(4096)));
+static uint64_t kernel_pml4[TABLE_ENTRIES] __attribute__((aligned(4096)));
+static uint64_t kernel_pdpt[TABLE_ENTRIES] __attribute__((aligned(4096)));
+static uint64_t kernel_pd[TABLE_ENTRIES] __attribute__((aligned(4096)));
+static uint64_t heap_pd[TABLE_ENTRIES] __attribute__((aligned(4096)));
+static uint64_t graphics_pd[TABLE_ENTRIES] __attribute__((aligned(4096)));
+static uint64_t heap_pt[TABLE_ENTRIES] __attribute__((aligned(4096)));
+static uint64_t graphics_pt[TABLE_ENTRIES] __attribute__((aligned(4096)));
 
-static uint32_t kernel_page_tables[PAGE_TABLE_COUNT][1024]
-    __attribute__((aligned(4096)));
-
-static uint32_t heap_page_table[1024]
-    __attribute__((aligned(4096)));
-
-static uint32_t graphics_page_table[1024]
-    __attribute__((aligned(4096)));
-
-/*
- * Address-space directories are deliberately kept in kernel memory for
- * this stage. They are page-aligned and therefore directly usable as
- * CR3 values while the kernel still uses its identity mapping.
- *
- * User page tables are intentionally not allocated yet. The lower
- * address-space entries remain empty until the user-memory layer is
- * introduced. This gives processes independent page directories without
- * enabling an unverified user-mode path.
- */
-static uint32_t address_space_directories[ADDRESS_SPACE_MAX][1024]
+static uint64_t address_space_pml4[ADDRESS_SPACE_MAX][TABLE_ENTRIES]
     __attribute__((aligned(4096)));
 
 static paging_address_space_t address_spaces[ADDRESS_SPACE_MAX];
-
 static paging_address_space_t kernel_address_space;
 static paging_address_space_t* current_address_space;
 
-static inline void load_page_directory(uintptr_t physical_address)
+static inline void load_page_table(uintptr_t physical_address)
 {
-    __asm__ volatile (
-        "mov %0, %%cr3"
-        :
-        : "r"((uint32_t)physical_address)
-        : "memory"
-    );
+    __asm__ volatile ("mov %0, %%cr3" : : "r"(physical_address) : "memory");
 }
 
 static inline void invalidate_page(uintptr_t address)
 {
-    __asm__ volatile (
-        "invlpg (%0)"
-        :
-        : "r"(address)
-        : "memory"
-    );
+    __asm__ volatile ("invlpg (%0)" : : "r"(address) : "memory");
 }
 
-static inline void enable_paging(void)
+static uint64_t* table_for(uintptr_t virtual_address)
 {
-    uint32_t cr0;
+    uint64_t pdpt_index = (virtual_address >> 30) & 0x1FFU;
+    uint64_t pd_index = (virtual_address >> 21) & 0x1FFU;
 
-    __asm__ volatile (
-        "mov %%cr0, %0"
-        : "=r"(cr0)
-    );
+    if (pdpt_index != 0)
+        return NULL;
 
-    cr0 |= 0x80000000U;
+    if (pd_index == ((0xC0000000ULL >> 21) & 0x1FFU))
+        return heap_pt;
 
-    __asm__ volatile (
-        "mov %0, %%cr0"
-        :
-        : "r"(cr0)
-        : "memory"
-    );
-}
-
-static uint32_t* get_kernel_page_table(uintptr_t virtual_address)
-{
-    uint32_t directory_index =
-        (uint32_t)(virtual_address >> 22);
-
-    if (directory_index < PAGE_TABLE_COUNT)
-        return kernel_page_tables[directory_index];
-
-    if (directory_index == PAGING_KERNEL_DIRECTORY_INDEX)
-        return heap_page_table;
-
-    if (directory_index == PAGING_GRAPHICS_DIRECTORY_INDEX)
-        return graphics_page_table;
+    if (pd_index == ((0xD0000000ULL >> 21) & 0x1FFU))
+        return graphics_pt;
 
     return NULL;
 }
 
-static int is_kernel_mapping(uint32_t directory_index)
+static void map_high_region(uint64_t* pd, uint64_t* pt, uint64_t virtual_base)
 {
-    return directory_index < PAGE_TABLE_COUNT ||
-           directory_index == PAGING_KERNEL_DIRECTORY_INDEX ||
-           directory_index == PAGING_GRAPHICS_DIRECTORY_INDEX;
+    uint32_t pd_index = (uint32_t)((virtual_base >> 21) & 0x1FFU);
+    pd[pd_index] = ((uint64_t)(uintptr_t)pt) |
+                   PAGE_PRESENT | PAGE_WRITE;
+
+    for (uint32_t i = 0; i < TABLE_ENTRIES; i++)
+        pt[i] = 0;
 }
 
 void paging_initialize(void)
 {
-    for (uint32_t i = 0; i < 1024; i++)
-        kernel_page_directory[i] = 0;
-
-    for (uint32_t table = 0; table < PAGE_TABLE_COUNT; table++)
+    for (uint32_t i = 0; i < TABLE_ENTRIES; i++)
     {
-        for (uint32_t entry = 0; entry < 1024; entry++)
-        {
-            uint32_t frame =
-                (table * 1024U + entry) * PAGE_SIZE;
-
-            kernel_page_tables[table][entry] =
-                frame | PAGE_PRESENT | PAGE_WRITE;
-        }
-
-        kernel_page_directory[table] =
-            (uint32_t)&kernel_page_tables[table][0] |
-            PAGE_PRESENT |
-            PAGE_WRITE;
+        kernel_pml4[i] = 0;
+        kernel_pdpt[i] = 0;
+        kernel_pd[i] = 0;
+        heap_pd[i] = 0;
+        graphics_pd[i] = 0;
+        heap_pt[i] = 0;
+        graphics_pt[i] = 0;
     }
 
-    for (uint32_t entry = 0; entry < 1024; entry++)
-    {
-        heap_page_table[entry] = 0;
-        graphics_page_table[entry] = 0;
-    }
+    /* Identity-map the first 1 GiB with 2 MiB pages. */
+    kernel_pml4[0] =
+        (uint64_t)(uintptr_t)kernel_pdpt |
+        PAGE_PRESENT | PAGE_WRITE;
 
-    kernel_page_directory[PAGING_KERNEL_DIRECTORY_INDEX] =
-        (uint32_t)&heap_page_table[0] |
-        PAGE_PRESENT |
-        PAGE_WRITE;
+    kernel_pdpt[0] =
+        (uint64_t)(uintptr_t)kernel_pd |
+        PAGE_PRESENT | PAGE_WRITE;
+
+    for (uint32_t i = 0; i < TABLE_ENTRIES; i++)
+        kernel_pd[i] =
+            ((uint64_t)i * PAGE_2M) |
+            PAGE_PRESENT | PAGE_WRITE | 0x080U;
 
     /*
-     * Install the graphics PDE during page-directory construction.
-     * Graphics mapping must not depend on paging_map_page() lazily
-     * creating the directory entry after paging is already active.
+     * Keep the existing high virtual windows used by the heap and
+     * framebuffer. Both are backed by ordinary 4 KiB page tables.
      */
-    kernel_page_directory[PAGING_GRAPHICS_DIRECTORY_INDEX] =
-        (uint32_t)&graphics_page_table[0] |
-        PAGE_PRESENT |
-        PAGE_WRITE;
+    map_high_region(kernel_pd, heap_pt, 0xC0000000ULL);
+    map_high_region(kernel_pd, graphics_pt, 0xD0000000ULL);
 
-    kernel_address_space.directory =
-        kernel_page_directory;
+    kernel_address_space.directory = kernel_pml4;
     kernel_address_space.directory_physical =
-        (uintptr_t)kernel_page_directory;
+        (uintptr_t)kernel_pml4;
     kernel_address_space.used = 1;
 
     for (uint32_t i = 0; i < ADDRESS_SPACE_MAX; i++)
     {
-        address_spaces[i].directory = address_space_directories[i];
+        address_spaces[i].directory = address_space_pml4[i];
         address_spaces[i].directory_physical =
-            (uintptr_t)address_space_directories[i];
+            (uintptr_t)address_space_pml4[i];
         address_spaces[i].used = 0;
     }
 
     current_address_space = &kernel_address_space;
 
-    load_page_directory(
-        kernel_address_space.directory_physical
-    );
-
-    enable_paging();
+    load_page_table(kernel_address_space.directory_physical);
 }
 
-int paging_map_page(
-    uintptr_t virtual_address,
-    uintptr_t physical_address
-)
+int paging_map_page(uintptr_t virtual_address, uintptr_t physical_address)
 {
     if ((virtual_address % PAGE_SIZE) != 0 ||
-        (physical_address % PAGE_SIZE) != 0)
-        return 0;
-
-    uint32_t directory_index =
-        (uint32_t)(virtual_address >> 22);
-
-    uint32_t table_index =
-        (uint32_t)((virtual_address >> 12) & 0x3FFU);
-
-    uint32_t* table =
-        get_kernel_page_table(virtual_address);
-
-    if (!table ||
+        (physical_address % PAGE_SIZE) != 0 ||
         current_address_space != &kernel_address_space)
         return 0;
 
-    if (directory_index == PAGING_KERNEL_DIRECTORY_INDEX &&
-        !(kernel_page_directory[directory_index] & PAGE_PRESENT))
-    {
-        kernel_page_directory[directory_index] =
-            (uint32_t)&heap_page_table[0] |
-            PAGE_PRESENT |
-            PAGE_WRITE;
-    }
+    uint64_t* table = table_for(virtual_address);
+    if (!table)
+        return 0;
 
-    if (directory_index == PAGING_GRAPHICS_DIRECTORY_INDEX &&
-        !(kernel_page_directory[directory_index] & PAGE_PRESENT))
-    {
-        kernel_page_directory[directory_index] =
-            (uint32_t)&graphics_page_table[0] |
-            PAGE_PRESENT |
-            PAGE_WRITE;
-    }
-
+    uint32_t table_index = (uint32_t)((virtual_address >> 12) & 0x1FFU);
     table[table_index] =
-        (uint32_t)physical_address |
-        PAGE_PRESENT |
-        PAGE_WRITE;
+        ((uint64_t)physical_address) |
+        PAGE_PRESENT | PAGE_WRITE;
 
     invalidate_page(virtual_address);
-
     return 1;
 }
 
@@ -222,53 +138,33 @@ void paging_unmap_page(uintptr_t virtual_address)
         current_address_space != &kernel_address_space)
         return;
 
-    uint32_t directory_index =
-        (uint32_t)(virtual_address >> 22);
-
-    uint32_t table_index =
-        (uint32_t)((virtual_address >> 12) & 0x3FFU);
-
-    uint32_t* table =
-        get_kernel_page_table(virtual_address);
-
-    if (!table ||
-        !(kernel_page_directory[directory_index] & PAGE_PRESENT))
+    uint64_t* table = table_for(virtual_address);
+    if (!table)
         return;
 
-    table[table_index] = 0;
+    uint32_t index = (uint32_t)((virtual_address >> 12) & 0x1FFU);
+    table[index] = 0;
     invalidate_page(virtual_address);
 }
 
 uintptr_t paging_get_physical(uintptr_t virtual_address)
 {
-    uint32_t directory_index =
-        (uint32_t)(virtual_address >> 22);
+    uint64_t* table = table_for(virtual_address);
 
-    uint32_t table_index =
-        (uint32_t)((virtual_address >> 12) & 0x3FFU);
-
-    uint32_t offset =
-        (uint32_t)(virtual_address & 0xFFFU);
-
-    if (current_address_space == &kernel_address_space)
+    if (table)
     {
-        uint32_t* table =
-            get_kernel_page_table(virtual_address);
-
-        if (!table ||
-            !(kernel_page_directory[directory_index] & PAGE_PRESENT) ||
-            !(table[table_index] & PAGE_PRESENT))
+        uint32_t index = (uint32_t)((virtual_address >> 12) & 0x1FFU);
+        if (!(table[index] & PAGE_PRESENT))
             return 0;
 
-        return (uintptr_t)
-            (table[table_index] & 0xFFFFF000U) + offset;
+        return (uintptr_t)(table[index] & 0x000FFFFFFFFFF000ULL) |
+               (virtual_address & 0xFFFU);
     }
 
-    /*
-     * User address spaces intentionally have no user mappings yet.
-     * Kernel mappings can still be inspected after a future CR3 switch
-     * once the shared kernel mapping layer is expanded.
-     */
+    /* Identity-mapped low memory. */
+    if (virtual_address < 0x40000000ULL)
+        return virtual_address;
+
     return 0;
 }
 
@@ -282,37 +178,16 @@ paging_address_space_t* paging_create_address_space(void)
         if (address_spaces[i].used)
             continue;
 
-        uint32_t* directory =
-            address_spaces[i].directory;
+        uint64_t* pml4 = address_spaces[i].directory;
 
-        for (uint32_t entry = 0; entry < 1024; entry++)
-            directory[entry] = 0;
-
-        /*
-         * Keep the existing supervisor-only kernel mappings shared.
-         * The user portion (PDE 0..767) starts empty.
-         */
-        for (uint32_t entry = 768; entry < 1024; entry++)
-        {
-            if (kernel_page_directory[entry] & PAGE_PRESENT)
-                directory[entry] =
-                    kernel_page_directory[entry];
-        }
+        for (uint32_t entry = 0; entry < TABLE_ENTRIES; entry++)
+            pml4[entry] = 0;
 
         /*
-         * VantaOS is still in the transition from its identity-mapped
-         * bootstrap kernel. Keep the current low identity mappings
-         * supervisor-only so the kernel can continue operating while
-         * the user-memory layer is developed.
+         * Share the kernel's identity and high mappings. User mappings
+         * can later occupy otherwise-empty PML4 entries.
          */
-        for (uint32_t entry = 0; entry < PAGE_TABLE_COUNT; entry++)
-            directory[entry] = kernel_page_directory[entry];
-
-        directory[PAGING_KERNEL_DIRECTORY_INDEX] =
-            kernel_page_directory[PAGING_KERNEL_DIRECTORY_INDEX];
-
-        directory[PAGING_GRAPHICS_DIRECTORY_INDEX] =
-            kernel_page_directory[PAGING_GRAPHICS_DIRECTORY_INDEX];
+        pml4[0] = kernel_pml4[0];
 
         address_spaces[i].used = 1;
         return &address_spaces[i];
@@ -321,36 +196,27 @@ paging_address_space_t* paging_create_address_space(void)
     return NULL;
 }
 
-void paging_destroy_address_space(
-    paging_address_space_t* address_space
-)
+void paging_destroy_address_space(paging_address_space_t* address_space)
 {
-    if (!address_space ||
-        address_space == &kernel_address_space)
+    if (!address_space || address_space == &kernel_address_space)
         return;
 
     address_space->used = 0;
 
-    for (uint32_t entry = 0; entry < 1024; entry++)
-        address_space->directory[entry] = 0;
+    for (uint32_t i = 0; i < TABLE_ENTRIES; i++)
+        address_space->directory[i] = 0;
 }
 
-void paging_switch_address_space(
-    paging_address_space_t* address_space
-)
+void paging_switch_address_space(paging_address_space_t* address_space)
 {
-    if (!address_space ||
-        !address_space->used)
+    if (!address_space || !address_space->used)
         return;
 
     if (current_address_space == address_space)
         return;
 
     current_address_space = address_space;
-
-    load_page_directory(
-        address_space->directory_physical
-    );
+    load_page_table(address_space->directory_physical);
 }
 
 paging_address_space_t* paging_get_kernel_address_space(void)

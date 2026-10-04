@@ -201,7 +201,7 @@ int graphics_initialize(multiboot_info_t* mbd)
             if (paging_get_physical(GRAPHICS_VIRTUAL_BASE) != first_page)
                 return 0;
 
-            framebuffer = (uint8_t*)(GRAPHICS_VIRTUAL_BASE + offset);
+            framebuffer = (uint8_t*)(uintptr_t)(GRAPHICS_VIRTUAL_BASE + offset);
             framebuffer_pitch = mbd->framebuffer_pitch;
             framebuffer_width = mbd->framebuffer_width;
             framebuffer_height = mbd->framebuffer_height;

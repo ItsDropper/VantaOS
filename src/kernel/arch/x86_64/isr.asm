@@ -126,10 +126,9 @@ irq0_stub:
     call timer_handle_interrupt
     mov edi, 0
     call pic_send_eoi
-    lea rdi, [rsp + 8]
+    mov rdi, rsp
     call scheduler_tick
     mov rsp, rax
-    sub rsp, 8
     pop rax
     RESTORE_ALL
     iretq

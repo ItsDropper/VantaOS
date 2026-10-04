@@ -2,18 +2,18 @@ CC = gcc
 AS = nasm
 LD = ld
 
-CFLAGS = -m32 -march=i386 -mtune=generic -ffreestanding -fno-pie -fno-stack-protector -mgeneral-regs-only -mstackrealign -nostdlib -Iinclude
-LDFLAGS = -m elf_i386 --no-warn-rwx-segments -T build/linker.ld
+CFLAGS = -m64 -march=x86-64 -mtune=generic -ffreestanding -fno-pie -fno-stack-protector -mno-red-zone -mgeneral-regs-only -nostdlib -Iinclude
+LDFLAGS = -m elf_x86_64 --no-warn-rwx-segments -T build/linker.ld
 
 OBJS = boot.o isr.o kernel.o os.o desktop.o desktop_process.o file_explorer.o file_explorer_process.o gdt.o idt.o pic.o terminal.o keyboard.o mouse.o ata.o interrupts.o panic.o fault_trace.o timer.o pmm.o paging.o graphics.o graphics_core.o graphics_text.o graphics_input.o graphics_ui.o heap.o shell.o shell_core.o shell_files.o shell_system.o shell_storage.o shell_commands.o pci.o filesystem.o fat32.o process.o scheduler.o vfs.o terminal_process.o
 
 all: kernel.bin
 
 boot.o:
-	$(AS) -f elf32 src/boot/boot.asm -o boot.o
+	$(AS) -f elf64 src/boot/boot.asm -o boot.o
 
 isr.o:
-	$(AS) -f elf32 src/kernel/arch/x86/isr.asm -o isr.o
+	$(AS) -f elf64 src/kernel/arch/x86_64/isr.asm -o isr.o
 
 kernel.o:
 	$(CC) $(CFLAGS) -c src/kernel/kernel.c -o kernel.o
@@ -34,13 +34,13 @@ file_explorer.o:
 	$(CC) $(CFLAGS) -c src/os/desktop/file_explorer.c -o file_explorer.o
 
 gdt.o:
-	$(CC) $(CFLAGS) -c src/kernel/arch/x86/gdt.c -o gdt.o
+	$(CC) $(CFLAGS) -c src/kernel/arch/x86_64/gdt.c -o gdt.o
 
 idt.o:
-	$(CC) $(CFLAGS) -c src/kernel/arch/x86/idt.c -o idt.o
+	$(CC) $(CFLAGS) -c src/kernel/arch/x86_64/idt.c -o idt.o
 
 pic.o:
-	$(CC) $(CFLAGS) -c src/kernel/arch/x86/pic.c -o pic.o
+	$(CC) $(CFLAGS) -c src/kernel/arch/x86_64/pic.c -o pic.o
 
 terminal.o:
 	$(CC) $(CFLAGS) -c src/os/terminal/terminal.c -o terminal.o
@@ -55,7 +55,7 @@ ata.o:
 	$(CC) $(CFLAGS) -c src/kernel/drivers/storage/ata.c -o ata.o
 
 interrupts.o:
-	$(CC) $(CFLAGS) -c src/kernel/arch/x86/interrupts.c -o interrupts.o
+	$(CC) $(CFLAGS) -c src/kernel/arch/x86_64/interrupts.c -o interrupts.o
 
 panic.o:
 	$(CC) $(CFLAGS) -c src/kernel/panic.c -o panic.o

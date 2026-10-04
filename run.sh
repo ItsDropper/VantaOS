@@ -14,6 +14,6 @@ fi
 
 exec qemu-system-i386 \
     -m 256M \
-    -cdrom VantaOS.iso \
-    -drive file=vantaos.img,format=raw
-    -boot d
+    -drive file=VantaOS.iso,media=cdrom,format=raw \
+    -drive file=vantaos.img,if=ide,format=raw \
+    -boot order=d

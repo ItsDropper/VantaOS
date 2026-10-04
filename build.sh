@@ -31,14 +31,16 @@ if command -v mkfs.fat >/dev/null 2>&1; then
     if command -v mmd >/dev/null 2>&1 && command -v mcopy >/dev/null 2>&1; then
         # Build the real on-disk VantaOS system namespace.
         for dir in system system/drivers system/devices home home/user etc; do
-            mmd -i vantaos.img "::/$dir" 2>/dev/null || true
+            if ! mdir -i vantaos.img "::/$dir" >/dev/null 2>&1; then
+                mmd -i vantaos.img "::/$dir"
+            fi
         done
 
         install_system_file() {
             local path="$1"
             shift
             local tmp="/tmp/vantaos-$(basename "$path")"
-            printf '%s\\n' "$@" > "$tmp"
+            printf '%s\n' "$@" > "$tmp"
             mcopy -o -i vantaos.img "$tmp" "::/$path" >/dev/null
             rm -f "$tmp"
             echo "    Installed /$path"

@@ -116,11 +116,8 @@ static int fs_load_directory(uint32_t directory_id)
     return count;
 }
 
-static int fs_find_child(uint32_t parent, const char* name)
+static int fs_find_cached_child(uint32_t parent, const char* name)
 {
-    if (fs_load_directory(parent) < 0)
-        return -1;
-
     for (unsigned int i = 0; i < node_count; i++)
     {
         if (nodes[i].parent == parent &&
@@ -129,6 +126,19 @@ static int fs_find_child(uint32_t parent, const char* name)
     }
 
     return -1;
+}
+
+static int fs_find_child(uint32_t parent, const char* name)
+{
+    int cached = fs_find_cached_child(parent, name);
+
+    if (cached >= 0)
+        return cached;
+
+    if (fs_load_directory(parent) < 0)
+        return -1;
+
+    return fs_find_cached_child(parent, name);
 }
 
 static int fs_next_component(
@@ -184,10 +194,9 @@ void filesystem_initialize(multiboot_info_t* mbd)
     initialized = 1;
 
     /*
-     * Keep the Explorer's standard system locations available even when
-     * the backing FAT32 volume does not contain them yet. These are real
-     * filesystem nodes, but intentionally empty until filesystem writes
-     * and virtual-file population are implemented.
+     * Load real FAT32 entries when available. Standard VantaOS
+     * directories are then added to the in-memory namespace if they
+     * are missing from the volume.
      */
     fs_load_directory(filesystem_root());
 
@@ -195,12 +204,8 @@ void filesystem_initialize(multiboot_info_t* mbd)
 
     if (system_id >= 0)
     {
-        const fs_node_t* system = filesystem_get_node((uint32_t)system_id);
-        if (system && system->type == FS_NODE_DIRECTORY)
-        {
-            filesystem_ensure_directory("/system/drivers");
-            filesystem_ensure_directory("/system/devices");
-        }
+        filesystem_ensure_directory("/system/drivers");
+        filesystem_ensure_directory("/system/devices");
     }
 
     filesystem_ensure_directory("/home");
@@ -272,8 +277,12 @@ int filesystem_list(
         directory->type != FS_NODE_DIRECTORY)
         return -1;
 
-    if (fs_load_directory(directory_id) < 0)
-        return -1;
+    /*
+     * A FAT32 read failure must not erase the in-memory VantaOS
+     * namespace. This matters for the standard virtual directories:
+     * they are already cached and should remain navigable.
+     */
+    fs_load_directory(directory_id);
 
     unsigned int count = 0;
 
@@ -316,11 +325,6 @@ int filesystem_read(
     );
 }
 
-/*
- * Creation and writes are deliberately disabled until the FAT32
- * allocation/update path is implemented. The important distinction
- * is that VantaOS no longer pretends these operations succeeded.
- */
 int filesystem_create_directory(const char* path)
 {
     (void)path;
@@ -356,22 +360,31 @@ int filesystem_ensure_directory(const char* path)
 
     while (fs_next_component(&cursor, component))
     {
-        int child = fs_find_child(current, component);
+        int child = fs_find_cached_child(current, component);
+
+        if (child < 0)
+        {
+            fs_load_directory(current);
+            child = fs_find_cached_child(current, component);
+        }
 
         if (child >= 0)
         {
-            const fs_node_t* node = filesystem_get_node((uint32_t)child);
+            const fs_node_t* node =
+                filesystem_get_node((uint32_t)child);
+
             if (!node || node->type != FS_NODE_DIRECTORY)
                 return -1;
+
             current = (uint32_t)child;
             continue;
         }
 
-        child = fs_add_node(current, FS_NODE_DIRECTORY, component, 0, 0);
+        child = fs_add_virtual_directory(current, component);
+
         if (child < 0)
             return -1;
 
-        nodes[child].loaded = 1;
         current = (uint32_t)child;
     }
 

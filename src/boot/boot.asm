@@ -22,7 +22,7 @@ _start:
 
     ; GRUB Multiboot gives the information structure in EBX.
     ; Keep it unchanged through the long-mode transition.
-    mov eax, ebx
+    mov esi, ebx
 
     ; Build a minimal identity map covering the first 1 GiB.
     mov eax, pml4_table
@@ -68,10 +68,6 @@ _start:
     or eax, 0x80000000
     mov cr0, eax
 
-    ; Preserve the Multiboot pointer in RBX after entering long mode.
-    mov ebx, eax
-    mov ebx, [esp]
-
     lgdt [gdt_pointer]
 
     jmp 0x08:long_mode_entry
@@ -89,8 +85,7 @@ long_mode_entry:
     mov rsp, stack_top
     and rsp, -16
 
-    mov edi, ebx
-    mov rdi, rbx
+    mov rdi, rsi
     call kernel_main
 
 .hang:

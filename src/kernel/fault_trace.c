@@ -14,7 +14,7 @@ struct descriptor_pointer
     unsigned int base;
 } __attribute__((packed));
 
-static void draw_hex(int x, int y, unsigned int value)
+static void draw_hex(int x, int y, uintptr_t value)
 {
     const char* hex = "0123456789ABCDEF";
     char text[19];

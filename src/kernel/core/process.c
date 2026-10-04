@@ -91,16 +91,21 @@ static void process_prepare_stack(process_t* process, uintptr_t stack_top)
     uint64_t* stack = (uint64_t*)stack_top;
 
     /*
-     * Long-mode IRETQ restores the complete interrupt-return frame.
-     * The CPU's interrupt frame is:
+     /*
+     * Hardware IRQ entry saves 15 GPRs plus one alignment padding qword
+     * before the CPU's five-qword long-mode IRETQ frame. Mirror that exact
+     * layout for a new kernel process.
      *
-     *   RIP, CS, RFLAGS, RSP, SS
-     *
-     * followed here by the 15 saved GPRs used by SAVE_ALL.
-     *
-     * Build exactly the same frame shape as irq0_stub produces so the
-     * scheduler can switch RSP and let the normal RESTORE_ALL + IRETQ
-     * path start a newly-created process.
+     * Final stack layout at process->stack_pointer:
+     *   +0   padding
+     *   +8   rax
+     *   ...
+     *   +112 r15
+     *   +120 RIP
+     *   +128 CS
+     *   +136 RFLAGS
+     *   +144 RSP
+     *   +152 SS
      */
     *(--stack) = 0x10U; /* SS */
     *(--stack) = (uint64_t)stack_top; /* RSP after IRETQ */
@@ -110,6 +115,8 @@ static void process_prepare_stack(process_t* process, uintptr_t stack_top)
 
     for (int i = 0; i < 15; i++)
         *(--stack) = 0;
+
+    *(--stack) = 0; /* IRQ C-call alignment padding */
 
     process->stack_pointer = (uint64_t)(uintptr_t)stack;
     process->context.rsp = process->stack_pointer;
@@ -343,18 +350,18 @@ int process_stack_is_valid(uint32_t pid)
         (uintptr_t)&stack_top;
     uintptr_t frame = (uintptr_t)process->stack_pointer;
 
-    if (frame < stack_base || frame + 160U > stack_end)
+    if (frame < stack_base || frame + 168U > stack_end)
         return 0;
 
     uint64_t* values = (uint64_t*)frame;
 
-    if (values[16] != 0x08U ||
-        (values[17] & 0x00000200U) == 0 ||
-        values[19] != 0x10U ||
-        values[18] != stack_end)
+    if (values[17] != 0x08U ||
+        (values[18] & 0x00000200U) == 0 ||
+        values[20] != 0x10U ||
+        values[19] != stack_end)
         return 0;
 
-    uintptr_t rip = (uintptr_t)values[15];
+    uintptr_t rip = (uintptr_t)values[16];
     uintptr_t code_start = (uintptr_t)&_kernel_text_start;
     uintptr_t code_end = (uintptr_t)&_kernel_text_end;
 

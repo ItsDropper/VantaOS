@@ -22,18 +22,25 @@ typedef enum
 
 typedef struct process_context
 {
-    uint32_t edi;
-    uint32_t esi;
-    uint32_t ebp;
-    uint32_t esp;
-    uint32_t ebx;
-    uint32_t edx;
-    uint32_t ecx;
-    uint32_t eax;
-    uint32_t eip;
-    uint32_t eflags;
-    uint32_t cs;
-    uint32_t ss;
+    uint64_t r15;
+    uint64_t r14;
+    uint64_t r13;
+    uint64_t r12;
+    uint64_t r11;
+    uint64_t r10;
+    uint64_t r9;
+    uint64_t r8;
+    uint64_t rdi;
+    uint64_t rsi;
+    uint64_t rbp;
+    uint64_t rdx;
+    uint64_t rcx;
+    uint64_t rbx;
+    uint64_t rax;
+    uint64_t rip;
+    uint64_t rflags;
+    uint64_t cs;
+    uint64_t ss;
 } process_context_t;
 
 typedef struct
@@ -43,7 +50,7 @@ typedef struct
     process_state_t state;
     char name[PROCESS_NAME_MAX + 1];
 
-    uint32_t stack_pointer;
+    uintptr_t stack_pointer;
     process_entry_t entry;
     void* kernel_stack;
     paging_address_space_t* address_space;
@@ -51,7 +58,6 @@ typedef struct
 } process_t;
 
 void process_initialize(void);
-
 int process_is_initialized(void);
 
 int process_create_kernel(
@@ -75,18 +81,17 @@ int process_terminate(uint32_t pid);
 void process_block_current(void);
 void process_terminate_current(void);
 
-void process_save_stack(uint32_t pid, uint32_t stack_pointer);
-uint32_t process_get_stack(uint32_t pid);
+void process_save_stack(uint32_t pid, uintptr_t stack_pointer);
+uintptr_t process_get_stack(uint32_t pid);
 int process_stack_is_valid(uint32_t pid);
 int process_switch_to(uint32_t pid);
+
 int process_reap(uint32_t pid);
 
-uint32_t process_schedule(uint32_t current_stack);
+uintptr_t process_schedule(uintptr_t current_stack);
 
 const process_t* process_get(uint32_t pid);
-
 unsigned int process_count(void);
-
 uint32_t process_current_pid(void);
 
 #endif

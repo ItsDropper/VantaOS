@@ -16,6 +16,7 @@ typedef struct
 
 static int available;
 static ata_channel_t active_channel;
+static uint8_t active_drive;
 static uint8_t last_status;
 static uint8_t last_error;
 static uint8_t last_signature_mid;
@@ -147,6 +148,7 @@ static int ata_probe_device(
         (void)inw(channel->base);
 
     active_channel = *channel;
+    active_drive = drive;
     available = 1;
     return 1;
 }
@@ -162,6 +164,7 @@ void ata_initialize(void)
     available = 0;
     active_channel.base = 0;
     active_channel.control = 0;
+    active_drive = 0xA0;
     last_status = 0;
     last_error = 0;
     last_signature_mid = 0;
@@ -224,7 +227,7 @@ int ata_read_sectors(
     uint8_t* destination = (uint8_t*)buffer;
 
     outb(active_channel.base + 6,
-         (uint8_t)(0xE0 | ((lba >> 24) & 0x0F)));
+         (uint8_t)(active_drive | ((lba >> 24) & 0x0F)));
 
     ata_wait_400ns(&active_channel);
 

@@ -141,6 +141,12 @@ void shell_execute(void)
     {
         shell_ps();
     }
+    else if (shell_string_equals(
+                 shell_buffer,
+                 "storage"))
+    {
+        shell_storage();
+    }
     else if (shell_buffer[0] == 'm' &&
              shell_buffer[1] == 'k' &&
              shell_buffer[2] == 'd' &&

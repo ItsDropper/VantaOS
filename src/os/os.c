@@ -16,24 +16,31 @@
 
 extern void shell_set_multiboot_info(multiboot_info_t* mbd);
 
-static unsigned long long os_boot_terminal;
-static unsigned long long os_boot_memory;
-static unsigned long long os_boot_mouse;
-static unsigned long long os_boot_shell;
+static unsigned long long boot_terminal;
+static unsigned long long boot_keyboard;
+static unsigned long long boot_mouse;
+static unsigned long long boot_shell;
 
-extern unsigned long long kernel_boot_start(void);
-extern unsigned long long kernel_boot_gdt(void);
-extern unsigned long long kernel_boot_terminal(void);
-extern unsigned long long kernel_boot_keyboard(void);
-extern unsigned long long kernel_boot_mouse(void);
-extern unsigned long long kernel_boot_interrupts(void);
-extern unsigned long long kernel_boot_shell(void);
+static inline unsigned long long read_tsc(void)
+{
+    unsigned int low;
+    unsigned int high;
+
+    __asm__ volatile (
+        "rdtsc"
+        : "=a"(low), "=d"(high)
+    );
+
+    return ((unsigned long long)high << 32) | low;
+}
 
 void os_initialize(multiboot_info_t* mbd)
 {
     terminal_initialize();
+    boot_terminal = read_tsc();
 
     keyboard_initialize();
+    boot_keyboard = read_tsc();
 
     int graphics_ready =
         graphics_initialize(mbd);
@@ -75,14 +82,12 @@ void os_initialize(multiboot_info_t* mbd)
     terminal_process_initialize();
     desktop_process_initialize();
 
-    os_boot_memory = kernel_boot_start();
-
     mouse_initialize();
-    os_boot_mouse = kernel_boot_start();
+    boot_mouse = read_tsc();
 
     shell_initialize();
     shell_set_multiboot_info(mbd);
-    os_boot_shell = kernel_boot_start();
+    boot_shell = read_tsc();
 
     desktop_initialize(mbd);
 }
@@ -117,4 +122,24 @@ void os_run(void)
     __asm__ volatile ("sti");
 
     desktop_process_main();
+}
+
+unsigned long long kernel_boot_terminal(void)
+{
+    return boot_terminal;
+}
+
+unsigned long long kernel_boot_keyboard(void)
+{
+    return boot_keyboard;
+}
+
+unsigned long long kernel_boot_mouse(void)
+{
+    return boot_mouse;
+}
+
+unsigned long long kernel_boot_shell(void)
+{
+    return boot_shell;
 }

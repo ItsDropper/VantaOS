@@ -40,12 +40,23 @@ static int valid_boot_sector(const uint8_t* b)
     if (b[510] != 0x55 || b[511] != 0xAA)
         return 0;
 
-    if (b[82] != 'F' || b[83] != 'A' ||
-        b[84] != 'T' || b[85] != '3' ||
-        b[86] != '2')
-        return 0;
+    /*
+     * Do not depend on the optional filesystem-type text at offset 82.
+     * FAT32 identifies itself through the BPB geometry and FAT32-specific
+     * fields; some formatters leave the text field blank or use different
+     * wording.
+     */
+    uint16_t bytes = fat16(&b[11]);
+    uint8_t sectors = b[13];
+    uint16_t reserved = fat16(&b[14]);
+    uint8_t fats = b[16];
+    uint32_t sectors_per_fat = fat32(&b[36]);
 
-    return 1;
+    return bytes == 512 &&
+           sectors != 0 &&
+           reserved != 0 &&
+           fats != 0 &&
+           sectors_per_fat != 0;
 }
 
 static int mount_partition(uint32_t lba)

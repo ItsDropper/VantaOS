@@ -1,8 +1,11 @@
+OUTPUT_FORMAT(elf64-x86-64)
 ENTRY(_start)
 
 SECTIONS
 {
-    .multiboot 1M :
+    . = 1M;
+
+    .multiboot ALIGN(4) :
     {
         KEEP(*(.multiboot))
     }
@@ -10,7 +13,6 @@ SECTIONS
     .text ALIGN(16) :
     {
         KEEP(*(.text.start))
-
         _kernel_text_start = .;
         *(.text)
         _kernel_text_end = .;

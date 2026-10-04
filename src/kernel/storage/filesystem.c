@@ -177,29 +177,45 @@ void filesystem_initialize(multiboot_info_t* mbd)
     initialized = 0;
     node_count = 0;
 
-    ata_initialize();
-    fat32_initialize();
-
-    if (!fat32_is_mounted())
-        return;
-
+    /*
+     * The VantaOS namespace must exist even when the persistent disk
+     * cannot be mounted. Explorer, the shell, and VFS all depend on
+     * filesystem_lookup() having a valid root and namespace.
+     *
+     * The root starts as an in-memory directory. If FAT32 mounts,
+     * its real root cluster is attached below and the on-disk entries
+     * are loaded into the same namespace.
+     */
     if (fs_add_node(
             0,
             FS_NODE_DIRECTORY,
             "",
-            fat32_root_cluster(),
+            0,
             0) < 0)
         return;
 
+    nodes[0].loaded = 1;
     initialized = 1;
 
-    /*
-     * Load real FAT32 entries when available. Standard VantaOS
-     * directories are then added to the in-memory namespace if they
-     * are missing from the volume.
-     */
-    fs_load_directory(filesystem_root());
+    ata_initialize();
+    fat32_initialize();
 
+    if (fat32_is_mounted())
+    {
+        nodes[0].first_cluster = fat32_root_cluster();
+        nodes[0].loaded = 0;
+
+        /*
+         * A failed FAT32 directory read must not destroy the in-memory
+         * namespace. Standard VantaOS directories are seeded below.
+         */
+        fs_load_directory(filesystem_root());
+    }
+
+    /*
+     * These are real VantaOS namespace nodes. They remain available
+     * even if persistent storage is temporarily unavailable.
+     */
     int system_id = filesystem_ensure_directory("/system");
 
     if (system_id >= 0)

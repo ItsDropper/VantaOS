@@ -91,12 +91,12 @@ static void process_prepare_stack(process_t* process, uintptr_t stack_top)
     uint64_t* stack = (uint64_t*)stack_top;
 
     /*
-     * x86_64 IRETQ always consumes the complete long-mode interrupt
-     * frame: RIP, CS, RFLAGS, RSP, SS. Build that frame below the
-     * 15 saved GPRs so RESTORE_ALL + IRETQ can enter the process safely.
+     * All current VantaOS processes run at CPL0. A same-privilege
+     * interrupt/IRETQ frame contains only RIP, CS and RFLAGS.
+     * RSP/SS are pushed only when changing privilege levels.
+     *
+     * Keep the synthetic frame identical to the CPU's timer IRQ frame.
      */
-    *(--stack) = 0x10U; /* SS */
-    *(--stack) = (uint64_t)stack_top; /* RSP after IRETQ */
     *(--stack) = 0x202U; /* RFLAGS: IF enabled */
     *(--stack) = 0x08U; /* CS */
     *(--stack) = (uint64_t)(uintptr_t)process_entry_trampoline; /* RIP */
@@ -336,14 +336,13 @@ int process_stack_is_valid(uint32_t pid)
         (uintptr_t)&stack_top;
     uintptr_t frame = (uintptr_t)process->stack_pointer;
 
-    if (frame < stack_base || frame + 160U > stack_end)
+    if (frame < stack_base || frame + 144U > stack_end)
         return 0;
 
     uint64_t* values = (uint64_t*)frame;
 
     if (values[16] != 0x08U ||
-        (values[17] & 0x00000200U) == 0 ||
-        values[19] != 0x10U)
+        (values[17] & 0x00000200U) == 0)
         return 0;
 
     uintptr_t rip = (uintptr_t)values[15];

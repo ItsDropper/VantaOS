@@ -35,7 +35,7 @@ void kernel_panic(
     const char* reason,
     unsigned int exception_number,
     struct exception_frame* frame,
-    unsigned int fault_address,
+    uintptr_t fault_address,
     int has_fault_address
 )
 {
@@ -149,7 +149,7 @@ void exception_handler(
     struct exception_frame* frame
 )
 {
-    unsigned int fault_address = 0;
+    uintptr_t fault_address = 0;
     int has_fault_address = 0;
 
     if (exception_number == 14)

@@ -22,16 +22,16 @@ os.o:
 	$(CC) $(CFLAGS) -c src/os/os.c -o os.o
 
 desktop.o:
-	$(CC) $(CFLAGS) -c src/kernel/desktop/desktop.c -o desktop.o
+	$(CC) $(CFLAGS) -c src/os/desktop/desktop.c -o desktop.o
 
 desktop_process.o:
-	$(CC) $(CFLAGS) -c src/kernel/desktop/desktop_process.c -o desktop_process.o
+	$(CC) $(CFLAGS) -c src/os/desktop/desktop_process.c -o desktop_process.o
 
 file_explorer_process.o:
-	$(CC) $(CFLAGS) -c src/kernel/desktop/file_explorer_process.c -o file_explorer_process.o
+	$(CC) $(CFLAGS) -c src/os/desktop/file_explorer_process.c -o file_explorer_process.o
 
 file_explorer.o:
-	$(CC) $(CFLAGS) -c src/kernel/desktop/file_explorer.c -o file_explorer.o
+	$(CC) $(CFLAGS) -c src/os/desktop/file_explorer.c -o file_explorer.o
 
 gdt.o:
 	$(CC) $(CFLAGS) -c src/kernel/arch/x86/gdt.c -o gdt.o
@@ -43,7 +43,7 @@ pic.o:
 	$(CC) $(CFLAGS) -c src/kernel/arch/x86/pic.c -o pic.o
 
 terminal.o:
-	$(CC) $(CFLAGS) -c src/kernel/terminal/terminal.c -o terminal.o
+	$(CC) $(CFLAGS) -c src/os/terminal/terminal.c -o terminal.o
 
 keyboard.o:
 	$(CC) $(CFLAGS) -c src/kernel/drivers/input/keyboard.c -o keyboard.o
@@ -91,19 +91,19 @@ heap.o:
 	$(CC) $(CFLAGS) -c src/kernel/core/heap.c -o heap.o
 
 shell.o:
-	$(CC) $(CFLAGS) -c src/kernel/terminal/shell.c -o shell.o
+	$(CC) $(CFLAGS) -c src/os/terminal/shell.c -o shell.o
 
 shell_core.o:
-	$(CC) $(CFLAGS) -c src/kernel/terminal/shell_core.c -o shell_core.o
+	$(CC) $(CFLAGS) -c src/os/terminal/shell_core.c -o shell_core.o
 
 shell_files.o:
-	$(CC) $(CFLAGS) -c src/kernel/terminal/shell_files.c -o shell_files.o
+	$(CC) $(CFLAGS) -c src/os/terminal/shell_files.c -o shell_files.o
 
 shell_system.o:
-	$(CC) $(CFLAGS) -c src/kernel/terminal/shell_system.c -o shell_system.o
+	$(CC) $(CFLAGS) -c src/os/terminal/shell_system.c -o shell_system.o
 
 shell_commands.o:
-	$(CC) $(CFLAGS) -c src/kernel/terminal/shell_commands.c -o shell_commands.o
+	$(CC) $(CFLAGS) -c src/os/terminal/shell_commands.c -o shell_commands.o
 
 pci.o:
 	$(CC) $(CFLAGS) -c src/kernel/drivers/pci/pci.c -o pci.o
@@ -124,7 +124,7 @@ vfs.o:
 	$(CC) $(CFLAGS) -c src/kernel/storage/vfs.c -o vfs.o
 
 terminal_process.o:
-	$(CC) $(CFLAGS) -c src/kernel/terminal/terminal_process.c -o terminal_process.o
+	$(CC) $(CFLAGS) -c src/os/terminal/terminal_process.c -o terminal_process.o
 
 kernel.bin: $(OBJS)
 	$(LD) $(LDFLAGS) $(OBJS) -o kernel.bin

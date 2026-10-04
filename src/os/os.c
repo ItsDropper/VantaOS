@@ -4,7 +4,6 @@
 #include "desktop_process.h"
 #include "filesystem.h"
 #include "graphics.h"
-#include "heap.h"
 #include "keyboard.h"
 #include "mouse.h"
 #include "process.h"
@@ -73,7 +72,6 @@ void os_initialize(multiboot_info_t* mbd)
         graphics_ready ? "YES\n" : "NO\n"
     );
 
-    heap_initialize();
     filesystem_initialize(mbd);
     vfs_initialize();
 

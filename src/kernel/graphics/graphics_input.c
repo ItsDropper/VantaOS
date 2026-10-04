@@ -3,6 +3,7 @@
 #include "terminal.h"
 #include "process.h"
 #include "file_explorer.h"
+#include "file_explorer_process.h"
 #include "pmm.h"
 
 /* Explorer window state used by mouse interaction. */
@@ -49,6 +50,7 @@ void graphics_mouse_click(int button)
             }
             else
             {
+                file_explorer_process_start(process_current_pid());
                 file_explorer_restore();
             }
             return;
@@ -90,6 +92,7 @@ void graphics_mouse_click(int button)
         {
             active_panel = 2;
             file_explorer_initialize();
+            file_explorer_process_start(process_current_pid());
             start_menu_open = 0;
             return;
         }
@@ -269,6 +272,7 @@ void graphics_mouse_click(int button)
     {
         active_panel = 2;
         file_explorer_initialize();
+        file_explorer_process_start(process_current_pid());
         return;
     }
 

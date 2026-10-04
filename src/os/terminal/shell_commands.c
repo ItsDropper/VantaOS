@@ -1,6 +1,9 @@
 #include "shell_internal.h"
 #include "terminal.h"
 
+/* Keep this command declaration explicit for standalone command builds. */
+void shell_storage(void);
+
 void shell_execute(void)
 {
     shell_buffer[shell_length] = 0;

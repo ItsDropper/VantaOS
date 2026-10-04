@@ -98,9 +98,12 @@ static int ata_wait_data(const ata_channel_t* channel)
     return 0;
 }
 
-static int ata_probe_channel(const ata_channel_t* channel)
+static int ata_probe_device(
+    const ata_channel_t* channel,
+    uint8_t drive
+)
 {
-    outb(channel->base + 6, 0xA0);
+    outb(channel->base + 6, drive);
     ata_wait_400ns(channel);
 
     uint8_t status = inb(channel->base + 7);
@@ -109,22 +112,31 @@ static int ata_probe_channel(const ata_channel_t* channel)
     if (status == 0x00 || status == 0xFF)
         return 0;
 
+    if (!ata_wait_not_busy(channel))
+        return 0;
+
     outb(channel->base + 2, 0);
     outb(channel->base + 3, 0);
     outb(channel->base + 4, 0);
     outb(channel->base + 5, 0);
     outb(channel->base + 7, ATA_CMD_IDENTIFY);
 
+    status = inb(channel->base + 7);
+    last_status = status;
+
+    if (status == 0x00 || status == 0xFF)
+        return 0;
+
+    /*
+     * The device signature is available after IDENTIFY has been issued
+     * and BSY has cleared. 0x14/0xEB identifies an ATAPI device.
+     */
     if (!ata_wait_not_busy(channel))
         return 0;
 
     last_signature_mid = inb(channel->base + 4);
     last_signature_high = inb(channel->base + 5);
 
-    /*
-     * 0x14/0xEB is the standard ATAPI signature. VantaOS needs
-     * a block ATA disk, so skip optical/ATAPI devices.
-     */
     if (last_signature_mid != 0 || last_signature_high != 0)
         return 0;
 
@@ -160,10 +172,15 @@ void ata_initialize(void)
      * vantaos.img is attached to the secondary IDE channel. Probe
      * both channels instead of assuming the disk is primary master.
      */
+    static const uint8_t drives[] = {0xA0, 0xB0};
+
     for (unsigned int i = 0; i < 2; i++)
     {
-        if (ata_probe_channel(&channels[i]))
-            return;
+        for (unsigned int j = 0; j < 2; j++)
+        {
+            if (ata_probe_device(&channels[i], drives[j]))
+                return;
+        }
     }
 }
 

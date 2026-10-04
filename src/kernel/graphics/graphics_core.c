@@ -130,7 +130,7 @@ int graphics_initialize_bochs(void)
     if (paging_get_physical(GRAPHICS_VIRTUAL_BASE) != first_page)
         return 0;
 
-    framebuffer = (uint8_t*)(GRAPHICS_VIRTUAL_BASE + offset);
+    framebuffer = (uint8_t*)(uintptr_t)(GRAPHICS_VIRTUAL_BASE + offset);
     framebuffer_pitch = pitch;
     framebuffer_width = 1024;
     framebuffer_height = 768;
@@ -320,7 +320,7 @@ int graphics_set_resolution(uint32_t width, uint32_t height)
             return 0;
     }
 
-    framebuffer = (uint8_t*)(GRAPHICS_VIRTUAL_BASE + (physical & 0xFFFU));
+    framebuffer = (uint8_t*)(uintptr_t)(GRAPHICS_VIRTUAL_BASE + (physical & 0xFFFU));
     framebuffer_pitch = width * 4U;
     framebuffer_width = width;
     framebuffer_height = height;

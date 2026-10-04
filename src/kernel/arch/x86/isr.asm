@@ -46,6 +46,7 @@ extern timer_handle_interrupt
 extern keyboard_handle_interrupt
 extern mouse_handle_interrupt
 extern pic_send_eoi
+extern scheduler_tick
 
 process_entry_trampoline:
     cld
@@ -59,9 +60,21 @@ irq0_stub:
     cld
     pusha
     call timer_handle_interrupt
+
+    /* Acknowledge the PIT before scheduling. */
     push dword 0
     call pic_send_eoi
     add esp, 4
+
+    /*
+     * scheduler_tick() receives the address of the complete PUSHA
+     * frame and returns the frame that should be restored.
+     */
+    push esp
+    call scheduler_tick
+    add esp, 4
+    mov esp, eax
+
     popa
     iretd
 

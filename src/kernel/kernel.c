@@ -7,6 +7,7 @@
 #include "paging.h"
 #include "pci.h"
 #include "pmm.h"
+#include "serial.h"
 
 static inline unsigned long long read_tsc(void)
 {
@@ -48,9 +49,13 @@ static void kernel_start_os(multiboot_info_t* mbd)
 
 void kernel_main(multiboot_info_t* mbd)
 {
+    serial_initialize();
+    serial_write("VANTAOS: kernel entry\n");
+
     boot_start = read_tsc();
 
     kernel_initialize(mbd);
+    serial_write("VANTAOS: kernel initialized\n");
     kernel_start_os(mbd);
 }
 

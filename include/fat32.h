@@ -5,7 +5,7 @@
 
 typedef struct
 {
-    char name[13];
+    char name[256];
     uint8_t directory;
     uint32_t first_cluster;
     uint32_t size;

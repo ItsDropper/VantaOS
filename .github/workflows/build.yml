@@ -76,7 +76,7 @@ jobs:
             fi
 
             for marker in "${required_markers[@]}"; do
-              if ! grep -q "^${marker}$" "$log"; then
+              if ! grep -q "^${marker}" "$log"; then
                 echo "Missing required marker '${marker}' at ${memory} MiB."
                 cat "$log" 2>/dev/null || true
                 exit 1

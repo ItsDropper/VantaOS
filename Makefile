@@ -1,142 +1,52 @@
-CC = gcc
-AS = nasm
-LD = ld
+# VantaOS top-level build orchestrator.
+# Subsystems declare sources in nearby Makefiles; this file owns build policy.
 
-CFLAGS = -m64 -march=x86-64 -mtune=generic -ffreestanding -fno-pie -fno-stack-protector -mno-red-zone -mgeneral-regs-only -nostdlib -Iinclude
+CC       ?= gcc
+AS       ?= nasm
+LD       ?= ld
+OBJDIR   := build/obj
+
+CFLAGS   := -m64 -march=x86-64 -mtune=generic -ffreestanding -fno-pie \
+            -fno-stack-protector -mno-red-zone -mgeneral-regs-only \
+            -nostdlib -Iinclude -MMD -MP
+ASFLAGS  := -f elf64
+LDFLAGS  := -m elf_x86_64 --no-warn-rwx-segments -T build/linker.ld
+
 ifneq ($(VANTAOS_SELF_TEST),)
 CFLAGS += -DVANTAOS_SELF_TEST
 endif
-LDFLAGS = -m elf_x86_64 --no-warn-rwx-segments -T build/linker.ld
 
-OBJS = boot.o isr.o kernel.o os.o desktop.o desktop_process.o file_explorer.o file_explorer_process.o gdt.o idt.o pic.o terminal.o keyboard.o mouse.o ata.o interrupts.o serial.o panic.o fault_trace.o timer.o pmm.o paging.o graphics.o graphics_core.o graphics_text.o graphics_input.o graphics_ui.o heap.o shell.o shell_core.o shell_files.o shell_system.o shell_storage.o shell_commands.o pci.o filesystem.o fat32.o process.o scheduler.o vfs.o terminal_process.o
+include src/boot/Makefile
+include src/kernel/Makefile
+include src/os/Makefile
 
+ASM_SOURCES := $(VANTAOS_BOOT_ASM) $(VANTAOS_ARCH_ASM)
+C_SOURCES   := $(VANTAOS_KERNEL_C) $(VANTAOS_ARCH_C) $(VANTAOS_CORE_C) \
+               $(VANTAOS_DRIVER_C) $(VANTAOS_GRAPHICS_C) \
+               $(VANTAOS_STORAGE_C) $(VANTAOS_OS_C) \
+               $(VANTAOS_TERMINAL_C) $(VANTAOS_DESKTOP_C)
+OBJECTS     := $(patsubst %.asm,$(OBJDIR)/%.o,$(ASM_SOURCES)) \
+               $(patsubst %.c,$(OBJDIR)/%.o,$(C_SOURCES))
+DEPFILES    := $(OBJECTS:.o=.d)
+
+.PHONY: all clean list-sources
 all: kernel.bin
 
-boot.o:
-	$(AS) -f elf64 src/boot/boot.asm -o boot.o
+kernel.bin: $(OBJECTS) build/linker.ld
+	$(LD) $(LDFLAGS) $(OBJECTS) -o $@
 
-isr.o:
-	$(AS) -f elf64 src/kernel/arch/x86_64/isr.asm -o isr.o
+$(OBJDIR)/%.o: %.c
+	@mkdir -p $(@D)
+	$(CC) $(CFLAGS) -c $< -o $@
 
-kernel.o:
-	$(CC) $(CFLAGS) -c src/kernel/kernel.c -o kernel.o
-
-os.o:
-	$(CC) $(CFLAGS) -c src/os/os.c -o os.o
-
-desktop.o:
-	$(CC) $(CFLAGS) -c src/os/desktop/desktop.c -o desktop.o
-
-desktop_process.o:
-	$(CC) $(CFLAGS) -c src/os/desktop/desktop_process.c -o desktop_process.o
-
-file_explorer_process.o:
-	$(CC) $(CFLAGS) -c src/os/desktop/file_explorer_process.c -o file_explorer_process.o
-
-file_explorer.o:
-	$(CC) $(CFLAGS) -c src/os/desktop/file_explorer.c -o file_explorer.o
-
-gdt.o:
-	$(CC) $(CFLAGS) -c src/kernel/arch/x86_64/gdt.c -o gdt.o
-
-idt.o:
-	$(CC) $(CFLAGS) -c src/kernel/arch/x86_64/idt.c -o idt.o
-
-pic.o:
-	$(CC) $(CFLAGS) -c src/kernel/arch/x86_64/pic.c -o pic.o
-
-terminal.o:
-	$(CC) $(CFLAGS) -c src/os/terminal/terminal.c -o terminal.o
-
-keyboard.o:
-	$(CC) $(CFLAGS) -c src/kernel/drivers/input/keyboard.c -o keyboard.o
-
-mouse.o:
-	$(CC) $(CFLAGS) -c src/kernel/drivers/input/mouse.c -o mouse.o
-
-ata.o:
-	$(CC) $(CFLAGS) -c src/kernel/drivers/storage/ata.c -o ata.o
-
-interrupts.o:
-	$(CC) $(CFLAGS) -c src/kernel/arch/x86_64/interrupts.c -o interrupts.o
-
-serial.o:
-	$(CC) $(CFLAGS) -c src/kernel/serial.c -o serial.o
-
-panic.o:
-	$(CC) $(CFLAGS) -c src/kernel/panic.c -o panic.o
-
-fault_trace.o:
-	$(CC) $(CFLAGS) -c src/kernel/fault_trace.c -o fault_trace.o
-
-timer.o:
-	$(CC) $(CFLAGS) -c src/kernel/core/timer.c -o timer.o
-
-pmm.o:
-	$(CC) $(CFLAGS) -c src/kernel/core/pmm.c -o pmm.o
-
-paging.o:
-	$(CC) $(CFLAGS) -c src/kernel/core/paging.c -o paging.o
-
-graphics.o:
-	$(CC) $(CFLAGS) -c src/kernel/graphics/graphics.c -o graphics.o
-
-graphics_core.o:
-	$(CC) $(CFLAGS) -c src/kernel/graphics/graphics_core.c -o graphics_core.o
-
-graphics_text.o:
-	$(CC) $(CFLAGS) -c src/kernel/graphics/graphics_text.c -o graphics_text.o
-
-graphics_input.o:
-	$(CC) $(CFLAGS) -c src/kernel/graphics/graphics_input.c -o graphics_input.o
-
-graphics_ui.o:
-	$(CC) $(CFLAGS) -c src/kernel/graphics/graphics_ui.c -o graphics_ui.o
-
-heap.o:
-	$(CC) $(CFLAGS) -c src/kernel/core/heap.c -o heap.o
-
-shell.o:
-	$(CC) $(CFLAGS) -c src/os/terminal/shell.c -o shell.o
-
-shell_core.o:
-	$(CC) $(CFLAGS) -c src/os/terminal/shell_core.c -o shell_core.o
-
-shell_files.o:
-	$(CC) $(CFLAGS) -c src/os/terminal/shell_files.c -o shell_files.o
-
-shell_system.o:
-	$(CC) $(CFLAGS) -c src/os/terminal/shell_system.c -o shell_system.o
-
-shell_storage.o:
-	$(CC) $(CFLAGS) -c src/os/terminal/shell_storage.c -o shell_storage.o
-
-shell_commands.o:
-	$(CC) $(CFLAGS) -c src/os/terminal/shell_commands.c -o shell_commands.o
-
-pci.o:
-	$(CC) $(CFLAGS) -c src/kernel/drivers/pci/pci.c -o pci.o
-
-filesystem.o:
-	$(CC) $(CFLAGS) -c src/kernel/storage/filesystem.c -o filesystem.o
-
-fat32.o:
-	$(CC) $(CFLAGS) -c src/kernel/storage/fat32.c -o fat32.o
-
-process.o:
-	$(CC) $(CFLAGS) -c src/kernel/core/process.c -o process.o
-
-scheduler.o:
-	$(CC) $(CFLAGS) -c src/kernel/core/scheduler.c -o scheduler.o
-
-vfs.o:
-	$(CC) $(CFLAGS) -c src/kernel/storage/vfs.c -o vfs.o
-
-terminal_process.o:
-	$(CC) $(CFLAGS) -c src/os/terminal/terminal_process.c -o terminal_process.o
-
-kernel.bin: $(OBJS)
-	$(LD) $(LDFLAGS) $(OBJS) -o kernel.bin
+$(OBJDIR)/%.o: %.asm
+	@mkdir -p $(@D)
+	$(AS) $(ASFLAGS) $< -o $@
 
 clean:
-	rm -f *.o kernel.bin
+	rm -rf $(OBJDIR) kernel.bin *.o
+
+list-sources:
+	@printf '%s\n' 'Assembly sources:' $(ASM_SOURCES) 'C sources:' $(C_SOURCES)
+
+-include $(DEPFILES)

@@ -3,9 +3,10 @@ name: VantaOS build
 on:
   push:
     branches:
-      - main
+      - master
       - work/kernel-reliability-2026-10-15
       - work/comprehensive-tests-docs-2026-10-15
+      - work/modular-kbuild-layout-2026-10-15
   pull_request:
   workflow_dispatch:
 
@@ -21,6 +22,11 @@ jobs:
 
       - name: Install build dependencies
         run: sudo apt-get update && sudo apt-get install --yes build-essential nasm grub-pc-bin xorriso mtools dosfstools qemu-system-x86
+
+      - name: Verify modular source manifests
+        run: |
+          make list-sources
+          test "$(find src -name Makefile | wc -l)" -ge 10
 
       - name: Build kernel, ISO, and FAT32 image with self-tests
         run: chmod +x build.sh && VANTAOS_SELF_TEST=1 ./build.sh

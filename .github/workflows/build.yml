@@ -26,7 +26,10 @@ jobs:
       - name: Verify modular source manifests
         run: |
           make list-sources
-          test "$(find src -name Makefile | wc -l)" -ge 10
+          test -f arch/x86_64/Makefile
+          test -f mm/Makefile
+          test -f drivers/Makefile
+          test -f fs/Makefile
 
       - name: Build kernel, ISO, and FAT32 image with self-tests
         run: chmod +x build.sh && VANTAOS_SELF_TEST=1 ./build.sh

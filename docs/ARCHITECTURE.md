@@ -1,51 +1,52 @@
 # Architecture overview
 
-This is a source-oriented overview of the current prototype, not a promise that every subsystem is production-ready.
+This document describes the current prototype, not a promise that every subsystem is production-ready.
 
 ## Boot and initialization
 
-1. `src/boot/boot.asm` provides the Multiboot-compatible entry path and transfers control to the 64-bit kernel.
-2. `src/kernel/kernel.c` initializes serial diagnostics, the GDT, physical-memory bookkeeping, interrupt infrastructure, paging, PCI/ATA discovery, and the heap.
-3. `src/os/os.c` initializes terminal/input, graphics, filesystem/VFS, process management, scheduler, shell, and desktop components.
-4. The OS draws an initial desktop frame, enables interrupts, writes the `VANTAOS_BOOT_OK` serial marker, and enters the desktop process loop.
-
-The exact order matters: components rely on earlier initialization. When adding a subsystem, document its dependencies and add a test for both success and expected failure behavior.
+1. `arch/x86_64/boot/boot.asm` provides the Multiboot-compatible entry path and transfers control to the 64-bit kernel.
+2. `kernel/kernel.c` initializes serial diagnostics, GDT, physical-memory bookkeeping, interrupt infrastructure, paging, PCI/ATA discovery, and heap.
+3. `os/os.c` initializes terminal/input, graphics, filesystem/VFS, process management, scheduler, shell, and desktop components.
+4. The OS draws an initial desktop frame, enables interrupts, writes `VANTAOS_BOOT_OK` to serial, and enters the desktop process loop.
 
 ## Main source areas
 
 | Path | Responsibility |
 | --- | --- |
-| `src/boot/` | Boot assembly and Multiboot handoff. |
-| `src/kernel/arch/x86_64/` | Long-mode GDT, IDT, interrupt handlers, and PIC setup. |
-| `src/kernel/core/` | Heap, physical-memory bookkeeping, paging, process table, scheduler, timer. |
-| `src/kernel/drivers/` | Current PCI, ATA, keyboard, and mouse driver code. |
-| `src/kernel/storage/` | Filesystem namespace, FAT32 read path, and VFS handles. |
-| `src/kernel/graphics/` | Software graphics primitives, text, input integration, and UI drawing. |
-| `src/os/terminal/` | Terminal, shell, and shell commands. |
-| `src/os/desktop/` | Desktop process and file-explorer UI. |
-| `include/` | Public interfaces shared by kernel and OS components. |
-| `.github/workflows/` | Build and QEMU regression checks. |
+| `arch/x86_64/` | Active long-mode GDT, IDT, interrupt entry/dispatch, PIC, and boot code. |
+| `arch/x86/` | Legacy 32-bit source retained for audit; not linked into the active target. |
+| `kernel/` | Kernel initialization, serial diagnostics, panic/fault tracing, and graphics. |
+| `kernel/proc/` | Process table and lifecycle. |
+| `kernel/sched/` | Ready-process selection and scheduling. |
+| `kernel/time/` | Timer subsystem. |
+| `mm/` | Heap, physical-memory bookkeeping, and paging. |
+| `drivers/` | Keyboard/mouse input, PCI enumeration, and ATA storage driver code. |
+| `fs/` | Filesystem namespace, FAT32 read path, and VFS handles. |
+| `os/terminal/` | Terminal, shell, and commands. |
+| `os/desktop/` | Desktop and file-explorer UI. |
+| `include/` | Shared interfaces. |
+| `build/obj/` | Generated object/dependency tree; never edit generated files. |
 
 ## Processes and scheduling
 
-The process table has fixed capacity and currently represents kernel execution contexts. Each process record contains a state, name, saved stack/context, entry function, and address-space pointer. The scheduler uses timer ticks and a simple ready-process selection strategy. The CI self-test checks selected state transitions and a process that returns and is later reaped.
+The process table has fixed capacity and currently represents kernel execution contexts. Process records contain a state, name, saved stack/context, entry function, and address-space pointer. The scheduler uses timer ticks and a simple ready-process selection strategy. CI tests selected lifecycle transitions and a returning kernel process that is reaped.
 
-**Important:** assigning an address-space pointer is not equivalent to implementing secure isolation. Current process execution is kernel-mode, and the page-table implementation does not yet provide a validated per-process user address-space security boundary. Do not describe this as a general-purpose, isolated process model.
+An address-space pointer is not proof of secure isolation. Current process execution is kernel-mode; per-process user permissions and a validated user-address-space boundary are not implemented.
 
 ## Memory and paging
 
-Paging sets up identity mappings for low memory and high virtual windows used by the heap/framebuffer. Address-space structures exist, but user mappings, permission enforcement, and safe user-pointer validation remain incomplete. Memory protection must be proven with tests that attempt prohibited accesses; structure definitions alone are not evidence of isolation.
+Paging establishes identity mappings for low memory and high virtual windows used by the heap/framebuffer. Address-space structures exist, but user mappings, permission enforcement, and safe user-pointer validation remain incomplete.
 
 ## Filesystem and VFS
 
-The filesystem builds a standard in-memory namespace such as `/system`, `/home/user`, and `/etc`, and can import directory entries when FAT32 mounting succeeds. The VFS provides lookup/list/open/read/write/close interfaces and bounded open-file slots. However, the current filesystem create/write implementation is a stub that returns an unsupported result. Do not assume file creation or persistent writes work.
+The filesystem builds an in-memory namespace such as `/system`, `/home/user`, and `/etc`, and can import directory entries when FAT32 mounting succeeds. The VFS provides lookup/list/open/read/write/close interfaces and bounded open-file slots. Current filesystem create/write operations return an unsupported result.
 
 ## Graphics and input
 
-The graphics code draws the desktop using software primitives and consumes a Multiboot framebuffer when available. Keyboard and mouse driver code is present. CI currently verifies boot progress, not the visual correctness of each widget or full input behavior. Graphics success in QEMU does not imply accelerated GPU support.
+Graphics code draws the desktop using software primitives and consumes a Multiboot framebuffer when available. Keyboard and mouse driver code exists. CI verifies boot progress, not visual correctness or full input behavior. This does not imply accelerated GPU support.
 
 ## Diagnostics
 
-- COM1 serial logging is used by CI and should remain bounded and safe during early boot.
-- Panic/fault tracing is intended to help identify failures; it is not a replacement for debugging symbols or a debugger.
-- CI markers use the `VANTAOS_..._OK` / `VANTAOS_..._FAIL` naming convention. A success marker should only be emitted after the corresponding assertion has actually passed.
+- COM1 serial logging is used by CI.
+- Panic/fault tracing helps diagnose failures but does not replace a debugger.
+- CI markers use `VANTAOS_..._OK` and `VANTAOS_..._FAIL`. A success marker must only be emitted after its assertion passes.

@@ -135,6 +135,13 @@ static void pmm_boot_info_probe(void)
         pmm_get_total_blocks() == 0x106000ULL / PAGE_SIZE &&
         pmm_get_free_blocks() == 2U;
 
+    synthetic.struct_size--;
+    pmm_initialize(&synthetic);
+    ok = !pmm_is_initialized() && ok;
+    synthetic.struct_size = sizeof(synthetic);
+    pmm_initialize(&synthetic);
+    ok = pmm_is_initialized() && pmm_get_free_blocks() == 2U && ok;
+
     void* first = pmm_alloc_block();
     void* second = pmm_alloc_block();
     void* third = pmm_alloc_block();
@@ -146,6 +153,11 @@ static void pmm_boot_info_probe(void)
     pmm_free_block(first);
     pmm_free_block(second);
     ok = pmm_get_free_blocks() == 2U && ok;
+
+    synthetic.memory_regions[0].base = UINT64_MAX - 7U;
+    synthetic.memory_regions[0].length = 16U;
+    pmm_initialize(&synthetic);
+    ok = !pmm_is_initialized() && ok;
 
     pmm_initialize(NULL);
     ok = !pmm_is_initialized() && pmm_alloc_block() == NULL && ok;

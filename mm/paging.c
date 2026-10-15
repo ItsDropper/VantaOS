@@ -18,6 +18,10 @@ static uint64_t heap_pt[TABLE_ENTRIES] __attribute__((aligned(4096)));
 #define GRAPHICS_PT_COUNT 8U
 static uint64_t graphics_pt[GRAPHICS_PT_COUNT][TABLE_ENTRIES]
     __attribute__((aligned(4096)));
+#define MMIO_PT_COUNT 2U
+#define MMIO_WINDOW_BASE 0xE0000000ULL
+static uint64_t mmio_pt[MMIO_PT_COUNT][TABLE_ENTRIES]
+    __attribute__((aligned(4096)));
 
 static uint64_t address_space_pml4[ADDRESS_SPACE_MAX][TABLE_ENTRIES]
     __attribute__((aligned(4096)));
@@ -51,6 +55,12 @@ static uint64_t* table_for(uintptr_t virtual_address)
         uint64_t first = (0xD0000000ULL >> 21) & 0x1FFU;
         if (pd_index >= first && pd_index < first + GRAPHICS_PT_COUNT)
             return graphics_pt[pd_index - first];
+    }
+
+    {
+        uint64_t first = (MMIO_WINDOW_BASE >> 21) & 0x1FFU;
+        if (pd_index >= first && pd_index < first + MMIO_PT_COUNT)
+            return mmio_pt[pd_index - first];
     }
 
     return NULL;
@@ -236,6 +246,8 @@ void paging_initialize(void)
         heap_pt[i] = 0;
         for (uint32_t t = 0; t < GRAPHICS_PT_COUNT; t++)
             graphics_pt[t][i] = 0;
+        for (uint32_t t = 0; t < MMIO_PT_COUNT; t++)
+            mmio_pt[t][i] = 0;
     }
 
     /* Identity-map the first 1 GiB with 2 MiB pages. */
@@ -264,6 +276,9 @@ void paging_initialize(void)
     for (uint32_t t = 0; t < GRAPHICS_PT_COUNT; t++)
         map_high_region(high_pd, graphics_pt[t],
                         0xD0000000ULL + (uint64_t)t * PAGE_2M);
+    for (uint32_t t = 0; t < MMIO_PT_COUNT; t++)
+        map_high_region(high_pd, mmio_pt[t],
+                        MMIO_WINDOW_BASE + (uint64_t)t * PAGE_2M);
 
     kernel_address_space.directory = kernel_pml4;
     kernel_address_space.directory_physical =
@@ -366,6 +381,26 @@ uint64_t paging_get_page_flags(uintptr_t virtual_address)
 
     uint32_t index = (uint32_t)((virtual_address >> 12) & 0x1FFU);
     return table[index] & 0xFFFU;
+}
+
+int paging_map_mmio_page(uintptr_t virtual_address, uintptr_t physical_address)
+{
+    if ((virtual_address & (PAGE_SIZE - 1U)) != 0 ||
+        (physical_address & (PAGE_SIZE - 1U)) != 0 ||
+        virtual_address < MMIO_WINDOW_BASE ||
+        virtual_address >= MMIO_WINDOW_BASE + MMIO_PT_COUNT * PAGE_2M ||
+        current_address_space != &kernel_address_space)
+        return 0;
+
+    uint64_t* table = table_for(virtual_address);
+    if (!table)
+        return 0;
+
+    uint32_t index = (uint32_t)((virtual_address >> 12) & 0x1FFU);
+    table[index] = ((uint64_t)physical_address & 0x000FFFFFFFFFF000ULL) |
+                   PAGE_PRESENT | PAGE_WRITE | 0x018U; /* PWT + PCD */
+    invalidate_page(virtual_address);
+    return 1;
 }
 
 void paging_unmap_page(uintptr_t virtual_address)

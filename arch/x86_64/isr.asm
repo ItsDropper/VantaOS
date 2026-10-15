@@ -5,6 +5,7 @@ section .text
 global irq0_stub
 global irq1_stub
 global irq12_stub
+global apic_spurious_stub
 global process_entry_trampoline
 
 global exception0_stub
@@ -47,6 +48,9 @@ extern keyboard_handle_interrupt
 extern mouse_handle_interrupt
 extern pic_send_eoi
 extern scheduler_tick
+
+apic_spurious_stub:
+    iretq
 
 process_entry_trampoline:
     cld

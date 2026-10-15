@@ -1,4 +1,6 @@
 #include "ata.h"
+#include "apic.h"
+#include "smp.h"
 #include "gdt.h"
 #include "heap.h"
 #include "interrupts.h"
@@ -272,6 +274,8 @@ static void kernel_initialize(const vanta_boot_info_t* boot_info)
     boot_interrupts = read_tsc();
 
     paging_initialize();
+    apic_initialize();
+    smp_initialize();
 #ifdef VANTAOS_SELF_TEST
     user_mapping_probe();
 #endif

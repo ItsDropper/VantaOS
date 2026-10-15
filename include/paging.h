@@ -23,6 +23,7 @@ typedef struct paging_address_space
 } paging_address_space_t;
 
 void paging_initialize(void);
+int paging_map_mmio_page(uintptr_t virtual_address, uintptr_t physical_address);
 int paging_map_page(uintptr_t virtual_address, uintptr_t physical_address);
 int paging_map_user_page(paging_address_space_t* address_space,
                          uintptr_t virtual_address,

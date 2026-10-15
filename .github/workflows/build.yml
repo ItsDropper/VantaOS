@@ -24,7 +24,7 @@ jobs:
       - name: Verify build artifacts
         run: test -s kernel.bin && test -s VantaOS.iso && test -s vantaos.img
 
-      - name: QEMU survival smoke test
+      - name: QEMU boot and process lifecycle regression test
         shell: bash
         run: |
           set +e

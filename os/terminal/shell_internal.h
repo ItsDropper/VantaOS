@@ -3,7 +3,7 @@
 
 #include "shell.h"
 #include "filesystem.h"
-#include "multiboot.h"
+#include "vanta_boot_info.h"
 #include "process.h"
 #include "keyboard.h"
 
@@ -18,7 +18,7 @@ extern unsigned int shell_history_count;
 extern unsigned int shell_history_position;
 extern char shell_history_draft[SHELL_BUFFER_SIZE];
 extern unsigned int shell_history_draft_length;
-extern multiboot_info_t* multiboot_info;
+extern const vanta_boot_info_t* boot_info;
 extern int pmm_initialized;
 extern int pci_initialized;
 extern char shell_cwd[FS_PATH_MAX];

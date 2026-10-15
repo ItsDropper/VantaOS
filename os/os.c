@@ -3,6 +3,7 @@
 #include "desktop.h"
 #include "desktop_process.h"
 #include "filesystem.h"
+#include "heap.h"
 #include "graphics.h"
 #include "keyboard.h"
 #include "mouse.h"
@@ -140,8 +141,77 @@ static void process_state_transition_probe(void)
     serial_write("VANTAOS_PROCESS_STATE_TRANSITIONS_OK\n");
 }
 
+static void heap_allocator_probe(void)
+{
+    if (!heap_is_initialized())
+    {
+        serial_write("VANTAOS_HEAP_ALLOCATOR_FAIL\n");
+        return;
+    }
+
+    size_t total_before = heap_get_total_size();
+    size_t used_before = heap_get_used_size();
+    size_t free_before = heap_get_free_size();
+
+    if (total_before < 16U * 4096U ||
+        used_before > total_before ||
+        free_before > total_before)
+    {
+        serial_write("VANTAOS_HEAP_ALLOCATOR_FAIL\n");
+        return;
+    }
+
+    unsigned char* first = (unsigned char*)kmalloc(64U);
+    unsigned char* second = (unsigned char*)kmalloc(257U);
+
+    if (!first || !second)
+    {
+        if (first)
+            kfree(first);
+        if (second)
+            kfree(second);
+        serial_write("VANTAOS_HEAP_ALLOCATOR_FAIL\n");
+        return;
+    }
+
+    int ok =
+        ((uintptr_t)first % HEAP_ALIGNMENT) == 0 &&
+        ((uintptr_t)second % HEAP_ALIGNMENT) == 0;
+
+    for (size_t i = 0; i < 64U; i++)
+        first[i] = (unsigned char)(i ^ 0x5AU);
+
+    for (size_t i = 0; i < 257U; i++)
+        second[i] = (unsigned char)(i ^ 0xA5U);
+
+    for (size_t i = 0; i < 64U; i++)
+        ok = (first[i] == (unsigned char)(i ^ 0x5AU)) && ok;
+
+    for (size_t i = 0; i < 257U; i++)
+        ok = (second[i] == (unsigned char)(i ^ 0xA5U)) && ok;
+
+    size_t used_after_alloc = heap_get_used_size();
+    kfree((void*)((uintptr_t)first + 1U));
+    ok = (heap_get_used_size() == used_after_alloc) && ok;
+
+    kfree(first);
+    kfree(second);
+    size_t used_after_free = heap_get_used_size();
+    kfree(first); /* A double free must not change accounting. */
+
+    ok = (used_after_free == used_before) && ok;
+    ok = (heap_get_used_size() == used_before) && ok;
+    ok = (heap_get_total_size() == total_before) && ok;
+    ok = (heap_get_free_size() >= free_before) && ok;
+
+    serial_write(ok ?
+        "VANTAOS_HEAP_ALLOCATOR_OK\n" :
+        "VANTAOS_HEAP_ALLOCATOR_FAIL\n");
+}
+
 static void scheduler_probe_initialize(void)
 {
+    heap_allocator_probe();
     filesystem_probe_initialize();
     process_state_transition_probe();
 

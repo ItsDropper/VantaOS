@@ -10,12 +10,11 @@ For pushes to `main`, pull requests, and manual workflow runs, GitHub Actions:
 
 1. Checks out the repository on a clean Ubuntu runner.
 2. Installs GCC/build tools, NASM, GRUB utilities, FAT tools, and QEMU.
-3. builds the freestanding kernel, bootable ISO, and FAT32 development image with `VANTAOS_SELF_TEST=1`.
+3. Builds the freestanding kernel, bootable ISO, and FAT32 development image with `VANTAOS_SELF_TEST=1`.
 4. Asserts that `kernel.bin`, `VantaOS.iso`, and `vantaos.img` exist and are non-empty.
 5. Boots the ISO in headless QEMU with serial output captured to a log.
 6. Requires all success markers, rejects any `VANTAOS_*_FAIL` marker, and requires QEMU to remain running until the smoke-test timeout.
-
-The QEMU boot test is repeated with more than one guest-memory size to catch some memory-configuration regressions.
+7. Repeats the QEMU boot at 256 MiB and 512 MiB guest RAM. CI waits briefly after QEMU exits so the serial log is flushed before assertions run.
 
 ## Runtime assertions
 
@@ -43,7 +42,7 @@ VANTAOS_SELF_TEST=1 ./build.sh
 Then boot headless and capture serial output:
 
 ```sh
-timeout 8s qemu-system-x86_64 \
+timeout 12s qemu-system-x86_64 \
   -machine pc -m 256M \
   -drive file=VantaOS.iso,media=cdrom,format=raw \
   -drive file=vantaos.img,if=ide,format=raw \
@@ -51,7 +50,7 @@ timeout 8s qemu-system-x86_64 \
   -serial file:boot.log -monitor none -no-reboot
 ```
 
-Exit code 124 from `timeout` is expected for this smoke test: the guest is expected to remain alive through the test window. An earlier exit, missing marker, or failure marker is a test failure. Inspect `boot.log` when debugging.
+Exit code 124 from `timeout` is expected for this smoke test: the guest is expected to remain alive through the test window. After QEMU exits, allow its serial file to flush before checking the markers. An earlier exit, missing marker, or failure marker is a test failure. Inspect `boot.log` when debugging.
 
 ## What is not yet covered
 

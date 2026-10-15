@@ -595,7 +595,8 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* system_tab
     serial_write("VANTAOS_UEFI_EXIT_BOOT_SERVICES_OK\n");
     serial_write("VANTAOS_UEFI_KERNEL_HANDOFF\n");
 
-    typedef void (EFIAPI *kernel_entry_t)(vanta_boot_info_t*);
+    /* The kernel entry uses SysV x86-64, unlike UEFI service calls. */
+    typedef void (*kernel_entry_t)(vanta_boot_info_t*);
     kernel_entry_t kernel_entry = (kernel_entry_t)(UINTN)entry_address;
     kernel_entry(boot_info);
 

@@ -23,17 +23,18 @@ This roadmap prioritizes a trustworthy kernel over visual features. A Windows al
 **Exit criteria:** repeatable clean build and recorded boot evidence.
 
 ### M1 — Build and boot regression checks
-- [ ] Add CI that builds the kernel and creates the ISO and disk image.
-- [ ] Make CI failures block claims of a passing build.
-- [ ] Add a serial/debug output path for automated boot assertions.
+- [x] Add CI that builds the kernel and creates the ISO and disk image.
+- [x] Run the checks on pushes and pull requests.
+- [x] Add serial output and QEMU assertions for successful OS initialization and process lifecycle checks.
 
 **Exit criteria:** clean build runs on pushes and pull requests; boot tests have observable pass/fail conditions.
 
 ### M2 — Process and scheduler correctness
-- [ ] Validate process record initialization and name handling.
-- [ ] Validate interrupt-frame layout and stack bounds.
+- [x] Validate process-name termination for overlong names in the CI-only QEMU probe.
+- [x] Exercise invalid process API inputs in the CI-only QEMU probe.
+- [ ] Add dedicated automated checks for interrupt-frame layout and stack bounds.
 - [x] Verify a returning kernel process can be preempted and reaped in the CI-only QEMU probe.
-- [ ] Verify invalid process IDs and state transitions are rejected.
+- [ ] Verify all process state transitions, not only invalid IDs.
 - [ ] Test timer preemption repeatedly without unexplained resets.
 
 **Exit criteria:** lifecycle/state tests pass and QEMU demonstrates repeated scheduling without panic or reboot.
@@ -76,4 +77,5 @@ This roadmap prioritizes a trustworthy kernel over visual features. A Windows al
 - Backup branch: `backup/pre-desktop-reliability-2026-10-15`.
 - Work branch: `work/kernel-reliability-2026-10-15`.
 - Three code-level fixes are on the work branch: process-name copying avoids an unsequenced index read/write, the process-return trampoline leaves timer interrupts enabled so the scheduler can run, and stack validation accepts the actual same-privilege long-mode IRQ frame instead of assuming RSP/SS are pushed on every interrupt.
-- These fixes are **not yet build- or boot-verified**. CI and runtime testing are the next evidence required.
+- The branch currently passes a clean CI build and QEMU boot/lifecycle assertions, including process API guards, bounded process-name handling, scheduling a kernel process, and reaping it after return.
+- This does **not** establish user-mode isolation, process memory isolation, or reliable behavior on physical hardware. Those remain unverified.

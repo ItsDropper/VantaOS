@@ -418,7 +418,7 @@ static EFI_STATUS refresh_memory_map(
     if (EFI_ERROR(status) || descriptor_size < sizeof(EFI_MEMORY_DESCRIPTOR) ||
         descriptor_size == 0 || *map_size > map_capacity)
     {
-        serial_write("VANTAOS_UEFI_MEMORY_MAP_GET_FAIL\\n");
+        serial_write("VANTAOS_UEFI_MEMORY_MAP_GET_FAIL\n");
         return EFI_LOAD_ERROR;
     }
 
@@ -431,7 +431,7 @@ static EFI_STATUS refresh_memory_map(
         if (offset > *map_size ||
             descriptor_size > *map_size - offset)
         {
-            serial_write("VANTAOS_UEFI_MEMORY_MAP_MALFORMED_FAIL\\n");
+            serial_write("VANTAOS_UEFI_MEMORY_MAP_MALFORMED_FAIL\n");
             return EFI_LOAD_ERROR;
         }
 
@@ -441,21 +441,21 @@ static EFI_STATUS refresh_memory_map(
             continue;
         if (descriptor->NumberOfPages > UINT64_MAX / EFI_PAGE_SIZE)
         {
-            serial_write("VANTAOS_UEFI_MEMORY_MAP_OVERFLOW_FAIL\\n");
+            serial_write("VANTAOS_UEFI_MEMORY_MAP_OVERFLOW_FAIL\n");
             return EFI_LOAD_ERROR;
         }
 
         UINT64 length = descriptor->NumberOfPages * EFI_PAGE_SIZE;
         if (length > UINT64_MAX - descriptor->PhysicalStart)
         {
-            serial_write("VANTAOS_UEFI_MEMORY_MAP_RANGE_FAIL\\n");
+            serial_write("VANTAOS_UEFI_MEMORY_MAP_RANGE_FAIL\n");
             return EFI_LOAD_ERROR;
         }
 
         if (boot_info->memory_region_count >=
             VANTA_BOOT_INFO_MAX_MEMORY_REGIONS)
         {
-            serial_write("VANTAOS_UEFI_MEMORY_MAP_CAPACITY_FAIL\\n");
+            serial_write("VANTAOS_UEFI_MEMORY_MAP_CAPACITY_FAIL\n");
             return EFI_UNSUPPORTED;
         }
 
@@ -469,7 +469,7 @@ static EFI_STATUS refresh_memory_map(
 
     if (boot_info->memory_region_count == 0)
     {
-        serial_write("VANTAOS_UEFI_MEMORY_MAP_EMPTY_FAIL\\n");
+        serial_write("VANTAOS_UEFI_MEMORY_MAP_EMPTY_FAIL\n");
         return EFI_LOAD_ERROR;
     }
 
@@ -579,7 +579,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* system_tab
 
         if (status != EFI_INVALID_PARAMETER)
         {
-            serial_write("VANTAOS_UEFI_EXIT_BOOT_SERVICES_FAIL\\n");
+            serial_write("VANTAOS_UEFI_EXIT_BOOT_SERVICES_FAIL\n");
             break;
         }
     }

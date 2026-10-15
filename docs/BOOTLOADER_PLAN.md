@@ -40,7 +40,8 @@ The custom loader must own the handoff to the kernel; it must not quietly chain 
 
 1. Stabilize physical-frame allocator accounting and add regression probes.
 2. [x] Introduce the versioned boot-info header and a Multiboot-to-boot-info adapter without changing the existing boot path; require automated QEMU regression checks.
-3. Add the UEFI entry and ELF loader as a separate build target.
-4. Add OVMF CI and only then consider making the custom loader the default.
+3. [x] Add a separate UEFI entry, validated ELF64 loader, normalized memory-map/GOP/ACPI handoff, and EFI system image.
+4. [x] Add OVMF/QEMU CI while preserving the GRUB fallback.
+5. Validate the first CI run, fix any firmware/loader issues, then expand malformed-ELF tests before considering the custom loader the default.
 
 This sequence deliberately avoids mixing a new firmware handoff with untested memory-management changes in one risky switch.

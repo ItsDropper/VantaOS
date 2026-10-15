@@ -212,8 +212,10 @@ static EFI_STATUS load_elf64(
         header->e_ident[EI_MAG3] != ELFMAG3 ||
         header->e_ident[EI_CLASS] != ELFCLASS64 ||
         header->e_ident[EI_DATA] != ELFDATA2LSB ||
+        header->e_version != EV_CURRENT ||
         header->e_type != ET_EXEC ||
         header->e_machine != EM_X86_64 ||
+        header->e_ehsize != sizeof(Elf64_Ehdr) ||
         header->e_phentsize != sizeof(Elf64_Phdr) ||
         header->e_phnum == 0 || header->e_phnum > 128U)
         return EFI_LOAD_ERROR;
@@ -247,6 +249,18 @@ static EFI_STATUS load_elf64(
         UINT64 segment_end = ph->p_paddr + ph->p_memsz;
         if (segment_end > UEFI_MAX_PHYSICAL_ADDRESS)
             return EFI_UNSUPPORTED;
+
+        /* PT_LOAD destinations must not alias one another. */
+        for (UINTN previous = 0; previous < i; previous++)
+        {
+            const Elf64_Phdr* other = &phdrs[previous];
+            if (other->p_type != PT_LOAD || other->p_memsz == 0)
+                continue;
+
+            UINT64 other_end = other->p_paddr + other->p_memsz;
+            if (ph->p_paddr < other_end && other->p_paddr < segment_end)
+                return EFI_LOAD_ERROR;
+        }
 
         if (ph->p_align > 1U &&
             ((ph->p_align & (ph->p_align - 1U)) != 0 ||

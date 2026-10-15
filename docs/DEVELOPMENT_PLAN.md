@@ -28,6 +28,13 @@ This roadmap prioritizes a trustworthy kernel over visual features. A Windows al
 - [x] Split build source lists into subsystem Makefiles.
 - [x] Move source code into architecture, kernel, memory, drivers, and filesystem directories.
 
+### M1.5 — Independent boot path (planned)
+- [ ] Define a versioned boot-info ABI independent of Multiboot.
+- [ ] Keep GRUB/Multiboot as a working fallback while adding a separate UEFI x86-64 entry.
+- [ ] Load and validate ELF64 kernel segments, acquire the final UEFI memory map, and call `ExitBootServices` safely.
+- [ ] Add OVMF/QEMU CI for the custom loader before changing the default boot path.
+- [ ] Test malformed kernel images and missing optional firmware data.
+
 ### M2 — Process and scheduler correctness
 - [x] Test selected process API guards and lifecycle transitions.
 - [x] Verify a returning kernel process is reaped.

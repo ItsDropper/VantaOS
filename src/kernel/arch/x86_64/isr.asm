@@ -52,7 +52,6 @@ process_entry_trampoline:
     cld
     call process_entry_dispatch
 .halt:
-    cli
     hlt
     jmp .halt
 

@@ -74,6 +74,12 @@ uefi: VantaOS-UEFI.img
 kernel.bin: $(OBJECTS) build/linker.ld
 	$(LD) $(LDFLAGS) $(OBJECTS) -o $@
 
+$(OBJDIR)/arch/x86_64/ap_trampoline.bin: arch/x86_64/ap_trampoline.asm
+	@mkdir -p $(@D)
+	$(AS) -f bin $< -o $@
+
+$(OBJDIR)/arch/x86_64/isr.o: $(OBJDIR)/arch/x86_64/ap_trampoline.bin
+
 $(OBJDIR)/%.o: %.c
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) -c $< -o $@

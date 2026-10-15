@@ -47,6 +47,7 @@ jobs:
             VANTAOS_BOOT_INFO_READY
             VANTAOS_APIC_LOCAL_OK
             VANTAOS_SMP_TOPOLOGY_OK
+            VANTAOS_SMP_AP_START_OK
             VANTAOS_BOOT_INFO_ADAPTER_OK
             VANTAOS_PMM_BOOT_INFO_OK
             VANTAOS_PMM_ALLOCATOR_OK
@@ -61,12 +62,14 @@ jobs:
             VANTAOS_SCHEDULER_REAP_OK
           )
 
-          for memory in 256 512; do
-            log="boot-${memory}m.log"
-            echo "Booting VantaOS in QEMU with ${memory} MiB RAM..."
+          for config in "256 1" "512 2" "512 4"; do
+            read -r memory cpus <<< "$config"
+            log="boot-${memory}m-${cpus}cpu.log"
+            echo "Booting VantaOS in QEMU with ${memory} MiB RAM and ${cpus} CPU(s)..."
             set +e
             timeout 12s qemu-system-x86_64 \
               -machine pc \
+              -smp "${cpus}" \
               -m "${memory}M" \
               -drive file=VantaOS.iso,media=cdrom,format=raw \
               -drive file=vantaos.img,if=ide,format=raw \
@@ -169,6 +172,7 @@ jobs:
             VANTAOS_UEFI_BOOT_INFO_READY
             VANTAOS_APIC_LOCAL_OK
             VANTAOS_SMP_TOPOLOGY_OK
+            VANTAOS_SMP_AP_START_OK
             VANTAOS_PMM_BOOT_INFO_OK
             VANTAOS_BOOT_OK
           )

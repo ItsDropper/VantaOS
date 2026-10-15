@@ -211,4 +211,12 @@ EXCEPTION_NO_ERROR 29
 EXCEPTION_NO_ERROR 30
 EXCEPTION_NO_ERROR 31
 
+section .rodata
+align 16
+global ap_trampoline_blob_start
+global ap_trampoline_blob_end
+ap_trampoline_blob_start:
+    incbin "build/obj/arch/x86_64/ap_trampoline.bin"
+ap_trampoline_blob_end:
+
 section .note.GNU-stack noalloc noexec nowrite progbits

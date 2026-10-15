@@ -17,9 +17,6 @@ int smp_initialize(void)
 
     discovered_cpu_count = info->cpu_count;
     serial_write("VANTAOS_SMP_TOPOLOGY_OK\n");
-    serial_write("VANTAOS_SMP_CPU_COUNT=");
-    serial_write_hex(discovered_cpu_count);
-    serial_write("\n");
 
     if (discovered_cpu_count > 1U)
         serial_write("VANTAOS_SMP_SECONDARIES_PENDING\n");

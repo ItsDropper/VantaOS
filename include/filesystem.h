@@ -2,7 +2,7 @@
 #define FILESYSTEM_H
 
 #include <stdint.h>
-#include "multiboot.h"
+
 
 #define FS_MAX_NODES 256
 #define FS_NAME_MAX 31
@@ -28,7 +28,7 @@ typedef struct
     uint8_t loaded;
 } fs_node_t;
 
-void filesystem_initialize(multiboot_info_t* mbd);
+void filesystem_initialize(void);
 int filesystem_is_initialized(void);
 int filesystem_lookup(const char* path);
 const fs_node_t* filesystem_get_node(uint32_t id);

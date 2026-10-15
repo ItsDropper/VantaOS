@@ -6,8 +6,9 @@ global multiboot_header
 
 multiboot_header:
     dd 0x1BADB002
-    dd 0x00000000
-    dd -(0x1BADB002 + 0x00000000)
+    ; Request Multiboot memory information for the physical memory manager.
+    dd 0x00000002
+    dd -(0x1BADB002 + 0x00000002)
 
 section .text.start
 align 16

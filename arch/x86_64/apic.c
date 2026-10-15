@@ -152,7 +152,7 @@ int apic_initialize(void)
         base &= ~APIC_BASE_ENABLE;
         write_msr(IA32_APIC_BASE_MSR, base);
     }
-    base &= ~(APIC_BASE_X2APIC | 0x0000000FFFFF000ULL);
+    base &= ~(APIC_BASE_X2APIC | 0x0000000FFFFFF000ULL);
     base |= (platform_info.local_apic_address & 0x0000000FFFFF000ULL) |
             APIC_BASE_ENABLE | (read_msr(IA32_APIC_BASE_MSR) & APIC_BASE_BSP);
     write_msr(IA32_APIC_BASE_MSR, base);

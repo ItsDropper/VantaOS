@@ -5,7 +5,7 @@
 #include "multiboot.h"
 
 #define FS_MAX_NODES 256
-#define FS_NAME_MAX 31
+#define FS_NAME_MAX 255
 #define FS_PATH_MAX 128
 #define FS_FILE_MAX 512
 

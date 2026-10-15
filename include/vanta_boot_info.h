@@ -11,7 +11,7 @@
  * must validate magic, version, and size before using the structure.
  */
 #define VANTA_BOOT_INFO_MAGIC 0x56424F49U /* "VBOI" */
-#define VANTA_BOOT_INFO_VERSION 1U
+#define VANTA_BOOT_INFO_VERSION 2U
 #define VANTA_BOOT_INFO_MAX_MEMORY_REGIONS 128U
 
 #define VANTA_BOOT_FLAG_MEMORY_MAP_VALID      (1U << 0)

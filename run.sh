@@ -12,7 +12,7 @@ if [ ! -f vantaos.img ]; then
     exit 1
 fi
 
-exec qemu-system-i386 \
+exec qemu-system-x86_64 \
     -m 256M \
     -drive file=VantaOS.iso,media=cdrom,format=raw \
     -drive file=vantaos.img,if=ide,format=raw \

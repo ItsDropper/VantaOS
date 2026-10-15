@@ -35,7 +35,7 @@ An address-space pointer is not proof of secure isolation. Current process execu
 
 ## Memory and paging
 
-Paging establishes identity mappings for low memory and high virtual windows used by the heap/framebuffer. Address-space structures exist, but user mappings, permission enforcement, and safe user-pointer validation remain incomplete.
+Paging establishes identity mappings for low memory and high virtual windows used by the heap/framebuffer. The physical memory manager now consumes the versioned, normalized boot-info memory map and reserves the kernel image, legacy handoff metadata, and framebuffer. Address-space structures exist, but user mappings, permission enforcement, and safe user-pointer validation remain incomplete.
 
 ## Filesystem and VFS
 

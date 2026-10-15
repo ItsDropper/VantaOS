@@ -199,6 +199,7 @@ void kernel_main(multiboot_info_t* mbd)
 
 #ifdef VANTAOS_SELF_TEST
     boot_info_adapter_probe();
+    pmm_boot_info_probe();
 #endif
 
     kernel_initialize(&normalized_boot_info);

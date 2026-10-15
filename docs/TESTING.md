@@ -21,6 +21,7 @@ For pushes to `main`, pull requests, and manual workflow runs, GitHub Actions:
 | Marker | What it establishes |
 | --- | --- |
 | `VANTAOS_BOOT_OK` | Initialization reached the OS run path and emitted its boot marker. |
+| `VANTAOS_HEAP_ALLOCATOR_OK` | The heap is initialized; aligned allocations preserve test data; invalid and duplicate frees are rejected; and usage accounting returns to baseline. |
 | `VANTAOS_PROCESS_API_GUARDS_OK` | Selected invalid process API arguments are rejected. |
 | `VANTAOS_PROCESS_NAME_OK` | An overlong process name remains null-terminated at the maximum name index. |
 | `VANTAOS_PROCESS_STATE_TRANSITIONS_OK` | A test process transitions through ready, running, sleeping, wake-up, and termination/reaping paths. |
@@ -56,6 +57,7 @@ Exit code 124 from `timeout` is expected for this smoke test: the guest is expec
 
 - Exhaustive process-state combinations, sustained preemption stress, race conditions, or long-duration stability.
 - Page-table permission enforcement, user/supervisor transitions, syscall validation, and process-to-process memory isolation.
+- Exhaustive allocator fragmentation, allocation-failure recovery, and long-duration memory-pressure tests.
 - Actual FAT32 write/create support; the current filesystem write/create functions report unsupported.
 - Filesystem corruption, power-loss recovery, and persistent-data round trips.
 - Pixel-level desktop correctness, input interaction scripts, display modes, and visual regression tests.

@@ -4,13 +4,9 @@
 #include <stddef.h>
 
 /*
- * The PMM metadata lives in the kernel's BSS instead of being placed
- * immediately after the linked kernel image. This makes its location
- * independent of the kernel size and prevents it from overlapping
- * Multiboot data or other early allocations.
- *
- * 4 GiB / 4 KiB = 1,048,576 physical frames.
- * One bit per frame therefore needs 128 KiB.
+ * 4 GiB / 4 KiB = 1,048,576 physical frames. One bit per frame uses 128 KiB.
+ * The bitmaps live in BSS and are therefore covered by the kernel image range
+ * reserved below.
  */
 static uint32_t pmm_bitmap[PMM_BITMAP_WORDS]
     __attribute__((aligned(4096)));
@@ -37,6 +33,19 @@ static inline int bitmap_test(const uint32_t* bitmap, uint32_t bit)
     return (bitmap[bit / 32U] & (1U << (bit % 32U))) != 0;
 }
 
+static int memory_region_end(
+    const vanta_memory_region_t* region,
+    uint64_t* end_address
+)
+{
+    if (!region || !end_address ||
+        region->length > UINT64_MAX - region->base)
+        return 0;
+
+    *end_address = region->base + region->length;
+    return 1;
+}
+
 static void pmm_reserve_range(uint64_t start, uint64_t end_address)
 {
     if (!initialized ||
@@ -59,7 +68,6 @@ static void pmm_reserve_range(uint64_t start, uint64_t end_address)
         if (!bitmap_test(pmm_bitmap, block))
         {
             bitmap_set(pmm_bitmap, block);
-
             if (free_blocks > 0)
                 free_blocks--;
         }
@@ -68,7 +76,44 @@ static void pmm_reserve_range(uint64_t start, uint64_t end_address)
     }
 }
 
-void pmm_initialize(multiboot_info_t* mbd)
+static void pmm_make_usable_range(uint64_t start, uint64_t end_address)
+{
+    if (!initialized ||
+        start >= PMM_MAX_PHYSICAL_ADDRESS ||
+        end_address <= start)
+        return;
+
+    if (end_address > PMM_MAX_PHYSICAL_ADDRESS)
+        end_address = PMM_MAX_PHYSICAL_ADDRESS;
+
+    /* Only fully covered pages are released to the allocator. */
+    uint32_t first =
+        (uint32_t)((start + PAGE_SIZE - 1U) / PAGE_SIZE);
+    uint32_t last = (uint32_t)(end_address / PAGE_SIZE);
+
+    if (first > total_blocks)
+        first = total_blocks;
+    if (last > total_blocks)
+        last = total_blocks;
+
+    for (uint32_t block = first; block < last; block++)
+    {
+        if (bitmap_test(pmm_bitmap, block))
+        {
+            bitmap_clear(pmm_bitmap, block);
+            bitmap_clear(pmm_reserved_bitmap, block);
+            free_blocks++;
+        }
+    }
+}
+
+static int is_releasable_type(uint32_t type)
+{
+    return type == VANTA_MEMORY_USABLE ||
+           type == VANTA_MEMORY_BOOTLOADER_RECLAIMABLE;
+}
+
+void pmm_initialize(const vanta_boot_info_t* boot_info)
 {
     initialized = 0;
     total_blocks = 0;
@@ -80,221 +125,166 @@ void pmm_initialize(multiboot_info_t* mbd)
         pmm_reserved_bitmap[i] = 0xFFFFFFFFU;
     }
 
-    if (!mbd)
+    if (!boot_info ||
+        boot_info->magic != VANTA_BOOT_INFO_MAGIC ||
+        boot_info->version != VANTA_BOOT_INFO_VERSION ||
+        boot_info->struct_size < sizeof(*boot_info) ||
+        boot_info->memory_region_count >
+            VANTA_BOOT_INFO_MAX_MEMORY_REGIONS ||
+        boot_info->kernel_image_end <= boot_info->kernel_image_start)
         return;
 
+    const int use_memory_map =
+        (boot_info->flags & VANTA_BOOT_FLAG_MEMORY_MAP_VALID) != 0 &&
+        boot_info->memory_region_count > 0U;
+
     uint64_t highest_addr = 0;
-    uint64_t mmap_start = 0;
-    uint64_t mmap_end_address = 0;
-    int use_mmap = 0;
 
-    /*
-     * Multiboot 1 normally supplies the full firmware memory map, but
-     * some boot paths only provide the legacy mem_upper field. Do not
-     * leave the PMM completely offline just because the mmap handoff is
-     * unavailable or malformed.
-     */
-    if ((mbd->flags & MULTIBOOT_INFO_MEM_MAP) &&
-        mbd->mmap_addr != 0 &&
-        mbd->mmap_length >= sizeof(uint32_t))
+    if (use_memory_map)
     {
-        mmap_start = mbd->mmap_addr;
-        mmap_end_address =
-            mmap_start + mbd->mmap_length;
-
-        if (mmap_end_address > mmap_start &&
-            mmap_end_address <= PMM_MAX_PHYSICAL_ADDRESS)
+        for (uint32_t i = 0; i < boot_info->memory_region_count; i++)
         {
-            multiboot_memory_map_t* mmap =
-                (multiboot_memory_map_t*)(uintptr_t)mmap_start;
+            const vanta_memory_region_t* region =
+                &boot_info->memory_regions[i];
+            uint64_t region_end;
 
-            use_mmap = 1;
+            if (!memory_region_end(region, &region_end))
+                return;
 
-            while ((uint64_t)(uintptr_t)mmap < mmap_end_address)
+            if (is_releasable_type(region->type) &&
+                region_end > region->base &&
+                region->base < PMM_MAX_PHYSICAL_ADDRESS)
             {
-                uint64_t entry_start =
-                    (uint64_t)(uintptr_t)mmap;
-                uint64_t entry_end =
-                    entry_start +
-                    mmap->size +
-                    sizeof(mmap->size);
-
-                if (mmap->size < 20 ||
-                    entry_end <= entry_start ||
-                    entry_end > mmap_end_address)
-                {
-                    use_mmap = 0;
-                    break;
-                }
-
-                if (mmap->type == MULTIBOOT_MEMORY_AVAILABLE)
-                {
-                    uint64_t top = mmap->addr + mmap->len;
-
-                    if (top > highest_addr)
-                        highest_addr = top;
-                }
-
-                mmap =
-                    (multiboot_memory_map_t*)(uintptr_t)entry_end;
+                uint64_t top = region_end;
+                if (top > PMM_MAX_PHYSICAL_ADDRESS)
+                    top = PMM_MAX_PHYSICAL_ADDRESS;
+                if (top > highest_addr)
+                    highest_addr = top;
             }
         }
     }
-
-    /*
-     * Legacy Multiboot memory information reports memory above 1 MiB
-     * in KiB. It is less precise than the memory map, but it is a safe
-     * fallback for early boot and is enough to bring the PMM online.
-     */
-    if (!use_mmap)
+    else if (boot_info->source == VANTA_BOOT_SOURCE_MULTIBOOT1 &&
+             (boot_info->flags & VANTA_BOOT_FLAG_LEGACY_INFO_PRESENT))
     {
-        highest_addr =
-            0x100000ULL +
-            ((uint64_t)mbd->mem_upper * 1024ULL);
-
+        /* Compatibility fallback for old Multiboot handoffs without a map. */
+        highest_addr = 0x100000ULL +
+            ((uint64_t)boot_info->legacy_mem_upper_kib * 1024ULL);
         if (highest_addr > PMM_MAX_PHYSICAL_ADDRESS)
             highest_addr = PMM_MAX_PHYSICAL_ADDRESS;
     }
-    else if (highest_addr > PMM_MAX_PHYSICAL_ADDRESS)
+    else
     {
-        highest_addr = PMM_MAX_PHYSICAL_ADDRESS;
+        return;
     }
+
+    if (highest_addr > PMM_MAX_PHYSICAL_ADDRESS)
+        highest_addr = PMM_MAX_PHYSICAL_ADDRESS;
 
     total_blocks =
         (uint32_t)((highest_addr + PAGE_SIZE - 1U) / PAGE_SIZE);
-
     if (total_blocks > PMM_MAX_BLOCKS)
         total_blocks = PMM_MAX_BLOCKS;
-
     if (total_blocks == 0)
         return;
 
     initialized = 1;
 
-    /*
-     * Start with every frame unavailable, then release usable RAM.
-     * With a full memory map, release only MULTIBOOT_MEMORY_AVAILABLE
-     * regions. With the legacy fallback, the reported RAM above 1 MiB
-     * is treated as usable until the reported physical limit.
-     */
-    if (use_mmap)
+    if (use_memory_map)
     {
-        multiboot_memory_map_t* mmap =
-            (multiboot_memory_map_t*)(uintptr_t)mmap_start;
-
-        while ((uint64_t)(uintptr_t)mmap < mmap_end_address)
+        /*
+         * Release only usable/reclaimable ranges first. Then overlay every
+         * non-usable range so reserved entries win if a map overlaps.
+         */
+        for (uint32_t i = 0; i < boot_info->memory_region_count; i++)
         {
-            uint64_t entry_start =
-                (uint64_t)(uintptr_t)mmap;
-            uint64_t entry_end =
-                entry_start +
-                mmap->size +
-                sizeof(mmap->size);
+            const vanta_memory_region_t* region =
+                &boot_info->memory_regions[i];
+            uint64_t region_end;
 
-            if (mmap->size < 20 ||
-                entry_end <= entry_start ||
-                entry_end > mmap_end_address)
-                return;
-
-            if (mmap->type == MULTIBOOT_MEMORY_AVAILABLE)
+            if (!memory_region_end(region, &region_end))
             {
-                uint64_t region_start = mmap->addr;
-                uint64_t region_end = mmap->addr + mmap->len;
-
-                if (region_start < PMM_MAX_PHYSICAL_ADDRESS &&
-                    region_end > region_start)
-                {
-                    if (region_end > PMM_MAX_PHYSICAL_ADDRESS)
-                        region_end = PMM_MAX_PHYSICAL_ADDRESS;
-
-                    uint32_t start_block =
-                        (uint32_t)((region_start + PAGE_SIZE - 1U) /
-                                   PAGE_SIZE);
-
-                    uint32_t end_block =
-                        (uint32_t)(region_end / PAGE_SIZE);
-
-                    if (end_block > total_blocks)
-                        end_block = total_blocks;
-
-                    for (uint32_t block = start_block;
-                         block < end_block;
-                         block++)
-                    {
-                        if (bitmap_test(pmm_bitmap, block))
-                        {
-                            bitmap_clear(pmm_bitmap, block);
-                            bitmap_clear(pmm_reserved_bitmap, block);
-                            free_blocks++;
-                        }
-                    }
-                }
+                initialized = 0;
+                total_blocks = 0;
+                free_blocks = 0;
+                return;
             }
 
-            mmap =
-                (multiboot_memory_map_t*)(uintptr_t)entry_end;
+            if (is_releasable_type(region->type))
+                pmm_make_usable_range(region->base, region_end);
+        }
+
+        for (uint32_t i = 0; i < boot_info->memory_region_count; i++)
+        {
+            const vanta_memory_region_t* region =
+                &boot_info->memory_regions[i];
+            uint64_t region_end;
+
+            if (!memory_region_end(region, &region_end))
+            {
+                initialized = 0;
+                total_blocks = 0;
+                free_blocks = 0;
+                return;
+            }
+
+            if (!is_releasable_type(region->type))
+                pmm_reserve_range(region->base, region_end);
         }
     }
     else
     {
-        uint32_t start_block =
-            (uint32_t)((0x100000ULL + PAGE_SIZE - 1U) / PAGE_SIZE);
+        pmm_make_usable_range(0x100000ULL, highest_addr);
+    }
 
-        for (uint32_t block = start_block;
-             block < total_blocks;
-             block++)
+    /* Firmware/legacy low memory is never handed to the page allocator. */
+    pmm_reserve_range(0, 0x100000ULL);
+    pmm_reserve_range(
+        boot_info->kernel_image_start,
+        boot_info->kernel_image_end
+    );
+
+    if (boot_info->flags & VANTA_BOOT_FLAG_LEGACY_INFO_PRESENT)
+    {
+        if (boot_info->legacy_info_length <=
+            UINT64_MAX - boot_info->legacy_info_address)
         {
-            if (bitmap_test(pmm_bitmap, block))
-            {
-                bitmap_clear(pmm_bitmap, block);
-                bitmap_clear(pmm_reserved_bitmap, block);
-                free_blocks++;
-            }
+            pmm_reserve_range(
+                boot_info->legacy_info_address,
+                boot_info->legacy_info_address +
+                    boot_info->legacy_info_length
+            );
+        }
+
+        if (boot_info->legacy_mmap_length <=
+            UINT64_MAX - boot_info->legacy_mmap_address)
+        {
+            pmm_reserve_range(
+                boot_info->legacy_mmap_address,
+                boot_info->legacy_mmap_address +
+                    boot_info->legacy_mmap_length
+            );
         }
     }
 
-    /*
-     * Reserve the first MiB for firmware/boot structures and keep
-     * the kernel image itself unavailable to the allocator.
-     *
-     * The linker-provided 'end' symbol is safe here because the PMM
-     * bitmap itself is already part of the kernel image/BSS.
-     */
-    extern uint32_t end;
-
-    pmm_reserve_range(0, 0x100000);
-    pmm_reserve_range(0x100000, (uintptr_t)&end);
-
-    /*
-     * Reserve the Multiboot structures we directly reference.
-     */
-    pmm_reserve_range(
-        (uint64_t)(uintptr_t)mbd,
-        (uint64_t)(uintptr_t)mbd + sizeof(multiboot_info_t)
-    );
-
-    pmm_reserve_range(
-        mbd->mmap_addr,
-        (uint64_t)mbd->mmap_addr + mbd->mmap_length
-    );
-
-    if (mbd->flags & MULTIBOOT_INFO_FRAMEBUFFER)
+    if ((boot_info->flags & VANTA_BOOT_FLAG_FRAMEBUFFER_VALID) &&
+        boot_info->framebuffer.height != 0 &&
+        boot_info->framebuffer.pitch != 0)
     {
-        uint64_t framebuffer_end =
-            mbd->framebuffer_addr +
-            (uint64_t)mbd->framebuffer_pitch *
-            mbd->framebuffer_height;
+        uint64_t framebuffer_size =
+            (uint64_t)boot_info->framebuffer.pitch *
+            boot_info->framebuffer.height;
 
-        pmm_reserve_range(
-            mbd->framebuffer_addr,
-            framebuffer_end
-        );
+        if (framebuffer_size <=
+            UINT64_MAX - boot_info->framebuffer.address)
+        {
+            pmm_reserve_range(
+                boot_info->framebuffer.address,
+                boot_info->framebuffer.address + framebuffer_size
+            );
+        }
     }
 
-    /*
-     * Frames above the reported physical limit are permanently
-     * unavailable because they are outside the usable address space.
-     */
+    /* Frames above the reported physical limit remain unavailable. */
     for (uint32_t block = total_blocks;
          block < PMM_MAX_BLOCKS;
          block++)
@@ -333,8 +323,7 @@ void* pmm_alloc_block(void)
                 if (free_blocks > 0)
                     free_blocks--;
 
-                return (void*)(uintptr_t)
-                    (block * PAGE_SIZE);
+                return (void*)(uintptr_t)(block * PAGE_SIZE);
             }
         }
     }

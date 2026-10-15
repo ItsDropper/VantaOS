@@ -1,4 +1,4 @@
-#include "vanta_boot_info.h"
+#include "boot_info_multiboot.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -47,6 +47,9 @@ int vanta_boot_info_from_multiboot(
     out_info->legacy_mem_lower_kib = mbd->mem_lower;
     out_info->legacy_mem_upper_kib = mbd->mem_upper;
     out_info->legacy_info_address = (uint64_t)(uintptr_t)mbd;
+    out_info->legacy_info_length = sizeof(*mbd);
+    out_info->legacy_mmap_address = mbd->mmap_addr;
+    out_info->legacy_mmap_length = mbd->mmap_length;
     out_info->kernel_image_start = (uint64_t)(uintptr_t)&_start;
     out_info->kernel_image_end = (uint64_t)(uintptr_t)&end;
 

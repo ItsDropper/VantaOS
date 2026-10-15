@@ -23,6 +23,7 @@ For pushes to `main`, pull requests, and manual workflow runs, GitHub Actions:
 | `VANTAOS_BOOT_OK` | Initialization reached the OS run path and emitted its boot marker. |
 | `VANTAOS_BOOT_INFO_READY` | The live GRUB/Multiboot handoff was normalized into the versioned boot-info structure. |
 | `VANTAOS_BOOT_INFO_ADAPTER_OK` | The contract magic/version/size are correct; synthetic memory ranges and framebuffer fields normalize correctly; malformed entry sizes, overflowing region ranges, and null arguments are rejected. |
+| `VANTAOS_PMM_BOOT_INFO_OK` | The physical allocator consumes the normalized contract, rejects invalid boot-info pointers, preserves reserved-region precedence over overlapping usable memory, and reserves kernel and legacy metadata pages. |
 | `VANTAOS_PMM_ALLOCATOR_OK` | The physical allocator is initialized; two distinct aligned frames are allocated; invalid and duplicate frees are rejected; and free/used accounting returns to baseline. |
 | `VANTAOS_HEAP_ALLOCATOR_OK` | The heap is initialized; aligned allocations preserve test data; invalid and duplicate frees are rejected; and usage accounting returns to baseline. |
 | `VANTAOS_PROCESS_API_GUARDS_OK` | Selected invalid process API arguments are rejected. |

@@ -2,7 +2,6 @@
 #define VANTA_BOOT_INFO_H
 
 #include <stdint.h>
-#include "multiboot.h"
 
 /*
  * Stable, loader-independent handoff contract.
@@ -12,7 +11,7 @@
  * must validate magic, version, and size before using the structure.
  */
 #define VANTA_BOOT_INFO_MAGIC 0x56424F49U /* "VBOI" */
-#define VANTA_BOOT_INFO_VERSION 1U
+#define VANTA_BOOT_INFO_VERSION 2U
 #define VANTA_BOOT_INFO_MAX_MEMORY_REGIONS 128U
 
 #define VANTA_BOOT_FLAG_MEMORY_MAP_VALID      (1U << 0)
@@ -82,13 +81,12 @@ typedef struct vanta_boot_info
 
     vanta_framebuffer_info_t framebuffer;
     vanta_memory_region_t memory_regions[VANTA_BOOT_INFO_MAX_MEMORY_REGIONS];
-} vanta_boot_info_t;
 
-/* Converts a Multiboot 1 handoff into the versioned VantaOS boot contract. */
-int vanta_boot_info_from_multiboot(
-    const multiboot_info_t* multiboot_info,
-    vanta_boot_info_t* out_info
-);
+    /* Optional legacy metadata ranges retained during the GRUB transition. */
+    uint64_t legacy_info_length;
+    uint64_t legacy_mmap_address;
+    uint64_t legacy_mmap_length;
+} vanta_boot_info_t;
 
 /* Kernel-owned normalized handoff retained for the kernel lifetime. */
 const vanta_boot_info_t* kernel_get_boot_info(void);

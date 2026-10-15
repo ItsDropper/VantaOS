@@ -27,6 +27,7 @@ jobs:
         run: |
           make list-sources
           test -f arch/x86_64/Makefile
+          test -f kernel/boot/Makefile
           test -f mm/Makefile
           test -f drivers/Makefile
           test -f fs/Makefile
@@ -43,6 +44,8 @@ jobs:
           set -euo pipefail
           required_markers=(
             VANTAOS_BOOT_OK
+            VANTAOS_BOOT_INFO_READY
+            VANTAOS_BOOT_INFO_ADAPTER_OK
             VANTAOS_PMM_ALLOCATOR_OK
             VANTAOS_HEAP_ALLOCATOR_OK
             VANTAOS_PROCESS_API_GUARDS_OK

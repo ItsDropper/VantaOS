@@ -18,7 +18,7 @@ The custom loader must own the handoff to the kernel; it must not quietly chain 
 
 ### Required stages
 
-1. **Define a stable boot contract.** Add a versioned, fixed-width `vanta_boot_info` structure that describes the usable/reserved physical-memory ranges, framebuffer, kernel image bounds, ACPI RSDP address when available, and loader-reclaimable memory. Avoid passing GRUB/Multiboot structures directly into the long-term kernel API.
+1. **Define a stable boot contract.** The initial versioned `vanta_boot_info` structure and Multiboot adapter now exist in `include/vanta_boot_info.h` and `kernel/boot/boot_info.c`. It carries normalized memory regions, framebuffer metadata, kernel image bounds, optional ACPI/loader-reclaimable fields, and a version/size tag. The existing kernel subsystems still consume Multiboot directly during this transition; removing that dependency is a later step.
 2. **Separate boot entry paths.** Keep the current Multiboot entry as a fallback and add a distinct x86-64 UEFI entry that begins in the firmware's 64-bit execution environment. Both paths should normalize their inputs into the same kernel boot contract.
 3. **Load the kernel safely.** Parse ELF64 program headers, validate every offset/size/address calculation, reject unsupported segments and overlapping destinations, allocate backing pages, zero each segment's BSS, and never trust unchecked file metadata.
 4. **Collect firmware information.** Read the UEFI memory map, GOP framebuffer information, and ACPI configuration-table pointer. Keep boot-services allocations reserved until the kernel has consumed the handoff.
@@ -39,7 +39,7 @@ The custom loader must own the handoff to the kernel; it must not quietly chain 
 ## First implementation sequence
 
 1. Stabilize physical-frame allocator accounting and add regression probes.
-2. Introduce the versioned boot-info header and a Multiboot-to-boot-info adapter without changing the existing boot path.
+2. [x] Introduce the versioned boot-info header and a Multiboot-to-boot-info adapter without changing the existing boot path; require automated QEMU regression checks.
 3. Add the UEFI entry and ELF loader as a separate build target.
 4. Add OVMF CI and only then consider making the custom loader the default.
 

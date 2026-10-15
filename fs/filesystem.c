@@ -4,6 +4,8 @@
 #include "fat32.h"
 
 static fs_node_t nodes[FS_MAX_NODES];
+/* FAT32 enumeration scratch space; filesystem metadata is currently serialized. */
+static fat32_dirent_t directory_entries[FS_MAX_NODES];
 static unsigned int node_count;
 static int initialized;
 
@@ -89,10 +91,9 @@ static int fs_load_directory(uint32_t directory_id)
     if (directory->loaded)
         return 0;
 
-    fat32_dirent_t entries[FS_MAX_NODES];
     int count = fat32_list_directory(
         directory->first_cluster,
-        entries,
+        directory_entries,
         FS_MAX_NODES
     );
 
@@ -105,11 +106,11 @@ static int fs_load_directory(uint32_t directory_id)
     {
         if (fs_add_node(
                 directory_id,
-                entries[i].directory ?
+                directory_entries[i].directory ?
                     FS_NODE_DIRECTORY : FS_NODE_FILE,
-                entries[i].name,
-                entries[i].first_cluster,
-                entries[i].size) < 0)
+                directory_entries[i].name,
+                directory_entries[i].first_cluster,
+                directory_entries[i].size) < 0)
             break;
     }
 

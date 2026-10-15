@@ -47,8 +47,25 @@ static void scheduler_reap_observer_entry(void)
 
 static void scheduler_probe_initialize(void)
 {
+    if (process_create_kernel(NULL, process_current_pid(),
+                              scheduler_probe_entry) != -1 ||
+        process_create_kernel("invalid-entry", process_current_pid(),
+                              NULL) != -1 ||
+        process_switch_to(0) != 0 ||
+        process_switch_to(PROCESS_MAX) != 0 ||
+        process_set_running(PROCESS_MAX) != 0 ||
+        process_mark_ready(0) != 0 ||
+        process_terminate(0) != 0 ||
+        process_wake(PROCESS_MAX) != 0)
+    {
+        serial_write("VANTAOS_PROCESS_API_GUARDS_FAIL\n");
+        return;
+    }
+
+    serial_write("VANTAOS_PROCESS_API_GUARDS_OK\n");
+
     int probe_pid = process_create_kernel(
-        "sched-probe",
+        "scheduler-probe-name-that-exceeds-the-process-name-limit",
         process_current_pid(),
         scheduler_probe_entry
     );
@@ -60,6 +77,14 @@ static void scheduler_probe_initialize(void)
     }
 
     scheduler_probe_pid = (uint32_t)probe_pid;
+    const process_t* probe = process_get(scheduler_probe_pid);
+    if (!probe || probe->name[PROCESS_NAME_MAX] != '\0')
+    {
+        serial_write("VANTAOS_PROCESS_NAME_FAIL\n");
+        return;
+    }
+
+    serial_write("VANTAOS_PROCESS_NAME_OK\n");
 
     if (process_create_kernel(
             "sched-reap-check",

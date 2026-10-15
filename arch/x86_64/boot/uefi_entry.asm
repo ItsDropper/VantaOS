@@ -5,11 +5,11 @@ align 16
 global uefi_kernel_entry
 extern kernel_main_uefi
 
-; EFI x64 passes the first argument in RCX. The kernel uses the SysV ABI.
+; The loader calls this custom kernel entry with the SysV x86-64 ABI.
 ; Establish an identity map for the first 4 GiB before entering kernel C code.
 uefi_kernel_entry:
     cli
-    mov r12, rcx
+    mov r12, rdi
 
     cld
     lea rdi, [rel uefi_pml4]

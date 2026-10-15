@@ -20,7 +20,10 @@ For pushes to `main`, pull requests, and manual workflow runs, GitHub Actions:
 
 | Marker | What it establishes |
 | --- | --- |
-| `VANTAOS_BOOT_OK` | Initialization reached the OS run path and emitted its boot marker. |
+| `VANTAOS_BOOT_INFO_ADAPTER_OK` | The versioned boot-info header has the expected magic/version/size; Multiboot memory ranges and framebuffer fields normalize correctly; malformed map entries and null arguments are rejected; and the live GRUB handoff was normalized. |
+
+| Marker | What it establishes |
+| --- | --- |
 | `VANTAOS_PMM_ALLOCATOR_OK` | The physical allocator is initialized; two distinct aligned frames are allocated; invalid and duplicate frees are rejected; and free/used accounting returns to baseline. |
 | `VANTAOS_HEAP_ALLOCATOR_OK` | The heap is initialized; aligned allocations preserve test data; invalid and duplicate frees are rejected; and usage accounting returns to baseline. |
 | `VANTAOS_PROCESS_API_GUARDS_OK` | Selected invalid process API arguments are rejected. |

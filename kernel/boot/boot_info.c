@@ -6,6 +6,13 @@
 extern char _start;
 extern char end;
 
+static void clear_bytes(void* pointer, size_t length)
+{
+    uint8_t* bytes = (uint8_t*)pointer;
+    for (size_t i = 0; i < length; i++)
+        bytes[i] = 0;
+}
+
 static uint32_t normalize_memory_type(uint32_t multiboot_type)
 {
     switch (multiboot_type)
@@ -31,7 +38,7 @@ int vanta_boot_info_from_multiboot(
     if (!mbd || !out_info)
         return 0;
 
-    *out_info = (vanta_boot_info_t){0};
+    clear_bytes(out_info, sizeof(*out_info));
     out_info->magic = VANTA_BOOT_INFO_MAGIC;
     out_info->struct_size = (uint32_t)sizeof(*out_info);
     out_info->version = VANTA_BOOT_INFO_VERSION;

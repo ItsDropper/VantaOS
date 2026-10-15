@@ -24,8 +24,6 @@ int graphics_files_window_y(void)
     return (int)framebuffer_height / 2 - 240;
 }
 
-}
-
 void graphics_draw_panel(int x, int y, int w, int h)
 {
     /* Modern, low-contrast window surface with a restrained blue edge. */

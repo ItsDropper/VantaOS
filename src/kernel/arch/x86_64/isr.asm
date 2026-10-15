@@ -96,16 +96,17 @@ process_entry_trampoline:
 ; for a normal SysV C call. Keep one padding qword with the saved context
 ; so every C call made from a hardware IRQ has the ABI-required alignment.
 ;
-; Saved context layout:
+; IRQ saved context layout (before the CPU return frame):
 ;   +0   padding
-;   +8   rax
+;   +8   r15
+;   +16  r14
 ;   ...
-;   +112 r15
-;   +120 RIP
-;   +128 CS
-;   +136 RFLAGS
-;   +144 RSP (only on privilege transition)
-;   +152 SS  (only on privilege transition)
+;   +120 rax
+;   +128 RIP
+;   +136 CS
+;   +144 RFLAGS
+;   +152 RSP (only on privilege transition)
+;   +160 SS  (only on privilege transition)
 %macro SAVE_IRQ_ALL 0
     SAVE_ALL
     push qword 0

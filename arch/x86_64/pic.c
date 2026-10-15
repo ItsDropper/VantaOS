@@ -1,4 +1,5 @@
 #include "pic.h"
+#include "apic.h"
 
 #include <stdint.h>
 
@@ -29,7 +30,19 @@ void pic_remap(void)
 
 void pic_send_eoi(unsigned int irq)
 {
+    if (apic_is_enabled())
+    {
+        apic_send_eoi();
+        return;
+    }
+
     if (irq >= 8)
         outb(PIC2_COMMAND, PIC_EOI);
     outb(PIC1_COMMAND, PIC_EOI);
+}
+
+void pic_mask_all(void)
+{
+    outb(PIC1_DATA, 0xFF);
+    outb(PIC2_DATA, 0xFF);
 }

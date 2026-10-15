@@ -75,5 +75,5 @@ This roadmap prioritizes a trustworthy kernel over visual features. A Windows al
 
 - Backup branch: `backup/pre-desktop-reliability-2026-10-15`.
 - Work branch: `work/kernel-reliability-2026-10-15`.
-- Two code-level fixes are on the work branch: process-name copying no longer reads and increments the index in one expression, and the process-return trampoline no longer disables timer interrupts before waiting.
+- Three code-level fixes are on the work branch: process-name copying avoids an unsequenced index read/write, the process-return trampoline leaves timer interrupts enabled so the scheduler can run, and stack validation accepts the actual same-privilege long-mode IRQ frame instead of assuming RSP/SS are pushed on every interrupt.
 - These fixes are **not yet build- or boot-verified**. CI and runtime testing are the next evidence required.

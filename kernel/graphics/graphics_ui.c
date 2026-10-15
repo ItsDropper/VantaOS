@@ -26,6 +26,16 @@ int graphics_files_window_y(void)
 
 }
 
+void graphics_draw_panel(int x, int y, int w, int h)
+{
+    /* Modern, low-contrast window surface with a restrained blue edge. */
+    graphics_fill_rounded_rect(x + 7, y + 9, w, h, 12, 0x0006090F);
+    graphics_fill_rounded_rect(x, y, w, h, 12, 0x00151B25);
+    graphics_fill_rounded_rect(x, y, w, 46, 12, 0x001D2633);
+    graphics_fill_rect(x + 1, y + 45, w - 2, 1, 0x00293443);
+    graphics_fill_rect(x + 18, y + 45, 44, 2, 0x004B9CFF);
+}
+
 void graphics_draw_taskbar(int taskbar_y, int width)
 {
     int center = width / 2;

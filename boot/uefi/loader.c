@@ -571,6 +571,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* system_tab
         return EFI_LOAD_ERROR;
     }
 
+    __asm__ volatile ("cli");
     serial_write("VANTAOS_UEFI_EXIT_BOOT_SERVICES_OK\n");
     serial_write("VANTAOS_UEFI_KERNEL_HANDOFF\n");
 

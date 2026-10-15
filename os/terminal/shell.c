@@ -12,14 +12,14 @@ unsigned int shell_history_position;
 char shell_history_draft[SHELL_BUFFER_SIZE];
 unsigned int shell_history_draft_length;
 
-multiboot_info_t* multiboot_info;
+const vanta_boot_info_t* boot_info;
 int pmm_initialized;
 int pci_initialized;
 char shell_cwd[FS_PATH_MAX] = "/";
 
-void shell_set_multiboot_info(multiboot_info_t* mbd)
+void shell_set_boot_info(const vanta_boot_info_t* info)
 {
-    multiboot_info = mbd;
+    boot_info = info;
 }
 
 void shell_initialize(void)

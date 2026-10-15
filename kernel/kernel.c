@@ -2,7 +2,7 @@
 #include "gdt.h"
 #include "heap.h"
 #include "interrupts.h"
-#include "multiboot.h"
+#include "boot_info_multiboot.h"
 #include "os.h"
 #include "paging.h"
 #include "pci.h"
@@ -105,12 +105,12 @@ static void boot_info_adapter_probe(void)
 }
 #endif
 
-static void kernel_initialize(multiboot_info_t* mbd)
+static void kernel_initialize(const vanta_boot_info_t* boot_info)
 {
     gdt_initialize();
     boot_gdt = read_tsc();
 
-    pmm_initialize(mbd);
+    pmm_initialize(boot_info);
     interrupts_initialize();
     boot_interrupts = read_tsc();
 
@@ -146,7 +146,7 @@ void kernel_main(multiboot_info_t* mbd)
     boot_info_adapter_probe();
 #endif
 
-    kernel_initialize(mbd);
+    kernel_initialize(&normalized_boot_info);
     serial_write("VANTAOS: kernel initialized\n");
     kernel_start_os(mbd);
 }

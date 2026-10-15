@@ -2,6 +2,8 @@
 
 #include "acpi.h"
 #include "apic.h"
+#include "gdt.h"
+#include "idt.h"
 #include "paging.h"
 #include "serial.h"
 
@@ -40,6 +42,10 @@ static int find_cpu_index(const acpi_platform_info_t* info, uint32_t apic_id)
 
 _Noreturn void smp_ap_entry(uint32_t apic_id)
 {
+    /* Replace the trampoline GDT with the kernel's long-mode GDT and IDT. */
+    gdt_initialize();
+    idt_load();
+
     const acpi_platform_info_t* info = apic_get_platform_info();
     int index = info ? find_cpu_index(info, apic_id) : -1;
 
@@ -75,6 +81,11 @@ static int start_secondary_cpus(const acpi_platform_info_t* info)
     mailbox->entry = (uintptr_t)&smp_ap_entry;
 
     uint32_t bsp_id = apic_get_bsp_id();
+    if (find_cpu_index(info, bsp_id) < 0)
+    {
+        serial_write("VANTAOS_SMP_BSP_NOT_IN_MADT_FAIL\n");
+        return 0;
+    }
     unsigned int online_count = 1U;
 
     for (uint32_t i = 0; i < info->cpu_count; i++)

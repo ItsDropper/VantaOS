@@ -173,6 +173,95 @@ static void pmm_boot_info_probe(void)
 }
 #endif
 
+
+#ifdef VANTAOS_SELF_TEST
+static void user_mapping_probe(void)
+{
+    paging_address_space_t* space = paging_create_address_space();
+    void* writable_frame = pmm_alloc_block();
+    void* readonly_frame = pmm_alloc_block();
+    int ok = space != NULL && writable_frame != NULL &&
+             readonly_frame != NULL;
+    int writable_mapped = 0;
+    int readonly_mapped = 0;
+
+    if (ok)
+    {
+        writable_mapped = paging_map_user_page(
+            space, (uintptr_t)PAGING_USER_BASE,
+            (uintptr_t)writable_frame, 1);
+        readonly_mapped = paging_map_user_page(
+            space, (uintptr_t)(PAGING_USER_BASE + PAGE_SIZE),
+            (uintptr_t)readonly_frame, 0);
+
+        ok = writable_mapped && readonly_mapped;
+        ok = !paging_map_user_page(
+            space, (uintptr_t)PAGING_USER_BASE,
+            (uintptr_t)writable_frame, 1) && ok;
+        ok = !paging_map_user_page(
+            space, (uintptr_t)(PAGING_USER_BASE + 1U),
+            (uintptr_t)writable_frame, 1) && ok;
+        ok = !paging_map_user_page(
+            space, (uintptr_t)0x100000U,
+            (uintptr_t)writable_frame, 1) && ok;
+    }
+
+    if (space && ok)
+    {
+        paging_switch_address_space(space);
+        ok = paging_get_current_address_space() == space && ok;
+        ok = paging_get_physical(
+            (uintptr_t)(PAGING_USER_BASE + 64U)) ==
+            (uintptr_t)writable_frame + 64U && ok;
+        ok = (paging_get_page_flags(
+            (uintptr_t)PAGING_USER_BASE) &
+            (PAGE_PRESENT | PAGE_USER | PAGE_WRITE)) ==
+            (PAGE_PRESENT | PAGE_USER | PAGE_WRITE) && ok;
+        ok = (paging_get_page_flags(
+            (uintptr_t)(PAGING_USER_BASE + PAGE_SIZE)) &
+            (PAGE_PRESENT | PAGE_USER)) ==
+            (PAGE_PRESENT | PAGE_USER) && ok;
+        ok = (paging_get_page_flags(
+            (uintptr_t)(PAGING_USER_BASE + PAGE_SIZE)) &
+            PAGE_WRITE) == 0 && ok;
+
+        if (ok)
+        {
+            volatile uint64_t* user_word =
+                (volatile uint64_t*)(uintptr_t)(PAGING_USER_BASE + 64U);
+            *user_word = 0x56414E5441555345ULL;
+            ok = *user_word == 0x56414E5441555345ULL;
+        }
+    }
+
+    if (space)
+    {
+        if (paging_get_current_address_space() == space)
+        {
+            if (writable_mapped)
+                ok = paging_unmap_user_page(
+                    space, (uintptr_t)PAGING_USER_BASE) && ok;
+            if (readonly_mapped)
+                ok = paging_unmap_user_page(
+                    space, (uintptr_t)(PAGING_USER_BASE + PAGE_SIZE)) && ok;
+            ok = paging_get_physical(
+                (uintptr_t)PAGING_USER_BASE) == 0 && ok;
+            paging_switch_address_space(paging_get_kernel_address_space());
+        }
+        paging_destroy_address_space(space);
+    }
+
+    if (writable_frame)
+        pmm_free_block(writable_frame);
+    if (readonly_frame)
+        pmm_free_block(readonly_frame);
+
+    serial_write(ok ?
+        "VANTAOS_USER_MAPPING_OK\n" :
+        "VANTAOS_USER_MAPPING_FAIL\n");
+}
+#endif
+
 static void kernel_initialize(const vanta_boot_info_t* boot_info)
 {
     gdt_initialize();
@@ -183,6 +272,9 @@ static void kernel_initialize(const vanta_boot_info_t* boot_info)
     boot_interrupts = read_tsc();
 
     paging_initialize();
+#ifdef VANTAOS_SELF_TEST
+    user_mapping_probe();
+#endif
     pci_initialize();
     ata_initialize();
     heap_initialize();

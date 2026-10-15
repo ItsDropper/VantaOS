@@ -1,6 +1,4 @@
-# VantaOS top-level build orchestrator.
-# Subsystems declare sources in nearby Makefiles; this file owns build policy.
-
+# VantaOS build orchestrator. Subsystem manifests live beside their code.
 CC       = gcc
 AS       = nasm
 LD       = ld
@@ -16,15 +14,19 @@ ifneq ($(VANTAOS_SELF_TEST),)
 CFLAGS += -DVANTAOS_SELF_TEST
 endif
 
-include src/boot/Makefile
-include src/kernel/Makefile
-include src/os/Makefile
+include arch/x86_64/boot/Makefile
+include arch/Makefile
+include kernel/Makefile
+include mm/Makefile
+include drivers/Makefile
+include fs/Makefile
+include os/Makefile
 
 ASM_SOURCES := $(VANTAOS_BOOT_ASM) $(VANTAOS_ARCH_ASM)
-C_SOURCES   := $(VANTAOS_KERNEL_C) $(VANTAOS_ARCH_C) $(VANTAOS_CORE_C) \
-               $(VANTAOS_DRIVER_C) $(VANTAOS_GRAPHICS_C) \
-               $(VANTAOS_STORAGE_C) $(VANTAOS_OS_C) \
-               $(VANTAOS_TERMINAL_C) $(VANTAOS_DESKTOP_C)
+C_SOURCES   := $(VANTAOS_KERNEL_C) $(VANTAOS_ARCH_C) $(VANTAOS_MM_C) \
+               $(VANTAOS_PROC_C) $(VANTAOS_SCHED_C) $(VANTAOS_TIME_C) \
+               $(VANTAOS_DRIVER_C) $(VANTAOS_GRAPHICS_C) $(VANTAOS_FS_C) \
+               $(VANTAOS_OS_C) $(VANTAOS_TERMINAL_C) $(VANTAOS_DESKTOP_C)
 OBJECTS     := $(patsubst %.asm,$(OBJDIR)/%.o,$(ASM_SOURCES)) \
                $(patsubst %.c,$(OBJDIR)/%.o,$(C_SOURCES))
 DEPFILES    := $(OBJECTS:.o=.d)

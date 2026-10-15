@@ -57,6 +57,14 @@ timeout 12s qemu-system-x86_64 \
 
 Exit code 124 from `timeout` is expected for this smoke test: the guest is expected to remain alive through the test window. After QEMU exits, allow its serial file to flush before checking the markers. An earlier exit, missing marker, or failure marker is a test failure. Inspect `boot.log` when debugging.
 
+## UEFI boot test
+
+The workflow also builds `VantaOS-UEFI.img` and boots it with OVMF. The image contains the removable-media entry point at `EFI/BOOT/BOOTX64.EFI` and the separate `kernel-uefi.elf` at `EFI/VANTA/KERNEL.ELF`.
+
+The UEFI smoke test requires serial markers proving that the loader started, validated and loaded the ELF64 kernel, successfully called `ExitBootServices`, transferred control to the UEFI kernel entry, validated the normalized handoff, and reached `VANTAOS_BOOT_OK`. The original GRUB ISO tests still run independently at 256 MiB and 512 MiB.
+
+This test does not yet establish physical-hardware compatibility or complete removal of legacy Multiboot-shaped metadata from OS services. GRUB remains the fallback until the UEFI path is repeatedly green and malformed-ELF regression tests are added.
+
 ## What is not yet covered
 
 - Exhaustive process-state combinations, sustained preemption stress, race conditions, or long-duration stability.

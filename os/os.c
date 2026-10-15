@@ -8,6 +8,7 @@
 #include "keyboard.h"
 #include "mouse.h"
 #include "process.h"
+#include "pmm.h"
 #include "serial.h"
 #include "scheduler.h"
 #include "shell.h"
@@ -141,6 +142,68 @@ static void process_state_transition_probe(void)
     serial_write("VANTAOS_PROCESS_STATE_TRANSITIONS_OK\n");
 }
 
+
+static void pmm_allocator_probe(void)
+{
+    if (!pmm_is_initialized())
+    {
+        serial_write("VANTAOS_PMM_ALLOCATOR_FAIL\\n");
+        return;
+    }
+
+    uint32_t total_before = pmm_get_total_blocks();
+    uint32_t free_before = pmm_get_free_blocks();
+    uint32_t used_before = pmm_get_used_blocks();
+
+    if (total_before == 0 ||
+        free_before > total_before ||
+        used_before > total_before ||
+        free_before + used_before != total_before)
+    {
+        serial_write("VANTAOS_PMM_ALLOCATOR_FAIL\\n");
+        return;
+    }
+
+    void* first = pmm_alloc_block();
+    void* second = pmm_alloc_block();
+
+    if (!first || !second)
+    {
+        if (first)
+            pmm_free_block(first);
+        if (second)
+            pmm_free_block(second);
+        serial_write("VANTAOS_PMM_ALLOCATOR_FAIL\\n");
+        return;
+    }
+
+    uintptr_t first_address = (uintptr_t)first;
+    uintptr_t second_address = (uintptr_t)second;
+    int ok =
+        first_address != second_address &&
+        (first_address % PAGE_SIZE) == 0 &&
+        (second_address % PAGE_SIZE) == 0 &&
+        pmm_get_free_blocks() + 2U == free_before &&
+        pmm_get_used_blocks() == used_before + 2U;
+
+    pmm_free_block((void*)(first_address + 1U));
+    ok = (pmm_get_free_blocks() + 2U == free_before) && ok;
+
+    pmm_free_block(first);
+    pmm_free_block(second);
+    ok = (pmm_get_free_blocks() == free_before) && ok;
+    ok = (pmm_get_used_blocks() == used_before) && ok;
+
+    /* A second free must not release the same frame twice. */
+    pmm_free_block(first);
+    ok = (pmm_get_free_blocks() == free_before) && ok;
+    ok = (pmm_get_total_blocks() == total_before) && ok;
+
+    serial_write(ok ?
+        "VANTAOS_PMM_ALLOCATOR_OK\\n" :
+        "VANTAOS_PMM_ALLOCATOR_FAIL\\n");
+}
+
 static void heap_allocator_probe(void)
 {
     if (!heap_is_initialized())
@@ -211,6 +274,7 @@ static void heap_allocator_probe(void)
 
 static void scheduler_probe_initialize(void)
 {
+    pmm_allocator_probe();
     heap_allocator_probe();
     filesystem_probe_initialize();
     process_state_transition_probe();

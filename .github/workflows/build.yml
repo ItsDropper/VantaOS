@@ -35,12 +35,18 @@ jobs:
             -drive file=vantaos.img,if=ide,format=raw \
             -boot order=d \
             -display none \
-            -serial none \
+            -serial file:boot.log \
             -monitor none \
             -no-reboot
           result=$?
           if [ "$result" -ne 124 ]; then
             echo "QEMU exited before the smoke-test timeout (exit code $result)."
+            cat boot.log 2>/dev/null || true
             exit 1
           fi
-          echo "QEMU stayed alive for the full smoke-test window; visual boot is not yet asserted."
+          if ! grep -q '^VANTAOS_BOOT_OK' boot.log; then
+            echo "Kernel did not report successful OS initialization."
+            cat boot.log 2>/dev/null || true
+            exit 1
+          fi
+          echo "QEMU stayed alive and the kernel reported VANTAOS_BOOT_OK."

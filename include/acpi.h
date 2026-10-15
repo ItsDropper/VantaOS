@@ -19,7 +19,7 @@ typedef struct
     uint64_t io_apic_address;
     uint32_t io_apic_gsi_base;
     uint8_t io_apic_id;
-    uint8_t cpu_apic_ids[ACPI_MAX_CPUS];
+    uint32_t cpu_apic_ids[ACPI_MAX_CPUS];
     uint32_t cpu_count;
     acpi_irq_override_t overrides[ACPI_MAX_ISO];
     uint32_t override_count;

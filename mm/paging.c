@@ -62,15 +62,18 @@ static uint64_t* table_for(uintptr_t virtual_address)
 
 static int paging_owns_address_space(const paging_address_space_t* space)
 {
-    if (!space || space == &kernel_address_space || !space->used)
+    if (!space || space == &kernel_address_space)
         return 0;
 
     uintptr_t candidate = (uintptr_t)space;
     uintptr_t first = (uintptr_t)&address_spaces[0];
     uintptr_t end = (uintptr_t)&address_spaces[ADDRESS_SPACE_MAX];
 
-    return candidate >= first && candidate < end &&
-           ((candidate - first) % sizeof(address_spaces[0])) == 0;
+    if (candidate < first || candidate >= end ||
+        ((candidate - first) % sizeof(address_spaces[0])) != 0)
+        return 0;
+
+    return space->used != 0;
 }
 
 static uint64_t* allocate_user_table(void)

@@ -44,7 +44,7 @@ jobs:
             cat boot.log 2>/dev/null || true
             exit 1
           fi
-          for marker in VANTAOS_BOOT_OK VANTAOS_SCHEDULER_PROBE_OK VANTAOS_SCHEDULER_REAP_OK; do
+          for marker in VANTAOS_BOOT_OK VANTAOS_PROCESS_API_GUARDS_OK VANTAOS_PROCESS_NAME_OK VANTAOS_SCHEDULER_PROBE_OK VANTAOS_SCHEDULER_REAP_OK; do
             if ! grep -q "^$marker" boot.log; then
               echo "Missing required boot-test marker: $marker"
               cat boot.log 2>/dev/null || true

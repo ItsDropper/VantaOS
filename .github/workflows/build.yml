@@ -43,6 +43,7 @@ jobs:
           set -euo pipefail
           required_markers=(
             VANTAOS_BOOT_OK
+            VANTAOS_PMM_ALLOCATOR_OK
             VANTAOS_HEAP_ALLOCATOR_OK
             VANTAOS_PROCESS_API_GUARDS_OK
             VANTAOS_PROCESS_NAME_OK

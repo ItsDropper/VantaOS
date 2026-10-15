@@ -8,6 +8,10 @@
 #define PAGE_WRITE   0x002U
 #define PAGE_USER    0x004U
 
+/* User mappings live in PML4 slot 1, away from the shared kernel mappings. */
+#define PAGING_USER_BASE 0x0000008000000000ULL
+#define PAGING_USER_END  0x00007FFFFFFFFFFFULL
+
 #define PAGING_KERNEL_DIRECTORY_INDEX 256U
 #define PAGING_GRAPHICS_DIRECTORY_INDEX 832U
 
@@ -20,6 +24,13 @@ typedef struct paging_address_space
 
 void paging_initialize(void);
 int paging_map_page(uintptr_t virtual_address, uintptr_t physical_address);
+int paging_map_user_page(paging_address_space_t* address_space,
+                         uintptr_t virtual_address,
+                         uintptr_t physical_address,
+                         int writable);
+int paging_unmap_user_page(paging_address_space_t* address_space,
+                           uintptr_t virtual_address);
+uint64_t paging_get_page_flags(uintptr_t virtual_address);
 void paging_unmap_page(uintptr_t virtual_address);
 uintptr_t paging_get_physical(uintptr_t virtual_address);
 paging_address_space_t* paging_create_address_space(void);

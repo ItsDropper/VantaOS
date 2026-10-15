@@ -1,0 +1,54 @@
+name: VantaOS build
+
+on:
+  push:
+    branches:
+      - main
+      - work/kernel-reliability-2026-10-15
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install --yes build-essential nasm grub-pc-bin xorriso mtools dosfstools qemu-system-x86
+      - name: Build kernel, ISO, and FAT32 image
+        run: chmod +x build.sh && VANTAOS_SELF_TEST=1 ./build.sh
+      - name: Verify build artifacts
+        run: test -s kernel.bin && test -s VantaOS.iso && test -s vantaos.img
+
+      - name: QEMU boot and process lifecycle regression test
+        shell: bash
+        run: |
+          set +e
+          timeout 8s qemu-system-x86_64 \
+            -machine pc \
+            -m 256M \
+            -drive file=VantaOS.iso,media=cdrom,format=raw \
+            -drive file=vantaos.img,if=ide,format=raw \
+            -boot order=d \
+            -display none \
+            -serial file:boot.log \
+            -monitor none \
+            -no-reboot
+          result=$?
+          if [ "$result" -ne 124 ]; then
+            echo "QEMU exited before the smoke-test timeout (exit code $result)."
+            cat boot.log 2>/dev/null || true
+            exit 1
+          fi
+          for marker in VANTAOS_BOOT_OK VANTAOS_PROCESS_API_GUARDS_OK VANTAOS_PROCESS_NAME_OK VANTAOS_SCHEDULER_PROBE_OK VANTAOS_SCHEDULER_REAP_OK; do
+            if ! grep -q "^$marker" boot.log; then
+              echo "Missing required boot-test marker: $marker"
+              cat boot.log 2>/dev/null || true
+              exit 1
+            fi
+          done
+          echo "Boot reached the OS, scheduled a kernel process, and reaped it successfully."

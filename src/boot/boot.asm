@@ -6,8 +6,9 @@ global multiboot_header
 
 multiboot_header:
     dd 0x1BADB002
-    dd 0x00000000
-    dd -(0x1BADB002 + 0x00000000)
+    ; Request Multiboot memory information for the physical memory manager.
+    dd 0x00000002
+    dd -(0x1BADB002 + 0x00000002)
 
 section .text.start
 align 16
@@ -22,9 +23,11 @@ _start:
 
     ; Build the IA-32e page hierarchy while still in protected mode.
     xor eax, eax
-    mov ecx, 512
+    ; Clear the three 4 KiB paging structures using 32-bit stores.
+    ; STOSQ is not encodable until the CPU enters 64-bit mode.
+    mov ecx, 3072
     mov edi, pml4_table
-    rep stosq
+    rep stosd
 
     mov eax, pdpt_table
     or eax, 0x003

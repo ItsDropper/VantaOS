@@ -11,7 +11,7 @@ extern unsigned char _kernel_text_end;
 struct descriptor_pointer
 {
     unsigned short limit;
-    unsigned int base;
+    uint64_t base;
 } __attribute__((packed));
 
 static void draw_hex(int x, int y, uintptr_t value)
@@ -76,17 +76,17 @@ static void draw_execution_context(
 {
     graphics_draw_text(x, y, "CPU CONTEXT", 0x00F2F5F8, 1);
 
-    draw_field(x, y + 16, "EIP", frame->eip);
+    draw_field(x, y + 16, "RIP", frame->rip);
     draw_field(x, y + 32, "CS", frame->cs);
-    draw_field(x, y + 48, "EFLAGS", frame->eflags);
-    draw_field(x, y + 64, "SAVED ESP", frame->esp);
-    draw_field(x, y + 80, "EAX", frame->eax);
-    draw_field(x, y + 96, "EBX", frame->ebx);
-    draw_field(x, y + 112, "ECX", frame->ecx);
-    draw_field(x, y + 128, "EDX", frame->edx);
-    draw_field(x, y + 144, "ESI", frame->esi);
-    draw_field(x, y + 160, "EDI", frame->edi);
-    draw_field(x, y + 176, "EBP", frame->ebp);
+    draw_field(x, y + 48, "RFLAGS", frame->rflags);
+    draw_field(x, y + 64, "INTERRUPTED RSP", (uintptr_t)frame + 19U * sizeof(uint64_t));
+    draw_field(x, y + 80, "RAX", frame->rax);
+    draw_field(x, y + 96, "RBX", frame->rbx);
+    draw_field(x, y + 112, "RCX", frame->rcx);
+    draw_field(x, y + 128, "RDX", frame->rdx);
+    draw_field(x, y + 144, "RSI", frame->rsi);
+    draw_field(x, y + 160, "RDI", frame->rdi);
+    draw_field(x, y + 176, "RBP", frame->rbp);
 }
 
 static void draw_process_context(
@@ -124,8 +124,8 @@ static void draw_process_context(
     draw_field(x, y + 96, "ENTRY", (uint32_t)(uintptr_t)process->entry);
     draw_field(x, y + 112, "KSTACK", (uint32_t)(uintptr_t)process->kernel_stack);
 
-    if (frame->eip < (uint32_t)(uintptr_t)&_start ||
-        frame->eip >= (uint32_t)(uintptr_t)&_end)
+    if (frame->rip < (uintptr_t)&_start ||
+        frame->rip >= (uintptr_t)&_end)
     {
         graphics_draw_text(
             x, y + 128,
@@ -134,8 +134,8 @@ static void draw_process_context(
         );
     }
     else if (
-        frame->eip >= (uint32_t)(uintptr_t)&_kernel_text_start &&
-        frame->eip < (uint32_t)(uintptr_t)&_kernel_text_end)
+        frame->rip >= (uintptr_t)&_kernel_text_start &&
+        frame->rip < (uintptr_t)&_kernel_text_end)
     {
         graphics_draw_text(
             x, y + 128,
@@ -163,7 +163,7 @@ static void draw_instruction_diagnostics(
     uintptr_t image_end = (uintptr_t)&_end;
     uintptr_t text_start = (uintptr_t)&_kernel_text_start;
     uintptr_t text_end = (uintptr_t)&_kernel_text_end;
-    uintptr_t eip = (uintptr_t)frame->eip;
+    uintptr_t eip = (uintptr_t)frame->rip;
 
     graphics_draw_text(
         x, y,
@@ -223,7 +223,7 @@ static void draw_instruction_diagnostics(
         );
     }
 
-    draw_field(x, y + 144, "EIP", frame->eip);
+    draw_field(x, y + 144, "RIP", frame->rip);
 }
 
 static void draw_machine_state(int x, int y)
@@ -279,97 +279,45 @@ static void draw_raw_frame(
         0x00F2F5F8, 1
     );
 
-    draw_field(x, y + 16, "EDI", frame->edi);
-    draw_field(x, y + 32, "ESI", frame->esi);
-    draw_field(x, y + 48, "EBP", frame->ebp);
-    draw_field(x, y + 64, "ESP", frame->esp);
-    draw_field(x, y + 80, "EBX", frame->ebx);
-    draw_field(x, y + 96, "EDX", frame->edx);
-    draw_field(x, y + 112, "ECX", frame->ecx);
-    draw_field(x, y + 128, "EAX", frame->eax);
+    draw_field(x, y + 16, "RDI", frame->rdi);
+    draw_field(x, y + 32, "RSI", frame->rsi);
+    draw_field(x, y + 48, "RBP", frame->rbp);
+    draw_field(x, y + 64, "RSP", (uintptr_t)frame + 19U * sizeof(uint64_t));
+    draw_field(x, y + 80, "RBX", frame->rbx);
+    draw_field(x, y + 96, "RDX", frame->rdx);
+    draw_field(x, y + 112, "RCX", frame->rcx);
+    draw_field(x, y + 128, "RAX", frame->rax);
     draw_field(x, y + 144, "ERROR", frame->error_code);
-    draw_field(x, y + 160, "EIP", frame->eip);
+    draw_field(x, y + 160, "RIP", frame->rip);
     draw_field(x, y + 176, "CS", frame->cs);
     draw_field(x, y + 192, "FLAGS", frame->eflags);
-    draw_field(x, y + 208, "FRAME PTR", (uint32_t)(uintptr_t)frame);
+    draw_field(x, y + 208, "FRAME PTR", (uintptr_t)frame);
 }
 
-static void draw_interrupted_stack(
+static void draw_stack_summary(
     int x,
     int y,
-    unsigned int exception_number,
     const struct exception_frame* frame
 )
 {
     graphics_draw_text(
         x, y,
-        "INTERRUPTED STACK",
+        "STACK SUMMARY",
         0x00F2F5F8, 1
     );
 
     /*
-     * frame->esp is the original ESP captured by PUSHA, immediately
-     * after the exception stub pushed its error-code word.
-     * The CPU exception frame is therefore 4 bytes below it.
-     *
-     * For a no-error exception the original interrupted ESP is
-     * frame->esp + 16: 4 bytes for the synthetic error code and
-     * 12 bytes for EIP/CS/EFLAGS.
+     * Do not dereference arbitrary stack addresses while handling a fault:
+     * a second page fault during diagnostics can hide the original failure.
+     * For same-privilege exceptions, the interrupted RSP follows the 19
+     * qwords saved by the CPU and exception stub.
      */
-    unsigned int interrupted_esp = frame->esp + 16U;
-
-    draw_field(x, y + 16, "INTERRUPTED ESP", interrupted_esp);
+    draw_field(x, y + 16, "FRAME ADDRESS", (uintptr_t)frame);
     draw_field(
         x, y + 32,
-        "STACK EIP",
-        *(volatile unsigned int*)(interrupted_esp - 12U)
+        "INTERRUPTED RSP",
+        (uintptr_t)frame + 19U * sizeof(uint64_t)
     );
-    draw_field(
-        x, y + 48,
-        "STACK CS",
-        *(volatile unsigned int*)(interrupted_esp - 8U)
-    );
-    draw_field(
-        x, y + 64,
-        "STACK FLAGS",
-        *(volatile unsigned int*)(interrupted_esp - 4U)
-    );
-
-    draw_field(
-        x, y + 80,
-        "ESP +00",
-        *(volatile unsigned int*)(interrupted_esp)
-    );
-    draw_field(
-        x, y + 96,
-        "ESP +04",
-        *(volatile unsigned int*)(interrupted_esp + 4U)
-    );
-    draw_field(
-        x, y + 112,
-        "ESP +08",
-        *(volatile unsigned int*)(interrupted_esp + 8U)
-    );
-    draw_field(
-        x, y + 128,
-        "ESP +0C",
-        *(volatile unsigned int*)(interrupted_esp + 12U)
-    );
-
-    unsigned int found = 0;
-    for (unsigned int i = 0; i < 32; i++)
-    {
-        unsigned int value =
-            *(volatile unsigned int*)(interrupted_esp + i * 4U);
-
-        if (value == frame->eip)
-        {
-            found = interrupted_esp + i * 4U;
-            break;
-        }
-    }
-
-    draw_field(x, y + 144, "EIP ON STACK", found);
 }
 
 void fault_trace_draw(
@@ -412,5 +360,5 @@ void fault_trace_draw(
 
     draw_machine_state(x, lower_y);
     draw_raw_frame(right_x, lower_y, frame);
-    draw_interrupted_stack(right_x, lower_y + 218, exception_number, frame);
+    draw_stack_summary(right_x, lower_y + 218, frame);
 }

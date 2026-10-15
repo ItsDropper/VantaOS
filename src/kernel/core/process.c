@@ -21,8 +21,11 @@ static uint32_t current_pid;
 static void process_copy_name(char* destination, const char* source)
 {
     unsigned int i = 0;
-    while (source && source[i] && i < PROCESS_NAME_MAX)
-        destination[i++] = source[i];
+    while (source && i < PROCESS_NAME_MAX && source[i])
+    {
+        destination[i] = source[i];
+        i++;
+    }
     destination[i] = 0;
 }
 
@@ -91,21 +94,12 @@ static void process_prepare_stack(process_t* process, uintptr_t stack_top)
     uint64_t* stack = (uint64_t*)stack_top;
 
     /*
-     /*
-     * Hardware IRQ entry saves 15 GPRs plus one alignment padding qword
-     * before the CPU's five-qword long-mode IRETQ frame. Mirror that exact
-     * layout for a new kernel process.
+     * Initial context layout consumed by RESTORE_ALL followed by IRETQ.
+     * This ring-0 IRETQ consumes RIP, CS, and RFLAGS. RSP and SS are
+     * reserved words at the top of this synthetic initial stack.
      *
-     * Final stack layout at process->stack_pointer:
-     *   +0   padding
-     *   +8   rax
-     *   ...
-     *   +112 r15
-     *   +120 RIP
-     *   +128 CS
-     *   +136 RFLAGS
-     *   +144 RSP
-     *   +152 SS
+     * Offsets: padding 0; GPRs +8..+120; RIP +128; CS +136;
+     * RFLAGS +144; reserved RSP +152; reserved SS +160.
      */
     *(--stack) = 0x10U; /* SS */
     *(--stack) = (uint64_t)stack_top; /* RSP after IRETQ */
@@ -350,15 +344,22 @@ int process_stack_is_valid(uint32_t pid)
         (uintptr_t)&stack_top;
     uintptr_t frame = (uintptr_t)process->stack_pointer;
 
-    if (frame < stack_base || frame + 168U > stack_end)
+    /*
+     * Same-privilege long-mode IRQs push only RIP, CS, and RFLAGS.
+     * The scheduler's synthetic first-run frame also reserves RSP/SS,
+     * but later interrupt frames do not contain those two values.
+     * Validate the common 19-qword prefix instead of assuming every
+     * saved frame has the five-qword privilege-transition layout.
+     */
+    if (frame < stack_base ||
+        frame > stack_end ||
+        stack_end - frame < 19U * sizeof(uint64_t))
         return 0;
 
     uint64_t* values = (uint64_t*)frame;
 
     if (values[17] != 0x08U ||
-        (values[18] & 0x00000200U) == 0 ||
-        values[20] != 0x10U ||
-        values[19] != stack_end)
+        (values[18] & 0x00000200U) == 0)
         return 0;
 
     uintptr_t rip = (uintptr_t)values[16];

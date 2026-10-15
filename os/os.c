@@ -68,6 +68,12 @@ static void filesystem_probe_initialize(void)
         int drivers_upper = filesystem_lookup("/SYSTEM/DRIVERS");
         int ata_lower = filesystem_lookup("/system/drivers/ata.sys");
         int ata_upper = filesystem_lookup("/SYSTEM/DRIVERS/ATA.SYS");
+        int keyboard_lfn = filesystem_lookup("/system/devices/keyboard0.dev");
+        int config_lfn = filesystem_lookup("/etc/system.conf");
+        const fs_node_t* keyboard_node = keyboard_lfn >= 0 ?
+            filesystem_get_node((uint32_t)keyboard_lfn) : NULL;
+        const fs_node_t* config_node = config_lfn >= 0 ?
+            filesystem_get_node((uint32_t)config_lfn) : NULL;
 
         fat32_namespace_ok =
             system_lower >= 0 &&
@@ -75,7 +81,11 @@ static void filesystem_probe_initialize(void)
             drivers_lower >= 0 &&
             drivers_lower == drivers_upper &&
             ata_lower >= 0 &&
-            ata_lower == ata_upper;
+            ata_lower == ata_upper &&
+            keyboard_node &&
+            keyboard_node->size > 0 &&
+            config_node &&
+            config_node->size > 0;
     }
 
     if (!filesystem_is_initialized() ||

@@ -1,2 +1,3 @@
 # Multiboot entry and early boot assembly.
-VANTAOS_BOOT_ASM := arch/x86_64/boot/boot.asm
+VANTAOS_BOOT_ASM := arch/x86_64/boot/boot.asm \
+                     arch/x86_64/boot/uefi_entry.asm

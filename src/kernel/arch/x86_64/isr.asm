@@ -91,23 +91,21 @@ process_entry_trampoline:
     pop r15
 %endmacro
 
-/*
- * Long-mode interrupt delivery aligns RSP to 16 bytes before building
- * the CPU return frame. SAVE_ALL pushes 15 qwords, leaving RSP misaligned
- * for a normal SysV C call. Keep one padding qword with the saved context
- * so every C call made from a hardware IRQ has the ABI-required alignment.
- *
- * The saved context layout becomes:
- *   +0   padding
- *   +8   rax
- *   ...
- *   +112 r15
- *   +120 RIP
- *   +128 CS
- *   +136 RFLAGS
- *   +144 RSP
- *   +152 SS
- */
+; Long-mode interrupt delivery aligns RSP to 16 bytes before building
+; the CPU return frame. SAVE_ALL pushes 15 qwords, leaving RSP misaligned
+; for a normal SysV C call. Keep one padding qword with the saved context
+; so every C call made from a hardware IRQ has the ABI-required alignment.
+;
+; Saved context layout:
+;   +0   padding
+;   +8   rax
+;   ...
+;   +112 r15
+;   +120 RIP
+;   +128 CS
+;   +136 RFLAGS
+;   +144 RSP (only on privilege transition)
+;   +152 SS  (only on privilege transition)
 %macro SAVE_IRQ_ALL 0
     SAVE_ALL
     push qword 0
@@ -115,7 +113,7 @@ process_entry_trampoline:
 
 %macro RESTORE_IRQ_ALL 0
     pop rax
-    /* discard the IRQ alignment padding */
+    ; Discard the IRQ alignment padding
     RESTORE_ALL
 %endmacro
 

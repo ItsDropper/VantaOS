@@ -352,15 +352,22 @@ int process_stack_is_valid(uint32_t pid)
         (uintptr_t)&stack_top;
     uintptr_t frame = (uintptr_t)process->stack_pointer;
 
-    if (frame < stack_base || frame + 168U > stack_end)
+    /*
+     * Same-privilege long-mode IRQs push only RIP, CS, and RFLAGS.
+     * The scheduler's synthetic first-run frame also reserves RSP/SS,
+     * but later interrupt frames do not contain those two values.
+     * Validate the common 19-qword prefix instead of assuming every
+     * saved frame has the five-qword privilege-transition layout.
+     */
+    if (frame < stack_base ||
+        frame > stack_end ||
+        stack_end - frame < 19U * sizeof(uint64_t))
         return 0;
 
     uint64_t* values = (uint64_t*)frame;
 
     if (values[17] != 0x08U ||
-        (values[18] & 0x00000200U) == 0 ||
-        values[20] != 0x10U ||
-        values[19] != stack_end)
+        (values[18] & 0x00000200U) == 0)
         return 0;
 
     uintptr_t rip = (uintptr_t)values[16];

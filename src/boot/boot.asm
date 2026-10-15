@@ -22,9 +22,11 @@ _start:
 
     ; Build the IA-32e page hierarchy while still in protected mode.
     xor eax, eax
-    mov ecx, 512
+    ; Clear the three 4 KiB paging structures using 32-bit stores.
+    ; STOSQ is not encodable until the CPU enters 64-bit mode.
+    mov ecx, 3072
     mov edi, pml4_table
-    rep stosq
+    rep stosd
 
     mov eax, pdpt_table
     or eax, 0x003

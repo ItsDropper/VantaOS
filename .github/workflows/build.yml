@@ -20,7 +20,7 @@ jobs:
       - name: Install build dependencies
         run: sudo apt-get update && sudo apt-get install --yes build-essential nasm grub-pc-bin xorriso mtools dosfstools qemu-system-x86
       - name: Build kernel, ISO, and FAT32 image
-        run: chmod +x build.sh && ./build.sh
+        run: chmod +x build.sh && VANTAOS_SELF_TEST=1 ./build.sh
       - name: Verify build artifacts
         run: test -s kernel.bin && test -s VantaOS.iso && test -s vantaos.img
 
@@ -44,9 +44,11 @@ jobs:
             cat boot.log 2>/dev/null || true
             exit 1
           fi
-          if ! grep -q '^VANTAOS_BOOT_OK' boot.log; then
-            echo "Kernel did not report successful OS initialization."
-            cat boot.log 2>/dev/null || true
-            exit 1
-          fi
-          echo "QEMU stayed alive and the kernel reported VANTAOS_BOOT_OK."
+          for marker in VANTAOS_BOOT_OK VANTAOS_SCHEDULER_PROBE_OK VANTAOS_SCHEDULER_REAP_OK; do
+            if ! grep -q "^$marker" boot.log; then
+              echo "Missing required boot-test marker: $marker"
+              cat boot.log 2>/dev/null || true
+              exit 1
+            fi
+          done
+          echo "Boot reached the OS, scheduled a kernel process, and reaped it successfully."

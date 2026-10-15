@@ -147,7 +147,7 @@ static void pmm_allocator_probe(void)
 {
     if (!pmm_is_initialized())
     {
-        serial_write("VANTAOS_PMM_ALLOCATOR_FAIL\\n");
+        serial_write("VANTAOS_PMM_ALLOCATOR_FAIL\n");
         return;
     }
 
@@ -160,7 +160,7 @@ static void pmm_allocator_probe(void)
         used_before > total_before ||
         free_before + used_before != total_before)
     {
-        serial_write("VANTAOS_PMM_ALLOCATOR_FAIL\\n");
+        serial_write("VANTAOS_PMM_ALLOCATOR_FAIL\n");
         return;
     }
 
@@ -173,7 +173,7 @@ static void pmm_allocator_probe(void)
             pmm_free_block(first);
         if (second)
             pmm_free_block(second);
-        serial_write("VANTAOS_PMM_ALLOCATOR_FAIL\\n");
+        serial_write("VANTAOS_PMM_ALLOCATOR_FAIL\n");
         return;
     }
 
@@ -200,8 +200,8 @@ static void pmm_allocator_probe(void)
     ok = (pmm_get_total_blocks() == total_before) && ok;
 
     serial_write(ok ?
-        "VANTAOS_PMM_ALLOCATOR_OK\\n" :
-        "VANTAOS_PMM_ALLOCATOR_FAIL\\n");
+        "VANTAOS_PMM_ALLOCATOR_OK\n" :
+        "VANTAOS_PMM_ALLOCATOR_FAIL\n");
 }
 
 static void heap_allocator_probe(void)

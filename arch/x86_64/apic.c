@@ -190,6 +190,55 @@ int apic_initialize(void)
     return 1;
 }
 
+static void apic_delay(volatile uint32_t iterations)
+{
+    while (iterations--)
+        __asm__ volatile ("pause");
+}
+
+static int apic_send_ipi(uint32_t destination, uint32_t command)
+{
+    if (!enabled || !lapic || destination > 255U)
+        return 0;
+
+    uint32_t timeout = 1000000U;
+    while ((lapic_read(0x300U) & (1U << 12)) != 0 && timeout--)
+        __asm__ volatile ("pause");
+    if (timeout == 0)
+        return 0;
+
+    lapic_write(0x310U, destination << 24);
+    lapic_write(0x300U, command);
+
+    timeout = 1000000U;
+    while ((lapic_read(0x300U) & (1U << 12)) != 0 && timeout--)
+        __asm__ volatile ("pause");
+    return timeout != 0;
+}
+
+uint32_t apic_get_bsp_id(void)
+{
+    return enabled && lapic ? lapic_read(LAPIC_ID) >> 24 : 0U;
+}
+
+int apic_send_init_sipi(uint32_t apic_id, uint8_t startup_vector)
+{
+    if (!enabled || startup_vector == 0)
+        return 0;
+
+    /* INIT assert, INIT deassert, then two SIPIs as required by xAPIC startup. */
+    if (!apic_send_ipi(apic_id, 0x0000C500U))
+        return 0;
+    apic_delay(10000000U);
+    if (!apic_send_ipi(apic_id, 0x00008500U))
+        return 0;
+    apic_delay(10000000U);
+    if (!apic_send_ipi(apic_id, 0x00000600U | startup_vector))
+        return 0;
+    apic_delay(200000U);
+    return apic_send_ipi(apic_id, 0x00000600U | startup_vector);
+}
+
 int apic_is_enabled(void)
 {
     return enabled;

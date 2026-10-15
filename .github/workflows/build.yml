@@ -107,10 +107,24 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          code_firmware=/usr/share/OVMF/OVMF_CODE.fd
-          vars_template=/usr/share/OVMF/OVMF_VARS.fd
-          test -s "$code_firmware"
-          test -s "$vars_template"
+          code_firmware=""
+          vars_template=""
+          for suffix in "" "_4M"; do
+            code_candidate="/usr/share/OVMF/OVMF_CODE${suffix}.fd"
+            vars_candidate="/usr/share/OVMF/OVMF_VARS${suffix}.fd"
+            if [ -s "$code_candidate" ] && [ -s "$vars_candidate" ]; then
+              code_firmware="$code_candidate"
+              vars_template="$vars_candidate"
+              break
+            fi
+          done
+          if [ -z "$code_firmware" ]; then
+            code_firmware="$(find /usr/share -maxdepth 4 -name 'OVMF_CODE*.fd' -print -quit)"
+            vars_template="${code_firmware/OVMF_CODE/OVMF_VARS}"
+          fi
+          test -n "$code_firmware" && test -s "$code_firmware"
+          test -n "$vars_template" && test -s "$vars_template"
+          echo "Using OVMF firmware: $code_firmware"
           test -s VantaOS-UEFI.img
           cp "$vars_template" OVMF_VARS.fd
 

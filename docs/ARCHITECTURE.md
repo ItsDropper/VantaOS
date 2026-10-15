@@ -4,7 +4,7 @@ This document describes the current prototype, not a promise that every subsyste
 
 ## Boot and initialization
 
-1. `arch/x86_64/boot/boot.asm` provides the Multiboot-compatible entry path and transfers control to the 64-bit kernel.
+1. GRUB loads the kernel through the Multiboot-compatible entry in `arch/x86_64/boot/boot.asm`, which creates early page tables, enters long mode, and transfers control to the kernel. VantaOS does not yet have its own bootloader; see [the bootloader plan](BOOTLOADER_PLAN.md).
 2. `kernel/kernel.c` initializes serial diagnostics, GDT, physical-memory bookkeeping, interrupt infrastructure, paging, PCI/ATA discovery, and heap.
 3. `os/os.c` initializes terminal/input, graphics, filesystem/VFS, process management, scheduler, shell, and desktop components.
 4. The OS draws an initial desktop frame, enables interrupts, writes `VANTAOS_BOOT_OK` to serial, and enters the desktop process loop.

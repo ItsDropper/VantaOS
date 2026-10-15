@@ -14,7 +14,10 @@ static uint64_t kernel_pd[TABLE_ENTRIES] __attribute__((aligned(4096)));
 static uint64_t heap_pd[TABLE_ENTRIES] __attribute__((aligned(4096)));
 static uint64_t high_pd[TABLE_ENTRIES] __attribute__((aligned(4096)));
 static uint64_t heap_pt[TABLE_ENTRIES] __attribute__((aligned(4096)));
-static uint64_t graphics_pt[TABLE_ENTRIES] __attribute__((aligned(4096)));
+/* Eight 4 KiB page tables cover the 16 MiB framebuffer window. */
+#define GRAPHICS_PT_COUNT 8U
+static uint64_t graphics_pt[GRAPHICS_PT_COUNT][TABLE_ENTRIES]
+    __attribute__((aligned(4096)));
 
 static uint64_t address_space_pml4[ADDRESS_SPACE_MAX][TABLE_ENTRIES]
     __attribute__((aligned(4096)));
@@ -44,8 +47,11 @@ static uint64_t* table_for(uintptr_t virtual_address)
     if (pd_index == ((0xC0000000ULL >> 21) & 0x1FFU))
         return heap_pt;
 
-    if (pd_index == ((0xD0000000ULL >> 21) & 0x1FFU))
-        return graphics_pt;
+    {
+        uint64_t first = (0xD0000000ULL >> 21) & 0x1FFU;
+        if (pd_index >= first && pd_index < first + GRAPHICS_PT_COUNT)
+            return graphics_pt[pd_index - first];
+    }
 
     return NULL;
 }
@@ -228,7 +234,8 @@ void paging_initialize(void)
         heap_pd[i] = 0;
         high_pd[i] = 0;
         heap_pt[i] = 0;
-        graphics_pt[i] = 0;
+        for (uint32_t t = 0; t < GRAPHICS_PT_COUNT; t++)
+            graphics_pt[t][i] = 0;
     }
 
     /* Identity-map the first 1 GiB with 2 MiB pages. */
@@ -254,7 +261,9 @@ void paging_initialize(void)
         PAGE_PRESENT | PAGE_WRITE;
 
     map_high_region(high_pd, heap_pt, 0xC0000000ULL);
-    map_high_region(high_pd, graphics_pt, 0xD0000000ULL);
+    for (uint32_t t = 0; t < GRAPHICS_PT_COUNT; t++)
+        map_high_region(high_pd, graphics_pt[t],
+                        0xD0000000ULL + (uint64_t)t * PAGE_2M);
 
     kernel_address_space.directory = kernel_pml4;
     kernel_address_space.directory_physical =

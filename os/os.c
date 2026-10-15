@@ -3,6 +3,7 @@
 #include "desktop.h"
 #include "desktop_process.h"
 #include "filesystem.h"
+#include "fat32.h"
 #include "heap.h"
 #include "graphics.h"
 #include "keyboard.h"
@@ -53,6 +54,30 @@ static void filesystem_probe_initialize(void)
     const fs_node_t* root = root_id >= 0 ?
         vfs_get_node((uint32_t)root_id) : NULL;
 
+    /*
+     * When the CI disk is mounted, prove that case variants resolve to
+     * the same on-disk nodes and that the FAT32 entries remain reachable.
+     * This catches duplicate virtual directories shadowing real directories.
+     */
+    int fat32_namespace_ok = 1;
+    if (fat32_is_mounted())
+    {
+        int system_lower = filesystem_lookup("/system");
+        int system_upper = filesystem_lookup("/SYSTEM");
+        int drivers_lower = filesystem_lookup("/system/drivers");
+        int drivers_upper = filesystem_lookup("/SYSTEM/DRIVERS");
+        int ata_lower = filesystem_lookup("/system/drivers/ata.sys");
+        int ata_upper = filesystem_lookup("/SYSTEM/DRIVERS/ATA.SYS");
+
+        fat32_namespace_ok =
+            system_lower >= 0 &&
+            system_lower == system_upper &&
+            drivers_lower >= 0 &&
+            drivers_lower == drivers_upper &&
+            ata_lower >= 0 &&
+            ata_lower == ata_upper;
+    }
+
     if (!filesystem_is_initialized() ||
         !vfs_is_initialized() ||
         !root ||
@@ -62,7 +87,8 @@ static void filesystem_probe_initialize(void)
         vfs_lookup("/home/user") < 0 ||
         vfs_lookup("/etc") < 0 ||
         vfs_lookup("/__vantaos_ci_missing_entry__") != -1 ||
-        vfs_list((uint32_t)root_id, NULL, 0) < 0)
+        vfs_list((uint32_t)root_id, NULL, 0) < 0 ||
+        !fat32_namespace_ok)
     {
         serial_write("VANTAOS_FILESYSTEM_NAMESPACE_FAIL\n");
         return;

@@ -116,12 +116,32 @@ static int fs_load_directory(uint32_t directory_id)
     return count;
 }
 
+static char fs_fold(char c)
+{
+    return (c >= 'A' && c <= 'Z') ?
+        (char)(c - 'A' + 'a') : c;
+}
+
+static int fs_equals_ci(const char* a, const char* b)
+{
+    unsigned int i = 0;
+
+    while (a[i] && b[i])
+    {
+        if (fs_fold(a[i]) != fs_fold(b[i]))
+            return 0;
+        i++;
+    }
+
+    return a[i] == 0 && b[i] == 0;
+}
+
 static int fs_find_cached_child(uint32_t parent, const char* name)
 {
     for (unsigned int i = 0; i < node_count; i++)
     {
         if (nodes[i].parent == parent &&
-            fs_equals(nodes[i].name, name))
+            fs_equals_ci(nodes[i].name, name))
             return (int)i;
     }
 

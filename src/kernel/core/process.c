@@ -94,20 +94,12 @@ static void process_prepare_stack(process_t* process, uintptr_t stack_top)
     uint64_t* stack = (uint64_t*)stack_top;
 
     /*
-     * Hardware IRQ entry saves 15 GPRs plus one alignment padding qword
-     * before the CPU's five-qword long-mode IRETQ frame. Mirror that exact
-     * layout for a new kernel process.
+     * Initial context layout consumed by RESTORE_ALL followed by IRETQ.
+     * This ring-0 IRETQ consumes RIP, CS, and RFLAGS. RSP and SS are
+     * reserved words at the top of this synthetic initial stack.
      *
-     * Final stack layout at process->stack_pointer:
-     *   +0   padding
-     *   +8   rax
-     *   ...
-     *   +112 r15
-     *   +120 RIP
-     *   +128 CS
-     *   +136 RFLAGS
-     *   +144 RSP
-     *   +152 SS
+     * Offsets: padding 0; GPRs +8..+120; RIP +128; CS +136;
+     * RFLAGS +144; reserved RSP +152; reserved SS +160.
      */
     *(--stack) = 0x10U; /* SS */
     *(--stack) = (uint64_t)stack_top; /* RSP after IRETQ */

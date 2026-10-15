@@ -1,0 +1,25 @@
+name: VantaOS build
+
+on:
+  push:
+    branches:
+      - main
+      - work/kernel-reliability-2026-10-15
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install --yes build-essential nasm grub-pc-bin xorriso mtools dosfstools
+      - name: Build kernel, ISO, and FAT32 image
+        run: chmod +x build.sh && ./build.sh
+      - name: Verify build artifacts
+        run: test -s kernel.bin && test -s VantaOS.iso && test -s vantaos.img

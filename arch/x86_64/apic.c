@@ -169,8 +169,13 @@ int apic_initialize(void)
         !route_isa_irq(1, 33, destination, maximum_redirection) ||
         !route_isa_irq(12, 44, destination, maximum_redirection))
     {
-        /* Leave legacy PIC routing untouched if IOAPIC routing is incomplete. */
-        lapic_write(LAPIC_SVR, LAPIC_SPURIOUS_VECTOR);
+        /* Undo partial IOAPIC routing; keep firmware's legacy PIC path intact. */
+        for (uint32_t i = 0; i <= maximum_redirection && i <= 119U; i++)
+        {
+            uint8_t reg = (uint8_t)(IOAPIC_REG_REDIR + i * 2U);
+            ioapic_write(reg, IOAPIC_REDIR_MASK);
+            ioapic_write((uint8_t)(reg + 1U), 0);
+        }
         serial_write("VANTAOS_APIC_IOAPIC_ROUTE_FAIL\n");
         return 0;
     }

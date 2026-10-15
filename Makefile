@@ -1,9 +1,9 @@
 # VantaOS top-level build orchestrator.
 # Subsystems declare sources in nearby Makefiles; this file owns build policy.
 
-CC       ?= gcc
-AS       ?= nasm
-LD       ?= ld
+CC       = gcc
+AS       = nasm
+LD       = ld
 OBJDIR   := build/obj
 
 CFLAGS   := -m64 -march=x86-64 -mtune=generic -ffreestanding -fno-pie \

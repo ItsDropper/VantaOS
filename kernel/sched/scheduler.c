@@ -23,8 +23,7 @@ static uint32_t scheduler_next_ready(uint32_t current_pid)
     for (uint32_t offset = 1; offset < PROCESS_MAX; offset++)
     {
         uint32_t pid = (current_pid + offset) % PROCESS_MAX;
-        if (pid == 1)
-            continue;
+        /* PID 1 is the desktop loop and must participate in round-robin. */
 
         const process_t* process = process_get(pid);
         if (process && process->state == PROCESS_READY)

@@ -103,6 +103,61 @@ static void boot_info_adapter_probe(void)
         "VANTAOS_BOOT_INFO_ADAPTER_OK\n" :
         "VANTAOS_BOOT_INFO_ADAPTER_FAIL\n");
 }
+static void pmm_boot_info_probe(void)
+{
+    static vanta_boot_info_t synthetic;
+    synthetic.magic = VANTA_BOOT_INFO_MAGIC;
+    synthetic.struct_size = sizeof(synthetic);
+    synthetic.version = VANTA_BOOT_INFO_VERSION;
+    synthetic.source = VANTA_BOOT_SOURCE_MULTIBOOT1;
+    synthetic.flags = VANTA_BOOT_FLAG_MEMORY_MAP_VALID |
+        VANTA_BOOT_FLAG_LEGACY_INFO_PRESENT;
+    synthetic.memory_region_count = 2U;
+    synthetic.kernel_image_start = 0x100000ULL;
+    synthetic.kernel_image_end = 0x101000ULL;
+    synthetic.legacy_info_address = 0x104000ULL;
+    synthetic.legacy_info_length = 0x1000ULL;
+    synthetic.legacy_mmap_address = 0x105000ULL;
+    synthetic.legacy_mmap_length = 0x1000ULL;
+    synthetic.memory_regions[0] = (vanta_memory_region_t){
+        .base = 0x100000ULL,
+        .length = 0x6000ULL,
+        .type = VANTA_MEMORY_USABLE
+    };
+    synthetic.memory_regions[1] = (vanta_memory_region_t){
+        .base = 0x102000ULL,
+        .length = 0x1000ULL,
+        .type = VANTA_MEMORY_RESERVED
+    };
+
+    pmm_initialize(&synthetic);
+    int ok = pmm_is_initialized() &&
+        pmm_get_total_blocks() == 0x106000ULL / PAGE_SIZE &&
+        pmm_get_free_blocks() == 2U;
+
+    void* first = pmm_alloc_block();
+    void* second = pmm_alloc_block();
+    void* third = pmm_alloc_block();
+
+    ok = first == (void*)(uintptr_t)0x101000ULL && ok;
+    ok = second == (void*)(uintptr_t)0x103000ULL && ok;
+    ok = third == NULL && ok;
+
+    pmm_free_block(first);
+    pmm_free_block(second);
+    ok = pmm_get_free_blocks() == 2U && ok;
+
+    pmm_initialize(NULL);
+    ok = !pmm_is_initialized() && pmm_alloc_block() == NULL && ok;
+
+    /* Restore the real boot map before the normal kernel initialization. */
+    pmm_initialize(&normalized_boot_info);
+    ok = pmm_is_initialized() && ok;
+
+    serial_write(ok ?
+        "VANTAOS_PMM_BOOT_INFO_OK\\n" :
+        "VANTAOS_PMM_BOOT_INFO_FAIL\\n");
+}
 #endif
 
 static void kernel_initialize(const vanta_boot_info_t* boot_info)

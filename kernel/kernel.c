@@ -33,7 +33,7 @@ static multiboot_memory_map_t boot_info_test_map[2];
 
 static void boot_info_adapter_probe(void)
 {
-    multiboot_info_t synthetic = {0};
+    static multiboot_info_t synthetic;
     vanta_boot_info_t converted;
 
     boot_info_test_map[0] = (multiboot_memory_map_t){
@@ -83,6 +83,12 @@ static void boot_info_adapter_probe(void)
     /* Malformed map entries must be rejected, not partially normalized. */
     boot_info_test_map[0].size = 0U;
     ok = !vanta_boot_info_from_multiboot(&synthetic, &converted) && ok;
+    boot_info_test_map[0].size = 20U;
+    boot_info_test_map[0].addr = UINT64_MAX - 7U;
+    boot_info_test_map[0].len = 16U;
+    ok = !vanta_boot_info_from_multiboot(&synthetic, &converted) && ok;
+    boot_info_test_map[0].addr = 0x100000ULL;
+    boot_info_test_map[0].len = 0x3F00000ULL;
     ok = !vanta_boot_info_from_multiboot(NULL, &converted) && ok;
     ok = !vanta_boot_info_from_multiboot(&synthetic, NULL) && ok;
 

@@ -45,8 +45,106 @@ static void scheduler_reap_observer_entry(void)
     serial_write("VANTAOS_SCHEDULER_REAP_FAIL\n");
 }
 
+static void filesystem_probe_initialize(void)
+{
+    int root_id = vfs_lookup("/");
+    const fs_node_t* root = root_id >= 0 ?
+        vfs_get_node((uint32_t)root_id) : NULL;
+
+    if (!filesystem_is_initialized() ||
+        !vfs_is_initialized() ||
+        !root ||
+        root->type != FS_NODE_DIRECTORY ||
+        vfs_lookup("/system") < 0 ||
+        vfs_lookup("/system/drivers") < 0 ||
+        vfs_lookup("/home/user") < 0 ||
+        vfs_lookup("/etc") < 0 ||
+        vfs_lookup("/__vantaos_ci_missing_entry__") != -1 ||
+        vfs_list((uint32_t)root_id, NULL, 0) < 0)
+    {
+        serial_write("VANTAOS_FILESYSTEM_NAMESPACE_FAIL\n");
+        return;
+    }
+
+    char byte = 'x';
+    if (vfs_read(-1, &byte, 1) != -1 ||
+        vfs_write(-1, "x", 1) != -1 ||
+        vfs_close(-1) != -1)
+    {
+        serial_write("VANTAOS_VFS_HANDLE_GUARDS_FAIL\n");
+        return;
+    }
+
+    serial_write("VANTAOS_FILESYSTEM_NAMESPACE_OK\n");
+    serial_write("VANTAOS_VFS_HANDLE_GUARDS_OK\n");
+}
+
+static void process_state_transition_probe(void)
+{
+    int pid = process_create_kernel(
+        "state-transition-probe",
+        process_current_pid(),
+        scheduler_probe_entry
+    );
+
+    if (pid < 0)
+    {
+        serial_write("VANTAOS_PROCESS_STATE_TRANSITIONS_FAIL\n");
+        return;
+    }
+
+    int ok = 1;
+    const process_t* process = process_get((uint32_t)pid);
+    ok = process && process->state == PROCESS_READY;
+
+    if (ok)
+        ok = process_mark_running((uint32_t)pid);
+    process = process_get((uint32_t)pid);
+    if (ok)
+        ok = process && process->state == PROCESS_RUNNING;
+
+    if (ok)
+        ok = process_mark_ready((uint32_t)pid);
+    process = process_get((uint32_t)pid);
+    if (ok)
+        ok = process && process->state == PROCESS_READY;
+
+    if (ok)
+        ok = process_set_running((uint32_t)pid);
+    if (ok)
+    {
+        process_block_current();
+        process = process_get((uint32_t)pid);
+        ok = process && process->state == PROCESS_SLEEPING;
+    }
+
+    if (ok)
+        ok = process_wake((uint32_t)pid);
+    process = process_get((uint32_t)pid);
+    if (ok)
+        ok = process && process->state == PROCESS_READY;
+
+    /* Restore the boot/desktop process before reaping the probe. */
+    if (process_current_pid() != 1U)
+        ok = process_switch_to(1U) && ok;
+
+    if (process_get((uint32_t)pid))
+        ok = process_terminate((uint32_t)pid) && ok;
+
+    if (!ok || process_get((uint32_t)pid) != NULL)
+    {
+        serial_write("VANTAOS_PROCESS_STATE_TRANSITIONS_FAIL\n");
+        return;
+    }
+
+    serial_write("VANTAOS_PROCESS_STATE_TRANSITIONS_OK\n");
+}
+
 static void scheduler_probe_initialize(void)
 {
+    filesystem_probe_initialize();
+    process_state_transition_probe();
+
     if (process_create_kernel(NULL, process_current_pid(),
                               scheduler_probe_entry) != -1 ||
         process_create_kernel("invalid-entry", process_current_pid(),
@@ -158,7 +256,7 @@ void os_initialize(multiboot_info_t* mbd)
      * Register the boot/desktop execution context as PID 1 before any
      * application processes are created. Its stack is the real kernel
      * boot stack, and the first timer IRQ will replace its saved ESP
-     * with a genuine PUSHA/IRET frame.
+     * with a genuine long-mode interrupt frame.
      */
     process_attach_current("desktop", 0);
 

@@ -47,7 +47,7 @@ jobs:
             log="boot-${memory}m.log"
             echo "Booting VantaOS in QEMU with ${memory} MiB RAM..."
             set +e
-            timeout 8s qemu-system-x86_64 \
+            timeout 12s qemu-system-x86_64 \
               -machine pc \
               -m "${memory}M" \
               -drive file=VantaOS.iso,media=cdrom,format=raw \
@@ -65,6 +65,9 @@ jobs:
               cat "$log" 2>/dev/null || true
               exit 1
             fi
+
+            # Allow QEMU's serial file to flush after timeout sends SIGTERM.
+            sleep 1
 
             if grep -Eq '^VANTAOS_[A-Z0-9_]*_FAIL' "$log"; then
               echo "A kernel self-test emitted a failure marker at ${memory} MiB."

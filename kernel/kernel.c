@@ -168,8 +168,8 @@ static void pmm_boot_info_probe(void)
     ok = pmm_is_initialized() && ok;
 
     serial_write(ok ?
-        "VANTAOS_PMM_BOOT_INFO_OK\\n" :
-        "VANTAOS_PMM_BOOT_INFO_FAIL\\n");
+        "VANTAOS_PMM_BOOT_INFO_OK\n" :
+        "VANTAOS_PMM_BOOT_INFO_FAIL\n");
 }
 #endif
 
@@ -228,7 +228,7 @@ void kernel_main(multiboot_info_t* mbd)
 void kernel_main_uefi(vanta_boot_info_t* boot_info)
 {
     serial_initialize();
-    serial_write("VANTAOS_UEFI_KERNEL_ENTRY\\n");
+    serial_write("VANTAOS_UEFI_KERNEL_ENTRY\n");
 
     if (!boot_info ||
         boot_info->magic != VANTA_BOOT_INFO_MAGIC ||
@@ -241,7 +241,7 @@ void kernel_main_uefi(vanta_boot_info_t* boot_info)
         boot_info->memory_region_count > VANTA_BOOT_INFO_MAX_MEMORY_REGIONS ||
         boot_info->kernel_image_end <= boot_info->kernel_image_start)
     {
-        serial_write("VANTAOS_UEFI_BOOT_INFO_FAIL\\n");
+        serial_write("VANTAOS_UEFI_BOOT_INFO_FAIL\n");
         for (;;)
             __asm__ volatile ("cli; hlt");
     }
@@ -286,14 +286,14 @@ void kernel_main_uefi(vanta_boot_info_t* boot_info)
     }
 
     boot_start = read_tsc();
-    serial_write("VANTAOS_UEFI_BOOT_INFO_READY\\n");
+    serial_write("VANTAOS_UEFI_BOOT_INFO_READY\n");
 
 #ifdef VANTAOS_SELF_TEST
     pmm_boot_info_probe();
 #endif
 
     kernel_initialize(&normalized_boot_info);
-    serial_write("VANTAOS: UEFI kernel initialized\\n");
+    serial_write("VANTAOS: UEFI kernel initialized\n");
     kernel_start_os(&uefi_legacy_info);
 }
 

@@ -202,18 +202,24 @@ static int apic_send_ipi(uint32_t destination, uint32_t command)
         return 0;
 
     uint32_t timeout = 1000000U;
-    while ((lapic_read(0x300U) & (1U << 12)) != 0 && timeout--)
+    while ((lapic_read(0x300U) & (1U << 12)) != 0 && timeout > 0)
+    {
+        timeout--;
         __asm__ volatile ("pause");
-    if (timeout == 0)
+    }
+    if ((lapic_read(0x300U) & (1U << 12)) != 0)
         return 0;
 
     lapic_write(0x310U, destination << 24);
     lapic_write(0x300U, command);
 
     timeout = 1000000U;
-    while ((lapic_read(0x300U) & (1U << 12)) != 0 && timeout--)
+    while ((lapic_read(0x300U) & (1U << 12)) != 0 && timeout > 0)
+    {
+        timeout--;
         __asm__ volatile ("pause");
-    return timeout != 0;
+    }
+    return (lapic_read(0x300U) & (1U << 12)) == 0;
 }
 
 uint32_t apic_get_bsp_id(void)

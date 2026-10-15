@@ -21,8 +21,11 @@ static uint32_t current_pid;
 static void process_copy_name(char* destination, const char* source)
 {
     unsigned int i = 0;
-    while (source && source[i] && i < PROCESS_NAME_MAX)
-        destination[i++] = source[i];
+    while (source && i < PROCESS_NAME_MAX && source[i])
+    {
+        destination[i] = source[i];
+        i++;
+    }
     destination[i] = 0;
 }
 
@@ -91,7 +94,6 @@ static void process_prepare_stack(process_t* process, uintptr_t stack_top)
     uint64_t* stack = (uint64_t*)stack_top;
 
     /*
-     /*
      * Hardware IRQ entry saves 15 GPRs plus one alignment padding qword
      * before the CPU's five-qword long-mode IRETQ frame. Mirror that exact
      * layout for a new kernel process.

@@ -7,6 +7,7 @@
 #include "keyboard.h"
 #include "mouse.h"
 #include "process.h"
+#include "serial.h"
 #include "scheduler.h"
 #include "shell.h"
 #include "terminal.h"
@@ -128,6 +129,7 @@ void os_run(void)
 
     __asm__ volatile ("sti");
 
+    serial_write("VANTAOS_BOOT_OK\n");
     desktop_process_main();
 }
 

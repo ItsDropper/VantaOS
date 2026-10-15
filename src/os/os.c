@@ -21,6 +21,57 @@ static unsigned long long boot_keyboard;
 static unsigned long long boot_mouse;
 static unsigned long long boot_shell;
 
+#ifdef VANTAOS_SELF_TEST
+static uint32_t scheduler_probe_pid;
+
+static void scheduler_probe_entry(void)
+{
+    serial_write("VANTAOS_SCHEDULER_PROBE_OK\n");
+}
+
+static void scheduler_reap_observer_entry(void)
+{
+    for (uint32_t attempt = 0; attempt < 1000U; attempt++)
+    {
+        if (process_get(scheduler_probe_pid) == NULL)
+        {
+            serial_write("VANTAOS_SCHEDULER_REAP_OK\n");
+            return;
+        }
+
+        __asm__ volatile ("hlt");
+    }
+
+    serial_write("VANTAOS_SCHEDULER_REAP_FAIL\n");
+}
+
+static void scheduler_probe_initialize(void)
+{
+    int probe_pid = process_create_kernel(
+        "sched-probe",
+        process_current_pid(),
+        scheduler_probe_entry
+    );
+
+    if (probe_pid < 0)
+    {
+        serial_write("VANTAOS_SCHEDULER_PROBE_CREATE_FAIL\n");
+        return;
+    }
+
+    scheduler_probe_pid = (uint32_t)probe_pid;
+
+    if (process_create_kernel(
+            "sched-reap-check",
+            process_current_pid(),
+            scheduler_reap_observer_entry
+        ) < 0)
+    {
+        serial_write("VANTAOS_SCHEDULER_OBSERVER_CREATE_FAIL\n");
+    }
+}
+#endif
+
 static inline unsigned long long read_tsc(void)
 {
     unsigned int low;
@@ -98,6 +149,10 @@ void os_initialize(multiboot_info_t* mbd)
     boot_shell = read_tsc();
 
     desktop_initialize(mbd);
+
+#ifdef VANTAOS_SELF_TEST
+    scheduler_probe_initialize();
+#endif
 }
 
 void os_run(void)

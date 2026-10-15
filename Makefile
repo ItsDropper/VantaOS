@@ -5,7 +5,7 @@ LD = ld
 CFLAGS = -m64 -march=x86-64 -mtune=generic -ffreestanding -fno-pie -fno-stack-protector -mno-red-zone -mgeneral-regs-only -nostdlib -Iinclude
 LDFLAGS = -m elf_x86_64 --no-warn-rwx-segments -T build/linker.ld
 
-OBJS = boot.o isr.o kernel.o os.o desktop.o desktop_process.o file_explorer.o file_explorer_process.o gdt.o idt.o pic.o terminal.o keyboard.o mouse.o ata.o interrupts.o panic.o fault_trace.o timer.o pmm.o paging.o graphics.o graphics_core.o graphics_text.o graphics_input.o graphics_ui.o heap.o shell.o shell_core.o shell_files.o shell_system.o shell_storage.o shell_commands.o pci.o filesystem.o fat32.o process.o scheduler.o vfs.o terminal_process.o
+OBJS = boot.o isr.o kernel.o os.o desktop.o desktop_process.o file_explorer.o file_explorer_process.o gdt.o idt.o pic.o terminal.o keyboard.o mouse.o ata.o interrupts.o serial.o panic.o fault_trace.o timer.o pmm.o paging.o graphics.o graphics_core.o graphics_text.o graphics_input.o graphics_ui.o heap.o shell.o shell_core.o shell_files.o shell_system.o shell_storage.o shell_commands.o pci.o filesystem.o fat32.o process.o scheduler.o vfs.o terminal_process.o
 
 all: kernel.bin
 
@@ -56,6 +56,9 @@ ata.o:
 
 interrupts.o:
 	$(CC) $(CFLAGS) -c src/kernel/arch/x86_64/interrupts.c -o interrupts.o
+
+serial.o:
+	$(CC) $(CFLAGS) -c src/kernel/serial.c -o serial.o
 
 panic.o:
 	$(CC) $(CFLAGS) -c src/kernel/panic.c -o panic.o

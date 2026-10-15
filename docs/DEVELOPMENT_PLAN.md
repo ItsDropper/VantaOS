@@ -32,7 +32,7 @@ This roadmap prioritizes a trustworthy kernel over visual features. A Windows al
 ### M2 — Process and scheduler correctness
 - [ ] Validate process record initialization and name handling.
 - [ ] Validate interrupt-frame layout and stack bounds.
-- [ ] Verify a returning process can be preempted and reaped.
+- [x] Verify a returning kernel process can be preempted and reaped in the CI-only QEMU probe.
 - [ ] Verify invalid process IDs and state transitions are rejected.
 - [ ] Test timer preemption repeatedly without unexplained resets.
 

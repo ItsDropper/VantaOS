@@ -45,6 +45,8 @@ jobs:
           required_markers=(
             VANTAOS_BOOT_OK
             VANTAOS_BOOT_INFO_READY
+            VANTAOS_APIC_LOCAL_OK
+            VANTAOS_SMP_TOPOLOGY_OK
             VANTAOS_BOOT_INFO_ADAPTER_OK
             VANTAOS_PMM_BOOT_INFO_OK
             VANTAOS_PMM_ALLOCATOR_OK
@@ -165,6 +167,8 @@ jobs:
             VANTAOS_UEFI_KERNEL_HANDOFF
             VANTAOS_UEFI_KERNEL_ENTRY
             VANTAOS_UEFI_BOOT_INFO_READY
+            VANTAOS_APIC_LOCAL_OK
+            VANTAOS_SMP_TOPOLOGY_OK
             VANTAOS_PMM_BOOT_INFO_OK
             VANTAOS_BOOT_OK
           )

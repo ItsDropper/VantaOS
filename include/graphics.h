@@ -2,9 +2,9 @@
 #define GRAPHICS_H
 
 #include <stdint.h>
-#include "multiboot.h"
+#include "vanta_boot_info.h"
 
-int graphics_initialize(multiboot_info_t* mbd);
+int graphics_initialize(const vanta_boot_info_t* boot_info);
 void graphics_clear(uint32_t color);
 void graphics_present(void);
 

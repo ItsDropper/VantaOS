@@ -1,7 +1,6 @@
 #include "process_internal.h"
 #include "cpu_local.h"
 #include "spinlock.h"
-#include "vfs.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -410,26 +409,72 @@ int process_create_idle_for_cpu(uint32_t cpu_id, const char* name,
 
 int process_fd_install(uint32_t pid, int vfs_handle)
 {
-    if (!process_initialized_state || pid >= PROCESS_MAX || vfs_handle < 0) return -1;
+    if (!process_initialized_state || pid >= PROCESS_MAX || vfs_handle < 0)
+        return -1;
+
     uint64_t flags = process_table_lock_acquire();
-    process_t* p = &process_table_records[pid];
-    if (p->state == PROCESS_UNUSED || p->state == PROCESS_TERMINATED || p->state == PROCESS_REAPING || !p->is_user) { process_table_lock_release(flags); return -1; }
-    for (uint32_t i = 0; i < PROCESS_FD_COUNT; i++) if (p->file_descriptors[i] < 0) { p->file_descriptors[i] = vfs_handle; process_table_lock_release(flags); return PROCESS_FD_BASE + (int)i; }
-    process_table_lock_release(flags); return -1;
+    process_t* process = &process_table_records[pid];
+    if (process->state == PROCESS_UNUSED ||
+        process->state == PROCESS_TERMINATED ||
+        process->state == PROCESS_REAPING || !process->is_user)
+    {
+        process_table_lock_release(flags);
+        return -1;
+    }
+
+    for (uint32_t i = 0; i < PROCESS_FD_COUNT; i++)
+    {
+        if (process->file_descriptors[i] >= 0)
+            continue;
+        process->file_descriptors[i] = vfs_handle;
+        process_table_lock_release(flags);
+        return PROCESS_FD_BASE + (int)i;
+    }
+
+    process_table_lock_release(flags);
+    return -1;
 }
 
 int process_fd_get(uint32_t pid, int descriptor)
 {
-    if (!process_initialized_state || pid >= PROCESS_MAX || descriptor < PROCESS_FD_BASE || descriptor >= PROCESS_FD_BASE + (int)PROCESS_FD_COUNT) return -1;
-    uint64_t flags = process_table_lock_acquire(); process_t* p = &process_table_records[pid]; int h = -1;
-    if (p->state != PROCESS_UNUSED && p->state != PROCESS_TERMINATED && p->state != PROCESS_REAPING && p->is_user) h = p->file_descriptors[(uint32_t)(descriptor - PROCESS_FD_BASE)];
-    process_table_lock_release(flags); return h;
+    if (!process_initialized_state || pid >= PROCESS_MAX ||
+        descriptor < PROCESS_FD_BASE ||
+        descriptor >= PROCESS_FD_BASE + (int)PROCESS_FD_COUNT)
+        return -1;
+
+    uint64_t flags = process_table_lock_acquire();
+    process_t* process = &process_table_records[pid];
+    int handle = -1;
+    if (process->state != PROCESS_UNUSED &&
+        process->state != PROCESS_TERMINATED &&
+        process->state != PROCESS_REAPING && process->is_user)
+    {
+        handle = process->file_descriptors[
+            (uint32_t)(descriptor - PROCESS_FD_BASE)];
+    }
+    process_table_lock_release(flags);
+    return handle;
 }
 
 int process_fd_remove(uint32_t pid, int descriptor, int* vfs_handle_out)
 {
-    if (!process_initialized_state || pid >= PROCESS_MAX || !vfs_handle_out || descriptor < PROCESS_FD_BASE || descriptor >= PROCESS_FD_BASE + (int)PROCESS_FD_COUNT) return 0;
-    uint64_t flags = process_table_lock_acquire(); process_t* p = &process_table_records[pid]; uint32_t i = (uint32_t)(descriptor - PROCESS_FD_BASE);
-    if (p->state == PROCESS_UNUSED || !p->is_user || p->file_descriptors[i] < 0) { process_table_lock_release(flags); return 0; }
-    *vfs_handle_out = p->file_descriptors[i]; p->file_descriptors[i] = -1; process_table_lock_release(flags); return 1;
+    if (!process_initialized_state || pid >= PROCESS_MAX || !vfs_handle_out ||
+        descriptor < PROCESS_FD_BASE ||
+        descriptor >= PROCESS_FD_BASE + (int)PROCESS_FD_COUNT)
+        return 0;
+
+    uint64_t flags = process_table_lock_acquire();
+    process_t* process = &process_table_records[pid];
+    uint32_t index = (uint32_t)(descriptor - PROCESS_FD_BASE);
+    if (process->state == PROCESS_UNUSED || !process->is_user ||
+        process->file_descriptors[index] < 0)
+    {
+        process_table_lock_release(flags);
+        return 0;
+    }
+
+    *vfs_handle_out = process->file_descriptors[index];
+    process->file_descriptors[index] = -1;
+    process_table_lock_release(flags);
+    return 1;
 }

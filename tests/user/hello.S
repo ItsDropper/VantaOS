@@ -231,7 +231,7 @@ fixture_matches:
     cmp $-5, %rax
     jne file_fail
 
-    /* File writes must validate pointers and reject lengths above 511 bytes. */
+    /* File writes validate pointers and reject transfers above the 4 KiB syscall limit. */
     mov $14, %eax
     mov %r12, %rdi
     mov $0x7ffffffff000, %rsi

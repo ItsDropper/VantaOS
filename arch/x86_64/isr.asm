@@ -142,8 +142,11 @@ lapic_timer_stub:
 reschedule_ipi_stub:
     cld
     SAVE_IRQ_ALL
+    mov rdi, rsp
     call reschedule_ipi_handle_interrupt
-    RESTORE_IRQ_ALL
+    mov rsp, rax
+    pop rax
+    RESTORE_ALL
     iretq
 
 tlb_shootdown_ipi_stub:

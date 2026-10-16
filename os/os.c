@@ -400,7 +400,7 @@ static int smp_scheduler_probe_initialize(void)
     }
     if (smp_scheduler_probe_ap_cpu == UINT32_MAX)
     {
-        serial_write("VANTAOS_SMP_SCHEDULER_STRESS_FAIL\\n");
+        serial_write("VANTAOS_SMP_SCHEDULER_STRESS_FAIL\n");
         return 0;
     }
 

@@ -237,15 +237,6 @@ int gui_server_submit_draw(uint32_t pid, uint32_t id,
 {
     if (count > VANTA_GUI_MAX_COMMANDS || (count != 0U && !commands))
         return -22;
-    for (uint32_t i = 0; i < count; i++)
-        if (!gui_command_valid(&commands[i], 100000U, 100000U))
-        {
-            /* Full bounds are checked again against the actual window below. */
-            if (commands[i].type != VANTA_GUI_DRAW_TEXT &&
-                commands[i].type != VANTA_GUI_DRAW_FILL_RECT)
-                return -22;
-        }
-
     uint64_t flags = spinlock_lock_irqsave(&gui_lock);
     gui_window_t* window = gui_find_window_locked(pid, id);
     if (!window)

@@ -57,7 +57,13 @@ _Noreturn void smp_ap_entry(uint32_t apic_id)
     if (index >= 0 &&
         apic_initialize_cpu(apic_id) &&
         cpu_local_initialize((uint32_t)index, apic_id))
+    {
         __atomic_store_n(&ap_online[index], 1U, __ATOMIC_RELEASE);
+    }
+    else
+    {
+        serial_write("VANTAOS_SMP_AP_LOCAL_INIT_FAIL\\n");
+    }
 
     /* APs remain safely parked until per-CPU scheduling is implemented. */
     for (;;)

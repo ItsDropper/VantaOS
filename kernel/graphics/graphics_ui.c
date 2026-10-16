@@ -116,48 +116,9 @@ void graphics_present(void)
     int h = (int)framebuffer_height;
     int taskbar_y = h - 64;
 
-    /* Quiet, low-contrast workspace. App hitboxes stay stable while the
-       presentation moves away from stacked legacy-style panels. */
-    graphics_fill_rect(0, 0, w, h, VANTA_UI_DESKTOP);
-    graphics_fill_rect(0, 0, w, 42, VANTA_UI_TOPBAR);
-    graphics_fill_rect(0, 41, w, 1, 0x00232E3B);
-    graphics_fill_rect(0, h - 64, w, 64, 0x00090D13);
-
-    /* Restrained Vanta wallpaper mark, kept well behind application content. */
-    graphics_fill_rounded_rect(w - 330, 112, 230, 230, 115, 0x000F1925);
-    graphics_fill_rounded_rect(w - 286, 156, 142, 142, 71, 0x00121F2D);
-    /* Concentric low-contrast forms carry the brand without a cross-shaped mark. */
-
-    /* Compact workspace bar: identity left, session state right. */
-    graphics_draw_vanta_logo(18, 11, 20);
-    graphics_draw_text(48, 16, "VantaOS", VANTA_UI_TEXT, 1);
-    graphics_fill_rect(112, 14, 1, 15, 0x00313D4B);
-    graphics_draw_text(126, 16, "Workspace", VANTA_UI_TEXT_SECONDARY, 1);
-    graphics_fill_rounded_rect(w - 126, 11, 106, 22, 7, 0x001F2935);
-    graphics_draw_text(w - 111, 18, "Local session", 0x00C3CDD8, 1);
-
-    /* Three restrained desktop shortcuts; click regions remain unchanged. */
-    graphics_fill_rounded_rect(24, 58, 88, 72, 10,
-        active_panel == 1 ? VANTA_UI_HOVER : 0x000F161F);
-    graphics_fill_rounded_rect(49, 72, 38, 34, 8, 0x00202D3B);
-    graphics_fill_rounded_rect(57, 80, 22, 18, 4, VANTA_UI_ACCENT);
-    graphics_draw_text(43, 114, "System", 0x00DCE4EC, 1);
-
-    graphics_fill_rounded_rect(120, 58, 88, 72, 10,
-        active_panel == 2 ? VANTA_UI_HOVER : 0x000F161F);
-    graphics_fill_rounded_rect(145, 72, 38, 34, 8, 0x00202D3B);
-    graphics_fill_rounded_rect(151, 81, 26, 19, 4, 0x0057B77E);
-    graphics_fill_rect(153, 77, 11, 5, 0x0085D9A9);
-    graphics_draw_text(150, 114, "Files", 0x00DCE4EC, 1);
-
-    graphics_fill_rounded_rect(216, 58, 88, 72, 10,
-        active_panel == 3 ? VANTA_UI_HOVER : 0x000F161F);
-    graphics_fill_rounded_rect(241, 72, 38, 34, 8, 0x00202D3B);
-    graphics_draw_text(247, 84, ">_", 0x007DB8FF, 1);
-    graphics_draw_text(228, 114, "Terminal", 0x00DCE4EC, 1);
-
-    graphics_draw_text(24, h - 87, "VANTAOS", 0x004D6074, 1);
-    graphics_draw_text(24, h - 71, "x86_64  /  LOCAL", 0x005D7185, 1);
+    graphics_draw_desktop_backdrop(w, h);
+    if (active_panel == 0)
+        graphics_draw_desktop_dashboard(w, h);
 
     if (active_panel == 4)
     {
@@ -198,45 +159,7 @@ void graphics_present(void)
 
         graphics_draw_window_frame(wx, wy, ww, wh, "System", 0);
 
-        graphics_draw_text(wx + 28, wy + 108, "System overview", 0x0079B8FF, 1);
-        graphics_fill_rect(wx + 28, wy + 132, ww - 56, 1, 0x00293443);
-        graphics_draw_text(wx + 28, wy + 154, "Architecture", 0x008A9BAD, 1);
-        graphics_draw_text(wx + 190, wy + 154, "x86_64", 0x00E0E7EF, 1);
-        graphics_draw_text(wx + 28, wy + 180, "Kernel", 0x008A9BAD, 1);
-        graphics_draw_text(wx + 190, wy + 180, "VantaOS", 0x00E0E7EF, 1);
-        graphics_draw_text(wx + 28, wy + 206, "Display", 0x008A9BAD, 1);
-
-        char resolution[32];
-        unsigned int rw = (unsigned int)w, rh = (unsigned int)h;
-        resolution[0]='R'; resolution[1]='E'; resolution[2]='S'; resolution[3]=' ';
-        resolution[4]=(char)('0'+((rw/1000)%10));
-        resolution[5]=(char)('0'+((rw/100)%10));
-        resolution[6]=(char)('0'+((rw/10)%10));
-        resolution[7]=(char)('0'+(rw%10));
-        resolution[8]='x';
-        resolution[9]=(char)('0'+((rh/1000)%10));
-        resolution[10]=(char)('0'+((rh/100)%10));
-        resolution[11]=(char)('0'+((rh/10)%10));
-        resolution[12]=(char)('0'+(rh%10));
-        resolution[13]=0;
-        graphics_draw_text(wx + 190, wy + 206, resolution, 0x00E0E7EF, 1);
-
-        graphics_draw_text(wx + 28, wy + 238, "Services", 0x0079B8FF, 1);
-        graphics_fill_rect(wx + 28, wy + 262, ww - 56, 1, 0x00293443);
-        graphics_draw_text(wx + 28, wy + 282, "Filesystem", 0x008A9BAD, 1);
-        graphics_draw_text(wx + 190, wy + 282,
-            filesystem_is_initialized() ? "initialized" : "not initialized",
-            0x00E0E7EF, 1);
-        graphics_draw_text(wx + 28, wy + 308, "Processes", 0x008A9BAD, 1);
-        graphics_draw_text(wx + 190, wy + 308,
-            process_is_initialized() ? "process manager ready" : "not initialized",
-            0x00E0E7EF, 1);
-
-        graphics_draw_text(wx + 28, wy + 346, "System paths", 0x0079B8FF, 1);
-        graphics_fill_rect(wx + 28, wy + 370, ww - 56, 1, 0x00293443);
-        graphics_draw_text(wx + 28, wy + 390, "/system/version", 0x00C5D1DE, 1);
-        graphics_draw_text(wx + 28, wy + 412, "/system/kernel", 0x00C5D1DE, 1);
-        graphics_draw_text(wx + 28, wy + 434, "/system/memory", 0x00C5D1DE, 1);
+        graphics_draw_system_page_detail(wx, wy, ww, wh);
     }
 
     if (active_panel == 2)

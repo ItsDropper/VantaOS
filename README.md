@@ -7,8 +7,9 @@ The project focuses on learning and validating operating-system fundamentals: bo
 ## Project status
 
 - **Target:** x86-64. The established GRUB/Multiboot path and a separate UEFI/OVMF path are exercised by CI.
-- **Kernel/userspace milestone:** VantaOS can load a static ELF64 `ET_EXEC` from FAT32 into a user address space, enter ring 3, construct a bounded `argc`/`argv` stack, perform basic serial/terminal write syscalls, and exit. The smoke program validates quoted arguments from ring 3.
-- **Filesystem boundary:** FAT32/VFS reads support the current file-loading path. User-mode file descriptors and general-purpose persistent create/write operations are not implemented.
+- **User-mode milestone:** VantaOS loads static ELF64 `ET_EXEC` programs from FAT32 into private address spaces and runs them at ring 3. The initial `int 0x80` ABI includes process spawn/wait, bounded file descriptors and I/O, directory listing, terminal input, file creation, and process-owned GUI windows.
+- **Storage boundary:** bounded FAT32 8.3 regular-file create/write and multi-cluster range I/O are implemented and exercised by QEMU regression tests, including a second-boot persistence assertion. This is not general-purpose filesystem support: long-filename writes, directory creation, rename/delete, crash-atomic replacement, and broad corruption testing remain incomplete.
+- **GUI boundary:** the kernel retains framebuffer/compositor ownership; user processes can request windows, submit bounded text/rectangle draw lists, and poll input/focus/close events. Terminal's shell runs as a ring-3 ELF, but its window/rendering and Settings/File Explorer remain kernel-side. The GUI ABI is a project-specific bring-up interface, not a stable platform API.
 - **Still experimental:** process isolation needs broader fault and adversarial testing; demand paging, dynamic linking, networking, audio, modern GPU acceleration, and broad physical-hardware compatibility are not established.
 - **Quality rule:** source presence is not proof of completion. See [Testing](docs/TESTING.md) for the exact automated assertions and their limits.
 
@@ -16,6 +17,8 @@ The project focuses on learning and validating operating-system fundamentals: bo
 
 - [Documentation index](docs/README.md) — subsystem guides, build, testing, support, and plans.
 - [Architecture overview](docs/ARCHITECTURE.md) — boot flow and subsystem boundaries.
+- [User-space desktop applications](docs/USERSPACE_GUI.md) — current GUI syscall boundary and migration plan.
+- [User-mode programs](docs/user-mode-programs.md) — ELF loading, syscall ABI, and limitations.
 - [Engineering model](docs/ENGINEERING_MODEL.md) — verification levels, contracts, concurrency, and test layers.
 - [Architecture decision records](docs/decisions/README.md) — durable rationale for long-lived design choices.
 - [Build system](docs/BUILD_SYSTEM.md) — build targets and generated artifacts.

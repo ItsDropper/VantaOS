@@ -39,6 +39,9 @@ static volatile uint32_t tlb_shootdown_lock;
 static uint64_t tlb_shootdown_generation;
 static volatile uint32_t paging_mutation_lock;
 
+static void paging_switch_address_space_locked(
+    paging_address_space_t* address_space);
+
 static uint64_t paging_lock_acquire(void)
 {
     uint64_t saved_flags;
@@ -706,8 +709,12 @@ uintptr_t paging_get_physical(uintptr_t virtual_address)
 
 paging_address_space_t* paging_create_address_space(void)
 {
+    uint64_t saved_flags = paging_lock_acquire();
     if (paging_current() != &kernel_address_space)
+    {
+        paging_lock_release(saved_flags);
         return NULL;
+    }
 
     for (uint32_t i = 0; i < ADDRESS_SPACE_MAX; i++)
     {
@@ -715,59 +722,131 @@ paging_address_space_t* paging_create_address_space(void)
             continue;
 
         uint64_t* pml4 = address_spaces[i].directory;
-
         for (uint32_t entry = 0; entry < TABLE_ENTRIES; entry++)
             pml4[entry] = 0;
 
-        /*
-         * Share the kernel's identity and high mappings. User mappings
-         * can later occupy otherwise-empty PML4 entries.
-         */
+        /* Share kernel identity/high mappings; user mappings occupy slot 1. */
         pml4[0] = kernel_pml4[0];
-
-        address_spaces[i].used = 1;
+        address_spaces[i].active_cpu_mask = 0;
+        address_spaces[i].pending_shootdowns = 0;
+        __atomic_store_n(&address_spaces[i].used, 1, __ATOMIC_RELEASE);
+        paging_lock_release(saved_flags);
         return &address_spaces[i];
     }
 
+    paging_lock_release(saved_flags);
     return NULL;
 }
 
 void paging_destroy_address_space(paging_address_space_t* address_space)
 {
-    if (!paging_owns_address_space(address_space))
-        return;
-
-    cpu_local_t* current_cpu = cpu_local_current();
-    for (uint32_t i = 0; i < cpu_local_capacity(); i++)
+    uint64_t saved_flags = paging_lock_acquire();
+    if (!paging_owns_address_space(address_space) ||
+        __atomic_load_n(&address_space->pending_shootdowns,
+                        __ATOMIC_ACQUIRE) != 0U)
     {
-        const cpu_local_t* local = cpu_local_get(i);
-        if (local && local->current_address_space == address_space &&
-            local != current_cpu)
-            return; /* Never free page tables still loaded by another CPU. */
+        paging_lock_release(saved_flags);
+        return;
     }
 
     if (paging_current() == address_space)
-        paging_switch_address_space(&kernel_address_space);
+        paging_switch_address_space_locked(&kernel_address_space);
+
+    /*
+     * The same lock serializes address-space activation and destruction, so
+     * no CPU can begin using this directory between this check and teardown.
+     */
+    if (__atomic_load_n(&address_space->active_cpu_mask,
+                        __ATOMIC_ACQUIRE) != 0U ||
+        __atomic_load_n(&address_space->pending_shootdowns,
+                        __ATOMIC_ACQUIRE) != 0U)
+    {
+        paging_lock_release(saved_flags);
+        return;
+    }
 
     release_user_page_tables(address_space);
-
     for (uint32_t i = 0; i < TABLE_ENTRIES; i++)
         address_space->directory[i] = 0;
 
-    address_space->used = 0;
+    address_space->active_cpu_mask = 0;
+    __atomic_store_n(&address_space->used, 0, __ATOMIC_RELEASE);
+    paging_lock_release(saved_flags);
 }
 
-void paging_switch_address_space(paging_address_space_t* address_space)
+static void paging_switch_address_space_locked(
+    paging_address_space_t* address_space)
 {
     if (!address_space || !address_space->used)
         return;
 
-    paging_address_space_t** slot = paging_current_slot();
-    if (*slot == address_space)
-        return;
+    cpu_local_t* local = cpu_local_current();
+    if (local && local->self == local && local->online != 0U)
+    {
+        paging_address_space_t* old_space = __atomic_load_n(
+            &local->current_address_space, __ATOMIC_ACQUIRE);
+        if (old_space == address_space)
+            return;
 
-    *slot = address_space;
+        uint32_t bit = 1U << local->logical_id;
+        if (old_space)
+            __atomic_fetch_and(&old_space->active_cpu_mask, ~bit,
+                               __ATOMIC_RELEASE);
+        __atomic_fetch_or(&address_space->active_cpu_mask, bit,
+                          __ATOMIC_RELEASE);
+
+        /*
+         * Publish the target before loading CR3. If a concurrent shootdown
+         * sees this CPU as active, its IPI is handled after this switch and
+         * invalidates the target address space; otherwise the CR3 reload
+         * itself flushes stale non-global translations.
+         */
+        __atomic_store_n(&local->current_address_space, address_space,
+                         __ATOMIC_RELEASE);
+    }
+    else
+    {
+        if (fallback_current_address_space == address_space)
+            return;
+        fallback_current_address_space = address_space;
+    }
+
     load_page_table(address_space->directory_physical);
+}
+
+void paging_switch_address_space(paging_address_space_t* address_space)
+{
+    uint64_t saved_flags = paging_lock_acquire();
+    if (!address_space || !address_space->used)
+    {
+        paging_lock_release(saved_flags);
+        return;
+    }
+
+    paging_switch_address_space_locked(address_space);
+    paging_lock_release(saved_flags);
+}
+
+int paging_register_cpu(uint32_t logical_id,
+                        paging_address_space_t* address_space)
+{
+    if (logical_id >= CPU_LOCAL_MAX || !address_space ||
+        !address_space->used)
+        return 0;
+
+    uint64_t saved_flags = paging_lock_acquire();
+    cpu_local_t* local = cpu_local_current();
+    if (!local || local->self != local || local->logical_id != logical_id ||
+        local->current_address_space != address_space)
+    {
+        paging_lock_release(saved_flags);
+        return 0;
+    }
+
+    __atomic_fetch_or(&address_space->active_cpu_mask, 1U << logical_id,
+                      __ATOMIC_RELEASE);
+    paging_lock_release(saved_flags);
+    return 1;
 }
 
 paging_address_space_t* paging_get_kernel_address_space(void)

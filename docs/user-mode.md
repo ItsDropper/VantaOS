@@ -8,7 +8,7 @@ The scheduler enters user mode with `CS=0x23` and `SS=0x1B`. Each process has a 
 
 ## Freestanding C syscall interface
 
-Include `<vanta/syscall.h>` from `userspace/include`. It provides inline wrappers for the current syscall ABI and can be used without libc or a runtime startup object. The ABI version macro is `VANTA_USER_ABI_VERSION` (currently `1`).
+Include `<vanta/syscall.h>` from `userspace/include`. It provides inline wrappers for the current syscall ABI and can be used without libc or a runtime startup object. The ABI version macro is `VANTA_USER_ABI_VERSION` (currently `3`).
 
 ```c
 #include <vanta/syscall.h>

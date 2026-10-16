@@ -245,25 +245,77 @@ void file_explorer_open_directory(uint32_t id)
     explorer_set_directory(id, 0);
 }
 
-static void explorer_icon(int x, int y, int directory, int selected)
+static int explorer_suffix_equal(const char* name, const char* suffix)
 {
-    uint32_t icon = directory ? 0x005AA9E6 : 0x008EA3B7;
+    int name_len = 0;
+    int suffix_len = 0;
+
+    while (name[name_len]) ++name_len;
+    while (suffix[suffix_len]) ++suffix_len;
+    if (suffix_len > name_len) return 0;
+
+    int offset = name_len - suffix_len;
+    for (int i = 0; i < suffix_len; ++i)
+    {
+        char a = name[offset + i];
+        char b = suffix[i];
+        if (a >= 'A' && a <= 'Z') a = (char)(a - 'A' + 'a');
+        if (b >= 'A' && b <= 'Z') b = (char)(b - 'A' + 'a');
+        if (a != b) return 0;
+    }
+    return 1;
+}
+
+static int explorer_file_kind(const fs_node_t* node)
+{
+    if (!node || node->type == FS_NODE_DIRECTORY) return 0;
+    if (explorer_suffix_equal(node->name, ".c") ||
+        explorer_suffix_equal(node->name, ".h") ||
+        explorer_suffix_equal(node->name, ".asm") ||
+        explorer_suffix_equal(node->name, ".s")) return 1;
+    if (explorer_suffix_equal(node->name, ".txt") ||
+        explorer_suffix_equal(node->name, ".md")) return 2;
+    if (explorer_suffix_equal(node->name, ".log")) return 3;
+    if (explorer_suffix_equal(node->name, ".cfg") ||
+        explorer_suffix_equal(node->name, ".ini")) return 4;
+    if (explorer_suffix_equal(node->name, ".elf") ||
+        explorer_suffix_equal(node->name, ".bin")) return 5;
+    return 6;
+}
+
+static void explorer_icon(int x, int y, const fs_node_t* node, int selected)
+{
+    int kind = explorer_file_kind(node);
+    uint32_t tint = kind == 0 ? 0x005AA9E6 :
+                    kind == 1 ? 0x007DB8FF :
+                    kind == 2 ? 0x0069D6AE :
+                    kind == 3 ? 0x00E6BD78 :
+                    kind == 4 ? 0x00B5A0FF :
+                    kind == 5 ? 0x00E17F89 : 0x008EA3B7;
 
     if (selected)
-        graphics_fill_rounded_rect(
-            x - 6, y - 5, 30, 30, 6, 0x002A3B4E);
+        graphics_fill_rounded_rect(x - 6, y - 5, 30, 30, 6, 0x002A3B4E);
 
-    if (directory)
+    if (kind == 0)
     {
-        graphics_fill_rect(x, y + 5, 18, 13, icon);
-        graphics_fill_rect(x + 2, y + 2, 9, 5, icon);
+        graphics_fill_rounded_rect(x, y + 5, 18, 13, 3, tint);
+        graphics_fill_rounded_rect(x + 2, y + 2, 9, 5, 2, tint);
+        graphics_fill_rect(x + 3, y + 10, 12, 1, 0x002C5B83);
     }
     else
     {
-        graphics_fill_rect(x + 2, y, 14, 18, icon);
-        graphics_fill_rect(x + 5, y + 4, 8, 2, 0x00131D28);
-        graphics_fill_rect(x + 5, y + 8, 8, 2, 0x00131D28);
-        graphics_fill_rect(x + 5, y + 12, 6, 2, 0x00131D28);
+        graphics_fill_rounded_rect(x + 2, y, 15, 19, 2, tint);
+        graphics_fill_rect(x + 5, y + 5, 9, 1, 0x00131D28);
+        graphics_fill_rect(x + 5, y + 9, 9, 1, 0x00131D28);
+        graphics_fill_rect(x + 5, y + 13, 6, 1, 0x00131D28);
+        if (kind == 1)
+            graphics_draw_text(x + 4, y + 6, "C", 0x00131D28, 1);
+        else if (kind == 3)
+            graphics_draw_text(x + 4, y + 6, "L", 0x00131D28, 1);
+        else if (kind == 4)
+            graphics_draw_text(x + 4, y + 6, "=", 0x00131D28, 1);
+        else if (kind == 5)
+            graphics_draw_text(x + 4, y + 6, "E", 0x00131D28, 1);
     }
 }
 
@@ -418,7 +470,7 @@ void file_explorer_draw(int width, int height)
 
         explorer_icon(
             content_x + 18, row_y + 8,
-            node->type == FS_NODE_DIRECTORY,
+            node,
             explorer_file == (int)node->id);
 
         graphics_draw_text(

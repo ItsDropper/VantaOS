@@ -381,7 +381,7 @@ static void smp_scheduler_probe_entry(void)
     {
     }
 
-    for (uint32_t i = 0; i < 50000000U; i++)
+    for (uint32_t i = 0; i < 20000000U; i++)
         __asm__ volatile ("pause" ::: "memory");
 
     __atomic_sub_fetch(&smp_scheduler_probe_active, 1U, __ATOMIC_ACQ_REL);

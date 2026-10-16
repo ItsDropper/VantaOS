@@ -68,9 +68,14 @@ int process_switch_to(uint32_t pid);
 /* Atomically releases current_pid and claims a READY process for cpu_id. */
 int process_claim_for_cpu(uint32_t next_pid, uint32_t current_pid,
                           uint32_t cpu_id);
+/* Claims a process and returns its validated context under the same lock. */
+int process_claim_for_cpu_context(uint32_t next_pid, uint32_t current_pid,
+                                  uint32_t cpu_id, uint64_t* stack_pointer_out,
+                                  paging_address_space_t** address_space_out);
 /* Scheduler transition APIs; finish must run after switching off the old stack. */
 int process_prepare_context_switch(uint32_t next_pid, uint32_t current_pid,
-                                   uint32_t cpu_id);
+                                   uint32_t cpu_id, uint64_t* next_stack_out,
+                                   paging_address_space_t** next_address_space_out);
 int process_finish_context_switch(uint32_t outgoing_pid, uint32_t cpu_id);
 int process_reap(uint32_t pid);
 uint64_t process_schedule(uint64_t current_stack);

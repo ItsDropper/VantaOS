@@ -314,10 +314,16 @@ int process_reap(uint32_t pid)
 
     if (process->state == PROCESS_ZOMBIE)
     {
+        uint32_t parent_pid = process->parent_pid;
+        int wake_parent = parent_pid > 0U && parent_pid < PROCESS_MAX &&
+            process_table_records[parent_pid].is_user &&
+            process_table_records[parent_pid].state == PROCESS_SLEEPING;
         process_reparent_children_locked(pid);
         process_reset_record(process);
         process->pid = pid;
         process_table_lock_release(flags);
+        if (wake_parent)
+            (void)process_wake(parent_pid);
         return 1;
     }
 
@@ -349,10 +355,16 @@ int process_reap(uint32_t pid)
         process_table_lock_release(flags);
         return 0;
     }
+    uint32_t parent_pid = process->parent_pid;
+    int wake_parent = parent_pid > 0U && parent_pid < PROCESS_MAX &&
+        process_table_records[parent_pid].is_user &&
+        process_table_records[parent_pid].state == PROCESS_SLEEPING;
     process_reparent_children_locked(pid);
     process_reset_record(process);
     process->pid = pid;
     process_table_lock_release(flags);
+    if (wake_parent)
+        (void)process_wake(parent_pid);
     return 1;
 }
 

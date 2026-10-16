@@ -309,13 +309,10 @@ int process_set_running(uint32_t pid)
     if (current_pid < PROCESS_MAX && current_pid != pid)
     {
         process_t* current = &processes[current_pid];
-        if (current->state == PROCESS_RUNNING ||
-            (current->state == PROCESS_READY &&
-             current->owner_cpu == cpu_id))
-        {
+        if (current->state == PROCESS_RUNNING)
             current->state = PROCESS_READY;
+        if (current->owner_cpu == cpu_id)
             current->owner_cpu = PROCESS_CPU_UNOWNED;
-        }
     }
 
     process_set_current_slot(pid);
@@ -377,8 +374,7 @@ int process_wake(uint32_t pid)
     if (!initialized || pid >= PROCESS_MAX)
         return 0;
     uint64_t flags = process_table_lock_acquire();
-    int ok = processes[pid].state == PROCESS_SLEEPING &&
-             processes[pid].owner_cpu == PROCESS_CPU_UNOWNED;
+    int ok = processes[pid].state == PROCESS_SLEEPING;
     if (ok)
         processes[pid].state = PROCESS_READY;
     process_table_lock_release(flags);
@@ -392,10 +388,8 @@ void process_block_current(void)
     uint64_t flags = process_table_lock_acquire();
     uint32_t current_pid = process_current_slot();
     if (current_pid < PROCESS_MAX)
-    {
         processes[current_pid].state = PROCESS_SLEEPING;
-        processes[current_pid].owner_cpu = PROCESS_CPU_UNOWNED;
-    }
+    /* Ownership remains with this CPU until it actually switches stacks. */
     process_table_lock_release(flags);
 }
 

@@ -213,13 +213,13 @@ static int smp_wait_for_reschedule_ipis(const acpi_platform_info_t* info)
         const cpu_local_t* local = cpu_local_get(i);
         if (!local)
             return 0;
-        if (i == local->logical_id && local->apic_id == apic_get_bsp_id())
+        if (local->apic_id == apic_get_bsp_id())
             continue;
         expected[i] = __atomic_load_n(&local->reschedule_ipi_ticks,
                                       __ATOMIC_ACQUIRE) + 1U;
         if (!apic_send_reschedule_ipi(local->apic_id))
         {
-            serial_write("VANTAOS_SMP_RESCHEDULE_IPI_FAIL\\n");
+            serial_write("VANTAOS_SMP_RESCHEDULE_IPI_FAIL\n");
             return 0;
         }
     }
@@ -248,10 +248,10 @@ static int smp_wait_for_reschedule_ipis(const acpi_platform_info_t* info)
 
     if (!ready)
     {
-        serial_write("VANTAOS_SMP_RESCHEDULE_IPI_FAIL\\n");
+        serial_write("VANTAOS_SMP_RESCHEDULE_IPI_FAIL\n");
         return 0;
     }
-    serial_write("VANTAOS_SMP_RESCHEDULE_IPI_OK\\n");
+    serial_write("VANTAOS_SMP_RESCHEDULE_IPI_OK\n");
     return 1;
 }
 

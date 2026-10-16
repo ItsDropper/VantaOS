@@ -423,6 +423,24 @@ int user_mode_process_smoke_test_start(void)
         return 0;
     }
 
+    /*
+     * Attempt to execute from the writable stack. NX must fault the process,
+     * not panic the kernel; the exception path then reaps it after switching
+     * away from its stack and CR3.
+     */
+    static const uint8_t nx_fault_image[] = {
+        0x48, 0xB8, 0x00, 0x10, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00,
+        0xFF, 0xE0
+    };
+    int fault_pid = process_create_user(
+        "ring3-nx-fault", process_current_pid(),
+        nx_fault_image, sizeof(nx_fault_image));
+    if (fault_pid <= 0)
+    {
+        serial_write("VANTAOS_USER_FAULT_PROCESS_CREATE_FAIL\n");
+        return 0;
+    }
+
     static const uint8_t invalid_elf[64] = {0};
     if (process_create_user_elf("invalid-elf", process_current_pid(),
                                 invalid_elf, sizeof(invalid_elf)) != -1)

@@ -380,6 +380,7 @@ static void smp_scheduler_probe_entry(void)
 
 static int smp_scheduler_probe_initialize(void)
 {
+    serial_write("VANTAOS_SMP_STRESS_INIT_BEGIN\n");
     smp_scheduler_probe_completed = 0;
     smp_scheduler_probe_ap_cpu = UINT32_MAX;
     smp_scheduler_probe_cpu_mask = 0;
@@ -404,6 +405,7 @@ static int smp_scheduler_probe_initialize(void)
         return 0;
     }
 
+    serial_write("VANTAOS_SMP_STRESS_AP_SELECTED\n");
     smp_scheduler_probe_task_count = smp_cpu_count() * 8U;
     if (smp_scheduler_probe_task_count < 4U)
         smp_scheduler_probe_task_count = 4U;
@@ -433,11 +435,13 @@ static int smp_scheduler_probe_initialize(void)
             return 0;
         }
     }
+    serial_write("VANTAOS_SMP_STRESS_TASKS_CREATED\n");
     return 1;
 }
 
 static int smp_scheduler_probe_wait(void)
 {
+    serial_write("VANTAOS_SMP_STRESS_WAIT_BEGIN\n");
     uint32_t attempts = 0;
     while (attempts++ < 1500U &&
            __atomic_load_n(&smp_scheduler_probe_completed,
@@ -461,6 +465,7 @@ static int smp_scheduler_probe_wait(void)
                                           __ATOMIC_ACQUIRE);
     uint32_t duplicates = __atomic_load_n(&smp_scheduler_probe_duplicates,
                                           __ATOMIC_ACQUIRE);
+    serial_write("VANTAOS_SMP_STRESS_WAIT_DONE\n");
     if (completed != smp_scheduler_probe_task_count ||
         cpus_seen < required_cpus || duplicates != 0U ||
         max_active < required_cpus)

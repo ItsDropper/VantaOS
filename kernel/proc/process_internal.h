@@ -7,10 +7,10 @@
 #include "spinlock.h"
 
 /* Private process-table contract shared by lifecycle implementation units. */
-extern process_t processes[PROCESS_MAX];
-extern uint8_t process_stacks[PROCESS_MAX][PROCESS_STACK_SIZE];
+extern process_t process_table_records[PROCESS_MAX];
+extern uint8_t process_stack_storage[PROCESS_MAX][PROCESS_STACK_SIZE];
 extern int process_initialized_state;
-extern uint32_t legacy_current_pid;
+extern uint32_t process_legacy_current_pid;
 extern spinlock_t process_table_lock;
 
 uint64_t process_table_lock_acquire(void);

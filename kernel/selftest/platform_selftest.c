@@ -8,7 +8,6 @@
 #include "spinlock.h"
 
 #ifdef VANTAOS_SELF_TEST
-#ifdef VANTAOS_SELF_TEST
 static void spinlock_primitive_probe(void)
 {
     spinlock_t lock = SPINLOCK_INITIALIZER;

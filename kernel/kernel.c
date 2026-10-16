@@ -182,11 +182,16 @@ static void pmm_boot_info_probe(void)
 static void spinlock_primitive_probe(void)
 {
     spinlock_t lock = SPINLOCK_INITIALIZER;
-    int ok = spinlock_try_lock(&lock);
+    uint64_t flags = 0;
+    int ok = spinlock_try_lock_irqsave(&lock, &flags);
     ok = !spinlock_try_lock(&lock) && ok;
-    spinlock_unlock(&lock);
-    ok = spinlock_try_lock(&lock) && ok;
-    spinlock_unlock(&lock);
+    spinlock_unlock_irqrestore(&lock, flags);
+
+    flags = 0;
+    int reacquired = spinlock_try_lock_irqsave(&lock, &flags);
+    ok = reacquired && ok;
+    if (reacquired)
+        spinlock_unlock_irqrestore(&lock, flags);
 
     serial_write(ok ?
         "VANTAOS_SPINLOCK_PRIMITIVE_OK\n" :

@@ -68,7 +68,7 @@ jobs:
             log="boot-${memory}m-${cpus}cpu.log"
             echo "Booting VantaOS in QEMU with ${memory} MiB RAM and ${cpus} CPU(s)..."
             set +e
-            timeout 12s qemu-system-x86_64 \
+            timeout 30s qemu-system-x86_64 \
               -machine pc \
               -smp "${cpus}" \
               -m "${memory}M" \

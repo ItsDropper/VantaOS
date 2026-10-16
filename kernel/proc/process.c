@@ -1,5 +1,6 @@
 #include "process.h"
 #include "cpu_local.h"
+#include "apic.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -282,6 +283,14 @@ int process_create_kernel_any(const char* name, uint32_t parent_pid,
 }
 
 
+
+int process_create_kernel_on_cpu(const char* name, uint32_t parent_pid,
+                                  process_entry_t entry, uint32_t cpu_id)
+{
+    return process_create_kernel_affinity(name, parent_pid, entry, cpu_id);
+}
+
+
 int process_create_idle_for_cpu(uint32_t cpu_id, const char* name,
                                 process_entry_t entry)
 {
@@ -422,15 +431,57 @@ int process_switch_to(uint32_t pid)
                                  process_current_cpu_id());
 }
 
+static void process_send_wake_ipi(uint32_t owner_cpu,
+                                       uint32_t affinity_cpu)
+{
+    if (!apic_is_enabled())
+        return;
+
+    if (owner_cpu != PROCESS_CPU_UNOWNED)
+    {
+        const cpu_local_t* local = cpu_local_get(owner_cpu);
+        if (local)
+            (void)apic_send_reschedule_ipi(local->apic_id);
+        return;
+    }
+
+    if (affinity_cpu != PROCESS_CPU_ANY)
+    {
+        const cpu_local_t* local = cpu_local_get(affinity_cpu);
+        if (local)
+            (void)apic_send_reschedule_ipi(local->apic_id);
+        return;
+    }
+
+    /* An unpinned task can be claimed by any online CPU. */
+    for (uint32_t cpu = 0; cpu < cpu_local_capacity(); cpu++)
+    {
+        const cpu_local_t* local = cpu_local_get(cpu);
+        if (local)
+            (void)apic_send_reschedule_ipi(local->apic_id);
+    }
+}
+
 int process_wake(uint32_t pid)
 {
-    if (!initialized || pid >= PROCESS_MAX)
+    if (!initialized || pid == 0U || pid >= PROCESS_MAX)
         return 0;
+
+    uint32_t owner_cpu = PROCESS_CPU_UNOWNED;
+    uint32_t affinity_cpu = PROCESS_CPU_ANY;
     uint64_t flags = process_table_lock_acquire();
-    int ok = processes[pid].state == PROCESS_SLEEPING;
+    process_t* process = &processes[pid];
+    int ok = process->state == PROCESS_SLEEPING;
     if (ok)
-        processes[pid].state = PROCESS_READY;
+    {
+        process->state = PROCESS_READY;
+        owner_cpu = process->owner_cpu;
+        affinity_cpu = process->affinity_cpu;
+    }
     process_table_lock_release(flags);
+
+    if (ok)
+        process_send_wake_ipi(owner_cpu, affinity_cpu);
     return ok;
 }
 

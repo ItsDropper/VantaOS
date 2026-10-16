@@ -110,6 +110,26 @@ fixture_matches:
     cmp $-2, %rax
     jne file_fail
 
+    /* Fill all per-process slots, verify exhaustion, then exit without
+       closing them so the reaper must release every owned VFS handle. */
+    mov $8, %r13
+open_until_full:
+    mov $3, %eax
+    lea file_path(%rip), %rdi
+    mov $1, %esi
+    int $0x80
+    cmp $3, %rax
+    jl file_fail
+    dec %r13
+    jnz open_until_full
+
+    mov $3, %eax
+    lea file_path(%rip), %rdi
+    mov $1, %esi
+    int $0x80
+    cmp $-24, %rax
+    jne file_fail
+
     mov $1, %eax
     lea file_success(%rip), %rdi
     mov $(file_success_end - file_success), %esi

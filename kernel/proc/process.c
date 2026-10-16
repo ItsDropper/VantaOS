@@ -100,9 +100,17 @@ void process_reset_record(process_t* process)
     process->kernel_stack = NULL;
     process->address_space = NULL;
     process->is_user = 0U;
-    process->user_code_frame = NULL;
-    process->user_stack_frame = NULL;
+    process->user_page_count = 0U;
+    process->user_entry = 0U;
+    process->user_stack_base = 0U;
+    process->user_stack_top = 0U;
     process->user_image_size = 0U;
+    for (uint32_t i = 0; i < PROCESS_USER_MAX_PAGES; i++)
+    {
+        process->user_pages[i].virtual_address = 0U;
+        process->user_pages[i].physical_frame = NULL;
+        process->user_pages[i].flags = 0U;
+    }
 
     process->context.r15 = 0;
     process->context.r14 = 0;
@@ -150,11 +158,25 @@ int process_stack_is_valid_locked(const process_t* process)
     uintptr_t rip = (uintptr_t)values[16];
     if (process->is_user)
     {
+        int executable_page = 0;
+        if (process->user_page_count == 0U ||
+            process->user_page_count > PROCESS_USER_MAX_PAGES)
+            return 0;
+        for (uint32_t i = 0; i < process->user_page_count; i++)
+        {
+            const process_user_page_t* page = &process->user_pages[i];
+            if ((page->flags & PROCESS_USER_PAGE_EXEC) != 0U &&
+                rip >= page->virtual_address &&
+                rip - page->virtual_address < PAGE_SIZE)
+            {
+                executable_page = 1;
+                break;
+            }
+        }
         return values[17] == 0x23U && values[20] == 0x1BU &&
-               rip >= PAGING_USER_BASE &&
-               rip - PAGING_USER_BASE < process->user_image_size &&
-               values[19] > PAGING_USER_BASE + PAGE_SIZE &&
-               values[19] <= PAGING_USER_BASE + 2U * PAGE_SIZE;
+               executable_page &&
+               values[19] >= process->user_stack_base &&
+               values[19] <= process->user_stack_top;
     }
 
     if (values[17] != 0x08U)

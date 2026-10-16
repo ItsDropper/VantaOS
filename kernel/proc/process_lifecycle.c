@@ -339,8 +339,6 @@ int process_reap(uint32_t pid)
         process_reset_record(process);
         process->pid = pid;
         process_table_lock_release(flags);
-        if (wake_parent)
-            (void)process_wake(parent_pid);
         return 1;
     }
 

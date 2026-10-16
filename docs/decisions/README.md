@@ -31,4 +31,6 @@ What becomes easier or harder? What risks, migration steps, or follow-up work re
 
 Number records sequentially. Do not backdate a record or mark a proposal accepted before the project has actually chosen it.
 
-No records have been added yet; add the first when a substantive architectural decision needs a durable explanation.
+## Accepted decisions
+
+- [ADR-001: Subsystem-owned source manifests and boot coordinators](0001-subsystem-source-manifests-and-boot-coordinators.md) — keep initialization order in coordinators, test implementations in subsystem-owned modules, and protect the boundary with CI.

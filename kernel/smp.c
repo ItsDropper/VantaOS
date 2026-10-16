@@ -170,9 +170,18 @@ static _Noreturn void smp_idle_process_entry(void)
 
 int smp_scheduler_initialize(void)
 {
-    if (!process_is_initialized() || !scheduler_is_initialized() ||
-        discovered_cpu_count == 0U ||
-        discovered_cpu_count > cpu_local_capacity())
+    if (!process_is_initialized() || !scheduler_is_initialized())
+        return 0;
+
+    /*
+     * APIC/SMP unavailability is a supported legacy fallback. There are no
+     * per-CPU idle contexts to publish in that mode, so this phase is a
+     * successful no-op rather than a scheduler bootstrap failure.
+     */
+    if (discovered_cpu_count == 0U)
+        return 1;
+
+    if (discovered_cpu_count > cpu_local_capacity())
         return 0;
 
     /* Build every pinned idle context before allowing any AP to switch. */

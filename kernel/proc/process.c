@@ -315,7 +315,7 @@ int process_create_idle_for_cpu(uint32_t cpu_id, const char* name,
         return 0;
 
     int pid = process_create_kernel_affinity(name, 0U, entry,
-                                                    cpu_id, local);
+                                                cpu_id, local);
     if (pid < 0)
         return 0;
 

@@ -19,6 +19,7 @@
 #define LAPIC_LVT_TIMER 0x320U
 #define LAPIC_TIMER_INITIAL_COUNT 0x380U
 #define LAPIC_TIMER_DIVIDE 0x3E0U
+#define APIC_RESCHEDULE_VECTOR 0xF3U
 #define LAPIC_LVT_LINT0 0x350U
 #define LAPIC_LVT_LINT1 0x360U
 #define LAPIC_SVR 0x0F0U
@@ -309,6 +310,11 @@ int apic_send_fixed_ipi(uint32_t apic_id, uint8_t vector)
     if (vector < 0x10U || vector == 0xFFU)
         return 0;
     return apic_send_ipi(apic_id, vector);
+}
+
+int apic_send_reschedule_ipi(uint32_t apic_id)
+{
+    return apic_send_fixed_ipi(apic_id, APIC_RESCHEDULE_VECTOR);
 }
 
 int apic_is_enabled(void)

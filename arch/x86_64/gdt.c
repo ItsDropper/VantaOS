@@ -1,16 +1,33 @@
 #include "gdt.h"
 
+#include <stddef.h>
 #include <stdint.h>
 
-struct gdt_entry
+#define GDT_USER_DATA_INDEX 3U
+#define GDT_USER_CODE_INDEX 4U
+#define GDT_TSS_BASE_INDEX 5U
+#define GDT_ENTRY_COUNT (GDT_TSS_BASE_INDEX + CPU_LOCAL_MAX * 2U)
+
+typedef struct tss64
 {
-    uint16_t limit_low;
-    uint16_t base_low;
-    uint8_t base_middle;
-    uint8_t access;
-    uint8_t granularity;
-    uint8_t base_high;
-} __attribute__((packed));
+    uint32_t reserved0;
+    uint64_t rsp0;
+    uint64_t rsp1;
+    uint64_t rsp2;
+    uint64_t reserved1;
+    uint64_t ist1;
+    uint64_t ist2;
+    uint64_t ist3;
+    uint64_t ist4;
+    uint64_t ist5;
+    uint64_t ist6;
+    uint64_t ist7;
+    uint64_t reserved2;
+    uint16_t reserved3;
+    uint16_t iomap_base;
+} __attribute__((packed)) tss64_t;
+
+_Static_assert(sizeof(tss64_t) == 104U, "x86-64 TSS must be 104 bytes");
 
 struct gdt_ptr
 {
@@ -18,44 +35,67 @@ struct gdt_ptr
     uint64_t base;
 } __attribute__((packed));
 
-static struct gdt_entry gdt[3];
+/*
+ * One immutable shared GDT contains the flat kernel/user segments and one
+ * 16-byte TSS descriptor per logical CPU. TSS contents are CPU-local; in
+ * particular, each CPU's RSP0 must never point at another CPU's stack.
+ */
+static uint64_t gdt[GDT_ENTRY_COUNT];
 static struct gdt_ptr gdt_pointer;
+static tss64_t cpu_tss[CPU_LOCAL_MAX];
 
-static void gdt_set_gate(int number, uint32_t base, uint32_t limit,
-                         uint8_t access, uint8_t granularity)
+static void gdt_set_segment(unsigned int index, uint8_t access,
+                            uint8_t flags)
 {
-    gdt[number].base_low = base & 0xFFFFU;
-    gdt[number].base_middle = (base >> 16) & 0xFFU;
-    gdt[number].base_high = (base >> 24) & 0xFFU;
-    gdt[number].limit_low = limit & 0xFFFFU;
-    gdt[number].granularity = (limit >> 16) & 0x0FU;
-    gdt[number].granularity |= granularity & 0xF0U;
-    gdt[number].access = access;
+    /* Flat 4-GiB descriptor; long-mode code uses L=1 and D=0. */
+    gdt[index] = 0xFFFFULL |
+                 ((uint64_t)access << 40) |
+                 (0xFULL << 48) |
+                 ((uint64_t)(flags & 0xF0U) << 48);
+}
+
+static void gdt_set_tss_descriptor(unsigned int cpu)
+{
+    const unsigned int index = GDT_TSS_BASE_INDEX + cpu * 2U;
+    const uintptr_t base = (uintptr_t)&cpu_tss[cpu];
+    const uint32_t limit = (uint32_t)sizeof(tss64_t) - 1U;
+
+    gdt[index] = (uint64_t)(limit & 0xFFFFU) |
+                 ((uint64_t)(base & 0xFFFFFFU) << 16) |
+                 (0x89ULL << 40) |
+                 ((uint64_t)((limit >> 16) & 0x0FU) << 48) |
+                 ((uint64_t)((base >> 24) & 0xFFU) << 56);
+    gdt[index + 1U] = (uint64_t)(base >> 32);
 }
 
 void gdt_initialize(void)
 {
-    gdt_pointer.limit = sizeof(gdt) - 1;
+    for (unsigned int i = 0; i < GDT_ENTRY_COUNT; i++)
+        gdt[i] = 0;
+
+    /* Kernel code/data: selectors 0x08/0x10. */
+    gdt_set_segment(1U, 0x9AU, 0xA0U);
+    gdt_set_segment(2U, 0x92U, 0xC0U);
+
+    /* User data/code: RPL3 selectors 0x1B/0x23. */
+    gdt_set_segment(GDT_USER_DATA_INDEX, 0xF2U, 0xC0U);
+    gdt_set_segment(GDT_USER_CODE_INDEX, 0xFAU, 0xA0U);
+
+    for (unsigned int cpu = 0; cpu < CPU_LOCAL_MAX; cpu++)
+    {
+        cpu_tss[cpu].iomap_base = (uint16_t)sizeof(tss64_t);
+        gdt_set_tss_descriptor(cpu);
+    }
+
+    gdt_pointer.limit = (uint16_t)(sizeof(gdt) - 1U);
     gdt_pointer.base = (uint64_t)(uintptr_t)&gdt;
-
-    gdt_set_gate(0, 0, 0, 0, 0);
-
-    /* Long-mode kernel code: L=1, D=0, present, ring 0, executable. */
-    gdt_set_gate(1, 0, 0xFFFFFFFFU, 0x9AU, 0xA0U);
-
-    /* Kernel data segment. Segmentation is effectively flat in long mode. */
-    gdt_set_gate(2, 0, 0xFFFFFFFFU, 0x92U, 0x00U);
-
     gdt_load();
 }
 
 /*
- * Load the already-built shared GDT on the calling CPU.
- *
- * The descriptor table is shared by every CPU and must be immutable after
- * the BSP publishes it. AP startup must load it, not rebuild it: rewriting
- * descriptors while another CPU is taking an interrupt can expose a
- * partially updated descriptor to that CPU.
+ * Load the already-built shared GDT on the calling CPU. The table is built
+ * once before AP startup; CPUs must not rewrite descriptors while another
+ * CPU could be taking an interrupt.
  */
 void gdt_load(void)
 {
@@ -74,4 +114,25 @@ void gdt_load(void)
         : "m"(gdt_pointer)
         : "rax", "memory"
     );
+}
+
+int gdt_set_kernel_stack(uint32_t logical_id, uintptr_t stack_top)
+{
+    if (logical_id >= CPU_LOCAL_MAX || stack_top == 0U ||
+        (stack_top & 0xFULL) != 0U)
+        return 0;
+
+    cpu_tss[logical_id].rsp0 = (uint64_t)stack_top;
+    return 1;
+}
+
+int gdt_load_task_register(uint32_t logical_id)
+{
+    if (logical_id >= CPU_LOCAL_MAX)
+        return 0;
+
+    const uint16_t selector =
+        (uint16_t)((GDT_TSS_BASE_INDEX + logical_id * 2U) * 8U);
+    __asm__ volatile ("ltr %0" : : "r"(selector) : "memory");
+    return 1;
 }

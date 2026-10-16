@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -312,11 +312,27 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-      - name: Replace tracked desktop screenshot on master
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master' && !contains(github.event.head_commit.message, '[skip ci]')
+  refresh-screenshot:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master' && !contains(github.event.head_commit.message, '[skip ci]')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out master
+        uses: actions/checkout@v4
+
+      - name: Download freshly captured desktop screenshot
+        uses: actions/download-artifact@v4
+        with:
+          name: vantaos-desktop-screenshot
+          path: media
+
+      - name: Replace tracked desktop screenshot
         shell: bash
         run: |
           set -euo pipefail
+          test -s media/desktop.png
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add media/desktop.png

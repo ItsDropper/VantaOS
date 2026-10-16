@@ -158,7 +158,7 @@ int process_create_user_elf_args(const char* name, uint32_t parent_pid,
     size_t total_argument_bytes = 0U;
     for (uint32_t i = 0; i < argc; i++)
     {
-        if (!argv[i] || (i == 0U && argv[i][0] == '\\0'))
+        if (!argv[i] || (i == 0U && argv[i][0] == '\0'))
             return -1;
         size_t length = 0U;
         while (length <= PROCESS_USER_ARG_BYTES_MAX && argv[i][length])

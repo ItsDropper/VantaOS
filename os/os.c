@@ -535,6 +535,125 @@ static int smp_remote_wake_probe_wait(void)
     return 1;
 }
 
+
+static uint32_t smp_migration_bsp_cpu;
+static uint32_t smp_migration_target_cpu;
+static volatile uint32_t smp_migration_target_pid;
+static volatile uint32_t smp_migration_start_cpu;
+static volatile uint32_t smp_migration_target_done;
+static volatile uint32_t smp_migration_helper_done;
+static volatile uint32_t smp_migration_ok;
+
+static void smp_migration_target_entry(void)
+{
+    uint32_t pid = process_current_pid();
+    uint32_t start_cpu = process_current_cpu_id();
+    __atomic_store_n(&smp_migration_start_cpu, start_cpu, __ATOMIC_RELEASE);
+    __atomic_store_n(&smp_migration_target_pid, pid, __ATOMIC_RELEASE);
+
+    for (uint32_t spin = 0; spin < 100000000U; spin++)
+    {
+        process_t snapshot;
+        uint32_t current_cpu = process_current_cpu_id();
+        if (current_cpu == smp_migration_bsp_cpu &&
+            current_cpu != start_cpu &&
+            process_snapshot(pid, &snapshot) &&
+            snapshot.affinity_cpu == smp_migration_bsp_cpu)
+        {
+            __atomic_store_n(&smp_migration_target_done, 1U,
+                             __ATOMIC_RELEASE);
+            return;
+        }
+        __asm__ volatile ("pause" ::: "memory");
+    }
+}
+
+static void smp_migration_helper_entry(void)
+{
+    uint32_t target_pid = 0;
+    uint32_t start_cpu = UINT32_MAX;
+    for (uint32_t spin = 0; spin < 100000000U; spin++)
+    {
+        target_pid = __atomic_load_n(&smp_migration_target_pid,
+                                     __ATOMIC_ACQUIRE);
+        start_cpu = __atomic_load_n(&smp_migration_start_cpu,
+                                    __ATOMIC_ACQUIRE);
+        if (target_pid != 0U && start_cpu != UINT32_MAX)
+            break;
+        __asm__ volatile ("pause" ::: "memory");
+    }
+
+    int ok = target_pid != 0U &&
+             start_cpu == smp_migration_target_cpu &&
+             start_cpu != smp_migration_bsp_cpu &&
+             process_set_affinity(target_pid, smp_migration_bsp_cpu);
+
+    for (uint32_t spin = 0; ok && spin < 100000000U; spin++)
+    {
+        if (__atomic_load_n(&smp_migration_target_done,
+                            __ATOMIC_ACQUIRE) != 0U)
+            break;
+        __asm__ volatile ("pause" ::: "memory");
+    }
+
+    ok = ok && __atomic_load_n(&smp_migration_target_done,
+                               __ATOMIC_ACQUIRE) != 0U;
+    __atomic_store_n(&smp_migration_ok, ok ? 1U : 0U, __ATOMIC_RELEASE);
+    __atomic_store_n(&smp_migration_helper_done, 1U, __ATOMIC_RELEASE);
+}
+
+static int smp_process_migration_probe_initialize(void)
+{
+    smp_migration_bsp_cpu = process_current_cpu_id();
+    smp_migration_target_cpu = UINT32_MAX;
+    smp_migration_target_pid = 0;
+    smp_migration_start_cpu = UINT32_MAX;
+    smp_migration_target_done = 0;
+    smp_migration_helper_done = 0;
+    smp_migration_ok = 0;
+
+    for (uint32_t cpu = 0; cpu < smp_cpu_count(); cpu++)
+    {
+        if (!smp_cpu_is_bsp(cpu) && cpu_local_get(cpu))
+        {
+            smp_migration_target_cpu = cpu;
+            break;
+        }
+    }
+
+    if (smp_migration_target_cpu == UINT32_MAX ||
+        process_create_kernel_on_cpu("migration-target",
+                                     process_current_pid(),
+                                     smp_migration_target_entry,
+                                     smp_migration_target_cpu) < 0 ||
+        process_create_kernel("migration-helper", process_current_pid(),
+                              smp_migration_helper_entry) < 0)
+    {
+        serial_write("VANTAOS_SMP_MIGRATION_FAIL\n");
+        return 0;
+    }
+    return 1;
+}
+
+static int smp_process_migration_probe_wait(void)
+{
+    uint32_t attempts = 0;
+    while (attempts++ < 1500U &&
+           __atomic_load_n(&smp_migration_helper_done,
+                           __ATOMIC_ACQUIRE) == 0U)
+        __asm__ volatile ("sti; hlt" ::: "memory");
+
+    if (__atomic_load_n(&smp_migration_helper_done, __ATOMIC_ACQUIRE) == 0U ||
+        __atomic_load_n(&smp_migration_ok, __ATOMIC_ACQUIRE) == 0U)
+    {
+        serial_write("VANTAOS_SMP_MIGRATION_FAIL\n");
+        return 0;
+    }
+
+    serial_write("VANTAOS_SMP_MIGRATION_OK\n");
+    return 1;
+}
+
 static void scheduler_probe_initialize(void)
 {
     pmm_allocator_probe();
@@ -713,6 +832,8 @@ void os_run(void)
         (void)smp_scheduler_probe_wait();
     if (smp_cpu_count() > 1U && smp_remote_wake_probe_initialize())
         (void)smp_remote_wake_probe_wait();
+    if (smp_cpu_count() > 1U && smp_process_migration_probe_initialize())
+        (void)smp_process_migration_probe_wait();
 #endif
     desktop_process_main();
 }

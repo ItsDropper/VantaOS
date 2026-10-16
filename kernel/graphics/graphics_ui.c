@@ -71,40 +71,119 @@ void graphics_draw_window_frame(int x, int y, int w, int h, const char* title, i
     }
 }
 
+static unsigned char ui_rtc_read(unsigned char reg)
+{
+    unsigned char value;
+    __asm__ volatile ("outb %0, $0x70" : : "a"(reg));
+    __asm__ volatile ("inb $0x71, %0" : "=a"(value));
+    return value;
+}
+static unsigned char ui_bcd(unsigned char value)
+{
+    return (unsigned char)((value & 0x0F) + ((value >> 4) * 10));
+}
+static void ui_clock_text(char *clock, char *date)
+{
+    unsigned char second, minute, hour, day, month, year, status_b;
+    /* Read a coherent RTC snapshot; the RTC stores calendar time in CMOS. */
+    for (int tries = 0; tries < 4; ++tries)
+    {
+        while (ui_rtc_read(0x0A) & 0x80) { }
+        second = ui_rtc_read(0x00);
+        minute = ui_rtc_read(0x02);
+        hour = ui_rtc_read(0x04);
+        day = ui_rtc_read(0x07);
+        month = ui_rtc_read(0x08);
+        year = ui_rtc_read(0x09);
+        status_b = ui_rtc_read(0x0B);
+        if (second == ui_rtc_read(0x00))
+            break;
+    }
+    if (!(status_b & 0x04))
+    {
+        second = ui_bcd(second);
+        minute = ui_bcd(minute);
+        hour = (unsigned char)((hour & 0x80) | ui_bcd(hour & 0x7F));
+        day = ui_bcd(day);
+        month = ui_bcd(month);
+        year = ui_bcd(year);
+    }
+    if (!(status_b & 0x02))
+    {
+        unsigned char pm = hour & 0x80;
+        hour &= 0x7F;
+        hour = (unsigned char)(hour % 12);
+        if (pm) hour = (unsigned char)(hour + 12);
+    }
+    clock[0] = (char)('0' + minute / 10);
+    clock[1] = (char)('0' + minute % 10);
+    clock[2] = ':';
+    clock[3] = (char)('0' + hour / 10);
+    clock[4] = (char)('0' + hour % 10);
+    clock[5] = 0;
+    /* Finnish-style date; RTC year is the conventional 2000-2099 range. */
+    date[0] = (char)('0' + day / 10);
+    date[1] = (char)('0' + day % 10);
+    date[2] = '.';
+    date[3] = (char)('0' + month / 10);
+    date[4] = (char)('0' + month % 10);
+    date[5] = '.';
+    date[6] = '2';
+    date[7] = '0';
+    date[8] = (char)('0' + year / 10);
+    date[9] = (char)('0' + year % 10);
+    date[10] = 0;
+}
+
 void graphics_draw_taskbar(int taskbar_y, int width)
 {
     int center = width / 2;
+    char clock[6], date[11];
+    ui_clock_text(clock, date);
 
-    /* Floating, compact dock. Coordinates intentionally match input hitboxes. */
-    graphics_fill_rounded_rect(center - 202, taskbar_y + 5, 224, 54, 14,
-        0x00151C27);
-    graphics_fill_rect(center - 190, taskbar_y + 5, 200, 1, 0x002A3747);
+    /* Windows 11-style taskbar: one quiet full-width surface and centered apps. */
+    graphics_fill_rect(0, taskbar_y, width, 64, 0x00E6EDF6);
+    graphics_fill_rect(0, taskbar_y, width, 1, 0x00CAD5E2);
+    graphics_fill_rect(0, taskbar_y + 1, width, 1, 0x00F7FAFD);
 
-    graphics_fill_rounded_rect(center - 190, taskbar_y + 10, 48, 42, 10,
-        start_menu_open ? 0x002C3C50 : 0x001C2633);
-    graphics_draw_vanta_logo(center - 180, taskbar_y + 17, 26);
+    /* Start */
+    graphics_fill_rounded_rect(center - 210, taskbar_y + 10, 42, 42, 8,
+        start_menu_open ? 0x00C9DDF5 : 0x00E6EDF6);
+    ui_brand(center - 199, taskbar_y + 21, 20);
 
-    graphics_fill_rounded_rect(center - 132, taskbar_y + 10, 68, 42, 10,
-        active_panel == 2 ? 0x00304459 : 0x001C2633);
-    graphics_fill_rounded_rect(center - 112, taskbar_y + 20, 24, 18, 4,
-        VANTA_UI_ACCENT);
-    graphics_fill_rect(center - 108, taskbar_y + 17, 12, 5, 0x0079B8FF);
+    /* Search is styled like a native taskbar affordance; intentionally inert. */
+    graphics_fill_rounded_rect(center - 160, taskbar_y + 10, 66, 42, 9,
+                                0x00F7F9FC);
+    graphics_fill_rounded_rect(center - 146, taskbar_y + 21, 12, 12, 6,
+                                0x005B7189);
+    graphics_fill_rect(center - 136, taskbar_y + 31, 5, 2, 0x005B7189);
+    graphics_draw_text(center - 128, taskbar_y + 27, "Search", 0x005B7189, 1);
+
+    /* File Explorer: folder with a proper tab and body. */
+    graphics_fill_rounded_rect(center - 84, taskbar_y + 10, 42, 42, 8,
+        active_panel == 2 ? 0x00C9DDF5 : 0x00E6EDF6);
+    graphics_fill_rounded_rect(center - 75, taskbar_y + 24, 25, 16, 3,
+                                0x00E9B94F);
+    graphics_fill_rounded_rect(center - 74, taskbar_y + 20, 12, 6, 2,
+                                0x00F5D77C);
     if (active_panel == 2)
-        graphics_fill_rounded_rect(center - 110, taskbar_y + 48, 24, 2, 1,
-            0x0079B8FF);
+        graphics_fill_rounded_rect(center - 73, taskbar_y + 49, 20, 2, 1,
+                                    0x004A8BE8);
 
-    graphics_fill_rounded_rect(center - 56, taskbar_y + 10, 68, 42, 10,
-        active_panel == 3 ? 0x00304459 : 0x001C2633);
-    graphics_fill_rounded_rect(center - 40, taskbar_y + 19, 36, 24, 5,
-        0x000B1119);
-    graphics_draw_text(center - 34, taskbar_y + 26, ">_", 0x0079B8FF, 1);
+    /* Terminal */
+    graphics_fill_rounded_rect(center - 36, taskbar_y + 10, 42, 42, 8,
+        active_panel == 3 ? 0x00C9DDF5 : 0x00E6EDF6);
+    graphics_fill_rounded_rect(center - 28, taskbar_y + 20, 26, 22, 5,
+                                0x002A3B50);
+    graphics_draw_text(center - 24, taskbar_y + 27, ">_", 0x00F3F7FC, 1);
     if (terminal_running)
-        graphics_fill_rounded_rect(center - 30, taskbar_y + 48, 16, 2, 1,
-            0x0079B8FF);
+        graphics_fill_rounded_rect(center - 28, taskbar_y + 49, 26, 2, 1,
+                                    0x004A8BE8);
 
-    /* No decorative status icon: every taskbar affordance has an action. */
+    /* Real-time clock and RTC calendar, right aligned like Windows. */
+    graphics_draw_text(width - 92, taskbar_y + 17, clock, 0x002A3543, 1);
+    graphics_draw_text(width - 92, taskbar_y + 34, date, 0x004C5A6B, 1);
 }
-
 void graphics_present(void)
 {
     if (!initialized)

@@ -6,7 +6,7 @@
 
 int process_mark_ready(uint32_t pid)
 {
-    if (!initialized || pid == 0 || pid >= PROCESS_MAX)
+    if (!process_initialized_state || pid == 0 || pid >= PROCESS_MAX)
         return 0;
     uint64_t flags = process_table_lock_acquire();
     int ok = processes[pid].state != PROCESS_UNUSED &&
@@ -19,7 +19,7 @@ int process_mark_ready(uint32_t pid)
 
 int process_set_running(uint32_t pid)
 {
-    if (!initialized || pid >= PROCESS_MAX)
+    if (!process_initialized_state || pid >= PROCESS_MAX)
         return 0;
 
     uint64_t flags = process_table_lock_acquire();
@@ -59,7 +59,7 @@ static int process_claim_for_cpu_internal(uint32_t next_pid,
                                           uint64_t* stack_pointer_out,
                                           paging_address_space_t** address_space_out)
 {
-    if (!initialized || next_pid == 0 || next_pid >= PROCESS_MAX ||
+    if (!process_initialized_state || next_pid == 0 || next_pid >= PROCESS_MAX ||
         current_pid >= PROCESS_MAX ||
         ((stack_pointer_out == NULL) != (address_space_out == NULL)))
         return 0;
@@ -142,7 +142,7 @@ int process_prepare_context_switch(uint32_t next_pid, uint32_t current_pid,
                                    uint32_t cpu_id, uint64_t* next_stack_out,
                                    paging_address_space_t** next_address_space_out)
 {
-    if (!initialized || next_pid == 0U || next_pid >= PROCESS_MAX ||
+    if (!process_initialized_state || next_pid == 0U || next_pid >= PROCESS_MAX ||
         current_pid == 0U || current_pid >= PROCESS_MAX ||
         !next_stack_out || !next_address_space_out)
         return 0;
@@ -193,7 +193,7 @@ int process_prepare_context_switch(uint32_t next_pid, uint32_t current_pid,
  */
 int process_finish_context_switch(uint32_t outgoing_pid, uint32_t cpu_id)
 {
-    if (!initialized || outgoing_pid == 0U || outgoing_pid >= PROCESS_MAX ||
+    if (!process_initialized_state || outgoing_pid == 0U || outgoing_pid >= PROCESS_MAX ||
         cpu_id != process_current_cpu_id() ||
         outgoing_pid == process_current_slot())
         return 0;
@@ -262,7 +262,7 @@ static void process_send_wake_ipi(uint32_t owner_cpu,
 
 int process_wake(uint32_t pid)
 {
-    if (!initialized || pid == 0U || pid >= PROCESS_MAX)
+    if (!process_initialized_state || pid == 0U || pid >= PROCESS_MAX)
         return 0;
 
     uint32_t owner_cpu = PROCESS_CPU_UNOWNED;
@@ -293,7 +293,7 @@ static void process_request_cpu_reschedule(uint32_t cpu_id)
 
 int process_set_affinity(uint32_t pid, uint32_t cpu_id)
 {
-    if (!initialized || pid == 0U || pid >= PROCESS_MAX ||
+    if (!process_initialized_state || pid == 0U || pid >= PROCESS_MAX ||
         (cpu_id != PROCESS_CPU_ANY &&
          (cpu_id >= CPU_LOCAL_MAX || !cpu_local_get(cpu_id))))
         return 0;
@@ -345,7 +345,7 @@ int process_set_affinity(uint32_t pid, uint32_t cpu_id)
 
 void process_block_current(void)
 {
-    if (!initialized)
+    if (!process_initialized_state)
         return;
     uint64_t flags = process_table_lock_acquire();
     uint32_t current_pid = process_current_slot();
@@ -357,7 +357,7 @@ void process_block_current(void)
 
 int process_terminate(uint32_t pid)
 {
-    if (!initialized || pid == 0 || pid >= PROCESS_MAX)
+    if (!process_initialized_state || pid == 0 || pid >= PROCESS_MAX)
         return 0;
 
     uint64_t flags = process_table_lock_acquire();
@@ -381,7 +381,7 @@ int process_terminate(uint32_t pid)
 
 void process_terminate_current(void)
 {
-    if (!initialized)
+    if (!process_initialized_state)
         return;
     uint64_t flags = process_table_lock_acquire();
     uint32_t current_pid = process_current_slot();
@@ -394,7 +394,7 @@ void process_terminate_current(void)
 
 void process_save_stack(uint32_t pid, uint64_t stack_pointer)
 {
-    if (!initialized || pid >= PROCESS_MAX)
+    if (!process_initialized_state || pid >= PROCESS_MAX)
         return;
     uint64_t flags = process_table_lock_acquire();
     if (processes[pid].state != PROCESS_UNUSED)
@@ -407,7 +407,7 @@ void process_save_stack(uint32_t pid, uint64_t stack_pointer)
 
 uint64_t process_get_stack(uint32_t pid)
 {
-    if (!initialized || pid >= PROCESS_MAX)
+    if (!process_initialized_state || pid >= PROCESS_MAX)
         return 0;
     uint64_t flags = process_table_lock_acquire();
     uint64_t stack = processes[pid].state == PROCESS_UNUSED ?
@@ -418,7 +418,7 @@ uint64_t process_get_stack(uint32_t pid)
 
 int process_stack_is_valid(uint32_t pid)
 {
-    if (!initialized || pid == 0 || pid >= PROCESS_MAX)
+    if (!process_initialized_state || pid == 0 || pid >= PROCESS_MAX)
         return 0;
 
     uint64_t flags = process_table_lock_acquire();
@@ -429,7 +429,7 @@ int process_stack_is_valid(uint32_t pid)
 
 int process_reap(uint32_t pid)
 {
-    if (!initialized || pid == 0 || pid >= PROCESS_MAX)
+    if (!process_initialized_state || pid == 0 || pid >= PROCESS_MAX)
         return 0;
 
     uint64_t flags = process_table_lock_acquire();
@@ -454,7 +454,7 @@ int process_reap(uint32_t pid)
 uint64_t process_schedule(uint64_t current_stack)
 {
     uint32_t current_pid = process_current_slot();
-    if (!initialized || current_pid >= PROCESS_MAX)
+    if (!process_initialized_state || current_pid >= PROCESS_MAX)
         return current_stack;
 
     process_save_stack(current_pid, current_stack);
@@ -464,7 +464,7 @@ uint64_t process_schedule(uint64_t current_stack)
 
 int process_snapshot(uint32_t pid, process_t* snapshot)
 {
-    if (!initialized || pid >= PROCESS_MAX || !snapshot)
+    if (!process_initialized_state || pid >= PROCESS_MAX || !snapshot)
         return 0;
 
     uint64_t flags = process_table_lock_acquire();
@@ -478,7 +478,7 @@ int process_snapshot(uint32_t pid, process_t* snapshot)
 
 int process_snapshot_try(uint32_t pid, process_t* snapshot)
 {
-    if (!initialized || pid >= PROCESS_MAX || !snapshot)
+    if (!process_initialized_state || pid >= PROCESS_MAX || !snapshot)
         return 0;
 
     uint64_t flags;
@@ -494,7 +494,7 @@ int process_snapshot_try(uint32_t pid, process_t* snapshot)
 
 unsigned int process_count(void)
 {
-    if (!initialized)
+    if (!process_initialized_state)
         return 0;
     uint64_t flags = process_table_lock_acquire();
     unsigned int count = 0;

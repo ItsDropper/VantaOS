@@ -34,6 +34,7 @@ int cpu_local_initialize(uint32_t logical_id, uint32_t apic_id)
     local->interrupt_depth = 0;
     local->work_iterations = 0;
     local->scheduler_ticks = 0;
+    local->lapic_timer_ticks = 0;
     __atomic_store_n(&local->online, 1U, __ATOMIC_RELEASE);
 
     /*

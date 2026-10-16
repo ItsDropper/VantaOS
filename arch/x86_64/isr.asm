@@ -7,6 +7,7 @@ global irq1_stub
 global irq12_stub
 global apic_spurious_stub
 global smp_wakeup_stub
+global lapic_timer_stub
 global process_entry_trampoline
 
 global exception0_stub
@@ -50,6 +51,8 @@ extern mouse_handle_interrupt
 extern pic_send_eoi
 extern scheduler_tick
 extern apic_send_eoi
+extern apic_is_enabled
+extern lapic_timer_handle_interrupt
 
 apic_spurious_stub:
     iretq
@@ -125,6 +128,13 @@ process_entry_trampoline:
 %endmacro
 
 ; Fixed IPI used to wake initialized APs from their idle HLT loop.
+lapic_timer_stub:
+    cld
+    SAVE_IRQ_ALL
+    call lapic_timer_handle_interrupt
+    RESTORE_IRQ_ALL
+    iretq
+
 smp_wakeup_stub:
     cld
     SAVE_IRQ_ALL
@@ -136,8 +146,15 @@ irq0_stub:
     cld
     SAVE_IRQ_ALL
     call timer_handle_interrupt
+    call apic_is_enabled
+    test eax, eax
+    jz .irq0_pic_eoi
+    call apic_send_eoi
+    jmp .irq0_eoi_done
+.irq0_pic_eoi:
     mov edi, 0
     call pic_send_eoi
+.irq0_eoi_done:
     mov rdi, rsp
     call scheduler_tick
     mov rsp, rax
@@ -149,8 +166,15 @@ irq1_stub:
     cld
     SAVE_IRQ_ALL
     call keyboard_handle_interrupt
+    call apic_is_enabled
+    test eax, eax
+    jz .irq1_pic_eoi
+    call apic_send_eoi
+    jmp .irq1_eoi_done
+.irq1_pic_eoi:
     mov edi, 1
     call pic_send_eoi
+.irq1_eoi_done:
     RESTORE_IRQ_ALL
     iretq
 
@@ -158,8 +182,15 @@ irq12_stub:
     cld
     SAVE_IRQ_ALL
     call mouse_handle_interrupt
+    call apic_is_enabled
+    test eax, eax
+    jz .irq12_pic_eoi
+    call apic_send_eoi
+    jmp .irq12_eoi_done
+.irq12_pic_eoi:
     mov edi, 12
     call pic_send_eoi
+.irq12_eoi_done:
     RESTORE_IRQ_ALL
     iretq
 

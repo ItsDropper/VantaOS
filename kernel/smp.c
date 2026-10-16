@@ -17,6 +17,8 @@
 #define AP_STACK_SIZE 16384U
 #define AP_STARTUP_SPIN_LIMIT 50000000U
 #define SMP_WORK_PROBE_ITERATIONS 100000U
+#define SMP_LOCAL_TIMER_VECTOR 0xF2U
+#define SMP_LOCAL_TIMER_INITIAL_COUNT 1000000U
 
 typedef struct
 {
@@ -83,7 +85,9 @@ _Noreturn void smp_ap_entry(uint32_t apic_id)
      */
     if (index >= 0 &&
         apic_initialize_cpu(apic_id) &&
-        cpu_local_initialize((uint32_t)index, apic_id))
+        cpu_local_initialize((uint32_t)index, apic_id) &&
+        apic_timer_initialize(SMP_LOCAL_TIMER_VECTOR,
+                              SMP_LOCAL_TIMER_INITIAL_COUNT))
     {
         __atomic_store_n(&ap_online[index], 1U, __ATOMIC_RELEASE);
     }
@@ -109,7 +113,7 @@ _Noreturn void smp_ap_entry(uint32_t apic_id)
 
     /* Work execution is proven; general scheduling is intentionally not enabled. */
     for (;;)
-        __asm__ volatile ("cli; hlt" ::: "memory");
+        __asm__ volatile ("sti; hlt" ::: "memory");
 }
 
 static int start_secondary_cpus(const acpi_platform_info_t* info)
@@ -200,6 +204,43 @@ static int start_secondary_cpus(const acpi_platform_info_t* info)
     return 1;
 }
 
+static int smp_wait_for_local_timers(const acpi_platform_info_t* info)
+{
+    uint64_t saved_flags;
+    __asm__ volatile ("pushfq; popq %0" : "=r"(saved_flags));
+    __asm__ volatile ("sti" ::: "memory");
+
+    uint32_t spin = 0;
+    int ready = 0;
+    while (spin++ < AP_STARTUP_SPIN_LIMIT)
+    {
+        ready = 1;
+        for (uint32_t i = 0; i < info->cpu_count; i++)
+        {
+            const cpu_local_t* local = cpu_local_get(i);
+            if (!local || local->lapic_timer_ticks < 2U)
+            {
+                ready = 0;
+                break;
+            }
+        }
+        if (ready)
+            break;
+        __asm__ volatile ("pause" ::: "memory");
+    }
+
+    if ((saved_flags & (1ULL << 9)) == 0U)
+        __asm__ volatile ("cli" ::: "memory");
+
+    if (!ready)
+    {
+        serial_write("VANTAOS_SMP_LOCAL_TIMER_FAIL\n");
+        return 0;
+    }
+    serial_write("VANTAOS_SMP_LOCAL_TIMER_OK\n");
+    return 1;
+}
+
 static int smp_run_work_probe(const acpi_platform_info_t* info,
                               uint32_t bsp_index)
 {
@@ -266,7 +307,7 @@ static int smp_run_work_probe(const acpi_platform_info_t* info,
     }
 
     serial_write("VANTAOS_SMP_WORK_OK\n");
-    return 1;
+    return smp_wait_for_local_timers(info);
 }
 
 int smp_initialize(void)
@@ -284,7 +325,9 @@ int smp_initialize(void)
     uint32_t bsp_id = apic_get_bsp_id();
     int bsp_index = find_cpu_index(info, bsp_id);
     if (bsp_index < 0 ||
-        !cpu_local_initialize((uint32_t)bsp_index, bsp_id))
+        !cpu_local_initialize((uint32_t)bsp_index, bsp_id) ||
+        !apic_timer_initialize(SMP_LOCAL_TIMER_VECTOR,
+                               SMP_LOCAL_TIMER_INITIAL_COUNT))
     {
         serial_write("VANTAOS_SMP_CPU_LOCAL_FAIL\n");
         return 0;

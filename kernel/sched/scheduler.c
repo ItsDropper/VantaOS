@@ -33,22 +33,34 @@ int scheduler_is_initialized(void)
 
 static uint32_t scheduler_next_ready(uint32_t current_pid)
 {
+    uint32_t cpu_id = process_current_cpu_id();
     for (uint32_t offset = 1; offset < PROCESS_MAX; offset++)
     {
         uint32_t pid = (current_pid + offset) % PROCESS_MAX;
         process_t process;
         if (process_snapshot(pid, &process) &&
             process.state == PROCESS_READY &&
-            process.owner_cpu == PROCESS_CPU_UNOWNED)
+            process.owner_cpu == PROCESS_CPU_UNOWNED &&
+            (process.affinity_cpu == PROCESS_CPU_ANY ||
+             process.affinity_cpu == cpu_id))
             return pid;
     }
 
+    cpu_local_t* local = cpu_local_current();
+    uint32_t idle_pid = local && local->self == local &&
+        local->online != 0U ?
+        __atomic_load_n(&local->idle_pid, __ATOMIC_ACQUIRE) : 1U;
+    if (idle_pid == 0U || idle_pid >= PROCESS_MAX)
+        return current_pid;
+
     process_t idle;
-    if (process_snapshot(1, &idle) &&
+    if (process_snapshot(idle_pid, &idle) &&
         ((idle.state == PROCESS_READY &&
-          idle.owner_cpu == PROCESS_CPU_UNOWNED) ||
-         (idle.state == PROCESS_RUNNING && idle.owner_cpu == 0U)))
-        return 1;
+          idle.owner_cpu == PROCESS_CPU_UNOWNED &&
+          (idle.affinity_cpu == PROCESS_CPU_ANY ||
+           idle.affinity_cpu == cpu_id)) ||
+         (idle.state == PROCESS_RUNNING && idle.owner_cpu == cpu_id)))
+        return idle_pid;
 
     return current_pid;
 }
@@ -76,6 +88,36 @@ static uint64_t scheduler_switch_from_stack(uint64_t current_stack,
         process_reap(current_pid);
 
     return process_get_stack(next_pid);
+}
+
+uint64_t scheduler_start_cpu(uint64_t interrupted_stack)
+{
+    if (__atomic_load_n(&initialized, __ATOMIC_ACQUIRE) == 0 ||
+        !process_is_initialized())
+        return interrupted_stack;
+
+    cpu_local_t* local = cpu_local_current();
+    if (!local || local->self != local || local->online == 0U ||
+        local->current_pid != 0U)
+        return interrupted_stack;
+
+    uint32_t idle_pid = __atomic_load_n(&local->idle_pid, __ATOMIC_ACQUIRE);
+    process_t idle;
+    if (idle_pid == 0U || idle_pid >= PROCESS_MAX ||
+        !process_snapshot(idle_pid, &idle) ||
+        idle.state != PROCESS_READY ||
+        idle.affinity_cpu != local->logical_id ||
+        !process_stack_is_valid(idle_pid) ||
+        !process_claim_for_cpu(idle_pid, 0U, local->logical_id))
+    {
+        __atomic_store_n(&local->reschedule_pending, 1U, __ATOMIC_RELEASE);
+        return interrupted_stack;
+    }
+
+    __atomic_store_n(&local->reschedule_pending, 0U, __ATOMIC_RELEASE);
+    if (idle.address_space != paging_get_current_address_space())
+        paging_switch_address_space(idle.address_space);
+    return process_get_stack(idle_pid);
 }
 
 uint64_t scheduler_reschedule(uint64_t current_stack)

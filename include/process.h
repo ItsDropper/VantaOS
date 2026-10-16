@@ -56,6 +56,8 @@ int process_stack_is_valid(uint32_t pid);
 int process_switch_to(uint32_t pid);
 int process_reap(uint32_t pid);
 uint64_t process_schedule(uint64_t current_stack);
+/* Copies a process record while holding the process-table lock. */
+int process_snapshot(uint32_t pid, process_t* snapshot);
 const process_t* process_get(uint32_t pid);
 unsigned int process_count(void);
 uint32_t process_current_pid(void);

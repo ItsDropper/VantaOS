@@ -174,6 +174,7 @@ int process_finish_context_switch(uint32_t outgoing_pid, uint32_t cpu_id)
      * away from both its kernel stack and address space.
      */
     outgoing_snapshot = *outgoing;
+    int outgoing_was_user = outgoing_snapshot.is_user != 0U;
     process_table_lock_release(flags);
 
     if (!process_release_user_resources(&outgoing_snapshot))
@@ -191,7 +192,7 @@ int process_finish_context_switch(uint32_t outgoing_pid, uint32_t cpu_id)
 
     uint32_t parent_pid = outgoing->parent_pid;
     int retain_zombie = 0;
-    if (outgoing_snapshot.is_user && parent_pid > 0U &&
+    if (outgoing_was_user && parent_pid > 0U &&
         parent_pid < PROCESS_MAX)
     {
         const process_t* parent = &process_table_records[parent_pid];

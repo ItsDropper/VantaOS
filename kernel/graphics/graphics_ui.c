@@ -161,12 +161,7 @@ void graphics_present(void)
         int wh = h - 96;
         if (wh > 480) wh = 480;
         int wx = w / 2 - ww / 2, wy = h / 2 - wh / 2;
-        graphics_fill_rounded_rect(wx + 7, wy + 9, ww, wh, 14, 0x0006090F);
-        graphics_fill_rounded_rect(wx, wy, ww, wh, 14, 0x00151B25);
-        graphics_fill_rounded_rect(wx, wy, ww, 46, 14, 0x001D2633);
-        graphics_fill_rect(wx + 1, wy + 45, ww - 2, 1, 0x00293443);
-        graphics_draw_text(wx + 24, wy + 16, "Settings", 0x00F0F4F8, 2);
-        graphics_draw_text(wx + ww - 28, wy + 16, "X", 0x00D3DDE7, 1);
+        graphics_draw_window_frame(wx, wy, ww, wh, "Settings");
         graphics_draw_text(wx + 28, wy + 82, "Display", 0x0079B8FF, 1);
         graphics_draw_text(wx + 28, wy + 112, "Resolution", 0x0093A3B5, 1);
         const char* labels[3] = {"800X600", "1024X768", "1280X720"};
@@ -196,10 +191,7 @@ void graphics_present(void)
         int ww = 760, wh = 480;
         int wx = w / 2 - ww / 2, wy = h / 2 - wh / 2;
 
-        graphics_draw_panel(wx, wy, ww, wh);
-        graphics_draw_vanta_logo(wx + 24, wy + 60, 30);
-        graphics_draw_text(wx + 68, wy + 68, "System", 0x00F0F4F8, 2);
-        graphics_draw_text(wx + ww - 28, wy + 16, "X", 0x00D3DDE7, 1);
+        graphics_draw_window_frame(wx, wy, ww, wh, "System");
 
         graphics_draw_text(wx + 28, wy + 108, "System overview", 0x0079B8FF, 1);
         graphics_fill_rect(wx + 28, wy + 132, ww - 56, 1, 0x00293443);

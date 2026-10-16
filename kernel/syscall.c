@@ -3,7 +3,7 @@
 #include "paging.h"
 #include "process.h"
 #include "serial.h"
-#include "selftest/user_mode_selftest.h"
+#include "user_mode_test.h"
 
 #include <stdint.h>
 

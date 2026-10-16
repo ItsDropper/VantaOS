@@ -37,6 +37,31 @@ static paging_address_space_t* fallback_current_address_space;
 #define TLB_SHOOTDOWN_SPIN_LIMIT 100000000U
 static volatile uint32_t tlb_shootdown_lock;
 static uint64_t tlb_shootdown_generation;
+static volatile uint32_t paging_mutation_lock;
+
+static uint64_t paging_lock_acquire(void)
+{
+    uint64_t saved_flags;
+    __asm__ volatile ("pushfq; popq %0; cli" : "=r"(saved_flags) :: "memory");
+    while (__atomic_exchange_n(&paging_mutation_lock, 1U,
+                               __ATOMIC_ACQUIRE) != 0U)
+        __asm__ volatile ("pause" ::: "memory");
+    return saved_flags;
+}
+
+static void paging_lock_release(uint64_t saved_flags)
+{
+    __atomic_store_n(&paging_mutation_lock, 0U, __ATOMIC_RELEASE);
+    if (saved_flags & (1ULL << 9))
+        __asm__ volatile ("sti" ::: "memory");
+}
+
+static _Noreturn void paging_tlb_failure(void)
+{
+    serial_write("VANTAOS_TLB_SHOOTDOWN_FAIL\\n");
+    for (;;)
+        __asm__ volatile ("cli; hlt" ::: "memory");
+}
 
 static paging_address_space_t** paging_current_slot(void)
 {
@@ -48,7 +73,7 @@ static paging_address_space_t** paging_current_slot(void)
 
 static paging_address_space_t* paging_current(void)
 {
-    return *paging_current_slot();
+    return __atomic_load_n(paging_current_slot(), __ATOMIC_ACQUIRE);
 }
 
 static inline void load_page_table(uintptr_t physical_address)

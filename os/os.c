@@ -656,6 +656,8 @@ static volatile uint32_t smp_migration_start_cpu;
 static volatile uint32_t smp_migration_target_done;
 static volatile uint32_t smp_migration_helper_done;
 static volatile uint32_t smp_migration_ok;
+static volatile uint32_t smp_migration_cpu_mask;
+static volatile uint32_t smp_migration_owner_mismatch;
 
 static void smp_migration_target_entry(void)
 {
@@ -668,10 +670,21 @@ static void smp_migration_target_entry(void)
     {
         process_t snapshot;
         uint32_t current_cpu = process_current_cpu_id();
+        if (current_cpu < 32U)
+            __atomic_fetch_or(&smp_migration_cpu_mask,
+                              1U << current_cpu, __ATOMIC_RELEASE);
+
+        if (process_snapshot(pid, &snapshot) &&
+            snapshot.state != PROCESS_UNUSED &&
+            snapshot.owner_cpu != current_cpu)
+            __atomic_store_n(&smp_migration_owner_mismatch, 1U,
+                             __ATOMIC_RELEASE);
+
         if (current_cpu == smp_migration_bsp_cpu &&
             current_cpu != start_cpu &&
             process_snapshot(pid, &snapshot) &&
-            snapshot.affinity_cpu == smp_migration_bsp_cpu)
+            snapshot.affinity_cpu == smp_migration_bsp_cpu &&
+            snapshot.owner_cpu == current_cpu)
         {
             __atomic_store_n(&smp_migration_target_done, 1U,
                              __ATOMIC_RELEASE);
@@ -724,6 +737,8 @@ static int smp_process_migration_probe_initialize(void)
     smp_migration_target_done = 0;
     smp_migration_helper_done = 0;
     smp_migration_ok = 0;
+    smp_migration_cpu_mask = 0;
+    smp_migration_owner_mismatch = 0;
 
     for (uint32_t cpu = 0; cpu < smp_cpu_count(); cpu++)
     {
@@ -756,8 +771,25 @@ static int smp_process_migration_probe_wait(void)
                            __ATOMIC_ACQUIRE) == 0U)
         __asm__ volatile ("sti; hlt" ::: "memory");
 
-    if (__atomic_load_n(&smp_migration_helper_done, __ATOMIC_ACQUIRE) == 0U ||
-        __atomic_load_n(&smp_migration_ok, __ATOMIC_ACQUIRE) == 0U)
+    if (__atomic_load_n(&smp_migration_helper_done, __ATOMIC_ACQUIRE) == 0U)
+    {
+        serial_write("VANTAOS_SMP_MIGRATION_FAIL\n");
+        return 0;
+    }
+
+    uint32_t cpu_mask = __atomic_load_n(&smp_migration_cpu_mask,
+                                        __ATOMIC_ACQUIRE);
+    uint32_t required_mask = (1U << smp_migration_bsp_cpu) |
+                             (1U << smp_migration_target_cpu);
+    if (__atomic_load_n(&smp_migration_owner_mismatch,
+                        __ATOMIC_ACQUIRE) != 0U ||
+        (cpu_mask & required_mask) != required_mask)
+    {
+        serial_write("VANTAOS_SMP_MIGRATION_OWNERSHIP_FAIL\n");
+        return 0;
+    }
+
+    if (__atomic_load_n(&smp_migration_ok, __ATOMIC_ACQUIRE) == 0U)
     {
         serial_write("VANTAOS_SMP_MIGRATION_FAIL\n");
         return 0;

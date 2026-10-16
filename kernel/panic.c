@@ -12,13 +12,18 @@ static volatile uint32_t panic_broadcast_active;
 
 static int panic_broadcast_begin(void)
 {
-    if (__atomic_exchange_n(&panic_broadcast_active, 1U,
-                            __ATOMIC_ACQ_REL) != 0U)
-        return 0;
+    return __atomic_exchange_n(&panic_broadcast_active, 1U,
+                               __ATOMIC_ACQ_REL) == 0U;
+}
 
+/*
+ * Stop peers only after the local panic report is complete. Freezing a peer
+ * while it owns a console/serial/graphics lock could deadlock panic reporting.
+ */
+static void panic_broadcast_stop_peers(void)
+{
     if (apic_is_enabled() && !apic_send_nmi_all())
         serial_write("VANTAOS_SMP_PANIC_NMI_SEND_FAIL\n");
-    return 1;
 }
 
 static const char* exception_names[] =
@@ -50,7 +55,10 @@ _Noreturn void kernel_panic_halt_all(void)
 {
     __asm__ volatile ("cli" ::: "memory");
     if (panic_broadcast_begin())
+    {
         serial_write("VANTAOS_SMP_FATAL_HALT\n");
+        panic_broadcast_stop_peers();
+    }
     panic_halt();
 }
 
@@ -100,6 +108,7 @@ void kernel_panic(
         }
 
         terminal_write("\nSYSTEM HALTED\n");
+        panic_broadcast_stop_peers();
         panic_halt();
     }
 
@@ -166,6 +175,7 @@ void kernel_panic(
         0x008E9AA5, 1
     );
 
+    panic_broadcast_stop_peers();
     panic_halt();
 }
 

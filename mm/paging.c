@@ -56,8 +56,7 @@ static void paging_lock_release(uint64_t saved_flags)
 static _Noreturn void paging_tlb_failure(void)
 {
     serial_write("VANTAOS_TLB_SHOOTDOWN_FAIL\n");
-    for (;;)
-        __asm__ volatile ("cli; hlt" ::: "memory");
+    kernel_panic_halt_all();
 }
 
 static paging_address_space_t** paging_current_slot(void)

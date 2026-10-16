@@ -114,6 +114,11 @@ jobs:
                 exit 1
               fi
             done
+            if [ "$cpus" -eq 1 ] && ! grep -q "^VANTAOS_SMP_NMI_BROADCAST_PROBE_OK" "$log"; then
+              echo "Single-CPU APIC NMI-broadcast probe did not pass."
+              cat "$log"
+              exit 1
+            fi
             if [ "$cpus" -gt 1 ] && ! grep -q "^VANTAOS_SMP_SCHEDULER_STRESS_OK" "$log"; then
               echo "Cross-CPU scheduler stress did not pass at ${memory} MiB."
               cat "$log"

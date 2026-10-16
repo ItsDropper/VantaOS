@@ -140,7 +140,7 @@ static void process_state_transition_probe(void)
          process.state == PROCESS_READY;
 
     if (ok)
-        ok = process_mark_running((uint32_t)pid);
+        ok = process_set_running((uint32_t)pid);
     if (ok)
         ok = process_snapshot((uint32_t)pid, &process) &&
              process.state == PROCESS_RUNNING;

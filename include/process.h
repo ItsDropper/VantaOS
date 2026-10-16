@@ -56,7 +56,6 @@ int process_create_idle_for_cpu(uint32_t cpu_id, const char* name,
                                 process_entry_t entry);
 int process_attach_current(const char* name, uint32_t parent_pid);
 int process_set_running(uint32_t pid);
-int process_mark_running(uint32_t pid);
 int process_mark_ready(uint32_t pid);
 int process_wake(uint32_t pid);
 int process_terminate(uint32_t pid);

@@ -141,7 +141,7 @@ static void process_state_transition_probe(void)
          process.state == PROCESS_READY;
 
     if (ok)
-        ok = process_mark_running((uint32_t)pid);
+        ok = process_set_running((uint32_t)pid);
     if (ok)
         ok = process_snapshot((uint32_t)pid, &process) &&
              process.state == PROCESS_RUNNING;
@@ -195,6 +195,74 @@ static void process_state_transition_probe(void)
     }
 
     serial_write("VANTAOS_PROCESS_STATE_TRANSITIONS_OK\n");
+}
+
+
+
+static void process_owned_terminated_reuse_probe(void)
+{
+    int pid = process_create_kernel(
+        "owned-terminated-probe",
+        process_current_pid(),
+        scheduler_probe_entry
+    );
+    if (pid < 0)
+    {
+        serial_write("VANTAOS_PROCESS_OWNED_REUSE_FAIL\n");
+        return;
+    }
+
+    int ok = process_set_running((uint32_t)pid);
+    if (ok)
+        ok = process_terminate((uint32_t)pid);
+
+    process_t snapshot;
+    if (ok)
+        ok = process_snapshot((uint32_t)pid, &snapshot) &&
+             snapshot.state == PROCESS_TERMINATED &&
+             snapshot.owner_cpu != PROCESS_CPU_UNOWNED;
+
+    int replacement = process_create_kernel(
+        "process-slot-reuse-probe",
+        process_current_pid(),
+        scheduler_probe_entry
+    );
+    if (replacement < 0 || replacement == pid)
+        ok = 0;
+
+    /*
+     * Restore the boot process before cleaning up either slot. The fallback
+     * is only for a failed regression: it avoids leaving the probe as the
+     * logical current process and contaminating later tests.
+     */
+    if (process_current_pid() != 1U)
+    {
+        int restored = process_switch_to(1U);
+        if (!restored)
+            restored = process_set_running(1U);
+        ok = restored && ok;
+    }
+
+    if (process_snapshot((uint32_t)pid, &snapshot))
+    {
+        if (snapshot.state == PROCESS_TERMINATED)
+            ok = process_reap((uint32_t)pid) && ok;
+        else
+            ok = process_terminate((uint32_t)pid) && ok;
+    }
+
+    if (replacement >= 0 && replacement != pid &&
+        process_snapshot((uint32_t)replacement, &snapshot))
+    {
+        if (snapshot.state == PROCESS_TERMINATED)
+            ok = process_reap((uint32_t)replacement) && ok;
+        else
+            ok = process_terminate((uint32_t)replacement) && ok;
+    }
+
+    serial_write(ok ?
+        "VANTAOS_PROCESS_OWNED_REUSE_OK\n" :
+        "VANTAOS_PROCESS_OWNED_REUSE_FAIL\n");
 }
 
 
@@ -773,6 +841,7 @@ static void scheduler_probe_initialize(void)
     heap_allocator_probe();
     filesystem_probe_initialize();
     process_state_transition_probe();
+    process_owned_terminated_reuse_probe();
 
     if (process_create_kernel(NULL, process_current_pid(),
                               scheduler_probe_entry) != -1 ||

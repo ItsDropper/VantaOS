@@ -114,17 +114,21 @@ static uint64_t scheduler_switch_from_stack(uint64_t current_stack,
  */
 void scheduler_finish_context_switch(void)
 {
-    cpu_local_t* local = cpu_local_current();
-    if (!local || local->self != local || local->online == 0U ||
-        local->logical_id >= CPU_LOCAL_MAX)
-        return;
+    /*
+     * CPU 0 is also the legacy single-CPU fallback when GS/APIC setup is
+     * unavailable, so use the process layer's canonical CPU ID rather than
+     * requiring a cpu_local_t here.
+     */
+    uint32_t cpu_id = process_current_cpu_id();
+    if (cpu_id >= CPU_LOCAL_MAX)
+        kernel_panic_halt_all();
 
     uint32_t outgoing_pid = __atomic_exchange_n(
-        &pending_outgoing_pid[local->logical_id], 0U, __ATOMIC_ACQ_REL);
+        &pending_outgoing_pid[cpu_id], 0U, __ATOMIC_ACQ_REL);
     if (outgoing_pid == 0U)
         return;
 
-    if (!process_finish_context_switch(outgoing_pid, local->logical_id))
+    if (!process_finish_context_switch(outgoing_pid, cpu_id))
         kernel_panic_halt_all();
 }
 

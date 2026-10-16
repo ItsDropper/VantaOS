@@ -202,7 +202,7 @@ void graphics_mouse_click(int button)
         if (cursor_x >= window_x + window_w - 52 &&
             cursor_x < window_x + window_w &&
             cursor_y >= window_y &&
-            cursor_y < window_y + 44)
+            cursor_y < window_y + 46)
         {
             active_panel = 0;
             return;
@@ -227,7 +227,7 @@ void graphics_mouse_click(int button)
         if (cursor_x >= window_x + window_w - 52 &&
             cursor_x < window_x + window_w &&
             cursor_y >= window_y &&
-            cursor_y < window_y + 44)
+            cursor_y < window_y + 46)
         {
             active_panel = 0;
             return;
@@ -258,14 +258,14 @@ void graphics_mouse_click(int button)
     }
 
     if (cursor_x >= 24 && cursor_x < 112 &&
-        cursor_y >= 26 && cursor_y < 108)
+        cursor_y >= 58 && cursor_y < 130)
     {
         active_panel = 1;
         return;
     }
 
     if (cursor_x >= 120 && cursor_x < 208 &&
-        cursor_y >= 26 && cursor_y < 108)
+        cursor_y >= 58 && cursor_y < 130)
     {
         active_panel = 2;
         file_explorer_initialize();
@@ -273,7 +273,7 @@ void graphics_mouse_click(int button)
     }
 
     if (cursor_x >= 216 && cursor_x < 304 &&
-        cursor_y >= 26 && cursor_y < 108)
+        cursor_y >= 58 && cursor_y < 130)
     {
         active_panel = 3;
         graphics_request_terminal_open();

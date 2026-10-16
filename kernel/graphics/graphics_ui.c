@@ -1,4 +1,5 @@
 #include "graphics_internal.h"
+#include "desktop_theme.h"
 #include "filesystem.h"
 #include "file_explorer.h"
 #include "terminal.h"
@@ -31,7 +32,43 @@ void graphics_draw_panel(int x, int y, int w, int h)
     graphics_fill_rounded_rect(x, y, w, h, 12, 0x00151B25);
     graphics_fill_rounded_rect(x, y, w, 46, 12, 0x001D2633);
     graphics_fill_rect(x + 1, y + 45, w - 2, 1, 0x00293443);
-    graphics_fill_rect(x + 18, y + 45, 44, 2, 0x004B9CFF);
+    graphics_fill_rect(x + 18, y + 45, 44, 2, VANTA_UI_ACCENT);
+}
+
+
+void graphics_draw_window_frame(int x, int y, int w, int h, const char* title, int show_window_controls)
+{
+    if (w <= 0 || h <= 0)
+        return;
+
+    /* Shared desktop window chrome: one border, one titlebar, one control grid. */
+    graphics_fill_rounded_rect(x + 5, y + 7, w, h, 10, 0x0005080D);
+    graphics_fill_rounded_rect(x, y, w, h, 10, VANTA_UI_SURFACE);
+    graphics_fill_rounded_rect(x + 1, y + 1, w - 2, 45, 9, VANTA_UI_TITLEBAR);
+    graphics_fill_rect(x + 1, y + 45, w - 2, 1, VANTA_UI_BORDER);
+
+    graphics_fill_rounded_rect(x + 14, y + 10, 24, 24, 6, 0x00253648);
+    graphics_draw_vanta_logo(x + 21, y + 14, 15);
+    graphics_draw_text(x + 48, y + 18, title ? title : "Window",
+                       VANTA_UI_TEXT, 1);
+
+    if (show_window_controls)
+    {
+        int controls_x = x + w - 138;
+        for (int i = 0; i < 3; i++)
+        {
+            int bx = controls_x + i * 46;
+            graphics_fill_rect(bx, y + 1, 1, 44, VANTA_UI_BORDER);
+        }
+        graphics_draw_text(controls_x + 20, y + 19, "_", 0x00AAB8C8, 1);
+        graphics_draw_text(controls_x + 60, y + 17, "[]", 0x00AAB8C8, 1);
+        graphics_draw_text(controls_x + 110, y + 18, "X", 0x00DCE4EC, 1);
+    }
+    else
+    {
+        graphics_fill_rect(x + w - 46, y + 1, 1, 44, VANTA_UI_BORDER);
+        graphics_draw_text(x + w - 28, y + 18, "X", 0x00DCE4EC, 1);
+    }
 }
 
 void graphics_draw_taskbar(int taskbar_y, int width)
@@ -50,7 +87,7 @@ void graphics_draw_taskbar(int taskbar_y, int width)
     graphics_fill_rounded_rect(center - 132, taskbar_y + 10, 68, 42, 10,
         active_panel == 2 ? 0x00304459 : 0x001C2633);
     graphics_fill_rounded_rect(center - 112, taskbar_y + 20, 24, 18, 4,
-        0x004B9CFF);
+        VANTA_UI_ACCENT);
     graphics_fill_rect(center - 108, taskbar_y + 17, 12, 5, 0x0079B8FF);
     if (active_panel == 2)
         graphics_fill_rounded_rect(center - 110, taskbar_y + 48, 24, 2, 1,
@@ -65,10 +102,7 @@ void graphics_draw_taskbar(int taskbar_y, int width)
         graphics_fill_rounded_rect(center - 30, taskbar_y + 48, 16, 2, 1,
             0x0079B8FF);
 
-    /* Small system affordance at the right; not a fake status indicator. */
-    graphics_fill_rounded_rect(width - 46, taskbar_y + 15, 30, 30, 9,
-        0x0019232F);
-    graphics_draw_vanta_logo(width - 42, taskbar_y + 19, 22);
+    /* No decorative status icon: every taskbar affordance has an action. */
 }
 
 void graphics_present(void)
@@ -82,53 +116,48 @@ void graphics_present(void)
     int h = (int)framebuffer_height;
     int taskbar_y = h - 64;
 
-    /*
-     * Vanta desktop direction: dark graphite surfaces, generous empty space,
-     * muted blue highlights, and no fake live widgets. The original shortcut
-     * hitboxes remain unchanged so mouse input continues to match the UI.
-     */
-    graphics_fill_rect(0, 0, w, h, 0x000B1018);
-    graphics_fill_rect(0, 0, w, 32, 0x00101620);
-    graphics_fill_rect(0, 31, w, 1, 0x00212D3A);
-    graphics_fill_rect(0, 32, w, h - 96, 0x000D131C);
+    /* Quiet, low-contrast workspace. App hitboxes stay stable while the
+       presentation moves away from stacked legacy-style panels. */
+    graphics_fill_rect(0, 0, w, h, VANTA_UI_DESKTOP);
+    graphics_fill_rect(0, 0, w, 42, VANTA_UI_TOPBAR);
+    graphics_fill_rect(0, 41, w, 1, 0x00232E3B);
+    graphics_fill_rect(0, h - 64, w, 64, 0x00090D13);
 
-    /* Subtle geometric wallpaper, deliberately low contrast behind windows. */
-    graphics_fill_rounded_rect(w - 360, 72, 300, 300, 150, 0x000F1C2B);
-    graphics_fill_rounded_rect(w - 305, 120, 210, 210, 105, 0x00101B28);
-    graphics_fill_rounded_rect(w - 250, 174, 100, 100, 50, 0x00131F2D);
-    graphics_fill_rect(0, 32, 3, h - 96, 0x003D8DDF);
+    /* Restrained Vanta wallpaper mark, kept well behind application content. */
+    graphics_fill_rounded_rect(w - 330, 112, 230, 230, 115, 0x000F1925);
+    graphics_fill_rounded_rect(w - 286, 156, 142, 142, 71, 0x00121F2D);
+    /* Concentric low-contrast forms carry the brand without a cross-shaped mark. */
 
-    /* Top bar: product identity and a clear workspace label. */
-    graphics_draw_vanta_logo(18, 8, 17);
-    graphics_draw_text(43, 12, "VantaOS", 0x00E5EBF2, 1);
-    graphics_draw_text(128, 12, "Workspace", 0x007D8DA1, 1);
-    graphics_fill_rounded_rect(w - 112, 8, 94, 17, 6, 0x001B2633);
-    graphics_draw_text(w - 100, 13, "Desktop", 0x00AAB8C8, 1);
+    /* Compact workspace bar: identity left, session state right. */
+    graphics_draw_vanta_logo(18, 11, 20);
+    graphics_draw_text(48, 16, "VantaOS", VANTA_UI_TEXT, 1);
+    graphics_fill_rect(112, 14, 1, 15, 0x00313D4B);
+    graphics_draw_text(126, 16, "Workspace", VANTA_UI_TEXT_SECONDARY, 1);
+    graphics_fill_rounded_rect(w - 126, 11, 106, 22, 7, 0x001F2935);
+    graphics_draw_text(w - 111, 18, "Local session", 0x00C3CDD8, 1);
 
-    /* App shortcuts retain their established input regions. */
-    graphics_fill_rounded_rect(24, 26, 88, 82, 12,
-        active_panel == 1 ? 0x00202D3B : 0x00101822);
-    graphics_fill_rounded_rect(48, 43, 40, 34, 8, 0x00202F40);
-    graphics_fill_rounded_rect(54, 49, 28, 22, 5, 0x004B9CFF);
-    graphics_fill_rect(54, 46, 13, 4, 0x0079B8FF);
-    graphics_draw_text(45, 87, "System", 0x00D8E1EB, 1);
+    /* Three restrained desktop shortcuts; click regions remain unchanged. */
+    graphics_fill_rounded_rect(24, 58, 88, 72, 10,
+        active_panel == 1 ? VANTA_UI_HOVER : 0x000F161F);
+    graphics_fill_rounded_rect(49, 72, 38, 34, 8, 0x00202D3B);
+    graphics_fill_rounded_rect(57, 80, 22, 18, 4, VANTA_UI_ACCENT);
+    graphics_draw_text(43, 114, "System", 0x00DCE4EC, 1);
 
-    graphics_fill_rounded_rect(120, 26, 88, 82, 12,
-        active_panel == 2 ? 0x00202D3B : 0x00101822);
-    graphics_fill_rounded_rect(144, 43, 40, 34, 8, 0x00202F40);
-    graphics_fill_rounded_rect(150, 50, 28, 21, 5, 0x0056B98A);
-    graphics_fill_rect(150, 47, 13, 4, 0x0082D7AB);
-    graphics_draw_text(149, 87, "Files", 0x00D8E1EB, 1);
+    graphics_fill_rounded_rect(120, 58, 88, 72, 10,
+        active_panel == 2 ? VANTA_UI_HOVER : 0x000F161F);
+    graphics_fill_rounded_rect(145, 72, 38, 34, 8, 0x00202D3B);
+    graphics_fill_rounded_rect(151, 81, 26, 19, 4, 0x0057B77E);
+    graphics_fill_rect(153, 77, 11, 5, 0x0085D9A9);
+    graphics_draw_text(150, 114, "Files", 0x00DCE4EC, 1);
 
-    graphics_fill_rounded_rect(216, 26, 88, 82, 12,
-        active_panel == 3 ? 0x00202D3B : 0x00101822);
-    graphics_fill_rounded_rect(240, 43, 40, 34, 8, 0x00202F40);
-    graphics_fill_rounded_rect(246, 48, 28, 24, 5, 0x000B1119);
-    graphics_draw_text(250, 56, ">_", 0x0079B8FF, 1);
-    graphics_draw_text(229, 87, "Terminal", 0x00D8E1EB, 1);
+    graphics_fill_rounded_rect(216, 58, 88, 72, 10,
+        active_panel == 3 ? VANTA_UI_HOVER : 0x000F161F);
+    graphics_fill_rounded_rect(241, 72, 38, 34, 8, 0x00202D3B);
+    graphics_draw_text(247, 84, ">_", 0x007DB8FF, 1);
+    graphics_draw_text(228, 114, "Terminal", 0x00DCE4EC, 1);
 
-    graphics_draw_text(24, h - 88, "VANTAOS", 0x003D5268, 1);
-    graphics_draw_text(24, h - 72, "LOCAL SESSION", 0x004A6075, 1);
+    graphics_draw_text(24, h - 87, "VANTAOS", 0x004D6074, 1);
+    graphics_draw_text(24, h - 71, "x86_64  /  LOCAL", 0x005D7185, 1);
 
     if (active_panel == 4)
     {
@@ -137,12 +166,7 @@ void graphics_present(void)
         int wh = h - 96;
         if (wh > 480) wh = 480;
         int wx = w / 2 - ww / 2, wy = h / 2 - wh / 2;
-        graphics_fill_rounded_rect(wx + 7, wy + 9, ww, wh, 14, 0x0006090F);
-        graphics_fill_rounded_rect(wx, wy, ww, wh, 14, 0x00151B25);
-        graphics_fill_rounded_rect(wx, wy, ww, 46, 14, 0x001D2633);
-        graphics_fill_rect(wx + 1, wy + 45, ww - 2, 1, 0x00293443);
-        graphics_draw_text(wx + 24, wy + 16, "Settings", 0x00F0F4F8, 2);
-        graphics_draw_text(wx + ww - 28, wy + 16, "X", 0x00D3DDE7, 1);
+        graphics_draw_window_frame(wx, wy, ww, wh, "Settings", 0);
         graphics_draw_text(wx + 28, wy + 82, "Display", 0x0079B8FF, 1);
         graphics_draw_text(wx + 28, wy + 112, "Resolution", 0x0093A3B5, 1);
         const char* labels[3] = {"800X600", "1024X768", "1280X720"};
@@ -172,10 +196,7 @@ void graphics_present(void)
         int ww = 760, wh = 480;
         int wx = w / 2 - ww / 2, wy = h / 2 - wh / 2;
 
-        graphics_draw_panel(wx, wy, ww, wh);
-        graphics_draw_vanta_logo(wx + 24, wy + 60, 30);
-        graphics_draw_text(wx + 68, wy + 68, "System", 0x00F0F4F8, 2);
-        graphics_draw_text(wx + ww - 28, wy + 16, "X", 0x00D3DDE7, 1);
+        graphics_draw_window_frame(wx, wy, ww, wh, "System", 0);
 
         graphics_draw_text(wx + 28, wy + 108, "System overview", 0x0079B8FF, 1);
         graphics_fill_rect(wx + 28, wy + 132, ww - 56, 1, 0x00293443);
@@ -200,7 +221,7 @@ void graphics_present(void)
         resolution[13]=0;
         graphics_draw_text(wx + 190, wy + 206, resolution, 0x00E0E7EF, 1);
 
-        graphics_draw_text(wx + 28, wy + 238, "SERVICES", 0x0079B8FF, 1);
+        graphics_draw_text(wx + 28, wy + 238, "Services", 0x0079B8FF, 1);
         graphics_fill_rect(wx + 28, wy + 262, ww - 56, 1, 0x00293443);
         graphics_draw_text(wx + 28, wy + 282, "Filesystem", 0x008A9BAD, 1);
         graphics_draw_text(wx + 190, wy + 282,

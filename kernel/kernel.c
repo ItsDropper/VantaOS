@@ -1,5 +1,6 @@
 #include "ata.h"
 #include "apic.h"
+#include "cpu_local.h"
 #include "smp.h"
 #include "gdt.h"
 #include "heap.h"
@@ -184,6 +185,8 @@ static void user_mapping_probe(void)
     void* readonly_frame = pmm_alloc_block();
     int ok = space != NULL && writable_frame != NULL &&
              readonly_frame != NULL;
+    int per_cpu_ok = space != NULL;
+    const cpu_local_t* bsp_local = cpu_local_current();
     int writable_mapped = 0;
     int readonly_mapped = 0;
 
@@ -212,6 +215,17 @@ static void user_mapping_probe(void)
     {
         paging_switch_address_space(space);
         ok = paging_get_current_address_space() == space && ok;
+        per_cpu_ok = paging_get_current_address_space() == space &&
+                     bsp_local &&
+                     bsp_local->current_address_space == space && per_cpu_ok;
+        for (uint32_t cpu = 0; cpu < cpu_local_capacity(); cpu++)
+        {
+            const cpu_local_t* local = cpu_local_get(cpu);
+            if (local && local != bsp_local)
+                per_cpu_ok =
+                    local->current_address_space ==
+                    paging_get_kernel_address_space() && per_cpu_ok;
+        }
         ok = paging_get_physical(
             (uintptr_t)(PAGING_USER_BASE + 64U)) ==
             (uintptr_t)writable_frame + 64U && ok;
@@ -249,6 +263,9 @@ static void user_mapping_probe(void)
             ok = paging_get_physical(
                 (uintptr_t)PAGING_USER_BASE) == 0 && ok;
             paging_switch_address_space(paging_get_kernel_address_space());
+            per_cpu_ok =
+                paging_get_current_address_space() ==
+                paging_get_kernel_address_space() && per_cpu_ok;
         }
         paging_destroy_address_space(space);
     }
@@ -258,6 +275,9 @@ static void user_mapping_probe(void)
     if (readonly_frame)
         pmm_free_block(readonly_frame);
 
+    serial_write(per_cpu_ok ?
+        "VANTAOS_PER_CPU_ADDRESS_SPACE_OK\n" :
+        "VANTAOS_PER_CPU_ADDRESS_SPACE_FAIL\n");
     serial_write(ok ?
         "VANTAOS_USER_MAPPING_OK\n" :
         "VANTAOS_USER_MAPPING_FAIL\n");

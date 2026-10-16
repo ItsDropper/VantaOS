@@ -12,7 +12,7 @@ VantaOS is an experimental x86-64 OS. Source code for a driver is not proof that
 | Graphics/framebuffer | Initialization code exists and boot logs report framebuffer details | Pixel correctness and broad firmware support unverified |
 | Keyboard/mouse | Driver code exists | Device compatibility and full interaction unverified |
 | PCI/ATA | Driver code exists and initialization runs during boot | Broad controller/device compatibility unverified |
-| FAT32 | Directory-reading/mount code exists | Mount behavior depends on disk layout; write/create are not implemented |
+| FAT32 | Directory-reading/mount code exists; ATA PIO sector-write primitive is present | Filesystem allocation, directory updates, and write/create remain unimplemented; raw ATA writes are not end-to-end tested |
 | USB, Wi-Fi, Ethernet networking, audio | No end-to-end support established by the current CI | Not verified |
 | Modern discrete GPU acceleration | No end-to-end driver support established | Not verified |
 

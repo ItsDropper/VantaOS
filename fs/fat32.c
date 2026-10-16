@@ -582,7 +582,7 @@ int fat32_read_file(
 int fat32_read_file_range(uint32_t first_cluster, uint32_t size,
                           uint32_t offset, char* buffer, uint32_t length)
 {
-    if (!mounted || (length && !buffer))
+    if (!mounted || (length && !buffer) || length > 0x7FFFFFFFU)
         return -1;
     if (offset >= size || length == 0U)
         return 0;
@@ -876,7 +876,8 @@ static int fat32_next_for_write(uint32_t cluster, uint32_t* next)
 int fat32_write_file_range(const char* path, uint32_t offset,
                            const char* data, uint32_t length)
 {
-    if (!mounted || !path || (length && !data))
+    if (!mounted || !path || (length && !data) ||
+        length > 0x7FFFFFFFU)
         return -1;
     if (length == 0U)
         return 0;

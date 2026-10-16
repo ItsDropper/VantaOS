@@ -8,6 +8,7 @@ VantaOS is an experimental x86-64 operating-system project. Contributions should
 2. Check the [development plan](docs/DEVELOPMENT_PLAN.md) and recent pull requests to avoid duplicating or contradicting active work.
 3. Identify invariants, ownership rules, interrupt-state assumptions, and failure paths before editing kernel code.
 4. Keep changes focused. Separate documentation, refactoring, and behavioral changes when that makes review safer.
+5. For changes to subsystem boundaries, boot handoff, process/memory ownership, or cross-CPU synchronization strategy, check [architecture decision records](docs/decisions/README.md) and add or update a record when the decision will be costly to reverse.
 
 ## Development workflow
 

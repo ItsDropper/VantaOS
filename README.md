@@ -16,6 +16,7 @@ The project focuses on learning and validating operating-system fundamentals: bo
 - [Documentation index](docs/README.md) — subsystem guides, build, testing, support, and plans.
 - [Architecture overview](docs/ARCHITECTURE.md) — boot flow and subsystem boundaries.
 - [Engineering model](docs/ENGINEERING_MODEL.md) — verification levels, contracts, concurrency, and test layers.
+- [Architecture decision records](docs/decisions/README.md) — durable rationale for long-lived design choices.
 - [Build system](docs/BUILD_SYSTEM.md) — build targets and generated artifacts.
 - [Testing and verification](docs/TESTING.md) — CI checks and their limits.
 - [Hardware support](docs/HARDWARE_SUPPORT.md) — known constraints and unverified areas.

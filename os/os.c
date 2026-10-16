@@ -163,7 +163,8 @@ static void process_state_transition_probe(void)
              process.owner_cpu != PROCESS_CPU_UNOWNED;
         if (ok)
             ok = !process_claim_for_cpu(
-                (uint32_t)pid, 0U, process.owner_cpu + 1U);
+                (uint32_t)pid, process_current_pid(),
+                process.owner_cpu + 1U);
     }
     if (ok)
         ok = process_set_running((uint32_t)pid);
@@ -879,6 +880,9 @@ static void scheduler_probe_initialize(void)
                               scheduler_probe_entry) != -1 ||
         process_create_kernel("invalid-entry", process_current_pid(),
                               NULL) != -1 ||
+        process_create_kernel_on_cpu("invalid-cpu", process_current_pid(),
+                                     scheduler_probe_entry,
+                                     CPU_LOCAL_MAX) != -1 ||
         process_switch_to(0) != 0 ||
         process_switch_to(PROCESS_MAX) != 0 ||
         process_set_running(PROCESS_MAX) != 0 ||

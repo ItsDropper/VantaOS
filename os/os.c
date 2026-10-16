@@ -3,23 +3,17 @@
 #include "desktop.h"
 #include "desktop_process.h"
 #include "filesystem.h"
-#include "fat32.h"
-#include "heap.h"
 #include "graphics.h"
 #include "keyboard.h"
 #include "mouse.h"
 #include "process.h"
-#include "cpu_local.h"
 #include "smp.h"
 #include "panic.h"
-#include "spinlock.h"
-#include "pmm.h"
 #include "serial.h"
 #include "scheduler.h"
 #include "shell.h"
 #include "terminal.h"
 #include "terminal_process.h"
-#include "vfs.h"
 
 extern void shell_set_multiboot_info(multiboot_info_t* mbd);
 

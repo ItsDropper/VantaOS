@@ -33,6 +33,45 @@ _start:
     mov $(exec_message_end - exec_message), %esi
     int $0x80
 
+    /* spawn rejects invalid user pointers and malformed argument counts. */
+    mov $6, %eax
+    mov $0x7ffffffff000, %rdi
+    lea child_argv(%rip), %rsi
+    mov $1, %edx
+    int $0x80
+    cmp $-14, %rax
+    jne file_fail
+
+    mov $6, %eax
+    lea child_path(%rip), %rdi
+    mov $0x7ffffffff000, %rsi
+    mov $1, %edx
+    int $0x80
+    cmp $-14, %rax
+    jne file_fail
+
+    mov $6, %eax
+    lea child_path(%rip), %rdi
+    lea child_argv(%rip), %rsi
+    xor %edx, %edx
+    int $0x80
+    cmp $-22, %rax
+    jne file_fail
+
+    /* Launch a separate ELF from FAT32 with a kernel-owned argv copy. */
+    mov $6, %eax
+    lea child_path(%rip), %rdi
+    lea child_argv(%rip), %rsi
+    mov $1, %edx
+    int $0x80
+    test %rax, %rax
+    jle file_fail
+
+    mov $1, %eax
+    lea spawn_message(%rip), %rdi
+    mov $(spawn_message_end - spawn_message), %esi
+    int $0x80
+
     /* Invalid output pointers and oversized writes must be rejected. */
     mov $1, %eax
     mov $0x7ffffffff000, %rdi
@@ -177,6 +216,14 @@ argv_message_end:
 exec_message:
     .ascii "VANTAOS_FILESYSTEM_EXEC_OK\n"
 exec_message_end:
+spawn_message:
+    .ascii "VANTAOS_USER_SPAWN_OK\n"
+spawn_message_end:
+child_path:
+    .asciz "/CHILD.ELF"
+.align 8
+child_argv:
+    .quad child_path
 file_path:
     .asciz "/USERDATA.TXT"
 missing_path:

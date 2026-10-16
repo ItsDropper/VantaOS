@@ -1,6 +1,7 @@
 #include "process.h"
 #include "cpu_local.h"
 #include "apic.h"
+#include "spinlock.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -20,21 +21,16 @@ static uint8_t process_stacks[PROCESS_MAX][PROCESS_STACK_SIZE]
 static int initialized;
 static uint32_t legacy_current_pid;
 
-static volatile uint32_t process_table_lock;
+static spinlock_t process_table_lock = SPINLOCK_INITIALIZER;
 
 static uint64_t process_table_lock_acquire(void)
 {
-    uint64_t flags;
-    __asm__ volatile ("pushfq; popq %0; cli" : "=r"(flags) :: "memory");
-    while (__atomic_exchange_n(&process_table_lock, 1U, __ATOMIC_ACQUIRE) != 0U)
-        __asm__ volatile ("pause" ::: "memory");
-    return flags;
+    return spinlock_lock_irqsave(&process_table_lock);
 }
 
 static void process_table_lock_release(uint64_t flags)
 {
-    __atomic_store_n(&process_table_lock, 0U, __ATOMIC_RELEASE);
-    __asm__ volatile ("pushq %0; popfq" :: "r"(flags) : "memory", "cc");
+    spinlock_unlock_irqrestore(&process_table_lock, flags);
 }
 
 static cpu_local_t* process_local_state(void)

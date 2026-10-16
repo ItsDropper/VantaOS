@@ -5,7 +5,8 @@ VantaOS uses a small GNU Make system inspired by the subsystem-oriented layout o
 ## Layout
 
 - `arch/`: architecture-specific entry and interrupt code; x86-64 is the active target.
-- `kernel/`: boot orchestration, diagnostics, process, scheduler, timer, and graphics code.
+- `kernel/`: boot orchestration, diagnostics, scheduler, timer, and graphics code.
+- `kernel/proc/`: process-table initialization/creation, context ownership transitions, and lifecycle operations.
 - `kernel/selftest/`: test-only boot-info/PMM and paging/spinlock regression probes.
 - `mm/`: physical memory management, paging, and heap.
 - `drivers/`: input, PCI, and ATA driver code.

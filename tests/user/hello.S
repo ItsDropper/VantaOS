@@ -92,50 +92,6 @@ _start:
     jle file_fail
     mov %rax, %r14
 
-    /* waitpid must reject invalid status pointers without blocking. */
-    mov $7, %eax
-    mov %r14, %rdi
-    mov $0x7ffffffff000, %rsi
-    int $0x80
-    cmp $-14, %rax
-    jne file_fail
-
-    mov $7, %eax
-    xor %edi, %edi
-    xor %esi, %esi
-    int $0x80
-    cmp $-22, %rax
-    jne file_fail
-
-    mov $1, %eax
-    lea spawn_message(%rip), %rdi
-    mov $(spawn_message_end - spawn_message), %esi
-    int $0x80
-
-    /* Block until the child exits and verify the kernel preserved its status. */
-    mov $7, %eax
-    mov %r14, %rdi
-    lea child_status(%rip), %rsi
-    int $0x80
-    cmp %r14, %rax
-    jne file_fail
-    mov child_status(%rip), %eax
-    cmp $23, %eax
-    jne file_fail
-
-    /* A collected child must no longer be waitable. */
-    mov $7, %eax
-    mov %r14, %rdi
-    xor %esi, %esi
-    int $0x80
-    cmp $-10, %rax
-    jne file_fail
-
-    mov $1, %eax
-    lea wait_success(%rip), %rdi
-    mov $(wait_success_end - wait_success), %esi
-    int $0x80
-    
     /* Invalid output pointers and oversized writes must be rejected. */
     mov $1, %eax
     mov $0x7ffffffff000, %rdi
@@ -261,6 +217,51 @@ open_until_full:
     mov $(file_success_end - file_success), %esi
     int $0x80
 
+
+    /* waitpid must reject invalid status pointers without blocking. */
+    mov $7, %eax
+    mov %r14, %rdi
+    mov $0x7ffffffff000, %rsi
+    int $0x80
+    cmp $-14, %rax
+    jne file_fail
+
+    mov $7, %eax
+    xor %edi, %edi
+    xor %esi, %esi
+    int $0x80
+    cmp $-22, %rax
+    jne file_fail
+
+    mov $1, %eax
+    lea spawn_message(%rip), %rdi
+    mov $(spawn_message_end - spawn_message), %esi
+    int $0x80
+
+    /* Block until the child exits and verify the kernel preserved its status. */
+    mov $7, %eax
+    mov %r14, %rdi
+    lea child_status(%rip), %rsi
+    int $0x80
+    cmp %r14, %rax
+    jne file_fail
+    mov child_status(%rip), %eax
+    cmp $23, %eax
+    jne file_fail
+
+    /* A collected child must no longer be waitable. */
+    mov $7, %eax
+    mov %r14, %rdi
+    xor %esi, %esi
+    int $0x80
+    cmp $-10, %rax
+    jne file_fail
+
+    mov $1, %eax
+    lea wait_success(%rip), %rdi
+    mov $(wait_success_end - wait_success), %esi
+    int $0x80
+    
 
     xor %edi, %edi
     xor %eax, %eax

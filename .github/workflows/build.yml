@@ -152,7 +152,8 @@ jobs:
             fi
 
             for marker in "${required_markers[@]}"; do
-              if ! grep -q "^${marker}" "$log"; then
+              # Serial output from different CPUs can interleave on a line.
+              if ! grep -q "${marker}" "$log"; then
                 echo "Missing required marker '${marker}' at ${memory} MiB."
                 cat "$log" 2>/dev/null || true
                 exit 1

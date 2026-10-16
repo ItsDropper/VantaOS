@@ -159,7 +159,7 @@ static void command_exec(char* command)
     {
         char digits[12];
         size_t used = 0U;
-        uint32_t value = status < 0 ? (uint32_t)(-status) : (uint32_t)status;
+        uint32_t value = status < 0 ? 0U - (uint32_t)status : (uint32_t)status;
         do
         {
             digits[used++] = (char)('0' + value % 10U);
@@ -183,7 +183,7 @@ static void execute_line(char* command)
     if (string_equals(command, "help"))
         command_help();
     else if (string_equals(command, "about"))
-        write_text("VantaOS Terminal — user-mode shell (CPL3).\n");
+        write_text("VantaOS Terminal - user-mode shell (CPL3).\n");
     else if (string_equals(command, "pwd"))
         write_text("/\n");
     else if (string_equals(command, "ls"))
@@ -202,7 +202,7 @@ static void execute_line(char* command)
     else if (string_equals(command, "clear"))
     {
         (void)vanta_terminal_clear();
-        write_text("VantaOS Terminal — user-mode shell\n");
+        write_text("VantaOS Terminal - user-mode shell\n");
     }
     else if (string_equals(command, "exit"))
         vanta_exit(0);

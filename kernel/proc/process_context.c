@@ -1,4 +1,5 @@
 #include "process_internal.h"
+#include "serial.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -232,7 +233,13 @@ int process_finish_context_switch(uint32_t outgoing_pid, uint32_t cpu_id)
     process_table_lock_release(flags);
 
     if (wake_parent_pid != 0U)
-        (void)process_wake(wake_parent_pid);
+    {
+        serial_write("VANTAOS_WAITPID_CHILD_ZOMBIE\n");
+        if (process_wake(wake_parent_pid))
+            serial_write("VANTAOS_WAITPID_PARENT_WOKEN\n");
+        else
+            serial_write("VANTAOS_WAITPID_PARENT_WAKE_FAILED\n");
+    }
     return 1;
 }
 

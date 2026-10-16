@@ -98,20 +98,6 @@ user_mode_test_return_trampoline:
     popfq
     ret
 
-; int 0x80 enters only through a DPL-3 gate in self-test builds.
-user_mode_test_syscall_stub:
-    cld
-    push qword 0
-    SAVE_ALL
-    mov r12, rsp
-    and rsp, -16
-    mov rdi, r12
-    call user_mode_selftest_syscall_dispatch
-    mov rsp, r12
-    RESTORE_ALL
-    add rsp, 8
-    iretq
-
 %macro SAVE_ALL 0
     push r15
     push r14
@@ -147,6 +133,20 @@ user_mode_test_syscall_stub:
     pop r14
     pop r15
 %endmacro
+
+; int 0x80 enters only through a DPL-3 gate in self-test builds.
+user_mode_test_syscall_stub:
+    cld
+    push qword 0
+    SAVE_ALL
+    mov r12, rsp
+    and rsp, -16
+    mov rdi, r12
+    call user_mode_selftest_syscall_dispatch
+    mov rsp, r12
+    RESTORE_ALL
+    add rsp, 8
+    iretq
 
 ; Long-mode interrupt delivery aligns RSP to 16 bytes before building
 ; the CPU return frame. SAVE_ALL pushes 15 qwords, leaving RSP misaligned

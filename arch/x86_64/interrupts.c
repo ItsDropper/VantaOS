@@ -6,6 +6,8 @@
 #include "mouse.h"
 #include "apic.h"
 #include "cpu_local.h"
+#include "process.h"
+#include "scheduler.h"
 
 extern void irq0_stub(void);
 extern void irq1_stub(void);
@@ -98,12 +100,32 @@ void lapic_timer_handle_interrupt(void)
     apic_send_eoi();
 }
 
-void reschedule_ipi_handle_interrupt(void)
+uint64_t reschedule_ipi_handle_interrupt(uint64_t saved_stack)
 {
     cpu_local_t* local = cpu_local_current();
-    if (local && local->self == local && local->online != 0U)
+    int valid_local = local && local->self == local &&
+                      local->online != 0U;
+    if (valid_local)
         __atomic_add_fetch(&local->reschedule_ipi_ticks, 1U, __ATOMIC_RELAXED);
+
+    /*
+     * An IPI can arrive before the scheduler is initialized or while this CPU
+     * has no process context to switch from. Preserve the request and return
+     * the interrupted stack unchanged in those cases.
+     */
+    if (!valid_local || !scheduler_is_initialized() ||
+        !process_is_initialized() || process_current_pid() == 0U)
+    {
+        if (valid_local)
+            __atomic_store_n(&local->reschedule_pending, 1U,
+                             __ATOMIC_RELEASE);
+        apic_send_eoi();
+        return saved_stack;
+    }
+
+    __atomic_store_n(&local->reschedule_pending, 0U, __ATOMIC_RELEASE);
     apic_send_eoi();
+    return scheduler_reschedule(saved_stack);
 }
 
 unsigned int interrupts_get_ticks(void)

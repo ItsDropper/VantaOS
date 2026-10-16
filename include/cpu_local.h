@@ -25,6 +25,8 @@ typedef struct cpu_local
     volatile uint32_t lapic_timer_ticks;
     /* Number of reschedule IPIs delivered to this CPU (not scheduled yet). */
     volatile uint32_t reschedule_ipi_ticks;
+    /* Deferred when an IPI arrives before this CPU can safely schedule. */
+    volatile uint32_t reschedule_pending;
     /* Address space loaded in this CPU's CR3 (not a global singleton). */
     struct paging_address_space* current_address_space;
     /* Single-slot synchronous TLB shootdown mailbox; globally serialized. */

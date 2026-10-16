@@ -169,7 +169,7 @@ static void process_prepare_stack(process_t* process, uintptr_t stack_top)
 
 void process_initialize(void)
 {
-    initialized = 0;
+    __atomic_store_n(&initialized, 0, __ATOMIC_RELAXED);
     legacy_current_pid = 0;
     cpu_local_t* local = process_local_state();
     if (local)
@@ -181,12 +181,12 @@ void process_initialize(void)
         process_reset_record(&processes[i]);
     }
 
-    initialized = 1;
+    __atomic_store_n(&initialized, 1, __ATOMIC_RELEASE);
 }
 
 int process_is_initialized(void)
 {
-    return initialized != 0;
+    return __atomic_load_n(&initialized, __ATOMIC_ACQUIRE) != 0;
 }
 
 int process_attach_current(const char* name, uint32_t parent_pid)

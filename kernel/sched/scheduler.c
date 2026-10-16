@@ -18,17 +18,17 @@ static volatile uint32_t* scheduler_quantum_slot(void)
 
 void scheduler_initialize(void)
 {
-    initialized = 1;
     cpu_local_t* local = cpu_local_current();
     if (local && local->self == local && local->online != 0U)
         local->scheduler_ticks = 0;
     else
         fallback_quantum_ticks = 0;
+    __atomic_store_n(&initialized, 1, __ATOMIC_RELEASE);
 }
 
 int scheduler_is_initialized(void)
 {
-    return initialized != 0;
+    return __atomic_load_n(&initialized, __ATOMIC_ACQUIRE) != 0;
 }
 
 static uint32_t scheduler_next_ready(uint32_t current_pid)
@@ -53,21 +53,9 @@ static uint32_t scheduler_next_ready(uint32_t current_pid)
     return current_pid;
 }
 
-uint64_t scheduler_tick(uint64_t current_stack)
+static uint64_t scheduler_switch_from_stack(uint64_t current_stack,
+                                           uint32_t current_pid)
 {
-    if (!initialized || !process_is_initialized())
-        return current_stack;
-
-    uint32_t current_pid = process_current_pid();
-    if (current_pid == 0 || current_pid >= PROCESS_MAX)
-        return current_stack;
-
-    process_save_stack(current_pid, current_stack);
-    volatile uint32_t* quantum_ticks = scheduler_quantum_slot();
-    if (++(*quantum_ticks) < SCHEDULER_QUANTUM_TICKS)
-        return current_stack;
-    *quantum_ticks = 0;
-
     uint32_t next_pid = scheduler_next_ready(current_pid);
     if (next_pid == current_pid)
         return current_stack;
@@ -88,6 +76,45 @@ uint64_t scheduler_tick(uint64_t current_stack)
         process_reap(current_pid);
 
     return process_get_stack(next_pid);
+}
+
+uint64_t scheduler_reschedule(uint64_t current_stack)
+{
+    if (__atomic_load_n(&initialized, __ATOMIC_ACQUIRE) == 0 ||
+        !process_is_initialized())
+        return current_stack;
+
+    uint32_t current_pid = process_current_pid();
+    if (current_pid == 0 || current_pid >= PROCESS_MAX)
+        return current_stack;
+
+    process_save_stack(current_pid, current_stack);
+    *scheduler_quantum_slot() = 0;
+    return scheduler_switch_from_stack(current_stack, current_pid);
+}
+
+uint64_t scheduler_tick(uint64_t current_stack)
+{
+    if (__atomic_load_n(&initialized, __ATOMIC_ACQUIRE) == 0 ||
+        !process_is_initialized())
+        return current_stack;
+
+    uint32_t current_pid = process_current_pid();
+    if (current_pid == 0 || current_pid >= PROCESS_MAX)
+        return current_stack;
+
+    process_save_stack(current_pid, current_stack);
+    cpu_local_t* local = cpu_local_current();
+    int requested = local && local->self == local &&
+        __atomic_exchange_n(&local->reschedule_pending, 0U,
+                            __ATOMIC_ACQ_REL) != 0U;
+
+    volatile uint32_t* quantum_ticks = scheduler_quantum_slot();
+    if (!requested && ++(*quantum_ticks) < SCHEDULER_QUANTUM_TICKS)
+        return current_stack;
+    *quantum_ticks = 0;
+
+    return scheduler_switch_from_stack(current_stack, current_pid);
 }
 
 void scheduler_yield(void)

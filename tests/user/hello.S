@@ -253,7 +253,7 @@ invalid_child_argv:
 long_child_argv:
     .quad long_child_argument
 long_child_argument:
-    .fill 513, 0x61
+    .fill 513, 1, 0x61
     .byte 0
 file_path:
     .asciz "/USERDATA.TXT"

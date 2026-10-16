@@ -10,6 +10,7 @@
 #include "shell.h"
 #include "terminal.h"
 #include "file_explorer.h"
+#include "gui_server.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -30,8 +31,9 @@ static void desktop_gui_present(void)
 
     if (terminal_window_open && graphics_get_active_panel() == 3)
         terminal_window_draw();
-    else
-        graphics_draw_cursor();
+
+    gui_server_draw_windows();
+    graphics_draw_cursor();
 }
 
 int desktop_launch_terminal(void)
@@ -192,6 +194,9 @@ void desktop_present(void)
 
 void desktop_update(void)
 {
+    gui_server_cleanup_dead_windows();
+    gui_server_pump_keyboard();
+
     /* Keep the RTC clock/date current even when the user is not moving the mouse. */
     if (graphics_get_active_panel() != 3)
     {
@@ -285,4 +290,7 @@ void desktop_update(void)
 
         mouse_clear_event_flags();
     }
+
+    if (gui_server_take_redraw_request())
+        desktop_gui_present();
 }

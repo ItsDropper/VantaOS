@@ -32,6 +32,8 @@ int cpu_local_initialize(uint32_t logical_id, uint32_t apic_id)
     local->logical_id = logical_id;
     local->apic_id = apic_id;
     local->current_pid = 0;
+    local->idle_pid = 0;
+    local->scheduler_online = 0;
     local->interrupt_depth = 0;
     local->work_iterations = 0;
     local->scheduler_ticks = 0;

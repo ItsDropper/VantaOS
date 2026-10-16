@@ -7,6 +7,8 @@
 #include "idt.h"
 #include "paging.h"
 #include "serial.h"
+#include "process.h"
+#include "scheduler.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -33,6 +35,7 @@ extern uint8_t ap_trampoline_blob_end[];
 extern _Noreturn void smp_ap_entry(uint32_t apic_id);
 
 static unsigned int discovered_cpu_count;
+static uint32_t bsp_logical_id;
 static uint32_t calibrated_timer_initial_count;
 static uint8_t ap_stacks[ACPI_MAX_CPUS][AP_STACK_SIZE]
     __attribute__((aligned(16)));
@@ -70,6 +73,48 @@ static int run_local_work_probe(uint32_t expected_logical_id)
     }
 
     return local->work_iterations - start == SMP_WORK_PROBE_ITERATIONS;
+}
+
+
+static _Noreturn void smp_idle_process_entry(void)
+{
+    for (;;)
+        __asm__ volatile ("sti; hlt" ::: "memory");
+}
+
+int smp_scheduler_initialize(void)
+{
+    if (!process_is_initialized() || !scheduler_is_initialized() ||
+        discovered_cpu_count == 0U ||
+        discovered_cpu_count > cpu_local_capacity())
+        return 0;
+
+    /* Build every pinned idle context before allowing any AP to switch. */
+    for (uint32_t cpu = 0; cpu < discovered_cpu_count; cpu++)
+    {
+        const cpu_local_t* local = cpu_local_get(cpu);
+        if (!local || local->logical_id != cpu ||
+            !process_create_idle_for_cpu(cpu, "cpu-idle",
+                                         smp_idle_process_entry))
+        {
+            serial_write("VANTAOS_SMP_IDLE_CONTEXTS_FAIL\n");
+            return 0;
+        }
+    }
+
+    for (uint32_t cpu = 0; cpu < discovered_cpu_count; cpu++)
+    {
+        cpu_local_t* local = (cpu_local_t*)cpu_local_get(cpu);
+        if (!local)
+        {
+            serial_write("VANTAOS_SMP_IDLE_CONTEXTS_FAIL\n");
+            return 0;
+        }
+        __atomic_store_n(&local->scheduler_online, 1U, __ATOMIC_RELEASE);
+    }
+
+    serial_write("VANTAOS_SMP_IDLE_CONTEXTS_OK\n");
+    return 1;
 }
 
 _Noreturn void smp_ap_entry(uint32_t apic_id)
@@ -390,10 +435,13 @@ int smp_initialize(void)
     }
 
     discovered_cpu_count = info->cpu_count;
+    bsp_logical_id = 0U;
     serial_write("VANTAOS_SMP_TOPOLOGY_OK\n");
 
     uint32_t bsp_id = apic_get_bsp_id();
     int bsp_index = find_cpu_index(info, bsp_id);
+    if (bsp_index >= 0)
+        bsp_logical_id = (uint32_t)bsp_index;
     if (bsp_index < 0 ||
         !cpu_local_initialize((uint32_t)bsp_index, bsp_id))
     {
@@ -441,6 +489,11 @@ int smp_initialize(void)
         return 0;
 
     return 1;
+}
+
+int smp_cpu_is_bsp(uint32_t logical_id)
+{
+    return logical_id == bsp_logical_id;
 }
 
 unsigned int smp_cpu_count(void)

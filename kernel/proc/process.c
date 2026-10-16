@@ -120,6 +120,7 @@ static int process_allocate_common(process_t* process,
     process_reset_record(process);
     process->parent_pid = parent_pid;
     process->state = PROCESS_READY;
+    process->affinity_cpu = process_current_cpu_id();
     process_copy_name(process->name, name);
     process->address_space = paging_get_kernel_address_space();
 
@@ -228,8 +229,10 @@ int process_attach_current(const char* name, uint32_t parent_pid)
     return -1;
 }
 
-int process_create_kernel(const char* name, uint32_t parent_pid,
-                           process_entry_t entry)
+static int process_create_kernel_affinity(const char* name,
+                                          uint32_t parent_pid,
+                                          process_entry_t entry,
+                                          uint32_t affinity_cpu)
 {
     if (!initialized || !name || !name[0] || !entry)
         return -1;
@@ -248,6 +251,7 @@ int process_create_kernel(const char* name, uint32_t parent_pid,
             return -1;
         }
 
+        process->affinity_cpu = affinity_cpu;
         process->kernel_stack = process_stacks[pid];
         process->entry = entry;
         uintptr_t stack_top =
@@ -260,6 +264,53 @@ int process_create_kernel(const char* name, uint32_t parent_pid,
 
     process_table_lock_release(flags);
     return -1;
+}
+
+
+int process_create_kernel(const char* name, uint32_t parent_pid,
+                          process_entry_t entry)
+{
+    return process_create_kernel_affinity(name, parent_pid, entry,
+                                          process_current_cpu_id());
+}
+
+int process_create_kernel_any(const char* name, uint32_t parent_pid,
+                              process_entry_t entry)
+{
+    return process_create_kernel_affinity(name, parent_pid, entry,
+                                          PROCESS_CPU_ANY);
+}
+
+
+int process_create_idle_for_cpu(uint32_t cpu_id, const char* name,
+                                process_entry_t entry)
+{
+    if (!initialized || cpu_id >= CPU_LOCAL_MAX || !name || !name[0] ||
+        !entry)
+        return 0;
+
+    cpu_local_t* local = (cpu_local_t*)cpu_local_get(cpu_id);
+    if (!local || local->self != local || local->online == 0U)
+        return 0;
+
+    int pid = process_create_kernel(name, 0U, entry);
+    if (pid < 0)
+        return 0;
+
+    uint64_t flags = process_table_lock_acquire();
+    process_t* process = &processes[(uint32_t)pid];
+    if (process->state != PROCESS_READY ||
+        process->owner_cpu != PROCESS_CPU_UNOWNED ||
+        local->idle_pid != 0U)
+    {
+        process_table_lock_release(flags);
+        (void)process_terminate((uint32_t)pid);
+        return 0;
+    }
+    process->affinity_cpu = cpu_id;
+    __atomic_store_n(&local->idle_pid, (uint32_t)pid, __ATOMIC_RELEASE);
+    process_table_lock_release(flags);
+    return pid;
 }
 
 int process_mark_running(uint32_t pid)
@@ -332,7 +383,9 @@ int process_claim_for_cpu(uint32_t next_pid, uint32_t current_pid,
     uint64_t flags = process_table_lock_acquire();
     process_t* next = &processes[next_pid];
     if (next->state != PROCESS_READY ||
-        next->owner_cpu != PROCESS_CPU_UNOWNED)
+        next->owner_cpu != PROCESS_CPU_UNOWNED ||
+        (next->affinity_cpu != PROCESS_CPU_ANY &&
+         next->affinity_cpu != cpu_id))
     {
         process_table_lock_release(flags);
         return 0;

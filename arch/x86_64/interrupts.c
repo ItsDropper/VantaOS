@@ -8,6 +8,7 @@
 #include "cpu_local.h"
 #include "process.h"
 #include "scheduler.h"
+#include "smp.h"
 
 extern void irq0_stub(void);
 extern void irq1_stub(void);
@@ -92,12 +93,30 @@ uint64_t interrupt_handler(uint64_t interrupt_number, uint64_t saved_stack)
     return saved_stack;
 }
 
-void lapic_timer_handle_interrupt(void)
+uint64_t lapic_timer_handle_interrupt(uint64_t saved_stack)
 {
     cpu_local_t* local = cpu_local_current();
-    if (local && local->self == local && local->online != 0U)
-        local->lapic_timer_ticks++;
+    if (!local || local->self != local || local->online == 0U)
+    {
+        apic_send_eoi();
+        return saved_stack;
+    }
+
+    __atomic_add_fetch(&local->lapic_timer_ticks, 1U, __ATOMIC_RELAXED);
     apic_send_eoi();
+
+    if (__atomic_load_n(&local->scheduler_online, __ATOMIC_ACQUIRE) == 0U ||
+        !scheduler_is_initialized() || !process_is_initialized())
+        return saved_stack;
+
+    if (process_current_pid() == 0U)
+        return scheduler_start_cpu(saved_stack);
+
+    /* The BSP still schedules from the legacy timer; APs use their LAPIC. */
+    if (smp_cpu_count() > 1U && !smp_cpu_is_bsp(local->logical_id))
+        return scheduler_tick(saved_stack);
+
+    return saved_stack;
 }
 
 uint64_t reschedule_ipi_handle_interrupt(uint64_t saved_stack)
@@ -105,25 +124,27 @@ uint64_t reschedule_ipi_handle_interrupt(uint64_t saved_stack)
     cpu_local_t* local = cpu_local_current();
     int valid_local = local && local->self == local &&
                       local->online != 0U;
-    if (valid_local)
-        __atomic_add_fetch(&local->reschedule_ipi_ticks, 1U, __ATOMIC_RELAXED);
-
     /*
-     * An IPI can arrive before the scheduler is initialized or while this CPU
-     * has no process context to switch from. Preserve the request and return
-     * the interrupted stack unchanged in those cases.
+     * Publish the deferred request before publishing delivery to the BSP.
+     * The BSP's test waits on reschedule_ipi_ticks, so reversing these stores
+     * would let it observe delivery before the pending bit becomes visible.
      */
     if (!valid_local || !scheduler_is_initialized() ||
         !process_is_initialized() || process_current_pid() == 0U)
     {
         if (valid_local)
+        {
             __atomic_store_n(&local->reschedule_pending, 1U,
                              __ATOMIC_RELEASE);
+            __atomic_add_fetch(&local->reschedule_ipi_ticks, 1U,
+                               __ATOMIC_RELEASE);
+        }
         apic_send_eoi();
         return saved_stack;
     }
 
     __atomic_store_n(&local->reschedule_pending, 0U, __ATOMIC_RELEASE);
+    __atomic_add_fetch(&local->reschedule_ipi_ticks, 1U, __ATOMIC_RELEASE);
     apic_send_eoi();
     return scheduler_reschedule(saved_stack);
 }

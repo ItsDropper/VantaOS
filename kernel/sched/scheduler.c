@@ -54,9 +54,6 @@ static uint32_t scheduler_next_ready(uint32_t current_pid)
             return pid;
     }
 
-    uint32_t idle_pid = local && local->self == local &&
-        local->online != 0U ?
-        __atomic_load_n(&local->idle_pid, __ATOMIC_ACQUIRE) : 1U;
     if (idle_pid == 0U || idle_pid >= PROCESS_MAX)
         return current_pid;
 

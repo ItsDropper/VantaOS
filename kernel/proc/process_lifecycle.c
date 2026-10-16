@@ -402,7 +402,9 @@ int process_wait_child(uint32_t parent_pid, uint32_t child_pid,
         return (int)child_pid;
     }
 
-    if (child->state == PROCESS_REAPING)
+    if (child->state == PROCESS_REAPING ||
+        (child->state == PROCESS_TERMINATED &&
+         child->owner_cpu == PROCESS_CPU_UNOWNED))
     {
         process_table_lock_release(flags);
         return -1;

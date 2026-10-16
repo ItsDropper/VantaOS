@@ -192,6 +192,96 @@ fixture_matches:
     cmp $-2, %rax
     jne file_fail
 
+    /* Create a real FAT32-backed config file through ring-3 syscalls. */
+    mov $15, %eax
+    lea config_path(%rip), %rdi
+    int $0x80
+    test %rax, %rax
+    jne file_fail
+
+    /* Open read/write and truncate using explicit access flags. */
+    mov $3, %eax
+    lea config_path(%rip), %rdi
+    mov $6, %esi
+    int $0x80
+    cmp $3, %rax
+    jl file_fail
+    mov %rax, %r12
+
+    /* File writes must validate pointers and reject lengths above 511 bytes. */
+    mov $14, %eax
+    mov %r12, %rdi
+    mov $0x7ffffffff000, %rsi
+    mov $1, %edx
+    int $0x80
+    cmp $-14, %rax
+    jne file_fail
+
+    mov $14, %eax
+    mov %r12, %rdi
+    lea config_data(%rip), %rsi
+    mov $512, %edx
+    int $0x80
+    cmp $-22, %rax
+    jne file_fail
+
+    mov $14, %eax
+    mov %r12, %rdi
+    lea config_data(%rip), %rsi
+    mov $(config_data_end - config_data), %edx
+    int $0x80
+    cmp $(config_data_end - config_data), %rax
+    jne file_fail
+
+    mov $5, %eax
+    mov %r12, %rdi
+    int $0x80
+    test %rax, %rax
+    jne file_fail
+
+    /* Read it back from disk via a fresh read-only descriptor. */
+    mov $3, %eax
+    lea config_path(%rip), %rdi
+    mov $1, %esi
+    int $0x80
+    cmp $3, %rax
+    jl file_fail
+    mov %rax, %r12
+
+    mov $4, %eax
+    mov %r12, %rdi
+    lea file_buffer(%rip), %rsi
+    mov $(config_data_end - config_data), %edx
+    int $0x80
+    cmp $(config_data_end - config_data), %rax
+    jne file_fail
+
+    lea file_buffer(%rip), %rsi
+    lea config_data(%rip), %rdi
+    mov $(config_data_end - config_data), %ecx
+compare_config:
+    test %ecx, %ecx
+    jz config_matches
+    movb (%rsi), %al
+    cmpb (%rdi), %al
+    jne file_fail
+    inc %rsi
+    inc %rdi
+    dec %ecx
+    jmp compare_config
+
+config_matches:
+    mov $5, %eax
+    mov %r12, %rdi
+    int $0x80
+    test %rax, %rax
+    jne file_fail
+
+    mov $1, %eax
+    lea write_success(%rip), %rdi
+    mov $(write_success_end - write_success), %esi
+    int $0x80
+
     /* Fill all per-process slots, verify exhaustion, then exit without
        closing them so the reaper must release every owned VFS handle. */
     mov $8, %r13
@@ -307,11 +397,19 @@ long_child_argument:
     .byte 0
 file_path:
     .asciz "/USERDATA.TXT"
+config_path:
+    .asciz "/VNTUSER.CFG"
+config_data:
+    .ascii "region=Europe/Helsinki\ntimezone=local\n"
+config_data_end:
 missing_path:
     .asciz "/NO-SUCH-FILE.TXT"
 fixture:
     .ascii "VANTAOS_USER_FILE_FIXTURE\n"
 fixture_end:
+write_success:
+    .ascii "VANTAOS_USER_FILE_WRITE_OK\n"
+write_success_end:
 file_success:
     .ascii "VANTAOS_USER_FILE_IO_OK\n"
 file_success_end:

@@ -29,8 +29,7 @@ static unsigned long long boot_mouse;
 static unsigned long long boot_shell;
 
 #ifdef VANTAOS_SELF_TEST
-void os_selftest_initialize(void);
-void os_selftest_run_smp_probes(void);
+#include "selftest/selftest.h"
 #endif
 
 static inline unsigned long long read_tsc(void)

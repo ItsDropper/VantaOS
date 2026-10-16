@@ -17,6 +17,7 @@
 static int terminal_window_open;
 static int terminal_window_prompted;
 static unsigned int terminal_last_blink_state;
+static unsigned int desktop_last_clock_refresh;
 
 static void terminal_window_draw(void);
 
@@ -181,6 +182,7 @@ void desktop_initialize(multiboot_info_t* mbd)
     terminal_window_open = 0;
     terminal_window_prompted = 0;
     terminal_last_blink_state = 0;
+    desktop_last_clock_refresh = 0;
 }
 
 void desktop_present(void)
@@ -190,6 +192,17 @@ void desktop_present(void)
 
 void desktop_update(void)
 {
+    /* Keep the RTC clock/date current even when the user is not moving the mouse. */
+    if (graphics_get_active_panel() != 3)
+    {
+        unsigned int refresh = interrupts_get_ticks() / 50U;
+        if (refresh != desktop_last_clock_refresh)
+        {
+            desktop_last_clock_refresh = refresh;
+            desktop_gui_present();
+        }
+    }
+
     if (!terminal_window_open && graphics_terminal_open_requested())
     {
         graphics_clear_terminal_open_request();

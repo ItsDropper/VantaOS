@@ -96,12 +96,13 @@ static void draw_process_context(
 )
 {
     uint32_t pid = process_current_pid();
-    const process_t* process = process_get(pid);
+    process_t process;
+    int has_process = process_snapshot(pid, &process);
 
     graphics_draw_text(x, y, "PROCESS CONTEXT", 0x00F2F5F8, 1);
     draw_field(x, y + 16, "PID", pid);
 
-    if (!process)
+    if (!has_process)
     {
         graphics_draw_text(
             x, y + 32,
@@ -114,15 +115,15 @@ static void draw_process_context(
     graphics_draw_text(x, y + 32, "NAME", 0x008E9AA5, 1);
     graphics_draw_text(
         x + 118, y + 32,
-        process->name,
+        process.name,
         0x00F2F5F8, 1
     );
 
-    draw_field(x, y + 48, "STATE", process->state);
-    draw_field(x, y + 64, "SAVED STACK", process->stack_pointer);
-    draw_field(x, y + 80, "PARENT PID", process->parent_pid);
-    draw_field(x, y + 96, "ENTRY", (uint32_t)(uintptr_t)process->entry);
-    draw_field(x, y + 112, "KSTACK", (uint32_t)(uintptr_t)process->kernel_stack);
+    draw_field(x, y + 48, "STATE", process.state);
+    draw_field(x, y + 64, "SAVED STACK", process.stack_pointer);
+    draw_field(x, y + 80, "PARENT PID", process.parent_pid);
+    draw_field(x, y + 96, "ENTRY", (uint32_t)(uintptr_t)process.entry);
+    draw_field(x, y + 112, "KSTACK", (uint32_t)(uintptr_t)process.kernel_stack);
 
     if (frame->rip < (uintptr_t)&_start ||
         frame->rip >= (uintptr_t)&_end)

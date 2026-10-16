@@ -119,8 +119,12 @@ int smp_scheduler_initialize(void)
 
 _Noreturn void smp_ap_entry(uint32_t apic_id)
 {
-    /* Replace the trampoline GDT with the kernel's long-mode GDT and IDT. */
-    gdt_initialize();
+    /*
+     * The BSP constructs the shared GDT before starting APs. Load its
+     * immutable descriptors locally; rebuilding the shared table here could
+     * race with interrupts on CPUs that are already online.
+     */
+    gdt_load();
     idt_load();
 
     const acpi_platform_info_t* info = apic_get_platform_info();
@@ -333,7 +337,9 @@ static int smp_wait_for_local_timers(const acpi_platform_info_t* info)
         for (uint32_t i = 0; i < info->cpu_count; i++)
         {
             const cpu_local_t* local = cpu_local_get(i);
-            if (!local || local->lapic_timer_ticks < 2U)
+            if (!local ||
+                __atomic_load_n(&local->lapic_timer_ticks,
+                                __ATOMIC_ACQUIRE) < 2U)
             {
                 ready = 0;
                 break;

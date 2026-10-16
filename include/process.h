@@ -8,6 +8,9 @@
 #define PROCESS_MAX 128
 #define PROCESS_NAME_MAX 31
 #define PROCESS_STACK_SIZE 16384U
+#define PROCESS_USER_MAX_PAGES 64U
+#define PROCESS_USER_PAGE_WRITE 0x01U
+#define PROCESS_USER_PAGE_EXEC  0x02U
 #define PROCESS_CPU_UNOWNED UINT32_MAX
 #define PROCESS_CPU_ANY PROCESS_CPU_UNOWNED
 
@@ -30,6 +33,13 @@ typedef struct process_context
     uint64_t rsp, rip, rflags, cs, ss;
 } process_context_t;
 
+typedef struct process_user_page
+{
+    uintptr_t virtual_address;
+    void* physical_frame;
+    uint32_t flags;
+} process_user_page_t;
+
 typedef struct
 {
     uint32_t pid;
@@ -46,9 +56,12 @@ typedef struct
     process_context_t context;
     /* User-image ownership; frames are reclaimed only after leaving its CR3. */
     uint32_t is_user;
-    void* user_code_frame;
-    void* user_stack_frame;
+    uint32_t user_page_count;
+    uintptr_t user_entry;
+    uintptr_t user_stack_base;
+    uintptr_t user_stack_top;
     uint64_t user_image_size;
+    process_user_page_t user_pages[PROCESS_USER_MAX_PAGES];
 } process_t;
 
 void process_initialize(void);
@@ -57,6 +70,9 @@ int process_create_kernel(const char* name, uint32_t parent_pid, process_entry_t
 /* Copies a single-page flat x86-64 image into an isolated ring-3 process. */
 int process_create_user(const char* name, uint32_t parent_pid,
                         const void* image, size_t image_size);
+/* Load a validated static ELF64 executable into a private address space. */
+int process_create_user_elf(const char* name, uint32_t parent_pid,
+                            const void* image, size_t image_size);
 int process_create_kernel_any(const char* name, uint32_t parent_pid,
                               process_entry_t entry);
 int process_create_kernel_on_cpu(const char* name, uint32_t parent_pid,

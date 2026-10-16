@@ -132,7 +132,8 @@ int vfs_read(
 {
     if (!initialized || handle < 0 ||
         handle >= (int)VFS_MAX_OPEN_FILES || !buffer || length == 0U ||
-        !open_files[handle].used)
+        !open_files[handle].used ||
+        !(open_files[handle].flags & VFS_OPEN_READ))
         return -1;
 
     const fs_node_t* node =

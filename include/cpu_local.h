@@ -19,6 +19,8 @@ typedef struct cpu_local
     volatile uint64_t work_iterations;
     /* Per-CPU scheduler quantum; never shared between logical CPUs. */
     volatile uint32_t scheduler_ticks;
+    /* Incremented only by this CPU's local APIC timer interrupt. */
+    volatile uint32_t lapic_timer_ticks;
 } cpu_local_t;
 
 /* Installs the current CPU's GS base and initializes its private state. */

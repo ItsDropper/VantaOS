@@ -257,6 +257,51 @@ void graphics_mouse_click(int button)
         return;
     }
 
+    /*
+     * The workspace quick-access tiles are real launch affordances. Their
+     * rectangles mirror ui_quick_access() in graphics_ui_detail.c.
+     */
+    if (active_panel == 0 && !start_menu_open &&
+        width >= 614 && height >= 568 &&
+        cursor_y >= 344 && cursor_y < 476)
+    {
+        int dashboard_x = 330;
+        int dashboard_width = width - dashboard_x - 24;
+        int tile_gap = 10;
+        int tile_width = (dashboard_width - tile_gap) / 2;
+        int left_x = dashboard_x;
+        int right_x = dashboard_x + tile_width + tile_gap;
+
+        if (cursor_y >= 344 && cursor_y < 406)
+        {
+            if (cursor_x >= left_x && cursor_x < left_x + tile_width)
+            {
+                active_panel = 2;
+                file_explorer_initialize();
+                return;
+            }
+            if (cursor_x >= right_x && cursor_x < right_x + tile_width)
+            {
+                active_panel = 3;
+                graphics_request_terminal_open();
+                return;
+            }
+        }
+        else if (cursor_y >= 414 && cursor_y < 476)
+        {
+            if (cursor_x >= left_x && cursor_x < left_x + tile_width)
+            {
+                active_panel = 1;
+                return;
+            }
+            if (cursor_x >= right_x && cursor_x < right_x + tile_width)
+            {
+                active_panel = 4;
+                return;
+            }
+        }
+    }
+
     if (cursor_x >= 24 && cursor_x < 112 &&
         cursor_y >= 58 && cursor_y < 130)
     {

@@ -90,6 +90,38 @@ void filesystem_selftest_initialize(void)
         return;
     }
 
+    /*
+     * This image is a disposable CI fixture. Exercise the real ATA -> FAT32
+     * allocation/directory-entry -> VFS read path with a bounded 8.3 name.
+     * A failure is a hard regression marker; no success marker is printed
+     * until bytes written to the disk can be read back through the VFS.
+     */
+    static const char write_probe[] = "VANTAOS_FAT32_WRITE_OK";
+    char write_back[64];
+    if (filesystem_write_file("/VNTTEST.TXT", write_probe) !=
+            (int)(sizeof(write_probe) - 1U))
+    {
+        serial_write("VANTAOS_FAT32_WRITE_FAIL\\n");
+        return;
+    }
+    int probe_id = filesystem_lookup("/VNTTEST.TXT");
+    if (probe_id < 0 ||
+        filesystem_read((uint32_t)probe_id, write_back, sizeof(write_back)) !=
+            (int)(sizeof(write_probe) - 1U))
+    {
+        serial_write("VANTAOS_FAT32_WRITE_READBACK_FAIL\\n");
+        return;
+    }
+    for (unsigned int i = 0; i < sizeof(write_probe); i++)
+    {
+        if (write_back[i] != write_probe[i])
+        {
+            serial_write("VANTAOS_FAT32_WRITE_CONTENT_FAIL\\n");
+            return;
+        }
+    }
+    serial_write("VANTAOS_FAT32_WRITE_READBACK_OK\\n");
+
     serial_write("VANTAOS_FILESYSTEM_NAMESPACE_OK\n");
     serial_write("VANTAOS_VFS_HANDLE_GUARDS_OK\n");
 }

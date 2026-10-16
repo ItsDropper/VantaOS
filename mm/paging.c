@@ -373,12 +373,12 @@ uintptr_t paging_get_physical(uintptr_t virtual_address)
 paging_address_space_t* paging_create_address_space(void)
 {
     uint64_t saved_flags = paging_lock_acquire();
-    if (paging_current() != &kernel_address_space)
-    {
-        paging_lock_release(saved_flags);
-        return NULL;
-    }
 
+    /*
+     * Every address space shares the supervisor-only kernel mapping in PML4
+     * slot 0. Kernel code may therefore construct a new, inactive user space
+     * even while servicing an interrupt from a user process.
+     */
     for (uint32_t i = 0; i < ADDRESS_SPACE_MAX; i++)
     {
         if (address_spaces[i].used)

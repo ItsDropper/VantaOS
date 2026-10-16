@@ -63,6 +63,11 @@ static int parse_exec_arguments(const char* input, char* storage,
             if (*read && *read != ' ' && *read != '\t')
                 return 0;
         }
+        else if (*read == ' ' || *read == '\t')
+        {
+            /* Advance before writing NUL when read and write alias. */
+            read++;
+        }
         *write++ = '\0';
     }
 

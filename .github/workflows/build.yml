@@ -47,7 +47,7 @@ jobs:
           ld -m elf_x86_64 -static -nostdlib -Ttext-segment=0x8000000000 -e _start -o /tmp/vantaos-user-hello.elf /tmp/vantaos-user-hello.o
           test -s /tmp/vantaos-user-hello.elf
           mcopy -i vantaos.img /tmp/vantaos-user-hello.elf ::/HELLO.ELF
-          printf 'VANTAOS_USER_FILE_FIXTURE\\n' > /tmp/vantaos-user-file.txt
+          printf 'VANTAOS_USER_FILE_FIXTURE\n' > /tmp/vantaos-user-file.txt
           mcopy -i vantaos.img /tmp/vantaos-user-file.txt ::/USERDATA.TXT
 
       - name: QEMU boot and regression tests at multiple memory sizes

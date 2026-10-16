@@ -326,7 +326,7 @@ static void kernel_initialize(const vanta_boot_info_t* boot_info)
     smp_init_result_t smp_result = smp_initialize();
     if (smp_result == SMP_INIT_FAILED)
     {
-        serial_write("VANTAOS_SMP_INIT_FATAL_FAIL\\n");
+        serial_write("VANTAOS_SMP_INIT_FATAL_FAIL\n");
         for (;;)
             __asm__ volatile ("cli; hlt" ::: "memory");
     }

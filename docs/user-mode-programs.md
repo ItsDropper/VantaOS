@@ -11,7 +11,7 @@ The shell accepts single- or double-quoted arguments and preserves whitespace in
 ## What currently works
 
 - Read an ELF executable through the filesystem-backed `exec` path.
-- Create regular files and write through validated ring-3 syscalls. File writes are limited to 511 bytes per call, use read/write access flags, and validate the full user buffer before touching the VFS.
+- Create regular files and write through validated ring-3 syscalls. File writes are limited to 511 bytes per call, use explicit read/write/truncate access flags, and validate the full user buffer before touching the VFS. The ring-3 smoke program creates `/VNTUSER.CFG`, writes a region/timezone-shaped config payload, closes it, reopens it read-only, and verifies the bytes from disk.
 - Validate and load its supported ELF64 load segments into a private user address space.
 - Enter the program at CPL3 (ring 3) with a writable, non-executable initial stack.
 - Supply `argc`, a null-terminated `argv[]`, an empty `envp`, and a minimal `AT_NULL` auxiliary-vector terminator.

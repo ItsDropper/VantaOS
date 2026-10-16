@@ -10,6 +10,7 @@
 #include "shell.h"
 #include "terminal.h"
 #include "file_explorer.h"
+#include "gui_server.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -30,8 +31,9 @@ static void desktop_gui_present(void)
 
     if (terminal_window_open && graphics_get_active_panel() == 3)
         terminal_window_draw();
-    else
-        graphics_draw_cursor();
+
+    gui_server_draw_windows();
+    graphics_draw_cursor();
 }
 
 int desktop_launch_terminal(void)
@@ -173,7 +175,6 @@ static void terminal_window_draw(void)
     graphics_draw_text(window_x + window_w - 112, status_y + 12,
         "UTF-8  |  x86_64", VANTA_UI_TEXT_SECONDARY, 1);
 
-    graphics_draw_cursor();
 }
 
 void desktop_initialize(multiboot_info_t* mbd)
@@ -192,6 +193,8 @@ void desktop_present(void)
 
 void desktop_update(void)
 {
+    gui_server_cleanup_dead_windows();
+
     /* Keep the RTC clock/date current even when the user is not moving the mouse. */
     if (graphics_get_active_panel() != 3)
     {
@@ -227,7 +230,7 @@ void desktop_update(void)
         {
             if (terminal_process_consume_redraw())
             {
-                terminal_window_draw();
+                desktop_gui_present();
             }
             else
             {
@@ -235,7 +238,7 @@ void desktop_update(void)
                 if (blink_state != terminal_last_blink_state)
                 {
                     terminal_last_blink_state = blink_state;
-                    terminal_window_draw();
+                    desktop_gui_present();
                 }
             }
         }
@@ -270,7 +273,7 @@ void desktop_update(void)
                 terminal_scroll_up();
                 terminal_scroll_up();
             }
-            terminal_window_draw();
+            desktop_gui_present();
         }
 
         if (graphics_is_initialized())
@@ -285,4 +288,7 @@ void desktop_update(void)
 
         mouse_clear_event_flags();
     }
+
+    if (gui_server_take_redraw_request())
+        desktop_gui_present();
 }

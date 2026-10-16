@@ -11,7 +11,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define VANTA_USER_ABI_VERSION 3U
+#define VANTA_USER_ABI_VERSION 4U
 
 #define VANTA_SYS_EXIT          0U
 #define VANTA_SYS_WRITE         1U
@@ -38,6 +38,7 @@
 #define VANTA_EPERM       1
 #define VANTA_ENOENT      2
 #define VANTA_EIO         5
+#define VANTA_ENODEV     19
 #define VANTA_EBADF       9
 #define VANTA_ECHILD     10
 #define VANTA_EFAULT     14

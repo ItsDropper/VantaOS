@@ -4,6 +4,7 @@
 #include "process.h"
 #include "file_explorer.h"
 #include "pmm.h"
+#include "gui_server.h"
 
 /* Explorer window state used by mouse interaction. */
 extern int explorer_dragging;
@@ -18,6 +19,10 @@ extern int explorer_restore_y;
 void graphics_mouse_click(int button)
 {
     if (!initialized || button != 1)
+        return;
+
+    /* User windows are painted above desktop chrome; route their hits first. */
+    if (gui_server_mouse_click(cursor_x, cursor_y, button))
         return;
 
     int width = (int)framebuffer_width;
@@ -357,6 +362,8 @@ void graphics_mouse_move(int dx, int dy)
         if (terminal_y < 0)
             terminal_y = 0;
     }
+
+    gui_server_mouse_move(cursor_x, cursor_y);
 }
 
 void graphics_mouse_release(int button)

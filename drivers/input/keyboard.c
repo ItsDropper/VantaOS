@@ -1,6 +1,7 @@
 #include "keyboard.h"
 
 #include <stdint.h>
+#include "spinlock.h"
 
 #define KEYBOARD_DATA_PORT 0x60
 
@@ -92,6 +93,7 @@ static const char keyboard_map_shifted[] =
 };
 
 static volatile char keyboard_buffer[KEYBOARD_BUFFER_SIZE];
+static spinlock_t keyboard_lock = SPINLOCK_INITIALIZER;
 
 static volatile unsigned int buffer_read = 0;
 static volatile unsigned int buffer_write = 0;
@@ -316,6 +318,7 @@ static void handle_key_release(uint8_t scancode)
 
 void keyboard_initialize(void)
 {
+    spinlock_init(&keyboard_lock);
     buffer_read = 0;
     buffer_write = 0;
 
@@ -334,6 +337,7 @@ void keyboard_initialize(void)
 
 void keyboard_handle_interrupt(void)
 {
+    uint64_t flags = spinlock_lock_irqsave(&keyboard_lock);
     uint8_t scancode =
         keyboard_read_data();
 
@@ -343,6 +347,7 @@ void keyboard_handle_interrupt(void)
     if (scancode == SCANCODE_EXTENDED)
     {
         extended_scancode = true;
+        spinlock_unlock_irqrestore(&keyboard_lock, flags);
         return;
     }
 
@@ -360,47 +365,56 @@ void keyboard_handle_interrupt(void)
         );
 
         extended_scancode = false;
-
+        spinlock_unlock_irqrestore(&keyboard_lock, flags);
         return;
     }
 
     handle_key_press(scancode);
+    spinlock_unlock_irqrestore(&keyboard_lock, flags);
 }
 
 bool keyboard_has_char(void)
 {
-    return buffer_read != buffer_write;
+    uint64_t flags = spinlock_lock_irqsave(&keyboard_lock);
+    bool available = buffer_read != buffer_write;
+    spinlock_unlock_irqrestore(&keyboard_lock, flags);
+    return available;
 }
 
 char keyboard_get_char(void)
 {
-    if (!keyboard_has_char())
+    uint64_t flags = spinlock_lock_irqsave(&keyboard_lock);
+    if (buffer_read == buffer_write)
+    {
+        spinlock_unlock_irqrestore(&keyboard_lock, flags);
         return 0;
+    }
 
-    char c =
-        keyboard_buffer[buffer_read];
-
-    buffer_read =
-        (buffer_read + 1) % KEYBOARD_BUFFER_SIZE;
-
+    char c = keyboard_buffer[buffer_read];
+    buffer_read = (buffer_read + 1) % KEYBOARD_BUFFER_SIZE;
+    spinlock_unlock_irqrestore(&keyboard_lock, flags);
     return c;
 }
 
 bool keyboard_has_event(void)
 {
-    return event_read != event_write;
+    uint64_t flags = spinlock_lock_irqsave(&keyboard_lock);
+    bool available = event_read != event_write;
+    spinlock_unlock_irqrestore(&keyboard_lock, flags);
+    return available;
 }
 
 keyboard_event_t keyboard_get_event(void)
 {
-    if (!keyboard_has_event())
+    uint64_t flags = spinlock_lock_irqsave(&keyboard_lock);
+    if (event_read == event_write)
+    {
+        spinlock_unlock_irqrestore(&keyboard_lock, flags);
         return KEY_EVENT_NONE;
+    }
 
-    keyboard_event_t event =
-        event_buffer[event_read];
-
-    event_read =
-        (event_read + 1) % KEYBOARD_EVENT_BUFFER_SIZE;
-
+    keyboard_event_t event = event_buffer[event_read];
+    event_read = (event_read + 1) % KEYBOARD_EVENT_BUFFER_SIZE;
+    spinlock_unlock_irqrestore(&keyboard_lock, flags);
     return event;
 }

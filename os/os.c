@@ -707,7 +707,6 @@ void os_run(void)
     /* Publish boot completion before enabling timer-driven preemption. */
     __asm__ volatile ("sti");
 
-    serial_write("VANTAOS_BOOT_OK\n");
 #ifdef VANTAOS_SELF_TEST
     /* The cross-CPU workload is meaningful only when an AP exists. */
     if (smp_cpu_count() > 1U && smp_scheduler_probe_initialize())

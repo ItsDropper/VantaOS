@@ -14,6 +14,7 @@
 #include "shell.h"
 #include "terminal.h"
 #include "terminal_process.h"
+#include "vfs.h"
 
 extern void shell_set_multiboot_info(multiboot_info_t* mbd);
 

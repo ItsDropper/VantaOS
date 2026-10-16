@@ -161,12 +161,14 @@ static int start_secondary_cpus(const acpi_platform_info_t* info)
             (uintptr_t)&ap_stacks[i][AP_STACK_SIZE];
         __asm__ volatile ("mfence" ::: "memory");
 
+        serial_write("VANTAOS_SMP_AP_IPI_BEGIN\n");
         if (!apic_send_init_sipi(apic_id, AP_STARTUP_VECTOR))
         {
             serial_write("VANTAOS_SMP_AP_START_FAIL\n");
             return 0;
         }
 
+        serial_write("VANTAOS_SMP_AP_IPI_SENT\n");
         uint32_t spin = 0;
         while (__atomic_load_n(&ap_online[i], __ATOMIC_ACQUIRE) == 0U &&
                spin++ < AP_STARTUP_SPIN_LIMIT)
@@ -178,6 +180,7 @@ static int start_secondary_cpus(const acpi_platform_info_t* info)
             return 0;
         }
 
+        serial_write("VANTAOS_SMP_AP_ONLINE\n");
         online_count++;
     }
 

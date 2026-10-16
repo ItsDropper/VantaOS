@@ -11,6 +11,7 @@ void apic_send_eoi(void);
 uint32_t apic_get_bsp_id(void);
 int apic_send_init_all(void);
 int apic_send_sipi(uint32_t apic_id, uint8_t startup_vector);
+int apic_send_fixed_ipi(uint32_t apic_id, uint8_t vector);
 const acpi_platform_info_t* apic_get_platform_info(void);
 
 #endif

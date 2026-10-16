@@ -1029,8 +1029,55 @@ static int smp_process_migration_probe_wait(void)
     return 1;
 }
 
+static int process_idle_lifecycle_probe(void)
+{
+    uint32_t checked = 0U;
+    for (uint32_t cpu = 0; cpu < cpu_local_capacity(); cpu++)
+    {
+        const cpu_local_t* local = cpu_local_get(cpu);
+        if (!local)
+            continue;
+
+        uint32_t idle_pid = __atomic_load_n(&local->idle_pid,
+                                            __ATOMIC_ACQUIRE);
+        if (idle_pid == 0U)
+            continue;
+
+        process_t before;
+        process_t after;
+        if (!process_snapshot(idle_pid, &before) ||
+            process_terminate(idle_pid) ||
+            process_reap(idle_pid) ||
+            !process_snapshot(idle_pid, &after) ||
+            after.pid != before.pid ||
+            after.state != before.state ||
+            after.owner_cpu != before.owner_cpu ||
+            after.affinity_cpu != before.affinity_cpu ||
+            after.stack_pointer != before.stack_pointer ||
+            after.kernel_stack != before.kernel_stack ||
+            after.address_space != before.address_space ||
+            __atomic_load_n(&local->idle_pid, __ATOMIC_ACQUIRE) != idle_pid)
+        {
+            serial_write("VANTAOS_IDLE_PROCESS_LIFECYCLE_FAIL\n");
+            return 0;
+        }
+        checked++;
+    }
+
+    if (checked == 0U)
+    {
+        serial_write("VANTAOS_IDLE_PROCESS_LIFECYCLE_FAIL\n");
+        return 0;
+    }
+
+    serial_write("VANTAOS_IDLE_PROCESS_LIFECYCLE_OK\n");
+    return 1;
+}
+
 static void scheduler_probe_initialize(void)
 {
+    if (!process_idle_lifecycle_probe())
+        return;
     pmm_allocator_probe();
     heap_allocator_probe();
     filesystem_probe_initialize();

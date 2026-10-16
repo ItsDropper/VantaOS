@@ -1,4 +1,5 @@
 #include "paging.h"
+#include "panic.h"
 #include "pmm.h"
 #include "cpu_local.h"
 #include "apic.h"

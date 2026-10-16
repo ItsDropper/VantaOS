@@ -3,7 +3,6 @@
 #include "paging.h"
 #include "pic.h"
 #include "serial.h"
-#include "timer.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -20,6 +19,13 @@
 #define LAPIC_LVT_TIMER 0x320U
 #define LAPIC_TIMER_INITIAL_COUNT 0x380U
 #define LAPIC_TIMER_CURRENT_COUNT 0x390U
+#define PIT_COMMAND_PORT 0x43U
+#define PIT_CHANNEL2_DATA_PORT 0x42U
+#define PIT_SPEAKER_PORT 0x61U
+#define PIT_BASE_FREQUENCY 1193182ULL
+#define PIT_CALIBRATION_DIVISOR 65535U
+#define PIT_CALIBRATION_PERIODS 2U
+#define PIT_CALIBRATION_SPIN_LIMIT 200000000U
 #define LAPIC_TIMER_DIVIDE 0x3E0U
 #define APIC_RESCHEDULE_VECTOR 0xF3U
 #define LAPIC_LVT_LINT0 0x350U
@@ -58,6 +64,18 @@ static int cpu_has_apic(void)
     __asm__ volatile ("cpuid"
                       : "+a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx));
     return (edx & (1U << 9)) != 0;
+}
+
+static uint8_t inb(uint16_t port)
+{
+    uint8_t value;
+    __asm__ volatile ("inb %1, %0" : "=a"(value) : "Nd"(port));
+    return value;
+}
+
+static void outb(uint16_t port, uint8_t value)
+{
+    __asm__ volatile ("outb %0, %1" : : "a"(value), "Nd"(port));
 }
 
 static uint32_t lapic_read(uint32_t offset)
@@ -210,45 +228,83 @@ int apic_timer_initialize(uint8_t vector, uint32_t initial_count)
     return 1;
 }
 
-int apic_timer_calibrate(uint8_t vector, uint32_t reference_ticks,
+static int pit_channel2_wait_period(uint8_t original_port)
+{
+    /* Channel 2 mode 0 provides a polled reference without relying on IRQ0. */
+    outb(PIT_SPEAKER_PORT, original_port & (uint8_t)~0x03U);
+    outb(PIT_COMMAND_PORT, 0xB0U); /* channel 2, lobyte/hibyte, mode 0 */
+    outb(PIT_CHANNEL2_DATA_PORT, (uint8_t)PIT_CALIBRATION_DIVISOR);
+    outb(PIT_CHANNEL2_DATA_PORT,
+         (uint8_t)(PIT_CALIBRATION_DIVISOR >> 8));
+    outb(PIT_SPEAKER_PORT,
+         (original_port & (uint8_t)~0x02U) | 0x01U); /* gate on, speaker off */
+
+    uint32_t spins = 0;
+    while ((inb(PIT_SPEAKER_PORT) & 0x20U) != 0U &&
+           spins++ < PIT_CALIBRATION_SPIN_LIMIT)
+        __asm__ volatile ("pause" ::: "memory");
+
+    int output_went_low =
+        (inb(PIT_SPEAKER_PORT) & 0x20U) == 0U;
+    while (output_went_low &&
+           (inb(PIT_SPEAKER_PORT) & 0x20U) == 0U &&
+           spins++ < PIT_CALIBRATION_SPIN_LIMIT)
+        __asm__ volatile ("pause" ::: "memory");
+
+    int elapsed = output_went_low &&
+                  (inb(PIT_SPEAKER_PORT) & 0x20U) != 0U;
+    outb(PIT_SPEAKER_PORT, original_port);
+    return elapsed;
+}
+
+int apic_timer_calibrate(uint8_t vector, uint32_t target_hz,
                          uint32_t* count_per_tick)
 {
     if (!enabled || !lapic || vector < 0x10U || vector == 0xFFU ||
-        reference_ticks < 2U || !count_per_tick)
+        target_hz == 0U || !count_per_tick)
         return 0;
 
     uint64_t saved_flags;
     __asm__ volatile ("pushfq; popq %0" : "=r"(saved_flags));
+    uint8_t original_port = inb(PIT_SPEAKER_PORT);
 
-    /* Mask delivery but let the one-shot counter run down from its maximum. */
+    /* Mask delivery but let the one-shot LAPIC counter run down. */
     lapic_write(LAPIC_LVT_TIMER, (1U << 16) | vector);
     lapic_write(LAPIC_TIMER_DIVIDE, 0x3U);
     lapic_write(LAPIC_TIMER_INITIAL_COUNT, UINT32_MAX);
 
-    uint32_t start_ticks = timer_get_ticks();
-    __asm__ volatile ("sti" ::: "memory");
-    while ((uint32_t)(timer_get_ticks() - start_ticks) < reference_ticks)
-        __asm__ volatile ("sti; hlt" ::: "memory");
-    __asm__ volatile ("cli" ::: "memory");
+    int ok = 1;
+    for (uint32_t i = 0; i < PIT_CALIBRATION_PERIODS; i++)
+    {
+        if (!pit_channel2_wait_period(original_port))
+        {
+            ok = 0;
+            break;
+        }
+    }
 
-    uint32_t elapsed_ticks = (uint32_t)(timer_get_ticks() - start_ticks);
     uint32_t remaining = lapic_read(LAPIC_TIMER_CURRENT_COUNT);
     lapic_write(LAPIC_LVT_TIMER, (1U << 16) | vector);
+    outb(PIT_SPEAKER_PORT, original_port);
 
     if ((saved_flags & (1ULL << 9)) != 0U)
         __asm__ volatile ("sti" ::: "memory");
     else
         __asm__ volatile ("cli" ::: "memory");
 
-    if (elapsed_ticks < reference_ticks || remaining >= UINT32_MAX)
+    if (!ok || remaining >= UINT32_MAX)
         return 0;
 
-    uint32_t elapsed_count = UINT32_MAX - remaining;
-    uint32_t calibrated = elapsed_count / elapsed_ticks;
-    if (calibrated == 0U)
+    uint64_t elapsed_count = (uint64_t)UINT32_MAX - remaining;
+    uint64_t denominator =
+        (uint64_t)PIT_CALIBRATION_DIVISOR *
+        PIT_CALIBRATION_PERIODS * target_hz;
+    uint64_t calibrated =
+        elapsed_count * PIT_BASE_FREQUENCY / denominator;
+    if (calibrated == 0U || calibrated > UINT32_MAX)
         return 0;
 
-    *count_per_tick = calibrated;
+    *count_per_tick = (uint32_t)calibrated;
     return 1;
 }
 

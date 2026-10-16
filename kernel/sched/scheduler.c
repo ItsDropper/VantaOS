@@ -36,17 +36,15 @@ static uint32_t scheduler_next_ready(uint32_t current_pid)
     for (uint32_t offset = 1; offset < PROCESS_MAX; offset++)
     {
         uint32_t pid = (current_pid + offset) % PROCESS_MAX;
-        /* PID 1 is the desktop loop and must participate in round-robin. */
-
-        const process_t* process = process_get(pid);
-        if (process && process->state == PROCESS_READY)
+        process_t process;
+        if (process_snapshot(pid, &process) &&
+            process.state == PROCESS_READY)
             return pid;
     }
 
-    const process_t* idle = process_get(1);
-    if (idle &&
-        (idle->state == PROCESS_READY ||
-         idle->state == PROCESS_RUNNING))
+    process_t idle;
+    if (process_snapshot(1, &idle) &&
+        (idle.state == PROCESS_READY || idle.state == PROCESS_RUNNING))
         return 1;
 
     return current_pid;
@@ -58,35 +56,32 @@ uint64_t scheduler_tick(uint64_t current_stack)
         return current_stack;
 
     uint32_t current_pid = process_current_pid();
-
     if (current_pid == 0 || current_pid >= PROCESS_MAX)
         return current_stack;
 
     process_save_stack(current_pid, current_stack);
-
     volatile uint32_t* quantum_ticks = scheduler_quantum_slot();
     if (++(*quantum_ticks) < SCHEDULER_QUANTUM_TICKS)
         return current_stack;
-
     *quantum_ticks = 0;
 
     uint32_t next_pid = scheduler_next_ready(current_pid);
     if (next_pid == current_pid)
         return current_stack;
 
-    const process_t* current = process_get(current_pid);
-    const process_t* next = process_get(next_pid);
-
-    if (!current || !next || !process_stack_is_valid(next_pid))
+    process_t current, next;
+    if (!process_snapshot(current_pid, &current) ||
+        !process_snapshot(next_pid, &next) ||
+        !process_stack_is_valid(next_pid))
         return current_stack;
 
     if (!process_switch_to(next_pid))
         return current_stack;
 
-    if (next->address_space != paging_get_current_address_space())
-        paging_switch_address_space(next->address_space);
+    if (next.address_space != paging_get_current_address_space())
+        paging_switch_address_space(next.address_space);
 
-    if (current->state == PROCESS_TERMINATED)
+    if (current.state == PROCESS_TERMINATED)
         process_reap(current_pid);
 
     return process_get_stack(next_pid);

@@ -538,7 +538,7 @@ static int syscall_file_write(struct exception_frame* frame, uint32_t pid,
     }
 
     uint64_t length = frame->rdx;
-    if (length > FS_FILE_MAX - 1U)
+    if (length > USER_SYSCALL_IO_MAX)
     {
         frame->rax = (uint64_t)(int64_t)-22;
         return 0;
@@ -564,7 +564,7 @@ static int syscall_file_write(struct exception_frame* frame, uint32_t pid,
         return 0;
     }
 
-    char buffer[FS_FILE_MAX];
+    char buffer[USER_SYSCALL_IO_MAX];
     for (size_t i = 0; i < (size_t)length; i++)
         buffer[i] = ((const char*)address)[i];
 

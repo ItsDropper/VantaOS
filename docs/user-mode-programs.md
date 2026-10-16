@@ -11,7 +11,7 @@ The shell accepts single- or double-quoted arguments and preserves whitespace in
 ## What currently works
 
 - Read an ELF executable through the filesystem-backed `exec` path.
-- Create regular files and write through validated ring-3 syscalls. File writes are limited to 511 bytes per call, use explicit read/write/truncate access flags, and validate the full user buffer before touching the VFS. The ring-3 smoke program creates `/VNTUSER.CFG`, writes a region/timezone-shaped config payload, closes it, reopens it read-only, and verifies the bytes from disk.
+- Create regular files and write through validated ring-3 syscalls. File writes are limited to a 511-byte file size, use explicit read/write/truncate access flags, and validate the full user buffer before touching the VFS. The ring-3 smoke program creates `/VNTUSER.CFG`, writes a region/timezone-shaped config payload, closes it, reopens it read-only, and verifies the bytes from disk.
 - Validate and load its supported ELF64 load segments into a private user address space.
 - Enter the program at CPL3 (ring 3) with a writable, non-executable initial stack.
 - Supply `argc`, a null-terminated `argv[]`, an empty `envp`, and a minimal `AT_NULL` auxiliary-vector terminator.
@@ -22,7 +22,7 @@ This is an early execution path, not a complete process environment. There is no
 
 ## Freestanding C wrapper header
 
-C user programs can include `<vanta/syscall.h>` from `userspace/include`. The header defines `VANTA_USER_ABI_VERSION`, syscall numbers, the read-only open flag, and inline wrappers for write, terminal output, open/read/close, child spawn, waitpid, and process exit. It is freestanding and does not require libc. Wrappers return the kernel's raw result: a non-negative value on success or a negative error number on failure; they do not set `errno`. See [user-mode.md](user-mode.md) for the wrapper table and limitations. CI compiles every wrapper with `-Wall -Wextra -Werror` to catch ABI/header drift.
+C user programs can include `<vanta/syscall.h>` from `userspace/include`. The header defines `VANTA_USER_ABI_VERSION`, syscall numbers, read/write/truncate open flags, bounded file creation/writes, and inline wrappers for write, terminal output, open/read/close, child spawn, waitpid, and process exit. It is freestanding and does not require libc. Wrappers return the kernel's raw result: a non-negative value on success or a negative error number on failure; they do not set `errno`. See [user-mode.md](user-mode.md) for the wrapper table and limitations. CI compiles every wrapper with `-Wall -Wextra -Werror` to catch ABI/header drift.
 
 ## Bring-up syscall ABI
 

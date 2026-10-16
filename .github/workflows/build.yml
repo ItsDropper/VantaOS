@@ -51,8 +51,9 @@ jobs:
         run: |
           gcc -m64 -ffreestanding -fno-pie -fno-stack-protector -c tests/user/hello.S -o /tmp/vantaos-user-hello.o
           ld -m elf_x86_64 -static -nostdlib -Ttext-segment=0x8000000000 -e _start -o /tmp/vantaos-user-hello.elf /tmp/vantaos-user-hello.o
-          gcc -m64 -ffreestanding -fno-pie -fno-stack-protector -c tests/user/child.S -o /tmp/vantaos-user-child.o
-          ld -m elf_x86_64 -static -nostdlib -Ttext-segment=0x8000000000 -e _start -o /tmp/vantaos-user-child.elf /tmp/vantaos-user-child.o
+          gcc -m64 -ffreestanding -fno-pie -fno-stack-protector -mno-red-zone -c userspace/crt/crt0.S -o /tmp/vantaos-user-crt0.o
+          gcc -m64 -ffreestanding -fno-pie -fno-stack-protector -mno-red-zone -fno-builtin -Iuserspace/include -c tests/user/child.c -o /tmp/vantaos-user-child.o
+          ld -m elf_x86_64 -static -nostdlib -Ttext-segment=0x8000000000 -e _start -o /tmp/vantaos-user-child.elf /tmp/vantaos-user-crt0.o /tmp/vantaos-user-child.o
           test -s /tmp/vantaos-user-hello.elf
           test -s /tmp/vantaos-user-child.elf
           mcopy -i vantaos.img /tmp/vantaos-user-hello.elf ::/HELLO.ELF

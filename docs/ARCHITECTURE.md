@@ -42,7 +42,8 @@ The two boot paths are not interchangeable evidence: a successful GRUB boot does
 | `arch/x86_64/` | Active long-mode GDT, IDT, interrupt entry/dispatch, PIC, and boot code. |
 | `arch/x86/` | Legacy 32-bit source retained for audit; not linked into the active target. |
 | `boot/` | Boot-related assets and configuration. |
-| `kernel/` | Kernel initialization, serial diagnostics, panic/fault tracing, and graphics. |
+| `kernel/` | Boot orchestration, serial diagnostics, panic/fault tracing, and shared kernel services. |
+| `kernel/selftest/` | Test-only boot-info/PMM and paging/spinlock regression probes. |
 | `kernel/proc/` | Process table and lifecycle. |
 | `kernel/sched/` | Ready-process selection and scheduling. |
 | `kernel/time/` | Timer subsystem. |
@@ -86,6 +87,12 @@ Changes that cross these boundaries should be reviewed together with their calle
 These are design constraints for review, not a claim that every edge case is already proven. See [Engineering model](ENGINEERING_MODEL.md) for the review questions and [ADR-001](decisions/0001-subsystem-source-manifests-and-boot-coordinators.md) for the source-boundary rationale.
 
 ## Test-code boundaries
+
+`kernel/kernel.c` coordinates early kernel initialization; it does not own regression fixture implementations. Kernel-only probes live in `kernel/selftest/`, grouped by the contract they exercise:
+
+- `boot_info_selftest.c` — Multiboot normalization and PMM boot-map invariants.
+- `platform_selftest.c` — spinlock primitive, TLB shootdown, user mappings, and per-CPU address-space invariants.
+- `selftest.h` — explicit entry points called by the boot coordinator only when `VANTAOS_SELF_TEST` is enabled.
 
 `os/os.c` owns OS initialization order and the long-running desktop entry path. It should coordinate subsystems, not implement their regression fixtures. Test-only code lives under `os/selftest/`, divided by responsibility:
 

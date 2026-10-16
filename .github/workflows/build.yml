@@ -32,6 +32,9 @@ jobs:
           test -f drivers/Makefile
           test -f fs/Makefile
 
+      - name: Enforce architecture boundaries
+        run: python3 scripts/check_architecture.py
+
       - name: Build kernel, ISO, and FAT32 image with self-tests
         run: chmod +x build.sh && VANTAOS_SELF_TEST=1 ./build.sh
 

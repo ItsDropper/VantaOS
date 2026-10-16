@@ -23,7 +23,11 @@ compare_argument:
     lea child_message(%rip), %rdi
     mov $(child_message_end - child_message), %esi
     int $0x80
-    jmp child_exit
+
+    mov $23, %edi
+    xor %eax, %eax
+    int $0x80
+    ud2
 
 child_fail:
     mov $1, %eax
@@ -31,8 +35,7 @@ child_fail:
     mov $(child_failure_end - child_failure), %esi
     int $0x80
 
-child_exit:
-    xor %edi, %edi
+    mov $1, %edi
     xor %eax, %eax
     int $0x80
     ud2

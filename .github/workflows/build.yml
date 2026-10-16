@@ -21,7 +21,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install build dependencies
-        run: sudo apt-get update && sudo apt-get install --yes build-essential nasm grub-pc-bin xorriso mtools dosfstools qemu-system-x86 gnu-efi ovmf gdisk
+        run: sudo apt-get update && sudo apt-get install --yes build-essential nasm grub-pc-bin xorriso mtools dosfstools qemu-system-x86 gnu-efi ovmf gdisk xvfb socat imagemagick
 
       - name: Verify modular source manifests
         run: |
@@ -242,3 +242,103 @@ jobs:
             fi
           done
           echo "UEFI loader reached the VantaOS kernel under OVMF."
+
+      - name: Capture graphical desktop after boot
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p media
+          rm -f /tmp/vantaos-monitor.sock /tmp/vantaos-desktop.ppm
+          xvfb-run -a qemu-system-x86_64 \
+            -machine pc \
+            -m 512M \
+            -smp 2 \
+            -vga std \
+            -drive file=VantaOS.iso,media=cdrom,format=raw \
+            -drive file=vantaos.img,if=ide,format=raw \
+            -boot order=d \
+            -display sdl \
+            -serial file:desktop-boot.log \
+            -monitor unix:/tmp/vantaos-monitor.sock,server,nowait \
+            -no-reboot >/tmp/vantaos-desktop-qemu.log 2>&1 &
+          qemu_pid=$!
+          cleanup() {
+            kill "$qemu_pid" 2>/dev/null || true
+            wait "$qemu_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          booted=0
+          for attempt in $(seq 1 60); do
+            if grep -q '^VANTAOS_BOOT_OK' desktop-boot.log 2>/dev/null; then
+              booted=1
+              break
+            fi
+            if ! kill -0 "$qemu_pid" 2>/dev/null; then
+              cat /tmp/vantaos-desktop-qemu.log
+              cat desktop-boot.log 2>/dev/null || true
+              exit 1
+            fi
+            sleep 1
+          done
+          if [ "$booted" -ne 1 ]; then
+            echo "QEMU did not reach VANTAOS_BOOT_OK for the desktop screenshot."
+            cat desktop-boot.log 2>/dev/null || true
+            cat /tmp/vantaos-desktop-qemu.log
+            exit 1
+          fi
+
+          # Give the desktop renderer a moment to draw its first complete frame.
+          sleep 3
+          # The QEMU monitor stays connected; bound the client lifetime after
+          # sending the one screendump command rather than waiting for EOF.
+          printf 'screendump /tmp/vantaos-desktop.ppm\n' |
+            timeout 5s socat -T 1 - UNIX-CONNECT:/tmp/vantaos-monitor.sock || true
+          for attempt in $(seq 1 10); do
+            test -s /tmp/vantaos-desktop.ppm && break
+            sleep 1
+          done
+          test -s /tmp/vantaos-desktop.ppm
+          convert /tmp/vantaos-desktop.ppm -strip media/desktop.png
+          test -s media/desktop.png
+          identify media/desktop.png
+
+      - name: Upload boot screenshot artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vantaos-desktop-screenshot
+          path: media/desktop.png
+          if-no-files-found: ignore
+          retention-days: 14
+
+  refresh-screenshot:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master' && !contains(github.event.head_commit.message, '[skip ci]')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out master
+        uses: actions/checkout@v4
+
+      - name: Download freshly captured desktop screenshot
+        uses: actions/download-artifact@v4
+        with:
+          name: vantaos-desktop-screenshot
+          path: media
+
+      - name: Replace tracked desktop screenshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s media/desktop.png
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add media/desktop.png
+          if git diff --cached --quiet; then
+            echo "The tracked desktop screenshot is already current."
+            exit 0
+          fi
+          git commit -m "ci: refresh desktop screenshot [skip ci]"
+          git push origin HEAD:master

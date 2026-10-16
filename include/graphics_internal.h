@@ -55,6 +55,21 @@ extern int cursor_saved_height;
 extern int cursor_saved_valid;
 
 
+void graphics_ui_draw_status_pill(int x, int y, const char* label, int ready);
+void graphics_ui_draw_divider(int x, int y, int width);
+void graphics_ui_draw_badge(int x, int y, const char* text, uint32_t tint);
+void graphics_ui_draw_page_header(int x, int y, const char* section,
+                                  const char* title, const char* subtitle);
+void graphics_ui_draw_property(int x, int y, int width,
+                               const char* key, const char* value);
+void graphics_ui_draw_card(int x, int y, int width, int height,
+                           const char* title, const char* subtitle,
+                           uint32_t accent);
+void graphics_ui_draw_icon_terminal(int x, int y, int size);
+void graphics_ui_draw_icon_folder(int x, int y, int size);
+void graphics_ui_draw_icon_system(int x, int y, int size);
+void graphics_ui_draw_icon_settings(int x, int y, int size);
+
 void graphics_ui_draw_button(int x, int y, int width, int height,
                              const char* label, int selected, int enabled);
 void graphics_ui_draw_toggle(int x, int y, int enabled);

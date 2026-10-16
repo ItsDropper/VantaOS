@@ -2,6 +2,7 @@
 #include "pmm.h"
 #include "cpu_local.h"
 #include "apic.h"
+#include "serial.h"
 
 #include <stddef.h>
 #include <stdint.h>

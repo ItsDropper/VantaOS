@@ -172,6 +172,21 @@ int main(int argc, char** argv)
     }
     static const char range_success[] = "VANTAOS_USER_FILE_RANGE_IO_OK\\n";
     (void)vanta_write(range_success, sizeof(range_success) - 1U);
+    const char* settings_args[] = { "/SYSTEM/SETTINGS.ELF", "--self-test" };
+    long settings_pid = vanta_spawn("/SYSTEM/SETTINGS.ELF", settings_args, 2U);
+    if (settings_pid <= 0)
+    {
+        (void)vanta_write(failure, sizeof(failure) - 1U);
+        return 11;
+    }
+    int32_t settings_status = -1;
+    if (vanta_waitpid((int)settings_pid, &settings_status) != settings_pid ||
+        settings_status != 0)
+    {
+        (void)vanta_write(failure, sizeof(failure) - 1U);
+        return 12;
+    }
+
     (void)vanta_write(list_success, sizeof(list_success) - 1U);
     (void)vanta_write(success, sizeof(success) - 1U);
     return 23;

@@ -202,12 +202,12 @@ int process_release_user_resources(process_t* process)
         paging_get_current_address_space() == process->address_space)
         return 0;
 
+    if (!paging_destroy_address_space(process->address_space))
+        return 0;
+
     for (uint32_t i = 0; i < PROCESS_FD_COUNT; i++)
         if (process->file_descriptors[i] >= 0)
             (void)vfs_close(process->file_descriptors[i]);
-
-    if (!paging_destroy_address_space(process->address_space))
-        return 0;
 
     for (uint32_t i = 0; i < process->user_page_count; i++)
     {

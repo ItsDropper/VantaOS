@@ -121,7 +121,7 @@ static inline long vanta_close(int descriptor)
                           (uintptr_t)(intptr_t)descriptor, 0U, 0U);
 }
 
-/* Writes are bounded by the current FAT32-backed VFS limit (511 bytes). */
+/* Each call streams at most 4096 bytes; FAT32 file size is 32-bit. */
 static inline long vanta_file_write(int descriptor, const void* buffer,
                                     size_t length)
 {

@@ -4,10 +4,11 @@
 #include <stdint.h>
 #include "paging.h"
 
-#define PROCESS_MAX 32
+#define PROCESS_MAX 128
 #define PROCESS_NAME_MAX 31
 #define PROCESS_STACK_SIZE 16384U
 #define PROCESS_CPU_UNOWNED UINT32_MAX
+#define PROCESS_CPU_ANY PROCESS_CPU_UNOWNED
 
 typedef void (*process_entry_t)(void);
 
@@ -33,6 +34,7 @@ typedef struct
     uint32_t parent_pid;
     /* PROCESS_CPU_UNOWNED unless this process is executing on a CPU. */
     uint32_t owner_cpu;
+    uint32_t affinity_cpu;
     process_state_t state;
     char name[PROCESS_NAME_MAX + 1];
     uint64_t stack_pointer;
@@ -45,6 +47,10 @@ typedef struct
 void process_initialize(void);
 int process_is_initialized(void);
 int process_create_kernel(const char* name, uint32_t parent_pid, process_entry_t entry);
+int process_create_kernel_any(const char* name, uint32_t parent_pid,
+                              process_entry_t entry);
+int process_create_idle_for_cpu(uint32_t cpu_id, const char* name,
+                                process_entry_t entry);
 int process_attach_current(const char* name, uint32_t parent_pid);
 int process_set_running(uint32_t pid);
 int process_mark_running(uint32_t pid);
@@ -67,6 +73,7 @@ int process_snapshot(uint32_t pid, process_t* snapshot);
 const process_t* process_get(uint32_t pid);
 unsigned int process_count(void);
 uint32_t process_current_pid(void);
+uint32_t process_current_cpu_id(void);
 uint32_t process_current_cpu_id(void);
 
 #endif

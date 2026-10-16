@@ -98,7 +98,12 @@ void graphics_ui_draw_notice(int x, int y, int width, const char* message,
                              uint32_t tint);
 
 void graphics_draw_start_menu_detail(int width, int height);
-void graphics_draw_desktop_backdrop(int width, int height);\nvoid graphics_draw_desktop_dashboard(int width, int height);\nvoid graphics_draw_system_page_detail(int x, int y, int width, int height);\nvoid graphics_draw_settings_page_detail(int x, int y, int width, int height);\n\nuint32_t graphics_pack_color(uint32_t color);
+void graphics_draw_desktop_backdrop(int width, int height);
+void graphics_draw_desktop_dashboard(int width, int height);
+void graphics_draw_system_page_detail(int x, int y, int width, int height);
+void graphics_draw_settings_page_detail(int x, int y, int width, int height);
+
+uint32_t graphics_pack_color(uint32_t color);
 void bochs_vbe_write(uint16_t index, uint16_t value);
 uint16_t bochs_vbe_read(uint16_t index);
 

@@ -35,6 +35,8 @@ static paging_address_space_t address_spaces[ADDRESS_SPACE_MAX];
 static paging_address_space_t kernel_address_space;
 static paging_address_space_t* fallback_current_address_space;
 
+static spinlock_t paging_mutation_lock = SPINLOCK_INITIALIZER;
+
 
 static void paging_switch_address_space_locked(
     paging_address_space_t* address_space);

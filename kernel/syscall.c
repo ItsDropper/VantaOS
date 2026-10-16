@@ -360,7 +360,7 @@ static int syscall_listdir(struct exception_frame* frame,
             output[used++] = node->name[j];
         if (suffix)
             output[used++] = '/';
-        output[used++] = '\\n';
+        output[used++] = '\n';
     }
 
     if (used >= capacity)
@@ -368,7 +368,7 @@ static int syscall_listdir(struct exception_frame* frame,
         frame->rax = (uint64_t)(int64_t)-22;
         return 0;
     }
-    output[used] = '\\0';
+    output[used] = '\0';
     for (size_t i = 0; i <= used; i++)
         ((char*)buffer_address)[i] = output[i];
 

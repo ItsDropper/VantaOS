@@ -17,6 +17,8 @@ typedef struct cpu_local
     uint32_t reserved;
     /* Updated only by this logical CPU; also validates GS-based lookup. */
     volatile uint64_t work_iterations;
+    /* Per-CPU scheduler quantum; never shared between logical CPUs. */
+    volatile uint32_t scheduler_ticks;
 } cpu_local_t;
 
 /* Installs the current CPU's GS base and initializes its private state. */

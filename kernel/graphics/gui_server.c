@@ -334,12 +334,12 @@ void gui_server_draw_windows(void)
         int32_t y = window->y;
         uint32_t width = window->width;
         uint32_t height = window->height;
+        graphics_draw_window_frame(x, y, (int)width, (int)height,
+                                   window->title, 0);
         graphics_fill_rounded_rect(x + 2, y + GUI_TITLEBAR_HEIGHT,
                                    (int)width - 4,
                                    (int)height - GUI_TITLEBAR_HEIGHT - 2,
                                    6, 0x00151D29);
-        graphics_draw_window_frame(x, y, (int)width, (int)height,
-                                   window->title, 0);
 
         for (uint32_t j = 0; j < window->command_count; j++)
         {

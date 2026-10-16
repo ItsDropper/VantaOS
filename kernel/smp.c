@@ -134,11 +134,11 @@ static int smp_topology_validation_probe(void)
         SMP_TOPOLOGY_INVALID_COUNT)
         goto fail;
 
-    serial_write("VANTAOS_SMP_TOPOLOGY_VALIDATION_OK\\n");
+    serial_write("VANTAOS_SMP_TOPOLOGY_VALIDATION_OK\n");
     return 1;
 
 fail:
-    serial_write("VANTAOS_SMP_TOPOLOGY_VALIDATION_FAIL\\n");
+    serial_write("VANTAOS_SMP_TOPOLOGY_VALIDATION_FAIL\n");
     return 0;
 }
 #endif
@@ -527,7 +527,7 @@ int smp_initialize(void)
     const acpi_platform_info_t* info = apic_get_platform_info();
     if (!info)
     {
-        serial_write("VANTAOS_SMP_TOPOLOGY_UNAVAILABLE\\n");
+        serial_write("VANTAOS_SMP_TOPOLOGY_UNAVAILABLE\n");
         return 0;
     }
 
@@ -540,16 +540,16 @@ int smp_initialize(void)
         switch (topology_status)
         {
             case SMP_TOPOLOGY_INVALID_COUNT:
-                serial_write("VANTAOS_SMP_TOPOLOGY_COUNT_FAIL\\n");
+                serial_write("VANTAOS_SMP_TOPOLOGY_COUNT_FAIL\n");
                 break;
             case SMP_TOPOLOGY_DUPLICATE_APIC_ID:
-                serial_write("VANTAOS_SMP_TOPOLOGY_DUPLICATE_FAIL\\n");
+                serial_write("VANTAOS_SMP_TOPOLOGY_DUPLICATE_FAIL\n");
                 break;
             case SMP_TOPOLOGY_BSP_MISSING:
-                serial_write("VANTAOS_SMP_BSP_NOT_IN_MADT_FAIL\\n");
+                serial_write("VANTAOS_SMP_BSP_NOT_IN_MADT_FAIL\n");
                 break;
             case SMP_TOPOLOGY_UNSUPPORTED_APIC_ID:
-                serial_write("VANTAOS_SMP_APIC_ID_UNSUPPORTED\\n");
+                serial_write("VANTAOS_SMP_APIC_ID_UNSUPPORTED\n");
                 break;
             case SMP_TOPOLOGY_VALID:
                 break;
@@ -559,11 +559,11 @@ int smp_initialize(void)
 
     discovered_cpu_count = info->cpu_count;
     bsp_logical_id = (uint32_t)bsp_index;
-    serial_write("VANTAOS_SMP_TOPOLOGY_OK\\n");
+    serial_write("VANTAOS_SMP_TOPOLOGY_OK\n");
 
     if (!cpu_local_initialize((uint32_t)bsp_index, bsp_id))
     {
-        serial_write("VANTAOS_SMP_CPU_LOCAL_FAIL\\n");
+        serial_write("VANTAOS_SMP_CPU_LOCAL_FAIL\n");
         return 0;
     }
 

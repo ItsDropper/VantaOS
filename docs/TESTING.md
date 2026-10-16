@@ -1,79 +1,90 @@
 # Testing and verification
 
-This document distinguishes what automation actually checks from what is still untested. A green CI run means the listed assertions passed; it does not prove every code path or every hardware configuration works.
+This document records what the current automation actually checks. A green workflow means the listed assertions passed in its tested environment; it does not prove every code path, all hardware configurations, or security.
 
-## Continuous integration
+## CI workflow
 
 Workflow: [`.github/workflows/build.yml`](../.github/workflows/build.yml)
 
-For pushes to `main`, pull requests, and manual workflow runs, GitHub Actions:
+The workflow runs on pull requests, manual dispatch, and pushes to the branches explicitly listed in the workflow file. It uses an Ubuntu GitHub-hosted runner and:
 
-1. Checks out the repository on a clean Ubuntu runner.
-2. Installs GCC/build tools, NASM, GRUB utilities, FAT tools, and QEMU.
-3. Builds the freestanding kernel, bootable ISO, and FAT32 development image with `VANTAOS_SELF_TEST=1`.
-4. Asserts that `kernel.bin`, `VantaOS.iso`, and `vantaos.img` exist and are non-empty.
-5. Boots the ISO in headless QEMU with serial output captured to a log.
-6. Requires all success markers, rejects any `VANTAOS_*_FAIL` marker, and requires QEMU to remain running until the smoke-test timeout.
-7. Repeats the QEMU boot at 256 MiB and 512 MiB guest RAM. CI waits briefly after QEMU exits so the serial log is flushed before assertions run.
+1. Installs GCC/build tools, NASM, GRUB utilities, FAT tools, QEMU, GNU-EFI, OVMF, and GPT tooling.
+2. Runs `make list-sources` and verifies expected subsystem manifests.
+3. Builds the kernel, ISO, and FAT32 development image with `VANTAOS_SELF_TEST=1`.
+4. Checks that `kernel.bin`, `VantaOS.iso`, and `vantaos.img` are non-empty.
+5. Boots the GRUB ISO in headless QEMU and validates serial markers while requiring QEMU to remain alive through the smoke-test timeout.
+6. Runs the following GRUB/QEMU matrix:
 
-## Runtime assertions
+| Guest RAM | vCPUs | Additional requirement |
+| ---: | ---: | --- |
+| 256 MiB | 1 | Required boot and regression markers |
+| 512 MiB | 2 | Required markers plus SMP scheduler stress, remote wake, and migration |
+| 512 MiB | 4 | Required markers plus SMP scheduler stress, remote wake, and migration |
 
-| Marker | What it establishes |
+7. Builds the UEFI image and boots it under OVMF, requiring loader, ELF load, `ExitBootServices`, kernel handoff, boot-info, APIC/SMP, and memory-manager markers.
+
+The workflow's YAML is the source of truth if this summary and the implementation ever differ.
+
+## Marker contract
+
+The workflow checks for the required markers listed in `.github/workflows/build.yml`. Some key markers are:
+
+| Marker | Evidence |
 | --- | --- |
-| `VANTAOS_BOOT_OK` | Initialization reached the OS run path and emitted its boot marker. |
-| `VANTAOS_BOOT_INFO_READY` | The live GRUB/Multiboot handoff was normalized into the versioned boot-info structure. |
-| `VANTAOS_BOOT_INFO_ADAPTER_OK` | The contract magic/version/size are correct; synthetic memory ranges and framebuffer fields normalize correctly; malformed entry sizes, overflowing region ranges, and null arguments are rejected. |
-| `VANTAOS_PMM_BOOT_INFO_OK` | The physical allocator consumes the normalized contract, rejects invalid boot-info pointers, preserves reserved-region precedence over overlapping usable memory, and reserves kernel and legacy metadata pages. |
-| `VANTAOS_PMM_ALLOCATOR_OK` | The physical allocator is initialized; two distinct aligned frames are allocated; invalid and duplicate frees are rejected; and free/used accounting returns to baseline. |
-| `VANTAOS_HEAP_ALLOCATOR_OK` | The heap is initialized; aligned allocations preserve test data; invalid and duplicate frees are rejected; and usage accounting returns to baseline. |
-| `VANTAOS_PROCESS_API_GUARDS_OK` | Selected invalid process API arguments are rejected. |
-| `VANTAOS_PROCESS_NAME_OK` | An overlong process name remains null-terminated at the maximum name index. |
-| `VANTAOS_PROCESS_STATE_TRANSITIONS_OK` | A test process transitions through ready, running, sleeping, wake-up, and termination/reaping paths. |
-| `VANTAOS_FILESYSTEM_NAMESPACE_OK` | The filesystem/VFS initializes, root and standard directories can be resolved, a missing path stays missing, and root listing returns without error. |
-| `VANTAOS_VFS_HANDLE_GUARDS_OK` | Invalid VFS read/write/close handles are rejected. |
-| `VANTAOS_SCHEDULER_PROBE_OK` | The scheduler runs the dedicated kernel-mode probe entry. |
-| `VANTAOS_SCHEDULER_REAP_OK` | The observer sees the completed probe process removed from the process table. |
+| `VANTAOS_BOOT_OK` | Kernel initialization reached the OS run path. |
+| `VANTAOS_BOOT_INFO_READY` | Boot information was normalized into the versioned contract. |
+| `VANTAOS_APIC_LOCAL_OK` / `VANTAOS_SMP_TOPOLOGY_OK` | APIC-local and CPU-topology checks passed. |
+| `VANTAOS_SMP_AP_START_OK` | Application processors reached the tested startup checkpoint. |
+| `VANTAOS_SMP_LOCAL_TIMER_OK` | The tested per-CPU timer path passed. |
+| `VANTAOS_SMP_RESCHEDULE_IPI_OK` / `VANTAOS_SMP_RESCHEDULE_PENDING_OK` | Reschedule IPI and pending-request assertions passed. |
+| `VANTAOS_SMP_IDLE_CONTEXTS_OK` | Per-CPU idle-context assertions passed. |
+| `VANTAOS_TLB_SHOOTDOWN_OK` | The tested cross-CPU TLB shootdown assertions passed. |
+| `VANTAOS_PMM_ALLOCATOR_OK` / `VANTAOS_HEAP_ALLOCATOR_OK` | Selected physical-frame and heap allocation/free invariants passed. |
+| `VANTAOS_PROCESS_STATE_TRANSITIONS_OK` / `VANTAOS_SCHEDULER_REAP_OK` | Selected kernel-process lifecycle and reaping assertions passed. |
+| `VANTAOS_SMP_SCHEDULER_STRESS_OK` | Multi-vCPU stress assertions for task completion, CPU participation, duplicate-entry detection, and measured overlap passed. |
+| `VANTAOS_SMP_REMOTE_WAKE_OK` | The tested remote wakeup path passed. |
+| `VANTAOS_SMP_MIGRATION_OK` | The tested cross-CPU migration path passed. |
+| `VANTAOS_UEFI_EXIT_BOOT_SERVICES_OK` / `VANTAOS_UEFI_KERNEL_HANDOFF` | UEFI loader reached the tested exit/handoff checkpoints. |
 
-These tests run inside the kernel before/after enabling interrupts as appropriate. They do **not** run untrusted user-mode programs.
+A marker is evidence for the assertions tied to it only. It is not a proof of general correctness. A success marker must never be printed before its assertions pass. The workflow rejects `VANTAOS_*_FAIL` markers.
 
 ## Run locally
 
-On a compatible Linux development environment with the packages listed in the README:
+Install the packages listed in the root [README](../README.md), then:
 
 ```sh
 VANTAOS_SELF_TEST=1 ./build.sh
 ```
 
-Then boot headless and capture serial output:
+A basic single-vCPU serial smoke test can be run with:
 
 ```sh
 timeout 12s qemu-system-x86_64 \
-  -machine pc -m 256M \
+  -machine pc -smp 1 -m 256M \
   -drive file=VantaOS.iso,media=cdrom,format=raw \
   -drive file=vantaos.img,if=ide,format=raw \
   -boot order=d -display none \
   -serial file:boot.log -monitor none -no-reboot
 ```
 
-Exit code 124 from `timeout` is expected for this smoke test: the guest is expected to remain alive through the test window. After QEMU exits, allow its serial file to flush before checking the markers. An earlier exit, missing marker, or failure marker is a test failure. Inspect `boot.log` when debugging.
+For this smoke test, exit code 124 from `timeout` is expected: QEMU should remain alive for the full interval. Inspect `boot.log` for missing or failure markers. This command is not a substitute for the full CI matrix.
 
-## UEFI boot test
+## UEFI path
 
-The workflow also builds `VantaOS-UEFI.img` and boots it with OVMF. The image contains the removable-media entry point at `EFI/BOOT/BOOTX64.EFI` and the separate `kernel-uefi.elf` at `EFI/VANTA/KERNEL.ELF`.
+The UEFI image contains `EFI/BOOT/BOOTX64.EFI` and `EFI/VANTA/KERNEL.ELF`. The OVMF regression checks the loader's tested ELF-load and boot-services handoff path and verifies selected kernel markers after entry.
 
-The UEFI smoke test requires serial markers proving that the loader started, validated and loaded the ELF64 kernel, successfully called `ExitBootServices`, transferred control to the UEFI kernel entry, validated the normalized handoff, and reached `VANTAOS_BOOT_OK`. The original GRUB ISO tests still run independently at 256 MiB and 512 MiB.
+The UEFI path is exercised in CI, but that does not establish compatibility with arbitrary firmware, secure boot, or physical hardware. Malformed-ELF fuzzing and broader firmware variation remain future work.
 
-This test does not yet establish physical-hardware compatibility or complete removal of legacy Multiboot-shaped metadata from OS services. GRUB remains the fallback until the UEFI path is repeatedly green and malformed-ELF regression tests are added.
+## Coverage gaps
 
-## What is not yet covered
+Current CI does **not** establish:
 
-- Exhaustive process-state combinations, sustained preemption stress, race conditions, or long-duration stability.
-- Page-table permission enforcement, user/supervisor transitions, syscall validation, and process-to-process memory isolation.
-- Physical-memory-map malformed-entry/overflow fuzzing, allocator fragmentation, allocation-failure recovery, and long-duration memory-pressure tests.
-- Actual FAT32 write/create support; the current filesystem write/create functions report unsupported.
-- Filesystem corruption, power-loss recovery, and persistent-data round trips.
-- Pixel-level desktop correctness, input interaction scripts, display modes, and visual regression tests.
-- Real-device compatibility, USB/HID edge cases, NICs, Wi-Fi, audio, GPU acceleration, sleep/resume, and firmware variations.
-- Security auditing, fuzzing, sanitizers suitable for this freestanding target, and formal verification.
+- Exhaustive scheduling interleavings, race freedom, long-duration SMP stability, or correctness under arbitrary interrupt timing.
+- A user-mode privilege boundary, secure process isolation, syscall safety, or complete page-table permission enforcement.
+- Exhaustive malformed-memory-map fuzzing, allocator fragmentation behavior, or recovery under sustained memory pressure.
+- General persistent FAT32 create/write support, filesystem corruption handling, crash consistency, or power-loss recovery.
+- Pixel-level desktop correctness, scripted user interaction, broad display/input support, or visual regression.
+- Real-device compatibility, broad USB/HID behavior, Wi-Fi, Ethernet, audio, modern GPU acceleration, sleep/resume, or firmware variation.
+- Independent security audit, formal verification, or exhaustive fuzzing.
 
-The next useful test increments are a repeated scheduler stress scenario, focused page-table/memory-manager invariants, FAT32 read-only fixture tests, and automated input/graphics checks. Tests should be added alongside each new subsystem instead of relying on a single boot marker.
+Useful next increments are repeated scheduler stress, interrupt-frame/stack-bound invariants, page-table permission tests, disposable FAT32 fixture tests, and automated UI/input checks. Add focused tests alongside the subsystem changes they protect.

@@ -62,6 +62,23 @@ static void process_set_current_slot(uint32_t pid)
         legacy_current_pid = pid;
 }
 
+/* Caller must hold process_table_lock. Idle PIDs are persistent CPU-local
+ * references and must never be terminated, reaped, or reused as ordinary work. */
+static int process_is_idle_locked(uint32_t pid)
+{
+    if (pid == 0U || pid >= PROCESS_MAX)
+        return 0;
+
+    for (uint32_t cpu = 0; cpu < cpu_local_capacity(); cpu++)
+    {
+        const cpu_local_t* local = cpu_local_get(cpu);
+        if (local &&
+            __atomic_load_n(&local->idle_pid, __ATOMIC_ACQUIRE) == pid)
+            return 1;
+    }
+    return 0;
+}
+
 static void process_copy_name(char* destination, const char* source)
 {
     unsigned int i = 0;
@@ -221,9 +238,10 @@ int process_attach_current(const char* name, uint32_t parent_pid)
     uint64_t flags = process_table_lock_acquire();
     for (uint32_t pid = 1; pid < PROCESS_MAX; pid++)
     {
-        if (processes[pid].state != PROCESS_UNUSED &&
-            (processes[pid].state != PROCESS_TERMINATED ||
-             processes[pid].owner_cpu != PROCESS_CPU_UNOWNED))
+        if ((processes[pid].state != PROCESS_UNUSED &&
+             (processes[pid].state != PROCESS_TERMINATED ||
+              processes[pid].owner_cpu != PROCESS_CPU_UNOWNED)) ||
+            process_is_idle_locked(pid))
             continue;
 
         process_t* process = &processes[pid];
@@ -274,9 +292,10 @@ static int process_create_kernel_affinity(const char* name,
 
     for (uint32_t pid = 1; pid < PROCESS_MAX; pid++)
     {
-        if (processes[pid].state != PROCESS_UNUSED &&
-            (processes[pid].state != PROCESS_TERMINATED ||
-             processes[pid].owner_cpu != PROCESS_CPU_UNOWNED))
+        if ((processes[pid].state != PROCESS_UNUSED &&
+             (processes[pid].state != PROCESS_TERMINATED ||
+              processes[pid].owner_cpu != PROCESS_CPU_UNOWNED)) ||
+            process_is_idle_locked(pid))
             continue;
 
         process_t* process = &processes[pid];
@@ -707,7 +726,8 @@ int process_terminate(uint32_t pid)
     uint64_t flags = process_table_lock_acquire();
     process_t* process = &processes[pid];
     if (process->state == PROCESS_UNUSED ||
-        process->state == PROCESS_TERMINATED)
+        process->state == PROCESS_TERMINATED ||
+        process_is_idle_locked(pid))
     {
         process_table_lock_release(flags);
         return 0;
@@ -729,7 +749,8 @@ void process_terminate_current(void)
     uint64_t flags = process_table_lock_acquire();
     uint32_t current_pid = process_current_slot();
     if (current_pid != 0 && current_pid < PROCESS_MAX &&
-        processes[current_pid].state != PROCESS_UNUSED)
+        processes[current_pid].state != PROCESS_UNUSED &&
+        !process_is_idle_locked(current_pid))
         processes[current_pid].state = PROCESS_TERMINATED;
     process_table_lock_release(flags);
 }
@@ -776,6 +797,7 @@ int process_reap(uint32_t pid)
 
     uint64_t flags = process_table_lock_acquire();
     if (pid == process_current_slot() ||
+        process_is_idle_locked(pid) ||
         processes[pid].state != PROCESS_TERMINATED ||
         processes[pid].owner_cpu != PROCESS_CPU_UNOWNED)
     {

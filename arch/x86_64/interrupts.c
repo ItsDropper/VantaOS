@@ -114,11 +114,13 @@ uint64_t lapic_timer_handle_interrupt(uint64_t saved_stack)
     if (process_current_pid() == 0U)
         return scheduler_start_cpu(saved_stack);
 
-    /* The BSP still schedules from the legacy timer; APs use their LAPIC. */
-    if (smp_cpu_count() > 1U && !smp_cpu_is_bsp(local->logical_id))
-        return scheduler_tick(saved_stack);
-
-    return saved_stack;
+    /*
+     * The legacy PIC timer only acknowledges IRQ0; it does not enter the
+     * scheduler. Run scheduling from the LAPIC timer on the BSP as well as
+     * APs, otherwise a BSP idle context cannot dispatch a parent made READY
+     * by child exit (for example, a parent blocked in waitpid).
+     */
+    return scheduler_tick(saved_stack);
 }
 
 uint64_t reschedule_ipi_handle_interrupt(uint64_t saved_stack)

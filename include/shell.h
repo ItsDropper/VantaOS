@@ -11,6 +11,7 @@ void shell_handle_char(char c);
 void shell_handle_event(keyboard_event_t event);
 
 void shell_show_prompt(void);
+void shell_exec(const char* argument);
 
 void shell_set_multiboot_info(multiboot_info_t* mbd);
 

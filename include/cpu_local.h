@@ -33,6 +33,8 @@ typedef struct cpu_local
     struct paging_address_space* current_address_space;
     /* Single-slot synchronous TLB shootdown mailbox; globally serialized. */
     volatile uint64_t tlb_request_generation;
+    /* Set by the requester, consumed once by the target interrupt handler. */
+    volatile uint32_t tlb_request_pending;
     volatile uint64_t tlb_ack_generation;
     struct paging_address_space* volatile tlb_address_space;
     volatile uintptr_t tlb_address;

@@ -9,6 +9,9 @@
 #include "process.h"
 #include "scheduler.h"
 #include "smp.h"
+#ifdef VANTAOS_SELF_TEST
+#include "selftest/user_mode_selftest.h"
+#endif
 
 extern void irq0_stub(void);
 extern void irq1_stub(void);
@@ -18,6 +21,9 @@ extern void smp_wakeup_stub(void);
 extern void lapic_timer_stub(void);
 extern void reschedule_ipi_stub(void);
 extern void tlb_shootdown_ipi_stub(void);
+#ifdef VANTAOS_SELF_TEST
+extern void user_mode_test_syscall_stub(void);
+#endif
 
 #define DECLARE_EXCEPTION(n) extern void exception##n##_stub(void);
 DECLARE_EXCEPTION(0) DECLARE_EXCEPTION(1) DECLARE_EXCEPTION(2)
@@ -66,6 +72,9 @@ void interrupts_initialize(void)
     idt_set_gate(0xF2, (uint64_t)(uintptr_t)lapic_timer_stub, 0x08, 0x8E);
     idt_set_gate(0xF3, (uint64_t)(uintptr_t)reschedule_ipi_stub, 0x08, 0x8E);
     idt_set_gate(0xF4, (uint64_t)(uintptr_t)tlb_shootdown_ipi_stub, 0x08, 0x8E);
+#ifdef VANTAOS_SELF_TEST
+    idt_set_gate(0x80, (uint64_t)(uintptr_t)user_mode_test_syscall_stub, 0x08, 0xEE);
+#endif
 
     pic_remap();
     timer_initialize(100);

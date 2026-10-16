@@ -8,6 +8,7 @@
 #define PAGE_PRESENT 0x001U
 #define PAGE_WRITE   0x002U
 #define PAGE_USER    0x004U
+#define PAGE_NX      (1ULL << 63)
 
 /* User mappings live in PML4 slot 1, away from the shared kernel mappings. */
 #define PAGING_USER_BASE 0x0000008000000000ULL
@@ -34,6 +35,11 @@ int paging_map_user_page(paging_address_space_t* address_space,
                          uintptr_t virtual_address,
                          uintptr_t physical_address,
                          int writable);
+int paging_map_user_page_ex(paging_address_space_t* address_space,
+                            uintptr_t virtual_address,
+                            uintptr_t physical_address,
+                            int writable, int executable);
+int paging_nx_available(void);
 int paging_unmap_user_page(paging_address_space_t* address_space,
                            uintptr_t virtual_address);
 /* Validate a complete user buffer before the kernel dereferences it. */

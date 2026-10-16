@@ -578,6 +578,68 @@ int fat32_read_file(
 }
 
 
+/* Read a byte range without allocating or staging the complete file. */
+int fat32_read_file_range(uint32_t first_cluster, uint32_t size,
+                          uint32_t offset, char* buffer, uint32_t length)
+{
+    if (!mounted || (length && !buffer))
+        return -1;
+    if (offset >= size || length == 0U)
+        return 0;
+    if (first_cluster < 2U)
+        return -1;
+
+    uint32_t available = size - offset;
+    if (length > available)
+        length = available;
+
+    uint64_t cluster_bytes = (uint64_t)sectors_per_cluster * 512U;
+    uint32_t target_index = (uint32_t)((uint64_t)offset / cluster_bytes);
+    uint32_t cluster = first_cluster;
+    for (uint32_t index = 0; index < target_index; index++)
+    {
+        cluster = next_cluster(cluster);
+        if (cluster == FAT32_MAX_CLUSTER || cluster == FAT32_BAD_CLUSTER)
+            return -1;
+    }
+
+    uint32_t copied = 0U;
+    uint32_t in_cluster = (uint32_t)((uint64_t)offset % cluster_bytes);
+    uint32_t steps = target_index;
+    while (copied < length && steps < cluster_count)
+    {
+        uint32_t base = cluster_lba(cluster);
+        if (base == FAT32_INVALID_LBA)
+            return -1;
+
+        while (in_cluster < sectors_per_cluster * 512U && copied < length)
+        {
+            uint32_t sector_index = in_cluster / 512U;
+            uint32_t in_sector = in_cluster % 512U;
+            if (!read_sector(base + sector_index, sector_buffer))
+                return -1;
+
+            uint32_t amount = 512U - in_sector;
+            if (amount > length - copied)
+                amount = length - copied;
+            for (uint32_t i = 0; i < amount; i++)
+                buffer[copied + i] = (char)sector_buffer[in_sector + i];
+            copied += amount;
+            in_cluster += amount;
+        }
+
+        if (copied == length)
+            break;
+        cluster = next_cluster(cluster);
+        if (cluster == FAT32_MAX_CLUSTER || cluster == FAT32_BAD_CLUSTER)
+            return -1;
+        in_cluster = 0U;
+        steps++;
+    }
+    return copied == length ? (int)copied : -1;
+}
+
+
 
 typedef struct
 {

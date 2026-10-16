@@ -44,18 +44,26 @@ This roadmap prioritizes a trustworthy kernel over visual features. A Windows al
 
 ### M3 — Memory safety and address spaces
 - [ ] Add bounds/overflow checks to mapping and frame calculations.
-- [ ] Implement per-process page tables with correct kernel/user permissions.
-- [ ] Add page-fault diagnostics and invalid-mapping tests.
+- [x] Add the initial per-process user address-space path and bounded ELF page mappings with write/execute permissions.
+- [x] Validate user output buffers at the initial syscall boundary.
+- [ ] Expand page-fault diagnostics, invalid-mapping tests, allocation-failure cleanup, and adversarial isolation coverage.
+- [ ] Add demand paging and mature virtual-memory policy.
 
-### M4 — User mode and syscall boundary
-- [ ] Define a versioned syscall ABI.
-- [ ] Add controlled privilege transitions and per-process user stacks.
-- [ ] Validate syscall numbers and user pointers.
-- [ ] Contain a user-process fault without taking down the kernel.
+### M4 — User mode and syscall boundary (early execution path implemented)
+- [x] Enter ring 3 from a loaded static ELF64 `ET_EXEC` image.
+- [x] Build a bounded initial stack with `argc`, `argv`, empty `envp`, and an `AT_NULL` terminator.
+- [x] Provide bring-up syscalls for process exit, serial output, and terminal output through `int 0x80`.
+- [x] Validate syscall context and user output-buffer ranges for the implemented write calls.
+- [x] Exercise the FAT32-loaded ELF and quoted argument path in QEMU CI.
+- [ ] Define a versioned/stable syscall ABI and error-code contract.
+- [ ] Add comprehensive user-fault containment and malformed pointer/ELF tests.
+- [ ] Add per-process file descriptors and user-mode file I/O.
+- [ ] Support `ET_DYN`, dynamic linking, and shared libraries.
 
 ### M5 — Storage and services
 - [x] Document the current VFS/FAT32 boundary and unsupported writes.
-- [ ] Test FAT32 reads against disposable disk fixtures.
+- [x] Exercise FAT32-backed executable loading using a disposable CI disk image.
+- [ ] Expand FAT32 read tests against disposable disk fixtures.
 - [ ] Implement file/directory creation and writes; test persistence across reboot.
 - [ ] Add corruption-safe tests and consistent error propagation.
 
@@ -68,4 +76,5 @@ This roadmap prioritizes a trustworthy kernel over visual features. A Windows al
 
 - Backup branch: `backup/pre-desktop-reliability-2026-10-15`.
 - Default branch: `master`.
-- Current work moves source into Linux-inspired top-level subsystem directories and updates manifests/docs. Merge only after clean build and QEMU CI pass.
+- Current user-mode status: static ELF64 execution from FAT32, bounded `argc`/`argv`, and basic output/exit syscalls are implemented and covered by the pull-request QEMU/UEFI regression workflow. This is not yet a general application environment.
+- Next userspace milestone: per-process file descriptors and safe user-mode file I/O, backed by end-to-end tests. Continue merging only after relevant QEMU and UEFI CI checks pass.

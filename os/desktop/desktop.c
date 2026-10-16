@@ -95,27 +95,21 @@ static void terminal_window_draw(void)
         window_y = 10;
     }
 
-    graphics_fill_rect(window_x, window_y, window_w, window_h, 0x000B1118);
-    graphics_fill_rect(window_x, window_y, window_w, 44, 0x0017222D);
-    graphics_fill_rect(window_x, window_y + 43, window_w, 1, 0x002B80C9);
-    graphics_fill_rect(window_x + 14, window_y + 10, 24, 24, 0x001E3A50);
-    graphics_draw_text(window_x + 20, window_y + 16, "V", 0x005AA9E6, 1);
-    graphics_draw_text(window_x + 48, window_y + 14, "Terminal", 0x00F2F5F8, 1);
-    graphics_draw_text(window_x + 48, window_y + 27, "VantaOS", 0x007F95A8, 1);
-    graphics_draw_text(window_x + window_w - 118, window_y + 14, "_", 0x00B7C5D1, 1);
-    graphics_draw_text(window_x + window_w - 84, window_y + 13, "[]", 0x00B7C5D1, 1);
-    graphics_draw_text(window_x + window_w - 38, window_y + 13, "X", 0x00F2F5F8, 1);
-    graphics_fill_rect(window_x, window_y + 44, window_w, 34, 0x000E171F);
-    graphics_fill_rect(window_x + 14, window_y + 49, 180, 29, 0x001A2A37);
-    graphics_fill_rect(window_x + 14, window_y + 76, 180, 2, 0x003B82F6);
-    graphics_draw_text(window_x + 28, window_y + 58, "VantaOS", 0x00E7EEF4, 1);
+    graphics_draw_window_frame(window_x, window_y, window_w, window_h, "Terminal");
+
+    /* A compact tab strip separates terminal sessions from window chrome. */
+    graphics_fill_rect(window_x + 1, window_y + 46, window_w - 2, 34, 0x00131B25);
+    graphics_fill_rounded_rect(window_x + 14, window_y + 50, 156, 26, 6, 0x00212D3A);
+    graphics_fill_rect(window_x + 24, window_y + 74, 136, 2, 0x004B9CFF);
+    graphics_draw_text(window_x + 28, window_y + 59, "Shell", 0x00E8EDF4, 1);
+    graphics_draw_text(window_x + 184, window_y + 59, "VantaOS", 0x007D8DA1, 1);
 
     int content_x = window_x + 18;
     int content_y = window_y + 88;
     int content_w = window_w - 36;
     int content_h = window_h - 104;
 
-    graphics_fill_rect(content_x, content_y, content_w, content_h, 0x000B1118);
+    graphics_fill_rounded_rect(content_x, content_y, content_w, content_h, 5, 0x000B1017);
 
     size_t count = terminal_history_count();
     size_t visible_lines = (size_t)(content_h / 10);
@@ -135,8 +129,8 @@ static void terminal_window_draw(void)
         if (!terminal_history_line(i, line, sizeof(line)))
             continue;
 
-        graphics_draw_text(content_x + 10, text_y, line, 0x00F2F2F2, 1);
-        text_y += 10;
+        graphics_draw_text(content_x + 14, text_y, line, 0x00DDE5EE, 1);
+        text_y += 12;
     }
 
     size_t cursor_line = terminal_get_cursor_line();
@@ -147,8 +141,8 @@ static void terminal_window_draw(void)
         cursor_line >= cursor_first &&
         cursor_line < cursor_first + visible_lines)
     {
-        int cursor_x = content_x + 10 + (int)cursor_column * 6;
-        int cursor_y = content_y + 8 + (int)(cursor_line - cursor_first) * 10;
+        int cursor_x = content_x + 14 + (int)cursor_column * 6;
+        int cursor_y = content_y + 8 + (int)(cursor_line - cursor_first) * 12;
         graphics_fill_rect(cursor_x, cursor_y, 2, 8, 0x00F2F5F8);
         terminal_window_prompted = 0;
     }

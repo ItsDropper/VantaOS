@@ -11,6 +11,8 @@
 #define PROCESS_USER_MAX_ARGS 16U
 #define PROCESS_USER_ARG_BYTES_MAX 512U
 #define PROCESS_USER_MAX_PAGES 64U
+#define PROCESS_FD_BASE 3
+#define PROCESS_FD_COUNT 8U
 #define PROCESS_USER_PAGE_WRITE 0x01U
 #define PROCESS_USER_PAGE_EXEC  0x02U
 #define PROCESS_CPU_UNOWNED UINT32_MAX
@@ -64,6 +66,7 @@ typedef struct
     uintptr_t user_stack_top;
     uint64_t user_image_size;
     process_user_page_t user_pages[PROCESS_USER_MAX_PAGES];
+    int32_t file_descriptors[PROCESS_FD_COUNT];
 } process_t;
 
 void process_initialize(void);
@@ -109,6 +112,9 @@ int process_prepare_context_switch(uint32_t next_pid, uint32_t current_pid,
                                    paging_address_space_t** next_address_space_out);
 int process_finish_context_switch(uint32_t outgoing_pid, uint32_t cpu_id);
 int process_reap(uint32_t pid);
+int process_fd_install(uint32_t pid, int vfs_handle);
+int process_fd_get(uint32_t pid, int descriptor);
+int process_fd_remove(uint32_t pid, int descriptor, int* vfs_handle_out);
 uint64_t process_schedule(uint64_t current_stack);
 /* Copies a process record while holding the process-table lock. */
 int process_snapshot(uint32_t pid, process_t* snapshot);

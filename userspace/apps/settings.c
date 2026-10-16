@@ -115,6 +115,18 @@ static int load_config(void)
     return 1;
 }
 
+static long open_config_for_write(void)
+{
+    long descriptor = vanta_open(
+        SETTINGS_PATH, VANTA_OPEN_WRITE | VANTA_OPEN_TRUNCATE);
+    if (descriptor >= 0)
+        return descriptor;
+    if (vanta_create_file(SETTINGS_PATH) < 0)
+        return -1;
+    return vanta_open(
+        SETTINGS_PATH, VANTA_OPEN_WRITE | VANTA_OPEN_TRUNCATE);
+}
+
 static int save_config(void)
 {
     const char* config = accent_teal
@@ -130,10 +142,7 @@ static int save_config(void)
     for (size_t i = 0U; i < ending_length; i++)
         buffer[used++] = ending[i];
 
-    if (vanta_create_file(SETTINGS_PATH) < 0)
-        return 0;
-    long descriptor = vanta_open(
-        SETTINGS_PATH, VANTA_OPEN_WRITE | VANTA_OPEN_TRUNCATE);
+    long descriptor = open_config_for_write();
     if (descriptor < 0)
         return 0;
     long written = vanta_file_write((int)descriptor, buffer, used);
@@ -160,10 +169,7 @@ static int run_storage_self_test(void)
         }
     }
 
-    if (vanta_create_file(SETTINGS_PATH) < 0)
-        return 1;
-    long descriptor = vanta_open(
-        SETTINGS_PATH, VANTA_OPEN_WRITE | VANTA_OPEN_TRUNCATE);
+    long descriptor = open_config_for_write();
     if (descriptor < 0)
         return 2;
     long written = vanta_file_write(
@@ -238,7 +244,7 @@ int main(int argc, char** argv)
 
     int config_loaded = load_config();
     const char* status = config_loaded
-        ? "Loaded /VANTASET.CFG"
+        ? "Loaded /SYSTEM/VANTASET.CFG"
         : "Defaults active; save to create config";
     uint32_t status_color = config_loaded ? COLOR_SUCCESS : COLOR_MUTED;
 

@@ -97,7 +97,8 @@ static inline void invalidate_page(uintptr_t address)
 int paging_tlb_shootdown(paging_address_space_t* address_space,
                          uintptr_t virtual_address)
 {
-    if (!address_space || !address_space->used ||
+    if (!address_space ||
+        __atomic_load_n(&address_space->used, __ATOMIC_ACQUIRE) == 0 ||
         (virtual_address & (PAGE_SIZE - 1U)) != 0)
         return 0;
 

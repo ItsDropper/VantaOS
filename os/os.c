@@ -24,6 +24,7 @@ static unsigned long long boot_shell;
 
 #ifdef VANTAOS_SELF_TEST
 #include "selftest/selftest.h"
+#include "user_mode_test.h"
 #endif
 
 static inline unsigned long long read_tsc(void)
@@ -117,6 +118,8 @@ void os_initialize(multiboot_info_t* mbd)
 
 #ifdef VANTAOS_SELF_TEST
     os_selftest_initialize();
+    if (!user_mode_process_smoke_test_start())
+        os_boot_fatal("VANTAOS_USER_PROCESS_TEST_START_FATAL_FAIL\n");
 #endif
 }
 

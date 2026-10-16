@@ -377,6 +377,21 @@ static void smp_scheduler_probe_entry(void)
     }
 
     /*
+     * For multicore runs, hold the first entrant in this non-preemptible
+     * section until another CPU enters. This makes the overlap assertion
+     * deterministic instead of depending on QEMU timing. Bound the wait so a
+     * broken scheduler still reports a failure rather than hanging forever.
+     */
+    if (smp_cpu_count() > 1U)
+    {
+        uint32_t overlap_wait = 0;
+        while (__atomic_load_n(&smp_scheduler_probe_active,
+                               __ATOMIC_ACQUIRE) < 2U &&
+               overlap_wait++ < 10000000U)
+            __asm__ volatile ("pause" ::: "memory");
+    }
+
+    /*
      * Exercise the shared ticket lock while the task set is known to overlap
      * on distinct CPUs. A lost increment or lock corruption is caught by the
      * exact final counter check in smp_scheduler_probe_wait().

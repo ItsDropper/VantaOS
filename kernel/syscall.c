@@ -2,6 +2,7 @@
 
 #include "paging.h"
 #include "process.h"
+#include "scheduler.h"
 #include "serial.h"
 #include "terminal.h"
 #include "vfs.h"
@@ -349,8 +350,14 @@ static int syscall_waitpid(struct exception_frame* frame,
             return 0;
         }
 
-        /* STI followed by HLT avoids losing a wakeup between check and sleep. */
-        __asm__ volatile ("sti; hlt" : : : "memory");
+        /*
+         * This is a syscall context, not an interrupt return path. HLT alone
+         * does not schedule the READY child on the BSP, and can resume this
+         * sleeping parent before the child ever runs. Force the normal
+         * interrupt-return scheduler path; the parent resumes here only after
+         * another process (or its wakeup) is scheduled back onto this stack.
+         */
+        __asm__ volatile ("int $0xF3" : : : "memory");
     }
 }
 

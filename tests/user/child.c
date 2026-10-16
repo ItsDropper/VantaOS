@@ -1,4 +1,5 @@
 #include <vanta/syscall.h>
+#include <vanta/gui.h>
 
 static const char success[] = "VANTAOS_USER_CHILD_PROGRAM_OK\n";
 static const char list_success[] = "VANTAOS_USER_DIRECTORY_LIST_OK\n";
@@ -50,6 +51,85 @@ int main(int argc, char** argv)
         return 2;
     }
 
+    vanta_gui_window_request_t request = {
+        .width = 420U,
+        .height = 280U,
+        .title = "GUI ABI Test"
+    };
+    long window = vanta_gui_create_window(&request);
+    if (window <= 0)
+    {
+        (void)vanta_write(failure, sizeof(failure) - 1U);
+        return 3;
+    }
+
+    vanta_gui_draw_command_t commands[2] = {
+        {
+            .type = VANTA_GUI_DRAW_FILL_RECT,
+            .x = 0,
+            .y = 0,
+            .width = 100,
+            .height = 32,
+            .color = 0x003B82F6U,
+            .scale = 1U
+        },
+        {
+            .type = VANTA_GUI_DRAW_TEXT,
+            .x = 8,
+            .y = 48,
+            .color = 0x00FFFFFFU,
+            .scale = 1U,
+            .text = "Ring-3 GUI syscall works"
+        }
+    };
+
+    if (vanta_gui_draw((uint32_t)window,
+                       (const vanta_gui_draw_command_t*)(uintptr_t)0x7ffffffff000ULL,
+                       1U) != -VANTA_EFAULT)
+    {
+        (void)vanta_gui_close_window((uint32_t)window);
+        (void)vanta_write(failure, sizeof(failure) - 1U);
+        return 4;
+    }
+
+    vanta_gui_draw_command_t invalid = {
+        .type = VANTA_GUI_DRAW_FILL_RECT,
+        .x = 0,
+        .y = 0,
+        .width = -1,
+        .height = 20,
+        .color = 0x00FFFFFFU
+    };
+    if (vanta_gui_draw((uint32_t)window, &invalid, 1U) != -VANTA_EINVAL ||
+        vanta_gui_draw((uint32_t)window, commands, 2U) != 2L)
+    {
+        (void)vanta_gui_close_window((uint32_t)window);
+        (void)vanta_write(failure, sizeof(failure) - 1U);
+        return 5;
+    }
+
+    /* Give the desktop process a few ticks to present the retained commands. */
+    for (unsigned int i = 0; i < 4U; i++)
+        (void)vanta_yield();
+
+    vanta_gui_event_t event;
+    if (vanta_gui_poll_event((uint32_t)window,
+                             (vanta_gui_event_t*)(uintptr_t)0x7ffffffff000ULL) !=
+            -VANTA_EFAULT ||
+        vanta_gui_poll_event((uint32_t)window, &event) != 1L ||
+        event.type != VANTA_GUI_EVENT_FOCUS_GAINED ||
+        vanta_gui_poll_event((uint32_t)window, &event) != 0L ||
+        vanta_gui_close_window(UINT32_MAX) != -VANTA_EBADF ||
+        vanta_gui_close_window((uint32_t)window) != 0L ||
+        vanta_gui_close_window((uint32_t)window) != -VANTA_EBADF)
+    {
+        (void)vanta_gui_close_window((uint32_t)window);
+        (void)vanta_write(failure, sizeof(failure) - 1U);
+        return 6;
+    }
+
+    static const char gui_success[] = "VANTAOS_USER_GUI_SYSCALL_OK\n";
+    (void)vanta_write(gui_success, sizeof(gui_success) - 1U);
     (void)vanta_write(list_success, sizeof(list_success) - 1U);
     (void)vanta_write(success, sizeof(success) - 1U);
     return 23;

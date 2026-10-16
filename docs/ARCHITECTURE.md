@@ -83,7 +83,7 @@ Changes that cross these boundaries should be reviewed together with their calle
 - **Filesystem handles:** invalid handles and unsupported operations must fail explicitly; namespace visibility is not equivalent to durable storage.
 - **Diagnostics:** serial markers are test interfaces. Emit a success marker only after its associated assertion passes.
 
-These are design constraints for review, not a claim that every edge case is already proven. See [Engineering model](ENGINEERING_MODEL.md) for the review questions.
+These are design constraints for review, not a claim that every edge case is already proven. See [Engineering model](ENGINEERING_MODEL.md) for the review questions and [ADR-001](decisions/0001-subsystem-source-manifests-and-boot-coordinators.md) for the source-boundary rationale.
 
 ## Test-code boundaries
 

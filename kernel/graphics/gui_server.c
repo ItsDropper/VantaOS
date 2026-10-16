@@ -4,6 +4,8 @@
 #include "keyboard.h"
 #include "process.h"
 #include "spinlock.h"
+#include "terminal.h"
+#include "terminal_process.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -273,6 +275,30 @@ int gui_server_poll_event(uint32_t pid, uint32_t id,
         spinlock_unlock_irqrestore(&gui_lock, flags);
         return -9;
     }
+    if (window->event_count == 0U && focused_window_id == id)
+    {
+        if (keyboard_has_event())
+        {
+            keyboard_event_t key = keyboard_get_event();
+            vanta_gui_event_t event = {
+                VANTA_GUI_EVENT_KEY, 0, 0, 0x100U + (uint32_t)key, 0U
+            };
+            *event_out = event;
+            spinlock_unlock_irqrestore(&gui_lock, flags);
+            return 1;
+        }
+        if (keyboard_has_char())
+        {
+            char character = keyboard_get_char();
+            vanta_gui_event_t event = {
+                VANTA_GUI_EVENT_KEY, 0, 0,
+                (uint32_t)(unsigned char)character, 0U
+            };
+            *event_out = event;
+            spinlock_unlock_irqrestore(&gui_lock, flags);
+            return 1;
+        }
+    }
     if (window->event_count == 0U)
     {
         spinlock_unlock_irqrestore(&gui_lock, flags);
@@ -406,41 +432,36 @@ void gui_server_mouse_move(int x, int y)
     spinlock_unlock_irqrestore(&gui_lock, flags);
 }
 
-void gui_server_pump_keyboard(void)
+char gui_server_read_terminal_char(void)
 {
     uint64_t flags = spinlock_lock_irqsave(&gui_lock);
-    gui_window_t* window = 0;
-    for (unsigned int i = 0; i < VANTA_GUI_MAX_WINDOWS; i++)
-        if (windows[i].used && windows[i].id == focused_window_id)
-        {
-            window = &windows[i];
-            break;
-        }
-    if (!window)
+    if (focused_window_id != 0U)
     {
         spinlock_unlock_irqrestore(&gui_lock, flags);
-        return;
+        return 0;
     }
 
-    unsigned int budget = 16U;
-    while (budget-- && keyboard_has_char())
+    int input_enabled = terminal_process_input_enabled();
+    while (keyboard_has_event())
     {
-        char character = keyboard_get_char();
-        vanta_gui_event_t event = {
-            VANTA_GUI_EVENT_KEY, 0, 0,
-            (uint32_t)(unsigned char)character, 0U
-        };
-        gui_queue_event_locked(window, &event);
+        keyboard_event_t event = keyboard_get_event();
+        if (!input_enabled)
+            continue;
+        if (event == KEY_EVENT_PAGE_UP)
+        {
+            terminal_scroll_up();
+            terminal_process_mark_redraw();
+        }
+        else if (event == KEY_EVENT_PAGE_DOWN)
+        {
+            terminal_scroll_down();
+            terminal_process_mark_redraw();
+        }
     }
-    spinlock_unlock_irqrestore(&gui_lock, flags);
-}
 
-int gui_server_has_keyboard_focus(void)
-{
-    uint64_t flags = spinlock_lock_irqsave(&gui_lock);
-    int focused = focused_window_id != 0U;
+    char character = keyboard_has_char() ? keyboard_get_char() : 0;
     spinlock_unlock_irqrestore(&gui_lock, flags);
-    return focused;
+    return input_enabled ? character : 0;
 }
 
 int gui_server_take_redraw_request(void)

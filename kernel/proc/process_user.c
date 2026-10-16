@@ -136,3 +136,31 @@ int process_create_user(const char* name, uint32_t parent_pid,
                                    code_mapped, stack_mapped);
     return -1;
 }
+
+
+/* Called only after the process no longer owns a CPU or the active CR3. */
+int process_release_user_resources(process_t* process)
+{
+    if (!process)
+        return 0;
+    if (!process->is_user)
+        return 1;
+    if (!process->address_space ||
+        paging_get_current_address_space() == process->address_space)
+        return 0;
+
+    if (!paging_destroy_address_space(process->address_space))
+        return 0;
+
+    if (process->user_code_frame)
+        pmm_free_block(process->user_code_frame);
+    if (process->user_stack_frame)
+        pmm_free_block(process->user_stack_frame);
+
+    process->address_space = NULL;
+    process->user_code_frame = NULL;
+    process->user_stack_frame = NULL;
+    process->user_image_size = 0U;
+    process->is_user = 0U;
+    return 1;
+}

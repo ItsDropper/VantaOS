@@ -52,59 +52,98 @@ uint64_t* paging_user_leaf_entry(paging_address_space_t* space,
         return NULL;
 
     uint64_t* pml4 = space->directory;
+    uint64_t* pdpt = NULL;
+    uint64_t* pd = NULL;
+    uint64_t* pt = NULL;
+    int created_pdpt = 0;
+    int created_pd = 0;
+    int created_pt = 0;
+
     if (!(pml4[pml4_index] & PAGE_PRESENT))
     {
         if (!create)
             return NULL;
 
-        uint64_t* next = allocate_user_table();
-        if (!next)
+        pdpt = allocate_user_table();
+        if (!pdpt)
             return NULL;
-        pml4[pml4_index] = (uint64_t)(uintptr_t)next |
+        pml4[pml4_index] = (uint64_t)(uintptr_t)pdpt |
                            PAGE_PRESENT | PAGE_WRITE | PAGE_USER;
+        created_pdpt = 1;
     }
-
-    if (!(pml4[pml4_index] & PAGE_USER))
-        return NULL;
-    uint64_t* pdpt = (uint64_t*)(uintptr_t)
-        (pml4[pml4_index] & PAGE_ADDRESS_MASK);
+    else
+    {
+        if (!(pml4[pml4_index] & PAGE_USER))
+            return NULL;
+        pdpt = (uint64_t*)(uintptr_t)
+            (pml4[pml4_index] & PAGE_ADDRESS_MASK);
+    }
 
     if (!(pdpt[pdpt_index] & PAGE_PRESENT))
     {
         if (!create)
-            return NULL;
+            goto fail;
 
-        uint64_t* next = allocate_user_table();
-        if (!next)
-            return NULL;
-        pdpt[pdpt_index] = (uint64_t)(uintptr_t)next |
+        pd = allocate_user_table();
+        if (!pd)
+            goto fail;
+        pdpt[pdpt_index] = (uint64_t)(uintptr_t)pd |
                            PAGE_PRESENT | PAGE_WRITE | PAGE_USER;
+        created_pd = 1;
     }
-
-    if (!(pdpt[pdpt_index] & PAGE_USER))
-        return NULL;
-    uint64_t* pd = (uint64_t*)(uintptr_t)
-        (pdpt[pdpt_index] & PAGE_ADDRESS_MASK);
+    else
+    {
+        if (!(pdpt[pdpt_index] & PAGE_USER))
+            goto fail;
+        pd = (uint64_t*)(uintptr_t)
+            (pdpt[pdpt_index] & PAGE_ADDRESS_MASK);
+    }
 
     if (!(pd[pd_index] & PAGE_PRESENT))
     {
         if (!create)
-            return NULL;
+            goto fail;
 
-        uint64_t* next = allocate_user_table();
-        if (!next)
-            return NULL;
-        pd[pd_index] = (uint64_t)(uintptr_t)next |
-                        PAGE_PRESENT | PAGE_WRITE | PAGE_USER;
+        pt = allocate_user_table();
+        if (!pt)
+            goto fail;
+        pd[pd_index] = (uint64_t)(uintptr_t)pt |
+                       PAGE_PRESENT | PAGE_WRITE | PAGE_USER;
+        created_pt = 1;
+    }
+    else
+    {
+        if (!(pd[pd_index] & PAGE_USER) ||
+            (pd[pd_index] & 0x080U))
+            goto fail;
+        pt = (uint64_t*)(uintptr_t)
+            (pd[pd_index] & PAGE_ADDRESS_MASK);
     }
 
-    if (!(pd[pd_index] & PAGE_USER) ||
-        (pd[pd_index] & 0x080U))
-        return NULL;
-
-    uint64_t* pt = (uint64_t*)(uintptr_t)
-        (pd[pd_index] & PAGE_ADDRESS_MASK);
+    /*
+     * A failed walk must not leave newly allocated, unreachable-to-userspace
+     * page-table levels consuming PMM frames. Only unwind levels created by
+     * this invocation; existing tables and their mappings remain untouched.
+     */
     return &pt[pt_index];
+
+fail:
+    if (created_pt)
+    {
+        pd[pd_index] = 0;
+        pmm_free_block(pt);
+    }
+    if (created_pd)
+    {
+        pdpt[pdpt_index] = 0;
+        pmm_free_block(pd);
+    }
+    if (created_pdpt)
+    {
+        pml4[pml4_index] = 0;
+        pmm_free_block(pdpt);
+    }
+    return NULL;
 }
 
 void paging_release_user_page_tables(paging_address_space_t* space)
@@ -215,5 +254,3 @@ int paging_unmap_user_page(paging_address_space_t* address_space,
     /* The caller owns the unmapped physical frame and must free it separately. */
     return 1;
 }
-
-

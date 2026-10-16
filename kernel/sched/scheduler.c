@@ -5,6 +5,7 @@
 #include "paging.h"
 #include "panic.h"
 #include "gdt.h"
+#include "serial.h"
 
 extern unsigned char stack_bottom;
 extern unsigned char stack_top;
@@ -97,16 +98,31 @@ static uint64_t scheduler_switch_from_stack(uint64_t current_stack,
 {
     uint32_t next_pid = scheduler_next_ready(current_pid);
     if (next_pid == current_pid)
+    {
+        process_t current;
+        if (process_snapshot(current_pid, &current) &&
+            current.state != PROCESS_RUNNING && current.state != PROCESS_READY)
+            serial_write("VANTAOS_SCHED_NO_RUNNABLE\\n");
         return current_stack;
+    }
 
     uint32_t cpu_id = process_current_cpu_id();
     uint64_t next_stack = 0;
     paging_address_space_t* next_address_space = NULL;
-    if (cpu_id >= CPU_LOCAL_MAX ||
-        __atomic_load_n(&pending_outgoing_pid[cpu_id], __ATOMIC_ACQUIRE) != 0U ||
-        !process_prepare_context_switch(next_pid, current_pid, cpu_id,
-                                        &next_stack, &next_address_space))
+    if (cpu_id >= CPU_LOCAL_MAX)
         return current_stack;
+    if (__atomic_load_n(&pending_outgoing_pid[cpu_id], __ATOMIC_ACQUIRE) != 0U)
+    {
+        if (current_pid != 0U)
+            serial_write("VANTAOS_SCHED_PENDING_OUTGOING\\n");
+        return current_stack;
+    }
+    if (!process_prepare_context_switch(next_pid, current_pid, cpu_id,
+                                        &next_stack, &next_address_space))
+    {
+        serial_write("VANTAOS_SCHED_PREPARE_FAILED\\n");
+        return current_stack;
+    }
 
     /*
      * The outgoing process is deliberately still owned by this CPU. The
@@ -213,6 +229,18 @@ uint64_t scheduler_tick(uint64_t current_stack)
     int requested = local && local->self == local &&
         __atomic_exchange_n(&local->reschedule_pending, 0U,
                             __ATOMIC_ACQ_REL) != 0U;
+
+    /*
+     * Sleeping and terminating processes must never continue executing merely
+     * because their round-robin quantum has not expired. In particular,
+     * waitpid marks its caller SLEEPING from inside the syscall path; the very
+     * next timer interrupt must switch to the runnable child (or idle task).
+     */
+    process_t current;
+    int current_runnable = process_snapshot(current_pid, &current) &&
+        (current.state == PROCESS_RUNNING || current.state == PROCESS_READY);
+    if (!current_runnable)
+        requested = 1;
 
     volatile uint32_t* quantum_ticks = scheduler_quantum_slot();
     if (!requested && ++(*quantum_ticks) < SCHEDULER_QUANTUM_TICKS)

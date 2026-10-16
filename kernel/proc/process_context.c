@@ -1,4 +1,5 @@
 #include "process_internal.h"
+#include "serial.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -95,12 +96,16 @@ int process_prepare_context_switch(uint32_t next_pid, uint32_t current_pid,
     if (!process_initialized_state || next_pid == 0U || next_pid >= PROCESS_MAX ||
         current_pid == 0U || current_pid >= PROCESS_MAX ||
         !next_stack_out || !next_address_space_out)
+    {
+        serial_write("VANTAOS_SWITCH_REJECT_ARGS\\n");
         return 0;
+    }
 
     uint64_t flags = process_table_lock_acquire();
     if (cpu_id != process_current_cpu_id() ||
         current_pid != process_current_slot() || next_pid == current_pid)
     {
+        serial_write("VANTAOS_SWITCH_REJECT_CURRENT\\n");
         process_table_lock_release(flags);
         return 0;
     }
@@ -111,14 +116,24 @@ int process_prepare_context_switch(uint32_t next_pid, uint32_t current_pid,
         (current->state != PROCESS_RUNNING &&
          current->state != PROCESS_READY &&
          current->state != PROCESS_SLEEPING &&
-         current->state != PROCESS_TERMINATED) ||
-        next->state != PROCESS_READY ||
+         current->state != PROCESS_TERMINATED))
+    {
+        serial_write("VANTAOS_SWITCH_REJECT_OUTGOING\\n");
+        process_table_lock_release(flags);
+        return 0;
+    }
+    if (next->state != PROCESS_READY ||
         next->owner_cpu != PROCESS_CPU_UNOWNED ||
         (next->affinity_cpu != PROCESS_CPU_ANY &&
-         next->affinity_cpu != cpu_id) ||
-        !process_stack_is_valid_locked(next) ||
-        next->address_space == NULL)
+         next->affinity_cpu != cpu_id))
     {
+        serial_write("VANTAOS_SWITCH_REJECT_INCOMING_STATE\\n");
+        process_table_lock_release(flags);
+        return 0;
+    }
+    if (!process_stack_is_valid_locked(next) || next->address_space == NULL)
+    {
+        serial_write("VANTAOS_SWITCH_REJECT_INCOMING_CONTEXT\\n");
         process_table_lock_release(flags);
         return 0;
     }
@@ -174,11 +189,13 @@ int process_finish_context_switch(uint32_t outgoing_pid, uint32_t cpu_id)
      * away from both its kernel stack and address space.
      */
     outgoing_snapshot = *outgoing;
+    int outgoing_was_user = outgoing_snapshot.is_user != 0U;
     process_table_lock_release(flags);
 
     if (!process_release_user_resources(&outgoing_snapshot))
         return 0;
 
+    uint32_t wake_parent_pid = 0U;
     flags = process_table_lock_acquire();
     outgoing = &process_table_records[outgoing_pid];
     if (outgoing->owner_cpu != cpu_id ||
@@ -187,9 +204,56 @@ int process_finish_context_switch(uint32_t outgoing_pid, uint32_t cpu_id)
         process_table_lock_release(flags);
         return 0;
     }
-    process_reset_record(outgoing);
-    outgoing->pid = outgoing_pid;
+
+    uint32_t parent_pid = outgoing->parent_pid;
+    int retain_zombie = 0;
+    if (outgoing_was_user && parent_pid > 0U &&
+        parent_pid < PROCESS_MAX)
+    {
+        const process_t* parent = &process_table_records[parent_pid];
+        retain_zombie = parent->is_user &&
+            parent->state != PROCESS_UNUSED &&
+            parent->state != PROCESS_TERMINATED &&
+            parent->state != PROCESS_ZOMBIE &&
+            parent->state != PROCESS_REAPING;
+    }
+
+    /* A process that exits cannot remain the parent of live descendants. */
+    process_reparent_children_locked(outgoing_pid);
+
+    if (retain_zombie)
+    {
+        int32_t exit_status = outgoing->exit_status;
+        char name[PROCESS_NAME_MAX + 1U];
+        for (uint32_t i = 0; i < sizeof(name); i++)
+            name[i] = outgoing->name[i];
+
+        process_reset_record(outgoing);
+        outgoing->pid = outgoing_pid;
+        outgoing->parent_pid = parent_pid;
+        outgoing->exit_status = exit_status;
+        for (uint32_t i = 0; i < sizeof(name); i++)
+            outgoing->name[i] = name[i];
+        outgoing->state = PROCESS_ZOMBIE;
+        outgoing->owner_cpu = PROCESS_CPU_UNOWNED;
+        outgoing->affinity_cpu = PROCESS_CPU_ANY;
+        wake_parent_pid = parent_pid;
+    }
+    else
+    {
+        process_reset_record(outgoing);
+        outgoing->pid = outgoing_pid;
+    }
     process_table_lock_release(flags);
+
+    if (wake_parent_pid != 0U)
+    {
+        serial_write("VANTAOS_WAITPID_CHILD_ZOMBIE\n");
+        if (process_wake(wake_parent_pid))
+            serial_write("VANTAOS_WAITPID_PARENT_WOKEN\n");
+        else
+            serial_write("VANTAOS_WAITPID_PARENT_WAKE_FAILED\n");
+    }
     return 1;
 }
 

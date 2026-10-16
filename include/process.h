@@ -27,6 +27,7 @@ typedef enum
     PROCESS_RUNNING,
     PROCESS_SLEEPING,
     PROCESS_TERMINATED,
+    PROCESS_ZOMBIE,
     PROCESS_REAPING
 } process_state_t;
 
@@ -52,6 +53,7 @@ typedef struct
     uint32_t owner_cpu;
     uint32_t affinity_cpu;
     process_state_t state;
+    int32_t exit_status;
     char name[PROCESS_NAME_MAX + 1];
     uint64_t stack_pointer;
     process_entry_t entry;
@@ -98,6 +100,10 @@ int process_wake(uint32_t pid);
 int process_terminate(uint32_t pid);
 void process_block_current(void);
 void process_terminate_current(void);
+void process_terminate_current_with_status(int32_t exit_status);
+/* Returns child PID when reaped, 0 when the parent was put to sleep, -1 if not a child. */
+int process_wait_child(uint32_t parent_pid, uint32_t child_pid,
+                       int32_t* exit_status_out);
 void process_save_stack(uint32_t pid, uint64_t stack_pointer);
 uint64_t process_get_stack(uint32_t pid);
 int process_stack_is_valid(uint32_t pid);

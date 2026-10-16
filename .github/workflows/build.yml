@@ -7,6 +7,7 @@ on:
       - work/kernel-reliability-2026-10-15
       - work/comprehensive-tests-docs-2026-10-15
       - work/modular-kbuild-layout-2026-10-15
+      - feat/userspace-waitpid
   pull_request:
   workflow_dispatch:
 
@@ -88,6 +89,7 @@ jobs:
             VANTAOS_USER_FILE_IO_OK
             VANTAOS_USER_SPAWN_OK
             VANTAOS_USER_CHILD_PROGRAM_OK
+            VANTAOS_USER_WAITPID_OK
             VANTAOS_ARGV_STACK_OK
             VANTAOS_USER_PROCESS_REAP_OK
             VANTAOS_USER_PROCESS_FAULT

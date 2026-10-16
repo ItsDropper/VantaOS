@@ -94,6 +94,7 @@ void process_reset_record(process_t* process)
     process->parent_pid = 0;
     process->owner_cpu = PROCESS_CPU_UNOWNED;
     process->state = PROCESS_UNUSED;
+    process->exit_status = 0;
     process->name[0] = 0;
     process->stack_pointer = 0;
     process->entry = NULL;
@@ -148,44 +149,49 @@ int process_stack_is_valid_locked(const process_t* process)
         process->kernel_stack == (void*)(uintptr_t)&stack_bottom ?
         (uintptr_t)&stack_top : stack_base + PROCESS_STACK_SIZE;
     uintptr_t frame = (uintptr_t)process->stack_pointer;
-    const size_t frame_words = process->is_user ? 21U : 19U;
+
+    /* Every interrupt frame has RIP, CS and RFLAGS. A user task can be
+       preempted while executing either ring-3 code or a ring-0 syscall.
+       The saved frame's CS, not the process type, determines its shape. */
     if (frame < stack_base || frame > stack_end ||
-        stack_end - frame < frame_words * sizeof(uint64_t))
+        stack_end - frame < 19U * sizeof(uint64_t))
         return 0;
 
     const uint64_t* values = (const uint64_t*)frame;
+    uintptr_t rip = (uintptr_t)values[16];
+    uint64_t code_selector = values[17];
     if ((values[18] & 0x00000200U) == 0)
         return 0;
 
-    uintptr_t rip = (uintptr_t)values[16];
-    if (process->is_user)
+    if (code_selector == 0x08U)
     {
-        int executable_page = 0;
-        if (process->user_page_count == 0U ||
-            process->user_page_count > PROCESS_USER_MAX_PAGES)
-            return 0;
-        for (uint32_t i = 0; i < process->user_page_count; i++)
-        {
-            const process_user_page_t* page = &process->user_pages[i];
-            if ((page->flags & PROCESS_USER_PAGE_EXEC) != 0U &&
-                rip >= page->virtual_address &&
-                rip - page->virtual_address < PAGE_SIZE)
-            {
-                executable_page = 1;
-                break;
-            }
-        }
-        return values[17] == 0x23U && values[20] == 0x1BU &&
-               executable_page &&
-               values[19] >= process->user_stack_base &&
-               values[19] <= process->user_stack_top;
+        uintptr_t code_start = (uintptr_t)&_kernel_text_start;
+        uintptr_t code_end = (uintptr_t)&_kernel_text_end;
+        return rip >= code_start && rip < code_end;
     }
 
-    if (values[17] != 0x08U)
+    if (code_selector != 0x23U || !process->is_user ||
+        stack_end - frame < 21U * sizeof(uint64_t) ||
+        values[20] != 0x1BU ||
+        process->user_page_count == 0U ||
+        process->user_page_count > PROCESS_USER_MAX_PAGES ||
+        values[19] < process->user_stack_base ||
+        values[19] > process->user_stack_top)
         return 0;
-    uintptr_t code_start = (uintptr_t)&_kernel_text_start;
-    uintptr_t code_end = (uintptr_t)&_kernel_text_end;
-    return rip >= code_start && rip < code_end;
+
+    int executable_page = 0;
+    for (uint32_t i = 0; i < process->user_page_count; i++)
+    {
+        const process_user_page_t* page = &process->user_pages[i];
+        if ((page->flags & PROCESS_USER_PAGE_EXEC) != 0U &&
+            rip >= page->virtual_address &&
+            rip - page->virtual_address < PAGE_SIZE)
+        {
+            executable_page = 1;
+            break;
+        }
+    }
+    return executable_page;
 }
 
 static int process_allocate_common(process_t* process,
@@ -277,9 +283,7 @@ int process_attach_current(const char* name, uint32_t parent_pid)
     uint64_t flags = process_table_lock_acquire();
     for (uint32_t pid = 1; pid < PROCESS_MAX; pid++)
     {
-        if ((process_table_records[pid].state != PROCESS_UNUSED &&
-             (process_table_records[pid].state != PROCESS_TERMINATED ||
-              process_table_records[pid].owner_cpu != PROCESS_CPU_UNOWNED)) ||
+        if (process_table_records[pid].state != PROCESS_UNUSED ||
             process_is_idle_locked(pid))
             continue;
 
@@ -331,9 +335,7 @@ static int process_create_kernel_affinity(const char* name,
 
     for (uint32_t pid = 1; pid < PROCESS_MAX; pid++)
     {
-        if ((process_table_records[pid].state != PROCESS_UNUSED &&
-             (process_table_records[pid].state != PROCESS_TERMINATED ||
-              process_table_records[pid].owner_cpu != PROCESS_CPU_UNOWNED)) ||
+        if (process_table_records[pid].state != PROCESS_UNUSED ||
             process_is_idle_locked(pid))
             continue;
 

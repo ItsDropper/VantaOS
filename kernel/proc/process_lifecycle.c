@@ -4,6 +4,35 @@
 #include <stddef.h>
 #include <stdint.h>
 
+void process_reparent_children_locked(uint32_t parent_pid)
+{
+    if (parent_pid == 0U || parent_pid >= PROCESS_MAX)
+        return;
+
+    for (uint32_t pid = 1U; pid < PROCESS_MAX; pid++)
+    {
+        if (pid == parent_pid)
+            continue;
+
+        process_t* child = &process_table_records[pid];
+        if (child->state == PROCESS_UNUSED ||
+            child->parent_pid != parent_pid)
+            continue;
+
+        if (child->state == PROCESS_ZOMBIE &&
+            child->owner_cpu == PROCESS_CPU_UNOWNED)
+        {
+            process_reset_record(child);
+            child->pid = pid;
+        }
+        else
+        {
+            /* Orphans are detached; their later exit will be auto-reaped. */
+            child->parent_pid = 0U;
+        }
+    }
+}
+
 int process_mark_ready(uint32_t pid)
 {
     if (!process_initialized_state || pid == 0 || pid >= PROCESS_MAX)
@@ -11,6 +40,7 @@ int process_mark_ready(uint32_t pid)
     uint64_t flags = process_table_lock_acquire();
     int ok = process_table_records[pid].state != PROCESS_UNUSED &&
              process_table_records[pid].state != PROCESS_TERMINATED &&
+             process_table_records[pid].state != PROCESS_ZOMBIE &&
              process_table_records[pid].state != PROCESS_REAPING;
     if (ok)
         process_table_records[pid].state = PROCESS_READY;
@@ -28,6 +58,7 @@ int process_set_running(uint32_t pid)
     uint32_t cpu_id = process_current_cpu_id();
     if (target->state == PROCESS_UNUSED ||
         target->state == PROCESS_TERMINATED ||
+        target->state == PROCESS_ZOMBIE ||
         target->state == PROCESS_REAPING ||
         (target->affinity_cpu != PROCESS_CPU_ANY &&
          target->affinity_cpu != cpu_id) ||
@@ -58,13 +89,18 @@ int process_set_running(uint32_t pid)
 static void process_send_wake_ipi(uint32_t owner_cpu,
                                        uint32_t affinity_cpu)
 {
-    if (!apic_is_enabled())
-        return;
-
+    /*
+     * Publish the scheduling request before attempting hardware delivery.
+     * The BSP timer consumes this flag too, so a deferred/lost IPI cannot
+     * leave a newly READY process stranded behind an idle context.
+     */
     if (owner_cpu != PROCESS_CPU_UNOWNED)
     {
         const cpu_local_t* local = cpu_local_get(owner_cpu);
         if (local)
+            __atomic_store_n((uint32_t*)&local->reschedule_pending, 1U,
+                             __ATOMIC_RELEASE);
+        if (apic_is_enabled() && local)
             (void)apic_send_reschedule_ipi(local->apic_id);
         return;
     }
@@ -73,6 +109,9 @@ static void process_send_wake_ipi(uint32_t owner_cpu,
     {
         const cpu_local_t* local = cpu_local_get(affinity_cpu);
         if (local)
+            __atomic_store_n((uint32_t*)&local->reschedule_pending, 1U,
+                             __ATOMIC_RELEASE);
+        if (apic_is_enabled() && local)
             (void)apic_send_reschedule_ipi(local->apic_id);
         return;
     }
@@ -81,7 +120,11 @@ static void process_send_wake_ipi(uint32_t owner_cpu,
     for (uint32_t cpu = 0; cpu < cpu_local_capacity(); cpu++)
     {
         const cpu_local_t* local = cpu_local_get(cpu);
-        if (local)
+        if (!local)
+            continue;
+        __atomic_store_n((uint32_t*)&local->reschedule_pending, 1U,
+                         __ATOMIC_RELEASE);
+        if (apic_is_enabled())
             (void)apic_send_reschedule_ipi(local->apic_id);
     }
 }
@@ -130,6 +173,7 @@ int process_set_affinity(uint32_t pid, uint32_t cpu_id)
     process_t* process = &process_table_records[pid];
     if (process->state == PROCESS_UNUSED ||
         process->state == PROCESS_TERMINATED ||
+        process->state == PROCESS_ZOMBIE ||
         process->state == PROCESS_REAPING)
     {
         process_table_lock_release(flags);
@@ -191,6 +235,7 @@ int process_terminate(uint32_t pid)
     process_t* process = &process_table_records[pid];
     if (process->state == PROCESS_UNUSED ||
         process->state == PROCESS_TERMINATED ||
+        process->state == PROCESS_ZOMBIE ||
         process->state == PROCESS_REAPING ||
         process_is_idle_locked(pid))
     {
@@ -199,6 +244,7 @@ int process_terminate(uint32_t pid)
     }
 
     process->state = PROCESS_TERMINATED;
+    process->exit_status = -1;
     int is_current = pid == process_current_slot();
     process_table_lock_release(flags);
 
@@ -209,6 +255,11 @@ int process_terminate(uint32_t pid)
 
 void process_terminate_current(void)
 {
+    process_terminate_current_with_status(0);
+}
+
+void process_terminate_current_with_status(int32_t exit_status)
+{
     if (!process_initialized_state)
         return;
     uint64_t flags = process_table_lock_acquire();
@@ -216,7 +267,10 @@ void process_terminate_current(void)
     if (current_pid != 0 && current_pid < PROCESS_MAX &&
         process_table_records[current_pid].state != PROCESS_UNUSED &&
         !process_is_idle_locked(current_pid))
+    {
         process_table_records[current_pid].state = PROCESS_TERMINATED;
+        process_table_records[current_pid].exit_status = exit_status;
+    }
     process_table_lock_release(flags);
 }
 
@@ -263,10 +317,44 @@ int process_reap(uint32_t pid)
     process_t snapshot;
     uint64_t flags = process_table_lock_acquire();
     process_t* process = &process_table_records[pid];
-    if (pid == process_current_slot() ||
-        process_is_idle_locked(pid) ||
-        process->state != PROCESS_TERMINATED ||
+    if (pid == process_current_slot() || process_is_idle_locked(pid) ||
         process->owner_cpu != PROCESS_CPU_UNOWNED)
+    {
+        process_table_lock_release(flags);
+        return 0;
+    }
+
+    if (process->state == PROCESS_ZOMBIE)
+    {
+        uint32_t parent_pid = process->parent_pid;
+        /*
+         * A zombie belonging to a live user parent is waitable state, not
+         * leaked execution resources. Generic reaper passes must not consume
+         * it before waitpid observes the exit status; only orphaned zombies
+         * may be reclaimed here.
+         */
+        if (parent_pid > 0U && parent_pid < PROCESS_MAX)
+        {
+            const process_t* parent = &process_table_records[parent_pid];
+            if (parent->is_user &&
+                parent->state != PROCESS_UNUSED &&
+                parent->state != PROCESS_TERMINATED &&
+                parent->state != PROCESS_ZOMBIE &&
+                parent->state != PROCESS_REAPING)
+            {
+                process_table_lock_release(flags);
+                return 0;
+            }
+        }
+
+        process_reparent_children_locked(pid);
+        process_reset_record(process);
+        process->pid = pid;
+        process_table_lock_release(flags);
+        return 1;
+    }
+
+    if (process->state != PROCESS_TERMINATED)
     {
         process_table_lock_release(flags);
         return 0;
@@ -280,9 +368,15 @@ int process_reap(uint32_t pid)
     {
         flags = process_table_lock_acquire();
         process = &process_table_records[pid];
+        uint32_t parent_pid = process->parent_pid;
+        int wake_parent = parent_pid > 0U && parent_pid < PROCESS_MAX &&
+            process_table_records[parent_pid].is_user &&
+            process_table_records[parent_pid].state == PROCESS_SLEEPING;
         if (process->state == PROCESS_REAPING)
             process->state = PROCESS_TERMINATED;
         process_table_lock_release(flags);
+        if (wake_parent)
+            (void)process_wake(parent_pid);
         return 0;
     }
 
@@ -294,10 +388,71 @@ int process_reap(uint32_t pid)
         process_table_lock_release(flags);
         return 0;
     }
+    uint32_t parent_pid = process->parent_pid;
+    int wake_parent = parent_pid > 0U && parent_pid < PROCESS_MAX &&
+        process_table_records[parent_pid].is_user &&
+        process_table_records[parent_pid].state == PROCESS_SLEEPING;
+    process_reparent_children_locked(pid);
     process_reset_record(process);
     process->pid = pid;
     process_table_lock_release(flags);
+    if (wake_parent)
+        (void)process_wake(parent_pid);
     return 1;
+}
+
+int process_wait_child(uint32_t parent_pid, uint32_t child_pid,
+                       int32_t* exit_status_out)
+{
+    if (!process_initialized_state || parent_pid == 0U ||
+        parent_pid >= PROCESS_MAX || child_pid == 0U ||
+        child_pid >= PROCESS_MAX || parent_pid == child_pid)
+        return -1;
+
+    uint64_t flags = process_table_lock_acquire();
+    process_t* parent = &process_table_records[parent_pid];
+    process_t* child = &process_table_records[child_pid];
+    if (parent_pid != process_current_slot() || !parent->is_user ||
+        parent->state == PROCESS_UNUSED ||
+        parent->state == PROCESS_TERMINATED ||
+        parent->state == PROCESS_ZOMBIE ||
+        parent->state == PROCESS_REAPING ||
+        parent->owner_cpu != process_current_cpu_id() ||
+        child->state == PROCESS_UNUSED ||
+        child->parent_pid != parent_pid)
+    {
+        process_table_lock_release(flags);
+        return -1;
+    }
+
+    if (child->state == PROCESS_ZOMBIE &&
+        child->owner_cpu == PROCESS_CPU_UNOWNED)
+    {
+        int32_t status = child->exit_status;
+        process_reparent_children_locked(child_pid);
+        process_reset_record(child);
+        child->pid = child_pid;
+        process_table_lock_release(flags);
+        if (exit_status_out)
+            *exit_status_out = status;
+        return (int)child_pid;
+    }
+
+    if (child->state == PROCESS_REAPING ||
+        (child->state == PROCESS_TERMINATED &&
+         child->owner_cpu == PROCESS_CPU_UNOWNED))
+    {
+        process_table_lock_release(flags);
+        return -1;
+    }
+
+    /*
+     * Publish the sleeping state under the same lock used by child exit.
+     * This closes the lost-wakeup window between checking and blocking.
+     */
+    parent->state = PROCESS_SLEEPING;
+    process_table_lock_release(flags);
+    return 0;
 }
 
 uint64_t process_schedule(uint64_t current_stack)
@@ -350,6 +505,7 @@ unsigned int process_count(void)
     for (uint32_t i = 0; i < PROCESS_MAX; i++)
         if (process_table_records[i].state != PROCESS_UNUSED &&
             process_table_records[i].state != PROCESS_TERMINATED &&
+            process_table_records[i].state != PROCESS_ZOMBIE &&
             process_table_records[i].state != PROCESS_REAPING)
             count++;
     process_table_lock_release(flags);

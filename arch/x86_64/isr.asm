@@ -368,11 +368,15 @@ exception%1_stub:
     call exception_handler
     cmp dword [rel user_mode_test_exit_requested], 0
     jne %%user_test_exit
+    test byte [r12 + 136], 3
+    jnz %%schedule_user
     SWAPGS_IF_USER r12, 136
     mov rsp, r12
     RESTORE_ALL
     add rsp, 8
     iretq
+%%schedule_user:
+    SCHEDULE_USER_FRAME
 %%user_test_exit:
     mov dword [rel user_mode_test_exit_requested], 0
     jmp user_mode_test_return_trampoline

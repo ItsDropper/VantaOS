@@ -486,6 +486,66 @@ int process_wake(uint32_t pid)
     return ok;
 }
 
+
+static void process_request_cpu_reschedule(uint32_t cpu_id)
+{
+    const cpu_local_t* local = cpu_local_get(cpu_id);
+    if (local && apic_is_enabled())
+        (void)apic_send_reschedule_ipi(local->apic_id);
+}
+
+int process_set_affinity(uint32_t pid, uint32_t cpu_id)
+{
+    if (!initialized || pid == 0U || pid >= PROCESS_MAX ||
+        (cpu_id != PROCESS_CPU_ANY &&
+         (cpu_id >= CPU_LOCAL_MAX || !cpu_local_get(cpu_id))))
+        return 0;
+
+    uint32_t old_affinity = PROCESS_CPU_ANY;
+    uint32_t owner_cpu = PROCESS_CPU_UNOWNED;
+    uint64_t flags = process_table_lock_acquire();
+    process_t* process = &processes[pid];
+    if (process->state == PROCESS_UNUSED ||
+        process->state == PROCESS_TERMINATED)
+    {
+        process_table_lock_release(flags);
+        return 0;
+    }
+
+    old_affinity = process->affinity_cpu;
+    owner_cpu = process->owner_cpu;
+    if (old_affinity == cpu_id)
+    {
+        process_table_lock_release(flags);
+        return 1;
+    }
+
+    process->affinity_cpu = cpu_id;
+    process_table_lock_release(flags);
+
+    /*
+     * First make the old owner relinquish its stack, then prompt the
+     * destination (or all CPUs for an unpinned process) to claim READY work.
+     */
+    if (owner_cpu != PROCESS_CPU_UNOWNED)
+        process_request_cpu_reschedule(owner_cpu);
+
+    if (cpu_id != PROCESS_CPU_ANY)
+    {
+        if (cpu_id != owner_cpu)
+            process_request_cpu_reschedule(cpu_id);
+    }
+    else
+    {
+        for (uint32_t cpu = 0; cpu < cpu_local_capacity(); cpu++)
+        {
+            if (cpu != owner_cpu)
+                process_request_cpu_reschedule(cpu);
+        }
+    }
+    return 1;
+}
+
 void process_block_current(void)
 {
     if (!initialized)

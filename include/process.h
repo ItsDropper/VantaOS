@@ -51,6 +51,7 @@ int process_create_kernel_any(const char* name, uint32_t parent_pid,
                               process_entry_t entry);
 int process_create_kernel_on_cpu(const char* name, uint32_t parent_pid,
                                   process_entry_t entry, uint32_t cpu_id);
+int process_set_affinity(uint32_t pid, uint32_t cpu_id);
 int process_create_idle_for_cpu(uint32_t cpu_id, const char* name,
                                 process_entry_t entry);
 int process_attach_current(const char* name, uint32_t parent_pid);

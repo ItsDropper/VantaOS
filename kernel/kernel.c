@@ -217,7 +217,10 @@ static void user_mapping_probe(void)
         ok = paging_get_current_address_space() == space && ok;
         per_cpu_ok = paging_get_current_address_space() == space &&
                      bsp_local &&
-                     bsp_local->current_address_space == space;
+                     bsp_local->current_address_space == space &&
+                     (space->active_cpu_mask &
+                      (1U << bsp_local->logical_id)) != 0U &&
+                     space->pending_shootdowns == 0U;
         for (uint32_t cpu = 0; cpu < cpu_local_capacity(); cpu++)
         {
             const cpu_local_t* local = cpu_local_get(cpu);
@@ -265,7 +268,9 @@ static void user_mapping_probe(void)
             paging_switch_address_space(paging_get_kernel_address_space());
             per_cpu_ok =
                 paging_get_current_address_space() ==
-                paging_get_kernel_address_space() && per_cpu_ok;
+                paging_get_kernel_address_space() &&
+                space->active_cpu_mask == 0U &&
+                space->pending_shootdowns == 0U && per_cpu_ok;
         }
         paging_destroy_address_space(space);
     }

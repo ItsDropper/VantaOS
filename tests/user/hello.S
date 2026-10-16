@@ -33,6 +33,29 @@ _start:
     mov $(exec_message_end - exec_message), %esi
     int $0x80
 
+    /* Invalid output pointers and oversized writes must be rejected. */
+    mov $1, %eax
+    mov $0x7ffffffff000, %rdi
+    mov $1, %esi
+    int $0x80
+    cmp $-14, %rax
+    jne file_fail
+
+    mov $1, %eax
+    lea file_path(%rip), %rdi
+    mov $4097, %esi
+    int $0x80
+    cmp $-22, %rax
+    jne file_fail
+
+    /* An invalid path pointer must not reach the VFS. */
+    mov $3, %eax
+    mov $0x7ffffffff000, %rdi
+    mov $1, %esi
+    int $0x80
+    cmp $-14, %rax
+    jne file_fail
+
     /* Open the known FAT32 fixture read-only. */
     mov $3, %eax
     lea file_path(%rip), %rdi

@@ -357,16 +357,21 @@ int process_terminate(uint32_t pid)
     if (!initialized || pid == 0 || pid >= PROCESS_MAX)
         return 0;
 
+    uint64_t flags = process_table_lock_acquire();
     process_t* process = &processes[pid];
     if (process->state == PROCESS_UNUSED ||
         process->state == PROCESS_TERMINATED)
+    {
+        process_table_lock_release(flags);
         return 0;
+    }
 
     process->state = PROCESS_TERMINATED;
+    int is_current = pid == process_current_slot();
+    process_table_lock_release(flags);
 
-    if (pid == process_current_slot())
+    if (is_current)
         return 1;
-
     return process_reap(pid);
 }
 
@@ -411,59 +416,62 @@ int process_stack_is_valid(uint32_t pid)
     if (!initialized || pid == 0 || pid >= PROCESS_MAX)
         return 0;
 
+    uint64_t flags = process_table_lock_acquire();
     process_t* process = &processes[pid];
-
     if (process->state == PROCESS_UNUSED ||
         process->stack_pointer == 0 ||
         process->kernel_stack == NULL)
+    {
+        process_table_lock_release(flags);
         return 0;
+    }
 
     uintptr_t stack_base = (uintptr_t)process->kernel_stack;
-    uintptr_t stack_end =
-        process->entry != NULL ?
-        stack_base + PROCESS_STACK_SIZE :
-        (uintptr_t)&stack_top;
+    uintptr_t stack_end = process->entry != NULL ?
+        stack_base + PROCESS_STACK_SIZE : (uintptr_t)&stack_top;
     uintptr_t frame = (uintptr_t)process->stack_pointer;
-
-    /*
-     * Same-privilege long-mode IRQs push only RIP, CS, and RFLAGS.
-     * The scheduler's synthetic first-run frame also reserves RSP/SS,
-     * but later interrupt frames do not contain those two values.
-     * Validate the common 19-qword prefix instead of assuming every
-     * saved frame has the five-qword privilege-transition layout.
-     */
-    if (frame < stack_base ||
-        frame > stack_end ||
+    if (frame < stack_base || frame > stack_end ||
         stack_end - frame < 19U * sizeof(uint64_t))
+    {
+        process_table_lock_release(flags);
         return 0;
+    }
 
     uint64_t* values = (uint64_t*)frame;
-
     if (values[17] != 0x08U ||
         (values[18] & 0x00000200U) == 0)
+    {
+        process_table_lock_release(flags);
         return 0;
+    }
 
     uintptr_t rip = (uintptr_t)values[16];
     uintptr_t code_start = (uintptr_t)&_kernel_text_start;
     uintptr_t code_end = (uintptr_t)&_kernel_text_end;
-
-    return rip >= code_start && rip < code_end;
+    int valid = rip >= code_start && rip < code_end;
+    process_table_lock_release(flags);
+    return valid;
 }
 
 int process_reap(uint32_t pid)
 {
-    if (!initialized || pid == 0 || pid >= PROCESS_MAX ||
-        pid == process_current_slot())
+    if (!initialized || pid == 0 || pid >= PROCESS_MAX)
         return 0;
+
+    uint64_t flags = process_table_lock_acquire();
+    if (pid == process_current_slot() ||
+        processes[pid].state != PROCESS_TERMINATED)
+    {
+        process_table_lock_release(flags);
+        return 0;
+    }
 
     process_t* process = &processes[pid];
-    if (process->state != PROCESS_TERMINATED)
-        return 0;
-
     process->address_space = NULL;
     process->kernel_stack = NULL;
     process_reset_record(process);
     process->pid = pid;
+    process_table_lock_release(flags);
     return 1;
 }
 

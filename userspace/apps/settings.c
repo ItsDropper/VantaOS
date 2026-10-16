@@ -19,7 +19,6 @@ static uint32_t command_count;
 static uint32_t window_id;
 static int accent_teal;
 static int compact_rows;
-static int saved_state;
 static int running = 1;
 
 static size_t text_length(const char* text)

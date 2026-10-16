@@ -8,6 +8,8 @@
 #define PROCESS_MAX 128
 #define PROCESS_NAME_MAX 31
 #define PROCESS_STACK_SIZE 16384U
+#define PROCESS_USER_MAX_ARGS 16U
+#define PROCESS_USER_ARG_BYTES_MAX 512U
 #define PROCESS_USER_MAX_PAGES 64U
 #define PROCESS_USER_PAGE_WRITE 0x01U
 #define PROCESS_USER_PAGE_EXEC  0x02U
@@ -73,6 +75,9 @@ int process_create_user(const char* name, uint32_t parent_pid,
 /* Load a validated static ELF64 executable into a private address space. */
 int process_create_user_elf(const char* name, uint32_t parent_pid,
                             const void* image, size_t image_size);
+int process_create_user_elf_args(const char* name, uint32_t parent_pid,
+                                 const void* image, size_t image_size,
+                                 uint32_t argc, const char* const argv[]);
 int process_create_kernel_any(const char* name, uint32_t parent_pid,
                               process_entry_t entry);
 int process_create_kernel_on_cpu(const char* name, uint32_t parent_pid,

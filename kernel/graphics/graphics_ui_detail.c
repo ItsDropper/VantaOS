@@ -479,30 +479,30 @@ void graphics_draw_start_menu_detail(int width, int height)
     ui_label(mx + 24, my + 76, "PINNED APPLICATIONS");
     ui_label(mx + mw - 100, my + 76, "4 APPS");
 
-    ui_surface(mx + 24, my + 92, mw - 48, 54, 9,
+    ui_surface(mx + 24, my + 110, mw - 48, 54, 9,
                0x00202F3F, UI_EDGE_SOFT);
-    ui_icon_terminal(mx + 36, my + 104, 30, UI_BLUE_BRIGHT);
-    graphics_draw_text(mx + 78, my + 105, "Terminal", UI_WHITE, 1);
-    graphics_draw_text(mx + 78, my + 123, "Run shell commands", UI_MUTED, 1);
+    ui_icon_terminal(mx + 36, my + 122, 30, UI_BLUE_BRIGHT);
+    graphics_draw_text(mx + 78, my + 123, "Terminal", UI_WHITE, 1);
+    graphics_draw_text(mx + 78, my + 141, "Run shell commands", UI_MUTED, 1);
     ui_dot(mx + mw - 42, my + 116, UI_MINT);
 
-    ui_surface(mx + 24, my + 146, mw - 48, 54, 9,
+    ui_surface(mx + 24, my + 164, mw - 48, 54, 9,
                0x001A2633, UI_EDGE_SOFT);
-    ui_icon_folder(mx + 36, my + 158, 30, UI_MINT);
-    graphics_draw_text(mx + 78, my + 159, "Files", UI_WHITE, 1);
-    graphics_draw_text(mx + 78, my + 177, "Browse system paths", UI_MUTED, 1);
+    ui_icon_folder(mx + 36, my + 176, 30, UI_MINT);
+    graphics_draw_text(mx + 78, my + 177, "Files", UI_WHITE, 1);
+    graphics_draw_text(mx + 78, my + 195, "Browse system paths", UI_MUTED, 1);
 
-    ui_surface(mx + 24, my + 200, mw - 48, 54, 9,
+    ui_surface(mx + 24, my + 218, mw - 48, 54, 9,
                0x001A2633, UI_EDGE_SOFT);
-    ui_icon_system(mx + 36, my + 212, 30, UI_BLUE);
-    graphics_draw_text(mx + 78, my + 213, "System", UI_WHITE, 1);
-    graphics_draw_text(mx + 78, my + 231, "Kernel and service status", UI_MUTED, 1);
+    ui_icon_system(mx + 36, my + 230, 30, UI_BLUE);
+    graphics_draw_text(mx + 78, my + 231, "System", UI_WHITE, 1);
+    graphics_draw_text(mx + 78, my + 249, "Kernel and service status", UI_MUTED, 1);
 
-    ui_surface(mx + 24, my + 254, mw - 48, 54, 9,
+    ui_surface(mx + 24, my + 272, mw - 48, 54, 9,
                0x001A2633, UI_EDGE_SOFT);
-    ui_icon_settings(mx + 36, my + 266, 30, UI_AMBER);
-    graphics_draw_text(mx + 78, my + 267, "Settings", UI_WHITE, 1);
-    graphics_draw_text(mx + 78, my + 285, "Display configuration", UI_MUTED, 1);
+    ui_icon_settings(mx + 36, my + 284, 30, UI_AMBER);
+    graphics_draw_text(mx + 78, my + 285, "Settings", UI_WHITE, 1);
+    graphics_draw_text(mx + 78, my + 303, "Display configuration", UI_MUTED, 1);
 
     ui_line(mx + 24, my + mh - 64, mw - 48, UI_EDGE_SOFT);
     ui_dot(mx + 26, my + mh - 43,

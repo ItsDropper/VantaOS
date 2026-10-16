@@ -395,7 +395,7 @@ int paging_destroy_address_space(paging_address_space_t* address_space)
                         __ATOMIC_ACQUIRE) != 0U)
     {
         paging_lock_release(saved_flags);
-        return;
+        return 0;
     }
 
     paging_release_user_page_tables(address_space);

@@ -4,7 +4,7 @@ This document describes the current prototype, not a promise that every subsyste
 
 ## System boundary map
 
-The current design has two boot paths under development that converge on the kernel's normalized handoff contract. The desktop and shell are still kernel-integrated GUI components; only the Terminal shell logic and selected smoke programs run as ring-3 ELF applications. A general user-space GUI application boundary is not implemented yet. See [User-space desktop applications](USERSPACE_GUI.md).
+The current design has two boot paths that converge on the kernel's normalized handoff contract. Static ELF64 applications run at ring 3, and a bounded VantaOS-specific GUI syscall ABI now supports process-owned windows, retained rectangle/text drawing, and queued events. The kernel still owns framebuffer access and composition; Settings and File Explorer remain kernel-rendered, and Terminal's ring-3 shell still uses a kernel-rendered window. See [User-space desktop applications](USERSPACE_GUI.md).
 
 ```mermaid
 flowchart TD
@@ -64,7 +64,7 @@ The two boot paths are not interchangeable evidence: a successful GRUB boot does
 
 The process table has fixed capacity and supports both kernel execution contexts and an early user-process path. Process records track lifecycle state, saved context, kernel stack, address space, and—where applicable—user-image pages and entry/stack metadata. The scheduler uses timer ticks and ready-process selection; selected lifecycle, reaping, and SMP invariants are exercised in QEMU.
 
-Static ELF64 `ET_EXEC` images can be loaded from the FAT32-backed shell path into a private user address space and entered at CPL3 (ring 3). The initial stack contains `argc`, a null-terminated `argv` array, an empty `envp`, and a minimal `AT_NULL` terminator. Argument count and string storage are bounded. The current `int 0x80` interface supports exit, serial write, and terminal write; it is a bring-up ABI, not a stable POSIX ABI. See [User-mode programs](user-mode-programs.md).
+Static ELF64 `ET_EXEC` images can be loaded from the FAT32-backed shell path into a private user address space and entered at CPL3 (ring 3). The initial stack contains `argc`, a null-terminated `argv` array, an empty `envp`, and a minimal `AT_NULL` terminator. Argument count and string storage are bounded. The current `int 0x80` interface supports exit, output, bounded file descriptors and I/O, spawn/wait, directory listing, terminal input, file creation, and GUI window/draw/event operations. It is a bring-up ABI, not a stable POSIX ABI. See [User-mode programs](user-mode-programs.md) and [User-space desktop applications](USERSPACE_GUI.md).
 
 This is an early protection boundary, not a claim of production-grade isolation. The ELF loader validates segment ranges and permissions and requires NX support, while output syscalls validate user buffers. Broader invalid-pointer, fault-containment, process-to-process, and adversarial testing remains necessary. SMP test success proves only the assertions those tests exercise, not general race freedom or long-duration stability.
 
@@ -74,7 +74,7 @@ Paging establishes identity mappings for low memory and high virtual windows use
 
 ## Filesystem and VFS
 
-The filesystem builds an in-memory namespace such as `/system`, `/home/user`, and `/etc`, and can import directory entries when FAT32 mounting succeeds. The VFS provides kernel-side lookup/list/open/read/write/close interfaces and bounded open-file slots. The user ELF loader can read executable bytes through the filesystem path. User programs do not yet have a per-process file-descriptor API, and general filesystem create/write operations are unsupported; interface presence does not imply durable storage.
+The filesystem builds an in-memory namespace such as `/system`, `/home/user`, and `/etc`, and can import directory entries when FAT32 mounting succeeds. The VFS provides lookup/list/open/read/write/close interfaces and bounded open-file slots. User processes have a small per-process descriptor table and bounded syscalls for read/write/close, directory listing, and regular-file creation. FAT32 supports conservative 8.3 file writes and range-based multi-cluster I/O; CI checks write/readback and a second-boot persistence marker. This does not provide long-filename writes, directory creation, rename/delete, crash-atomic replacement, or general corruption recovery.
 
 ## Graphics and input
 

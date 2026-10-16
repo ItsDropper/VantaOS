@@ -8,6 +8,7 @@
 #include "cpu_local.h"
 #include "process.h"
 #include "scheduler.h"
+#include "smp.h"
 
 extern void irq0_stub(void);
 extern void irq1_stub(void);
@@ -92,12 +93,30 @@ uint64_t interrupt_handler(uint64_t interrupt_number, uint64_t saved_stack)
     return saved_stack;
 }
 
-void lapic_timer_handle_interrupt(void)
+uint64_t lapic_timer_handle_interrupt(uint64_t saved_stack)
 {
     cpu_local_t* local = cpu_local_current();
-    if (local && local->self == local && local->online != 0U)
-        local->lapic_timer_ticks++;
+    if (!local || local->self != local || local->online == 0U)
+    {
+        apic_send_eoi();
+        return saved_stack;
+    }
+
+    __atomic_add_fetch(&local->lapic_timer_ticks, 1U, __ATOMIC_RELAXED);
     apic_send_eoi();
+
+    if (__atomic_load_n(&local->scheduler_online, __ATOMIC_ACQUIRE) == 0U ||
+        !scheduler_is_initialized() || !process_is_initialized())
+        return saved_stack;
+
+    if (process_current_pid() == 0U)
+        return scheduler_start_cpu(saved_stack);
+
+    /* The BSP still schedules from the legacy timer; APs use their LAPIC. */
+    if (smp_cpu_count() > 1U && local->logical_id != 0U)
+        return scheduler_tick(saved_stack);
+
+    return saved_stack;
 }
 
 uint64_t reschedule_ipi_handle_interrupt(uint64_t saved_stack)

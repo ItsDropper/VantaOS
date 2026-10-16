@@ -16,6 +16,9 @@
 #define LAPIC_ID 0x020U
 #define LAPIC_TPR 0x080U
 #define LAPIC_EOI 0x0B0U
+#define LAPIC_LVT_TIMER 0x320U
+#define LAPIC_TIMER_INITIAL_COUNT 0x380U
+#define LAPIC_TIMER_DIVIDE 0x3E0U
 #define LAPIC_LVT_LINT0 0x350U
 #define LAPIC_LVT_LINT1 0x360U
 #define LAPIC_SVR 0x0F0U
@@ -187,6 +190,20 @@ int apic_initialize(void)
     pic_mask_all();
     enabled = 1;
     serial_write("VANTAOS_APIC_LOCAL_OK\n");
+    return 1;
+}
+
+int apic_timer_initialize(uint8_t vector, uint32_t initial_count)
+{
+    if (!enabled || !lapic || vector < 0x10U || vector == 0xFFU ||
+        initial_count == 0U)
+        return 0;
+
+    /* Divide by 16; use periodic mode, masking the vector during setup. */
+    lapic_write(LAPIC_LVT_TIMER, (1U << 16) | vector);
+    lapic_write(LAPIC_TIMER_DIVIDE, 0x3U);
+    lapic_write(LAPIC_TIMER_INITIAL_COUNT, initial_count);
+    lapic_write(LAPIC_LVT_TIMER, (1U << 17) | vector);
     return 1;
 }
 

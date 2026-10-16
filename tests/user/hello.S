@@ -42,6 +42,15 @@ _start:
     jl file_fail
     mov %rax, %r12
 
+    /* Requests above the syscall limit must fail without consuming data. */
+    mov $4, %eax
+    mov %r12, %rdi
+    lea file_buffer(%rip), %rsi
+    mov $4097, %edx
+    int $0x80
+    cmp $-22, %rax
+    jne file_fail
+
     /* An invalid destination must not consume any file bytes. */
     mov $4, %eax
     mov %r12, %rdi

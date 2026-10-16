@@ -13,4 +13,4 @@ The programs use the initial VantaOS syscall ABI:
 
 The CI ELF reads and verifies `/USERDATA.TXT` from the disposable FAT32 image, then exercises bad-pointer, invalid-descriptor, oversized-read, missing-file, and descriptor-exhaustion errors. It exits with descriptors still open to exercise reaper cleanup. Success is reported by `VANTAOS_USER_FILE_IO_OK`.
 
-These syscall numbers and register conventions are an early bring-up ABI, not a POSIX or stability guarantee.
+The freestanding C wrappers live in `userspace/include/vanta/syscall.h`; `tests/user/abi_compile.c` is compiled with strict warnings in CI to verify the wrapper signatures and register argument order. These syscall numbers and register conventions are an early bring-up ABI, not a POSIX or stability guarantee.

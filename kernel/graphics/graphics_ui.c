@@ -88,7 +88,9 @@ static void ui_clock_text(char *clock, char *date)
     /* Read a coherent RTC snapshot; the RTC stores calendar time in CMOS. */
     for (int tries = 0; tries < 4; ++tries)
     {
-        while (ui_rtc_read(0x0A) & 0x80) { }
+        for (unsigned int wait = 0; wait < 100000U; ++wait)
+            if (!(ui_rtc_read(0x0A) & 0x80))
+                break;
         second = ui_rtc_read(0x00);
         minute = ui_rtc_read(0x02);
         hour = ui_rtc_read(0x04);
@@ -115,11 +117,11 @@ static void ui_clock_text(char *clock, char *date)
         hour = (unsigned char)(hour % 12);
         if (pm) hour = (unsigned char)(hour + 12);
     }
-    clock[0] = (char)('0' + minute / 10);
-    clock[1] = (char)('0' + minute % 10);
+    clock[0] = (char)('0' + hour / 10);
+    clock[1] = (char)('0' + hour % 10);
     clock[2] = ':';
-    clock[3] = (char)('0' + hour / 10);
-    clock[4] = (char)('0' + hour % 10);
+    clock[3] = (char)('0' + minute / 10);
+    clock[4] = (char)('0' + minute % 10);
     clock[5] = 0;
     /* Finnish-style date; RTC year is the conventional 2000-2099 range. */
     date[0] = (char)('0' + day / 10);

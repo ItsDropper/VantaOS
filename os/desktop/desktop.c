@@ -195,7 +195,6 @@ void desktop_present(void)
 void desktop_update(void)
 {
     gui_server_cleanup_dead_windows();
-    gui_server_pump_keyboard();
 
     /* Keep the RTC clock/date current even when the user is not moving the mouse. */
     if (graphics_get_active_panel() != 3)

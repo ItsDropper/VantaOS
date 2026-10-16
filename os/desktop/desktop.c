@@ -96,7 +96,7 @@ static void terminal_window_draw(void)
         window_y = 10;
     }
 
-    graphics_draw_window_frame(window_x, window_y, window_w, window_h, "Terminal");
+    graphics_draw_window_frame(window_x, window_y, window_w, window_h, "Terminal", 1);
 
     /* A compact tab strip separates terminal sessions from window chrome. */
     graphics_fill_rect(window_x + 1, window_y + 46, window_w - 2, 34, VANTA_UI_TOOLBAR);

@@ -667,3 +667,257 @@ void graphics_ui_draw_notice(int x, int y, int width, const char* message,
     graphics_fill_rounded_rect(x + 10, y + 10, 3, 14, 1, tint);
     graphics_draw_text(x + 22, y + 12, message, UI_MUTED, 1);
 }
+
+
+/* Native widget primitives. These draw visual states only; the owning app
+ * must supply hit-testing and state transitions before presenting controls
+ * as interactive. */
+
+void graphics_ui_draw_button(int x, int y, int width, int height,
+                             const char* label, int selected, int enabled)
+{
+    uint32_t fill = selected ? UI_BLUE_DARK :
+                    enabled ? UI_SURFACE_1 : UI_INK_SOFT;
+    uint32_t edge = selected ? UI_BLUE : UI_EDGE_SOFT;
+    uint32_t ink = enabled ? UI_WHITE : UI_QUIET;
+    ui_surface(x, y, width, height, 7, fill, edge);
+    graphics_draw_text(x + 12, y + height / 2 - 3, label, ink, 1);
+    if (selected)
+        graphics_fill_rounded_rect(x + 8, y + height - 4,
+                                   width - 16, 2, 1, UI_BLUE_BRIGHT);
+}
+
+void graphics_ui_draw_toggle(int x, int y, int enabled)
+{
+    uint32_t track = enabled ? UI_BLUE_DARK : UI_SURFACE_2;
+    uint32_t edge = enabled ? UI_BLUE : UI_EDGE;
+    ui_surface(x, y, 38, 22, 11, track, edge);
+    graphics_fill_rounded_rect(x + (enabled ? 19 : 3), y + 3,
+                               16, 16, 8,
+                               enabled ? UI_BLUE_BRIGHT : UI_MUTED);
+}
+
+void graphics_ui_draw_tab(int x, int y, int width, const char* label,
+                          int active)
+{
+    if (active)
+    {
+        ui_surface(x, y, width, 30, 6, UI_SURFACE_2, UI_EDGE_SOFT);
+        graphics_fill_rounded_rect(x + 8, y + 26, width - 16, 2, 1,
+                                   UI_BLUE_BRIGHT);
+    }
+    graphics_draw_text(x + 12, y + 11, label,
+                       active ? UI_WHITE : UI_MUTED, 1);
+}
+
+void graphics_ui_draw_breadcrumb(int x, int y, int width,
+                                 const char* path)
+{
+    ui_surface(x, y, width, 30, 7, UI_SURFACE_0, UI_EDGE_SOFT);
+    ui_dot(x + 10, y + 12, UI_BLUE);
+    graphics_draw_text(x + 23, y + 11, path, UI_WHITE, 1);
+}
+
+void graphics_ui_draw_toolbar(int x, int y, int width,
+                              const char* section, const char* action)
+{
+    graphics_fill_rect(x, y, width, 42, UI_SURFACE_1);
+    ui_line(x, y + 41, width, UI_EDGE_SOFT);
+    graphics_draw_text(x + 16, y + 17, section, UI_WHITE, 1);
+    int action_width = 18;
+    for (const char* p = action; *p; ++p) action_width += 6;
+    action_width = ui_clamp(action_width, 64, 180);
+    ui_surface(x + width - action_width - 12, y + 6,
+               action_width, 30, 7, UI_SURFACE_2, UI_EDGE_SOFT);
+    graphics_draw_text(x + width - action_width, y + 17, action,
+                       UI_MUTED, 1);
+}
+
+void graphics_ui_draw_icon_badge(int x, int y, int size,
+                                 const char* glyph, uint32_t tint)
+{
+    ui_surface(x, y, size, size, 7, UI_SURFACE_2, UI_EDGE_SOFT);
+    graphics_draw_text(x + size / 2 - 3, y + size / 2 - 3,
+                       glyph, tint, 1);
+}
+
+void graphics_ui_draw_status_line(int x, int y, int width,
+                                   const char* title, const char* state,
+                                   int ready)
+{
+    ui_line(x, y + 27, width, UI_EDGE_SOFT);
+    ui_dot(x + 2, y + 10, ready ? UI_MINT : UI_AMBER);
+    graphics_draw_text(x + 16, y + 9, title, UI_MUTED, 1);
+    graphics_draw_text(x + width - 150, y + 9, state,
+                       ready ? UI_WHITE : UI_AMBER, 1);
+}
+
+void graphics_ui_draw_info_card(int x, int y, int width, int height,
+                                const char* title, const char* value,
+                                const char* description, uint32_t tint)
+{
+    ui_surface(x, y, width, height, 10, UI_SURFACE_0, UI_EDGE_SOFT);
+    ui_surface(x + 14, y + 14, 26, 26, 7, UI_SURFACE_2, UI_EDGE_SOFT);
+    ui_dot(x + 24, y + 24, tint);
+    graphics_draw_text(x + 50, y + 16, title, UI_MUTED, 1);
+    graphics_draw_text(x + 14, y + 49, value, UI_WHITE, 1);
+    graphics_draw_text(x + 14, y + height - 20, description, UI_QUIET, 1);
+}
+
+void graphics_ui_draw_description_row(int x, int y, int width,
+                                      const char* title, const char* body)
+{
+    ui_line(x, y + 42, width, UI_EDGE_SOFT);
+    graphics_draw_text(x, y + 6, title, UI_WHITE, 1);
+    graphics_draw_text(x, y + 23, body, UI_MUTED, 1);
+}
+
+void graphics_ui_draw_property_group(int x, int y, int width,
+                                     const char* heading,
+                                     const char* description)
+{
+    ui_label(x, y, heading);
+    graphics_draw_text(x, y + 17, description, UI_MUTED, 1);
+    ui_line(x, y + 36, width, UI_EDGE_SOFT);
+}
+
+void graphics_ui_draw_section_card(int x, int y, int width, int height,
+                                   const char* heading, uint32_t accent)
+{
+    ui_surface(x, y, width, height, 10, UI_SURFACE_0, UI_EDGE_SOFT);
+    graphics_fill_rounded_rect(x + 14, y + 14, 3, height - 28, 1, accent);
+    graphics_draw_text(x + 28, y + 15, heading, UI_WHITE, 1);
+}
+
+void graphics_ui_draw_keycap(int x, int y, const char* key)
+{
+    int width = 14;
+    for (const char* p = key; *p; ++p) width += 6;
+    width = ui_clamp(width, 24, 72);
+    ui_surface(x, y, width, 22, 5, UI_SURFACE_2, UI_EDGE);
+    graphics_draw_text(x + 7, y + 7, key, UI_WHITE, 1);
+}
+
+void graphics_ui_draw_shortcut_hint(int x, int y, const char* description,
+                                    const char* key)
+{
+    graphics_draw_text(x, y + 6, description, UI_MUTED, 1);
+    int width = 14;
+    for (const char* p = key; *p; ++p) width += 6;
+    width = ui_clamp(width, 24, 72);
+    graphics_ui_draw_keycap(x + 210, y, key);
+    (void)width;
+}
+
+void graphics_ui_draw_progress_label(int x, int y, int width,
+                                     const char* label, int percent,
+                                     uint32_t tint)
+{
+    char text[5];
+    int value = ui_clamp(percent, 0, 100);
+    text[0] = (char)('0' + (value / 100) % 10);
+    text[1] = (char)('0' + (value / 10) % 10);
+    text[2] = (char)('0' + value % 10);
+    text[3] = '%';
+    text[4] = 0;
+    graphics_draw_text(x, y, label, UI_MUTED, 1);
+    graphics_draw_text(x + width - 30, y, text, UI_WHITE, 1);
+    graphics_ui_draw_progress(x, y + 17, width, value, tint);
+}
+
+void graphics_ui_draw_divided_panel(int x, int y, int width, int height,
+                                    int divider_x)
+{
+    ui_surface(x, y, width, height, 10, UI_SURFACE_0, UI_EDGE_SOFT);
+    if (divider_x > 0 && divider_x < width)
+        ui_vline(x + divider_x, y + 12, height - 24, UI_EDGE_SOFT);
+}
+
+void graphics_ui_draw_illustration_frame(int x, int y, int width, int height)
+{
+    ui_surface(x, y, width, height, 12, UI_SURFACE_1, UI_EDGE_SOFT);
+    ui_surface(x + 12, y + 12, width - 24, height - 24,
+               8, UI_SURFACE_0, UI_EDGE_SOFT);
+    ui_line(x + 24, y + 30, width - 48, UI_EDGE_SOFT);
+    ui_dot(x + 23, y + 22, UI_RED);
+    ui_dot(x + 34, y + 22, UI_AMBER);
+    ui_dot(x + 45, y + 22, UI_MINT);
+}
+
+void graphics_ui_draw_file_type_chip(int x, int y, const char* extension,
+                                     uint32_t tint)
+{
+    int width = 18;
+    for (const char* p = extension; *p; ++p) width += 6;
+    width = ui_clamp(width, 34, 68);
+    ui_surface(x, y, width, 20, 5, UI_SURFACE_2, UI_EDGE_SOFT);
+    graphics_draw_text(x + 7, y + 6, extension, tint, 1);
+}
+
+void graphics_ui_draw_list_empty(int x, int y, int width, int height,
+                                 const char* title, const char* detail,
+                                 const char* hint)
+{
+    int center_x = x + width / 2;
+    int center_y = y + height / 2;
+    ui_surface(center_x - 24, center_y - 60, 48, 48, 12,
+               UI_SURFACE_1, UI_EDGE_SOFT);
+    graphics_draw_text(center_x - 8, center_y - 43, "...", UI_QUIET, 1);
+    graphics_draw_text(center_x - 64, center_y - 3, title, UI_WHITE, 1);
+    graphics_draw_text(center_x - 140, center_y + 18, detail, UI_MUTED, 1);
+    graphics_draw_text(center_x - 130, center_y + 43, hint, UI_QUIET, 1);
+}
+
+void graphics_ui_draw_call_to_action(int x, int y, int width,
+                                     const char* label, uint32_t tint)
+{
+    ui_surface(x, y, width, 34, 7, UI_SURFACE_2, tint);
+    graphics_draw_text(x + 12, y + 12, label, UI_WHITE, 1);
+    graphics_draw_text(x + width - 18, y + 12, ">", tint, 1);
+}
+
+void graphics_ui_draw_status_footer(int x, int y, int width,
+                                    const char* left, const char* right)
+{
+    graphics_fill_rect(x, y, width, 26, UI_SURFACE_1);
+    ui_line(x, y, width, UI_EDGE_SOFT);
+    graphics_draw_text(x + 14, y + 9, left, UI_MUTED, 1);
+    graphics_draw_text(x + width - 170, y + 9, right, UI_QUIET, 1);
+}
+
+void graphics_ui_draw_split_heading(int x, int y, int width,
+                                    const char* title, const char* action)
+{
+    graphics_draw_text(x, y, title, UI_WHITE, 1);
+    graphics_draw_text(x + width - 100, y, action, UI_BLUE_BRIGHT, 1);
+    ui_line(x, y + 22, width, UI_EDGE_SOFT);
+}
+
+void graphics_ui_draw_notice_card(int x, int y, int width, int height,
+                                  const char* eyebrow, const char* title,
+                                  const char* body, uint32_t tint)
+{
+    ui_surface(x, y, width, height, 10, UI_SURFACE_0, UI_EDGE_SOFT);
+    ui_accent(x + 14, y + 14, 28, tint);
+    graphics_draw_text(x + 14, y + 27, eyebrow, UI_QUIET, 1);
+    graphics_draw_text(x + 14, y + 45, title, UI_WHITE, 1);
+    graphics_draw_text(x + 14, y + 64, body, UI_MUTED, 1);
+}
+
+void graphics_ui_draw_table_header(int x, int y, int width,
+                                   const char* first, const char* second,
+                                   const char* third)
+{
+    graphics_fill_rect(x, y, width, 30, UI_SURFACE_1);
+    graphics_draw_text(x + 16, y + 10, first, UI_QUIET, 1);
+    graphics_draw_text(x + width - 180, y + 10, second, UI_QUIET, 1);
+    graphics_draw_text(x + width - 70, y + 10, third, UI_QUIET, 1);
+    ui_line(x, y + 29, width, UI_EDGE_SOFT);
+}
+
+void graphics_ui_draw_inline_status(int x, int y, const char* label,
+                                    int ready)
+{
+    ui_dot(x, y + 3, ready ? UI_MINT : UI_AMBER);
+    graphics_draw_text(x + 11, y, label, UI_MUTED, 1);
+}

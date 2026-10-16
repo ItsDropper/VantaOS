@@ -250,5 +250,4 @@ void graphics_present(void)
     if (start_menu_open)
         graphics_draw_start_menu_detail(w, h);
 
-    graphics_draw_cursor();
 }

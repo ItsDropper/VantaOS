@@ -7,6 +7,7 @@
 #include "fault_trace.h"
 #include "apic.h"
 #include "serial.h"
+#include "selftest/user_mode_selftest.h"
 
 static volatile uint32_t panic_broadcast_active;
 
@@ -188,6 +189,9 @@ void exception_handler(
     struct exception_frame* frame
 )
 {
+    if (user_mode_selftest_handle_exception(exception_number, frame))
+        return;
+
     if (exception_number == 2U &&
         __atomic_load_n(&panic_broadcast_active, __ATOMIC_ACQUIRE) != 0U)
         panic_halt();

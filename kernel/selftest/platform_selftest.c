@@ -6,6 +6,7 @@
 #include "pmm.h"
 #include "serial.h"
 #include "spinlock.h"
+#include "user_mode_selftest.h"
 
 #ifdef VANTAOS_SELF_TEST
 static void spinlock_primitive_probe(void)
@@ -149,5 +150,6 @@ void kernel_platform_selftest(void)
         "VANTAOS_TLB_SHOOTDOWN_OK\n" :
         "VANTAOS_TLB_SHOOTDOWN_FAIL\n");
     user_mapping_probe();
+    (void)user_mode_selftest_run();
 }
 #endif

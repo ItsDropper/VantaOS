@@ -80,6 +80,7 @@ static void process_reset_record(process_t* process)
 {
     process->parent_pid = 0;
     process->owner_cpu = PROCESS_CPU_UNOWNED;
+    process->affinity_cpu = PROCESS_CPU_ANY;
     process->state = PROCESS_UNUSED;
     process->name[0] = 0;
     process->stack_pointer = 0;
@@ -212,6 +213,7 @@ int process_attach_current(const char* name, uint32_t parent_pid)
         __asm__ volatile ("mov %%rsp, %0" : "=r"(current_stack));
         process->state = PROCESS_RUNNING;
         process->owner_cpu = process_current_cpu_id();
+        process->affinity_cpu = process_current_cpu_id();
         process->stack_pointer = current_stack;
         process->context.rsp = current_stack;
         process->context.rip =
@@ -220,6 +222,9 @@ int process_attach_current(const char* name, uint32_t parent_pid)
         process->context.ss = 0x10U;
         process->kernel_stack = (void*)(uintptr_t)&stack_bottom;
         process_set_current_slot(pid);
+        cpu_local_t* local = process_local_state();
+        if (pid == 1U && local)
+            __atomic_store_n(&local->idle_pid, pid, __ATOMIC_RELEASE);
         process_table_lock_release(flags);
         return (int)pid;
     }
@@ -228,10 +233,14 @@ int process_attach_current(const char* name, uint32_t parent_pid)
     return -1;
 }
 
-int process_create_kernel(const char* name, uint32_t parent_pid,
-                           process_entry_t entry)
+static int process_create_kernel_affinity(const char* name,
+                                          uint32_t parent_pid,
+                                          process_entry_t entry,
+                                          uint32_t affinity_cpu)
 {
-    if (!initialized || !name || !name[0] || !entry)
+    if (!initialized || !name || !name[0] || !entry ||
+        (affinity_cpu != PROCESS_CPU_ANY &&
+         (affinity_cpu >= CPU_LOCAL_MAX || !cpu_local_get(affinity_cpu))))
         return -1;
 
     uint64_t flags = process_table_lock_acquire();
@@ -248,6 +257,7 @@ int process_create_kernel(const char* name, uint32_t parent_pid,
             return -1;
         }
 
+        process->affinity_cpu = affinity_cpu;
         process->kernel_stack = process_stacks[pid];
         process->entry = entry;
         uintptr_t stack_top =
@@ -262,13 +272,45 @@ int process_create_kernel(const char* name, uint32_t parent_pid,
     return -1;
 }
 
+int process_create_kernel(const char* name, uint32_t parent_pid,
+                          process_entry_t entry)
+{
+    return process_create_kernel_affinity(name, parent_pid, entry,
+                                          process_current_cpu_id());
+}
+
+int process_create_kernel_any(const char* name, uint32_t parent_pid,
+                              process_entry_t entry)
+{
+    return process_create_kernel_affinity(name, parent_pid, entry,
+                                          PROCESS_CPU_ANY);
+}
+
+int process_create_idle_for_cpu(uint32_t cpu_id, const char* name,
+                                process_entry_t entry)
+{
+    cpu_local_t* local = (cpu_id < CPU_LOCAL_MAX) ?
+        (cpu_local_t*)cpu_local_get(cpu_id) : NULL;
+    if (!local)
+        return -1;
+
+    int pid = process_create_kernel_affinity(name, 0U, entry, cpu_id);
+    if (pid < 0)
+        return -1;
+
+    __atomic_store_n(&local->idle_pid, (uint32_t)pid, __ATOMIC_RELEASE);
+    return pid;
+}
+
 int process_mark_running(uint32_t pid)
 {
     if (!initialized || pid == 0 || pid >= PROCESS_MAX)
         return 0;
     uint64_t flags = process_table_lock_acquire();
     int ok = processes[pid].state != PROCESS_UNUSED &&
-             processes[pid].state != PROCESS_TERMINATED;
+             processes[pid].state != PROCESS_TERMINATED &&
+             (processes[pid].affinity_cpu == PROCESS_CPU_ANY ||
+              processes[pid].affinity_cpu == process_current_cpu_id());
     if (ok)
         processes[pid].state = PROCESS_RUNNING;
     process_table_lock_release(flags);
@@ -298,6 +340,8 @@ int process_set_running(uint32_t pid)
     uint32_t cpu_id = process_current_cpu_id();
     if (target->state == PROCESS_UNUSED ||
         target->state == PROCESS_TERMINATED ||
+        (target->affinity_cpu != PROCESS_CPU_ANY &&
+         target->affinity_cpu != cpu_id) ||
         (target->owner_cpu != PROCESS_CPU_UNOWNED &&
          target->owner_cpu != cpu_id))
     {
@@ -332,7 +376,9 @@ int process_claim_for_cpu(uint32_t next_pid, uint32_t current_pid,
     uint64_t flags = process_table_lock_acquire();
     process_t* next = &processes[next_pid];
     if (next->state != PROCESS_READY ||
-        next->owner_cpu != PROCESS_CPU_UNOWNED)
+        next->owner_cpu != PROCESS_CPU_UNOWNED ||
+        (next->affinity_cpu != PROCESS_CPU_ANY &&
+         next->affinity_cpu != cpu_id))
     {
         process_table_lock_release(flags);
         return 0;

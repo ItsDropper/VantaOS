@@ -175,7 +175,6 @@ static void terminal_window_draw(void)
     graphics_draw_text(window_x + window_w - 112, status_y + 12,
         "UTF-8  |  x86_64", VANTA_UI_TEXT_SECONDARY, 1);
 
-    graphics_draw_cursor();
 }
 
 void desktop_initialize(multiboot_info_t* mbd)
@@ -231,7 +230,7 @@ void desktop_update(void)
         {
             if (terminal_process_consume_redraw())
             {
-                terminal_window_draw();
+                desktop_gui_present();
             }
             else
             {
@@ -239,7 +238,7 @@ void desktop_update(void)
                 if (blink_state != terminal_last_blink_state)
                 {
                     terminal_last_blink_state = blink_state;
-                    terminal_window_draw();
+                    desktop_gui_present();
                 }
             }
         }
@@ -274,7 +273,7 @@ void desktop_update(void)
                 terminal_scroll_up();
                 terminal_scroll_up();
             }
-            terminal_window_draw();
+            desktop_gui_present();
         }
 
         if (graphics_is_initialized())

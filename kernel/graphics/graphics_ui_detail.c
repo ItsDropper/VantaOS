@@ -131,11 +131,14 @@ static void ui_metric(int x, int y, int w, int h, const char* eyebrow,
     ui_surface(x, y, w, h, 10, UI_SURFACE_0, UI_EDGE_SOFT);
     ui_accent(x + 14, y + 13, 28, accent);
     ui_label(x + 14, y + 27, eyebrow);
-    if (icon == 0) ui_icon_system(x + w - 46, y + 12, 32, accent);
-    else if (icon == 1) ui_icon_folder(x + w - 46, y + 12, 32, accent);
-    else if (icon == 2) ui_icon_terminal(x + w - 46, y + 12, 32, accent);
-    else if (icon == 3) ui_icon_chip(x + w - 46, y + 12, 32, accent);
-    else ui_icon_memory(x + w - 46, y + 12, 32, accent);
+    if (w >= 175)
+    {
+        if (icon == 0) ui_icon_system(x + w - 46, y + 12, 32, accent);
+        else if (icon == 1) ui_icon_folder(x + w - 46, y + 12, 32, accent);
+        else if (icon == 2) ui_icon_terminal(x + w - 46, y + 12, 32, accent);
+        else if (icon == 3) ui_icon_chip(x + w - 46, y + 12, 32, accent);
+        else ui_icon_memory(x + w - 46, y + 12, 32, accent);
+    }
     graphics_draw_text(x + 14, y + 49, value, UI_WHITE, 1);
     graphics_draw_text(x + 14, y + h - 22, detail, UI_MUTED, 1);
 }
@@ -655,9 +658,10 @@ void graphics_ui_draw_settings_row(int x, int y, int width,
 void graphics_ui_draw_separator_label(int x, int y, int width,
                                       const char* label)
 {
+    int label_width = 12;
+    for (const char* p = label; *p; ++p) label_width += 6;
     ui_line(x, y + 5, width, UI_EDGE_SOFT);
-    graphics_fill_rect(x, y, (int)(sizeof("SYSTEM") - 1) * 6 + 12,
-                       12, UI_SURFACE_0);
+    graphics_fill_rect(x, y, ui_min(label_width, width), 12, UI_SURFACE_0);
     graphics_draw_text(x + 6, y + 1, label, UI_QUIET, 1);
 }
 void graphics_ui_draw_notice(int x, int y, int width, const char* message,
@@ -802,11 +806,7 @@ void graphics_ui_draw_shortcut_hint(int x, int y, const char* description,
                                     const char* key)
 {
     graphics_draw_text(x, y + 6, description, UI_MUTED, 1);
-    int width = 14;
-    for (const char* p = key; *p; ++p) width += 6;
-    width = ui_clamp(width, 24, 72);
     graphics_ui_draw_keycap(x + 210, y, key);
-    (void)width;
 }
 
 void graphics_ui_draw_progress_label(int x, int y, int width,

@@ -18,12 +18,12 @@ static volatile uint32_t* scheduler_quantum_slot(void)
 
 void scheduler_initialize(void)
 {
-    __atomic_store_n(&initialized, 1, __ATOMIC_RELEASE);
     cpu_local_t* local = cpu_local_current();
     if (local && local->self == local && local->online != 0U)
         local->scheduler_ticks = 0;
     else
         fallback_quantum_ticks = 0;
+    __atomic_store_n(&initialized, 1, __ATOMIC_RELEASE);
 }
 
 int scheduler_is_initialized(void)
@@ -95,7 +95,8 @@ uint64_t scheduler_reschedule(uint64_t current_stack)
 
 uint64_t scheduler_tick(uint64_t current_stack)
 {
-    if (!initialized || !process_is_initialized())
+    if (__atomic_load_n(&initialized, __ATOMIC_ACQUIRE) == 0 ||
+        !process_is_initialized())
         return current_stack;
 
     uint32_t current_pid = process_current_pid();

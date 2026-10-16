@@ -1,5 +1,6 @@
 #include "paging.h"
 #include "pmm.h"
+#include "cpu_local.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -28,7 +29,20 @@ static uint64_t address_space_pml4[ADDRESS_SPACE_MAX][TABLE_ENTRIES]
 
 static paging_address_space_t address_spaces[ADDRESS_SPACE_MAX];
 static paging_address_space_t kernel_address_space;
-static paging_address_space_t* current_address_space;
+static paging_address_space_t* fallback_current_address_space;
+
+static paging_address_space_t** paging_current_slot(void)
+{
+    cpu_local_t* local = cpu_local_current();
+    if (local && local->self == local && local->online != 0U)
+        return &local->current_address_space;
+    return &fallback_current_address_space;
+}
+
+static paging_address_space_t* paging_current(void)
+{
+    return *paging_current_slot();
+}
 
 static inline void load_page_table(uintptr_t physical_address)
 {
@@ -293,7 +307,7 @@ void paging_initialize(void)
         address_spaces[i].used = 0;
     }
 
-    current_address_space = &kernel_address_space;
+    fallback_current_address_space = &kernel_address_space;
 
     load_page_table(kernel_address_space.directory_physical);
 }
@@ -302,7 +316,7 @@ int paging_map_page(uintptr_t virtual_address, uintptr_t physical_address)
 {
     if ((virtual_address % PAGE_SIZE) != 0 ||
         (physical_address % PAGE_SIZE) != 0 ||
-        current_address_space != &kernel_address_space)
+        paging_current() != &kernel_address_space)
         return 0;
 
     uint64_t* table = table_for(virtual_address);
@@ -340,7 +354,7 @@ int paging_map_user_page(paging_address_space_t* address_space,
              PAGE_PRESENT | PAGE_USER |
              (writable ? PAGE_WRITE : 0U);
 
-    if (current_address_space == address_space)
+    if (paging_current() == address_space)
         invalidate_page(virtual_address);
 
     return 1;
@@ -358,7 +372,7 @@ int paging_unmap_user_page(paging_address_space_t* address_space,
         return 0;
 
     *entry = 0;
-    if (current_address_space == address_space)
+    if (paging_current() == address_space)
         invalidate_page(virtual_address);
 
     /* The caller owns the mapped physical frame and must free it separately. */
@@ -370,7 +384,7 @@ uint64_t paging_get_page_flags(uintptr_t virtual_address)
     if (virtual_address >= PAGING_USER_BASE &&
         virtual_address <= PAGING_USER_END)
     {
-        uint64_t* entry = user_leaf_entry(current_address_space,
+        uint64_t* entry = user_leaf_entry(paging_current(),
                                           virtual_address, 0);
         return entry ? (*entry & 0xFFFU) : 0;
     }
@@ -389,7 +403,7 @@ int paging_map_mmio_page(uintptr_t virtual_address, uintptr_t physical_address)
         (physical_address & (PAGE_SIZE - 1U)) != 0 ||
         virtual_address < MMIO_WINDOW_BASE ||
         virtual_address >= MMIO_WINDOW_BASE + MMIO_PT_COUNT * PAGE_2M ||
-        current_address_space != &kernel_address_space)
+        paging_current() != &kernel_address_space)
         return 0;
 
     uint64_t* table = table_for(virtual_address);
@@ -406,7 +420,7 @@ int paging_map_mmio_page(uintptr_t virtual_address, uintptr_t physical_address)
 void paging_unmap_page(uintptr_t virtual_address)
 {
     if ((virtual_address % PAGE_SIZE) != 0 ||
-        current_address_space != &kernel_address_space)
+        paging_current() != &kernel_address_space)
         return;
 
     uint64_t* table = table_for(virtual_address);
@@ -423,7 +437,7 @@ uintptr_t paging_get_physical(uintptr_t virtual_address)
     if (virtual_address >= PAGING_USER_BASE &&
         virtual_address <= PAGING_USER_END)
     {
-        uint64_t* entry = user_leaf_entry(current_address_space,
+        uint64_t* entry = user_leaf_entry(paging_current(),
                                           virtual_address, 0);
         if (!entry || !(*entry & PAGE_PRESENT))
             return 0;
@@ -453,7 +467,7 @@ uintptr_t paging_get_physical(uintptr_t virtual_address)
 
 paging_address_space_t* paging_create_address_space(void)
 {
-    if (current_address_space != &kernel_address_space)
+    if (paging_current() != &kernel_address_space)
         return NULL;
 
     for (uint32_t i = 0; i < ADDRESS_SPACE_MAX; i++)
@@ -484,7 +498,16 @@ void paging_destroy_address_space(paging_address_space_t* address_space)
     if (!paging_owns_address_space(address_space))
         return;
 
-    if (current_address_space == address_space)
+    cpu_local_t* current_cpu = cpu_local_current();
+    for (uint32_t i = 0; i < cpu_local_capacity(); i++)
+    {
+        const cpu_local_t* local = cpu_local_get(i);
+        if (local && local->current_address_space == address_space &&
+            local != current_cpu)
+            return; /* Never free page tables still loaded by another CPU. */
+    }
+
+    if (paging_current() == address_space)
         paging_switch_address_space(&kernel_address_space);
 
     release_user_page_tables(address_space);
@@ -500,10 +523,11 @@ void paging_switch_address_space(paging_address_space_t* address_space)
     if (!address_space || !address_space->used)
         return;
 
-    if (current_address_space == address_space)
+    paging_address_space_t** slot = paging_current_slot();
+    if (*slot == address_space)
         return;
 
-    current_address_space = address_space;
+    *slot = address_space;
     load_page_table(address_space->directory_physical);
 }
 
@@ -514,5 +538,5 @@ paging_address_space_t* paging_get_kernel_address_space(void)
 
 paging_address_space_t* paging_get_current_address_space(void)
 {
-    return current_address_space;
+    return paging_current();
 }

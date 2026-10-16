@@ -1,4 +1,5 @@
 #include "cpu_local.h"
+#include "paging.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -36,6 +37,7 @@ int cpu_local_initialize(uint32_t logical_id, uint32_t apic_id)
     local->scheduler_ticks = 0;
     local->lapic_timer_ticks = 0;
     local->reschedule_ipi_ticks = 0;
+    local->current_address_space = paging_get_kernel_address_space();
     __atomic_store_n(&local->online, 1U, __ATOMIC_RELEASE);
 
     /*

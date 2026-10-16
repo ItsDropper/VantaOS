@@ -5,6 +5,8 @@
 #include "scheduler.h"
 #include "serial.h"
 #include "terminal.h"
+#include "terminal_process.h"
+#include "keyboard.h"
 #include "vfs.h"
 #include "user_mode_test.h"
 
@@ -18,6 +20,12 @@
 #define USER_SYSCALL_CLOSE 5U
 #define USER_SYSCALL_SPAWN 6U
 #define USER_SYSCALL_WAITPID 7U
+#define USER_SYSCALL_READ_CHAR 8U
+#define USER_SYSCALL_YIELD 9U
+#define USER_SYSCALL_LISTDIR 10U
+#define USER_SYSCALL_TERMINAL_BEGIN_INPUT 11U
+#define USER_SYSCALL_TERMINAL_BACKSPACE 12U
+#define USER_SYSCALL_TERMINAL_CLEAR 13U
 #define USER_SYSCALL_IO_MAX 4096U
 #define USER_SYSCALL_WRITE_MAX 4096U
 
@@ -85,6 +93,7 @@ static int syscall_console_write(struct exception_frame* frame,
         terminal_write(chunk);
         offset += count;
     }
+    terminal_process_mark_redraw();
     frame->rax = length;
     return 0;
 }
@@ -236,6 +245,153 @@ static int syscall_copy_user_string(char* destination, size_t capacity,
         }
     }
     return -22;
+}
+
+
+/* Return one buffered character without exposing kernel keyboard state. */
+static int syscall_read_char(struct exception_frame* frame)
+{
+    int input_enabled = terminal_process_input_enabled();
+    while (keyboard_has_event())
+    {
+        keyboard_event_t event = keyboard_get_event();
+        if (!input_enabled)
+            continue;
+        if (event == KEY_EVENT_PAGE_UP)
+        {
+            terminal_scroll_up();
+            terminal_process_mark_redraw();
+        }
+        else if (event == KEY_EVENT_PAGE_DOWN)
+        {
+            terminal_scroll_down();
+            terminal_process_mark_redraw();
+        }
+    }
+
+    char character = keyboard_has_char() ? keyboard_get_char() : 0;
+    frame->rax = input_enabled ? (uint64_t)(unsigned char)character : 0U;
+    return 0;
+}
+
+static int syscall_yield(struct exception_frame* frame)
+{
+    /* Wait for the next interrupt; timer preemption remains responsible for
+       selecting another runnable process. */
+    __asm__ volatile ("sti; hlt; cli" : : : "memory");
+    frame->rax = 0U;
+    return 0;
+}
+
+static int syscall_listdir(struct exception_frame* frame,
+                           const process_t* process)
+{
+    uintptr_t buffer_address = (uintptr_t)frame->rsi;
+    uint64_t capacity_value = frame->rdx;
+    if (capacity_value == 0U || capacity_value > USER_SYSCALL_IO_MAX)
+    {
+        frame->rax = (uint64_t)(int64_t)-22;
+        return 0;
+    }
+
+    size_t capacity = (size_t)capacity_value;
+    if (!paging_user_range_valid(process->address_space, buffer_address,
+                                 capacity, 1))
+    {
+        frame->rax = (uint64_t)(int64_t)-14;
+        return 0;
+    }
+
+    char path[FS_PATH_MAX];
+    size_t path_length = 0U;
+    int copied = syscall_copy_user_string(
+        path, sizeof(path), (uintptr_t)frame->rdi, process, &path_length);
+    if (copied != 0 || path_length == 0U)
+    {
+        frame->rax = (uint64_t)(int64_t)(copied != 0 ? copied : -22);
+        return 0;
+    }
+
+    int directory_id = vfs_lookup(path);
+    if (directory_id < 0)
+    {
+        frame->rax = (uint64_t)(int64_t)-2;
+        return 0;
+    }
+    const fs_node_t* directory = vfs_get_node((uint32_t)directory_id);
+    if (!directory || directory->type != FS_NODE_DIRECTORY)
+    {
+        frame->rax = (uint64_t)(int64_t)-22;
+        return 0;
+    }
+
+    uint32_t ids[FS_MAX_NODES];
+    int count = vfs_list((uint32_t)directory_id, ids, FS_MAX_NODES);
+    if (count < 0 || count > FS_MAX_NODES)
+    {
+        frame->rax = (uint64_t)(int64_t)-5;
+        return 0;
+    }
+
+    char output[USER_SYSCALL_IO_MAX];
+    size_t used = 0U;
+    for (int i = 0; i < count; i++)
+    {
+        const fs_node_t* node = vfs_get_node(ids[i]);
+        if (!node)
+        {
+            frame->rax = (uint64_t)(int64_t)-5;
+            return 0;
+        }
+
+        size_t name_length = 0U;
+        while (name_length <= FS_NAME_MAX && node->name[name_length])
+            name_length++;
+        if (name_length == 0U || name_length > FS_NAME_MAX)
+        {
+            frame->rax = (uint64_t)(int64_t)-5;
+            return 0;
+        }
+
+        size_t suffix = node->type == FS_NODE_DIRECTORY ? 1U : 0U;
+        if (used + name_length + suffix + 1U >= capacity)
+        {
+            frame->rax = (uint64_t)(int64_t)-22;
+            return 0;
+        }
+        for (size_t j = 0; j < name_length; j++)
+            output[used++] = node->name[j];
+        if (suffix)
+            output[used++] = '/';
+        output[used++] = '\n';
+    }
+
+    if (used >= capacity)
+    {
+        frame->rax = (uint64_t)(int64_t)-22;
+        return 0;
+    }
+    output[used] = '\0';
+    for (size_t i = 0; i <= used; i++)
+        ((char*)buffer_address)[i] = output[i];
+
+    frame->rax = (uint64_t)used;
+    return 0;
+}
+
+static int syscall_terminal_control(struct exception_frame* frame,
+                                    uint64_t operation)
+{
+    (void)frame;
+    if (operation == USER_SYSCALL_TERMINAL_BEGIN_INPUT)
+        terminal_begin_input();
+    else if (operation == USER_SYSCALL_TERMINAL_BACKSPACE)
+        terminal_backspace();
+    else if (operation == USER_SYSCALL_TERMINAL_CLEAR)
+        terminal_reset();
+    terminal_process_mark_redraw();
+    frame->rax = 0U;
+    return 0;
 }
 
 /*
@@ -402,6 +558,16 @@ static int syscall_dispatch(struct exception_frame* frame)
             return syscall_spawn(frame, &process);
         case USER_SYSCALL_WAITPID:
             return syscall_waitpid(frame, &process);
+        case USER_SYSCALL_READ_CHAR:
+            return syscall_read_char(frame);
+        case USER_SYSCALL_YIELD:
+            return syscall_yield(frame);
+        case USER_SYSCALL_LISTDIR:
+            return syscall_listdir(frame, &process);
+        case USER_SYSCALL_TERMINAL_BEGIN_INPUT:
+        case USER_SYSCALL_TERMINAL_BACKSPACE:
+        case USER_SYSCALL_TERMINAL_CLEAR:
+            return syscall_terminal_control(frame, frame->rax);
         default:
             frame->rax = (uint64_t)(int64_t)-38;
             return 0;

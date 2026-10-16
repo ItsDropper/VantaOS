@@ -11,7 +11,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define VANTA_USER_ABI_VERSION 1U
+#define VANTA_USER_ABI_VERSION 2U
 
 #define VANTA_SYS_EXIT          0U
 #define VANTA_SYS_WRITE         1U
@@ -21,6 +21,12 @@
 #define VANTA_SYS_CLOSE         5U
 #define VANTA_SYS_SPAWN         6U
 #define VANTA_SYS_WAITPID       7U
+#define VANTA_SYS_READ_CHAR     8U
+#define VANTA_SYS_YIELD          9U
+#define VANTA_SYS_LISTDIR       10U
+#define VANTA_SYS_TERMINAL_BEGIN_INPUT 11U
+#define VANTA_SYS_TERMINAL_BACKSPACE   12U
+#define VANTA_SYS_TERMINAL_CLEAR      13U
 
 #define VANTA_OPEN_READ 1
 
@@ -58,6 +64,37 @@ static inline long vanta_console_write(const void* buffer, size_t length)
 {
     return vanta_syscall3(VANTA_SYS_CONSOLE_WRITE,
                           (uintptr_t)buffer, (uintptr_t)length, 0U);
+}
+
+static inline long vanta_read_char(void)
+{
+    return vanta_syscall3(VANTA_SYS_READ_CHAR, 0U, 0U, 0U);
+}
+
+static inline long vanta_yield(void)
+{
+    return vanta_syscall3(VANTA_SYS_YIELD, 0U, 0U, 0U);
+}
+
+static inline long vanta_listdir(const char* path, char* buffer, size_t capacity)
+{
+    return vanta_syscall3(VANTA_SYS_LISTDIR, (uintptr_t)path,
+                          (uintptr_t)buffer, (uintptr_t)capacity);
+}
+
+static inline long vanta_terminal_begin_input(void)
+{
+    return vanta_syscall3(VANTA_SYS_TERMINAL_BEGIN_INPUT, 0U, 0U, 0U);
+}
+
+static inline long vanta_terminal_backspace(void)
+{
+    return vanta_syscall3(VANTA_SYS_TERMINAL_BACKSPACE, 0U, 0U, 0U);
+}
+
+static inline long vanta_terminal_clear(void)
+{
+    return vanta_syscall3(VANTA_SYS_TERMINAL_CLEAR, 0U, 0U, 0U);
 }
 
 static inline long vanta_open(const char* path, int flags)

@@ -8,6 +8,18 @@ make clean
 echo "==> Building kernel..."
 make
 
+echo "==> Building the ring-3 Terminal ELF..."
+gcc -m64 -mcmodel=large -ffreestanding -fno-pie -fno-stack-protector \
+    -mno-red-zone -fno-builtin -nostdlib -Wall -Wextra -Werror \
+    -Iuserspace/include -c userspace/crt/crt0.S -o /tmp/vantaos-terminal-crt0.o
+gcc -m64 -mcmodel=large -ffreestanding -fno-pie -fno-stack-protector \
+    -mno-red-zone -fno-builtin -nostdlib -Wall -Wextra -Werror \
+    -Iuserspace/include -c userspace/apps/terminal.c -o /tmp/vantaos-terminal.o
+ld -m elf_x86_64 -static -nostdlib -Ttext-segment=0x8000000000 \
+    -e _start -o /tmp/vantaos-terminal.elf \
+    /tmp/vantaos-terminal-crt0.o /tmp/vantaos-terminal.o
+test -s /tmp/vantaos-terminal.elf
+
 echo "==> Preparing ISO..."
 rm -rf isodir/boot/kernel.bin
 cp kernel.bin isodir/boot/kernel.bin
@@ -46,10 +58,14 @@ if command -v mkfs.fat >/dev/null 2>&1; then
             echo "    Installed /$path"
         }
 
+        mcopy -o -i vantaos.img /tmp/vantaos-terminal.elf ::/TERMINAL.ELF >/dev/null
+        echo "    Installed /TERMINAL.ELF (static ring-3 application)"
+
         install_system_file "system/terminal.vx" \
             "VANTA EXECUTABLE" \
             "name=Terminal" \
-            "entry=terminal" \
+            "entry=/TERMINAL.ELF" \
+            "format=ELF64" \
             "version=1"
 
         install_system_file "system/drivers/ata.sys" \

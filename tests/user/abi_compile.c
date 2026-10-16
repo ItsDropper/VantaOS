@@ -13,6 +13,13 @@ long vanta_user_abi_compile_check(
         result += vanta_close((int)fd);
     }
 
+    result += vanta_read_char();
+    result += vanta_yield();
+    result += vanta_listdir(path, buffer, 1U);
+    result += vanta_terminal_begin_input();
+    result += vanta_terminal_backspace();
+    result += vanta_terminal_clear();
+
     long child = vanta_spawn(path, argv, 1U);
     if (child > 0)
         result += vanta_waitpid((int)child, status);

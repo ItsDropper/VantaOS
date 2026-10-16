@@ -266,8 +266,9 @@ static int syscall_read_char(struct exception_frame* frame)
         }
     }
 
-    frame->rax = keyboard_has_char() ?
-        (uint64_t)(unsigned char)keyboard_get_char() : 0U;
+    char character = keyboard_has_char() ? keyboard_get_char() : 0;
+    frame->rax = terminal_process_input_enabled() ?
+        (uint64_t)(unsigned char)character : 0U;
     return 0;
 }
 

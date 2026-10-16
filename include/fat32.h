@@ -28,6 +28,8 @@ int fat32_read_file(
     char* buffer,
     unsigned int capacity
 );
+int fat32_read_file_range(uint32_t first_cluster, uint32_t size,
+                          uint32_t offset, char* buffer, uint32_t length);
 
 int fat32_create_file(const char* path);
 int fat32_write_file(const char* path, const char* data, uint32_t size);

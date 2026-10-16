@@ -3,71 +3,101 @@
 .type _start, @function
 
 _start:
-    mov (%rsp), %rax
+    mov $3, %eax
+    lea file_path(%rip), %rdi
+    mov $1, %esi
+    int $0x80
     cmp $3, %rax
-    jne argv_fail
+    jl file_fail
+    mov %rax, %r12
 
-    mov 16(%rsp), %rdi
-    cmpb $'a', 0(%rdi)
-    jne argv_fail
-    cmpb $'a', 4(%rdi)
-    jne argv_fail
-    cmpb $0, 5(%rdi)
-    jne argv_fail
+    /* Invalid user destination must fail before consuming file bytes. */
+    mov $4, %eax
+    mov %r12, %rdi
+    mov $0x7ffffffff000, %rsi
+    mov $(fixture_end - fixture), %edx
+    int $0x80
+    cmp $-14, %rax
+    jne file_fail
 
-    mov 24(%rsp), %rdi
-    cmpb $'t', 0(%rdi)
-    jne argv_fail
-    cmpb $' ', 3(%rdi)
-    jne argv_fail
-    cmpb $'w', 4(%rdi)
-    jne argv_fail
-    cmpb $0, 9(%rdi)
-    jne argv_fail
+    mov $4, %eax
+    mov %r12, %rdi
+    lea file_buffer(%rip), %rsi
+    mov $(fixture_end - fixture), %edx
+    int $0x80
+    cmp $(fixture_end - fixture), %rax
+    jne file_fail
+
+    lea file_buffer(%rip), %rsi
+    lea fixture(%rip), %rdi
+    mov $(fixture_end - fixture), %ecx
+compare_fixture:
+    test %ecx, %ecx
+    jz fixture_matches
+    movb (%rsi), %al
+    cmpb (%rdi), %al
+    jne file_fail
+    inc %rsi
+    inc %rdi
+    dec %ecx
+    jmp compare_fixture
+
+fixture_matches:
+    mov $5, %eax
+    mov %r12, %rdi
+    int $0x80
+    test %rax, %rax
+    jne file_fail
+
+    /* Invalid descriptors are rejected deterministically. */
+    mov $5, %eax
+    mov $99, %edi
+    int $0x80
+    cmp $-9, %rax
+    jne file_fail
+
+    mov $3, %eax
+    lea missing_path(%rip), %rdi
+    mov $1, %esi
+    int $0x80
+    cmp $-2, %rax
+    jne file_fail
 
     mov $1, %eax
-    lea argv_message(%rip), %rdi
-    mov $(argv_message_end - argv_message), %esi
+    lea file_success(%rip), %rdi
+    mov $(file_success_end - file_success), %esi
     int $0x80
-
-    mov $1, %eax
-    lea serial_message(%rip), %rdi
-    mov $(serial_message_end - serial_message), %esi
-    int $0x80
-
-    mov $2, %eax
-    lea terminal_message(%rip), %rdi
-    mov $(terminal_message_end - terminal_message), %esi
-    int $0x80
-
     xor %eax, %eax
     int $0x80
     ud2
 
-argv_fail:
+file_fail:
     mov $1, %eax
-    lea argv_failure(%rip), %rdi
-    mov $(argv_failure_end - argv_failure), %esi
+    lea file_failure(%rip), %rdi
+    mov $(file_failure_end - file_failure), %esi
     int $0x80
     xor %eax, %eax
     int $0x80
     ud2
 
 .section .rodata
-argv_message:
-    .ascii "VANTAOS_ARGV_STACK_OK\n"
-argv_message_end:
+file_path:
+    .asciz "/USERDATA.TXT"
+missing_path:
+    .asciz "/NO-SUCH-FILE.TXT"
+fixture:
+    .ascii "VANTAOS_USER_FILE_FIXTURE\n"
+fixture_end:
+file_success:
+    .ascii "VANTAOS_USER_FILE_IO_OK\n"
+file_success_end:
+file_failure:
+    .ascii "VANTAOS_USER_FILE_IO_FAIL\n"
+file_failure_end:
 
-argv_failure:
-    .ascii "VANTAOS_ARGV_STACK_FAIL\n"
-argv_failure_end:
-
-serial_message:
-    .ascii "VANTAOS_FILESYSTEM_EXEC_OK\n"
-serial_message_end:
-
-terminal_message:
-    .ascii "VantaOS userspace received argv and is running.\n"
-terminal_message_end:
+.section .bss
+.align 16
+file_buffer:
+    .skip fixture_end - fixture
 
 .section .note.GNU-stack,"",@progbits

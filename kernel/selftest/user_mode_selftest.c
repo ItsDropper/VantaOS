@@ -13,6 +13,8 @@
 #define USER_TEST_KERNEL_ADDRESS 0x00100000ULL
 #define USER_TEST_SYSCALL_MODE 1U
 #define USER_TEST_PROTECTION_MODE 2U
+#define USER_TEST_GS_MODE 3U
+#define IA32_GS_BASE_MSR 0xC0000101U
 #define USER_TEST_KERNEL_STACK_SIZE 16384U
 #define IDENTITY_MAP_LIMIT 0x40000000ULL
 
@@ -31,6 +33,7 @@ static volatile uint32_t user_test_active;
 static volatile uint32_t user_test_mode;
 static volatile uint32_t user_test_syscall_seen;
 static volatile uint32_t user_test_protection_fault_seen;
+static volatile uint32_t user_test_gs_fault_seen;
 static volatile uint32_t user_test_unexpected;
 
 static void write_hex(uint64_t value)
@@ -98,6 +101,11 @@ int user_mode_selftest_handle_exception(unsigned int number,
          * the known kernel continuation so CI reports the fault instead of
          * hanging without a useful serial trace.
          */
+        uint32_t low, high;
+        __asm__ volatile ("rdmsr" : "=a"(low), "=d"(high)
+                          : "c"(IA32_GS_BASE_MSR));
+        if ((low | high) == 0U)
+            __asm__ volatile ("swapgs" ::: "memory");
         __atomic_store_n(&user_test_unexpected, 1U, __ATOMIC_RELEASE);
         serial_write("VANTAOS_RING3_KERNEL_EXCEPTION number=");
         write_hex(number);
@@ -123,6 +131,12 @@ int user_mode_selftest_handle_exception(unsigned int number,
         __atomic_store_n(&user_test_protection_fault_seen, 1U,
                          __ATOMIC_RELEASE);
     }
+    else if (mode == USER_TEST_GS_MODE && number == 14U &&
+             fault_address == 0U &&
+             (frame->error_code & 0x5U) == 0x4U)
+    {
+        __atomic_store_n(&user_test_gs_fault_seen, 1U, __ATOMIC_RELEASE);
+    }
     else
     {
         __atomic_store_n(&user_test_unexpected, 1U, __ATOMIC_RELEASE);
@@ -139,22 +153,31 @@ static int run_user_probe(unsigned int mode,
     __atomic_store_n(&user_mode_test_exit_requested, 0U, __ATOMIC_RELAXED);
     __atomic_store_n(&user_test_syscall_seen, 0U, __ATOMIC_RELAXED);
     __atomic_store_n(&user_test_protection_fault_seen, 0U, __ATOMIC_RELAXED);
+    __atomic_store_n(&user_test_gs_fault_seen, 0U, __ATOMIC_RELAXED);
     __atomic_store_n(&user_test_unexpected, 0U, __ATOMIC_RELAXED);
     __atomic_store_n(&user_test_mode, mode, __ATOMIC_RELEASE);
     __atomic_store_n(&user_test_active, 1U, __ATOMIC_RELEASE);
 
     serial_write(mode == USER_TEST_SYSCALL_MODE ?
         "VANTAOS_RING3_ENTER_SYSCALL\n" :
-        "VANTAOS_RING3_ENTER_ISOLATION\n");
+        (mode == USER_TEST_GS_MODE ?
+         "VANTAOS_RING3_ENTER_GS_ISOLATION\n" :
+         "VANTAOS_RING3_ENTER_ISOLATION\n"));
     user_mode_test_enter((uintptr_t)PAGING_USER_BASE, user_stack_top);
     serial_write(mode == USER_TEST_SYSCALL_MODE ?
         "VANTAOS_RING3_RETURN_SYSCALL\n" :
-        "VANTAOS_RING3_RETURN_ISOLATION\n");
+        (mode == USER_TEST_GS_MODE ?
+         "VANTAOS_RING3_RETURN_GS_ISOLATION\n" :
+         "VANTAOS_RING3_RETURN_ISOLATION\n"));
 
     __atomic_store_n(&user_test_active, 0U, __ATOMIC_RELEASE);
     __atomic_store_n(&user_mode_test_exit_requested, 0U, __ATOMIC_RELEASE);
     if (mode == USER_TEST_SYSCALL_MODE)
         return __atomic_load_n(&user_test_syscall_seen, __ATOMIC_ACQUIRE) != 0U &&
+               __atomic_load_n(&user_test_unexpected, __ATOMIC_ACQUIRE) == 0U;
+
+    if (mode == USER_TEST_GS_MODE)
+        return __atomic_load_n(&user_test_gs_fault_seen, __ATOMIC_ACQUIRE) != 0U &&
                __atomic_load_n(&user_test_unexpected, __ATOMIC_ACQUIRE) == 0U;
 
     return __atomic_load_n(&user_test_protection_fault_seen,
@@ -172,6 +195,7 @@ int user_mode_selftest_run(void)
     int stack_mapped = 0;
     int syscall_ok = 0;
     int isolation_ok = 0;
+    int gs_ok = 0;
     int ok = space != NULL && code_frame != NULL && stack_frame != NULL;
     const uint32_t cpu_id = process_current_cpu_id();
 
@@ -236,7 +260,19 @@ int user_mode_selftest_run(void)
             USER_TEST_PROTECTION_MODE,
             (uintptr_t)(PAGING_USER_BASE + 2U * PAGE_SIZE - 16U));
     }
-    ok = ok && syscall_ok && isolation_ok;
+    if (space && code_mapped && stack_mapped &&
+        paging_get_current_address_space() == space)
+    {
+        /* mov rax, qword ptr gs:[0]; a user GS base of zero must fault at VA 0. */
+        static const uint8_t gs_program[] = {
+            0x65, 0x48, 0x8B, 0x04, 0x25, 0x00, 0x00, 0x00, 0x00
+        };
+        copy_bytes(code_frame, gs_program, sizeof(gs_program));
+        gs_ok = run_user_probe(
+            USER_TEST_GS_MODE,
+            (uintptr_t)(PAGING_USER_BASE + 2U * PAGE_SIZE - 16U));
+    }
+    ok = ok && syscall_ok && isolation_ok && gs_ok;
 
     /* Never destroy an address space while it is loaded in CR3. */
     if (paging_get_current_address_space() == space)
@@ -266,5 +302,8 @@ int user_mode_selftest_run(void)
     serial_write(isolation_ok ?
         "VANTAOS_RING3_KERNEL_ISOLATION_OK\n" :
         "VANTAOS_RING3_KERNEL_ISOLATION_FAIL\n");
+    serial_write(gs_ok ?
+        "VANTAOS_RING3_GS_ISOLATION_OK\n" :
+        "VANTAOS_RING3_GS_ISOLATION_FAIL\n");
     return ok;
 }

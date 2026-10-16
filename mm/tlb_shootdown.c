@@ -8,7 +8,6 @@
 #define TLB_SHOOTDOWN_SPIN_LIMIT 100000000U
 static volatile uint32_t tlb_shootdown_lock;
 static uint64_t tlb_shootdown_generation;
-static spinlock_t paging_mutation_lock = SPINLOCK_INITIALIZER;
 
 
 

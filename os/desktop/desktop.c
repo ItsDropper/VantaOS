@@ -102,13 +102,21 @@ static void terminal_window_draw(void)
     graphics_fill_rect(window_x + 1, window_y + 46, window_w - 2, 34, VANTA_UI_TOOLBAR);
     graphics_fill_rounded_rect(window_x + 14, window_y + 50, 156, 26, 6, VANTA_UI_HOVER);
     graphics_fill_rect(window_x + 24, window_y + 74, 136, 2, VANTA_UI_ACCENT);
-    graphics_draw_text(window_x + 28, window_y + 59, "Shell", 0x00E8EDF4, 1);
+    graphics_fill_rounded_rect(window_x + 22, window_y + 57, 12, 12, 3,
+                                VANTA_UI_ACCENT);
+    graphics_draw_text(window_x + 42, window_y + 59, "Shell", 0x00E8EDF4, 1);
     graphics_draw_text(window_x + 184, window_y + 59, "VantaOS", 0x007D8DA1, 1);
+    graphics_fill_rounded_rect(window_x + window_w - 116, window_y + 56,
+                                92, 18, 6, 0x00111A25);
+    graphics_fill_rounded_rect(window_x + window_w - 106, window_y + 62,
+                                5, 5, 3, 0x0069D6AE);
+    graphics_draw_text(window_x + window_w - 96, window_y + 61,
+                       "RUNNING", 0x009AAABD, 1);
 
     int content_x = window_x + 18;
     int content_y = window_y + 88;
     int content_w = window_w - 36;
-    int content_h = window_h - 104;
+    int content_h = window_h - 132;
 
     graphics_fill_rounded_rect(content_x, content_y, content_w, content_h, 5, VANTA_UI_DESKTOP);
 
@@ -147,6 +155,22 @@ static void terminal_window_draw(void)
         graphics_fill_rect(cursor_x, cursor_y, 2, 8, 0x00F2F5F8);
         terminal_window_prompted = 0;
     }
+
+    /* A dedicated status strip keeps session state out of command output. */
+    int status_y = window_y + window_h - 32;
+    graphics_fill_rect(window_x + 1, status_y, window_w - 2, 31,
+                       VANTA_UI_TOOLBAR);
+    graphics_fill_rect(window_x + 1, status_y, window_w - 2, 1,
+                       0x002A3746);
+    graphics_draw_text(window_x + 18, status_y + 12, "SHELL",
+                       VANTA_UI_TEXT_SECONDARY, 1);
+    graphics_fill_rect(window_x + 65, status_y + 9, 1, 12,
+                       0x00334455);
+    graphics_draw_text(window_x + 78, status_y + 12,
+        scroll_offset == 0 ? "LIVE OUTPUT" : "SCROLLBACK VIEW",
+        VANTA_UI_TEXT_SECONDARY, 1);
+    graphics_draw_text(window_x + window_w - 112, status_y + 12,
+        "UTF-8  |  x86_64", VANTA_UI_TEXT_SECONDARY, 1);
 
     graphics_draw_cursor();
 }

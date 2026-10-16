@@ -2,6 +2,8 @@
 
 #define ATA_CMD_IDENTIFY 0xEC
 #define ATA_CMD_READ_PIO 0x20
+#define ATA_CMD_WRITE_PIO 0x30
+#define ATA_CMD_CACHE_FLUSH 0xE7
 
 #define ATA_STATUS_BSY   0x80
 #define ATA_STATUS_DRQ   0x08
@@ -264,5 +266,65 @@ int ata_read_sectors(
     }
 
     ata_wait_400ns(&active_channel);
+    return 1;
+}
+
+
+/*
+ * PIO writes are deliberately a low-level primitive. FAT32 must own cluster
+ * allocation, directory-entry updates, and ordering before this can be used
+ * to advertise general filesystem writes or durable user settings.
+ */
+int ata_write_sectors(uint32_t lba, uint8_t count, const void* buffer)
+{
+    if (!available || count == 0 || !buffer)
+        return 0;
+
+    /* LBA28 addresses sectors 0..0x0fffffff; reject arithmetic overflow. */
+    if (lba > 0x0FFFFFFFU ||
+        (uint32_t)count - 1U > 0x0FFFFFFFU - lba)
+        return 0;
+
+    const uint8_t* source = (const uint8_t*)buffer;
+
+    outb(active_channel.base + 6,
+         (uint8_t)(active_drive |
+                   0x40U |
+                   ((lba >> 24) & 0x0FU)));
+    ata_wait_400ns(&active_channel);
+
+    outb(active_channel.base + 2, count);
+    outb(active_channel.base + 3, (uint8_t)lba);
+    outb(active_channel.base + 4, (uint8_t)(lba >> 8));
+    outb(active_channel.base + 5, (uint8_t)(lba >> 16));
+    outb(active_channel.base + 7, ATA_CMD_WRITE_PIO);
+
+    for (unsigned int sector = 0; sector < count; sector++)
+    {
+        if (!ata_wait_not_busy(&active_channel) ||
+            !ata_wait_data(&active_channel))
+            return 0;
+
+        for (unsigned int word = 0; word < 256; word++)
+        {
+            uint16_t value =
+                (uint16_t)source[sector * 512U + word * 2U] |
+                ((uint16_t)source[sector * 512U + word * 2U + 1U] << 8);
+            __asm__ volatile (
+                "outw %0, %1"
+                :
+                : "a"(value), "Nd"(active_channel.base)
+            );
+        }
+        ata_wait_400ns(&active_channel);
+    }
+
+    if (!ata_wait_not_busy(&active_channel))
+        return 0;
+
+    outb(active_channel.base + 7, ATA_CMD_CACHE_FLUSH);
+    if (!ata_wait_not_busy(&active_channel))
+        return 0;
+
     return 1;
 }

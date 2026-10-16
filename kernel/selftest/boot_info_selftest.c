@@ -9,7 +9,6 @@
 #include "vanta_boot_info.h"
 
 #ifdef VANTAOS_SELF_TEST
-#ifdef VANTAOS_SELF_TEST
 static multiboot_memory_map_t boot_info_test_map[2];
 
 static void boot_info_adapter_probe(const vanta_boot_info_t* normalized)
@@ -77,7 +76,7 @@ static void boot_info_adapter_probe(const vanta_boot_info_t* normalized)
         normalized->struct_size == sizeof(vanta_boot_info_t) &&
         normalized->version == VANTA_BOOT_INFO_VERSION &&
         (normalized->source == VANTA_BOOT_SOURCE_MULTIBOOT1 ||
-         normalized_boot_info.source == VANTA_BOOT_SOURCE_UEFI) &&
+         normalized->source == VANTA_BOOT_SOURCE_UEFI) &&
         (normalized->flags & VANTA_BOOT_FLAG_MEMORY_MAP_VALID) != 0 &&
         normalized->memory_region_count > 0U && ok;
 

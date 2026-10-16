@@ -1,6 +1,6 @@
 #include <vanta/gui.h>
 
-#define SETTINGS_PATH "/VANTASET.CFG"
+#define SETTINGS_PATH "/SYSTEM/VANTASET.CFG"
 #define CONFIG_CAPACITY 128U
 #define WINDOW_WIDTH 560U
 #define WINDOW_HEIGHT 420U

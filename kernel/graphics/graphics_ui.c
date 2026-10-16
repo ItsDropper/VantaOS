@@ -100,10 +100,10 @@ void graphics_present(void)
 
     /* Top bar: product identity and a clear workspace label. */
     graphics_draw_vanta_logo(18, 8, 17);
-    graphics_draw_text(43, 12, "VANTAOS", 0x00E5EBF2, 1);
-    graphics_draw_text(128, 12, "WORKSPACE", 0x007D8DA1, 1);
+    graphics_draw_text(43, 12, "VantaOS", 0x00E5EBF2, 1);
+    graphics_draw_text(128, 12, "Workspace", 0x007D8DA1, 1);
     graphics_fill_rounded_rect(w - 112, 8, 94, 17, 6, 0x001B2633);
-    graphics_draw_text(w - 100, 13, "DESKTOP", 0x00AAB8C8, 1);
+    graphics_draw_text(w - 100, 13, "Desktop", 0x00AAB8C8, 1);
 
     /* App shortcuts retain their established input regions. */
     graphics_fill_rounded_rect(24, 26, 88, 82, 12,
@@ -111,21 +111,21 @@ void graphics_present(void)
     graphics_fill_rounded_rect(48, 43, 40, 34, 8, 0x00202F40);
     graphics_fill_rounded_rect(54, 49, 28, 22, 5, 0x004B9CFF);
     graphics_fill_rect(54, 46, 13, 4, 0x0079B8FF);
-    graphics_draw_text(45, 87, "SYSTEM", 0x00D8E1EB, 1);
+    graphics_draw_text(45, 87, "System", 0x00D8E1EB, 1);
 
     graphics_fill_rounded_rect(120, 26, 88, 82, 12,
         active_panel == 2 ? 0x00202D3B : 0x00101822);
     graphics_fill_rounded_rect(144, 43, 40, 34, 8, 0x00202F40);
     graphics_fill_rounded_rect(150, 50, 28, 21, 5, 0x0056B98A);
     graphics_fill_rect(150, 47, 13, 4, 0x0082D7AB);
-    graphics_draw_text(149, 87, "FILES", 0x00D8E1EB, 1);
+    graphics_draw_text(149, 87, "Files", 0x00D8E1EB, 1);
 
     graphics_fill_rounded_rect(216, 26, 88, 82, 12,
         active_panel == 3 ? 0x00202D3B : 0x00101822);
     graphics_fill_rounded_rect(240, 43, 40, 34, 8, 0x00202F40);
     graphics_fill_rounded_rect(246, 48, 28, 24, 5, 0x000B1119);
     graphics_draw_text(250, 56, ">_", 0x0079B8FF, 1);
-    graphics_draw_text(229, 87, "TERMINAL", 0x00D8E1EB, 1);
+    graphics_draw_text(229, 87, "Terminal", 0x00D8E1EB, 1);
 
     graphics_draw_text(24, h - 88, "VANTAOS", 0x003D5268, 1);
     graphics_draw_text(24, h - 72, "LOCAL SESSION", 0x004A6075, 1);
@@ -141,10 +141,10 @@ void graphics_present(void)
         graphics_fill_rounded_rect(wx, wy, ww, wh, 14, 0x00151B25);
         graphics_fill_rounded_rect(wx, wy, ww, 46, 14, 0x001D2633);
         graphics_fill_rect(wx + 1, wy + 45, ww - 2, 1, 0x00293443);
-        graphics_draw_text(wx + 24, wy + 16, "SETTINGS", 0x00F0F4F8, 2);
+        graphics_draw_text(wx + 24, wy + 16, "Settings", 0x00F0F4F8, 2);
         graphics_draw_text(wx + ww - 28, wy + 16, "X", 0x00D3DDE7, 1);
-        graphics_draw_text(wx + 28, wy + 82, "DISPLAY", 0x0079B8FF, 1);
-        graphics_draw_text(wx + 28, wy + 112, "RESOLUTION", 0x0093A3B5, 1);
+        graphics_draw_text(wx + 28, wy + 82, "Display", 0x0079B8FF, 1);
+        graphics_draw_text(wx + 28, wy + 112, "Resolution", 0x0093A3B5, 1);
         const char* labels[3] = {"800X600", "1024X768", "1280X720"};
         for (int i = 0; i < 3; i++)
         {
@@ -158,13 +158,13 @@ void graphics_present(void)
                     0x0079B8FF);
             graphics_draw_text(bx + 14, wy + 160, labels[i], 0x00E5EBF2, 1);
         }
-        graphics_draw_text(wx + 28, wy + 222, "DISPLAY MODE", 0x0093A3B5, 1);
-        graphics_draw_text(wx + 190, wy + 222, "VBE FRAMEBUFFER", 0x00DCE5EE, 1);
+        graphics_draw_text(wx + 28, wy + 222, "Display mode", 0x0093A3B5, 1);
+        graphics_draw_text(wx + 190, wy + 222, "VBE framebuffer", 0x00DCE5EE, 1);
         graphics_fill_rect(wx + 28, wy + 250, ww - 56, 1, 0x00293443);
-        graphics_draw_text(wx + 28, wy + 274, "APPEARANCE", 0x0079B8FF, 1);
-        graphics_draw_text(wx + 28, wy + 306, "Corner style", 0x0093A3B5, 1);
-        graphics_draw_text(wx + 190, wy + 306, "Rounded", 0x00DCE5EE, 1);
-        graphics_draw_text(wx + 28, wy + 354, "Changes apply immediately when supported.", 0x006E8094, 1);
+        graphics_draw_text(wx + 28, wy + 274, "Appearance", 0x0079B8FF, 1);
+        graphics_draw_text(wx + 28, wy + 306, "Window style", 0x0093A3B5, 1);
+        graphics_draw_text(wx + 190, wy + 306, "Rounded corners", 0x00DCE5EE, 1);
+        graphics_draw_text(wx + 28, wy + 354, "Display changes apply immediately when supported.", 0x006E8094, 1);
     }
 
     if (active_panel == 1)
@@ -174,13 +174,13 @@ void graphics_present(void)
 
         graphics_draw_panel(wx, wy, ww, wh);
         graphics_draw_vanta_logo(wx + 24, wy + 60, 30);
-        graphics_draw_text(wx + 68, wy + 68, "SYSTEM", 0x00F0F4F8, 2);
+        graphics_draw_text(wx + 68, wy + 68, "System", 0x00F0F4F8, 2);
         graphics_draw_text(wx + ww - 28, wy + 16, "X", 0x00D3DDE7, 1);
 
-        graphics_draw_text(wx + 28, wy + 108, "SYSTEM OVERVIEW", 0x0079B8FF, 1);
+        graphics_draw_text(wx + 28, wy + 108, "System overview", 0x0079B8FF, 1);
         graphics_fill_rect(wx + 28, wy + 132, ww - 56, 1, 0x00293443);
         graphics_draw_text(wx + 28, wy + 154, "Architecture", 0x008A9BAD, 1);
-        graphics_draw_text(wx + 190, wy + 154, "x86 32-bit", 0x00E0E7EF, 1);
+        graphics_draw_text(wx + 190, wy + 154, "x86_64", 0x00E0E7EF, 1);
         graphics_draw_text(wx + 28, wy + 180, "Kernel", 0x008A9BAD, 1);
         graphics_draw_text(wx + 190, wy + 180, "VantaOS", 0x00E0E7EF, 1);
         graphics_draw_text(wx + 28, wy + 206, "Display", 0x008A9BAD, 1);
@@ -200,7 +200,7 @@ void graphics_present(void)
         resolution[13]=0;
         graphics_draw_text(wx + 190, wy + 206, resolution, 0x00E0E7EF, 1);
 
-        graphics_draw_text(wx + 28, wy + 238, "MEMORY", 0x0079B8FF, 1);
+        graphics_draw_text(wx + 28, wy + 238, "SERVICES", 0x0079B8FF, 1);
         graphics_fill_rect(wx + 28, wy + 262, ww - 56, 1, 0x00293443);
         graphics_draw_text(wx + 28, wy + 282, "Filesystem", 0x008A9BAD, 1);
         graphics_draw_text(wx + 190, wy + 282,
@@ -211,7 +211,7 @@ void graphics_present(void)
             process_is_initialized() ? "process manager ready" : "not initialized",
             0x00E0E7EF, 1);
 
-        graphics_draw_text(wx + 28, wy + 346, "SYSTEM PATHS", 0x0079B8FF, 1);
+        graphics_draw_text(wx + 28, wy + 346, "System paths", 0x0079B8FF, 1);
         graphics_fill_rect(wx + 28, wy + 370, ww - 56, 1, 0x00293443);
         graphics_draw_text(wx + 28, wy + 390, "/system/version", 0x00C5D1DE, 1);
         graphics_draw_text(wx + 28, wy + 412, "/system/kernel", 0x00C5D1DE, 1);
@@ -239,18 +239,40 @@ void graphics_present(void)
         graphics_fill_rounded_rect(mx, my, menu_w, 48, 14, 0x001D2633);
         graphics_fill_rect(mx + 1, my + 47, menu_w - 2, 1, 0x00293443);
         graphics_draw_vanta_logo(mx + 22, my + 14, 27);
-        graphics_draw_text(mx + 62, my + 20, "VANTAOS", 0x00F0F4F8, 1);
-        graphics_draw_text(mx + 24, my + 76, "APPLICATIONS", 0x007D8DA1, 1);
+        graphics_draw_text(mx + 62, my + 20, "VantaOS", 0x00F0F4F8, 1);
+        graphics_draw_text(mx + 24, my + 76, "Pinned apps", 0x007D8DA1, 1);
 
+        /* Consistent app rows: names, concise descriptions and distinct
+           icon surfaces. The hitboxes in graphics_input.c match these rows. */
         graphics_fill_rounded_rect(mx + 24, my + 110, menu_w - 48, 50, 9, 0x001F2B38);
-        graphics_draw_text(mx + 42, my + 128, "TERMINAL", 0x00E5EBF2, 1);
+        graphics_fill_rounded_rect(mx + 36, my + 121, 28, 28, 7, 0x00202F40);
+        graphics_draw_text(mx + 43, my + 132, ">_", 0x0079B8FF, 1);
+        graphics_draw_text(mx + 76, my + 121, "Terminal", 0x00E5EBF2, 1);
+        graphics_draw_text(mx + 76, my + 138, "Run commands and tools", 0x008A9BAD, 1);
+
         graphics_fill_rounded_rect(mx + 24, my + 164, menu_w - 48, 50, 9, 0x001F2B38);
-        graphics_draw_text(mx + 42, my + 182, "FILES", 0x00E5EBF2, 1);
+        graphics_fill_rounded_rect(mx + 36, my + 175, 28, 28, 7, 0x00202F40);
+        graphics_fill_rounded_rect(mx + 42, my + 184, 16, 12, 3, 0x0056B98A);
+        graphics_fill_rect(mx + 44, my + 181, 8, 4, 0x0082D7AB);
+        graphics_draw_text(mx + 76, my + 175, "Files", 0x00E5EBF2, 1);
+        graphics_draw_text(mx + 76, my + 192, "Browse files and folders", 0x008A9BAD, 1);
+
         graphics_fill_rounded_rect(mx + 24, my + 218, menu_w - 48, 50, 9, 0x001F2B38);
-        graphics_draw_text(mx + 42, my + 236, "SYSTEM", 0x00E5EBF2, 1);
+        graphics_fill_rounded_rect(mx + 36, my + 229, 28, 28, 7, 0x00202F40);
+        graphics_fill_rounded_rect(mx + 42, my + 235, 16, 16, 4, 0x003B82F6);
+        graphics_draw_text(mx + 47, my + 240, "i", 0x00FFFFFF, 1);
+        graphics_draw_text(mx + 76, my + 229, "System", 0x00E5EBF2, 1);
+        graphics_draw_text(mx + 76, my + 246, "Kernel and service status", 0x008A9BAD, 1);
+
         graphics_fill_rounded_rect(mx + 24, my + 272, menu_w - 48, 50, 9, 0x001F2B38);
-        graphics_draw_text(mx + 42, my + 290, "SETTINGS", 0x00E5EBF2, 1);
-        graphics_draw_text(mx + 24, my + menu_h - 34, "BUILT-IN APPLICATIONS", 0x006E8094, 1);
+        graphics_fill_rounded_rect(mx + 36, my + 283, 28, 28, 7, 0x00202F40);
+        graphics_fill_rounded_rect(mx + 43, my + 289, 14, 14, 3, 0x0093A3B5);
+        graphics_fill_rect(mx + 49, my + 286, 3, 20, 0x0093A3B5);
+        graphics_fill_rect(mx + 40, my + 295, 20, 3, 0x0093A3B5);
+        graphics_draw_text(mx + 76, my + 283, "Settings", 0x00E5EBF2, 1);
+        graphics_draw_text(mx + 76, my + 300, "Display and appearance", 0x008A9BAD, 1);
+        graphics_fill_rect(mx + 24, my + menu_h - 50, menu_w - 48, 1, 0x00293443);
+        graphics_draw_text(mx + 24, my + menu_h - 34, "Local session", 0x006E8094, 1);
     }
 
     graphics_draw_cursor();

@@ -46,7 +46,7 @@ CI builds `tests/user/hello.S`, installs the ELF as `/HELLO.ELF` in the disposab
 exec /HELLO.ELF alpha "two words"
 ```
 
-The user ELF checks its argument stack, then opens `/USERDATA.TXT`, verifies the fixture bytes, closes the descriptor, and checks invalid-pointer, invalid-descriptor, and missing-path errors. It emits `VANTAOS_USER_FILE_IO_OK` on success. CI installs the known fixture into the disposable FAT32 image and requires this marker in the QEMU regression matrix; UEFI/OVMF boot handoff remains a separate regression.
+The user ELF checks its argument stack, then opens `/USERDATA.TXT`, verifies the fixture bytes, closes the descriptor, and checks invalid-pointer, invalid-descriptor, oversized-read, and missing-path errors. It also fills all eight descriptor slots, verifies exhaustion, and exits with handles still open so process reaping exercises descriptor cleanup. It emits `VANTAOS_USER_FILE_IO_OK` on success. CI installs the known fixture into the disposable FAT32 image and requires this marker in the QEMU regression matrix; UEFI/OVMF boot handoff remains a separate regression.
 
 A passing smoke test verifies only this test program and execution path on the CI configurations. It does not prove arbitrary ELF compatibility, hostile-program isolation, real-hardware compatibility, or general syscall correctness.
 

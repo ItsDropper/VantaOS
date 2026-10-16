@@ -11,6 +11,7 @@
 #include "process.h"
 #include "cpu_local.h"
 #include "smp.h"
+#include "panic.h"
 #include "spinlock.h"
 #include "pmm.h"
 #include "serial.h"
@@ -961,8 +962,7 @@ static inline unsigned long long read_tsc(void)
 static _Noreturn void os_boot_fatal(const char* marker)
 {
     serial_write(marker);
-    for (;;)
-        __asm__ volatile ("cli; hlt" ::: "memory");
+    kernel_panic_halt_all();
 }
 
 void os_initialize(multiboot_info_t* mbd)

@@ -355,9 +355,15 @@ static int smp_scheduler_probe_initialize(void)
 
     for (uint32_t i = 0; i < smp_scheduler_probe_task_count; i++)
     {
-        if (process_create_kernel_any("smp-scheduler-probe",
+        /* Keep one probe on the BSP so AP participation is measured against it. */
+        int pid = i == 0U ?
+            process_create_kernel("smp-scheduler-probe-bsp",
+                                  process_current_pid(),
+                                  smp_scheduler_probe_entry) :
+            process_create_kernel_any("smp-scheduler-probe",
                                       process_current_pid(),
-                                      smp_scheduler_probe_entry) < 0)
+                                      smp_scheduler_probe_entry);
+        if (pid < 0)
         {
             serial_write("VANTAOS_SMP_SCHEDULER_STRESS_FAIL\n");
             return 0;

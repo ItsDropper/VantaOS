@@ -46,6 +46,19 @@ void gdt_initialize(void)
     /* Kernel data segment. Segmentation is effectively flat in long mode. */
     gdt_set_gate(2, 0, 0xFFFFFFFFU, 0x92U, 0x00U);
 
+    gdt_load();
+}
+
+/*
+ * Load the already-built shared GDT on the calling CPU.
+ *
+ * The descriptor table is shared by every CPU and must be immutable after
+ * the BSP publishes it. AP startup must load it, not rebuild it: rewriting
+ * descriptors while another CPU is taking an interrupt can expose a
+ * partially updated descriptor to that CPU.
+ */
+void gdt_load(void)
+{
     __asm__ volatile (
         "lgdt %0\n"
         "pushq $0x08\n"

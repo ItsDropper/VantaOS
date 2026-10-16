@@ -576,7 +576,8 @@ void os_run(void)
 
     serial_write("VANTAOS_BOOT_OK\n");
 #ifdef VANTAOS_SELF_TEST
-    if (smp_scheduler_probe_initialize())
+    /* The cross-CPU workload is meaningful only when an AP exists. */
+    if (smp_cpu_count() > 1U && smp_scheduler_probe_initialize())
         (void)smp_scheduler_probe_wait();
 #endif
     desktop_process_main();

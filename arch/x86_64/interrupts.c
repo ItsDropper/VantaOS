@@ -9,6 +9,7 @@ extern void irq0_stub(void);
 extern void irq1_stub(void);
 extern void irq12_stub(void);
 extern void apic_spurious_stub(void);
+extern void smp_wakeup_stub(void);
 
 #define DECLARE_EXCEPTION(n) extern void exception##n##_stub(void);
 DECLARE_EXCEPTION(0) DECLARE_EXCEPTION(1) DECLARE_EXCEPTION(2)
@@ -53,6 +54,7 @@ void interrupts_initialize(void)
     idt_set_gate(IRQ1_VECTOR, (uint64_t)(uintptr_t)irq1_stub, 0x08, 0x8E);
     idt_set_gate(IRQ12_VECTOR, (uint64_t)(uintptr_t)irq12_stub, 0x08, 0x8E);
     idt_set_gate(0xFF, (uint64_t)(uintptr_t)apic_spurious_stub, 0x08, 0x8E);
+    idt_set_gate(0xF1, (uint64_t)(uintptr_t)smp_wakeup_stub, 0x08, 0x8E);
 
     pic_remap();
     timer_initialize(100);

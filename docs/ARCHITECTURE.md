@@ -51,6 +51,7 @@ The two boot paths are not interchangeable evidence: a successful GRUB boot does
 | `fs/` | Filesystem namespace, FAT32 read path, and VFS handles. |
 | `os/terminal/` | Terminal, shell, and commands. |
 | `os/desktop/` | Desktop and file-explorer UI. |
+| `os/selftest/` | Test-only process, filesystem, allocator, and SMP regression probes; separate from boot orchestration. |
 | `include/` | Shared interfaces. |
 | `build/obj/` | Generated object/dependency tree; never edit generated files. |
 
@@ -83,6 +84,18 @@ Changes that cross these boundaries should be reviewed together with their calle
 - **Diagnostics:** serial markers are test interfaces. Emit a success marker only after its associated assertion passes.
 
 These are design constraints for review, not a claim that every edge case is already proven. See [Engineering model](ENGINEERING_MODEL.md) for the review questions.
+
+## Test-code boundaries
+
+`os/os.c` owns OS initialization order and the long-running desktop entry path. It should coordinate subsystems, not implement their regression fixtures. Test-only code lives under `os/selftest/`, divided by responsibility:
+
+- `process_selftest.c` — process lifecycle, API guards, and process-record invariants.
+- `filesystem_selftest.c` — VFS namespace and FAT32 integration checks.
+- `memory_selftest.c` — physical and heap allocator checks.
+- `smp_selftest.c` — cross-CPU scheduling, wakeup, and migration probes.
+- `selftest.h` — the narrow interface used by boot orchestration in explicit self-test builds.
+
+The self-test translation units are compiled in ordinary builds too, but their implementations are gated by `VANTAOS_SELF_TEST`. Add a probe to the subsystem-specific module rather than growing `os/os.c`. Keep success markers attached to assertions and registered in CI when they are required regressions.
 
 ## Diagnostics
 

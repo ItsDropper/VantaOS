@@ -421,7 +421,8 @@ static void smp_remote_wake_target_entry(void)
     {
         process_t snapshot;
         if (process_snapshot(pid, &snapshot) &&
-            snapshot.state == PROCESS_READY)
+            (snapshot.state == PROCESS_READY ||
+             snapshot.state == PROCESS_RUNNING))
         {
             __atomic_store_n(&smp_remote_wake_target_done, 1U,
                              __ATOMIC_RELEASE);

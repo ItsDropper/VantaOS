@@ -275,7 +275,7 @@ int paging_user_range_valid(paging_address_space_t* address_space,
         uint64_t* entry = paging_user_leaf_entry(address_space, page, 0);
         if (!entry || !(*entry & PAGE_PRESENT) ||
             !(*entry & PAGE_USER) ||
-            (writable && !(*entry & PAGE_WRITE))
+            (writable && !(*entry & PAGE_WRITE)))
             return 0;
 
         if (page == last_page)

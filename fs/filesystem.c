@@ -367,15 +367,64 @@ int filesystem_create_directory(const char* path)
 
 int filesystem_create_file(const char* path)
 {
-    (void)path;
-    return -2;
+    if (!initialized || !path || !fat32_is_mounted() ||
+        filesystem_lookup(path) >= 0)
+        return -1;
+
+    if (fat32_create_file(path) < 0)
+        return -1;
+
+    /* Cache the new on-disk entry so VFS lookups see it immediately. */
+    const char* slash = path;
+    const char* last = path;
+    while (*slash)
+    {
+        if (*slash == '/') last = slash;
+        slash++;
+    }
+    if (!last[1]) return -1;
+
+    char parent_path[FS_PATH_MAX];
+    unsigned int n = (unsigned int)(last - path);
+    if (n == 0) n = 1;
+    if (n >= sizeof(parent_path)) return -1;
+    for (unsigned int i = 0; i < n; i++) parent_path[i] = path[i];
+    parent_path[n] = 0;
+
+    int parent_id = filesystem_lookup(parent_path);
+    if (parent_id < 0) return -1;
+    return fs_add_node((uint32_t)parent_id, FS_NODE_FILE, last + 1, 0, 0);
 }
 
 int filesystem_write_file(const char* path, const char* data)
 {
-    (void)path;
-    (void)data;
-    return -2;
+    if (!initialized || !path || !data || !fat32_is_mounted())
+        return -1;
+
+    unsigned int size = 0;
+    while (data[size] && size < FS_FILE_MAX - 1U) size++;
+    if (data[size] != 0) return -1;
+
+    int id = filesystem_lookup(path);
+    if (id < 0)
+    {
+        if (filesystem_create_file(path) < 0) return -1;
+        id = filesystem_lookup(path);
+    }
+    if (id < 0 || nodes[id].type != FS_NODE_FILE) return -1;
+
+    if (fat32_write_file(path, data, size) < 0) return -1;
+
+    /* Refresh metadata from the on-disk directory entry via a root reload
+       is not safe for cached IDs; update the node using the FAT32 lookup. */
+    const char* name = path;
+    for (unsigned int i = 0; path[i]; i++)
+        if (path[i] == '/') name = path + i + 1;
+    (void)name;
+    nodes[id].size = size;
+    /* FAT32 writes replace the data cluster; re-enumerate parent directory
+       after invalidating its cached child nodes is a separate VFS task. */
+    return (int)size;
 }
 
 int filesystem_file_exists(const char* path)

@@ -254,3 +254,34 @@ int paging_unmap_user_page(paging_address_space_t* address_space,
     /* The caller owns the unmapped physical frame and must free it separately. */
     return 1;
 }
+
+
+int paging_user_range_valid(paging_address_space_t* address_space,
+                            uintptr_t virtual_address, size_t length,
+                            int writable)
+{
+    if (!paging_owns_address_space(address_space) || length == 0U ||
+        virtual_address < PAGING_USER_BASE ||
+        virtual_address > PAGING_USER_END ||
+        length - 1U > PAGING_USER_END - virtual_address)
+        return 0;
+
+    uintptr_t end = virtual_address + length - 1U;
+    uintptr_t page = virtual_address & ~(uintptr_t)(PAGE_SIZE - 1U);
+    const uintptr_t last_page = end & ~(uintptr_t)(PAGE_SIZE - 1U);
+
+    for (;;)
+    {
+        uint64_t* entry = paging_user_leaf_entry(address_space, page, 0);
+        if (!entry || !(*entry & PAGE_PRESENT) ||
+            !(*entry & PAGE_USER) ||
+            (writable && !(*entry & PAGE_WRITE))
+            return 0;
+
+        if (page == last_page)
+            return 1;
+        if (page > PAGING_USER_END - PAGE_SIZE)
+            return 0;
+        page += PAGE_SIZE;
+    }
+}

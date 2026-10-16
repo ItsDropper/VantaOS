@@ -46,7 +46,8 @@ The two boot paths are not interchangeable evidence: a successful GRUB boot does
 | `kernel/proc/` | Process table and lifecycle. |
 | `kernel/sched/` | Ready-process selection and scheduling. |
 | `kernel/time/` | Timer subsystem. |
-| `mm/` | Heap, physical-memory bookkeeping, and paging. |
+| `mm/` | Heap, physical-memory bookkeeping, page-table/address-space operations, and TLB invalidation. |
+| `mm/paging_tlb.c` | Serialized cross-CPU TLB-shootdown protocol and its IPI acknowledgement handler. |
 | `drivers/` | Keyboard/mouse input, PCI enumeration, and ATA storage driver code. |
 | `fs/` | Filesystem namespace, FAT32 read path, and VFS handles. |
 | `os/terminal/` | Terminal, shell, and commands. |

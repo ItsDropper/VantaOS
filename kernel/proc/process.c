@@ -17,7 +17,7 @@ process_t processes[PROCESS_MAX];
 uint8_t process_stacks[PROCESS_MAX][PROCESS_STACK_SIZE]
     __attribute__((aligned(16)));
 
-int initialized;
+int process_initialized_state;
 uint32_t legacy_current_pid;
 
 spinlock_t process_table_lock = SPINLOCK_INITIALIZER;
@@ -209,7 +209,7 @@ static void process_prepare_stack(process_t* process, uintptr_t stack_top)
 
 void process_initialize(void)
 {
-    __atomic_store_n(&initialized, 0, __ATOMIC_RELAXED);
+    __atomic_store_n(&process_initialized_state, 0, __ATOMIC_RELAXED);
     legacy_current_pid = 0;
     cpu_local_t* local = process_local_state();
     if (local)
@@ -221,17 +221,17 @@ void process_initialize(void)
         process_reset_record(&processes[i]);
     }
 
-    __atomic_store_n(&initialized, 1, __ATOMIC_RELEASE);
+    __atomic_store_n(&process_initialized_state, 1, __ATOMIC_RELEASE);
 }
 
 int process_is_initialized(void)
 {
-    return __atomic_load_n(&initialized, __ATOMIC_ACQUIRE) != 0;
+    return __atomic_load_n(&process_initialized_state, __ATOMIC_ACQUIRE) != 0;
 }
 
 int process_attach_current(const char* name, uint32_t parent_pid)
 {
-    if (!initialized || !name || !name[0])
+    if (!process_initialized_state || !name || !name[0])
         return -1;
 
     uint64_t flags = process_table_lock_acquire();
@@ -276,7 +276,7 @@ static int process_create_kernel_affinity(const char* name,
                                           uint32_t affinity_cpu,
                                           cpu_local_t* idle_local)
 {
-    if (!initialized || !name || !name[0] || !entry)
+    if (!process_initialized_state || !name || !name[0] || !entry)
         return -1;
 
     uint64_t flags = process_table_lock_acquire();
@@ -350,7 +350,7 @@ int process_create_kernel_on_cpu(const char* name, uint32_t parent_pid,
 int process_create_idle_for_cpu(uint32_t cpu_id, const char* name,
                                 process_entry_t entry)
 {
-    if (!initialized || cpu_id >= CPU_LOCAL_MAX || !name || !name[0] ||
+    if (!process_initialized_state || cpu_id >= CPU_LOCAL_MAX || !name || !name[0] ||
         !entry)
         return 0;
 

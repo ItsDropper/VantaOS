@@ -27,7 +27,7 @@ int terminal_process_start(uint32_t parent_pid)
     if (pid <= 0)
     {
         terminal_write("Terminal could not start /TERMINAL.ELF.\n");
-        redraw_requested = 1;
+        __atomic_store_n(&redraw_requested, 1, __ATOMIC_RELEASE);
         return -1;
     }
 
@@ -51,10 +51,7 @@ void terminal_process_mark_redraw(void)
 
 int terminal_process_consume_redraw(void)
 {
-    if (!redraw_requested)
-        return 0;
-    redraw_requested = 0;
-    return 1;
+    return __atomic_exchange_n(&redraw_requested, 0, __ATOMIC_ACQ_REL) != 0;
 }
 
 int terminal_process_is_running(void)

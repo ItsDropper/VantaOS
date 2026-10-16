@@ -159,7 +159,7 @@ void graphics_draw_taskbar(int taskbar_y, int width)
     graphics_fill_rounded_rect(center - 44, taskbar_y + 21, 12, 12, 6,
                                 0x005B7189);
     graphics_fill_rect(center - 34, taskbar_y + 31, 5, 2, 0x005B7189);
-    graphics_draw_text(center + 1006, taskbar_y + 27, "Search", 0x005B7189, 1);
+    graphics_draw_text(center - 26, taskbar_y + 27, "Search", 0x005B7189, 1);
 
     /* File Explorer: folder with a proper tab and body. */
     graphics_fill_rounded_rect(center + 18, taskbar_y + 10, 42, 42, 8,

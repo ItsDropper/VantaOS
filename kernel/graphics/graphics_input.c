@@ -21,6 +21,10 @@ void graphics_mouse_click(int button)
     if (!initialized || button != 1)
         return;
 
+    /* User windows are painted above desktop chrome; route their hits first. */
+    if (gui_server_mouse_click(cursor_x, cursor_y, button))
+        return;
+
     int width = (int)framebuffer_width;
     int height = (int)framebuffer_height;
     int taskbar_y = height - 64;
@@ -113,10 +117,6 @@ void graphics_mouse_click(int button)
 
         return;
     }
-
-    /* User-owned windows are above legacy panels in the desktop z-order. */
-    if (gui_server_mouse_click(cursor_x, cursor_y, button))
-        return;
 
     /*
      * Explorer has one input owner. Its hit-testing, title-bar controls,

@@ -64,7 +64,8 @@ This roadmap prioritizes a trustworthy kernel over visual features. A Windows al
 - [x] Document the current VFS/FAT32 boundary and unsupported writes.
 - [x] Exercise FAT32-backed executable loading using a disposable CI disk image.
 - [ ] Expand FAT32 read tests against disposable disk fixtures.
-- [ ] Implement file/directory creation and writes; test persistence across reboot.
+- [ ] Validate bounded FAT32 8.3 file create/replace writes and VFS readback in disposable QEMU disk fixtures.
+- [ ] Implement long-filename writes and directory creation; test persistence across reboot.
 - [ ] Add corruption-safe tests and consistent error propagation.
 
 ### M5.5 — User-space desktop application platform

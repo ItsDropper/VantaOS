@@ -46,6 +46,7 @@ void shell_cd(const char* argument);
 void shell_mkdir(const char* argument);
 void shell_touch(const char* argument);
 void shell_write_file(const char* argument);
+void shell_exec(const char* argument);
 
 void shell_help(void);
 void shell_about(void);

@@ -44,7 +44,7 @@ static cpu_local_t* process_local_state(void)
     return local;
 }
 
-static uint32_t process_current_cpu_id(void)
+uint32_t process_current_cpu_id(void)
 {
     cpu_local_t* local = process_local_state();
     return local ? local->logical_id : 0U;

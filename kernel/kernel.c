@@ -2,6 +2,7 @@
 #include "apic.h"
 #include "cpu_local.h"
 #include "smp.h"
+#include "panic.h"
 #include "gdt.h"
 #include "heap.h"
 #include "interrupts.h"

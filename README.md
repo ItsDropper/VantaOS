@@ -6,10 +6,11 @@ The project focuses on learning and validating operating-system fundamentals: bo
 
 ## Project status
 
-- **Target:** x86-64, booted through GRUB/Multiboot for the current path.
-- **Primary validation:** automated build checks, QEMU BIOS regressions, and UEFI/OVMF regressions in CI.
-- **Current limitations:** kernel tasks are not isolated user-mode processes; general-purpose persistent file creation/writing is not implemented; networking, audio, modern GPU acceleration, and broad physical-hardware compatibility are not established.
-- **Quality rule:** a source file or interface is not evidence that a feature is complete. Claims should identify what is actually tested.
+- **Target:** x86-64. The established GRUB/Multiboot path and a separate UEFI/OVMF path are exercised by CI.
+- **Kernel/userspace milestone:** VantaOS can load a static ELF64 `ET_EXEC` from FAT32 into a user address space, enter ring 3, construct a bounded `argc`/`argv` stack, perform basic serial/terminal write syscalls, and exit. The smoke program validates quoted arguments from ring 3.
+- **Filesystem boundary:** FAT32/VFS reads support the current file-loading path. User-mode file descriptors and general-purpose persistent create/write operations are not implemented.
+- **Still experimental:** process isolation needs broader fault and adversarial testing; demand paging, dynamic linking, networking, audio, modern GPU acceleration, and broad physical-hardware compatibility are not established.
+- **Quality rule:** source presence is not proof of completion. See [Testing](docs/TESTING.md) for the exact automated assertions and their limits.
 
 ## Start here
 

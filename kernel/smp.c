@@ -517,18 +517,29 @@ static int smp_run_work_probe(const acpi_platform_info_t* info,
     return smp_wait_for_local_timers(info);
 }
 
-int smp_initialize(void)
+smp_init_result_t smp_initialize(void)
 {
 #ifdef VANTAOS_SELF_TEST
     if (!smp_topology_validation_probe())
-        return 0;
+        return SMP_INIT_FAILED;
 #endif
+
+    /*
+     * ACPI/APIC may be unavailable on older machines. Preserve the existing
+     * single-CPU fallback only before any local CPU state or AP startup is
+     * committed.
+     */
+    if (!apic_is_enabled())
+    {
+        serial_write("VANTAOS_SMP_AP_START_SKIPPED\n");
+        return SMP_INIT_UNAVAILABLE;
+    }
 
     const acpi_platform_info_t* info = apic_get_platform_info();
     if (!info)
     {
         serial_write("VANTAOS_SMP_TOPOLOGY_UNAVAILABLE\n");
-        return 0;
+        return SMP_INIT_UNAVAILABLE;
     }
 
     uint32_t bsp_id = apic_get_bsp_id();
@@ -554,7 +565,7 @@ int smp_initialize(void)
             case SMP_TOPOLOGY_VALID:
                 break;
         }
-        return 0;
+        return SMP_INIT_FAILED;
     }
 
     discovered_cpu_count = info->cpu_count;
@@ -564,7 +575,7 @@ int smp_initialize(void)
     if (!cpu_local_initialize((uint32_t)bsp_index, bsp_id))
     {
         serial_write("VANTAOS_SMP_CPU_LOCAL_FAIL\n");
-        return 0;
+        return SMP_INIT_FAILED;
     }
 
     if (!apic_timer_calibrate(SMP_LOCAL_TIMER_VECTOR,
@@ -573,7 +584,7 @@ int smp_initialize(void)
         calibrated_timer_initial_count == 0U)
     {
         serial_write("VANTAOS_SMP_TIMER_CALIBRATION_FAIL\n");
-        return 0;
+        return SMP_INIT_FAILED;
     }
     serial_write("VANTAOS_SMP_TIMER_CALIBRATION_OK\n");
 
@@ -581,14 +592,13 @@ int smp_initialize(void)
                                calibrated_timer_initial_count))
     {
         serial_write("VANTAOS_SMP_CPU_LOCAL_FAIL\n");
-        return 0;
+        return SMP_INIT_FAILED;
     }
 
     if (!start_secondary_cpus(info))
     {
-        if (!apic_is_enabled())
-            serial_write("VANTAOS_SMP_AP_START_SKIPPED\n");
-        return 0;
+        /* APIC was active before startup; any failure here is fatal. */
+        return SMP_INIT_FAILED;
     }
 
     for (uint32_t i = 0; i < info->cpu_count; i++)
@@ -598,15 +608,15 @@ int smp_initialize(void)
             local->apic_id != info->cpu_apic_ids[i])
         {
             serial_write("VANTAOS_SMP_CPU_LOCAL_FAIL\n");
-            return 0;
+            return SMP_INIT_FAILED;
         }
     }
 
     serial_write("VANTAOS_SMP_CPU_LOCAL_OK\n");
     if (!smp_run_work_probe(info, (uint32_t)bsp_index))
-        return 0;
+        return SMP_INIT_FAILED;
 
-    return 1;
+    return SMP_INIT_OK;
 }
 
 int smp_cpu_is_bsp(uint32_t logical_id)

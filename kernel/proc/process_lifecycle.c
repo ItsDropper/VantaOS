@@ -40,6 +40,7 @@ int process_mark_ready(uint32_t pid)
     uint64_t flags = process_table_lock_acquire();
     int ok = process_table_records[pid].state != PROCESS_UNUSED &&
              process_table_records[pid].state != PROCESS_TERMINATED &&
+             process_table_records[pid].state != PROCESS_ZOMBIE &&
              process_table_records[pid].state != PROCESS_REAPING;
     if (ok)
         process_table_records[pid].state = PROCESS_READY;
@@ -57,6 +58,7 @@ int process_set_running(uint32_t pid)
     uint32_t cpu_id = process_current_cpu_id();
     if (target->state == PROCESS_UNUSED ||
         target->state == PROCESS_TERMINATED ||
+        target->state == PROCESS_ZOMBIE ||
         target->state == PROCESS_REAPING ||
         (target->affinity_cpu != PROCESS_CPU_ANY &&
          target->affinity_cpu != cpu_id) ||
@@ -159,6 +161,7 @@ int process_set_affinity(uint32_t pid, uint32_t cpu_id)
     process_t* process = &process_table_records[pid];
     if (process->state == PROCESS_UNUSED ||
         process->state == PROCESS_TERMINATED ||
+        process->state == PROCESS_ZOMBIE ||
         process->state == PROCESS_REAPING)
     {
         process_table_lock_release(flags);

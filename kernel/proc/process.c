@@ -122,10 +122,9 @@ static int process_allocate_common(process_t* process,
 void process_entry_dispatch(void)
 {
     uint32_t pid = process_current_pid();
-    const process_t* process = process_get(pid);
-
-    if (process && process->entry)
-        process->entry();
+    process_t process;
+    if (process_snapshot(pid, &process) && process.entry)
+        process.entry();
 
     process_terminate_current();
 }

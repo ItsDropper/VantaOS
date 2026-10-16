@@ -359,7 +359,9 @@ static int syscall_waitpid(struct exception_frame* frame,
          * that stub's return-frame assumptions are specific to interrupt
          * delivery and are not part of the syscall ABI.
          */
+        serial_write("VANTAOS_WAITPID_BLOCK\n");
         __asm__ volatile ("sti; hlt; cli" : : : "memory");
+        serial_write("VANTAOS_WAITPID_RESUME\n");
     }
 }
 

@@ -33,6 +33,7 @@ static uint64_t address_space_pml4[ADDRESS_SPACE_MAX][PAGING_TABLE_ENTRIES]
 static paging_address_space_t address_spaces[ADDRESS_SPACE_MAX];
 static paging_address_space_t kernel_address_space;
 static paging_address_space_t* fallback_current_address_space;
+static volatile uint32_t nx_enabled;
 
 static spinlock_t paging_mutation_lock = SPINLOCK_INITIALIZER;
 
@@ -128,8 +129,37 @@ static void map_high_region(uint64_t* pd, uint64_t* pt, uint64_t virtual_base)
         pt[i] = 0;
 }
 
+static int paging_enable_nx(void)
+{
+    uint32_t eax = 0x80000000U, ebx, ecx, edx;
+    __asm__ volatile ("cpuid"
+                      : "+a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx));
+    if (eax < 0x80000001U)
+        return 0;
+
+    eax = 0x80000001U;
+    __asm__ volatile ("cpuid"
+                      : "+a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx));
+    if ((edx & (1U << 20)) == 0U)
+        return 0;
+
+    uint32_t low, high;
+    ecx = 0xC0000080U;
+    __asm__ volatile ("rdmsr" : "=a"(low), "=d"(high) : "c"(ecx));
+    low |= (1U << 11);
+    __asm__ volatile ("wrmsr" : : "a"(low), "d"(high), "c"(ecx));
+    return 1;
+}
+
+int paging_nx_available(void)
+{
+    return __atomic_load_n(&nx_enabled, __ATOMIC_ACQUIRE) != 0U;
+}
+
 void paging_initialize(void)
 {
+    __atomic_store_n(&nx_enabled, paging_enable_nx() ? 1U : 0U,
+                     __ATOMIC_RELEASE);
     for (uint32_t i = 0; i < PAGING_TABLE_ENTRIES; i++)
     {
         kernel_pml4[i] = 0;

@@ -30,6 +30,7 @@ volatile uint32_t user_mode_test_exit_requested;
 static uint8_t user_test_kernel_stack[USER_TEST_KERNEL_STACK_SIZE]
     __attribute__((aligned(16)));
 static volatile uint32_t user_test_active;
+static volatile uint32_t user_test_cpu_id;
 static volatile uint32_t user_test_mode;
 static volatile uint32_t user_test_syscall_seen;
 static volatile uint32_t user_test_protection_fault_seen;

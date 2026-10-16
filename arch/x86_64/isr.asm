@@ -54,14 +54,6 @@ extern apic_send_eoi
 apic_spurious_stub:
     iretq
 
-; Fixed IPI used to wake initialized APs from their idle HLT loop.
-smp_wakeup_stub:
-    cld
-    SAVE_IRQ_ALL
-    call apic_send_eoi
-    RESTORE_IRQ_ALL
-    iretq
-
 process_entry_trampoline:
     cld
     call process_entry_dispatch
@@ -131,6 +123,14 @@ process_entry_trampoline:
     ; Discard the IRQ alignment padding
     RESTORE_ALL
 %endmacro
+
+; Fixed IPI used to wake initialized APs from their idle HLT loop.
+smp_wakeup_stub:
+    cld
+    SAVE_IRQ_ALL
+    call apic_send_eoi
+    RESTORE_IRQ_ALL
+    iretq
 
 irq0_stub:
     cld

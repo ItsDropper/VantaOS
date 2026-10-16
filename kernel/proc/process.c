@@ -1,4 +1,5 @@
 #include "process.h"
+#include "cpu_local.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -16,7 +17,30 @@ static uint8_t process_stacks[PROCESS_MAX][PROCESS_STACK_SIZE]
     __attribute__((aligned(16)));
 
 static int initialized;
-static uint32_t current_pid;
+static uint32_t legacy_current_pid;
+
+static cpu_local_t* process_local_state(void)
+{
+    cpu_local_t* local = cpu_local_current();
+    if (!local || local->self != local || local->online == 0U)
+        return NULL;
+    return local;
+}
+
+static uint32_t process_current_slot(void)
+{
+    cpu_local_t* local = process_local_state();
+    return local ? local->current_pid : legacy_current_pid;
+}
+
+static void process_set_current_slot(uint32_t pid)
+{
+    cpu_local_t* local = process_local_state();
+    if (local)
+        local->current_pid = pid;
+    else
+        legacy_current_pid = pid;
+}
 
 static void process_copy_name(char* destination, const char* source)
 {
@@ -123,7 +147,10 @@ static void process_prepare_stack(process_t* process, uintptr_t stack_top)
 void process_initialize(void)
 {
     initialized = 0;
-    current_pid = 0;
+    legacy_current_pid = 0;
+    cpu_local_t* local = process_local_state();
+    if (local)
+        local->current_pid = 0;
 
     for (uint32_t i = 0; i < PROCESS_MAX; i++)
     {
@@ -167,7 +194,7 @@ int process_attach_current(const char* name, uint32_t parent_pid)
         process->context.ss = 0x10U;
         process->kernel_stack = (void*)(uintptr_t)&stack_bottom;
 
-        current_pid = pid;
+        process_set_current_slot(pid);
         return (int)pid;
     }
 
@@ -234,11 +261,13 @@ int process_set_running(uint32_t pid)
         processes[pid].state == PROCESS_TERMINATED)
         return 0;
 
-    if (processes[current_pid].state == PROCESS_RUNNING &&
+    uint32_t current_pid = process_current_slot();
+    if (current_pid < PROCESS_MAX &&
+        processes[current_pid].state == PROCESS_RUNNING &&
         current_pid != pid)
         processes[current_pid].state = PROCESS_READY;
 
-    current_pid = pid;
+    process_set_current_slot(pid);
     processes[pid].state = PROCESS_RUNNING;
     return 1;
 }
@@ -252,12 +281,13 @@ int process_switch_to(uint32_t pid)
         processes[pid].state != PROCESS_RUNNING)
         return 0;
 
+    uint32_t current_pid = process_current_slot();
     if (current_pid != pid &&
         current_pid < PROCESS_MAX &&
         processes[current_pid].state == PROCESS_RUNNING)
         processes[current_pid].state = PROCESS_READY;
 
-    current_pid = pid;
+    process_set_current_slot(pid);
     processes[pid].state = PROCESS_RUNNING;
     return 1;
 }
@@ -274,6 +304,7 @@ int process_wake(uint32_t pid)
 
 void process_block_current(void)
 {
+    uint32_t current_pid = process_current_slot();
     if (initialized && current_pid < PROCESS_MAX)
         processes[current_pid].state = PROCESS_SLEEPING;
 }
@@ -290,7 +321,7 @@ int process_terminate(uint32_t pid)
 
     process->state = PROCESS_TERMINATED;
 
-    if (pid == current_pid)
+    if (pid == process_current_slot())
         return 1;
 
     return process_reap(pid);
@@ -298,6 +329,7 @@ int process_terminate(uint32_t pid)
 
 void process_terminate_current(void)
 {
+    uint32_t current_pid = process_current_slot();
     if (!initialized || current_pid == 0 ||
         current_pid >= PROCESS_MAX)
         return;
@@ -372,7 +404,7 @@ int process_stack_is_valid(uint32_t pid)
 int process_reap(uint32_t pid)
 {
     if (!initialized || pid == 0 || pid >= PROCESS_MAX ||
-        pid == current_pid)
+        pid == process_current_slot())
         return 0;
 
     process_t* process = &processes[pid];
@@ -388,6 +420,7 @@ int process_reap(uint32_t pid)
 
 uint64_t process_schedule(uint64_t current_stack)
 {
+    uint32_t current_pid = process_current_slot();
     if (!initialized || current_pid >= PROCESS_MAX)
         return current_stack;
 
@@ -420,5 +453,5 @@ unsigned int process_count(void)
 
 uint32_t process_current_pid(void)
 {
-    return current_pid;
+    return process_current_slot();
 }

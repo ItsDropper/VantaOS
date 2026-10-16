@@ -1,16 +1,29 @@
 #include "scheduler.h"
+#include "cpu_local.h"
 #include "process.h"
 #include "paging.h"
 
 #define SCHEDULER_QUANTUM_TICKS 5U
 
 static int initialized;
-static uint32_t quantum_ticks;
+static uint32_t fallback_quantum_ticks;
+
+static volatile uint32_t* scheduler_quantum_slot(void)
+{
+    cpu_local_t* local = cpu_local_current();
+    if (local && local->self == local && local->online != 0U)
+        return &local->scheduler_ticks;
+    return &fallback_quantum_ticks;
+}
 
 void scheduler_initialize(void)
 {
     initialized = 1;
-    quantum_ticks = 0;
+    cpu_local_t* local = cpu_local_current();
+    if (local && local->self == local && local->online != 0U)
+        local->scheduler_ticks = 0;
+    else
+        fallback_quantum_ticks = 0;
 }
 
 int scheduler_is_initialized(void)
@@ -51,10 +64,11 @@ uint64_t scheduler_tick(uint64_t current_stack)
 
     process_save_stack(current_pid, current_stack);
 
-    if (++quantum_ticks < SCHEDULER_QUANTUM_TICKS)
+    volatile uint32_t* quantum_ticks = scheduler_quantum_slot();
+    if (++(*quantum_ticks) < SCHEDULER_QUANTUM_TICKS)
         return current_stack;
 
-    quantum_ticks = 0;
+    *quantum_ticks = 0;
 
     uint32_t next_pid = scheduler_next_ready(current_pid);
     if (next_pid == current_pid)

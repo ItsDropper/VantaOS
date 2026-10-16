@@ -7,6 +7,13 @@
 
 static cpu_local_t cpu_locals[CPU_LOCAL_MAX];
 
+static uint64_t read_msr(uint32_t msr)
+{
+    uint32_t low, high;
+    __asm__ volatile ("rdmsr" : "=a"(low), "=d"(high) : "c"(msr));
+    return ((uint64_t)high << 32) | low;
+}
+
 static void write_msr(uint32_t msr, uint64_t value)
 {
     uint32_t low = (uint32_t)value;
@@ -26,6 +33,7 @@ int cpu_local_initialize(uint32_t logical_id, uint32_t apic_id)
     local->current_pid = 0;
     local->interrupt_depth = 0;
     local->work_iterations = 0;
+    local->scheduler_ticks = 0;
     __atomic_store_n(&local->online, 1U, __ATOMIC_RELEASE);
 
     /*
@@ -39,6 +47,10 @@ int cpu_local_initialize(uint32_t logical_id, uint32_t apic_id)
 
 cpu_local_t* cpu_local_current(void)
 {
+    /* GS is not guaranteed to be initialized when APIC/SMP is unavailable. */
+    if (read_msr(IA32_GS_BASE_MSR) == 0)
+        return NULL;
+
     cpu_local_t* local;
     __asm__ volatile ("movq %%gs:0, %0" : "=r"(local));
     return local;

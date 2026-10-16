@@ -94,7 +94,7 @@ _Noreturn void smp_ap_entry(uint32_t apic_id)
             __asm__ volatile ("cli; hlt" ::: "memory");
     }
 
-    /* Wait without HLT: the BSP's release flag is polled with interrupts off. */
+    /* Sleep with interrupts enabled until the BSP sends the wakeup IPI. */
     while (__atomic_load_n(&work_probe_start, __ATOMIC_ACQUIRE) == 0U)
         __asm__ volatile ("sti; hlt" ::: "memory");
 
@@ -168,14 +168,12 @@ static int start_secondary_cpus(const acpi_platform_info_t* info)
         __asm__ volatile ("mfence" ::: "memory");
 
         serial_write("VANTAOS_SMP_AP_IPI_BEGIN\n");
-        serial_write("VANTAOS_SMP_AP_IPI_BEGIN\n");
         if (!apic_send_sipi(apic_id, AP_STARTUP_VECTOR))
         {
             serial_write("VANTAOS_SMP_AP_START_FAIL\n");
             return 0;
         }
 
-        serial_write("VANTAOS_SMP_AP_IPI_SENT\n");
         serial_write("VANTAOS_SMP_AP_IPI_SENT\n");
         uint32_t spin = 0;
         while (__atomic_load_n(&ap_online[i], __ATOMIC_ACQUIRE) == 0U &&
@@ -188,7 +186,6 @@ static int start_secondary_cpus(const acpi_platform_info_t* info)
             return 0;
         }
 
-        serial_write("VANTAOS_SMP_AP_ONLINE\n");
         serial_write("VANTAOS_SMP_AP_ONLINE\n");
         online_count++;
     }

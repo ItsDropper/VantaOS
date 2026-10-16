@@ -9,6 +9,8 @@
 #include "keyboard.h"
 #include "mouse.h"
 #include "process.h"
+#include "cpu_local.h"
+#include "smp.h"
 #include "pmm.h"
 #include "serial.h"
 #include "scheduler.h"

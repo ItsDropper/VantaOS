@@ -38,6 +38,10 @@ int cpu_local_initialize(uint32_t logical_id, uint32_t apic_id)
     local->lapic_timer_ticks = 0;
     local->reschedule_ipi_ticks = 0;
     local->current_address_space = paging_get_kernel_address_space();
+    local->tlb_request_generation = 0;
+    local->tlb_ack_generation = 0;
+    local->tlb_address_space = NULL;
+    local->tlb_address = 0;
     __atomic_store_n(&local->online, 1U, __ATOMIC_RELEASE);
 
     /*

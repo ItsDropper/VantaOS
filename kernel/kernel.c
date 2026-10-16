@@ -297,6 +297,11 @@ static void kernel_initialize(const vanta_boot_info_t* boot_info)
     apic_initialize();
     smp_initialize();
 #ifdef VANTAOS_SELF_TEST
+    int tlb_shootdown_ok = paging_tlb_shootdown(
+        paging_get_kernel_address_space(), (uintptr_t)0xC0000000ULL);
+    serial_write(tlb_shootdown_ok ?
+        "VANTAOS_TLB_SHOOTDOWN_OK\n" :
+        "VANTAOS_TLB_SHOOTDOWN_FAIL\n");
     user_mapping_probe();
 #endif
     pci_initialize();

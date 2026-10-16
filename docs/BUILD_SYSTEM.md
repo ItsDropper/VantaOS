@@ -9,11 +9,12 @@ VantaOS uses a small GNU Make system inspired by the subsystem-oriented layout o
 - `mm/`: physical memory management, paging, and heap.
 - `drivers/`: input, PCI, and ATA driver code.
 - `fs/`: filesystem namespace, FAT32, and VFS.
-- `os/`: terminal, shell, desktop, and file explorer.
+- `os/`: boot orchestration, terminal, shell, desktop, and file explorer.
+- `os/selftest/`: test-only regression modules grouped by process, filesystem, memory, and SMP responsibility.
 - `include/`: shared C interfaces.
 - `build/obj/`: generated objects and dependency files, mirroring source paths.
 
-The root Makefile owns compiler flags, dependency generation, object placement, and final linking. Each subsystem Makefile declares its own source list. build.sh creates the bootable ISO and development disk image; CI runs the same build and QEMU smoke tests.
+The root Makefile owns compiler flags, dependency generation, object placement, and final linking. Each subsystem Makefile declares its own source list. `os/Makefile` explicitly registers the self-test translation units; `os/os.c` only calls their narrow entry points when `VANTAOS_SELF_TEST` is enabled. build.sh creates the bootable ISO and development disk image; CI runs the same build and QEMU smoke tests.
 
 ## Commands
 

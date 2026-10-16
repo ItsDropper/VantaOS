@@ -243,7 +243,7 @@ fixture_matches:
     mov $14, %eax
     mov %r12, %rdi
     lea config_data(%rip), %rsi
-    mov $512, %edx
+    mov $4097, %edx
     int $0x80
     cmp $-22, %rax
     jne file_fail

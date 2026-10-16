@@ -173,6 +173,9 @@ jobs:
             echo "All required markers passed at ${memory} MiB."
           done
 
+          # The second boot reuses the first boot's writable disk image.
+          grep -q '^VANTAOS_FAT32_REBOOT_PERSIST_OK' boot-512m-2cpu.log
+
       - name: Build the UEFI boot manager and EFI system image
         run: make uefi
 

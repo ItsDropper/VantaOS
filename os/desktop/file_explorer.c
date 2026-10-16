@@ -299,7 +299,7 @@ static void explorer_sidebar_item(
 
 static void explorer_title(int x, int y, int w, int h)
 {
-    graphics_draw_window_frame(x, y, w, h, "Files");
+    graphics_draw_window_frame(x, y, w, h, "Files", 1);
 }
 
 static void explorer_toolbar(int x, int y, int w)

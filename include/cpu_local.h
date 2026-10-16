@@ -27,6 +27,11 @@ typedef struct cpu_local
     volatile uint32_t reschedule_ipi_ticks;
     /* Address space loaded in this CPU's CR3 (not a global singleton). */
     struct paging_address_space* current_address_space;
+    /* Single-slot synchronous TLB shootdown mailbox; globally serialized. */
+    volatile uint64_t tlb_request_generation;
+    volatile uint64_t tlb_ack_generation;
+    struct paging_address_space* volatile tlb_address_space;
+    volatile uintptr_t tlb_address;
 } cpu_local_t;
 
 /* Installs the current CPU's GS base and initializes its private state. */

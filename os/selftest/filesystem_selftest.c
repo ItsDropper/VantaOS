@@ -143,6 +143,61 @@ void filesystem_selftest_initialize(void)
         }
     }
     serial_write("VANTAOS_FAT32_WRITE_READBACK_OK\n");
+
+    /* Exercise incremental allocation and reads across multiple FAT clusters. */
+    enum { MULTICLUSTER_CHUNK = 4096, MULTICLUSTER_TOTAL = 20480 };
+    static char large_chunk[MULTICLUSTER_CHUNK];
+    static char large_readback[MULTICLUSTER_CHUNK];
+    int large_id = filesystem_lookup("/BIGTEST.BIN");
+    if (large_id < 0)
+    {
+        if (filesystem_create_file("/BIGTEST.BIN") < 0)
+        {
+            serial_write("VANTAOS_FAT32_MULTICLUSTER_FAIL\n");
+            return;
+        }
+        large_id = filesystem_lookup("/BIGTEST.BIN");
+    }
+    if (large_id < 0)
+    {
+        serial_write("VANTAOS_FAT32_MULTICLUSTER_FAIL\n");
+        return;
+    }
+
+    for (uint32_t offset = 0; offset < MULTICLUSTER_TOTAL;
+         offset += MULTICLUSTER_CHUNK)
+    {
+        for (uint32_t i = 0; i < MULTICLUSTER_CHUNK; i++)
+            large_chunk[i] = (char)(((offset + i) * 37U + 11U) & 0xFFU);
+        if (filesystem_write_file_range("/BIGTEST.BIN", offset,
+                                        large_chunk, MULTICLUSTER_CHUNK) !=
+            MULTICLUSTER_CHUNK)
+        {
+            serial_write("VANTAOS_FAT32_MULTICLUSTER_FAIL\n");
+            return;
+        }
+    }
+
+    for (uint32_t offset = 0; offset < MULTICLUSTER_TOTAL;
+         offset += MULTICLUSTER_CHUNK)
+    {
+        if (filesystem_read_range((uint32_t)large_id, offset, large_readback,
+                                  MULTICLUSTER_CHUNK) != MULTICLUSTER_CHUNK)
+        {
+            serial_write("VANTAOS_FAT32_MULTICLUSTER_READ_FAIL\n");
+            return;
+        }
+        for (uint32_t i = 0; i < MULTICLUSTER_CHUNK; i++)
+        {
+            char expected = (char)(((offset + i) * 37U + 11U) & 0xFFU);
+            if (large_readback[i] != expected)
+            {
+                serial_write("VANTAOS_FAT32_MULTICLUSTER_CONTENT_FAIL\n");
+                return;
+            }
+        }
+    }
+    serial_write("VANTAOS_FAT32_MULTICLUSTER_IO_OK\n");
     }
     else
     {

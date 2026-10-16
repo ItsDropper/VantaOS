@@ -287,17 +287,19 @@ static void process_deferred_switch_probe(void)
                 ok = terminated && ok;
                 if (!terminated && failure_stage == 0U) failure_stage = 10U;
             }
-            if (process_snapshot((uint32_t)incoming_pid, &incoming) &&
-                incoming.owner_cpu == PROCESS_CPU_UNOWNED)
+
+            /*
+             * process_terminate reaps immediately when the slot is unowned.
+             * A missing record after that call is therefore the expected
+             * successful cleanup path, not a failed snapshot.
+             */
+            if (process_snapshot((uint32_t)incoming_pid, &incoming))
             {
-                int reaped = process_reap((uint32_t)incoming_pid);
+                int reaped = incoming.state == PROCESS_TERMINATED &&
+                             incoming.owner_cpu == PROCESS_CPU_UNOWNED &&
+                             process_reap((uint32_t)incoming_pid);
                 ok = reaped && ok;
                 if (!reaped && failure_stage == 0U) failure_stage = 11U;
-            }
-            else
-            {
-                ok = 0;
-                if (failure_stage == 0U) failure_stage = 12U;
             }
         }
     }

@@ -126,8 +126,7 @@ void graphics_present(void)
     /* Restrained Vanta wallpaper mark, kept well behind application content. */
     graphics_fill_rounded_rect(w - 330, 112, 230, 230, 115, 0x000F1925);
     graphics_fill_rounded_rect(w - 286, 156, 142, 142, 71, 0x00121F2D);
-    graphics_fill_rect(w - 218, 176, 14, 112, 0x00172A3D);
-    graphics_fill_rect(w - 252, 210, 82, 14, 0x00172A3D);
+    /* Concentric low-contrast forms carry the brand without a cross-shaped mark. */
 
     /* Compact workspace bar: identity left, session state right. */
     graphics_draw_vanta_logo(18, 11, 20);

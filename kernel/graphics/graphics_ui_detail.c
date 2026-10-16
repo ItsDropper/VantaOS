@@ -64,14 +64,15 @@ static void ui_dot(int x, int y, uint32_t c)
 }
 static void ui_brand(int x, int y, int size)
 {
-    int bar = ui_max(3, size / 7);
-    int left = x + size / 3;
-    int right = x + size / 2 + bar;
-    int bottom = y + size - bar * 2;
-    graphics_fill_rounded_rect(left, y, bar, size, bar / 2, UI_BLUE);
-    graphics_fill_rounded_rect(right, y, bar, size, bar / 2, UI_BLUE_BRIGHT);
-    graphics_fill_rounded_rect(left, bottom, right - left + bar, bar * 2,
-                               bar / 2, UI_MINT);
+    /* Four crisp panes read as an OS mark even at taskbar scale. */
+    int gap = ui_max(2, size / 12);
+    int pane_w = (size - gap) / 2;
+    int pane_h = (size - gap) / 2;
+    graphics_fill_rect(x, y, pane_w, pane_h, 0x00F5FAFF);
+    graphics_fill_rect(x + pane_w + gap, y, pane_w, pane_h, 0x00F5FAFF);
+    graphics_fill_rect(x, y + pane_h + gap, pane_w, pane_h, 0x00F5FAFF);
+    graphics_fill_rect(x + pane_w + gap, y + pane_h + gap,
+                       pane_w, pane_h, 0x00F5FAFF);
 }
 static void ui_icon_terminal(int x, int y, int s, uint32_t tint)
 {
@@ -167,44 +168,26 @@ static void ui_app_tile(int x, int y, int w, int h, const char* name,
  * support alpha compositing, blur, or GPU acceleration. */
 static void ui_wallpaper(int w, int h)
 {
-    graphics_fill_rect(0, 0, w, h, UI_INK);
-    graphics_fill_rounded_rect(w / 2 - 30, 84, w / 2 + 350,
-                               h - 190, 90, UI_INK_SOFT);
-    graphics_fill_rounded_rect(w / 2 + 70, 142, w / 2 + 180,
-                               h - 300, 90, 0x00101D2B);
-    graphics_fill_rounded_rect(w / 2 + 170, 200, w / 2 + 40,
-                               h - 420, 80, 0x00132232);
-    for (int gx = 350; gx < w; gx += 32)
-        ui_vline(gx, 70, h - 150, 0x00111D29);
-    for (int gy = 88; gy < h - 76; gy += 32)
-        ui_line(320, gy, w - 340, 0x00111D29);
-    int mark_size = ui_min(220, h / 3);
-    if (mark_size > 80)
-    {
-        int mx = w - mark_size - 60;
-        int my = h / 2 - mark_size / 2 - 10;
-        graphics_fill_rounded_rect(mx - 28, my - 28, mark_size + 56,
-                                   mark_size + 56, 24, 0x00111F2E);
-        ui_brand(mx + mark_size / 4, my, mark_size / 2);
-    }
-    ui_line(0, 42, w, 0x00273545);
-    ui_vline(0, 43, h - 107, 0x00121D29);
-    graphics_fill_rect(0, h - 64, w, 64, 0x00080D13);
+    /* Windows-inspired blue bloom: broad folded ribbons, no debug grid. */
+    graphics_fill_rect(0, 0, w, h, 0x0007132B);
+    graphics_fill_rounded_rect(w / 2 - 170, h / 2 - 210,
+                               w / 2 + 420, h / 2 + 310, 150, 0x000B2B58);
+    graphics_fill_rounded_rect(w / 2 - 70, h / 2 - 150,
+                               w / 2 + 360, h / 2 + 260, 130, 0x00104482);
+    graphics_fill_rounded_rect(w / 2 + 40, h / 2 - 95,
+                               w / 2 + 250, h / 2 + 190, 110, 0x001B66AD);
+    graphics_fill_rounded_rect(w / 2 + 120, h / 2 - 65,
+                               w / 2 + 170, h / 2 + 145, 90, 0x00278DD2);
+    graphics_fill_rounded_rect(w / 2 + 175, h / 2 - 25,
+                               w / 2 + 100, h / 2 + 100, 60, 0x0039A7EA);
+    /* Darken the left side so desktop labels remain readable. */
+    graphics_fill_rect(0, 0, w / 3, h, 0x00091725);
+    graphics_fill_rect(0, h - 64, w, 64, 0x00DDE7F4);
 }
 static void ui_topbar(int w)
 {
-    graphics_fill_rect(0, 0, w, 42, 0x00111A25);
-    ui_line(0, 41, w, UI_EDGE_SOFT);
-    ui_surface(14, 8, 26, 26, 7, UI_SURFACE_2, UI_EDGE_SOFT);
-    ui_brand(21, 12, 18);
-    graphics_draw_text(50, 16, "VantaOS", UI_WHITE, 1);
-    ui_vline(113, 13, 16, UI_EDGE);
-    graphics_draw_text(127, 16, "Workspace", UI_MUTED, 1);
-    ui_surface(w - 151, 10, 131, 22, 7, UI_SURFACE_0, UI_EDGE_SOFT);
-    ui_dot(w - 139, 18, filesystem_is_initialized() ? UI_MINT : UI_AMBER);
-    graphics_draw_text(w - 127, 17,
-        filesystem_is_initialized() ? "Filesystem ready" : "Booting services",
-        UI_MUTED, 1);
+    /* Keep the wallpaper uninterrupted, like a conventional desktop. */
+    (void)w;
 }
 static void ui_shortcuts(void)
 {
@@ -294,30 +277,15 @@ void graphics_draw_desktop_backdrop(int width, int height)
 {
     if (width <= 0 || height <= 0) return;
     ui_wallpaper(width, height);
-    ui_topbar(width);
     ui_shortcuts();
 }
 
 void graphics_draw_desktop_dashboard(int width, int height)
 {
-    if (width < 600 || height < 460) return;
-    int x = 330;
-    int available = width - x - 24;
-    int top = 62;
-    int footer_y = height - 94;
-    if (available < 260) return;
-    ui_welcome(x, top, available);
-    ui_overview(x, top + 140, available);
-    int quick_y = top + 264;
-    int quick_h = 168;
-    if (quick_y + quick_h > footer_y - 8)
-        quick_h = footer_y - quick_y - 8;
-    if (quick_h >= 140) ui_quick_access(x, quick_y, available);
-    int summary_y = quick_y + 164;
-    int summary_h = footer_y - summary_y - 8;
-    if (summary_h >= 72)
-        ui_system_summary(x, summary_y, available, summary_h);
-    ui_footer(24, height - 48, width - 48);
+    /* The desktop is intentionally a desktop, not a dashboard full of cards.
+       Real applications open from the shortcuts and Start menu. */
+    (void)width;
+    (void)height;
 }
 static void ui_window_heading(int x, int y, int width, const char* eyebrow,
                               const char* title, const char* description)

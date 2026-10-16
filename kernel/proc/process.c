@@ -229,8 +229,10 @@ int process_attach_current(const char* name, uint32_t parent_pid)
     return -1;
 }
 
-int process_create_kernel(const char* name, uint32_t parent_pid,
-                           process_entry_t entry)
+static int process_create_kernel_affinity(const char* name,
+                                          uint32_t parent_pid,
+                                          process_entry_t entry,
+                                          uint32_t affinity_cpu)
 {
     if (!initialized || !name || !name[0] || !entry)
         return -1;
@@ -249,6 +251,7 @@ int process_create_kernel(const char* name, uint32_t parent_pid,
             return -1;
         }
 
+        process->affinity_cpu = affinity_cpu;
         process->kernel_stack = process_stacks[pid];
         process->entry = entry;
         uintptr_t stack_top =
@@ -264,19 +267,20 @@ int process_create_kernel(const char* name, uint32_t parent_pid,
 }
 
 
+int process_create_kernel(const char* name, uint32_t parent_pid,
+                          process_entry_t entry)
+{
+    return process_create_kernel_affinity(name, parent_pid, entry,
+                                          process_current_cpu_id());
+}
+
 int process_create_kernel_any(const char* name, uint32_t parent_pid,
                               process_entry_t entry)
 {
-    int pid = process_create_kernel(name, parent_pid, entry);
-    if (pid < 0)
-        return pid;
-
-    uint64_t flags = process_table_lock_acquire();
-    if (processes[(uint32_t)pid].state != PROCESS_UNUSED)
-        processes[(uint32_t)pid].affinity_cpu = PROCESS_CPU_ANY;
-    process_table_lock_release(flags);
-    return pid;
+    return process_create_kernel_affinity(name, parent_pid, entry,
+                                          PROCESS_CPU_ANY);
 }
+
 
 int process_create_idle_for_cpu(uint32_t cpu_id, const char* name,
                                 process_entry_t entry)

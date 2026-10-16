@@ -375,7 +375,7 @@ static int syscall_dispatch(struct exception_frame* frame)
     switch (frame->rax)
     {
         case USER_SYSCALL_EXIT:
-            process_terminate_current();
+            process_terminate_current_with_status((int32_t)frame->rdi);
             return 1;
         case USER_SYSCALL_WRITE:
             return syscall_write(frame, &process);

@@ -1,6 +1,6 @@
 #include "gdt.h"
+#include "cpu_local.h"
 
-#include <stddef.h>
 #include <stdint.h>
 
 #define GDT_USER_DATA_INDEX 3U
@@ -35,11 +35,7 @@ struct gdt_ptr
     uint64_t base;
 } __attribute__((packed));
 
-/*
- * One immutable shared GDT contains the flat kernel/user segments and one
- * 16-byte TSS descriptor per logical CPU. TSS contents are CPU-local; in
- * particular, each CPU's RSP0 must never point at another CPU's stack.
- */
+/* Shared immutable descriptors; each CPU owns its TSS contents. */
 static uint64_t gdt[GDT_ENTRY_COUNT];
 static struct gdt_ptr gdt_pointer;
 static tss64_t cpu_tss[CPU_LOCAL_MAX];
@@ -47,7 +43,7 @@ static tss64_t cpu_tss[CPU_LOCAL_MAX];
 static void gdt_set_segment(unsigned int index, uint8_t access,
                             uint8_t flags)
 {
-    /* Flat 4-GiB descriptor; long-mode code uses L=1 and D=0. */
+    /* Flat descriptor. Long-mode code has L=1 and D=0. */
     gdt[index] = 0xFFFFULL |
                  ((uint64_t)access << 40) |
                  (0xFULL << 48) |
@@ -92,11 +88,7 @@ void gdt_initialize(void)
     gdt_load();
 }
 
-/*
- * Load the already-built shared GDT on the calling CPU. The table is built
- * once before AP startup; CPUs must not rewrite descriptors while another
- * CPU could be taking an interrupt.
- */
+/* Load the BSP-initialized GDT; APs must not rebuild shared descriptors. */
 void gdt_load(void)
 {
     __asm__ volatile (

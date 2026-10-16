@@ -451,3 +451,219 @@ void graphics_ui_draw_icon_settings(int x, int y, int size)
 {
     ui_icon_settings(x, y, size, UI_AMBER);
 }
+
+
+/* Launcher composition: rows keep the exact hit regions owned by the input
+ * dispatcher. Search is deliberately omitted until it can actually filter. */
+void graphics_draw_start_menu_detail(int width, int height)
+{
+    int mw = width < 492 ? width - 32 : 460;
+    int mh = height < 532 ? height - 32 : 500;
+    int mx = width / 2 - mw / 2;
+    int my = height - mh - 8;
+    if (mw < 280 || mh < 360) return;
+
+    graphics_fill_rounded_rect(mx + 8, my + 10, mw, mh, 16, 0x0006090F);
+    ui_surface(mx, my, mw, mh, 14, UI_SURFACE_0, UI_EDGE);
+    graphics_fill_rounded_rect(mx + 1, my + 1, mw - 2, 54, 13,
+                               UI_SURFACE_1);
+    ui_line(mx + 1, my + 53, mw - 2, UI_EDGE_SOFT);
+
+    ui_surface(mx + 18, my + 13, 30, 30, 8, UI_SURFACE_2, UI_EDGE_SOFT);
+    ui_brand(mx + 26, my + 17, 22);
+    graphics_draw_text(mx + 60, my + 18, "VantaOS", UI_WHITE, 1);
+    graphics_draw_text(mx + 60, my + 34, "LOCAL WORKSPACE", UI_QUIET, 1);
+    ui_surface(mx + mw - 42, my + 15, 24, 24, 12, UI_SURFACE_2, UI_EDGE_SOFT);
+    graphics_draw_text(mx + mw - 34, my + 23, "U", UI_MUTED, 1);
+
+    ui_label(mx + 24, my + 76, "PINNED APPLICATIONS");
+    ui_label(mx + mw - 100, my + 76, "4 APPS");
+
+    ui_surface(mx + 24, my + 92, mw - 48, 54, 9,
+               0x00202F3F, UI_EDGE_SOFT);
+    ui_icon_terminal(mx + 36, my + 104, 30, UI_BLUE_BRIGHT);
+    graphics_draw_text(mx + 78, my + 105, "Terminal", UI_WHITE, 1);
+    graphics_draw_text(mx + 78, my + 123, "Run shell commands", UI_MUTED, 1);
+    ui_dot(mx + mw - 42, my + 116, UI_MINT);
+
+    ui_surface(mx + 24, my + 146, mw - 48, 54, 9,
+               0x001A2633, UI_EDGE_SOFT);
+    ui_icon_folder(mx + 36, my + 158, 30, UI_MINT);
+    graphics_draw_text(mx + 78, my + 159, "Files", UI_WHITE, 1);
+    graphics_draw_text(mx + 78, my + 177, "Browse system paths", UI_MUTED, 1);
+
+    ui_surface(mx + 24, my + 200, mw - 48, 54, 9,
+               0x001A2633, UI_EDGE_SOFT);
+    ui_icon_system(mx + 36, my + 212, 30, UI_BLUE);
+    graphics_draw_text(mx + 78, my + 213, "System", UI_WHITE, 1);
+    graphics_draw_text(mx + 78, my + 231, "Kernel and service status", UI_MUTED, 1);
+
+    ui_surface(mx + 24, my + 254, mw - 48, 54, 9,
+               0x001A2633, UI_EDGE_SOFT);
+    ui_icon_settings(mx + 36, my + 266, 30, UI_AMBER);
+    graphics_draw_text(mx + 78, my + 267, "Settings", UI_WHITE, 1);
+    graphics_draw_text(mx + 78, my + 285, "Display configuration", UI_MUTED, 1);
+
+    ui_line(mx + 24, my + mh - 64, mw - 48, UI_EDGE_SOFT);
+    ui_dot(mx + 26, my + mh - 43,
+        filesystem_is_initialized() ? UI_MINT : UI_AMBER);
+    graphics_draw_text(mx + 39, my + mh - 44,
+        filesystem_is_initialized() ? "Filesystem ready" : "Filesystem unavailable",
+        UI_MUTED, 1);
+    graphics_draw_text(mx + mw - 108, my + mh - 44, "VantaOS", UI_QUIET, 1);
+}
+
+/* Shared Explorer parts. These are presentation-only; the Explorer remains
+ * the sole owner of directory state and all input hit-testing. */
+void graphics_ui_explorer_sidebar_heading(int x, int y, const char* title)
+{
+    ui_label(x, y, title);
+    ui_line(x, y + 15, 140, UI_EDGE_SOFT);
+}
+void graphics_ui_explorer_column_header(int x, int y, int width)
+{
+    graphics_fill_rect(x, y, width, 32, UI_SURFACE_1);
+    ui_line(x, y, width, UI_EDGE_SOFT);
+    graphics_draw_text(x + 18, y + 11, "NAME", UI_QUIET, 1);
+    graphics_draw_text(x + width - 150, y + 11, "TYPE", UI_QUIET, 1);
+    graphics_draw_text(x + width - 66, y + 11, "SIZE", UI_QUIET, 1);
+    ui_line(x + 18, y + 30, width - 36, UI_EDGE_SOFT);
+}
+void graphics_ui_explorer_row(int x, int y, int width, int height,
+                              int selected, int alternate)
+{
+    uint32_t fill = selected ? UI_BLUE_DARK :
+                    alternate ? 0x0017222F : UI_SURFACE_0;
+    graphics_fill_rect(x, y, width, height, fill);
+    if (selected)
+        graphics_fill_rect(x, y + 3, 2, height - 6, UI_BLUE_BRIGHT);
+    ui_line(x + 18, y + height - 1, width - 36, UI_EDGE_SOFT);
+}
+void graphics_ui_explorer_status(int x, int y, int width,
+                                 const char* count_label,
+                                 const char* location_label)
+{
+    graphics_fill_rect(x, y, width, 26, UI_SURFACE_1);
+    ui_line(x, y, width, UI_EDGE_SOFT);
+    graphics_draw_text(x + 14, y + 9, count_label, UI_MUTED, 1);
+    graphics_draw_text(x + width - 150, y + 9, location_label, UI_QUIET, 1);
+}
+void graphics_ui_explorer_location(int x, int y, int width,
+                                   const char* location)
+{
+    ui_surface(x, y, width, 30, 7, UI_SURFACE_0, UI_EDGE_SOFT);
+    ui_dot(x + 10, y + 12, UI_BLUE);
+    graphics_draw_text(x + 23, y + 11, location, UI_WHITE, 1);
+}
+void graphics_ui_explorer_toolbar_button(int x, int y, const char* glyph,
+                                         int enabled)
+{
+    ui_surface(x, y, 32, 30, 6,
+        enabled ? UI_SURFACE_2 : UI_SURFACE_0, UI_EDGE_SOFT);
+    graphics_draw_text(x + 10, y + 10, glyph,
+        enabled ? UI_WHITE : UI_QUIET, 1);
+}
+
+/* Small structural components used by future kernel-rendered applications. */
+void graphics_ui_draw_section(int x, int y, int width, const char* title,
+                              const char* detail)
+{
+    graphics_draw_text(x, y, title, UI_WHITE, 1);
+    graphics_draw_text(x, y + 18, detail, UI_MUTED, 1);
+    ui_line(x, y + 36, width, UI_EDGE_SOFT);
+}
+void graphics_ui_draw_callout(int x, int y, int width, int height,
+                              const char* title, const char* body,
+                              uint32_t accent)
+{
+    ui_surface(x, y, width, height, 9, UI_SURFACE_0, UI_EDGE_SOFT);
+    graphics_fill_rounded_rect(x, y + 10, 3, height - 20, 1, accent);
+    graphics_draw_text(x + 16, y + 14, title, UI_WHITE, 1);
+    graphics_draw_text(x + 16, y + 34, body, UI_MUTED, 1);
+}
+void graphics_ui_draw_key_value(int x, int y, int width, const char* key,
+                                const char* value, uint32_t value_color)
+{
+    ui_line(x, y + 25, width, UI_EDGE_SOFT);
+    graphics_draw_text(x, y + 8, key, UI_MUTED, 1);
+    graphics_draw_text(x + width - 170, y + 8, value, value_color, 1);
+}
+void graphics_ui_draw_progress(int x, int y, int width, int progress,
+                               uint32_t tint)
+{
+    ui_surface(x, y, width, 6, 3, UI_SURFACE_2, 0);
+    int fill = ui_clamp(progress, 0, 100) * width / 100;
+    if (fill > 0)
+        graphics_fill_rounded_rect(x, y, fill, 6, 3, tint);
+}
+void graphics_ui_draw_app_icon(int x, int y, int size, int app_kind)
+{
+    if (app_kind == 0) ui_icon_terminal(x, y, size, UI_BLUE_BRIGHT);
+    else if (app_kind == 1) ui_icon_folder(x, y, size, UI_MINT);
+    else if (app_kind == 2) ui_icon_system(x, y, size, UI_BLUE);
+    else if (app_kind == 3) ui_icon_settings(x, y, size, UI_AMBER);
+    else ui_icon_chip(x, y, size, UI_MINT);
+}
+void graphics_ui_draw_window_section(int x, int y, int width,
+                                     const char* title)
+{
+    graphics_draw_text(x, y, title, UI_WHITE, 1);
+    ui_line(x, y + 22, width, UI_EDGE_SOFT);
+}
+void graphics_ui_draw_table_row(int x, int y, int width, int height,
+                                const char* first, const char* second,
+                                const char* third, int alternate)
+{
+    graphics_fill_rect(x, y, width, height,
+        alternate ? 0x0017222F : UI_SURFACE_0);
+    graphics_draw_text(x + 16, y + height / 2 - 3, first, UI_WHITE, 1);
+    graphics_draw_text(x + width - 180, y + height / 2 - 3, second,
+                       UI_MUTED, 1);
+    graphics_draw_text(x + width - 70, y + height / 2 - 3, third,
+                       UI_MUTED, 1);
+    ui_line(x + 16, y + height - 1, width - 32, UI_EDGE_SOFT);
+}
+void graphics_ui_draw_navigation_item(int x, int y, int width,
+                                      const char* label, int selected,
+                                      int app_kind)
+{
+    if (selected)
+        ui_surface(x, y, width, 34, 7, UI_SURFACE_2, UI_EDGE_SOFT);
+    graphics_ui_draw_app_icon(x + 8, y + 6, 22, app_kind);
+    graphics_draw_text(x + 38, y + 12, label,
+                       selected ? UI_WHITE : UI_MUTED, 1);
+}
+void graphics_ui_draw_stat_card(int x, int y, int width, int height,
+                                const char* label, const char* value,
+                                const char* caption, uint32_t tint)
+{
+    ui_surface(x, y, width, height, 9, UI_SURFACE_0, UI_EDGE_SOFT);
+    ui_dot(x + 14, y + 15, tint);
+    graphics_draw_text(x + 27, y + 14, label, UI_QUIET, 1);
+    graphics_draw_text(x + 14, y + 37, value, UI_WHITE, 1);
+    graphics_draw_text(x + 14, y + height - 19, caption, UI_MUTED, 1);
+}
+void graphics_ui_draw_settings_row(int x, int y, int width,
+                                   const char* title, const char* subtitle,
+                                   const char* value)
+{
+    ui_line(x, y + 48, width, UI_EDGE_SOFT);
+    graphics_draw_text(x, y + 7, title, UI_WHITE, 1);
+    graphics_draw_text(x, y + 25, subtitle, UI_MUTED, 1);
+    graphics_draw_text(x + width - 150, y + 16, value, UI_BLUE_BRIGHT, 1);
+}
+void graphics_ui_draw_separator_label(int x, int y, int width,
+                                      const char* label)
+{
+    ui_line(x, y + 5, width, UI_EDGE_SOFT);
+    graphics_fill_rect(x, y, (int)(sizeof("SYSTEM") - 1) * 6 + 12,
+                       12, UI_SURFACE_0);
+    graphics_draw_text(x + 6, y + 1, label, UI_QUIET, 1);
+}
+void graphics_ui_draw_notice(int x, int y, int width, const char* message,
+                             uint32_t tint)
+{
+    ui_surface(x, y, width, 34, 7, UI_SURFACE_1, UI_EDGE_SOFT);
+    graphics_fill_rounded_rect(x + 10, y + 10, 3, 14, 1, tint);
+    graphics_draw_text(x + 22, y + 12, message, UI_MUTED, 1);
+}

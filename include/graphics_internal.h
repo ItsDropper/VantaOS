@@ -55,6 +55,8 @@ extern int cursor_saved_height;
 extern int cursor_saved_valid;
 
 void graphics_draw_start_menu_detail(int width, int height);
+void graphics_ui_draw_empty_state(int x, int y, int width, int height,
+                                  const char* title, const char* message);
 void graphics_ui_explorer_sidebar_heading(int x, int y, const char* title);
 void graphics_ui_explorer_column_header(int x, int y, int width);
 void graphics_ui_explorer_row(int x, int y, int width, int height,

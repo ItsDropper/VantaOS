@@ -175,7 +175,7 @@ int main(int argc, char** argv)
             return 10;
         }
     }
-    static const char range_success[] = "VANTAOS_USER_FILE_RANGE_IO_OK\\n";
+    static const char range_success[] = "VANTAOS_USER_FILE_RANGE_IO_OK\n";
     (void)vanta_write(range_success, sizeof(range_success) - 1U);
     const char* settings_args[] = { "/SYSTEM/SETTINGS.ELF", "--self-test" };
     long settings_pid = vanta_spawn("/SYSTEM/SETTINGS.ELF", settings_args, 2U);

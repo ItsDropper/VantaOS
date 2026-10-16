@@ -5,6 +5,7 @@
 #include "paging.h"
 #include "panic.h"
 #include "gdt.h"
+#include "serial.h"
 
 extern unsigned char stack_bottom;
 extern unsigned char stack_top;
@@ -97,16 +98,34 @@ static uint64_t scheduler_switch_from_stack(uint64_t current_stack,
 {
     uint32_t next_pid = scheduler_next_ready(current_pid);
     if (next_pid == current_pid)
+    {
+        process_t current;
+        if (process_snapshot(current_pid, &current) &&
+            current.state != PROCESS_RUNNING && current.state != PROCESS_READY)
+            serial_write("VANTAOS_SCHED_NO_RUNNABLE
+");
         return current_stack;
+    }
 
     uint32_t cpu_id = process_current_cpu_id();
     uint64_t next_stack = 0;
     paging_address_space_t* next_address_space = NULL;
-    if (cpu_id >= CPU_LOCAL_MAX ||
-        __atomic_load_n(&pending_outgoing_pid[cpu_id], __ATOMIC_ACQUIRE) != 0U ||
-        !process_prepare_context_switch(next_pid, current_pid, cpu_id,
-                                        &next_stack, &next_address_space))
+    if (cpu_id >= CPU_LOCAL_MAX)
         return current_stack;
+    if (__atomic_load_n(&pending_outgoing_pid[cpu_id], __ATOMIC_ACQUIRE) != 0U)
+    {
+        if (current_pid != 0U)
+            serial_write("VANTAOS_SCHED_PENDING_OUTGOING
+");
+        return current_stack;
+    }
+    if (!process_prepare_context_switch(next_pid, current_pid, cpu_id,
+                                        &next_stack, &next_address_space))
+    {
+        serial_write("VANTAOS_SCHED_PREPARE_FAILED
+");
+        return current_stack;
+    }
 
     /*
      * The outgoing process is deliberately still owned by this CPU. The

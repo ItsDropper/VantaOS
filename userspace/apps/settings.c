@@ -146,6 +146,20 @@ static int run_storage_self_test(void)
     static const char expected[] =
         "VANTA_SETTINGS=1\naccent=teal\ncompact=1\n";
     char actual[sizeof(expected)];
+    int previously_persisted = 0;
+    long existing = vanta_open(SETTINGS_PATH, VANTA_OPEN_READ);
+    if (existing >= 0)
+    {
+        long existing_count = vanta_read(
+            (int)existing, actual, sizeof(actual) - 1U);
+        (void)vanta_close((int)existing);
+        if (existing_count == (long)(sizeof(expected) - 1U))
+        {
+            actual[(size_t)existing_count] = '\0';
+            previously_persisted = text_equals(actual, expected);
+        }
+    }
+
     if (vanta_create_file(SETTINGS_PATH) < 0)
         return 1;
     long descriptor = vanta_open(
@@ -171,6 +185,11 @@ static int run_storage_self_test(void)
 
     static const char marker[] = "VANTAOS_SETTINGS_STORAGE_OK\n";
     (void)vanta_write(marker, sizeof(marker) - 1U);
+    if (previously_persisted)
+    {
+        static const char persist_marker[] = "VANTAOS_SETTINGS_PERSIST_OK\n";
+        (void)vanta_write(persist_marker, sizeof(persist_marker) - 1U);
+    }
     return 0;
 }
 

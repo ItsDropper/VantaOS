@@ -32,7 +32,7 @@ The current syscall entry is `int 0x80`. Put the syscall number in `RAX`; the fi
 | `4` | Read from an open file | `RDI`: descriptor; `RSI`: writable user-buffer address; `RDX`: maximum byte count |
 | `5` | Close an open file | `RDI`: descriptor |
 
-Serial and terminal writes accept at most 4096 bytes per call and validate the supplied range against the current process address space. File reads are limited to 4096 bytes per call and validate the complete destination range before consuming file data. Paths must terminate within `FS_PATH_MAX`; user programs can only open existing files for reading. Each process has eight descriptor slots, numbered from `3`, and descriptors are closed during process reaping. Errors are returned as negative values (`-EFAULT`-style `-14`, invalid descriptor `-9`, missing path `-2`, invalid argument `-22`, and resource exhaustion `-24`). This is a minimal bring-up interface, not a stable ABI. This ABI is internal and may change; it is not POSIX-compatible and is not yet versioned.
+Serial and terminal writes accept at most 4096 bytes per call and validate the supplied range against the current process address space. File reads are limited to 4096 bytes per call and validate the complete destination range before consuming file data. Paths must terminate within `FS_PATH_MAX`; user programs can only open existing files for reading. Each process has eight descriptor slots, numbered from `3`, and descriptors are closed during process reaping. Errors are returned as negative values (`-EFAULT`-style `-14`, invalid descriptor `-9`, missing path `-2`, invalid argument `-22`, and resource exhaustion `-24`). This is a minimal bring-up interface, not a stable or POSIX-compatible ABI.
 
 ## Loader and memory constraints
 

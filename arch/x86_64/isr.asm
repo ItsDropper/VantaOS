@@ -8,6 +8,7 @@ global irq12_stub
 global apic_spurious_stub
 global smp_wakeup_stub
 global lapic_timer_stub
+global reschedule_ipi_stub
 global process_entry_trampoline
 
 global exception0_stub
@@ -53,6 +54,7 @@ extern scheduler_tick
 extern apic_send_eoi
 extern apic_is_enabled
 extern lapic_timer_handle_interrupt
+extern reschedule_ipi_handle_interrupt
 
 apic_spurious_stub:
     iretq
@@ -132,6 +134,13 @@ lapic_timer_stub:
     cld
     SAVE_IRQ_ALL
     call lapic_timer_handle_interrupt
+    RESTORE_IRQ_ALL
+    iretq
+
+reschedule_ipi_stub:
+    cld
+    SAVE_IRQ_ALL
+    call reschedule_ipi_handle_interrupt
     RESTORE_IRQ_ALL
     iretq
 

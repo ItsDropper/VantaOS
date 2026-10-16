@@ -57,23 +57,24 @@ This roadmap prioritizes a trustworthy kernel over visual features. A Windows al
 - [x] Exercise the FAT32-loaded ELF and quoted argument path in QEMU CI.
 - [ ] Define a versioned/stable syscall ABI and error-code contract.
 - [ ] Add comprehensive user-fault containment and malformed pointer/ELF tests.
-- [ ] Add per-process file descriptors and user-mode file I/O.
+- [x] Add bounded per-process file descriptors and user-mode file I/O for the supported VFS/FAT32 operations.
 - [ ] Support `ET_DYN`, dynamic linking, and shared libraries.
 
 ### M5 — Storage and services
 - [x] Document the current VFS/FAT32 boundary and unsupported writes.
 - [x] Exercise FAT32-backed executable loading using a disposable CI disk image.
 - [ ] Expand FAT32 read tests against disposable disk fixtures.
-- [ ] Validate bounded FAT32 8.3 file create/replace writes and VFS readback in disposable QEMU disk fixtures.
-- [ ] Implement long-filename writes and directory creation; test persistence across reboot.
+- [x] Validate bounded FAT32 8.3 regular-file writes and VFS readback in disposable QEMU disk fixtures.
+- [ ] Implement long-filename writes, directory creation, rename/delete, crash-safe replacement, and broader persistence/corruption tests.
 - [ ] Add corruption-safe tests and consistent error propagation.
 
 ### M5.5 — User-space desktop application platform
 
-- [ ] Define and implement a bounded, versioned GUI syscall ABI for window lifecycle, draw submission, and queued input/focus events.
-- [ ] Keep framebuffer access and z-order under a kernel-owned compositor; never expose kernel pointers to applications.
-- [ ] Add QEMU tests for malformed GUI requests, invalid user pointers, focus/input routing, and cleanup when a client exits.
-- [ ] Implement durable FAT32-backed VFS create/write operations and safe user-mode write syscalls; verify config persistence across reboot.
+- [x] Define and implement the initial bounded GUI syscall ABI for window lifecycle, draw submission, and queued input/focus/close events.
+- [x] Keep framebuffer access and z-order under the kernel-owned renderer; do not expose kernel pointers to applications.
+- [x] Add QEMU tests for malformed GUI requests, invalid user pointers, and cleanup when a client exits.
+- [x] Implement bounded FAT32-backed regular-file create/write and user-mode write syscalls; verify the supported persistence path across a second boot.
+- [ ] Expand GUI regression coverage for click routing, focus transitions, queue overflow, close requests, and invalid event buffers.
 - [ ] Migrate Settings to a static ELF64 user-mode app first, with a versioned local config and functional navigation.
 - [ ] Migrate File Explorer to user mode and support launching only validated ELF64 executables or documented application manifests.
 - [ ] Move Terminal's window, input, and presentation onto the same GUI API while keeping its shell in ring 3.
@@ -88,5 +89,5 @@ This roadmap prioritizes a trustworthy kernel over visual features. A Windows al
 
 - Backup branch: `backup/pre-desktop-reliability-2026-10-15`.
 - Default branch: `master`.
-- Current user-mode status: static ELF64 execution from FAT32, bounded `argc`/`argv`, and basic output/exit syscalls are implemented and covered by the pull-request QEMU/UEFI regression workflow. This is not yet a general application environment.
-- Current next milestone: establish the user-space GUI syscall/event/presentation boundary. Existing Terminal syscalls are not sufficient for an isolated graphical app. Durable settings also depend on currently unsupported FAT32 create/write operations. See [User-space desktop applications](USERSPACE_GUI.md). Continue merging only after relevant QEMU and UEFI CI checks pass.
+- Current user-mode status: static ELF64 execution, bounded process/file syscalls, and an initial process-owned GUI ABI are implemented. CI checks selected syscall, file-I/O, multi-cluster FAT32, GUI malformed-request, dead-window-cleanup, and second-boot persistence cases. This remains an early bring-up environment, not a stable application platform.
+- Current next milestone: expand GUI event/focus/input tests, then implement Settings as a real ring-3 ELF using the GUI ABI and a versioned local configuration file. Date/time settings must wait for an explicit RTC policy and tested timezone conversion. See [User-space desktop applications](USERSPACE_GUI.md).

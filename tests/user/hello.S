@@ -443,7 +443,7 @@ file_failure_end:
 .section .bss
 .align 16
 file_buffer:
-    .skip fixture_end - fixture
+    .skip config_data_end - config_data
 .align 4
 child_status:
     .skip 4

@@ -1,4 +1,5 @@
 #include "file_explorer.h"
+#include "desktop_theme.h"
 
 #include "filesystem.h"
 #include "graphics.h"
@@ -281,7 +282,7 @@ static void explorer_sidebar_item(
     else if (type == 1)
     {
         graphics_fill_rounded_rect(
-            x + 11, y + 7, 18, 18, 4, 0x004B9CFF);
+            x + 11, y + 7, 18, 18, 4, VANTA_UI_ACCENT);
         graphics_draw_text(x + 16, y + 11, "C", 0x00FFFFFF, 1);
     }
     else
@@ -293,7 +294,7 @@ static void explorer_sidebar_item(
 
     graphics_draw_text(
         x + 38, y + 11, label,
-        selected ? 0x00FFFFFF : 0x00CBD4DE, 1);
+        selected ? 0x00FFFFFF : VANTA_UI_TEXT, 1);
 }
 
 static void explorer_title(int x, int y, int w, int h)
@@ -307,23 +308,23 @@ static void explorer_toolbar(int x, int y, int w)
 
     graphics_fill_rect(
         content, y, w - EXPLORER_SIDEBAR,
-        EXPLORER_TOOLBAR, 0x0017202B);
+        EXPLORER_TOOLBAR, VANTA_UI_TOOLBAR);
 
     graphics_fill_rounded_rect(
-        content + 10, y + 6, 32, 30, 6, 0x00232F3D);
+        content + 10, y + 6, 32, 30, 6, VANTA_UI_HOVER);
     graphics_draw_text(
         content + 21, y + 14, "<",
         explorer_has_history ? 0x00FFFFFF : 0x00677B8D, 1);
 
     graphics_fill_rounded_rect(
-        content + 48, y + 6, 32, 30, 6, 0x00232F3D);
+        content + 48, y + 6, 32, 30, 6, VANTA_UI_HOVER);
     graphics_draw_text(
         content + 59, y + 14, "^", 0x00FFFFFF, 1);
 
     graphics_fill_rect(
         content + 90, y + 6,
         w - EXPLORER_SIDEBAR - 104, 30,
-        0x00232F3D);
+        VANTA_UI_HOVER);
 
     graphics_draw_text(
         content + 103, y + 14,
@@ -353,11 +354,11 @@ void file_explorer_draw(int width, int height)
 
     graphics_fill_rect(
         wx, sidebar_y, EXPLORER_SIDEBAR,
-        wh - EXPLORER_TITLE, 0x00141D28);
+        wh - EXPLORER_TITLE, VANTA_UI_SURFACE);
 
     graphics_draw_text(
         wx + 16, sidebar_y + 22,
-        "LOCATIONS", 0x008D9BAC, 1);
+        "LOCATIONS", VANTA_UI_TEXT_SECONDARY, 1);
 
     {
         int system_id = explorer_directory_for_path("/system");
@@ -382,15 +383,15 @@ void file_explorer_draw(int width, int height)
 
     graphics_draw_text(
         wx + 16, sidebar_y + 172,
-        "SYSTEM", 0x008D9BAC, 1);
+        "SYSTEM", VANTA_UI_TEXT_SECONDARY, 1);
 
     /* System shortcuts use the same restrained row treatment. */
     for (int item = 0; item < 3; item++)
         graphics_fill_rounded_rect(wx + 12, sidebar_y + 188 + item * 24,
-            EXPLORER_SIDEBAR - 24, 24, 5, 0x00141D28);
-    graphics_draw_text(wx + 20, sidebar_y + 194, "/etc", 0x00CBD4DE, 1);
-    graphics_draw_text(wx + 20, sidebar_y + 218, "/drivers", 0x00CBD4DE, 1);
-    graphics_draw_text(wx + 20, sidebar_y + 242, "/devices", 0x00CBD4DE, 1);
+            EXPLORER_SIDEBAR - 24, 24, 5, VANTA_UI_SURFACE);
+    graphics_draw_text(wx + 20, sidebar_y + 194, "/etc", VANTA_UI_TEXT, 1);
+    graphics_draw_text(wx + 20, sidebar_y + 218, "/drivers", VANTA_UI_TEXT, 1);
+    graphics_draw_text(wx + 20, sidebar_y + 242, "/devices", VANTA_UI_TEXT, 1);
 
     /*
      * Show the active location explicitly. This also makes it obvious that
@@ -411,16 +412,16 @@ void file_explorer_draw(int width, int height)
     list_y = sidebar_y + EXPLORER_TOOLBAR;
 
     graphics_fill_rect(
-        content_x, list_y, content_w, 32, 0x001D2835);
+        content_x, list_y, content_w, 32, VANTA_UI_ROW);
     graphics_draw_text(
         content_x + 18, list_y + 10, "NAME",
-        0x008D9BAC, 1);
+        VANTA_UI_TEXT_SECONDARY, 1);
     graphics_draw_text(
         content_x + content_w - 150, list_y + 10, "TYPE",
-        0x008D9BAC, 1);
+        VANTA_UI_TEXT_SECONDARY, 1);
     graphics_draw_text(
         content_x + content_w - 66, list_y + 10, "SIZE",
-        0x008D9BAC, 1);
+        VANTA_UI_TEXT_SECONDARY, 1);
 
     count = filesystem_list(explorer_directory, ids, FS_MAX_NODES);
     if (count < 0)
@@ -454,7 +455,7 @@ void file_explorer_draw(int width, int height)
         graphics_draw_text(
             content_x + content_w - 150, row_y + 11,
             node->type == FS_NODE_DIRECTORY ? "Folder" : "File",
-            0x008D9BAC, 1);
+            VANTA_UI_TEXT_SECONDARY, 1);
 
         if (node->type != FS_NODE_DIRECTORY)
         {
@@ -473,7 +474,7 @@ void file_explorer_draw(int width, int height)
             graphics_draw_text(
                 content_x + content_w - 66,
                 row_y + 11, size_text,
-                0x008D9BAC, 1);
+                VANTA_UI_TEXT_SECONDARY, 1);
         }
     }
 
@@ -481,7 +482,7 @@ void file_explorer_draw(int width, int height)
         graphics_draw_text(
             content_x + 20, list_y + 58,
             "This folder is empty.",
-            0x008D9BAC, 1);
+            VANTA_UI_TEXT_SECONDARY, 1);
 }
 
 int file_explorer_click(int x, int y, int width, int height)

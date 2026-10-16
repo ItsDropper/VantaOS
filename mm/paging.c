@@ -608,37 +608,57 @@ uint64_t paging_get_page_flags(uintptr_t virtual_address)
 
 int paging_map_mmio_page(uintptr_t virtual_address, uintptr_t physical_address)
 {
+    uint64_t saved_flags = paging_lock_acquire();
     if ((virtual_address & (PAGE_SIZE - 1U)) != 0 ||
         (physical_address & (PAGE_SIZE - 1U)) != 0 ||
         virtual_address < MMIO_WINDOW_BASE ||
         virtual_address >= MMIO_WINDOW_BASE + MMIO_PT_COUNT * PAGE_2M ||
         paging_current() != &kernel_address_space)
+    {
+        paging_lock_release(saved_flags);
         return 0;
+    }
 
     uint64_t* table = table_for(virtual_address);
     if (!table)
+    {
+        paging_lock_release(saved_flags);
         return 0;
+    }
 
     uint32_t index = (uint32_t)((virtual_address >> 12) & 0x1FFU);
     table[index] = ((uint64_t)physical_address & 0x000FFFFFFFFFF000ULL) |
                    PAGE_PRESENT | PAGE_WRITE | 0x018U; /* PWT + PCD */
-    invalidate_page(virtual_address);
+    paging_lock_release(saved_flags);
+
+    if (!paging_tlb_shootdown(&kernel_address_space, virtual_address))
+        paging_tlb_failure();
     return 1;
 }
 
 void paging_unmap_page(uintptr_t virtual_address)
 {
+    uint64_t saved_flags = paging_lock_acquire();
     if ((virtual_address % PAGE_SIZE) != 0 ||
         paging_current() != &kernel_address_space)
+    {
+        paging_lock_release(saved_flags);
         return;
+    }
 
     uint64_t* table = table_for(virtual_address);
     if (!table)
+    {
+        paging_lock_release(saved_flags);
         return;
+    }
 
     uint32_t index = (uint32_t)((virtual_address >> 12) & 0x1FFU);
     table[index] = 0;
-    invalidate_page(virtual_address);
+    paging_lock_release(saved_flags);
+
+    if (!paging_tlb_shootdown(&kernel_address_space, virtual_address))
+        paging_tlb_failure();
 }
 
 uintptr_t paging_get_physical(uintptr_t virtual_address)

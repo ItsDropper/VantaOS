@@ -16,8 +16,7 @@ int gui_server_poll_event(uint32_t pid, uint32_t id,
 void gui_server_draw_windows(void);
 int gui_server_mouse_click(int x, int y, int button);
 void gui_server_mouse_move(int x, int y);
-void gui_server_pump_keyboard(void);
-int gui_server_has_keyboard_focus(void);
+char gui_server_read_terminal_char(void);
 int gui_server_take_redraw_request(void);
 void gui_server_cleanup_dead_windows(void);
 

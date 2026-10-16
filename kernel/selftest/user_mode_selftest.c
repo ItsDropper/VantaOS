@@ -105,7 +105,7 @@ int user_mode_selftest_handle_exception(unsigned int number,
         write_hex(frame->rip);
         serial_write(" error=");
         write_hex(frame->error_code);
-        serial_write("\\n");
+        serial_write("\n");
         user_test_redirect_to_kernel(frame);
         return 1;
     }
@@ -128,7 +128,7 @@ int user_mode_selftest_handle_exception(unsigned int number,
         __atomic_store_n(&user_test_unexpected, 1U, __ATOMIC_RELEASE);
     }
 
-    serial_write("VANTAOS_RING3_USER_EXCEPTION_HANDLED\\n");
+    serial_write("VANTAOS_RING3_USER_EXCEPTION_HANDLED\n");
     user_test_redirect_to_kernel(frame);
     return 1;
 }

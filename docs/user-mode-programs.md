@@ -1,6 +1,6 @@
 # Running ELF64 user programs
 
-VantaOS has an early x86-64 user-mode execution path. With a FAT32 volume mounted, use `exec /path/to/program.elf` from the shell. The loader currently accepts static `ET_EXEC` images only; `ET_DYN`, dynamic linking, relocations, and shared libraries are not implemented.
+VantaOS has an early x86-64 user-mode execution path. With a FAT32 volume mounted, use `exec /path/to/program.elf [args...]` from the shell. Arguments may be single- or double-quoted; whitespace inside quotes is preserved. The initial stack provides `argc`, a null-terminated `argv` pointer array, a null `envp`, and a minimal `AT_NULL` auxiliary-vector terminator. The loader currently accepts static `ET_EXEC` images only; `ET_DYN`, dynamic linking, relocations, and shared libraries are not implemented.
 
 ## Initial ABI (bring-up only)
 

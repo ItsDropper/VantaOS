@@ -477,7 +477,7 @@ void graphics_draw_start_menu_detail(int width, int height)
     graphics_draw_text(mx + 60, my + 18, "VantaOS", UI_WHITE, 1);
     graphics_draw_text(mx + 60, my + 34, "LOCAL WORKSPACE", UI_QUIET, 1);
     ui_surface(mx + mw - 42, my + 15, 24, 24, 12, UI_SURFACE_2, UI_EDGE_SOFT);
-    graphics_draw_text(mx + mw - 34, my + 23, "U", UI_MUTED, 1);
+    graphics_draw_text(mx + mw - 35, my + 23, "OS", UI_MUTED, 1);
 
     ui_label(mx + 24, my + 76, "PINNED APPLICATIONS");
     ui_label(mx + mw - 100, my + 76, "4 APPS");
@@ -487,7 +487,7 @@ void graphics_draw_start_menu_detail(int width, int height)
     ui_icon_terminal(mx + 36, my + 122, 30, UI_BLUE_BRIGHT);
     graphics_draw_text(mx + 78, my + 123, "Terminal", UI_WHITE, 1);
     graphics_draw_text(mx + 78, my + 141, "Run shell commands", UI_MUTED, 1);
-    ui_dot(mx + mw - 42, my + 116, UI_MINT);
+    ui_dot(mx + mw - 42, my + 134, UI_MINT);
 
     ui_surface(mx + 24, my + 164, mw - 48, 54, 9,
                0x001A2633, UI_EDGE_SOFT);

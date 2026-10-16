@@ -17,7 +17,6 @@
 #define USER_STACK_TOP ((uintptr_t)PAGING_USER_END + 1U)
 #define USER_STACK_SIZE (USER_STACK_PAGES * PAGE_SIZE)
 #define IDENTITY_MAP_LIMIT 0x40000000ULL
-#define USER_INITIAL_STACK_WORDS 6U
 
 typedef struct __attribute__((packed)) elf64_header
 {
@@ -70,6 +69,24 @@ static process_user_page_t* find_page(process_user_page_t* pages,
         if (pages[i].virtual_address == page_address)
             return &pages[i];
     return NULL;
+}
+
+static int write_user_stack(process_user_page_t* pages, uint32_t page_count,
+                            uintptr_t address, const void* source,
+                            size_t length)
+{
+    const uint8_t* input = (const uint8_t*)source;
+    for (size_t i = 0; i < length; i++)
+    {
+        uintptr_t target = address + i;
+        process_user_page_t* page =
+            find_page(pages, page_count, target);
+        if (!page || !(page->flags & PROCESS_USER_PAGE_WRITE))
+            return 0;
+        ((uint8_t*)page->physical_frame)
+            [target & (PAGE_SIZE - 1U)] = input[i];
+    }
+    return 1;
 }
 
 static void release_unpublished_image(paging_address_space_t* space,
@@ -127,13 +144,31 @@ static int allocate_and_map_page(paging_address_space_t* space,
     return 1;
 }
 
-int process_create_user_elf(const char* name, uint32_t parent_pid,
-                            const void* image, size_t image_size)
+int process_create_user_elf_args(const char* name, uint32_t parent_pid,
+                                 const void* image, size_t image_size,
+                                 uint32_t argc, const char* const argv[])
 {
     if (!process_initialized_state || !name || !name[0] || !image ||
         image_size < sizeof(elf64_header_t) ||
+        argc > PROCESS_USER_MAX_ARGS || (argc != 0U && !argv) ||
         !paging_nx_available())
         return -1;
+
+    size_t argument_lengths[PROCESS_USER_MAX_ARGS] = {0};
+    size_t total_argument_bytes = 0U;
+    for (uint32_t i = 0; i < argc; i++)
+    {
+        if (!argv[i] || (i == 0U && argv[i][0] == '\0'))
+            return -1;
+        size_t length = 0U;
+        while (length <= PROCESS_USER_ARG_BYTES_MAX && argv[i][length])
+            length++;
+        if (length >= PROCESS_USER_ARG_BYTES_MAX ||
+            total_argument_bytes > PROCESS_USER_ARG_BYTES_MAX - (length + 1U))
+            return -1;
+        argument_lengths[i] = length;
+        total_argument_bytes += length + 1U;
+    }
 
     const uint8_t* bytes = (const uint8_t*)image;
     const elf64_header_t* header = (const elf64_header_t*)bytes;
@@ -246,7 +281,6 @@ int process_create_user_elf(const char* name, uint32_t parent_pid,
         return -1;
     }
 
-    void* stack_frames[USER_STACK_PAGES] = {0};
     for (uint32_t i = 0; i < USER_STACK_PAGES; i++)
     {
         uintptr_t va = stack_base + (uintptr_t)i * PAGE_SIZE;
@@ -255,20 +289,64 @@ int process_create_user_elf(const char* name, uint32_t parent_pid,
             release_unpublished_image(space, pages, page_count);
             return -1;
         }
-        stack_frames[i] = pages[page_count - 1U].physical_frame;
     }
 
-    uint64_t* initial_words = (uint64_t*)((uint8_t*)stack_frames[
-        USER_STACK_PAGES - 1U] + PAGE_SIZE -
-        USER_INITIAL_STACK_WORDS * sizeof(uint64_t));
-    for (uint32_t i = 0; i < USER_INITIAL_STACK_WORDS; i++)
-        initial_words[i] = 0U;
+    uintptr_t argument_addresses[PROCESS_USER_MAX_ARGS] = {0};
+    uintptr_t stack_pointer = stack_top;
+    for (uint32_t i = argc; i > 0U; i--)
+    {
+        uint32_t index = i - 1U;
+        size_t length = argument_lengths[index] + 1U;
+        if (length > stack_pointer - stack_base)
+        {
+            release_unpublished_image(space, pages, page_count);
+            return -1;
+        }
+        stack_pointer -= length;
+        if (!write_user_stack(pages, page_count, stack_pointer,
+                              argv[index], length))
+        {
+            release_unpublished_image(space, pages, page_count);
+            return -1;
+        }
+        argument_addresses[index] = stack_pointer;
+    }
 
-    uintptr_t initial_stack = stack_top -
-        USER_INITIAL_STACK_WORDS * sizeof(uint64_t);
+    const size_t word_count = (size_t)argc + 5U;
+    const size_t table_bytes = word_count * sizeof(uint64_t);
+    if (table_bytes > stack_pointer - stack_base)
+    {
+        release_unpublished_image(space, pages, page_count);
+        return -1;
+    }
+    stack_pointer = (stack_pointer - table_bytes) & ~(uintptr_t)0xFU;
+    if (stack_pointer < stack_base ||
+        table_bytes > stack_top - stack_pointer)
+    {
+        release_unpublished_image(space, pages, page_count);
+        return -1;
+    }
+
+    uint64_t initial_words[PROCESS_USER_MAX_ARGS + 5U] = {0};
+    initial_words[0] = argc;
+    for (uint32_t i = 0; i < argc; i++)
+        initial_words[1U + i] = argument_addresses[i];
+    /* argv terminator, envp terminator, then AT_NULL and its value. */
+    initial_words[1U + argc] = 0U;
+    initial_words[2U + argc] = 0U;
+    initial_words[3U + argc] = 0U;
+    initial_words[4U + argc] = 0U;
+
+    if (!write_user_stack(pages, page_count, stack_pointer,
+                          initial_words, table_bytes))
+    {
+        release_unpublished_image(space, pages, page_count);
+        return -1;
+    }
+
     int pid = process_install_user_image(
         name, parent_pid, space, (uintptr_t)header->entry,
-        stack_base, stack_top, initial_stack, image_size,
+        stack_base, stack_top, stack_pointer, image_size,
         pages, page_count);
     if (pid <= 0)
     {
@@ -276,4 +354,11 @@ int process_create_user_elf(const char* name, uint32_t parent_pid,
         return -1;
     }
     return pid;
+}
+
+int process_create_user_elf(const char* name, uint32_t parent_pid,
+                            const void* image, size_t image_size)
+{
+    return process_create_user_elf_args(name, parent_pid, image, image_size,
+                                        0U, NULL);
 }

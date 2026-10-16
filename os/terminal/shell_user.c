@@ -6,16 +6,96 @@
 
 #define SHELL_EXEC_MAX_IMAGE_SIZE (1024U * 1024U)
 
+static int parse_exec_arguments(const char* input, char* storage,
+                                size_t storage_size, const char** argv,
+                                uint32_t argv_capacity, uint32_t* argc_out)
+{
+    if (!input || !storage || storage_size == 0U || !argv || !argc_out)
+        return 0;
+
+    size_t input_length = 0U;
+    while (input[input_length])
+    {
+        if (input_length + 1U >= storage_size)
+            return 0;
+        storage[input_length] = input[input_length];
+        input_length++;
+    }
+    storage[input_length] = '\0';
+
+    char* read = storage;
+    char* write = storage;
+    uint32_t argc = 0U;
+    while (*read)
+    {
+        while (*read == ' ' || *read == '\t')
+            read++;
+        if (!*read)
+            break;
+        if (argc >= argv_capacity)
+            return 0;
+
+        char quote = 0;
+        if (*read == '"' || *read == '\'')
+            quote = *read++;
+
+        argv[argc++] = write;
+        while (*read)
+        {
+            if (quote && *read == quote)
+                break;
+            if (!quote && (*read == ' ' || *read == '\t'))
+                break;
+            if (*read == '\\')
+            {
+                if (!read[1])
+                    return 0;
+                read++;
+            }
+            *write++ = *read++;
+        }
+
+        if (quote)
+        {
+            if (*read != quote)
+                return 0;
+            read++;
+            if (*read && *read != ' ' && *read != '\t')
+                return 0;
+        }
+        else if (*read == ' ' || *read == '\t')
+        {
+            /* Advance before writing NUL when read and write alias. */
+            read++;
+        }
+        *write++ = '\0';
+    }
+
+    *argc_out = argc;
+    return argc != 0U;
+}
+
 void shell_exec(const char* argument)
 {
     if (!argument || !argument[0])
     {
-        terminal_write("\nexec: usage: exec <elf-file>");
+        terminal_write("\nexec: usage: exec <elf-file> [args...]");
+        return;
+    }
+
+    char argument_storage[SHELL_BUFFER_SIZE];
+    const char* parsed_argv[PROCESS_USER_MAX_ARGS];
+    uint32_t argc = 0U;
+    if (!parse_exec_arguments(argument, argument_storage,
+                              sizeof(argument_storage), parsed_argv,
+                              PROCESS_USER_MAX_ARGS, &argc))
+    {
+        terminal_write("\nexec: malformed command line or too many arguments");
         return;
     }
 
     char path[FS_PATH_MAX];
-    shell_resolve_path(argument, path);
+    shell_resolve_path(parsed_argv[0], path);
 
     int node_id = vfs_lookup(path);
     if (node_id < 0)
@@ -62,8 +142,14 @@ void shell_exec(const char* argument)
         return;
     }
 
-    int pid = process_create_user_elf(
-        path, process_current_pid(), image, (size_t)bytes_read);
+    const char* user_argv[PROCESS_USER_MAX_ARGS];
+    user_argv[0] = path;
+    for (uint32_t i = 1U; i < argc; i++)
+        user_argv[i] = parsed_argv[i];
+
+    int pid = process_create_user_elf_args(
+        path, process_current_pid(), image, (size_t)bytes_read,
+        argc, user_argv);
     kfree(image);
 
     if (pid <= 0)

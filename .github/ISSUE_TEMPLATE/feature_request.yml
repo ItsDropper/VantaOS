@@ -1,0 +1,54 @@
+name: Feature proposal
+description: Propose a capability or architectural improvement
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the user-visible or engineering problem first. A proposed implementation is optional; new abstractions should solve a concrete need.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What cannot be done today, or what is difficult or unreliable?
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: What should VantaOS do differently? How could success be observed or tested?
+    validations:
+      required: true
+  - type: textarea
+    id: design
+    attributes:
+      label: Design ideas and trade-offs
+      description: Optional. Include constraints, alternatives, compatibility concerns, and failure cases.
+    validations:
+      required: false
+  - type: dropdown
+    id: area
+    attributes:
+      label: Main area
+      options:
+        - Boot and architecture
+        - Interrupts and SMP
+        - Processes and scheduling
+        - Memory management
+        - Filesystem and VFS
+        - Drivers and hardware
+        - Desktop and shell
+        - Build, tests, and documentation
+        - Other / cross-cutting
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Scope check
+      options:
+        - label: I have checked the README and documentation for existing plans or related work.
+          required: false
+        - label: I understand that this proposal is not a commitment or a claim that the feature is implemented.
+          required: true

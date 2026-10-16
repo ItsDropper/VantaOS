@@ -15,6 +15,8 @@ typedef struct cpu_local
     volatile uint32_t current_pid;
     volatile uint32_t interrupt_depth;
     uint32_t reserved;
+    /* Updated only by this logical CPU; also validates GS-based lookup. */
+    volatile uint64_t work_iterations;
 } cpu_local_t;
 
 /* Installs the current CPU's GS base and initializes its private state. */

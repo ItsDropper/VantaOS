@@ -327,39 +327,105 @@ static void heap_allocator_probe(void)
 
 
 static uint32_t smp_scheduler_probe_task_count;
+static uint32_t smp_scheduler_probe_ap_cpu;
 static volatile uint32_t smp_scheduler_probe_completed;
 static volatile uint32_t smp_scheduler_probe_cpu_mask;
+static volatile uint32_t smp_scheduler_probe_active;
+static volatile uint32_t smp_scheduler_probe_max_active;
+static volatile uint32_t smp_scheduler_probe_duplicates;
+static volatile uint32_t smp_scheduler_probe_seen[PROCESS_MAX];
 
 static void smp_scheduler_probe_entry(void)
 {
+    uint32_t pid = process_current_pid();
+    if (pid == 0U || pid >= PROCESS_MAX ||
+        __atomic_exchange_n(&smp_scheduler_probe_seen[pid], 1U,
+                            __ATOMIC_ACQ_REL) != 0U)
+        __atomic_add_fetch(&smp_scheduler_probe_duplicates, 1U,
+                           __ATOMIC_RELAXED);
+
     cpu_local_t* local = cpu_local_current();
     if (local && local->self == local && local->online != 0U)
         __atomic_fetch_or(&smp_scheduler_probe_cpu_mask,
                           1U << local->logical_id, __ATOMIC_RELEASE);
 
-    for (uint32_t i = 0; i < 5000000U; i++)
+    /*
+     * Do not barrier here: a barrier can occupy every available process slot
+     * with waiters before the scheduler gets a useful overlap window. Let each
+     * CPU enter the measured section as soon as its probe is scheduled.
+     *
+     * Keep this section non-preemptible: active > 1 can then only happen when
+     * two distinct CPUs execute probe entries concurrently.
+     */
+    __asm__ volatile ("cli" ::: "memory");
+    uint32_t active = __atomic_add_fetch(&smp_scheduler_probe_active, 1U,
+                                         __ATOMIC_ACQ_REL);
+    uint32_t observed = __atomic_load_n(&smp_scheduler_probe_max_active,
+                                        __ATOMIC_RELAXED);
+    while (active > observed &&
+           !__atomic_compare_exchange_n(&smp_scheduler_probe_max_active,
+                                        &observed, active, 0,
+                                        __ATOMIC_RELAXED,
+                                        __ATOMIC_RELAXED))
+    {
+    }
+
+    for (uint32_t i = 0; i < 50000U; i++)
         __asm__ volatile ("pause" ::: "memory");
 
+    __atomic_sub_fetch(&smp_scheduler_probe_active, 1U, __ATOMIC_ACQ_REL);
+    __asm__ volatile ("sti" ::: "memory");
     __atomic_add_fetch(&smp_scheduler_probe_completed, 1U, __ATOMIC_RELEASE);
 }
 
 static int smp_scheduler_probe_initialize(void)
 {
+    serial_write("VANTAOS_SMP_STRESS_INIT_BEGIN\n");
     smp_scheduler_probe_completed = 0;
+    smp_scheduler_probe_ap_cpu = UINT32_MAX;
     smp_scheduler_probe_cpu_mask = 0;
-    smp_scheduler_probe_task_count = smp_cpu_count() * 2U;
-    if (smp_scheduler_probe_task_count < 2U)
-        smp_scheduler_probe_task_count = 2U;
+    smp_scheduler_probe_active = 0;
+    smp_scheduler_probe_max_active = 0;
+    smp_scheduler_probe_duplicates = 0;
+    for (uint32_t pid = 0; pid < PROCESS_MAX; pid++)
+        __atomic_store_n(&smp_scheduler_probe_seen[pid], 0U,
+                         __ATOMIC_RELAXED);
+
+    for (uint32_t cpu = 0; cpu < smp_cpu_count(); cpu++)
+    {
+        if (!smp_cpu_is_bsp(cpu) && cpu_local_get(cpu))
+        {
+            smp_scheduler_probe_ap_cpu = cpu;
+            break;
+        }
+    }
+    if (smp_scheduler_probe_ap_cpu == UINT32_MAX)
+    {
+        serial_write("VANTAOS_SMP_SCHEDULER_STRESS_FAIL\n");
+        return 0;
+    }
+
+    serial_write("VANTAOS_SMP_STRESS_AP_SELECTED\n");
+    smp_scheduler_probe_task_count = smp_cpu_count() * 8U;
+    if (smp_scheduler_probe_task_count < 4U)
+        smp_scheduler_probe_task_count = 4U;
     if (smp_scheduler_probe_task_count > 64U)
         smp_scheduler_probe_task_count = 64U;
 
     for (uint32_t i = 0; i < smp_scheduler_probe_task_count; i++)
     {
-        /* Keep one probe on the BSP so AP participation is measured against it. */
+        /* Pin one probe to each side so the overlap test cannot depend on
+         * the scheduler opportunistically choosing an AP for ANY work. */
         int pid = i == 0U ?
-            process_create_kernel("smp-scheduler-probe-bsp",
-                                  process_current_pid(),
-                                  smp_scheduler_probe_entry) :
+            process_create_kernel_on_cpu("smp-scheduler-probe-bsp",
+                                         process_current_pid(),
+                                         smp_scheduler_probe_entry,
+                                         process_current_cpu_id()) :
+            i == 1U ?
+            process_create_kernel_on_cpu("smp-scheduler-probe-ap",
+                                         process_current_pid(),
+                                         smp_scheduler_probe_entry,
+                                         smp_scheduler_probe_ap_cpu) :
             process_create_kernel_any("smp-scheduler-probe",
                                       process_current_pid(),
                                       smp_scheduler_probe_entry);
@@ -369,11 +435,13 @@ static int smp_scheduler_probe_initialize(void)
             return 0;
         }
     }
+    serial_write("VANTAOS_SMP_STRESS_TASKS_CREATED\n");
     return 1;
 }
 
 static int smp_scheduler_probe_wait(void)
 {
+    serial_write("VANTAOS_SMP_STRESS_WAIT_BEGIN\n");
     uint32_t attempts = 0;
     while (attempts++ < 1500U &&
            __atomic_load_n(&smp_scheduler_probe_completed,
@@ -393,8 +461,14 @@ static int smp_scheduler_probe_wait(void)
     }
 
     uint32_t required_cpus = smp_cpu_count() > 1U ? 2U : 1U;
+    uint32_t max_active = __atomic_load_n(&smp_scheduler_probe_max_active,
+                                          __ATOMIC_ACQUIRE);
+    uint32_t duplicates = __atomic_load_n(&smp_scheduler_probe_duplicates,
+                                          __ATOMIC_ACQUIRE);
+    serial_write("VANTAOS_SMP_STRESS_WAIT_DONE\n");
     if (completed != smp_scheduler_probe_task_count ||
-        cpus_seen < required_cpus)
+        cpus_seen < required_cpus || duplicates != 0U ||
+        max_active < required_cpus)
     {
         serial_write("VANTAOS_SMP_SCHEDULER_STRESS_FAIL\n");
         return 0;
@@ -403,7 +477,6 @@ static int smp_scheduler_probe_wait(void)
     serial_write("VANTAOS_SMP_SCHEDULER_STRESS_OK\n");
     return 1;
 }
-
 
 static uint32_t smp_remote_wake_target_cpu;
 static volatile uint32_t smp_remote_wake_target_pid;

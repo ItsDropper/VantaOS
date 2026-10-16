@@ -159,13 +159,14 @@ int gui_server_create_window(uint32_t pid,
     if (request->width < GUI_WINDOW_MIN_WIDTH ||
         request->height < GUI_WINDOW_MIN_HEIGHT ||
         request->width > graphics_get_width() - 16U ||
-        request->height > graphics_get_height() - 80U)
+        request->height > graphics_get_height() - 128U)
         return -22;
 
     size_t title_length = 0U;
     while (title_length <= VANTA_GUI_TITLE_MAX && request->title[title_length])
         title_length++;
-    if (title_length == 0U || title_length > VANTA_GUI_TITLE_MAX)
+    if (title_length == 0U || title_length > VANTA_GUI_TITLE_MAX ||
+        title_length > (request->width - 100U) / 8U)
         return -22;
 
     uint64_t flags = spinlock_lock_irqsave(&gui_lock);

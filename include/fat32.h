@@ -31,5 +31,7 @@ int fat32_read_file(
 
 int fat32_create_file(const char* path);
 int fat32_write_file(const char* path, const char* data, uint32_t size);
+int fat32_write_file_range(const char* path, uint32_t offset,
+                           const char* data, uint32_t length);
 
 #endif

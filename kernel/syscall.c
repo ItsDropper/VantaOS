@@ -140,7 +140,13 @@ static int syscall_open(struct exception_frame* frame, uint32_t pid,
 static int syscall_read(struct exception_frame* frame, uint32_t pid,
                         const process_t* process)
 {
-    int descriptor = (int)(int64_t)frame->rdi;
+    if (frame->rdi < PROCESS_FD_BASE ||
+        frame->rdi >= PROCESS_FD_BASE + PROCESS_FD_COUNT)
+    {
+        frame->rax = (uint64_t)(int64_t)-9;
+        return 0;
+    }
+    int descriptor = (int)frame->rdi;
     uintptr_t address = (uintptr_t)frame->rsi;
     uint64_t length = frame->rdx;
 
@@ -185,7 +191,13 @@ static int syscall_read(struct exception_frame* frame, uint32_t pid,
 
 static int syscall_close(struct exception_frame* frame, uint32_t pid)
 {
-    int descriptor = (int)(int64_t)frame->rdi;
+    if (frame->rdi < PROCESS_FD_BASE ||
+        frame->rdi >= PROCESS_FD_BASE + PROCESS_FD_COUNT)
+    {
+        frame->rax = (uint64_t)(int64_t)-9;
+        return 0;
+    }
+    int descriptor = (int)frame->rdi;
     int handle = -1;
     if (!process_fd_remove(pid, descriptor, &handle))
     {
@@ -216,7 +228,7 @@ static int syscall_dispatch(struct exception_frame* frame)
         return 0;
     }
 
-    switch ((uint32_t)frame->rax)
+    switch (frame->rax)
     {
         case USER_SYSCALL_EXIT:
             process_terminate_current();

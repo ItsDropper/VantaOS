@@ -1,10 +1,6 @@
 #include "shell_internal.h"
 
-#include "heap.h"
 #include "terminal.h"
-#include "vfs.h"
-
-#define SHELL_EXEC_MAX_IMAGE_SIZE (1024U * 1024U)
 
 static int parse_exec_arguments(const char* input, char* storage,
                                 size_t storage_size, const char** argv,
@@ -97,64 +93,23 @@ void shell_exec(const char* argument)
     char path[FS_PATH_MAX];
     shell_resolve_path(parsed_argv[0], path);
 
-    int node_id = vfs_lookup(path);
-    if (node_id < 0)
-    {
-        terminal_write("\nexec: file not found: ");
-        terminal_write(path);
-        return;
-    }
-
-    const fs_node_t* node = vfs_get_node((uint32_t)node_id);
-    if (!node || node->type != FS_NODE_FILE)
-    {
-        terminal_write("\nexec: path is not a regular file");
-        return;
-    }
-    if (node->size < 64U || node->size > SHELL_EXEC_MAX_IMAGE_SIZE)
-    {
-        terminal_write("\nexec: ELF image size is outside the supported range");
-        return;
-    }
-
-    int handle = vfs_open(path, VFS_OPEN_READ);
-    if (handle < 0)
-    {
-        terminal_write("\nexec: could not open file");
-        return;
-    }
-
-    size_t allocation_size = (size_t)node->size + 1U;
-    char* image = (char*)kmalloc(allocation_size);
-    if (!image)
-    {
-        vfs_close(handle);
-        terminal_write("\nexec: not enough kernel memory to load image");
-        return;
-    }
-
-    int bytes_read = vfs_read(handle, image, (unsigned int)allocation_size);
-    vfs_close(handle);
-    if (bytes_read < 0 || (uint32_t)bytes_read != node->size)
-    {
-        kfree(image);
-        terminal_write("\nexec: incomplete file read");
-        return;
-    }
-
     const char* user_argv[PROCESS_USER_MAX_ARGS];
     user_argv[0] = path;
     for (uint32_t i = 1U; i < argc; i++)
         user_argv[i] = parsed_argv[i];
 
-    int pid = process_create_user_elf_args(
-        path, process_current_pid(), image, (size_t)bytes_read,
-        argc, user_argv);
-    kfree(image);
-
+    int pid = process_spawn_user_elf_file(
+        path, process_current_pid(), argc, user_argv);
     if (pid <= 0)
     {
-        terminal_write("\nexec: invalid ELF or process creation failed");
+        if (pid == -2)
+            terminal_write("\nexec: file not found or could not be opened");
+        else if (pid == -5)
+            terminal_write("\nexec: incomplete file read");
+        else if (pid == -12)
+            terminal_write("\nexec: not enough kernel memory to load image");
+        else
+            terminal_write("\nexec: invalid ELF or process creation failed");
         return;
     }
 

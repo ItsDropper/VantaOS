@@ -15,6 +15,7 @@
 #define USER_SYSCALL_OPEN 3U
 #define USER_SYSCALL_READ 4U
 #define USER_SYSCALL_CLOSE 5U
+#define USER_SYSCALL_SPAWN 6U
 #define USER_SYSCALL_IO_MAX 4096U
 #define USER_SYSCALL_WRITE_MAX 4096U
 
@@ -210,6 +211,101 @@ static int syscall_close(struct exception_frame* frame, uint32_t pid)
     return 0;
 }
 
+static int syscall_copy_user_string(char* destination, size_t capacity,
+                                     uintptr_t address,
+                                     const process_t* process,
+                                     size_t* length_out)
+{
+    if (!destination || capacity == 0U || !process || !length_out)
+        return -22;
+
+    for (size_t i = 0; i < capacity; i++)
+    {
+        uintptr_t current = address + i;
+        if (current < address ||
+            !paging_user_range_valid(process->address_space, current, 1U, 0))
+            return -14;
+
+        destination[i] = *(const char*)current;
+        if (destination[i] == '\0')
+        {
+            *length_out = i;
+            return 0;
+        }
+    }
+    return -22;
+}
+
+/*
+ * spawn(path, argv, argc) loads a read-only ELF64 file from the VFS and
+ * publishes it as a child of the calling user process. All user strings are
+ * copied into kernel-owned storage before filesystem or ELF code consumes
+ * them; no user pointer is retained by the child.
+ */
+static int syscall_spawn(struct exception_frame* frame,
+                         const process_t* process)
+{
+    uint64_t argc_value = frame->rdx;
+    if (argc_value == 0U || argc_value > PROCESS_USER_MAX_ARGS)
+    {
+        frame->rax = (uint64_t)(int64_t)-22;
+        return 0;
+    }
+
+    char path[FS_PATH_MAX];
+    size_t path_length = 0U;
+    int copy_result = syscall_copy_user_string(
+        path, sizeof(path), (uintptr_t)frame->rdi, process, &path_length);
+    if (copy_result != 0 || path_length == 0U)
+    {
+        frame->rax = (uint64_t)(int64_t)(copy_result != 0 ?
+                                         copy_result : -22);
+        return 0;
+    }
+
+    const uint32_t argc = (uint32_t)argc_value;
+    const uintptr_t argv_address = (uintptr_t)frame->rsi;
+    const size_t vector_size = (size_t)argc * sizeof(uintptr_t);
+    if (!paging_user_range_valid(process->address_space, argv_address,
+                                 vector_size, 0))
+    {
+        frame->rax = (uint64_t)(int64_t)-14;
+        return 0;
+    }
+
+    char argument_storage[PROCESS_USER_ARG_BYTES_MAX];
+    const char* argv[PROCESS_USER_MAX_ARGS];
+    size_t argument_bytes = 0U;
+    const uintptr_t* user_argv = (const uintptr_t*)argv_address;
+    for (uint32_t i = 0; i < argc; i++)
+    {
+        if (argument_bytes >= sizeof(argument_storage))
+        {
+            frame->rax = (uint64_t)(int64_t)-22;
+            return 0;
+        }
+
+        size_t argument_length = 0U;
+        copy_result = syscall_copy_user_string(
+            argument_storage + argument_bytes,
+            sizeof(argument_storage) - argument_bytes,
+            user_argv[i], process, &argument_length);
+        if (copy_result != 0)
+        {
+            frame->rax = (uint64_t)(int64_t)copy_result;
+            return 0;
+        }
+
+        argv[i] = argument_storage + argument_bytes;
+        argument_bytes += argument_length + 1U;
+    }
+
+    int child_pid = process_spawn_user_elf_file(
+        path, process->pid, argc, argv);
+    frame->rax = (uint64_t)(int64_t)child_pid;
+    return 0;
+}
+
 static int syscall_dispatch(struct exception_frame* frame)
 {
     if (!frame || (frame->cs & 3U) != 3U)
@@ -243,6 +339,8 @@ static int syscall_dispatch(struct exception_frame* frame)
             return syscall_read(frame, process.pid, &process);
         case USER_SYSCALL_CLOSE:
             return syscall_close(frame, process.pid);
+        case USER_SYSCALL_SPAWN:
+            return syscall_spawn(frame, &process);
         default:
             frame->rax = (uint64_t)(int64_t)-38;
             return 0;

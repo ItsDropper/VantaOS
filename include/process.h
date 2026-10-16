@@ -81,6 +81,9 @@ int process_create_user_elf(const char* name, uint32_t parent_pid,
 int process_create_user_elf_args(const char* name, uint32_t parent_pid,
                                  const void* image, size_t image_size,
                                  uint32_t argc, const char* const argv[]);
+/* Load a read-only ELF64 file from the VFS and publish it as a child. */
+int process_spawn_user_elf_file(const char* path, uint32_t parent_pid,
+                                uint32_t argc, const char* const argv[]);
 int process_create_kernel_any(const char* name, uint32_t parent_pid,
                               process_entry_t entry);
 int process_create_kernel_on_cpu(const char* name, uint32_t parent_pid,

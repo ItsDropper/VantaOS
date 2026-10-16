@@ -73,20 +73,23 @@ int paging_tlb_shootdown(paging_address_space_t* address_space,
         return 0;
 
     uint64_t saved_flags;
-    __asm__ volatile ("pushfq; popq %0; cli" : "=r"(saved_flags) :: "memory");
+    __asm__ volatile ("pushfq; popq %0" : "=r"(saved_flags));
 
+    /*
+     * Keep interrupts enabled while waiting for the global lock: the current
+     * CPU may itself be a target of the lock holder's shootdown. Disable local
+     * interrupts only after acquiring the lock, and only restore their prior
+     * state when leaving the critical section.
+     */
     uint32_t spins = 0;
     while (__atomic_exchange_n(&tlb_shootdown_lock, 1U,
                                __ATOMIC_ACQUIRE) != 0U)
     {
         if (spins++ >= TLB_SHOOTDOWN_SPIN_LIMIT)
-        {
-            if (saved_flags & (1ULL << 9))
-                __asm__ volatile ("sti" ::: "memory");
             return 0;
-        }
         __asm__ volatile ("pause" ::: "memory");
     }
+    __asm__ volatile ("cli" ::: "memory");
 
     cpu_local_t* current = cpu_local_current();
     if (current && current->self == current &&

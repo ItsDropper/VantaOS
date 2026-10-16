@@ -108,6 +108,8 @@ jobs:
             VANTAOS_PROCESS_DEFERRED_SWITCH_OK
             VANTAOS_PROCESS_OWNED_REUSE_OK
             VANTAOS_FILESYSTEM_NAMESPACE_OK
+            VANTAOS_FAT32_WRITE_READBACK_OK
+            VANTAOS_FAT32_NAME_GUARDS_OK
             VANTAOS_VFS_HANDLE_GUARDS_OK
             VANTAOS_SCHEDULER_PROBE_OK
             VANTAOS_SCHEDULER_REAP_OK
@@ -171,6 +173,9 @@ jobs:
             fi
             echo "All required markers passed at ${memory} MiB."
           done
+
+          # The second boot reuses the first boot's writable disk image.
+          grep -q '^VANTAOS_FAT32_REBOOT_PERSIST_OK' boot-512m-2cpu.log
 
       - name: Build the UEFI boot manager and EFI system image
         run: make uefi

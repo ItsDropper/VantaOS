@@ -171,9 +171,16 @@ int paging_tlb_shootdown(paging_address_space_t* address_space,
             if (expected[i] == 0U)
                 continue;
             const cpu_local_t* target = cpu_local_get(i);
+            /*
+             * Acknowledgements identify one exact serialized request. Ordered
+             * comparisons are invalid when the 64-bit generation wraps: an
+             * old UINT64_MAX acknowledgement would look newer than generation
+             * 1. No later request can be published while this lock is held, so
+             * only equality means this target completed the current request.
+             */
             if (!target ||
                 __atomic_load_n(&target->tlb_ack_generation,
-                                __ATOMIC_ACQUIRE) < expected[i])
+                                __ATOMIC_ACQUIRE) != expected[i])
                 pending = 1;
         }
 

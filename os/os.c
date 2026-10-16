@@ -9,6 +9,8 @@
 #include "keyboard.h"
 #include "mouse.h"
 #include "process.h"
+#include "cpu_local.h"
+#include "smp.h"
 #include "pmm.h"
 #include "serial.h"
 #include "scheduler.h"
@@ -23,6 +25,43 @@ static unsigned long long boot_terminal;
 static unsigned long long boot_keyboard;
 static unsigned long long boot_mouse;
 static unsigned long long boot_shell;
+
+static int smp_idle_processes_ready = 1;
+
+static void cpu_idle_process_entry(void)
+{
+    cpu_local_t* local = cpu_local_current();
+    if (local && local->self == local && local->online != 0U)
+        __atomic_store_n(&local->scheduler_online, 1U, __ATOMIC_RELEASE);
+
+    for (;;)
+        __asm__ volatile ("sti; hlt" ::: "memory");
+}
+
+static int create_smp_idle_processes(void)
+{
+    cpu_local_t* bsp = cpu_local_current();
+    unsigned int count = smp_cpu_count();
+
+    for (uint32_t cpu = 0; cpu < count; cpu++)
+    {
+        cpu_local_t* local = (cpu_local_t*)cpu_local_get(cpu);
+        if (!local)
+            return 0;
+        if (local == bsp)
+            continue;
+
+        char name[PROCESS_NAME_MAX + 1] = "smp-idle-00";
+        name[9] = (char)('0' + (cpu / 10U));
+        name[10] = (char)('0' + (cpu % 10U));
+        if (process_create_idle_for_cpu(cpu, name,
+                                        cpu_idle_process_entry) < 0)
+            return 0;
+    }
+
+    return 1;
+}
+
 
 #ifdef VANTAOS_SELF_TEST
 static uint32_t scheduler_probe_pid;
@@ -443,7 +482,11 @@ void os_initialize(multiboot_info_t* mbd)
      * boot stack, and the first timer IRQ will replace its saved ESP
      * with a genuine long-mode interrupt frame.
      */
-    process_attach_current("desktop", 0);
+    int boot_process_pid = process_attach_current("desktop", 0);
+    smp_idle_processes_ready =
+        boot_process_pid == 1 && create_smp_idle_processes();
+    if (!smp_idle_processes_ready)
+        serial_write("VANTAOS_SMP_IDLE_PROCESS_CREATE_FAIL\n");
 
     scheduler_initialize();
     terminal_process_initialize();
@@ -491,6 +534,22 @@ void os_run(void)
     desktop_present();
 
     __asm__ volatile ("sti");
+
+    if (!smp_idle_processes_ready || !smp_start_scheduler_cpus())
+    {
+        serial_write("VANTAOS_SMP_SCHEDULER_APS_FAIL\n");
+        for (;;)
+            __asm__ volatile ("cli; hlt" ::: "memory");
+    }
+
+#ifdef VANTAOS_SELF_TEST
+    if (!smp_scheduler_probe_initialize() || !smp_scheduler_probe_wait())
+    {
+        serial_write("VANTAOS_SMP_SCHEDULER_STRESS_FAIL\n");
+        for (;;)
+            __asm__ volatile ("cli; hlt" ::: "memory");
+    }
+#endif
 
     serial_write("VANTAOS_BOOT_OK\n");
     desktop_process_main();

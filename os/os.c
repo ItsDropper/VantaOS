@@ -703,6 +703,8 @@ void os_run(void)
     desktop_update();
     desktop_present();
 
+    serial_write("VANTAOS_BOOT_OK\n");
+    /* Publish boot completion before enabling timer-driven preemption. */
     __asm__ volatile ("sti");
 
     serial_write("VANTAOS_BOOT_OK\n");

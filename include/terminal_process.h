@@ -10,6 +10,8 @@ void terminal_process_request_exit(void);
 int terminal_process_is_running(void);
 int terminal_process_consume_redraw(void);
 void terminal_process_mark_redraw(void);
+void terminal_process_set_input_enabled(int enabled);
+int terminal_process_input_enabled(void);
 uint32_t terminal_process_pid(void);
 
 #endif

@@ -192,6 +192,20 @@ fixture_matches:
     cmp $-2, %rax
     jne file_fail
 
+    /* Invalid create pointers and access modes must be rejected. */
+    mov $15, %eax
+    mov $0x7ffffffff000, %rdi
+    int $0x80
+    cmp $-14, %rax
+    jne file_fail
+
+    mov $3, %eax
+    lea config_path(%rip), %rdi
+    xor %esi, %esi
+    int $0x80
+    cmp $-22, %rax
+    jne file_fail
+
     /* Create a real FAT32-backed config file through ring-3 syscalls. */
     mov $15, %eax
     lea config_path(%rip), %rdi
@@ -207,6 +221,15 @@ fixture_matches:
     cmp $3, %rax
     jl file_fail
     mov %rax, %r12
+
+    /* A write-only descriptor must not be usable for reads. */
+    mov $4, %eax
+    mov %r12, %rdi
+    lea file_buffer(%rip), %rsi
+    mov $1, %edx
+    int $0x80
+    cmp $-5, %rax
+    jne file_fail
 
     /* File writes must validate pointers and reject lengths above 511 bytes. */
     mov $14, %eax

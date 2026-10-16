@@ -299,7 +299,7 @@ jobs:
             sleep 1
           done
           test -s /tmp/vantaos-desktop.ppm
-          magick /tmp/vantaos-desktop.ppm -strip media/desktop.png
+          convert /tmp/vantaos-desktop.ppm -strip media/desktop.png
           test -s media/desktop.png
           identify media/desktop.png
 

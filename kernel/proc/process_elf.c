@@ -178,6 +178,7 @@ int process_create_user_elf(const char* name, uint32_t parent_pid,
         if (ph->memory_size == 0U || ph->file_size > ph->memory_size ||
             !range_in_image(ph->offset, ph->file_size, image_size) ||
             ph->virtual_address < PAGING_USER_BASE ||
+            ph->virtual_address > PAGING_USER_END ||
             ph->memory_size >
                 (uint64_t)PAGING_USER_END - ph->virtual_address + 1U ||
             (ph->flags & (PF_W | PF_X)) == (PF_W | PF_X) ||
@@ -253,8 +254,6 @@ int process_create_user_elf(const char* name, uint32_t parent_pid,
         uintptr_t va = stack_base + (uintptr_t)i * PAGE_SIZE;
         if (!allocate_and_map_page(space, pages, &page_count, va, 1, 0))
         {
-            for (uint32_t j = 0; j < USER_STACK_PAGES; j++)
-                (void)j;
             release_unpublished_image(space, pages, page_count);
             return -1;
         }

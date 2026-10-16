@@ -17,6 +17,8 @@ uint32_t apic_get_bsp_id(void);
 int apic_send_init_all(void);
 int apic_send_sipi(uint32_t apic_id, uint8_t startup_vector);
 int apic_send_fixed_ipi(uint32_t apic_id, uint8_t vector);
+/* Broadcasts an NMI to all other CPUs for system-wide fatal-stop handling. */
+int apic_send_nmi_all(void);
 /* Sends the dedicated reschedule-request vector; does not switch contexts. */
 int apic_send_reschedule_ipi(uint32_t apic_id);
 const acpi_platform_info_t* apic_get_platform_info(void);

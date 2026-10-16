@@ -2,6 +2,7 @@
 #include "apic.h"
 #include "cpu_local.h"
 #include "smp.h"
+#include "panic.h"
 #include "gdt.h"
 #include "heap.h"
 #include "interrupts.h"
@@ -327,8 +328,7 @@ static void kernel_initialize(const vanta_boot_info_t* boot_info)
     if (smp_result == SMP_INIT_FAILED)
     {
         serial_write("VANTAOS_SMP_INIT_FATAL_FAIL\n");
-        for (;;)
-            __asm__ volatile ("cli; hlt" ::: "memory");
+        kernel_panic_halt_all();
     }
 #ifdef VANTAOS_SELF_TEST
     spinlock_primitive_probe();

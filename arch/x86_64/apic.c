@@ -390,6 +390,12 @@ static int apic_send_ipi(uint32_t destination, uint32_t command)
     return delivered;
 }
 
+int apic_send_nmi_all(void)
+{
+    /* Fixed xAPIC ICR: NMI delivery, shorthand = all excluding self. */
+    return apic_send_ipi(0U, 0x000C0400U);
+}
+
 uint32_t apic_get_bsp_id(void)
 {
     return enabled && lapic ? lapic_read(LAPIC_ID) >> 24 : 0U;

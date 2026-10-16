@@ -5,6 +5,30 @@
 #include "terminal.h"
 #include "process.h"
 #include "fault_trace.h"
+#include "apic.h"
+#include "serial.h"
+
+static volatile uint32_t panic_broadcast_active;
+
+static int panic_broadcast_begin(void)
+{
+    return __atomic_exchange_n(&panic_broadcast_active, 1U,
+                               __ATOMIC_ACQ_REL) == 0U;
+}
+
+/*
+ * Stop peers only after the local panic report is complete. Freezing a peer
+ * while it owns a console/serial/graphics lock could deadlock panic reporting.
+ */
+static void panic_broadcast_stop_peers(void)
+{
+    /*
+     * Do not log after broadcasting: a peer may have been stopped while
+     * holding a serial lock, and logging here could deadlock the panic CPU.
+     */
+    if (apic_is_enabled())
+        (void)apic_send_nmi_all();
+}
 
 static const char* exception_names[] =
 {
@@ -31,6 +55,17 @@ static __attribute__((noreturn)) void panic_halt(void)
         __asm__ volatile ("hlt");
 }
 
+_Noreturn void kernel_panic_halt_all(void)
+{
+    __asm__ volatile ("cli" ::: "memory");
+    if (panic_broadcast_begin())
+    {
+        serial_write("VANTAOS_SMP_FATAL_HALT\n");
+        panic_broadcast_stop_peers();
+    }
+    panic_halt();
+}
+
 void kernel_panic(
     const char* reason,
     unsigned int exception_number,
@@ -40,6 +75,8 @@ void kernel_panic(
 )
 {
     __asm__ volatile ("cli");
+    if (!panic_broadcast_begin())
+        panic_halt();
 
     if (!graphics_is_initialized())
     {
@@ -75,6 +112,7 @@ void kernel_panic(
         }
 
         terminal_write("\nSYSTEM HALTED\n");
+        panic_broadcast_stop_peers();
         panic_halt();
     }
 
@@ -141,6 +179,7 @@ void kernel_panic(
         0x008E9AA5, 1
     );
 
+    panic_broadcast_stop_peers();
     panic_halt();
 }
 
@@ -149,6 +188,10 @@ void exception_handler(
     struct exception_frame* frame
 )
 {
+    if (exception_number == 2U &&
+        __atomic_load_n(&panic_broadcast_active, __ATOMIC_ACQUIRE) != 0U)
+        panic_halt();
+
     uintptr_t fault_address = 0;
     int has_fault_address = 0;
 

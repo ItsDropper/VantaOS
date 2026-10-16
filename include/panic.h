@@ -5,6 +5,8 @@
 
 struct exception_frame;
 
+_Noreturn void kernel_panic_halt_all(void);
+
 void kernel_panic(
     const char* reason,
     unsigned int exception_number,

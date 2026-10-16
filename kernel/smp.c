@@ -7,7 +7,6 @@
 #include "idt.h"
 #include "paging.h"
 #include "serial.h"
-#include "timer.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -19,7 +18,7 @@
 #define AP_STARTUP_SPIN_LIMIT 50000000U
 #define SMP_WORK_PROBE_ITERATIONS 100000U
 #define SMP_LOCAL_TIMER_VECTOR 0xF2U
-#define SMP_LOCAL_TIMER_REFERENCE_TICKS 10U
+#define SMP_LOCAL_TIMER_TARGET_HZ 100U
 #define SMP_RESCHEDULE_IPI_VECTOR 0xF3U
 
 typedef struct
@@ -263,9 +262,9 @@ static int smp_wait_for_local_timers(const acpi_platform_info_t* info)
     __asm__ volatile ("pushfq; popq %0" : "=r"(saved_flags));
     __asm__ volatile ("sti" ::: "memory");
 
-    uint32_t start_ticks = timer_get_ticks();
+    uint32_t spin = 0;
     int ready = 0;
-    for (;;)
+    while (spin++ < 250000000U)
     {
         ready = 1;
         for (uint32_t i = 0; i < info->cpu_count; i++)
@@ -277,10 +276,9 @@ static int smp_wait_for_local_timers(const acpi_platform_info_t* info)
                 break;
             }
         }
-        if (ready ||
-            (uint32_t)(timer_get_ticks() - start_ticks) >= 20U)
+        if (ready)
             break;
-        __asm__ volatile ("sti; hlt" ::: "memory");
+        __asm__ volatile ("pause" ::: "memory");
     }
 
     if ((saved_flags & (1ULL << 9)) == 0U)
@@ -386,7 +384,7 @@ int smp_initialize(void)
     }
 
     if (!apic_timer_calibrate(SMP_LOCAL_TIMER_VECTOR,
-                              SMP_LOCAL_TIMER_REFERENCE_TICKS,
+                              SMP_LOCAL_TIMER_TARGET_HZ,
                               &calibrated_timer_initial_count) ||
         calibrated_timer_initial_count == 0U)
     {

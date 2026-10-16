@@ -446,8 +446,7 @@ void os_initialize(multiboot_info_t* mbd)
     process_attach_current("desktop", 0);
 
     scheduler_initialize();
-    if (smp_cpu_count() > 1U)
-        (void)smp_scheduler_initialize();
+    (void)smp_scheduler_initialize();
     terminal_process_initialize();
     desktop_process_initialize();
 

@@ -958,6 +958,13 @@ static inline unsigned long long read_tsc(void)
     return ((unsigned long long)high << 32) | low;
 }
 
+static _Noreturn void os_boot_fatal(const char* marker)
+{
+    serial_write(marker);
+    for (;;)
+        __asm__ volatile ("cli; hlt" ::: "memory");
+}
+
 void os_initialize(multiboot_info_t* mbd)
 {
     terminal_initialize();
@@ -1001,6 +1008,8 @@ void os_initialize(multiboot_info_t* mbd)
     vfs_initialize();
 
     process_initialize();
+    if (!process_is_initialized())
+        os_boot_fatal("VANTAOS_PROCESS_INIT_FATAL_FAIL\\n");
 
     /*
      * Register the boot/desktop execution context as PID 1 before any
@@ -1008,10 +1017,12 @@ void os_initialize(multiboot_info_t* mbd)
      * boot stack, and the first timer IRQ will replace its saved ESP
      * with a genuine long-mode interrupt frame.
      */
-    process_attach_current("desktop", 0);
+    if (process_attach_current("desktop", 0) <= 0)
+        os_boot_fatal("VANTAOS_PROCESS_BOOT_ATTACH_FATAL_FAIL\\n");
 
     scheduler_initialize();
-    (void)smp_scheduler_initialize();
+    if (!smp_scheduler_initialize())
+        os_boot_fatal("VANTAOS_SMP_SCHEDULER_INIT_FATAL_FAIL\\n");
     terminal_process_initialize();
     desktop_process_initialize();
 

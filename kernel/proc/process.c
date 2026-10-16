@@ -702,6 +702,23 @@ int process_snapshot(uint32_t pid, process_t* snapshot)
     return ok;
 }
 
+
+int process_snapshot_try(uint32_t pid, process_t* snapshot)
+{
+    if (!initialized || pid >= PROCESS_MAX || !snapshot)
+        return 0;
+
+    uint64_t flags;
+    if (!spinlock_try_lock_irqsave(&process_table_lock, &flags))
+        return 0;
+
+    int ok = processes[pid].state != PROCESS_UNUSED;
+    if (ok)
+        *snapshot = processes[pid];
+    process_table_lock_release(flags);
+    return ok;
+}
+
 unsigned int process_count(void)
 {
     if (!initialized)

@@ -1,6 +1,7 @@
 #include "serial.h"
 
 #include <stdint.h>
+#include <stddef.h>
 
 #define SERIAL_COM1 0x3F8U
 #define SERIAL_SPIN_LIMIT 100000U
@@ -51,5 +52,19 @@ void serial_write(const char* text)
             serial_write_char('\r');
 
         serial_write_char(*text++);
+    }
+}
+
+
+void serial_write_bytes(const char* data, size_t length)
+{
+    if (!data)
+        return;
+
+    for (size_t i = 0; i < length; i++)
+    {
+        if (data[i] == '\n')
+            serial_write_char('\r');
+        serial_write_char(data[i]);
     }
 }

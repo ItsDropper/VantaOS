@@ -135,8 +135,11 @@ process_entry_trampoline:
 lapic_timer_stub:
     cld
     SAVE_IRQ_ALL
+    mov rdi, rsp
     call lapic_timer_handle_interrupt
-    RESTORE_IRQ_ALL
+    mov rsp, rax
+    pop rax
+    RESTORE_ALL
     iretq
 
 reschedule_ipi_stub:

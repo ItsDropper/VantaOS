@@ -492,68 +492,99 @@ void paging_initialize(void)
 
 int paging_map_page(uintptr_t virtual_address, uintptr_t physical_address)
 {
+    uint64_t saved_flags = paging_lock_acquire();
     if ((virtual_address % PAGE_SIZE) != 0 ||
         (physical_address % PAGE_SIZE) != 0 ||
         paging_current() != &kernel_address_space)
+    {
+        paging_lock_release(saved_flags);
         return 0;
+    }
 
     uint64_t* table = table_for(virtual_address);
     if (!table)
+    {
+        paging_lock_release(saved_flags);
         return 0;
+    }
 
     uint32_t table_index = (uint32_t)((virtual_address >> 12) & 0x1FFU);
-    table[table_index] =
-        ((uint64_t)physical_address) |
-        PAGE_PRESENT | PAGE_WRITE;
+    table[table_index] = ((uint64_t)physical_address) |
+                         PAGE_PRESENT | PAGE_WRITE;
+    paging_lock_release(saved_flags);
 
-    invalidate_page(virtual_address);
+    if (!paging_tlb_shootdown(&kernel_address_space, virtual_address))
+        paging_tlb_failure();
     return 1;
 }
-
 
 int paging_map_user_page(paging_address_space_t* address_space,
                          uintptr_t virtual_address,
                          uintptr_t physical_address,
                          int writable)
 {
+    uint64_t saved_flags = paging_lock_acquire();
     if ((virtual_address & (PAGE_SIZE - 1U)) != 0 ||
         (physical_address & (PAGE_SIZE - 1U)) != 0 ||
         virtual_address < PAGING_USER_BASE ||
         virtual_address > PAGING_USER_END ||
         physical_address >= PMM_MAX_PHYSICAL_ADDRESS ||
         !paging_owns_address_space(address_space))
+    {
+        paging_lock_release(saved_flags);
         return 0;
+    }
 
     uint64_t* entry = user_leaf_entry(address_space, virtual_address, 1);
     if (!entry || (*entry & PAGE_PRESENT))
+    {
+        paging_lock_release(saved_flags);
         return 0;
+    }
 
     *entry = ((uint64_t)physical_address) |
              PAGE_PRESENT | PAGE_USER |
              (writable ? PAGE_WRITE : 0U);
+    __atomic_add_fetch(&address_space->pending_shootdowns, 1U,
+                       __ATOMIC_RELEASE);
+    paging_lock_release(saved_flags);
 
-    if (paging_current() == address_space)
-        invalidate_page(virtual_address);
-
+    if (!paging_tlb_shootdown(address_space, virtual_address))
+        paging_tlb_failure();
+    __atomic_sub_fetch(&address_space->pending_shootdowns, 1U,
+                       __ATOMIC_RELEASE);
     return 1;
 }
 
 int paging_unmap_user_page(paging_address_space_t* address_space,
                            uintptr_t virtual_address)
 {
+    uint64_t saved_flags = paging_lock_acquire();
     if ((virtual_address & (PAGE_SIZE - 1U)) != 0 ||
         !paging_owns_address_space(address_space))
+    {
+        paging_lock_release(saved_flags);
         return 0;
+    }
 
     uint64_t* entry = user_leaf_entry(address_space, virtual_address, 0);
     if (!entry || !(*entry & PAGE_PRESENT))
+    {
+        paging_lock_release(saved_flags);
         return 0;
+    }
 
     *entry = 0;
-    if (paging_current() == address_space)
-        invalidate_page(virtual_address);
+    __atomic_add_fetch(&address_space->pending_shootdowns, 1U,
+                       __ATOMIC_RELEASE);
+    paging_lock_release(saved_flags);
 
-    /* The caller owns the mapped physical frame and must free it separately. */
+    if (!paging_tlb_shootdown(address_space, virtual_address))
+        paging_tlb_failure();
+    __atomic_sub_fetch(&address_space->pending_shootdowns, 1U,
+                       __ATOMIC_RELEASE);
+
+    /* The caller owns the unmapped physical frame and must free it separately. */
     return 1;
 }
 

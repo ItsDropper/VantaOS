@@ -67,6 +67,17 @@ This roadmap prioritizes a trustworthy kernel over visual features. A Windows al
 - [ ] Implement file/directory creation and writes; test persistence across reboot.
 - [ ] Add corruption-safe tests and consistent error propagation.
 
+### M5.5 — User-space desktop application platform
+
+- [ ] Define and implement a bounded, versioned GUI syscall ABI for window lifecycle, draw submission, and queued input/focus events.
+- [ ] Keep framebuffer access and z-order under a kernel-owned compositor; never expose kernel pointers to applications.
+- [ ] Add QEMU tests for malformed GUI requests, invalid user pointers, focus/input routing, and cleanup when a client exits.
+- [ ] Implement durable FAT32-backed VFS create/write operations and safe user-mode write syscalls; verify config persistence across reboot.
+- [ ] Migrate Settings to a static ELF64 user-mode app first, with a versioned local config and functional navigation.
+- [ ] Migrate File Explorer to user mode and support launching only validated ELF64 executables or documented application manifests.
+- [ ] Move Terminal's window, input, and presentation onto the same GUI API while keeping its shell in ring 3.
+- [ ] Implement RTC UTC/local policy and a timezone-rule service before claiming region-based local time or DST correctness.
+
 ### M6 — Daily-driver prototype
 - [ ] Networking, audio, practical USB, and reliable graphics/input.
 - [ ] Package installation, signed updates, recovery, and rollback.
@@ -77,4 +88,4 @@ This roadmap prioritizes a trustworthy kernel over visual features. A Windows al
 - Backup branch: `backup/pre-desktop-reliability-2026-10-15`.
 - Default branch: `master`.
 - Current user-mode status: static ELF64 execution from FAT32, bounded `argc`/`argv`, and basic output/exit syscalls are implemented and covered by the pull-request QEMU/UEFI regression workflow. This is not yet a general application environment.
-- Next userspace milestone: per-process file descriptors and safe user-mode file I/O, backed by end-to-end tests. Continue merging only after relevant QEMU and UEFI CI checks pass.
+- Current next milestone: establish the user-space GUI syscall/event/presentation boundary. Existing Terminal syscalls are not sufficient for an isolated graphical app. Durable settings also depend on currently unsupported FAT32 create/write operations. See [User-space desktop applications](USERSPACE_GUI.md). Continue merging only after relevant QEMU and UEFI CI checks pass.

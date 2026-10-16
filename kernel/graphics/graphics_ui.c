@@ -36,7 +36,7 @@ void graphics_draw_panel(int x, int y, int w, int h)
 }
 
 
-void graphics_draw_window_frame(int x, int y, int w, int h, const char* title)
+void graphics_draw_window_frame(int x, int y, int w, int h, const char* title, int show_window_controls)
 {
     if (w <= 0 || h <= 0)
         return;
@@ -52,15 +52,23 @@ void graphics_draw_window_frame(int x, int y, int w, int h, const char* title)
     graphics_draw_text(x + 48, y + 18, title ? title : "Window",
                        VANTA_UI_TEXT, 1);
 
-    int controls_x = x + w - 138;
-    for (int i = 0; i < 3; i++)
+    if (show_window_controls)
     {
-        int bx = controls_x + i * 46;
-        graphics_fill_rect(bx, y + 1, 1, 44, 0x00232E3B);
+        int controls_x = x + w - 138;
+        for (int i = 0; i < 3; i++)
+        {
+            int bx = controls_x + i * 46;
+            graphics_fill_rect(bx, y + 1, 1, 44, VANTA_UI_BORDER);
+        }
+        graphics_draw_text(controls_x + 20, y + 19, "_", 0x00AAB8C8, 1);
+        graphics_draw_text(controls_x + 60, y + 17, "[]", 0x00AAB8C8, 1);
+        graphics_draw_text(controls_x + 110, y + 18, "X", 0x00DCE4EC, 1);
     }
-    graphics_draw_text(controls_x + 20, y + 19, "_", 0x00AAB8C8, 1);
-    graphics_draw_text(controls_x + 60, y + 17, "[]", 0x00AAB8C8, 1);
-    graphics_draw_text(controls_x + 110, y + 18, "X", 0x00DCE4EC, 1);
+    else
+    {
+        graphics_fill_rect(x + w - 46, y + 1, 1, 44, VANTA_UI_BORDER);
+        graphics_draw_text(x + w - 28, y + 18, "X", 0x00DCE4EC, 1);
+    }
 }
 
 void graphics_draw_taskbar(int taskbar_y, int width)
@@ -94,10 +102,7 @@ void graphics_draw_taskbar(int taskbar_y, int width)
         graphics_fill_rounded_rect(center - 30, taskbar_y + 48, 16, 2, 1,
             0x0079B8FF);
 
-    /* Small system affordance at the right; not a fake status indicator. */
-    graphics_fill_rounded_rect(width - 46, taskbar_y + 15, 30, 30, 9,
-        0x0019232F);
-    graphics_draw_vanta_logo(width - 42, taskbar_y + 19, 22);
+    /* No decorative status icon: every taskbar affordance has an action. */
 }
 
 void graphics_present(void)
@@ -162,7 +167,7 @@ void graphics_present(void)
         int wh = h - 96;
         if (wh > 480) wh = 480;
         int wx = w / 2 - ww / 2, wy = h / 2 - wh / 2;
-        graphics_draw_window_frame(wx, wy, ww, wh, "Settings");
+        graphics_draw_window_frame(wx, wy, ww, wh, "Settings", 0);
         graphics_draw_text(wx + 28, wy + 82, "Display", 0x0079B8FF, 1);
         graphics_draw_text(wx + 28, wy + 112, "Resolution", 0x0093A3B5, 1);
         const char* labels[3] = {"800X600", "1024X768", "1280X720"};
@@ -192,7 +197,7 @@ void graphics_present(void)
         int ww = 760, wh = 480;
         int wx = w / 2 - ww / 2, wy = h / 2 - wh / 2;
 
-        graphics_draw_window_frame(wx, wy, ww, wh, "System");
+        graphics_draw_window_frame(wx, wy, ww, wh, "System", 0);
 
         graphics_draw_text(wx + 28, wy + 108, "System overview", 0x0079B8FF, 1);
         graphics_fill_rect(wx + 28, wy + 132, ww - 56, 1, 0x00293443);
@@ -217,7 +222,7 @@ void graphics_present(void)
         resolution[13]=0;
         graphics_draw_text(wx + 190, wy + 206, resolution, 0x00E0E7EF, 1);
 
-        graphics_draw_text(wx + 28, wy + 238, "SERVICES", 0x0079B8FF, 1);
+        graphics_draw_text(wx + 28, wy + 238, "Services", 0x0079B8FF, 1);
         graphics_fill_rect(wx + 28, wy + 262, ww - 56, 1, 0x00293443);
         graphics_draw_text(wx + 28, wy + 282, "Filesystem", 0x008A9BAD, 1);
         graphics_draw_text(wx + 190, wy + 282,

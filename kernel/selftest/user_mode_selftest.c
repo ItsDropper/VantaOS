@@ -96,6 +96,7 @@ int user_mode_selftest_handle_exception(unsigned int number,
         __atomic_store_n(&user_test_unexpected, 1U, __ATOMIC_RELEASE);
     }
 
+    serial_write("VANTAOS_RING3_USER_EXCEPTION_HANDLED\n");
     user_test_redirect_to_kernel(frame);
     return 1;
 }
@@ -109,7 +110,13 @@ static int run_user_probe(unsigned int mode,
     __atomic_store_n(&user_test_mode, mode, __ATOMIC_RELEASE);
     __atomic_store_n(&user_test_active, 1U, __ATOMIC_RELEASE);
 
+    serial_write(mode == USER_TEST_SYSCALL_MODE ?
+        "VANTAOS_RING3_ENTER_SYSCALL\n" :
+        "VANTAOS_RING3_ENTER_ISOLATION\n");
     user_mode_test_enter((uintptr_t)PAGING_USER_BASE, user_stack_top);
+    serial_write(mode == USER_TEST_SYSCALL_MODE ?
+        "VANTAOS_RING3_RETURN_SYSCALL\n" :
+        "VANTAOS_RING3_RETURN_ISOLATION\n");
 
     __atomic_store_n(&user_test_active, 0U, __ATOMIC_RELEASE);
     if (mode == USER_TEST_SYSCALL_MODE)
@@ -123,6 +130,7 @@ static int run_user_probe(unsigned int mode,
 
 int user_mode_selftest_run(void)
 {
+    serial_write("VANTAOS_RING3_TEST_START\n");
     paging_address_space_t* space = paging_create_address_space();
     void* code_frame = pmm_alloc_block();
     void* stack_frame = pmm_alloc_block();
@@ -151,6 +159,7 @@ int user_mode_selftest_run(void)
 
     if (ok)
     {
+        serial_write("VANTAOS_RING3_TEST_MAPPINGS_READY\n");
         /* mov eax,1; int 0x80; ud2 -- the test-only exit syscall. */
         static const uint8_t syscall_program[] = {
             0xB8, 0x01, 0x00, 0x00, 0x00, 0xCD, 0x80, 0x0F, 0x0B
@@ -167,6 +176,8 @@ int user_mode_selftest_run(void)
     {
         paging_switch_address_space(space);
         ok = paging_get_current_address_space() == space;
+        if (ok)
+            serial_write("VANTAOS_RING3_TEST_ADDRESS_SPACE_ACTIVE\n");
         if (ok)
             syscall_ok = run_user_probe(
                 USER_TEST_SYSCALL_MODE,

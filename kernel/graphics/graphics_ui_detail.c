@@ -353,20 +353,20 @@ void graphics_draw_settings_page_detail(int x, int y, int w, int h)
     int inner_w = w - 48;
     ui_window_heading(x + 24, y + 66, inner_w, "PERSONALIZATION",
         "Display settings", "Changes apply only when the graphics backend supports them.");
-    ui_surface(x + 24, y + 140, inner_w, 112, 10, UI_SURFACE_0, UI_EDGE_SOFT);
-    graphics_draw_text(x + 42, y + 158, "Resolution", UI_WHITE, 1);
-    graphics_draw_text(x + 42, y + 177, "Select a framebuffer mode", UI_MUTED, 1);
+    ui_surface(x + 24, y + 128, inner_w, 104, 10, UI_SURFACE_0, UI_EDGE_SOFT);
+    graphics_draw_text(x + 42, y + 137, "Resolution", UI_WHITE, 1);
+    graphics_draw_text(x + 42, y + 151, "Select a framebuffer mode", UI_MUTED, 1);
     const char* resolutions[3] = {"800 x 600", "1024 x 768", "1280 x 720"};
     int gap = 10;
-    int bw = (inner_w - 36 - gap * 2) / 3;
+    int bw = (w - 56 - gap * 2) / 3;
     for (int i = 0; i < 3; ++i)
     {
-        int bx = x + 42 + i * (bw + gap);
-        int by = y + 205;
+        int bx = x + 28 + i * (bw + gap);
+        int by = y + 156;
         int selected = settings_resolution_index == i;
-        ui_surface(bx, by, bw, 32, 6, selected ? UI_BLUE_DARK : UI_SURFACE_1,
+        ui_surface(bx, by, bw, 50, 8, selected ? UI_BLUE_DARK : UI_SURFACE_1,
                    selected ? UI_BLUE : UI_EDGE_SOFT);
-        graphics_draw_text(bx + 10, by + 12, resolutions[i],
+        graphics_draw_text(bx + 10, by + 21, resolutions[i],
                            selected ? UI_WHITE : UI_MUTED, 1);
     }
     ui_surface(x + 24, y + 266, inner_w, h - 292, 10,

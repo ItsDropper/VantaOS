@@ -2,7 +2,6 @@
 
 #include "paging.h"
 #include "process.h"
-#include "heap.h"
 #include "serial.h"
 #include "terminal.h"
 #include "vfs.h"
@@ -302,53 +301,9 @@ static int syscall_spawn(struct exception_frame* frame,
         argument_bytes += argument_length + 1U;
     }
 
-    int node_id = vfs_lookup(path);
-    if (node_id < 0)
-    {
-        frame->rax = (uint64_t)(int64_t)-2;
-        return 0;
-    }
-
-    const fs_node_t* node = vfs_get_node((uint32_t)node_id);
-    if (!node || node->type != FS_NODE_FILE ||
-        node->size < 64U || node->size > USER_SYSCALL_EXEC_MAX)
-    {
-        frame->rax = (uint64_t)(int64_t)-8;
-        return 0;
-    }
-
-    const size_t image_size = (size_t)node->size;
-    int handle = vfs_open(path, VFS_OPEN_READ);
-    if (handle < 0)
-    {
-        frame->rax = (uint64_t)(int64_t)-2;
-        return 0;
-    }
-
-    char* image = (char*)kmalloc(image_size);
-    if (!image)
-    {
-        (void)vfs_close(handle);
-        frame->rax = (uint64_t)(int64_t)-12;
-        return 0;
-    }
-
-    int bytes_read = vfs_read(handle, image, (unsigned int)image_size);
-    int close_result = vfs_close(handle);
-    if (bytes_read < 0 || (size_t)bytes_read != image_size ||
-        close_result != 0)
-    {
-        kfree(image);
-        frame->rax = (uint64_t)(int64_t)-5;
-        return 0;
-    }
-
-    int child_pid = process_create_user_elf_args(
-        path, process->pid, image, image_size, argc, argv);
-    kfree(image);
-
-    frame->rax = child_pid > 0 ? (uint64_t)child_pid :
-                 (uint64_t)(int64_t)-8;
+    int child_pid = process_spawn_user_elf_file(
+        path, process->pid, argc, argv);
+    frame->rax = (uint64_t)(int64_t)child_pid;
     return 0;
 }
 

@@ -135,6 +135,14 @@ void shell_execute(void)
     {
         shell_cat(&shell_buffer[4]);
     }
+    else if (shell_buffer[0] == 'e' &&
+             shell_buffer[1] == 'x' &&
+             shell_buffer[2] == 'e' &&
+             shell_buffer[3] == 'c' &&
+             shell_buffer[4] == ' ')
+    {
+        shell_exec(&shell_buffer[5]);
+    }
     else if (shell_string_equals(
                  shell_buffer,
                  "ps"))

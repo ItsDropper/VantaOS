@@ -531,11 +531,17 @@ int process_set_affinity(uint32_t pid, uint32_t cpu_id)
         process_request_cpu_reschedule(owner_cpu);
 
     if (cpu_id != PROCESS_CPU_ANY)
-        process_request_cpu_reschedule(cpu_id);
+    {
+        if (cpu_id != owner_cpu)
+            process_request_cpu_reschedule(cpu_id);
+    }
     else
     {
         for (uint32_t cpu = 0; cpu < cpu_local_capacity(); cpu++)
-            process_request_cpu_reschedule(cpu);
+        {
+            if (cpu != owner_cpu)
+                process_request_cpu_reschedule(cpu);
+        }
     }
     return 1;
 }

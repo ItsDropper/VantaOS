@@ -214,6 +214,18 @@ uint64_t scheduler_tick(uint64_t current_stack)
         __atomic_exchange_n(&local->reschedule_pending, 0U,
                             __ATOMIC_ACQ_REL) != 0U;
 
+    /*
+     * Sleeping and terminating processes must never continue executing merely
+     * because their round-robin quantum has not expired. In particular,
+     * waitpid marks its caller SLEEPING from inside the syscall path; the very
+     * next timer interrupt must switch to the runnable child (or idle task).
+     */
+    process_t current;
+    int current_runnable = process_snapshot(current_pid, &current) &&
+        (current.state == PROCESS_RUNNING || current.state == PROCESS_READY);
+    if (!current_runnable)
+        requested = 1;
+
     volatile uint32_t* quantum_ticks = scheduler_quantum_slot();
     if (!requested && ++(*quantum_ticks) < SCHEDULER_QUANTUM_TICKS)
         return current_stack;

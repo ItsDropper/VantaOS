@@ -287,6 +287,13 @@ int apic_send_sipi(uint32_t apic_id, uint8_t startup_vector)
     return apic_send_ipi(apic_id, 0x00000600U | startup_vector);
 }
 
+int apic_send_fixed_ipi(uint32_t apic_id, uint8_t vector)
+{
+    if (vector < 0x10U || vector == 0xFFU)
+        return 0;
+    return apic_send_ipi(apic_id, vector);
+}
+
 int apic_is_enabled(void)
 {
     return enabled;

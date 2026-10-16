@@ -41,10 +41,9 @@ void shell_ps(void)
 
     for (uint32_t pid = 0; pid < PROCESS_MAX; pid++)
     {
-        const process_t* process =
-            process_get(pid);
+        process_t process;
 
-        if (process == 0)
+        if (!process_snapshot(pid, &process))
             continue;
 
         terminal_write("   ");
@@ -57,16 +56,16 @@ void shell_ps(void)
         terminal_write("    ");
 
         shell_print_decimal(
-            process->parent_pid
+            process.parent_pid
         );
 
         terminal_write("   ");
         terminal_write(
-            shell_process_state(process->state)
+            shell_process_state(process.state)
         );
 
         terminal_write("   ");
-        terminal_write(process->name);
+        terminal_write(process.name);
         terminal_putchar('\n');
     }
 }

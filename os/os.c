@@ -361,7 +361,8 @@ static void smp_scheduler_probe_entry(void)
         }
         if (cpus_seen >= required_cpus)
             break;
-        __asm__ volatile ("pause" ::: "memory");
+        /* Let the local timer preempt this waiter so other CPUs can run probes. */
+        __asm__ volatile ("sti; pause" ::: "memory");
     }
 
     /*

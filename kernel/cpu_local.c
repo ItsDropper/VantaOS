@@ -1,5 +1,6 @@
 #include "cpu_local.h"
 #include "paging.h"
+#include "gdt.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -49,9 +50,20 @@ int cpu_local_initialize(uint32_t logical_id, uint32_t apic_id)
     __atomic_store_n(&local->online, 0U, __ATOMIC_RELAXED);
 
     /*
-     * Each CPU has its own IA32_GS_BASE MSR. No SWAPGS is needed yet because
-     * VantaOS has not entered user mode; a future ring-3 transition must add
-     * a deliberate kernel/user GS-base protocol before exposing this API.
+     * Install a valid bootstrap RSP0 before enabling the CPU-local state.
+     * The scheduler replaces it with the selected process's kernel-stack top
+     * before that process can return to ring 3.
+     */
+    uintptr_t current_rsp;
+    __asm__ volatile ("mov %%rsp, %0" : "=r"(current_rsp));
+    current_rsp &= ~(uintptr_t)0xFULL;
+    if (!gdt_set_kernel_stack(logical_id, current_rsp) ||
+        !gdt_load_task_register(logical_id))
+        return 0;
+
+    /*
+     * GS:0 is the CPU-local self pointer. Entering ring 3 later requires a
+     * SWAPGS protocol and a user GS-base policy; neither is implicit here.
      */
     write_msr(IA32_GS_BASE_MSR, (uint64_t)(uintptr_t)local);
     if (cpu_local_current() != local ||
@@ -63,7 +75,6 @@ int cpu_local_initialize(uint32_t logical_id, uint32_t apic_id)
 
 cpu_local_t* cpu_local_current(void)
 {
-    /* GS is not guaranteed to be initialized when APIC/SMP is unavailable. */
     if (read_msr(IA32_GS_BASE_MSR) == 0)
         return NULL;
 

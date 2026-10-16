@@ -225,7 +225,7 @@ int process_terminate(uint32_t pid)
         process->state == PROCESS_TERMINATED ||
         process->state == PROCESS_ZOMBIE ||
         process->state == PROCESS_REAPING ||
-        process_is_idle_locked(pid)
+        process_is_idle_locked(pid))
     {
         process_table_lock_release(flags);
         return 0;

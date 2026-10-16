@@ -404,6 +404,136 @@ static int smp_scheduler_probe_wait(void)
     return 1;
 }
 
+
+static uint32_t smp_remote_wake_target_cpu;
+static volatile uint32_t smp_remote_wake_target_pid;
+static volatile uint32_t smp_remote_wake_target_done;
+static volatile uint32_t smp_remote_wake_helper_done;
+static volatile uint32_t smp_remote_wake_ok;
+
+static void smp_remote_wake_target_entry(void)
+{
+    uint32_t pid = process_current_pid();
+    __atomic_store_n(&smp_remote_wake_target_pid, pid, __ATOMIC_RELEASE);
+    process_block_current();
+
+    for (uint32_t spin = 0; spin < 100000000U; spin++)
+    {
+        process_t snapshot;
+        if (process_snapshot(pid, &snapshot) &&
+            snapshot.state == PROCESS_READY)
+        {
+            __atomic_store_n(&smp_remote_wake_target_done, 1U,
+                             __ATOMIC_RELEASE);
+            return;
+        }
+        __asm__ volatile ("pause" ::: "memory");
+    }
+}
+
+static void smp_remote_wake_helper_entry(void)
+{
+    uint32_t target_pid = 0;
+    for (uint32_t spin = 0; spin < 100000000U; spin++)
+    {
+        target_pid = __atomic_load_n(&smp_remote_wake_target_pid,
+                                     __ATOMIC_ACQUIRE);
+        if (target_pid != 0U)
+            break;
+        __asm__ volatile ("pause" ::: "memory");
+    }
+
+    const cpu_local_t* target_cpu = cpu_local_get(smp_remote_wake_target_cpu);
+    int ok = target_pid != 0U && target_cpu != NULL;
+    process_t target;
+    int sleeping = 0;
+    for (uint32_t spin = 0; ok && spin < 100000000U; spin++)
+    {
+        if (process_snapshot(target_pid, &target) &&
+            target.state == PROCESS_SLEEPING)
+        {
+            sleeping = 1;
+            break;
+        }
+        __asm__ volatile ("pause" ::: "memory");
+    }
+
+    uint32_t ipi_before = target_cpu ?
+        __atomic_load_n(&target_cpu->reschedule_ipi_ticks, __ATOMIC_ACQUIRE) :
+        0U;
+    if (!sleeping || !process_wake(target_pid))
+        ok = 0;
+
+    int ipi_seen = 0;
+    for (uint32_t spin = 0; ok && spin < 100000000U; spin++)
+    {
+        uint32_t delivered = __atomic_load_n(
+            &target_cpu->reschedule_ipi_ticks, __ATOMIC_ACQUIRE);
+        if (delivered > ipi_before &&
+            __atomic_load_n(&smp_remote_wake_target_done,
+                            __ATOMIC_ACQUIRE) != 0U)
+        {
+            ipi_seen = 1;
+            break;
+        }
+        __asm__ volatile ("pause" ::: "memory");
+    }
+
+    __atomic_store_n(&smp_remote_wake_ok, ok && ipi_seen ? 1U : 0U,
+                     __ATOMIC_RELEASE);
+    __atomic_store_n(&smp_remote_wake_helper_done, 1U, __ATOMIC_RELEASE);
+}
+
+static int smp_remote_wake_probe_initialize(void)
+{
+    smp_remote_wake_target_pid = 0;
+    smp_remote_wake_target_done = 0;
+    smp_remote_wake_helper_done = 0;
+    smp_remote_wake_ok = 0;
+    smp_remote_wake_target_cpu = UINT32_MAX;
+
+    for (uint32_t cpu = 0; cpu < smp_cpu_count(); cpu++)
+    {
+        if (!smp_cpu_is_bsp(cpu) && cpu_local_get(cpu))
+        {
+            smp_remote_wake_target_cpu = cpu;
+            break;
+        }
+    }
+
+    if (smp_remote_wake_target_cpu == UINT32_MAX ||
+        process_create_kernel_on_cpu("remote-wake-target",
+                                     process_current_pid(),
+                                     smp_remote_wake_target_entry,
+                                     smp_remote_wake_target_cpu) < 0 ||
+        process_create_kernel("remote-wake-helper", process_current_pid(),
+                              smp_remote_wake_helper_entry) < 0)
+    {
+        serial_write("VANTAOS_SMP_REMOTE_WAKE_FAIL\n");
+        return 0;
+    }
+    return 1;
+}
+
+static int smp_remote_wake_probe_wait(void)
+{
+    uint32_t attempts = 0;
+    while (attempts++ < 1500U &&
+           __atomic_load_n(&smp_remote_wake_helper_done,
+                           __ATOMIC_ACQUIRE) == 0U)
+        __asm__ volatile ("sti; hlt" ::: "memory");
+
+    if (__atomic_load_n(&smp_remote_wake_helper_done, __ATOMIC_ACQUIRE) == 0U ||
+        __atomic_load_n(&smp_remote_wake_ok, __ATOMIC_ACQUIRE) == 0U)
+    {
+        serial_write("VANTAOS_SMP_REMOTE_WAKE_FAIL\n");
+        return 0;
+    }
+
+    serial_write("VANTAOS_SMP_REMOTE_WAKE_OK\n");
+    return 1;
+}
+
 static void scheduler_probe_initialize(void)
 {
     pmm_allocator_probe();
@@ -579,6 +709,8 @@ void os_run(void)
     /* The cross-CPU workload is meaningful only when an AP exists. */
     if (smp_cpu_count() > 1U && smp_scheduler_probe_initialize())
         (void)smp_scheduler_probe_wait();
+    if (smp_cpu_count() > 1U && smp_remote_wake_probe_initialize())
+        (void)smp_remote_wake_probe_wait();
 #endif
     desktop_process_main();
 }

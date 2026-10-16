@@ -349,25 +349,45 @@ static int apic_send_ipi(uint32_t destination, uint32_t command)
     if (!enabled || !lapic || destination > 255U)
         return 0;
 
+    /*
+     * The ICR belongs to the calling CPU's local APIC, so CPUs do not share
+     * one ICR lock. Interrupts must nevertheless stay disabled across the
+     * ICR-high/ICR-low pair: a nested local interrupt must not overwrite the
+     * destination between those two writes. Preserve the caller's IF state.
+     */
+    uint64_t saved_flags;
+    __asm__ volatile ("pushfq; popq %0; cli"
+                      : "=r"(saved_flags) :: "memory", "cc");
+
     uint32_t timeout = 1000000U;
-    while ((lapic_read(0x300U) & (1U << 12)) != 0 && timeout > 0)
+    while ((lapic_read(0x300U) & (1U << 12)) != 0U && timeout > 0U)
     {
         timeout--;
-        __asm__ volatile ("pause");
+        __asm__ volatile ("pause" ::: "memory");
     }
-    if ((lapic_read(0x300U) & (1U << 12)) != 0)
+
+    if ((lapic_read(0x300U) & (1U << 12)) != 0U)
+    {
+        __asm__ volatile ("pushq %0; popfq"
+                          :: "r"(saved_flags) : "memory", "cc");
         return 0;
+    }
 
     lapic_write(0x310U, destination << 24);
+    __asm__ volatile ("" ::: "memory");
     lapic_write(0x300U, command);
 
     timeout = 1000000U;
-    while ((lapic_read(0x300U) & (1U << 12)) != 0 && timeout > 0)
+    while ((lapic_read(0x300U) & (1U << 12)) != 0U && timeout > 0U)
     {
         timeout--;
-        __asm__ volatile ("pause");
+        __asm__ volatile ("pause" ::: "memory");
     }
-    return (lapic_read(0x300U) & (1U << 12)) == 0;
+
+    int delivered = (lapic_read(0x300U) & (1U << 12)) == 0U;
+    __asm__ volatile ("pushq %0; popfq"
+                      :: "r"(saved_flags) : "memory", "cc");
+    return delivered;
 }
 
 uint32_t apic_get_bsp_id(void)

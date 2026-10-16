@@ -9,7 +9,7 @@
 /* Private process-table contract shared by lifecycle implementation units. */
 extern process_t processes[PROCESS_MAX];
 extern uint8_t process_stacks[PROCESS_MAX][PROCESS_STACK_SIZE];
-extern int initialized;
+extern int process_initialized_state;
 extern uint32_t legacy_current_pid;
 extern spinlock_t process_table_lock;
 

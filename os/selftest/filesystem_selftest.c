@@ -23,6 +23,8 @@
 #include "vfs.h"
 
 #ifdef VANTAOS_SELF_TEST
+#include "selftest.h"
+
 void filesystem_selftest_initialize(void)
 {
     int root_id = vfs_lookup("/");

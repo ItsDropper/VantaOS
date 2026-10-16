@@ -1,6 +1,7 @@
 #include <vanta/syscall.h>
 
 static const char success[] = "VANTAOS_USER_CHILD_PROGRAM_OK\n";
+static const char list_success[] = "VANTAOS_USER_DIRECTORY_LIST_OK\n";
 static const char failure[] = "VANTAOS_USER_CHILD_PROGRAM_FAIL\n";
 
 static int string_contains(const char* text, const char* needle)
@@ -49,6 +50,7 @@ int main(int argc, char** argv)
         return 2;
     }
 
+    (void)vanta_write(list_success, sizeof(list_success) - 1U);
     (void)vanta_write(success, sizeof(success) - 1U);
     return 23;
 }

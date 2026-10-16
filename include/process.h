@@ -19,7 +19,8 @@ typedef enum
     PROCESS_READY,
     PROCESS_RUNNING,
     PROCESS_SLEEPING,
-    PROCESS_TERMINATED
+    PROCESS_TERMINATED,
+    PROCESS_REAPING
 } process_state_t;
 
 typedef struct process_context

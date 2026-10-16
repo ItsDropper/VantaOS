@@ -42,6 +42,11 @@ jobs:
       - name: Verify build artifacts
         run: test -s kernel.bin && test -s VantaOS.iso && test -s vantaos.img
 
+      - name: Compile the public freestanding userspace ABI
+        run: |
+          gcc -m64 -march=x86-64 -ffreestanding -fno-pie -fno-stack-protector -mno-red-zone -nostdlib -Wall -Wextra -Werror -Iuserspace/include -c tests/user/abi_compile.c -o /tmp/vantaos-user-abi.o
+          test -s /tmp/vantaos-user-abi.o
+
       - name: Build and install the FAT32-backed ELF64 smoke program
         run: |
           gcc -m64 -ffreestanding -fno-pie -fno-stack-protector -c tests/user/hello.S -o /tmp/vantaos-user-hello.o

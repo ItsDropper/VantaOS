@@ -263,7 +263,7 @@ static int fat32_raw_entry(uint32_t cluster, uint32_t* value)
 
 static int fat32_set_raw_entry(uint32_t cluster, uint32_t value)
 {
-    if (cluster < 2 || cluster > cluster_count + 1U || value > FAT32_MAX_CLUSTER)
+    if (cluster < 2 || cluster > cluster_count + 1U || value > FAT32_EOC_MIN)
         return 0;
     uint32_t offset = cluster * 4U;
     for (uint32_t copy = 0; copy < fat_count; copy++)

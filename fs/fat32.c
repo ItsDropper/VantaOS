@@ -894,7 +894,8 @@ int fat32_write_file(const char* path, const char* data, uint32_t size)
     uint8_t leaf[11];
     fat32_slot_t entry;
     if (!fat32_parent_and_leaf(path, &parent, leaf) ||
-        !fat32_find_entry(parent, leaf, &entry))
+        !fat32_find_entry(parent, leaf, &entry) ||
+        (entry.found && (entry.attributes & 0x01U)))
         return -1;
 
     uint32_t new_cluster = 0;

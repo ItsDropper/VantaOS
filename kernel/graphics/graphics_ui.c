@@ -150,53 +150,7 @@ void graphics_present(void)
         return;
 
     if (start_menu_open)
-    {
-        int menu_w = 460, menu_h = 500;
-        if (w < 492) menu_w = w - 32;
-        if (h < 532) menu_h = h - 32;
-        int mx = w / 2 - menu_w / 2;
-        int my = h - menu_h - 8;
-
-        graphics_fill_rounded_rect(mx + 7, my + 9, menu_w, menu_h, 14, 0x0006090F);
-        graphics_fill_rounded_rect(mx, my, menu_w, menu_h, 14, 0x00151B25);
-        graphics_fill_rounded_rect(mx, my, menu_w, 48, 14, 0x001D2633);
-        graphics_fill_rect(mx + 1, my + 47, menu_w - 2, 1, 0x00293443);
-        graphics_draw_vanta_logo(mx + 22, my + 14, 27);
-        graphics_draw_text(mx + 62, my + 20, "VantaOS", 0x00F0F4F8, 1);
-        graphics_draw_text(mx + 24, my + 76, "Pinned apps", 0x007D8DA1, 1);
-
-        /* Consistent app rows: names, concise descriptions and distinct
-           icon surfaces. The hitboxes in graphics_input.c match these rows. */
-        graphics_fill_rounded_rect(mx + 24, my + 110, menu_w - 48, 50, 9, 0x001F2B38);
-        graphics_fill_rounded_rect(mx + 36, my + 121, 28, 28, 7, 0x00202F40);
-        graphics_draw_text(mx + 43, my + 132, ">_", 0x0079B8FF, 1);
-        graphics_draw_text(mx + 76, my + 121, "Terminal", 0x00E5EBF2, 1);
-        graphics_draw_text(mx + 76, my + 138, "Run commands and tools", 0x008A9BAD, 1);
-
-        graphics_fill_rounded_rect(mx + 24, my + 164, menu_w - 48, 50, 9, 0x001F2B38);
-        graphics_fill_rounded_rect(mx + 36, my + 175, 28, 28, 7, 0x00202F40);
-        graphics_fill_rounded_rect(mx + 42, my + 184, 16, 12, 3, 0x0056B98A);
-        graphics_fill_rect(mx + 44, my + 181, 8, 4, 0x0082D7AB);
-        graphics_draw_text(mx + 76, my + 175, "Files", 0x00E5EBF2, 1);
-        graphics_draw_text(mx + 76, my + 192, "Browse files and folders", 0x008A9BAD, 1);
-
-        graphics_fill_rounded_rect(mx + 24, my + 218, menu_w - 48, 50, 9, 0x001F2B38);
-        graphics_fill_rounded_rect(mx + 36, my + 229, 28, 28, 7, 0x00202F40);
-        graphics_fill_rounded_rect(mx + 42, my + 235, 16, 16, 4, 0x003B82F6);
-        graphics_draw_text(mx + 47, my + 240, "i", 0x00FFFFFF, 1);
-        graphics_draw_text(mx + 76, my + 229, "System", 0x00E5EBF2, 1);
-        graphics_draw_text(mx + 76, my + 246, "Kernel and service status", 0x008A9BAD, 1);
-
-        graphics_fill_rounded_rect(mx + 24, my + 272, menu_w - 48, 50, 9, 0x001F2B38);
-        graphics_fill_rounded_rect(mx + 36, my + 283, 28, 28, 7, 0x00202F40);
-        graphics_fill_rounded_rect(mx + 43, my + 289, 14, 14, 3, 0x0093A3B5);
-        graphics_fill_rect(mx + 49, my + 286, 3, 20, 0x0093A3B5);
-        graphics_fill_rect(mx + 40, my + 295, 20, 3, 0x0093A3B5);
-        graphics_draw_text(mx + 76, my + 283, "Settings", 0x00E5EBF2, 1);
-        graphics_draw_text(mx + 76, my + 300, "Display and appearance", 0x008A9BAD, 1);
-        graphics_fill_rect(mx + 24, my + menu_h - 50, menu_w - 48, 1, 0x00293443);
-        graphics_draw_text(mx + 24, my + menu_h - 34, "Local session", 0x006E8094, 1);
-    }
+        graphics_draw_start_menu_detail(w, h);
 
     graphics_draw_cursor();
 }

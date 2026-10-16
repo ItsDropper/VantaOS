@@ -46,7 +46,8 @@ The two boot paths are not interchangeable evidence: a successful GRUB boot does
 | `kernel/proc/` | `process.c` owns table initialization/creation; `process_context.c` owns atomic CPU claims and context-switch transitions; `process_lifecycle.c` owns wake/block/terminate/reap and snapshots. `process_internal.h` is private shared state, not a public API. |
 | `kernel/sched/` | Ready-process selection and scheduling. |
 | `kernel/time/` | Timer subsystem. |
-| `mm/` | Heap, physical-memory bookkeeping, and paging. |
+| `mm/` | Heap, physical-memory bookkeeping, address-space/page-table management, and TLB shootdown coordination. |
+| `mm/tlb_shootdown.c` | Serialized cross-CPU invalidation requests, acknowledgement handling, and fail-closed diagnostics. |
 | `drivers/` | Keyboard/mouse input, PCI enumeration, and ATA storage driver code. |
 | `fs/` | Filesystem namespace, FAT32 read path, and VFS handles. |
 | `os/terminal/` | Terminal, shell, and commands. |

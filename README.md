@@ -30,7 +30,8 @@ The project focuses on learning and validating operating-system fundamentals: bo
 | --- | --- |
 | `arch/` | CPU-specific entry, interrupt, and architecture code. |
 | `boot/` | Boot-related assets and configuration. |
-| `kernel/` | Kernel initialization, diagnostics, process lifecycle, scheduling, timer, and graphics. |
+| `kernel/` | Kernel boot orchestration, diagnostics, process lifecycle, scheduling, timer, and graphics. |
+| `kernel/selftest/` | Test-only boot-info, allocator, paging, and synchronization probes. |
 | `mm/` | Heap, physical-memory bookkeeping, and paging. |
 | `drivers/` | Keyboard, mouse, PCI, and ATA driver code. |
 | `fs/` | Filesystem namespace, FAT32 read path, and VFS. |

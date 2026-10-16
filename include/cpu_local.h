@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+struct paging_address_space;
+
 #define CPU_LOCAL_MAX 32U
 
 typedef struct cpu_local
@@ -23,6 +25,8 @@ typedef struct cpu_local
     volatile uint32_t lapic_timer_ticks;
     /* Number of reschedule IPIs delivered to this CPU (not scheduled yet). */
     volatile uint32_t reschedule_ipi_ticks;
+    /* Address space loaded in this CPU's CR3 (not a global singleton). */
+    struct paging_address_space* current_address_space;
 } cpu_local_t;
 
 /* Installs the current CPU's GS base and initializes its private state. */

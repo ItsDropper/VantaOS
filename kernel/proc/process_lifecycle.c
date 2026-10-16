@@ -341,9 +341,15 @@ int process_reap(uint32_t pid)
     {
         flags = process_table_lock_acquire();
         process = &process_table_records[pid];
+        uint32_t parent_pid = process->parent_pid;
+        int wake_parent = parent_pid > 0U && parent_pid < PROCESS_MAX &&
+            process_table_records[parent_pid].is_user &&
+            process_table_records[parent_pid].state == PROCESS_SLEEPING;
         if (process->state == PROCESS_REAPING)
             process->state = PROCESS_TERMINATED;
         process_table_lock_release(flags);
+        if (wake_parent)
+            (void)process_wake(parent_pid);
         return 0;
     }
 

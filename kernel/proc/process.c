@@ -120,6 +120,7 @@ static int process_allocate_common(process_t* process,
     process_reset_record(process);
     process->parent_pid = parent_pid;
     process->state = PROCESS_READY;
+    process->affinity_cpu = process_current_cpu_id();
     process_copy_name(process->name, name);
     process->address_space = paging_get_kernel_address_space();
 
@@ -266,7 +267,15 @@ int process_create_kernel(const char* name, uint32_t parent_pid,
 int process_create_kernel_any(const char* name, uint32_t parent_pid,
                               process_entry_t entry)
 {
-    return process_create_kernel(name, parent_pid, entry);
+    int pid = process_create_kernel(name, parent_pid, entry);
+    if (pid < 0)
+        return pid;
+
+    uint64_t flags = process_table_lock_acquire();
+    if (processes[(uint32_t)pid].state != PROCESS_UNUSED)
+        processes[(uint32_t)pid].affinity_cpu = PROCESS_CPU_ANY;
+    process_table_lock_release(flags);
+    return pid;
 }
 
 int process_create_idle_for_cpu(uint32_t cpu_id, const char* name,
@@ -291,7 +300,7 @@ int process_create_idle_for_cpu(uint32_t cpu_id, const char* name,
         local->idle_pid != 0U)
     {
         process_table_lock_release(flags);
-        (void)process_reap((uint32_t)pid);
+        (void)process_terminate((uint32_t)pid);
         return 0;
     }
     process->affinity_cpu = cpu_id;

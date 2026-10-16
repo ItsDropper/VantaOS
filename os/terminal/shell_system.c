@@ -29,6 +29,8 @@ const char* shell_process_state(
             return "SLEEPING";
         case PROCESS_TERMINATED:
             return "TERMINATED";
+        case PROCESS_ZOMBIE:
+            return "ZOMBIE";
         default:
             return "UNKNOWN";
     }

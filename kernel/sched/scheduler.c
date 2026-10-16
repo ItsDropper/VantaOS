@@ -4,6 +4,10 @@
 #include "process.h"
 #include "paging.h"
 #include "panic.h"
+#include "gdt.h"
+
+extern unsigned char stack_bottom;
+extern unsigned char stack_top;
 
 #define SCHEDULER_QUANTUM_TICKS 5U
 
@@ -73,6 +77,21 @@ static uint32_t scheduler_next_ready(uint32_t current_pid)
     return current_pid;
 }
 
+static int scheduler_install_kernel_stack(uint32_t pid)
+{
+    process_t process;
+    if (!process_snapshot(pid, &process) || !process.kernel_stack)
+        return 0;
+
+    uintptr_t top;
+    if (process.kernel_stack == (void*)(uintptr_t)&stack_bottom)
+        top = (uintptr_t)&stack_top;
+    else
+        top = (uintptr_t)process.kernel_stack + PROCESS_STACK_SIZE;
+
+    return gdt_set_kernel_stack(process_current_cpu_id(), top);
+}
+
 static uint64_t scheduler_switch_from_stack(uint64_t current_stack,
                                            uint32_t current_pid)
 {
@@ -100,6 +119,9 @@ static uint64_t scheduler_switch_from_stack(uint64_t current_stack,
 
     if (next_address_space != paging_get_current_address_space())
         paging_switch_address_space(next_address_space);
+
+    if (!scheduler_install_kernel_stack(next_pid))
+        kernel_panic_halt_all();
 
     return next_stack;
 }
@@ -155,6 +177,9 @@ uint64_t scheduler_start_cpu(uint64_t interrupted_stack)
     __atomic_store_n(&local->reschedule_pending, 0U, __ATOMIC_RELEASE);
     if (idle_address_space != paging_get_current_address_space())
         paging_switch_address_space(idle_address_space);
+
+    if (!scheduler_install_kernel_stack(idle_pid))
+        kernel_panic_halt_all();
     return idle_stack;
 }
 

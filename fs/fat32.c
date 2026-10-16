@@ -884,6 +884,11 @@ int fat32_create_file(const char* path)
         off = 0;
         if (lba == FAT32_INVALID_LBA) return -1;
     }
+    else
+    {
+        lba = entry.free_lba;
+        off = entry.free_offset;
+    }
     return fat32_write_entry(lba, off, leaf, 0, 0) ? 0 : -1;
 }
 

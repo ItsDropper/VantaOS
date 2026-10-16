@@ -351,13 +351,15 @@ static int syscall_waitpid(struct exception_frame* frame,
         }
 
         /*
-         * This is a syscall context, not an interrupt return path. HLT alone
-         * does not schedule the READY child on the BSP, and can resume this
-         * sleeping parent before the child ever runs. Force the normal
-         * interrupt-return scheduler path; the parent resumes here only after
-         * another process (or its wakeup) is scheduled back onto this stack.
+         * int 0x80 entered with IF cleared. Temporarily enable interrupts and
+         * halt so the BSP timer can run the normal scheduler path. The parent
+         * is already SLEEPING under the process-table lock, so the scheduler
+         * selects the child; child exit publishes its zombie and wakes us.
+         * Avoid reusing the hardware-IPI entry point as a user software trap:
+         * that stub's return-frame assumptions are specific to interrupt
+         * delivery and are not part of the syscall ABI.
          */
-        __asm__ volatile ("int $0xF3" : : : "memory");
+        __asm__ volatile ("sti; hlt; cli" : : : "memory");
     }
 }
 

@@ -10,6 +10,8 @@ uint64_t scheduler_tick(uint64_t current_stack);
 uint64_t scheduler_start_cpu(uint64_t interrupted_stack);
 /* Force a scheduling decision from an interrupt-safe saved stack frame. */
 uint64_t scheduler_reschedule(uint64_t current_stack);
+/* IRQ/IPI assembly calls this only after switching to the incoming RSP. */
+void scheduler_finish_context_switch(void);
 void scheduler_yield(void);
 
 #endif

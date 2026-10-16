@@ -1,0 +1,79 @@
+name: Bug report
+description: Report a reproducible VantaOS defect
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        VantaOS is experimental. Please include enough detail to reproduce the issue. Do not attach secrets, personal files, or unredacted identifiers.
+  - type: input
+    id: commit
+    attributes:
+      label: Commit or branch
+      description: Exact commit SHA is best.
+      placeholder: "commit SHA"
+    validations:
+      required: true
+  - type: dropdown
+    id: boot-path
+    attributes:
+      label: Boot path
+      options:
+        - GRUB / Multiboot
+        - UEFI / OVMF
+        - Unknown
+    validations:
+      required: true
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      options:
+        - QEMU
+        - Physical hardware
+        - Build-only failure
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Exact commands, configuration, RAM, vCPU count, and steps.
+      placeholder: |
+        1. Build with ...
+        2. Run with ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and evidence
+      description: Include relevant serial output, panic trace, build output, and CI run URL. Redact personal identifiers.
+      render: text
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I checked for an existing issue and included the exact commit/configuration where possible.
+          required: true
+        - label: I removed secrets and personal identifiers from logs.
+          required: true

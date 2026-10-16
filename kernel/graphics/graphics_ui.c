@@ -1,4 +1,5 @@
 #include "graphics_internal.h"
+#include "desktop_theme.h"
 #include "filesystem.h"
 #include "file_explorer.h"
 #include "terminal.h"
@@ -31,7 +32,7 @@ void graphics_draw_panel(int x, int y, int w, int h)
     graphics_fill_rounded_rect(x, y, w, h, 12, 0x00151B25);
     graphics_fill_rounded_rect(x, y, w, 46, 12, 0x001D2633);
     graphics_fill_rect(x + 1, y + 45, w - 2, 1, 0x00293443);
-    graphics_fill_rect(x + 18, y + 45, 44, 2, 0x004B9CFF);
+    graphics_fill_rect(x + 18, y + 45, 44, 2, VANTA_UI_ACCENT);
 }
 
 
@@ -42,14 +43,14 @@ void graphics_draw_window_frame(int x, int y, int w, int h, const char* title)
 
     /* Shared desktop window chrome: one border, one titlebar, one control grid. */
     graphics_fill_rounded_rect(x + 5, y + 7, w, h, 10, 0x0005080D);
-    graphics_fill_rounded_rect(x, y, w, h, 10, 0x000F151E);
-    graphics_fill_rounded_rect(x + 1, y + 1, w - 2, 45, 9, 0x001A2430);
-    graphics_fill_rect(x + 1, y + 45, w - 2, 1, 0x002A3746);
+    graphics_fill_rounded_rect(x, y, w, h, 10, VANTA_UI_SURFACE);
+    graphics_fill_rounded_rect(x + 1, y + 1, w - 2, 45, 9, VANTA_UI_TITLEBAR);
+    graphics_fill_rect(x + 1, y + 45, w - 2, 1, VANTA_UI_BORDER);
 
     graphics_fill_rounded_rect(x + 14, y + 10, 24, 24, 6, 0x00253648);
     graphics_draw_vanta_logo(x + 21, y + 14, 15);
     graphics_draw_text(x + 48, y + 18, title ? title : "Window",
-                       0x00E8EDF4, 1);
+                       VANTA_UI_TEXT, 1);
 
     int controls_x = x + w - 138;
     for (int i = 0; i < 3; i++)
@@ -78,7 +79,7 @@ void graphics_draw_taskbar(int taskbar_y, int width)
     graphics_fill_rounded_rect(center - 132, taskbar_y + 10, 68, 42, 10,
         active_panel == 2 ? 0x00304459 : 0x001C2633);
     graphics_fill_rounded_rect(center - 112, taskbar_y + 20, 24, 18, 4,
-        0x004B9CFF);
+        VANTA_UI_ACCENT);
     graphics_fill_rect(center - 108, taskbar_y + 17, 12, 5, 0x0079B8FF);
     if (active_panel == 2)
         graphics_fill_rounded_rect(center - 110, taskbar_y + 48, 24, 2, 1,
@@ -112,8 +113,8 @@ void graphics_present(void)
 
     /* Quiet, low-contrast workspace. App hitboxes stay stable while the
        presentation moves away from stacked legacy-style panels. */
-    graphics_fill_rect(0, 0, w, h, 0x000C1119);
-    graphics_fill_rect(0, 0, w, 42, 0x00151C26);
+    graphics_fill_rect(0, 0, w, h, VANTA_UI_DESKTOP);
+    graphics_fill_rect(0, 0, w, 42, VANTA_UI_TOPBAR);
     graphics_fill_rect(0, 41, w, 1, 0x00232E3B);
     graphics_fill_rect(0, h - 64, w, 64, 0x00090D13);
 
@@ -125,28 +126,28 @@ void graphics_present(void)
 
     /* Compact workspace bar: identity left, session state right. */
     graphics_draw_vanta_logo(18, 11, 20);
-    graphics_draw_text(48, 16, "VantaOS", 0x00E8EDF4, 1);
+    graphics_draw_text(48, 16, "VantaOS", VANTA_UI_TEXT, 1);
     graphics_fill_rect(112, 14, 1, 15, 0x00313D4B);
-    graphics_draw_text(126, 16, "Workspace", 0x008D9BAC, 1);
+    graphics_draw_text(126, 16, "Workspace", VANTA_UI_TEXT_SECONDARY, 1);
     graphics_fill_rounded_rect(w - 126, 11, 106, 22, 7, 0x001F2935);
     graphics_draw_text(w - 111, 18, "Local session", 0x00C3CDD8, 1);
 
     /* Three restrained desktop shortcuts; click regions remain unchanged. */
     graphics_fill_rounded_rect(24, 58, 88, 72, 10,
-        active_panel == 1 ? 0x00232F3D : 0x000F161F);
+        active_panel == 1 ? VANTA_UI_HOVER : 0x000F161F);
     graphics_fill_rounded_rect(49, 72, 38, 34, 8, 0x00202D3B);
-    graphics_fill_rounded_rect(57, 80, 22, 18, 4, 0x004B9CFF);
+    graphics_fill_rounded_rect(57, 80, 22, 18, 4, VANTA_UI_ACCENT);
     graphics_draw_text(43, 114, "System", 0x00DCE4EC, 1);
 
     graphics_fill_rounded_rect(120, 58, 88, 72, 10,
-        active_panel == 2 ? 0x00232F3D : 0x000F161F);
+        active_panel == 2 ? VANTA_UI_HOVER : 0x000F161F);
     graphics_fill_rounded_rect(145, 72, 38, 34, 8, 0x00202D3B);
     graphics_fill_rounded_rect(151, 81, 26, 19, 4, 0x0057B77E);
     graphics_fill_rect(153, 77, 11, 5, 0x0085D9A9);
     graphics_draw_text(150, 114, "Files", 0x00DCE4EC, 1);
 
     graphics_fill_rounded_rect(216, 58, 88, 72, 10,
-        active_panel == 3 ? 0x00232F3D : 0x000F161F);
+        active_panel == 3 ? VANTA_UI_HOVER : 0x000F161F);
     graphics_fill_rounded_rect(241, 72, 38, 34, 8, 0x00202D3B);
     graphics_draw_text(247, 84, ">_", 0x007DB8FF, 1);
     graphics_draw_text(228, 114, "Terminal", 0x00DCE4EC, 1);

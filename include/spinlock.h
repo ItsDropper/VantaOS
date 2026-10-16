@@ -46,6 +46,30 @@ static inline void spinlock_unlock(spinlock_t* lock)
     __atomic_fetch_add(&lock->owner_ticket, 1U, __ATOMIC_RELEASE);
 }
 
+/*
+ * Try to acquire without waiting while preserving local interrupt state.
+ * On success, flags_out must remain available until unlock_irqrestore().
+ */
+static inline int spinlock_try_lock_irqsave(spinlock_t* lock,
+                                           uint64_t* flags_out)
+{
+    if (!lock || !flags_out)
+        return 0;
+
+    uint64_t flags;
+    __asm__ volatile ("pushfq; popq %0; cli"
+                      : "=r"(flags) :: "memory", "cc");
+    if (!spinlock_try_lock(lock))
+    {
+        __asm__ volatile ("pushq %0; popfq"
+                          :: "r"(flags) : "memory", "cc");
+        return 0;
+    }
+
+    *flags_out = flags;
+    return 1;
+}
+
 /* Disable local maskable interrupts before waiting to avoid local re-entry. */
 static inline uint64_t spinlock_lock_irqsave(spinlock_t* lock)
 {

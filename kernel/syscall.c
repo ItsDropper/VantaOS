@@ -261,28 +261,7 @@ static int syscall_copy_user_string(char* destination, size_t capacity,
 /* Return one buffered character without exposing kernel keyboard state. */
 static int syscall_read_char(struct exception_frame* frame)
 {
-    int input_enabled = terminal_process_input_enabled() &&
-                        !gui_server_has_keyboard_focus();
-    while (keyboard_has_event())
-    {
-        keyboard_event_t event = keyboard_get_event();
-        if (!input_enabled)
-            continue;
-        if (event == KEY_EVENT_PAGE_UP)
-        {
-            terminal_scroll_up();
-            terminal_process_mark_redraw();
-        }
-        else if (event == KEY_EVENT_PAGE_DOWN)
-        {
-            terminal_scroll_down();
-            terminal_process_mark_redraw();
-        }
-    }
-
-    char character = input_enabled && keyboard_has_char() ?
-        keyboard_get_char() : 0;
-    frame->rax = input_enabled ? (uint64_t)(unsigned char)character : 0U;
+    frame->rax = (uint64_t)(unsigned char)gui_server_read_terminal_char();
     return 0;
 }
 

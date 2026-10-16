@@ -28,7 +28,7 @@ static uint64_t* allocate_user_table(void)
     }
 
     uint64_t* table = (uint64_t*)physical;
-    for (uint32_t i = 0; i < PAGING_PAGING_TABLE_ENTRIES; i++)
+    for (uint32_t i = 0; i < PAGING_TABLE_ENTRIES; i++)
         table[i] = 0;
 
     return table;
@@ -163,7 +163,7 @@ int paging_map_user_page(paging_address_space_t* address_space,
         return 0;
     }
 
-    uint64_t* entry = user_leaf_entry(address_space, virtual_address, 1);
+    uint64_t* entry = paging_user_leaf_entry(address_space, virtual_address, 1);
     if (!entry || (*entry & PAGE_PRESENT))
     {
         paging_lock_release(saved_flags);
@@ -195,7 +195,7 @@ int paging_unmap_user_page(paging_address_space_t* address_space,
         return 0;
     }
 
-    uint64_t* entry = user_leaf_entry(address_space, virtual_address, 0);
+    uint64_t* entry = paging_user_leaf_entry(address_space, virtual_address, 0);
     if (!entry || !(*entry & PAGE_PRESENT))
     {
         paging_lock_release(saved_flags);

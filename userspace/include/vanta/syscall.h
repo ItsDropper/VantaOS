@@ -27,8 +27,12 @@
 #define VANTA_SYS_TERMINAL_BEGIN_INPUT 11U
 #define VANTA_SYS_TERMINAL_BACKSPACE   12U
 #define VANTA_SYS_TERMINAL_CLEAR      13U
+#define VANTA_SYS_FILE_WRITE          14U
+#define VANTA_SYS_CREATE_FILE         15U
 
-#define VANTA_OPEN_READ 1
+#define VANTA_OPEN_READ      1
+#define VANTA_OPEN_WRITE     2
+#define VANTA_OPEN_TRUNCATE  4
 
 /* Negative return values currently emitted by the kernel ABI. */
 #define VANTA_EPERM       1
@@ -114,6 +118,20 @@ static inline long vanta_close(int descriptor)
 {
     return vanta_syscall3(VANTA_SYS_CLOSE,
                           (uintptr_t)(intptr_t)descriptor, 0U, 0U);
+}
+
+/* Writes are bounded by the current FAT32-backed VFS limit (511 bytes). */
+static inline long vanta_file_write(int descriptor, const void* buffer,
+                                    size_t length)
+{
+    return vanta_syscall3(VANTA_SYS_FILE_WRITE,
+                          (uintptr_t)(intptr_t)descriptor,
+                          (uintptr_t)buffer, (uintptr_t)length);
+}
+
+static inline long vanta_create_file(const char* path)
+{
+    return vanta_syscall3(VANTA_SYS_CREATE_FILE, (uintptr_t)path, 0U, 0U);
 }
 
 /* argc must be in [1, 16]; argv and all strings must be user-readable. */

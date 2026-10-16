@@ -200,7 +200,8 @@ int process_attach_current(const char* name, uint32_t parent_pid)
     for (uint32_t pid = 1; pid < PROCESS_MAX; pid++)
     {
         if (processes[pid].state != PROCESS_UNUSED &&
-            processes[pid].state != PROCESS_TERMINATED)
+            (processes[pid].state != PROCESS_TERMINATED ||
+             processes[pid].owner_cpu != PROCESS_CPU_UNOWNED))
             continue;
 
         process_t* process = &processes[pid];

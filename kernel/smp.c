@@ -234,10 +234,10 @@ static int smp_wait_for_local_timers(const acpi_platform_info_t* info)
 
     if (!ready)
     {
-        serial_write("VANTAOS_SMP_LOCAL_TIMER_FAIL\\n");
+        serial_write("VANTAOS_SMP_LOCAL_TIMER_FAIL\n");
         return 0;
     }
-    serial_write("VANTAOS_SMP_LOCAL_TIMER_OK\\n");
+    serial_write("VANTAOS_SMP_LOCAL_TIMER_OK\n");
     return 1;
 }
 

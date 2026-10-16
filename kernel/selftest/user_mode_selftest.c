@@ -23,6 +23,7 @@ extern unsigned char stack_top;
 
 uintptr_t user_mode_test_saved_rsp;
 uint64_t user_mode_test_saved_rflags;
+volatile uint32_t user_mode_test_exit_requested;
 
 static uint8_t user_test_kernel_stack[USER_TEST_KERNEL_STACK_SIZE]
     __attribute__((aligned(16)));
@@ -53,6 +54,7 @@ static void copy_bytes(void* destination, const uint8_t* source, size_t count)
 
 static void user_test_redirect_to_kernel(struct exception_frame* frame)
 {
+    __atomic_store_n(&user_mode_test_exit_requested, 1U, __ATOMIC_RELEASE);
     frame->rip = (uintptr_t)user_mode_test_return_trampoline;
     frame->cs = 0x08U;
     /* Return to a controlled kernel trampoline with maskable interrupts off. */
@@ -134,6 +136,7 @@ int user_mode_selftest_handle_exception(unsigned int number,
 static int run_user_probe(unsigned int mode,
                           uintptr_t user_stack_top)
 {
+    __atomic_store_n(&user_mode_test_exit_requested, 0U, __ATOMIC_RELAXED);
     __atomic_store_n(&user_test_syscall_seen, 0U, __ATOMIC_RELAXED);
     __atomic_store_n(&user_test_protection_fault_seen, 0U, __ATOMIC_RELAXED);
     __atomic_store_n(&user_test_unexpected, 0U, __ATOMIC_RELAXED);
@@ -149,6 +152,7 @@ static int run_user_probe(unsigned int mode,
         "VANTAOS_RING3_RETURN_ISOLATION\n");
 
     __atomic_store_n(&user_test_active, 0U, __ATOMIC_RELEASE);
+    __atomic_store_n(&user_mode_test_exit_requested, 0U, __ATOMIC_RELEASE);
     if (mode == USER_TEST_SYSCALL_MODE)
         return __atomic_load_n(&user_test_syscall_seen, __ATOMIC_ACQUIRE) != 0U &&
                __atomic_load_n(&user_test_unexpected, __ATOMIC_ACQUIRE) == 0U;

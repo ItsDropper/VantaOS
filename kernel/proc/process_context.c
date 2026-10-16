@@ -252,7 +252,7 @@ int process_finish_context_switch(uint32_t outgoing_pid, uint32_t cpu_id)
         if (process_wake(wake_parent_pid))
             serial_write("VANTAOS_WAITPID_PARENT_WOKEN\n");
         else
-            serial_write("VANTAOS_WAITPID_PARENT_WAKE_FAILED\n");
+            serial_write("VANTAOS_WAITPID_PARENT_NOT_SLEEPING\n");
     }
     return 1;
 }

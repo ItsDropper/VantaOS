@@ -109,10 +109,10 @@ static int syscall_read(struct exception_frame* frame, uint32_t pid, const proce
 {
     int descriptor = (int)(int64_t)frame->rdi; uintptr_t address = (uintptr_t)frame->rsi; uint64_t length = frame->rdx;
     if (length > USER_SYSCALL_IO_MAX) { frame->rax = (uint64_t)(int64_t)-22; return 0; }
-    if (length == 0U) { frame->rax = 0U; return 0; }
-    if (!paging_user_range_valid(process->address_space, address, (size_t)length, 1)) { frame->rax = (uint64_t)(int64_t)-14; return 0; }
     int handle = process_fd_get(pid, descriptor);
     if (handle < 0) { frame->rax = (uint64_t)(int64_t)-9; return 0; }
+    if (length == 0U) { frame->rax = 0U; return 0; }
+    if (!paging_user_range_valid(process->address_space, address, (size_t)length, 1)) { frame->rax = (uint64_t)(int64_t)-14; return 0; }
     char buffer[USER_SYSCALL_IO_MAX]; int result = vfs_read(handle, buffer, (unsigned int)length);
     if (result < 0) { frame->rax = (uint64_t)(int64_t)-5; return 0; }
     for (int i = 0; i < result; i++) ((char*)address)[i] = buffer[i];

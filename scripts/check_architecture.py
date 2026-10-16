@@ -37,10 +37,10 @@ kernel_probe_markers = re.compile(
 if kernel_probe_markers.search(kernel):
     fail("kernel/kernel.c contains implementation-owned self-test markers")
 
-if re.search(r"^static\\s+void\\s+\\w*probe\\w*\\s*\\(", kernel, re.MULTILINE):
+if re.search(r"^static\s+void\s+\w*probe\w*\s*\(", kernel, re.MULTILINE):
     fail("kernel/kernel.c contains a self-test probe implementation")
 
-if re.search(r"^static\\s+void\\s+\\w*probe\\w*\\s*\\(", os_source, re.MULTILINE):
+if re.search(r"^static\s+void\s+\w*probe\w*\s*\(", os_source, re.MULTILINE):
     fail("os/os.c contains a self-test probe implementation")
 
 for marker in ("kernel_boot_info_selftest", "kernel_platform_selftest"):

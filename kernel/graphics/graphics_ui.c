@@ -149,37 +149,37 @@ void graphics_draw_taskbar(int taskbar_y, int width)
     graphics_fill_rect(0, taskbar_y + 1, width, 1, 0x00F7FAFD);
 
     /* Start */
-    graphics_fill_rounded_rect(center - 210, taskbar_y + 10, 42, 42, 8,
+    graphics_fill_rounded_rect(center - 108, taskbar_y + 10, 42, 42, 8,
         start_menu_open ? 0x00C9DDF5 : 0x00E6EDF6);
-    ui_brand(center - 199, taskbar_y + 21, 20);
+    ui_brand(center - 97, taskbar_y + 21, 20);
 
     /* Search is styled like a native taskbar affordance; intentionally inert. */
-    graphics_fill_rounded_rect(center - 160, taskbar_y + 10, 66, 42, 9,
+    graphics_fill_rounded_rect(center - 58, taskbar_y + 10, 66, 42, 9,
                                 0x00F7F9FC);
-    graphics_fill_rounded_rect(center - 146, taskbar_y + 21, 12, 12, 6,
+    graphics_fill_rounded_rect(center - 44, taskbar_y + 21, 12, 12, 6,
                                 0x005B7189);
-    graphics_fill_rect(center - 136, taskbar_y + 31, 5, 2, 0x005B7189);
-    graphics_draw_text(center - 128, taskbar_y + 27, "Search", 0x005B7189, 1);
+    graphics_fill_rect(center - 34, taskbar_y + 31, 5, 2, 0x005B7189);
+    graphics_draw_text(center + 1006, taskbar_y + 27, "Search", 0x005B7189, 1);
 
     /* File Explorer: folder with a proper tab and body. */
-    graphics_fill_rounded_rect(center - 84, taskbar_y + 10, 42, 42, 8,
+    graphics_fill_rounded_rect(center + 18, taskbar_y + 10, 42, 42, 8,
         active_panel == 2 ? 0x00C9DDF5 : 0x00E6EDF6);
-    graphics_fill_rounded_rect(center - 75, taskbar_y + 24, 25, 16, 3,
+    graphics_fill_rounded_rect(center + 27, taskbar_y + 24, 25, 16, 3,
                                 0x00E9B94F);
-    graphics_fill_rounded_rect(center - 74, taskbar_y + 20, 12, 6, 2,
+    graphics_fill_rounded_rect(center + 28, taskbar_y + 20, 12, 6, 2,
                                 0x00F5D77C);
     if (active_panel == 2)
-        graphics_fill_rounded_rect(center - 73, taskbar_y + 49, 20, 2, 1,
+        graphics_fill_rounded_rect(center + 29, taskbar_y + 49, 20, 2, 1,
                                     0x004A8BE8);
 
     /* Terminal */
-    graphics_fill_rounded_rect(center - 36, taskbar_y + 10, 42, 42, 8,
+    graphics_fill_rounded_rect(center + 66, taskbar_y + 10, 42, 42, 8,
         active_panel == 3 ? 0x00C9DDF5 : 0x00E6EDF6);
-    graphics_fill_rounded_rect(center - 28, taskbar_y + 20, 26, 22, 5,
+    graphics_fill_rounded_rect(center + 74, taskbar_y + 20, 26, 22, 5,
                                 0x002A3B50);
-    graphics_draw_text(center - 24, taskbar_y + 27, ">_", 0x00F3F7FC, 1);
+    graphics_draw_text(center + 78, taskbar_y + 27, ">_", 0x00F3F7FC, 1);
     if (terminal_running)
-        graphics_fill_rounded_rect(center - 28, taskbar_y + 49, 26, 2, 1,
+        graphics_fill_rounded_rect(center + 74, taskbar_y + 49, 26, 2, 1,
                                     0x004A8BE8);
 
     /* Real-time clock and RTC calendar, right aligned like Windows. */

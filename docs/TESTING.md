@@ -6,7 +6,7 @@ This document distinguishes what automation actually checks from what is still u
 
 Workflow: [`.github/workflows/build.yml`](../.github/workflows/build.yml)
 
-For pushes to `main`, pull requests, and manual workflow runs, GitHub Actions:
+On pushes to `master`, pull requests targeting the repository, and manual workflow runs, GitHub Actions:
 
 1. Checks out the repository on a clean Ubuntu runner.
 2. Installs GCC/build tools, NASM, GRUB utilities, FAT tools, and QEMU.
@@ -14,7 +14,8 @@ For pushes to `main`, pull requests, and manual workflow runs, GitHub Actions:
 4. Asserts that `kernel.bin`, `VantaOS.iso`, and `vantaos.img` exist and are non-empty.
 5. Boots the ISO in headless QEMU with serial output captured to a log.
 6. Requires all success markers, rejects any `VANTAOS_*_FAIL` marker, and requires QEMU to remain running until the smoke-test timeout.
-7. Repeats the QEMU boot at 256 MiB and 512 MiB guest RAM. CI waits briefly after QEMU exits so the serial log is flushed before assertions run.
+7. Runs the GRUB/Multiboot ISO regression in three configurations: 256 MiB RAM with 1 vCPU, 512 MiB with 2 vCPUs, and 512 MiB with 4 vCPUs. Multi-vCPU runs additionally require scheduler-stress, remote-wakeup, and process-migration markers. CI waits briefly after QEMU exits so the serial log is flushed before assertions run.
+8. Builds the separate UEFI system image and boots it with OVMF, requiring loader, `ExitBootServices`, kernel-handoff, and selected kernel/SMP markers.
 
 ## Runtime assertions
 
@@ -61,7 +62,7 @@ Exit code 124 from `timeout` is expected for this smoke test: the guest is expec
 
 The workflow also builds `VantaOS-UEFI.img` and boots it with OVMF. The image contains the removable-media entry point at `EFI/BOOT/BOOTX64.EFI` and the separate `kernel-uefi.elf` at `EFI/VANTA/KERNEL.ELF`.
 
-The UEFI smoke test requires serial markers proving that the loader started, validated and loaded the ELF64 kernel, successfully called `ExitBootServices`, transferred control to the UEFI kernel entry, validated the normalized handoff, and reached `VANTAOS_BOOT_OK`. The original GRUB ISO tests still run independently at 256 MiB and 512 MiB.
+The UEFI smoke test requires serial markers proving that the loader started, validated and loaded the ELF64 kernel, successfully called `ExitBootServices`, transferred control to the UEFI kernel entry, validated the normalized handoff, and reached `VANTAOS_BOOT_OK`. The original GRUB ISO tests still run independently in the 1-, 2-, and 4-vCPU matrix described above.
 
 This test does not yet establish physical-hardware compatibility or complete removal of legacy Multiboot-shaped metadata from OS services. GRUB remains the fallback until the UEFI path is repeatedly green and malformed-ELF regression tests are added.
 

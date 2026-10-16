@@ -6,6 +6,13 @@ long vanta_user_abi_compile_check(
 {
     long fd = vanta_open(path, VANTA_OPEN_READ);
     long result = vanta_write(buffer, 1U);
+    result += vanta_create_file(path);
+    long write_fd = vanta_open(path, VANTA_OPEN_WRITE | VANTA_OPEN_TRUNCATE);
+    if (write_fd >= 0)
+    {
+        result += vanta_file_write((int)write_fd, buffer, 1U);
+        result += vanta_close((int)write_fd);
+    }
     result += vanta_console_write(buffer, 1U);
     if (fd >= 0)
     {
@@ -27,6 +34,3 @@ long vanta_user_abi_compile_check(
     return result;
 }
 
-/* Keep the new persistent-file API part of the freestanding ABI compile gate. */
-static long (*const file_write_api)(int, const void*, size_t) = vanta_file_write;
-static long (*const create_file_api)(const char*) = vanta_create_file;

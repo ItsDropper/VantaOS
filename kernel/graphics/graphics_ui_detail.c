@@ -286,6 +286,14 @@ static void ui_footer(int x, int y, int width)
                        UI_QUIET, 1);
     graphics_draw_text(x + width - 115, y + 12, "NO TELEMETRY", UI_QUIET, 1);
 }
+void graphics_draw_desktop_backdrop(int width, int height)
+{
+    if (width <= 0 || height <= 0) return;
+    ui_wallpaper(width, height);
+    ui_topbar(width);
+    ui_shortcuts();
+}
+
 void graphics_draw_desktop_dashboard(int width, int height)
 {
     if (width < 600 || height < 460) return;

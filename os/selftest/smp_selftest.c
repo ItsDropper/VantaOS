@@ -519,5 +519,4 @@ void os_selftest_run_smp_probes(void)
     if (smp_cpu_count() > 1U && smp_process_migration_probe_initialize())
         (void)smp_process_migration_probe_wait();
 }
-
-
+#endif

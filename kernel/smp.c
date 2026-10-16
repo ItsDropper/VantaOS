@@ -7,6 +7,7 @@
 #include "idt.h"
 #include "paging.h"
 #include "serial.h"
+#include "timer.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -262,9 +263,9 @@ static int smp_wait_for_local_timers(const acpi_platform_info_t* info)
     __asm__ volatile ("pushfq; popq %0" : "=r"(saved_flags));
     __asm__ volatile ("sti" ::: "memory");
 
-    uint32_t spin = 0;
+    uint32_t start_ticks = timer_get_ticks();
     int ready = 0;
-    while (spin++ < AP_STARTUP_SPIN_LIMIT)
+    for (;;)
     {
         ready = 1;
         for (uint32_t i = 0; i < info->cpu_count; i++)
@@ -276,9 +277,10 @@ static int smp_wait_for_local_timers(const acpi_platform_info_t* info)
                 break;
             }
         }
-        if (ready)
+        if (ready ||
+            (uint32_t)(timer_get_ticks() - start_ticks) >= 20U)
             break;
-        __asm__ volatile ("pause" ::: "memory");
+        __asm__ volatile ("sti; hlt" ::: "memory");
     }
 
     if ((saved_flags & (1ULL << 9)) == 0U)

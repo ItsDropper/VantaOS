@@ -761,9 +761,161 @@ int fat32_create_file(const char* path)
     return fat32_write_entry(lba, off, leaf, 0, 0) ? 0 : -1;
 }
 
+
+static int fat32_update_file_entry(uint32_t lba, uint32_t offset,
+                                   uint32_t cluster, uint32_t size)
+{
+    if (offset > 480U || (offset & 31U))
+        return 0;
+    if (!read_sector(lba, sector_buffer))
+        return 0;
+    uint8_t* entry = &sector_buffer[offset];
+    entry[20] = (uint8_t)(cluster >> 16);
+    entry[21] = (uint8_t)(cluster >> 24);
+    entry[26] = (uint8_t)cluster;
+    entry[27] = (uint8_t)(cluster >> 8);
+    entry[28] = (uint8_t)size;
+    entry[29] = (uint8_t)(size >> 8);
+    entry[30] = (uint8_t)(size >> 16);
+    entry[31] = (uint8_t)(size >> 24);
+    return fat32_write_sector(lba, sector_buffer);
+}
+
+static int fat32_next_for_write(uint32_t cluster, uint32_t* next)
+{
+    uint32_t value;
+    if (!next || !fat32_raw_entry(cluster, &value))
+        return 0;
+    if (value >= FAT32_EOC_MIN)
+    {
+        uint32_t allocated = fat32_allocate_one();
+        if (!allocated)
+            return 0;
+        if (!fat32_set_raw_entry(cluster, allocated))
+        {
+            fat32_release_chain(allocated);
+            return 0;
+        }
+        *next = allocated;
+        return 1;
+    }
+    if (value < 2U || value > cluster_count + 1U ||
+        value == FAT32_BAD_CLUSTER)
+        return 0;
+    *next = value;
+    return 1;
+}
+
+/*
+ * Write one bounded chunk at an explicit byte offset. Storage allocation is
+ * incremental: this routine only walks/allocates the clusters touched by the
+ * chunk and never stages the whole file in RAM.
+ */
+int fat32_write_file_range(const char* path, uint32_t offset,
+                           const char* data, uint32_t length)
+{
+    if (!mounted || !path || (length && !data))
+        return -1;
+    if (length == 0U)
+        return 0;
+
+    uint64_t end = (uint64_t)offset + length;
+    uint64_t cluster_bytes = (uint64_t)sectors_per_cluster * 512U;
+    uint64_t volume_bytes = (uint64_t)cluster_count * cluster_bytes;
+    if (end > UINT32_MAX || end > volume_bytes)
+        return -1;
+
+    uint32_t parent;
+    uint8_t leaf[11];
+    fat32_slot_t entry;
+    if (!fat32_parent_and_leaf(path, &parent, leaf) ||
+        !fat32_find_entry(parent, leaf, &entry) || !entry.found ||
+        (entry.attributes & 0x01U) != 0U ||
+        offset > entry.size ||
+        (entry.size != 0U && entry.first_cluster < 2U))
+        return -1;
+
+    uint32_t first_cluster = entry.first_cluster;
+    int newly_allocated_first = 0;
+    if (first_cluster < 2U)
+    {
+        first_cluster = fat32_allocate_one();
+        if (!first_cluster)
+            return -1;
+        newly_allocated_first = 1;
+    }
+
+    uint32_t current_cluster = first_cluster;
+    uint32_t current_index = 0U;
+    uint32_t written = 0U;
+
+    while (written < length)
+    {
+        uint64_t absolute = (uint64_t)offset + written;
+        uint32_t target_index = (uint32_t)(absolute / cluster_bytes);
+        while (current_index < target_index)
+        {
+            uint32_t next;
+            if (!fat32_next_for_write(current_cluster, &next))
+            {
+                if (newly_allocated_first)
+                    fat32_release_chain(first_cluster);
+                return -1;
+            }
+            current_cluster = next;
+            current_index++;
+        }
+
+        uint32_t in_cluster = (uint32_t)(absolute % cluster_bytes);
+        uint32_t sector_index = in_cluster / 512U;
+        uint32_t in_sector = in_cluster % 512U;
+        uint32_t lba = cluster_lba(current_cluster);
+        if (lba == FAT32_INVALID_LBA ||
+            sector_index >= sectors_per_cluster ||
+            !read_sector(lba + sector_index, sector_buffer))
+        {
+            if (newly_allocated_first)
+                fat32_release_chain(first_cluster);
+            return -1;
+        }
+
+        uint32_t amount = 512U - in_sector;
+        if (amount > length - written)
+            amount = length - written;
+        for (uint32_t i = 0; i < amount; i++)
+            sector_buffer[in_sector + i] = (uint8_t)data[written + i];
+        if (!fat32_write_sector(lba + sector_index, sector_buffer))
+        {
+            if (newly_allocated_first)
+                fat32_release_chain(first_cluster);
+            return -1;
+        }
+        written += amount;
+    }
+
+    uint32_t final_size = entry.size;
+    if (end > final_size)
+        final_size = (uint32_t)end;
+    if (!fat32_update_file_entry(entry.entry_lba, entry.entry_offset,
+                                 first_cluster, final_size))
+    {
+        /* The directory-sector write may have reached the device. Do not
+           release the new chain after an ambiguous commit result. */
+        return -1;
+    }
+    return (int)length;
+}
+
 int fat32_write_file(const char* path, const char* data, uint32_t size)
 {
-    if (!data || size > 512U) return -1;
+    if (!mounted || !path || (size && !data))
+        return -1;
+
+    uint64_t cluster_bytes = (uint64_t)sectors_per_cluster * 512U;
+    uint64_t volume_bytes = (uint64_t)cluster_count * cluster_bytes;
+    if (size > volume_bytes)
+        return -1;
+
     uint32_t parent;
     uint8_t leaf[11];
     fat32_slot_t entry;
@@ -772,56 +924,29 @@ int fat32_write_file(const char* path, const char* data, uint32_t size)
         (entry.found && (entry.attributes & 0x01U)))
         return -1;
 
-    uint32_t new_cluster = 0;
-    if (size)
+    if (!entry.found)
     {
-        new_cluster = fat32_allocate_one();
-        if (!new_cluster) return -1;
-        uint32_t base = cluster_lba(new_cluster);
-        if (base == FAT32_INVALID_LBA || !read_sector(base, sector_buffer))
-        {
-            fat32_release_chain(new_cluster);
+        if (fat32_create_file(path) < 0 ||
+            !fat32_find_entry(parent, leaf, &entry) || !entry.found)
             return -1;
-        }
-        for (unsigned int i = 0; i < 512; i++)
-            sector_buffer[i] = i < size ? (uint8_t)data[i] : 0;
-        if (!fat32_write_sector(base, sector_buffer))
-        {
-            fat32_release_chain(new_cluster);
+    }
+
+    uint32_t old_cluster = entry.first_cluster;
+    if (!fat32_update_file_entry(entry.entry_lba, entry.entry_offset, 0U, 0U))
+        return -1;
+    if (old_cluster >= 2U)
+        fat32_release_chain(old_cluster);
+
+    uint32_t offset = 0U;
+    while (offset < size)
+    {
+        uint32_t amount = size - offset;
+        if (amount > 4096U)
+            amount = 4096U;
+        int result = fat32_write_file_range(path, offset, data + offset, amount);
+        if (result != (int)amount)
             return -1;
-        }
+        offset += amount;
     }
-
-    uint32_t lba = 0, off = 0;
-    if (entry.found)
-    {
-        lba = entry.entry_lba;
-        off = entry.entry_offset;
-    }
-    else
-    {
-        if (!entry.free_found)
-        {
-            uint32_t new_dir_cluster = fat32_allocate_one();
-            if (!new_dir_cluster || !fat32_set_raw_entry(entry.last_cluster, new_dir_cluster))
-            {
-                if (new_cluster) fat32_release_chain(new_cluster);
-                return -1;
-            }
-            lba = cluster_lba(new_dir_cluster);
-            off = 0;
-        }
-        else
-        {
-            lba = entry.free_lba;
-            off = entry.free_offset;
-        }
-    }
-
-    if (!fat32_write_entry(lba, off, leaf, new_cluster, size))
-        return -1; /* Keep new allocation: the directory write may have reached disk. */
-
-    if (entry.found && entry.first_cluster >= 2)
-        fat32_release_chain(entry.first_cluster);
     return 0;
 }

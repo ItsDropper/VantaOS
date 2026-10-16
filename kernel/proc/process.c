@@ -379,7 +379,9 @@ int process_claim_for_cpu(uint32_t next_pid, uint32_t current_pid,
     uint64_t flags = process_table_lock_acquire();
     process_t* next = &processes[next_pid];
     if (next->state != PROCESS_READY ||
-        next->owner_cpu != PROCESS_CPU_UNOWNED)
+        next->owner_cpu != PROCESS_CPU_UNOWNED ||
+        (next->affinity_cpu != PROCESS_CPU_ANY &&
+         next->affinity_cpu != cpu_id))
     {
         process_table_lock_release(flags);
         return 0;

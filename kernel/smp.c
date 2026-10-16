@@ -488,6 +488,11 @@ int smp_initialize(void)
     return 1;
 }
 
+int smp_cpu_is_bsp(uint32_t logical_id)
+{
+    return logical_id == bsp_logical_id;
+}
+
 unsigned int smp_cpu_count(void)
 {
     return discovered_cpu_count;

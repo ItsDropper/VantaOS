@@ -123,6 +123,18 @@ int paging_tlb_shootdown(paging_address_space_t* address_space,
         expected[i] = generation;
     }
 
+    if (!ok)
+    {
+        /*
+         * Fail closed: an IPI delivery failure means a CPU may retain a stale
+         * translation. Keep the mailbox lock held rather than permit another
+         * request to overwrite this possibly-undelivered one.
+         */
+        if (saved_flags & (1ULL << 9))
+            __asm__ volatile ("sti" ::: "memory");
+        return 0;
+    }
+
     spins = 0;
     for (;;)
     {
@@ -142,8 +154,13 @@ int paging_tlb_shootdown(paging_address_space_t* address_space,
             break;
         if (spins++ >= TLB_SHOOTDOWN_SPIN_LIMIT)
         {
-            ok = 0;
-            break;
+            /*
+             * Fail closed on a non-responsive target: do not recycle its
+             * mailbox while it may still need to acknowledge this request.
+             */
+            if (saved_flags & (1ULL << 9))
+                __asm__ volatile ("sti" ::: "memory");
+            return 0;
         }
         __asm__ volatile ("pause" ::: "memory");
     }

@@ -362,6 +362,78 @@ static void heap_allocator_probe(void)
         "VANTAOS_HEAP_ALLOCATOR_FAIL\n");
 }
 
+static uint32_t smp_scheduler_probe_task_count;
+static volatile uint32_t smp_scheduler_probe_completed;
+static volatile uint32_t smp_scheduler_probe_cpu_mask;
+
+static void smp_scheduler_probe_entry(void)
+{
+    cpu_local_t* local = cpu_local_current();
+    if (local && local->self == local && local->online != 0U)
+        __atomic_fetch_or(&smp_scheduler_probe_cpu_mask,
+                          1U << local->logical_id, __ATOMIC_RELEASE);
+
+    for (uint32_t i = 0; i < 5000000U; i++)
+        __asm__ volatile ("pause" ::: "memory");
+
+    __atomic_add_fetch(&smp_scheduler_probe_completed, 1U, __ATOMIC_RELEASE);
+}
+
+static int smp_scheduler_probe_initialize(void)
+{
+    smp_scheduler_probe_completed = 0;
+    smp_scheduler_probe_cpu_mask = 0;
+    smp_scheduler_probe_task_count = smp_cpu_count() * 2U;
+    if (smp_scheduler_probe_task_count < 2U)
+        smp_scheduler_probe_task_count = 2U;
+    if (smp_scheduler_probe_task_count > 64U)
+        smp_scheduler_probe_task_count = 64U;
+
+    for (uint32_t i = 0; i < smp_scheduler_probe_task_count; i++)
+    {
+        if (process_create_kernel_any("smp-scheduler-probe",
+                                      process_current_pid(),
+                                      smp_scheduler_probe_entry) < 0)
+            return 0;
+    }
+    return 1;
+}
+
+static int smp_scheduler_probe_wait(void)
+{
+    uint32_t attempts = 0;
+    while (attempts++ < 1500U)
+    {
+        if (__atomic_load_n(&smp_scheduler_probe_completed,
+                            __ATOMIC_ACQUIRE) >=
+            smp_scheduler_probe_task_count)
+            break;
+        __asm__ volatile ("sti; hlt" ::: "memory");
+    }
+
+    uint32_t completed = __atomic_load_n(&smp_scheduler_probe_completed,
+                                         __ATOMIC_ACQUIRE);
+    uint32_t cpu_mask = __atomic_load_n(&smp_scheduler_probe_cpu_mask,
+                                        __ATOMIC_ACQUIRE);
+    uint32_t cpus_seen = 0;
+    while (cpu_mask != 0U)
+    {
+        cpus_seen += cpu_mask & 1U;
+        cpu_mask >>= 1;
+    }
+
+    uint32_t required_cpus = smp_cpu_count() > 1U ? 2U : 1U;
+    if (completed != smp_scheduler_probe_task_count ||
+        cpus_seen < required_cpus)
+    {
+        serial_write("VANTAOS_SMP_SCHEDULER_STRESS_FAIL\n");
+        return 0;
+    }
+
+    serial_write("VANTAOS_SMP_SCHEDULER_STRESS_OK\n");
+    return 1;
+}
+
 static void scheduler_probe_initialize(void)
 {
     pmm_allocator_probe();

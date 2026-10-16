@@ -65,4 +65,4 @@ A passing smoke test verifies only this test program and execution path on the C
 
 ## Next steps
 
-The current file-I/O smoke test is not exhaustive. Process groups/signals, concurrent VFS access, broad fault containment, adversarial pointer fuzzing, dynamic linking, writes larger than 511 bytes, directory creation from user mode, file deletion/rename, and a stable application ABI remain unimplemented.
+The current file-I/O smoke test is not exhaustive. Process groups/signals, concurrent VFS access, broad fault containment, adversarial pointer fuzzing, dynamic linking, files larger than FAT32's 32-bit size ceiling, directory creation from user mode, file deletion/rename, and a stable application ABI remain unimplemented.

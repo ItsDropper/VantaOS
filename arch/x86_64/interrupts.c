@@ -9,9 +9,6 @@
 #include "process.h"
 #include "scheduler.h"
 #include "smp.h"
-#ifdef VANTAOS_SELF_TEST
-#include "selftest/user_mode_selftest.h"
-#endif
 
 extern void irq0_stub(void);
 extern void irq1_stub(void);

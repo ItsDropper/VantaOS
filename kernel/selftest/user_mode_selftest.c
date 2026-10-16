@@ -32,6 +32,18 @@ static volatile uint32_t user_test_syscall_seen;
 static volatile uint32_t user_test_protection_fault_seen;
 static volatile uint32_t user_test_unexpected;
 
+static void write_hex(uint64_t value)
+{
+    static const char digits[] = "0123456789ABCDEF";
+    char buffer[19];
+    buffer[0] = '0';
+    buffer[1] = 'x';
+    for (unsigned int i = 0; i < 16U; i++)
+        buffer[i + 2U] = digits[(value >> (60U - i * 4U)) & 0x0FU];
+    buffer[18] = '\0';
+    serial_write(buffer);
+}
+
 static void copy_bytes(void* destination, const uint8_t* source, size_t count)
 {
     uint8_t* out = (uint8_t*)destination;
@@ -74,9 +86,27 @@ int user_mode_selftest_handle_exception(unsigned int number,
                                         struct exception_frame* frame)
 {
     if (!frame ||
-        __atomic_load_n(&user_test_active, __ATOMIC_ACQUIRE) == 0U ||
-        (frame->cs & 3U) != 3U)
+        __atomic_load_n(&user_test_active, __ATOMIC_ACQUIRE) == 0U)
         return 0;
+
+    if ((frame->cs & 3U) != 3U)
+    {
+        /*
+         * An exception during IRETQ/entry is a failed probe too. Recover to
+         * the known kernel continuation so CI reports the fault instead of
+         * hanging without a useful serial trace.
+         */
+        __atomic_store_n(&user_test_unexpected, 1U, __ATOMIC_RELEASE);
+        serial_write("VANTAOS_RING3_KERNEL_EXCEPTION number=");
+        write_hex(number);
+        serial_write(" rip=");
+        write_hex(frame->rip);
+        serial_write(" error=");
+        write_hex(frame->error_code);
+        serial_write("\\n");
+        user_test_redirect_to_kernel(frame);
+        return 1;
+    }
 
     uintptr_t fault_address = 0;
     if (number == 14U)
@@ -96,7 +126,7 @@ int user_mode_selftest_handle_exception(unsigned int number,
         __atomic_store_n(&user_test_unexpected, 1U, __ATOMIC_RELEASE);
     }
 
-    serial_write("VANTAOS_RING3_USER_EXCEPTION_HANDLED\n");
+    serial_write("VANTAOS_RING3_USER_EXCEPTION_HANDLED\\n");
     user_test_redirect_to_kernel(frame);
     return 1;
 }

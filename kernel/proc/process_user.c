@@ -144,7 +144,7 @@ int process_create_user(const char* name, uint32_t parent_pid,
                         const void* image, size_t image_size)
 {
     if (!process_initialized_state || !name || !name[0] || !image ||
-        image_size == 0U || image_size > PAGE_SIZE ||
+        image_size == 0U || image_size > PAGE_SIZE)
         return -1;
 
     paging_address_space_t* space = paging_create_address_space();

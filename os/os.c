@@ -329,17 +329,41 @@ static void heap_allocator_probe(void)
 static uint32_t smp_scheduler_probe_task_count;
 static volatile uint32_t smp_scheduler_probe_completed;
 static volatile uint32_t smp_scheduler_probe_cpu_mask;
+static volatile uint32_t smp_scheduler_probe_active;
+static volatile uint32_t smp_scheduler_probe_max_active;
+static volatile uint32_t smp_scheduler_probe_duplicates;
+static volatile uint32_t smp_scheduler_probe_seen[PROCESS_MAX];
 
 static void smp_scheduler_probe_entry(void)
 {
+    uint32_t pid = process_current_pid();
+    if (pid == 0U || pid >= PROCESS_MAX ||
+        __atomic_exchange_n(&smp_scheduler_probe_seen[pid], 1U,
+                            __ATOMIC_ACQ_REL) != 0U)
+        __atomic_add_fetch(&smp_scheduler_probe_duplicates, 1U,
+                           __ATOMIC_RELAXED);
+
     cpu_local_t* local = cpu_local_current();
     if (local && local->self == local && local->online != 0U)
         __atomic_fetch_or(&smp_scheduler_probe_cpu_mask,
                           1U << local->logical_id, __ATOMIC_RELEASE);
 
-    for (uint32_t i = 0; i < 5000000U; i++)
+    uint32_t active = __atomic_add_fetch(&smp_scheduler_probe_active, 1U,
+                                         __ATOMIC_ACQ_REL);
+    uint32_t observed = __atomic_load_n(&smp_scheduler_probe_max_active,
+                                        __ATOMIC_RELAXED);
+    while (active > observed &&
+           !__atomic_compare_exchange_n(&smp_scheduler_probe_max_active,
+                                        &observed, active, 0,
+                                        __ATOMIC_RELAXED,
+                                        __ATOMIC_RELAXED))
+    {
+    }
+
+    for (uint32_t i = 0; i < 20000000U; i++)
         __asm__ volatile ("pause" ::: "memory");
 
+    __atomic_sub_fetch(&smp_scheduler_probe_active, 1U, __ATOMIC_ACQ_REL);
     __atomic_add_fetch(&smp_scheduler_probe_completed, 1U, __ATOMIC_RELEASE);
 }
 
@@ -347,9 +371,16 @@ static int smp_scheduler_probe_initialize(void)
 {
     smp_scheduler_probe_completed = 0;
     smp_scheduler_probe_cpu_mask = 0;
-    smp_scheduler_probe_task_count = smp_cpu_count() * 2U;
-    if (smp_scheduler_probe_task_count < 2U)
-        smp_scheduler_probe_task_count = 2U;
+    smp_scheduler_probe_active = 0;
+    smp_scheduler_probe_max_active = 0;
+    smp_scheduler_probe_duplicates = 0;
+    for (uint32_t pid = 0; pid < PROCESS_MAX; pid++)
+        __atomic_store_n(&smp_scheduler_probe_seen[pid], 0U,
+                         __ATOMIC_RELAXED);
+
+    smp_scheduler_probe_task_count = smp_cpu_count() * 8U;
+    if (smp_scheduler_probe_task_count < 4U)
+        smp_scheduler_probe_task_count = 4U;
     if (smp_scheduler_probe_task_count > 64U)
         smp_scheduler_probe_task_count = 64U;
 
@@ -393,8 +424,13 @@ static int smp_scheduler_probe_wait(void)
     }
 
     uint32_t required_cpus = smp_cpu_count() > 1U ? 2U : 1U;
+    uint32_t max_active = __atomic_load_n(&smp_scheduler_probe_max_active,
+                                          __ATOMIC_ACQUIRE);
+    uint32_t duplicates = __atomic_load_n(&smp_scheduler_probe_duplicates,
+                                          __ATOMIC_ACQUIRE);
     if (completed != smp_scheduler_probe_task_count ||
-        cpus_seen < required_cpus)
+        cpus_seen < required_cpus || duplicates != 0U ||
+        max_active < required_cpus)
     {
         serial_write("VANTAOS_SMP_SCHEDULER_STRESS_FAIL\n");
         return 0;
@@ -403,7 +439,6 @@ static int smp_scheduler_probe_wait(void)
     serial_write("VANTAOS_SMP_SCHEDULER_STRESS_OK\n");
     return 1;
 }
-
 
 static uint32_t smp_remote_wake_target_cpu;
 static volatile uint32_t smp_remote_wake_target_pid;

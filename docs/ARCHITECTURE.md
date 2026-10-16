@@ -48,7 +48,8 @@ The two boot paths are not interchangeable evidence: a successful GRUB boot does
 | `kernel/time/` | Timer subsystem. |
 | `mm/` | Heap, physical-memory bookkeeping, and paging. |
 | `drivers/` | Keyboard/mouse input, PCI enumeration, and ATA storage driver code. |
-| `fs/` | Filesystem namespace, FAT32 read path, and VFS handles. |
+| `fs/` | Filesystem namespace, FAT32 directory/file access, and VFS handles. |
+| `fs/fat32_lfn.c` | FAT32 long-filename sequence validation and UTF-16-to-UTF-8 decoding. |
 | `os/terminal/` | Terminal, shell, and commands. |
 | `os/desktop/` | Desktop and file-explorer UI. |
 | `os/selftest/` | Test-only process, filesystem, allocator, and SMP regression probes; separate from boot orchestration. |

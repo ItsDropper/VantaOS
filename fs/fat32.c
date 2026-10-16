@@ -254,10 +254,21 @@ static int fat32_raw_entry(uint32_t cluster, uint32_t* value)
     uint32_t offset = cluster * 4U;
     if ((uint64_t)offset + 4U > (uint64_t)sectors_per_fat * 512U)
         return 0;
-    uint32_t lba = fat_lba + offset / 512U;
-    if (!read_sector(lba, sector_buffer))
-        return 0;
-    *value = fat32(&sector_buffer[offset % 512U]) & 0x0FFFFFFFU;
+
+    uint32_t expected = 0;
+    for (uint32_t copy = 0; copy < fat_count; copy++)
+    {
+        uint32_t lba = fat_lba + copy * sectors_per_fat + offset / 512U;
+        if (!read_sector(lba, sector_buffer))
+            return 0;
+        uint32_t entry = fat32(&sector_buffer[offset % 512U]) & 0x0FFFFFFFU;
+        /* Never allocate through a mirrored FAT that disagrees about ownership. */
+        if (copy != 0 && entry != expected)
+            return 0;
+        expected = entry;
+    }
+
+    *value = expected;
     return 1;
 }
 

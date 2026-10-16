@@ -96,6 +96,13 @@ fixture_matches:
     cmp $-9, %rax
     jne file_fail
 
+    /* High descriptor bits must not truncate into a valid descriptor. */
+    mov $5, %eax
+    movabs $0x100000003, %rdi
+    int $0x80
+    cmp $-9, %rax
+    jne file_fail
+
     mov $3, %eax
     lea missing_path(%rip), %rdi
     mov $1, %esi

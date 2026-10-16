@@ -28,18 +28,19 @@ This roadmap prioritizes a trustworthy kernel over visual features. A Windows al
 - [x] Split build source lists into subsystem Makefiles.
 - [x] Move source code into architecture, kernel, memory, drivers, and filesystem directories.
 
-### M1.5 — Independent boot path (planned)
-- [ ] Define a versioned boot-info ABI independent of Multiboot.
-- [ ] Keep GRUB/Multiboot as a working fallback while adding a separate UEFI x86-64 entry.
-- [ ] Load and validate ELF64 kernel segments, acquire the final UEFI memory map, and call `ExitBootServices` safely.
-- [ ] Add OVMF/QEMU CI for the custom loader before changing the default boot path.
-- [ ] Test malformed kernel images and missing optional firmware data.
+### M1.5 — Independent UEFI boot path (implemented; further hardening planned)
+- [x] Define a versioned boot-info ABI and normalize boot information for the physical memory manager; migration of every legacy consumer remains incomplete.
+- [x] Keep GRUB/Multiboot as a working fallback and add a separate UEFI x86-64 entry.
+- [x] Load ELF64 kernel segments, acquire the final UEFI memory map, and call `ExitBootServices` in the tested OVMF path.
+- [x] Add OVMF/QEMU CI for the UEFI loader while retaining GRUB as the fallback.
+- [ ] Expand malformed-ELF, memory-map boundary, and missing optional firmware-data tests.
 
 ### M2 — Process and scheduler correctness
 - [x] Test selected process API guards and lifecycle transitions.
 - [x] Verify a returning kernel process is reaped.
+- [x] Exercise concurrent scheduler work, remote wakeups, and process migration in the multi-vCPU QEMU regression matrix.
 - [ ] Add interrupt-frame layout and stack-bound tests.
-- [ ] Stress repeated scheduling and timer preemption.
+- [ ] Expand sustained scheduling and timer-preemption stress coverage.
 
 ### M3 — Memory safety and address spaces
 - [ ] Add bounds/overflow checks to mapping and frame calculations.

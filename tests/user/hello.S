@@ -248,6 +248,14 @@ open_until_full:
     cmp $23, %eax
     jne file_fail
 
+    /* A collected child must no longer be waitable. */
+    mov $7, %eax
+    mov %r14, %rdi
+    xor %esi, %esi
+    int $0x80
+    cmp $-10, %rax
+    jne file_fail
+
     mov $1, %eax
     lea wait_success(%rip), %rdi
     mov $(wait_success_end - wait_success), %esi

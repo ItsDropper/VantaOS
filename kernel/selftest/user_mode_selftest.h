@@ -7,6 +7,7 @@
 int user_mode_selftest_run(void);
 
 /* Called by the IDT's DPL-3 test gate and by the exception dispatcher. */
+int user_mode_selftest_is_active(void);
 void user_mode_selftest_syscall_dispatch(struct exception_frame* frame);
 int user_mode_selftest_handle_exception(unsigned int number,
                                         struct exception_frame* frame);

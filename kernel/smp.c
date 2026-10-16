@@ -96,7 +96,7 @@ _Noreturn void smp_ap_entry(uint32_t apic_id)
 
     /* Wait without HLT: the BSP's release flag is polled with interrupts off. */
     while (__atomic_load_n(&work_probe_start, __ATOMIC_ACQUIRE) == 0U)
-        __asm__ volatile ("pause" ::: "memory");
+        __asm__ volatile ("sti; hlt" ::: "memory");
 
     if (!run_local_work_probe((uint32_t)index))
     {
@@ -215,6 +215,20 @@ static int smp_run_work_probe(const acpi_platform_info_t* info,
     }
 
     __atomic_store_n(&work_probe_start, 1U, __ATOMIC_RELEASE);
+
+    /* Wake APs with a dedicated fixed IPI; do not make them burn TCG time
+       spinning while the BSP starts the remaining processors. */
+    for (uint32_t i = 0; i < info->cpu_count; i++)
+    {
+        if (i == bsp_index)
+            continue;
+        const cpu_local_t* local = cpu_local_get(i);
+        if (!local || !apic_send_fixed_ipi(local->apic_id, 0xF1U))
+        {
+            serial_write("VANTAOS_SMP_WORK_FAIL\\n");
+            return 0;
+        }
+    }
 
     if (!run_local_work_probe(bsp_index))
     {

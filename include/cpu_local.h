@@ -15,6 +15,8 @@ typedef struct cpu_local
     uint32_t apic_id;
     volatile uint32_t online;
     volatile uint32_t current_pid;
+    volatile uint32_t idle_pid;
+    volatile uint32_t scheduler_online;
     volatile uint32_t interrupt_depth;
     uint32_t reserved;
     /* Updated only by this logical CPU; also validates GS-based lookup. */

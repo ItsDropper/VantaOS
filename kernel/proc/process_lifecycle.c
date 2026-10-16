@@ -401,7 +401,10 @@ int process_wait_child(uint32_t parent_pid, uint32_t child_pid,
     process_t* parent = &process_table_records[parent_pid];
     process_t* child = &process_table_records[child_pid];
     if (parent_pid != process_current_slot() || !parent->is_user ||
-        parent->state != PROCESS_RUNNING ||
+        parent->state == PROCESS_UNUSED ||
+        parent->state == PROCESS_TERMINATED ||
+        parent->state == PROCESS_ZOMBIE ||
+        parent->state == PROCESS_REAPING ||
         parent->owner_cpu != process_current_cpu_id() ||
         child->state == PROCESS_UNUSED ||
         child->parent_pid != parent_pid)

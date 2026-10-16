@@ -65,8 +65,8 @@ void interrupts_initialize(void)
     idt_set_gate(0xFF, (uint64_t)(uintptr_t)apic_spurious_stub, 0x08, 0x8E);
     idt_set_gate(0xF1, (uint64_t)(uintptr_t)smp_wakeup_stub, 0x08, 0x8E);
     idt_set_gate(0xF2, (uint64_t)(uintptr_t)lapic_timer_stub, 0x08, 0x8E);
-    /* User-mode waitpid uses int $0xF3 to yield while blocked. */
-    idt_set_gate(0xF3, (uint64_t)(uintptr_t)reschedule_ipi_stub, 0x08, 0xEE);
+    /* Reschedule IPIs are hardware-delivery only; user waits use the timer. */
+    idt_set_gate(0xF3, (uint64_t)(uintptr_t)reschedule_ipi_stub, 0x08, 0x8E);
     idt_set_gate(0xF4, (uint64_t)(uintptr_t)tlb_shootdown_ipi_stub, 0x08, 0x8E);
     idt_set_gate(0x80, (uint64_t)(uintptr_t)user_mode_syscall_stub, 0x08, 0xEE);
 

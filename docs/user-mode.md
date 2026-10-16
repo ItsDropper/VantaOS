@@ -22,7 +22,7 @@ void user_main(void)
 }
 ```
 
-The program still needs an ELF entry point and a freestanding link configuration. The header does not provide a C runtime, heap, environment, dynamic linker, or libc.
+`userspace/crt/crt0.S` provides a minimal `_start` for C programs: it reads `argc`/`argv` from the kernel-built initial stack, aligns the stack for the System V AMD64 calling convention, calls `main(argc, argv)`, and exits with `main`'s return value. It is not a full C runtime: there is no heap, environment support beyond the empty `envp`, dynamic linker, TLS setup, constructors, or libc.
 
 ## Syscall ABI
 

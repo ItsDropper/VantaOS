@@ -587,7 +587,19 @@ static int syscall_create_file(struct exception_frame* frame,
     }
 
     int result = vfs_create_file(path);
-    frame->rax = result < 0 ? (uint64_t)(int64_t)-5 : 0U;
+    if (result < 0)
+    {
+        /* create-file is idempotent for an existing regular file. */
+        int existing = vfs_lookup(path);
+        const fs_node_t* node = existing >= 0 ?
+            vfs_get_node((uint32_t)existing) : 0;
+        if (!node || node->type != FS_NODE_FILE)
+        {
+            frame->rax = (uint64_t)(int64_t)-5;
+            return 0;
+        }
+    }
+    frame->rax = 0U;
     return 0;
 }
 

@@ -226,10 +226,15 @@ static void process_deferred_switch_probe(void)
         ok = process_terminate((uint32_t)outgoing_pid);
         if (!ok) failure_stage = 3U;
     }
+    uint64_t incoming_stack = 0;
+    paging_address_space_t* incoming_address_space = NULL;
     if (ok)
     {
         ok = process_prepare_context_switch((uint32_t)incoming_pid,
-                                            (uint32_t)outgoing_pid, cpu_id);
+                                            (uint32_t)outgoing_pid, cpu_id,
+                                            &incoming_stack,
+                                            &incoming_address_space) &&
+             incoming_stack != 0U && incoming_address_space != NULL;
         if (!ok) failure_stage = 4U;
     }
 

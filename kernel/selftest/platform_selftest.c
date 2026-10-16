@@ -147,8 +147,8 @@ void kernel_platform_selftest(void)
     int tlb_shootdown_ok = paging_tlb_shootdown(
         paging_get_kernel_address_space(), (uintptr_t)0xC0000000ULL);
     serial_write(tlb_shootdown_ok ?
-        "VANTAOS_TLB_SHOOTDOWN_OK\\n" :
-        "VANTAOS_TLB_SHOOTDOWN_FAIL\\n");
+        "VANTAOS_TLB_SHOOTDOWN_OK\n" :
+        "VANTAOS_TLB_SHOOTDOWN_FAIL\n");
     user_mapping_probe();
 }
 #endif

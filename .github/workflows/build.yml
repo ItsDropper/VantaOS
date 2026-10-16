@@ -7,6 +7,7 @@ on:
       - work/kernel-reliability-2026-10-15
       - work/comprehensive-tests-docs-2026-10-15
       - work/modular-kbuild-layout-2026-10-15
+      - feat/userspace-waitpid
   pull_request:
   workflow_dispatch:
 

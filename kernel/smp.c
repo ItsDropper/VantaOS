@@ -93,9 +93,16 @@ int smp_scheduler_initialize(void)
     for (uint32_t cpu = 0; cpu < discovered_cpu_count; cpu++)
     {
         const cpu_local_t* local = cpu_local_get(cpu);
-        if (!local || local->logical_id != cpu ||
-            !process_create_idle_for_cpu(cpu, "cpu-idle",
-                                         smp_idle_process_entry))
+        int idle_pid = process_create_idle_for_cpu(
+            cpu, "cpu-idle", smp_idle_process_entry);
+        process_t idle;
+        if (!local || local->logical_id != cpu || idle_pid <= 0 ||
+            !process_snapshot((uint32_t)idle_pid, &idle) ||
+            idle.state != PROCESS_READY ||
+            idle.owner_cpu != PROCESS_CPU_UNOWNED ||
+            idle.affinity_cpu != cpu ||
+            __atomic_load_n(&local->idle_pid, __ATOMIC_ACQUIRE) !=
+                (uint32_t)idle_pid)
         {
             serial_write("VANTAOS_SMP_IDLE_CONTEXTS_FAIL\n");
             return 0;

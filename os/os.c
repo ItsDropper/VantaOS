@@ -163,7 +163,8 @@ static void process_state_transition_probe(void)
              process.owner_cpu != PROCESS_CPU_UNOWNED;
         if (ok)
             ok = !process_claim_for_cpu(
-                (uint32_t)pid, 0U, process.owner_cpu + 1U);
+                (uint32_t)pid, process_current_pid(),
+                process.owner_cpu + 1U);
     }
     if (ok)
         ok = process_set_running((uint32_t)pid);
@@ -442,6 +443,21 @@ static void smp_scheduler_probe_entry(void)
                                         __ATOMIC_RELAXED,
                                         __ATOMIC_RELAXED))
     {
+    }
+
+    /*
+     * In multicore runs, hold the first entrant in this non-preemptible
+     * section until another CPU enters. This makes the overlap assertion
+     * deterministic instead of depending on QEMU timing. Bound the wait so a
+     * broken scheduler reports a failure rather than hanging forever.
+     */
+    if (smp_cpu_count() > 1U)
+    {
+        uint32_t overlap_wait = 0;
+        while (__atomic_load_n(&smp_scheduler_probe_active,
+                               __ATOMIC_ACQUIRE) < 2U &&
+               overlap_wait++ < 10000000U)
+            __asm__ volatile ("pause" ::: "memory");
     }
 
     /*
@@ -879,6 +895,9 @@ static void scheduler_probe_initialize(void)
                               scheduler_probe_entry) != -1 ||
         process_create_kernel("invalid-entry", process_current_pid(),
                               NULL) != -1 ||
+        process_create_kernel_on_cpu("invalid-cpu", process_current_pid(),
+                                     scheduler_probe_entry,
+                                     CPU_LOCAL_MAX) != -1 ||
         process_switch_to(0) != 0 ||
         process_switch_to(PROCESS_MAX) != 0 ||
         process_set_running(PROCESS_MAX) != 0 ||

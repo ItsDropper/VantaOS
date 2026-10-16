@@ -106,8 +106,15 @@ void graphics_mouse_click(int button)
         if (cursor_x >= menu_x + 24 && cursor_x < menu_x + 436 &&
             cursor_y >= menu_y + 272 && cursor_y < menu_y + 326)
         {
-            active_panel = 4;
+            const char* settings_argv[] = { "/SETTINGS.ELF" };
+            int settings_pid = process_spawn_user_elf_file(
+                "/SETTINGS.ELF", process_current_pid(), 1U, settings_argv);
             start_menu_open = 0;
+            if (settings_pid < 0)
+            {
+                /* Keep the legacy settings panel available if disk launch fails. */
+                active_panel = 4;
+            }
             return;
         }
 

@@ -252,6 +252,24 @@ static int smp_wait_for_reschedule_ipis(const acpi_platform_info_t* info)
         serial_write("VANTAOS_SMP_RESCHEDULE_IPI_FAIL\n");
         return 0;
     }
+    int pending_ok = 1;
+    for (uint32_t i = 0; i < info->cpu_count; i++)
+    {
+        if (expected[i] == 0U)
+            continue;
+        const cpu_local_t* local = cpu_local_get(i);
+        if (!local ||
+            __atomic_load_n(&local->reschedule_pending,
+                            __ATOMIC_ACQUIRE) == 0U)
+            pending_ok = 0;
+    }
+
+    if (!pending_ok)
+    {
+        serial_write("VANTAOS_SMP_RESCHEDULE_PENDING_FAIL\n");
+        return 0;
+    }
+    serial_write("VANTAOS_SMP_RESCHEDULE_PENDING_OK\n");
     serial_write("VANTAOS_SMP_RESCHEDULE_IPI_OK\n");
     return 1;
 }

@@ -128,28 +128,7 @@ void graphics_present(void)
         if (wh > 480) wh = 480;
         int wx = w / 2 - ww / 2, wy = h / 2 - wh / 2;
         graphics_draw_window_frame(wx, wy, ww, wh, "Settings", 0);
-        graphics_draw_text(wx + 28, wy + 82, "Display", 0x0079B8FF, 1);
-        graphics_draw_text(wx + 28, wy + 112, "Resolution", 0x0093A3B5, 1);
-        const char* labels[3] = {"800X600", "1024X768", "1280X720"};
-        for (int i = 0; i < 3; i++)
-        {
-            int gap = 10;
-            int bw = (ww - 56 - gap * 2) / 3;
-            int bx = wx + 28 + i * (bw + gap);
-            graphics_fill_rounded_rect(bx, wy + 140, bw, 52, 9,
-                settings_resolution_index == i ? 0x002A5681 : 0x001D2936);
-            if (settings_resolution_index == i)
-                graphics_fill_rounded_rect(bx + 12, wy + 185, bw - 24, 2, 1,
-                    0x0079B8FF);
-            graphics_draw_text(bx + 14, wy + 160, labels[i], 0x00E5EBF2, 1);
-        }
-        graphics_draw_text(wx + 28, wy + 222, "Display mode", 0x0093A3B5, 1);
-        graphics_draw_text(wx + 190, wy + 222, "VBE framebuffer", 0x00DCE5EE, 1);
-        graphics_fill_rect(wx + 28, wy + 250, ww - 56, 1, 0x00293443);
-        graphics_draw_text(wx + 28, wy + 274, "Appearance", 0x0079B8FF, 1);
-        graphics_draw_text(wx + 28, wy + 306, "Window style", 0x0093A3B5, 1);
-        graphics_draw_text(wx + 190, wy + 306, "Rounded corners", 0x00DCE5EE, 1);
-        graphics_draw_text(wx + 28, wy + 354, "Display changes apply immediately when supported.", 0x006E8094, 1);
+        graphics_draw_settings_page_detail(wx, wy, ww, wh);
     }
 
     if (active_panel == 1)

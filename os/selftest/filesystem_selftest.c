@@ -96,6 +96,13 @@ void filesystem_selftest_initialize(void)
      * A failure is a hard regression marker; no success marker is printed
      * until bytes written to the disk can be read back through the VFS.
      */
+    if (filesystem_create_file("/BAD NAME.TXT") >= 0)
+    {
+        serial_write("VANTAOS_FAT32_NAME_GUARD_FAIL\n");
+        return;
+    }
+    serial_write("VANTAOS_FAT32_NAME_GUARDS_OK\n");
+
     static const char write_probe[] = "VANTAOS_FAT32_WRITE_OK";
     char write_back[64];
 

@@ -140,6 +140,8 @@ int paging_tlb_shootdown(paging_address_space_t* address_space,
         __atomic_store_n(&target->tlb_address, virtual_address,
                          __ATOMIC_RELAXED);
         __atomic_store_n(&target->tlb_request_generation, generation,
+                         __ATOMIC_RELAXED);
+        __atomic_store_n(&target->tlb_request_pending, 1U,
                          __ATOMIC_RELEASE);
 
         if (!apic_send_fixed_ipi(target->apic_id, TLB_SHOOTDOWN_VECTOR))
@@ -210,12 +212,17 @@ void paging_tlb_shootdown_handle_interrupt(void)
     cpu_local_t* local = cpu_local_current();
     if (local && local->self == local && local->online != 0U)
     {
-        uint64_t generation = __atomic_load_n(
-            &local->tlb_request_generation, __ATOMIC_ACQUIRE);
-        uint64_t acknowledged = __atomic_load_n(
-            &local->tlb_ack_generation, __ATOMIC_RELAXED);
-        if (generation != 0U && generation != acknowledged)
+        /*
+         * Do not infer whether a request is new by comparing generation
+         * numbers: every finite generation counter eventually repeats. The
+         * serialized mailbox has an explicit one-shot pending state instead.
+         */
+        uint32_t pending = __atomic_exchange_n(
+            &local->tlb_request_pending, 0U, __ATOMIC_ACQUIRE);
+        if (pending != 0U)
         {
+            uint64_t generation = __atomic_load_n(
+                &local->tlb_request_generation, __ATOMIC_RELAXED);
             paging_address_space_t* target_space = __atomic_load_n(
                 &local->tlb_address_space, __ATOMIC_RELAXED);
             uintptr_t address = __atomic_load_n(

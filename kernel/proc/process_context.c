@@ -22,7 +22,7 @@ static int process_claim_for_cpu_internal(uint32_t next_pid,
         return 0;
     }
 
-    process_t* next = &processes[next_pid];
+    process_t* next = &process_table_records[next_pid];
     if (next->state != PROCESS_READY ||
         next->owner_cpu != PROCESS_CPU_UNOWNED ||
         (next->affinity_cpu != PROCESS_CPU_ANY &&
@@ -37,7 +37,7 @@ static int process_claim_for_cpu_internal(uint32_t next_pid,
 
     if (current_pid != 0 && current_pid != next_pid)
     {
-        process_t* current = &processes[current_pid];
+        process_t* current = &process_table_records[current_pid];
         if (current->owner_cpu != cpu_id ||
             (current->state != PROCESS_RUNNING &&
              current->state != PROCESS_READY &&
@@ -105,8 +105,8 @@ int process_prepare_context_switch(uint32_t next_pid, uint32_t current_pid,
         return 0;
     }
 
-    process_t* current = &processes[current_pid];
-    process_t* next = &processes[next_pid];
+    process_t* current = &process_table_records[current_pid];
+    process_t* next = &process_table_records[next_pid];
     if (current->owner_cpu != cpu_id ||
         (current->state != PROCESS_RUNNING &&
          current->state != PROCESS_READY &&
@@ -149,7 +149,7 @@ int process_finish_context_switch(uint32_t outgoing_pid, uint32_t cpu_id)
         return 0;
 
     uint64_t flags = process_table_lock_acquire();
-    process_t* outgoing = &processes[outgoing_pid];
+    process_t* outgoing = &process_table_records[outgoing_pid];
     if (outgoing->owner_cpu != cpu_id ||
         (outgoing->state != PROCESS_READY &&
          outgoing->state != PROCESS_SLEEPING &&

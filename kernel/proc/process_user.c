@@ -1,5 +1,6 @@
 #include "process_internal.h"
 #include "pmm.h"
+#include "serial.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -162,5 +163,6 @@ int process_release_user_resources(process_t* process)
     process->user_stack_frame = NULL;
     process->user_image_size = 0U;
     process->is_user = 0U;
+    serial_write("VANTAOS_USER_PROCESS_REAP_OK\n");
     return 1;
 }

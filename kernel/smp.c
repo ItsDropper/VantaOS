@@ -94,7 +94,7 @@ _Noreturn void smp_ap_entry(uint32_t apic_id)
             __asm__ volatile ("cli; hlt" ::: "memory");
     }
 
-    /* Wait without HLT: the BSP's release flag is polled with interrupts off. */
+    /* Sleep with interrupts enabled until the BSP sends the wakeup IPI. */
     while (__atomic_load_n(&work_probe_start, __ATOMIC_ACQUIRE) == 0U)
         __asm__ volatile ("sti; hlt" ::: "memory");
 

@@ -3,6 +3,7 @@
 #include "cpu_local.h"
 #include "apic.h"
 #include "serial.h"
+#include "spinlock.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -37,26 +38,19 @@ static paging_address_space_t* fallback_current_address_space;
 #define TLB_SHOOTDOWN_SPIN_LIMIT 100000000U
 static volatile uint32_t tlb_shootdown_lock;
 static uint64_t tlb_shootdown_generation;
-static volatile uint32_t paging_mutation_lock;
+static spinlock_t paging_mutation_lock = SPINLOCK_INITIALIZER;
 
 static void paging_switch_address_space_locked(
     paging_address_space_t* address_space);
 
 static uint64_t paging_lock_acquire(void)
 {
-    uint64_t saved_flags;
-    __asm__ volatile ("pushfq; popq %0; cli" : "=r"(saved_flags) :: "memory");
-    while (__atomic_exchange_n(&paging_mutation_lock, 1U,
-                               __ATOMIC_ACQUIRE) != 0U)
-        __asm__ volatile ("pause" ::: "memory");
-    return saved_flags;
+    return spinlock_lock_irqsave(&paging_mutation_lock);
 }
 
 static void paging_lock_release(uint64_t saved_flags)
 {
-    __atomic_store_n(&paging_mutation_lock, 0U, __ATOMIC_RELEASE);
-    if (saved_flags & (1ULL << 9))
-        __asm__ volatile ("sti" ::: "memory");
+    spinlock_unlock_irqrestore(&paging_mutation_lock, saved_flags);
 }
 
 static _Noreturn void paging_tlb_failure(void)

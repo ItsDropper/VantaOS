@@ -201,7 +201,7 @@ void exception_handler(
     if (frame && (frame->cs & 3U) == 3U)
     {
         process_t process;
-        if (process_snapshot_try(process_current_pid(), &process) &&
+        if (process_snapshot(process_current_pid(), &process) &&
             process.is_user &&
             process.address_space == paging_get_current_address_space())
         {

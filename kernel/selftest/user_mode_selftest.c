@@ -329,31 +329,126 @@ int user_mode_selftest_run(void)
 
 int user_mode_process_smoke_test_start(void)
 {
-    /*
-     * Flat ring-3 image: write(1, message, 24), exit(0). The message starts
-     * at offset 32 in the same read-only user code page.
-     */
-    static const uint8_t image[] = {
-        0xB8, 0x01, 0x00, 0x00, 0x00,             /* mov eax, SYS_WRITE */
-        0x48, 0xBF, 0x20, 0x00, 0x00, 0x00,       /* mov rdi, user VA */
-        0x80, 0x00, 0x00, 0x00,
-        0xBE, 0x18, 0x00, 0x00, 0x00,             /* mov esi, 24 */
-        0xCD, 0x80,                                /* int 0x80 */
-        0xB8, 0x00, 0x00, 0x00, 0x00,             /* mov eax, SYS_EXIT */
-        0xCD, 0x80,                                /* int 0x80 */
-        0x90, 0x90, 0x90,                          /* pad to offset 32 */
+    static const uint8_t flat_image[] = {
+        0xB8, 0x01, 0x00, 0x00, 0x00,
+        0x48, 0xBF, 0x20, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00,
+        0xBE, 0x18, 0x00, 0x00, 0x00,
+        0xCD, 0x80,
+        0xB8, 0x00, 0x00, 0x00, 0x00,
+        0xCD, 0x80,
+        0x90, 0x90, 0x90,
         'V','A','N','T','A','O','S','_',
         'U','S','E','R','_','P','R','O','G','R','A','M','_','O','K','\n'
     };
-
-    int pid = process_create_user("ring3-smoke", process_current_pid(),
-                                  image, sizeof(image));
-    if (pid <= 0)
+    int flat_pid = process_create_user(
+        "ring3-flat-smoke", process_current_pid(),
+        flat_image, sizeof(flat_image));
+    if (flat_pid <= 0)
     {
         serial_write("VANTAOS_USER_PROCESS_CREATE_FAIL\n");
         return 0;
     }
 
+    /*
+     * Construct a minimal valid ELF64 ET_EXEC in memory. Its one PT_LOAD
+     * segment is RX and contains a write/exit program plus its message.
+     */
+    struct __attribute__((packed)) test_elf_header
+    {
+        uint8_t ident[16];
+        uint16_t type, machine;
+        uint32_t version;
+        uint64_t entry, phoff, shoff;
+        uint32_t flags;
+        uint16_t ehsize, phentsize, phnum, shentsize, shnum, shstrndx;
+    };
+    struct __attribute__((packed)) test_elf_program_header
+    {
+        uint32_t type, flags;
+        uint64_t offset, vaddr, paddr, filesz, memsz, align;
+    };
+    static const uint8_t elf_program[] = {
+        0xB8, 0x01, 0x00, 0x00, 0x00,
+        0x48, 0xBF, 0x98, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00,
+        0xBE, 0x1C, 0x00, 0x00, 0x00,
+        0xCD, 0x80,
+        0xB8, 0x00, 0x00, 0x00, 0x00,
+        0xCD, 0x80,
+        0x90, 0x90, 0x90,
+        'V','A','N','T','A','O','S','_',
+        'E','L','F','_','U','S','E','R','_',
+        'P','R','O','G','R','A','M','_','O','K','\n'
+    };
+    enum { ELF_PAYLOAD_OFFSET = 64 + 56 };
+    static uint8_t elf_image[ELF_PAYLOAD_OFFSET + sizeof(elf_program)];
+    for (size_t i = 0; i < sizeof(elf_image); i++)
+        elf_image[i] = 0U;
+
+    struct test_elf_header* header =
+        (struct test_elf_header*)elf_image;
+    header->ident[0] = 0x7FU;
+    header->ident[1] = 'E';
+    header->ident[2] = 'L';
+    header->ident[3] = 'F';
+    header->ident[4] = 2U;
+    header->ident[5] = 1U;
+    header->ident[6] = 1U;
+    header->type = 2U;
+    header->machine = 62U;
+    header->version = 1U;
+    header->entry = PAGING_USER_BASE + ELF_PAYLOAD_OFFSET;
+    header->phoff = sizeof(*header);
+    header->ehsize = sizeof(*header);
+    header->phentsize = sizeof(struct test_elf_program_header);
+    header->phnum = 1U;
+
+    struct test_elf_program_header* ph =
+        (struct test_elf_program_header*)(elf_image + header->phoff);
+    ph->type = 1U;
+    ph->flags = 5U; /* PF_R | PF_X; writable+executable is rejected. */
+    ph->offset = ELF_PAYLOAD_OFFSET;
+    ph->vaddr = header->entry;
+    ph->filesz = sizeof(elf_program);
+    ph->memsz = sizeof(elf_program);
+    ph->align = 1U;
+    for (size_t i = 0; i < sizeof(elf_program); i++)
+        elf_image[ELF_PAYLOAD_OFFSET + i] = elf_program[i];
+
+    int elf_pid = process_create_user_elf(
+        "ring3-elf-smoke", process_current_pid(),
+        elf_image, sizeof(elf_image));
+    if (elf_pid <= 0)
+    {
+        serial_write("VANTAOS_ELF_USER_PROCESS_CREATE_FAIL\n");
+        return 0;
+    }
+
+    /*
+     * Attempt to execute from the writable stack. NX must fault the process,
+     * not panic the kernel; the exception path then reaps it after switching
+     * away from its stack and CR3.
+     */
+    static const uint8_t nx_fault_image[] = {
+        0x48, 0xB8, 0x00, 0x10, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00,
+        0xFF, 0xE0
+    };
+    int fault_pid = process_create_user(
+        "ring3-nx-fault", process_current_pid(),
+        nx_fault_image, sizeof(nx_fault_image));
+    if (fault_pid <= 0)
+    {
+        serial_write("VANTAOS_USER_FAULT_PROCESS_CREATE_FAIL\n");
+        return 0;
+    }
+
+    static const uint8_t invalid_elf[64] = {0};
+    if (process_create_user_elf("invalid-elf", process_current_pid(),
+                                invalid_elf, sizeof(invalid_elf)) != -1)
+    {
+        serial_write("VANTAOS_ELF_VALIDATION_FAIL\n");
+        return 0;
+    }
+    serial_write("VANTAOS_ELF_VALIDATION_OK\n");
     serial_write("VANTAOS_USER_PROCESS_QUEUED\n");
     return 1;
 }

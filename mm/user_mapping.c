@@ -190,6 +190,18 @@ int paging_map_user_page(paging_address_space_t* address_space,
                          uintptr_t physical_address,
                          int writable)
 {
+    return paging_map_user_page_ex(address_space, virtual_address,
+                                   physical_address, writable, 1);
+}
+
+int paging_map_user_page_ex(paging_address_space_t* address_space,
+                            uintptr_t virtual_address,
+                            uintptr_t physical_address,
+                            int writable, int executable)
+{
+    if (!executable && !paging_nx_available())
+        return 0;
+
     uint64_t saved_flags = paging_lock_acquire();
     if ((virtual_address & (PAGE_SIZE - 1U)) != 0 ||
         (physical_address & (PAGE_SIZE - 1U)) != 0 ||
@@ -211,7 +223,8 @@ int paging_map_user_page(paging_address_space_t* address_space,
 
     *entry = ((uint64_t)physical_address) |
              PAGE_PRESENT | PAGE_USER |
-             (writable ? PAGE_WRITE : 0U);
+             (writable ? PAGE_WRITE : 0U) |
+             (executable ? 0U : PAGE_NX);
     __atomic_add_fetch(&address_space->pending_shootdowns, 1U,
                        __ATOMIC_RELEASE);
     paging_lock_release(saved_flags);

@@ -20,7 +20,7 @@ ld -m elf_x86_64 -static -nostdlib -Ttext-segment=0x8000000000 \
     /tmp/vantaos-terminal-crt0.o /tmp/vantaos-terminal.o
 gcc -m64 -mcmodel=large -ffreestanding -fno-pie -fno-stack-protector \
     -mno-red-zone -fno-builtin -nostdlib -Wall -Wextra -Werror \
-    -Iuserspace/include -c userspace/apps/settings.c -o /tmp/vantaos-settings.o
+    -Iuserspace/include -Iinclude -c userspace/apps/settings.c -o /tmp/vantaos-settings.o
 ld -m elf_x86_64 -static -nostdlib -Ttext-segment=0x8000000000 \
     -e _start -o /tmp/vantaos-settings.elf \
     /tmp/vantaos-terminal-crt0.o /tmp/vantaos-settings.o

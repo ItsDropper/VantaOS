@@ -55,7 +55,6 @@ jobs:
             VANTAOS_SMP_RESCHEDULE_IPI_OK
             VANTAOS_SMP_RESCHEDULE_PENDING_OK
             VANTAOS_SMP_IDLE_CONTEXTS_OK
-            VANTAOS_SMP_SCHEDULER_STRESS_OK
             VANTAOS_TLB_SHOOTDOWN_OK
             VANTAOS_BOOT_INFO_ADAPTER_OK
             VANTAOS_PMM_BOOT_INFO_OK
@@ -113,6 +112,11 @@ jobs:
                 exit 1
               fi
             done
+            if [ "$cpus" -gt 1 ] && ! grep -q "^VANTAOS_SMP_SCHEDULER_STRESS_OK" "$log"; then
+              echo "Cross-CPU scheduler stress did not pass at ${memory} MiB."
+              cat "$log"
+              exit 1
+            fi
             echo "All required markers passed at ${memory} MiB."
           done
 
@@ -188,7 +192,6 @@ jobs:
             VANTAOS_SMP_RESCHEDULE_IPI_OK
             VANTAOS_SMP_RESCHEDULE_PENDING_OK
             VANTAOS_SMP_IDLE_CONTEXTS_OK
-            VANTAOS_SMP_SCHEDULER_STRESS_OK
             VANTAOS_TLB_SHOOTDOWN_OK
             VANTAOS_PMM_BOOT_INFO_OK
             VANTAOS_BOOT_OK

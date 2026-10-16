@@ -19,6 +19,7 @@
 #define UI_BLUE_DARK 0x00234162
 #define UI_MINT 0x0069D6AE
 #define UI_AMBER 0x00E6BD78
+#define UI_RED 0x00E17F89
 
 static int ui_min(int a, int b) { return a < b ? a : b; }
 static int ui_max(int a, int b) { return a > b ? a : b; }

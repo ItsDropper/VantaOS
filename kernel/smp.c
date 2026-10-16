@@ -289,7 +289,7 @@ static int smp_wait_for_local_timers(const acpi_platform_info_t* info)
         return 0;
     }
     serial_write("VANTAOS_SMP_LOCAL_TIMER_OK\n");
-    return 1;
+    return smp_wait_for_reschedule_ipis(info);
 }
 
 static int smp_run_work_probe(const acpi_platform_info_t* info,

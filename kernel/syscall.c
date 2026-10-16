@@ -18,7 +18,6 @@
 #define USER_SYSCALL_SPAWN 6U
 #define USER_SYSCALL_IO_MAX 4096U
 #define USER_SYSCALL_WRITE_MAX 4096U
-#define USER_SYSCALL_EXEC_MAX (1024U * 1024U)
 
 static int syscall_write(struct exception_frame* frame,
                          const process_t* process)

@@ -702,15 +702,6 @@ int process_snapshot(uint32_t pid, process_t* snapshot)
     return ok;
 }
 
-const process_t* process_get(uint32_t pid)
-{
-    if (!initialized || pid >= PROCESS_MAX ||
-        processes[pid].state == PROCESS_UNUSED)
-        return NULL;
-
-    return &processes[pid];
-}
-
 unsigned int process_count(void)
 {
     if (!initialized)

@@ -106,6 +106,32 @@ static void process_reset_record(process_t* process)
     process->context.ss = 0x10U;
 }
 
+/* Caller must hold process_table_lock. */
+static int process_stack_is_valid_locked(const process_t* process)
+{
+    if (!process || process->state == PROCESS_UNUSED ||
+        process->stack_pointer == 0 || process->kernel_stack == NULL)
+        return 0;
+
+    uintptr_t stack_base = (uintptr_t)process->kernel_stack;
+    uintptr_t stack_end = process->entry != NULL ?
+        stack_base + PROCESS_STACK_SIZE : (uintptr_t)&stack_top;
+    uintptr_t frame = (uintptr_t)process->stack_pointer;
+    if (frame < stack_base || frame > stack_end ||
+        stack_end - frame < 19U * sizeof(uint64_t))
+        return 0;
+
+    const uint64_t* values = (const uint64_t*)frame;
+    if (values[17] != 0x08U ||
+        (values[18] & 0x00000200U) == 0)
+        return 0;
+
+    uintptr_t rip = (uintptr_t)values[16];
+    uintptr_t code_start = (uintptr_t)&_kernel_text_start;
+    uintptr_t code_end = (uintptr_t)&_kernel_text_end;
+    return rip >= code_start && rip < code_end;
+}
+
 static int process_allocate_common(process_t* process,
                                     const char* name,
                                     uint32_t parent_pid)
@@ -371,11 +397,15 @@ int process_set_running(uint32_t pid)
     return 1;
 }
 
-int process_claim_for_cpu(uint32_t next_pid, uint32_t current_pid,
-                          uint32_t cpu_id)
+static int process_claim_for_cpu_internal(uint32_t next_pid,
+                                          uint32_t current_pid,
+                                          uint32_t cpu_id,
+                                          uint64_t* stack_pointer_out,
+                                          paging_address_space_t** address_space_out)
 {
     if (!initialized || next_pid == 0 || next_pid >= PROCESS_MAX ||
-        current_pid >= PROCESS_MAX)
+        current_pid >= PROCESS_MAX ||
+        ((stack_pointer_out == NULL) != (address_space_out == NULL)))
         return 0;
 
     uint64_t flags = process_table_lock_acquire();
@@ -390,7 +420,10 @@ int process_claim_for_cpu(uint32_t next_pid, uint32_t current_pid,
     if (next->state != PROCESS_READY ||
         next->owner_cpu != PROCESS_CPU_UNOWNED ||
         (next->affinity_cpu != PROCESS_CPU_ANY &&
-         next->affinity_cpu != cpu_id))
+         next->affinity_cpu != cpu_id) ||
+        (stack_pointer_out &&
+         (!process_stack_is_valid_locked(next) ||
+          next->address_space == NULL)))
     {
         process_table_lock_release(flags);
         return 0;
@@ -417,8 +450,31 @@ int process_claim_for_cpu(uint32_t next_pid, uint32_t current_pid,
     next->state = PROCESS_RUNNING;
     next->owner_cpu = cpu_id;
     process_set_current_slot(next_pid);
+    if (stack_pointer_out)
+    {
+        *stack_pointer_out = next->stack_pointer;
+        *address_space_out = next->address_space;
+    }
     process_table_lock_release(flags);
     return 1;
+}
+
+int process_claim_for_cpu(uint32_t next_pid, uint32_t current_pid,
+                          uint32_t cpu_id)
+{
+    return process_claim_for_cpu_internal(next_pid, current_pid, cpu_id,
+                                          NULL, NULL);
+}
+
+/* Claim a READY process and return its validated context under the same lock. */
+int process_claim_for_cpu_context(uint32_t next_pid, uint32_t current_pid,
+                                  uint32_t cpu_id, uint64_t* stack_pointer_out,
+                                  paging_address_space_t** address_space_out)
+{
+    if (!stack_pointer_out || !address_space_out)
+        return 0;
+    return process_claim_for_cpu_internal(next_pid, current_pid, cpu_id,
+                                          stack_pointer_out, address_space_out);
 }
 
 /*
@@ -427,10 +483,12 @@ int process_claim_for_cpu(uint32_t next_pid, uint32_t current_pid,
  * That prevents another CPU from resuming a stack that is still active here.
  */
 int process_prepare_context_switch(uint32_t next_pid, uint32_t current_pid,
-                                   uint32_t cpu_id)
+                                   uint32_t cpu_id, uint64_t* next_stack_out,
+                                   paging_address_space_t** next_address_space_out)
 {
     if (!initialized || next_pid == 0U || next_pid >= PROCESS_MAX ||
-        current_pid == 0U || current_pid >= PROCESS_MAX)
+        current_pid == 0U || current_pid >= PROCESS_MAX ||
+        !next_stack_out || !next_address_space_out)
         return 0;
 
     uint64_t flags = process_table_lock_acquire();
@@ -451,7 +509,9 @@ int process_prepare_context_switch(uint32_t next_pid, uint32_t current_pid,
         next->state != PROCESS_READY ||
         next->owner_cpu != PROCESS_CPU_UNOWNED ||
         (next->affinity_cpu != PROCESS_CPU_ANY &&
-         next->affinity_cpu != cpu_id))
+         next->affinity_cpu != cpu_id) ||
+        !process_stack_is_valid_locked(next) ||
+        next->address_space == NULL)
     {
         process_table_lock_release(flags);
         return 0;
@@ -464,6 +524,8 @@ int process_prepare_context_switch(uint32_t next_pid, uint32_t current_pid,
     next->state = PROCESS_RUNNING;
     next->owner_cpu = cpu_id;
     process_set_current_slot(next_pid);
+    *next_stack_out = next->stack_pointer;
+    *next_address_space_out = next->address_space;
     process_table_lock_release(flags);
     return 1;
 }
@@ -702,38 +764,7 @@ int process_stack_is_valid(uint32_t pid)
         return 0;
 
     uint64_t flags = process_table_lock_acquire();
-    process_t* process = &processes[pid];
-    if (process->state == PROCESS_UNUSED ||
-        process->stack_pointer == 0 ||
-        process->kernel_stack == NULL)
-    {
-        process_table_lock_release(flags);
-        return 0;
-    }
-
-    uintptr_t stack_base = (uintptr_t)process->kernel_stack;
-    uintptr_t stack_end = process->entry != NULL ?
-        stack_base + PROCESS_STACK_SIZE : (uintptr_t)&stack_top;
-    uintptr_t frame = (uintptr_t)process->stack_pointer;
-    if (frame < stack_base || frame > stack_end ||
-        stack_end - frame < 19U * sizeof(uint64_t))
-    {
-        process_table_lock_release(flags);
-        return 0;
-    }
-
-    uint64_t* values = (uint64_t*)frame;
-    if (values[17] != 0x08U ||
-        (values[18] & 0x00000200U) == 0)
-    {
-        process_table_lock_release(flags);
-        return 0;
-    }
-
-    uintptr_t rip = (uintptr_t)values[16];
-    uintptr_t code_start = (uintptr_t)&_kernel_text_start;
-    uintptr_t code_end = (uintptr_t)&_kernel_text_end;
-    int valid = rip >= code_start && rip < code_end;
+    int valid = process_stack_is_valid_locked(&processes[pid]);
     process_table_lock_release(flags);
     return valid;
 }

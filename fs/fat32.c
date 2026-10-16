@@ -5,6 +5,7 @@
 #define FAT32_PARTITION_OFFSET 446
 #define FAT32_MAX_CLUSTER 0x0FFFFFF7U
 #define FAT32_EOC_MIN 0x0FFFFFF8U
+#define FAT32_BAD_CLUSTER 0xFFFFFFFEU
 #define FAT32_LBA28_MAX 0x0FFFFFFFU
 
 static int mounted;
@@ -177,21 +178,22 @@ static uint32_t cluster_lba(uint32_t cluster)
 static uint32_t next_cluster(uint32_t cluster)
 {
     if (!mounted || cluster < 2 || cluster > cluster_count + 1U)
-        return FAT32_MAX_CLUSTER;
+        return FAT32_BAD_CLUSTER;
 
     uint64_t fat_offset = (uint64_t)cluster * 4U;
     if (fat_offset + 4U > (uint64_t)sectors_per_fat * 512U)
-        return FAT32_MAX_CLUSTER;
+        return FAT32_BAD_CLUSTER;
 
     uint32_t lba = fat_lba + (uint32_t)(fat_offset / 512U);
     uint32_t offset = (uint32_t)(fat_offset % 512U);
     if (!read_sector(lba, sector_buffer))
-        return FAT32_MAX_CLUSTER;
+        return FAT32_BAD_CLUSTER;
 
     uint32_t next = fat32(&sector_buffer[offset]) & 0x0FFFFFFFU;
-    if (next >= FAT32_EOC_MIN || next == 0x0FFFFFF7U ||
-        next < 2 || next > cluster_count + 1U)
+    if (next >= FAT32_EOC_MIN)
         return FAT32_MAX_CLUSTER;
+    if (next == 0x0FFFFFF7U || next < 2 || next > cluster_count + 1U)
+        return FAT32_BAD_CLUSTER;
     return next;
 }
 
@@ -271,7 +273,8 @@ int fat32_list_directory(
     unsigned int capacity
 )
 {
-    if (!mounted || !entries || capacity == 0 || cluster < 2)
+    if (!mounted || !entries || capacity == 0 ||
+        cluster < 2 || cluster > cluster_count + 1U)
         return -1;
 
     unsigned int count = 0;
@@ -350,9 +353,15 @@ int fat32_list_directory(
             }
         }
         cluster = next_cluster(cluster);
+        if (cluster == FAT32_BAD_CLUSTER)
+            return -1;
         if (cluster == FAT32_MAX_CLUSTER)
-            break;
+            return (int)count;
     }
+
+    /* A still-valid cluster after the volume-derived step limit is a cycle. */
+    if (cluster >= 2 && cluster <= cluster_count + 1U)
+        return -1;
     return (int)count;
 }
 
@@ -411,7 +420,8 @@ int fat32_read_file(
             break;
 
         cluster = next_cluster(cluster);
-        if (remaining && cluster == FAT32_MAX_CLUSTER)
+        if (remaining &&
+            (cluster == FAT32_MAX_CLUSTER || cluster == FAT32_BAD_CLUSTER))
             return -1;
     }
 

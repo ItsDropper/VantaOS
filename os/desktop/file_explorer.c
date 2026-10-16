@@ -362,7 +362,11 @@ static void explorer_toolbar(int x, int y, int w)
         content, y, w - EXPLORER_SIDEBAR,
         EXPLORER_TOOLBAR, VANTA_UI_TOOLBAR);
 
-    graphics_ui_explorer_toolbar_button(content + 10, y + 6, "<",\n                                        explorer_has_history);\n    graphics_ui_explorer_toolbar_button(content + 48, y + 6, "^", 1);\n    graphics_ui_explorer_location(content + 90, y + 6,\n        w - EXPLORER_SIDEBAR - 104, explorer_location_name());
+    graphics_ui_explorer_toolbar_button(content + 10, y + 6, "<",
+                                        explorer_has_history);
+    graphics_ui_explorer_toolbar_button(content + 48, y + 6, "^", 1);
+    graphics_ui_explorer_location(content + 90, y + 6,
+        w - EXPLORER_SIDEBAR - 104, explorer_location_name());
 }
 
 void file_explorer_draw(int width, int height)

@@ -151,10 +151,24 @@ static void process_state_transition_probe(void)
     if (ok)
         ok = process_set_running((uint32_t)pid);
     if (ok)
+        ok = process_mark_ready((uint32_t)pid);
+    if (ok)
+    {
+        ok = process_snapshot((uint32_t)pid, &process) &&
+             process.state == PROCESS_READY &&
+             process.owner_cpu != PROCESS_CPU_UNOWNED;
+        if (ok)
+            ok = !process_claim_for_cpu(
+                (uint32_t)pid, 0U, process.owner_cpu + 1U);
+    }
+    if (ok)
+        ok = process_set_running((uint32_t)pid);
+    if (ok)
     {
         process_block_current();
         ok = process_snapshot((uint32_t)pid, &process) &&
-             process.state == PROCESS_SLEEPING;
+             process.state == PROCESS_SLEEPING &&
+             process.owner_cpu != PROCESS_CPU_UNOWNED;
     }
 
     if (ok)

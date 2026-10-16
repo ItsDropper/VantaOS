@@ -7,6 +7,7 @@
 #define PROCESS_MAX 32
 #define PROCESS_NAME_MAX 31
 #define PROCESS_STACK_SIZE 16384U
+#define PROCESS_CPU_UNOWNED UINT32_MAX
 
 typedef void (*process_entry_t)(void);
 
@@ -30,6 +31,8 @@ typedef struct
 {
     uint32_t pid;
     uint32_t parent_pid;
+    /* PROCESS_CPU_UNOWNED unless this process is executing on a CPU. */
+    uint32_t owner_cpu;
     process_state_t state;
     char name[PROCESS_NAME_MAX + 1];
     uint64_t stack_pointer;
@@ -54,6 +57,9 @@ void process_save_stack(uint32_t pid, uint64_t stack_pointer);
 uint64_t process_get_stack(uint32_t pid);
 int process_stack_is_valid(uint32_t pid);
 int process_switch_to(uint32_t pid);
+/* Atomically releases current_pid and claims a READY process for cpu_id. */
+int process_claim_for_cpu(uint32_t next_pid, uint32_t current_pid,
+                          uint32_t cpu_id);
 int process_reap(uint32_t pid);
 uint64_t process_schedule(uint64_t current_stack);
 /* Copies a process record while holding the process-table lock. */
@@ -61,5 +67,6 @@ int process_snapshot(uint32_t pid, process_t* snapshot);
 const process_t* process_get(uint32_t pid);
 unsigned int process_count(void);
 uint32_t process_current_pid(void);
+uint32_t process_current_cpu_id(void);
 
 #endif

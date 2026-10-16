@@ -44,6 +44,12 @@ static cpu_local_t* process_local_state(void)
     return local;
 }
 
+uint32_t process_current_cpu_id(void)
+{
+    cpu_local_t* local = process_local_state();
+    return local ? local->logical_id : 0U;
+}
+
 static uint32_t process_current_slot(void)
 {
     cpu_local_t* local = process_local_state();
@@ -73,6 +79,7 @@ static void process_copy_name(char* destination, const char* source)
 static void process_reset_record(process_t* process)
 {
     process->parent_pid = 0;
+    process->owner_cpu = PROCESS_CPU_UNOWNED;
     process->state = PROCESS_UNUSED;
     process->name[0] = 0;
     process->stack_pointer = 0;
@@ -204,6 +211,7 @@ int process_attach_current(const char* name, uint32_t parent_pid)
         uint64_t current_stack;
         __asm__ volatile ("mov %%rsp, %0" : "=r"(current_stack));
         process->state = PROCESS_RUNNING;
+        process->owner_cpu = process_current_cpu_id();
         process->stack_pointer = current_stack;
         process->context.rsp = current_stack;
         process->context.rip =
@@ -284,48 +292,81 @@ int process_set_running(uint32_t pid)
 {
     if (!initialized || pid >= PROCESS_MAX)
         return 0;
+
     uint64_t flags = process_table_lock_acquire();
-    if (processes[pid].state == PROCESS_UNUSED ||
-        processes[pid].state == PROCESS_TERMINATED)
+    process_t* target = &processes[pid];
+    uint32_t cpu_id = process_current_cpu_id();
+    if (target->state == PROCESS_UNUSED ||
+        target->state == PROCESS_TERMINATED ||
+        (target->owner_cpu != PROCESS_CPU_UNOWNED &&
+         target->owner_cpu != cpu_id))
     {
         process_table_lock_release(flags);
         return 0;
     }
 
     uint32_t current_pid = process_current_slot();
-    if (current_pid < PROCESS_MAX &&
-        processes[current_pid].state == PROCESS_RUNNING &&
-        current_pid != pid)
-        processes[current_pid].state = PROCESS_READY;
+    if (current_pid < PROCESS_MAX && current_pid != pid)
+    {
+        process_t* current = &processes[current_pid];
+        if (current->state == PROCESS_RUNNING)
+            current->state = PROCESS_READY;
+        if (current->owner_cpu == cpu_id)
+            current->owner_cpu = PROCESS_CPU_UNOWNED;
+    }
 
     process_set_current_slot(pid);
-    processes[pid].state = PROCESS_RUNNING;
+    target->state = PROCESS_RUNNING;
+    target->owner_cpu = cpu_id;
+    process_table_lock_release(flags);
+    return 1;
+}
+
+int process_claim_for_cpu(uint32_t next_pid, uint32_t current_pid,
+                          uint32_t cpu_id)
+{
+    if (!initialized || next_pid == 0 || next_pid >= PROCESS_MAX ||
+        current_pid >= PROCESS_MAX)
+        return 0;
+
+    uint64_t flags = process_table_lock_acquire();
+    process_t* next = &processes[next_pid];
+    if (next->state != PROCESS_READY ||
+        next->owner_cpu != PROCESS_CPU_UNOWNED)
+    {
+        process_table_lock_release(flags);
+        return 0;
+    }
+
+    if (current_pid != 0 && current_pid != next_pid)
+    {
+        process_t* current = &processes[current_pid];
+        if (current->owner_cpu != cpu_id ||
+            (current->state != PROCESS_RUNNING &&
+             current->state != PROCESS_READY &&
+             current->state != PROCESS_SLEEPING &&
+             current->state != PROCESS_TERMINATED))
+        {
+            process_table_lock_release(flags);
+            return 0;
+        }
+
+        if (current->state == PROCESS_RUNNING)
+            current->state = PROCESS_READY;
+        current->owner_cpu = PROCESS_CPU_UNOWNED;
+    }
+
+    next->state = PROCESS_RUNNING;
+    next->owner_cpu = cpu_id;
+    process_set_current_slot(next_pid);
     process_table_lock_release(flags);
     return 1;
 }
 
 int process_switch_to(uint32_t pid)
 {
-    if (!initialized || pid == 0 || pid >= PROCESS_MAX)
-        return 0;
-    uint64_t flags = process_table_lock_acquire();
-    if (processes[pid].state != PROCESS_READY &&
-        processes[pid].state != PROCESS_RUNNING)
-    {
-        process_table_lock_release(flags);
-        return 0;
-    }
-
-    uint32_t current_pid = process_current_slot();
-    if (current_pid != pid &&
-        current_pid < PROCESS_MAX &&
-        processes[current_pid].state == PROCESS_RUNNING)
-        processes[current_pid].state = PROCESS_READY;
-
-    process_set_current_slot(pid);
-    processes[pid].state = PROCESS_RUNNING;
-    process_table_lock_release(flags);
-    return 1;
+    return process_claim_for_cpu(pid, process_current_slot(),
+                                 process_current_cpu_id());
 }
 
 int process_wake(uint32_t pid)
@@ -348,6 +389,7 @@ void process_block_current(void)
     uint32_t current_pid = process_current_slot();
     if (current_pid < PROCESS_MAX)
         processes[current_pid].state = PROCESS_SLEEPING;
+    /* Ownership remains with this CPU until it actually switches stacks. */
     process_table_lock_release(flags);
 }
 
@@ -459,7 +501,8 @@ int process_reap(uint32_t pid)
 
     uint64_t flags = process_table_lock_acquire();
     if (pid == process_current_slot() ||
-        processes[pid].state != PROCESS_TERMINATED)
+        processes[pid].state != PROCESS_TERMINATED ||
+        processes[pid].owner_cpu != PROCESS_CPU_UNOWNED)
     {
         process_table_lock_release(flags);
         return 0;

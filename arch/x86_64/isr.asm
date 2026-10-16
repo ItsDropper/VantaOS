@@ -11,6 +11,9 @@ global lapic_timer_stub
 global reschedule_ipi_stub
 global tlb_shootdown_ipi_stub
 global process_entry_trampoline
+global user_mode_test_enter
+global user_mode_test_return_trampoline
+global user_mode_test_syscall_stub
 
 global exception0_stub
 global exception1_stub
@@ -58,6 +61,9 @@ extern apic_is_enabled
 extern lapic_timer_handle_interrupt
 extern reschedule_ipi_handle_interrupt
 extern paging_tlb_shootdown_handle_interrupt
+extern user_mode_selftest_syscall_dispatch
+extern user_mode_test_saved_rsp
+extern user_mode_test_saved_rflags
 
 apic_spurious_stub:
     iretq
@@ -68,6 +74,43 @@ process_entry_trampoline:
 .halt:
     hlt
     jmp .halt
+
+; Test-only ring-3 entry. The caller's stack and flags are restored by the
+; return trampoline after the test syscall or expected user-mode page fault.
+user_mode_test_enter:
+    mov [rel user_mode_test_saved_rsp], rsp
+    pushfq
+    pop rax
+    mov [rel user_mode_test_saved_rflags], rax
+    mov rax, rdi
+    mov rdx, rsi
+    push qword 0x1B
+    push rdx
+    push qword 0x202
+    push qword 0x23
+    push rax
+    iretq
+
+user_mode_test_return_trampoline:
+    mov rsp, [rel user_mode_test_saved_rsp]
+    mov rax, [rel user_mode_test_saved_rflags]
+    push rax
+    popfq
+    ret
+
+; int 0x80 enters only through a DPL-3 gate in self-test builds.
+user_mode_test_syscall_stub:
+    cld
+    push qword 0
+    SAVE_ALL
+    mov r12, rsp
+    and rsp, -16
+    mov rdi, r12
+    call user_mode_selftest_syscall_dispatch
+    mov rsp, r12
+    RESTORE_ALL
+    add rsp, 8
+    iretq
 
 %macro SAVE_ALL 0
     push r15
@@ -227,9 +270,12 @@ exception%1_stub:
     cld
     push qword 0
     SAVE_ALL
-    mov rsi, rsp
+    mov r12, rsp
+    and rsp, -16
+    mov rsi, r12
     mov edi, %1
     call exception_handler
+    mov rsp, r12
     RESTORE_ALL
     add rsp, 8
     iretq
@@ -239,9 +285,12 @@ exception%1_stub:
 exception%1_stub:
     cld
     SAVE_ALL
-    mov rsi, rsp
+    mov r12, rsp
+    and rsp, -16
+    mov rsi, r12
     mov edi, %1
     call exception_handler
+    mov rsp, r12
     RESTORE_ALL
     add rsp, 8
     iretq

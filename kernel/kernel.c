@@ -11,6 +11,7 @@
 #include "pci.h"
 #include "pmm.h"
 #include "serial.h"
+#include "spinlock.h"
 #include "vanta_boot_info.h"
 
 static inline unsigned long long read_tsc(void)
@@ -178,6 +179,25 @@ static void pmm_boot_info_probe(void)
 
 
 #ifdef VANTAOS_SELF_TEST
+static void spinlock_primitive_probe(void)
+{
+    spinlock_t lock = SPINLOCK_INITIALIZER;
+    uint64_t flags = 0;
+    int ok = spinlock_try_lock_irqsave(&lock, &flags);
+    ok = !spinlock_try_lock(&lock) && ok;
+    spinlock_unlock_irqrestore(&lock, flags);
+
+    flags = 0;
+    int reacquired = spinlock_try_lock_irqsave(&lock, &flags);
+    ok = reacquired && ok;
+    if (reacquired)
+        spinlock_unlock_irqrestore(&lock, flags);
+
+    serial_write(ok ?
+        "VANTAOS_SPINLOCK_PRIMITIVE_OK\n" :
+        "VANTAOS_SPINLOCK_PRIMITIVE_FAIL\n");
+}
+
 static void user_mapping_probe(void)
 {
     paging_address_space_t* space = paging_create_address_space();
@@ -305,6 +325,7 @@ static void kernel_initialize(const vanta_boot_info_t* boot_info)
     apic_initialize();
     smp_initialize();
 #ifdef VANTAOS_SELF_TEST
+    spinlock_primitive_probe();
     int tlb_shootdown_ok = paging_tlb_shootdown(
         paging_get_kernel_address_space(), (uintptr_t)0xC0000000ULL);
     serial_write(tlb_shootdown_ok ?

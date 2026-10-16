@@ -11,6 +11,7 @@
 #include "process.h"
 #include "cpu_local.h"
 #include "smp.h"
+#include "spinlock.h"
 #include "pmm.h"
 #include "serial.h"
 #include "scheduler.h"
@@ -326,8 +327,12 @@ static void heap_allocator_probe(void)
 }
 
 
+#define SMP_SCHEDULER_LOCK_PROBE_ITERATIONS 64U
+
 static uint32_t smp_scheduler_probe_task_count;
 static uint32_t smp_scheduler_probe_ap_cpu;
+static spinlock_t smp_scheduler_probe_lock = SPINLOCK_INITIALIZER;
+static uint32_t smp_scheduler_probe_locked_count;
 static volatile uint32_t smp_scheduler_probe_completed;
 static volatile uint32_t smp_scheduler_probe_cpu_mask;
 static volatile uint32_t smp_scheduler_probe_active;
@@ -370,6 +375,18 @@ static void smp_scheduler_probe_entry(void)
     {
     }
 
+    /*
+     * Exercise the shared ticket lock while the task set is known to overlap
+     * on distinct CPUs. A lost increment or lock corruption is caught by the
+     * exact final counter check in smp_scheduler_probe_wait().
+     */
+    for (uint32_t i = 0; i < SMP_SCHEDULER_LOCK_PROBE_ITERATIONS; i++)
+    {
+        uint64_t flags = spinlock_lock_irqsave(&smp_scheduler_probe_lock);
+        smp_scheduler_probe_locked_count++;
+        spinlock_unlock_irqrestore(&smp_scheduler_probe_lock, flags);
+    }
+
     for (uint32_t i = 0; i < 50000U; i++)
         __asm__ volatile ("pause" ::: "memory");
 
@@ -382,6 +399,7 @@ static int smp_scheduler_probe_initialize(void)
 {
     serial_write("VANTAOS_SMP_STRESS_INIT_BEGIN\n");
     smp_scheduler_probe_completed = 0;
+    smp_scheduler_probe_locked_count = 0;
     smp_scheduler_probe_ap_cpu = UINT32_MAX;
     smp_scheduler_probe_cpu_mask = 0;
     smp_scheduler_probe_active = 0;
@@ -465,12 +483,33 @@ static int smp_scheduler_probe_wait(void)
                                           __ATOMIC_ACQUIRE);
     uint32_t duplicates = __atomic_load_n(&smp_scheduler_probe_duplicates,
                                           __ATOMIC_ACQUIRE);
+    uint32_t expected_locked_count =
+        smp_scheduler_probe_task_count * SMP_SCHEDULER_LOCK_PROBE_ITERATIONS;
+    uint32_t locked_count = smp_scheduler_probe_locked_count;
     serial_write("VANTAOS_SMP_STRESS_WAIT_DONE\n");
-    if (completed != smp_scheduler_probe_task_count ||
-        cpus_seen < required_cpus || duplicates != 0U ||
-        max_active < required_cpus)
+    if (completed != smp_scheduler_probe_task_count)
     {
-        serial_write("VANTAOS_SMP_SCHEDULER_STRESS_FAIL\n");
+        serial_write("VANTAOS_SMP_STRESS_COMPLETION_FAIL\n");
+        return 0;
+    }
+    if (cpus_seen < required_cpus)
+    {
+        serial_write("VANTAOS_SMP_STRESS_CPU_COVERAGE_FAIL\n");
+        return 0;
+    }
+    if (duplicates != 0U)
+    {
+        serial_write("VANTAOS_SMP_STRESS_DUPLICATE_FAIL\n");
+        return 0;
+    }
+    if (max_active < required_cpus)
+    {
+        serial_write("VANTAOS_SMP_STRESS_OVERLAP_FAIL\n");
+        return 0;
+    }
+    if (locked_count != expected_locked_count)
+    {
+        serial_write("VANTAOS_SMP_STRESS_LOCK_COUNT_FAIL\n");
         return 0;
     }
 

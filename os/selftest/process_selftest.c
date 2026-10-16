@@ -7,6 +7,7 @@
 #include "fat32.h"
 #include "heap.h"
 #include "graphics.h"
+#include "gui_server.h"
 #include "keyboard.h"
 #include "mouse.h"
 #include "process.h"
@@ -385,6 +386,48 @@ static int process_idle_lifecycle_probe(void)
     return 1;
 }
 
+static void gui_dead_owner_cleanup_probe(void)
+{
+    int pid = process_create_kernel(
+        "gui-cleanup-probe", process_current_pid(), scheduler_probe_entry);
+    if (pid <= 0)
+    {
+        serial_write("VANTAOS_GUI_DEAD_OWNER_CLEANUP_FAIL_CREATE\n");
+        return;
+    }
+
+    vanta_gui_window_request_t request = {
+        .width = 240U,
+        .height = 160U,
+        .title = "Cleanup Probe"
+    };
+    int window = gui_server_create_window((uint32_t)pid, &request);
+    if (window <= 0)
+    {
+        (void)process_terminate((uint32_t)pid);
+        serial_write("VANTAOS_GUI_DEAD_OWNER_CLEANUP_FAIL_WINDOW\n");
+        return;
+    }
+
+    if (!process_terminate((uint32_t)pid))
+    {
+        (void)gui_server_close_window((uint32_t)pid, (uint32_t)window);
+        serial_write("VANTAOS_GUI_DEAD_OWNER_CLEANUP_FAIL_TERMINATE\n");
+        return;
+    }
+
+    gui_server_cleanup_dead_windows();
+    vanta_gui_event_t event;
+    if (gui_server_poll_event((uint32_t)pid, (uint32_t)window, &event) != -9)
+    {
+        (void)gui_server_close_window((uint32_t)pid, (uint32_t)window);
+        serial_write("VANTAOS_GUI_DEAD_OWNER_CLEANUP_FAIL_RETAINED\n");
+        return;
+    }
+
+    serial_write("VANTAOS_GUI_DEAD_OWNER_CLEANUP_OK\n");
+}
+
 void os_selftest_initialize(void)
 {
     if (!process_idle_lifecycle_probe())
@@ -394,6 +437,7 @@ void os_selftest_initialize(void)
     process_state_transition_probe();
     process_deferred_switch_probe();
     process_owned_terminated_reuse_probe();
+    gui_dead_owner_cleanup_probe();
 
     if (process_create_kernel(NULL, process_current_pid(),
                               scheduler_probe_entry) != -1 ||

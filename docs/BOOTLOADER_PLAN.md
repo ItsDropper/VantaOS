@@ -1,47 +1,40 @@
-# VantaOS Bootloader Plan
+# Boot paths and bootloader roadmap
 
 ## Current state
 
-VantaOS does **not** have its own bootloader yet. The current boot path is:
+VantaOS has two boot paths under active development:
 
-1. GRUB loads the Multiboot-compatible `kernel.bin`.
-2. `arch/x86_64/boot/boot.asm` receives the Multiboot 32-bit entry, creates an initial identity map, enables long mode, and calls `kernel_main`.
-3. The kernel consumes the Multiboot information structure for the memory map and framebuffer.
+- **GRUB/Multiboot:** the established ISO path. GRUB loads `kernel.bin`; `arch/x86_64/boot/boot.asm` establishes the initial CPU state and enters the kernel.
+- **UEFI:** a separate EFI application at `boot/uefi/` loads the ELF64 kernel, gathers boot information, exits boot services, and transfers control through the UEFI kernel entry.
 
-Keep this path working until the replacement boots reliably. Do not replace GRUB in-place before the new path passes the same automated checks.
+The UEFI path is built and exercised under QEMU/OVMF in CI. It is not yet a reason to remove the GRUB fallback or claim broad physical-firmware compatibility. The boot-information contract is defined in `include/vanta_boot_info.h`; the Multiboot and UEFI paths must normalize their handoff data to this contract.
 
-## Target: Vanta Boot Manager (UEFI x86-64 first)
+## Current architecture
 
-Start with a UEFI application, because that is the standard boot path on modern x86-64 PCs. Treat legacy BIOS support as a later compatibility project, not a requirement for the first milestone.
+The boot path is responsible for parsing its own loader/firmware data and constructing normalized boot information. Kernel services should consume the versioned contract rather than independently parsing firmware-specific structures.
 
-The custom loader must own the handoff to the kernel; it must not quietly chain back into GRUB.
+The contract currently carries memory-region and framebuffer metadata, kernel image bounds, optional firmware information, and reserved legacy metadata ranges. Version, size, pointer, and range validation are important because malformed handoff data can corrupt physical-memory bookkeeping.
 
-### Required stages
+## Remaining work
 
-1. **Define a stable boot contract.** The initial versioned `vanta_boot_info` structure and Multiboot adapter now exist in `include/vanta_boot_info.h` and `kernel/boot/boot_info.c`. It carries normalized memory regions, framebuffer metadata, kernel image bounds, optional ACPI/loader-reclaimable fields, and a version/size tag. The existing kernel subsystems still consume Multiboot directly during this transition; removing that dependency is a later step.
-2. **Separate boot entry paths.** The version-3 `vanta_boot_info_t` contract now includes legacy metadata reservation ranges, and the physical memory manager consumes it rather than parsing Multiboot itself; the Multiboot adapter preserves legacy metadata ranges so the allocator cannot hand those pages out while the existing OS still uses them. Automated QEMU tests cover normalized PMM inputs and reserved-range precedence. The remaining graphics/filesystem consumers still need migration before the UEFI entry can replace `kernel_main`. Keep the current Multiboot entry as a fallback and add a distinct x86-64 UEFI entry that begins in the firmware's 64-bit execution environment. Both paths should normalize their inputs into the same kernel boot contract.
-3. **Load the kernel safely.** Parse ELF64 program headers, validate every offset/size/address calculation, reject unsupported segments and overlapping destinations, allocate backing pages, zero each segment's BSS, and never trust unchecked file metadata.
-4. **Collect firmware information.** Read the UEFI memory map, GOP framebuffer information, and ACPI configuration-table pointer. Keep boot-services allocations reserved until the kernel has consumed the handoff.
-5. **Exit boot services correctly.** Obtain the final memory map and its key, call `ExitBootServices`, and retry map acquisition if the key becomes stale. After success, do not call UEFI boot-service functions.
-6. **Transfer control.** Pass the versioned boot-info pointer using a documented x86-64 calling convention, establish only the mappings required by the entry contract, and jump to the kernel entry point.
-7. **Test both paths.** CI must continue to test the GRUB fallback and add OVMF/QEMU tests for the UEFI loader. Check malformed ELF inputs, memory-map boundaries, missing framebuffer, and loader failures as well as the successful boot marker.
+1. **Harden ELF parsing.** Add malformed-ELF regression cases for truncated headers, invalid program-header sizes, integer overflow, out-of-range segments, unsupported types, and overlapping load destinations.
+2. **Expand handoff validation.** Test missing optional framebuffer/firmware data, malformed memory-map entries, and boundary/overflow cases.
+3. **Reduce legacy dependencies.** Migrate remaining OS-facing consumers away from raw Multiboot structures so the normalized contract is the only general kernel interface.
+4. **Exercise firmware variation.** Expand OVMF configurations and failure-path tests before considering the UEFI path a default.
+5. **Preserve fallback behavior.** Keep the GRUB ISO independently tested until the UEFI path has enough regression evidence to justify any default-path change.
 
 ## Non-negotiable safety rules
 
-- Keep the current GRUB ISO bootable until the custom path is proven.
-- Do not free loader memory before the kernel has copied or consumed its metadata.
-- Validate all ELF ranges, integer additions, alignments, physical-address limits, and destination overlaps before writing memory.
-- Make the boot-info structure versioned and size-tagged so future fields can be added safely.
+- Keep the GRUB path bootable while the UEFI path matures.
+- Validate all ELF ranges, arithmetic, alignments, physical-address limits, and destination overlaps before writing to memory.
+- Do not release loader-owned memory until the kernel has copied or consumed its metadata.
+- After a successful `ExitBootServices`, do not call UEFI boot-service functions.
 - Keep serial diagnostics available before graphics initialization.
-- Test the loader in QEMU/OVMF before trying it on physical hardware.
-- Never report the custom loader as working until CI proves it reaches the kernel under OVMF.
+- Test in QEMU/OVMF before attempting physical hardware.
+- Describe a test as passing only when its assertions and expected markers were observed.
 
-## First implementation sequence
+## Verification
 
-1. Stabilize physical-frame allocator accounting and add regression probes.
-2. [x] Introduce the versioned boot-info header and a Multiboot-to-boot-info adapter without changing the existing boot path; require automated QEMU regression checks.
-3. [x] Add a separate UEFI entry, validated ELF64 loader, normalized memory-map/GOP/ACPI handoff, and EFI system image.
-4. [x] Add OVMF/QEMU CI while preserving the GRUB fallback.
-5. Validate the first CI run, fix any firmware/loader issues, then expand malformed-ELF tests before considering the custom loader the default.
+The current workflow builds the UEFI image and requires serial markers for loader start, ELF loading, `ExitBootServices`, kernel handoff, boot-info readiness, and selected kernel/APIC/SMP initialization. See [Testing and verification](TESTING.md).
 
-This sequence deliberately avoids mixing a new firmware handoff with untested memory-management changes in one risky switch.
+Passing that workflow is evidence for the tested OVMF configuration only. It is not proof of compatibility with arbitrary firmware, Secure Boot, or physical machines.

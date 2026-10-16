@@ -1,0 +1,41 @@
+name: Feature request
+description: Propose a capability or engineering improvement
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What concrete limitation should this address?
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: Describe observable behavior, not only an implementation idea.
+    validations:
+      required: true
+  - type: textarea
+    id: boundaries
+    attributes:
+      label: Subsystems and interfaces affected
+      description: If known, mention architecture, kernel, memory, drivers, filesystem, OS UI, build, or CI.
+    validations:
+      required: false
+  - type: textarea
+    id: verification
+    attributes:
+      label: How should this be verified?
+      description: Suggest observable tests or acceptance criteria. Distinguish QEMU evidence from physical-hardware requirements.
+    validations:
+      required: false
+  - type: textarea
+    id: tradeoffs
+    attributes:
+      label: Constraints and trade-offs
+      description: Performance, memory, compatibility, complexity, safety, or maintenance concerns.
+    validations:
+      required: false

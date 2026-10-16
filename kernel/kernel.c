@@ -273,6 +273,9 @@ static void user_mapping_probe(void)
                 space->pending_shootdowns == 0U && per_cpu_ok;
         }
         paging_destroy_address_space(space);
+        per_cpu_ok = space->used == 0 &&
+                     space->active_cpu_mask == 0U &&
+                     space->pending_shootdowns == 0U && per_cpu_ok;
     }
 
     if (writable_frame)

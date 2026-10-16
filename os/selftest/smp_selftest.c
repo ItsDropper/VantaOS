@@ -23,6 +23,8 @@
 #include "vfs.h"
 
 #ifdef VANTAOS_SELF_TEST
+#include "selftest.h"
+
 #define SMP_SCHEDULER_LOCK_PROBE_ITERATIONS 64U
 
 static uint32_t smp_scheduler_probe_task_count;

@@ -133,7 +133,7 @@ int user_mode_selftest_handle_exception(unsigned int number,
     }
     else if (mode == USER_TEST_GS_MODE && number == 14U &&
              fault_address == 0U &&
-             (frame->error_code & 0x5U) == 0x4U)
+             (frame->error_code & 0x4U) == 0x4U)
     {
         __atomic_store_n(&user_test_gs_fault_seen, 1U, __ATOMIC_RELEASE);
     }

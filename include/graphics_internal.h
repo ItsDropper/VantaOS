@@ -54,6 +54,59 @@ extern int cursor_saved_width;
 extern int cursor_saved_height;
 extern int cursor_saved_valid;
 
+
+void graphics_ui_draw_button(int x, int y, int width, int height,
+                             const char* label, int selected, int enabled);
+void graphics_ui_draw_toggle(int x, int y, int enabled);
+void graphics_ui_draw_tab(int x, int y, int width, const char* label,
+                          int active);
+void graphics_ui_draw_breadcrumb(int x, int y, int width, const char* path);
+void graphics_ui_draw_toolbar(int x, int y, int width,
+                              const char* section, const char* action);
+void graphics_ui_draw_icon_badge(int x, int y, int size,
+                                 const char* glyph, uint32_t tint);
+void graphics_ui_draw_status_line(int x, int y, int width,
+                                  const char* title, const char* state,
+                                  int ready);
+void graphics_ui_draw_info_card(int x, int y, int width, int height,
+                                 const char* title, const char* value,
+                                 const char* description, uint32_t tint);
+void graphics_ui_draw_description_row(int x, int y, int width,
+                                      const char* title, const char* body);
+void graphics_ui_draw_property_group(int x, int y, int width,
+                                      const char* heading,
+                                      const char* description);
+void graphics_ui_draw_section_card(int x, int y, int width, int height,
+                                   const char* heading, uint32_t accent);
+void graphics_ui_draw_keycap(int x, int y, const char* key);
+void graphics_ui_draw_shortcut_hint(int x, int y, const char* description,
+                                    const char* key);
+void graphics_ui_draw_progress_label(int x, int y, int width,
+                                     const char* label, int percent,
+                                     uint32_t tint);
+void graphics_ui_draw_divided_panel(int x, int y, int width, int height,
+                                    int divider_x);
+void graphics_ui_draw_illustration_frame(int x, int y, int width, int height);
+void graphics_ui_draw_file_type_chip(int x, int y, const char* extension,
+                                     uint32_t tint);
+void graphics_ui_draw_list_empty(int x, int y, int width, int height,
+                                 const char* title, const char* detail,
+                                 const char* hint);
+void graphics_ui_draw_call_to_action(int x, int y, int width,
+                                     const char* label, uint32_t tint);
+void graphics_ui_draw_status_footer(int x, int y, int width,
+                                    const char* left, const char* right);
+void graphics_ui_draw_split_heading(int x, int y, int width,
+                                    const char* title, const char* action);
+void graphics_ui_draw_notice_card(int x, int y, int width, int height,
+                                  const char* eyebrow, const char* title,
+                                  const char* body, uint32_t tint);
+void graphics_ui_draw_table_header(int x, int y, int width,
+                                   const char* first, const char* second,
+                                   const char* third);
+void graphics_ui_draw_inline_status(int x, int y, const char* label,
+                                    int ready);
+
 void graphics_draw_start_menu_detail(int width, int height);
 void graphics_ui_draw_empty_state(int x, int y, int width, int height,
                                   const char* title, const char* message);

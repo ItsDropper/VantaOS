@@ -9,7 +9,7 @@ VantaOS uses a small GNU Make system inspired by the subsystem-oriented layout o
 - `kernel/selftest/`: test-only boot-info/PMM and paging/spinlock regression probes.
 - `mm/`: physical memory management, paging, and heap.
 - `drivers/`: input, PCI, and ATA driver code.
-- `fs/`: filesystem namespace, FAT32, and VFS.
+- `fs/`: filesystem namespace, FAT32, and VFS; `fat32_lfn.c` owns long-filename sequence validation and decoding.
 - `os/`: boot orchestration, terminal, shell, desktop, and file explorer.
 - `os/selftest/`: test-only regression modules grouped by process, filesystem, memory, and SMP responsibility.
 - `include/`: shared C interfaces.

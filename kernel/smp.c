@@ -7,6 +7,8 @@
 #include "idt.h"
 #include "paging.h"
 #include "serial.h"
+#include "process.h"
+#include "scheduler.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -33,6 +35,7 @@ extern uint8_t ap_trampoline_blob_end[];
 extern _Noreturn void smp_ap_entry(uint32_t apic_id);
 
 static unsigned int discovered_cpu_count;
+static uint32_t bsp_logical_id;
 static uint32_t calibrated_timer_initial_count;
 static uint8_t ap_stacks[ACPI_MAX_CPUS][AP_STACK_SIZE]
     __attribute__((aligned(16)));
@@ -394,8 +397,13 @@ int smp_initialize(void)
 
     uint32_t bsp_id = apic_get_bsp_id();
     int bsp_index = find_cpu_index(info, bsp_id);
-    if (bsp_index < 0 ||
-        !cpu_local_initialize((uint32_t)bsp_index, bsp_id))
+    if (bsp_index < 0)
+    {
+        serial_write("VANTAOS_SMP_CPU_LOCAL_FAIL\n");
+        return 0;
+    }
+    bsp_logical_id = (uint32_t)bsp_index;
+    if (!cpu_local_initialize(bsp_logical_id, bsp_id))
     {
         serial_write("VANTAOS_SMP_CPU_LOCAL_FAIL\n");
         return 0;
@@ -446,4 +454,72 @@ int smp_initialize(void)
 unsigned int smp_cpu_count(void)
 {
     return discovered_cpu_count;
+}
+
+uint32_t smp_bsp_logical_id(void)
+{
+    return bsp_logical_id;
+}
+
+int smp_start_scheduler_cpus(void)
+{
+    const acpi_platform_info_t* info = apic_get_platform_info();
+    if (!info)
+    {
+        serial_write("VANTAOS_SMP_SCHEDULER_APS_SKIPPED\n");
+        return 1;
+    }
+
+    if (!scheduler_is_initialized() || !process_is_initialized())
+    {
+        serial_write("VANTAOS_SMP_SCHEDULER_APS_FAIL\n");
+        return 0;
+    }
+
+    for (uint32_t i = 0; i < info->cpu_count; i++)
+    {
+        if (i == bsp_logical_id)
+            continue;
+
+        const cpu_local_t* local = cpu_local_get(i);
+        if (!local ||
+            __atomic_load_n(&local->idle_pid, __ATOMIC_ACQUIRE) == 0U ||
+            !apic_send_reschedule_ipi(local->apic_id))
+        {
+            serial_write("VANTAOS_SMP_SCHEDULER_APS_FAIL\n");
+            return 0;
+        }
+    }
+
+    uint32_t spin = 0;
+    int ready = 0;
+    while (spin++ < AP_STARTUP_SPIN_LIMIT)
+    {
+        ready = 1;
+        for (uint32_t i = 0; i < info->cpu_count; i++)
+        {
+            if (i == bsp_logical_id)
+                continue;
+            const cpu_local_t* local = cpu_local_get(i);
+            if (!local ||
+                __atomic_load_n(&local->scheduler_online,
+                                __ATOMIC_ACQUIRE) == 0U)
+            {
+                ready = 0;
+                break;
+            }
+        }
+        if (ready)
+            break;
+        __asm__ volatile ("pause" ::: "memory");
+    }
+
+    if (!ready)
+    {
+        serial_write("VANTAOS_SMP_SCHEDULER_APS_FAIL\n");
+        return 0;
+    }
+
+    serial_write("VANTAOS_SMP_SCHEDULER_APS_OK\n");
+    return 1;
 }

@@ -26,6 +26,8 @@
 #define USER_SYSCALL_TERMINAL_BEGIN_INPUT 11U
 #define USER_SYSCALL_TERMINAL_BACKSPACE 12U
 #define USER_SYSCALL_TERMINAL_CLEAR 13U
+#define USER_SYSCALL_FILE_WRITE 14U
+#define USER_SYSCALL_CREATE_FILE 15U
 #define USER_SYSCALL_IO_MAX 4096U
 #define USER_SYSCALL_WRITE_MAX 4096U
 
@@ -102,7 +104,10 @@ static int syscall_open(struct exception_frame* frame, uint32_t pid,
                         const process_t* process)
 {
     uintptr_t address = (uintptr_t)frame->rdi;
-    if (frame->rsi != VFS_OPEN_READ)
+    uint64_t flags = frame->rsi;
+    if ((flags & ~(VFS_OPEN_READ | VFS_OPEN_WRITE | VFS_OPEN_TRUNCATE)) != 0U ||
+        (flags & (VFS_OPEN_READ | VFS_OPEN_WRITE)) == 0U ||
+        ((flags & VFS_OPEN_TRUNCATE) && !(flags & VFS_OPEN_WRITE)))
     {
         frame->rax = (uint64_t)(int64_t)-22;
         return 0;
@@ -130,7 +135,7 @@ static int syscall_open(struct exception_frame* frame, uint32_t pid,
         return 0;
     }
 
-    int handle = vfs_open(path, VFS_OPEN_READ);
+    int handle = vfs_open(path, (uint32_t)flags);
     if (handle < 0)
     {
         frame->rax = (uint64_t)(int64_t)-2;
@@ -521,6 +526,83 @@ static int syscall_waitpid(struct exception_frame* frame,
     }
 }
 
+
+static int syscall_file_write(struct exception_frame* frame, uint32_t pid,
+                              const process_t* process)
+{
+    if (frame->rdi < PROCESS_FD_BASE ||
+        frame->rdi >= PROCESS_FD_BASE + PROCESS_FD_COUNT)
+    {
+        frame->rax = (uint64_t)(int64_t)-9;
+        return 0;
+    }
+
+    uint64_t length = frame->rdx;
+    if (length > FS_FILE_MAX - 1U)
+    {
+        frame->rax = (uint64_t)(int64_t)-22;
+        return 0;
+    }
+    if (length == 0U)
+    {
+        frame->rax = 0U;
+        return 0;
+    }
+
+    uintptr_t address = (uintptr_t)frame->rsi;
+    if (!paging_user_range_valid(process->address_space, address,
+                                 (size_t)length, 0))
+    {
+        frame->rax = (uint64_t)(int64_t)-14;
+        return 0;
+    }
+
+    int handle = process_fd_get(pid, (int)frame->rdi);
+    if (handle < 0)
+    {
+        frame->rax = (uint64_t)(int64_t)-9;
+        return 0;
+    }
+
+    char buffer[FS_FILE_MAX];
+    for (size_t i = 0; i < (size_t)length; i++)
+        buffer[i] = ((const char*)address)[i];
+
+    int result = vfs_write(handle, buffer, (unsigned int)length);
+    frame->rax = result < 0 ? (uint64_t)(int64_t)-5 : (uint64_t)result;
+    return 0;
+}
+
+static int syscall_create_file(struct exception_frame* frame,
+                               const process_t* process)
+{
+    char path[FS_PATH_MAX];
+    size_t length = 0U;
+    int copied = syscall_copy_user_string(
+        path, sizeof(path), (uintptr_t)frame->rdi, process, &length);
+    if (copied != 0 || length == 0U)
+    {
+        frame->rax = (uint64_t)(int64_t)(copied != 0 ? copied : -22);
+        return 0;
+    }
+
+    int result = vfs_create_file(path);
+    if (result < 0)
+    {
+        /* create-file is idempotent for an existing regular file. */
+        int existing = vfs_lookup(path);
+        const fs_node_t* node = existing >= 0 ?
+            vfs_get_node((uint32_t)existing) : 0;
+        if (!node || node->type != FS_NODE_FILE)
+        {
+            frame->rax = (uint64_t)(int64_t)-5;
+            return 0;
+        }
+    }
+    frame->rax = 0U;
+    return 0;
+}
+
 static int syscall_dispatch(struct exception_frame* frame)
 {
     if (!frame || (frame->cs & 3U) != 3U)
@@ -568,6 +650,10 @@ static int syscall_dispatch(struct exception_frame* frame)
         case USER_SYSCALL_TERMINAL_BACKSPACE:
         case USER_SYSCALL_TERMINAL_CLEAR:
             return syscall_terminal_control(frame, frame->rax);
+        case USER_SYSCALL_FILE_WRITE:
+            return syscall_file_write(frame, process.pid, &process);
+        case USER_SYSCALL_CREATE_FILE:
+            return syscall_create_file(frame, &process);
         default:
             frame->rax = (uint64_t)(int64_t)-38;
             return 0;

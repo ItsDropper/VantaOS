@@ -27,14 +27,14 @@ The first implementation should deliberately be a small VantaOS-specific GUI ABI
 
 ## Persistent settings and time
 
-A settings file requires working filesystem create/write support on the FAT32-backed VFS, safe user-mode write syscalls, and a test proving values survive a reboot. The config should be versioned, bounded, parsed defensively, and written without overwriting unrelated files.
+A settings file requires working filesystem create/write support on the FAT32-backed VFS, safe user-mode write syscalls, and a test proving values survive a reboot. Current groundwork supports only conservative 8.3 paths and a 511-byte write limit; robust settings commits still need a versioned format, defensive parsing, and safe replacement semantics. Do not claim arbitrary configuration files are supported.
 
 Timezone handling must not silently treat CMOS time as local time. The RTC value needs a documented UTC/local policy. Region selection should resolve to an actual timezone identifier; a timezone rule table/service must account for daylight-saving transitions. A fixed UTC offset alone is not a correct long-term implementation for regions with DST. Until those prerequisites exist, the UI must state the limitation rather than claiming local time works.
 
 ## Application migration order
 
 1. Establish and test the GUI syscall/event/presentation contract.
-2. Add persistent VFS writes and a versioned settings config with reboot round-trip tests.
+2. Finish and merge bounded FAT32/VFS writes plus validated ring-3 create/write syscalls; expand to safe multi-write settings commits and a versioned config with reboot round-trip tests.
 3. Migrate Settings to a ring-3 ELF first, because it exercises navigation, controls, persistence, and date/time configuration.
 4. Migrate File Explorer using VFS metadata/list/read APIs and add launch behavior only for recognized executable formats/manifests.
 5. Keep Terminal's shell in ring 3 while moving its window/input/rendering onto the same GUI API.

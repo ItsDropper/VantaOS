@@ -325,3 +325,35 @@ int user_mode_selftest_run(void)
         "VANTAOS_RING3_GS_ISOLATION_FAIL\n");
     return ok;
 }
+
+
+int user_mode_process_smoke_test_start(void)
+{
+    /*
+     * Flat ring-3 image: write(1, message, 24), exit(0). The message starts
+     * at offset 32 in the same read-only user code page.
+     */
+    static const uint8_t image[] = {
+        0xB8, 0x01, 0x00, 0x00, 0x00,             /* mov eax, SYS_WRITE */
+        0x48, 0xBF, 0x20, 0x00, 0x00, 0x00,       /* mov rdi, user VA */
+        0x80, 0x00, 0x00, 0x00,
+        0xBE, 0x18, 0x00, 0x00, 0x00,             /* mov esi, 24 */
+        0xCD, 0x80,                                /* int 0x80 */
+        0xB8, 0x00, 0x00, 0x00, 0x00,             /* mov eax, SYS_EXIT */
+        0xCD, 0x80,                                /* int 0x80 */
+        0x90, 0x90, 0x90,                          /* pad to offset 32 */
+        'V','A','N','T','A','O','S','_',
+        'U','S','E','R','_','P','R','O','G','R','A','M','_','O','K','\n'
+    };
+
+    int pid = process_create_user("ring3-smoke", process_current_pid(),
+                                  image, sizeof(image));
+    if (pid <= 0)
+    {
+        serial_write("VANTAOS_USER_PROCESS_CREATE_FAIL\n");
+        return 0;
+    }
+
+    serial_write("VANTAOS_USER_PROCESS_QUEUED\n");
+    return 1;
+}

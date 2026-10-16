@@ -113,7 +113,7 @@ uint64_t lapic_timer_handle_interrupt(uint64_t saved_stack)
         return scheduler_start_cpu(saved_stack);
 
     /* The BSP still schedules from the legacy timer; APs use their LAPIC. */
-    if (smp_cpu_count() > 1U && local->logical_id != 0U)
+    if (smp_cpu_count() > 1U && !smp_cpu_is_bsp(local->logical_id))
         return scheduler_tick(saved_stack);
 
     return saved_stack;

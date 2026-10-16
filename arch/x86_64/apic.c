@@ -190,6 +190,36 @@ int apic_initialize(void)
     return 1;
 }
 
+int apic_initialize_cpu(uint32_t expected_apic_id)
+{
+    if (!enabled || !lapic || !cpu_has_apic() ||
+        platform_info.local_apic_address >= 0x100000000ULL)
+        return 0;
+
+    /*
+     * IA32_APIC_BASE is per logical processor. The BSP's setup does not
+     * configure the AP's MSR, so repeat the local enable on every AP.
+     */
+    uint64_t base = read_msr(IA32_APIC_BASE_MSR);
+    if (base & APIC_BASE_ENABLE)
+    {
+        base &= ~APIC_BASE_ENABLE;
+        write_msr(IA32_APIC_BASE_MSR, base);
+    }
+
+    base &= ~(APIC_BASE_X2APIC | 0x0000000FFFFFF000ULL);
+    base |= (platform_info.local_apic_address & 0x0000000FFFFF000ULL) |
+            APIC_BASE_ENABLE;
+    write_msr(IA32_APIC_BASE_MSR, base);
+
+    lapic_write(LAPIC_TPR, 0);
+    lapic_write(LAPIC_SVR, (1U << 8) | LAPIC_SPURIOUS_VECTOR);
+    lapic_write(LAPIC_LVT_LINT0, 1U << 16);
+    lapic_write(LAPIC_LVT_LINT1, 1U << 16);
+
+    return (lapic_read(LAPIC_ID) >> 24) == expected_apic_id;
+}
+
 static void apic_delay(volatile uint32_t iterations)
 {
     while (iterations--)

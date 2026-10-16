@@ -8,7 +8,7 @@ static volatile int redraw_requested;
 void terminal_process_initialize(void)
 {
     terminal_pid = 0U;
-    redraw_requested = 0;
+    __atomic_store_n(&redraw_requested, 0, __ATOMIC_RELEASE);
 }
 
 int terminal_process_start(uint32_t parent_pid)
@@ -32,7 +32,7 @@ int terminal_process_start(uint32_t parent_pid)
     }
 
     terminal_pid = (uint32_t)pid;
-    redraw_requested = 1;
+    __atomic_store_n(&redraw_requested, 1, __ATOMIC_RELEASE);
     return pid;
 }
 
@@ -46,7 +46,7 @@ void terminal_process_request_exit(void)
 
 void terminal_process_mark_redraw(void)
 {
-    redraw_requested = 1;
+    __atomic_store_n(&redraw_requested, 1, __ATOMIC_RELEASE);
 }
 
 int terminal_process_consume_redraw(void)

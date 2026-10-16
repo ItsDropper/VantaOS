@@ -1,6 +1,7 @@
 #include "process_internal.h"
 #include "cpu_local.h"
 #include "spinlock.h"
+#include "vfs.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -105,6 +106,8 @@ void process_reset_record(process_t* process)
     process->user_stack_base = 0U;
     process->user_stack_top = 0U;
     process->user_image_size = 0U;
+    for (uint32_t i = 0; i < PROCESS_FD_COUNT; i++)
+        process->file_descriptors[i] = -1;
     for (uint32_t i = 0; i < PROCESS_USER_MAX_PAGES; i++)
     {
         process->user_pages[i].virtual_address = 0U;
@@ -402,4 +405,31 @@ int process_create_idle_for_cpu(uint32_t cpu_id, const char* name,
         return 0;
 
     return pid;
+}
+
+
+int process_fd_install(uint32_t pid, int vfs_handle)
+{
+    if (!process_initialized_state || pid >= PROCESS_MAX || vfs_handle < 0) return -1;
+    uint64_t flags = process_table_lock_acquire();
+    process_t* p = &process_table_records[pid];
+    if (p->state == PROCESS_UNUSED || p->state == PROCESS_TERMINATED || p->state == PROCESS_REAPING || !p->is_user) { process_table_lock_release(flags); return -1; }
+    for (uint32_t i = 0; i < PROCESS_FD_COUNT; i++) if (p->file_descriptors[i] < 0) { p->file_descriptors[i] = vfs_handle; process_table_lock_release(flags); return PROCESS_FD_BASE + (int)i; }
+    process_table_lock_release(flags); return -1;
+}
+
+int process_fd_get(uint32_t pid, int descriptor)
+{
+    if (!process_initialized_state || pid >= PROCESS_MAX || descriptor < PROCESS_FD_BASE || descriptor >= PROCESS_FD_BASE + (int)PROCESS_FD_COUNT) return -1;
+    uint64_t flags = process_table_lock_acquire(); process_t* p = &process_table_records[pid]; int h = -1;
+    if (p->state != PROCESS_UNUSED && p->state != PROCESS_TERMINATED && p->state != PROCESS_REAPING && p->is_user) h = p->file_descriptors[(uint32_t)(descriptor - PROCESS_FD_BASE)];
+    process_table_lock_release(flags); return h;
+}
+
+int process_fd_remove(uint32_t pid, int descriptor, int* vfs_handle_out)
+{
+    if (!process_initialized_state || pid >= PROCESS_MAX || !vfs_handle_out || descriptor < PROCESS_FD_BASE || descriptor >= PROCESS_FD_BASE + (int)PROCESS_FD_COUNT) return 0;
+    uint64_t flags = process_table_lock_acquire(); process_t* p = &process_table_records[pid]; uint32_t i = (uint32_t)(descriptor - PROCESS_FD_BASE);
+    if (p->state == PROCESS_UNUSED || !p->is_user || p->file_descriptors[i] < 0) { process_table_lock_release(flags); return 0; }
+    *vfs_handle_out = p->file_descriptors[i]; p->file_descriptors[i] = -1; process_table_lock_release(flags); return 1;
 }

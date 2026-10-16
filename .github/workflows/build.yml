@@ -290,8 +290,10 @@ jobs:
 
           # Give the desktop renderer a moment to draw its first complete frame.
           sleep 3
+          # The QEMU monitor stays connected; bound the client lifetime after
+          # sending the one screendump command rather than waiting for EOF.
           printf 'screendump /tmp/vantaos-desktop.ppm\n' |
-            socat - UNIX-CONNECT:/tmp/vantaos-monitor.sock
+            timeout 5s socat -T 1 - UNIX-CONNECT:/tmp/vantaos-monitor.sock || true
           for attempt in $(seq 1 10); do
             test -s /tmp/vantaos-desktop.ppm && break
             sleep 1

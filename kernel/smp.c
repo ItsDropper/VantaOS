@@ -57,6 +57,92 @@ static int find_cpu_index(const acpi_platform_info_t* info, uint32_t apic_id)
     return -1;
 }
 
+typedef enum
+{
+    SMP_TOPOLOGY_VALID = 0,
+    SMP_TOPOLOGY_INVALID_COUNT,
+    SMP_TOPOLOGY_DUPLICATE_APIC_ID,
+    SMP_TOPOLOGY_BSP_MISSING,
+    SMP_TOPOLOGY_UNSUPPORTED_APIC_ID
+} smp_topology_status_t;
+
+/*
+ * Validate the complete topology before sending INIT/SIPI. x2APIC is not
+ * implemented, so reject IDs that this xAPIC startup path cannot address.
+ */
+static smp_topology_status_t smp_validate_topology(
+    const acpi_platform_info_t* info, uint32_t bsp_apic_id,
+    int* bsp_index_out)
+{
+    if (!info || !bsp_index_out || info->cpu_count == 0U ||
+        info->cpu_count > ACPI_MAX_CPUS ||
+        info->cpu_count > cpu_local_capacity())
+        return SMP_TOPOLOGY_INVALID_COUNT;
+
+    int bsp_index = -1;
+    for (uint32_t i = 0; i < info->cpu_count; i++)
+    {
+        uint32_t apic_id = info->cpu_apic_ids[i];
+        if (apic_id > 255U)
+            return SMP_TOPOLOGY_UNSUPPORTED_APIC_ID;
+
+        for (uint32_t j = 0; j < i; j++)
+            if (info->cpu_apic_ids[j] == apic_id)
+                return SMP_TOPOLOGY_DUPLICATE_APIC_ID;
+
+        if (apic_id == bsp_apic_id)
+            bsp_index = (int)i;
+    }
+
+    if (bsp_index < 0)
+        return SMP_TOPOLOGY_BSP_MISSING;
+
+    *bsp_index_out = bsp_index;
+    return SMP_TOPOLOGY_VALID;
+}
+
+#ifdef VANTAOS_SELF_TEST
+static int smp_topology_validation_probe(void)
+{
+    acpi_platform_info_t test = {0};
+    int bsp_index = -1;
+
+    test.cpu_count = 2U;
+    test.cpu_apic_ids[0] = 1U;
+    test.cpu_apic_ids[1] = 2U;
+    if (smp_validate_topology(&test, 1U, &bsp_index) !=
+            SMP_TOPOLOGY_VALID || bsp_index != 0)
+        goto fail;
+
+    test.cpu_apic_ids[1] = 1U;
+    if (smp_validate_topology(&test, 1U, &bsp_index) !=
+        SMP_TOPOLOGY_DUPLICATE_APIC_ID)
+        goto fail;
+
+    test.cpu_apic_ids[1] = 2U;
+    if (smp_validate_topology(&test, 3U, &bsp_index) !=
+        SMP_TOPOLOGY_BSP_MISSING)
+        goto fail;
+
+    test.cpu_apic_ids[1] = 256U;
+    if (smp_validate_topology(&test, 1U, &bsp_index) !=
+        SMP_TOPOLOGY_UNSUPPORTED_APIC_ID)
+        goto fail;
+
+    test.cpu_count = ACPI_MAX_CPUS + 1U;
+    if (smp_validate_topology(&test, 1U, &bsp_index) !=
+        SMP_TOPOLOGY_INVALID_COUNT)
+        goto fail;
+
+    serial_write("VANTAOS_SMP_TOPOLOGY_VALIDATION_OK\n");
+    return 1;
+
+fail:
+    serial_write("VANTAOS_SMP_TOPOLOGY_VALIDATION_FAIL\n");
+    return 0;
+}
+#endif
+
 static int run_local_work_probe(uint32_t expected_logical_id)
 {
     cpu_local_t* local = cpu_local_current();
@@ -216,13 +302,6 @@ static int start_secondary_cpus(const acpi_platform_info_t* info)
         uint32_t apic_id = info->cpu_apic_ids[i];
         if (apic_id == bsp_id)
             continue;
-
-        /* xAPIC's destination field is eight bits; x2APIC startup is separate. */
-        if (apic_id > 255U)
-        {
-            serial_write("VANTAOS_SMP_AP_START_FAIL\n");
-            return 0;
-        }
 
         __atomic_store_n(&ap_online[i], 0U, __ATOMIC_RELAXED);
         mailbox->stack_top =
@@ -440,6 +519,11 @@ static int smp_run_work_probe(const acpi_platform_info_t* info,
 
 int smp_initialize(void)
 {
+#ifdef VANTAOS_SELF_TEST
+    if (!smp_topology_validation_probe())
+        return 0;
+#endif
+
     const acpi_platform_info_t* info = apic_get_platform_info();
     if (!info)
     {
@@ -447,16 +531,37 @@ int smp_initialize(void)
         return 0;
     }
 
+    uint32_t bsp_id = apic_get_bsp_id();
+    int bsp_index = -1;
+    smp_topology_status_t topology_status =
+        smp_validate_topology(info, bsp_id, &bsp_index);
+    if (topology_status != SMP_TOPOLOGY_VALID)
+    {
+        switch (topology_status)
+        {
+            case SMP_TOPOLOGY_INVALID_COUNT:
+                serial_write("VANTAOS_SMP_TOPOLOGY_COUNT_FAIL\n");
+                break;
+            case SMP_TOPOLOGY_DUPLICATE_APIC_ID:
+                serial_write("VANTAOS_SMP_TOPOLOGY_DUPLICATE_FAIL\n");
+                break;
+            case SMP_TOPOLOGY_BSP_MISSING:
+                serial_write("VANTAOS_SMP_BSP_NOT_IN_MADT_FAIL\n");
+                break;
+            case SMP_TOPOLOGY_UNSUPPORTED_APIC_ID:
+                serial_write("VANTAOS_SMP_APIC_ID_UNSUPPORTED\n");
+                break;
+            case SMP_TOPOLOGY_VALID:
+                break;
+        }
+        return 0;
+    }
+
     discovered_cpu_count = info->cpu_count;
-    bsp_logical_id = 0U;
+    bsp_logical_id = (uint32_t)bsp_index;
     serial_write("VANTAOS_SMP_TOPOLOGY_OK\n");
 
-    uint32_t bsp_id = apic_get_bsp_id();
-    int bsp_index = find_cpu_index(info, bsp_id);
-    if (bsp_index >= 0)
-        bsp_logical_id = (uint32_t)bsp_index;
-    if (bsp_index < 0 ||
-        !cpu_local_initialize((uint32_t)bsp_index, bsp_id))
+    if (!cpu_local_initialize((uint32_t)bsp_index, bsp_id))
     {
         serial_write("VANTAOS_SMP_CPU_LOCAL_FAIL\n");
         return 0;

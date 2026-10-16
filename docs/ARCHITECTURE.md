@@ -43,7 +43,7 @@ The two boot paths are not interchangeable evidence: a successful GRUB boot does
 | `arch/x86/` | Legacy 32-bit source retained for audit; not linked into the active target. |
 | `boot/` | Boot-related assets and configuration. |
 | `kernel/` | Kernel initialization, serial diagnostics, panic/fault tracing, and graphics. |
-| `kernel/proc/` | Process-table storage/creation and process lifecycle/state transitions, with private shared internals. |
+| `kernel/proc/` | `process.c` owns table initialization/creation; `process_context.c` owns atomic CPU claims and context-switch transitions; `process_lifecycle.c` owns wake/block/terminate/reap and snapshots. `process_internal.h` is private shared state, not a public API. |
 | `kernel/sched/` | Ready-process selection and scheduling. |
 | `kernel/time/` | Timer subsystem. |
 | `mm/` | Heap, physical-memory bookkeeping, and paging. |

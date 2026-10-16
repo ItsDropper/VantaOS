@@ -1009,7 +1009,7 @@ void os_initialize(multiboot_info_t* mbd)
 
     process_initialize();
     if (!process_is_initialized())
-        os_boot_fatal("VANTAOS_PROCESS_INIT_FATAL_FAIL\\n");
+        os_boot_fatal("VANTAOS_PROCESS_INIT_FATAL_FAIL\n");
 
     /*
      * Register the boot/desktop execution context as PID 1 before any
@@ -1018,11 +1018,11 @@ void os_initialize(multiboot_info_t* mbd)
      * with a genuine long-mode interrupt frame.
      */
     if (process_attach_current("desktop", 0) <= 0)
-        os_boot_fatal("VANTAOS_PROCESS_BOOT_ATTACH_FATAL_FAIL\\n");
+        os_boot_fatal("VANTAOS_PROCESS_BOOT_ATTACH_FATAL_FAIL\n");
 
     scheduler_initialize();
     if (!smp_scheduler_initialize())
-        os_boot_fatal("VANTAOS_SMP_SCHEDULER_INIT_FATAL_FAIL\\n");
+        os_boot_fatal("VANTAOS_SMP_SCHEDULER_INIT_FATAL_FAIL\n");
     terminal_process_initialize();
     desktop_process_initialize();
 

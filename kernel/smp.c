@@ -1,6 +1,7 @@
 #include "smp.h"
 
 #include "acpi.h"
+#include "cpu_local.h"
 #include "apic.h"
 #include "gdt.h"
 #include "idt.h"
@@ -49,7 +50,13 @@ _Noreturn void smp_ap_entry(uint32_t apic_id)
     const acpi_platform_info_t* info = apic_get_platform_info();
     int index = info ? find_cpu_index(info, apic_id) : -1;
 
-    if (index >= 0)
+    /*
+     * A CPU is not reported online until its own APIC MSR/registers and GS
+     * per-CPU base have both been initialized and validated.
+     */
+    if (index >= 0 &&
+        apic_initialize_cpu(apic_id) &&
+        cpu_local_initialize((uint32_t)index, apic_id))
         __atomic_store_n(&ap_online[index], 1U, __ATOMIC_RELEASE);
 
     /* APs remain safely parked until per-CPU scheduling is implemented. */
@@ -148,6 +155,15 @@ int smp_initialize(void)
     discovered_cpu_count = info->cpu_count;
     serial_write("VANTAOS_SMP_TOPOLOGY_OK\n");
 
+    uint32_t bsp_id = apic_get_bsp_id();
+    int bsp_index = find_cpu_index(info, bsp_id);
+    if (bsp_index < 0 ||
+        !cpu_local_initialize((uint32_t)bsp_index, bsp_id))
+    {
+        serial_write("VANTAOS_SMP_CPU_LOCAL_FAIL\n");
+        return 0;
+    }
+
     if (!start_secondary_cpus(info))
     {
         if (!apic_is_enabled())
@@ -155,6 +171,18 @@ int smp_initialize(void)
         return 0;
     }
 
+    for (uint32_t i = 0; i < info->cpu_count; i++)
+    {
+        const cpu_local_t* local = cpu_local_get(i);
+        if (!local || local->logical_id != i ||
+            local->apic_id != info->cpu_apic_ids[i])
+        {
+            serial_write("VANTAOS_SMP_CPU_LOCAL_FAIL\n");
+            return 0;
+        }
+    }
+
+    serial_write("VANTAOS_SMP_CPU_LOCAL_OK\n");
     return 1;
 }
 

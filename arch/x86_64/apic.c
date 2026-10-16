@@ -3,6 +3,7 @@
 #include "paging.h"
 #include "pic.h"
 #include "serial.h"
+#include "timer.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -18,6 +19,7 @@
 #define LAPIC_EOI 0x0B0U
 #define LAPIC_LVT_TIMER 0x320U
 #define LAPIC_TIMER_INITIAL_COUNT 0x380U
+#define LAPIC_TIMER_CURRENT_COUNT 0x390U
 #define LAPIC_TIMER_DIVIDE 0x3E0U
 #define APIC_RESCHEDULE_VECTOR 0xF3U
 #define LAPIC_LVT_LINT0 0x350U
@@ -205,6 +207,48 @@ int apic_timer_initialize(uint8_t vector, uint32_t initial_count)
     lapic_write(LAPIC_TIMER_DIVIDE, 0x3U);
     lapic_write(LAPIC_TIMER_INITIAL_COUNT, initial_count);
     lapic_write(LAPIC_LVT_TIMER, (1U << 17) | vector);
+    return 1;
+}
+
+int apic_timer_calibrate(uint8_t vector, uint32_t reference_ticks,
+                         uint32_t* count_per_tick)
+{
+    if (!enabled || !lapic || vector < 0x10U || vector == 0xFFU ||
+        reference_ticks < 2U || !count_per_tick)
+        return 0;
+
+    uint64_t saved_flags;
+    __asm__ volatile ("pushfq; popq %0" : "=r"(saved_flags));
+
+    /* Mask delivery but let the one-shot counter run down from its maximum. */
+    lapic_write(LAPIC_LVT_TIMER, (1U << 16) | vector);
+    lapic_write(LAPIC_TIMER_DIVIDE, 0x3U);
+    lapic_write(LAPIC_TIMER_INITIAL_COUNT, UINT32_MAX);
+
+    uint32_t start_ticks = timer_get_ticks();
+    __asm__ volatile ("sti" ::: "memory");
+    while ((uint32_t)(timer_get_ticks() - start_ticks) < reference_ticks)
+        __asm__ volatile ("sti; hlt" ::: "memory");
+    __asm__ volatile ("cli" ::: "memory");
+
+    uint32_t elapsed_ticks = (uint32_t)(timer_get_ticks() - start_ticks);
+    uint32_t remaining = lapic_read(LAPIC_TIMER_CURRENT_COUNT);
+    lapic_write(LAPIC_LVT_TIMER, (1U << 16) | vector);
+
+    if ((saved_flags & (1ULL << 9)) != 0U)
+        __asm__ volatile ("sti" ::: "memory");
+    else
+        __asm__ volatile ("cli" ::: "memory");
+
+    if (elapsed_ticks < reference_ticks || remaining >= UINT32_MAX)
+        return 0;
+
+    uint32_t elapsed_count = UINT32_MAX - remaining;
+    uint32_t calibrated = elapsed_count / elapsed_ticks;
+    if (calibrated == 0U)
+        return 0;
+
+    *count_per_tick = calibrated;
     return 1;
 }
 

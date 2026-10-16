@@ -590,20 +590,28 @@ int paging_unmap_user_page(paging_address_space_t* address_space,
 
 uint64_t paging_get_page_flags(uintptr_t virtual_address)
 {
+    uint64_t saved_flags = paging_lock_acquire();
+    uint64_t flags = 0;
+
     if (virtual_address >= PAGING_USER_BASE &&
         virtual_address <= PAGING_USER_END)
     {
         uint64_t* entry = user_leaf_entry(paging_current(),
                                           virtual_address, 0);
-        return entry ? (*entry & 0xFFFU) : 0;
+        flags = entry ? (*entry & 0xFFFU) : 0;
+    }
+    else
+    {
+        uint64_t* table = table_for(virtual_address);
+        if (table)
+        {
+            uint32_t index = (uint32_t)((virtual_address >> 12) & 0x1FFU);
+            flags = table[index] & 0xFFFU;
+        }
     }
 
-    uint64_t* table = table_for(virtual_address);
-    if (!table)
-        return 0;
-
-    uint32_t index = (uint32_t)((virtual_address >> 12) & 0x1FFU);
-    return table[index] & 0xFFFU;
+    paging_lock_release(saved_flags);
+    return flags;
 }
 
 int paging_map_mmio_page(uintptr_t virtual_address, uintptr_t physical_address)
@@ -663,35 +671,37 @@ void paging_unmap_page(uintptr_t virtual_address)
 
 uintptr_t paging_get_physical(uintptr_t virtual_address)
 {
+    uint64_t saved_flags = paging_lock_acquire();
+    uintptr_t physical = 0;
+
     if (virtual_address >= PAGING_USER_BASE &&
         virtual_address <= PAGING_USER_END)
     {
         uint64_t* entry = user_leaf_entry(paging_current(),
                                           virtual_address, 0);
-        if (!entry || !(*entry & PAGE_PRESENT))
-            return 0;
-
-        return (uintptr_t)(*entry & PAGE_ADDRESS_MASK) |
-               (virtual_address & (PAGE_SIZE - 1U));
+        if (entry && (*entry & PAGE_PRESENT))
+            physical = (uintptr_t)(*entry & PAGE_ADDRESS_MASK) |
+                       (virtual_address & (PAGE_SIZE - 1U));
     }
-
-    uint64_t* table = table_for(virtual_address);
-
-    if (table)
+    else
     {
-        uint32_t index = (uint32_t)((virtual_address >> 12) & 0x1FFU);
-        if (!(table[index] & PAGE_PRESENT))
-            return 0;
-
-        return (uintptr_t)(table[index] & 0x000FFFFFFFFFF000ULL) |
-               (virtual_address & 0xFFFU);
+        uint64_t* table = table_for(virtual_address);
+        if (table)
+        {
+            uint32_t index = (uint32_t)((virtual_address >> 12) & 0x1FFU);
+            if (table[index] & PAGE_PRESENT)
+                physical = (uintptr_t)(table[index] &
+                    0x000FFFFFFFFFF000ULL) | (virtual_address & 0xFFFU);
+        }
+        else if (virtual_address < 0x40000000ULL)
+        {
+            /* Identity-mapped low memory. */
+            physical = virtual_address;
+        }
     }
 
-    /* Identity-mapped low memory. */
-    if (virtual_address < 0x40000000ULL)
-        return virtual_address;
-
-    return 0;
+    paging_lock_release(saved_flags);
+    return physical;
 }
 
 paging_address_space_t* paging_create_address_space(void)

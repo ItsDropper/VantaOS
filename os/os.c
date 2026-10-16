@@ -348,26 +348,13 @@ static void smp_scheduler_probe_entry(void)
         __atomic_fetch_or(&smp_scheduler_probe_cpu_mask,
                           1U << local->logical_id, __ATOMIC_RELEASE);
 
-    uint32_t required_cpus = smp_cpu_count() > 1U ? 2U : 1U;
-    for (;;)
-    {
-        uint32_t mask = __atomic_load_n(&smp_scheduler_probe_cpu_mask,
-                                        __ATOMIC_ACQUIRE);
-        uint32_t cpus_seen = 0;
-        while (mask != 0U)
-        {
-            cpus_seen += mask & 1U;
-            mask >>= 1;
-        }
-        if (cpus_seen >= required_cpus)
-            break;
-        /* Let the local timer preempt this waiter so other CPUs can run probes. */
-        __asm__ volatile ("sti; pause" ::: "memory");
-    }
-
     /*
-     * Keep the measured section non-preemptible: active > 1 can then only
-     * happen when two distinct CPUs execute probe entries concurrently.
+     * Do not barrier here: a barrier can occupy every available process slot
+     * with waiters before the scheduler gets a useful overlap window. Let each
+     * CPU enter the measured section as soon as its probe is scheduled.
+     *
+     * Keep this section non-preemptible: active > 1 can then only happen when
+     * two distinct CPUs execute probe entries concurrently.
      */
     __asm__ volatile ("cli" ::: "memory");
     uint32_t active = __atomic_add_fetch(&smp_scheduler_probe_active, 1U,

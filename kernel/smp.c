@@ -16,6 +16,7 @@
 #define AP_STARTUP_VECTOR 0x08U
 #define AP_STACK_SIZE 16384U
 #define AP_STARTUP_SPIN_LIMIT 50000000U
+#define SMP_WORK_PROBE_ITERATIONS 100000U
 
 typedef struct
 {
@@ -33,12 +34,38 @@ static uint8_t ap_stacks[ACPI_MAX_CPUS][AP_STACK_SIZE]
     __attribute__((aligned(16)));
 static volatile uint32_t ap_online[ACPI_MAX_CPUS];
 
+/*
+ * APs remain interrupt-disabled during this first execution test. The BSP
+ * releases them only after every AP has initialized its own LAPIC and GS
+ * state. Each CPU then writes only its own cpu_local work counter.
+ */
+static volatile uint32_t work_probe_start;
+static volatile uint32_t work_probe_done[ACPI_MAX_CPUS];
+
 static int find_cpu_index(const acpi_platform_info_t* info, uint32_t apic_id)
 {
     for (uint32_t i = 0; i < info->cpu_count; i++)
         if (info->cpu_apic_ids[i] == apic_id)
             return (int)i;
     return -1;
+}
+
+static int run_local_work_probe(uint32_t expected_logical_id)
+{
+    cpu_local_t* local = cpu_local_current();
+    if (!local || local->self != local ||
+        local->logical_id != expected_logical_id ||
+        local->online == 0U)
+        return 0;
+
+    uint64_t start = local->work_iterations;
+    for (uint32_t i = 0; i < SMP_WORK_PROBE_ITERATIONS; i++)
+    {
+        local->work_iterations++;
+        __asm__ volatile ("pause" ::: "memory");
+    }
+
+    return local->work_iterations - start == SMP_WORK_PROBE_ITERATIONS;
 }
 
 _Noreturn void smp_ap_entry(uint32_t apic_id)
@@ -62,10 +89,25 @@ _Noreturn void smp_ap_entry(uint32_t apic_id)
     }
     else
     {
-        serial_write("VANTAOS_SMP_AP_LOCAL_INIT_FAIL\\n");
+        serial_write("VANTAOS_SMP_AP_LOCAL_INIT_FAIL\n");
+        for (;;)
+            __asm__ volatile ("cli; hlt" ::: "memory");
     }
 
-    /* APs remain safely parked until per-CPU scheduling is implemented. */
+    /* Wait without HLT: the BSP's release flag is polled with interrupts off. */
+    while (__atomic_load_n(&work_probe_start, __ATOMIC_ACQUIRE) == 0U)
+        __asm__ volatile ("sti; hlt" ::: "memory");
+
+    if (!run_local_work_probe((uint32_t)index))
+    {
+        serial_write("VANTAOS_SMP_WORK_FAIL\n");
+        for (;;)
+            __asm__ volatile ("cli; hlt" ::: "memory");
+    }
+
+    __atomic_store_n(&work_probe_done[index], 1U, __ATOMIC_RELEASE);
+
+    /* Work execution is proven; general scheduling is intentionally not enabled. */
     for (;;)
         __asm__ volatile ("cli; hlt" ::: "memory");
 }
@@ -101,6 +143,12 @@ static int start_secondary_cpus(const acpi_platform_info_t* info)
     }
     unsigned int online_count = 1U;
 
+    if (info->cpu_count > 1U && !apic_send_init_all())
+    {
+        serial_write("VANTAOS_SMP_AP_START_FAIL\n");
+        return 0;
+    }
+
     for (uint32_t i = 0; i < info->cpu_count; i++)
     {
         uint32_t apic_id = info->cpu_apic_ids[i];
@@ -119,12 +167,16 @@ static int start_secondary_cpus(const acpi_platform_info_t* info)
             (uintptr_t)&ap_stacks[i][AP_STACK_SIZE];
         __asm__ volatile ("mfence" ::: "memory");
 
-        if (!apic_send_init_sipi(apic_id, AP_STARTUP_VECTOR))
+        serial_write("VANTAOS_SMP_AP_IPI_BEGIN\n");
+        serial_write("VANTAOS_SMP_AP_IPI_BEGIN\n");
+        if (!apic_send_sipi(apic_id, AP_STARTUP_VECTOR))
         {
             serial_write("VANTAOS_SMP_AP_START_FAIL\n");
             return 0;
         }
 
+        serial_write("VANTAOS_SMP_AP_IPI_SENT\n");
+        serial_write("VANTAOS_SMP_AP_IPI_SENT\n");
         uint32_t spin = 0;
         while (__atomic_load_n(&ap_online[i], __ATOMIC_ACQUIRE) == 0U &&
                spin++ < AP_STARTUP_SPIN_LIMIT)
@@ -136,6 +188,8 @@ static int start_secondary_cpus(const acpi_platform_info_t* info)
             return 0;
         }
 
+        serial_write("VANTAOS_SMP_AP_ONLINE\n");
+        serial_write("VANTAOS_SMP_AP_ONLINE\n");
         online_count++;
     }
 
@@ -146,6 +200,75 @@ static int start_secondary_cpus(const acpi_platform_info_t* info)
     }
 
     serial_write("VANTAOS_SMP_AP_START_OK\n");
+    return 1;
+}
+
+static int smp_run_work_probe(const acpi_platform_info_t* info,
+                              uint32_t bsp_index)
+{
+    if (!info || info->cpu_count == 0 ||
+        info->cpu_count > CPU_LOCAL_MAX ||
+        cpu_local_current() != cpu_local_get(bsp_index))
+    {
+        serial_write("VANTAOS_SMP_WORK_FAIL\n");
+        return 0;
+    }
+
+    __atomic_store_n(&work_probe_start, 1U, __ATOMIC_RELEASE);
+
+    /* Wake APs with a dedicated fixed IPI; do not make them burn TCG time
+       spinning while the BSP starts the remaining processors. */
+    for (uint32_t i = 0; i < info->cpu_count; i++)
+    {
+        if (i == bsp_index)
+            continue;
+        const cpu_local_t* local = cpu_local_get(i);
+        if (!local || !apic_send_fixed_ipi(local->apic_id, 0xF1U))
+        {
+            serial_write("VANTAOS_SMP_WORK_FAIL\n");
+            return 0;
+        }
+    }
+
+    if (!run_local_work_probe(bsp_index))
+    {
+        serial_write("VANTAOS_SMP_WORK_FAIL\n");
+        return 0;
+    }
+
+    uint32_t spin = 0;
+    for (uint32_t i = 0; i < info->cpu_count; i++)
+    {
+        if (i == bsp_index)
+            continue;
+
+        while (__atomic_load_n(&work_probe_done[i], __ATOMIC_ACQUIRE) == 0U &&
+               spin++ < AP_STARTUP_SPIN_LIMIT)
+            __asm__ volatile ("pause");
+
+        if (__atomic_load_n(&work_probe_done[i], __ATOMIC_ACQUIRE) == 0U)
+        {
+            serial_write("VANTAOS_SMP_WORK_FAIL\n");
+            return 0;
+        }
+
+        const cpu_local_t* local = cpu_local_get(i);
+        if (!local || local->logical_id != i ||
+            local->work_iterations != SMP_WORK_PROBE_ITERATIONS)
+        {
+            serial_write("VANTAOS_SMP_WORK_FAIL\n");
+            return 0;
+        }
+    }
+
+    const cpu_local_t* bsp = cpu_local_get(bsp_index);
+    if (!bsp || bsp->work_iterations != SMP_WORK_PROBE_ITERATIONS)
+    {
+        serial_write("VANTAOS_SMP_WORK_FAIL\n");
+        return 0;
+    }
+
+    serial_write("VANTAOS_SMP_WORK_OK\n");
     return 1;
 }
 
@@ -189,6 +312,9 @@ int smp_initialize(void)
     }
 
     serial_write("VANTAOS_SMP_CPU_LOCAL_OK\n");
+    if (!smp_run_work_probe(info, (uint32_t)bsp_index))
+        return 0;
+
     return 1;
 }
 

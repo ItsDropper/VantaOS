@@ -6,6 +6,7 @@ global irq0_stub
 global irq1_stub
 global irq12_stub
 global apic_spurious_stub
+global smp_wakeup_stub
 global process_entry_trampoline
 
 global exception0_stub
@@ -48,6 +49,7 @@ extern keyboard_handle_interrupt
 extern mouse_handle_interrupt
 extern pic_send_eoi
 extern scheduler_tick
+extern apic_send_eoi
 
 apic_spurious_stub:
     iretq
@@ -121,6 +123,14 @@ process_entry_trampoline:
     ; Discard the IRQ alignment padding
     RESTORE_ALL
 %endmacro
+
+; Fixed IPI used to wake initialized APs from their idle HLT loop.
+smp_wakeup_stub:
+    cld
+    SAVE_IRQ_ALL
+    call apic_send_eoi
+    RESTORE_IRQ_ALL
+    iretq
 
 irq0_stub:
     cld

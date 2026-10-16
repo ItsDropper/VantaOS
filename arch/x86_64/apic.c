@@ -257,22 +257,41 @@ uint32_t apic_get_bsp_id(void)
     return enabled && lapic ? lapic_read(LAPIC_ID) >> 24 : 0U;
 }
 
-int apic_send_init_sipi(uint32_t apic_id, uint8_t startup_vector)
+int apic_send_init_all(void)
 {
-    if (!enabled || startup_vector == 0)
+    if (!enabled || !lapic)
         return 0;
 
-    /* INIT assert, INIT deassert, then two SIPIs as required by xAPIC startup. */
-    if (!apic_send_ipi(apic_id, 0x0000C500U))
+    /*
+     * Initialize all other processors as a batch. The INIT IPI destination
+     * shorthand is "all excluding self"; waiting once avoids multiplying the
+     * mandatory INIT delays by the number of APs under slow QEMU TCG.
+     */
+    if (!apic_send_ipi(0U, 0x000CC500U))
         return 0;
     apic_delay(10000000U);
-    if (!apic_send_ipi(apic_id, 0x00008500U))
+    if (!apic_send_ipi(0U, 0x000C8500U))
         return 0;
     apic_delay(10000000U);
+    return 1;
+}
+
+int apic_send_sipi(uint32_t apic_id, uint8_t startup_vector)
+{
+    if (!enabled || startup_vector == 0 || apic_id > 255U)
+        return 0;
+
     if (!apic_send_ipi(apic_id, 0x00000600U | startup_vector))
         return 0;
     apic_delay(200000U);
     return apic_send_ipi(apic_id, 0x00000600U | startup_vector);
+}
+
+int apic_send_fixed_ipi(uint32_t apic_id, uint8_t vector)
+{
+    if (vector < 0x10U || vector == 0xFFU)
+        return 0;
+    return apic_send_ipi(apic_id, vector);
 }
 
 int apic_is_enabled(void)

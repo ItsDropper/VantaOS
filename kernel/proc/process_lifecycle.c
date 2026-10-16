@@ -89,13 +89,18 @@ int process_set_running(uint32_t pid)
 static void process_send_wake_ipi(uint32_t owner_cpu,
                                        uint32_t affinity_cpu)
 {
-    if (!apic_is_enabled())
-        return;
-
+    /*
+     * Publish the scheduling request before attempting hardware delivery.
+     * The BSP timer consumes this flag too, so a deferred/lost IPI cannot
+     * leave a newly READY process stranded behind an idle context.
+     */
     if (owner_cpu != PROCESS_CPU_UNOWNED)
     {
         const cpu_local_t* local = cpu_local_get(owner_cpu);
         if (local)
+            __atomic_store_n((uint32_t*)&local->reschedule_pending, 1U,
+                             __ATOMIC_RELEASE);
+        if (apic_is_enabled() && local)
             (void)apic_send_reschedule_ipi(local->apic_id);
         return;
     }
@@ -104,6 +109,9 @@ static void process_send_wake_ipi(uint32_t owner_cpu,
     {
         const cpu_local_t* local = cpu_local_get(affinity_cpu);
         if (local)
+            __atomic_store_n((uint32_t*)&local->reschedule_pending, 1U,
+                             __ATOMIC_RELEASE);
+        if (apic_is_enabled() && local)
             (void)apic_send_reschedule_ipi(local->apic_id);
         return;
     }
@@ -112,7 +120,11 @@ static void process_send_wake_ipi(uint32_t owner_cpu,
     for (uint32_t cpu = 0; cpu < cpu_local_capacity(); cpu++)
     {
         const cpu_local_t* local = cpu_local_get(cpu);
-        if (local)
+        if (!local)
+            continue;
+        __atomic_store_n((uint32_t*)&local->reschedule_pending, 1U,
+                         __ATOMIC_RELEASE);
+        if (apic_is_enabled())
             (void)apic_send_reschedule_ipi(local->apic_id);
     }
 }

@@ -4,7 +4,7 @@ This document describes the current prototype, not a promise that every subsyste
 
 ## System boundary map
 
-The current design has two boot paths under development that converge on the kernel's normalized handoff contract. The desktop and shell are kernel-integrated components; they are not user-space applications running behind a security boundary.
+The current design has two boot paths under development that converge on the kernel's normalized handoff contract. The desktop and shell are still kernel-integrated GUI components; only the Terminal shell logic and selected smoke programs run as ring-3 ELF applications. A general user-space GUI application boundary is not implemented yet. See [User-space desktop applications](USERSPACE_GUI.md).
 
 ```mermaid
 flowchart TD

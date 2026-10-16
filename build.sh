@@ -67,8 +67,8 @@ if command -v mkfs.fat >/dev/null 2>&1; then
 
         mcopy -o -i vantaos.img /tmp/vantaos-terminal.elf ::/TERMINAL.ELF >/dev/null
         echo "    Installed /TERMINAL.ELF (static ring-3 application)"
-        mcopy -o -i vantaos.img /tmp/vantaos-settings.elf ::/SETTINGS.ELF >/dev/null
-        echo "    Installed /SETTINGS.ELF (static ring-3 Settings application)"
+        mcopy -o -i vantaos.img /tmp/vantaos-settings.elf ::/system/SETTINGS.ELF >/dev/null
+        echo "    Installed /system/SETTINGS.ELF (static ring-3 Settings application)"
 
         install_system_file "system/terminal.vx" \
             "VANTA EXECUTABLE" \

@@ -25,15 +25,16 @@ The current syscall entry is `int 0x80`. Put the syscall number in `RAX`; the fi
 
 | `RAX` | Operation | Arguments |
 | --- | --- | --- |
-| `0` | Exit current process | No arguments |
+| `0` | Exit current process | `RDI`: signed 32-bit exit status |
 | `1` | Write to serial log | `RDI`: user-buffer address; `RSI`: byte count |
 | `2` | Write to terminal | `RDI`: user-buffer address; `RSI`: byte count |
 | `3` | Open an existing file for reading | `RDI`: NUL-terminated user path; `RSI`: `1` (`VFS_OPEN_READ`) |
 | `4` | Read from an open file | `RDI`: descriptor; `RSI`: writable user-buffer address; `RDX`: maximum byte count |
 | `5` | Close an open file | `RDI`: descriptor |
 | `6` | Spawn a child ELF64 process | `RDI`: NUL-terminated VFS path; `RSI`: user `argv[]` pointer array; `RDX`: argument count (1–16) |
+| `7` | Wait for a direct child to exit | `RDI`: child PID; `RSI`: optional writable `int32_t*` for exit status |
 
-Serial and terminal writes accept at most 4096 bytes per call and validate the supplied range against the current process address space. File reads are limited to 4096 bytes per call and validate the complete destination range before consuming file data. Paths must terminate within `FS_PATH_MAX`; user programs can only open existing files for reading. Each process has eight descriptor slots, numbered from `3`, and descriptors are closed during process reaping. The spawn syscall copies the path, argument vector, and argument strings into kernel-owned memory before accessing the VFS or ELF loader. It accepts read-only ELF files up to 1 MiB and at most 16 arguments / 512 total argument bytes, creates the child in a private address space, and returns its PID. It does not yet provide `wait`, exit-status collection, or a stable orphan/reparenting policy. Errors are returned as negative values (`-EFAULT`-style `-14`, missing path `-2`, invalid argument `-22`, unsupported/invalid ELF or child-creation failure `-8`, temporary image-buffer allocation failure `-12`, and descriptor exhaustion `-24`). This is a minimal bring-up interface, not a stable or POSIX-compatible ABI.
+Serial and terminal writes accept at most 4096 bytes per call and validate the supplied range against the current process address space. File reads are limited to 4096 bytes per call and validate the complete destination range before consuming file data. Paths must terminate within `FS_PATH_MAX`; user programs can only open existing files for reading. Each process has eight descriptor slots, numbered from `3`, and descriptors are closed during process reaping. The spawn syscall copies the path, argument vector, and argument strings into kernel-owned memory before accessing the VFS or ELF loader. It accepts read-only ELF files up to 1 MiB and at most 16 arguments / 512 total argument bytes, creates the child in a private address space, and returns its PID. A child with a live user-mode parent remains as a resource-free zombie until `waitpid` collects its status. `waitpid` blocks without losing child-exit wakeups, validates its optional status pointer before sleeping, and returns the child PID; orphaned children are detached and auto-reaped on exit. Kernel-owned shell launches remain auto-reaped. This is not a stable or POSIX-compatible process ABI. Errors are returned as negative values (`-EFAULT`-style `-14`, missing path `-2`, invalid argument `-22`, unsupported/invalid ELF or child-creation failure `-8`, temporary image-buffer allocation failure `-12`, and descriptor exhaustion `-24`). This is a minimal bring-up interface, not a stable or POSIX-compatible ABI.
 
 ## Loader and memory constraints
 
@@ -47,10 +48,10 @@ CI builds `tests/user/hello.S`, installs the ELF as `/HELLO.ELF` in the disposab
 exec /HELLO.ELF alpha "two words"
 ```
 
-The user ELF checks its argument stack, then exercises spawn's invalid path/vector/count boundaries before launching `/CHILD.ELF` with an argv vector. It emits `VANTAOS_USER_SPAWN_OK` after the kernel returns a child PID; the child independently writes `VANTAOS_USER_CHILD_PROGRAM_OK` and exits. The parent also opens `/USERDATA.TXT`, verifies fixture bytes, closes the descriptor, and checks invalid-pointer, invalid-descriptor, oversized-I/O, and missing-path errors. It fills all eight descriptor slots, verifies exhaustion, and exits with handles open so process reaping exercises descriptor cleanup. CI installs both ELF fixtures and requires the spawn and child markers in the QEMU regression matrix; UEFI/OVMF boot handoff remains a separate regression.
+The user ELF checks its argument stack, then exercises spawn's invalid path/vector/count/string-length boundaries before launching `/CHILD.ELF` with an argv vector. The child validates the copied argument, writes `VANTAOS_USER_CHILD_PROGRAM_OK`, and exits with status 23. The parent verifies invalid `waitpid` pointers and IDs, blocks until the child exits, validates the returned PID and exit status, and emits `VANTAOS_USER_WAITPID_OK`. The parent also opens `/USERDATA.TXT`, verifies fixture bytes, closes the descriptor, and checks invalid-pointer, invalid-descriptor, oversized-I/O, and missing-path errors. It fills all eight descriptor slots, verifies exhaustion, and exits with handles open so process reaping exercises descriptor cleanup. CI installs both ELF fixtures and requires the spawn and child markers in the QEMU regression matrix; UEFI/OVMF boot handoff remains a separate regression.
 
 A passing smoke test verifies only this test program and execution path on the CI configurations. It does not prove arbitrary ELF compatibility, hostile-program isolation, real-hardware compatibility, or general syscall correctness.
 
 ## Next steps
 
-The current file-I/O smoke test is not exhaustive. Blocking child waits and exit-status collection, explicit orphan handling, concurrent VFS access, broad fault containment, adversarial pointer fuzzing, dynamic linking, persistent file creation/writes, and a stable application ABI remain unimplemented.
+The current file-I/O smoke test is not exhaustive. Process groups/signals, concurrent VFS access, broad fault containment, adversarial pointer fuzzing, dynamic linking, persistent file creation/writes, and a stable application ABI remain unimplemented.

@@ -64,6 +64,7 @@ extern paging_tlb_shootdown_handle_interrupt
 extern user_mode_selftest_syscall_dispatch
 extern user_mode_test_saved_rsp
 extern user_mode_test_saved_rflags
+extern user_mode_test_exit_requested
 
 apic_spurious_stub:
     iretq
@@ -143,10 +144,15 @@ user_mode_test_syscall_stub:
     and rsp, -16
     mov rdi, r12
     call user_mode_selftest_syscall_dispatch
+    cmp dword [rel user_mode_test_exit_requested], 0
+    jne .user_test_exit
     mov rsp, r12
     RESTORE_ALL
     add rsp, 8
     iretq
+.user_test_exit:
+    mov dword [rel user_mode_test_exit_requested], 0
+    jmp user_mode_test_return_trampoline
 
 ; Long-mode interrupt delivery aligns RSP to 16 bytes before building
 ; the CPU return frame. SAVE_ALL pushes 15 qwords, leaving RSP misaligned
@@ -275,10 +281,15 @@ exception%1_stub:
     mov rsi, r12
     mov edi, %1
     call exception_handler
+    cmp dword [rel user_mode_test_exit_requested], 0
+    jne %%user_test_exit
     mov rsp, r12
     RESTORE_ALL
     add rsp, 8
     iretq
+%%user_test_exit:
+    mov dword [rel user_mode_test_exit_requested], 0
+    jmp user_mode_test_return_trampoline
 %endmacro
 
 %macro EXCEPTION_ERROR 1
@@ -290,10 +301,15 @@ exception%1_stub:
     mov rsi, r12
     mov edi, %1
     call exception_handler
+    cmp dword [rel user_mode_test_exit_requested], 0
+    jne %%user_test_exit
     mov rsp, r12
     RESTORE_ALL
     add rsp, 8
     iretq
+%%user_test_exit:
+    mov dword [rel user_mode_test_exit_requested], 0
+    jmp user_mode_test_return_trampoline
 %endmacro
 
 EXCEPTION_NO_ERROR 0

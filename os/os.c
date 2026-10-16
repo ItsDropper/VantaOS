@@ -132,44 +132,45 @@ static void process_state_transition_probe(void)
     }
 
     int ok = 1;
-    const process_t* process = process_get((uint32_t)pid);
-    ok = process && process->state == PROCESS_READY;
+    process_t process;
+    ok = process_snapshot((uint32_t)pid, &process) &&
+         process.state == PROCESS_READY;
 
     if (ok)
         ok = process_mark_running((uint32_t)pid);
-    process = process_get((uint32_t)pid);
     if (ok)
-        ok = process && process->state == PROCESS_RUNNING;
+        ok = process_snapshot((uint32_t)pid, &process) &&
+             process.state == PROCESS_RUNNING;
 
     if (ok)
         ok = process_mark_ready((uint32_t)pid);
-    process = process_get((uint32_t)pid);
     if (ok)
-        ok = process && process->state == PROCESS_READY;
+        ok = process_snapshot((uint32_t)pid, &process) &&
+             process.state == PROCESS_READY;
 
     if (ok)
         ok = process_set_running((uint32_t)pid);
     if (ok)
     {
         process_block_current();
-        process = process_get((uint32_t)pid);
-        ok = process && process->state == PROCESS_SLEEPING;
+        ok = process_snapshot((uint32_t)pid, &process) &&
+             process.state == PROCESS_SLEEPING;
     }
 
     if (ok)
         ok = process_wake((uint32_t)pid);
-    process = process_get((uint32_t)pid);
     if (ok)
-        ok = process && process->state == PROCESS_READY;
+        ok = process_snapshot((uint32_t)pid, &process) &&
+             process.state == PROCESS_READY;
 
     /* Restore the boot/desktop process before reaping the probe. */
     if (process_current_pid() != 1U)
         ok = process_switch_to(1U) && ok;
 
-    if (process_get((uint32_t)pid))
+    if (process_snapshot((uint32_t)pid, &process))
         ok = process_terminate((uint32_t)pid) && ok;
 
-    if (!ok || process_get((uint32_t)pid) != NULL)
+    if (!ok || process_snapshot((uint32_t)pid, &process))
     {
         serial_write("VANTAOS_PROCESS_STATE_TRANSITIONS_FAIL\n");
         return;

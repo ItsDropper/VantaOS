@@ -97,7 +97,7 @@ static void draw_process_context(
 {
     uint32_t pid = process_current_pid();
     process_t process;
-    int has_process = process_snapshot(pid, &process);
+    int has_process = process_snapshot_try(pid, &process);
 
     graphics_draw_text(x, y, "PROCESS CONTEXT", 0x00F2F5F8, 1);
     draw_field(x, y + 16, "PID", pid);

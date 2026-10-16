@@ -22,8 +22,12 @@ static int panic_broadcast_begin(void)
  */
 static void panic_broadcast_stop_peers(void)
 {
-    if (apic_is_enabled() && !apic_send_nmi_all())
-        serial_write("VANTAOS_SMP_PANIC_NMI_SEND_FAIL\n");
+    /*
+     * Do not log after broadcasting: a peer may have been stopped while
+     * holding a serial lock, and logging here could deadlock the panic CPU.
+     */
+    if (apic_is_enabled())
+        (void)apic_send_nmi_all();
 }
 
 static const char* exception_names[] =

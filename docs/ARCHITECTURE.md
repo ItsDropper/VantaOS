@@ -1,52 +1,62 @@
 # Architecture overview
 
-This document describes the current prototype, not a promise that every subsystem is production-ready.
+This is a current-state overview of the prototype. For subsystem ownership, dependency direction, and SMP invariants, see [System design](SYSTEM_DESIGN.md). A source file's existence does not mean its feature is complete or hardware-validated.
 
 ## Boot and initialization
 
-1. GRUB loads the kernel through the Multiboot-compatible entry in `arch/x86_64/boot/boot.asm`, which creates early page tables, enters long mode, and transfers control to the kernel. VantaOS does not yet have its own bootloader; see [the bootloader plan](BOOTLOADER_PLAN.md).
-2. `kernel/kernel.c` initializes serial diagnostics, GDT, physical-memory bookkeeping, interrupt infrastructure, paging, PCI/ATA discovery, and heap.
-3. `os/os.c` initializes terminal/input, graphics, filesystem/VFS, process management, scheduler, shell, and desktop components.
-4. The OS draws an initial desktop frame, enables interrupts, writes `VANTAOS_BOOT_OK` to serial, and enters the desktop process loop.
+VantaOS currently has two boot paths:
+
+1. **GRUB/Multiboot:** `arch/x86_64/boot/boot.asm` establishes early CPU state, enters long mode, and transfers control to the kernel.
+2. **UEFI:** `boot/uefi/` provides an EFI application that loads the ELF64 kernel and transfers control after the UEFI handoff sequence.
+
+Both paths are intended to supply a normalized, versioned boot-information structure. The GRUB path remains available as a fallback. The UEFI path is exercised under OVMF in CI; this does not prove support for all firmware.
+
+At a high level, initialization establishes diagnostics and validates boot data, initializes CPU/interrupt and memory facilities, initializes supported drivers, starts process/scheduler and OS-facing subsystems, and reaches the desktop/process loop. The exact implementation order is defined by the current kernel and OS initialization code.
 
 ## Main source areas
 
 | Path | Responsibility |
 | --- | --- |
-| `arch/x86_64/` | Active long-mode GDT, IDT, interrupt entry/dispatch, PIC, and boot code. |
-| `arch/x86/` | Legacy 32-bit source retained for audit; not linked into the active target. |
-| `kernel/` | Kernel initialization, serial diagnostics, panic/fault tracing, and graphics. |
-| `kernel/proc/` | Process table and lifecycle. |
-| `kernel/sched/` | Ready-process selection and scheduling. |
-| `kernel/time/` | Timer subsystem. |
-| `mm/` | Heap, physical-memory bookkeeping, and paging. |
-| `drivers/` | Keyboard/mouse input, PCI enumeration, and ATA storage driver code. |
-| `fs/` | Filesystem namespace, FAT32 read path, and VFS handles. |
-| `os/terminal/` | Terminal, shell, and commands. |
-| `os/desktop/` | Desktop and file-explorer UI. |
-| `include/` | Shared interfaces. |
-| `build/obj/` | Generated object/dependency tree; never edit generated files. |
+| `arch/x86_64/` | Active x86-64 boot entry, descriptor/interrupt mechanics, APIC/SMP primitives |
+| `arch/x86/` | Legacy 32-bit source retained for reference; not linked into the active target |
+| `boot/uefi/` | UEFI application/loader |
+| `kernel/` | Kernel initialization, diagnostics, process lifecycle, scheduler, timer, graphics |
+| `mm/` | Physical-memory bookkeeping, heap, paging |
+| `drivers/` | Keyboard/mouse, PCI, and ATA driver code |
+| `fs/` | Filesystem namespace, FAT32 read path, VFS handles |
+| `os/` | Terminal, shell, desktop, file explorer |
+| `include/` | Shared interfaces and boot-information contract |
+| `build/obj/` | Generated objects/dependency files; never edit generated files |
 
-## Processes and scheduling
+Subsystem Makefiles declare source membership. The root Makefile owns common compiler/linker flags, dependency generation, object paths, and linking. See [Build system](BUILD_SYSTEM.md).
 
-The process table has fixed capacity and currently represents kernel execution contexts. Process records contain a state, name, saved stack/context, entry function, and address-space pointer. The scheduler uses timer ticks and a simple ready-process selection strategy. CI tests selected lifecycle transitions and a returning kernel process that is reaped.
+## Process and scheduler model
 
-An address-space pointer is not proof of secure isolation. Current process execution is kernel-mode; per-process user permissions and a validated user-address-space boundary are not implemented.
+The fixed-capacity process table currently represents kernel-mode execution contexts. Process records include lifecycle state, a name, saved context/stack, entry function, and address-space-related state. The scheduler handles ready-process selection and state transitions; architecture code supplies CPU-specific mechanisms.
+
+The active SMP work includes processor startup, per-CPU state and idle contexts, local timers, reschedule IPIs, remote wakeups, affinity/migration behavior, and scheduler stress checks. CI verifies selected invariants in 2- and 4-vCPU QEMU configurations. This is not exhaustive proof of race freedom or long-duration stability.
+
+An address-space pointer is **not** proof of secure isolation. Controlled privilege transitions, correctly enforced user permissions, safe user pointers, and a verified user/kernel boundary are not implemented as a complete security model.
 
 ## Memory and paging
 
-Paging establishes identity mappings for low memory and high virtual windows used by the heap/framebuffer. The physical memory manager now consumes the versioned, normalized boot-info memory map and reserves the kernel image, legacy handoff metadata, and framebuffer. Address-space structures exist, but user mappings, permission enforcement, and safe user-pointer validation remain incomplete.
+The physical memory manager consumes normalized boot memory information and reserves important ranges such as the kernel image and framebuffer. Heap allocation and paging structures are present, and CI checks selected allocation, accounting, mapping, and TLB-shootdown invariants.
+
+These checks do not establish exhaustive malformed-input handling, complete user/supervisor permission enforcement, robust allocation-failure recovery, or process-to-process isolation.
 
 ## Filesystem and VFS
 
-The filesystem builds an in-memory namespace such as `/system`, `/home/user`, and `/etc`, and can import directory entries when FAT32 mounting succeeds. The VFS provides lookup/list/open/read/write/close interfaces and bounded open-file slots. Current filesystem create/write operations return an unsupported result.
+The filesystem provides an in-memory namespace, path lookup/listing, bounded VFS handles, and a FAT32 read-oriented path when mounting succeeds. General persistent file/directory creation and writing are not implemented; unsupported operations must remain explicit to callers.
 
 ## Graphics and input
 
-Graphics code draws the desktop using software primitives and consumes a Multiboot framebuffer when available. Keyboard and mouse driver code exists. CI verifies boot progress, not visual correctness or full input behavior. This does not imply accelerated GPU support.
+The desktop is drawn using software primitives and a framebuffer when one is provided by the boot path. Keyboard/mouse, PCI, and ATA code exists, but CI does not establish full interaction correctness or broad physical-device compatibility. Modern discrete GPU acceleration, broad USB, networking, and audio support are not established.
 
-## Diagnostics
+## Diagnostics and evidence
 
-- COM1 serial logging is used by CI.
-- Panic/fault tracing helps diagnose failures but does not replace a debugger.
-- CI markers use `VANTAOS_..._OK` and `VANTAOS_..._FAIL`. A success marker must only be emitted after its assertion passes.
+- COM1 serial output is the primary machine-readable CI diagnostic channel.
+- Panic/fault tracing assists debugging but does not replace a debugger.
+- CI uses `VANTAOS_..._OK` and `VANTAOS_..._FAIL` markers.
+- A success marker must only be emitted after the corresponding assertions pass.
+
+See [Testing and verification](TESTING.md) for the tested QEMU matrix, UEFI/OVMF checks, and explicit coverage gaps.

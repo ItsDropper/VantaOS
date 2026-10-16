@@ -4,7 +4,8 @@ Use this index to find the document that answers a specific engineering question
 
 ## Understand the system
 
-- [Architecture overview](ARCHITECTURE.md) — boot sequence, subsystem responsibilities, process model, memory, VFS, and diagnostics.
+- [Architecture overview](ARCHITECTURE.md) — boot sequence, subsystem responsibilities, kernel processes, early ring-3 execution, memory, VFS, and diagnostics.
+- [User-mode programs](user-mode-programs.md) — current static ELF64 loader, initial stack, syscall interface, and explicit limitations.
 - [Engineering model](ENGINEERING_MODEL.md) — evidence levels, subsystem contracts, concurrency review, and test layers.
 - [Hardware support](HARDWARE_SUPPORT.md) — current hardware and emulator limitations.
 - [Bootloader plan](BOOTLOADER_PLAN.md) — planned work toward an independent boot path; not a description of a completed bootloader.

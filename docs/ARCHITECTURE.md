@@ -62,17 +62,19 @@ The two boot paths are not interchangeable evidence: a successful GRUB boot does
 
 ## Processes and scheduling
 
-The process table has fixed capacity and currently represents kernel execution contexts. Process records contain a state, name, saved stack/context, entry function, and address-space pointer. The scheduler uses timer ticks and a simple ready-process selection strategy. CI tests selected lifecycle transitions, process reaping, and SMP scheduling invariants under QEMU.
+The process table has fixed capacity and supports both kernel execution contexts and an early user-process path. Process records track lifecycle state, saved context, kernel stack, address space, and—where applicable—user-image pages and entry/stack metadata. The scheduler uses timer ticks and ready-process selection; selected lifecycle, reaping, and SMP invariants are exercised in QEMU.
 
-An address-space pointer is not proof of secure isolation. Current process execution is kernel-mode; per-process user permissions and a validated user-address-space boundary are not implemented. SMP test success establishes only the specific concurrency assertions exercised by those tests, not general race freedom or long-duration stability.
+Static ELF64 `ET_EXEC` images can be loaded from the FAT32-backed shell path into a private user address space and entered at CPL3 (ring 3). The initial stack contains `argc`, a null-terminated `argv` array, an empty `envp`, and a minimal `AT_NULL` terminator. Argument count and string storage are bounded. The current `int 0x80` interface supports exit, serial write, and terminal write; it is a bring-up ABI, not a stable POSIX ABI. See [User-mode programs](user-mode-programs.md).
+
+This is an early protection boundary, not a claim of production-grade isolation. The ELF loader validates segment ranges and permissions and requires NX support, while output syscalls validate user buffers. Broader invalid-pointer, fault-containment, process-to-process, and adversarial testing remains necessary. SMP test success proves only the assertions those tests exercise, not general race freedom or long-duration stability.
 
 ## Memory and paging
 
-Paging establishes identity mappings for low memory and high virtual windows used by the heap/framebuffer. The physical memory manager consumes the versioned, normalized boot-info memory map and reserves the kernel image, legacy handoff metadata, and framebuffer. Address-space structures exist, but user mappings, permission enforcement, and safe user-pointer validation remain incomplete.
+Paging establishes identity mappings for low memory and high virtual windows used by the heap/framebuffer. The physical memory manager consumes the versioned, normalized boot-info memory map and reserves the kernel image, legacy handoff metadata, and framebuffer. The user ELF path allocates/maps bounded user pages with write/execute permissions and a writable, non-executable stack; syscall output buffers are checked against the current process address space. Demand paging, mature virtual-memory policy, and exhaustive mapping/fault validation remain unimplemented.
 
 ## Filesystem and VFS
 
-The filesystem builds an in-memory namespace such as `/system`, `/home/user`, and `/etc`, and can import directory entries when FAT32 mounting succeeds. The VFS provides lookup/list/open/read/write/close interfaces and bounded open-file slots. Current filesystem create/write operations return an unsupported result; an API existing does not imply that the operation is implemented or persistent.
+The filesystem builds an in-memory namespace such as `/system`, `/home/user`, and `/etc`, and can import directory entries when FAT32 mounting succeeds. The VFS provides kernel-side lookup/list/open/read/write/close interfaces and bounded open-file slots. The user ELF loader can read executable bytes through the filesystem path. User programs do not yet have a per-process file-descriptor API, and general filesystem create/write operations are unsupported; interface presence does not imply durable storage.
 
 ## Graphics and input
 

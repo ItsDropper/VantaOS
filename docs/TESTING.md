@@ -32,10 +32,12 @@ On pushes to `master`, pull requests targeting the repository, and manual workfl
 | `VANTAOS_PROCESS_STATE_TRANSITIONS_OK` | A test process transitions through ready, running, sleeping, wake-up, and termination/reaping paths. |
 | `VANTAOS_FILESYSTEM_NAMESPACE_OK` | The filesystem/VFS initializes, root and standard directories can be resolved, a missing path stays missing, and root listing returns without error. |
 | `VANTAOS_VFS_HANDLE_GUARDS_OK` | Invalid VFS read/write/close handles are rejected. |
+| `VANTAOS_ARGV_STACK_OK` | The ring-3 smoke executable sees the expected argument count and validates `argv[1] = alpha` and `argv[2] = two words` from its initial stack. |
+| `VANTAOS_FILESYSTEM_EXEC_OK` | The FAT32-loaded user ELF reaches ring 3, performs the tested output calls, and reaches its expected completion marker. |
 | `VANTAOS_SCHEDULER_PROBE_OK` | The scheduler runs the dedicated kernel-mode probe entry. |
 | `VANTAOS_SCHEDULER_REAP_OK` | The observer sees the completed probe process removed from the process table. |
 
-These tests run inside the kernel before/after enabling interrupts as appropriate. They do **not** run untrusted user-mode programs.
+Kernel self-tests run inside the kernel. Separately, the workflow builds `tests/user/hello.S`, installs the ELF in the FAT32 image, and launches it through the shell's file-backed `exec` path. That user program checks its initial arguments, exercises serial/terminal output, and exits through the syscall path. These are deterministic smoke tests, not adversarial isolation tests or a general application compatibility suite.
 
 ## Run locally
 
@@ -69,7 +71,8 @@ This test does not yet establish physical-hardware compatibility or complete rem
 ## What is not yet covered
 
 - Exhaustive process-state combinations, sustained preemption stress, race conditions, or long-duration stability.
-- Page-table permission enforcement, user/supervisor transitions, syscall validation, and process-to-process memory isolation.
+- Exhaustive page-table permission tests, invalid syscall-pointer fuzzing, fault containment for arbitrary user programs, and adversarial process-to-process isolation tests.
+- User-mode file descriptors and file I/O; the current user syscall interface has no open/read/close operations.
 - Physical-memory-map malformed-entry/overflow fuzzing, allocator fragmentation, allocation-failure recovery, and long-duration memory-pressure tests.
 - Actual FAT32 write/create support; the current filesystem write/create functions report unsupported.
 - Filesystem corruption, power-loss recovery, and persistent-data round trips.
@@ -77,4 +80,4 @@ This test does not yet establish physical-hardware compatibility or complete rem
 - Real-device compatibility, USB/HID edge cases, NICs, Wi-Fi, audio, GPU acceleration, sleep/resume, and firmware variations.
 - Security auditing, fuzzing, sanitizers suitable for this freestanding target, and formal verification.
 
-The next useful test increments are a repeated scheduler stress scenario, focused page-table/memory-manager invariants, FAT32 read-only fixture tests, and automated input/graphics checks. Tests should be added alongside each new subsystem instead of relying on a single boot marker.
+The next useful test increments are a user-mode open/read/close round trip against a disposable FAT32 fixture, malformed ELF and invalid user-pointer tests, repeated scheduler stress, focused page-table/memory-manager invariants, and automated input/graphics checks. Tests should be added alongside each new subsystem instead of relying on a single boot marker.

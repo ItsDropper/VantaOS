@@ -99,6 +99,10 @@ void process_reset_record(process_t* process)
     process->entry = NULL;
     process->kernel_stack = NULL;
     process->address_space = NULL;
+    process->is_user = 0U;
+    process->user_code_frame = NULL;
+    process->user_stack_frame = NULL;
+    process->user_image_size = 0U;
 
     process->context.r15 = 0;
     process->context.r14 = 0;
@@ -130,19 +134,31 @@ int process_stack_is_valid_locked(const process_t* process)
         return 0;
 
     uintptr_t stack_base = (uintptr_t)process->kernel_stack;
-    uintptr_t stack_end = process->entry != NULL ?
-        stack_base + PROCESS_STACK_SIZE : (uintptr_t)&stack_top;
+    uintptr_t stack_end =
+        process->kernel_stack == (void*)(uintptr_t)&stack_bottom ?
+        (uintptr_t)&stack_top : stack_base + PROCESS_STACK_SIZE;
     uintptr_t frame = (uintptr_t)process->stack_pointer;
+    const size_t frame_words = process->is_user ? 21U : 19U;
     if (frame < stack_base || frame > stack_end ||
-        stack_end - frame < 19U * sizeof(uint64_t))
+        stack_end - frame < frame_words * sizeof(uint64_t))
         return 0;
 
     const uint64_t* values = (const uint64_t*)frame;
-    if (values[17] != 0x08U ||
-        (values[18] & 0x00000200U) == 0)
+    if ((values[18] & 0x00000200U) == 0)
         return 0;
 
     uintptr_t rip = (uintptr_t)values[16];
+    if (process->is_user)
+    {
+        return values[17] == 0x23U && values[20] == 0x1BU &&
+               rip >= PAGING_USER_BASE &&
+               rip - PAGING_USER_BASE < process->user_image_size &&
+               values[19] > PAGING_USER_BASE + PAGE_SIZE &&
+               values[19] <= PAGING_USER_BASE + 2U * PAGE_SIZE;
+    }
+
+    if (values[17] != 0x08U)
+        return 0;
     uintptr_t code_start = (uintptr_t)&_kernel_text_start;
     uintptr_t code_end = (uintptr_t)&_kernel_text_end;
     return rip >= code_start && rip < code_end;

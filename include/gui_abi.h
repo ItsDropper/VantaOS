@@ -21,6 +21,9 @@
 #define VANTA_GUI_EVENT_FOCUS_GAINED  5U
 #define VANTA_GUI_EVENT_FOCUS_LOST    6U
 
+/* For KEY events, values 0-255 are character bytes; 0x100 + keyboard_event_t
+ * represents a special key such as Page Up, arrows, Home, End, or Delete. */
+
 typedef struct
 {
     uint32_t width;

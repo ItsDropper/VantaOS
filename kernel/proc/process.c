@@ -278,9 +278,7 @@ int process_attach_current(const char* name, uint32_t parent_pid)
     uint64_t flags = process_table_lock_acquire();
     for (uint32_t pid = 1; pid < PROCESS_MAX; pid++)
     {
-        if ((process_table_records[pid].state != PROCESS_UNUSED &&
-             (process_table_records[pid].state != PROCESS_TERMINATED ||
-              process_table_records[pid].owner_cpu != PROCESS_CPU_UNOWNED)) ||
+        if (process_table_records[pid].state != PROCESS_UNUSED ||
             process_is_idle_locked(pid))
             continue;
 
@@ -332,9 +330,7 @@ static int process_create_kernel_affinity(const char* name,
 
     for (uint32_t pid = 1; pid < PROCESS_MAX; pid++)
     {
-        if ((process_table_records[pid].state != PROCESS_UNUSED &&
-             (process_table_records[pid].state != PROCESS_TERMINATED ||
-              process_table_records[pid].owner_cpu != PROCESS_CPU_UNOWNED)) ||
+        if (process_table_records[pid].state != PROCESS_UNUSED ||
             process_is_idle_locked(pid))
             continue;
 

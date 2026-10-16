@@ -381,6 +381,15 @@ static void smp_migration_target_entry(void)
     for (uint32_t spin = 0; spin < 100000000U; spin++)
     {
         process_t snapshot;
+        /*
+         * Keep the CPU identity and ownership snapshot in one local
+         * non-preemptible window. Otherwise this thread can be migrated
+         * between reading current_cpu and taking the snapshot, making the
+         * old CPU ID look like an ownership violation after it resumes.
+         */
+        uint64_t saved_flags;
+        __asm__ volatile ("pushfq; popq %0; cli"
+                          : "=r"(saved_flags) : : "memory");
         uint32_t current_cpu = process_current_cpu_id();
         if (current_cpu < 32U)
             __atomic_fetch_or(&smp_migration_cpu_mask,
@@ -403,6 +412,8 @@ static void smp_migration_target_entry(void)
                     serial_write("VANTAOS_SMP_MIGRATION_OWNER_MISMATCH_OTHER_STATE\n");
             }
         }
+        __asm__ volatile ("pushq %0; popfq"
+                          : : "r"(saved_flags) : "memory", "cc");
 
         if (current_cpu == smp_migration_bsp_cpu &&
             current_cpu != start_cpu &&

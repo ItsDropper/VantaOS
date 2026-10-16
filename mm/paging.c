@@ -58,7 +58,7 @@ static void paging_lock_release(uint64_t saved_flags)
 
 static _Noreturn void paging_tlb_failure(void)
 {
-    serial_write("VANTAOS_TLB_SHOOTDOWN_FAIL\\n");
+    serial_write("VANTAOS_TLB_SHOOTDOWN_FAIL\n");
     for (;;)
         __asm__ volatile ("cli; hlt" ::: "memory");
 }
@@ -472,6 +472,8 @@ void paging_initialize(void)
     kernel_address_space.directory_physical =
         (uintptr_t)kernel_pml4;
     kernel_address_space.used = 1;
+    kernel_address_space.active_cpu_mask = 0;
+    kernel_address_space.pending_shootdowns = 0;
 
     for (uint32_t i = 0; i < ADDRESS_SPACE_MAX; i++)
     {
@@ -479,6 +481,8 @@ void paging_initialize(void)
         address_spaces[i].directory_physical =
             (uintptr_t)address_space_pml4[i];
         address_spaces[i].used = 0;
+        address_spaces[i].active_cpu_mask = 0;
+        address_spaces[i].pending_shootdowns = 0;
     }
 
     fallback_current_address_space = &kernel_address_space;

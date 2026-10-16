@@ -2,6 +2,7 @@
 #define PAGING_H
 
 #include <stdint.h>
+#include <stddef.h>
 
 #define PAGE_SIZE 4096U
 #define PAGE_PRESENT 0x001U
@@ -35,6 +36,10 @@ int paging_map_user_page(paging_address_space_t* address_space,
                          int writable);
 int paging_unmap_user_page(paging_address_space_t* address_space,
                            uintptr_t virtual_address);
+/* Validate a complete user buffer before the kernel dereferences it. */
+int paging_user_range_valid(paging_address_space_t* address_space,
+                            uintptr_t virtual_address, size_t length,
+                            int writable);
 uint64_t paging_get_page_flags(uintptr_t virtual_address);
 void paging_unmap_page(uintptr_t virtual_address);
 uintptr_t paging_get_physical(uintptr_t virtual_address);

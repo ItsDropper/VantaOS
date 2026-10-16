@@ -7,6 +7,7 @@
 int graphics_initialize(multiboot_info_t* mbd);
 void graphics_clear(uint32_t color);
 void graphics_present(void);
+void graphics_draw_window_frame(int x, int y, int width, int height, const char* title);
 
 void graphics_fill_rect(
     int x,

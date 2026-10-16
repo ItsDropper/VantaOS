@@ -19,6 +19,23 @@ static uint8_t process_stacks[PROCESS_MAX][PROCESS_STACK_SIZE]
 static int initialized;
 static uint32_t legacy_current_pid;
 
+static volatile uint32_t process_table_lock;
+
+static uint64_t process_table_lock_acquire(void)
+{
+    uint64_t flags;
+    __asm__ volatile ("pushfq; popq %0; cli" : "=r"(flags) :: "memory");
+    while (__atomic_exchange_n(&process_table_lock, 1U, __ATOMIC_ACQUIRE) != 0U)
+        __asm__ volatile ("pause" ::: "memory");
+    return flags;
+}
+
+static void process_table_lock_release(uint64_t flags)
+{
+    __atomic_store_n(&process_table_lock, 0U, __ATOMIC_RELEASE);
+    __asm__ volatile ("pushq %0; popfq" :: "r"(flags) : "memory", "cc");
+}
+
 static cpu_local_t* process_local_state(void)
 {
     cpu_local_t* local = cpu_local_current();
@@ -171,6 +188,7 @@ int process_attach_current(const char* name, uint32_t parent_pid)
     if (!initialized || !name || !name[0])
         return -1;
 
+    uint64_t flags = process_table_lock_acquire();
     for (uint32_t pid = 1; pid < PROCESS_MAX; pid++)
     {
         if (processes[pid].state != PROCESS_UNUSED &&
@@ -178,13 +196,14 @@ int process_attach_current(const char* name, uint32_t parent_pid)
             continue;
 
         process_t* process = &processes[pid];
-
         if (!process_allocate_common(process, name, parent_pid))
+        {
+            process_table_lock_release(flags);
             return -1;
+        }
 
         uint64_t current_stack;
         __asm__ volatile ("mov %%rsp, %0" : "=r"(current_stack));
-
         process->state = PROCESS_RUNNING;
         process->stack_pointer = current_stack;
         process->context.rsp = current_stack;
@@ -193,11 +212,12 @@ int process_attach_current(const char* name, uint32_t parent_pid)
         process->context.cs = 0x08U;
         process->context.ss = 0x10U;
         process->kernel_stack = (void*)(uintptr_t)&stack_bottom;
-
         process_set_current_slot(pid);
+        process_table_lock_release(flags);
         return (int)pid;
     }
 
+    process_table_lock_release(flags);
     return -1;
 }
 
@@ -207,6 +227,7 @@ int process_create_kernel(const char* name, uint32_t parent_pid,
     if (!initialized || !name || !name[0] || !entry)
         return -1;
 
+    uint64_t flags = process_table_lock_acquire();
     for (uint32_t pid = 1; pid < PROCESS_MAX; pid++)
     {
         if (processes[pid].state != PROCESS_UNUSED &&
@@ -214,21 +235,23 @@ int process_create_kernel(const char* name, uint32_t parent_pid,
             continue;
 
         process_t* process = &processes[pid];
-
         if (!process_allocate_common(process, name, parent_pid))
+        {
+            process_table_lock_release(flags);
             return -1;
+        }
 
         process->kernel_stack = process_stacks[pid];
         process->entry = entry;
-
         uintptr_t stack_top =
             (uintptr_t)process->kernel_stack + PROCESS_STACK_SIZE;
         stack_top &= ~(uintptr_t)0x0FU;
-
         process_prepare_stack(process, stack_top);
+        process_table_lock_release(flags);
         return (int)pid;
     }
 
+    process_table_lock_release(flags);
     return -1;
 }
 

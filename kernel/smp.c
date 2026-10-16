@@ -597,10 +597,7 @@ smp_init_result_t smp_initialize(void)
 
     if (!start_secondary_cpus(info))
     {
-        if (!apic_is_enabled())
-            serial_write("VANTAOS_SMP_AP_START_SKIPPED\n");
-            return SMP_INIT_UNAVAILABLE;
-        }
+        /* APIC was active before startup; any failure here is fatal. */
         return SMP_INIT_FAILED;
     }
 

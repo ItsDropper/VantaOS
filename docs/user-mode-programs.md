@@ -19,6 +19,10 @@ The shell accepts single- or double-quoted arguments and preserves whitespace in
 
 This is an early execution path, not a complete process environment. There is no dynamic linker, demand paging, stable binary ABI, or POSIX-compatible process environment.
 
+## Freestanding C wrapper header
+
+C user programs can include `<vanta/syscall.h>` from `userspace/include`. The header defines `VANTA_USER_ABI_VERSION`, syscall numbers, the read-only open flag, and inline wrappers for write, terminal output, open/read/close, child spawn, waitpid, and process exit. It is freestanding and does not require libc. Wrappers return the kernel's raw result: a non-negative value on success or a negative error number on failure; they do not set `errno`. See [user-mode.md](user-mode.md) for the wrapper table and limitations. CI compiles every wrapper with `-Wall -Wextra -Werror` to catch ABI/header drift.
+
 ## Bring-up syscall ABI
 
 The current syscall entry is `int 0x80`. Put the syscall number in `RAX`; the first two arguments are in `RDI` and `RSI`. Return values are placed in `RAX`; negative values represent errors for the implemented non-exit calls.

@@ -49,7 +49,7 @@ Userspace enters through `int 0x80`. The syscall number is in `RAX`, arguments a
 | 18 | `vanta_gui_draw(id, commands, count)` | RDI: window ID, RSI: command array, RDX: count | Commands retained |
 | 19 | `vanta_gui_poll_event(id, event)` | RDI: window ID, RSI: writable event pointer | One event, zero if empty |
 
-The current limits are 4096 bytes per read call, 511 bytes maximum per file, eight per-process file descriptors beginning at 3, 16 arguments, 512 total argument bytes, and a 1 MiB executable-file limit in the shell launch path. User-mode writes currently support regular files with conservative 8.3 names. The GUI ABI is VantaOS-specific: eight windows, 24 retained draw commands per window, 31-byte titles, 63-byte text commands, and a 32-event queue that drops the oldest event on overflow. Only filled rectangles and text are drawable; window move/resize/minimize/maximize are not implemented. These GUI calls are under review in PR #94 and are not available from the default branch until merged. `vanta_waitpid` accepts a null status pointer. A child with a live user parent remains a resource-free zombie until its exit status is collected.
+The current limits are 4096 bytes per read/write syscall, FAT32's 32-bit file-size ceiling (4 GiB minus 1 byte) subject to available volume capacity, eight per-process file descriptors beginning at 3, 16 arguments, 512 total argument bytes, and a 1 MiB executable-file limit in the shell launch path. User-mode writes currently support regular files with conservative 8.3 names. The GUI ABI is VantaOS-specific: eight windows, 24 retained draw commands per window, 31-byte titles, 63-byte text commands, and a 32-event queue that drops the oldest event on overflow. Only filled rectangles and text are drawable; window move/resize/minimize/maximize are not implemented. These GUI calls are under review in PR #94 and are not available from the default branch until merged. `vanta_waitpid` accepts a null status pointer. A child with a live user parent remains a resource-free zombie until its exit status is collected.
 
 The syscall numbers and semantics are an **initial VantaOS ABI**, not a POSIX interface and not yet a long-term compatibility promise. Keep the public header, kernel dispatch, tests, and documentation synchronized when changing it.
 
@@ -57,7 +57,7 @@ The syscall numbers and semantics are an **initial VantaOS ABI**, not a POSIX in
 
 - Static ELF64 `ET_EXEC` only; no `ET_DYN`, dynamic linker, relocations, or shared libraries.
 - No libc/startup runtime, standard streams, environment variables, heap allocator, or general-purpose thread API.
-- No directory creation from user mode, files larger than 511 bytes, rename/delete, pipes, process groups, signals, or POSIX-compatible descriptor semantics.
+- No directory creation from user mode, files larger than FAT32's 32-bit size ceiling, rename/delete, pipes, process groups, signals, or POSIX-compatible descriptor semantics.
 - Settings and File Explorer have not yet been migrated to independent ring-3 GUI executables.
 - No demand paging, copy-on-write, or per-process memory growth.
 - Kernel faults are not generally recoverable; only faults attributed to recognized user processes are contained at process level.

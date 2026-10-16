@@ -359,6 +359,80 @@ int filesystem_read(
     );
 }
 
+
+int filesystem_read_range(uint32_t file_id, uint32_t offset,
+                          char* buffer, uint32_t length)
+{
+    if (!initialized || file_id >= node_count || (length && !buffer))
+        return -1;
+    const fs_node_t* node = &nodes[file_id];
+    if (node->type != FS_NODE_FILE)
+        return -1;
+    return fat32_read_file_range(node->first_cluster, node->size,
+                                 offset, buffer, length);
+}
+
+static int fs_refresh_file_metadata(uint32_t id, const char* path)
+{
+    const char* last_slash = path;
+    for (unsigned int i = 0; path[i]; i++)
+        if (path[i] == '/')
+            last_slash = path + i;
+
+    char parent_path[FS_PATH_MAX];
+    unsigned int parent_length = (unsigned int)(last_slash - path);
+    if (parent_length == 0U)
+        parent_length = 1U;
+    if (parent_length >= sizeof(parent_path))
+        return 0;
+    for (unsigned int i = 0; i < parent_length; i++)
+        parent_path[i] = path[i];
+    parent_path[parent_length] = 0;
+
+    int parent_id = filesystem_lookup(parent_path);
+    if (parent_id < 0)
+        return 0;
+    const fs_node_t* parent = filesystem_get_node((uint32_t)parent_id);
+    if (!parent || parent->type != FS_NODE_DIRECTORY ||
+        parent->first_cluster < 2U)
+        return 0;
+
+    int count = fat32_list_directory(parent->first_cluster,
+                                     directory_entries, FS_MAX_NODES);
+    if (count < 0)
+        return 0;
+    const char* leaf = last_slash + 1;
+    for (int i = 0; i < count; i++)
+    {
+        if (!fs_equals_ci(directory_entries[i].name, leaf))
+            continue;
+        nodes[id].first_cluster = directory_entries[i].first_cluster;
+        nodes[id].size = directory_entries[i].size;
+        return 1;
+    }
+    return 0;
+}
+
+int filesystem_write_file_range(const char* path, uint32_t offset,
+                                const char* data, uint32_t length)
+{
+    if (!initialized || !path || (length && !data) ||
+        (uint64_t)offset + length > UINT32_MAX || !fat32_is_mounted())
+        return -1;
+
+    int id = filesystem_lookup(path);
+    if (id < 0 || nodes[id].type != FS_NODE_FILE)
+        return -1;
+    if (offset > nodes[id].size)
+        return -1;
+    int result = fat32_write_file_range(path, offset, data, length);
+    if (result < 0)
+        return -1;
+    if (!fs_refresh_file_metadata((uint32_t)id, path))
+        return -1;
+    return result;
+}
+
 int filesystem_create_directory(const char* path)
 {
     (void)path;

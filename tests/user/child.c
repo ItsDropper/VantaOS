@@ -130,6 +130,48 @@ int main(int argc, char** argv)
 
     static const char gui_success[] = "VANTAOS_USER_GUI_SYSCALL_OK\n";
     (void)vanta_write(gui_success, sizeof(gui_success) - 1U);
+    /* Verify user-mode file syscalls stream beyond the old 511-byte cap. */
+    static const char range_path[] = "/USERIO.BIN";
+    char range_write[1024];
+    char range_read[1024];
+    for (unsigned int i = 0; i < sizeof(range_write); i++)
+        range_write[i] = (char)((i * 29U + 7U) & 0xFFU);
+
+    if (vanta_create_file(range_path) < 0)
+    {
+        (void)vanta_write(failure, sizeof(failure) - 1U);
+        return 7;
+    }
+    long write_fd = vanta_open(range_path,
+                               VANTA_OPEN_WRITE | VANTA_OPEN_TRUNCATE);
+    if (write_fd < 0 ||
+        vanta_file_write((int)write_fd, range_write, sizeof(range_write)) !=
+            (long)sizeof(range_write) ||
+        vanta_close((int)write_fd) != 0)
+    {
+        (void)vanta_write(failure, sizeof(failure) - 1U);
+        return 8;
+    }
+
+    long read_fd = vanta_open(range_path, VANTA_OPEN_READ);
+    if (read_fd < 0 ||
+        vanta_read((int)read_fd, range_read, sizeof(range_read)) !=
+            (long)sizeof(range_read) ||
+        vanta_close((int)read_fd) != 0)
+    {
+        (void)vanta_write(failure, sizeof(failure) - 1U);
+        return 9;
+    }
+    for (unsigned int i = 0; i < sizeof(range_read); i++)
+    {
+        if (range_read[i] != range_write[i])
+        {
+            (void)vanta_write(failure, sizeof(failure) - 1U);
+            return 10;
+        }
+    }
+    static const char range_success[] = "VANTAOS_USER_FILE_RANGE_IO_OK\\n";
+    (void)vanta_write(range_success, sizeof(range_success) - 1U);
     (void)vanta_write(list_success, sizeof(list_success) - 1U);
     (void)vanta_write(success, sizeof(success) - 1U);
     return 23;

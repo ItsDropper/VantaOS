@@ -44,6 +44,10 @@ int filesystem_read(
     char* buffer,
     unsigned int capacity
 );
+int filesystem_read_range(uint32_t file_id, uint32_t offset,
+                          char* buffer, uint32_t length);
+int filesystem_write_file_range(const char* path, uint32_t offset,
+                                const char* data, uint32_t length);
 
 int filesystem_create_directory(const char* path);
 int filesystem_create_file(const char* path);

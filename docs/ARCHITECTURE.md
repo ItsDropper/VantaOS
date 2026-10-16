@@ -48,6 +48,8 @@ The two boot paths are not interchangeable evidence: a successful GRUB boot does
 | `kernel/time/` | Timer subsystem. |
 | `mm/` | Heap, physical-memory bookkeeping, address-space/page-table management, and TLB shootdown coordination. |
 | `mm/tlb_shootdown.c` | Serialized cross-CPU invalidation requests, acknowledgement handling, and fail-closed diagnostics. |
+| `mm/user_mapping.c` | User-range validation, user page-table allocation/walking, and map/unmap lifecycle. |
+| `mm/paging_internal.h` | Private lock/helper contract shared by paging implementation units; not a public kernel API. |
 | `drivers/` | Keyboard/mouse input, PCI enumeration, and ATA storage driver code. |
 | `fs/` | Filesystem namespace, FAT32 read path, and VFS handles. |
 | `os/terminal/` | Terminal, shell, and commands. |

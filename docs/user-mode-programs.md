@@ -11,6 +11,7 @@ The shell accepts single- or double-quoted arguments and preserves whitespace in
 ## What currently works
 
 - Read an ELF executable through the filesystem-backed `exec` path.
+- Create regular files and write through validated ring-3 syscalls. File writes are limited to 511 bytes per call, use read/write access flags, and validate the full user buffer before touching the VFS.
 - Validate and load its supported ELF64 load segments into a private user address space.
 - Enter the program at CPL3 (ring 3) with a writable, non-executable initial stack.
 - Supply `argc`, a null-terminated `argv[]`, an empty `envp`, and a minimal `AT_NULL` auxiliary-vector terminator.
@@ -64,4 +65,4 @@ A passing smoke test verifies only this test program and execution path on the C
 
 ## Next steps
 
-The current file-I/O smoke test is not exhaustive. Process groups/signals, concurrent VFS access, broad fault containment, adversarial pointer fuzzing, dynamic linking, persistent file creation/writes, and a stable application ABI remain unimplemented.
+The current file-I/O smoke test is not exhaustive. Process groups/signals, concurrent VFS access, broad fault containment, adversarial pointer fuzzing, dynamic linking, writes larger than 511 bytes, directory creation from user mode, file deletion/rename, and a stable application ABI remain unimplemented.

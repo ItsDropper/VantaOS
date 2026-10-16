@@ -33,7 +33,7 @@ void graphics_mouse_click(int button)
     {
         int center = width / 2;
 
-        if (cursor_x >= center - 210 && cursor_x < center - 168)
+        if (cursor_x >= center - 108 && cursor_x < center - 66)
         {
             start_menu_open = !start_menu_open;
             explorer_dragging = 0;
@@ -41,7 +41,7 @@ void graphics_mouse_click(int button)
             return;
         }
 
-        if (cursor_x >= center - 84 && cursor_x < center - 42)
+        if (cursor_x >= center + 18 && cursor_x < center + 60)
         {
             if (active_panel == 2)
                 file_explorer_minimize();
@@ -50,7 +50,7 @@ void graphics_mouse_click(int button)
             return;
         }
 
-        if (cursor_x >= center - 36 && cursor_x < center + 6)
+        if (cursor_x >= center + 66 && cursor_x < center + 108)
         {
             active_panel = 3;
             explorer_dragging = 0;

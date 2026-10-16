@@ -52,6 +52,7 @@ extern keyboard_handle_interrupt
 extern mouse_handle_interrupt
 extern pic_send_eoi
 extern scheduler_tick
+extern scheduler_finish_context_switch
 extern apic_send_eoi
 extern apic_is_enabled
 extern lapic_timer_handle_interrupt
@@ -138,6 +139,7 @@ lapic_timer_stub:
     mov rdi, rsp
     call lapic_timer_handle_interrupt
     mov rsp, rax
+    call scheduler_finish_context_switch
     pop rax
     RESTORE_ALL
     iretq
@@ -148,6 +150,7 @@ reschedule_ipi_stub:
     mov rdi, rsp
     call reschedule_ipi_handle_interrupt
     mov rsp, rax
+    call scheduler_finish_context_switch
     pop rax
     RESTORE_ALL
     iretq
@@ -182,6 +185,7 @@ irq0_stub:
     mov rdi, rsp
     call scheduler_tick
     mov rsp, rax
+    call scheduler_finish_context_switch
     pop rax
     RESTORE_ALL
     iretq

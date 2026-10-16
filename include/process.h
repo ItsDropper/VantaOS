@@ -68,6 +68,10 @@ int process_switch_to(uint32_t pid);
 /* Atomically releases current_pid and claims a READY process for cpu_id. */
 int process_claim_for_cpu(uint32_t next_pid, uint32_t current_pid,
                           uint32_t cpu_id);
+/* Scheduler transition APIs; finish must run after switching off the old stack. */
+int process_prepare_context_switch(uint32_t next_pid, uint32_t current_pid,
+                                   uint32_t cpu_id);
+int process_finish_context_switch(uint32_t outgoing_pid, uint32_t cpu_id);
 int process_reap(uint32_t pid);
 uint64_t process_schedule(uint64_t current_stack);
 /* Copies a process record while holding the process-table lock. */
@@ -76,7 +80,6 @@ int process_snapshot(uint32_t pid, process_t* snapshot);
 int process_snapshot_try(uint32_t pid, process_t* snapshot);
 unsigned int process_count(void);
 uint32_t process_current_pid(void);
-uint32_t process_current_cpu_id(void);
 uint32_t process_current_cpu_id(void);
 
 #endif

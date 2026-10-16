@@ -2,11 +2,14 @@
 #include "cpu_local.h"
 #include "process.h"
 #include "paging.h"
+#include "panic.h"
 
 #define SCHEDULER_QUANTUM_TICKS 5U
 
 static int initialized;
 static uint32_t fallback_quantum_ticks;
+/* PID being switched away from; consumed after interrupt assembly changes RSP. */
+static volatile uint32_t pending_outgoing_pid[CPU_LOCAL_MAX];
 
 static volatile uint32_t* scheduler_quantum_slot(void)
 {
@@ -77,21 +80,56 @@ static uint64_t scheduler_switch_from_stack(uint64_t current_stack,
         return current_stack;
 
     process_t current, next;
-    if (!process_snapshot(current_pid, &current) ||
+    uint32_t cpu_id = process_current_cpu_id();
+    if (cpu_id >= CPU_LOCAL_MAX ||
+        __atomic_load_n(&pending_outgoing_pid[cpu_id], __ATOMIC_ACQUIRE) != 0U ||
+        !process_snapshot(current_pid, &current) ||
         !process_snapshot(next_pid, &next) ||
         !process_stack_is_valid(next_pid))
         return current_stack;
 
-    if (!process_switch_to(next_pid))
+    uint64_t next_stack = process_get_stack(next_pid);
+    if (next_stack == 0U ||
+        !process_prepare_context_switch(next_pid, current_pid, cpu_id))
         return current_stack;
+
+    /*
+     * The outgoing process is deliberately still owned by this CPU. The
+     * interrupt stub calls scheduler_finish_context_switch only after it has
+     * changed RSP to next_stack, so migration and PID/stack reuse cannot race
+     * the final instructions on the outgoing stack.
+     */
+    __atomic_store_n(&pending_outgoing_pid[cpu_id], current_pid,
+                     __ATOMIC_RELEASE);
 
     if (next.address_space != paging_get_current_address_space())
         paging_switch_address_space(next.address_space);
 
-    if (current.state == PROCESS_TERMINATED)
-        process_reap(current_pid);
+    return next_stack;
+}
 
-    return process_get_stack(next_pid);
+/*
+ * Called by the IRQ/IPI return stubs after RSP has changed to the incoming
+ * saved frame. The outgoing stack is now inactive and can safely be released.
+ */
+void scheduler_finish_context_switch(void)
+{
+    /*
+     * CPU 0 is also the legacy single-CPU fallback when GS/APIC setup is
+     * unavailable, so use the process layer's canonical CPU ID rather than
+     * requiring a cpu_local_t here.
+     */
+    uint32_t cpu_id = process_current_cpu_id();
+    if (cpu_id >= CPU_LOCAL_MAX)
+        kernel_panic_halt_all();
+
+    uint32_t outgoing_pid = __atomic_exchange_n(
+        &pending_outgoing_pid[cpu_id], 0U, __ATOMIC_ACQ_REL);
+    if (outgoing_pid == 0U)
+        return;
+
+    if (!process_finish_context_switch(outgoing_pid, cpu_id))
+        kernel_panic_halt_all();
 }
 
 

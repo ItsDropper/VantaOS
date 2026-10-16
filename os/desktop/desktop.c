@@ -1,6 +1,7 @@
 #include "desktop.h"
 
 #include "graphics.h"
+#include "desktop_theme.h"
 #include "interrupts.h"
 #include "keyboard.h"
 #include "mouse.h"
@@ -98,9 +99,9 @@ static void terminal_window_draw(void)
     graphics_draw_window_frame(window_x, window_y, window_w, window_h, "Terminal");
 
     /* A compact tab strip separates terminal sessions from window chrome. */
-    graphics_fill_rect(window_x + 1, window_y + 46, window_w - 2, 34, 0x00131B25);
-    graphics_fill_rounded_rect(window_x + 14, window_y + 50, 156, 26, 6, 0x00212D3A);
-    graphics_fill_rect(window_x + 24, window_y + 74, 136, 2, 0x004B9CFF);
+    graphics_fill_rect(window_x + 1, window_y + 46, window_w - 2, 34, VANTA_UI_TOOLBAR);
+    graphics_fill_rounded_rect(window_x + 14, window_y + 50, 156, 26, 6, VANTA_UI_HOVER);
+    graphics_fill_rect(window_x + 24, window_y + 74, 136, 2, VANTA_UI_ACCENT);
     graphics_draw_text(window_x + 28, window_y + 59, "Shell", 0x00E8EDF4, 1);
     graphics_draw_text(window_x + 184, window_y + 59, "VantaOS", 0x007D8DA1, 1);
 
@@ -109,7 +110,7 @@ static void terminal_window_draw(void)
     int content_w = window_w - 36;
     int content_h = window_h - 104;
 
-    graphics_fill_rounded_rect(content_x, content_y, content_w, content_h, 5, 0x000B1017);
+    graphics_fill_rounded_rect(content_x, content_y, content_w, content_h, 5, VANTA_UI_DESKTOP);
 
     size_t count = terminal_history_count();
     size_t visible_lines = (size_t)(content_h / 12);
@@ -129,7 +130,7 @@ static void terminal_window_draw(void)
         if (!terminal_history_line(i, line, sizeof(line)))
             continue;
 
-        graphics_draw_text(content_x + 14, text_y, line, 0x00DDE5EE, 1);
+        graphics_draw_text(content_x + 14, text_y, line, VANTA_UI_TEXT, 1);
         text_y += 12;
     }
 

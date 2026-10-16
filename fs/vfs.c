@@ -67,7 +67,10 @@ int vfs_open(
     uint32_t flags
 )
 {
-    if (!initialized || !path)
+    if (!initialized || !path ||
+        (flags & ~(VFS_OPEN_READ | VFS_OPEN_WRITE | VFS_OPEN_TRUNCATE)) != 0U ||
+        (flags & (VFS_OPEN_READ | VFS_OPEN_WRITE)) == 0U ||
+        ((flags & VFS_OPEN_TRUNCATE) && !(flags & VFS_OPEN_WRITE)))
         return -1;
 
     int node_id =
@@ -80,6 +83,7 @@ int vfs_open(
         filesystem_get_node((uint32_t)node_id);
 
     if (!node ||
+        ((flags & VFS_OPEN_WRITE) && node->type != FS_NODE_FILE) ||
         (node->type != FS_NODE_FILE &&
          node->type != FS_NODE_VIRTUAL))
         return -1;
@@ -268,7 +272,8 @@ int vfs_write(
             open_files[handle].node_id
         );
 
-    if (!node || node->type != FS_NODE_FILE)
+    if (!node || node->type != FS_NODE_FILE ||
+        !(open_files[handle].flags & VFS_OPEN_WRITE))
         return -1;
 
     if (length >= FS_FILE_MAX)

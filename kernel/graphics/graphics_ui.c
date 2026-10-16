@@ -71,6 +71,16 @@ void graphics_draw_window_frame(int x, int y, int w, int h, const char* title, i
     }
 }
 
+static void taskbar_windows_logo(int x, int y, int size)
+{
+    int gap = size / 8;
+    int pane = (size - gap) / 2;
+    graphics_fill_rect(x, y, pane, pane, 0x004B8FE8);
+    graphics_fill_rect(x + pane + gap, y, pane, pane, 0x004B8FE8);
+    graphics_fill_rect(x, y + pane + gap, pane, pane, 0x004B8FE8);
+    graphics_fill_rect(x + pane + gap, y + pane + gap, pane, pane,
+                       0x004B8FE8);
+}
 static unsigned char ui_rtc_read(unsigned char reg)
 {
     unsigned char value;
@@ -151,7 +161,7 @@ void graphics_draw_taskbar(int taskbar_y, int width)
     /* Start */
     graphics_fill_rounded_rect(center - 108, taskbar_y + 10, 42, 42, 8,
         start_menu_open ? 0x00C9DDF5 : 0x00E6EDF6);
-    ui_brand(center - 97, taskbar_y + 21, 20);
+    taskbar_windows_logo(center - 97, taskbar_y + 21, 20);
 
     /* Search is styled like a native taskbar affordance; intentionally inert. */
     graphics_fill_rounded_rect(center - 58, taskbar_y + 10, 66, 42, 9,

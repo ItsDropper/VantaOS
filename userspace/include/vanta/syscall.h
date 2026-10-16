@@ -11,7 +11,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define VANTA_USER_ABI_VERSION 2U
+#define VANTA_USER_ABI_VERSION 4U
 
 #define VANTA_SYS_EXIT          0U
 #define VANTA_SYS_WRITE         1U
@@ -27,13 +27,18 @@
 #define VANTA_SYS_TERMINAL_BEGIN_INPUT 11U
 #define VANTA_SYS_TERMINAL_BACKSPACE   12U
 #define VANTA_SYS_TERMINAL_CLEAR      13U
+#define VANTA_SYS_FILE_WRITE          14U
+#define VANTA_SYS_CREATE_FILE         15U
 
-#define VANTA_OPEN_READ 1
+#define VANTA_OPEN_READ      1
+#define VANTA_OPEN_WRITE     2
+#define VANTA_OPEN_TRUNCATE  4
 
 /* Negative return values currently emitted by the kernel ABI. */
 #define VANTA_EPERM       1
 #define VANTA_ENOENT      2
 #define VANTA_EIO         5
+#define VANTA_ENODEV     19
 #define VANTA_EBADF       9
 #define VANTA_ECHILD     10
 #define VANTA_EFAULT     14
@@ -114,6 +119,20 @@ static inline long vanta_close(int descriptor)
 {
     return vanta_syscall3(VANTA_SYS_CLOSE,
                           (uintptr_t)(intptr_t)descriptor, 0U, 0U);
+}
+
+/* Each call streams at most 4096 bytes; FAT32 file size is 32-bit. */
+static inline long vanta_file_write(int descriptor, const void* buffer,
+                                    size_t length)
+{
+    return vanta_syscall3(VANTA_SYS_FILE_WRITE,
+                          (uintptr_t)(intptr_t)descriptor,
+                          (uintptr_t)buffer, (uintptr_t)length);
+}
+
+static inline long vanta_create_file(const char* path)
+{
+    return vanta_syscall3(VANTA_SYS_CREATE_FILE, (uintptr_t)path, 0U, 0U);
 }
 
 /* argc must be in [1, 16]; argv and all strings must be user-readable. */

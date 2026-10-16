@@ -8,7 +8,7 @@ The scheduler enters user mode with `CS=0x23` and `SS=0x1B`. Each process has a 
 
 ## Freestanding C syscall interface
 
-Include `<vanta/syscall.h>` from `userspace/include`. It provides inline wrappers for the current syscall ABI and can be used without libc or a runtime startup object. The ABI version macro is `VANTA_USER_ABI_VERSION` (currently `1`).
+Include `<vanta/syscall.h>` from `userspace/include`. It provides inline wrappers for the current syscall ABI and can be used without libc or a runtime startup object. The ABI version macro is `VANTA_USER_ABI_VERSION` (currently `4`).
 
 ```c
 #include <vanta/syscall.h>
@@ -33,13 +33,23 @@ Userspace enters through `int 0x80`. The syscall number is in `RAX`, arguments a
 | 0 | `vanta_exit(status)` | RDI: signed exit status | Does not return |
 | 1 | `vanta_write(buffer, length)` | RDI: buffer, RSI: byte count | Bytes written |
 | 2 | `vanta_console_write(buffer, length)` | RDI: buffer, RSI: byte count | Bytes written |
-| 3 | `vanta_open(path, flags)` | RDI: path, RSI: `VANTA_OPEN_READ` | Descriptor |
+| 3 | `vanta_open(path, flags)` | RDI: path, RSI: read/write/truncate flags | Descriptor |
 | 4 | `vanta_read(fd, buffer, length)` | RDI: descriptor, RSI: destination, RDX: maximum bytes | Bytes read |
 | 5 | `vanta_close(fd)` | RDI: descriptor | Zero on success |
 | 6 | `vanta_spawn(path, argv, argc)` | RDI: path, RSI: argv, RDX: argument count | Child PID |
 | 7 | `vanta_waitpid(pid, status)` | RDI: direct-child PID, RSI: optional writable status pointer | Collected child PID |
+| 8 | `vanta_read_char()` | None | Character byte or zero |
+| 9 | `vanta_yield()` | None | Zero |
+| 10 | `vanta_listdir(path, buffer, capacity)` | RDI: path, RSI: output buffer, RDX: capacity | Bytes in newline-delimited list |
+| 11–13 | Terminal input/backspace/clear | No arguments | Zero |
+| 14 | `vanta_file_write(fd, buffer, length)` | RDI: descriptor, RSI: source, RDX: length | Bytes written |
+| 15 | `vanta_create_file(path)` | RDI: path | Zero |
+| 16 | `vanta_gui_create_window(request)` | RDI: window request | Window ID |
+| 17 | `vanta_gui_close_window(id)` | RDI: window ID | Zero |
+| 18 | `vanta_gui_draw(id, commands, count)` | RDI: window ID, RSI: command array, RDX: count | Commands retained |
+| 19 | `vanta_gui_poll_event(id, event)` | RDI: window ID, RSI: writable event pointer | One event, zero if empty |
 
-The current limits are 4096 bytes per read/write call, eight per-process file descriptors beginning at 3, 16 arguments, 512 total argument bytes, and a 1 MiB executable-file limit in the shell launch path. Open currently supports read-only access to existing files. `vanta_waitpid` accepts a null status pointer. A child with a live user parent remains a resource-free zombie until its exit status is collected.
+The current limits are 4096 bytes per read/write syscall, FAT32's 32-bit file-size ceiling (4 GiB minus 1 byte) subject to available volume capacity, eight per-process file descriptors beginning at 3, 16 arguments, 512 total argument bytes, and a 1 MiB executable-file limit in the shell launch path. User-mode writes currently support regular files with conservative 8.3 names. The GUI ABI is VantaOS-specific: eight windows, 24 retained draw commands per window, 31-byte titles, 63-byte text commands, and a 32-event queue that drops the oldest event on overflow. Only filled rectangles and text are drawable; window move/resize/minimize/maximize are not implemented. These GUI calls are under review in PR #94 and are not available from the default branch until merged. `vanta_waitpid` accepts a null status pointer. A child with a live user parent remains a resource-free zombie until its exit status is collected.
 
 The syscall numbers and semantics are an **initial VantaOS ABI**, not a POSIX interface and not yet a long-term compatibility promise. Keep the public header, kernel dispatch, tests, and documentation synchronized when changing it.
 
@@ -47,7 +57,8 @@ The syscall numbers and semantics are an **initial VantaOS ABI**, not a POSIX in
 
 - Static ELF64 `ET_EXEC` only; no `ET_DYN`, dynamic linker, relocations, or shared libraries.
 - No libc/startup runtime, standard streams, environment variables, heap allocator, or general-purpose thread API.
-- No file creation/writes, pipes, process groups, signals, or POSIX-compatible descriptor semantics.
+- No directory creation from user mode, files larger than FAT32's 32-bit size ceiling, rename/delete, pipes, process groups, signals, or POSIX-compatible descriptor semantics.
+- Settings and File Explorer have not yet been migrated to independent ring-3 GUI executables.
 - No demand paging, copy-on-write, or per-process memory growth.
 - Kernel faults are not generally recoverable; only faults attributed to recognized user processes are contained at process level.
 

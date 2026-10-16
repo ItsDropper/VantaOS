@@ -112,7 +112,7 @@ static void terminal_window_draw(void)
     graphics_fill_rounded_rect(content_x, content_y, content_w, content_h, 5, 0x000B1017);
 
     size_t count = terminal_history_count();
-    size_t visible_lines = (size_t)(content_h / 10);
+    size_t visible_lines = (size_t)(content_h / 12);
     if (visible_lines > 55)
         visible_lines = 55;
 

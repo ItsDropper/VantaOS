@@ -214,25 +214,44 @@ static void process_deferred_switch_probe(void)
     int incoming_pid = process_create_kernel(
         "deferred-incoming-probe", process_current_pid(), scheduler_probe_entry);
     int ok = outgoing_pid > 0 && incoming_pid > 0;
+    uint32_t failure_stage = ok ? 0U : 1U;
 
     if (ok)
+    {
         ok = process_set_running((uint32_t)outgoing_pid);
+        if (!ok) failure_stage = 2U;
+    }
     if (ok)
+    {
         ok = process_terminate((uint32_t)outgoing_pid);
+        if (!ok) failure_stage = 3U;
+    }
     if (ok)
+    {
         ok = process_prepare_context_switch((uint32_t)incoming_pid,
                                             (uint32_t)outgoing_pid, cpu_id);
+        if (!ok) failure_stage = 4U;
+    }
 
     process_t outgoing;
     if (ok)
+    {
         ok = process_snapshot((uint32_t)outgoing_pid, &outgoing) &&
              outgoing.state == PROCESS_TERMINATED &&
              outgoing.owner_cpu == cpu_id;
+        if (!ok) failure_stage = 5U;
+    }
 
     if (ok)
+    {
         ok = process_finish_context_switch((uint32_t)outgoing_pid, cpu_id);
+        if (!ok) failure_stage = 6U;
+    }
     if (ok)
+    {
         ok = !process_snapshot((uint32_t)outgoing_pid, &outgoing);
+        if (!ok) failure_stage = 7U;
+    }
 
     /* Restore the boot context before cleaning up the incoming test slot. */
     if (process_current_pid() != 1U)
@@ -241,6 +260,7 @@ static void process_deferred_switch_probe(void)
         if (!restored)
             restored = process_set_running(1U);
         ok = restored && ok;
+        if (!restored && failure_stage == 0U) failure_stage = 8U;
     }
 
     if (outgoing_pid > 0 && process_current_pid() != (uint32_t)outgoing_pid)
@@ -248,8 +268,12 @@ static void process_deferred_switch_probe(void)
         if (process_snapshot((uint32_t)outgoing_pid, &outgoing) &&
             outgoing.state == PROCESS_TERMINATED &&
             outgoing.owner_cpu == cpu_id)
-            ok = process_finish_context_switch((uint32_t)outgoing_pid,
-                                               cpu_id) && ok;
+        {
+            int finished = process_finish_context_switch(
+                (uint32_t)outgoing_pid, cpu_id);
+            ok = finished && ok;
+            if (!finished && failure_stage == 0U) failure_stage = 9U;
+        }
     }
 
     if (incoming_pid > 0)
@@ -258,12 +282,43 @@ static void process_deferred_switch_probe(void)
         if (process_snapshot((uint32_t)incoming_pid, &incoming))
         {
             if (incoming.state != PROCESS_TERMINATED)
-                ok = process_terminate((uint32_t)incoming_pid) && ok;
+            {
+                int terminated = process_terminate((uint32_t)incoming_pid);
+                ok = terminated && ok;
+                if (!terminated && failure_stage == 0U) failure_stage = 10U;
+            }
             if (process_snapshot((uint32_t)incoming_pid, &incoming) &&
                 incoming.owner_cpu == PROCESS_CPU_UNOWNED)
-                ok = process_reap((uint32_t)incoming_pid) && ok;
+            {
+                int reaped = process_reap((uint32_t)incoming_pid);
+                ok = reaped && ok;
+                if (!reaped && failure_stage == 0U) failure_stage = 11U;
+            }
             else
+            {
                 ok = 0;
+                if (failure_stage == 0U) failure_stage = 12U;
+            }
+        }
+    }
+
+    if (!ok)
+    {
+        switch (failure_stage)
+        {
+            case 1U: serial_write("VANTAOS_PROCESS_DEFERRED_FAIL_CREATE\n"); break;
+            case 2U: serial_write("VANTAOS_PROCESS_DEFERRED_FAIL_SET_RUNNING\n"); break;
+            case 3U: serial_write("VANTAOS_PROCESS_DEFERRED_FAIL_TERMINATE\n"); break;
+            case 4U: serial_write("VANTAOS_PROCESS_DEFERRED_FAIL_PREPARE\n"); break;
+            case 5U: serial_write("VANTAOS_PROCESS_DEFERRED_FAIL_OWNER_CHECK\n"); break;
+            case 6U: serial_write("VANTAOS_PROCESS_DEFERRED_FAIL_FINISH\n"); break;
+            case 7U: serial_write("VANTAOS_PROCESS_DEFERRED_FAIL_REAP_CHECK\n"); break;
+            case 8U: serial_write("VANTAOS_PROCESS_DEFERRED_FAIL_RESTORE\n"); break;
+            case 9U: serial_write("VANTAOS_PROCESS_DEFERRED_FAIL_CLEAN_OUTGOING\n"); break;
+            case 10U: serial_write("VANTAOS_PROCESS_DEFERRED_FAIL_TERMINATE_INCOMING\n"); break;
+            case 11U: serial_write("VANTAOS_PROCESS_DEFERRED_FAIL_REAP_INCOMING\n"); break;
+            case 12U: serial_write("VANTAOS_PROCESS_DEFERRED_FAIL_INCOMING_OWNER\n"); break;
+            default: serial_write("VANTAOS_PROCESS_DEFERRED_FAIL_UNKNOWN\n"); break;
         }
     }
 

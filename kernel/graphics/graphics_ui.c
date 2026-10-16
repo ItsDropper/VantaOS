@@ -192,9 +192,16 @@ void graphics_draw_taskbar(int taskbar_y, int width)
         graphics_fill_rounded_rect(center + 74, taskbar_y + 49, 26, 2, 1,
                                     0x004A8BE8);
 
-    /* Real-time clock and RTC calendar, right aligned like Windows. */
-    graphics_draw_text(width - 92, taskbar_y + 17, clock, 0x002A3543, 1);
-    graphics_draw_text(width - 92, taskbar_y + 34, date, 0x004C5A6B, 1);
+    /* Give the clock its own high-contrast, padded region so both lines remain
+       legible and inside the framebuffer at the 1024px CI screenshot width. */
+    int clock_x = width - 116;
+    if (clock_x < center + 116)
+        clock_x = center + 116;
+    graphics_fill_rounded_rect(clock_x, taskbar_y + 6, width - clock_x - 8,
+                                52, 8, 0x00F7FAFD);
+    graphics_fill_rect(clock_x + 7, taskbar_y + 8, 1, 48, 0x00D4DEEA);
+    graphics_draw_text(clock_x + 15, taskbar_y + 17, clock, 0x001B2938, 1);
+    graphics_draw_text(clock_x + 15, taskbar_y + 34, date, 0x0038495D, 1);
 }
 void graphics_present(void)
 {

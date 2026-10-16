@@ -85,11 +85,13 @@ user_mode_test_enter:
     mov [rel user_mode_test_saved_rflags], rax
     mov rax, rdi
     mov rdx, rsi
+    cli
     push qword 0x1B
     push rdx
     push qword 0x202
     push qword 0x23
     push rax
+    swapgs
     iretq
 
 user_mode_test_return_trampoline:
@@ -98,6 +100,13 @@ user_mode_test_return_trampoline:
     push rax
     popfq
     ret
+
+%macro SWAPGS_IF_USER 2
+    test byte [%1 + %2], 3
+    jz %%done
+    swapgs
+%%done:
+%endmacro
 
 %macro SAVE_ALL 0
     push r15
@@ -137,6 +146,7 @@ user_mode_test_return_trampoline:
 
 ; int 0x80 enters only through a DPL-3 gate in self-test builds.
 user_mode_test_syscall_stub:
+    SWAPGS_IF_USER rsp, 8
     cld
     push qword 0
     SAVE_ALL
@@ -146,6 +156,7 @@ user_mode_test_syscall_stub:
     call user_mode_selftest_syscall_dispatch
     cmp dword [rel user_mode_test_exit_requested], 0
     jne .user_test_exit
+    SWAPGS_IF_USER r12, 136
     mov rsp, r12
     RESTORE_ALL
     add rsp, 8
@@ -183,42 +194,51 @@ user_mode_test_syscall_stub:
 
 ; Fixed IPI used to wake initialized APs from their idle HLT loop.
 lapic_timer_stub:
+    SWAPGS_IF_USER rsp, 8
     cld
     SAVE_IRQ_ALL
     mov rdi, rsp
     call lapic_timer_handle_interrupt
     mov rsp, rax
     call scheduler_finish_context_switch
+    SWAPGS_IF_USER rsp, 136
     pop rax
     RESTORE_ALL
     iretq
 
 reschedule_ipi_stub:
+    SWAPGS_IF_USER rsp, 8
     cld
     SAVE_IRQ_ALL
     mov rdi, rsp
     call reschedule_ipi_handle_interrupt
     mov rsp, rax
     call scheduler_finish_context_switch
+    SWAPGS_IF_USER rsp, 136
     pop rax
     RESTORE_ALL
     iretq
 
 tlb_shootdown_ipi_stub:
+    SWAPGS_IF_USER rsp, 8
     cld
     SAVE_IRQ_ALL
     call paging_tlb_shootdown_handle_interrupt
+    SWAPGS_IF_USER rsp, 136
     RESTORE_IRQ_ALL
     iretq
 
 smp_wakeup_stub:
+    SWAPGS_IF_USER rsp, 8
     cld
     SAVE_IRQ_ALL
     call apic_send_eoi
+    SWAPGS_IF_USER rsp, 136
     RESTORE_IRQ_ALL
     iretq
 
 irq0_stub:
+    SWAPGS_IF_USER rsp, 8
     cld
     SAVE_IRQ_ALL
     call timer_handle_interrupt
@@ -235,11 +255,13 @@ irq0_stub:
     call scheduler_tick
     mov rsp, rax
     call scheduler_finish_context_switch
+    SWAPGS_IF_USER rsp, 136
     pop rax
     RESTORE_ALL
     iretq
 
 irq1_stub:
+    SWAPGS_IF_USER rsp, 8
     cld
     SAVE_IRQ_ALL
     call keyboard_handle_interrupt
@@ -252,10 +274,12 @@ irq1_stub:
     mov edi, 1
     call pic_send_eoi
 .irq1_eoi_done:
+    SWAPGS_IF_USER rsp, 136
     RESTORE_IRQ_ALL
     iretq
 
 irq12_stub:
+    SWAPGS_IF_USER rsp, 8
     cld
     SAVE_IRQ_ALL
     call mouse_handle_interrupt
@@ -268,11 +292,13 @@ irq12_stub:
     mov edi, 12
     call pic_send_eoi
 .irq12_eoi_done:
+    SWAPGS_IF_USER rsp, 136
     RESTORE_IRQ_ALL
     iretq
 
 %macro EXCEPTION_NO_ERROR 1
 exception%1_stub:
+    SWAPGS_IF_USER rsp, 8
     cld
     push qword 0
     SAVE_ALL
@@ -283,6 +309,7 @@ exception%1_stub:
     call exception_handler
     cmp dword [rel user_mode_test_exit_requested], 0
     jne %%user_test_exit
+    SWAPGS_IF_USER r12, 136
     mov rsp, r12
     RESTORE_ALL
     add rsp, 8
@@ -294,6 +321,7 @@ exception%1_stub:
 
 %macro EXCEPTION_ERROR 1
 exception%1_stub:
+    SWAPGS_IF_USER rsp, 16
     cld
     SAVE_ALL
     mov r12, rsp
@@ -303,6 +331,7 @@ exception%1_stub:
     call exception_handler
     cmp dword [rel user_mode_test_exit_requested], 0
     jne %%user_test_exit
+    SWAPGS_IF_USER r12, 136
     mov rsp, r12
     RESTORE_ALL
     add rsp, 8

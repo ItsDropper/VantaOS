@@ -6,6 +6,7 @@
 #include <stdint.h>
 
 #define IA32_GS_BASE_MSR 0xC0000101U
+#define IA32_KERNEL_GS_BASE_MSR 0xC0000102U
 
 static cpu_local_t cpu_locals[CPU_LOCAL_MAX];
 
@@ -66,6 +67,8 @@ int cpu_local_initialize(uint32_t logical_id, uint32_t apic_id)
      * SWAPGS protocol and a user GS-base policy; neither is implicit here.
      */
     write_msr(IA32_GS_BASE_MSR, (uint64_t)(uintptr_t)local);
+    /* SWAPGS must expose a neutral GS base while code runs at CPL3. */
+    write_msr(IA32_KERNEL_GS_BASE_MSR, 0U);
     if (cpu_local_current() != local ||
         !paging_register_cpu(logical_id, paging_get_kernel_address_space()))
         return 0;

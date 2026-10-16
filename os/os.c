@@ -485,8 +485,7 @@ static int smp_scheduler_probe_wait(void)
                                           __ATOMIC_ACQUIRE);
     uint32_t expected_locked_count =
         smp_scheduler_probe_task_count * SMP_SCHEDULER_LOCK_PROBE_ITERATIONS;
-    uint32_t locked_count = __atomic_load_n(
-        &smp_scheduler_probe_locked_count, __ATOMIC_ACQUIRE);
+    uint32_t locked_count = smp_scheduler_probe_locked_count;
     serial_write("VANTAOS_SMP_STRESS_WAIT_DONE\n");
     if (completed != smp_scheduler_probe_task_count ||
         cpus_seen < required_cpus || duplicates != 0U ||

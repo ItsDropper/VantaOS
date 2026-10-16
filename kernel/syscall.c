@@ -16,6 +16,7 @@
 #define USER_SYSCALL_READ 4U
 #define USER_SYSCALL_CLOSE 5U
 #define USER_SYSCALL_SPAWN 6U
+#define USER_SYSCALL_WAITPID 7U
 #define USER_SYSCALL_IO_MAX 4096U
 #define USER_SYSCALL_WRITE_MAX 4096U
 
@@ -306,6 +307,53 @@ static int syscall_spawn(struct exception_frame* frame,
     return 0;
 }
 
+/*
+ * waitpid blocks the current user process until its direct child exits. The
+ * child-exit path wakes a sleeping parent after publishing a waitable zombie.
+ */
+static int syscall_waitpid(struct exception_frame* frame,
+                           const process_t* process)
+{
+    uint64_t child_value = frame->rdi;
+    uintptr_t status_address = (uintptr_t)frame->rsi;
+    if (child_value == 0U || child_value >= PROCESS_MAX ||
+        child_value == process->pid)
+    {
+        frame->rax = (uint64_t)(int64_t)-22;
+        return 0;
+    }
+
+    if (status_address != 0U &&
+        !paging_user_range_valid(process->address_space, status_address,
+                                 sizeof(int32_t), 1))
+    {
+        frame->rax = (uint64_t)(int64_t)-14;
+        return 0;
+    }
+
+    for (;;)
+    {
+        int32_t exit_status = 0;
+        int result = process_wait_child(process->pid, (uint32_t)child_value,
+                                        &exit_status);
+        if (result > 0)
+        {
+            if (status_address != 0U)
+                *(int32_t*)status_address = exit_status;
+            frame->rax = (uint64_t)result;
+            return 0;
+        }
+        if (result < 0)
+        {
+            frame->rax = (uint64_t)(int64_t)-10;
+            return 0;
+        }
+
+        /* STI followed by HLT avoids losing a wakeup between check and sleep. */
+        __asm__ volatile ("sti; hlt" : : : "memory");
+    }
+}
+
 static int syscall_dispatch(struct exception_frame* frame)
 {
     if (!frame || (frame->cs & 3U) != 3U)
@@ -341,6 +389,8 @@ static int syscall_dispatch(struct exception_frame* frame)
             return syscall_close(frame, process.pid);
         case USER_SYSCALL_SPAWN:
             return syscall_spawn(frame, &process);
+        case USER_SYSCALL_WAITPID:
+            return syscall_waitpid(frame, &process);
         default:
             frame->rax = (uint64_t)(int64_t)-38;
             return 0;

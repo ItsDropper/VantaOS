@@ -4,6 +4,7 @@
 #include "interrupts.h"
 
 int user_mode_selftest_is_active(void);
+int user_mode_process_smoke_test_start(void);
 void user_mode_selftest_syscall_dispatch(struct exception_frame* frame);
 int user_mode_selftest_handle_exception(unsigned int number,
                                         struct exception_frame* frame);

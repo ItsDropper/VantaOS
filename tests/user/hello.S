@@ -58,6 +58,30 @@ _start:
     cmp $-22, %rax
     jne file_fail
 
+    mov $6, %eax
+    lea child_path(%rip), %rdi
+    lea child_argv(%rip), %rsi
+    mov $17, %edx
+    int $0x80
+    cmp $-22, %rax
+    jne file_fail
+
+    mov $6, %eax
+    lea child_path(%rip), %rdi
+    lea invalid_child_argv(%rip), %rsi
+    mov $1, %edx
+    int $0x80
+    cmp $-14, %rax
+    jne file_fail
+
+    mov $6, %eax
+    lea child_path(%rip), %rdi
+    lea long_child_argv(%rip), %rsi
+    mov $1, %edx
+    int $0x80
+    cmp $-22, %rax
+    jne file_fail
+
     /* Launch a separate ELF from FAT32 with a kernel-owned argv copy. */
     mov $6, %eax
     lea child_path(%rip), %rdi
@@ -224,6 +248,13 @@ child_path:
 .align 8
 child_argv:
     .quad child_path
+invalid_child_argv:
+    .quad 0x7ffffffff000
+long_child_argv:
+    .quad long_child_argument
+long_child_argument:
+    .fill 513, 0x61
+    .byte 0
 file_path:
     .asciz "/USERDATA.TXT"
 missing_path:

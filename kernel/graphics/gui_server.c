@@ -312,7 +312,7 @@ void gui_server_draw_windows(void)
                                    (int)height - GUI_TITLEBAR_HEIGHT - 2,
                                    6, 0x00151D29);
         graphics_draw_window_frame(x, y, (int)width, (int)height,
-                                   window->title, 1);
+                                   window->title, 0);
 
         for (uint32_t j = 0; j < window->command_count; j++)
         {

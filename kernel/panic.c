@@ -7,6 +7,7 @@
 #include "fault_trace.h"
 #include "apic.h"
 #include "serial.h"
+#include "selftest/user_mode_selftest.h"
 
 static volatile uint32_t panic_broadcast_active;
 

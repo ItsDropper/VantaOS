@@ -487,12 +487,29 @@ static int smp_scheduler_probe_wait(void)
         smp_scheduler_probe_task_count * SMP_SCHEDULER_LOCK_PROBE_ITERATIONS;
     uint32_t locked_count = smp_scheduler_probe_locked_count;
     serial_write("VANTAOS_SMP_STRESS_WAIT_DONE\n");
-    if (completed != smp_scheduler_probe_task_count ||
-        cpus_seen < required_cpus || duplicates != 0U ||
-        max_active < required_cpus ||
-        locked_count != expected_locked_count)
+    if (completed != smp_scheduler_probe_task_count)
     {
-        serial_write("VANTAOS_SMP_SCHEDULER_STRESS_FAIL\n");
+        serial_write("VANTAOS_SMP_STRESS_COMPLETION_FAIL\n");
+        return 0;
+    }
+    if (cpus_seen < required_cpus)
+    {
+        serial_write("VANTAOS_SMP_STRESS_CPU_COVERAGE_FAIL\n");
+        return 0;
+    }
+    if (duplicates != 0U)
+    {
+        serial_write("VANTAOS_SMP_STRESS_DUPLICATE_FAIL\n");
+        return 0;
+    }
+    if (max_active < required_cpus)
+    {
+        serial_write("VANTAOS_SMP_STRESS_OVERLAP_FAIL\n");
+        return 0;
+    }
+    if (locked_count != expected_locked_count)
+    {
+        serial_write("VANTAOS_SMP_STRESS_LOCK_COUNT_FAIL\n");
         return 0;
     }
 

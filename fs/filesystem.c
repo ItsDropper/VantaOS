@@ -415,16 +415,41 @@ int filesystem_write_file(const char* path, const char* data)
 
     if (fat32_write_file(path, data, size) < 0) return -1;
 
-    /* Refresh metadata from the on-disk directory entry via a root reload
-       is not safe for cached IDs; update the node using the FAT32 lookup. */
-    const char* name = path;
+    const char* leaf = path;
+    const char* last_slash = path;
     for (unsigned int i = 0; path[i]; i++)
-        if (path[i] == '/') name = path + i + 1;
-    (void)name;
-    nodes[id].size = size;
-    /* FAT32 writes replace the data cluster; re-enumerate parent directory
-       after invalidating its cached child nodes is a separate VFS task. */
-    return (int)size;
+        if (path[i] == '/') last_slash = path + i;
+    leaf = last_slash + 1;
+
+    char parent_path[FS_PATH_MAX];
+    unsigned int parent_length = (unsigned int)(last_slash - path);
+    if (parent_length == 0) parent_length = 1;
+    if (parent_length >= sizeof(parent_path)) return -1;
+    for (unsigned int i = 0; i < parent_length; i++)
+        parent_path[i] = path[i];
+    parent_path[parent_length] = 0;
+
+    int parent_id = filesystem_lookup(parent_path);
+    if (parent_id < 0) return -1;
+    const fs_node_t* parent_node = filesystem_get_node((uint32_t)parent_id);
+    if (!parent_node || parent_node->type != FS_NODE_DIRECTORY ||
+        parent_node->first_cluster < 2)
+        return -1;
+
+    int count = fat32_list_directory(parent_node->first_cluster,
+                                     directory_entries, FS_MAX_NODES);
+    if (count < 0) return -1;
+    int refreshed = 0;
+    for (int i = 0; i < count; i++)
+    {
+        if (!fs_equals_ci(directory_entries[i].name, leaf))
+            continue;
+        nodes[id].first_cluster = directory_entries[i].first_cluster;
+        nodes[id].size = directory_entries[i].size;
+        refreshed = 1;
+        break;
+    }
+    return refreshed ? (int)size : -1;
 }
 
 int filesystem_file_exists(const char* path)

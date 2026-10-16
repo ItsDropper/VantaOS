@@ -371,7 +371,7 @@ paging_address_space_t* paging_create_address_space(void)
     return NULL;
 }
 
-void paging_destroy_address_space(paging_address_space_t* address_space)
+int paging_destroy_address_space(paging_address_space_t* address_space)
 {
     uint64_t saved_flags = paging_lock_acquire();
     if (!paging_owns_address_space(address_space) ||
@@ -379,7 +379,7 @@ void paging_destroy_address_space(paging_address_space_t* address_space)
                         __ATOMIC_ACQUIRE) != 0U)
     {
         paging_lock_release(saved_flags);
-        return;
+        return 0;
     }
 
     if (paging_current() == address_space)
@@ -395,7 +395,7 @@ void paging_destroy_address_space(paging_address_space_t* address_space)
                         __ATOMIC_ACQUIRE) != 0U)
     {
         paging_lock_release(saved_flags);
-        return;
+        return 0;
     }
 
     paging_release_user_page_tables(address_space);
@@ -405,6 +405,7 @@ void paging_destroy_address_space(paging_address_space_t* address_space)
     address_space->active_cpu_mask = 0;
     __atomic_store_n(&address_space->used, 0, __ATOMIC_RELEASE);
     paging_lock_release(saved_flags);
+    return 1;
 }
 
 static void paging_switch_address_space_locked(

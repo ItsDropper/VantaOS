@@ -13,7 +13,7 @@ global tlb_shootdown_ipi_stub
 global process_entry_trampoline
 global user_mode_test_enter
 global user_mode_test_return_trampoline
-global user_mode_test_syscall_stub
+global user_mode_syscall_stub
 
 global exception0_stub
 global exception1_stub
@@ -61,7 +61,8 @@ extern apic_is_enabled
 extern lapic_timer_handle_interrupt
 extern reschedule_ipi_handle_interrupt
 extern paging_tlb_shootdown_handle_interrupt
-extern user_mode_selftest_syscall_dispatch
+extern user_mode_syscall_dispatch
+extern scheduler_reschedule
 extern user_mode_test_saved_rsp
 extern user_mode_test_saved_rflags
 extern user_mode_test_exit_requested
@@ -144,8 +145,36 @@ user_mode_test_return_trampoline:
     pop r15
 %endmacro
 
-; int 0x80 enters only through a DPL-3 gate in self-test builds.
-user_mode_test_syscall_stub:
+; Convert a ring-3 exception/syscall frame into the scheduler's IRQ-frame
+; layout, then switch away. The saved GPRs stay intact; the fake error-code
+; slot is replaced by RIP and a padding word is inserted below the frame.
+%macro SCHEDULE_USER_FRAME 0
+    mov rsp, r12
+    mov rax, [rsp + 128]
+    mov rbx, [rsp + 136]
+    mov rcx, [rsp + 144]
+    mov rdx, [rsp + 152]
+    mov rbp, [rsp + 160]
+    mov [rsp + 120], rax
+    mov [rsp + 128], rbx
+    mov [rsp + 136], rcx
+    mov [rsp + 144], rdx
+    mov [rsp + 152], rbp
+    sub rsp, 8
+    mov qword [rsp], 0
+    mov rdi, rsp
+    and rsp, -16
+    call scheduler_reschedule
+    mov rsp, rax
+    call scheduler_finish_context_switch
+    SWAPGS_IF_USER rsp, 136
+    pop rax
+    RESTORE_ALL
+    iretq
+%endmacro
+
+; int 0x80 is the minimal ring-3 syscall ABI in every build.
+user_mode_syscall_stub:
     SWAPGS_IF_USER rsp, 8
     cld
     push qword 0
@@ -153,14 +182,18 @@ user_mode_test_syscall_stub:
     mov r12, rsp
     and rsp, -16
     mov rdi, r12
-    call user_mode_selftest_syscall_dispatch
+    call user_mode_syscall_dispatch
     cmp dword [rel user_mode_test_exit_requested], 0
     jne .user_test_exit
+    test eax, eax
+    jnz .schedule_user
     SWAPGS_IF_USER r12, 136
     mov rsp, r12
     RESTORE_ALL
     add rsp, 8
     iretq
+.schedule_user:
+    SCHEDULE_USER_FRAME
 .user_test_exit:
     mov dword [rel user_mode_test_exit_requested], 0
     jmp user_mode_test_return_trampoline
@@ -309,11 +342,15 @@ exception%1_stub:
     call exception_handler
     cmp dword [rel user_mode_test_exit_requested], 0
     jne %%user_test_exit
+    test byte [r12 + 136], 3
+    jnz %%schedule_user
     SWAPGS_IF_USER r12, 136
     mov rsp, r12
     RESTORE_ALL
     add rsp, 8
     iretq
+%%schedule_user:
+    SCHEDULE_USER_FRAME
 %%user_test_exit:
     mov dword [rel user_mode_test_exit_requested], 0
     jmp user_mode_test_return_trampoline

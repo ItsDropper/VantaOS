@@ -143,11 +143,13 @@ int process_prepare_context_switch(uint32_t next_pid, uint32_t current_pid,
  */
 int process_finish_context_switch(uint32_t outgoing_pid, uint32_t cpu_id)
 {
-    if (!process_initialized_state || outgoing_pid == 0U || outgoing_pid >= PROCESS_MAX ||
+    if (!process_initialized_state || outgoing_pid == 0U ||
+        outgoing_pid >= PROCESS_MAX ||
         cpu_id != process_current_cpu_id() ||
         outgoing_pid == process_current_slot())
         return 0;
 
+    process_t outgoing_snapshot;
     uint64_t flags = process_table_lock_acquire();
     process_t* outgoing = &process_table_records[outgoing_pid];
     if (outgoing->owner_cpu != cpu_id ||
@@ -159,16 +161,34 @@ int process_finish_context_switch(uint32_t outgoing_pid, uint32_t cpu_id)
         return 0;
     }
 
-    if (outgoing->state == PROCESS_TERMINATED)
-    {
-        process_reset_record(outgoing);
-        outgoing->pid = outgoing_pid;
-    }
-    else
+    if (outgoing->state != PROCESS_TERMINATED)
     {
         outgoing->owner_cpu = PROCESS_CPU_UNOWNED;
+        process_table_lock_release(flags);
+        return 1;
     }
 
+    /*
+     * Keep ownership pinned while releasing the lock. Other CPUs cannot reap
+     * or reuse this PID, and the interrupt return path has already switched
+     * away from both its kernel stack and address space.
+     */
+    outgoing_snapshot = *outgoing;
+    process_table_lock_release(flags);
+
+    if (!process_release_user_resources(&outgoing_snapshot))
+        return 0;
+
+    flags = process_table_lock_acquire();
+    outgoing = &process_table_records[outgoing_pid];
+    if (outgoing->owner_cpu != cpu_id ||
+        outgoing->state != PROCESS_TERMINATED)
+    {
+        process_table_lock_release(flags);
+        return 0;
+    }
+    process_reset_record(outgoing);
+    outgoing->pid = outgoing_pid;
     process_table_lock_release(flags);
     return 1;
 }

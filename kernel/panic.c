@@ -4,6 +4,7 @@
 #include "interrupts.h"
 #include "terminal.h"
 #include "process.h"
+#include "paging.h"
 #include "fault_trace.h"
 #include "apic.h"
 #include "serial.h"
@@ -191,6 +192,24 @@ void exception_handler(
 {
     if (user_mode_selftest_handle_exception(exception_number, frame))
         return;
+
+    /*
+     * A fault in CPL3 belongs to the process, not the kernel. The assembly
+     * return path detects the user CS, schedules away, and reclaims this
+     * address space only after switching CR3 and RSP.
+     */
+    if (frame && (frame->cs & 3U) == 3U)
+    {
+        process_t process;
+        if (process_snapshot_try(process_current_pid(), &process) &&
+            process.is_user &&
+            process.address_space == paging_get_current_address_space())
+        {
+            serial_write("VANTAOS_USER_PROCESS_FAULT\n");
+            process_terminate_current();
+            return;
+        }
+    }
 
     if (exception_number == 2U &&
         __atomic_load_n(&panic_broadcast_active, __ATOMIC_ACQUIRE) != 0U)

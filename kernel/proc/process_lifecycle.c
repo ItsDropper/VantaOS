@@ -10,7 +10,8 @@ int process_mark_ready(uint32_t pid)
         return 0;
     uint64_t flags = process_table_lock_acquire();
     int ok = process_table_records[pid].state != PROCESS_UNUSED &&
-             process_table_records[pid].state != PROCESS_TERMINATED;
+             process_table_records[pid].state != PROCESS_TERMINATED &&
+             process_table_records[pid].state != PROCESS_REAPING;
     if (ok)
         process_table_records[pid].state = PROCESS_READY;
     process_table_lock_release(flags);
@@ -27,6 +28,7 @@ int process_set_running(uint32_t pid)
     uint32_t cpu_id = process_current_cpu_id();
     if (target->state == PROCESS_UNUSED ||
         target->state == PROCESS_TERMINATED ||
+        target->state == PROCESS_REAPING ||
         (target->affinity_cpu != PROCESS_CPU_ANY &&
          target->affinity_cpu != cpu_id) ||
         (target->owner_cpu != PROCESS_CPU_UNOWNED &&
@@ -127,7 +129,8 @@ int process_set_affinity(uint32_t pid, uint32_t cpu_id)
     uint64_t flags = process_table_lock_acquire();
     process_t* process = &process_table_records[pid];
     if (process->state == PROCESS_UNUSED ||
-        process->state == PROCESS_TERMINATED)
+        process->state == PROCESS_TERMINATED ||
+        process->state == PROCESS_REAPING)
     {
         process_table_lock_release(flags);
         return 0;
@@ -188,6 +191,7 @@ int process_terminate(uint32_t pid)
     process_t* process = &process_table_records[pid];
     if (process->state == PROCESS_UNUSED ||
         process->state == PROCESS_TERMINATED ||
+        process->state == PROCESS_REAPING ||
         process_is_idle_locked(pid))
     {
         process_table_lock_release(flags);
@@ -253,22 +257,43 @@ int process_stack_is_valid(uint32_t pid)
 
 int process_reap(uint32_t pid)
 {
-    if (!process_initialized_state || pid == 0 || pid >= PROCESS_MAX)
+    if (!process_initialized_state || pid == 0U || pid >= PROCESS_MAX)
         return 0;
 
+    process_t snapshot;
     uint64_t flags = process_table_lock_acquire();
+    process_t* process = &process_table_records[pid];
     if (pid == process_current_slot() ||
         process_is_idle_locked(pid) ||
-        process_table_records[pid].state != PROCESS_TERMINATED ||
-        process_table_records[pid].owner_cpu != PROCESS_CPU_UNOWNED)
+        process->state != PROCESS_TERMINATED ||
+        process->owner_cpu != PROCESS_CPU_UNOWNED)
     {
         process_table_lock_release(flags);
         return 0;
     }
 
-    process_t* process = &process_table_records[pid];
-    process->address_space = NULL;
-    process->kernel_stack = NULL;
+    snapshot = *process;
+    process->state = PROCESS_REAPING;
+    process_table_lock_release(flags);
+
+    if (!process_release_user_resources(&snapshot))
+    {
+        flags = process_table_lock_acquire();
+        process = &process_table_records[pid];
+        if (process->state == PROCESS_REAPING)
+            process->state = PROCESS_TERMINATED;
+        process_table_lock_release(flags);
+        return 0;
+    }
+
+    flags = process_table_lock_acquire();
+    process = &process_table_records[pid];
+    if (process->state != PROCESS_REAPING ||
+        process->owner_cpu != PROCESS_CPU_UNOWNED)
+    {
+        process_table_lock_release(flags);
+        return 0;
+    }
     process_reset_record(process);
     process->pid = pid;
     process_table_lock_release(flags);
@@ -324,7 +349,8 @@ unsigned int process_count(void)
     unsigned int count = 0;
     for (uint32_t i = 0; i < PROCESS_MAX; i++)
         if (process_table_records[i].state != PROCESS_UNUSED &&
-            process_table_records[i].state != PROCESS_TERMINATED)
+            process_table_records[i].state != PROCESS_TERMINATED &&
+            process_table_records[i].state != PROCESS_REAPING)
             count++;
     process_table_lock_release(flags);
     return count;

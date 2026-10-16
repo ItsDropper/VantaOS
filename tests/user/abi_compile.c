@@ -26,3 +26,7 @@ long vanta_user_abi_compile_check(
 
     return result;
 }
+
+/* Keep the new persistent-file API part of the freestanding ABI compile gate. */
+static long (*const file_write_api)(int, const void*, size_t) = vanta_file_write;
+static long (*const create_file_api)(const char*) = vanta_create_file;

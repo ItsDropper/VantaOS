@@ -179,6 +179,7 @@ int process_finish_context_switch(uint32_t outgoing_pid, uint32_t cpu_id)
     if (!process_release_user_resources(&outgoing_snapshot))
         return 0;
 
+    uint32_t wake_parent_pid = 0U;
     flags = process_table_lock_acquire();
     outgoing = &process_table_records[outgoing_pid];
     if (outgoing->owner_cpu != cpu_id ||
@@ -187,9 +188,50 @@ int process_finish_context_switch(uint32_t outgoing_pid, uint32_t cpu_id)
         process_table_lock_release(flags);
         return 0;
     }
-    process_reset_record(outgoing);
-    outgoing->pid = outgoing_pid;
+
+    uint32_t parent_pid = outgoing->parent_pid;
+    int retain_zombie = 0;
+    if (outgoing_snapshot.is_user && parent_pid > 0U &&
+        parent_pid < PROCESS_MAX)
+    {
+        const process_t* parent = &process_table_records[parent_pid];
+        retain_zombie = parent->is_user &&
+            parent->state != PROCESS_UNUSED &&
+            parent->state != PROCESS_TERMINATED &&
+            parent->state != PROCESS_ZOMBIE &&
+            parent->state != PROCESS_REAPING;
+    }
+
+    /* A process that exits cannot remain the parent of live descendants. */
+    process_reparent_children_locked(outgoing_pid);
+
+    if (retain_zombie)
+    {
+        int32_t exit_status = outgoing->exit_status;
+        char name[PROCESS_NAME_MAX + 1U];
+        for (uint32_t i = 0; i < sizeof(name); i++)
+            name[i] = outgoing->name[i];
+
+        process_reset_record(outgoing);
+        outgoing->pid = outgoing_pid;
+        outgoing->parent_pid = parent_pid;
+        outgoing->exit_status = exit_status;
+        for (uint32_t i = 0; i < sizeof(name); i++)
+            outgoing->name[i] = name[i];
+        outgoing->state = PROCESS_ZOMBIE;
+        outgoing->owner_cpu = PROCESS_CPU_UNOWNED;
+        outgoing->affinity_cpu = PROCESS_CPU_ANY;
+        wake_parent_pid = parent_pid;
+    }
+    else
+    {
+        process_reset_record(outgoing);
+        outgoing->pid = outgoing_pid;
+    }
     process_table_lock_release(flags);
+
+    if (wake_parent_pid != 0U)
+        (void)process_wake(wake_parent_pid);
     return 1;
 }
 

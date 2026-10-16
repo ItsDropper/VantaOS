@@ -62,8 +62,6 @@ int process_install_user_image(const char* name, uint32_t parent_pid,
     if (!process_initialized_state || !name || !name[0] || !space ||
         !pages || page_count == 0U ||
         page_count > PROCESS_USER_MAX_PAGES ||
-        paging_get_current_address_space() !=
-            paging_get_kernel_address_space() ||
         entry < PAGING_USER_BASE || entry > PAGING_USER_END ||
         stack_base < PAGING_USER_BASE || stack_top <= stack_base ||
         stack_top - stack_base > PROCESS_USER_MAX_PAGES * PAGE_SIZE ||
@@ -146,9 +144,7 @@ int process_create_user(const char* name, uint32_t parent_pid,
                         const void* image, size_t image_size)
 {
     if (!process_initialized_state || !name || !name[0] || !image ||
-        image_size == 0U || image_size > PAGE_SIZE ||
-        paging_get_current_address_space() !=
-            paging_get_kernel_address_space())
+        image_size == 0U || image_size > PAGE_SIZE)
         return -1;
 
     paging_address_space_t* space = paging_create_address_space();

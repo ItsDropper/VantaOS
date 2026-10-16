@@ -90,6 +90,7 @@ void shell_help(void)
     terminal_write("  ls       - List files and directories\n");
     terminal_write("  cd       - Change directory\n");
     terminal_write("  cat      - Read a system file\n");
+    terminal_write("  exec     - Load and run an ELF64 user program\n");
     terminal_write("  ps       - Show processes\n");
     terminal_write("  storage  - Show ATA/FAT32 storage status\n");
 }

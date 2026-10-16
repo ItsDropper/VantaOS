@@ -132,8 +132,6 @@ int process_create_user_elf(const char* name, uint32_t parent_pid,
 {
     if (!process_initialized_state || !name || !name[0] || !image ||
         image_size < sizeof(elf64_header_t) ||
-        paging_get_current_address_space() !=
-            paging_get_kernel_address_space() ||
         !paging_nx_available())
         return -1;
 

@@ -120,6 +120,7 @@ void os_initialize(multiboot_info_t* mbd)
     os_selftest_initialize();
     if (!user_mode_process_smoke_test_start())
         os_boot_fatal("VANTAOS_USER_PROCESS_TEST_START_FATAL_FAIL\n");
+    shell_exec("/HELLO.ELF");
 #endif
 }
 

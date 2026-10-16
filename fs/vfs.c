@@ -1,4 +1,5 @@
 #include "vfs.h"
+#include "heap.h"
 
 #define VFS_MAX_OPEN_FILES 32U
 
@@ -125,60 +126,58 @@ int vfs_read(
     unsigned int length
 )
 {
-    if (!initialized ||
-        handle < 0 ||
-        handle >= (int)VFS_MAX_OPEN_FILES ||
-        !buffer ||
-        length == 0 ||
+    if (!initialized || handle < 0 ||
+        handle >= (int)VFS_MAX_OPEN_FILES || !buffer || length == 0U ||
         !open_files[handle].used)
         return -1;
 
     const fs_node_t* node =
-        filesystem_get_node(
-            open_files[handle].node_id
-        );
-
-    if (!node ||
-        (node->type != FS_NODE_FILE &&
-         node->type != FS_NODE_VIRTUAL))
+        filesystem_get_node(open_files[handle].node_id);
+    if (!node || node->type != FS_NODE_FILE ||
+        node->size >= HEAP_MAX_SIZE)
         return -1;
 
-    char temporary[FS_FILE_MAX];
+    /*
+     * FAT32 reads need one extra byte for the terminator. Allocate by actual
+     * file size instead of using the old 512-byte stack scratch buffer, so
+     * callers can read complete ELF images and other larger files safely.
+     */
+    size_t capacity = (size_t)node->size + 1U;
+    char* temporary = (char*)kmalloc(capacity);
+    if (!temporary)
+        return -1;
 
-    int result =
-        filesystem_read(
-            node->id,
-            temporary,
-            sizeof(temporary)
-        );
-
+    int result = filesystem_read(node->id, temporary,
+                                 (unsigned int)capacity);
     if (result < 0)
-        return -1;
-
-    unsigned int size = (unsigned int)result;
-
-    if (open_files[handle].position >= size)
-        return 0;
-
-    unsigned int available =
-        size - open_files[handle].position;
-
-    if (length > available)
-        length = available;
-
-    for (unsigned int i = 0; i < length; i++)
     {
-        buffer[i] =
-            temporary[
-                open_files[handle].position + i
-            ];
+        kfree(temporary);
+        return -1;
     }
 
-    open_files[handle].position += length;
+    unsigned int available = (unsigned int)result;
+    if (open_files[handle].position > available)
+    {
+        kfree(temporary);
+        return -1;
+    }
+    if (open_files[handle].position == available)
+    {
+        kfree(temporary);
+        return 0;
+    }
 
+    unsigned int remaining = available - open_files[handle].position;
+    if (length > remaining)
+        length = remaining;
+
+    for (unsigned int i = 0; i < length; i++)
+        buffer[i] = temporary[open_files[handle].position + i];
+
+    open_files[handle].position += length;
+    kfree(temporary);
     return (int)length;
 }
-
 
 
 static int vfs_node_path(

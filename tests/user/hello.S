@@ -322,6 +322,6 @@ file_buffer:
     .skip fixture_end - fixture
 .align 4
 child_status:
-    .long -1
+    .skip 4
 
 .section .note.GNU-stack,"",@progbits

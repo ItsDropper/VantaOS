@@ -257,32 +257,41 @@ int process_create_kernel(const char* name, uint32_t parent_pid,
 
 int process_mark_running(uint32_t pid)
 {
-    if (!initialized || pid == 0 || pid >= PROCESS_MAX ||
-        processes[pid].state == PROCESS_UNUSED ||
-        processes[pid].state == PROCESS_TERMINATED)
+    if (!initialized || pid == 0 || pid >= PROCESS_MAX)
         return 0;
-
-    processes[pid].state = PROCESS_RUNNING;
-    return 1;
+    uint64_t flags = process_table_lock_acquire();
+    int ok = processes[pid].state != PROCESS_UNUSED &&
+             processes[pid].state != PROCESS_TERMINATED;
+    if (ok)
+        processes[pid].state = PROCESS_RUNNING;
+    process_table_lock_release(flags);
+    return ok;
 }
 
 int process_mark_ready(uint32_t pid)
 {
-    if (!initialized || pid == 0 || pid >= PROCESS_MAX ||
-        processes[pid].state == PROCESS_UNUSED ||
-        processes[pid].state == PROCESS_TERMINATED)
+    if (!initialized || pid == 0 || pid >= PROCESS_MAX)
         return 0;
-
-    processes[pid].state = PROCESS_READY;
-    return 1;
+    uint64_t flags = process_table_lock_acquire();
+    int ok = processes[pid].state != PROCESS_UNUSED &&
+             processes[pid].state != PROCESS_TERMINATED;
+    if (ok)
+        processes[pid].state = PROCESS_READY;
+    process_table_lock_release(flags);
+    return ok;
 }
 
 int process_set_running(uint32_t pid)
 {
-    if (!initialized || pid >= PROCESS_MAX ||
-        processes[pid].state == PROCESS_UNUSED ||
-        processes[pid].state == PROCESS_TERMINATED)
+    if (!initialized || pid >= PROCESS_MAX)
         return 0;
+    uint64_t flags = process_table_lock_acquire();
+    if (processes[pid].state == PROCESS_UNUSED ||
+        processes[pid].state == PROCESS_TERMINATED)
+    {
+        process_table_lock_release(flags);
+        return 0;
+    }
 
     uint32_t current_pid = process_current_slot();
     if (current_pid < PROCESS_MAX &&
@@ -292,6 +301,7 @@ int process_set_running(uint32_t pid)
 
     process_set_current_slot(pid);
     processes[pid].state = PROCESS_RUNNING;
+    process_table_lock_release(flags);
     return 1;
 }
 
@@ -299,10 +309,13 @@ int process_switch_to(uint32_t pid)
 {
     if (!initialized || pid == 0 || pid >= PROCESS_MAX)
         return 0;
-
+    uint64_t flags = process_table_lock_acquire();
     if (processes[pid].state != PROCESS_READY &&
         processes[pid].state != PROCESS_RUNNING)
+    {
+        process_table_lock_release(flags);
         return 0;
+    }
 
     uint32_t current_pid = process_current_slot();
     if (current_pid != pid &&
@@ -312,24 +325,31 @@ int process_switch_to(uint32_t pid)
 
     process_set_current_slot(pid);
     processes[pid].state = PROCESS_RUNNING;
+    process_table_lock_release(flags);
     return 1;
 }
 
 int process_wake(uint32_t pid)
 {
-    if (!initialized || pid >= PROCESS_MAX ||
-        processes[pid].state != PROCESS_SLEEPING)
+    if (!initialized || pid >= PROCESS_MAX)
         return 0;
-
-    processes[pid].state = PROCESS_READY;
-    return 1;
+    uint64_t flags = process_table_lock_acquire();
+    int ok = processes[pid].state == PROCESS_SLEEPING;
+    if (ok)
+        processes[pid].state = PROCESS_READY;
+    process_table_lock_release(flags);
+    return ok;
 }
 
 void process_block_current(void)
 {
+    if (!initialized)
+        return;
+    uint64_t flags = process_table_lock_acquire();
     uint32_t current_pid = process_current_slot();
-    if (initialized && current_pid < PROCESS_MAX)
+    if (current_pid < PROCESS_MAX)
         processes[current_pid].state = PROCESS_SLEEPING;
+    process_table_lock_release(flags);
 }
 
 int process_terminate(uint32_t pid)
@@ -352,32 +372,38 @@ int process_terminate(uint32_t pid)
 
 void process_terminate_current(void)
 {
-    uint32_t current_pid = process_current_slot();
-    if (!initialized || current_pid == 0 ||
-        current_pid >= PROCESS_MAX)
+    if (!initialized)
         return;
-
-    if (processes[current_pid].state != PROCESS_UNUSED)
+    uint64_t flags = process_table_lock_acquire();
+    uint32_t current_pid = process_current_slot();
+    if (current_pid != 0 && current_pid < PROCESS_MAX &&
+        processes[current_pid].state != PROCESS_UNUSED)
         processes[current_pid].state = PROCESS_TERMINATED;
+    process_table_lock_release(flags);
 }
 
 void process_save_stack(uint32_t pid, uint64_t stack_pointer)
 {
-    if (!initialized || pid >= PROCESS_MAX ||
-        processes[pid].state == PROCESS_UNUSED)
+    if (!initialized || pid >= PROCESS_MAX)
         return;
-
-    processes[pid].stack_pointer = stack_pointer;
-    processes[pid].context.rsp = stack_pointer;
+    uint64_t flags = process_table_lock_acquire();
+    if (processes[pid].state != PROCESS_UNUSED)
+    {
+        processes[pid].stack_pointer = stack_pointer;
+        processes[pid].context.rsp = stack_pointer;
+    }
+    process_table_lock_release(flags);
 }
 
 uint64_t process_get_stack(uint32_t pid)
 {
-    if (!initialized || pid >= PROCESS_MAX ||
-        processes[pid].state == PROCESS_UNUSED)
+    if (!initialized || pid >= PROCESS_MAX)
         return 0;
-
-    return processes[pid].stack_pointer;
+    uint64_t flags = process_table_lock_acquire();
+    uint64_t stack = processes[pid].state == PROCESS_UNUSED ?
+                     0 : processes[pid].stack_pointer;
+    process_table_lock_release(flags);
+    return stack;
 }
 
 int process_stack_is_valid(uint32_t pid)
@@ -464,13 +490,13 @@ unsigned int process_count(void)
 {
     if (!initialized)
         return 0;
-
+    uint64_t flags = process_table_lock_acquire();
     unsigned int count = 0;
     for (uint32_t i = 0; i < PROCESS_MAX; i++)
         if (processes[i].state != PROCESS_UNUSED &&
             processes[i].state != PROCESS_TERMINATED)
             count++;
-
+    process_table_lock_release(flags);
     return count;
 }
 

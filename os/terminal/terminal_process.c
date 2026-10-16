@@ -4,11 +4,13 @@
 
 static uint32_t terminal_pid;
 static volatile int redraw_requested;
+static volatile int input_enabled;
 
 void terminal_process_initialize(void)
 {
     terminal_pid = 0U;
     __atomic_store_n(&redraw_requested, 0, __ATOMIC_RELEASE);
+    __atomic_store_n(&input_enabled, 0, __ATOMIC_RELEASE);
 }
 
 int terminal_process_start(uint32_t parent_pid)
@@ -40,8 +42,19 @@ void terminal_process_request_exit(void)
 {
     uint32_t pid = terminal_pid;
     terminal_pid = 0U;
+    __atomic_store_n(&input_enabled, 0, __ATOMIC_RELEASE);
     if (pid != 0U)
         (void)process_terminate(pid);
+}
+
+void terminal_process_set_input_enabled(int enabled)
+{
+    __atomic_store_n(&input_enabled, enabled != 0, __ATOMIC_RELEASE);
+}
+
+int terminal_process_input_enabled(void)
+{
+    return __atomic_load_n(&input_enabled, __ATOMIC_ACQUIRE) != 0;
 }
 
 void terminal_process_mark_redraw(void)

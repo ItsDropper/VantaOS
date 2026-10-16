@@ -238,6 +238,17 @@ static void process_deferred_switch_probe(void)
         if (!ok) failure_stage = 4U;
     }
 
+    process_t incoming;
+    if (ok)
+    {
+        ok = process_snapshot((uint32_t)incoming_pid, &incoming) &&
+             incoming.state == PROCESS_RUNNING &&
+             incoming.owner_cpu == cpu_id &&
+             incoming.stack_pointer == incoming_stack &&
+             incoming.address_space == incoming_address_space;
+        if (!ok) failure_stage = 12U;
+    }
+
     process_t outgoing;
     if (ok)
     {

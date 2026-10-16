@@ -96,6 +96,8 @@ void filesystem_selftest_initialize(void)
      * A failure is a hard regression marker; no success marker is printed
      * until bytes written to the disk can be read back through the VFS.
      */
+    if (fat32_is_mounted())
+    {
     if (filesystem_create_file("/BAD NAME.TXT") >= 0)
     {
         serial_write("VANTAOS_FAT32_NAME_GUARD_FAIL\n");
@@ -141,6 +143,12 @@ void filesystem_selftest_initialize(void)
         }
     }
     serial_write("VANTAOS_FAT32_WRITE_READBACK_OK\n");
+    }
+    else
+    {
+        /* The UEFI boot disk is an EFI System Partition, not the writable data volume. */
+        serial_write("VANTAOS_FAT32_WRITE_SKIPPED_NO_VOLUME\n");
+    }
 
     serial_write("VANTAOS_FILESYSTEM_NAMESPACE_OK\n");
     serial_write("VANTAOS_VFS_HANDLE_GUARDS_OK\n");

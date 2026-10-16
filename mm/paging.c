@@ -2,6 +2,7 @@
 #include "pmm.h"
 #include "cpu_local.h"
 #include "apic.h"
+#include "serial.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -36,6 +37,34 @@ static paging_address_space_t* fallback_current_address_space;
 #define TLB_SHOOTDOWN_SPIN_LIMIT 100000000U
 static volatile uint32_t tlb_shootdown_lock;
 static uint64_t tlb_shootdown_generation;
+static volatile uint32_t paging_mutation_lock;
+
+static void paging_switch_address_space_locked(
+    paging_address_space_t* address_space);
+
+static uint64_t paging_lock_acquire(void)
+{
+    uint64_t saved_flags;
+    __asm__ volatile ("pushfq; popq %0; cli" : "=r"(saved_flags) :: "memory");
+    while (__atomic_exchange_n(&paging_mutation_lock, 1U,
+                               __ATOMIC_ACQUIRE) != 0U)
+        __asm__ volatile ("pause" ::: "memory");
+    return saved_flags;
+}
+
+static void paging_lock_release(uint64_t saved_flags)
+{
+    __atomic_store_n(&paging_mutation_lock, 0U, __ATOMIC_RELEASE);
+    if (saved_flags & (1ULL << 9))
+        __asm__ volatile ("sti" ::: "memory");
+}
+
+static _Noreturn void paging_tlb_failure(void)
+{
+    serial_write("VANTAOS_TLB_SHOOTDOWN_FAIL\n");
+    for (;;)
+        __asm__ volatile ("cli; hlt" ::: "memory");
+}
 
 static paging_address_space_t** paging_current_slot(void)
 {
@@ -47,7 +76,7 @@ static paging_address_space_t** paging_current_slot(void)
 
 static paging_address_space_t* paging_current(void)
 {
-    return *paging_current_slot();
+    return __atomic_load_n(paging_current_slot(), __ATOMIC_ACQUIRE);
 }
 
 static inline void load_page_table(uintptr_t physical_address)
@@ -68,7 +97,8 @@ static inline void invalidate_page(uintptr_t address)
 int paging_tlb_shootdown(paging_address_space_t* address_space,
                          uintptr_t virtual_address)
 {
-    if (!address_space || !address_space->used ||
+    if (!address_space ||
+        __atomic_load_n(&address_space->used, __ATOMIC_ACQUIRE) == 0 ||
         (virtual_address & (PAGE_SIZE - 1U)) != 0)
         return 0;
 
@@ -446,6 +476,8 @@ void paging_initialize(void)
     kernel_address_space.directory_physical =
         (uintptr_t)kernel_pml4;
     kernel_address_space.used = 1;
+    kernel_address_space.active_cpu_mask = 0;
+    kernel_address_space.pending_shootdowns = 0;
 
     for (uint32_t i = 0; i < ADDRESS_SPACE_MAX; i++)
     {
@@ -453,6 +485,8 @@ void paging_initialize(void)
         address_spaces[i].directory_physical =
             (uintptr_t)address_space_pml4[i];
         address_spaces[i].used = 0;
+        address_spaces[i].active_cpu_mask = 0;
+        address_spaces[i].pending_shootdowns = 0;
     }
 
     fallback_current_address_space = &kernel_address_space;
@@ -462,161 +496,226 @@ void paging_initialize(void)
 
 int paging_map_page(uintptr_t virtual_address, uintptr_t physical_address)
 {
+    uint64_t saved_flags = paging_lock_acquire();
     if ((virtual_address % PAGE_SIZE) != 0 ||
         (physical_address % PAGE_SIZE) != 0 ||
         paging_current() != &kernel_address_space)
+    {
+        paging_lock_release(saved_flags);
         return 0;
+    }
 
     uint64_t* table = table_for(virtual_address);
     if (!table)
+    {
+        paging_lock_release(saved_flags);
         return 0;
+    }
 
     uint32_t table_index = (uint32_t)((virtual_address >> 12) & 0x1FFU);
-    table[table_index] =
-        ((uint64_t)physical_address) |
-        PAGE_PRESENT | PAGE_WRITE;
+    table[table_index] = ((uint64_t)physical_address) |
+                         PAGE_PRESENT | PAGE_WRITE;
+    paging_lock_release(saved_flags);
 
-    invalidate_page(virtual_address);
+    if (!paging_tlb_shootdown(&kernel_address_space, virtual_address))
+        paging_tlb_failure();
     return 1;
 }
-
 
 int paging_map_user_page(paging_address_space_t* address_space,
                          uintptr_t virtual_address,
                          uintptr_t physical_address,
                          int writable)
 {
+    uint64_t saved_flags = paging_lock_acquire();
     if ((virtual_address & (PAGE_SIZE - 1U)) != 0 ||
         (physical_address & (PAGE_SIZE - 1U)) != 0 ||
         virtual_address < PAGING_USER_BASE ||
         virtual_address > PAGING_USER_END ||
         physical_address >= PMM_MAX_PHYSICAL_ADDRESS ||
         !paging_owns_address_space(address_space))
+    {
+        paging_lock_release(saved_flags);
         return 0;
+    }
 
     uint64_t* entry = user_leaf_entry(address_space, virtual_address, 1);
     if (!entry || (*entry & PAGE_PRESENT))
+    {
+        paging_lock_release(saved_flags);
         return 0;
+    }
 
     *entry = ((uint64_t)physical_address) |
              PAGE_PRESENT | PAGE_USER |
              (writable ? PAGE_WRITE : 0U);
+    __atomic_add_fetch(&address_space->pending_shootdowns, 1U,
+                       __ATOMIC_RELEASE);
+    paging_lock_release(saved_flags);
 
-    if (paging_current() == address_space)
-        invalidate_page(virtual_address);
-
+    if (!paging_tlb_shootdown(address_space, virtual_address))
+        paging_tlb_failure();
+    __atomic_sub_fetch(&address_space->pending_shootdowns, 1U,
+                       __ATOMIC_RELEASE);
     return 1;
 }
 
 int paging_unmap_user_page(paging_address_space_t* address_space,
                            uintptr_t virtual_address)
 {
+    uint64_t saved_flags = paging_lock_acquire();
     if ((virtual_address & (PAGE_SIZE - 1U)) != 0 ||
         !paging_owns_address_space(address_space))
+    {
+        paging_lock_release(saved_flags);
         return 0;
+    }
 
     uint64_t* entry = user_leaf_entry(address_space, virtual_address, 0);
     if (!entry || !(*entry & PAGE_PRESENT))
+    {
+        paging_lock_release(saved_flags);
         return 0;
+    }
 
     *entry = 0;
-    if (paging_current() == address_space)
-        invalidate_page(virtual_address);
+    __atomic_add_fetch(&address_space->pending_shootdowns, 1U,
+                       __ATOMIC_RELEASE);
+    paging_lock_release(saved_flags);
 
-    /* The caller owns the mapped physical frame and must free it separately. */
+    if (!paging_tlb_shootdown(address_space, virtual_address))
+        paging_tlb_failure();
+    __atomic_sub_fetch(&address_space->pending_shootdowns, 1U,
+                       __ATOMIC_RELEASE);
+
+    /* The caller owns the unmapped physical frame and must free it separately. */
     return 1;
 }
 
 uint64_t paging_get_page_flags(uintptr_t virtual_address)
 {
+    uint64_t saved_flags = paging_lock_acquire();
+    uint64_t flags = 0;
+
     if (virtual_address >= PAGING_USER_BASE &&
         virtual_address <= PAGING_USER_END)
     {
         uint64_t* entry = user_leaf_entry(paging_current(),
                                           virtual_address, 0);
-        return entry ? (*entry & 0xFFFU) : 0;
+        flags = entry ? (*entry & 0xFFFU) : 0;
+    }
+    else
+    {
+        uint64_t* table = table_for(virtual_address);
+        if (table)
+        {
+            uint32_t index = (uint32_t)((virtual_address >> 12) & 0x1FFU);
+            flags = table[index] & 0xFFFU;
+        }
     }
 
-    uint64_t* table = table_for(virtual_address);
-    if (!table)
-        return 0;
-
-    uint32_t index = (uint32_t)((virtual_address >> 12) & 0x1FFU);
-    return table[index] & 0xFFFU;
+    paging_lock_release(saved_flags);
+    return flags;
 }
 
 int paging_map_mmio_page(uintptr_t virtual_address, uintptr_t physical_address)
 {
+    uint64_t saved_flags = paging_lock_acquire();
     if ((virtual_address & (PAGE_SIZE - 1U)) != 0 ||
         (physical_address & (PAGE_SIZE - 1U)) != 0 ||
         virtual_address < MMIO_WINDOW_BASE ||
         virtual_address >= MMIO_WINDOW_BASE + MMIO_PT_COUNT * PAGE_2M ||
         paging_current() != &kernel_address_space)
+    {
+        paging_lock_release(saved_flags);
         return 0;
+    }
 
     uint64_t* table = table_for(virtual_address);
     if (!table)
+    {
+        paging_lock_release(saved_flags);
         return 0;
+    }
 
     uint32_t index = (uint32_t)((virtual_address >> 12) & 0x1FFU);
     table[index] = ((uint64_t)physical_address & 0x000FFFFFFFFFF000ULL) |
                    PAGE_PRESENT | PAGE_WRITE | 0x018U; /* PWT + PCD */
-    invalidate_page(virtual_address);
+    paging_lock_release(saved_flags);
+
+    if (!paging_tlb_shootdown(&kernel_address_space, virtual_address))
+        paging_tlb_failure();
     return 1;
 }
 
 void paging_unmap_page(uintptr_t virtual_address)
 {
+    uint64_t saved_flags = paging_lock_acquire();
     if ((virtual_address % PAGE_SIZE) != 0 ||
         paging_current() != &kernel_address_space)
+    {
+        paging_lock_release(saved_flags);
         return;
+    }
 
     uint64_t* table = table_for(virtual_address);
     if (!table)
+    {
+        paging_lock_release(saved_flags);
         return;
+    }
 
     uint32_t index = (uint32_t)((virtual_address >> 12) & 0x1FFU);
     table[index] = 0;
-    invalidate_page(virtual_address);
+    paging_lock_release(saved_flags);
+
+    if (!paging_tlb_shootdown(&kernel_address_space, virtual_address))
+        paging_tlb_failure();
 }
 
 uintptr_t paging_get_physical(uintptr_t virtual_address)
 {
+    uint64_t saved_flags = paging_lock_acquire();
+    uintptr_t physical = 0;
+
     if (virtual_address >= PAGING_USER_BASE &&
         virtual_address <= PAGING_USER_END)
     {
         uint64_t* entry = user_leaf_entry(paging_current(),
                                           virtual_address, 0);
-        if (!entry || !(*entry & PAGE_PRESENT))
-            return 0;
-
-        return (uintptr_t)(*entry & PAGE_ADDRESS_MASK) |
-               (virtual_address & (PAGE_SIZE - 1U));
+        if (entry && (*entry & PAGE_PRESENT))
+            physical = (uintptr_t)(*entry & PAGE_ADDRESS_MASK) |
+                       (virtual_address & (PAGE_SIZE - 1U));
     }
-
-    uint64_t* table = table_for(virtual_address);
-
-    if (table)
+    else
     {
-        uint32_t index = (uint32_t)((virtual_address >> 12) & 0x1FFU);
-        if (!(table[index] & PAGE_PRESENT))
-            return 0;
-
-        return (uintptr_t)(table[index] & 0x000FFFFFFFFFF000ULL) |
-               (virtual_address & 0xFFFU);
+        uint64_t* table = table_for(virtual_address);
+        if (table)
+        {
+            uint32_t index = (uint32_t)((virtual_address >> 12) & 0x1FFU);
+            if (table[index] & PAGE_PRESENT)
+                physical = (uintptr_t)(table[index] &
+                    0x000FFFFFFFFFF000ULL) | (virtual_address & 0xFFFU);
+        }
+        else if (virtual_address < 0x40000000ULL)
+        {
+            /* Identity-mapped low memory. */
+            physical = virtual_address;
+        }
     }
 
-    /* Identity-mapped low memory. */
-    if (virtual_address < 0x40000000ULL)
-        return virtual_address;
-
-    return 0;
+    paging_lock_release(saved_flags);
+    return physical;
 }
 
 paging_address_space_t* paging_create_address_space(void)
 {
+    uint64_t saved_flags = paging_lock_acquire();
     if (paging_current() != &kernel_address_space)
+    {
+        paging_lock_release(saved_flags);
         return NULL;
+    }
 
     for (uint32_t i = 0; i < ADDRESS_SPACE_MAX; i++)
     {
@@ -624,59 +723,131 @@ paging_address_space_t* paging_create_address_space(void)
             continue;
 
         uint64_t* pml4 = address_spaces[i].directory;
-
         for (uint32_t entry = 0; entry < TABLE_ENTRIES; entry++)
             pml4[entry] = 0;
 
-        /*
-         * Share the kernel's identity and high mappings. User mappings
-         * can later occupy otherwise-empty PML4 entries.
-         */
+        /* Share kernel identity/high mappings; user mappings occupy slot 1. */
         pml4[0] = kernel_pml4[0];
-
-        address_spaces[i].used = 1;
+        address_spaces[i].active_cpu_mask = 0;
+        address_spaces[i].pending_shootdowns = 0;
+        __atomic_store_n(&address_spaces[i].used, 1, __ATOMIC_RELEASE);
+        paging_lock_release(saved_flags);
         return &address_spaces[i];
     }
 
+    paging_lock_release(saved_flags);
     return NULL;
 }
 
 void paging_destroy_address_space(paging_address_space_t* address_space)
 {
-    if (!paging_owns_address_space(address_space))
-        return;
-
-    cpu_local_t* current_cpu = cpu_local_current();
-    for (uint32_t i = 0; i < cpu_local_capacity(); i++)
+    uint64_t saved_flags = paging_lock_acquire();
+    if (!paging_owns_address_space(address_space) ||
+        __atomic_load_n(&address_space->pending_shootdowns,
+                        __ATOMIC_ACQUIRE) != 0U)
     {
-        const cpu_local_t* local = cpu_local_get(i);
-        if (local && local->current_address_space == address_space &&
-            local != current_cpu)
-            return; /* Never free page tables still loaded by another CPU. */
+        paging_lock_release(saved_flags);
+        return;
     }
 
     if (paging_current() == address_space)
-        paging_switch_address_space(&kernel_address_space);
+        paging_switch_address_space_locked(&kernel_address_space);
+
+    /*
+     * The same lock serializes address-space activation and destruction, so
+     * no CPU can begin using this directory between this check and teardown.
+     */
+    if (__atomic_load_n(&address_space->active_cpu_mask,
+                        __ATOMIC_ACQUIRE) != 0U ||
+        __atomic_load_n(&address_space->pending_shootdowns,
+                        __ATOMIC_ACQUIRE) != 0U)
+    {
+        paging_lock_release(saved_flags);
+        return;
+    }
 
     release_user_page_tables(address_space);
-
     for (uint32_t i = 0; i < TABLE_ENTRIES; i++)
         address_space->directory[i] = 0;
 
-    address_space->used = 0;
+    address_space->active_cpu_mask = 0;
+    __atomic_store_n(&address_space->used, 0, __ATOMIC_RELEASE);
+    paging_lock_release(saved_flags);
 }
 
-void paging_switch_address_space(paging_address_space_t* address_space)
+static void paging_switch_address_space_locked(
+    paging_address_space_t* address_space)
 {
     if (!address_space || !address_space->used)
         return;
 
-    paging_address_space_t** slot = paging_current_slot();
-    if (*slot == address_space)
-        return;
+    cpu_local_t* local = cpu_local_current();
+    if (local && local->self == local && local->online != 0U)
+    {
+        paging_address_space_t* old_space = __atomic_load_n(
+            &local->current_address_space, __ATOMIC_ACQUIRE);
+        if (old_space == address_space)
+            return;
 
-    *slot = address_space;
+        uint32_t bit = 1U << local->logical_id;
+        if (old_space)
+            __atomic_fetch_and(&old_space->active_cpu_mask, ~bit,
+                               __ATOMIC_RELEASE);
+        __atomic_fetch_or(&address_space->active_cpu_mask, bit,
+                          __ATOMIC_RELEASE);
+
+        /*
+         * Publish the target before loading CR3. If a concurrent shootdown
+         * sees this CPU as active, its IPI is handled after this switch and
+         * invalidates the target address space; otherwise the CR3 reload
+         * itself flushes stale non-global translations.
+         */
+        __atomic_store_n(&local->current_address_space, address_space,
+                         __ATOMIC_RELEASE);
+    }
+    else
+    {
+        if (fallback_current_address_space == address_space)
+            return;
+        fallback_current_address_space = address_space;
+    }
+
     load_page_table(address_space->directory_physical);
+}
+
+void paging_switch_address_space(paging_address_space_t* address_space)
+{
+    uint64_t saved_flags = paging_lock_acquire();
+    if (!address_space || !address_space->used)
+    {
+        paging_lock_release(saved_flags);
+        return;
+    }
+
+    paging_switch_address_space_locked(address_space);
+    paging_lock_release(saved_flags);
+}
+
+int paging_register_cpu(uint32_t logical_id,
+                        paging_address_space_t* address_space)
+{
+    if (logical_id >= CPU_LOCAL_MAX || !address_space ||
+        !address_space->used)
+        return 0;
+
+    uint64_t saved_flags = paging_lock_acquire();
+    cpu_local_t* local = cpu_local_current();
+    if (!local || local->self != local || local->logical_id != logical_id ||
+        local->current_address_space != address_space)
+    {
+        paging_lock_release(saved_flags);
+        return 0;
+    }
+
+    __atomic_fetch_or(&address_space->active_cpu_mask, 1U << logical_id,
+                      __ATOMIC_RELEASE);
+    paging_lock_release(saved_flags);
+    return 1;
 }
 
 paging_address_space_t* paging_get_kernel_address_space(void)

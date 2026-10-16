@@ -20,6 +20,10 @@ typedef struct paging_address_space
     uint64_t* directory;
     uintptr_t directory_physical;
     int used;
+    /* Protected by the paging mutation lock; bit N means CPU N runs here. */
+    volatile uint32_t active_cpu_mask;
+    /* Outstanding map/unmap shootdowns prevent page-table destruction. */
+    volatile uint32_t pending_shootdowns;
 } paging_address_space_t;
 
 void paging_initialize(void);
@@ -37,6 +41,9 @@ uintptr_t paging_get_physical(uintptr_t virtual_address);
 paging_address_space_t* paging_create_address_space(void);
 void paging_destroy_address_space(paging_address_space_t* address_space);
 void paging_switch_address_space(paging_address_space_t* address_space);
+/* Register a newly initialized CPU in its initial address space. */
+int paging_register_cpu(uint32_t logical_id,
+                        paging_address_space_t* address_space);
 /* Synchronously invalidate one virtual page on every online CPU using space. */
 int paging_tlb_shootdown(paging_address_space_t* address_space,
                          uintptr_t virtual_address);

@@ -874,7 +874,7 @@ int fat32_create_file(const char* path)
         !fat32_find_entry(parent, leaf, &entry) || entry.found)
         return -1;
 
-    uint32_t lba = entry.free_lba, off = entry.free_offset;
+    uint32_t lba = 0, off = 0;
     if (!entry.free_found)
     {
         uint32_t new_cluster = fat32_allocate_one();
@@ -918,8 +918,13 @@ int fat32_write_file(const char* path, const char* data, uint32_t size)
         }
     }
 
-    uint32_t lba = entry.entry_lba, off = entry.entry_offset;
-    if (!entry.found)
+    uint32_t lba = 0, off = 0;
+    if (entry.found)
+    {
+        lba = entry.entry_lba;
+        off = entry.entry_offset;
+    }
+    else
     {
         if (!entry.free_found)
         {

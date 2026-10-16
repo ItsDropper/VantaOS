@@ -1,6 +1,7 @@
 #include "desktop_process.h"
 
 #include "desktop.h"
+#include "graphics.h"
 #include "process.h"
 #include "mouse.h"
 #include "terminal_process.h"
@@ -13,6 +14,7 @@ void desktop_process_main(void)
     while (1)
     {
         mouse_process_events();
+        terminal_process_set_input_enabled(graphics_get_active_panel() == 3);
         desktop_update();
         file_explorer_process_step();
         __asm__ volatile ("hlt");

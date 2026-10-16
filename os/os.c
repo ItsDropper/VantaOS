@@ -39,7 +39,8 @@ static void scheduler_reap_observer_entry(void)
 {
     for (uint32_t attempt = 0; attempt < 1000U; attempt++)
     {
-        if (process_get(scheduler_probe_pid) == NULL)
+        process_t snapshot;
+        if (!process_snapshot(scheduler_probe_pid, &snapshot))
         {
             serial_write("VANTAOS_SCHEDULER_REAP_OK\n");
             return;
@@ -803,8 +804,9 @@ static void scheduler_probe_initialize(void)
     }
 
     scheduler_probe_pid = (uint32_t)probe_pid;
-    const process_t* probe = process_get(scheduler_probe_pid);
-    if (!probe || probe->name[PROCESS_NAME_MAX] != '\0')
+    process_t probe;
+    if (!process_snapshot(scheduler_probe_pid, &probe) ||
+        probe.name[PROCESS_NAME_MAX] != '\0')
     {
         serial_write("VANTAOS_PROCESS_NAME_FAIL\n");
         return;

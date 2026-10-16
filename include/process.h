@@ -73,7 +73,8 @@ int process_reap(uint32_t pid);
 uint64_t process_schedule(uint64_t current_stack);
 /* Copies a process record while holding the process-table lock. */
 int process_snapshot(uint32_t pid, process_t* snapshot);
-const process_t* process_get(uint32_t pid);
+/* Non-blocking snapshot for exception/fault paths that must not deadlock. */
+int process_snapshot_try(uint32_t pid, process_t* snapshot);
 unsigned int process_count(void);
 uint32_t process_current_pid(void);
 uint32_t process_current_cpu_id(void);

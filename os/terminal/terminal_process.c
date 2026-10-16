@@ -140,16 +140,16 @@ int terminal_process_is_running(void)
     if (terminal_pid == 0)
         return 0;
 
-    const process_t* process = process_get(terminal_pid);
+    process_t process;
 
-    if (!process)
+    if (!process_snapshot(terminal_pid, &process))
     {
         terminal_pid = 0;
         return 0;
     }
 
-    if (process->state == PROCESS_TERMINATED ||
-        process->state == PROCESS_UNUSED)
+    if (process.state == PROCESS_TERMINATED ||
+        process.state == PROCESS_UNUSED)
     {
         terminal_pid = 0;
         return 0;

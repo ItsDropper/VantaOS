@@ -215,10 +215,10 @@ int user_mode_selftest_run(void)
     /* Restore a mapped, stable boot stack for any later privilege transition. */
     (void)gdt_set_kernel_stack(cpu_id, (uintptr_t)&stack_top);
 
-    serial_write(ok ?
+    serial_write(syscall_ok ?
         "VANTAOS_RING3_SYSCALL_OK\n" :
         "VANTAOS_RING3_SYSCALL_FAIL\n");
-    serial_write(ok ?
+    serial_write(isolation_ok ?
         "VANTAOS_RING3_KERNEL_ISOLATION_OK\n" :
         "VANTAOS_RING3_KERNEL_ISOLATION_FAIL\n");
     return ok;

@@ -485,6 +485,20 @@ uint64_t process_schedule(uint64_t current_stack)
     return current_stack;
 }
 
+
+int process_snapshot(uint32_t pid, process_t* snapshot)
+{
+    if (!initialized || pid >= PROCESS_MAX || !snapshot)
+        return 0;
+
+    uint64_t flags = process_table_lock_acquire();
+    int ok = processes[pid].state != PROCESS_UNUSED;
+    if (ok)
+        *snapshot = processes[pid];
+    process_table_lock_release(flags);
+    return ok;
+}
+
 const process_t* process_get(uint32_t pid)
 {
     if (!initialized || pid >= PROCESS_MAX ||

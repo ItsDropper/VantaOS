@@ -13,12 +13,12 @@ extern unsigned char _kernel_text_start;
 extern unsigned char _kernel_text_end;
 extern void process_entry_trampoline(void);
 
-process_t processes[PROCESS_MAX];
-uint8_t process_stacks[PROCESS_MAX][PROCESS_STACK_SIZE]
+process_t process_table_records[PROCESS_MAX];
+uint8_t process_stack_storage[PROCESS_MAX][PROCESS_STACK_SIZE]
     __attribute__((aligned(16)));
 
 int process_initialized_state;
-uint32_t legacy_current_pid;
+uint32_t process_legacy_current_pid;
 
 spinlock_t process_table_lock = SPINLOCK_INITIALIZER;
 
@@ -49,7 +49,7 @@ uint32_t process_current_cpu_id(void)
 uint32_t process_current_slot(void)
 {
     cpu_local_t* local = process_local_state();
-    return local ? local->current_pid : legacy_current_pid;
+    return local ? local->current_pid : process_legacy_current_pid;
 }
 
 void process_set_current_slot(uint32_t pid)
@@ -58,7 +58,7 @@ void process_set_current_slot(uint32_t pid)
     if (local)
         local->current_pid = pid;
     else
-        legacy_current_pid = pid;
+        process_legacy_current_pid = pid;
 }
 
 /* Caller must hold process_table_lock. Idle PIDs are persistent CPU-local
@@ -210,15 +210,15 @@ static void process_prepare_stack(process_t* process, uintptr_t stack_top)
 void process_initialize(void)
 {
     __atomic_store_n(&process_initialized_state, 0, __ATOMIC_RELAXED);
-    legacy_current_pid = 0;
+    process_legacy_current_pid = 0;
     cpu_local_t* local = process_local_state();
     if (local)
         local->current_pid = 0;
 
     for (uint32_t i = 0; i < PROCESS_MAX; i++)
     {
-        processes[i].pid = i;
-        process_reset_record(&processes[i]);
+        process_table_records[i].pid = i;
+        process_reset_record(&process_table_records[i]);
     }
 
     __atomic_store_n(&process_initialized_state, 1, __ATOMIC_RELEASE);
@@ -237,13 +237,13 @@ int process_attach_current(const char* name, uint32_t parent_pid)
     uint64_t flags = process_table_lock_acquire();
     for (uint32_t pid = 1; pid < PROCESS_MAX; pid++)
     {
-        if ((processes[pid].state != PROCESS_UNUSED &&
-             (processes[pid].state != PROCESS_TERMINATED ||
-              processes[pid].owner_cpu != PROCESS_CPU_UNOWNED)) ||
+        if ((process_table_records[pid].state != PROCESS_UNUSED &&
+             (process_table_records[pid].state != PROCESS_TERMINATED ||
+              process_table_records[pid].owner_cpu != PROCESS_CPU_UNOWNED)) ||
             process_is_idle_locked(pid))
             continue;
 
-        process_t* process = &processes[pid];
+        process_t* process = &process_table_records[pid];
         if (!process_allocate_common(process, name, parent_pid))
         {
             process_table_lock_release(flags);
@@ -291,13 +291,13 @@ static int process_create_kernel_affinity(const char* name,
 
     for (uint32_t pid = 1; pid < PROCESS_MAX; pid++)
     {
-        if ((processes[pid].state != PROCESS_UNUSED &&
-             (processes[pid].state != PROCESS_TERMINATED ||
-              processes[pid].owner_cpu != PROCESS_CPU_UNOWNED)) ||
+        if ((process_table_records[pid].state != PROCESS_UNUSED &&
+             (process_table_records[pid].state != PROCESS_TERMINATED ||
+              process_table_records[pid].owner_cpu != PROCESS_CPU_UNOWNED)) ||
             process_is_idle_locked(pid))
             continue;
 
-        process_t* process = &processes[pid];
+        process_t* process = &process_table_records[pid];
         if (!process_allocate_common(process, name, parent_pid))
         {
             process_table_lock_release(flags);
@@ -305,7 +305,7 @@ static int process_create_kernel_affinity(const char* name,
         }
 
         process->affinity_cpu = affinity_cpu;
-        process->kernel_stack = process_stacks[pid];
+        process->kernel_stack = process_stack_storage[pid];
         process->entry = entry;
         uintptr_t stack_top =
             (uintptr_t)process->kernel_stack + PROCESS_STACK_SIZE;

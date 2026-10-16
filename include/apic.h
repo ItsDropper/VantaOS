@@ -8,6 +8,9 @@ int apic_initialize(void);
 int apic_initialize_cpu(uint32_t expected_apic_id);
 /* Starts a periodic local timer on the calling CPU. */
 int apic_timer_initialize(uint8_t vector, uint32_t initial_count);
+/* Calibrates LAPIC decrements per reference PIT tick on the calling CPU. */
+int apic_timer_calibrate(uint8_t vector, uint32_t reference_ticks,
+                         uint32_t* count_per_tick);
 int apic_is_enabled(void);
 void apic_send_eoi(void);
 uint32_t apic_get_bsp_id(void);

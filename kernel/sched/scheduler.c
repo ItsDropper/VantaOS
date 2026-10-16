@@ -34,9 +34,17 @@ int scheduler_is_initialized(void)
 static uint32_t scheduler_next_ready(uint32_t current_pid)
 {
     uint32_t cpu_id = process_current_cpu_id();
+    cpu_local_t* local = cpu_local_current();
+    uint32_t idle_pid = local && local->self == local &&
+        local->online != 0U ?
+        __atomic_load_n(&local->idle_pid, __ATOMIC_ACQUIRE) : 1U;
+
     for (uint32_t offset = 1; offset < PROCESS_MAX; offset++)
     {
         uint32_t pid = (current_pid + offset) % PROCESS_MAX;
+        if (pid == idle_pid)
+            continue;
+
         process_t process;
         if (process_snapshot(pid, &process) &&
             process.state == PROCESS_READY &&
@@ -46,7 +54,6 @@ static uint32_t scheduler_next_ready(uint32_t current_pid)
             return pid;
     }
 
-    cpu_local_t* local = cpu_local_current();
     uint32_t idle_pid = local && local->self == local &&
         local->online != 0U ?
         __atomic_load_n(&local->idle_pid, __ATOMIC_ACQUIRE) : 1U;

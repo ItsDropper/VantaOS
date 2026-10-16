@@ -39,7 +39,7 @@ Userspace enters through `int 0x80`. The syscall number is in `RAX`, arguments a
 | 6 | `vanta_spawn(path, argv, argc)` | RDI: path, RSI: argv, RDX: argument count | Child PID |
 | 7 | `vanta_waitpid(pid, status)` | RDI: direct-child PID, RSI: optional writable status pointer | Collected child PID |
 
-The current limits are 4096 bytes per read/write call, eight per-process file descriptors beginning at 3, 16 arguments, 512 total argument bytes, and a 1 MiB executable-file limit in the shell launch path. Open currently supports read-only access to existing files. `vanta_waitpid` accepts a null status pointer. A child with a live user parent remains a resource-free zombie until its exit status is collected.
+The current limits are 4096 bytes per read/write syscall, eight per-process file descriptors beginning at 3, 16 arguments, 512 total argument bytes, and a 1 MiB executable-file limit in the shell launch path. FAT32-backed regular files use incremental cluster allocation and range I/O, so file contents are not staged in RAM as a whole; the on-disk size field and current VFS offsets are 32-bit, limiting one file to at most 4 GiB minus 1 byte, also bounded by available volume capacity. Open supports existing regular files with read and/or write access; truncation requires write permission. Creation uses the separate create-file syscall. `vanta_waitpid` accepts a null status pointer. A child with a live user parent remains a resource-free zombie until its exit status is collected.
 
 The syscall numbers and semantics are an **initial VantaOS ABI**, not a POSIX interface and not yet a long-term compatibility promise. Keep the public header, kernel dispatch, tests, and documentation synchronized when changing it.
 
@@ -47,7 +47,7 @@ The syscall numbers and semantics are an **initial VantaOS ABI**, not a POSIX in
 
 - Static ELF64 `ET_EXEC` only; no `ET_DYN`, dynamic linker, relocations, or shared libraries.
 - No libc/startup runtime, standard streams, environment variables, heap allocator, or general-purpose thread API.
-- No file creation/writes, pipes, process groups, signals, or POSIX-compatible descriptor semantics.
+- No directory creation from user mode, deletion/rename, pipes, process groups, signals, or POSIX-compatible descriptor semantics.
 - No demand paging, copy-on-write, or per-process memory growth.
 - Kernel faults are not generally recoverable; only faults attributed to recognized user processes are contained at process level.
 

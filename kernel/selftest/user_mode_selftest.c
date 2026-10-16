@@ -30,11 +30,20 @@ volatile uint32_t user_mode_test_exit_requested;
 static uint8_t user_test_kernel_stack[USER_TEST_KERNEL_STACK_SIZE]
     __attribute__((aligned(16)));
 static volatile uint32_t user_test_active;
+static volatile uint32_t user_test_cpu_id;
 static volatile uint32_t user_test_mode;
 static volatile uint32_t user_test_syscall_seen;
 static volatile uint32_t user_test_protection_fault_seen;
 static volatile uint32_t user_test_gs_fault_seen;
 static volatile uint32_t user_test_unexpected;
+
+static int user_test_owned_by_current_cpu(void)
+{
+    const cpu_local_t* cpu = cpu_local_current();
+    return cpu &&
+        cpu->logical_id ==
+            __atomic_load_n(&user_test_cpu_id, __ATOMIC_ACQUIRE);
+}
 
 static void write_hex(uint64_t value)
 {
@@ -70,7 +79,8 @@ void user_mode_selftest_syscall_dispatch(struct exception_frame* frame)
         return;
 
     if (__atomic_load_n(&user_test_active, __ATOMIC_ACQUIRE) == 0U ||
-        (frame->cs & 3U) != 3U)
+        (frame->cs & 3U) != 3U ||
+        !user_test_owned_by_current_cpu())
     {
         /* No general syscall ABI is exposed by this test-only IDT gate. */
         frame->rax = (uint64_t)(int64_t)-38;
@@ -91,7 +101,8 @@ int user_mode_selftest_handle_exception(unsigned int number,
                                         struct exception_frame* frame)
 {
     if (!frame ||
-        __atomic_load_n(&user_test_active, __ATOMIC_ACQUIRE) == 0U)
+        __atomic_load_n(&user_test_active, __ATOMIC_ACQUIRE) == 0U ||
+        !user_test_owned_by_current_cpu())
         return 0;
 
     if ((frame->cs & 3U) != 3U)
@@ -156,6 +167,8 @@ static int run_user_probe(unsigned int mode,
     __atomic_store_n(&user_test_gs_fault_seen, 0U, __ATOMIC_RELAXED);
     __atomic_store_n(&user_test_unexpected, 0U, __ATOMIC_RELAXED);
     __atomic_store_n(&user_test_mode, mode, __ATOMIC_RELEASE);
+    __atomic_store_n(&user_test_cpu_id,
+                     cpu_local_current()->logical_id, __ATOMIC_RELEASE);
     __atomic_store_n(&user_test_active, 1U, __ATOMIC_RELEASE);
 
     serial_write(mode == USER_TEST_SYSCALL_MODE ?

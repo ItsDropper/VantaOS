@@ -185,7 +185,7 @@ static void user_mapping_probe(void)
     void* readonly_frame = pmm_alloc_block();
     int ok = space != NULL && writable_frame != NULL &&
              readonly_frame != NULL;
-    int per_cpu_ok = space != NULL;
+    int per_cpu_ok = 0;
     const cpu_local_t* bsp_local = cpu_local_current();
     int writable_mapped = 0;
     int readonly_mapped = 0;

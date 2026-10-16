@@ -1,5 +1,5 @@
 # Core kernel initialization and architecture-independent services.
-VANTAOS_KERNEL_C := kernel/kernel.c kernel/smp.c kernel/cpu_local.c kernel/serial.c kernel/panic.c kernel/fault_trace.c
+VANTAOS_KERNEL_C := kernel/kernel.c kernel/smp.c kernel/cpu_local.c kernel/serial.c kernel/panic.c kernel/fault_trace.c kernel/syscall.c
 include kernel/selftest/Makefile
 include kernel/boot/Makefile
 include kernel/proc/Makefile

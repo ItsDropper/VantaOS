@@ -100,9 +100,7 @@ int user_mode_selftest_handle_exception(unsigned int number,
     return 1;
 }
 
-static int run_user_probe(paging_address_space_t* space,
-                          uintptr_t code_frame,
-                          unsigned int mode,
+static int run_user_probe(unsigned int mode,
                           uintptr_t user_stack_top)
 {
     __atomic_store_n(&user_test_syscall_seen, 0U, __ATOMIC_RELAXED);
@@ -130,6 +128,8 @@ int user_mode_selftest_run(void)
     void* stack_frame = pmm_alloc_block();
     int code_mapped = 0;
     int stack_mapped = 0;
+    int syscall_ok = 0;
+    int isolation_ok = 0;
     int ok = space != NULL && code_frame != NULL && stack_frame != NULL;
     const uint32_t cpu_id = process_current_cpu_id();
 
@@ -168,12 +168,13 @@ int user_mode_selftest_run(void)
         paging_switch_address_space(space);
         ok = paging_get_current_address_space() == space;
         if (ok)
-            ok = run_user_probe(
-                space, (uintptr_t)code_frame, USER_TEST_SYSCALL_MODE,
+            syscall_ok = run_user_probe(
+                USER_TEST_SYSCALL_MODE,
                 (uintptr_t)(PAGING_USER_BASE + 2U * PAGE_SIZE - 16U));
     }
 
-    if (ok)
+    if (space && code_mapped && stack_mapped &&
+        paging_get_current_address_space() == space)
     {
         /*
          * Attempt a read from supervisor-only identity-mapped kernel memory.
@@ -186,10 +187,11 @@ int user_mode_selftest_run(void)
         };
         copy_bytes(code_frame, protection_program,
                    sizeof(protection_program));
-        ok = run_user_probe(
-            space, (uintptr_t)code_frame, USER_TEST_PROTECTION_MODE,
+        isolation_ok = run_user_probe(
+            USER_TEST_PROTECTION_MODE,
             (uintptr_t)(PAGING_USER_BASE + 2U * PAGE_SIZE - 16U));
     }
+    ok = ok && syscall_ok && isolation_ok;
 
     /* Never destroy an address space while it is loaded in CR3. */
     if (paging_get_current_address_space() == space)

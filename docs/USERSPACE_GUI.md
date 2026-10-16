@@ -10,7 +10,7 @@ Settings, File Explorer, and Terminal are applications with real executable file
 - The syscall ABI provides process exit/spawn/wait, bounded output, read-only file descriptors, directory listing, terminal input, and yield.
 - Terminal's shell logic is a ring-3 program at `/TERMINAL.ELF`; the kernel still owns its window, text rendering, and input routing.
 - File Explorer and Settings remain kernel-rendered and kernel-hit-tested. File Explorer is not an isolated user-mode GUI executable.
-- FAT32 file/directory creation and writes are currently unsupported. A local settings file cannot honestly be described as persistent until storage writes work and a reboot round-trip is tested.
+- A bounded FAT32 8.3 create/replace path for files up to 512 bytes is under validation. Long-filename writes and directory creation remain unsupported. Settings persistence must not be claimed until the write/readback and reboot round-trip tests pass.
 
 ## Required GUI boundary
 

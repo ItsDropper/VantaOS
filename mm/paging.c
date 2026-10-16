@@ -313,7 +313,7 @@ uintptr_t paging_get_physical(uintptr_t virtual_address)
     if (virtual_address >= PAGING_USER_BASE &&
         virtual_address <= PAGING_USER_END)
     {
-        uint64_t* entry = user_leaf_entry(paging_current(),
+        uint64_t* entry = paging_user_leaf_entry(paging_current(),
                                           virtual_address, 0);
         if (entry && (*entry & PAGE_PRESENT))
             physical = (uintptr_t)(*entry & PAGE_ADDRESS_MASK) |
@@ -398,7 +398,7 @@ void paging_destroy_address_space(paging_address_space_t* address_space)
         return;
     }
 
-    paging_release_user_page_tables(address_space)
+    paging_release_user_page_tables(address_space);
     for (uint32_t i = 0; i < PAGING_TABLE_ENTRIES; i++)
         address_space->directory[i] = 0;
 

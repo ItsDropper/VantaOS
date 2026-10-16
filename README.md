@@ -44,7 +44,7 @@ The automated build is tested in CI on Ubuntu Linux. Install the packages used b
 
 ```sh
 sudo apt-get update
-sudo apt-get install --yes build-essential nasm grub-pc-bin xorriso mtools dosfstools qemu-system-x86
+sudo apt-get install --yes build-essential nasm grub-pc-bin xorriso mtools dosfstools qemu-system-x86 gnu-efi ovmf gdisk
 
 git clone https://github.com/ItsDropper/VantaOS.git
 cd VantaOS

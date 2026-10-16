@@ -4,6 +4,8 @@
 
 #define FAT32_PARTITION_OFFSET 446
 #define FAT32_MAX_CLUSTER 0x0FFFFFF7U
+#define FAT32_EOC_MIN 0x0FFFFFF8U
+#define FAT32_LBA28_MAX 0x0FFFFFFFU
 
 static int mounted;
 static uint32_t partition_lba;
@@ -11,6 +13,8 @@ static uint32_t fat_lba;
 static uint32_t data_lba;
 static uint32_t sectors_per_fat;
 static uint32_t sectors_per_cluster;
+static uint32_t total_sectors;
+static uint32_t cluster_count;
 static uint32_t root_cluster;
 static uint16_t bytes_per_sector;
 static uint8_t fat_count;
@@ -52,45 +56,75 @@ static int valid_boot_sector(const uint8_t* b)
     uint16_t reserved = fat16(&b[14]);
     uint8_t fats = b[16];
     uint32_t sectors_per_fat = fat32(&b[36]);
+    uint32_t total32 = fat32(&b[32]);
+    uint16_t total16 = fat16(&b[19]);
+    uint32_t total = total32 ? total32 : total16;
 
     return bytes == 512 &&
            sectors != 0 &&
+           (sectors & (sectors - 1U)) == 0 &&
            reserved != 0 &&
            fats != 0 &&
-           sectors_per_fat != 0;
+           sectors_per_fat != 0 &&
+           total != 0;
 }
 
-static int mount_partition(uint32_t lba)
+static int mount_partition(uint32_t lba, uint32_t partition_sectors)
 {
-    if (!read_sector(lba, boot_sector_buffer))
+    mounted = 0;
+
+    if (lba > FAT32_LBA28_MAX ||
+        (partition_sectors &&
+         (partition_sectors - 1U > FAT32_LBA28_MAX - lba)) ||
+        !read_sector(lba, boot_sector_buffer))
         return 0;
 
     const uint8_t* boot = boot_sector_buffer;
-
     if (!valid_boot_sector(boot))
         return 0;
 
-    bytes_per_sector = fat16(&boot[11]);
-    sectors_per_cluster = boot[13];
-    uint16_t reserved = fat16(&boot[14]);
-    fat_count = boot[16];
-    sectors_per_fat = fat32(&boot[36]);
-    root_cluster = fat32(&boot[44]);
+    uint16_t bps = fat16(&boot[11]);
+    uint32_t spc = boot[13];
+    uint32_t reserved = fat16(&boot[14]);
+    uint32_t fats = boot[16];
+    uint32_t spf = fat32(&boot[36]);
+    uint32_t root = fat32(&boot[44]);
+    uint32_t total = fat32(&boot[32]);
+    if (total == 0)
+        total = fat16(&boot[19]);
 
-    if (bytes_per_sector != 512 ||
-        sectors_per_cluster == 0 ||
-        reserved == 0 ||
-        fat_count == 0 ||
-        sectors_per_fat == 0 ||
-        root_cluster < 2)
+    if (bps != 512 || spc == 0 || (spc & (spc - 1U)) != 0 ||
+        reserved == 0 || fats == 0 || fats > 2 || spf == 0 ||
+        total == 0 || root < 2 || root >= FAT32_MAX_CLUSTER ||
+        (partition_sectors && total > partition_sectors) ||
+        total - 1U > FAT32_LBA28_MAX - lba)
+        return 0;
+
+    /* Wide intermediates prevent corrupt BPB values wrapping geometry. */
+    uint64_t fat_area = (uint64_t)fats * spf;
+    uint64_t first_data = (uint64_t)reserved + fat_area;
+    if (first_data >= total)
+        return 0;
+
+    uint32_t data_sectors = total - (uint32_t)first_data;
+    uint32_t clusters = data_sectors / spc;
+    if (clusters == 0 || root > clusters + 1U)
+        return 0;
+
+    /* Every data cluster must have a corresponding FAT entry. */
+    if (((uint64_t)clusters + 2U) * 4U > (uint64_t)spf * 512U)
         return 0;
 
     partition_lba = lba;
     fat_lba = lba + reserved;
-    data_lba =
-        fat_lba +
-        (uint32_t)fat_count * sectors_per_fat;
-
+    data_lba = lba + (uint32_t)first_data;
+    bytes_per_sector = bps;
+    sectors_per_cluster = spc;
+    fat_count = (uint8_t)fats;
+    sectors_per_fat = spf;
+    total_sectors = total;
+    cluster_count = clusters;
+    root_cluster = root;
     mounted = 1;
     return 1;
 }
@@ -116,8 +150,10 @@ static int find_partition(void)
 
         uint32_t start =
             fat32(&sector_buffer[offset + 8]);
+        uint32_t length =
+            fat32(&sector_buffer[offset + 12]);
 
-        if (mount_partition(start))
+        if (length != 0 && mount_partition(start, length))
             return 1;
     }
 
@@ -126,21 +162,37 @@ static int find_partition(void)
 
 static uint32_t cluster_lba(uint32_t cluster)
 {
-    return data_lba +
-        (cluster - 2) * sectors_per_cluster;
+    if (!mounted || cluster < 2 || cluster > cluster_count + 1U)
+        return FAT32_LBA28_MAX;
+
+    uint64_t lba = (uint64_t)data_lba +
+        (uint64_t)(cluster - 2U) * sectors_per_cluster;
+    if (lba + sectors_per_cluster > (uint64_t)partition_lba + total_sectors ||
+        lba + sectors_per_cluster - 1U > FAT32_LBA28_MAX)
+        return FAT32_LBA28_MAX;
+
+    return (uint32_t)lba;
 }
 
 static uint32_t next_cluster(uint32_t cluster)
 {
-    uint32_t fat_offset = cluster * 4;
-    uint32_t lba =
-        fat_lba + fat_offset / 512;
-    uint32_t offset = fat_offset % 512;
+    if (!mounted || cluster < 2 || cluster > cluster_count + 1U)
+        return FAT32_MAX_CLUSTER;
 
+    uint64_t fat_offset = (uint64_t)cluster * 4U;
+    if (fat_offset + 4U > (uint64_t)sectors_per_fat * 512U)
+        return FAT32_MAX_CLUSTER;
+
+    uint32_t lba = fat_lba + (uint32_t)(fat_offset / 512U);
+    uint32_t offset = (uint32_t)(fat_offset % 512U);
     if (!read_sector(lba, sector_buffer))
         return FAT32_MAX_CLUSTER;
 
-    return fat32(&sector_buffer[offset]) & 0x0FFFFFFFU;
+    uint32_t next = fat32(&sector_buffer[offset]) & 0x0FFFFFFFU;
+    if (next >= FAT32_EOC_MIN || next == 0x0FFFFFF7U ||
+        next < 2 || next > cluster_count + 1U)
+        return FAT32_MAX_CLUSTER;
+    return next;
 }
 
 static void short_name(
@@ -199,7 +251,7 @@ void fat32_initialize(void)
     if (find_partition())
         return;
 
-    if (mount_partition(0))
+    if (mount_partition(0, 0))
         return;
 }
 
@@ -226,9 +278,13 @@ int fat32_list_directory(
     fat32_lfn_state_t lfn;
     fat32_lfn_reset(&lfn);
 
-    while (cluster >= 2 && cluster < FAT32_MAX_CLUSTER)
+    for (uint32_t steps = 0;
+         steps < cluster_count && cluster >= 2 && cluster <= cluster_count + 1U;
+         steps++)
     {
         uint32_t base = cluster_lba(cluster);
+        if (base == FAT32_LBA28_MAX)
+            return -1;
         for (uint32_t sector = 0; sector < sectors_per_cluster; sector++)
         {
             if (!read_sector(base + sector, sector_buffer))
@@ -294,6 +350,8 @@ int fat32_list_directory(
             }
         }
         cluster = next_cluster(cluster);
+        if (cluster == FAT32_MAX_CLUSTER)
+            break;
     }
     return (int)count;
 }
@@ -324,11 +382,14 @@ int fat32_read_file(
     unsigned int written = 0;
     uint32_t cluster = first_cluster;
 
-    while (remaining &&
-           cluster >= 2 &&
-           cluster < FAT32_MAX_CLUSTER)
+    for (uint32_t steps = 0;
+         remaining && steps < cluster_count &&
+         cluster >= 2 && cluster <= cluster_count + 1U;
+         steps++)
     {
         uint32_t base = cluster_lba(cluster);
+        if (base == FAT32_LBA28_MAX)
+            return -1;
 
         for (uint32_t sector = 0;
              sector < sectors_per_cluster && remaining;
@@ -350,7 +411,12 @@ int fat32_read_file(
             break;
 
         cluster = next_cluster(cluster);
+        if (remaining && cluster == FAT32_MAX_CLUSTER)
+            return -1;
     }
+
+    if (remaining)
+        return -1;
 
     buffer[written] = 0;
     return (int)written;

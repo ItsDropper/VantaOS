@@ -393,8 +393,14 @@ void file_explorer_draw(int width, int height)
     if (count < 0)
         count = 0;
     int total_count = count;
-    if (count > EXPLORER_MAX_ROWS)
-        count = EXPLORER_MAX_ROWS;
+    int visible_limit = (wh - EXPLORER_TITLE - EXPLORER_TOOLBAR - 32 - 26)
+        / EXPLORER_ROW;
+    if (visible_limit < 0)
+        visible_limit = 0;
+    if (visible_limit > EXPLORER_MAX_ROWS)
+        visible_limit = EXPLORER_MAX_ROWS;
+    if (count > visible_limit)
+        count = visible_limit;
 
     graphics_ui_explorer_column_header(content_x, list_y, content_w);
 

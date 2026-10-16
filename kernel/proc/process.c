@@ -193,6 +193,15 @@ int process_attach_current(const char* name, uint32_t parent_pid)
         return -1;
 
     uint64_t flags = process_table_lock_acquire();
+    if (idle_local &&
+        (idle_local->logical_id != affinity_cpu ||
+         idle_local->online == 0U ||
+         __atomic_load_n(&idle_local->idle_pid, __ATOMIC_ACQUIRE) != 0U))
+    {
+        process_table_lock_release(flags);
+        return -1;
+    }
+
     for (uint32_t pid = 1; pid < PROCESS_MAX; pid++)
     {
         if (processes[pid].state != PROCESS_UNUSED &&
@@ -230,7 +239,8 @@ int process_attach_current(const char* name, uint32_t parent_pid)
 static int process_create_kernel_affinity(const char* name,
                                           uint32_t parent_pid,
                                           process_entry_t entry,
-                                          uint32_t affinity_cpu)
+                                          uint32_t affinity_cpu,
+                                          cpu_local_t* idle_local)
 {
     if (!initialized || !name || !name[0] || !entry)
         return -1;
@@ -257,6 +267,8 @@ static int process_create_kernel_affinity(const char* name,
             (uintptr_t)process->kernel_stack + PROCESS_STACK_SIZE;
         stack_top &= ~(uintptr_t)0x0FU;
         process_prepare_stack(process, stack_top);
+        if (idle_local)
+            __atomic_store_n(&idle_local->idle_pid, pid, __ATOMIC_RELEASE);
         process_table_lock_release(flags);
         return (int)pid;
     }
@@ -270,14 +282,14 @@ int process_create_kernel(const char* name, uint32_t parent_pid,
                           process_entry_t entry)
 {
     return process_create_kernel_affinity(name, parent_pid, entry,
-                                          process_current_cpu_id());
+                                          process_current_cpu_id(), NULL);
 }
 
 int process_create_kernel_any(const char* name, uint32_t parent_pid,
                               process_entry_t entry)
 {
     return process_create_kernel_affinity(name, parent_pid, entry,
-                                          PROCESS_CPU_ANY);
+                                          PROCESS_CPU_ANY, NULL);
 }
 
 
@@ -287,7 +299,7 @@ int process_create_kernel_on_cpu(const char* name, uint32_t parent_pid,
 {
     if (cpu_id >= CPU_LOCAL_MAX || !cpu_local_get(cpu_id))
         return -1;
-    return process_create_kernel_affinity(name, parent_pid, entry, cpu_id);
+    return process_create_kernel_affinity(name, parent_pid, entry, cpu_id, NULL);
 }
 
 
@@ -302,22 +314,11 @@ int process_create_idle_for_cpu(uint32_t cpu_id, const char* name,
     if (!local || local->self != local || local->online == 0U)
         return 0;
 
-    int pid = process_create_kernel_affinity(name, 0U, entry, cpu_id);
+    int pid = process_create_kernel_affinity(name, 0U, entry,
+                                                    cpu_id, local);
     if (pid < 0)
         return 0;
 
-    uint64_t flags = process_table_lock_acquire();
-    process_t* process = &processes[(uint32_t)pid];
-    if (process->state != PROCESS_READY ||
-        process->owner_cpu != PROCESS_CPU_UNOWNED ||
-        local->idle_pid != 0U)
-    {
-        process_table_lock_release(flags);
-        (void)process_terminate((uint32_t)pid);
-        return 0;
-    }
-    __atomic_store_n(&local->idle_pid, (uint32_t)pid, __ATOMIC_RELEASE);
-    process_table_lock_release(flags);
     return pid;
 }
 

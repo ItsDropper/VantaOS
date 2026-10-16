@@ -23,6 +23,8 @@
 #include "vfs.h"
 
 #ifdef VANTAOS_SELF_TEST
+#include "selftest.h"
+
 static void pmm_allocator_probe(void)
 {
     if (!pmm_is_initialized())

@@ -37,6 +37,21 @@ ap_protected_entry:
     or eax, (1 << 8)
     wrmsr
 
+    ; Enable EFER.NXE on APs before they can enter an address space with
+    ; non-executable user pages. Older CPUs without NX keep the fallback.
+    mov eax, 0x80000000
+    cpuid
+    cmp eax, 0x80000001
+    jb .nx_done
+    mov eax, 0x80000001
+    cpuid
+    bt edx, 20
+    jnc .nx_done
+    mov ecx, 0xC0000080
+    rdmsr
+    or eax, (1 << 11)
+    wrmsr
+.nx_done:
     mov eax, cr0
     or eax, (1 << 31)
     mov cr0, eax

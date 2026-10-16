@@ -193,15 +193,6 @@ int process_attach_current(const char* name, uint32_t parent_pid)
         return -1;
 
     uint64_t flags = process_table_lock_acquire();
-    if (idle_local &&
-        (idle_local->logical_id != affinity_cpu ||
-         idle_local->online == 0U ||
-         __atomic_load_n(&idle_local->idle_pid, __ATOMIC_ACQUIRE) != 0U))
-    {
-        process_table_lock_release(flags);
-        return -1;
-    }
-
     for (uint32_t pid = 1; pid < PROCESS_MAX; pid++)
     {
         if (processes[pid].state != PROCESS_UNUSED &&
@@ -246,6 +237,15 @@ static int process_create_kernel_affinity(const char* name,
         return -1;
 
     uint64_t flags = process_table_lock_acquire();
+    if (idle_local &&
+        (idle_local->logical_id != affinity_cpu ||
+         idle_local->online == 0U ||
+         __atomic_load_n(&idle_local->idle_pid, __ATOMIC_ACQUIRE) != 0U))
+    {
+        process_table_lock_release(flags);
+        return -1;
+    }
+
     for (uint32_t pid = 1; pid < PROCESS_MAX; pid++)
     {
         if (processes[pid].state != PROCESS_UNUSED &&

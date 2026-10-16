@@ -1,3 +1,4 @@
+#include <stddef.h>
 #include "scheduler.h"
 #include "cpu_local.h"
 #include "process.h"

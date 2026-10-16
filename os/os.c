@@ -207,7 +207,7 @@ static void process_owned_terminated_reuse_probe(void)
     );
     if (pid < 0)
     {
-        serial_write("VANTAOS_PROCESS_OWNED_REUSE_FAIL\\n");
+        serial_write("VANTAOS_PROCESS_OWNED_REUSE_FAIL\n");
         return;
     }
 
@@ -260,8 +260,8 @@ static void process_owned_terminated_reuse_probe(void)
     }
 
     serial_write(ok ?
-        "VANTAOS_PROCESS_OWNED_REUSE_OK\\n" :
-        "VANTAOS_PROCESS_OWNED_REUSE_FAIL\\n");
+        "VANTAOS_PROCESS_OWNED_REUSE_OK\n" :
+        "VANTAOS_PROCESS_OWNED_REUSE_FAIL\n");
 }
 
 

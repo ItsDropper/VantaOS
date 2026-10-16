@@ -17,7 +17,7 @@ The shell accepts single- or double-quoted arguments and preserves whitespace in
 - Make the bounded output/exit syscalls described below.
 - Reclaim the process through the existing lifecycle path when it exits.
 
-This is an early execution path, not a complete process environment. There is no dynamic linker, demand paging, stable binary ABI, or user-level file-descriptor API.
+This is an early execution path, not a complete process environment. There is no dynamic linker, demand paging, stable binary ABI, or POSIX-compatible process environment.
 
 ## Bring-up syscall ABI
 
@@ -28,8 +28,11 @@ The current syscall entry is `int 0x80`. Put the syscall number in `RAX`; the fi
 | `0` | Exit current process | No arguments |
 | `1` | Write to serial log | `RDI`: user-buffer address; `RSI`: byte count |
 | `2` | Write to terminal | `RDI`: user-buffer address; `RSI`: byte count |
+| `3` | Open an existing file for reading | `RDI`: NUL-terminated user path; `RSI`: `1` (`VFS_OPEN_READ`) |
+| `4` | Read from an open file | `RDI`: descriptor; `RSI`: writable user-buffer address; `RDX`: maximum byte count |
+| `5` | Close an open file | `RDI`: descriptor |
 
-The write calls accept at most 4096 bytes per call and validate the supplied range against the current process address space before reading it. A zero-length write succeeds. Unsupported syscall numbers return an error. This ABI is internal and may change; it is not POSIX-compatible and is not yet versioned.
+Serial and terminal writes accept at most 4096 bytes per call and validate the supplied range against the current process address space. File reads are limited to 4096 bytes per call and validate the complete destination range before consuming file data. Paths must terminate within `FS_PATH_MAX`; user programs can only open existing files for reading. Each process has eight descriptor slots, numbered from `3`, and descriptors are closed during process reaping. Errors are returned as negative values (`-EFAULT`-style `-14`, invalid descriptor `-9`, missing path `-2`, invalid argument `-22`, and resource exhaustion `-24`). This is a minimal bring-up interface, not a stable ABI. This ABI is internal and may change; it is not POSIX-compatible and is not yet versioned.
 
 ## Loader and memory constraints
 
@@ -43,10 +46,10 @@ CI builds `tests/user/hello.S`, installs the ELF as `/HELLO.ELF` in the disposab
 exec /HELLO.ELF alpha "two words"
 ```
 
-The program checks the argument count and both argument values from ring 3, emits `VANTAOS_ARGV_STACK_OK`, exercises serial and terminal output, and emits `VANTAOS_FILESYSTEM_EXEC_OK` before exiting. The workflow requires the expected markers in the QEMU regression matrix and separately exercises the UEFI/OVMF boot path.
+The user ELF checks its argument stack, then opens `/USERDATA.TXT`, verifies the fixture bytes, closes the descriptor, and checks invalid-pointer, invalid-descriptor, and missing-path errors. It emits `VANTAOS_USER_FILE_IO_OK` on success. CI installs the known fixture into the disposable FAT32 image and requires this marker in the QEMU regression matrix; UEFI/OVMF boot handoff remains a separate regression.
 
 A passing smoke test verifies only this test program and execution path on the CI configurations. It does not prove arbitrary ELF compatibility, hostile-program isolation, real-hardware compatibility, or general syscall correctness.
 
 ## Next steps
 
-The next userspace milestone is a per-process file-descriptor table and bounded `open`/`read`/`close` syscalls, with ownership cleanup on process exit and an end-to-end test that reads and verifies a second file from FAT32. Persistent filesystem creation/writes, dynamic linking, and a stable application ABI remain later work.
+The current file-I/O smoke test is not exhaustive. Concurrent VFS access, broad fault containment, adversarial pointer fuzzing, dynamic linking, persistent file creation/writes, and a stable application ABI remain unimplemented.

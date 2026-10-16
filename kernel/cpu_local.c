@@ -42,7 +42,7 @@ int cpu_local_initialize(uint32_t logical_id, uint32_t apic_id)
     local->tlb_ack_generation = 0;
     local->tlb_address_space = NULL;
     local->tlb_address = 0;
-    __atomic_store_n(&local->online, 1U, __ATOMIC_RELEASE);
+    __atomic_store_n(&local->online, 0U, __ATOMIC_RELAXED);
 
     /*
      * Each CPU has its own IA32_GS_BASE MSR. No SWAPGS is needed yet because
@@ -50,7 +50,11 @@ int cpu_local_initialize(uint32_t logical_id, uint32_t apic_id)
      * a deliberate kernel/user GS-base protocol before exposing this API.
      */
     write_msr(IA32_GS_BASE_MSR, (uint64_t)(uintptr_t)local);
-    return cpu_local_current() == local;
+    if (cpu_local_current() != local ||
+        !paging_register_cpu(logical_id, paging_get_kernel_address_space()))
+        return 0;
+    __atomic_store_n(&local->online, 1U, __ATOMIC_RELEASE);
+    return 1;
 }
 
 cpu_local_t* cpu_local_current(void)

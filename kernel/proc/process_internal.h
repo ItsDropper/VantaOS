@@ -22,5 +22,12 @@ int process_is_idle_locked(uint32_t pid);
 void process_reset_record(process_t* process);
 int process_stack_is_valid_locked(const process_t* process);
 int process_release_user_resources(process_t* process);
+int process_install_user_image(const char* name, uint32_t parent_pid,
+                               paging_address_space_t* space,
+                               uintptr_t entry, uintptr_t stack_base,
+                               uintptr_t stack_top, uintptr_t initial_stack,
+                               size_t image_size,
+                               const process_user_page_t* pages,
+                               uint32_t page_count);
 
 #endif

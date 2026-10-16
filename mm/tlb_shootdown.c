@@ -1,8 +1,6 @@
 #include "paging.h"
-#include "panic.h"
 #include "cpu_local.h"
 #include "apic.h"
-#include "serial.h"
 
 #include <stdint.h>
 
@@ -13,16 +11,6 @@ static uint64_t tlb_shootdown_generation;
 static spinlock_t paging_mutation_lock = SPINLOCK_INITIALIZER;
 
 
-static _Noreturn void paging_tlb_failure(void)
-{
-    serial_write("VANTAOS_TLB_SHOOTDOWN_FAIL\\n");
-    kernel_panic_halt_all();
-}
-
-static inline void invalidate_page(uintptr_t address)
-{
-    __asm__ volatile ("invlpg (%0)" : : "r"(address) : "memory");
-}
 
 static inline void invalidate_page(uintptr_t address)
 {

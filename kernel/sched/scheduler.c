@@ -38,13 +38,16 @@ static uint32_t scheduler_next_ready(uint32_t current_pid)
         uint32_t pid = (current_pid + offset) % PROCESS_MAX;
         process_t process;
         if (process_snapshot(pid, &process) &&
-            process.state == PROCESS_READY)
+            process.state == PROCESS_READY &&
+            process.owner_cpu == PROCESS_CPU_UNOWNED)
             return pid;
     }
 
     process_t idle;
     if (process_snapshot(1, &idle) &&
-        (idle.state == PROCESS_READY || idle.state == PROCESS_RUNNING))
+        ((idle.state == PROCESS_READY &&
+          idle.owner_cpu == PROCESS_CPU_UNOWNED) ||
+         (idle.state == PROCESS_RUNNING && idle.owner_cpu == 0U)))
         return 1;
 
     return current_pid;

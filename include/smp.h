@@ -1,6 +1,8 @@
 #ifndef SMP_H
 #define SMP_H
 
+#include <stdint.h>
+
 /* Discover topology and start APs into the kernel's idle process contexts. */
 int smp_initialize(void);
 unsigned int smp_cpu_count(void);

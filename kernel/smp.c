@@ -19,6 +19,7 @@
 #define SMP_WORK_PROBE_ITERATIONS 100000U
 #define SMP_LOCAL_TIMER_VECTOR 0xF2U
 #define SMP_LOCAL_TIMER_INITIAL_COUNT 1000000U
+#define SMP_RESCHEDULE_IPI_VECTOR 0xF3U
 
 typedef struct
 {
@@ -204,6 +205,56 @@ static int start_secondary_cpus(const acpi_platform_info_t* info)
     return 1;
 }
 
+static int smp_wait_for_reschedule_ipis(const acpi_platform_info_t* info)
+{
+    uint32_t expected[ACPI_MAX_CPUS] = {0};
+    for (uint32_t i = 0; i < info->cpu_count; i++)
+    {
+        const cpu_local_t* local = cpu_local_get(i);
+        if (!local)
+            return 0;
+        if (local->apic_id == apic_get_bsp_id())
+            continue;
+        expected[i] = __atomic_load_n(&local->reschedule_ipi_ticks,
+                                      __ATOMIC_ACQUIRE) + 1U;
+        if (!apic_send_reschedule_ipi(local->apic_id))
+        {
+            serial_write("VANTAOS_SMP_RESCHEDULE_IPI_FAIL\n");
+            return 0;
+        }
+    }
+
+    uint32_t spin = 0;
+    int ready = 0;
+    while (spin++ < AP_STARTUP_SPIN_LIMIT)
+    {
+        ready = 1;
+        for (uint32_t i = 0; i < info->cpu_count; i++)
+        {
+            if (expected[i] == 0U)
+                continue;
+            const cpu_local_t* local = cpu_local_get(i);
+            if (!local || __atomic_load_n(&local->reschedule_ipi_ticks,
+                                          __ATOMIC_ACQUIRE) < expected[i])
+            {
+                ready = 0;
+                break;
+            }
+        }
+        if (ready)
+            break;
+        __asm__ volatile ("pause" ::: "memory");
+    }
+
+    if (!ready)
+    {
+        serial_write("VANTAOS_SMP_RESCHEDULE_IPI_FAIL\n");
+        return 0;
+    }
+    serial_write("VANTAOS_SMP_RESCHEDULE_IPI_OK\n");
+    return 1;
+}
+
 static int smp_wait_for_local_timers(const acpi_platform_info_t* info)
 {
     uint64_t saved_flags;
@@ -238,7 +289,7 @@ static int smp_wait_for_local_timers(const acpi_platform_info_t* info)
         return 0;
     }
     serial_write("VANTAOS_SMP_LOCAL_TIMER_OK\n");
-    return 1;
+    return smp_wait_for_reschedule_ipis(info);
 }
 
 static int smp_run_work_probe(const acpi_platform_info_t* info,

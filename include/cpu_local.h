@@ -21,6 +21,8 @@ typedef struct cpu_local
     volatile uint32_t scheduler_ticks;
     /* Incremented only by this CPU's local APIC timer interrupt. */
     volatile uint32_t lapic_timer_ticks;
+    /* Number of reschedule IPIs delivered to this CPU (not scheduled yet). */
+    volatile uint32_t reschedule_ipi_ticks;
 } cpu_local_t;
 
 /* Installs the current CPU's GS base and initializes its private state. */

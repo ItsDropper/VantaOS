@@ -13,6 +13,7 @@ extern void irq12_stub(void);
 extern void apic_spurious_stub(void);
 extern void smp_wakeup_stub(void);
 extern void lapic_timer_stub(void);
+extern void reschedule_ipi_stub(void);
 
 #define DECLARE_EXCEPTION(n) extern void exception##n##_stub(void);
 DECLARE_EXCEPTION(0) DECLARE_EXCEPTION(1) DECLARE_EXCEPTION(2)
@@ -59,6 +60,7 @@ void interrupts_initialize(void)
     idt_set_gate(0xFF, (uint64_t)(uintptr_t)apic_spurious_stub, 0x08, 0x8E);
     idt_set_gate(0xF1, (uint64_t)(uintptr_t)smp_wakeup_stub, 0x08, 0x8E);
     idt_set_gate(0xF2, (uint64_t)(uintptr_t)lapic_timer_stub, 0x08, 0x8E);
+    idt_set_gate(0xF3, (uint64_t)(uintptr_t)reschedule_ipi_stub, 0x08, 0x8E);
 
     pic_remap();
     timer_initialize(100);
@@ -91,6 +93,14 @@ void lapic_timer_handle_interrupt(void)
     cpu_local_t* local = cpu_local_current();
     if (local && local->self == local && local->online != 0U)
         local->lapic_timer_ticks++;
+    apic_send_eoi();
+}
+
+void reschedule_ipi_handle_interrupt(void)
+{
+    cpu_local_t* local = cpu_local_current();
+    if (local && local->self == local && local->online != 0U)
+        __atomic_add_fetch(&local->reschedule_ipi_ticks, 1U, __ATOMIC_RELAXED);
     apic_send_eoi();
 }
 

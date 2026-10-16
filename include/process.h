@@ -2,6 +2,7 @@
 #define PROCESS_H
 
 #include <stdint.h>
+#include <stddef.h>
 #include "paging.h"
 
 #define PROCESS_MAX 128
@@ -42,11 +43,19 @@ typedef struct
     void* kernel_stack;
     paging_address_space_t* address_space;
     process_context_t context;
+    /* User-image ownership; frames are reclaimed only after leaving its CR3. */
+    uint32_t is_user;
+    void* user_code_frame;
+    void* user_stack_frame;
+    uint64_t user_image_size;
 } process_t;
 
 void process_initialize(void);
 int process_is_initialized(void);
 int process_create_kernel(const char* name, uint32_t parent_pid, process_entry_t entry);
+/* Copies a single-page flat x86-64 image into an isolated ring-3 process. */
+int process_create_user(const char* name, uint32_t parent_pid,
+                        const void* image, size_t image_size);
 int process_create_kernel_any(const char* name, uint32_t parent_pid,
                               process_entry_t entry);
 int process_create_kernel_on_cpu(const char* name, uint32_t parent_pid,

@@ -172,7 +172,7 @@ static uint32_t cluster_lba(uint32_t cluster)
         (uint64_t)(cluster - 2U) * sectors_per_cluster;
     if (lba + sectors_per_cluster > (uint64_t)partition_lba + total_sectors ||
         lba + sectors_per_cluster - 1U > FAT32_LBA28_MAX)
-        return FAT32_LBA28_MAX;
+        return FAT32_INVALID_LBA;
 
     return (uint32_t)lba;
 }
@@ -399,7 +399,7 @@ int fat32_read_file(
          steps++)
     {
         uint32_t base = cluster_lba(cluster);
-        if (base == FAT32_LBA28_MAX)
+        if (base == FAT32_INVALID_LBA)
             return -1;
 
         for (uint32_t sector = 0;

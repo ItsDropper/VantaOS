@@ -88,6 +88,7 @@ uint64_t scheduler_reschedule(uint64_t current_stack)
         return current_stack;
 
     process_save_stack(current_pid, current_stack);
+    *scheduler_quantum_slot() = 0;
     return scheduler_switch_from_stack(current_stack, current_pid);
 }
 

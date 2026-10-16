@@ -1,5 +1,6 @@
 #include <vanta/syscall.h>
 
+#define PROCESS_USER_MAX_ARGS 16U
 #define LINE_CAPACITY 256U
 #define LIST_CAPACITY 2048U
 #define IO_CHUNK 256U

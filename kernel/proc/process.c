@@ -105,6 +105,8 @@ void process_reset_record(process_t* process)
     process->user_stack_base = 0U;
     process->user_stack_top = 0U;
     process->user_image_size = 0U;
+    for (uint32_t i = 0; i < PROCESS_FD_COUNT; i++)
+        process->file_descriptors[i] = -1;
     for (uint32_t i = 0; i < PROCESS_USER_MAX_PAGES; i++)
     {
         process->user_pages[i].virtual_address = 0U;
@@ -402,4 +404,77 @@ int process_create_idle_for_cpu(uint32_t cpu_id, const char* name,
         return 0;
 
     return pid;
+}
+
+
+int process_fd_install(uint32_t pid, int vfs_handle)
+{
+    if (!process_initialized_state || pid >= PROCESS_MAX || vfs_handle < 0)
+        return -1;
+
+    uint64_t flags = process_table_lock_acquire();
+    process_t* process = &process_table_records[pid];
+    if (process->state == PROCESS_UNUSED ||
+        process->state == PROCESS_TERMINATED ||
+        process->state == PROCESS_REAPING || !process->is_user)
+    {
+        process_table_lock_release(flags);
+        return -1;
+    }
+
+    for (uint32_t i = 0; i < PROCESS_FD_COUNT; i++)
+    {
+        if (process->file_descriptors[i] >= 0)
+            continue;
+        process->file_descriptors[i] = vfs_handle;
+        process_table_lock_release(flags);
+        return PROCESS_FD_BASE + (int)i;
+    }
+
+    process_table_lock_release(flags);
+    return -1;
+}
+
+int process_fd_get(uint32_t pid, int descriptor)
+{
+    if (!process_initialized_state || pid >= PROCESS_MAX ||
+        descriptor < PROCESS_FD_BASE ||
+        descriptor >= PROCESS_FD_BASE + (int)PROCESS_FD_COUNT)
+        return -1;
+
+    uint64_t flags = process_table_lock_acquire();
+    process_t* process = &process_table_records[pid];
+    int handle = -1;
+    if (process->state != PROCESS_UNUSED &&
+        process->state != PROCESS_TERMINATED &&
+        process->state != PROCESS_REAPING && process->is_user)
+    {
+        handle = process->file_descriptors[
+            (uint32_t)(descriptor - PROCESS_FD_BASE)];
+    }
+    process_table_lock_release(flags);
+    return handle;
+}
+
+int process_fd_remove(uint32_t pid, int descriptor, int* vfs_handle_out)
+{
+    if (!process_initialized_state || pid >= PROCESS_MAX || !vfs_handle_out ||
+        descriptor < PROCESS_FD_BASE ||
+        descriptor >= PROCESS_FD_BASE + (int)PROCESS_FD_COUNT)
+        return 0;
+
+    uint64_t flags = process_table_lock_acquire();
+    process_t* process = &process_table_records[pid];
+    uint32_t index = (uint32_t)(descriptor - PROCESS_FD_BASE);
+    if (process->state == PROCESS_UNUSED || !process->is_user ||
+        process->file_descriptors[index] < 0)
+    {
+        process_table_lock_release(flags);
+        return 0;
+    }
+
+    *vfs_handle_out = process->file_descriptors[index];
+    process->file_descriptors[index] = -1;
+    process_table_lock_release(flags);
+    return 1;
 }

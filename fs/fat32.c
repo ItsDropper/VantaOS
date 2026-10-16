@@ -7,6 +7,7 @@
 #define FAT32_EOC_MIN 0x0FFFFFF8U
 #define FAT32_BAD_CLUSTER 0xFFFFFFFEU
 #define FAT32_LBA28_MAX 0x0FFFFFFFU
+#define FAT32_INVALID_LBA 0xFFFFFFFFU
 
 static int mounted;
 static uint32_t partition_lba;
@@ -109,7 +110,8 @@ static int mount_partition(uint32_t lba, uint32_t partition_sectors)
 
     uint32_t data_sectors = total - (uint32_t)first_data;
     uint32_t clusters = data_sectors / spc;
-    if (clusters == 0 || root > clusters + 1U)
+    if (clusters == 0 || clusters > FAT32_MAX_CLUSTER - 2U ||
+        root > clusters + 1U)
         return 0;
 
     /* Every data cluster must have a corresponding FAT entry. */
@@ -164,7 +166,7 @@ static int find_partition(void)
 static uint32_t cluster_lba(uint32_t cluster)
 {
     if (!mounted || cluster < 2 || cluster > cluster_count + 1U)
-        return FAT32_LBA28_MAX;
+        return FAT32_INVALID_LBA;
 
     uint64_t lba = (uint64_t)data_lba +
         (uint64_t)(cluster - 2U) * sectors_per_cluster;
@@ -286,7 +288,7 @@ int fat32_list_directory(
          steps++)
     {
         uint32_t base = cluster_lba(cluster);
-        if (base == FAT32_LBA28_MAX)
+        if (base == FAT32_INVALID_LBA)
             return -1;
         for (uint32_t sector = 0; sector < sectors_per_cluster; sector++)
         {

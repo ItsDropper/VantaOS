@@ -327,6 +327,7 @@ static void heap_allocator_probe(void)
 
 
 static uint32_t smp_scheduler_probe_task_count;
+static uint32_t smp_scheduler_probe_ap_cpu;
 static volatile uint32_t smp_scheduler_probe_completed;
 static volatile uint32_t smp_scheduler_probe_cpu_mask;
 static volatile uint32_t smp_scheduler_probe_active;
@@ -369,7 +370,7 @@ static void smp_scheduler_probe_entry(void)
     {
     }
 
-    for (uint32_t i = 0; i < 20000000U; i++)
+    for (uint32_t i = 0; i < 80000000U; i++)
         __asm__ volatile ("pause" ::: "memory");
 
     __atomic_sub_fetch(&smp_scheduler_probe_active, 1U, __ATOMIC_ACQ_REL);
@@ -380,6 +381,7 @@ static void smp_scheduler_probe_entry(void)
 static int smp_scheduler_probe_initialize(void)
 {
     smp_scheduler_probe_completed = 0;
+    smp_scheduler_probe_ap_cpu = UINT32_MAX;
     smp_scheduler_probe_cpu_mask = 0;
     smp_scheduler_probe_active = 0;
     smp_scheduler_probe_max_active = 0;
@@ -387,6 +389,20 @@ static int smp_scheduler_probe_initialize(void)
     for (uint32_t pid = 0; pid < PROCESS_MAX; pid++)
         __atomic_store_n(&smp_scheduler_probe_seen[pid], 0U,
                          __ATOMIC_RELAXED);
+
+    for (uint32_t cpu = 0; cpu < smp_cpu_count(); cpu++)
+    {
+        if (!smp_cpu_is_bsp(cpu) && cpu_local_get(cpu))
+        {
+            smp_scheduler_probe_ap_cpu = cpu;
+            break;
+        }
+    }
+    if (smp_scheduler_probe_ap_cpu == UINT32_MAX)
+    {
+        serial_write("VANTAOS_SMP_SCHEDULER_STRESS_FAIL\\n");
+        return 0;
+    }
 
     smp_scheduler_probe_task_count = smp_cpu_count() * 8U;
     if (smp_scheduler_probe_task_count < 4U)
@@ -396,11 +412,18 @@ static int smp_scheduler_probe_initialize(void)
 
     for (uint32_t i = 0; i < smp_scheduler_probe_task_count; i++)
     {
-        /* Keep one probe on the BSP so AP participation is measured against it. */
+        /* Pin one probe to each side so the overlap test cannot depend on
+         * the scheduler opportunistically choosing an AP for ANY work. */
         int pid = i == 0U ?
-            process_create_kernel("smp-scheduler-probe-bsp",
-                                  process_current_pid(),
-                                  smp_scheduler_probe_entry) :
+            process_create_kernel_on_cpu("smp-scheduler-probe-bsp",
+                                         process_current_pid(),
+                                         smp_scheduler_probe_entry,
+                                         process_current_cpu_id()) :
+            i == 1U ?
+            process_create_kernel_on_cpu("smp-scheduler-probe-ap",
+                                         process_current_pid(),
+                                         smp_scheduler_probe_entry,
+                                         smp_scheduler_probe_ap_cpu) :
             process_create_kernel_any("smp-scheduler-probe",
                                       process_current_pid(),
                                       smp_scheduler_probe_entry);

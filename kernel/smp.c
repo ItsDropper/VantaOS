@@ -7,6 +7,8 @@
 #include "idt.h"
 #include "paging.h"
 #include "serial.h"
+#include "process.h"
+#include "scheduler.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -33,6 +35,7 @@ extern uint8_t ap_trampoline_blob_end[];
 extern _Noreturn void smp_ap_entry(uint32_t apic_id);
 
 static unsigned int discovered_cpu_count;
+static uint32_t bsp_logical_id;
 static uint32_t calibrated_timer_initial_count;
 static uint8_t ap_stacks[ACPI_MAX_CPUS][AP_STACK_SIZE]
     __attribute__((aligned(16)));

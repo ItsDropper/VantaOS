@@ -245,25 +245,77 @@ void file_explorer_open_directory(uint32_t id)
     explorer_set_directory(id, 0);
 }
 
-static void explorer_icon(int x, int y, int directory, int selected)
+static int explorer_suffix_equal(const char* name, const char* suffix)
 {
-    uint32_t icon = directory ? 0x005AA9E6 : 0x008EA3B7;
+    int name_len = 0;
+    int suffix_len = 0;
+
+    while (name[name_len]) ++name_len;
+    while (suffix[suffix_len]) ++suffix_len;
+    if (suffix_len > name_len) return 0;
+
+    int offset = name_len - suffix_len;
+    for (int i = 0; i < suffix_len; ++i)
+    {
+        char a = name[offset + i];
+        char b = suffix[i];
+        if (a >= 'A' && a <= 'Z') a = (char)(a - 'A' + 'a');
+        if (b >= 'A' && b <= 'Z') b = (char)(b - 'A' + 'a');
+        if (a != b) return 0;
+    }
+    return 1;
+}
+
+static int explorer_file_kind(const fs_node_t* node)
+{
+    if (!node || node->type == FS_NODE_DIRECTORY) return 0;
+    if (explorer_suffix_equal(node->name, ".c") ||
+        explorer_suffix_equal(node->name, ".h") ||
+        explorer_suffix_equal(node->name, ".asm") ||
+        explorer_suffix_equal(node->name, ".s")) return 1;
+    if (explorer_suffix_equal(node->name, ".txt") ||
+        explorer_suffix_equal(node->name, ".md")) return 2;
+    if (explorer_suffix_equal(node->name, ".log")) return 3;
+    if (explorer_suffix_equal(node->name, ".cfg") ||
+        explorer_suffix_equal(node->name, ".ini")) return 4;
+    if (explorer_suffix_equal(node->name, ".elf") ||
+        explorer_suffix_equal(node->name, ".bin")) return 5;
+    return 6;
+}
+
+static void explorer_icon(int x, int y, const fs_node_t* node, int selected)
+{
+    int kind = explorer_file_kind(node);
+    uint32_t tint = kind == 0 ? 0x005AA9E6 :
+                    kind == 1 ? 0x007DB8FF :
+                    kind == 2 ? 0x0069D6AE :
+                    kind == 3 ? 0x00E6BD78 :
+                    kind == 4 ? 0x00B5A0FF :
+                    kind == 5 ? 0x00E17F89 : 0x008EA3B7;
 
     if (selected)
-        graphics_fill_rounded_rect(
-            x - 6, y - 5, 30, 30, 6, 0x002A3B4E);
+        graphics_fill_rounded_rect(x - 6, y - 5, 30, 30, 6, 0x002A3B4E);
 
-    if (directory)
+    if (kind == 0)
     {
-        graphics_fill_rect(x, y + 5, 18, 13, icon);
-        graphics_fill_rect(x + 2, y + 2, 9, 5, icon);
+        graphics_fill_rounded_rect(x, y + 5, 18, 13, 3, tint);
+        graphics_fill_rounded_rect(x + 2, y + 2, 9, 5, 2, tint);
+        graphics_fill_rect(x + 3, y + 10, 12, 1, 0x002C5B83);
     }
     else
     {
-        graphics_fill_rect(x + 2, y, 14, 18, icon);
-        graphics_fill_rect(x + 5, y + 4, 8, 2, 0x00131D28);
-        graphics_fill_rect(x + 5, y + 8, 8, 2, 0x00131D28);
-        graphics_fill_rect(x + 5, y + 12, 6, 2, 0x00131D28);
+        graphics_fill_rounded_rect(x + 2, y, 15, 19, 2, tint);
+        graphics_fill_rect(x + 5, y + 5, 9, 1, 0x00131D28);
+        graphics_fill_rect(x + 5, y + 9, 9, 1, 0x00131D28);
+        graphics_fill_rect(x + 5, y + 13, 6, 1, 0x00131D28);
+        if (kind == 1)
+            graphics_draw_text(x + 4, y + 6, "C", 0x00131D28, 1);
+        else if (kind == 3)
+            graphics_draw_text(x + 4, y + 6, "L", 0x00131D28, 1);
+        else if (kind == 4)
+            graphics_draw_text(x + 4, y + 6, "=", 0x00131D28, 1);
+        else if (kind == 5)
+            graphics_draw_text(x + 4, y + 6, "E", 0x00131D28, 1);
     }
 }
 
@@ -310,25 +362,11 @@ static void explorer_toolbar(int x, int y, int w)
         content, y, w - EXPLORER_SIDEBAR,
         EXPLORER_TOOLBAR, VANTA_UI_TOOLBAR);
 
-    graphics_fill_rounded_rect(
-        content + 10, y + 6, 32, 30, 6, VANTA_UI_HOVER);
-    graphics_draw_text(
-        content + 21, y + 14, "<",
-        explorer_has_history ? 0x00FFFFFF : 0x00677B8D, 1);
-
-    graphics_fill_rounded_rect(
-        content + 48, y + 6, 32, 30, 6, VANTA_UI_HOVER);
-    graphics_draw_text(
-        content + 59, y + 14, "^", 0x00FFFFFF, 1);
-
-    graphics_fill_rect(
-        content + 90, y + 6,
-        w - EXPLORER_SIDEBAR - 104, 30,
-        VANTA_UI_HOVER);
-
-    graphics_draw_text(
-        content + 103, y + 14,
-        explorer_location_name(), 0x00E7EEF4, 1);
+    graphics_ui_explorer_toolbar_button(content + 10, y + 6, "<",
+                                        explorer_has_history);
+    graphics_ui_explorer_toolbar_button(content + 48, y + 6, "^", 1);
+    graphics_ui_explorer_location(content + 90, y + 6,
+        w - EXPLORER_SIDEBAR - 104, explorer_location_name());
 }
 
 void file_explorer_draw(int width, int height)
@@ -356,9 +394,7 @@ void file_explorer_draw(int width, int height)
         wx, sidebar_y, EXPLORER_SIDEBAR,
         wh - EXPLORER_TITLE, VANTA_UI_SURFACE);
 
-    graphics_draw_text(
-        wx + 16, sidebar_y + 22,
-        "LOCATIONS", VANTA_UI_TEXT_SECONDARY, 1);
+    graphics_ui_explorer_sidebar_heading(wx + 16, sidebar_y + 18, "LOCATIONS");
 
     {
         int system_id = explorer_directory_for_path("/system");
@@ -381,9 +417,7 @@ void file_explorer_draw(int width, int height)
             explorer_directory == (uint32_t)home_id, 2);
     }
 
-    graphics_draw_text(
-        wx + 16, sidebar_y + 172,
-        "SYSTEM", VANTA_UI_TEXT_SECONDARY, 1);
+    graphics_ui_explorer_sidebar_heading(wx + 16, sidebar_y + 166, "SYSTEM");
 
     /* System shortcuts use the same restrained row treatment. */
     for (int item = 0; item < 3; item++)
@@ -411,23 +445,20 @@ void file_explorer_draw(int width, int height)
     content_w = ww - EXPLORER_SIDEBAR;
     list_y = sidebar_y + EXPLORER_TOOLBAR;
 
-    graphics_fill_rect(
-        content_x, list_y, content_w, 32, VANTA_UI_ROW);
-    graphics_draw_text(
-        content_x + 18, list_y + 10, "NAME",
-        VANTA_UI_TEXT_SECONDARY, 1);
-    graphics_draw_text(
-        content_x + content_w - 150, list_y + 10, "TYPE",
-        VANTA_UI_TEXT_SECONDARY, 1);
-    graphics_draw_text(
-        content_x + content_w - 66, list_y + 10, "SIZE",
-        VANTA_UI_TEXT_SECONDARY, 1);
-
     count = filesystem_list(explorer_directory, ids, FS_MAX_NODES);
     if (count < 0)
         count = 0;
-    if (count > EXPLORER_MAX_ROWS)
-        count = EXPLORER_MAX_ROWS;
+    int total_count = count;
+    int visible_limit = (wh - EXPLORER_TITLE - EXPLORER_TOOLBAR - 32 - 26)
+        / EXPLORER_ROW;
+    if (visible_limit < 0)
+        visible_limit = 0;
+    if (visible_limit > EXPLORER_MAX_ROWS)
+        visible_limit = EXPLORER_MAX_ROWS;
+    if (count > visible_limit)
+        count = visible_limit;
+
+    graphics_ui_explorer_column_header(content_x, list_y, content_w);
 
     for (i = 0; i < count; i++)
     {
@@ -437,14 +468,13 @@ void file_explorer_draw(int width, int height)
         if (!node)
             continue;
 
-        if ((i & 1) == 0)
-            graphics_fill_rect(
-                content_x, row_y, content_w,
-                EXPLORER_ROW, 0x00151F29);
+        graphics_ui_explorer_row(
+            content_x, row_y, content_w, EXPLORER_ROW,
+            explorer_file == (int)node->id, (i & 1) == 0);
 
         explorer_icon(
             content_x + 18, row_y + 8,
-            node->type == FS_NODE_DIRECTORY,
+            node,
             explorer_file == (int)node->id);
 
         graphics_draw_text(
@@ -479,10 +509,40 @@ void file_explorer_draw(int width, int height)
     }
 
     if (count == 0)
-        graphics_draw_text(
-            content_x + 20, list_y + 58,
-            "This folder is empty.",
-            VANTA_UI_TEXT_SECONDARY, 1);
+    {
+        graphics_ui_draw_empty_state(content_x, list_y + 32, content_w,
+            wh - EXPLORER_TITLE - EXPLORER_TOOLBAR - 58,
+            "No files here", "This directory has no visible entries.");
+    }
+
+    {
+        char count_label[28];
+        char number[12];
+        unsigned int n = (unsigned int)total_count;
+        int digits = 0;
+        if (n == 0) number[digits++] = '0';
+        else
+        {
+            char reverse[10];
+            int r = 0;
+            while (n && r < 9)
+            {
+                reverse[r++] = (char)('0' + n % 10);
+                n /= 10;
+            }
+            while (r) number[digits++] = reverse[--r];
+        }
+        number[digits] = 0;
+        int p = 0;
+        for (int j = 0; number[j] && p < 20; ++j)
+            count_label[p++] = number[j];
+        const char* suffix = total_count == 1 ? " item" : " items";
+        for (int j = 0; suffix[j] && p < 26; ++j)
+            count_label[p++] = suffix[j];
+        count_label[p] = 0;
+        graphics_ui_explorer_status(wx + EXPLORER_SIDEBAR,
+            wy + wh - 26, ww - EXPLORER_SIDEBAR, count_label, "VFS");
+    }
 }
 
 int file_explorer_click(int x, int y, int width, int height)

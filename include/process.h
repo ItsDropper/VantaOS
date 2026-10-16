@@ -67,5 +67,6 @@ int process_snapshot(uint32_t pid, process_t* snapshot);
 const process_t* process_get(uint32_t pid);
 unsigned int process_count(void);
 uint32_t process_current_pid(void);
+uint32_t process_current_cpu_id(void);
 
 #endif

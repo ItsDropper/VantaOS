@@ -146,8 +146,7 @@ uint64_t scheduler_start_cpu(uint64_t interrupted_stack)
     paging_address_space_t* idle_address_space = NULL;
     if (idle_pid == 0U || idle_pid >= PROCESS_MAX ||
         !process_claim_for_cpu_context(idle_pid, 0U, local->logical_id,
-                                       &idle_stack, &idle_address_space) ||
-        idle_stack == 0U || idle_address_space == NULL)
+                                       &idle_stack, &idle_address_space))
     {
         __atomic_store_n(&local->reschedule_pending, 1U, __ATOMIC_RELEASE);
         return interrupted_stack;

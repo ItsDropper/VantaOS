@@ -315,9 +315,26 @@ int process_reap(uint32_t pid)
     if (process->state == PROCESS_ZOMBIE)
     {
         uint32_t parent_pid = process->parent_pid;
-        int wake_parent = parent_pid > 0U && parent_pid < PROCESS_MAX &&
-            process_table_records[parent_pid].is_user &&
-            process_table_records[parent_pid].state == PROCESS_SLEEPING;
+        /*
+         * A zombie belonging to a live user parent is waitable state, not
+         * leaked execution resources. Generic reaper passes must not consume
+         * it before waitpid observes the exit status; only orphaned zombies
+         * may be reclaimed here.
+         */
+        if (parent_pid > 0U && parent_pid < PROCESS_MAX)
+        {
+            const process_t* parent = &process_table_records[parent_pid];
+            if (parent->is_user &&
+                parent->state != PROCESS_UNUSED &&
+                parent->state != PROCESS_TERMINATED &&
+                parent->state != PROCESS_ZOMBIE &&
+                parent->state != PROCESS_REAPING)
+            {
+                process_table_lock_release(flags);
+                return 0;
+            }
+        }
+
         process_reparent_children_locked(pid);
         process_reset_record(process);
         process->pid = pid;

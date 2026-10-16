@@ -622,17 +622,6 @@ smp_init_result_t smp_initialize(void)
     }
 
     serial_write("VANTAOS_SMP_CPU_LOCAL_OK\n");
-#ifdef VANTAOS_SELF_TEST
-    if (info->cpu_count == 1U)
-    {
-        if (!apic_send_nmi_all())
-        {
-            serial_write("VANTAOS_SMP_NMI_BROADCAST_PROBE_FAIL\n");
-            return SMP_INIT_FAILED;
-        }
-        serial_write("VANTAOS_SMP_NMI_BROADCAST_PROBE_OK\n");
-    }
-#endif
     if (!smp_run_work_probe(info, (uint32_t)bsp_index))
         return SMP_INIT_FAILED;
 

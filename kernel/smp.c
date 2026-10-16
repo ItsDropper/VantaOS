@@ -225,7 +225,7 @@ static int smp_run_work_probe(const acpi_platform_info_t* info,
         const cpu_local_t* local = cpu_local_get(i);
         if (!local || !apic_send_fixed_ipi(local->apic_id, 0xF1U))
         {
-            serial_write("VANTAOS_SMP_WORK_FAIL\\n");
+            serial_write("VANTAOS_SMP_WORK_FAIL\n");
             return 0;
         }
     }

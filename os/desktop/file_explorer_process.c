@@ -25,11 +25,11 @@ int file_explorer_process_start(uint32_t parent_pid)
 {
     if (explorer_pid != 0)
     {
-        const process_t* process = process_get(explorer_pid);
+        process_t process;
 
-        if (process &&
-            process->state != PROCESS_TERMINATED &&
-            process->state != PROCESS_UNUSED)
+        if (process_snapshot(explorer_pid, &process) &&
+            process.state != PROCESS_TERMINATED &&
+            process.state != PROCESS_UNUSED)
             return (int)explorer_pid;
 
         explorer_pid = 0;
@@ -58,11 +58,11 @@ void file_explorer_process_step(void)
     if (explorer_pid == 0)
         return;
 
-    const process_t* process = process_get(explorer_pid);
+    process_t process;
 
-    if (!process ||
-        process->state == PROCESS_TERMINATED ||
-        process->state == PROCESS_UNUSED)
+    if (!process_snapshot(explorer_pid, &process) ||
+        process.state == PROCESS_TERMINATED ||
+        process.state == PROCESS_UNUSED)
     {
         explorer_pid = 0;
         return;

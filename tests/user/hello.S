@@ -86,7 +86,7 @@ _start:
     mov $6, %eax
     lea child_path(%rip), %rdi
     lea child_argv(%rip), %rsi
-    mov $1, %edx
+    mov $2, %edx
     int $0x80
     test %rax, %rax
     jle file_fail
@@ -248,6 +248,9 @@ child_path:
 .align 8
 child_argv:
     .quad child_path
+    .quad child_argument
+child_argument:
+    .asciz "spawned-child"
 invalid_child_argv:
     .quad 0x7ffffffff000
 long_child_argv:

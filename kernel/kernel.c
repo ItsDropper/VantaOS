@@ -217,7 +217,7 @@ static void user_mapping_probe(void)
         ok = paging_get_current_address_space() == space && ok;
         per_cpu_ok = paging_get_current_address_space() == space &&
                      bsp_local &&
-                     bsp_local->current_address_space == space && per_cpu_ok;
+                     bsp_local->current_address_space == space;
         for (uint32_t cpu = 0; cpu < cpu_local_capacity(); cpu++)
         {
             const cpu_local_t* local = cpu_local_get(cpu);

@@ -3,12 +3,14 @@
 #include "paging.h"
 #include "process.h"
 #include "serial.h"
+#include "terminal.h"
 #include "user_mode_test.h"
 
 #include <stdint.h>
 
 #define USER_SYSCALL_EXIT 0U
 #define USER_SYSCALL_WRITE 1U
+#define USER_SYSCALL_CONSOLE_WRITE 2U
 #define USER_SYSCALL_WRITE_MAX 4096U
 
 static int syscall_write(struct exception_frame* frame,
@@ -39,6 +41,46 @@ static int syscall_write(struct exception_frame* frame,
     return 0;
 }
 
+static int syscall_console_write(struct exception_frame* frame,
+                                 const process_t* process)
+{
+    const uintptr_t address = (uintptr_t)frame->rdi;
+    const uint64_t length = frame->rsi;
+
+    if (length == 0U)
+    {
+        frame->rax = 0U;
+        return 0;
+    }
+    if (length > USER_SYSCALL_WRITE_MAX)
+    {
+        frame->rax = (uint64_t)(int64_t)-22;
+        return 0;
+    }
+    if (!paging_user_range_valid(process->address_space, address,
+                                 (size_t)length, 0))
+    {
+        frame->rax = (uint64_t)(int64_t)-14;
+        return 0;
+    }
+
+    char chunk[129];
+    uint64_t offset = 0U;
+    while (offset < length)
+    {
+        size_t count = (size_t)(length - offset);
+        if (count > sizeof(chunk) - 1U)
+            count = sizeof(chunk) - 1U;
+        for (size_t i = 0; i < count; i++)
+            chunk[i] = ((const char*)address)[offset + i];
+        chunk[count] = '\0';
+        terminal_write(chunk);
+        offset += count;
+    }
+    frame->rax = length;
+    return 0;
+}
+
 static int syscall_dispatch(struct exception_frame* frame)
 {
     if (!frame || (frame->cs & 3U) != 3U)
@@ -64,6 +106,8 @@ static int syscall_dispatch(struct exception_frame* frame)
             return 1;
         case USER_SYSCALL_WRITE:
             return syscall_write(frame, &process);
+        case USER_SYSCALL_CONSOLE_WRITE:
+            return syscall_console_write(frame, &process);
         default:
             frame->rax = (uint64_t)(int64_t)-38;
             return 0;

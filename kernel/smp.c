@@ -18,7 +18,7 @@
 #define AP_STARTUP_SPIN_LIMIT 50000000U
 #define SMP_WORK_PROBE_ITERATIONS 100000U
 #define SMP_LOCAL_TIMER_VECTOR 0xF2U
-#define SMP_LOCAL_TIMER_INITIAL_COUNT 1000000U
+#define SMP_LOCAL_TIMER_TARGET_HZ 100U
 #define SMP_RESCHEDULE_IPI_VECTOR 0xF3U
 
 typedef struct
@@ -33,6 +33,7 @@ extern uint8_t ap_trampoline_blob_end[];
 extern _Noreturn void smp_ap_entry(uint32_t apic_id);
 
 static unsigned int discovered_cpu_count;
+static uint32_t calibrated_timer_initial_count;
 static uint8_t ap_stacks[ACPI_MAX_CPUS][AP_STACK_SIZE]
     __attribute__((aligned(16)));
 static volatile uint32_t ap_online[ACPI_MAX_CPUS];
@@ -88,7 +89,7 @@ _Noreturn void smp_ap_entry(uint32_t apic_id)
         apic_initialize_cpu(apic_id) &&
         cpu_local_initialize((uint32_t)index, apic_id) &&
         apic_timer_initialize(SMP_LOCAL_TIMER_VECTOR,
-                              SMP_LOCAL_TIMER_INITIAL_COUNT))
+                              calibrated_timer_initial_count))
     {
         __atomic_store_n(&ap_online[index], 1U, __ATOMIC_RELEASE);
     }
@@ -263,7 +264,7 @@ static int smp_wait_for_local_timers(const acpi_platform_info_t* info)
 
     uint32_t spin = 0;
     int ready = 0;
-    while (spin++ < AP_STARTUP_SPIN_LIMIT)
+    while (spin++ < 250000000U)
     {
         ready = 1;
         for (uint32_t i = 0; i < info->cpu_count; i++)
@@ -376,9 +377,24 @@ int smp_initialize(void)
     uint32_t bsp_id = apic_get_bsp_id();
     int bsp_index = find_cpu_index(info, bsp_id);
     if (bsp_index < 0 ||
-        !cpu_local_initialize((uint32_t)bsp_index, bsp_id) ||
-        !apic_timer_initialize(SMP_LOCAL_TIMER_VECTOR,
-                               SMP_LOCAL_TIMER_INITIAL_COUNT))
+        !cpu_local_initialize((uint32_t)bsp_index, bsp_id))
+    {
+        serial_write("VANTAOS_SMP_CPU_LOCAL_FAIL\n");
+        return 0;
+    }
+
+    if (!apic_timer_calibrate(SMP_LOCAL_TIMER_VECTOR,
+                              SMP_LOCAL_TIMER_TARGET_HZ,
+                              &calibrated_timer_initial_count) ||
+        calibrated_timer_initial_count == 0U)
+    {
+        serial_write("VANTAOS_SMP_TIMER_CALIBRATION_FAIL\n");
+        return 0;
+    }
+    serial_write("VANTAOS_SMP_TIMER_CALIBRATION_OK\n");
+
+    if (!apic_timer_initialize(SMP_LOCAL_TIMER_VECTOR,
+                               calibrated_timer_initial_count))
     {
         serial_write("VANTAOS_SMP_CPU_LOCAL_FAIL\n");
         return 0;

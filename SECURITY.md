@@ -8,7 +8,7 @@ Use GitHub's **Private vulnerability reporting** feature for this repository if 
 
 ## Supported versions
 
-Security fixes are currently considered for the latest code on the `main` branch. No formal long-term-support policy is established unless a release explicitly says otherwise.
+Security fixes are currently considered for the latest code on the `master` branch. No formal long-term-support policy is established unless a release explicitly says otherwise.
 
 ## Scope and limitations
 

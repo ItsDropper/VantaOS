@@ -108,17 +108,31 @@ uint64_t reschedule_ipi_handle_interrupt(uint64_t saved_stack)
     if (valid_local)
         __atomic_add_fetch(&local->reschedule_ipi_ticks, 1U, __ATOMIC_RELAXED);
 
-    /*
-     * An IPI can arrive before the scheduler is initialized or while this CPU
-     * has no process context to switch from. Preserve the request and return
-     * the interrupted stack unchanged in those cases.
-     */
     if (!valid_local || !scheduler_is_initialized() ||
-        !process_is_initialized() || process_current_pid() == 0U)
+        !process_is_initialized())
     {
         if (valid_local)
             __atomic_store_n(&local->reschedule_pending, 1U,
                              __ATOMIC_RELEASE);
+        apic_send_eoi();
+        return saved_stack;
+    }
+
+    if (process_current_pid() == 0U)
+    {
+        /*
+         * APs start on a bootstrap stack, not a process stack. Only jump to a
+         * prepared idle context when its per-CPU process has been registered.
+         */
+        if (__atomic_load_n(&local->idle_pid, __ATOMIC_ACQUIRE) != 0U)
+        {
+            __atomic_store_n(&local->reschedule_pending, 0U,
+                             __ATOMIC_RELEASE);
+            apic_send_eoi();
+            return scheduler_start_cpu(saved_stack);
+        }
+
+        __atomic_store_n(&local->reschedule_pending, 1U, __ATOMIC_RELEASE);
         apic_send_eoi();
         return saved_stack;
     }

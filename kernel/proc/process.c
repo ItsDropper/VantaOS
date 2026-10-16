@@ -262,6 +262,44 @@ int process_create_kernel(const char* name, uint32_t parent_pid,
     return -1;
 }
 
+
+int process_create_kernel_any(const char* name, uint32_t parent_pid,
+                              process_entry_t entry)
+{
+    return process_create_kernel(name, parent_pid, entry);
+}
+
+int process_create_idle_for_cpu(uint32_t cpu_id, const char* name,
+                                process_entry_t entry)
+{
+    if (!initialized || cpu_id >= CPU_LOCAL_MAX || !name || !name[0] ||
+        !entry)
+        return 0;
+
+    cpu_local_t* local = (cpu_local_t*)cpu_local_get(cpu_id);
+    if (!local || local->self != local || local->online == 0U)
+        return 0;
+
+    int pid = process_create_kernel(name, 0U, entry);
+    if (pid < 0)
+        return 0;
+
+    uint64_t flags = process_table_lock_acquire();
+    process_t* process = &processes[(uint32_t)pid];
+    if (process->state != PROCESS_READY ||
+        process->owner_cpu != PROCESS_CPU_UNOWNED ||
+        local->idle_pid != 0U)
+    {
+        process_table_lock_release(flags);
+        (void)process_reap((uint32_t)pid);
+        return 0;
+    }
+    process->affinity_cpu = cpu_id;
+    __atomic_store_n(&local->idle_pid, (uint32_t)pid, __ATOMIC_RELEASE);
+    process_table_lock_release(flags);
+    return pid;
+}
+
 int process_mark_running(uint32_t pid)
 {
     if (!initialized || pid == 0 || pid >= PROCESS_MAX)

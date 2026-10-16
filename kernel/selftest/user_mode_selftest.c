@@ -37,6 +37,11 @@ static volatile uint32_t user_test_protection_fault_seen;
 static volatile uint32_t user_test_gs_fault_seen;
 static volatile uint32_t user_test_unexpected;
 
+int user_mode_selftest_is_active(void)
+{
+    return __atomic_load_n(&user_test_active, __ATOMIC_ACQUIRE) != 0U;
+}
+
 static int user_test_owned_by_current_cpu(void)
 {
     const cpu_local_t* cpu = cpu_local_current();

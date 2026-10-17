@@ -5,6 +5,7 @@
 
 #define MMIO_PAGE_SIZE 4096ULL
 #define MMIO_ALLOCATION_MAX 16U
+#define MMIO_PHYSICAL_LIMIT 0x0010000000000000ULL
 
 typedef struct {
     void* returned_address;
@@ -20,7 +21,9 @@ static spinlock_t mmio_lock=SPINLOCK_INITIALIZER;
 
 void* mmio_map_region(uint64_t physical_address,size_t length)
 {
-    if(!length || physical_address>UINT64_MAX-(uint64_t)(length-1U))
+    if(!length || physical_address>=MMIO_PHYSICAL_LIMIT ||
+       physical_address>UINT64_MAX-(uint64_t)(length-1U) ||
+       (uint64_t)(length-1U)>=(MMIO_PHYSICAL_LIMIT-physical_address))
         return 0;
     uint64_t offset=physical_address&(MMIO_PAGE_SIZE-1U);
     if((uint64_t)length>UINT64_MAX-offset)return 0;

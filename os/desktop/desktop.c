@@ -141,29 +141,7 @@ void desktop_update(void)
 
     if (mouse_has_event())
     {
-        int wheel_event = mouse_has_wheel_event();
         int click_event = mouse_has_click_event();
-
-        if (wheel_event && terminal_window_open && graphics_get_active_panel() == 3)
-        {
-            int wheel_delta = mouse_get_wheel_delta();
-            /*
-             * One PS/2 wheel detent is too slow for the GUI terminal.
-             * Consume two history lines per detent while keeping the
-             * existing direction and scroll model intact.
-             */
-            if (wheel_delta > 0)
-            {
-                terminal_scroll_down();
-                terminal_scroll_down();
-            }
-            if (wheel_delta < 0)
-            {
-                terminal_scroll_up();
-                terminal_scroll_up();
-            }
-            desktop_gui_present();
-        }
 
         if (graphics_is_initialized())
         {

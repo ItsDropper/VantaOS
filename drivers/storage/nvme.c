@@ -61,13 +61,29 @@ typedef struct __attribute__((packed)) {
 typedef char nvme_command_must_be_64_bytes[(sizeof(nvme_command_t) == 64U) ? 1 : -1];
 typedef char nvme_completion_must_be_16_bytes[(sizeof(nvme_completion_t) == 16U) ? 1 : -1];
 
+#define NVME_IO_SLOTS 8U
+#define NVME_MAX_TRANSFER_PAGES 16U
+
+typedef struct {
+    dma_page_t pages[NVME_MAX_TRANSFER_PAGES];
+    dma_page_t prp_list;
+    uint64_t lba;
+    uint32_t sector_count;
+    size_t byte_offset;
+    uint16_t command_id;
+    uint8_t page_count;
+    uint8_t active;
+    uint8_t completed;
+    uint8_t success;
+} nvme_io_slot_t;
+
 typedef struct {
     dma_page_t admin_submission;
     dma_page_t admin_completion;
     dma_page_t io_submission;
     dma_page_t io_completion;
-    dma_page_t bounce;
     dma_page_t identify;
+    nvme_io_slot_t io_slots[NVME_IO_SLOTS];
     volatile uint8_t* registers;
     volatile uint32_t* admin_submission_doorbell;
     volatile uint32_t* admin_completion_doorbell;
@@ -77,6 +93,7 @@ typedef struct {
     uint64_t doorbell_stride;
     uint32_t namespace_count;
     uint32_t controller_index;
+    uint32_t max_transfer_pages;
     uint16_t admin_tail;
     uint16_t admin_head;
     uint16_t io_tail;
@@ -147,15 +164,26 @@ static int allocate_controller_memory(nvme_controller_t* c)
     if (!dma_alloc_page(&c->admin_completion)) return 0;
     if (!dma_alloc_page(&c->io_submission)) return 0;
     if (!dma_alloc_page(&c->io_completion)) return 0;
-    if (!dma_alloc_page(&c->bounce)) return 0;
     if (!dma_alloc_page(&c->identify)) return 0;
+    for (uint32_t slot = 0; slot < NVME_IO_SLOTS; ++slot) {
+        nvme_io_slot_t* io = &c->io_slots[slot];
+        if (!dma_alloc_page(&io->prp_list)) return 0;
+        for (uint32_t page = 0; page < NVME_MAX_TRANSFER_PAGES; ++page)
+            if (!dma_alloc_page(&io->pages[page])) return 0;
+    }
+    c->max_transfer_pages = NVME_MAX_TRANSFER_PAGES;
     return 1;
 }
 
 static void free_controller_memory(nvme_controller_t* c)
 {
+    for (uint32_t slot = 0; slot < NVME_IO_SLOTS; ++slot) {
+        nvme_io_slot_t* io = &c->io_slots[slot];
+        for (uint32_t page = 0; page < NVME_MAX_TRANSFER_PAGES; ++page)
+            dma_free_page(&io->pages[page]);
+        dma_free_page(&io->prp_list);
+    }
     dma_free_page(&c->identify);
-    dma_free_page(&c->bounce);
     dma_free_page(&c->io_completion);
     dma_free_page(&c->io_submission);
     dma_free_page(&c->admin_completion);
@@ -248,11 +276,120 @@ static void copy_bytes(void* destination, const void* source, size_t length)
     for (size_t i = 0; i < length; ++i) dst[i] = src[i];
 }
 
+static uint16_t next_io_command_id(nvme_controller_t* c)
+{
+    uint16_t id = ++c->next_command_id;
+    if (id == 0U) id = ++c->next_command_id;
+    return id;
+}
+
+static void prepare_io_command(nvme_controller_t* c, nvme_namespace_t* ns,
+                               nvme_io_slot_t* io, uint32_t slot_index,
+                               uint64_t lba, uint32_t sectors,
+                               size_t byte_offset, void* user_buffer, int write)
+{
+    const size_t bytes = (size_t)sectors * ns->sector_size;
+    uint32_t page_count = (uint32_t)((bytes + NVME_PAGE_SIZE - 1U) / NVME_PAGE_SIZE);
+    uint64_t* prps = (uint64_t*)io->prp_list.virtual_address;
+    for (uint32_t i = 0; i < NVME_MAX_TRANSFER_PAGES; ++i) prps[i] = 0U;
+    io->lba = lba;
+    io->sector_count = sectors;
+    io->byte_offset = byte_offset;
+    io->page_count = (uint8_t)page_count;
+    io->command_id = next_io_command_id(c);
+    io->active = 1U;
+    io->completed = 0U;
+    io->success = 0U;
+
+    uint8_t* user = (uint8_t*)user_buffer + byte_offset;
+    size_t remaining = bytes;
+    for (uint32_t page = 0; page < page_count; ++page) {
+        size_t page_bytes = remaining < NVME_PAGE_SIZE ? remaining : NVME_PAGE_SIZE;
+        if (write)
+            copy_bytes(io->pages[page].virtual_address, user, page_bytes);
+        if (page > 0U) prps[page - 1U] = io->pages[page].physical_address;
+        user += page_bytes;
+        remaining -= page_bytes;
+    }
+
+    nvme_command_t command = {0};
+    command.opcode = write ? NVME_IO_WRITE : NVME_IO_READ;
+    command.command_id = io->command_id;
+    command.namespace_id = ns->namespace_id;
+    command.prp1 = io->pages[0].physical_address;
+    if (page_count == 2U)
+        command.prp2 = io->pages[1].physical_address;
+    else if (page_count > 2U)
+        command.prp2 = io->prp_list.physical_address;
+    command.command_dword10 = (uint32_t)lba;
+    command.command_dword11 = (uint32_t)(lba >> 32);
+    command.command_dword12 = sectors - 1U; /* NLB is zero-based. */
+
+    volatile nvme_command_t* queue =
+        (volatile nvme_command_t*)c->io_submission.virtual_address;
+    queue[c->io_tail] = command;
+    c->io_tail = (uint16_t)((c->io_tail + 1U) % NVME_QUEUE_DEPTH);
+    (void)slot_index;
+}
+
+static int complete_io_batch(nvme_controller_t* c, uint32_t pending)
+{
+    uint32_t completed = 0U;
+    uint32_t spins = 0U;
+    volatile nvme_completion_t* queue =
+        (volatile nvme_completion_t*)c->io_completion.virtual_address;
+    while (completed < pending && spins < NVME_WAIT_LIMIT) {
+        if (mmio_read32(c->registers, 0x1CU) & NVME_CSTS_CFS) {
+            c->failed = 1U;
+            return 0;
+        }
+        nvme_completion_t completion;
+        completion.result = queue[c->io_head].result;
+        completion.reserved = queue[c->io_head].reserved;
+        completion.submission_head = queue[c->io_head].submission_head;
+        completion.submission_id = queue[c->io_head].submission_id;
+        completion.command_id = queue[c->io_head].command_id;
+        completion.status_phase = queue[c->io_head].status_phase;
+        __atomic_thread_fence(__ATOMIC_ACQUIRE);
+        if ((completion.status_phase & 1U) != c->io_phase) {
+            ++spins;
+            __asm__ volatile ("pause");
+            continue;
+        }
+        nvme_io_slot_t* found = 0;
+        for (uint32_t i = 0; i < NVME_IO_SLOTS; ++i) {
+            nvme_io_slot_t* candidate = &c->io_slots[i];
+            if (candidate->active && !candidate->completed &&
+                candidate->command_id == completion.command_id) {
+                found = candidate;
+                break;
+            }
+        }
+        if (!found) {
+            c->failed = 1U;
+            return 0;
+        }
+        found->completed = 1U;
+        found->success = ((completion.status_phase >> 1) == 0U);
+        ++completed;
+        c->io_head = (uint16_t)((c->io_head + 1U) % NVME_QUEUE_DEPTH);
+        if (c->io_head == 0U) c->io_phase ^= 1U;
+        __atomic_thread_fence(__ATOMIC_SEQ_CST);
+        *c->io_completion_doorbell = c->io_head;
+        ++spins;
+    }
+    if (completed != pending) {
+        c->failed = 1U;
+        return 0;
+    }
+    return 1;
+}
+
 static block_status_t namespace_transfer(nvme_namespace_t* ns, uint64_t lba,
                                          uint32_t count, void* buffer,
                                          int write)
 {
-    if (!ns || !ns->used || !buffer || count == 0)
+    if (!ns || !ns->used || !buffer || count == 0U)
         return BLOCK_STATUS_INVALID;
     nvme_controller_t* c = ns->controller;
     if (!c || !c->initialized || c->failed)
@@ -264,27 +401,52 @@ static block_status_t namespace_transfer(nvme_namespace_t* ns, uint64_t lba,
 
     uint64_t flags = spinlock_lock_irqsave(&c->io_lock);
     block_status_t status = BLOCK_STATUS_OK;
+    uint32_t transferred = 0U;
     uint8_t* user_buffer = (uint8_t*)buffer;
-    for (uint32_t sector = 0; sector < count; ++sector) {
-        if (c->failed) { status = BLOCK_STATUS_IO_ERROR; break; }
-        if (write)
-            copy_bytes(c->bounce.virtual_address,
-                       user_buffer + (size_t)sector * ns->sector_size,
-                       ns->sector_size);
-        nvme_command_t command = {0};
-        command.opcode = write ? NVME_IO_WRITE : NVME_IO_READ;
-        command.namespace_id = ns->namespace_id;
-        command.prp1 = c->bounce.physical_address;
-        command.command_dword10 = (uint32_t)(lba + sector);
-        command.command_dword11 = (uint32_t)((lba + sector) >> 32);
-        command.command_dword12 = 0U; /* NLB=0 means one logical block. */
-        if (!submit_command(c, 0, &command, 0)) {
+    const uint32_t sectors_per_page = NVME_PAGE_SIZE / ns->sector_size;
+    uint32_t sectors_per_command = c->max_transfer_pages * sectors_per_page;
+    if (!sectors_per_command) {
+        spinlock_unlock_irqrestore(&c->io_lock, flags);
+        return BLOCK_STATUS_IO_ERROR;
+    }
+
+    while (transferred < count && !c->failed) {
+        uint32_t pending = 0U;
+        for (uint32_t i = 0; i < NVME_IO_SLOTS && transferred < count; ++i) {
+            uint32_t sectors = count - transferred;
+            if (sectors > sectors_per_command) sectors = sectors_per_command;
+            prepare_io_command(c, ns, &c->io_slots[i], i, lba + transferred,
+                               sectors, (size_t)transferred * ns->sector_size,
+                               user_buffer, write);
+            transferred += sectors;
+            ++pending;
+        }
+        __atomic_thread_fence(__ATOMIC_SEQ_CST);
+        *c->io_submission_doorbell = c->io_tail;
+        __atomic_thread_fence(__ATOMIC_SEQ_CST);
+        if (!complete_io_batch(c, pending)) {
             status = BLOCK_STATUS_IO_ERROR;
             break;
         }
-        if (!write)
-            copy_bytes(user_buffer + (size_t)sector * ns->sector_size,
-                       c->bounce.virtual_address, ns->sector_size);
+        for (uint32_t i = 0; i < pending; ++i) {
+            nvme_io_slot_t* io = &c->io_slots[i];
+            if (!io->success) {
+                status = BLOCK_STATUS_IO_ERROR;
+            } else if (!write) {
+                size_t bytes = (size_t)io->sector_count * ns->sector_size;
+                size_t copied = 0U;
+                uint8_t* destination = user_buffer + io->byte_offset;
+                for (uint32_t page = 0; page < io->page_count; ++page) {
+                    size_t amount = bytes - copied;
+                    if (amount > NVME_PAGE_SIZE) amount = NVME_PAGE_SIZE;
+                    copy_bytes(destination + copied, io->pages[page].virtual_address,
+                               amount);
+                    copied += amount;
+                }
+            }
+            io->active = 0U;
+        }
+        if (status != BLOCK_STATUS_OK) break;
     }
     spinlock_unlock_irqrestore(&c->io_lock, flags);
     return status;
@@ -465,6 +627,10 @@ static storage_probe_result_t nvme_probe(const struct pci_device* pci)
     const uint8_t* controller_id = (const uint8_t*)c->identify.virtual_address;
     uint32_t namespace_total = *(const uint32_t*)(controller_id + 516U);
     if (!namespace_total) goto fail;
+    uint32_t mdts = controller_id[77U];
+    c->max_transfer_pages = mdts == 0U || mdts >= 4U ?
+        NVME_MAX_TRANSFER_PAGES : (1U << mdts);
+    if (!c->max_transfer_pages) c->max_transfer_pages = 1U;
 
     nvme_command_t create_cq = {0};
     create_cq.opcode = NVME_ADMIN_CREATE_IO_CQ;

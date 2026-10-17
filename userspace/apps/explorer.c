@@ -1,14 +1,25 @@
 #include <vanta/gui.h>
 #include <vanta/theme.h>
 
-#define PATH_CAPACITY 128U
-#define LIST_CAPACITY 2048U
-#define ENTRY_CAPACITY 48U
-#define ENTRY_NAME_CAPACITY 128U
-#define DISPLAY_ROWS 12U
+#define PATH_CAPACITY 256U
+#define LIST_CAPACITY 4096U
+#define ENTRY_CAPACITY 96U
+#define ENTRY_NAME_CAPACITY 256U
+#define DISPLAY_ROWS 11U
 #define PREVIEW_ROWS 12U
 #define WINDOW_WIDTH 760U
 #define WINDOW_HEIGHT 460U
+#define ROW_HEIGHT 20
+#define INPUT_NONE 0
+#define INPUT_PATH 1
+#define INPUT_SEARCH 2
+#define INPUT_DIALOG 3
+#define DIALOG_NONE 0
+#define DIALOG_CREATE_FILE 1
+#define DIALOG_CREATE_DIRECTORY 2
+#define DIALOG_RENAME 3
+#define DIALOG_CONFIRM_DELETE 4
+#define CONTEXT_NONE 0
 
 static vanta_theme_t current_theme;
 #define COLOR_TEXT vanta_theme_text_color(&current_theme)
@@ -17,29 +28,45 @@ static vanta_theme_t current_theme;
 #define COLOR_ROW vanta_theme_row_color(&current_theme)
 #define COLOR_ACCENT vanta_theme_accent_color(&current_theme)
 #define COLOR_BORDER vanta_theme_border_color(&current_theme)
+#define COLOR_SELECTED (current_theme.light ? 0x00DCEBFAU : 0x00253D56U)
 #define COLOR_ERROR (current_theme.light ? 0x00B83C49U : 0x00F87171U)
 
 static char current_path[PATH_CAPACITY] = "/";
 static char list_buffer[LIST_CAPACITY];
 static char entries[ENTRY_CAPACITY][ENTRY_NAME_CAPACITY];
 static unsigned char entry_is_directory[ENTRY_CAPACITY];
+static unsigned char entry_selected[ENTRY_CAPACITY];
 static size_t entry_count;
+static size_t visible_indices[ENTRY_CAPACITY];
+static size_t visible_count;
 static size_t selected_entry;
 static size_t first_visible;
+static int more_entries;
+static char search_query[64];
+static char clipboard_path[PATH_CAPACITY];
+static char input_buffer[PATH_CAPACITY];
+static int input_mode;
+static int dialog_mode;
+static int context_menu;
+static int properties_active;
+static int context_x;
+static int context_y;
+static size_t last_clicked_index = (size_t)-1;
+static unsigned int consecutive_clicks;
 static char preview_lines[PREVIEW_ROWS][VANTA_GUI_TEXT_MAX + 1U];
 static size_t preview_count;
 static int preview_active;
-static int more_entries;
+static char properties_path[PATH_CAPACITY];
+static vanta_file_info_t properties_info;
 static char status_text[VANTA_GUI_TEXT_MAX + 1U] = "Loading directory";
 static uint32_t status_color = 0x008D9BACU;
 static vanta_gui_draw_command_t commands[VANTA_GUI_MAX_COMMANDS];
 static uint32_t command_count;
 static uint32_t window_id;
 
-static size_t row_height(void)
-{
-    return current_theme.compact ? 16U : 20U;
-}
+/* Separate recursion levels keep recursive delete buffers off the user stack. */
+static char delete_list_buffers[8][LIST_CAPACITY];
+static char delete_path_buffers[8][PATH_CAPACITY];
 
 static size_t text_length(const char* text)
 {
@@ -49,37 +76,37 @@ static size_t text_length(const char* text)
     return length;
 }
 
-static int text_equals(const char* left, const char* right)
+static char fold_char(char c)
+{
+    return (c >= 'A' && c <= 'Z') ? (char)(c - 'A' + 'a') : c;
+}
+
+static int text_equals_ci(const char* left, const char* right)
 {
     size_t i = 0U;
     if (!left || !right)
         return 0;
-    while (left[i] && right[i] && left[i] == right[i])
+    while (left[i] && right[i] && fold_char(left[i]) == fold_char(right[i]))
         i++;
     return left[i] == right[i];
 }
 
-static int ends_with_elf(const char* name)
+static int text_contains_ci(const char* text, const char* query)
 {
-    size_t length = text_length(name);
-    if (length < 4U)
+    if (!query || !query[0])
+        return 1;
+    size_t n = text_length(text), q = text_length(query);
+    if (q > n)
         return 0;
-    const char* suffix = name + length - 4U;
-    return (suffix[0] == '.' &&
-            (suffix[1] == 'e' || suffix[1] == 'E') &&
-            (suffix[2] == 'l' || suffix[2] == 'L') &&
-            (suffix[3] == 'f' || suffix[3] == 'F'));
-}
-
-static void set_status(const char* text, uint32_t color)
-{
-    size_t length = text_length(text);
-    if (length > VANTA_GUI_TEXT_MAX)
-        length = VANTA_GUI_TEXT_MAX;
-    for (size_t i = 0U; i < length; i++)
-        status_text[i] = text[i];
-    status_text[length] = '\0';
-    status_color = color;
+    for (size_t i = 0; i + q <= n; i++)
+    {
+        size_t j = 0U;
+        while (j < q && fold_char(text[i + j]) == fold_char(query[j]))
+            j++;
+        if (j == q)
+            return 1;
+    }
+    return 0;
 }
 
 static void copy_text(char* destination, size_t capacity, const char* source)
@@ -95,17 +122,67 @@ static void copy_text(char* destination, size_t capacity, const char* source)
     destination[i] = '\0';
 }
 
+static int append_text(char* destination, size_t capacity, const char* suffix)
+{
+    size_t used = text_length(destination);
+    size_t i = 0U;
+    if (used >= capacity)
+        return 0;
+    while (suffix && suffix[i] && used + i + 1U < capacity)
+    {
+        destination[used + i] = suffix[i];
+        i++;
+    }
+    destination[used + i] = '\0';
+    return !suffix || suffix[i] == '\0';
+}
+
+static int build_child_path(const char* directory, const char* leaf,
+                            char* output, size_t capacity)
+{
+    if (!directory || !leaf || !leaf[0] || !output || capacity < 2U ||
+        leaf[0] == '/' || text_contains_ci(leaf, "/"))
+        return 0;
+    copy_text(output, capacity, directory);
+    size_t length = text_length(output);
+    if (length == 0U || output[length - 1U] != '/')
+        if (!append_text(output, capacity, "/"))
+            return 0;
+    return append_text(output, capacity, leaf);
+}
+
+static int build_entry_path(size_t index, char* output, size_t capacity)
+{
+    if (index >= entry_count)
+        return 0;
+    return build_child_path(current_path, entries[index], output, capacity);
+}
+
+static void set_status(const char* text, uint32_t color)
+{
+    copy_text(status_text, sizeof(status_text), text);
+    status_color = color;
+}
+
 static void add_rect(int32_t x, int32_t y, int32_t width,
                      int32_t height, uint32_t color)
 {
-    if (command_count >= VANTA_GUI_MAX_COMMANDS)
+    if (command_count >= VANTA_GUI_MAX_COMMANDS || width <= 0 || height <= 0)
         return;
     vanta_gui_draw_command_t* command = &commands[command_count++];
     *command = (vanta_gui_draw_command_t){
-        .type = VANTA_GUI_DRAW_FILL_RECT,
-        .x = x, .y = y, .width = width, .height = height,
-        .color = color, .scale = 1U
+        .type = VANTA_GUI_DRAW_FILL_RECT, .x = x, .y = y,
+        .width = width, .height = height, .color = color, .scale = 1U
     };
+}
+
+static void add_outline(int32_t x, int32_t y, int32_t width,
+                        int32_t height, uint32_t color)
+{
+    add_rect(x, y, width, 1, color);
+    add_rect(x, y + height - 1, width, 1, color);
+    add_rect(x, y, 1, height, color);
+    add_rect(x + width - 1, y, 1, height, color);
 }
 
 static void add_text(int32_t x, int32_t y, const char* text, uint32_t color)
@@ -116,35 +193,128 @@ static void add_text(int32_t x, int32_t y, const char* text, uint32_t color)
         return;
     vanta_gui_draw_command_t* command = &commands[command_count++];
     *command = (vanta_gui_draw_command_t){
-        .type = VANTA_GUI_DRAW_TEXT,
-        .x = x, .y = y, .color = color, .scale = 1U
+        .type = VANTA_GUI_DRAW_TEXT, .x = x, .y = y,
+        .color = color, .scale = 1U
     };
-    for (size_t i = 0U; i <= length; i++)
+    for (size_t i = 0; i <= length; i++)
         command->text[i] = text[i];
 }
 
-static void clear_entries(void)
+static void add_text_tail(int32_t x, int32_t y, const char* text,
+                          uint32_t color, size_t max_chars)
 {
-    entry_count = 0U;
-    selected_entry = 0U;
-    first_visible = 0U;
-    more_entries = 0;
-    for (size_t i = 0U; i < ENTRY_CAPACITY; i++)
+    size_t length = text_length(text);
+    if (length <= max_chars)
     {
-        entries[i][0] = '\0';
-        entry_is_directory[i] = 0U;
+        add_text(x, y, text, color);
+        return;
+    }
+    char clipped[VANTA_GUI_TEXT_MAX + 1U];
+    if (max_chars > VANTA_GUI_TEXT_MAX)
+        max_chars = VANTA_GUI_TEXT_MAX;
+    size_t start = length - max_chars;
+    for (size_t i = 0; i < max_chars; i++)
+        clipped[i] = text[start + i];
+    clipped[max_chars] = '\0';
+    add_text(x, y, clipped, color);
+}
+
+static size_t selected_count(void)
+{
+    size_t count = 0U;
+    for (size_t i = 0; i < entry_count; i++)
+        if (entry_selected[i])
+            count++;
+    return count;
+}
+
+static size_t first_selected(void)
+{
+    for (size_t i = 0; i < entry_count; i++)
+        if (entry_selected[i])
+            return i;
+    return (size_t)-1;
+}
+
+static void clear_selection(void)
+{
+    for (size_t i = 0; i < entry_count; i++)
+        entry_selected[i] = 0U;
+    selected_entry = (size_t)-1;
+}
+
+static void select_single(size_t index)
+{
+    clear_selection();
+    if (index < entry_count)
+    {
+        entry_selected[index] = 1U;
+        selected_entry = index;
+    }
+}
+
+static void build_visible(void)
+{
+    visible_count = 0U;
+    for (size_t i = 0; i < entry_count; i++)
+    {
+        if (!text_contains_ci(entries[i], search_query))
+            continue;
+        visible_indices[visible_count++] = i;
+    }
+    if (first_visible > visible_count)
+        first_visible = visible_count;
+    if (visible_count == 0U)
+        first_visible = 0U;
+}
+
+static void sort_entries(void)
+{
+    for (size_t i = 1U; i < entry_count; i++)
+    {
+        char name[ENTRY_NAME_CAPACITY];
+        unsigned char is_dir = entry_is_directory[i];
+        unsigned char selected = entry_selected[i];
+        copy_text(name, sizeof(name), entries[i]);
+        size_t j = i;
+        while (j > 0U)
+        {
+            int move = 0;
+            if (is_dir != entry_is_directory[j - 1U])
+                move = is_dir > entry_is_directory[j - 1U];
+            else
+            {
+                size_t k = 0U;
+                while (name[k] && entries[j - 1U][k] &&
+                       fold_char(name[k]) == fold_char(entries[j - 1U][k]))
+                    k++;
+                move = fold_char(name[k]) < fold_char(entries[j - 1U][k]);
+            }
+            if (!move)
+                break;
+            copy_text(entries[j], sizeof(entries[j]), entries[j - 1U]);
+            entry_is_directory[j] = entry_is_directory[j - 1U];
+            entry_selected[j] = entry_selected[j - 1U];
+            j--;
+        }
+        copy_text(entries[j], sizeof(entries[j]), name);
+        entry_is_directory[j] = is_dir;
+        entry_selected[j] = selected;
     }
 }
 
 static int load_directory(void)
 {
-    clear_entries();
+    entry_count = 0U;
+    more_entries = 0;
+    preview_active = 0;
     long result = vanta_listdir(current_path, list_buffer, sizeof(list_buffer));
     if (result < 0)
     {
         set_status(result == -2 ? "Directory not found" :
                    result == -22 ? "Directory listing exceeds buffer" :
                    "Directory read failed", COLOR_ERROR);
+        build_visible();
         return 0;
     }
 
@@ -158,32 +328,32 @@ static int load_directory(void)
         size_t length = cursor - start;
         if (cursor < bytes)
             cursor++;
-
         if (length == 0U)
             continue;
-        int is_directory = list_buffer[start + length - 1U] == '/';
-        if (is_directory)
+        int is_dir = list_buffer[start + length - 1U] == '/';
+        if (is_dir)
             length--;
         if (length == 0U)
             continue;
-
         if (entry_count >= ENTRY_CAPACITY)
         {
             more_entries = 1;
             continue;
         }
-        size_t copy_length = length;
-        if (copy_length >= ENTRY_NAME_CAPACITY)
-            copy_length = ENTRY_NAME_CAPACITY - 1U;
-        for (size_t i = 0U; i < copy_length; i++)
+        if (length >= ENTRY_NAME_CAPACITY)
+            length = ENTRY_NAME_CAPACITY - 1U;
+        for (size_t i = 0; i < length; i++)
             entries[entry_count][i] = list_buffer[start + i];
-        entries[entry_count][copy_length] = '\0';
-        entry_is_directory[entry_count] = (unsigned char)is_directory;
+        entries[entry_count][length] = '\0';
+        entry_is_directory[entry_count] = (unsigned char)is_dir;
+        entry_selected[entry_count] = 0U;
         entry_count++;
     }
-
-    preview_active = 0;
-    set_status(more_entries ? "Showing first 48 entries" :
+    selected_entry = (size_t)-1;
+    first_visible = 0U;
+    sort_entries();
+    build_visible();
+    set_status(more_entries ? "Showing first 96 entries" :
                entry_count == 0U ? "This directory is empty" : "Ready",
                COLOR_MUTED);
     return 1;
@@ -197,7 +367,7 @@ static void go_home(void)
 
 static void go_up(void)
 {
-    if (text_equals(current_path, "/"))
+    if (text_equals_ci(current_path, "/"))
         return;
     size_t length = text_length(current_path);
     while (length > 1U && current_path[length - 1U] == '/')
@@ -211,107 +381,497 @@ static void go_up(void)
     (void)load_directory();
 }
 
-static int build_entry_path(size_t index, char* destination, size_t capacity)
+static int ends_with_ci(const char* name, const char* suffix)
 {
-    if (index >= entry_count || !destination || capacity < 2U)
+    size_t n = text_length(name), s = text_length(suffix);
+    if (s > n)
         return 0;
-    size_t used = 0U;
-    if (text_equals(current_path, "/"))
-        destination[used++] = '/';
-    else
-    {
-        size_t path_length = text_length(current_path);
-        if (path_length + 1U >= capacity)
-            return 0;
-        for (size_t i = 0U; i < path_length; i++)
-            destination[used++] = current_path[i];
-        destination[used++] = '/';
-    }
+    return text_equals_ci(name + n - s, suffix);
+}
 
-    size_t name_length = text_length(entries[index]);
-    if (used + name_length >= capacity)
-        return 0;
-    for (size_t i = 0U; i < name_length; i++)
-        destination[used++] = entries[index][i];
-    destination[used] = '\0';
+static int read_exact(int descriptor, char* buffer, size_t length)
+{
+    size_t used = 0U;
+    while (used < length)
+    {
+        long result = vanta_read(descriptor, buffer + used, length - used);
+        if (result <= 0)
+            return 0;
+        used += (size_t)result;
+    }
     return 1;
 }
 
-static void preview_file(const char* path)
+static int write_all(int descriptor, const char* buffer, size_t length)
 {
-    long descriptor = vanta_open(path, VANTA_OPEN_READ);
-    if (descriptor < 0)
+    size_t used = 0U;
+    while (used < length)
     {
-        set_status("File cannot be opened for reading", COLOR_ERROR);
+        long result = vanta_file_write(descriptor, buffer + used, length - used);
+        if (result <= 0)
+            return 0;
+        used += (size_t)result;
+    }
+    return 1;
+}
+
+static int output_path_for_suffix(const char* source, const char* suffix,
+                                  char* output, size_t capacity)
+{
+    copy_text(output, capacity, source);
+    return append_text(output, capacity, suffix);
+}
+
+static int compress_file(const char* source_path)
+{
+    char output_path[PATH_CAPACITY];
+    if (!output_path_for_suffix(source_path, ".VZA", output_path,
+                                sizeof(output_path)))
+        return 0;
+    vanta_file_info_t existing;
+    if (vanta_stat_path(output_path, &existing) == 0)
+    {
+        set_status("Archive already exists; rename it first", COLOR_ERROR);
+        return 0;
+    }
+    long input = vanta_open(source_path, VANTA_OPEN_READ);
+    if (input < 0)
+        return 0;
+    if (vanta_create_file(output_path) < 0)
+    {
+        (void)vanta_close((int)input);
+        return 0;
+    }
+    long output = vanta_open(output_path, VANTA_OPEN_WRITE | VANTA_OPEN_TRUNCATE);
+    if (output < 0)
+    {
+        (void)vanta_close((int)input);
+        return 0;
+    }
+    static const char header[8] = {'V','Z','A','R','L','E','1','\n'};
+    int ok = write_all((int)output, header, sizeof(header));
+    char source[1024];
+    char encoded[1100];
+    while (ok)
+    {
+        long got = vanta_read((int)input, source, sizeof(source));
+        if (got < 0)
+        {
+            ok = 0;
+            break;
+        }
+        if (got == 0)
+            break;
+        size_t i = 0U, used = 0U, length = (size_t)got;
+        while (i < length)
+        {
+            size_t run = 1U;
+            while (i + run < length && source[i + run] == source[i] && run < 130U)
+                run++;
+            if (run >= 4U)
+            {
+                encoded[used++] = (char)(0x80U | (unsigned char)(run - 3U));
+                encoded[used++] = source[i];
+                i += run;
+                continue;
+            }
+            size_t start = i;
+            while (i < length && i - start < 127U)
+            {
+                run = 1U;
+                while (i + run < length && source[i + run] == source[i] && run < 130U)
+                    run++;
+                if (run >= 4U && i > start)
+                    break;
+                if (run >= 4U)
+                    break;
+                size_t room = 127U - (i - start);
+                if (run > room)
+                    run = room;
+                i += run;
+            }
+            size_t literal = i - start;
+            if (literal == 0U)
+                continue;
+            encoded[used++] = (char)literal;
+            for (size_t j = 0; j < literal; j++)
+                encoded[used++] = source[start + j];
+        }
+        if (used && !write_all((int)output, encoded, used))
+            ok = 0;
+    }
+    (void)vanta_close((int)input);
+    (void)vanta_close((int)output);
+    if (!ok)
+    {
+        (void)vanta_delete_path(output_path);
+        set_status("Compression failed; partial archive removed", COLOR_ERROR);
+        return 0;
+    }
+    return 1;
+}
+
+static int extract_file(const char* source_path)
+{
+    if (!ends_with_ci(source_path, ".VZA"))
+    {
+        set_status("Select a .VZA archive to extract", COLOR_ERROR);
+        return 0;
+    }
+    char output_path[PATH_CAPACITY];
+    copy_text(output_path, sizeof(output_path), source_path);
+    size_t length = text_length(output_path);
+    output_path[length - 4U] = '\0';
+    vanta_file_info_t existing;
+    if (vanta_stat_path(output_path, &existing) == 0)
+    {
+        set_status("Extract target exists; rename it first", COLOR_ERROR);
+        return 0;
+    }
+    long input = vanta_open(source_path, VANTA_OPEN_READ);
+    if (input < 0)
+        return 0;
+    char header[8];
+    if (!read_exact((int)input, header, sizeof(header)) ||
+        header[0] != 'V' || header[1] != 'Z' || header[2] != 'A' ||
+        header[3] != 'R' || header[4] != 'L' || header[5] != 'E' ||
+        header[6] != '1' || header[7] != '\n')
+    {
+        (void)vanta_close((int)input);
+        set_status("Unsupported or corrupt Vanta archive", COLOR_ERROR);
+        return 0;
+    }
+    if (vanta_create_file(output_path) < 0)
+    {
+        (void)vanta_close((int)input);
+        return 0;
+    }
+    long output = vanta_open(output_path, VANTA_OPEN_WRITE | VANTA_OPEN_TRUNCATE);
+    if (output < 0)
+    {
+        (void)vanta_close((int)input);
+        return 0;
+    }
+    char input_buffer[1024];
+    char output_buffer[1024];
+    size_t out_used = 0U;
+    unsigned int literal_remaining = 0U;
+    unsigned int run_remaining = 0U;
+    int run_needs_value = 0;
+    char run_value = 0;
+    int ok = 1;
+    while (ok)
+    {
+        long got = vanta_read((int)input, input_buffer, sizeof(input_buffer));
+        if (got < 0)
+        {
+            ok = 0;
+            break;
+        }
+        if (got == 0)
+            break;
+        for (long i = 0; i < got && ok; i++)
+        {
+            unsigned char byte = (unsigned char)input_buffer[i];
+            if (run_needs_value)
+            {
+                run_value = (char)byte;
+                run_needs_value = 0;
+                while (run_remaining)
+                {
+                    output_buffer[out_used++] = run_value;
+                    run_remaining--;
+                    if (out_used == sizeof(output_buffer))
+                    {
+                        if (!write_all((int)output, output_buffer, out_used))
+                        {
+                            ok = 0;
+                            break;
+                        }
+                        out_used = 0U;
+                    }
+                }
+            }
+            else if (literal_remaining)
+            {
+                output_buffer[out_used++] = (char)byte;
+                literal_remaining--;
+                if (out_used == sizeof(output_buffer))
+                {
+                    if (!write_all((int)output, output_buffer, out_used))
+                    {
+                        ok = 0;
+                        break;
+                    }
+                    out_used = 0U;
+                }
+            }
+            else if (byte & 0x80U)
+            {
+                run_remaining = (unsigned int)(byte & 0x7FU) + 3U;
+                run_needs_value = 1;
+            }
+            else if (byte != 0U)
+                literal_remaining = byte;
+            else
+                ok = 0;
+        }
+    }
+    if (literal_remaining || run_remaining || run_needs_value)
+        ok = 0;
+    if (ok && out_used)
+        ok = write_all((int)output, output_buffer, out_used);
+    (void)vanta_close((int)input);
+    (void)vanta_close((int)output);
+    if (!ok)
+    {
+        (void)vanta_delete_path(output_path);
+        set_status("Extraction failed; partial output removed", COLOR_ERROR);
+        return 0;
+    }
+    return 1;
+}
+
+static int delete_tree(const char* path, unsigned int depth)
+{
+    if (depth >= 8U)
+        return 0;
+    vanta_file_info_t info;
+    if (vanta_stat_path(path, &info) < 0)
+        return 0;
+    if (info.type == 2U)
+    {
+        char* listing = delete_list_buffers[depth];
+        long bytes = vanta_listdir(path, listing, LIST_CAPACITY);
+        if (bytes < 0)
+            return 0;
+        size_t cursor = 0U;
+        while (cursor < (size_t)bytes)
+        {
+            size_t start = cursor;
+            while (cursor < (size_t)bytes && listing[cursor] != '\n')
+                cursor++;
+            size_t length = cursor - start;
+            if (cursor < (size_t)bytes)
+                cursor++;
+            if (length == 0U)
+                continue;
+            int is_dir = listing[start + length - 1U] == '/';
+            if (is_dir)
+                length--;
+            if (length == 0U || length >= ENTRY_NAME_CAPACITY)
+                return 0;
+            char name[ENTRY_NAME_CAPACITY];
+            for (size_t i = 0; i < length; i++)
+                name[i] = listing[start + i];
+            name[length] = '\0';
+            char* child = delete_path_buffers[depth];
+            if (!build_child_path(path, name, child, PATH_CAPACITY))
+                return 0;
+            if (!delete_tree(child, depth + 1U))
+                return 0;
+        }
+    }
+    return vanta_delete_path(path) == 0;
+}
+
+static void show_properties(size_t index)
+{
+    if (index >= entry_count || !build_entry_path(index, properties_path,
+                                                   sizeof(properties_path)) ||
+        vanta_stat_path(properties_path, &properties_info) < 0)
+    {
+        set_status("Could not read file properties", COLOR_ERROR);
+        return;
+    }
+    properties_active = 1;
+    context_menu = CONTEXT_NONE;
+}
+
+static void start_dialog(int mode)
+{
+    dialog_mode = mode;
+    input_mode = INPUT_DIALOG;
+    input_buffer[0] = '\0';
+    if (mode == DIALOG_RENAME)
+    {
+        size_t index = first_selected();
+        if (index == (size_t)-1 || selected_count() != 1U)
+        {
+            input_mode = INPUT_NONE;
+            dialog_mode = DIALOG_NONE;
+            set_status("Select exactly one item to rename", COLOR_ERROR);
+            return;
+        }
+        copy_text(input_buffer, sizeof(input_buffer), entries[index]);
+    }
+    else if (mode == DIALOG_CONFIRM_DELETE)
+        copy_text(input_buffer, sizeof(input_buffer), "Delete selected items? Enter=yes, Esc=no");
+}
+
+static void commit_dialog(void)
+{
+    if (dialog_mode == DIALOG_CONFIRM_DELETE)
+    {
+        size_t count = selected_count();
+        size_t removed = 0U;
+        for (size_t i = 0; i < entry_count; i++)
+        {
+            if (!entry_selected[i])
+                continue;
+            char path[PATH_CAPACITY];
+            if (build_entry_path(i, path, sizeof(path)) &&
+                delete_tree(path, 0U))
+                removed++;
+        }
+        input_mode = INPUT_NONE;
+        dialog_mode = DIALOG_NONE;
+        (void)load_directory();
+        set_status(removed == count ? "Selected items deleted" :
+                   "Some items could not be deleted", removed == count ?
+                   COLOR_ACCENT : COLOR_ERROR);
         return;
     }
 
-    char buffer[768];
-    long count = vanta_read((int)descriptor, buffer, sizeof(buffer));
-    (void)vanta_close((int)descriptor);
-    if (count < 0)
+    if (!input_buffer[0] || text_contains_ci(input_buffer, "/"))
     {
-        set_status("File read failed", COLOR_ERROR);
+        set_status("Enter a valid filename without slashes", COLOR_ERROR);
         return;
     }
-
-    for (size_t row = 0U; row < PREVIEW_ROWS; row++)
-        preview_lines[row][0] = '\0';
-    preview_count = 1U;
-    size_t column = 0U;
-    for (long i = 0; i < count && preview_count <= PREVIEW_ROWS; i++)
+    char target[PATH_CAPACITY];
+    if (dialog_mode == DIALOG_RENAME)
     {
-        unsigned char ch = (unsigned char)buffer[i];
-        if (ch == '\r')
-            continue;
-        if (ch == '\n')
+        size_t index = first_selected();
+        char old_path[PATH_CAPACITY];
+        if (index == (size_t)-1 || !build_entry_path(index, old_path, sizeof(old_path)) ||
+            !build_child_path(current_path, input_buffer, target, sizeof(target)))
         {
-            if (preview_count == PREVIEW_ROWS)
-                break;
-            preview_count++;
-            column = 0U;
-            continue;
+            set_status("Invalid rename path", COLOR_ERROR);
+            return;
         }
-        if (ch == '\t')
-            ch = ' ';
-        if (ch < 32U || ch > 126U)
-            ch = '.';
-        if (column >= VANTA_GUI_TEXT_MAX)
+        if (vanta_rename_path(old_path, target) < 0)
         {
-            if (preview_count == PREVIEW_ROWS)
-                break;
-            preview_count++;
-            column = 0U;
+            set_status("Rename failed; target may exist or be invalid", COLOR_ERROR);
+            return;
         }
-        preview_lines[preview_count - 1U][column++] = (char)ch;
-        preview_lines[preview_count - 1U][column] = '\0';
     }
+    else
+    {
+        if (!build_child_path(current_path, input_buffer, target, sizeof(target)))
+        {
+            set_status("Invalid path or filename too long", COLOR_ERROR);
+            return;
+        }
+        long result = dialog_mode == DIALOG_CREATE_DIRECTORY ?
+            vanta_create_directory(target) : vanta_create_file(target);
+        if (result < 0)
+        {
+            set_status("Create failed; check name and free space", COLOR_ERROR);
+            return;
+        }
+    }
+    input_mode = INPUT_NONE;
+    dialog_mode = DIALOG_NONE;
+    (void)load_directory();
+    set_status("File operation completed", COLOR_ACCENT);
+}
 
-    preview_active = 1;
-    set_status(count == (long)sizeof(buffer) ?
-               "Preview limited to first 768 bytes" : "Text preview",
-               COLOR_MUTED);
+static void run_compress_selection(void)
+{
+    size_t count = selected_count(), done = 0U;
+    if (!count)
+    {
+        set_status("Select one or more files to compress", COLOR_ERROR);
+        return;
+    }
+    for (size_t i = 0; i < entry_count; i++)
+    {
+        if (!entry_selected[i] || entry_is_directory[i])
+            continue;
+        char path[PATH_CAPACITY];
+        if (build_entry_path(i, path, sizeof(path)) && compress_file(path))
+            done++;
+    }
+    (void)load_directory();
+    set_status(done == count ? "Compression complete" :
+               done ? "Some files compressed; folders are skipped" :
+               "Compression failed or selection contains folders",
+               done == count ? COLOR_ACCENT : COLOR_ERROR);
+}
+
+static void run_extract_selection(void)
+{
+    size_t count = selected_count(), done = 0U;
+    if (!count)
+    {
+        set_status("Select one or more .VZA archives", COLOR_ERROR);
+        return;
+    }
+    for (size_t i = 0; i < entry_count; i++)
+    {
+        if (!entry_selected[i] || entry_is_directory[i])
+            continue;
+        char path[PATH_CAPACITY];
+        if (build_entry_path(i, path, sizeof(path)) && extract_file(path))
+            done++;
+    }
+    (void)load_directory();
+    set_status(done == count ? "Extraction complete" :
+               done ? "Some archives extracted" :
+               "Extraction failed; select .VZA files",
+               done == count ? COLOR_ACCENT : COLOR_ERROR);
+}
+
+static void toolbar_action(unsigned int action)
+{
+    context_menu = CONTEXT_NONE;
+    switch (action)
+    {
+        case 0: start_dialog(DIALOG_CREATE_FILE); break;
+        case 1: start_dialog(DIALOG_CREATE_DIRECTORY); break;
+        case 2: start_dialog(DIALOG_RENAME); break;
+        case 3:
+            if (selected_count() == 0U)
+                set_status("Select items to delete", COLOR_ERROR);
+            else
+                start_dialog(DIALOG_CONFIRM_DELETE);
+            break;
+        case 4: run_compress_selection(); break;
+        case 5: run_extract_selection(); break;
+        case 6:
+        {
+            size_t index = first_selected();
+            if (index == (size_t)-1 || selected_count() != 1U)
+                set_status("Select one item to view properties", COLOR_ERROR);
+            else
+                show_properties(index);
+            break;
+        }
+        case 7: (void)load_directory(); break;
+    }
 }
 
 static void open_selected(void)
 {
-    if (selected_entry >= entry_count)
+    size_t index = selected_entry;
+    if (index >= entry_count)
+        index = first_selected();
+    if (index >= entry_count)
         return;
     char path[PATH_CAPACITY];
-    if (!build_entry_path(selected_entry, path, sizeof(path)))
+    if (!build_entry_path(index, path, sizeof(path)))
     {
-        set_status("Path is too long for current filesystem API", COLOR_ERROR);
+        set_status("Path exceeds the filesystem limit", COLOR_ERROR);
         return;
     }
-
-    if (entry_is_directory[selected_entry])
+    if (entry_is_directory[index])
     {
         copy_text(current_path, sizeof(current_path), path);
+        search_query[0] = '\0';
         (void)load_directory();
         return;
     }
-
-    if (ends_with_elf(path))
+    if (ends_with_ci(path, ".ELF"))
     {
         const char* argv[1] = { path };
         long child = vanta_spawn(path, argv, 1U);
@@ -331,73 +891,343 @@ static void open_selected(void)
         return;
     }
 
-    preview_file(path);
+    long descriptor = vanta_open(path, VANTA_OPEN_READ);
+    if (descriptor < 0)
+    {
+        set_status("File cannot be opened for reading", COLOR_ERROR);
+        return;
+    }
+    char buffer[768];
+    long count = vanta_read((int)descriptor, buffer, sizeof(buffer));
+    (void)vanta_close((int)descriptor);
+    if (count < 0)
+    {
+        set_status("File read failed", COLOR_ERROR);
+        return;
+    }
+    for (size_t row = 0; row < PREVIEW_ROWS; row++)
+        preview_lines[row][0] = '\0';
+    preview_count = 1U;
+    size_t column = 0U;
+    for (long i = 0; i < count && preview_count <= PREVIEW_ROWS; i++)
+    {
+        unsigned char ch = (unsigned char)buffer[i];
+        if (ch == '\r')
+            continue;
+        if (ch == '\n')
+        {
+            if (preview_count == PREVIEW_ROWS)
+                break;
+            preview_count++;
+            column = 0U;
+            continue;
+        }
+        if (ch == '\t') ch = ' ';
+        if (ch < 32U || ch > 126U) ch = '.';
+        if (column >= VANTA_GUI_TEXT_MAX)
+        {
+            if (preview_count == PREVIEW_ROWS)
+                break;
+            preview_count++;
+            column = 0U;
+        }
+        preview_lines[preview_count - 1U][column++] = (char)ch;
+        preview_lines[preview_count - 1U][column] = '\0';
+    }
+    preview_active = 1;
+    set_status(count == (long)sizeof(buffer) ?
+               "Preview limited to first 768 bytes" : "Text preview",
+               COLOR_MUTED);
+}
+
+static void path_input_begin(void)
+{
+    input_mode = INPUT_PATH;
+    copy_text(input_buffer, sizeof(input_buffer), current_path);
+}
+
+static void search_input_begin(void)
+{
+    input_mode = INPUT_SEARCH;
+    copy_text(input_buffer, sizeof(input_buffer), search_query);
+}
+
+static void commit_input(void)
+{
+    if (input_mode == INPUT_PATH)
+    {
+        char path[PATH_CAPACITY];
+        if (input_buffer[0] == '/')
+            copy_text(path, sizeof(path), input_buffer);
+        else
+        {
+            path[0] = '/';
+            path[1] = '\0';
+            (void)append_text(path, sizeof(path), input_buffer);
+        }
+        vanta_file_info_t info;
+        if (vanta_stat_path(path, &info) < 0 || info.type != 2U)
+            set_status("Path is not an accessible directory", COLOR_ERROR);
+        else
+        {
+            copy_text(current_path, sizeof(current_path), path);
+            search_query[0] = '\0';
+            (void)load_directory();
+        }
+    }
+    else if (input_mode == INPUT_SEARCH)
+    {
+        copy_text(search_query, sizeof(search_query), input_buffer);
+        build_visible();
+    }
+    else if (input_mode == INPUT_DIALOG)
+    {
+        commit_dialog();
+        return;
+    }
+    input_mode = INPUT_NONE;
+}
+
+static void handle_input_key(uint32_t key)
+{
+    if (key == 27U)
+    {
+        input_mode = INPUT_NONE;
+        dialog_mode = DIALOG_NONE;
+        return;
+    }
+    if (key == 10U || key == 13U)
+    {
+        commit_input();
+        return;
+    }
+    if (key == 8U || key == 127U)
+    {
+        size_t length = text_length(input_buffer);
+        if (length)
+            input_buffer[length - 1U] = '\0';
+    }
+    else if (key == 3U)
+        copy_text(clipboard_path, sizeof(clipboard_path), input_buffer);
+    else if (key == 22U)
+        copy_text(input_buffer, sizeof(input_buffer), clipboard_path);
+    else if (key >= 32U && key <= 126U)
+    {
+        size_t length = text_length(input_buffer);
+        size_t limit = input_mode == INPUT_SEARCH ? 62U : sizeof(input_buffer) - 1U;
+        if (length < limit)
+        {
+            input_buffer[length] = (char)key;
+            input_buffer[length + 1U] = '\0';
+        }
+    }
+    if (input_mode == INPUT_SEARCH)
+    {
+        copy_text(search_query, sizeof(search_query), input_buffer);
+        build_visible();
+    }
 }
 
 static void render(void)
 {
     command_count = 0U;
-    add_rect(8, 8, 720, 330, COLOR_SURFACE);
-    add_rect(8, 8, 720, 2, COLOR_ACCENT);
-    add_text(16, 16, preview_active ? "File preview" : "File Explorer",
-             COLOR_TEXT);
+    build_visible();
+    add_rect(0, 0, 744, 402, COLOR_SURFACE);
+    add_rect(0, 0, 744, 3, COLOR_ACCENT);
+    add_text(8, 8, preview_active ? "File preview" : "File Explorer", COLOR_TEXT);
+    add_text(152, 8, "Ctrl+click multi-select  |  Right-click for actions", COLOR_MUTED);
 
-    char path_display[VANTA_GUI_TEXT_MAX + 1U];
-    size_t path_length = text_length(current_path);
-    if (path_length <= VANTA_GUI_TEXT_MAX)
-        copy_text(path_display, sizeof(path_display), current_path);
+    add_rect(8, 30, 448, 24, COLOR_ROW);
+    add_outline(8, 30, 448, 24, input_mode == INPUT_PATH ? COLOR_ACCENT : COLOR_BORDER);
+    if (input_mode == INPUT_PATH)
+        add_text_tail(14, 34, input_buffer, COLOR_TEXT, 54U);
     else
-    {
-        path_display[0] = '.';
-        path_display[1] = '.';
-        path_display[2] = '.';
-        size_t start = path_length - (VANTA_GUI_TEXT_MAX - 3U);
-        for (size_t i = 3U; i < VANTA_GUI_TEXT_MAX; i++)
-            path_display[i] = current_path[start + i - 3U];
-        path_display[VANTA_GUI_TEXT_MAX] = '\0';
-    }
-    add_text(16, 38, path_display, COLOR_MUTED);
+        add_text_tail(14, 34, current_path, COLOR_TEXT, 54U);
 
-    add_text(16, 62, "Up     Home     Refresh", COLOR_ACCENT);
-
-    add_rect(8, 88, 720, 250, COLOR_ROW);
-    if (preview_active)
-    {
-        for (size_t i = 0U; i < preview_count && i < PREVIEW_ROWS; i++)
-            if (preview_lines[i][0])
-                add_text(16, 96 + (int32_t)i * (int32_t)row_height(),
-                         preview_lines[i], COLOR_TEXT);
-    }
+    add_rect(466, 30, 270, 24, COLOR_ROW);
+    add_outline(466, 30, 270, 24, input_mode == INPUT_SEARCH ? COLOR_ACCENT : COLOR_BORDER);
+    add_text(472, 34, "Find:", COLOR_MUTED);
+    if (input_mode == INPUT_SEARCH)
+        add_text_tail(520, 34, input_buffer, COLOR_TEXT, 25U);
+    else if (search_query[0])
+        add_text_tail(520, 34, search_query, COLOR_TEXT, 25U);
     else
+        add_text(520, 34, "search this folder", COLOR_MUTED);
+
+    static const char* button_labels[8] = {
+        "New File [N]", "New Folder [D]", "Rename [R]", "Delete [Del]",
+        "Compress [Z]", "Extract [X]", "Properties [I]", "Refresh [T]"
+    };
+    for (unsigned int i = 0; i < 8U; i++)
     {
-        for (size_t i = first_visible;
-             i < entry_count && i < first_visible + DISPLAY_ROWS; i++)
+        int row = i / 4U;
+        int col = i % 4U;
+        int x = 8 + (int)col * 162;
+        int y = 60 + row * 24;
+        add_rect(x, y, 154, 20, COLOR_ROW);
+        add_outline(x, y, 154, 20, COLOR_BORDER);
+        add_text(x + 6, y + 2, button_labels[i], COLOR_TEXT);
+    }
+
+    add_rect(8, 112, 136, 236, COLOR_ROW);
+    static const char* sidebar_labels[6] = {
+        "Computer /", "System", "Home", "Config (/etc)", "Drivers", "Devices"
+    };
+    static const char* sidebar_paths[6] = {
+        "/", "/system", "/home", "/etc", "/system/drivers", "/system/devices"
+    };
+    for (unsigned int i = 0; i < 6U; i++)
+    {
+        int y = 118 + (int)i * 26;
+        int active = text_equals_ci(current_path, sidebar_paths[i]);
+        if (active)
         {
-            char label[VANTA_GUI_TEXT_MAX + 1U];
-            size_t used = 0U;
-            label[used++] = selected_entry == i ? '>' : ' ';
-            label[used++] = ' ';
-            size_t name_length = text_length(entries[i]);
-            size_t maximum = VANTA_GUI_TEXT_MAX - used -
-                             (entry_is_directory[i] ? 1U : 0U);
-            if (name_length > maximum)
-                name_length = maximum;
-            for (size_t j = 0U; j < name_length; j++)
-                label[used++] = entries[i][j];
-            if (entry_is_directory[i])
-                label[used++] = '/';
-            label[used] = '\0';
-            add_text(16, 96 + (int32_t)(i - first_visible) * (int32_t)row_height(), label,
-                     entry_is_directory[i] ? COLOR_ACCENT : COLOR_TEXT);
+            add_rect(12, y - 2, 128, 23, COLOR_SELECTED);
+            add_outline(12, y - 2, 128, 23, COLOR_ACCENT);
         }
-        if (entry_count == 0U)
-            add_text(16, 100, "(empty directory)", COLOR_MUTED);
+        add_text(18, y + 1, sidebar_labels[i],
+                 active ? COLOR_ACCENT : COLOR_TEXT);
+    }
+    add_text(14, 300, "Current folder", COLOR_MUTED);
+    add_text_tail(14, 320, current_path, COLOR_TEXT, 15U);
+
+    add_rect(152, 112, 584, 236, COLOR_ROW);
+    add_text(160, 114, "Name", COLOR_MUTED);
+    add_text(600, 114, "Type / size", COLOR_MUTED);
+    size_t end = first_visible + DISPLAY_ROWS;
+    if (end > visible_count)
+        end = visible_count;
+    size_t row = 0U;
+    for (size_t v = first_visible; v < end; v++, row++)
+    {
+        size_t index = visible_indices[v];
+        int y = 132 + (int)row * ROW_HEIGHT;
+        if (entry_selected[index])
+        {
+            add_rect(156, y - 2, 576, 19, COLOR_SELECTED);
+            add_outline(156, y - 2, 576, 19, COLOR_ACCENT);
+        }
+        add_text(164, y, entry_is_directory[index] ? "[D]" : "[F]",
+                 entry_is_directory[index] ? COLOR_ACCENT : COLOR_MUTED);
+        add_text_tail(190, y, entries[index], COLOR_TEXT, 48U);
+        if (entry_is_directory[index])
+            add_text(600, y, "Folder", COLOR_MUTED);
+        else
+        {
+            char path[PATH_CAPACITY];
+            vanta_file_info_t info;
+            if (build_entry_path(index, path, sizeof(path)) &&
+                vanta_stat_path(path, &info) == 0)
+            {
+                char size_text[32];
+                size_t pos = 0U;
+                uint32_t size = info.size;
+                char reverse[12];
+                size_t digits = 0U;
+                do { reverse[digits++] = (char)('0' + size % 10U); size /= 10U; }
+                while (size && digits < sizeof(reverse));
+                while (digits) size_text[pos++] = reverse[--digits];
+                size_text[pos] = '\0';
+                (void)append_text(size_text, sizeof(size_text), " B");
+                add_text(600, y, size_text, COLOR_MUTED);
+            }
+            else
+                add_text(600, y, "File", COLOR_MUTED);
+        }
+    }
+    if (visible_count == 0U)
+        add_text(166, 156, search_query[0] ? "No matching items" : "This folder is empty",
+                 COLOR_MUTED);
+    else if (visible_count > DISPLAY_ROWS)
+        add_text(164, 342, "Use arrows / PageUp / PageDown to browse", COLOR_MUTED);
+
+    add_rect(8, 354, 728, 1, COLOR_BORDER);
+    char status[VANTA_GUI_TEXT_MAX + 1U];
+    size_t count = selected_count();
+    if (count)
+    {
+        status[0] = '\0';
+        char digits[16];
+        size_t pos = 0U;
+        size_t n = count;
+        char rev[12];
+        size_t nd = 0U;
+        do { rev[nd++] = (char)('0' + n % 10U); n /= 10U; } while (n && nd < sizeof(rev));
+        while (nd) digits[pos++] = rev[--nd];
+        digits[pos] = '\0';
+        copy_text(status, sizeof(status), digits);
+        (void)append_text(status, sizeof(status), " selected");
+        add_text(12, 360, status, COLOR_ACCENT);
+    }
+    else
+        add_text(12, 360, status_text, status_color);
+    add_text(12, 382, "Enter open | Backspace up | Ctrl+C/V path | N new | R rename | Del delete",
+             COLOR_MUTED);
+
+    if (context_menu)
+    {
+        int x = context_x;
+        int y = context_y;
+        if (x > 540) x = 540;
+        if (y > 250) y = 250;
+        if (x < 300) x = 300;
+        if (y < 120) y = 120;
+        context_x = x;
+        context_y = y;
+        add_rect(x, y, 180, 122, COLOR_SURFACE);
+        add_outline(x, y, 180, 122, COLOR_ACCENT);
+        static const char* menu[5] = {"Properties", "Rename", "Delete",
+                                      "Compress", "Extract"};
+        for (unsigned int i = 0; i < 5U; i++)
+            add_text(x + 10, y + 5 + (int)i * 23, menu[i], COLOR_TEXT);
     }
 
-    add_rect(8, 344, 720, 1, COLOR_BORDER);
-    add_text(16, 350, status_text, status_color);
-    add_text(16, 374, "Arrows select | Enter open | Backspace up | H home | R refresh",
-             COLOR_MUTED);
+    if (input_mode == INPUT_DIALOG)
+    {
+        add_rect(170, 140, 404, 106, COLOR_SURFACE);
+        add_outline(170, 140, 404, 106, COLOR_ACCENT);
+        const char* prompt = dialog_mode == DIALOG_CREATE_FILE ? "Create file name:" :
+            dialog_mode == DIALOG_CREATE_DIRECTORY ? "Create folder name:" :
+            dialog_mode == DIALOG_RENAME ? "Rename selected item:" :
+            "Confirm delete";
+        add_text(184, 152, prompt, COLOR_TEXT);
+        if (dialog_mode == DIALOG_CONFIRM_DELETE)
+            add_text(184, 178, input_buffer, COLOR_ERROR);
+        else
+        {
+            add_rect(182, 178, 380, 24, COLOR_ROW);
+            add_outline(182, 178, 380, 24, COLOR_BORDER);
+            add_text_tail(188, 182, input_buffer, COLOR_TEXT, 46U);
+        }
+        add_text(184, 216, "Enter confirm   Esc cancel", COLOR_MUTED);
+    }
+
+    if (properties_active)
+    {
+        add_rect(164, 118, 420, 230, COLOR_SURFACE);
+        add_outline(164, 118, 420, 230, COLOR_ACCENT);
+        add_text(178, 128, "File properties", COLOR_TEXT);
+        add_text_tail(178, 154, properties_info.name, COLOR_ACCENT, 60U);
+        add_text(178, 178, properties_info.type == 2U ? "Type: Folder" : "Type: File",
+                 COLOR_TEXT);
+        char size_text[64] = "Size: ";
+        char reverse[16];
+        size_t digits = 0U;
+        uint32_t size = properties_info.size;
+        do { reverse[digits++] = (char)('0' + size % 10U); size /= 10U; }
+        while (size && digits < sizeof(reverse));
+        while (digits)
+        {
+            size_t used = text_length(size_text);
+            size_text[used] = reverse[--digits];
+            size_text[used + 1U] = '\0';
+        }
+        (void)append_text(size_text, sizeof(size_text), " bytes");
+        add_text(178, 202, size_text, COLOR_TEXT);
+        add_text_tail(178, 226, properties_path, COLOR_MUTED, 60U);
+        add_text(178, 320, "Enter or Esc closes properties", COLOR_MUTED);
+    }
+
     (void)vanta_gui_draw(window_id, commands, command_count);
 }
 
@@ -413,7 +1243,6 @@ int main(int argc, char** argv)
     (void)argv;
     if (argc != 1)
         vanta_exit(2);
-
     vanta_gui_window_request_t request = {
         .width = WINDOW_WIDTH, .height = WINDOW_HEIGHT, .title = "File Explorer"
     };
@@ -445,101 +1274,189 @@ int main(int argc, char** argv)
             render();
             continue;
         }
-
         if (event.type == VANTA_GUI_EVENT_KEY)
         {
             uint32_t key = event.value;
-            if (key == 'q' || key == 'Q')
+            if (properties_active)
+            {
+                if (key == 27U || key == 10U || key == 13U)
+                    properties_active = 0;
+                render();
+                continue;
+            }
+            if (input_mode != INPUT_NONE)
+            {
+                handle_input_key(key);
+                render();
+                continue;
+            }
+            if (context_menu)
+            {
+                if (key == 27U)
+                    context_menu = CONTEXT_NONE;
+                render();
+                continue;
+            }
+            if (key == 3U)
+            {
+                size_t index = first_selected();
+                if (index != (size_t)-1)
+                    (void)build_entry_path(index, clipboard_path, sizeof(clipboard_path));
+            }
+            else if (key == 22U)
+                path_input_begin();
+            else if (key == 1U)
+            {
+                for (size_t i = 0; i < entry_count; i++)
+                    entry_selected[i] = (unsigned char)text_contains_ci(entries[i], search_query);
+                selected_entry = first_selected();
+            }
+            else if (key == 'q' || key == 'Q')
                 close_app();
-            else if (key == 'h' || key == 'H')
-            {
-                preview_active = 0;
-                go_home();
-            }
+            else if (key == 'n' || key == 'N')
+                start_dialog(DIALOG_CREATE_FILE);
+            else if (key == 'd' || key == 'D')
+                start_dialog(DIALOG_CREATE_DIRECTORY);
             else if (key == 'r' || key == 'R')
+                start_dialog(DIALOG_RENAME);
+            else if (key == 'z' || key == 'Z')
+                run_compress_selection();
+            else if (key == 'x' || key == 'X')
+                run_extract_selection();
+            else if (key == 'i' || key == 'I')
             {
-                if (preview_active)
-                    preview_active = 0;
+                size_t index = first_selected();
+                if (index != (size_t)-1 && selected_count() == 1U)
+                    show_properties(index);
+                else
+                    set_status("Select one item to view properties", COLOR_ERROR);
+            }
+            else if (key == 't' || key == 'T')
                 (void)load_directory();
-            }
-            else if (key == '\b' || key == 127U)
+            else if (key == 'h' || key == 'H')
+                go_home();
+            else if (key == 'f' || key == 'F')
+                search_input_begin();
+            else if (key == 'p' || key == 'P')
+                path_input_begin();
+            else if (key == 0x109U)
+                toolbar_action(3U);
+            else if (key == 8U || key == 127U)
+                go_up();
+            else if (key == 10U || key == 13U)
+                open_selected();
+            else if (key == VANTA_GUI_KEY_UP || key == VANTA_GUI_KEY_DOWN ||
+                     key == VANTA_GUI_KEY_PAGE_UP || key == VANTA_GUI_KEY_PAGE_DOWN)
             {
-                if (preview_active)
+                if (visible_count)
                 {
-                    preview_active = 0;
-                    set_status("Returned to directory", COLOR_MUTED);
+                    size_t visible_pos = 0U;
+                    for (size_t i = 0; i < visible_count; i++)
+                        if (visible_indices[i] == selected_entry) { visible_pos = i; break; }
+                    if (key == VANTA_GUI_KEY_UP && visible_pos > 0U) visible_pos--;
+                    else if (key == VANTA_GUI_KEY_DOWN && visible_pos + 1U < visible_count) visible_pos++;
+                    else if (key == VANTA_GUI_KEY_PAGE_UP)
+                        visible_pos = visible_pos > DISPLAY_ROWS ? visible_pos - DISPLAY_ROWS : 0U;
+                    else if (key == VANTA_GUI_KEY_PAGE_DOWN)
+                    {
+                        visible_pos += DISPLAY_ROWS;
+                        if (visible_pos >= visible_count) visible_pos = visible_count - 1U;
+                    }
+                    select_single(visible_indices[visible_pos]);
+                    if (visible_pos < first_visible) first_visible = visible_pos;
+                    if (visible_pos >= first_visible + DISPLAY_ROWS)
+                        first_visible = visible_pos - DISPLAY_ROWS + 1U;
                 }
-                else
-                    go_up();
-            }
-            else if (key == '\r' || key == '\n')
-            {
-                if (preview_active)
-                {
-                    preview_active = 0;
-                    set_status("Returned to directory", COLOR_MUTED);
-                }
-                else
-                    open_selected();
-            }
-            else if (key == VANTA_GUI_KEY_UP && !preview_active)
-            {
-                if (selected_entry > 0U)
-                    selected_entry--;
-                if (selected_entry < first_visible)
-                    first_visible = selected_entry;
-            }
-            else if (key == VANTA_GUI_KEY_DOWN && !preview_active)
-            {
-                if (selected_entry + 1U < entry_count)
-                    selected_entry++;
-                if (selected_entry >= first_visible + DISPLAY_ROWS)
-                    first_visible = selected_entry - DISPLAY_ROWS + 1U;
-            }
-            else if (key == VANTA_GUI_KEY_PAGE_UP && !preview_active)
-            {
-                selected_entry = selected_entry > DISPLAY_ROWS ?
-                    selected_entry - DISPLAY_ROWS : 0U;
-                first_visible = selected_entry;
-            }
-            else if (key == VANTA_GUI_KEY_PAGE_DOWN && !preview_active)
-            {
-                size_t last = entry_count == 0U ? 0U : entry_count - 1U;
-                selected_entry = selected_entry + DISPLAY_ROWS < last ?
-                    selected_entry + DISPLAY_ROWS : last;
-                first_visible = selected_entry >= DISPLAY_ROWS - 1U ?
-                    selected_entry - DISPLAY_ROWS + 1U : 0U;
             }
             render();
         }
         else if (event.type == VANTA_GUI_EVENT_POINTER_DOWN)
         {
-            if (event.y >= 58 && event.y < 82)
+            int x = event.x, y = event.y;
+            if (properties_active)
             {
-                if (event.x >= 16 && event.x < 68)
+                properties_active = 0;
+            }
+            else if (context_menu)
+            {
+                if (x >= context_x && x < context_x + 180 &&
+                    y >= context_y && y < context_y + 122)
                 {
-                    preview_active = 0;
-                    go_up();
+                    unsigned int item = (unsigned int)(y - context_y) / 23U;
+                    if (item == 0U)
+                    {
+                        size_t index = first_selected();
+                        if (index != (size_t)-1 && selected_count() == 1U)
+                            show_properties(index);
+                    }
+                    else if (item == 1U) start_dialog(DIALOG_RENAME);
+                    else if (item == 2U) toolbar_action(3U);
+                    else if (item == 3U) run_compress_selection();
+                    else if (item == 4U) run_extract_selection();
                 }
-                else if (event.x >= 76 && event.x < 140)
+                context_menu = CONTEXT_NONE;
+            }
+            else if (y >= 30 && y < 54 && x >= 8 && x < 456)
+                path_input_begin();
+            else if (y >= 30 && y < 54 && x >= 466 && x < 736)
+                search_input_begin();
+            else if (y >= 60 && y < 80)
+            {
+                unsigned int col = (unsigned int)(x - 8) / 162U;
+                if (x >= 8 && col < 4U) toolbar_action(col);
+            }
+            else if (y >= 84 && y < 104)
+            {
+                unsigned int col = (unsigned int)(x - 8) / 162U;
+                if (x >= 8 && col < 4U) toolbar_action(col + 4U);
+            }
+            else if (x >= 8 && x < 144 && y >= 116 && y < 274)
+            {
+                unsigned int item = (unsigned int)(y - 116) / 26U;
+                static const char* paths[6] = {
+                    "/", "/system", "/home", "/etc", "/system/drivers", "/system/devices"
+                };
+                if (item < 6U)
                 {
-                    preview_active = 0;
-                    go_home();
-                }
-                else if (event.x >= 148 && event.x < 232)
-                {
-                    preview_active = 0;
+                    copy_text(current_path, sizeof(current_path), paths[item]);
+                    search_query[0] = '\0';
                     (void)load_directory();
                 }
             }
-            else if (!preview_active && event.y >= 92 && event.y < 364)
+            else if (x >= 152 && x < 736 && y >= 132 && y < 352)
             {
-                size_t row = (size_t)(event.y - 92) / row_height();
-                size_t index = first_visible + row;
-                if (row < DISPLAY_ROWS && index < entry_count)
+                size_t row = (size_t)(y - 132) / ROW_HEIGHT;
+                size_t visible_pos = first_visible + row;
+                if (row < DISPLAY_ROWS && visible_pos < visible_count)
                 {
-                    selected_entry = index;
-                    open_selected();
+                    size_t index = visible_indices[visible_pos];
+                    if (event.value == 3U)
+                    {
+                        if (!entry_selected[index])
+                            select_single(index);
+                        context_menu = 1;
+                        context_x = x;
+                        context_y = y;
+                    }
+                    else if (event.reserved & VANTA_GUI_MOD_CTRL)
+                    {
+                        entry_selected[index] = !entry_selected[index];
+                        selected_entry = index;
+                        last_clicked_index = index;
+                        consecutive_clicks = 1U;
+                    }
+                    else
+                    {
+                        if (last_clicked_index == index)
+                            consecutive_clicks++;
+                        else
+                            consecutive_clicks = 1U;
+                        last_clicked_index = index;
+                        if (entry_selected[index] && consecutive_clicks >= 2U)
+                            open_selected();
+                        else
+                            select_single(index);
+                    }
                 }
             }
             render();

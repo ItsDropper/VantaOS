@@ -134,7 +134,8 @@ static void add_rect(int32_t x, int32_t y, int32_t width,
     };
 }
 
-static void add_text(int32_t x, int32_t y, const char* text, uint32_t color)
+static void add_text_scaled(int32_t x, int32_t y, const char* text,
+                            uint32_t color, uint32_t scale)
 {
     size_t length = text_length(text);
     if (command_count >= VANTA_GUI_MAX_COMMANDS || length == 0U ||
@@ -144,10 +145,15 @@ static void add_text(int32_t x, int32_t y, const char* text, uint32_t color)
     *command = (vanta_gui_draw_command_t){
         .type = VANTA_GUI_DRAW_TEXT,
         .x = x, .y = y, .color = color,
-        .scale = (uint32_t)text_scale
+        .scale = scale
     };
     for (size_t i = 0U; i <= length; i++)
         command->text[i] = text[i];
+}
+
+static void add_text(int32_t x, int32_t y, const char* text, uint32_t color)
+{
+    add_text_scaled(x, y, text, color, 1U);
 }
 
 static void reset_defaults(void)
@@ -323,8 +329,9 @@ static void render(void)
         add_rect(12, y, 520, 38,
                  selected_setting == i ? selected : surface);
         add_text(24, y + 10, labels[i], text);
-        add_text(360, y + 10, i == 0U ? accent_name() : values[i],
-                 i == 0U ? accent_value : muted);
+        add_text_scaled(360, y + 10, i == 0U ? accent_name() : values[i],
+                        i == 0U ? accent_value : muted,
+                        i == 3U ? (uint32_t)text_scale : 1U);
     }
 
     add_rect(12, 296, 180, 38, accent_value);
@@ -418,10 +425,10 @@ int main(int argc, char** argv)
                 reset_defaults();
                 set_status("Defaults restored; save to keep them", color_muted());
             }
-            else if (key == 0x100U + KEY_EVENT_UP)
+            else if (key == VANTA_GUI_KEY_UP)
                 selected_setting = selected_setting == 0U ?
                     SETTING_COUNT - 1U : selected_setting - 1U;
-            else if (key == 0x100U + KEY_EVENT_DOWN)
+            else if (key == VANTA_GUI_KEY_DOWN)
                 selected_setting = (selected_setting + 1U) % SETTING_COUNT;
             else if (key == '\r' || key == '\n' || key == ' ')
                 cycle_setting(selected_setting);

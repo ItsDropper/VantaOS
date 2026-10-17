@@ -239,9 +239,6 @@ void graphics_present(void)
         graphics_draw_system_page_detail(wx, wy, ww, wh);
     }
 
-    if (active_panel == 2)
-        file_explorer_draw(w, h);
-
     graphics_draw_taskbar(taskbar_y, w);
 
     if (active_panel == 3)

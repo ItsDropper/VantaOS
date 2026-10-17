@@ -16,6 +16,7 @@ static inline int net_tls_hostname_valid(const char *host)
     if (!host || !host[0]) return 0;
     for (size_t i = 0U; ; ++i) {
         unsigned char c = (unsigned char)host[i];
+        if (c != 0U && ++length > 253U) return 0;
         if (c == 0U || c == '.') {
             if (label_length == 0U || label_length > 63U ||
                 host[i - 1U] == '-') return 0;
@@ -27,7 +28,6 @@ static inline int net_tls_hostname_valid(const char *host)
               (c >= '0' && c <= '9') || c == '-')) return 0;
         if (label_length == 0U && c == '-') return 0;
         ++label_length;
-        if (++length > 253U) return 0;
     }
     return 1;
 }

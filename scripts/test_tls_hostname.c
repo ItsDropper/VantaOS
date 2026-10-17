@@ -47,6 +47,15 @@ int main(void)
     too_long[sizeof(too_long) - 1U] = 0;
     if (!expect(too_long, 0)) return 2;
 
+    char too_long_dotted[256];
+    size_t pos = 0U;
+    for (unsigned int label = 0U; label < 4U; ++label) {
+        for (unsigned int i = 0U; i < 63U; ++i) too_long_dotted[pos++] = 'a';
+        if (label != 3U) too_long_dotted[pos++] = '.';
+    }
+    too_long_dotted[pos] = 0;
+    if (!expect(too_long_dotted, 0)) return 3;
+
     puts("TLS hostname validation tests passed.");
     return 0;
 }

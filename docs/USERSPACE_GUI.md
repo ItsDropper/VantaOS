@@ -2,14 +2,16 @@
 
 ## Current state
 
-VantaOS has an initial user-mode GUI boundary, but not yet a complete user-space desktop platform. The current ABI is version 4 and is specific to VantaOS; it is not POSIX, Win32, or Wayland compatible.
+VantaOS has an initial user-mode GUI boundary and one standalone user-mode desktop application. The current ABI is version 4 and is specific to VantaOS; it is not POSIX, Win32, or Wayland compatible.
 
 - Static ELF64 `ET_EXEC` programs can be loaded from FAT32 and run at CPL3 (ring 3) in a private address space.
 - The public freestanding header `userspace/include/vanta/syscall.h` exposes the current syscall wrappers; GUI structures live in `userspace/include/vanta/gui.h`.
-- A ring-3 smoke program creates a window, submits draw commands, and exercises invalid pointers and malformed commands. CI requires `VANTAOS_USER_GUI_SYSCALL_OK`.
+- The ring-3 GUI smoke program creates a window, submits draw commands, and exercises invalid pointers and malformed commands. CI requires `VANTAOS_USER_GUI_SYSCALL_OK`.
 - The kernel owns framebuffer access, window registry, z-order, window chrome, event routing, and presentation. Applications never receive a raw kernel framebuffer pointer.
 - Windows are process-owned. Dead-owner cleanup is tested and required by CI through `VANTAOS_GUI_DEAD_OWNER_CLEANUP_OK`.
-- Terminal's shell is a ring-3 executable at `/TERMINAL.ELF`, but its visible window and text rendering remain kernel-side. Settings and File Explorer also remain kernel-rendered; they are not yet independent ring-3 GUI applications.
+- **Settings runs as a ring-3 ELF** at `/SYSTEM/SETTINGS.ELF`. It creates its own GUI window, lets users select Blue/Teal accent and compact-row preferences, and saves them to `/SYSTEM/VANTASET.CFG`. Its configuration has a simple versioned text header (`VANTA_SETTINGS=1`), and CI checks storage readback and persistence across a second boot.
+- Settings preferences currently affect that application only. They are not a global desktop theme service, and Settings does not yet provide timezone-aware local time.
+- Terminal's shell is a ring-3 executable at `/TERMINAL.ELF`, but its visible window and text rendering remain kernel-side. File Explorer also remains kernel-rendered.
 
 ## Current GUI ABI
 
@@ -29,9 +31,9 @@ The implementation is intentionally small. Window move/resize/minimize/maximize,
 
 ## Storage and Settings persistence
 
-User-mode file operations support bounded transfers (up to 4096 bytes per syscall), a small per-process descriptor table, and conservative FAT32 8.3 regular-file create/write behavior. FAT32 range I/O supports multi-cluster files; the on-disk file-size field remains 32-bit and actual capacity is limited by the volume. The regression workflow checks file readback and a second boot using the same disposable image.
+User-mode file operations support bounded transfers (up to 4096 bytes per syscall), a small per-process descriptor table, and conservative FAT32 8.3 regular-file create/write behavior. FAT32 range I/O supports multi-cluster files; the on-disk file-size field remains 32-bit and actual capacity is limited by the volume. The regression workflow checks file readback and a second boot using the same disposable image. Settings opens an existing config for truncating writes and creates it only when it is absent.
 
-This is enough groundwork for a small local configuration file, not a full filesystem API. Long-filename writes, directory creation, rename/delete, crash-atomic replacement, and exhaustive corruption/power-loss handling remain unsupported. A Settings application must parse a versioned format defensively, reject malformed values, preserve defaults on invalid data, and verify that saved values survive a reboot before persistence is described as complete.
+This is enough groundwork for a small local configuration file, not a full filesystem API. Long-filename writes, directory creation, rename/delete, crash-atomic replacement, and exhaustive corruption/power-loss handling remain unsupported. Settings rejects unsupported or malformed configuration values and falls back to defaults; this format is versioned but remains deliberately minimal.
 
 ## Date, time, and region
 
@@ -39,11 +41,11 @@ The Settings UI must not label an RTC value as local time unless its policy is e
 
 ## Next implementation sequence
 
-1. Expand GUI regression coverage for focus changes, click routing, queue overflow, close requests, and invalid event buffers.
-2. Implement Settings as a real static ELF64 ring-3 application using the GUI syscall ABI, not as another kernel-rendered panel.
-3. Add a versioned local configuration format and tests for defaults, malformed data, read/write failure, and reboot persistence.
-4. Implement and document RTC UTC/local policy and timezone conversion before exposing region-based local time as functional.
-5. Migrate File Explorer to ring 3 using directory listing and file APIs; keep launch restricted to validated executable formats.
-6. Move Terminal's visible window, drawing, and input onto the same GUI ABI while retaining its shell logic in ring 3.
+1. Expand GUI regression coverage for focus transitions, pointer click routing, queue overflow, close requests, and invalid event buffers.
+2. Harden user-mode process isolation with fault-containment, invalid-mapping, malformed-ELF, and allocation-failure tests.
+3. Migrate File Explorer to ring 3 using directory listing and file APIs; keep launch restricted to validated executable formats.
+4. Move Terminal's visible window, drawing, and input onto the same GUI ABI while retaining its shell logic in ring 3.
+5. Implement RTC UTC/local policy and timezone-rule conversion before exposing region-based local time as functional.
+6. Expand the Settings app only when its backing APIs, validation, and regression coverage exist; a UI control alone is not evidence of a working system feature.
 
 A control is functional only when its backing API, input path, persistence semantics (where relevant), and regression test exist.

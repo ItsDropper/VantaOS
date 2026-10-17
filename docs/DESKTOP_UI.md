@@ -34,7 +34,7 @@ The desktop is composed by `kernel/graphics/graphics_ui_detail.c`. This is a nat
 ### Visual hierarchy
 
 - **Workspace identity:** the topbar names the current workspace and reports only the VFS readiness state exposed by the kernel.
-- **Launch surface:** the three desktop shortcuts retain their hitboxes in `graphics_input.c`. The Start menu uses the same four app-row rectangles as its click dispatcher.
+- **Launch surface:** the three desktop shortcuts retain their hitboxes in `graphics_input.c`. The Start menu pins Terminal, Files, System, and Settings; each row uses the same geometry as its click dispatcher. The physical left or right Super/GUI key toggles the Start menu, as does the taskbar Vanta mark.
 - **Overview:** architecture, VFS initialization, and process-manager initialization are shown as separate status cards. These cards must remain grounded in existing APIs; do not add fabricated memory, CPU, network, uptime, or battery numbers.
 - **Application pages:** System and Settings share the same surfaces, typography, divider treatment, and spacing. Resolution controls must keep the exact geometry used by the input handler.
 - **Explorer:** navigation, column headers, selection rows, empty state, and status footer use the shared component layer. The footer reports the number of directory entries returned by the VFS and labels the source as VFS; it does not claim persistent-disk capacity or file timestamps.

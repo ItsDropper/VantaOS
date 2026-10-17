@@ -15,6 +15,8 @@
 #define SCANCODE_LEFT_ALT          0x38
 
 #define SCANCODE_EXTENDED          0xE0
+#define SCANCODE_LEFT_SUPER        0x5B
+#define SCANCODE_RIGHT_SUPER       0x5C
 
 #define SCANCODE_PAGE_UP           0x49
 #define SCANCODE_PAGE_DOWN         0x51
@@ -109,6 +111,9 @@ static bool left_shift_pressed = false;
 static bool right_shift_pressed = false;
 static bool ctrl_pressed = false;
 static bool alt_pressed = false;
+static bool left_super_pressed = false;
+static bool right_super_pressed = false;
+static bool super_event_pending = false;
 static bool caps_lock = false;
 
 static bool extended_scancode = false;
@@ -207,6 +212,18 @@ static void handle_key_press(uint8_t scancode)
 
         switch (scancode)
         {
+            case SCANCODE_LEFT_SUPER:
+                if (!left_super_pressed)
+                    super_event_pending = true;
+                left_super_pressed = true;
+                return;
+
+            case SCANCODE_RIGHT_SUPER:
+                if (!right_super_pressed)
+                    super_event_pending = true;
+                right_super_pressed = true;
+                return;
+
             case SCANCODE_PAGE_UP:
                 keyboard_event_push(KEY_EVENT_PAGE_UP);
                 return;
@@ -330,6 +347,9 @@ void keyboard_initialize(void)
 
     ctrl_pressed = false;
     alt_pressed = false;
+    left_super_pressed = false;
+    right_super_pressed = false;
+    super_event_pending = false;
 
     caps_lock = false;
     extended_scancode = false;
@@ -360,9 +380,17 @@ void keyboard_handle_interrupt(void)
         uint8_t released_scancode =
             scancode & 0x7F;
 
-        handle_key_release(
-            released_scancode
-        );
+        if (extended_scancode)
+        {
+            if (released_scancode == SCANCODE_LEFT_SUPER)
+                left_super_pressed = false;
+            else if (released_scancode == SCANCODE_RIGHT_SUPER)
+                right_super_pressed = false;
+        }
+        else
+        {
+            handle_key_release(released_scancode);
+        }
 
         extended_scancode = false;
         spinlock_unlock_irqrestore(&keyboard_lock, flags);
@@ -418,6 +446,15 @@ keyboard_event_t keyboard_get_event(void)
     spinlock_unlock_irqrestore(&keyboard_lock, flags);
     return event;
 }
+bool keyboard_take_super_event(void)
+{
+    uint64_t flags = spinlock_lock_irqsave(&keyboard_lock);
+    bool pending = super_event_pending;
+    super_event_pending = false;
+    spinlock_unlock_irqrestore(&keyboard_lock, flags);
+    return pending;
+}
+
 bool keyboard_ctrl_pressed(void)
 {
     uint64_t flags = spinlock_lock_irqsave(&keyboard_lock);

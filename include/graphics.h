@@ -41,6 +41,8 @@ void graphics_clear_terminal_close_requested(void);
 void graphics_set_terminal_running(int running);
 int graphics_terminal_is_running(void);
 void graphics_select_panel(int panel);
+void graphics_toggle_start_menu(void);
+void graphics_draw_start_menu_overlay(void);
 int graphics_terminal_open_requested(void);
 void graphics_request_terminal_open(void);
 void graphics_clear_terminal_open_request(void);

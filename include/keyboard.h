@@ -46,6 +46,7 @@ char keyboard_get_char(void);
  * Check whether a special keyboard event is waiting.
  */
 bool keyboard_has_event(void);
+bool keyboard_take_super_event(void);
 bool keyboard_ctrl_pressed(void);
 
 /*

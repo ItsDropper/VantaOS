@@ -16,13 +16,19 @@ extern int explorer_maximized;
 extern int explorer_restore_x;
 extern int explorer_restore_y;
 
+void graphics_toggle_start_menu(void)
+{
+    if (!initialized)
+        return;
+
+    start_menu_open = !start_menu_open;
+    explorer_dragging = 0;
+    terminal_dragging = 0;
+}
+
 void graphics_mouse_click(int button)
 {
     if (!initialized || button != 1)
-        return;
-
-    /* User windows are painted above desktop chrome; route their hits first. */
-    if (gui_server_mouse_click(cursor_x, cursor_y, button))
         return;
 
     int width = (int)framebuffer_width;
@@ -40,9 +46,7 @@ void graphics_mouse_click(int button)
 
         if (cursor_x >= center - 108 && cursor_x < center - 66)
         {
-            start_menu_open = !start_menu_open;
-            explorer_dragging = 0;
-            terminal_dragging = 0;
+            graphics_toggle_start_menu();
             return;
         }
 
@@ -124,6 +128,10 @@ void graphics_mouse_click(int button)
 
         return;
     }
+
+    /* Route window input after taskbar and Start-menu overlay hit testing. */
+    if (gui_server_mouse_click(cursor_x, cursor_y, button))
+        return;
 
     /*
      * Explorer has one input owner. Its hit-testing, title-bar controls,

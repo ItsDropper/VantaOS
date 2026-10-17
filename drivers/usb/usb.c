@@ -45,6 +45,8 @@ static uint8_t configuration_buffer[USB_MAX_CONFIGURATION_SIZE]
     __attribute__((aligned(64)));
 static uint8_t report_buffer[64] __attribute__((aligned(64)));
 static int usb_initialized;
+static uint8_t keyboard_input_observed;
+static uint8_t mouse_input_observed;
 
 static int usb_control(uint32_t slot, uint8_t request_type, uint8_t request,
                        uint16_t value, uint16_t index, void* data,
@@ -295,11 +297,29 @@ void usb_poll(void)
         if (!xhci_take_interrupt_report(slot, report_buffer,
                                         sizeof(report_buffer), &length))
             continue;
-        if (input_slots[slot].kind == 1U)
+        if (input_slots[slot].kind == 1U) {
             usb_hid_keyboard_report(input_slots[slot].hid_handle,
                                     report_buffer, length);
-        else if (input_slots[slot].kind == 2U)
+            int key_activity = length >= 8U && report_buffer[0] != 0U;
+            for (uint32_t key = 2U; key < 8U && key < length; ++key)
+                if (report_buffer[key] != 0U)
+                    key_activity = 1;
+            if (key_activity && !keyboard_input_observed) {
+                keyboard_input_observed = 1;
+                serial_write("VANTAOS_USB_HID_KEYBOARD_INPUT_OK\n");
+            }
+        } else if (input_slots[slot].kind == 2U) {
             usb_hid_mouse_report(input_slots[slot].hid_handle,
                                  report_buffer, length);
+            int mouse_activity = length >= 3U &&
+                ((report_buffer[0] & 0x1FU) != 0U ||
+                 (int8_t)report_buffer[1] != 0 ||
+                 (int8_t)report_buffer[2] != 0 ||
+                 (length >= 4U && (int8_t)report_buffer[3] != 0));
+            if (mouse_activity && !mouse_input_observed) {
+                mouse_input_observed = 1;
+                serial_write("VANTAOS_USB_HID_MOUSE_INPUT_OK\n");
+            }
+        }
     }
 }

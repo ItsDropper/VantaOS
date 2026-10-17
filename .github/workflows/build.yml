@@ -189,13 +189,14 @@ jobs:
           grep -q 'VANTAOS_SETTINGS_PERSIST_OK' boot-512m-2cpu.log
           grep -q 'VANTAOS_DESKTOP_THEME_CONFIG_OK' boot-512m-2cpu.log
 
-      - name: USB HID xHCI boot smoke test
+      - name: USB HID xHCI input end-to-end test
         shell: bash
         run: |
           set -euo pipefail
           log="usb-xhci-boot.log"
-          set +e
-          timeout 35s qemu-system-x86_64 \
+          monitor="/tmp/vantaos-usb-monitor.sock"
+          rm -f "$monitor" "$log"
+          timeout 45s qemu-system-x86_64 \
             -machine pc \
             -smp 1 \
             -m 256M \
@@ -207,25 +208,58 @@ jobs:
             -boot order=d \
             -display none \
             -serial "file:${log}" \
-            -monitor none \
-            -no-reboot
-          result=$?
-          set -e
-
-          if [ "$result" -ne 124 ]; then
-            echo "USB xHCI QEMU boot exited before the smoke-test timeout (exit code $result)."
-            cat "$log" 2>/dev/null || true
-            exit 1
-          fi
-          sleep 1
+            -monitor "unix:${monitor},server,nowait" \
+            -no-reboot &
+          qemu_pid=$!
+          cleanup() {
+            kill "$qemu_pid" 2>/dev/null || true
+            wait "$qemu_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+          for attempt in $(seq 1 300); do
+            if grep -q 'VANTAOS_BOOT_OK' "$log" 2>/dev/null; then
+              break
+            fi
+            if ! kill -0 "$qemu_pid" 2>/dev/null; then
+              echo "QEMU exited before VANTAOS_BOOT_OK."
+              cat "$log" 2>/dev/null || true
+              exit 1
+            fi
+            sleep 0.1
+          done
+          grep -q 'VANTAOS_BOOT_OK' "$log"
           for marker in VANTAOS_XHCI_CONTROLLER_ONLINE VANTAOS_USB_HID_KEYBOARD_ONLINE VANTAOS_USB_HID_MOUSE_ONLINE; do
             if ! grep -q "$marker" "$log"; then
-              echo "Missing USB smoke-test marker '$marker'."
+              echo "Missing USB enumeration marker '$marker'."
               cat "$log" 2>/dev/null || true
               exit 1
             fi
           done
-          echo "xHCI controller, USB HID keyboard, and USB HID mouse enumerated successfully."
+
+          # Drive real QEMU input events through the emulated USB devices.
+          for attempt in $(seq 1 30); do
+            test -S "$monitor" && break
+            sleep 0.1
+          done
+          test -S "$monitor"
+          printf 'sendkey a\n' | timeout 3s socat -T 1 - "UNIX-CONNECT:$monitor"
+          printf 'mouse_move 80 60\nmouse_button 1\nmouse_button 0\n' |
+            timeout 3s socat -T 1 - "UNIX-CONNECT:$monitor"
+
+          for attempt in $(seq 1 80); do
+            keyboard_seen=0
+            mouse_seen=0
+            grep -q 'VANTAOS_USB_HID_KEYBOARD_INPUT_OK' "$log" && keyboard_seen=1
+            grep -q 'VANTAOS_USB_HID_MOUSE_INPUT_OK' "$log" && mouse_seen=1
+            if [ "$keyboard_seen" -eq 1 ] && [ "$mouse_seen" -eq 1 ]; then
+              echo "USB keyboard key report and USB mouse movement/button report reached VantaOS."
+              exit 0
+            fi
+            sleep 0.1
+          done
+          echo "USB HID input did not reach the kernel input path."
+          cat "$log" 2>/dev/null || true
+          exit 1
 
       - name: Build the UEFI boot manager and EFI system image
         run: make uefi

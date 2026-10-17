@@ -502,14 +502,14 @@ static int command_http_url(const char *url)
         char c = authority[i];
         if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
               (c >= '0' && c <= '9') || c == '.' || c == '-')) {
-            terminal_write("\\nnet http: invalid hostname; only DNS names and IPv4 literals are supported");
+            terminal_write("\nnet http: invalid hostname; only DNS names and IPv4 literals are supported");
             return 1;
         }
         host[i] = c;
     }
     if (host[0] == '.' || host[host_length - 1U] == '.' ||
         host[0] == '-' || host[host_length - 1U] == '-') {
-        terminal_write("\\nnet http: invalid hostname");
+        terminal_write("\nnet http: invalid hostname");
         return 1;
     }
     host[host_length] = 0;
@@ -538,7 +538,7 @@ static int command_http_url(const char *url)
     for (size_t i = 0; i < path_length; ++i) {
         unsigned char c = (unsigned char)path[i];
         if (c <= 0x20U || c == 0x7FU) {
-            terminal_write("\\nnet http: URL path contains an unescaped control or space character");
+            terminal_write("\nnet http: URL path contains an unescaped control or space character");
             return 1;
         }
     }

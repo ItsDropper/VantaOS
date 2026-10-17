@@ -61,6 +61,100 @@ jobs:
           printf 'VANTAOS_USER_FILE_FIXTURE\n' > /tmp/vantaos-user-file.txt
           mcopy -i vantaos.img /tmp/vantaos-user-file.txt ::/USERDATA.TXT
 
+      - name: USB HID xHCI input end-to-end test
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          log="usb-xhci-boot.log"
+          monitor="/tmp/vantaos-usb-monitor.sock"
+          rm -f "$monitor" "$log" qemu-usb-stderr.log
+
+          # Keep QEMU's serial output unbuffered so the readiness and input
+          # assertions inspect live kernel output, not data flushed at shutdown.
+          stdbuf -o0 timeout 45s qemu-system-x86_64 \
+            -machine pc \
+            -nodefaults \
+            -vga std \
+            -smp 1 \
+            -m 256M \
+            -device qemu-xhci,id=xhci \
+            -device usb-kbd,bus=xhci.0 \
+            -device usb-mouse,bus=xhci.0 \
+            -drive file=VantaOS.iso,media=cdrom,format=raw \
+            -drive file=vantaos.img,if=ide,format=raw \
+            -boot order=d \
+            -display none \
+            -serial stdio \
+            -monitor "unix:$monitor,server=on,wait=off" \
+            -no-reboot >"$log" 2>qemu-usb-stderr.log &
+          qemu_pid=$!
+          cleanup() {
+            kill "$qemu_pid" 2>/dev/null || true
+            wait "$qemu_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          for attempt in $(seq 1 300); do
+            if grep -q 'VANTAOS_BOOT_OK' "$log" 2>/dev/null; then break; fi
+            if ! kill -0 "$qemu_pid" 2>/dev/null; then
+              echo "QEMU exited before VANTAOS_BOOT_OK."
+              cat "$log" qemu-usb-stderr.log 2>/dev/null || true
+              exit 1
+            fi
+            sleep 0.1
+          done
+          if ! grep -q 'VANTAOS_BOOT_OK' "$log"; then
+            echo "Timed out waiting for VANTAOS_BOOT_OK in the live serial log."
+            cat "$log" qemu-usb-stderr.log 2>/dev/null || true
+            exit 1
+          fi
+
+          usb_ready=0
+          for attempt in $(seq 1 300); do
+            if grep -q 'VANTAOS_XHCI_CONTROLLER_ONLINE' "$log" &&
+               grep -q 'VANTAOS_USB_HID_KEYBOARD_ONLINE' "$log" &&
+               grep -q 'VANTAOS_USB_HID_MOUSE_ONLINE' "$log"; then
+              usb_ready=1
+              break
+            fi
+            if ! kill -0 "$qemu_pid" 2>/dev/null; then
+              echo "QEMU exited before xHCI and both HID devices became ready."
+              cat "$log" qemu-usb-stderr.log 2>/dev/null || true
+              exit 1
+            fi
+            sleep 0.1
+          done
+          if [ "$usb_ready" -ne 1 ]; then
+            echo "Timed out waiting for xHCI, USB keyboard, and USB mouse enumeration."
+            cat "$log" qemu-usb-stderr.log 2>/dev/null || true
+            exit 1
+          fi
+
+          for attempt in $(seq 1 30); do
+            test -S "$monitor" && break
+            sleep 0.1
+          done
+          test -S "$monitor"
+          printf 'sendkey a\n' | timeout 3s socat -T 1 - "UNIX-CONNECT:$monitor"
+          printf 'mouse_move 80 60\nmouse_button 1\nmouse_button 0\n' |
+            timeout 3s socat -T 1 - "UNIX-CONNECT:$monitor"
+
+          for attempt in $(seq 1 100); do
+            keyboard_seen=0
+            mouse_seen=0
+            grep -q 'VANTAOS_USB_HID_KEYBOARD_INPUT_OK' "$log" && keyboard_seen=1
+            grep -q 'VANTAOS_USB_HID_MOUSE_INPUT_OK' "$log" && mouse_seen=1
+            if [ "$keyboard_seen" -eq 1 ] && [ "$mouse_seen" -eq 1 ]; then
+              echo "USB keyboard and mouse reports reached VantaOS through xHCI."
+              exit 0
+            fi
+            sleep 0.1
+          done
+          echo "USB HID input did not reach the kernel input path."
+          cat "$log" qemu-usb-stderr.log 2>/dev/null || true
+          exit 1
+
       - name: QEMU boot and regression tests at multiple memory sizes
         shell: bash
         run: |
@@ -188,100 +282,6 @@ jobs:
           grep -q '^VANTAOS_FAT32_REBOOT_PERSIST_OK' boot-512m-2cpu.log
           grep -q 'VANTAOS_SETTINGS_PERSIST_OK' boot-512m-2cpu.log
           grep -q 'VANTAOS_DESKTOP_THEME_CONFIG_OK' boot-512m-2cpu.log
-
-      - name: USB HID xHCI input end-to-end test
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          log="usb-xhci-boot.log"
-          monitor="/tmp/vantaos-usb-monitor.sock"
-          rm -f "$monitor" "$log" qemu-usb-stderr.log
-
-          # Keep QEMU's serial output unbuffered so the readiness and input
-          # assertions inspect live kernel output, not data flushed at shutdown.
-          stdbuf -o0 timeout 45s qemu-system-x86_64 \
-            -machine pc \
-            -nodefaults \
-            -vga std \
-            -smp 1 \
-            -m 256M \
-            -device qemu-xhci,id=xhci \
-            -device usb-kbd,bus=xhci.0 \
-            -device usb-mouse,bus=xhci.0 \
-            -drive file=VantaOS.iso,media=cdrom,format=raw \
-            -drive file=vantaos.img,if=ide,format=raw \
-            -boot order=d \
-            -display none \
-            -serial stdio \
-            -monitor "unix:$monitor,server=on,wait=off" \
-            -no-reboot >"$log" 2>qemu-usb-stderr.log &
-          qemu_pid=$!
-          cleanup() {
-            kill "$qemu_pid" 2>/dev/null || true
-            wait "$qemu_pid" 2>/dev/null || true
-          }
-          trap cleanup EXIT
-
-          for attempt in $(seq 1 300); do
-            if grep -q 'VANTAOS_BOOT_OK' "$log" 2>/dev/null; then break; fi
-            if ! kill -0 "$qemu_pid" 2>/dev/null; then
-              echo "QEMU exited before VANTAOS_BOOT_OK."
-              cat "$log" qemu-usb-stderr.log 2>/dev/null || true
-              exit 1
-            fi
-            sleep 0.1
-          done
-          if ! grep -q 'VANTAOS_BOOT_OK' "$log"; then
-            echo "Timed out waiting for VANTAOS_BOOT_OK in the live serial log."
-            cat "$log" qemu-usb-stderr.log 2>/dev/null || true
-            exit 1
-          fi
-
-          usb_ready=0
-          for attempt in $(seq 1 300); do
-            if grep -q 'VANTAOS_XHCI_CONTROLLER_ONLINE' "$log" &&
-               grep -q 'VANTAOS_USB_HID_KEYBOARD_ONLINE' "$log" &&
-               grep -q 'VANTAOS_USB_HID_MOUSE_ONLINE' "$log"; then
-              usb_ready=1
-              break
-            fi
-            if ! kill -0 "$qemu_pid" 2>/dev/null; then
-              echo "QEMU exited before xHCI and both HID devices became ready."
-              cat "$log" qemu-usb-stderr.log 2>/dev/null || true
-              exit 1
-            fi
-            sleep 0.1
-          done
-          if [ "$usb_ready" -ne 1 ]; then
-            echo "Timed out waiting for xHCI, USB keyboard, and USB mouse enumeration."
-            cat "$log" qemu-usb-stderr.log 2>/dev/null || true
-            exit 1
-          fi
-
-          for attempt in $(seq 1 30); do
-            test -S "$monitor" && break
-            sleep 0.1
-          done
-          test -S "$monitor"
-          printf 'sendkey a\n' | timeout 3s socat -T 1 - "UNIX-CONNECT:$monitor"
-          printf 'mouse_move 80 60\nmouse_button 1\nmouse_button 0\n' |
-            timeout 3s socat -T 1 - "UNIX-CONNECT:$monitor"
-
-          for attempt in $(seq 1 100); do
-            keyboard_seen=0
-            mouse_seen=0
-            grep -q 'VANTAOS_USB_HID_KEYBOARD_INPUT_OK' "$log" && keyboard_seen=1
-            grep -q 'VANTAOS_USB_HID_MOUSE_INPUT_OK' "$log" && mouse_seen=1
-            if [ "$keyboard_seen" -eq 1 ] && [ "$mouse_seen" -eq 1 ]; then
-              echo "USB keyboard and mouse reports reached VantaOS through xHCI."
-              exit 0
-            fi
-            sleep 0.1
-          done
-          echo "USB HID input did not reach the kernel input path."
-          cat "$log" qemu-usb-stderr.log 2>/dev/null || true
-          exit 1
 
       - name: Build the UEFI boot manager and EFI system image
         run: make uefi

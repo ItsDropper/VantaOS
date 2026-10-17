@@ -23,6 +23,7 @@ static char output[OUTPUT_LINES][OUTPUT_COLUMNS];
 static size_t output_count = 1U;
 static size_t input_length;
 static size_t prompt_length;
+static size_t output_scroll_offset;
 static vanta_gui_draw_command_t commands[VANTA_GUI_MAX_COMMANDS];
 static uint32_t command_count;
 static uint32_t window_id;
@@ -65,6 +66,7 @@ static void clear_line(size_t index)
 
 static void output_newline(void)
 {
+    output_scroll_offset = 0U;
     if (output_count < OUTPUT_LINES)
     {
         output_count++;
@@ -156,10 +158,10 @@ static void render(void)
     render_add_rect(8, 8, 720, 2, COLOR_ACCENT);
     render_add_text(16, 16, "VantaOS Terminal | user-mode shell", COLOR_TEXT);
 
-    size_t first = output_count > DISPLAY_LINES ?
-        output_count - DISPLAY_LINES : 0U;
+    size_t end = output_count - output_scroll_offset;
+    size_t first = end > DISPLAY_LINES ? end - DISPLAY_LINES : 0U;
     int y = 42;
-    for (size_t i = first; i < output_count && y < 416; i++)
+    for (size_t i = first; i < end && y < 416; i++)
     {
         if (output[i][0])
             render_add_text(16, y, output[i], COLOR_TEXT);
@@ -167,7 +169,7 @@ static void render(void)
     }
 
     render_add_rect(8, 424, 720, 1, COLOR_BORDER);
-    render_add_text(16, 430, "Type help for commands  |  exit closes Terminal",
+    render_add_text(16, 430, "PgUp/PgDn scrollback  |  help lists commands  |  exit closes",
                     COLOR_MUTED);
     (void)vanta_gui_draw(window_id, commands, command_count);
 }
@@ -387,6 +389,24 @@ int main(int argc, char** argv)
             continue;
 
         uint32_t key = event.value;
+        if (key == VANTA_GUI_KEY_PAGE_UP)
+        {
+            size_t maximum = output_count > DISPLAY_LINES ?
+                output_count - DISPLAY_LINES : 0U;
+            if (output_scroll_offset + 8U > maximum)
+                output_scroll_offset = maximum;
+            else
+                output_scroll_offset += 8U;
+            render();
+            continue;
+        }
+        if (key == VANTA_GUI_KEY_PAGE_DOWN)
+        {
+            output_scroll_offset = output_scroll_offset > 8U ?
+                output_scroll_offset - 8U : 0U;
+            render();
+            continue;
+        }
         if (key == '\r' || key == '\n')
         {
             output_character('\n');
@@ -412,6 +432,7 @@ int main(int argc, char** argv)
         else if (key >= 32U && key <= 126U &&
                  input_length + prompt_length < OUTPUT_COLUMNS - 1U)
         {
+            output_scroll_offset = 0U;
             line[input_length++] = (char)key;
             line[input_length] = '\0';
             output_character((char)key);

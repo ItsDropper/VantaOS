@@ -15,3 +15,4 @@ for macro in BR_USE_URANDOM BR_USE_WIN32_RAND BR_USE_UNIX_TIME BR_USE_WIN32_TIME
     exit 1
   }
 done
+echo "BearSSL configured for freestanding VantaOS."

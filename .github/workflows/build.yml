@@ -107,7 +107,7 @@ jobs:
           done
           if ! grep -q 'VANTAOS_BOOT_OK' "$log"; then
             echo "Timed out waiting for VANTAOS_BOOT_OK in the live serial log."
-            cat "$log" qemu-usb-stderr.log 2>/dev/null || true
+            cat "$log" qemu-usb-stderr.log qemu-usb-debug.log 2>/dev/null || true
             exit 1
           fi
 
@@ -122,14 +122,14 @@ jobs:
             fi
             if ! kill -0 "$qemu_pid" 2>/dev/null; then
               echo "QEMU exited before xHCI and both HID devices became ready."
-              cat "$log" qemu-usb-stderr.log 2>/dev/null || true
+              cat "$log" qemu-usb-stderr.log qemu-usb-debug.log 2>/dev/null || true
               exit 1
             fi
             sleep 0.1
           done
           if [ "$usb_ready" -ne 1 ]; then
             echo "Timed out waiting for xHCI, USB keyboard, and USB mouse enumeration."
-            cat "$log" qemu-usb-stderr.log 2>/dev/null || true
+            cat "$log" qemu-usb-stderr.log qemu-usb-debug.log 2>/dev/null || true
             exit 1
           fi
 
@@ -159,7 +159,7 @@ jobs:
             sleep 0.1
           done
           echo "USB HID input did not reach the kernel input path."
-          cat "$log" qemu-usb-stderr.log 2>/dev/null || true
+          cat "$log" qemu-usb-stderr.log qemu-usb-debug.log 2>/dev/null || true
           exit 1
 
       - name: QEMU boot and regression tests at multiple memory sizes

@@ -133,8 +133,14 @@ int process_install_user_image(const char* name, uint32_t parent_pid,
 static void release_unpublished_user_image(
     paging_address_space_t* space, void* code_frame, void* stack_frame)
 {
-    if (space)
-        (void)paging_destroy_address_space(space);
+    /*
+     * User frames may still be reachable through the address space if teardown
+     * is refused (for example, while a TLB shootdown is outstanding). Never
+     * return those frames to PMM unless the page tables were actually retired.
+     * A bounded leak is safer than reusing memory still mapped by a CPU.
+     */
+    if (space && !paging_destroy_address_space(space))
+        return;
     if (code_frame)
         pmm_free_block(code_frame);
     if (stack_frame)

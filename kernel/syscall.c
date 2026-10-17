@@ -751,7 +751,13 @@ static int syscall_dispatch(struct exception_frame* frame)
         case USER_SYSCALL_GUI_POLL_EVENT:
             return syscall_gui_poll_event(frame, &process);
         case USER_SYSCALL_SETTINGS_APPLY:
-            frame->rax = desktop_theme_reload() ? 0U : (uint64_t)(int64_t)-22;
+            if (desktop_theme_reload())
+            {
+                gui_server_notify_theme_changed();
+                frame->rax = 0U;
+            }
+            else
+                frame->rax = (uint64_t)(int64_t)-22;
             return 0;
         default:
             frame->rax = (uint64_t)(int64_t)-38;

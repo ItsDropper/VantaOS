@@ -71,6 +71,7 @@ void desktop_initialize(multiboot_info_t* mbd)
     terminal_window_open = 0;
     terminal_last_blink_state = 0;
     desktop_last_clock_refresh = 0;
+    (void)desktop_theme_reload();
 }
 
 void desktop_present(void)

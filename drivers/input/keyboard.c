@@ -418,3 +418,10 @@ keyboard_event_t keyboard_get_event(void)
     spinlock_unlock_irqrestore(&keyboard_lock, flags);
     return event;
 }
+bool keyboard_ctrl_pressed(void)
+{
+    uint64_t flags = spinlock_lock_irqsave(&keyboard_lock);
+    bool pressed = ctrl_pressed;
+    spinlock_unlock_irqrestore(&keyboard_lock, flags);
+    return pressed;
+}

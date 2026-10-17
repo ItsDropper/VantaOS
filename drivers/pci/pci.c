@@ -260,6 +260,18 @@ int pci_get_bar(const struct pci_device* device, uint8_t index,
     return *address != 0;
 }
 
+int pci_enable_io_space(const struct pci_device* device)
+{
+    if (!device) return 0;
+    uint32_t command_status = pci_read_config(device->bus, device->slot, device->function, 0x04);
+    uint16_t command = (uint16_t)command_status;
+    if (command & 1U) return 1;
+    command |= 1U;
+    pci_write_config(device->bus, device->slot, device->function, 0x04,
+                     (uint32_t)command);
+    return (pci_read_config(device->bus, device->slot, device->function, 0x04) & 1U) != 0;
+}
+
 int pci_enable_memory_space(const struct pci_device* device)
 {
     if (!device) return 0;

@@ -7,10 +7,43 @@
 #define DNS_MAX_MESSAGE 512U
 #define DNS_HEADER_SIZE 12U
 #define DNS_RETRY_TICKS 100U
-typedef struct { net_device_t* device; uint32_t server,result; uint16_t id; uint8_t active,done,failed; } dns_query_state_t;
+#define DNS_CACHE_CAPACITY 8U
+typedef struct { net_device_t *device; uint32_t server,address,expires; char host[254]; uint8_t valid; } dns_cache_entry_t;
+typedef struct { net_device_t* device; uint32_t server,result,ttl; uint16_t id,question_length; uint8_t question[264]; uint8_t active,done,failed; } dns_query_state_t;
 static dns_query_state_t query_state;
+static dns_cache_entry_t cache[DNS_CACHE_CAPACITY];
+static uint32_t cache_next;
 static uint16_t read_be16(const uint8_t* p){return (uint16_t)(((uint16_t)p[0]<<8)|p[1]);}
 static uint32_t read_be32(const uint8_t* p){return ((uint32_t)p[0]<<24)|((uint32_t)p[1]<<16)|((uint32_t)p[2]<<8)|p[3];}
+static void normalize_host(const char *host,char out[254])
+{
+    size_t i=0;
+    if(!host){out[0]=0;return;}
+    while(host[i]&&i<253U){char c=host[i];out[i]=(c>='A'&&c<='Z')?(char)(c-'A'+'a'):c;++i;}
+    out[i]=0;
+}
+static int cache_lookup(net_device_t*d,uint32_t server,const char*host,uint32_t*out)
+{
+    char normalized[254];normalize_host(host,normalized);uint32_t now=timer_get_ticks();
+    for(uint32_t i=0;i<DNS_CACHE_CAPACITY;i++){
+        if(!cache[i].valid)continue;
+        if((int32_t)(now-cache[i].expires)>=0){cache[i].valid=0;continue;}
+        if(cache[i].device==d&&cache[i].server==server){
+            size_t j=0;while(normalized[j]&&cache[i].host[j]&&normalized[j]==cache[i].host[j])j++;
+            if(!normalized[j]&&!cache[i].host[j]){*out=cache[i].address;return 1;}
+        }
+    }
+    return 0;
+}
+static void cache_store(net_device_t*d,uint32_t server,const char*host,uint32_t address,uint32_t ttl)
+{
+    if(!ttl||!address)return;
+    char normalized[254];normalize_host(host,normalized);
+    uint32_t ticks=ttl>21474836U?2147483600U:ttl*100U;
+    dns_cache_entry_t*e=&cache[cache_next++%DNS_CACHE_CAPACITY];
+    e->device=d;e->server=server;e->address=address;e->expires=timer_get_ticks()+ticks;e->valid=1;
+    size_t i=0;while(normalized[i]&&i<253U){e->host[i]=normalized[i];i++;}e->host[i]=0;
+}
 static void write_be16(uint8_t* p,uint16_t v){p[0]=(uint8_t)(v>>8);p[1]=(uint8_t)v;}
 static int skip_name(const uint8_t* p,size_t n,size_t* off)
 {
@@ -50,13 +83,20 @@ static void receive_dns(net_device_t* d,uint32_t src,uint16_t sport,uint16_t dpo
     uint16_t flags=read_be16(p+2),questions=read_be16(p+4),answers=read_be16(p+6);
     if(!(flags&0x8000U)||(flags&0x7800U)||(flags&0x0200U)||(flags&0x000FU)||questions!=1U||answers>64U){query_state.failed=1U;query_state.done=1U;return;}
     size_t pos=DNS_HEADER_SIZE;
+    if(n<DNS_HEADER_SIZE+query_state.question_length){query_state.failed=1U;query_state.done=1U;return;}
+    for(uint16_t i=0;i<query_state.question_length;i++){
+        uint8_t a=p[DNS_HEADER_SIZE+i],b=query_state.question[i];
+        if(a>='A'&&a<='Z')a=(uint8_t)(a-'A'+'a');
+        if(b>='A'&&b<='Z')b=(uint8_t)(b-'A'+'a');
+        if(a!=b){query_state.failed=1U;query_state.done=1U;return;}
+    }
     if(!skip_name(p,n,&pos)||pos+4U>n||read_be16(p+pos)!=1U||read_be16(p+pos+2U)!=1U){query_state.failed=1U;query_state.done=1U;return;}
     pos+=4U;
     for(uint32_t i=0;i<answers;i++){
         if(!skip_name(p,n,&pos)||pos+10U>n){query_state.failed=1U;query_state.done=1U;return;}
-        uint16_t type=read_be16(p+pos),klass=read_be16(p+pos+2U),dl=read_be16(p+pos+8U);pos+=10U;
+        uint16_t type=read_be16(p+pos),klass=read_be16(p+pos+2U),dl=read_be16(p+pos+8U);uint32_t ttl=read_be32(p+pos+4U);pos+=10U;
         if((size_t)dl>n-pos){query_state.failed=1U;query_state.done=1U;return;}
-        if(type==1U&&klass==1U&&dl==4U){uint32_t ip=read_be32(p+pos);uint8_t first=(uint8_t)(ip>>24);if(ip&&ip!=0xFFFFFFFFU&&first!=127U&&first<224U){query_state.result=ip;query_state.done=1U;return;}}
+        if(type==1U&&klass==1U&&dl==4U){uint32_t ip=read_be32(p+pos);uint8_t first=(uint8_t)(ip>>24);if(ip&&ip!=0xFFFFFFFFU&&first!=127U&&first<224U){query_state.result=ip;query_state.ttl=ttl;query_state.done=1U;return;}}
         pos+=dl;
     }
     query_state.failed=1U;query_state.done=1U;
@@ -76,13 +116,16 @@ static int build_query(const char* host,uint8_t* p,size_t cap,size_t* out_len)
 int net_dns_resolve(net_device_t* d,const char* host,uint32_t* out,uint32_t timeout_ms)
 {
     if(!d||!host||!out||!d->link_up||timeout_ms<500U||timeout_ms>30000U||!d->ipv4_configured||!d->ipv4_dns)return 0;
+    if(cache_lookup(d,d->ipv4_dns,host,out))return 1;
     query_state=(dns_query_state_t){0};query_state.device=d;query_state.server=d->ipv4_dns;
     query_state.id=(uint16_t)(timer_get_ticks()^d->mac[2]^((uint16_t)d->mac[4]<<8));if(!query_state.id)query_state.id=1U;query_state.active=1U;
     uint8_t packet[DNS_MAX_MESSAGE];size_t plen=0;
     if(!build_query(host,packet,sizeof(packet),&plen)||!net_udp_handler_register(DNS_CLIENT_PORT,receive_dns,0)){query_state.active=0U;return 0;}
+    query_state.question_length=(uint16_t)(plen-DNS_HEADER_SIZE);
+    for(uint16_t i=0;i<query_state.question_length;i++)query_state.question[i]=packet[DNS_HEADER_SIZE+i];
     int sent=net_udp_send(d,query_state.server,DNS_CLIENT_PORT,DNS_SERVER_PORT,packet,plen);
     uint32_t start=timer_get_ticks(),last=start,limit=timeout_ms/10U,retries=0U;
     while(sent&&!query_state.done&&(uint32_t)(timer_get_ticks()-start)<limit){(void)net_poll(16U);uint32_t now=timer_get_ticks();if((uint32_t)(now-last)>=DNS_RETRY_TICKS){if(retries>=3U)break;++retries;(void)net_udp_send(d,query_state.server,DNS_CLIENT_PORT,DNS_SERVER_PORT,packet,plen);last=now;}__asm__ volatile("pause");}
     query_state.active=0U;(void)net_udp_handler_unregister(DNS_CLIENT_PORT,receive_dns,0);
-    int ok=sent&&query_state.done&&!query_state.failed&&query_state.result!=0U;if(ok)*out=query_state.result;query_state.device=0;return ok;
+    int ok=sent&&query_state.done&&!query_state.failed&&query_state.result!=0U;if(ok){*out=query_state.result;cache_store(d,query_state.server,host,query_state.result,query_state.ttl);}query_state.device=0;return ok;
 }

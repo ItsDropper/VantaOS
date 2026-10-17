@@ -22,3 +22,22 @@ void dma_free_page(dma_page_t* p) {
  if(!dma_page_is_valid(p))return;
  pmm_free_block(p->virtual_address);p->virtual_address=0;p->physical_address=0;p->size=0;
 }
+
+int dma_alloc_contiguous(dma_page_t* pages, size_t count) {
+ if(!pages||!count||count>64U)return 0;
+ for(size_t i=0;i<count;i++){
+  if(!dma_alloc_page(&pages[i])){
+   while(i>0U)dma_free_page(&pages[--i]);
+   return 0;
+  }
+  if(i>0U&&pages[i].physical_address!=pages[i-1U].physical_address+PAGE_SIZE){
+   for(size_t j=0;j<=i;j++)dma_free_page(&pages[j]);
+   return 0;
+  }
+ }
+ return 1;
+}
+void dma_free_contiguous(dma_page_t* pages,size_t count) {
+ if(!pages||count>64U)return;
+ for(size_t i=0;i<count;i++)dma_free_page(&pages[i]);
+}

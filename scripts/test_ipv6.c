@@ -1,0 +1,105 @@
+#include "net_ipv6.h"
+#include "timer.h"
+#include <assert.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+
+static net_device_t device;
+static net_ethernet_handler_fn ipv6_handler;
+static void *ipv6_context;
+static uint32_t ticks = 1000U;
+static uint8_t last_tx[1600];
+static size_t last_tx_length;
+
+uint32_t timer_get_ticks(void) { return ticks; }
+size_t net_poll(size_t budget) { (void)budget; return 0U; }
+uint32_t net_device_count(void) { return 1U; }
+net_device_t *net_device_get(uint32_t index) { return index == 0U ? &device : 0; }
+int net_ethernet_handler_register(uint16_t type, net_ethernet_handler_fn fn, void *ctx)
+{
+    if (type != 0x86DDU || !fn || ipv6_handler) return 0;
+    ipv6_handler = fn; ipv6_context = ctx; return 1;
+}
+int net_device_transmit(net_device_t *d, const void *frame, size_t length)
+{
+    if (d != &device || !frame || length > sizeof(last_tx)) return 0;
+    const uint8_t *p = (const uint8_t *)frame;
+    for (size_t i = 0; i < length; ++i) last_tx[i] = p[i];
+    last_tx_length = length;
+    return 1;
+}
+static uint16_t checksum_bytes(uint32_t sum, const uint8_t *p, size_t n)
+{
+    while (n >= 2U) { sum += ((uint32_t)p[0] << 8) | p[1]; p += 2; n -= 2U; }
+    if (n) sum += (uint32_t)p[0] << 8;
+    while (sum >> 16) sum = (sum & 0xFFFFU) + (sum >> 16);
+    return (uint16_t)~sum;
+}
+static uint16_t icmp6_checksum(const uint8_t src[16], const uint8_t dst[16],
+                               const uint8_t *p, size_t n)
+{
+    uint32_t sum = 0;
+    sum = (uint32_t)~checksum_bytes(sum, src, 16U) & 0xFFFFU;
+    sum = (uint32_t)~checksum_bytes(sum, dst, 16U) & 0xFFFFU;
+    uint8_t pseudo[8] = {(uint8_t)(n >> 24),(uint8_t)(n >> 16),
+                         (uint8_t)(n >> 8),(uint8_t)n,0,0,0,58};
+    sum = (uint32_t)~checksum_bytes(sum, pseudo, sizeof(pseudo)) & 0xFFFFU;
+    sum = (uint32_t)~checksum_bytes(sum, p, n) & 0xFFFFU;
+    while (sum >> 16) sum = (sum & 0xFFFFU) + (sum >> 16);
+    return (uint16_t)~sum;
+}
+static void put16(uint8_t *p, uint16_t v) { p[0]=(uint8_t)(v>>8); p[1]=(uint8_t)v; }
+static void put32(uint8_t *p, uint32_t v) { p[0]=(uint8_t)(v>>24);p[1]=(uint8_t)(v>>16);p[2]=(uint8_t)(v>>8);p[3]=(uint8_t)v; }
+static void make_ip6(uint8_t *ip, const uint8_t src[16], const uint8_t dst[16],
+                     uint8_t hop, uint16_t plen)
+{
+    ip[0]=0x60;ip[1]=ip[2]=ip[3]=0;put16(ip+4,plen);ip[6]=58;ip[7]=hop;
+    for(uint32_t i=0;i<16U;i++){ip[8+i]=src[i];ip[24+i]=dst[i];}
+}
+static void inject_ra(void)
+{
+    static const uint8_t router_mac[6]={0x02,0xAA,0xBB,0xCC,0xDD,0xEE};
+    static const uint8_t src[16]={0xFE,0x80,0,0,0,0,0,0,0,0,0,0,0,0,0,1};
+    static const uint8_t dst[16]={0xFF,2,0,0,0,0,0,0,0,0,0,0,0,0,0,1};
+    uint8_t f[14+40+48]={0};f[0]=0x33;f[1]=0x33;f[5]=1;
+    for(uint32_t i=0;i<6U;i++){f[6+i]=router_mac[i];}
+    put16(f+12,0x86DD);
+    uint8_t *ip=f+14,*p=ip+40;make_ip6(ip,src,dst,255,48);
+    p[0]=134;p[4]=64;put16(p+6,1800);
+    p[16]=3;p[17]=4;p[18]=64;p[19]=0xC0;put32(p+20,3600);put32(p+24,1800);
+    p[32]=0x20;p[33]=0x01;p[34]=0x0D;p[35]=0xB8;p[37]=1;
+    put16(p+2,icmp6_checksum(src,dst,p,48));
+    ipv6_handler(&device,f,sizeof(f),0x86DDU,14U,ipv6_context);
+}
+static void inject_echo(const uint8_t global[16])
+{
+    static const uint8_t router_mac[6]={0x02,0xAA,0xBB,0xCC,0xDD,0xEE};
+    static const uint8_t src[16]={0x20,0x01,0x0D,0xB8,0,1,0,0,0,0,0,0,0,0,0,2};
+    uint8_t f[14+40+8]={0};for(uint32_t i=0;i<6U;i++){f[i]=device.mac[i];f[6+i]=router_mac[i];}
+    put16(f+12,0x86DD);uint8_t *ip=f+14,*p=ip+40;make_ip6(ip,src,global,64,8);
+    p[0]=128;put16(p+4,0x1234);put16(p+6,7);put16(p+2,icmp6_checksum(src,global,p,8));
+    ipv6_handler(&device,f,sizeof(f),0x86DDU,14U,ipv6_context);
+}
+int main(void)
+{
+    device=(net_device_t){.name="test0",.mac={0x02,0x11,0x22,0x33,0x44,0x55},
+                          .mtu=1500,.link_up=1};
+    assert(net_ipv6_initialize());assert(ipv6_handler);
+    net_ipv6_poll();assert(last_tx_length>=14U+40U+8U);
+    inject_ra();
+    net_ipv6_address_t ll={{0}},global={{0}},router={{0}};
+    assert(net_ipv6_get_status(&device,&ll,&global,&router));
+    assert(global.bytes[0]==0U); /* Address stays tentative until DAD completes. */
+    ticks+=101U;net_ipv6_poll();
+    assert(net_ipv6_get_status(&device,&ll,&global,&router));
+    assert(global.bytes[0]==0x20U&&global.bytes[1]==0x01U&&global.bytes[2]==0x0DU&&global.bytes[3]==0xB8U);
+    assert(global.bytes[8]==0x00U&&global.bytes[9]==0x11U&&global.bytes[10]==0x22U);
+    assert(global.bytes[11]==0xFFU&&global.bytes[12]==0xFEU&&global.bytes[15]==0x55U);
+    assert(router.bytes[0]==0xFEU&&router.bytes[1]==0x80U);
+    inject_echo(global.bytes);
+    assert(last_tx_length==14U+40U+8U);
+    assert(last_tx[12]==0x86U&&last_tx[13]==0xDDU&&last_tx[54]==129U);
+    puts("VANTAOS_IPV6_SLAAC_ICMP6_TEST_OK");
+    return 0;
+}

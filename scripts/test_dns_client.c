@@ -12,6 +12,7 @@ static void *registered_context;
 static uint16_t registered_port;
 static uint32_t fake_ticks;
 static int response_kind;
+static uint32_t send_count;
 
 uint32_t timer_get_ticks(void) { return fake_ticks++; }
 
@@ -37,6 +38,7 @@ int net_udp_handler_unregister(uint16_t port, net_udp_handler_fn fn, void *conte
 int net_udp_send(net_device_t *device, uint32_t destination, uint16_t source_port,
                  uint16_t destination_port, const void *payload, size_t length)
 {
+    ++send_count;
     const uint8_t *query = (const uint8_t *)payload;
     uint8_t reply[64] = {0};
     size_t n = 0;
@@ -89,7 +91,7 @@ int net_udp_send(net_device_t *device, uint32_t destination, uint16_t source_por
         reply[n++] = 0xC0; reply[n++] = 0x0C;
         reply[n++] = 0; reply[n++] = 1;
         reply[n++] = 0; reply[n++] = 1;
-        n += 4;
+        reply[n++] = 0; reply[n++] = 0; reply[n++] = 0; reply[n++] = 60; /* TTL 60 seconds. */
         reply[n++] = 0; reply[n++] = 4;
         reply[n++] = 192; reply[n++] = 0; reply[n++] = 2; reply[n++] = 1;
     }
@@ -103,11 +105,12 @@ size_t net_poll(size_t packet_budget) { (void)packet_budget; return 0; }
 
 static int run_case(int kind, int expected_success)
 {
-    net_device_t device = {0};
+    static net_device_t device;
+    device = (net_device_t){0};
     uint32_t result = 0xDEADBEEFU;
     device.link_up = 1;
     device.ipv4_configured = 1;
-    device.ipv4_dns = 0xC0000201U;
+    device.ipv4_dns = 0xC0000201U + (uint32_t)kind;
     response_kind = kind;
     fake_ticks = 0;
     int success = net_dns_resolve(&device, "example.com", &result, 1000U);
@@ -123,6 +126,11 @@ int main(void)
     if (!run_case(0, 1)) {
         fputs("valid compressed DNS A response was rejected\n", stderr);
         return 1;
+    }
+    uint32_t sends_after_first_lookup = send_count;
+    if (!run_case(0, 1) || send_count != sends_after_first_lookup) {
+        fputs("DNS positive TTL cache did not suppress the repeated query\n", stderr);
+        return 6;
     }
     if (!run_case(1, 0)) {
         fputs("DNS compression pointer loop was accepted\n", stderr);

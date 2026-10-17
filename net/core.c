@@ -103,6 +103,14 @@ int net_device_configure_ipv4(net_device_t* d, uint32_t address,
     spinlock_unlock_irqrestore(&lock, f);
     return 1;
 }
+int net_device_clear_ipv4(net_device_t* d)
+{
+    if(!d)return 0;
+    uint64_t f=spinlock_lock_irqsave(&lock);device_slot_t* s=find_locked(d);
+    if(!s){spinlock_unlock_irqrestore(&lock,f);return 0;}
+    d->ipv4_address=0;d->ipv4_netmask=0;d->ipv4_gateway=0;d->ipv4_dns=0;d->ipv4_configured=0;
+    spinlock_unlock_irqrestore(&lock,f);return 1;
+}
 int net_device_get_ipv4(net_device_t* d,uint32_t* address,uint32_t* mask,uint32_t* gateway)
 {
     if(!d)return 0;

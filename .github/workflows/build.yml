@@ -60,7 +60,7 @@ jobs:
                 nvme_only=1
                 for file in "${changed_files[@]}"; do
                   case "$file" in
-                    drivers/network/e1000.c|tests/test_e1000_network.py) ;;
+                    drivers/network/e1000.c|scripts/test_e1000_network.py) ;;
                     *) e1000_only=0 ;;
                   esac
                   case "$file" in

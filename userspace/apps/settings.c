@@ -314,7 +314,7 @@ static void render(void)
     uint32_t accent_value = accent_color();
 
     add_text(16, 10, "Settings", text);
-    add_text(16, 30, "Personalize this app; changes are saved to disk.", muted);
+    add_text(16, 30, "Customize desktop appearance and Settings text.", muted);
 
     const int row_y[SETTING_COUNT] = { 58, 104, 150, 196, 242 };
     const char* labels[SETTING_COUNT] = {

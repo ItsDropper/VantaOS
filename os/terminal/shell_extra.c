@@ -37,7 +37,7 @@ static int parse_command(char *input, char **argv, uint32_t capacity,
         }
         if (write > start) {
             *write++ = 0;
-            if (shell_string_equals(start, "-F")) {
+            if (shell_string_equals(start, "-F") && argc <= 1U) {
                 force = 1;
             } else {
                 if (argc >= capacity) return 0;
@@ -48,11 +48,6 @@ static int parse_command(char *input, char **argv, uint32_t capacity,
             if (argc >= capacity) return 0;
             argv[argc++] = start;
         }
-    }
-    if (argc > 0 && shell_string_equals(argv[0], "-F")) {
-        force = 1;
-        for (uint32_t i = 1; i < argc; ++i) argv[i - 1] = argv[i];
-        --argc;
     }
     *argc_out = argc;
     *force_out = force;

@@ -209,7 +209,7 @@ static int wait_completion(nvme_controller_t* c, int admin,
         completion.submission_id = queue[*head].submission_id;
         completion.command_id = queue[*head].command_id;
         completion.status_phase = queue[*head].status_phase;
-        __asm__ volatile ("" ::: "memory");
+        __atomic_thread_fence(__ATOMIC_ACQUIRE);
         if ((completion.status_phase & 1U) == *phase) {
             if (completion.command_id != command_id) {
                 c->failed = 1;
@@ -221,10 +221,8 @@ static int wait_completion(nvme_controller_t* c, int admin,
             if (*head == 0) *phase ^= 1U;
             *doorbell = *head;
             __asm__ volatile ("" ::: "memory");
-            if (status != 0U) {
-                c->failed = 1;
+            if (status != 0U)
                 return 0;
-            }
             return 1;
         }
         if (c->failed || (mmio_read32(c->registers, 0x1CU) & NVME_CSTS_CFS)) {
@@ -251,10 +249,10 @@ static int submit_command(nvme_controller_t* c, int admin,
     if (id == 0) id = ++c->next_command_id;
     command->command_id = id;
     queue[*tail] = *command;
-    __asm__ volatile ("" ::: "memory");
     *tail = (uint16_t)((*tail + 1U) % NVME_QUEUE_DEPTH);
+    __atomic_thread_fence(__ATOMIC_SEQ_CST);
     *doorbell = *tail;
-    __asm__ volatile ("" ::: "memory");
+    __atomic_thread_fence(__ATOMIC_SEQ_CST);
     return wait_completion(c, admin, id, result);
 }
 
@@ -699,28 +697,37 @@ static int nvme_run_io_selftest(void)
         serial_write("VANTAOS_NVME_IO_SELFTEST_SKIPPED\n");
         return 1;
     }
-    if (device->sector_count <= 8U || device->sector_size > NVME_PAGE_SIZE) {
+    if (device->sector_size > NVME_PAGE_SIZE) {
         serial_write("VANTAOS_NVME_IO_SELFTEST_FAIL\n");
         return 0;
     }
-    static uint8_t before[NVME_PAGE_SIZE];
-    static uint8_t expected[NVME_PAGE_SIZE];
-    static uint8_t actual[NVME_PAGE_SIZE];
-    for (uint32_t i = 0; i < device->sector_size; ++i)
-        expected[i] = (uint8_t)((i * 37U) ^ 0xA5U);
-    if (block_device_read(device, 7U, 1U, before) != BLOCK_STATUS_OK) {
+    /* Eight outstanding commands, each covering up to sixteen DMA pages. */
+    static uint8_t before[NVME_IO_SLOTS * NVME_MAX_TRANSFER_PAGES * NVME_PAGE_SIZE];
+    static uint8_t expected[NVME_IO_SLOTS * NVME_MAX_TRANSFER_PAGES * NVME_PAGE_SIZE];
+    static uint8_t actual[NVME_IO_SLOTS * NVME_MAX_TRANSFER_PAGES * NVME_PAGE_SIZE];
+    const uint32_t test_sectors = NVME_IO_SLOTS * NVME_MAX_TRANSFER_PAGES *
+                                  (NVME_PAGE_SIZE / device->sector_size);
+    const uint64_t test_lba = 8U;
+    const size_t test_bytes = (size_t)test_sectors * device->sector_size;
+    if (device->sector_count <= test_lba + test_sectors) {
         serial_write("VANTAOS_NVME_IO_SELFTEST_FAIL\n");
         return 0;
     }
-    int ok = block_device_write(device, 7U, 1U, expected) == BLOCK_STATUS_OK;
+    for (size_t i = 0; i < test_bytes; ++i)
+        expected[i] = (uint8_t)((i * 37U) ^ (i >> 7) ^ 0xA5U);
+    if (block_device_read(device, test_lba, test_sectors, before) != BLOCK_STATUS_OK) {
+        serial_write("VANTAOS_NVME_IO_SELFTEST_FAIL\n");
+        return 0;
+    }
+    int ok = block_device_write(device, test_lba, test_sectors, expected) == BLOCK_STATUS_OK;
     ok = ok && block_device_flush(device) == BLOCK_STATUS_OK;
-    ok = ok && block_device_read(device, 7U, 1U, actual) == BLOCK_STATUS_OK;
-    for (uint32_t i = 0; i < device->sector_size; ++i)
+    ok = ok && block_device_read(device, test_lba, test_sectors, actual) == BLOCK_STATUS_OK;
+    for (size_t i = 0; i < test_bytes; ++i)
         ok = ok && actual[i] == expected[i];
     ok = ok && block_device_read(device, device->sector_count, 1U, actual) ==
                BLOCK_STATUS_OUT_OF_RANGE;
-    /* Restore the scratch sector even when the data verification fails. */
-    if (block_device_write(device, 7U, 1U, before) != BLOCK_STATUS_OK)
+    /* Restore the complete scratch range even if verification fails. */
+    if (block_device_write(device, test_lba, test_sectors, before) != BLOCK_STATUS_OK)
         ok = 0;
     if (block_device_flush(device) != BLOCK_STATUS_OK)
         ok = 0;

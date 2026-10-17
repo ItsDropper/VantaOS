@@ -25,6 +25,7 @@ struct block_device {
  uint32_t sector_size;
  uint32_t flags;
  volatile uint32_t online;
+ volatile uint32_t active_operations;
  const block_device_ops_t* ops;
  void* driver_data;
 };

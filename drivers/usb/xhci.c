@@ -126,6 +126,9 @@ static uint64_t interrupt_expected_trb[XHCI_MAX_SLOTS];
 static uint8_t transfer_event_observed;
 static uint8_t hid_completion_observed[XHCI_MAX_SLOTS];
 static uint8_t hid_report_observed[XHCI_MAX_SLOTS];
+static uint8_t hid_transfer_submitted[XHCI_MAX_SLOTS];
+static uint8_t hid_transfer_event_observed[XHCI_MAX_SLOTS];
+static uint8_t hid_completion_mismatch_observed[XHCI_MAX_SLOTS];
 static uint32_t interrupt_enqueue[XHCI_MAX_SLOTS];
 static uint32_t interrupt_cycle[XHCI_MAX_SLOTS];
 static uint32_t interrupt_dci[XHCI_MAX_SLOTS];
@@ -226,6 +229,13 @@ static void consume_event_ring(void)
             completed_transfer_pointer = event->parameter;
             completed_transfer_code = (event->status >> 24) & 0xFFU;
             completed_transfer_slot = (control >> 24) & 0xFFU;
+            if (completed_transfer_slot > 0U &&
+                completed_transfer_slot <= XHCI_MAX_SLOTS &&
+                interrupt_configured[completed_transfer_slot - 1U] &&
+                !hid_transfer_event_observed[completed_transfer_slot - 1U]) {
+                hid_transfer_event_observed[completed_transfer_slot - 1U] = 1;
+                serial_write("VANTAOS_XHCI_HID_TRANSFER_EVENT_SEEN\n");
+            }
             __atomic_add_fetch(&transfer_completion_sequence, 1U,
                                __ATOMIC_RELEASE);
             handle_interrupt_completion(completed_transfer_slot,
@@ -548,6 +558,10 @@ static int submit_interrupt_trb(uint32_t index)
         return 0;
     interrupt_expected_trb[index] = trb_physical;
     interrupt_in_flight[index] = 1;
+    if (!hid_transfer_submitted[index]) {
+        hid_transfer_submitted[index] = 1;
+        serial_write("VANTAOS_XHCI_HID_TRANSFER_SUBMITTED\n");
+    }
     mmio_write32(doorbells, ((index + 1U) * 4U), interrupt_dci[index]);
     return 1;
 }
@@ -558,10 +572,16 @@ static void handle_interrupt_completion(uint32_t slot_id, uint32_t dci,
     if (slot_id == 0U || slot_id > XHCI_MAX_SLOTS)
         return;
     uint32_t index = slot_id - 1U;
-    if (!interrupt_configured[index] || !interrupt_in_flight[index] ||
-        dci != interrupt_dci[index] ||
-        trb_pointer != interrupt_expected_trb[index])
+    if (!interrupt_configured[index])
         return;
+    if (!interrupt_in_flight[index] || dci != interrupt_dci[index] ||
+        trb_pointer != interrupt_expected_trb[index]) {
+        if (!hid_completion_mismatch_observed[index]) {
+            hid_completion_mismatch_observed[index] = 1;
+            serial_write("VANTAOS_XHCI_HID_COMPLETION_MISMATCH\n");
+        }
+        return;
+    }
     if (!hid_completion_observed[index]) {
         hid_completion_observed[index] = 1;
         serial_write("VANTAOS_XHCI_HID_COMPLETION_MATCHED\n");

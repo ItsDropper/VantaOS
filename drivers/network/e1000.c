@@ -88,7 +88,27 @@ static int e1000_poll_device(void);
 static int e1000_probe(const struct pci_device* pci);
 
 static const net_pci_id_t e1000_ids[] = {
-    {E1000_VENDOR_ID,E1000_DEVICE_82540EM,0x02U,0x00U,0x00U}
+    /* Legacy 8254x E1000 controllers share this register and descriptor model. */
+    {E1000_VENDOR_ID,E1000_DEVICE_82540EM,0x02U,0x00U,0x00U},
+    {E1000_VENDOR_ID,0x100FU,0x02U,0x00U,0x00U}, /* 82545EM copper */
+    {E1000_VENDOR_ID,0x1010U,0x02U,0x00U,0x00U}, /* 82546EB copper */
+    {E1000_VENDOR_ID,0x1011U,0x02U,0x00U,0x00U}, /* 82545EM fiber */
+    {E1000_VENDOR_ID,0x1012U,0x02U,0x00U,0x00U}, /* 82546EB fiber */
+    {E1000_VENDOR_ID,0x1013U,0x02U,0x00U,0x00U}, /* 82541EI */
+    {E1000_VENDOR_ID,0x1015U,0x02U,0x00U,0x00U}, /* 82540EM LOM */
+    {E1000_VENDOR_ID,0x1016U,0x02U,0x00U,0x00U}, /* 82540EP */
+    {E1000_VENDOR_ID,0x1017U,0x02U,0x00U,0x00U}, /* 82540EP */
+    {E1000_VENDOR_ID,0x1018U,0x02U,0x00U,0x00U}, /* 82541EI */
+    {E1000_VENDOR_ID,0x1019U,0x02U,0x00U,0x00U}, /* 82547EI */
+    {E1000_VENDOR_ID,0x101AU,0x02U,0x00U,0x00U}, /* 82547EI */
+    {E1000_VENDOR_ID,0x1075U,0x02U,0x00U,0x00U}, /* 82547GI */
+    {E1000_VENDOR_ID,0x1076U,0x02U,0x00U,0x00U}, /* 82541GI */
+    {E1000_VENDOR_ID,0x1077U,0x02U,0x00U,0x00U}, /* 82547EI */
+    {E1000_VENDOR_ID,0x1078U,0x02U,0x00U,0x00U}, /* 82541ER */
+    {E1000_VENDOR_ID,0x1079U,0x02U,0x00U,0x00U}, /* 82546GB */
+    {E1000_VENDOR_ID,0x107AU,0x02U,0x00U,0x00U}, /* 82546GB */
+    {E1000_VENDOR_ID,0x107BU,0x02U,0x00U,0x00U}, /* 82546GB */
+    {E1000_VENDOR_ID,0x107CU,0x02U,0x00U,0x00U}  /* 82541PI */
 };
 static int e1000_transmit(net_device_t*,const uint8_t*,size_t);
 static const net_device_ops_t e1000_net_ops = { .transmit = e1000_transmit };

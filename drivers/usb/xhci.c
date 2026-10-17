@@ -713,7 +713,7 @@ int xhci_reset_port(uint32_t port)
         return 0;
 
     uint32_t writable = portsc & ~(XHCI_PORT_CHANGE_BITS |
-                                   XHCI_PORT_ENABLED |
+                                   XHCI_PORT_ENABLED | (1U << 16) |
                                    XHCI_PORT_RESET |
                                    XHCI_PORT_WARM_RESET);
     writable |= XHCI_PORT_POWER;
@@ -723,7 +723,7 @@ int xhci_reset_port(uint32_t port)
     uint32_t reset_bit = speed >= 4U
         ? XHCI_PORT_WARM_RESET : XHCI_PORT_RESET;
     writable = portsc & ~(XHCI_PORT_CHANGE_BITS |
-                          XHCI_PORT_ENABLED |
+                          XHCI_PORT_ENABLED | (1U << 16) |
                           XHCI_PORT_RESET |
                           XHCI_PORT_WARM_RESET);
     writable |= reset_bit;

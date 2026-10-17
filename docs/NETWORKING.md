@@ -6,7 +6,7 @@ This document describes the current networking contracts and the scope still mis
 
     User-mode socket/syscall ABI (future)
                 |
-    TCP / UDP / DHCP / DNS / ICMP / IPv4 (future protocol modules)
+    TCP / DHCP / DNS / sockets (future); UDP receive + ICMP echo / IPv4 (implemented)
                 |
     Ethernet-II demultiplexer (implemented)
                 |
@@ -34,7 +34,7 @@ Transmit is synchronous at this boundary: a driver must copy bytes into its own 
 
 net_receive_frame() validates bounds and copies into a fixed-capacity queue. It calls no protocol handlers and allocates no memory, so it can be called from interrupt context. Queue overflow increments per-device drop statistics. Handlers run only from net_poll() in caller context; a future scheduler-owned network worker should drive polling.
 
-Ethernet-II parsing validates the base header and supports one 802.1Q/802.1ad VLAN tag. Nested tags and IEEE 802.3 length-encoded frames are rejected. Handlers receive the complete frame, decoded EtherType, and header length; they must not retain the frame pointer after returning.
+Ethernet-II parsing validates the base header and supports one 802.1Q/802.1ad VLAN tag. ARP replies and IPv4 ICMP echo replies preserve that VLAN tag. Nested tags and IEEE 802.3 length-encoded frames are rejected. Handlers receive the complete frame, decoded EtherType, and header length; they must not retain the frame pointer after returning.
 
 ## Concurrency and resource bounds
 
@@ -56,9 +56,9 @@ The QEMU regression test boots with a real emulated E1000 device, verifies trans
 
 ## Current limitations
 
-The ARP module replies to well-formed Ethernet/IPv4 ARP requests for an explicitly configured interface address. IPv4 validates header length, total length, header checksum, fragment flags, destination address, and ICMP checksum before replying to ICMP echo requests. IPv4 configuration is explicit and currently exercised with a QEMU-only static address; there is no DHCP client or ARP cache yet. VLAN-tagged L3 packets are currently rejected by ARP/IPv4 handlers.
+The ARP module replies to well-formed Ethernet/IPv4 ARP requests for an explicitly configured interface address. IPv4 validates header length, total length, header checksum, fragment flags, destination address, and ICMP checksum before replying to ICMP echo requests. IPv4 configuration is explicit and currently exercised with a QEMU-only static address; there is no DHCP client or ARP cache yet. A bounded UDP receive demultiplexer validates UDP lengths, ports, and optional IPv4 pseudo-header checksums before invoking a registered port handler. IPv4 UDP checksums of zero are accepted as permitted by the IPv4 UDP specification. UDP transmit and IP fragmentation are not implemented.
 
-DHCP, DNS, UDP, TCP, routing, sockets, network syscalls, link event interrupts, IPv4 fragmentation, and real-hardware validation remain unimplemented. This is an early usable protocol slice, not yet a complete production networking stack.
+DHCP, DNS, UDP transmit, TCP, routing, sockets, network syscalls, link event interrupts, IPv4 fragmentation, and real-hardware validation remain unimplemented. This is an early usable protocol slice, not yet a complete production networking stack.
 
 ## Next sequence
 

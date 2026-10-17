@@ -88,4 +88,4 @@ This test does not yet establish physical-hardware compatibility or complete rem
 - Real-device compatibility, USB/HID edge cases, NICs, Wi-Fi, audio, GPU acceleration, sleep/resume, and firmware variations.
 - Security auditing, fuzzing, sanitizers suitable for this freestanding target, and formal verification.
 
-The next useful test increments are end-to-end interaction tests for the ring-3 apps, malformed ELF and user-fault containment tests, allocation-failure recovery, repeated scheduler stress, and focused page-table/memory-manager invariants. Tests should be added alongside each new subsystem instead of relying on a single boot marker.
+The next useful test increments are end-to-end interaction tests for ring-3 apps and copy/move/archive round-trips, malformed ELF and user-fault containment tests, allocation-failure recovery, repeated scheduler stress, and focused page-table/memory-manager invariants. Tests should be added alongside each new subsystem instead of relying on a single boot marker.

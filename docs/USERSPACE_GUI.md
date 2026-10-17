@@ -44,7 +44,7 @@ The Settings UI must not label an RTC value as local time unless its policy is e
 1. Harden user-mode process isolation with fault-containment, invalid-mapping, malformed-ELF, allocation-failure, and adversarial address-space tests.
 2. Add a blocking GUI event wait and complete window move/resize/minimize/maximize semantics without weakening process ownership.
 3. Implement RTC UTC/local policy and timezone-rule conversion before exposing region-based local time as functional.
-4. Expand Explorer only after the filesystem API supports safe create/write/rename/delete operations and their regression coverage.
+4. Add end-to-end automated interaction tests for Explorer selection, context menus, create/rename/delete, recursive copy/move, and archive round-trips; add Unicode LFN creation and crash-atomic filesystem transactions.
 5. Keep every Settings preference tied to a real effect, validated persistence, and regression coverage; a UI control alone is not evidence of a working system feature.
 
 A control is functional only when its backing API, input path, persistence semantics (where relevant), and regression test exist.

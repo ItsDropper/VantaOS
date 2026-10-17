@@ -212,7 +212,7 @@ jobs:
           # NVMe. No IDE data disk is attached, so ATA cannot satisfy this test.
           cp vantaos.img nvme-fat32.img
           for boot in 1 2; do
-            log="nvme-fat32-boot-\${boot}.log"
+            log="nvme-fat32-boot-${boot}.log"
             set +e
             timeout 35s qemu-system-x86_64 \
               -machine pc \
@@ -223,7 +223,7 @@ jobs:
               -device nvme,drive=nvmefs,serial=VANTAFS000001 \
               -boot order=d \
               -display none \
-              -serial "file:\${log}" \
+              -serial "file:${log}" \
               -monitor none \
               -no-reboot
             result=$?
@@ -313,6 +313,7 @@ jobs:
             VANTAOS_PROCESS_DEFERRED_SWITCH_OK
             VANTAOS_PROCESS_OWNED_REUSE_OK
             VANTAOS_FILESYSTEM_NAMESPACE_OK
+            VANTAOS_FAT32_BACKEND_ATA_OK
             VANTAOS_FAT32_WRITE_READBACK_OK
             VANTAOS_FAT32_MULTICLUSTER_IO_OK
             VANTAOS_FILESYSTEM_MUTATION_OK

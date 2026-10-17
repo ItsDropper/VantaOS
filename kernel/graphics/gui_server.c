@@ -6,6 +6,7 @@
 #include "spinlock.h"
 #include "terminal.h"
 #include "terminal_process.h"
+#include "desktop_theme.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -339,7 +340,7 @@ void gui_server_draw_windows(void)
         graphics_fill_rounded_rect(x + 2, y + GUI_TITLEBAR_HEIGHT,
                                    (int)width - 4,
                                    (int)height - GUI_TITLEBAR_HEIGHT - 2,
-                                   6, 0x00151D29);
+                                   6, VANTA_UI_DESKTOP);
 
         for (uint32_t j = 0; j < window->command_count; j++)
         {

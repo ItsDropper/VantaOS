@@ -14,14 +14,6 @@ static int theme_contrast;
 static int theme_compact;
 static int theme_initialized;
 
-static size_t theme_length(const char* text)
-{
-    size_t length = 0U;
-    while (text && text[length])
-        length++;
-    return length;
-}
-
 static int theme_contains(const char* text, const char* needle)
 {
     if (!text || !needle || !needle[0])
@@ -50,7 +42,10 @@ int desktop_theme_reload(void)
 {
     theme_defaults();
     if (!vfs_is_initialized())
+    {
+        theme_initialized = 0;
         return 0;
+    }
 
     char buffer[THEME_CONFIG_CAPACITY];
     int descriptor = vfs_open(THEME_CONFIG_PATH, VFS_OPEN_READ);

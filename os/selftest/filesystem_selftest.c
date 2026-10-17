@@ -198,6 +198,22 @@ void filesystem_selftest_initialize(void)
         }
     }
     serial_write("VANTAOS_FAT32_MULTICLUSTER_IO_OK\n");
+
+    /* Exercise directory creation, same-directory rename, and safe deletion. */
+    if (filesystem_create_directory("/FMTEST") < 0 ||
+        filesystem_create_file("/FMTEST/OLD.TXT") < 0 ||
+        filesystem_rename_path("/FMTEST/OLD.TXT",
+                               "/FMTEST/NEW.BIN") < 0 ||
+        filesystem_lookup("/FMTEST/OLD.TXT") >= 0 ||
+        filesystem_lookup("/FMTEST/NEW.BIN") < 0 ||
+        filesystem_delete_path("/FMTEST/NEW.BIN") < 0 ||
+        filesystem_delete_path("/FMTEST") < 0 ||
+        filesystem_lookup("/FMTEST") >= 0)
+    {
+        serial_write("VANTAOS_FILESYSTEM_MUTATION_FAIL\n");
+        return;
+    }
+    serial_write("VANTAOS_FILESYSTEM_MUTATION_OK\n");
     }
     else
     {

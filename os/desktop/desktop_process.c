@@ -6,6 +6,7 @@
 #include "mouse.h"
 #include "terminal_process.h"
 #include "file_explorer_process.h"
+#include "usb.h"
 
 static uint32_t desktop_pid;
 
@@ -13,6 +14,9 @@ void desktop_process_main(void)
 {
     while (1)
     {
+        /* xHCI is polled, not interrupt-driven: consume transfer events and
+           dispatch pending HID reports before the desktop reads input. */
+        usb_poll();
         mouse_process_events();
         terminal_process_set_input_enabled(graphics_get_active_panel() == 3);
         desktop_update();
@@ -31,7 +35,6 @@ int desktop_process_start(uint32_t parent_pid)
 {
     if (desktop_pid != 0)
         return (int)desktop_pid;
-
 
     int pid =
         process_create_kernel(

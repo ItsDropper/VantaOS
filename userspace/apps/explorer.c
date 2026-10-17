@@ -68,8 +68,8 @@ static uint32_t window_id;
 static char delete_list_buffers[8][LIST_CAPACITY];
 static char delete_path_buffers[8][PATH_CAPACITY];
 static char copy_list_buffers[8][LIST_CAPACITY];
-static char copy_source_paths[8][PATH_CAPACITY];
-static char copy_target_paths[8][PATH_CAPACITY];
+static char copy_source_paths[9][PATH_CAPACITY];
+static char copy_target_paths[9][PATH_CAPACITY];
 static char file_clipboard[ENTRY_CAPACITY][PATH_CAPACITY];
 static size_t file_clipboard_count;
 static int file_clipboard_cut;
@@ -871,14 +871,15 @@ static void paste_file_clipboard(void)
         if (file_clipboard_cut && delete_tree(file_clipboard[i], 0U))
             removed++;
     }
-    if (file_clipboard_cut && done == total && removed == total)
+    int was_cut = file_clipboard_cut;
+    if (was_cut && done == total && removed == total)
     {
         file_clipboard_count = 0U;
         file_clipboard_cut = 0;
     }
     (void)load_directory();
-    if (done == total && (!file_clipboard_cut || removed == total))
-        set_status(file_clipboard_cut ? "Move completed" : "Paste completed", COLOR_ACCENT);
+    if (done == total && (!was_cut || removed == total))
+        set_status(was_cut ? "Move completed" : "Paste completed", COLOR_ACCENT);
     else if (done > 0U)
         set_status("Partial paste; existing names are not overwritten", COLOR_ERROR);
     else

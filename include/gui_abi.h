@@ -6,7 +6,7 @@
 /* VantaOS-specific ring-3 GUI ABI. This is not a Win32/Wayland ABI. */
 #define VANTA_GUI_ABI_VERSION 1U
 #define VANTA_GUI_MAX_WINDOWS 8U
-#define VANTA_GUI_MAX_COMMANDS 160U
+#define VANTA_GUI_MAX_COMMANDS 128U
 #define VANTA_GUI_TITLE_MAX 31U
 #define VANTA_GUI_TEXT_MAX 63U
 

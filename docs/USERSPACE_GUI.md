@@ -2,16 +2,16 @@
 
 ## Current state
 
-VantaOS has an initial user-mode GUI boundary and one standalone user-mode desktop application. The current ABI is version 4 and is specific to VantaOS; it is not POSIX, Win32, or Wayland compatible.
+VantaOS has an initial user-mode GUI boundary and one standalone user-mode desktop application. The current syscall ABI is version 5 and is specific to VantaOS; it is not POSIX, Win32, or Wayland compatible.
 
 - Static ELF64 `ET_EXEC` programs can be loaded from FAT32 and run at CPL3 (ring 3) in a private address space.
 - The public freestanding header `userspace/include/vanta/syscall.h` exposes the current syscall wrappers; GUI structures live in `userspace/include/vanta/gui.h`.
 - The ring-3 GUI smoke program creates a window, submits draw commands, and exercises invalid pointers and malformed commands. CI requires `VANTAOS_USER_GUI_SYSCALL_OK`.
 - The kernel owns framebuffer access, window registry, z-order, window chrome, event routing, and presentation. Applications never receive a raw kernel framebuffer pointer.
 - Windows are process-owned. Dead-owner cleanup is tested and required by CI through `VANTAOS_GUI_DEAD_OWNER_CLEANUP_OK`.
-- **Settings runs as a ring-3 ELF** at `/SYSTEM/SETTINGS.ELF`. It creates its own GUI window, lets users select Blue/Teal accent and compact-row preferences, and saves them to `/SYSTEM/VANTASET.CFG`. Its configuration has a simple versioned text header (`VANTA_SETTINGS=1`), and CI checks storage readback and persistence across a second boot.
-- Settings preferences currently affect that application only. They are not a global desktop theme service, and Settings does not yet provide timezone-aware local time.
-- Terminal's shell is a ring-3 executable at `/TERMINAL.ELF`, but its visible window and text rendering remain kernel-side. File Explorer also remains kernel-rendered.
+- **Settings runs as a ring-3 ELF** at `/SYSTEM/SETTINGS.ELF`. It creates its own GUI window, provides four accent colors (Blue, Teal, Amber, Violet), light/dark appearance, compact/comfortable Explorer rows, a larger Settings label size, and high-contrast mode. It saves version 2 preferences to `/SYSTEM/VANTASET.CFG`, accepts existing version 1 files, and CI checks storage readback and persistence across a second boot.
+- Accent, light/dark surfaces, contrast, and Explorer row density are applied to the desktop when saved; the text-size option currently changes the Settings controls only. The settings-apply syscall reloads the validated on-disk config without restarting. Settings does not yet provide timezone-aware local time.
+- Terminal's shell, window, text rendering, input editing, and scrollback now run in the ring-3 `/TERMINAL.ELF` app using the bounded GUI ABI. File Explorer remains kernel-rendered.
 
 ## Current GUI ABI
 
@@ -46,6 +46,6 @@ The Settings UI must not label an RTC value as local time unless its policy is e
 3. Migrate File Explorer to ring 3 using directory listing and file APIs; keep launch restricted to validated executable formats.
 4. Move Terminal's visible window, drawing, and input onto the same GUI ABI while retaining its shell logic in ring 3.
 5. Implement RTC UTC/local policy and timezone-rule conversion before exposing region-based local time as functional.
-6. Expand the Settings app only when its backing APIs, validation, and regression coverage exist; a UI control alone is not evidence of a working system feature.
+6. Expand Settings only when each preference has validated persistence, a real effect, and regression coverage; a UI control alone is not evidence of a working system feature.
 
 A control is functional only when its backing API, input path, persistence semantics (where relevant), and regression test exist.

@@ -14,6 +14,7 @@ int gui_server_submit_draw(uint32_t pid, uint32_t id,
 int gui_server_poll_event(uint32_t pid, uint32_t id,
                           vanta_gui_event_t* event_out);
 int gui_server_set_owner_visible(uint32_t pid, int visible);
+void gui_server_notify_theme_changed(void);
 void gui_server_draw_windows(void);
 int gui_server_mouse_click(int x, int y, int button);
 void gui_server_mouse_move(int x, int y);

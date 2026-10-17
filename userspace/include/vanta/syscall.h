@@ -151,7 +151,7 @@ typedef struct
     uint32_t size;
     uint32_t first_cluster;
     uint32_t reserved;
-    char name[128];
+    char name[256];
 } vanta_file_info_t;
 
 static inline long vanta_create_directory(const char* path)

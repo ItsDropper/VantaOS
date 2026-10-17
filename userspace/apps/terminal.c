@@ -328,7 +328,7 @@ static void command_kernel(const char* command)
     /* The legacy kernel shell prints its own prompt; the GUI terminal owns
        the visible prompt, so suppress that final prompt character. */
     if (length > 0U && kernel_output[length - 1U] == '>')
-        kernel_output[length - 1U] = '\0';
+        kernel_output[--length] = '\0';
     write_text(kernel_output);
     if (length == 0U || kernel_output[length - 1U] != '\n')
         write_text("\n");

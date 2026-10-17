@@ -118,7 +118,7 @@ def main():
         udp_payload = b"VANTAOS-UDP"
         udp = bytearray(struct.pack("!HHHH", 53000, 4242, 8 + len(udp_payload), 0) + udp_payload)
         pseudo = host_ip + guest_ip + struct.pack("!BBH", 0, 17, len(udp))
-        udp_checksum = checksum(pseudo + udp)
+        udp_checksum = checksum(pseudo + bytes(udp))
         if udp_checksum == 0:
             udp_checksum = 0xFFFF
         struct.pack_into("!H", udp, 6, udp_checksum)

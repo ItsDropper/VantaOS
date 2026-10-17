@@ -56,14 +56,15 @@ block_device_t* block_device_find(const char* n) {
 }
 static block_status_t begin_io(block_device_t* d,uint64_t lba,uint32_t n,const void* b) {
  if(!d||!b||!n)return BLOCK_STATUS_INVALID;
- if(!__atomic_load_n(&d->online,__ATOMIC_ACQUIRE))return BLOCK_STATUS_NOT_READY;
- if(lba>=d->sector_count||(uint64_t)n>d->sector_count-lba)return BLOCK_STATUS_OUT_OF_RANGE;
- __atomic_add_fetch(&d->active_operations,1U,__ATOMIC_ACQ_REL);
+ uint64_t f=spinlock_lock_irqsave(&registry_lock);
  if(!__atomic_load_n(&d->online,__ATOMIC_ACQUIRE)) {
-  __atomic_sub_fetch(&d->active_operations,1U,__ATOMIC_RELEASE);
-  return BLOCK_STATUS_NOT_READY;
+  spinlock_unlock_irqrestore(&registry_lock,f);return BLOCK_STATUS_NOT_READY;
  }
- return BLOCK_STATUS_OK;
+ if(lba>=d->sector_count||(uint64_t)n>d->sector_count-lba) {
+  spinlock_unlock_irqrestore(&registry_lock,f);return BLOCK_STATUS_OUT_OF_RANGE;
+ }
+ __atomic_add_fetch(&d->active_operations,1U,__ATOMIC_ACQ_REL);
+ spinlock_unlock_irqrestore(&registry_lock,f);return BLOCK_STATUS_OK;
 }
 static void end_io(block_device_t* d) {
  __atomic_sub_fetch(&d->active_operations,1U,__ATOMIC_RELEASE);
@@ -81,12 +82,12 @@ block_status_t block_device_write(block_device_t* d,uint64_t lba,uint32_t n,cons
 }
 block_status_t block_device_flush(block_device_t* d) {
  if(!d)return BLOCK_STATUS_INVALID;
- if(!__atomic_load_n(&d->online,__ATOMIC_ACQUIRE))return BLOCK_STATUS_NOT_READY;
- __atomic_add_fetch(&d->active_operations,1U,__ATOMIC_ACQ_REL);
+ uint64_t f=spinlock_lock_irqsave(&registry_lock);
  if(!__atomic_load_n(&d->online,__ATOMIC_ACQUIRE)) {
-  __atomic_sub_fetch(&d->active_operations,1U,__ATOMIC_RELEASE);
-  return BLOCK_STATUS_NOT_READY;
+  spinlock_unlock_irqrestore(&registry_lock,f);return BLOCK_STATUS_NOT_READY;
  }
+ __atomic_add_fetch(&d->active_operations,1U,__ATOMIC_ACQ_REL);
+ spinlock_unlock_irqrestore(&registry_lock,f);
  block_status_t s=(!d->ops||!d->ops->flush)?BLOCK_STATUS_UNSUPPORTED:d->ops->flush(d);
- end_io(d); return s;
+ end_io(d);return s;
 }

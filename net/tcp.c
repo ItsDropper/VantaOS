@@ -129,13 +129,14 @@ static int emit_segment(net_device_t *device, uint32_t destination,
     size_t header_length = (flags & TCP_FLAG_SYN) ? TCP_SYN_HEADER_SIZE : TCP_HEADER_SIZE;
     size_t length = header_length + payload_length;
     uint8_t segment[NET_MTU_DEFAULT];
-    for (size_t i = 0; i < sizeof(segment); ++i) segment[i] = 0U;
     put16(segment, source_port);
     put16(segment + 2U, destination_port);
     put32(segment + 4U, sequence);
     put32(segment + 8U, acknowledgement);
     segment[12] = (uint8_t)((header_length / 4U) << 4);
     segment[13] = flags;
+    segment[16] = 0U; segment[17] = 0U;
+    segment[18] = 0U; segment[19] = 0U;
     put16(segment + 14U, (uint16_t)(NET_TCP_RX_CAPACITY -
         (client.rx_used < NET_TCP_RX_CAPACITY ? client.rx_used : NET_TCP_RX_CAPACITY)));
     if (header_length == TCP_SYN_HEADER_SIZE) {

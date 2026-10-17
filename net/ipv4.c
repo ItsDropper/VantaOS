@@ -189,9 +189,9 @@ int net_ipv4_ping(net_device_t* device, uint32_t destination,
         packet[8U + i] = marker[i];
     write_be16(packet + 2U, checksum(packet, sizeof(packet)));
 
-    uint32_t start = timer_get_ticks();
     int sent = net_ipv4_send(device, destination, IPV4_PROTOCOL_ICMP,
                              packet, sizeof(packet));
+    uint32_t start = timer_get_ticks();
     uint32_t limit = timeout_ms / 10U;
     while (sent && (uint32_t)(timer_get_ticks() - start) < limit) {
         (void)net_poll(16U);

@@ -1,8 +1,8 @@
 #include "fat32.h"
 #include "fat32_lfn.h"
 #include "block_device.h"
-#ifdef VANTAOS_SELF_TEST
 #include "serial.h"
+#ifdef VANTAOS_SELF_TEST
 #define FAT32_RENAME_DIAG(message) serial_write(message "\n")
 #else
 #define FAT32_RENAME_DIAG(message) ((void)0)
@@ -441,9 +441,7 @@ void fat32_initialize(void)
         {
             mounted = 0;
             active_device = 0;
-#ifdef VANTAOS_SELF_TEST
             serial_write("VANTAOS_FAT32_AMBIGUOUS_DEVICES\n");
-#endif
             return;
         }
         selected = candidate;
@@ -453,9 +451,7 @@ void fat32_initialize(void)
     {
         mounted = 0;
         active_device = 0;
-#ifdef VANTAOS_SELF_TEST
         serial_write("VANTAOS_FAT32_NO_USABLE_VOLUME\n");
-#endif
         return;
     }
 
@@ -465,9 +461,7 @@ void fat32_initialize(void)
     {
         mounted = 0;
         active_device = 0;
-#ifdef VANTAOS_SELF_TEST
         serial_write("VANTAOS_FAT32_SELECTED_VOLUME_MOUNT_FAIL\n");
-#endif
         return;
     }
 #ifdef VANTAOS_SELF_TEST

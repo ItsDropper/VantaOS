@@ -11,7 +11,7 @@ EFI_LDSCRIPT := $(firstword $(wildcard $(EFI_LIBDIR)/elf_x86_64_efi.lds /usr/lib
 
 CFLAGS   := -m64 -march=x86-64 -mtune=generic -ffreestanding -fno-pie \
             -fno-stack-protector -mno-red-zone -mgeneral-regs-only \
-            -nostdlib -Iinclude -Ithird_party/bearssl/inc -MMD -MP
+            -nostdlib -Iinclude -Ithird_party/bearssl/inc -Ithird_party/bearssl/src -MMD -MP
 ASFLAGS  := -f elf64
 LDFLAGS  := -m elf_x86_64 --no-warn-rwx-segments -T build/linker.ld
 

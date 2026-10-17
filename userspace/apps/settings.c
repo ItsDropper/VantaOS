@@ -2,8 +2,8 @@
 
 #define SETTINGS_PATH "/SYSTEM/VANTASET.CFG"
 #define CONFIG_CAPACITY 256U
-#define WINDOW_WIDTH 560U
-#define WINDOW_HEIGHT 440U
+#define WINDOW_WIDTH 620U
+#define WINDOW_HEIGHT 470U
 #define SETTING_COUNT 5U
 
 #define COLOR_TEXT 0x00F1F5F9U
@@ -31,6 +31,7 @@ static int compact_rows;
 static int text_scale;
 static int high_contrast;
 static uint32_t selected_setting;
+static uint32_t selected_page;
 static int running = 1;
 static char status_buffer[64] = "Defaults loaded; save to keep changes";
 static uint32_t status_color;
@@ -314,36 +315,84 @@ static void render(void)
     uint32_t accent_value = accent_color();
 
     add_text(16, 10, "Settings", text);
-    add_text(16, 30, "Customize desktop appearance and Settings text.", muted);
+    add_text(16, 30, "Personalize how VantaOS looks and feels.", muted);
 
-    const int row_y[SETTING_COUNT] = { 58, 104, 150, 196, 242 };
-    const char* labels[SETTING_COUNT] = {
-        "Accent color", "Appearance", "Row density",
-        "Text size", "High contrast"
-    };
-    const char* values[SETTING_COUNT] = {
-        0, light_theme ? "Light" : "Dark",
-        compact_rows ? "Compact" : "Comfortable",
-        text_scale == 2 ? "Large" : "Normal",
-        high_contrast ? "On" : "Off"
-    };
-    for (uint32_t i = 0U; i < SETTING_COUNT; i++)
+    /* Persistent navigation keeps the three settings areas easy to scan. */
+    add_rect(12, 56, 148, 294, surface);
+    add_text(24, 66, "CATEGORIES", muted);
+    const int nav_y[3] = { 88, 132, 176 };
+    const char* nav_labels[3] = { "Appearance", "Accessibility", "About" };
+    for (uint32_t i = 0U; i < 3U; i++)
     {
-        int y = row_y[i];
-        add_rect(12, y, 520, 38,
-                 selected_setting == i ? selected : surface);
-        add_text_scaled(24, y + 10, labels[i], text,
-                        (uint32_t)text_scale);
-        add_text(360, y + 10, i == 0U ? accent_name() : values[i],
-                 i == 0U ? accent_value : muted);
+        if (selected_page == i)
+            add_rect(18, nav_y[i], 136, 36, selected);
+        if (selected_page == i)
+            add_rect(18, nav_y[i], 3, 36, accent_value);
+        add_text(28, nav_y[i] + 10, nav_labels[i],
+                 selected_page == i ? text : muted);
     }
 
-    add_rect(12, 296, 180, 38, accent_value);
-    add_text(28, 307, "Save settings", 0x00FFFFFFU);
-    add_rect(204, 296, 180, 38, surface);
-    add_text(220, 307, "Reset defaults", text);
-    add_text(16, 346, status_buffer, status_color);
-    add_text(16, 366, "Click a row; use 1-5, S to save, R to reset, Q to close.", muted);
+    add_rect(172, 56, 436, 294, surface);
+    if (selected_page == 0U)
+    {
+        add_text(190, 68, "Appearance", text);
+        add_text(190, 88, "Set your desktop's visual defaults.", muted);
+        const int row_y[3] = { 116, 172, 228 };
+        const char* labels[3] = { "Accent color", "Color theme", "Explorer row density" };
+        const char* values[3] = {
+            accent_name(), light_theme ? "Light" : "Dark",
+            compact_rows ? "Compact" : "Comfortable"
+        };
+        for (uint32_t i = 0U; i < 3U; i++)
+        {
+            uint32_t setting = i;
+            add_rect(184, row_y[i], 412, 44,
+                     selected_setting == setting ? selected : color_surface());
+            add_text(196, row_y[i] + 7, labels[i], text);
+            add_text(196, row_y[i] + 25, "Select to cycle option", muted);
+            add_text(464, row_y[i] + 15, values[i],
+                     setting == 0U ? accent_value : text);
+        }
+    }
+    else if (selected_page == 1U)
+    {
+        add_text(190, 68, "Accessibility", text);
+        add_text(190, 88, "Improve legibility in Settings.", muted);
+        const int row_y[2] = { 116, 172 };
+        const char* labels[2] = { "Settings text size", "High contrast" };
+        const char* values[2] = {
+            text_scale == 2 ? "Large" : "Normal",
+            high_contrast ? "On" : "Off"
+        };
+        for (uint32_t i = 0U; i < 2U; i++)
+        {
+            uint32_t setting = i + 3U;
+            add_rect(184, row_y[i], 412, 44,
+                     selected_setting == setting ? selected : color_surface());
+            add_text(196, row_y[i] + 7, labels[i], text);
+            add_text(196, row_y[i] + 25, "Select to toggle option", muted);
+            add_text(500, row_y[i] + 15, values[i], text);
+        }
+        add_text(190, 236, "Text size currently affects Settings only.", muted);
+    }
+    else
+    {
+        add_text(190, 68, "About Settings", text);
+        add_text(190, 98, "VantaOS Settings", accent_value);
+        add_text(190, 124, "Standalone ring-3 application", text);
+        add_text(190, 150, "Preferences are stored in:", muted);
+        add_text(190, 172, "/SYSTEM/VANTASET.CFG", text);
+        add_text(190, 206, "Theme changes are applied when saved.", muted);
+        add_text(190, 230, "System time and timezone are not configurable yet.", muted);
+        add_text(190, 254, "This build does not claim unsupported features.", muted);
+    }
+
+    add_rect(172, 365, 202, 38, accent_value);
+    add_text(190, 377, "Save changes", 0x00FFFFFFU);
+    add_rect(384, 365, 224, 38, color_selected());
+    add_text(402, 377, "Restore defaults", text);
+    add_text(16, 414, status_buffer, status_color);
+    add_text(16, 436, "Click a category or setting; S saves, R resets, Q closes.", muted);
     (void)vanta_gui_draw(window_id, commands, command_count);
 }
 
@@ -359,6 +408,7 @@ static void cycle_setting(uint32_t setting)
     if (setting >= SETTING_COUNT)
         return;
     selected_setting = setting;
+    selected_page = setting < 3U ? 0U : 1U;
     if (setting == 0U)
         accent = (accent + 1U) % 4U;
     else if (setting == 1U)
@@ -427,6 +477,12 @@ int main(int argc, char** argv)
                 close_app();
             else if (key >= '1' && key <= '5')
                 cycle_setting(key - '1');
+            else if (key == 'a' || key == 'A')
+                selected_page = 0U;
+            else if (key == 'c' || key == 'C')
+                selected_page = 1U;
+            else if (key == 'i' || key == 'I')
+                selected_page = 2U;
             else if (key == 's' || key == 'S')
                 save_and_report();
             else if (key == 'r' || key == 'R')
@@ -434,32 +490,76 @@ int main(int argc, char** argv)
                 reset_defaults();
                 set_status("Defaults restored; save to keep them", color_muted());
             }
-            else if (key == VANTA_GUI_KEY_UP)
-                selected_setting = selected_setting == 0U ?
-                    SETTING_COUNT - 1U : selected_setting - 1U;
-            else if (key == VANTA_GUI_KEY_DOWN)
-                selected_setting = (selected_setting + 1U) % SETTING_COUNT;
+            else if (key == VANTA_GUI_KEY_UP || key == VANTA_GUI_KEY_DOWN)
+            {
+                if (selected_page == 0U)
+                {
+                    if (key == VANTA_GUI_KEY_UP)
+                        selected_setting = selected_setting == 0U ||
+                            selected_setting > 2U ? 2U : selected_setting - 1U;
+                    else
+                        selected_setting = selected_setting >= 2U ? 0U :
+                            selected_setting + 1U;
+                }
+                else if (selected_page == 1U)
+                {
+                    if (key == VANTA_GUI_KEY_UP)
+                        selected_setting = selected_setting <= 3U ? 4U : 3U;
+                    else
+                        selected_setting = selected_setting >= 4U ||
+                            selected_setting < 3U ? 3U : 4U;
+                }
+            }
             else if (key == '\r' || key == '\n' || key == ' ')
-                cycle_setting(selected_setting);
+            {
+                if (selected_page == 2U)
+                    selected_page = 0U;
+                else if ((selected_page == 0U && selected_setting < 3U) ||
+                         (selected_page == 1U && selected_setting >= 3U))
+                    cycle_setting(selected_setting);
+                else
+                    selected_setting = selected_page == 0U ? 0U : 3U;
+            }
             render();
         }
         else if (event.type == VANTA_GUI_EVENT_POINTER_DOWN)
         {
-            if (event.x >= 12 && event.x < 532)
+            if (event.x >= 18 && event.x < 154)
             {
-                const int row_y[SETTING_COUNT] = { 58, 104, 150, 196, 242 };
-                for (uint32_t i = 0U; i < SETTING_COUNT; i++)
-                    if (event.y >= row_y[i] && event.y < row_y[i] + 38)
+                if (event.y >= 88 && event.y < 124)
+                    selected_page = 0U;
+                else if (event.y >= 132 && event.y < 168)
+                    selected_page = 1U;
+                else if (event.y >= 176 && event.y < 212)
+                    selected_page = 2U;
+            }
+
+            if (event.x >= 184 && event.x < 596 && selected_page == 0U)
+            {
+                const int row_y[3] = { 116, 172, 228 };
+                for (uint32_t i = 0U; i < 3U; i++)
+                    if (event.y >= row_y[i] && event.y < row_y[i] + 44)
                     {
                         cycle_setting(i);
                         break;
                     }
             }
-            if (event.x >= 12 && event.x < 192 &&
-                event.y >= 296 && event.y < 334)
+            else if (event.x >= 184 && event.x < 596 && selected_page == 1U)
+            {
+                const int row_y[2] = { 116, 172 };
+                for (uint32_t i = 0U; i < 2U; i++)
+                    if (event.y >= row_y[i] && event.y < row_y[i] + 44)
+                    {
+                        cycle_setting(i + 3U);
+                        break;
+                    }
+            }
+
+            if (event.x >= 172 && event.x < 374 &&
+                event.y >= 365 && event.y < 403)
                 save_and_report();
-            else if (event.x >= 204 && event.x < 384 &&
-                     event.y >= 296 && event.y < 334)
+            else if (event.x >= 384 && event.x < 608 &&
+                     event.y >= 365 && event.y < 403)
             {
                 reset_defaults();
                 set_status("Defaults restored; save to keep them", color_muted());

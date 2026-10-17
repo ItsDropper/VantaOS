@@ -1512,7 +1512,7 @@ static void explorer_e2e_fail(void)
         if (!(condition)) { \
             static const char marker[] = \
                 "VANTAOS_EXPLORER_E2E_FAIL line=" \
-                EXPLORER_E2E_STRINGIFY(__LINE__) "\\n"; \
+                EXPLORER_E2E_STRINGIFY(__LINE__) "\n"; \
             (void)vanta_write(marker, sizeof(marker) - 1U); \
             vanta_exit(1); \
         } \

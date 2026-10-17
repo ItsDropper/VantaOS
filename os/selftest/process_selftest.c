@@ -394,17 +394,6 @@ static int gui_expect_event(uint32_t pid, uint32_t window_id,
            event.type == expected_type;
 }
 
-static int gui_drain_events(uint32_t pid, uint32_t window_id)
-{
-    vanta_gui_event_t event;
-    int result;
-    do
-    {
-        result = gui_server_poll_event(pid, window_id, &event);
-    } while (result == 1);
-    return result == 0;
-}
-
 static void gui_focus_input_regression_probe(void)
 {
     if (!graphics_is_initialized() ||

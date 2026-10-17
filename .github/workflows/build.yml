@@ -131,6 +131,11 @@ jobs:
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_tcp_client.c net/tcp.c -o /tmp/vantaos-tcp-client-test
           /tmp/vantaos-tcp-client-test
 
+      - name: Test Wi-Fi control API validation and state transitions
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_wifi_api.c net/wifi.c -o /tmp/vantaos-wifi-api-test
+          /tmp/vantaos-wifi-api-test
+
       - name: Build kernel, ISO, and FAT32 image with self-tests
         run: chmod +x build.sh && VANTAOS_SELF_TEST=1 ./build.sh
 

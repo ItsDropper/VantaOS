@@ -30,6 +30,7 @@ typedef struct {
 } tcp_client_t;
 
 static tcp_client_t client;
+static uint32_t next_local_port = 49152U;
 
 static void reset_client(void)
 {
@@ -290,7 +291,8 @@ int net_tcp_connect(net_device_t *device, uint32_t destination,
     client.device = device;
     client.remote_ip = destination;
     client.remote_port = destination_port;
-    client.local_port = (uint16_t)(49152U + (timer_get_ticks() % 16384U));
+    client.local_port = (uint16_t)next_local_port++;
+    if (next_local_port > 65535U) next_local_port = 49152U;
     client.peer_mss = TCP_MAX_MSS;
     uint32_t initial = (timer_get_ticks() * 1103515245U) ^
                        destination ^ ((uint32_t)destination_port << 16);

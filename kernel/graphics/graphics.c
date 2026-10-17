@@ -81,6 +81,7 @@ static uint32_t graphics_backbuffer_width;
 static uint32_t graphics_backbuffer_height;
 static int graphics_backbuffer_valid;
 static int graphics_frame_active;
+static int graphics_scene_invalidated = 1;
 /* A persistent shadow buffer plus a damage bitmap avoids flashing the whole
  * display for small UI changes. Tiles are copied to the scanout buffer only
  * when rendering actually changed their pixels. */

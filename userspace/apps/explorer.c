@@ -7,7 +7,7 @@
 #define DISPLAY_ROWS 12U
 #define PREVIEW_ROWS 12U
 #define WINDOW_WIDTH 760U
-#define WINDOW_HEIGHT 520U
+#define WINDOW_HEIGHT 460U
 
 #define COLOR_TEXT 0x00E8EDF4U
 #define COLOR_MUTED 0x008D9BACU
@@ -352,12 +352,12 @@ static void render(void)
 
     add_text(16, 62, "Up     Home     Refresh", COLOR_ACCENT);
 
-    add_rect(8, 88, 720, 288, 0x000F151EU);
+    add_rect(8, 88, 720, 250, 0x000F151EU);
     if (preview_active)
     {
         for (size_t i = 0U; i < preview_count && i < PREVIEW_ROWS; i++)
             if (preview_lines[i][0])
-                add_text(16, 96 + (int32_t)i * 22,
+                add_text(16, 96 + (int32_t)i * 20,
                          preview_lines[i], COLOR_TEXT);
     }
     else
@@ -379,16 +379,16 @@ static void render(void)
             if (entry_is_directory[i])
                 label[used++] = '/';
             label[used] = '\0';
-            add_text(16, 96 + (int32_t)(i - first_visible) * 23, label,
+            add_text(16, 96 + (int32_t)(i - first_visible) * 20, label,
                      entry_is_directory[i] ? COLOR_ACCENT : COLOR_TEXT);
         }
         if (entry_count == 0U)
             add_text(16, 100, "(empty directory)", COLOR_MUTED);
     }
 
-    add_rect(8, 384, 720, 1, COLOR_BORDER);
-    add_text(16, 396, status_text, status_color);
-    add_text(16, 420, "Arrows select | Enter open | Backspace up | H home | R refresh",
+    add_rect(8, 344, 720, 1, COLOR_BORDER);
+    add_text(16, 350, status_text, status_color);
+    add_text(16, 374, "Arrows select | Enter open | Backspace up | H home | R refresh",
              COLOR_MUTED);
     (void)vanta_gui_draw(window_id, commands, command_count);
 }
@@ -518,7 +518,7 @@ int main(int argc, char** argv)
             }
             else if (!preview_active && event.y >= 92 && event.y < 364)
             {
-                size_t row = (size_t)(event.y - 92) / 23U;
+                size_t row = (size_t)(event.y - 92) / 20U;
                 size_t index = first_visible + row;
                 if (row < DISPLAY_ROWS && index < entry_count)
                 {

@@ -491,7 +491,7 @@ int filesystem_create_directory(const char* path)
         return -1;
     int parent_id = filesystem_lookup(parent_path);
     if (parent_id < 0 ||
-        !fat32_create_directory(path))
+        fat32_create_directory(path) < 0)
         return -1;
     fat32_dirent_t disk_entry;
     if (!fs_find_disk_child((uint32_t)parent_id, leaf, &disk_entry))

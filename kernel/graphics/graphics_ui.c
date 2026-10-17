@@ -201,6 +201,13 @@ void graphics_draw_taskbar(int taskbar_y, int width)
     graphics_draw_text(clock_x + 15, taskbar_y + 17, clock, VANTA_UI_TEXT, 1);
     graphics_draw_text(clock_x + 15, taskbar_y + 34, date, VANTA_UI_TEXT_SECONDARY, 1);
 }
+void graphics_draw_start_menu_overlay(void)
+{
+    if (initialized && start_menu_open)
+        graphics_draw_start_menu_detail((int)framebuffer_width,
+                                        (int)framebuffer_height);
+}
+
 void graphics_present(void)
 {
     if (!initialized)
@@ -238,10 +245,6 @@ void graphics_present(void)
     }
 
     graphics_draw_taskbar(taskbar_y, w);
-
-    /* The Start surface is an overlay and must remain visible over every app. */
-    if (start_menu_open)
-        graphics_draw_start_menu_detail(w, h);
 
     if (active_panel == 3)
         return;

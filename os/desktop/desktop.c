@@ -29,6 +29,7 @@ static void desktop_gui_present(void)
     graphics_present();
 
     gui_server_draw_windows();
+    graphics_draw_start_menu_overlay();
     graphics_draw_cursor();
     graphics_end_frame();
 }

@@ -973,43 +973,265 @@ static int fat32_write_entry(uint32_t lba, uint32_t offset,
     return fat32_write_sector(lba, sector_buffer);
 }
 
-static int fat32_reserve_slot(fat32_slot_t* entry,
-                              uint32_t* lba, uint32_t* offset)
+static int fat32_reserve_named_slots(uint32_t directory, unsigned int needed,
+                                       uint32_t lbas[21], uint32_t offsets[21])
 {
-    if (!entry || !lba || !offset)
+    if (needed == 0U || needed > 21U)
         return 0;
-    if (entry->free_found)
+    uint32_t cluster = directory;
+    uint32_t last_cluster = directory;
+    uint32_t run = 0U;
+    int end_seen = 0;
+    for (uint32_t steps = 0; steps < cluster_count; steps++)
     {
-        *lba = entry->free_lba;
-        *offset = entry->free_offset;
-        return 1;
+        uint32_t base = cluster_lba(cluster);
+        if (base == FAT32_INVALID_LBA)
+            return 0;
+        last_cluster = cluster;
+        for (uint32_t sector = 0; sector < sectors_per_cluster; sector++)
+        {
+            uint32_t lba = base + sector;
+            if (!read_sector(lba, sector_buffer))
+                return 0;
+            for (uint32_t offset = 0; offset < 512U; offset += 32U)
+            {
+                const uint8_t* entry = &sector_buffer[offset];
+                if (entry[0] == 0U)
+                    end_seen = 1;
+                int free_slot = end_seen || entry[0] == 0xE5U;
+                if (free_slot)
+                {
+                    if (run < needed)
+                    {
+                        if (run == 0U)
+                        {
+                            lbas[0] = lba;
+                            offsets[0] = offset;
+                        }
+                        else
+                        {
+                            lbas[run] = lba;
+                            offsets[run] = offset;
+                        }
+                    }
+                    run++;
+                    if (run >= needed)
+                        return 1;
+                }
+                else
+                    run = 0U;
+            }
+        }
+        uint32_t next;
+        if (!fat32_raw_entry(cluster, &next))
+            return 0;
+        if (next >= FAT32_EOC_MIN)
+        {
+            uint32_t allocated = fat32_allocate_one();
+            if (!allocated || !fat32_set_raw_entry(last_cluster, allocated))
+            {
+                if (allocated) fat32_release_chain(allocated);
+                return 0;
+            }
+            cluster = allocated;
+            end_seen = 1;
+        }
+        else if (next == FAT32_BAD_CLUSTER || next < 2U ||
+                 next > cluster_count + 1U)
+            return 0;
+        else
+            cluster = next;
     }
-    uint32_t new_cluster = fat32_allocate_one();
-    if (!new_cluster)
+    return 0;
+}
+
+static int fat32_leaf_name(const char* path, char name[256])
+{
+    if (!path || !name)
         return 0;
-    if (!fat32_set_raw_entry(entry->last_cluster, new_cluster))
+    unsigned int length = 0U;
+    while (path[length]) length++;
+    while (length > 0U && path[length - 1U] == '/') length--;
+    unsigned int start = length;
+    while (start > 0U && path[start - 1U] != '/') start--;
+    unsigned int leaf_length = length - start;
+    if (leaf_length == 0U || leaf_length > 255U)
+        return 0;
+    for (unsigned int i = 0; i < leaf_length; i++)
     {
-        fat32_release_chain(new_cluster);
-        return 0;
+        unsigned char ch = (unsigned char)path[start + i];
+        if (ch < 32U || ch >= 127U || ch == ':' || ch == '*' ||
+            ch == '?' || ch == '"' || ch == '<' || ch == '>' || ch == '|')
+            return 0;
+        name[i] = (char)ch;
     }
-    *lba = cluster_lba(new_cluster);
-    *offset = 0U;
-    return *lba != FAT32_INVALID_LBA;
+    name[leaf_length] = 0;
+    return 1;
+}
+
+static int fat32_name_matches_alias(const char* name, const uint8_t alias[11])
+{
+    char display[13];
+    unsigned int used = 0U;
+    unsigned int base_end = 8U;
+    while (base_end > 0U && alias[base_end - 1U] == ' ') base_end--;
+    for (unsigned int i = 0; i < base_end; i++) display[used++] = (char)alias[i];
+    unsigned int ext_end = 11U;
+    while (ext_end > 8U && alias[ext_end - 1U] == ' ') ext_end--;
+    if (ext_end > 8U)
+    {
+        display[used++] = '.';
+        for (unsigned int i = 8U; i < ext_end; i++) display[used++] = (char)alias[i];
+    }
+    display[used] = 0;
+    return fat32_names_equal(name, display);
+}
+
+static int fat32_write_lfn_entry(uint32_t lba, uint32_t offset,
+                                 const uint16_t chars[260], unsigned int ordinal,
+                                 unsigned int total, uint8_t checksum)
+{
+    static const uint8_t char_offsets[13] = {
+        1, 3, 5, 7, 9, 14, 16, 18, 20, 22, 24, 28, 30
+    };
+    if (offset > 480U || (offset & 31U) || ordinal == 0U ||
+        ordinal > total || total > 20U || !read_sector(lba, sector_buffer))
+        return 0;
+    uint8_t* entry = &sector_buffer[offset];
+    for (unsigned int i = 0; i < 32U; i++) entry[i] = 0U;
+    entry[0] = (uint8_t)(ordinal | (ordinal == total ? 0x40U : 0U));
+    entry[11] = 0x0FU;
+    entry[12] = 0U;
+    entry[13] = checksum;
+    entry[26] = entry[27] = 0U;
+    for (unsigned int i = 0; i < 13U; i++)
+    {
+        uint16_t ch = chars[(ordinal - 1U) * 13U + i];
+        entry[char_offsets[i]] = (uint8_t)ch;
+        entry[char_offsets[i] + 1U] = (uint8_t)(ch >> 8);
+    }
+    return fat32_write_sector(lba, sector_buffer);
+}
+
+static int fat32_write_named_entry(uint32_t parent, const char* name,
+                                   const uint8_t alias[11], uint8_t attributes,
+                                   uint32_t first_cluster, uint32_t size)
+{
+    unsigned int length = 0U;
+    while (name && name[length])
+    {
+        if (length >= 255U || (unsigned char)name[length] >= 127U)
+            return 0;
+        length++;
+    }
+    if (!name || length == 0U)
+        return 0;
+    int needs_lfn = !fat32_name_matches_alias(name, alias);
+    unsigned int lfn_count = needs_lfn ? (length + 12U) / 13U : 0U;
+    unsigned int slot_count = lfn_count + 1U;
+    uint32_t lbas[21], offsets[21];
+    if (!fat32_reserve_named_slots(parent, slot_count, lbas, offsets))
+        return 0;
+
+    if (needs_lfn)
+    {
+        uint16_t chars[260];
+        for (unsigned int i = 0; i < 260U; i++) chars[i] = 0xFFFFU;
+        for (unsigned int i = 0; i < length; i++) chars[i] = (uint8_t)name[i];
+        if (length < lfn_count * 13U) chars[length] = 0U;
+        uint8_t checksum = fat32_lfn_checksum(alias);
+        for (unsigned int physical = 0; physical < lfn_count; physical++)
+        {
+            unsigned int ordinal = lfn_count - physical;
+            if (!fat32_write_lfn_entry(lbas[physical], offsets[physical],
+                                       chars, ordinal, lfn_count, checksum))
+                return 0;
+        }
+    }
+    return fat32_write_entry(lbas[slot_count - 1U], offsets[slot_count - 1U],
+                            alias, attributes, first_cluster, size);
+}
+
+static int fat32_mark_slot_deleted(uint32_t lba, uint32_t offset)
+{
+    if (offset > 480U || (offset & 31U) || !read_sector(lba, sector_buffer))
+        return 0;
+    sector_buffer[offset] = 0xE5U;
+    return fat32_write_sector(lba, sector_buffer);
+}
+
+static int fat32_mark_entry_deleted(uint32_t directory, const fat32_slot_t* target)
+{
+    if (!target || !target->found)
+        return 0;
+    uint32_t cluster = directory;
+    uint32_t lfn_lbas[20], lfn_offsets[20];
+    unsigned int lfn_count = 0U;
+    fat32_lfn_state_t lfn;
+    fat32_lfn_reset(&lfn);
+    for (uint32_t steps = 0; steps < cluster_count; steps++)
+    {
+        uint32_t base = cluster_lba(cluster);
+        if (base == FAT32_INVALID_LBA) return 0;
+        for (uint32_t sector = 0; sector < sectors_per_cluster; sector++)
+        {
+            uint32_t lba = base + sector;
+            if (!read_sector(lba, sector_buffer)) return 0;
+            for (uint32_t offset = 0; offset < 512U; offset += 32U)
+            {
+                const uint8_t* entry = &sector_buffer[offset];
+                if (entry[0] == 0U) return 0;
+                if (entry[0] == 0xE5U)
+                {
+                    lfn_count = 0U;
+                    fat32_lfn_reset(&lfn);
+                    continue;
+                }
+                if (entry[11] == 0x0FU)
+                {
+                    if (lfn_count < 20U)
+                    {
+                        lfn_lbas[lfn_count] = lba;
+                        lfn_offsets[lfn_count] = offset;
+                        lfn_count++;
+                    }
+                    (void)fat32_lfn_consume(entry, &lfn);
+                    continue;
+                }
+                if (lba == target->entry_lba && offset == target->entry_offset)
+                {
+                    for (unsigned int i = 0; i < lfn_count; i++)
+                        if (!fat32_mark_slot_deleted(lfn_lbas[i], lfn_offsets[i]))
+                            return 0;
+                    return fat32_mark_slot_deleted(lba, offset);
+                }
+                lfn_count = 0U;
+                fat32_lfn_reset(&lfn);
+            }
+        }
+        uint32_t next;
+        if (!fat32_raw_entry(cluster, &next)) return 0;
+        if (next >= FAT32_EOC_MIN) return 0;
+        if (next == FAT32_BAD_CLUSTER || next < 2U ||
+            next > cluster_count + 1U) return 0;
+        cluster = next;
+        lfn_count = 0U;
+        fat32_lfn_reset(&lfn);
+    }
+    return 0;
 }
 
 int fat32_create_file(const char* path)
 {
     uint32_t parent;
     uint8_t leaf[11];
+    char name[256];
     fat32_slot_t entry;
     if (!fat32_parent_and_leaf(path, &parent, leaf) ||
+        !fat32_leaf_name(path, name) ||
         !fat32_find_entry(parent, leaf, &entry) || entry.found)
         return -1;
-
-    uint32_t lba, off;
-    if (!fat32_reserve_slot(&entry, &lba, &off))
-        return -1;
-    return fat32_write_entry(lba, off, leaf, 0x20U, 0U, 0U) ? 0 : -1;
+    return fat32_write_named_entry(parent, name, leaf, 0x20U, 0U, 0U) ? 0 : -1;
 }
 
 int fat32_create_directory(const char* path)

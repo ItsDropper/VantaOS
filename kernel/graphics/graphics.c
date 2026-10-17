@@ -1,3 +1,4 @@
+#include <stddef.h>
 #include "graphics_internal.h"
 
 uint8_t* framebuffer;

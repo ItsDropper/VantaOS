@@ -48,6 +48,11 @@ typedef struct {
 typedef struct {
     int (*start)(void);
     int (*scan)(void);
+    /*
+     * Called with a temporary passphrase copy. A driver that needs it after
+     * this callback returns must copy it into protected driver-owned storage
+     * and erase that copy as soon as association no longer needs it.
+     */
     int (*connect)(const uint8_t *ssid, size_t ssid_length,
                    const uint8_t *passphrase, size_t passphrase_length,
                    net_wifi_security_t security);

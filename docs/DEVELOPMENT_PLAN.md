@@ -65,7 +65,8 @@ This roadmap prioritizes a trustworthy kernel over visual features. A Windows al
 - [x] Exercise FAT32-backed executable loading using a disposable CI disk image.
 - [ ] Expand FAT32 read tests against disposable disk fixtures.
 - [x] Validate bounded FAT32 8.3 regular-file writes and VFS readback in disposable QEMU disk fixtures.
-- [x] Implement printable-ASCII long-filename writes, directory creation, rename/delete, and CI regression coverage on disposable FAT32 images.\n- [ ] Add Unicode LFN creation, cross-directory move, crash-safe replacement, concurrent mutation protection, and broader persistence/corruption tests.
+- [x] Implement printable-ASCII long-filename writes, directory creation, rename/delete, and CI regression coverage on disposable FAT32 images.
+- [ ] Add Unicode LFN creation, cross-directory move, crash-safe replacement, concurrent mutation protection, and broader persistence/corruption tests.
 - [ ] Add corruption-safe tests and consistent error propagation.
 
 ### M5.5 — User-space desktop application platform
@@ -76,8 +77,9 @@ This roadmap prioritizes a trustworthy kernel over visual features. A Windows al
 - [x] Implement bounded FAT32-backed regular-file create/write and user-mode write syscalls; verify the supported persistence path across a second boot.
 - [x] Expand GUI regression coverage for click routing, focus transitions, queue overflow, close requests, invalid event buffers, and owner hide/restore.
 - [x] Migrate Settings to a static ELF64 ring-3 app with versioned preferences, four accent colors, light/dark surfaces, compact Explorer rows, larger Settings labels, high contrast, immediate theme reload, and second-boot persistence.
-- [x] Migrate File Explorer to a ring-3 ELF with directory navigation, text preview, and validated ELF launch; mutating filesystem operations remain unsupported.
-- [ ] Move Terminal's window, input, and presentation onto the same GUI API while keeping its shell in ring 3.
+- [x] Migrate File Explorer to a ring-3 ELF with validated launch, long-name file/folder creation, rename/delete, search, properties, multi-selection, and Vanta RLE archive support.
+- [x] Move Terminal's window, input, and presentation onto the ring-3 GUI API while keeping its shell in ring 3.
+- [ ] Add automated end-to-end mouse/keyboard tests, Unicode filename creation, cross-directory move, and file copy/paste.
 - [ ] Implement RTC UTC/local policy and a timezone-rule service before claiming region-based local time or DST correctness.
 
 ### M6 — Daily-driver prototype

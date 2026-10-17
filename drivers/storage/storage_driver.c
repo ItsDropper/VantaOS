@@ -50,6 +50,7 @@ uint32_t storage_probe_pci_devices(void) {
    for(uint32_t j=0;j<drv->id_count;j++)if(matches(&drv->ids[j],dev)){match=1;break;}
    if(!match)continue;
    storage_probe_result_t result=drv->probe(dev);
+   if(result==STORAGE_PROBE_FAILED)break;
    if(result!=STORAGE_PROBE_BOUND)continue;
    f=spinlock_lock_irqsave(&lock);
    if(bindings_count<STORAGE_BINDING_MAX&&!is_bound(dev)) {

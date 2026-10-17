@@ -113,6 +113,37 @@ def main():
         assert checksum(icmp_reply) == 0, "Invalid ICMP reply checksum"
         assert echo_reply[12:16] == guest_ip and echo_reply[16:20] == host_ip
         assert icmp_reply[8:] == payload, "ICMP echo payload changed"
+
+        # Exercise IPv4/UDP receive dispatch with a non-zero pseudo-header checksum.
+        udp_payload = b"VANTAOS-UDP"
+        udp = bytearray(struct.pack("!HHHH", 53000, 4242, 8 + len(udp_payload), 0) + udp_payload)
+        pseudo = host_ip + guest_ip + struct.pack("!BBH", 0, 17, len(udp))
+        udp_checksum = checksum(pseudo + bytes(udp))
+        if udp_checksum == 0:
+            udp_checksum = 0xFFFF
+        struct.pack_into("!H", udp, 6, udp_checksum)
+        udp_ip = bytearray(20)
+        udp_ip[0] = 0x45
+        struct.pack_into("!H", udp_ip, 2, len(udp_ip) + len(udp))
+        struct.pack_into("!H", udp_ip, 4, 0x4322)
+        udp_ip[8] = 64
+        udp_ip[9] = 17
+        udp_ip[12:16] = host_ip
+        udp_ip[16:20] = guest_ip
+        struct.pack_into("!H", udp_ip, 10, checksum(udp_ip))
+        # A corrupt checksum and inconsistent UDP length must both be dropped.
+        bad_checksum = bytearray(udp)
+        bad_checksum[6] ^= 0x01
+        bad_frame = guest_mac + host_mac + struct.pack("!H", 0x0800) + bytes(udp_ip) + bytes(bad_checksum)
+        send_frame(connection, bad_frame.ljust(60, b"\x00"))
+
+        bad_length = bytearray(udp)
+        struct.pack_into("!H", bad_length, 4, len(bad_length) + 1)
+        bad_frame = guest_mac + host_mac + struct.pack("!H", 0x0800) + bytes(udp_ip) + bytes(bad_length)
+        send_frame(connection, bad_frame.ljust(60, b"\x00"))
+
+        udp_frame = guest_mac + host_mac + struct.pack("!H", 0x0800) + bytes(udp_ip) + bytes(udp)
+        send_frame(connection, udp_frame.ljust(60, b"\x00"))
     finally:
         connection.close()
 

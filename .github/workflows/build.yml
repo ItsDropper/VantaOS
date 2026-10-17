@@ -189,6 +189,44 @@ jobs:
           grep -q 'VANTAOS_SETTINGS_PERSIST_OK' boot-512m-2cpu.log
           grep -q 'VANTAOS_DESKTOP_THEME_CONFIG_OK' boot-512m-2cpu.log
 
+      - name: USB HID xHCI boot smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          log="usb-xhci-boot.log"
+          set +e
+          timeout 35s qemu-system-x86_64 \
+            -machine pc \
+            -smp 1 \
+            -m 256M \
+            -device qemu-xhci,id=xhci \
+            -device usb-kbd,bus=xhci.0 \
+            -device usb-mouse,bus=xhci.0 \
+            -drive file=VantaOS.iso,media=cdrom,format=raw \
+            -drive file=vantaos.img,if=ide,format=raw \
+            -boot order=d \
+            -display none \
+            -serial "file:${log}" \
+            -monitor none \
+            -no-reboot
+          result=$?
+          set -e
+
+          if [ "$result" -ne 124 ]; then
+            echo "USB xHCI QEMU boot exited before the smoke-test timeout (exit code $result)."
+            cat "$log" 2>/dev/null || true
+            exit 1
+          fi
+          sleep 1
+          for marker in VANTAOS_XHCI_CONTROLLER_ONLINE VANTAOS_USB_HID_KEYBOARD_ONLINE VANTAOS_USB_HID_MOUSE_ONLINE; do
+            if ! grep -q "$marker" "$log"; then
+              echo "Missing USB smoke-test marker '$marker'."
+              cat "$log" 2>/dev/null || true
+              exit 1
+            fi
+          done
+          echo "xHCI controller, USB HID keyboard, and USB HID mouse enumerated successfully."
+
       - name: Build the UEFI boot manager and EFI system image
         run: make uefi
 

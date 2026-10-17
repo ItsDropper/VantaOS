@@ -52,7 +52,7 @@ A net_pci_driver_t supplies a persistent name, PCI match IDs, and a probe callba
 
 The current E1000 driver targets PCI ID `8086:100E` (Intel 82540EM/QEMU `e1000`). It maps BAR0 through the shared MMIO allocator, resets the controller, validates the MAC address, allocates below-4-GiB DMA pages for descriptor rings and packet buffers, configures RX/TX rings, and enables PCI bus mastering only after descriptor memory is ready. TX copies into a DMA buffer and waits with a bounded timeout for descriptor completion. RX is polling-based: `net_poll()` invokes the driver poll callback, which moves completed descriptors into the bounded network RX queue. Device interrupts are masked; no IRQ routing is assumed.
 
-The QEMU regression test boots with a real emulated E1000 device, verifies transmit completion, injects an Ethernet frame through QEMU's TCP socket backend, checks an ARP request/reply, and sends an IPv4 ICMP echo request whose reply must have valid IPv4 and ICMP checksums. This validates the Ethernet TX/RX path plus a basic L2/L3 round trip.
+The QEMU regression test boots with a real emulated E1000 device, verifies transmit completion, injects Ethernet frames through QEMU's TCP socket backend, checks ARP and ICMP echo replies and their checksums, and delivers a valid UDP datagram to a registered port handler. It also injects UDP packets with a corrupt checksum and inconsistent length and asserts that they are rejected.
 
 ## Current limitations
 
@@ -63,7 +63,7 @@ DHCP, DNS, UDP transmit, TCP, routing, sockets, network syscalls, link event int
 ## Next sequence
 
 1. Add ARP cache aging and address resolution for outgoing IPv4 traffic.
-2. Implement UDP with strict length/checksum validation and bounded receive buffers.
-3. Add DHCP and DNS clients with packet-level QEMU regression tests.
+2. Implement IPv4 output, neighbor resolution, and a bounded ARP cache with expiry and retry limits.
+3. Add UDP transmit and bounded datagram queues, then DHCP and DNS clients with packet-level QEMU regression tests.
 4. Implement TCP with retransmission, timeout, congestion control, and buffer-ownership tests.
 5. Define socket syscalls only after protocol and buffer-lifetime contracts are tested.

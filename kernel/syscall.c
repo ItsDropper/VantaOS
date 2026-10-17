@@ -689,30 +689,13 @@ static int syscall_kernel_command(struct exception_frame* frame,
      * This is an explicit privileged bridge for the built-in Terminal only.
      * Other user processes cannot use it to run arbitrary kernel commands.
      */
-    int terminal_process = 0;
-    for (size_t i = 0U; i + 7U < sizeof(process->name) &&
-         process->name[i] != '\0'; i++)
-    {
-        char a = process->name[i];
-        char b = process->name[i + 1U];
-        if ((a == 't' || a == 'T') &&
-            (b == 'e' || b == 'E') &&
-            (process->name[i + 2U] == 'r' || process->name[i + 2U] == 'R') &&
-            (process->name[i + 3U] == 'm' || process->name[i + 3U] == 'M') &&
-            (process->name[i + 4U] == 'i' || process->name[i + 4U] == 'I') &&
-            (process->name[i + 5U] == 'n' || process->name[i + 5U] == 'N') &&
-            (process->name[i + 6U] == 'a' || process->name[i + 6U] == 'A') &&
-            (process->name[i + 7U] == 'l' || process->name[i + 7U] == 'L'))
-        {
-            terminal_process = 1;
-            break;
-        }
-    }
+    int terminal_process = process->pid == terminal_process_pid();
     if (!terminal_process)
     {
         frame->rax = (uint64_t)(int64_t)-1;
         return 0;
     }
+
 
     uint64_t capacity = frame->rdx;
     uintptr_t output_address = (uintptr_t)frame->rsi;

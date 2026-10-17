@@ -57,7 +57,8 @@ int net_udp_send(net_device_t *device, uint32_t destination, uint16_t source_por
 
     if (response_kind == 1) {
         /* Answer owner points to itself: an invalid compression-pointer loop. */
-        reply[n++] = 0xC0; reply[n++] = (uint8_t)n;
+        size_t owner_offset = n;
+        reply[n++] = 0xC0; reply[n++] = (uint8_t)owner_offset;
         reply[n++] = 0; reply[n++] = 1;
         reply[n++] = 0; reply[n++] = 1;
         n += 4; /* TTL */

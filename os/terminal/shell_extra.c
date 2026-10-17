@@ -498,7 +498,20 @@ static int command_http_url(const char *url)
         terminal_write("\nnet http: invalid or oversized hostname");
         return 1;
     }
-    for (size_t i = 0; i < host_length; ++i) host[i] = authority[i];
+    for (size_t i = 0; i < host_length; ++i) {
+        char c = authority[i];
+        if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+              (c >= '0' && c <= '9') || c == '.' || c == '-')) {
+            terminal_write("\\nnet http: invalid hostname; only DNS names and IPv4 literals are supported");
+            return 1;
+        }
+        host[i] = c;
+    }
+    if (host[0] == '.' || host[host_length - 1U] == '.' ||
+        host[0] == '-' || host[host_length - 1U] == '-') {
+        terminal_write("\\nnet http: invalid hostname");
+        return 1;
+    }
     host[host_length] = 0;
 
     if (*path_start == '#') {
@@ -522,6 +535,13 @@ static int command_http_url(const char *url)
     }
     path[path_length] = 0;
     if (!path_length) { path[0] = '/'; path[1] = 0; }
+    for (size_t i = 0; i < path_length; ++i) {
+        unsigned char c = (unsigned char)path[i];
+        if (c <= 0x20U || c == 0x7FU) {
+            terminal_write("\\nnet http: URL path contains an unescaped control or space character");
+            return 1;
+        }
+    }
 
     for (uint32_t i = 0; i < net_device_count(); ++i) {
         net_device_t *candidate = net_device_get(i);

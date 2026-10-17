@@ -4,7 +4,7 @@ This document describes the current prototype, not a promise that every subsyste
 
 ## System boundary map
 
-The current design has two boot paths that converge on the kernel's normalized handoff contract. Static ELF64 applications run at ring 3, and a bounded VantaOS-specific GUI syscall ABI now supports process-owned windows, retained rectangle/text drawing, and queued events. The kernel still owns framebuffer access and composition. Settings, File Explorer, and Terminal now have ring-3 ELF applications using the bounded GUI syscall ABI; File Explorer is read-only, and the kernel retains framebuffer and composition ownership. See [User-space desktop applications](USERSPACE_GUI.md).
+The current design has two boot paths that converge on the kernel's normalized handoff contract. Static ELF64 applications run at ring 3, and a bounded VantaOS-specific GUI syscall ABI now supports process-owned windows, retained rectangle/text drawing, and queued events. The kernel still owns framebuffer access and composition. Settings, File Explorer, and Terminal now have ring-3 ELF applications using the bounded GUI syscall ABI; File Explorer supports bounded file operations through validated syscalls, while the kernel retains framebuffer and composition ownership. See [User-space desktop applications](USERSPACE_GUI.md).
 
 ```mermaid
 flowchart TD

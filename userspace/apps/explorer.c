@@ -1320,8 +1320,11 @@ static void render(void)
     add_text_tail(14, 320, current_path, COLOR_TEXT, 15U);
 
     add_rect(152, 112, 584, 236, COLOR_ROW);
-    add_text(160, 114, "Name", COLOR_MUTED);
-    add_text(600, 114, "Kind", COLOR_MUTED);
+    if (!context_menu)
+    {
+        add_text(160, 114, "Name", COLOR_MUTED);
+        add_text(600, 114, "Kind", COLOR_MUTED);
+    }
     size_t end = first_visible + DISPLAY_ROWS;
     if (end > visible_count)
         end = visible_count;
@@ -1373,16 +1376,16 @@ static void render(void)
         int x = context_x;
         int y = context_y;
         if (x > 540) x = 540;
-        if (y > 250) y = 250;
+        if (y > 234) y = 234;
         if (x < 300) x = 300;
         if (y < 120) y = 120;
         context_x = x;
         context_y = y;
-        add_rect(x, y, 180, 122, COLOR_SURFACE);
-        add_rect(x, y + 121, 180, 1, COLOR_ACCENT);
-        static const char* menu[5] = {"Properties", "Rename", "Delete",
-                                      "Compress", "Extract"};
-        for (unsigned int i = 0; i < 5U; i++)
+        add_rect(x, y, 180, 168, COLOR_SURFACE);
+        add_rect(x, y + 167, 180, 1, COLOR_ACCENT);
+        static const char* menu[7] = {"Properties", "Rename", "Copy",
+                                      "Cut / Move", "Delete", "Compress", "Extract"};
+        for (unsigned int i = 0; i < 7U; i++)
             add_text(x + 10, y + 5 + (int)i * 23, menu[i], COLOR_TEXT);
     }
 
@@ -1586,7 +1589,7 @@ int main(int argc, char** argv)
             else if (context_menu)
             {
                 if (x >= context_x && x < context_x + 180 &&
-                    y >= context_y && y < context_y + 122)
+                    y >= context_y && y < context_y + 168)
                 {
                     unsigned int item = (unsigned int)(y - context_y) / 23U;
                     if (item == 0U)
@@ -1596,9 +1599,11 @@ int main(int argc, char** argv)
                             show_properties(index);
                     }
                     else if (item == 1U) start_dialog(DIALOG_RENAME);
-                    else if (item == 2U) toolbar_action(3U);
-                    else if (item == 3U) run_compress_selection();
-                    else if (item == 4U) run_extract_selection();
+                    else if (item == 2U) set_file_clipboard(0);
+                    else if (item == 3U) set_file_clipboard(1);
+                    else if (item == 4U) toolbar_action(3U);
+                    else if (item == 5U) run_compress_selection();
+                    else if (item == 6U) run_extract_selection();
                 }
                 context_menu = CONTEXT_NONE;
             }

@@ -1,4 +1,5 @@
 #include "block_device.h"
+#include "dma.h"
 #include "serial.h"
 #include <stdint.h>
 #include <stddef.h>
@@ -51,6 +52,15 @@ void storage_framework_selftest(void)
     ok=ok&&block_device_flush(&mock_device)==BLOCK_STATUS_UNSUPPORTED;
     ok=ok&&block_device_unregister(&mock_device)==BLOCK_STATUS_OK;
     ok=ok&&block_device_count()==0U&&!mock_device.online;
+    dma_page_t page={0};
+    int dma_ok=dma_alloc_page(&page)&&dma_page_is_valid(&page);
+    if(dma_ok) {
+        const uint8_t* bytes=(const uint8_t*)page.virtual_address;
+        for(size_t i=0;i<page.size;i++)dma_ok=dma_ok&&bytes[i]==0;
+        dma_free_page(&page);
+        dma_ok=dma_ok&&!page.virtual_address&&!page.physical_address&&!page.size;
+    }
+    ok=ok&&dma_ok;
     serial_write(ok?"VANTAOS_STORAGE_FRAMEWORK_OK\n":
                     "VANTAOS_STORAGE_FRAMEWORK_FAIL\n");
 }

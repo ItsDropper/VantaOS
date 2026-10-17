@@ -170,55 +170,6 @@ static int ata_probe_device(
     return 1;
 }
 
-void ata_initialize(void)
-{
-    if (available && block_device_find("ata0"))
-        return;
-
-    static const ata_channel_t channels[] =
-    {
-        {0x1F0, 0x3F6},
-        {0x170, 0x376}
-    };
-
-    available = 0;
-    active_channel.base = 0;
-    active_channel.control = 0;
-    active_drive = 0xA0;
-    last_status = 0;
-    last_error = 0;
-    last_signature_mid = 0;
-    last_signature_high = 0;
-
-    /*
-     * QEMU's optical ISO can occupy the primary IDE master while
-     * vantaos.img is attached to the secondary IDE channel. Probe
-     * both channels instead of assuming the disk is primary master.
-     */
-    static const uint8_t drives[] = {0xA0, 0xB0};
-
-    for (unsigned int i = 0; i < 2; i++)
-    {
-        for (unsigned int j = 0; j < 2; j++)
-        {
-            if (ata_probe_device(&channels[i], drives[j]))
-            {
-                for (unsigned int n = 0; n < sizeof(ata_block.name); n++)
-                    ata_block.name[n] = 0;
-                ata_block.name[0] = 'a'; ata_block.name[1] = 't';
-                ata_block.name[2] = 'a'; ata_block.name[3] = '0';
-                ata_block.sector_count = available_sectors;
-                ata_block.sector_size = 512U;
-                ata_block.flags = 0U;
-                ata_block.ops = &ata_block_ops;
-                ata_block.driver_data = 0;
-                (void)block_device_register(&ata_block);
-                return;
-            }
-        }
-    }
-}
-
 static block_status_t ata_block_read(block_device_t* device, uint64_t lba,
                                      uint32_t count, void* buffer)
 {
@@ -267,6 +218,55 @@ static const block_device_ops_t ata_block_ops = {
     .write = ata_block_write,
     .flush = ata_block_flush
 };
+
+void ata_initialize(void)
+{
+    if (available && block_device_find("ata0"))
+        return;
+
+    static const ata_channel_t channels[] =
+    {
+        {0x1F0, 0x3F6},
+        {0x170, 0x376}
+    };
+
+    available = 0;
+    active_channel.base = 0;
+    active_channel.control = 0;
+    active_drive = 0xA0;
+    last_status = 0;
+    last_error = 0;
+    last_signature_mid = 0;
+    last_signature_high = 0;
+
+    /*
+     * QEMU's optical ISO can occupy the primary IDE master while
+     * vantaos.img is attached to the secondary IDE channel. Probe
+     * both channels instead of assuming the disk is primary master.
+     */
+    static const uint8_t drives[] = {0xA0, 0xB0};
+
+    for (unsigned int i = 0; i < 2; i++)
+    {
+        for (unsigned int j = 0; j < 2; j++)
+        {
+            if (ata_probe_device(&channels[i], drives[j]))
+            {
+                for (unsigned int n = 0; n < sizeof(ata_block.name); n++)
+                    ata_block.name[n] = 0;
+                ata_block.name[0] = 'a'; ata_block.name[1] = 't';
+                ata_block.name[2] = 'a'; ata_block.name[3] = '0';
+                ata_block.sector_count = available_sectors;
+                ata_block.sector_size = 512U;
+                ata_block.flags = 0U;
+                ata_block.ops = &ata_block_ops;
+                ata_block.driver_data = 0;
+                (void)block_device_register(&ata_block);
+                return;
+            }
+        }
+    }
+}
 
 int ata_is_available(void)
 {

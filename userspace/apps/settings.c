@@ -247,7 +247,9 @@ static int save_config(void)
         return 0;
     long written = vanta_file_write((int)descriptor, buffer, used);
     long closed = vanta_close((int)descriptor);
-    return written == (long)used && closed == 0;
+    if (written != (long)used || closed != 0)
+        return 0;
+    return vanta_settings_apply() == 0;
 }
 
 static int run_storage_self_test(void)

@@ -50,8 +50,10 @@ void network_framework_selftest(void) {
     ok=net_poll(NET_RX_QUEUE_CAPACITY)==NET_RX_QUEUE_CAPACITY&&ok;
     net_device_stats_t stats;
     ok=net_device_get_stats(&d,&stats)&&ok;
-    ok=stats.tx_frames==1&&stats.tx_errors==1&&stats.rx_frames==2+NET_RX_QUEUE_CAPACITY&&
-       stats.rx_dropped==1&&stats.rx_malformed==1&&ok;
+    /* net_poll also emits one IPv6 Router Solicitation for this live test NIC. */
+    ok=mock_tx_count==2&&stats.tx_frames==2&&stats.tx_errors==1&&
+       stats.rx_frames==2+NET_RX_QUEUE_CAPACITY&&stats.rx_dropped==1&&
+       stats.rx_malformed==1&&ok;
     ok=net_ethernet_handler_unregister(0x88B5U,mock_handler,0)&&ok;
     ok=net_device_unregister(&d)&&ok;
     ok=!net_device_get_ipv4(&d,&address,&mask,&gateway)&&ok;

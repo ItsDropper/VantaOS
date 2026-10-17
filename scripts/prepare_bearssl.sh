@@ -15,4 +15,12 @@ for macro in BR_USE_URANDOM BR_USE_WIN32_RAND BR_USE_UNIX_TIME BR_USE_WIN32_TIME
     exit 1
   }
 done
+sed -i \
+  -e 's/^#if BR_USE_URANDOM$/#if 0/' \
+  third_party/bearssl/src/ssl/ssl_engine.c
+sed -i \
+  -e 's/^#if BR_USE_UNIX_TIME$/#if 0/' \
+  third_party/bearssl/src/x509/x509_minimal.c
+grep -q '^#if 0$' third_party/bearssl/src/ssl/ssl_engine.c
+grep -q '^#if 0$' third_party/bearssl/src/x509/x509_minimal.c
 echo "BearSSL host entropy/time hooks disabled for freestanding VantaOS."

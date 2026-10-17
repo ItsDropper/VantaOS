@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#define EXTRA_ARG_MAX 10U
+#define EXTRA_ARG_MAX 64U
 
 static int parse_command(char *input, char **argv, uint32_t capacity,
                          uint32_t *argc_out, int *force_out)
@@ -103,6 +103,148 @@ static void print_ipv4(uint32_t ip)
     shell_print_decimal((ip >> 16) & 255U); terminal_putchar('.');
     shell_print_decimal((ip >> 8) & 255U); terminal_putchar('.');
     shell_print_decimal(ip & 255U);
+}
+
+static int command_stat(uint32_t argc, char **argv)
+{
+    if (argc != 2U) {
+        terminal_write("\nusage: stat <path>");
+        return 1;
+    }
+    char path[FS_PATH_MAX];
+    shell_resolve_path(argv[1], path);
+    int id = vfs_lookup(path);
+    if (id < 0) {
+        terminal_write("\nstat: path not found");
+        return 1;
+    }
+    const fs_node_t *node = vfs_get_node((uint32_t)id);
+    if (!node) {
+        terminal_write("\nstat: invalid node");
+        return 1;
+    }
+    terminal_write("\nPath: "); terminal_write(path);
+    terminal_write("\nType: ");
+    terminal_write(node->type == FS_NODE_DIRECTORY ? "directory" :
+                   node->type == FS_NODE_FILE ? "file" : "virtual");
+    terminal_write("\nNode: "); shell_print_decimal(node->id);
+    terminal_write("\nParent: "); shell_print_decimal(node->parent);
+    terminal_write("\nSize: "); shell_print_decimal(node->size);
+    terminal_write(" bytes\n");
+    return 1;
+}
+
+static int command_mkdir(uint32_t argc, char **argv, int force)
+{
+    if (argc != 2U) {
+        terminal_write("\nusage: mkdir [-F] <path>");
+        return 1;
+    }
+    char path[FS_PATH_MAX];
+    shell_resolve_path(argv[1], path);
+    int existing = vfs_lookup(path);
+    if (existing >= 0) {
+        const fs_node_t *node = vfs_get_node((uint32_t)existing);
+        if (force && node && node->type == FS_NODE_DIRECTORY) {
+            terminal_write("\ndirectory already exists: "); terminal_write(path);
+        } else {
+            terminal_write("\nmkdir: path already exists");
+        }
+        return 1;
+    }
+    if (vfs_create_directory(path) < 0) {
+        terminal_write("\nmkdir: create failed");
+        return 1;
+    }
+    terminal_write("\ncreated directory "); terminal_write(path);
+    return 1;
+}
+
+static int command_touch(uint32_t argc, char **argv, int force)
+{
+    if (argc != 2U) {
+        terminal_write("\nusage: touch [-F] <path>");
+        return 1;
+    }
+    char path[FS_PATH_MAX];
+    shell_resolve_path(argv[1], path);
+    int existing = vfs_lookup(path);
+    if (existing >= 0) {
+        const fs_node_t *node = vfs_get_node((uint32_t)existing);
+        if (force && node && node->type == FS_NODE_FILE) {
+            terminal_write("\nfile already exists: "); terminal_write(path);
+        } else {
+            terminal_write("\ntouch: path already exists");
+        }
+        return 1;
+    }
+    if (vfs_create_file(path) < 0) {
+        terminal_write("\ntouch: create failed");
+        return 1;
+    }
+    terminal_write("\ncreated file "); terminal_write(path);
+    return 1;
+}
+
+static int command_write(uint32_t argc, char **argv, int force)
+{
+    if (argc < 3U) {
+        terminal_write("\nusage: write [-F] <file> <text...>");
+        return 1;
+    }
+    char path[FS_PATH_MAX];
+    shell_resolve_path(argv[1], path);
+    char data[SHELL_BUFFER_SIZE];
+    uint32_t length = 0;
+    for (uint32_t i = 2U; i < argc; ++i) {
+        for (uint32_t j = 0; argv[i][j]; ++j) {
+            if (length + 1U >= sizeof(data)) {
+                terminal_write("\nwrite: text exceeds command buffer");
+                return 1;
+            }
+            data[length++] = argv[i][j];
+        }
+        if (i + 1U < argc) {
+            if (length + 1U >= sizeof(data)) {
+                terminal_write("\nwrite: text exceeds command buffer");
+                return 1;
+            }
+            data[length++] = ' ';
+        }
+    }
+    data[length] = 0;
+    int id = vfs_lookup(path);
+    if (id < 0) {
+        if (vfs_create_file(path) < 0) {
+            terminal_write("\nwrite: cannot create file");
+            return 1;
+        }
+        id = vfs_lookup(path);
+    }
+    const fs_node_t *node = id < 0 ? 0 : vfs_get_node((uint32_t)id);
+    if (!node || node->type != FS_NODE_FILE) {
+        terminal_write("\nwrite: destination is not a regular file");
+        return 1;
+    }
+    if (node->size != 0U && !force) {
+        terminal_write("\nwrite: refusing to overwrite non-empty file without -F");
+        return 1;
+    }
+    int handle = vfs_open(path, VFS_OPEN_WRITE |
+                          (force ? VFS_OPEN_TRUNCATE : 0U));
+    if (handle < 0) {
+        terminal_write("\nwrite: open failed");
+        return 1;
+    }
+    int written = vfs_write(handle, data, length);
+    int closed = vfs_close(handle);
+    if (written != (int)length || closed < 0) {
+        terminal_write("\nwrite: incomplete write");
+        return 1;
+    }
+    terminal_write("\nwrote "); shell_print_decimal(length);
+    terminal_write(" bytes to "); terminal_write(path);
+    return 1;
 }
 
 static int command_rm(uint32_t argc, char **argv, int force)
@@ -348,6 +490,10 @@ int shell_execute_extended(const char *command_line)
     if (shell_string_equals(argv[0], "mv")) return command_mv(argc, argv, force);
     if (shell_string_equals(argv[0], "cp")) return command_cp(argc, argv, force);
     if (shell_string_equals(argv[0], "kill")) return command_kill(argc, argv, force);
+    if (shell_string_equals(argv[0], "stat")) return command_stat(argc, argv);
+    if (shell_string_equals(argv[0], "mkdir")) return command_mkdir(argc, argv, force);
+    if (shell_string_equals(argv[0], "touch")) return command_touch(argc, argv, force);
+    if (shell_string_equals(argv[0], "write")) return command_write(argc, argv, force);
     if (shell_string_equals(argv[0], "net")) return command_net(argc, argv);
     return 0;
 }

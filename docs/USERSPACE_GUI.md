@@ -10,7 +10,7 @@ VantaOS has an initial user-mode GUI boundary and three standalone ring-3 deskto
 - The kernel owns framebuffer access, window registry, z-order, window chrome, event routing, and presentation. Applications never receive a raw kernel framebuffer pointer.
 - Windows are process-owned. Dead-owner cleanup is tested and required by CI through `VANTAOS_GUI_DEAD_OWNER_CLEANUP_OK`.
 - **Settings runs as a ring-3 ELF** at `/SYSTEM/SETTINGS.ELF`. It creates its own GUI window, provides four accent colors (Blue, Teal, Amber, Violet), light/dark appearance, compact/comfortable Explorer rows, a larger Settings label size, and high-contrast mode. It saves version 2 preferences to `/SYSTEM/VANTASET.CFG`, accepts existing version 1 files, and CI checks storage readback and persistence across a second boot.
-- Accent, light/dark surfaces, contrast, and Explorer row density are applied to the desktop when saved; the text-size option currently changes the Settings controls only. The settings-apply syscall reloads the validated on-disk config without restarting. Settings does not yet provide timezone-aware local time.
+- Accent, light/dark surfaces, contrast, and Explorer row density are applied to the desktop when saved; the text-size option currently changes the Settings controls only. The settings-apply syscall reloads the validated on-disk config without restarting and broadcasts a theme-change event so open apps refresh their own surfaces. Settings does not yet provide timezone-aware local time.
 - Terminal's shell, window, text rendering, input editing, and bounded scrollback run in the ring-3 `/TERMINAL.ELF` app. File Explorer runs as `/EXPLORER.ELF` at ring 3, supports directory navigation, text preview, taskbar hide/restore, and launching files through the validated ELF loader. Explorer is read-only: create/write/rename/delete are not implemented.
 
 ## Current GUI ABI
@@ -22,12 +22,12 @@ The kernel validates requests and retains a bounded draw list for each window.
 | Window lifecycle | Create/close an owned window with a server-assigned ID; at most 8 windows |
 | Drawing | Filled rectangles and text; at most 24 commands per window |
 | Text limits | 31-byte title and 63-byte command text |
-| Events | Poll keyboard-character, pointer, focus, and close-request events from a bounded per-window queue |
+| Events | Poll keyboard-character, pointer, focus, close-request, and theme-change events from a bounded per-window queue |
 | Queue overflow | Oldest event is dropped when the 32-event queue is full |
 | Input ownership | Pointer clicks route to the topmost user window; keyboard input follows focus |
 | Isolation boundary | User buffers are validated; no raw framebuffer or kernel pointer is exposed |
 
-The implementation is intentionally small. Window move/resize/minimize/maximize, resize events, image surfaces, clipboard, a blocking event wait, a general widget toolkit, and mature clipping/accessibility support are not implemented. Do not present those as working features.
+The implementation is intentionally small. General window move/resize/maximize controls, resize events, image surfaces, clipboard, a blocking event wait, a general widget toolkit, and mature clipping/accessibility support are not implemented. The desktop can hide and restore a process's windows while switching between the current apps. Do not present those as working features.
 
 ## Storage and Settings persistence
 

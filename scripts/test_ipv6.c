@@ -63,7 +63,8 @@ static void inject_ra(void)
     static const uint8_t src[16]={0xFE,0x80,0,0,0,0,0,0,0,0,0,0,0,0,0,1};
     static const uint8_t dst[16]={0xFF,2,0,0,0,0,0,0,0,0,0,0,0,0,0,1};
     uint8_t f[14+40+48]={0};f[0]=0x33;f[1]=0x33;f[5]=1;
-    for(uint32_t i=0;i<6U;i++)f[6+i]=router_mac[i];put16(f+12,0x86DD);
+    for(uint32_t i=0;i<6U;i++){f[6+i]=router_mac[i];}
+    put16(f+12,0x86DD);
     uint8_t *ip=f+14,*p=ip+40;make_ip6(ip,src,dst,255,48);
     p[0]=134;p[4]=64;put16(p+6,1800);
     p[16]=3;p[17]=4;p[18]=64;p[19]=0xC0;put32(p+20,3600);put32(p+24,1800);

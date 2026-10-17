@@ -57,7 +57,8 @@ int net_ipv6_ping(net_device_t*d,const net_ipv6_address_t*destination,uint32_t t
  const uint8_t*target=destination->bytes;const uint8_t*source=s->ll.bytes;uint8_t next_hop[16];
  if(linklocal(target)){for(uint32_t i=0;i<16U;i++)next_hop[i]=target[i];}
  else{
-  if(!s->valid)return 0;source=s->global.bytes;
+  if(!s->valid)return 0;
+  source=s->global.bytes;
   int on_link=1;for(uint32_t i=0;i<8U;i++)if(target[i]!=s->global.bytes[i])on_link=0;
   if(on_link){for(uint32_t i=0;i<16U;i++)next_hop[i]=target[i];}
   else{if(!s->router_valid)return 0;for(uint32_t i=0;i<16U;i++)next_hop[i]=s->router.bytes[i];}

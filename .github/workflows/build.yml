@@ -123,7 +123,7 @@ jobs:
                   time.sleep(0.1)
           if connection is None:
               raise SystemExit("Could not connect to QEMU's E1000 socket backend")
-          frame = bytes.fromhex("ffffffffffff02000000000288b556414e54")
+          frame = bytes.fromhex("ffffffffffff02000000000288b556414e54") + bytes(42)
           connection.sendall(struct.pack("!I", len(frame)) + frame)
           connection.close()
           PY
@@ -136,7 +136,10 @@ jobs:
             fi
             sleep 0.1
           done
-          grep -q 'VANTAOS_E1000_RX_SELFTEST_OK' "$log"
+          if ! grep -q 'VANTAOS_E1000_RX_SELFTEST_OK' "$log"; then
+            cat "$log" qemu-e1000-stderr.log
+            exit 1
+          fi
       - name: USB HID xHCI input end-to-end test
         if: always()
         shell: bash

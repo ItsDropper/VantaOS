@@ -222,7 +222,7 @@ static void e1000_rx_selftest_handler(net_device_t* device,const uint8_t* frame,
                                       void* context)
 {
     (void)device;(void)context;
-    if(!frame||type!=0x88B5U||header>length||length-header!=4U)return;
+    if(!frame||type!=0x88B5U||header>length||length-header<4U)return;
     if(frame[header]==0x56U&&frame[header+1U]==0x41U&&
        frame[header+2U]==0x4EU&&frame[header+3U]==0x54U)
         serial_write("VANTAOS_E1000_RX_SELFTEST_OK\n");

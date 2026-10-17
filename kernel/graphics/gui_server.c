@@ -21,6 +21,7 @@
 typedef struct
 {
     int used;
+    int visible;
     uint32_t id;
     uint32_t owner_pid;
     int32_t x;
@@ -94,7 +95,8 @@ static void gui_focus_locked(gui_window_t* target)
     {
         for (unsigned int i = 0; i < VANTA_GUI_MAX_WINDOWS; i++)
         {
-            if (windows[i].used && windows[i].id == focused_window_id)
+            if (windows[i].used && windows[i].visible &&
+            windows[i].id == focused_window_id)
             {
                 gui_emit_simple_event_locked(&windows[i],
                                              VANTA_GUI_EVENT_FOCUS_LOST);
@@ -189,6 +191,7 @@ int gui_server_create_window(uint32_t pid,
     for (size_t i = 0; i < sizeof(*slot); i++)
         ((uint8_t*)slot)[i] = 0U;
     slot->used = 1;
+    slot->visible = 1;
     slot->id = next_window_id++;
     if (slot->id == 0U)
         slot->id = next_window_id++;
@@ -264,6 +267,58 @@ int gui_server_submit_draw(uint32_t pid, uint32_t id,
     return (int)count;
 }
 
+int gui_server_set_owner_visible(uint32_t pid, int visible)
+{
+    if (pid == 0U)
+        return 0;
+    visible = visible != 0;
+    uint64_t flags = spinlock_lock_irqsave(&gui_lock);
+    int found = 0;
+    int changed = 0;
+    gui_window_t* newest_owned = 0;
+    for (unsigned int i = 0; i < VANTA_GUI_MAX_WINDOWS; i++)
+    {
+        gui_window_t* window = &windows[i];
+        if (!window->used || window->owner_pid != pid)
+            continue;
+        found = 1;
+        if (window->visible != visible)
+        {
+            window->visible = visible;
+            changed = 1;
+        }
+        if (!newest_owned || window->z_order > newest_owned->z_order)
+            newest_owned = window;
+    }
+
+    if (!found || !changed)
+    {
+        spinlock_unlock_irqrestore(&gui_lock, flags);
+        return found;
+    }
+
+    if (newest_owned && !visible && focused_window_id == newest_owned->id)
+        gui_focus_locked(0);
+
+    if (visible && newest_owned)
+        gui_focus_locked(newest_owned);
+    else if (!visible && focused_window_id == 0U)
+    {
+        gui_window_t* newest_visible = 0;
+        for (unsigned int i = 0; i < VANTA_GUI_MAX_WINDOWS; i++)
+            if (windows[i].used && windows[i].visible &&
+                (!newest_visible ||
+                 windows[i].z_order > newest_visible->z_order))
+                newest_visible = &windows[i];
+        if (newest_visible)
+            gui_focus_locked(newest_visible);
+    }
+
+    redraw_pending = 1;
+    spinlock_unlock_irqrestore(&gui_lock, flags);
+    return 1;
+}
+
 int gui_server_poll_event(uint32_t pid, uint32_t id,
                           vanta_gui_event_t* event_out)
 {
@@ -324,7 +379,8 @@ void gui_server_draw_windows(void)
     {
         gui_window_t* window = 0;
         for (unsigned int i = 0; i < VANTA_GUI_MAX_WINDOWS; i++)
-            if (windows[i].used && windows[i].z_order > previous_z &&
+            if (windows[i].used && windows[i].visible &&
+                windows[i].z_order > previous_z &&
                 (!window || windows[i].z_order < window->z_order))
                 window = &windows[i];
         if (!window)
@@ -369,7 +425,7 @@ int gui_server_mouse_click(int x, int y, int button)
     for (unsigned int i = 0; i < VANTA_GUI_MAX_WINDOWS; i++)
     {
         gui_window_t* window = &windows[i];
-        if (!window->used || x < window->x || y < window->y ||
+        if (!window->used || !window->visible || x < window->x || y < window->y ||
             x >= window->x + (int)window->width ||
             y >= window->y + (int)window->height)
             continue;

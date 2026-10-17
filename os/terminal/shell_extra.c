@@ -458,12 +458,12 @@ static int command_http_url(const char *url)
     if (url[0] == 'h' && url[1] == 't' && url[2] == 't' &&
         url[3] == 'p' && url[4] == 's' && url[5] == ':' &&
         url[6] == '/' && url[7] == '/') {
-        terminal_write("\\nnet http: HTTPS requires TLS, which is not implemented; refusing insecure downgrade.");
+        terminal_write("\nnet http: HTTPS requires TLS, which is not implemented; refusing insecure downgrade.");
         return 1;
     }
     if (!(url[0] == 'h' && url[1] == 't' && url[2] == 't' &&
           url[3] == 'p' && url[4] == ':' && url[5] == '/' && url[6] == '/')) {
-        terminal_write("\\nusage: net http <http://hostname[:port]/path>");
+        terminal_write("\nusage: net http <http://hostname[:port]/path>");
         return 1;
     }
 
@@ -481,13 +481,13 @@ static int command_http_url(const char *url)
         char port_text[6];
         size_t digits = (size_t)(path_start - port_start);
         if (!digits || digits >= sizeof(port_text)) {
-            terminal_write("\\nnet http: invalid TCP port");
+            terminal_write("\nnet http: invalid TCP port");
             return 1;
         }
         for (size_t i = 0; i < digits; ++i) port_text[i] = port_start[i];
         port_text[digits] = 0;
         if (!parse_u32(port_text, &port) || !port || port > 65535U) {
-            terminal_write("\\nnet http: invalid TCP port");
+            terminal_write("\nnet http: invalid TCP port");
             return 1;
         }
         host_length = (size_t)((port_start - 1U) - authority);
@@ -495,14 +495,14 @@ static int command_http_url(const char *url)
         host_length = (size_t)(cursor - authority);
     }
     if (!host_length || host_length >= sizeof(host)) {
-        terminal_write("\\nnet http: invalid or oversized hostname");
+        terminal_write("\nnet http: invalid or oversized hostname");
         return 1;
     }
     for (size_t i = 0; i < host_length; ++i) host[i] = authority[i];
     host[host_length] = 0;
 
     if (*path_start == '#') {
-        terminal_write("\\nnet http: URL fragments are not sent to the server");
+        terminal_write("\nnet http: URL fragments are not sent to the server");
         path_start = "/";
     }
     if (*path_start == '?' || *path_start == 0) {
@@ -531,18 +531,18 @@ static int command_http_url(const char *url)
         }
     }
     if (!device) {
-        terminal_write("\\nnet http: no configured link-up interface; run 'net connect' first");
+        terminal_write("\nnet http: no configured link-up interface; run 'net connect' first");
         return 1;
     }
 
     if (!parse_ipv4(host, &address)) {
         if (!device->ipv4_dns) {
-            terminal_write("\\nnet http: no DNS server configured; run 'net connect' first");
+            terminal_write("\nnet http: no DNS server configured; run 'net connect' first");
             return 1;
         }
-        terminal_write("\\nResolving "); terminal_write(host); terminal_write("...");
+        terminal_write("\nResolving "); terminal_write(host); terminal_write("...");
         if (!net_dns_resolve(device, host, &address, 8000U)) {
-            terminal_write("\\nnet http: DNS lookup failed or timed out");
+            terminal_write("\nnet http: DNS lookup failed or timed out");
             return 1;
         }
         terminal_write(" -> "); print_ipv4(address);
@@ -551,9 +551,9 @@ static int command_http_url(const char *url)
     request[0] = 0;
     if (!append_text(request, sizeof(request), &used, "GET ") ||
         !append_text(request, sizeof(request), &used, path) ||
-        !append_text(request, sizeof(request), &used, " HTTP/1.0\\r\\nHost: ") ||
+        !append_text(request, sizeof(request), &used, " HTTP/1.0\r\nHost: ") ||
         !append_text(request, sizeof(request), &used, host)) {
-        terminal_write("\\nnet http: request is too large");
+        terminal_write("\nnet http: request is too large");
         return 1;
     }
     if (port != 80U) {
@@ -566,48 +566,48 @@ static int command_http_url(const char *url)
         port_text[n] = 0;
         if (!append_text(request, sizeof(request), &used, ":") ||
             !append_text(request, sizeof(request), &used, port_text)) {
-            terminal_write("\\nnet http: request is too large");
+            terminal_write("\nnet http: request is too large");
             return 1;
         }
     }
     if (!append_text(request, sizeof(request), &used,
-                     "\\r\\nUser-Agent: VantaOS/0.1\\r\\nConnection: close\\r\\nAccept: */*\\r\\n\\r\\n")) {
-        terminal_write("\\nnet http: request is too large");
+                     "\r\nUser-Agent: VantaOS/0.1\r\nConnection: close\r\nAccept: */*\r\n\r\n")) {
+        terminal_write("\nnet http: request is too large");
         return 1;
     }
 
-    terminal_write("\\nConnecting to "); print_ipv4(address);
+    terminal_write("\nConnecting to "); print_ipv4(address);
     terminal_write(":"); shell_print_decimal(port); terminal_write("...");
     if (!net_tcp_connect(device, address, (uint16_t)port, 15000U)) {
-        terminal_write("\\nnet http: TCP connection failed or timed out");
+        terminal_write("\nnet http: TCP connection failed or timed out");
         return 1;
     }
     if (!net_tcp_send(device, request, used, 10000U)) {
-        terminal_write("\\nnet http: request transmission failed");
+        terminal_write("\nnet http: request transmission failed");
         net_tcp_close(device);
         return 1;
     }
 
-    terminal_write("\\n--- HTTP response (limited to 4096 bytes) ---\\n");
+    terminal_write("\n--- HTTP response (limited to 4096 bytes) ---\n");
     size_t total = 0;
     for (uint32_t chunks = 0; chunks < 16U; ++chunks) {
         int received = net_tcp_receive(device, output, sizeof(output) - 1U, 10000U);
         if (received == 0) break;
         if (received < 0) {
-            terminal_write("\\nnet http: response timed out or connection failed");
+            terminal_write("\nnet http: response timed out or connection failed");
             break;
         }
         output[received] = 0;
         terminal_write(output);
         total += (size_t)received;
         if (total >= 4096U) {
-            terminal_write("\\n[response display limit reached]");
+            terminal_write("\n[response display limit reached]");
             break;
         }
     }
     net_tcp_close(device);
-    if (!total) terminal_write("\\nnet http: server returned no data");
-    terminal_write("\\n--- end response ---");
+    if (!total) terminal_write("\nnet http: server returned no data");
+    terminal_write("\n--- end response ---");
     return 1;
 }
 

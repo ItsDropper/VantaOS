@@ -3,7 +3,7 @@
 static block_device_t* devices[BLOCK_DEVICE_MAX];
 static uint32_t device_count_value;
 static spinlock_t registry_lock = SPINLOCK_INITIALIZER;
-static int valid_sector_size(uint32_t n) { return n >= 512U && n <= 4096U && !(n & (n-1U)); }
+static int valid_sector_size(uint32_t n) { return n >= 512U && n <= 65536U && !(n & (n-1U)); }
 static int valid_name(const char* n) {
  if (!n || !n[0]) return 0;
  for (uint32_t i=0;i<BLOCK_DEVICE_NAME_MAX;i++) if (!n[i]) return 1;
@@ -21,7 +21,7 @@ block_status_t block_device_register(block_device_t* d) {
   spinlock_unlock_irqrestore(&registry_lock,f); return BLOCK_STATUS_BUSY;
  }
  if(device_count_value==BLOCK_DEVICE_MAX) { spinlock_unlock_irqrestore(&registry_lock,f); return BLOCK_STATUS_NO_MEMORY; }
- d->online=1; devices[device_count_value++]=d;
+ d->active_operations=0; d->online=1; devices[device_count_value++]=d;
  spinlock_unlock_irqrestore(&registry_lock,f); return BLOCK_STATUS_OK;
 }
 block_status_t block_device_unregister(block_device_t* d) {
@@ -29,6 +29,10 @@ block_status_t block_device_unregister(block_device_t* d) {
  uint64_t f=spinlock_lock_irqsave(&registry_lock);
  for(uint32_t i=0;i<device_count_value;i++) if(devices[i]==d) {
   d->online=0;
+  if(__atomic_load_n(&d->active_operations,__ATOMIC_ACQUIRE)!=0U) {
+   __atomic_store_n(&d->online,1U,__ATOMIC_RELEASE);
+   spinlock_unlock_irqrestore(&registry_lock,f); return BLOCK_STATUS_BUSY;
+  }
   for(uint32_t j=i+1;j<device_count_value;j++) devices[j-1]=devices[j];
   devices[--device_count_value]=0;
   spinlock_unlock_irqrestore(&registry_lock,f); return BLOCK_STATUS_OK;
@@ -50,25 +54,39 @@ block_device_t* block_device_find(const char* n) {
  for(uint32_t i=0;i<device_count_value;i++) if(same_name(devices[i]->name,n)){d=devices[i];break;}
  spinlock_unlock_irqrestore(&registry_lock,f); return d;
 }
-static block_status_t validate(block_device_t* d,uint64_t lba,uint32_t n,const void* b) {
- if(!d || !b || !n) return BLOCK_STATUS_INVALID;
- if(!d->online) return BLOCK_STATUS_NOT_READY;
- if(lba>=d->sector_count || (uint64_t)n>d->sector_count-lba) return BLOCK_STATUS_OUT_OF_RANGE;
+static block_status_t begin_io(block_device_t* d,uint64_t lba,uint32_t n,const void* b) {
+ if(!d||!b||!n)return BLOCK_STATUS_INVALID;
+ if(!__atomic_load_n(&d->online,__ATOMIC_ACQUIRE))return BLOCK_STATUS_NOT_READY;
+ if(lba>=d->sector_count||(uint64_t)n>d->sector_count-lba)return BLOCK_STATUS_OUT_OF_RANGE;
+ __atomic_add_fetch(&d->active_operations,1U,__ATOMIC_ACQ_REL);
+ if(!__atomic_load_n(&d->online,__ATOMIC_ACQUIRE)) {
+  __atomic_sub_fetch(&d->active_operations,1U,__ATOMIC_RELEASE);
+  return BLOCK_STATUS_NOT_READY;
+ }
  return BLOCK_STATUS_OK;
 }
+static void end_io(block_device_t* d) {
+ __atomic_sub_fetch(&d->active_operations,1U,__ATOMIC_RELEASE);
+}
 block_status_t block_device_read(block_device_t* d,uint64_t lba,uint32_t n,void* b) {
- block_status_t s=validate(d,lba,n,b); if(s!=BLOCK_STATUS_OK)return s;
- return d->ops->read(d,lba,n,b);
+ block_status_t s=begin_io(d,lba,n,b); if(s!=BLOCK_STATUS_OK)return s;
+ s=d->ops->read(d,lba,n,b); end_io(d); return s;
 }
 block_status_t block_device_write(block_device_t* d,uint64_t lba,uint32_t n,const void* b) {
- block_status_t s=validate(d,lba,n,b); if(s!=BLOCK_STATUS_OK)return s;
- if(d->flags&BLOCK_DEVICE_READ_ONLY)return BLOCK_STATUS_READ_ONLY;
- if(!d->ops->write)return BLOCK_STATUS_UNSUPPORTED;
- return d->ops->write(d,lba,n,b);
+ block_status_t s=begin_io(d,lba,n,b); if(s!=BLOCK_STATUS_OK)return s;
+ if(d->flags&BLOCK_DEVICE_READ_ONLY)s=BLOCK_STATUS_READ_ONLY;
+ else if(!d->ops->write)s=BLOCK_STATUS_UNSUPPORTED;
+ else s=d->ops->write(d,lba,n,b);
+ end_io(d); return s;
 }
 block_status_t block_device_flush(block_device_t* d) {
  if(!d)return BLOCK_STATUS_INVALID;
- if(!d->online)return BLOCK_STATUS_NOT_READY;
- if(!d->ops || !d->ops->flush)return BLOCK_STATUS_UNSUPPORTED;
- return d->ops->flush(d);
+ if(!__atomic_load_n(&d->online,__ATOMIC_ACQUIRE))return BLOCK_STATUS_NOT_READY;
+ __atomic_add_fetch(&d->active_operations,1U,__ATOMIC_ACQ_REL);
+ if(!__atomic_load_n(&d->online,__ATOMIC_ACQUIRE)) {
+  __atomic_sub_fetch(&d->active_operations,1U,__ATOMIC_RELEASE);
+  return BLOCK_STATUS_NOT_READY;
+ }
+ block_status_t s=(!d->ops||!d->ops->flush)?BLOCK_STATUS_UNSUPPORTED:d->ops->flush(d);
+ end_io(d); return s;
 }

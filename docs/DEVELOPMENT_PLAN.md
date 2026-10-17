@@ -79,7 +79,7 @@ This roadmap prioritizes a trustworthy kernel over visual features. A Windows al
 - [x] Migrate Settings to a static ELF64 ring-3 app with versioned preferences, four accent colors, light/dark surfaces, compact Explorer rows, larger Settings labels, high contrast, immediate theme reload, and second-boot persistence.
 - [x] Migrate File Explorer to a ring-3 ELF with validated launch, long-name file/folder creation, rename/delete, search, properties, multi-selection, and Vanta RLE archive support.
 - [x] Move Terminal's window, input, and presentation onto the ring-3 GUI API while keeping its shell in ring 3.
-- [ ] Add automated end-to-end mouse/keyboard tests, Unicode filename creation, cross-directory move, and file copy/paste.
+- [ ] Add automated end-to-end mouse/keyboard tests, Unicode filename creation, cross-directory rename, and crash-atomic filesystem transactions.
 - [ ] Implement RTC UTC/local policy and a timezone-rule service before claiming region-based local time or DST correctness.
 
 ### M6 — Daily-driver prototype

@@ -96,6 +96,8 @@ typedef struct {
     uint32_t namespace_count;
     uint32_t controller_index;
     uint32_t max_transfer_pages;
+    uint64_t direct_dma_commands;
+    uint64_t bounce_dma_commands;
     uint16_t admin_tail;
     uint16_t admin_head;
     uint16_t io_tail;
@@ -342,6 +344,10 @@ static void prepare_io_command(nvme_controller_t* c, nvme_namespace_t* ns,
 
     io->direct = (uint8_t)try_direct_dma(c, io, virtual_start, bytes, write,
                                          &prp1, &prp2, &page_count);
+    if (io->direct)
+        ++c->direct_dma_commands;
+    else
+        ++c->bounce_dma_commands;
     if (!io->direct) {
         page_count = (uint32_t)((bytes + NVME_PAGE_SIZE - 1U) / NVME_PAGE_SIZE);
         if (!page_count || page_count > NVME_MAX_TRANSFER_PAGES) {
@@ -779,6 +785,11 @@ static int nvme_run_io_selftest(void)
                                   (NVME_PAGE_SIZE / device->sector_size);
     const uint64_t test_lba = 8U;
     const size_t test_bytes = (size_t)test_sectors * device->sector_size;
+    nvme_namespace_t* test_namespace = (nvme_namespace_t*)device->driver_data;
+    nvme_controller_t* test_controller =
+        test_namespace ? test_namespace->controller : 0;
+    uint64_t direct_before = test_controller ?
+        test_controller->direct_dma_commands : 0U;
     if (device->sector_count <= test_lba + test_sectors) {
         kfree(test_memory);
         serial_write("VANTAOS_NVME_IO_SELFTEST_FAIL\n");
@@ -803,7 +814,13 @@ static int nvme_run_io_selftest(void)
         ok = 0;
     if (block_device_flush(device) != BLOCK_STATUS_OK)
         ok = 0;
+    int direct_dma_used = test_controller &&
+        test_controller->direct_dma_commands > direct_before;
+    if (!direct_dma_used)
+        ok = 0;
     kfree(test_memory);
+    if (direct_dma_used)
+        serial_write("VANTAOS_NVME_DIRECT_DMA_OK\n");
     serial_write(ok ? "VANTAOS_NVME_IO_SELFTEST_OK\n" :
                       "VANTAOS_NVME_IO_SELFTEST_FAIL\n");
     return ok;

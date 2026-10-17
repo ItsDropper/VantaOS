@@ -2,6 +2,12 @@
 
 #include "ata.h"
 #include "fat32.h"
+#ifdef VANTAOS_SELF_TEST
+#include "serial.h"
+#define FS_MUTATION_DIAG(message) serial_write(message "\n")
+#else
+#define FS_MUTATION_DIAG(message) ((void)0)
+#endif
 
 static fs_node_t nodes[FS_MAX_NODES];
 /* FAT32 enumeration scratch space; filesystem metadata is currently serialized. */
@@ -526,18 +532,39 @@ int filesystem_delete_path(const char* path)
 int filesystem_rename_path(const char* old_path, const char* new_path)
 {
     if (!initialized || !old_path || !new_path || !fat32_is_mounted())
+    {
+        FS_MUTATION_DIAG("VANTAOS_FS_RENAME_STAGE_1");
         return -1;
+    }
     int id = filesystem_lookup(old_path);
-    if (id <= 0 || filesystem_lookup(new_path) >= 0)
+    if (id <= 0)
+    {
+        FS_MUTATION_DIAG("VANTAOS_FS_RENAME_STAGE_2");
         return -1;
+    }
+    if (filesystem_lookup(new_path) >= 0)
+    {
+        FS_MUTATION_DIAG("VANTAOS_FS_RENAME_STAGE_3");
+        return -1;
+    }
     char parent_path[FS_PATH_MAX];
     const char* leaf = 0;
     if (!fs_split_parent(new_path, parent_path, sizeof(parent_path), &leaf))
+    {
+        FS_MUTATION_DIAG("VANTAOS_FS_RENAME_STAGE_4");
         return -1;
+    }
     int parent_id = filesystem_lookup(parent_path);
-    if (parent_id < 0 ||
-        !fat32_rename_path(old_path, new_path))
+    if (parent_id < 0)
+    {
+        FS_MUTATION_DIAG("VANTAOS_FS_RENAME_STAGE_5");
         return -1;
+    }
+    if (fat32_rename_path(old_path, new_path) < 0)
+    {
+        FS_MUTATION_DIAG("VANTAOS_FS_RENAME_STAGE_6");
+        return -1;
+    }
     nodes[id].parent = (uint32_t)parent_id;
     fs_copy_name(nodes[id].name, leaf);
     return 0;

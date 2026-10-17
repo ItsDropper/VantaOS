@@ -49,6 +49,14 @@ static uint32_t pci_config_address(
         (offset & 0xFC);
 }
 
+static void pci_write_config(
+    uint8_t bus, uint8_t slot, uint8_t function, uint8_t offset, uint32_t value
+)
+{
+    outl(PCI_CONFIG_ADDRESS, pci_config_address(bus, slot, function, offset));
+    outl(PCI_CONFIG_DATA, value);
+}
+
 static uint32_t pci_read_config(
     uint8_t bus,
     uint8_t slot,
@@ -208,6 +216,80 @@ const struct pci_device* pci_get_device(int index)
         return 0;
 
     return &devices[index];
+}
+
+int pci_get_bar(const struct pci_device* device, uint8_t index,
+                uint64_t* address, int* is_io, int* is_64bit)
+{
+    if (!device || !address || index >= 6)
+        return 0;
+
+    uint8_t offset = (uint8_t)(0x10 + index * 4);
+    uint32_t low = pci_read_config(device->bus, device->slot, device->function, offset);
+    if (low == 0 || low == 0xFFFFFFFFU)
+        return 0;
+
+    if (low & 1U)
+    {
+        *address = (uint64_t)(low & 0xFFFFFFFCU);
+        if (is_io) *is_io = 1;
+        if (is_64bit) *is_64bit = 0;
+        return *address != 0;
+    }
+
+    uint32_t memory_type = (low >> 1) & 0x03U;
+    if (memory_type == 0x03U)
+        return 0;
+    int wide = memory_type == 0x02U;
+    if (wide && index >= 5)
+        return 0;
+
+    uint64_t high = 0;
+    if (wide)
+        high = pci_read_config(device->bus, device->slot, device->function,
+                               (uint8_t)(offset + 4));
+    *address = (high << 32) | (uint64_t)(low & 0xFFFFFFF0U);
+    if (is_io) *is_io = 0;
+    if (is_64bit) *is_64bit = wide;
+    return *address != 0;
+}
+
+int pci_enable_memory_space(const struct pci_device* device)
+{
+    if (!device) return 0;
+    uint32_t command_status = pci_read_config(device->bus, device->slot, device->function, 0x04);
+    uint16_t command = (uint16_t)command_status;
+    if (command & (1U << 1)) return 1;
+    command |= (1U << 1);
+    pci_write_config(device->bus, device->slot, device->function, 0x04,
+                     (command_status & 0xFFFF0000U) | command);
+    return (pci_read_config(device->bus, device->slot, device->function, 0x04) & (1U << 1)) != 0;
+}
+
+int pci_enable_bus_mastering(const struct pci_device* device)
+{
+    if (!device) return 0;
+    uint32_t command_status = pci_read_config(device->bus, device->slot, device->function, 0x04);
+    uint16_t command = (uint16_t)command_status;
+    if (command & (1U << 2)) return 1;
+    command |= (1U << 2);
+    pci_write_config(device->bus, device->slot, device->function, 0x04,
+                     (command_status & 0xFFFF0000U) | command);
+    return (pci_read_config(device->bus, device->slot, device->function, 0x04) & (1U << 2)) != 0;
+}
+
+int pci_find_class(uint8_t class_code, uint8_t subclass, int prog_if,
+                   int start_index)
+{
+    if (start_index < 0) start_index = 0;
+    for (int i = start_index; i < device_count; ++i)
+    {
+        const struct pci_device* device = &devices[i];
+        if (device->class_code == class_code && device->subclass == subclass &&
+            (prog_if < 0 || device->prog_if == (uint8_t)prog_if))
+            return i;
+    }
+    return -1;
 }
 
 int pci_get_bar0(const struct pci_device* device, uint32_t* bar)

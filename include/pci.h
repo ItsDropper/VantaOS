@@ -20,6 +20,12 @@ struct pci_device
 
 void pci_initialize(void);
 
+int pci_get_bar(const struct pci_device* device, uint8_t index,
+                uint64_t* address, int* is_io, int* is_64bit);
+int pci_enable_memory_space(const struct pci_device* device);
+/* Enable bus mastering only after DMA buffers and device state are ready. */
+int pci_enable_bus_mastering(const struct pci_device* device);
+int pci_find_class(uint8_t class_code, uint8_t subclass, int prog_if, int start_index);
 int pci_get_bar0(const struct pci_device* device, uint32_t* bar);
 
 int pci_get_device_count(void);

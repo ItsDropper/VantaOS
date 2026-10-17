@@ -1,4 +1,6 @@
 #include "keyboard.h"
+#include "input.h"
+#include "ps2.h"
 
 #include <stdint.h>
 #include "spinlock.h"
@@ -306,6 +308,15 @@ static void handle_key_press(uint8_t scancode)
     (void)alt_pressed;
 
     keyboard_buffer_push(c);
+
+    input_event_t text_event = {
+        .device_id = ps2_input_keyboard_id(),
+        .type = INPUT_EVENT_TEXT,
+        .code = (unsigned char)c,
+        .value = (unsigned char)c,
+        .value2 = 0
+    };
+    (void)input_report_event(&text_event);
 }
 
 static void handle_key_release(uint8_t scancode)
@@ -392,12 +403,29 @@ void keyboard_handle_interrupt(void)
             handle_key_release(released_scancode);
         }
 
+        input_event_t key_event = {
+            .device_id = ps2_input_keyboard_id(),
+            .type = INPUT_EVENT_KEY,
+            .code = (int32_t)released_scancode | (extended_scancode ? 0x100 : 0),
+            .value = 0,
+            .value2 = 0
+        };
+        (void)input_report_event(&key_event);
         extended_scancode = false;
         spinlock_unlock_irqrestore(&keyboard_lock, flags);
         return;
     }
 
+    bool was_extended = extended_scancode;
     handle_key_press(scancode);
+    input_event_t key_event = {
+        .device_id = ps2_input_keyboard_id(),
+        .type = INPUT_EVENT_KEY,
+        .code = (int32_t)scancode | (was_extended ? 0x100 : 0),
+        .value = 1,
+        .value2 = 0
+    };
+    (void)input_report_event(&key_event);
     spinlock_unlock_irqrestore(&keyboard_lock, flags);
 }
 

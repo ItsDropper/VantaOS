@@ -262,7 +262,7 @@ int pci_enable_memory_space(const struct pci_device* device)
     if (command & (1U << 1)) return 1;
     command |= (1U << 1);
     pci_write_config(device->bus, device->slot, device->function, 0x04,
-                     (command_status & 0xFFFF0000U) | command);
+                     (uint32_t)command);
     return (pci_read_config(device->bus, device->slot, device->function, 0x04) & (1U << 1)) != 0;
 }
 
@@ -274,7 +274,7 @@ int pci_enable_bus_mastering(const struct pci_device* device)
     if (command & (1U << 2)) return 1;
     command |= (1U << 2);
     pci_write_config(device->bus, device->slot, device->function, 0x04,
-                     (command_status & 0xFFFF0000U) | command);
+                     (uint32_t)command);
     return (pci_read_config(device->bus, device->slot, device->function, 0x04) & (1U << 2)) != 0;
 }
 

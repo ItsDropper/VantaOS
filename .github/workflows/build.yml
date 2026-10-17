@@ -68,7 +68,7 @@ jobs:
           set -euo pipefail
           log="usb-xhci-boot.log"
           monitor="/tmp/vantaos-usb-monitor.sock"
-          rm -f "$monitor" "$log" qemu-usb-stderr.log
+          rm -f "$monitor" "$log" qemu-usb-stderr.log qemu-usb-debug.log
 
           # Keep QEMU's serial output unbuffered so the readiness and input
           # assertions inspect live kernel output, not data flushed at shutdown.
@@ -87,6 +87,7 @@ jobs:
             -display vnc=127.0.0.1:0 \
             -serial stdio \
             -monitor "unix:$monitor,server=on,wait=off" \
+            -d guest_errors,unimp -D qemu-usb-debug.log \\
             -no-reboot >"$log" 2>qemu-usb-stderr.log &
           qemu_pid=$!
           cleanup() {
@@ -99,7 +100,7 @@ jobs:
             if grep -q 'VANTAOS_BOOT_OK' "$log" 2>/dev/null; then break; fi
             if ! kill -0 "$qemu_pid" 2>/dev/null; then
               echo "QEMU exited before VANTAOS_BOOT_OK."
-              cat "$log" qemu-usb-stderr.log 2>/dev/null || true
+              cat "$log" qemu-usb-stderr.log qemu-usb-debug.log 2>/dev/null || true
               exit 1
             fi
             sleep 0.1

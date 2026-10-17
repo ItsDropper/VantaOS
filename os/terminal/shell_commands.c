@@ -227,3 +227,42 @@ void shell_execute(void)
 
     shell_show_prompt();
 }
+
+int shell_execute_kernel_command(const char* command, char* output,
+                                 size_t output_capacity)
+{
+    if (!command || !output || output_capacity == 0U)
+        return -22;
+
+    size_t length = 0U;
+    while (command[length] != '\0')
+    {
+        if (length >= SHELL_BUFFER_SIZE - 1U)
+            return -22;
+        length++;
+    }
+    if (length == 0U)
+        return -22;
+
+    char saved_buffer[SHELL_BUFFER_SIZE];
+    for (size_t i = 0U; i < sizeof(saved_buffer); i++)
+        saved_buffer[i] = shell_buffer[i];
+    unsigned int saved_length = shell_length;
+    unsigned int saved_cursor = shell_cursor;
+
+    for (size_t i = 0U; i < length; i++)
+        shell_buffer[i] = command[i];
+    shell_buffer[length] = '\0';
+    shell_length = (unsigned int)length;
+    shell_cursor = shell_length;
+
+    terminal_capture_begin(output, output_capacity);
+    shell_execute();
+    size_t captured = terminal_capture_end();
+
+    for (size_t i = 0U; i < sizeof(saved_buffer); i++)
+        shell_buffer[i] = saved_buffer[i];
+    shell_length = saved_length;
+    shell_cursor = saved_cursor;
+    return captured > 0U ? (int)captured : 0;
+}

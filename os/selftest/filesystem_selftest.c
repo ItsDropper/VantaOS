@@ -201,12 +201,12 @@ void filesystem_selftest_initialize(void)
 
     /* Exercise directory creation, same-directory rename, and safe deletion. */
     if (filesystem_create_directory("/FMTEST") < 0 ||
-        filesystem_create_file("/FMTEST/OLD.TXT") < 0 ||
-        filesystem_rename_path("/FMTEST/OLD.TXT",
-                               "/FMTEST/NEW.BIN") < 0 ||
-        filesystem_lookup("/FMTEST/OLD.TXT") >= 0 ||
-        filesystem_lookup("/FMTEST/NEW.BIN") < 0 ||
-        filesystem_delete_path("/FMTEST/NEW.BIN") < 0 ||
+        filesystem_create_file("/FMTEST/Long File Name.txt") < 0 ||
+        filesystem_rename_path("/FMTEST/Long File Name.txt",
+                               "/FMTEST/Renamed App.bin") < 0 ||
+        filesystem_lookup("/FMTEST/Long File Name.txt") >= 0 ||
+        filesystem_lookup("/FMTEST/Renamed App.bin") < 0 ||
+        filesystem_delete_path("/FMTEST/Renamed App.bin") < 0 ||
         filesystem_delete_path("/FMTEST") < 0 ||
         filesystem_lookup("/FMTEST") >= 0)
     {

@@ -110,13 +110,6 @@ static void mmio_write32(volatile uint8_t* base, uint32_t offset,
     *(volatile uint32_t*)(base + offset) = value;
 }
 
-static uint64_t mmio_read64(volatile uint8_t* base, uint32_t offset)
-{
-    uint32_t low = mmio_read32(base, offset);
-    uint32_t high = mmio_read32(base, offset + 4U);
-    return ((uint64_t)high << 32) | low;
-}
-
 static void mmio_write64(volatile uint8_t* base, uint32_t offset,
                          uint64_t value)
 {
@@ -215,7 +208,7 @@ int xhci_submit_command(uint32_t type, uint64_t parameter,
     trb->parameter = parameter;
     trb->status = status;
     trb->control = (type << XHCI_TRB_TYPE_SHIFT) |
-                   (control_flags & 0x3FFU) |
+                   (control_flags & 0xFF1F03FEU) |
                    (command_cycle ? XHCI_TRB_CYCLE : 0U);
     __atomic_thread_fence(__ATOMIC_RELEASE);
 

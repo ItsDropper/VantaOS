@@ -16,6 +16,16 @@ extern int explorer_maximized;
 extern int explorer_restore_x;
 extern int explorer_restore_y;
 
+void graphics_toggle_start_menu(void)
+{
+    if (!initialized)
+        return;
+
+    start_menu_open = !start_menu_open;
+    explorer_dragging = 0;
+    terminal_dragging = 0;
+}
+
 void graphics_mouse_click(int button)
 {
     if (!initialized || button != 1)
@@ -40,9 +50,7 @@ void graphics_mouse_click(int button)
 
         if (cursor_x >= center - 108 && cursor_x < center - 66)
         {
-            start_menu_open = !start_menu_open;
-            explorer_dragging = 0;
-            terminal_dragging = 0;
+            graphics_toggle_start_menu();
             return;
         }
 

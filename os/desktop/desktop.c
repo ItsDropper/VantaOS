@@ -85,6 +85,13 @@ void desktop_update(void)
 {
     gui_server_cleanup_dead_windows();
 
+    /* The physical Super/GUI key is a desktop shortcut, not text input. */
+    if (keyboard_take_super_event())
+    {
+        graphics_toggle_start_menu();
+        desktop_gui_present();
+    }
+
     uint32_t explorer_pid = file_explorer_process_pid();
     if (graphics_get_active_panel() == 2)
     {

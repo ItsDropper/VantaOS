@@ -64,15 +64,19 @@ static void ui_dot(int x, int y, uint32_t c)
 }
 static void ui_brand(int x, int y, int size)
 {
-    /* Four crisp panes read as an OS mark even at taskbar scale. */
-    int gap = ui_max(2, size / 12);
-    int pane_w = (size - gap) / 2;
-    int pane_h = (size - gap) / 2;
-    graphics_fill_rect(x, y, pane_w, pane_h, 0x00F5FAFF);
-    graphics_fill_rect(x + pane_w + gap, y, pane_w, pane_h, 0x00F5FAFF);
-    graphics_fill_rect(x, y + pane_h + gap, pane_w, pane_h, 0x00F5FAFF);
-    graphics_fill_rect(x + pane_w + gap, y + pane_h + gap,
-                       pane_w, pane_h, 0x00F5FAFF);
+    /* Reuse the Vanta V silhouette instead of a four-pane Windows-like mark. */
+    int steps = size / 2;
+    if (steps < 2) steps = 2;
+    for (int i = 0; i < steps; ++i)
+    {
+        int yy = y + i * size / steps;
+        int inset = i * size / (steps * 2);
+        uint32_t left = (i & 1) ? UI_BLUE_BRIGHT : UI_BLUE;
+        uint32_t right = (i & 1) ? 0x0048A8FFU : 0x0067C5FFU;
+        graphics_fill_rect(x + inset, yy, 3, 2, left);
+        graphics_fill_rect(x + size - inset - 3, yy, 3, 2, right);
+    }
+    graphics_fill_rect(x + size / 2 - 2, y + size - 3, 5, 3, UI_BLUE_BRIGHT);
 }
 static void ui_icon_terminal(int x, int y, int s, uint32_t tint)
 {
@@ -449,7 +453,7 @@ void graphics_draw_start_menu_detail(int width, int height)
     graphics_draw_text(mx + mw - 35, my + 23, "OS", UI_MUTED, 1);
 
     ui_label(mx + 24, my + 76, "PINNED APPLICATIONS");
-    ui_label(mx + mw - 100, my + 76, "4 APPS");
+    ui_label(mx + mw - 112, my + 76, "CORE APPS");
 
     ui_surface(mx + 24, my + 110, mw - 48, 54, 9,
                0x00202F3F, UI_EDGE_SOFT);
@@ -482,7 +486,7 @@ void graphics_draw_start_menu_detail(int width, int height)
     graphics_draw_text(mx + 39, my + mh - 44,
         filesystem_is_initialized() ? "Filesystem ready" : "Filesystem unavailable",
         UI_MUTED, 1);
-    graphics_draw_text(mx + mw - 108, my + mh - 44, "VantaOS", UI_QUIET, 1);
+    graphics_draw_text(mx + mw - 118, my + mh - 44, "SUPER TO OPEN", UI_QUIET, 1);
 }
 
 /* Shared Explorer parts. These are presentation-only; the Explorer remains

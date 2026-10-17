@@ -8,11 +8,19 @@
 
 void graphics_draw_vanta_logo(int x, int y, int size)
 {
-    /* Original Vanta mark: a clean geometric V built from two angled bars. */
-    int half = size / 2;
-    graphics_fill_rect(x + half - 3, y, 6, size, 0x003B82F6);
-    graphics_fill_rect(x + half + 8, y, 6, size, 0x005AA9E6);
-    graphics_fill_rect(x + half - 3, y + size - 8, 18, 8, 0x0048A8FF);
+    /* Compact electric-blue V mark; intentionally distinct from the Windows panes. */
+    int steps = size / 2;
+    if (steps < 2) steps = 2;
+    for (int i = 0; i < steps; ++i)
+    {
+        int yy = y + i * 2;
+        int inset = i * size / (steps * 2);
+        uint32_t left = (i & 1) ? 0x005AA9E6U : 0x003B82F6U;
+        uint32_t right = (i & 1) ? 0x0048A8FFU : 0x0067C5FFU;
+        graphics_fill_rect(x + inset, yy, 3, 2, left);
+        graphics_fill_rect(x + size - inset - 3, yy, 3, 2, right);
+    }
+    graphics_fill_rect(x + size / 2 - 2, y + size - 3, 5, 3, 0x0078B8FFU);
 }
 
 int graphics_files_window_x(void)
@@ -71,16 +79,6 @@ void graphics_draw_window_frame(int x, int y, int w, int h, const char* title, i
     }
 }
 
-static void taskbar_windows_logo(int x, int y, int size)
-{
-    int gap = size / 8;
-    int pane = (size - gap) / 2;
-    graphics_fill_rect(x, y, pane, pane, 0x004B8FE8);
-    graphics_fill_rect(x + pane + gap, y, pane, pane, 0x004B8FE8);
-    graphics_fill_rect(x, y + pane + gap, pane, pane, 0x004B8FE8);
-    graphics_fill_rect(x + pane + gap, y + pane + gap, pane, pane,
-                       0x004B8FE8);
-}
 static unsigned char ui_rtc_read(unsigned char reg)
 {
     unsigned char value;
@@ -161,7 +159,7 @@ void graphics_draw_taskbar(int taskbar_y, int width)
     /* Start */
     graphics_fill_rounded_rect(center - 108, taskbar_y + 10, 42, 42, 8,
         start_menu_open ? VANTA_UI_HOVER : VANTA_UI_TOPBAR);
-    taskbar_windows_logo(center - 97, taskbar_y + 21, 20);
+    graphics_draw_vanta_logo(center - 97, taskbar_y + 20, 22);
 
     /* Search is styled like a native taskbar affordance; intentionally inert. */
     graphics_fill_rounded_rect(center - 58, taskbar_y + 10, 66, 42, 9,
@@ -241,10 +239,11 @@ void graphics_present(void)
 
     graphics_draw_taskbar(taskbar_y, w);
 
-    if (active_panel == 3)
-        return;
-
+    /* The Start surface is an overlay and must remain visible over every app. */
     if (start_menu_open)
         graphics_draw_start_menu_detail(w, h);
+
+    if (active_panel == 3)
+        return;
 
 }

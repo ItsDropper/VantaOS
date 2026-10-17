@@ -35,6 +35,10 @@
 #define USER_SYSCALL_GUI_DRAW 18U
 #define USER_SYSCALL_GUI_POLL_EVENT 19U
 #define USER_SYSCALL_SETTINGS_APPLY 20U
+#define USER_SYSCALL_DELETE_PATH 21U
+#define USER_SYSCALL_RENAME_PATH 22U
+#define USER_SYSCALL_CREATE_DIRECTORY 23U
+#define USER_SYSCALL_STAT_PATH 24U
 #define USER_SYSCALL_IO_MAX 4096U
 #define USER_SYSCALL_WRITE_MAX 4096U
 
@@ -592,6 +596,89 @@ static int syscall_create_file(struct exception_frame* frame,
 }
 
 
+static int syscall_copy_path_arg(uintptr_t address, char* path,
+                                const process_t* process)
+{
+    size_t length = 0U;
+    int copied = syscall_copy_user_string(path, FS_PATH_MAX, address,
+                                          process, &length);
+    if (copied != 0)
+        return copied;
+    return length == 0U ? -22 : 0;
+}
+
+static int syscall_delete_path(struct exception_frame* frame,
+                               const process_t* process)
+{
+    char path[FS_PATH_MAX];
+    int result = syscall_copy_path_arg((uintptr_t)frame->rdi, path, process);
+    if (result == 0)
+        result = vfs_delete_path(path);
+    frame->rax = result < 0 ? (uint64_t)(int64_t)-5 : 0U;
+    return 0;
+}
+
+static int syscall_rename_path(struct exception_frame* frame,
+                               const process_t* process)
+{
+    char old_path[FS_PATH_MAX];
+    char new_path[FS_PATH_MAX];
+    int result = syscall_copy_path_arg((uintptr_t)frame->rdi, old_path, process);
+    if (result == 0)
+        result = syscall_copy_path_arg((uintptr_t)frame->rsi, new_path, process);
+    if (result == 0)
+        result = vfs_rename_path(old_path, new_path);
+    frame->rax = result < 0 ? (uint64_t)(int64_t)-5 : 0U;
+    return 0;
+}
+
+static int syscall_create_directory(struct exception_frame* frame,
+                                    const process_t* process)
+{
+    char path[FS_PATH_MAX];
+    int result = syscall_copy_path_arg((uintptr_t)frame->rdi, path, process);
+    if (result == 0)
+        result = vfs_create_directory(path);
+    frame->rax = result < 0 ? (uint64_t)(int64_t)-5 : 0U;
+    return 0;
+}
+
+static int syscall_stat_path(struct exception_frame* frame,
+                             const process_t* process)
+{
+    uintptr_t output_address = (uintptr_t)frame->rsi;
+    if (!paging_user_range_valid(process->address_space, output_address,
+                                 sizeof(fs_path_info_t), 1))
+    {
+        frame->rax = (uint64_t)(int64_t)-14;
+        return 0;
+    }
+    char path[FS_PATH_MAX];
+    int copied = syscall_copy_path_arg((uintptr_t)frame->rdi, path, process);
+    if (copied != 0)
+    {
+        frame->rax = (uint64_t)(int64_t)copied;
+        return 0;
+    }
+    int id = vfs_lookup(path);
+    const fs_node_t* node = id >= 0 ? vfs_get_node((uint32_t)id) : 0;
+    if (!node)
+    {
+        frame->rax = (uint64_t)(int64_t)-2;
+        return 0;
+    }
+    fs_path_info_t info = {0};
+    info.type = (uint32_t)node->type;
+    info.size = node->size;
+    info.first_cluster = node->first_cluster;
+    for (size_t i = 0; i < sizeof(info.name) - 1U && node->name[i]; i++)
+        info.name[i] = node->name[i];
+    for (size_t i = 0; i < sizeof(info); i++)
+        ((uint8_t*)output_address)[i] = ((const uint8_t*)&info)[i];
+    frame->rax = 0U;
+    return 0;
+}
+
 static int syscall_gui_create_window(struct exception_frame* frame,
                                      const process_t* process)
 {
@@ -742,6 +829,14 @@ static int syscall_dispatch(struct exception_frame* frame)
             return syscall_file_write(frame, process.pid, &process);
         case USER_SYSCALL_CREATE_FILE:
             return syscall_create_file(frame, &process);
+        case USER_SYSCALL_DELETE_PATH:
+            return syscall_delete_path(frame, &process);
+        case USER_SYSCALL_RENAME_PATH:
+            return syscall_rename_path(frame, &process);
+        case USER_SYSCALL_CREATE_DIRECTORY:
+            return syscall_create_directory(frame, &process);
+        case USER_SYSCALL_STAT_PATH:
+            return syscall_stat_path(frame, &process);
         case USER_SYSCALL_GUI_CREATE_WINDOW:
             return syscall_gui_create_window(frame, &process);
         case USER_SYSCALL_GUI_CLOSE_WINDOW:

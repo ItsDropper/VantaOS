@@ -44,6 +44,27 @@ static uint64_t next_z_order = 1U;
 static uint32_t focused_window_id;
 static int redraw_pending;
 
+/*
+ * Rendering is deliberately performed from a snapshot outside gui_lock.
+ * Holding the input/window lock while painting every pixel made keyboard
+ * syscalls spin behind software framebuffer rendering in QEMU.
+ */
+typedef struct
+{
+    int visible;
+    int32_t x;
+    int32_t y;
+    uint32_t width;
+    uint32_t height;
+    uint64_t z_order;
+    char title[VANTA_GUI_TITLE_MAX + 1U];
+    vanta_gui_draw_command_t commands[VANTA_GUI_MAX_COMMANDS];
+    uint32_t command_count;
+} gui_render_snapshot_t;
+
+static gui_render_snapshot_t render_snapshot[VANTA_GUI_MAX_WINDOWS];
+
+
 static gui_window_t* gui_find_window_locked(uint32_t pid, uint32_t id)
 {
     if (id == 0U)
@@ -393,16 +414,50 @@ void gui_server_draw_windows(void)
     if (!graphics_is_initialized())
         return;
 
+    /*
+     * Snapshot only render state under the lock. Drawing is CPU-intensive on
+     * the software framebuffer and must not hold gui_lock: keyboard reads,
+     * pointer events, and GUI syscalls need to proceed while the window is
+     * being painted.
+     */
     uint64_t flags = spinlock_lock_irqsave(&gui_lock);
+    for (unsigned int i = 0; i < VANTA_GUI_MAX_WINDOWS; i++)
+    {
+        gui_window_t* source = &windows[i];
+        gui_render_snapshot_t* target = &render_snapshot[i];
+        target->visible = source->used && source->visible;
+        if (!target->visible)
+        {
+            target->command_count = 0U;
+            continue;
+        }
+
+        target->x = source->x;
+        target->y = source->y;
+        target->width = source->width;
+        target->height = source->height;
+        target->z_order = source->z_order;
+        target->command_count = source->command_count;
+        for (size_t j = 0; j < sizeof(target->title); j++)
+            target->title[j] = source->title[j];
+        if (target->command_count > VANTA_GUI_MAX_COMMANDS)
+            target->command_count = VANTA_GUI_MAX_COMMANDS;
+        for (uint32_t j = 0; j < target->command_count; j++)
+            target->commands[j] = source->commands[j];
+    }
+    spinlock_unlock_irqrestore(&gui_lock, flags);
+
     uint64_t previous_z = 0U;
     for (unsigned int pass = 0; pass < VANTA_GUI_MAX_WINDOWS; pass++)
     {
-        gui_window_t* window = 0;
+        gui_render_snapshot_t* window = 0;
         for (unsigned int i = 0; i < VANTA_GUI_MAX_WINDOWS; i++)
-            if (windows[i].used && windows[i].visible &&
-                windows[i].z_order > previous_z &&
-                (!window || windows[i].z_order < window->z_order))
-                window = &windows[i];
+        {
+            gui_render_snapshot_t* candidate = &render_snapshot[i];
+            if (candidate->visible && candidate->z_order > previous_z &&
+                (!window || candidate->z_order < window->z_order))
+                window = candidate;
+        }
         if (!window)
             break;
         previous_z = window->z_order;
@@ -432,7 +487,6 @@ void gui_server_draw_windows(void)
                                    command->scale);
         }
     }
-    spinlock_unlock_irqrestore(&gui_lock, flags);
 }
 
 int gui_server_mouse_click(int x, int y, int button)

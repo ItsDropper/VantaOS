@@ -4,6 +4,7 @@
 #include "net.h"
 #include "net_dns.h"
 #include "net_ipv4.h"
+#include "net_tcp.h"
 #include <stdint.h>
 #include <stddef.h>
 
@@ -432,6 +433,184 @@ static int command_kill(uint32_t argc, char **argv, int force)
     return 1;
 }
 
+
+static int append_text(char *out, size_t capacity, size_t *used,
+                       const char *text)
+{
+    if (!out || !used || !text) return 0;
+    while (*text) {
+        if (*used + 1U >= capacity) return 0;
+        out[(*used)++] = *text++;
+    }
+    out[*used] = 0;
+    return 1;
+}
+
+static int command_http_url(const char *url)
+{
+    char host[96], path[96], request[512], output[257];
+    size_t host_length = 0, path_length = 0, used = 0;
+    uint32_t port = 80U, address = 0;
+    const char *authority, *cursor, *path_start, *port_start = 0;
+    net_device_t *device = 0;
+
+    if (!url) return 1;
+    if (url[0] == 'h' && url[1] == 't' && url[2] == 't' &&
+        url[3] == 'p' && url[4] == 's' && url[5] == ':' &&
+        url[6] == '/' && url[7] == '/') {
+        terminal_write("\\nnet http: HTTPS requires TLS, which is not implemented; refusing insecure downgrade.");
+        return 1;
+    }
+    if (!(url[0] == 'h' && url[1] == 't' && url[2] == 't' &&
+          url[3] == 'p' && url[4] == ':' && url[5] == '/' && url[6] == '/')) {
+        terminal_write("\\nusage: net http <http://hostname[:port]/path>");
+        return 1;
+    }
+
+    authority = url + 7U;
+    cursor = authority;
+    while (*cursor && *cursor != '/' && *cursor != '?' && *cursor != '#') {
+        if (*cursor == ':') { port_start = cursor + 1U; break; }
+        ++cursor;
+    }
+    path_start = cursor;
+    if (port_start) {
+        path_start = port_start;
+        while (*path_start && *path_start != '/' &&
+               *path_start != '?' && *path_start != '#') ++path_start;
+        char port_text[6];
+        size_t digits = (size_t)(path_start - port_start);
+        if (!digits || digits >= sizeof(port_text)) {
+            terminal_write("\\nnet http: invalid TCP port");
+            return 1;
+        }
+        for (size_t i = 0; i < digits; ++i) port_text[i] = port_start[i];
+        port_text[digits] = 0;
+        if (!parse_u32(port_text, &port) || !port || port > 65535U) {
+            terminal_write("\\nnet http: invalid TCP port");
+            return 1;
+        }
+        host_length = (size_t)((port_start - 1U) - authority);
+    } else {
+        host_length = (size_t)(cursor - authority);
+    }
+    if (!host_length || host_length >= sizeof(host)) {
+        terminal_write("\\nnet http: invalid or oversized hostname");
+        return 1;
+    }
+    for (size_t i = 0; i < host_length; ++i) host[i] = authority[i];
+    host[host_length] = 0;
+
+    if (*path_start == '#') {
+        terminal_write("\\nnet http: URL fragments are not sent to the server");
+        path_start = "/";
+    }
+    if (*path_start == '?' || *path_start == 0) {
+        path[path_length++] = '/';
+        if (*path_start == '?') {
+            size_t q = 0;
+            while (path_start[q] && path_start[q] != '#' &&
+                   path_length < sizeof(path) - 1U)
+                path[path_length++] = path_start[q++];
+        }
+    } else {
+        while (path_start[path_length] && path_start[path_length] != '#' &&
+               path_length < sizeof(path) - 1U) {
+            path[path_length] = path_start[path_length];
+            ++path_length;
+        }
+    }
+    path[path_length] = 0;
+    if (!path_length) { path[0] = '/'; path[1] = 0; }
+
+    for (uint32_t i = 0; i < net_device_count(); ++i) {
+        net_device_t *candidate = net_device_get(i);
+        if (candidate && candidate->link_up && candidate->ipv4_configured) {
+            device = candidate;
+            break;
+        }
+    }
+    if (!device) {
+        terminal_write("\\nnet http: no configured link-up interface; run 'net connect' first");
+        return 1;
+    }
+
+    if (!parse_ipv4(host, &address)) {
+        if (!device->ipv4_dns) {
+            terminal_write("\\nnet http: no DNS server configured; run 'net connect' first");
+            return 1;
+        }
+        terminal_write("\\nResolving "); terminal_write(host); terminal_write("...");
+        if (!net_dns_resolve(device, host, &address, 8000U)) {
+            terminal_write("\\nnet http: DNS lookup failed or timed out");
+            return 1;
+        }
+        terminal_write(" -> "); print_ipv4(address);
+    }
+
+    request[0] = 0;
+    if (!append_text(request, sizeof(request), &used, "GET ") ||
+        !append_text(request, sizeof(request), &used, path) ||
+        !append_text(request, sizeof(request), &used, " HTTP/1.0\\r\\nHost: ") ||
+        !append_text(request, sizeof(request), &used, host)) {
+        terminal_write("\\nnet http: request is too large");
+        return 1;
+    }
+    if (port != 80U) {
+        char port_text[6], digits[6];
+        size_t n = 0;
+        uint32_t value = port;
+        do { digits[n++] = (char)('0' + value % 10U); value /= 10U; }
+        while (value && n < sizeof(digits));
+        for (size_t i = 0; i < n; ++i) port_text[i] = digits[n - i - 1U];
+        port_text[n] = 0;
+        if (!append_text(request, sizeof(request), &used, ":") ||
+            !append_text(request, sizeof(request), &used, port_text)) {
+            terminal_write("\\nnet http: request is too large");
+            return 1;
+        }
+    }
+    if (!append_text(request, sizeof(request), &used,
+                     "\\r\\nUser-Agent: VantaOS/0.1\\r\\nConnection: close\\r\\nAccept: */*\\r\\n\\r\\n")) {
+        terminal_write("\\nnet http: request is too large");
+        return 1;
+    }
+
+    terminal_write("\\nConnecting to "); print_ipv4(address);
+    terminal_write(":"); shell_print_decimal(port); terminal_write("...");
+    if (!net_tcp_connect(device, address, (uint16_t)port, 15000U)) {
+        terminal_write("\\nnet http: TCP connection failed or timed out");
+        return 1;
+    }
+    if (!net_tcp_send(device, request, used, 10000U)) {
+        terminal_write("\\nnet http: request transmission failed");
+        net_tcp_close(device);
+        return 1;
+    }
+
+    terminal_write("\\n--- HTTP response (limited to 4096 bytes) ---\\n");
+    size_t total = 0;
+    for (uint32_t chunks = 0; chunks < 16U; ++chunks) {
+        int received = net_tcp_receive(device, output, sizeof(output) - 1U, 10000U);
+        if (received == 0) break;
+        if (received < 0) {
+            terminal_write("\\nnet http: response timed out or connection failed");
+            break;
+        }
+        output[received] = 0;
+        terminal_write(output);
+        total += (size_t)received;
+        if (total >= 4096U) {
+            terminal_write("\\n[response display limit reached]");
+            break;
+        }
+    }
+    net_tcp_close(device);
+    if (!total) terminal_write("\\nnet http: server returned no data");
+    terminal_write("\\n--- end response ---");
+    return 1;
+}
+
 static int command_net(uint32_t argc, char **argv)
 {
     if (argc == 1U || (argc == 2U && shell_string_equals(argv[1], "status"))) {
@@ -522,6 +701,10 @@ static int command_net(uint32_t argc, char **argv)
         shell_print_decimal(lease);
         terminal_write("\nInterface configured. General outbound Internet traffic still requires IPv4/ARP transmit and DNS/TCP client support.");
         return 1;
+    }
+    if (argc == 3U && (shell_string_equals(argv[1], "http") ||
+                       shell_string_equals(argv[1], "get"))) {
+        return command_http_url(argv[2]);
     }
     if (argc == 3U && shell_string_equals(argv[1], "ping")) {
         uint32_t target = 0;

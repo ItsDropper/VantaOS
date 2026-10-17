@@ -109,7 +109,8 @@ jobs:
           test -f drivers/Makefile
           test -f drivers/network/e1000.c
           test -f drivers/network/virtio_net.c
-          grep -q 'net/tls.c' net/Makefile
+          grep -q 'net/tcp.c' net/Makefile
+          ! grep -q 'net/tls.c' net/Makefile
           grep -q 'drivers/network/e1000.c' drivers/network/Makefile
           grep -q 'drivers/network/virtio_net.c' drivers/network/Makefile
           test -f fs/Makefile

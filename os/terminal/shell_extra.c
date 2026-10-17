@@ -766,7 +766,7 @@ static int command_net(uint32_t argc, char **argv)
             }
         }
         if (!d) {
-            terminal_write("\nnet dns: no DHCP DNS server configured; run net connect first");
+            terminal_write("\nnet dns: no DNS server configured; use 'net dns-server <IPv4> [index]'");
             return 1;
         }
         uint32_t address = 0;
@@ -834,7 +834,7 @@ static int command_net(uint32_t argc, char **argv)
         terminal_write(" (static; no DHCP lease or Internet test performed)");
         return 1;
     }
-    terminal_write("\nusage: net [status|poll|connect [index]|dhcp [index]|dns <hostname>|ping <IPv4>|http <URL>] | net config <index> <ip> <netmask> <gateway>");
+    terminal_write("\nusage: net [status|poll|connect [index]|dhcp [index]|dns <hostname>|dns-server <IPv4> [index]|ping <IPv4>|http <URL>] | net config <index> <ip> <netmask> <gateway>");
     return 1;
 }
 

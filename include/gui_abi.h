@@ -21,6 +21,17 @@
 #define VANTA_GUI_EVENT_FOCUS_GAINED  5U
 #define VANTA_GUI_EVENT_FOCUS_LOST    6U
 
+/* Special-key values carried by VANTA_GUI_EVENT_KEY. */
+#define VANTA_GUI_KEY_PAGE_UP   0x101U
+#define VANTA_GUI_KEY_PAGE_DOWN 0x102U
+#define VANTA_GUI_KEY_UP        0x103U
+#define VANTA_GUI_KEY_DOWN      0x104U
+#define VANTA_GUI_KEY_LEFT      0x105U
+#define VANTA_GUI_KEY_RIGHT     0x106U
+#define VANTA_GUI_KEY_HOME      0x107U
+#define VANTA_GUI_KEY_END       0x108U
+#define VANTA_GUI_KEY_DELETE    0x109U
+
 /* For KEY events, values 0-255 are character bytes; 0x100 + keyboard_event_t
  * represents a special key such as Page Up, arrows, Home, End, or Delete. */
 

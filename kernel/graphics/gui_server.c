@@ -275,6 +275,7 @@ int gui_server_set_owner_visible(uint32_t pid, int visible)
     uint64_t flags = spinlock_lock_irqsave(&gui_lock);
     int found = 0;
     int changed = 0;
+    int focused_owned = 0;
     gui_window_t* newest_owned = 0;
     for (unsigned int i = 0; i < VANTA_GUI_MAX_WINDOWS; i++)
     {
@@ -282,6 +283,8 @@ int gui_server_set_owner_visible(uint32_t pid, int visible)
         if (!window->used || window->owner_pid != pid)
             continue;
         found = 1;
+        if (window->id == focused_window_id)
+            focused_owned = 1;
         if (window->visible != visible)
         {
             window->visible = visible;
@@ -297,7 +300,7 @@ int gui_server_set_owner_visible(uint32_t pid, int visible)
         return found;
     }
 
-    if (newest_owned && !visible && focused_window_id == newest_owned->id)
+    if (!visible && focused_owned)
         gui_focus_locked(0);
 
     if (visible && newest_owned)

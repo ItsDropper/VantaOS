@@ -3,6 +3,7 @@
 #include "vfs.h"
 #include "net.h"
 #include "net_dns.h"
+#include "net_ipv4.h"
 #include <stdint.h>
 #include <stddef.h>
 

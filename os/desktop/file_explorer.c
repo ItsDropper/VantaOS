@@ -12,7 +12,7 @@
 #define EXPLORER_TITLE 46
 #define EXPLORER_SIDEBAR 188
 #define EXPLORER_TOOLBAR 44
-#define EXPLORER_ROW 34
+#define EXPLORER_ROW (desktop_theme_compact_rows() ? 28 : 34)
 #define EXPLORER_BUTTON 46
 #define EXPLORER_MAX_ROWS 12
 

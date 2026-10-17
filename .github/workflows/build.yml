@@ -108,7 +108,9 @@ jobs:
           test -f mm/Makefile
           test -f drivers/Makefile
           test -f drivers/network/e1000.c
+          test -f drivers/network/virtio_net.c
           grep -q 'drivers/network/e1000.c' drivers/network/Makefile
+          grep -q 'drivers/network/virtio_net.c' drivers/network/Makefile
           test -f fs/Makefile
 
       - name: Enforce architecture boundaries
@@ -118,6 +120,11 @@ jobs:
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_dns_client.c net/dns.c -o /tmp/vantaos-dns-client-test
           /tmp/vantaos-dns-client-test
+
+      - name: Test IPv6 RA, SLAAC, DAD, and ICMPv6
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_ipv6.c net/ipv6.c -o /tmp/vantaos-ipv6-test
+          /tmp/vantaos-ipv6-test
 
       - name: Test TCP client state machine
         run: |
@@ -219,6 +226,50 @@ jobs:
             cat "$log" qemu-e1000-stderr.log
             exit 1
           fi
+      - name: VirtIO legacy network device QEMU probe and TX regression
+        if: steps.scope.outputs.full == '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          log="virtio-boot.log"
+          rm -f "$log" qemu-virtio-stderr.log virtio-network.img
+          cp nvme-fat32-template.img virtio-network.img
+          stdbuf -o0 timeout 35s qemu-system-x86_64 \
+            -machine pc \
+            -nodefaults \
+            -device VGA,id=video0 \
+            -m 256M \
+            -device virtio-net-pci,disable-modern=on,netdev=net0 \
+            -netdev user,id=net0 \
+            -drive file=VantaOS.iso,media=cdrom,format=raw \
+            -drive file=virtio-network.img,if=ide,format=raw \
+            -boot order=d \
+            -display none \
+            -serial file:"$log" \
+            -no-reboot >/dev/null 2>qemu-virtio-stderr.log &
+          qemu_pid=$!
+          cleanup() {
+            kill "$qemu_pid" 2>/dev/null || true
+            wait "$qemu_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+          for attempt in $(seq 1 300); do
+            if grep -q 'VANTAOS_VIRTIO_NET_TX_SELFTEST_OK' "$log" 2>/dev/null && grep -q 'VANTAOS_BOOT_OK' "$log" 2>/dev/null; then break; fi
+            if grep -q 'VANTAOS_VIRTIO_NET_TX_SELFTEST_FAIL' "$log" 2>/dev/null; then
+              cat "$log" qemu-virtio-stderr.log
+              exit 1
+            fi
+            if ! kill -0 "$qemu_pid" 2>/dev/null; then
+              echo "QEMU exited before the VirtIO network TX test completed."
+              cat "$log" qemu-virtio-stderr.log
+              exit 1
+            fi
+            sleep 0.1
+          done
+          grep -q 'VANTAOS_BOOT_OK' "$log"
+          grep -q 'VANTAOS_VIRTIO_NET_INITIALIZED' "$log"
+          grep -q 'VANTAOS_VIRTIO_NET_TX_SELFTEST_OK' "$log"
+
       - name: USB HID xHCI input end-to-end test
         if: steps.scope.outputs.full == '1' || steps.scope.outputs.usb == '1'
         shell: bash

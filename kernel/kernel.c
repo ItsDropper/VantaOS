@@ -12,6 +12,8 @@
 #include "nvme.h"
 #include "net.h"
 #include "e1000.h"
+#include "virtio_net.h"
+#include "net_ipv6.h"
 #include "net_arp.h"
 #include "net_ipv4.h"
 #include "net_tcp.h"
@@ -64,11 +66,13 @@ static void kernel_initialize(const vanta_boot_info_t* boot_info)
     pci_initialize();
     heap_initialize();
     net_initialize();
-    if (!net_arp_initialize() || !net_ipv4_initialize() || !net_udp_initialize() ||
-        !net_tcp_initialize())
+    if (!net_arp_initialize() || !net_ipv4_initialize() || !net_ipv6_initialize() ||
+        !net_udp_initialize() || !net_tcp_initialize())
         serial_write("VANTAOS_NETWORK_PROTOCOL_REGISTER_FAIL\n");
     if (!e1000_initialize())
         serial_write("VANTAOS_E1000_DRIVER_REGISTER_FAIL\n");
+    if (!virtio_net_initialize())
+        serial_write("VANTAOS_VIRTIO_NET_DRIVER_REGISTER_FAIL\n");
     (void)net_probe_pci_devices();
 #ifdef VANTAOS_SELF_TEST
     network_framework_selftest();

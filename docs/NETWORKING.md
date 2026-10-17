@@ -7,23 +7,23 @@ VantaOS now has a usable IPv4 client path for DHCP, DNS, ICMP diagnostics, UDP, 
 ```
 Shell: net connect / net dns / net ping / net http
                 |
-DHCPv4, DNS A records, ICMP echo, bounded TCP client + HTTP/1.0 GET
+DHCPv4 with lease maintenance, DNS A records with TTL cache, IPv4 ICMP/UDP/TCP
+                |                         IPv6 ICMPv6, Router Advertisements, SLAAC
+IPv4 routing + ARP cache/resolution   IPv6 link-local + /64 SLAAC + ND responses
+                |                         |
+Ethernet-II + IPv4/IPv6 demultiplexing + bounded receive queue
                 |
-IPv4 input/output + next-hop routing + ARP cache/resolution
-                |
-Ethernet-II demultiplexer + bounded receive queue
-                |
-PCI network driver registry -> E1000-compatible driver
+PCI network driver registry -> E1000-compatible + legacy VirtIO-net
 ```
 
-Architecture-independent protocol code lives in `net/`; PCI drivers live in `drivers/network/`; shared contracts live in `include/net.h`. Network receive is polling-based: the driver moves frames into a fixed-capacity queue and protocol handlers run in `net_poll()` caller context. The E1000 driver supports QEMU `8086:100E` plus a defined set of legacy Intel 8254x PCI IDs that share this register/descriptor model. It is not a generic driver for all Intel adapters and does not imply compatibility with arbitrary physical NICs. Unsupported devices remain unbound instead of being guessed from the vendor name.
+Architecture-independent protocol code lives in `net/`; PCI drivers live in `drivers/network/`; shared contracts live in `include/net.h`. Network receive is polling-based: the driver moves frames into a fixed-capacity queue and protocol handlers run in `net_poll()` caller context. The E1000 driver supports QEMU `8086:100E` plus a defined set of legacy Intel 8254x PCI IDs that share this register/descriptor model. The VirtIO driver supports the **legacy/transitional PCI I/O transport** (`1af4:1000`), including split virtqueues backed by DMA memory below 4 GiB. It is not yet a modern VirtIO PCI capability/notification transport (`1af4:1041`), and this must not be read as support for every VirtIO implementation. The QEMU regression verifies legacy device initialization and transmit completion; it is not a substitute for physical-hardware coverage. Unsupported devices remain unbound instead of being guessed from the vendor name.
 
 ## Easy connection workflow
 
 1. Ensure the VM's virtual NIC or supported physical NIC is connected to a network.
 2. Run `net connect` to request DHCPv4 configuration.
 3. Run `net status` to verify link, address, gateway, DNS, and RX/TX counters.
-4. Run `net ping 1.1.1.1` as an optional ICMP diagnostic; some networks block ping.
+4. Run `net ping 1.1.1.1` as an optional ICMP diagnostic; some networks block ping. After IPv6 Router Advertisements and SLAAC complete, `net ping6 2606:4700:4700::1111` tests routed ICMPv6 reachability when the network permits it.
 5. Run `net dns example.com` to test DNS.
 6. Run `net http http://example.com/` to make a real plain-HTTP GET over TCP and print up to 4096 response bytes. `net get` is an alias.
 
@@ -36,11 +36,12 @@ A successful DHCP lease alone does not prove Internet access. DNS, gateway routi
 - ARP uses a bounded expiring cache and bounded request/retry behavior.
 - IPv4 validates header length, total length, checksum, destination, and unsupported fragments. Outbound packets are unfragmented and limited by the interface MTU.
 - UDP receive validates lengths and nonzero checksums; a zero UDP checksum is accepted as valid for IPv4. UDP transmit generates the IPv4 pseudo-header checksum.
-- DHCPv4 obtains address, netmask, gateway, DNS, and lease duration. Lease renewal/expiry is not yet implemented.
-- DNS supports bounded A-record lookup using the per-interface DNS address supplied by DHCP or set with `net dns-server`. CNAME-only/AAAA resolution and DNS-over-TLS/HTTPS are not implemented.
+- DHCPv4 obtains address, netmask, gateway, DNS, and lease duration. It schedules T1 unicast renewal, T2 broadcast rebinding, bounded exponential retry, and lease expiry cleanup. Renewal is still a single-client state machine and needs longer-running network-emulator tests under packet loss and server restart.
+- DNS supports bounded A-record lookup using the per-interface DNS address supplied by DHCP or set with `net dns-server`. Replies must match the outstanding transaction and question; positive A answers are cached per interface/server until their TTL expires. CNAME-only/AAAA resolution, negative caching, EDNS0, DNSSEC, and DNS-over-TLS/HTTPS are not implemented.
+- IPv6 accepts ICMPv6, validates its pseudo-header checksum, sends Router Solicitations, processes Router Advertisements and autonomous /64 prefixes, performs basic Duplicate Address Detection before publishing a SLAAC address, responds to Neighbor Solicitations for local addresses, and answers ICMPv6 echo requests. IPv6 echo requests use a bounded neighbor cache, Neighbor Solicitation/Advertisement resolution, and an advertised default router for off-link destinations. IPv6 UDP/TCP sockets, privacy addresses, DHCPv6, extension-header chains, and broad adversarial ND hardening are not yet implemented; this is dual-stack ICMP reachability, not full IPv6 Internet access.
 - TCP is currently a **single synchronous client connection** with bounded send/receive buffers, peer-MSS and advertised-window handling, segmentation of larger writes, zero-window waiting, retransmission timeout, sequence-checked RST handling, and checksum validation. It does not yet implement multiple simultaneous sockets, congestion control, SACK, out-of-order reassembly, IP fragmentation, or a full socket API.
 - HTTP support is **plain HTTP only**: one bounded HTTP/1.0 GET, response display capped at 4096 bytes. HTTPS is intentionally rejected because TLS and certificate validation are not implemented; the client does not silently downgrade HTTPS to HTTP.
 
 ## Validation and remaining work
 
-The existing QEMU network regression covers E1000 transmit/receive, ARP, ICMP, and UDP validation. TCP/HTTP still needs dedicated end-to-end QEMU tests and real-hardware validation before being described as production-ready. Remaining priorities are end-to-end TCP loss/duplicate/out-of-order tests, TLS and certificate validation before HTTPS, DHCP lease renewal/expiry, IPv6, additional independently implemented NIC drivers (including common Realtek and VirtIO adapters), and a Wi-Fi driver plus WPA2/WPA3 authentication. Wi-Fi cannot be enabled by a router setting alone: VantaOS needs a supported wireless chipset driver and a secure association/authentication implementation.
+CI now includes focused IPv6 RA/SLAAC/ICMPv6 tests and a QEMU legacy VirtIO-net transmit-completion test, alongside the E1000 Ethernet/ARP/ICMP/UDP regression and DNS/TCP host-side tests. These tests validate only the named assertions. TCP still needs end-to-end loss/duplicate/out-of-order tests; IPv6 needs outbound UDP/TCP and routed neighbor resolution; VirtIO modern PCI support and additional independently implemented NIC drivers (including common Realtek adapters) remain future work. TLS and certificate validation are required before HTTPS. Wi-Fi still requires a chipset-specific driver, firmware handling, scanning, and a secure WPA2/WPA3 association path. Wi-Fi cannot be enabled by a router setting alone: VantaOS needs a supported wireless chipset driver and a secure association/authentication implementation.

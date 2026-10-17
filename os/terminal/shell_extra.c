@@ -4,6 +4,7 @@
 #include "net.h"
 #include "net_dns.h"
 #include "net_ipv4.h"
+#include "net_ipv6.h"
 #include "net_tcp.h"
 #include <stdint.h>
 #include <stddef.h>
@@ -95,12 +96,66 @@ static int parse_ipv4(const char *s, uint32_t *out)
     return 1;
 }
 
+static int parse_ipv6(const char *text, net_ipv6_address_t *out)
+{
+    uint16_t groups[8]={0};size_t count=0;int compression=-1;const char*p=text;
+    if(!p||!out||!*p)return 0;
+    if(*p==':'){if(p[1]!=':')return 0;compression=0;p+=2;}
+    while(*p){
+        if(count>=8U)return 0;
+        uint16_t value=0;size_t digits=0;
+        while(*p&&*p!=':'){
+            char c=*p++;uint8_t nibble;
+            if(c>='0'&&c<='9')nibble=(uint8_t)(c-'0');
+            else if(c>='a'&&c<='f')nibble=(uint8_t)(c-'a'+10);
+            else if(c>='A'&&c<='F')nibble=(uint8_t)(c-'A'+10);
+            else return 0;
+            if(++digits>4U)return 0;
+            value=(uint16_t)((value<<4)|nibble);
+        }
+        if(!digits)return 0;
+        groups[count++]=value;
+        if(!*p)break;
+        if(p[1]==':'){
+            if(compression>=0)return 0;
+            compression=(int)count;p+=2;
+            if(!*p)break;
+        }else{
+            ++p;if(!*p)return 0;
+        }
+    }
+    if(compression>=0){
+        if(count>=8U)return 0;
+        size_t zeros=8U-count;
+        for(size_t i=count;i>(size_t)compression;i--)
+            groups[i+zeros-1U]=groups[i-1U];
+        for(size_t i=(size_t)compression;i<(size_t)compression+zeros;i++)groups[i]=0;
+        count=8U;
+    }else if(count!=8U)return 0;
+    for(size_t i=0;i<8U;i++){out->bytes[i*2U]=(uint8_t)(groups[i]>>8);out->bytes[i*2U+1U]=(uint8_t)groups[i];}
+    return 1;
+}
+
 static void print_ipv4(uint32_t ip)
 {
     shell_print_decimal((ip >> 24) & 255U); terminal_putchar('.');
     shell_print_decimal((ip >> 16) & 255U); terminal_putchar('.');
     shell_print_decimal((ip >> 8) & 255U); terminal_putchar('.');
     shell_print_decimal(ip & 255U);
+}
+static int ipv6_is_zero(const net_ipv6_address_t *address)
+{
+    uint8_t any=0;for(uint32_t i=0;i<16U;i++)any|=address->bytes[i];return any==0U;
+}
+static void print_ipv6(const net_ipv6_address_t *address)
+{
+    static const char hex[]="0123456789abcdef";
+    for(uint32_t i=0;i<8U;i++){
+        if(i)terminal_putchar(':');
+        uint16_t group=(uint16_t)(((uint16_t)address->bytes[i*2U]<<8)|address->bytes[i*2U+1U]);
+        terminal_putchar(hex[(group>>12)&15U]);terminal_putchar(hex[(group>>8)&15U]);
+        terminal_putchar(hex[(group>>4)&15U]);terminal_putchar(hex[group&15U]);
+    }
 }
 
 static int command_stat(uint32_t argc, char **argv)
@@ -657,6 +712,12 @@ static int command_net(uint32_t argc, char **argv)
                 terminal_write(" / "); print_ipv4(mask);
                 terminal_write(" gateway "); print_ipv4(gateway);
             } else terminal_write("\n    IPv4 unconfigured");
+            net_ipv6_address_t link_local={{0}},global={{0}},router={{0}};
+            if(net_ipv6_get_status(d,&link_local,&global,&router)){
+                terminal_write("\n    IPv6 link-local ");print_ipv6(&link_local);
+                if(!ipv6_is_zero(&global)){terminal_write("\n    IPv6 SLAAC ");print_ipv6(&global);}
+                if(!ipv6_is_zero(&router)){terminal_write("\n    IPv6 router ");print_ipv6(&router);}
+            }
             net_device_stats_t stats;
             if (net_device_get_stats(d, &stats)) {
                 if (d->ipv4_dns) {
@@ -670,7 +731,7 @@ static int command_net(uint32_t argc, char **argv)
             }
             terminal_putchar('\n');
         }
-        terminal_write("Use 'net connect' for DHCP, 'net ping' for reachability, 'net dns' for DNS, and 'net http http://host/' for a plain-HTTP GET. HTTPS/TLS is not implemented.\n");
+        terminal_write("Use 'net connect' for DHCP, 'net ping'/'net ping6' for IPv4/IPv6 reachability, 'net dns' for DNS, and 'net http http://host/' for a plain-HTTP GET. HTTPS/TLS is not implemented.\n");
         return 1;
     }
     if ((argc == 2U || argc == 3U) &&
@@ -754,6 +815,16 @@ static int command_net(uint32_t argc, char **argv)
         terminal_write(": time="); shell_print_decimal(elapsed);
         terminal_write(" ms");
         return 1;
+    }
+    if (argc == 3U && shell_string_equals(argv[1], "ping6")) {
+        net_ipv6_address_t target={{0}};
+        if(!parse_ipv6(argv[2],&target)){terminal_write("\nusage: net ping6 <IPv6-address>");return 1;}
+        net_device_t *d=0;
+        for(uint32_t i=0;i<net_device_count();i++){net_device_t*candidate=net_device_get(i);if(candidate&&candidate->link_up){d=candidate;break;}}
+        if(!d){terminal_write("\nnet ping6: no link-up interface");return 1;}
+        uint32_t elapsed=0;terminal_write("\nPING6 ");print_ipv6(&target);terminal_write(" ...");
+        if(!net_ipv6_ping(d,&target,3000U,&elapsed)){terminal_write("\nno IPv6 echo reply (check SLAAC, router advertisements, neighbor discovery, and firewall)");return 1;}
+        terminal_write("\nreply from ");print_ipv6(&target);terminal_write(": time=");shell_print_decimal(elapsed);terminal_write(" ms");return 1;
     }
     if (argc == 3U && shell_string_equals(argv[1], "dns")) {
         net_device_t *d = 0;

@@ -10,6 +10,10 @@
 #define PAGE_USER    0x004U
 #define PAGE_NX      (1ULL << 63)
 
+/* Shared virtual window for uncached device MMIO mappings. */
+#define PAGING_MMIO_BASE 0xE0000000ULL
+#define PAGING_MMIO_SIZE (6ULL * 1024ULL * 1024ULL)
+
 /* User mappings live in PML4 slot 1, away from the shared kernel mappings. */
 #define PAGING_USER_BASE 0x0000008000000000ULL
 #define PAGING_USER_END  0x000000FFFFFFFFFFULL

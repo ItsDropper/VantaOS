@@ -5,6 +5,7 @@ The NVMe driver is a kernel-mode PCI driver that exposes supported NVMe namespac
 ## Implemented data path
 
 - PCI class 01h / subclass 08h / programming interface 02h discovery.
+- Admin and I/O queue depth is selected from CAP.MQES (capped at 64 entries), rather than rejecting controllers that support fewer than 64 entries; batches never exceed the available ring capacity.
 - BAR0 MMIO mapping sized from CAP.DSTRD, capability validation, controller ready handshakes, and Admin Submission/Completion Queues.
 - Identify Controller and active-namespace discovery; unsupported metadata formats and logical block sizes outside 512–4096 bytes are rejected.
 - Block-device read/write/flush, 64-bit LBA handling, range validation, and bounded polling.

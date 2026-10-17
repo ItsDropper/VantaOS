@@ -26,6 +26,15 @@ void shell_execute(void)
 
     shell_add_history();
 
+    if (shell_execute_extended(shell_buffer))
+    {
+        terminal_putchar('\n');
+        shell_clear_buffer();
+        shell_history_position = shell_history_count;
+        shell_show_prompt();
+        return;
+    }
+
     if (shell_string_equals(
             shell_buffer,
             "help"))

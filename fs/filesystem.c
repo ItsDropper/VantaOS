@@ -518,22 +518,45 @@ static int fs_find_disk_child(uint32_t parent_id, const char* name,
 
 int filesystem_create_directory_unlocked(const char* path)
 {
-    if (!initialized || !path || !fat32_is_mounted() ||
-        filesystem_lookup_unlocked(path) >= 0)
+    if (!initialized || !path || !fat32_is_mounted())
+    {
+        FS_MUTATION_DIAG("VANTAOS_FS_MKDIR_STAGE_1");
         return -1;
+    }
+    if (filesystem_lookup_unlocked(path) >= 0)
+    {
+        FS_MUTATION_DIAG("VANTAOS_FS_MKDIR_EXISTS");
+        return -1;
+    }
     char parent_path[FS_PATH_MAX];
     const char* leaf = 0;
     if (!fs_split_parent(path, parent_path, sizeof(parent_path), &leaf))
+    {
+        FS_MUTATION_DIAG("VANTAOS_FS_MKDIR_STAGE_2");
         return -1;
+    }
     int parent_id = filesystem_lookup_unlocked(parent_path);
-    if (parent_id < 0 ||
-        fat32_create_directory(path) < 0)
+    if (parent_id < 0)
+    {
+        FS_MUTATION_DIAG("VANTAOS_FS_MKDIR_STAGE_3");
         return -1;
+    }
+    if (fat32_create_directory(path) < 0)
+    {
+        FS_MUTATION_DIAG("VANTAOS_FS_MKDIR_FAT32_FAIL");
+        return -1;
+    }
     fat32_dirent_t disk_entry;
     if (!fs_find_disk_child((uint32_t)parent_id, leaf, &disk_entry))
+    {
+        FS_MUTATION_DIAG("VANTAOS_FS_MKDIR_DISK_LOOKUP_FAIL");
         return -1;
-    return fs_add_node((uint32_t)parent_id, FS_NODE_DIRECTORY, leaf,
-                       disk_entry.first_cluster, 0U);
+    }
+    int id = fs_add_node((uint32_t)parent_id, FS_NODE_DIRECTORY, leaf,
+                         disk_entry.first_cluster, 0U);
+    if (id < 0)
+        FS_MUTATION_DIAG("VANTAOS_FS_MKDIR_CACHE_ADD_FAIL");
+    return id;
 }
 
 int filesystem_delete_path_unlocked(const char* path)

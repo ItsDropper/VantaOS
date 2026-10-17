@@ -34,6 +34,7 @@ void shell_delete(void);
 void shell_backspace(void);
 void shell_insert_char(char c);
 void shell_execute(void);
+int shell_execute_extended(const char* command_line);
 void shell_ps(void);
 
 void shell_copy_path(char* destination, const char* source);

@@ -26,7 +26,7 @@ struct net_device {
     const net_device_ops_t* ops;
     void* driver_data;
     /* IPv4 values use host byte order; configuration is explicit, never guessed. */
-    uint32_t ipv4_address, ipv4_netmask, ipv4_gateway;
+    uint32_t ipv4_address, ipv4_netmask, ipv4_gateway, ipv4_dns;
     uint8_t ipv4_configured;
 };
 typedef struct {
@@ -63,6 +63,8 @@ int net_device_configure_ipv4(net_device_t*, uint32_t address,
                               uint32_t netmask, uint32_t gateway);
 int net_device_get_ipv4(net_device_t*, uint32_t* address,
                         uint32_t* netmask, uint32_t* gateway);
+int net_dhcp_configure(net_device_t*, uint32_t timeout_ms,
+                       uint32_t* dns_server, uint32_t* lease_seconds);
 uint32_t net_device_count(void);
 net_device_t* net_device_get(uint32_t);
 int net_device_get_stats(net_device_t*, net_device_stats_t*);
@@ -72,6 +74,10 @@ size_t net_poll(size_t packet_budget);
 int net_ethernet_handler_register(uint16_t, net_ethernet_handler_fn, void*);
 int net_ethernet_handler_unregister(uint16_t, net_ethernet_handler_fn, void*);
 int net_udp_initialize(void);
+/* Sends a UDP datagram through IPv4; may block briefly for ARP resolution. */
+int net_udp_send(net_device_t*, uint32_t destination_address,
+                 uint16_t source_port, uint16_t destination_port,
+                 const void* payload, size_t payload_length);
 int net_udp_handler_register(uint16_t, net_udp_handler_fn, void*);
 int net_udp_handler_unregister(uint16_t, net_udp_handler_fn, void*);
 /* Internal IPv4-to-UDP dispatch; the IP header has already been validated. */

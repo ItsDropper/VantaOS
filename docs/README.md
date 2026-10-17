@@ -12,6 +12,8 @@ Use this index to find the document that answers a specific engineering question
 - [Hardware support](HARDWARE_SUPPORT.md) — current hardware and emulator limitations.
 - [Bootloader plan](BOOTLOADER_PLAN.md) — planned work toward an independent boot path; not a description of a completed bootloader.
 
+- [Terminal shell](SHELL.md) — file operations, process commands, force-flag behavior, and current network CLI limits.
+
 ## Build and validate
 
 - [Build system](BUILD_SYSTEM.md) — build targets, generated artifacts, and source manifests.

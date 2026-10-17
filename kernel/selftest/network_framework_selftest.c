@@ -27,6 +27,11 @@ void network_framework_selftest(void) {
     ok=ok&&net_device_get_ipv4(&d,&address,&mask,&gateway);
     ok=ok&&address==0xC0A80102U&&mask==0xFFFFFF00U&&gateway==0xC0A80101U;
     ok=!net_device_configure_ipv4(&d,0xC0A80102U,0xFF00FF00U,0xC0A80101U)&&ok;
+    ok=!net_device_configure_ipv4(&d,0xC0A80100U,0xFFFFFF00U,0xC0A80101U)&&ok;
+    ok=!net_device_configure_ipv4(&d,0xC0A801FFU,0xFFFFFF00U,0xC0A80101U)&&ok;
+    ok=!net_device_configure_ipv4(&d,0xC0A80102U,0xFFFFFF00U,0xC0A80102U)&&ok;
+    ok=net_device_get_ipv4(&d,&address,&mask,&gateway)&&ok;
+    ok=address==0xC0A80102U&&mask==0xFFFFFF00U&&gateway==0xC0A80101U&&ok;
     ok=ok&&net_ethernet_handler_register(0x88B5U,mock_handler,0);
     ok=ok&&net_device_transmit(&d,frame,sizeof(frame))&&mock_tx_count==1;
     ok=net_device_set_link(&d,0)&&ok;

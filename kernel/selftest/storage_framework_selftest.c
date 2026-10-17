@@ -1,5 +1,7 @@
 #include "block_device.h"
 #include "dma.h"
+#include "mmio.h"
+#include "paging.h"
 #include "serial.h"
 #include <stdint.h>
 #include <stddef.h>
@@ -53,10 +55,18 @@ void storage_framework_selftest(void)
     ok=ok&&block_device_unregister(&mock_device)==BLOCK_STATUS_OK;
     ok=ok&&block_device_count()==0U&&!mock_device.online;
     dma_page_t page={0};
-    int dma_ok=dma_alloc_page(&page)&&dma_page_is_valid(&page);
-    if(dma_ok) {
+    int dma_allocated=dma_alloc_page(&page);
+    int dma_ok=dma_allocated&&dma_page_is_valid(&page);
+    if(dma_allocated&&dma_page_is_valid(&page)) {
         const uint8_t* bytes=(const uint8_t*)page.virtual_address;
         for(size_t i=0;i<page.size;i++)dma_ok=dma_ok&&bytes[i]==0;
+        void* mapped=mmio_map_region(page.physical_address+64U,128U);
+        dma_ok=dma_ok&&mapped!=0;
+        if(mapped) {
+            dma_ok=dma_ok&&paging_get_physical((uintptr_t)mapped)==page.physical_address+64U;
+            dma_ok=dma_ok&&mmio_unmap_region(mapped,128U);
+            dma_ok=dma_ok&&!mmio_unmap_region(mapped,128U);
+        }
         dma_free_page(&page);
         dma_ok=dma_ok&&!page.virtual_address&&!page.physical_address&&!page.size;
     }

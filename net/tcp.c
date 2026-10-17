@@ -199,6 +199,7 @@ void net_tcp_receive_ipv4(net_device_t *device, const uint8_t *ip,
         client.snd_una = acknowledgement;
         client.state = TCP_ESTABLISHED;
         client.peer_mss = TCP_DEFAULT_MSS;
+        int mss_seen = 0;
         for (size_t at = TCP_HEADER_SIZE; at + 1U < header_length;) {
             uint8_t kind = tcp[at];
             if (kind == 0U) break;
@@ -209,11 +210,14 @@ void net_tcp_receive_ipv4(net_device_t *device, const uint8_t *ip,
             uint8_t option_length = tcp[at + 1U];
             if (kind == 2U && option_length == 4U) {
                 uint16_t mss = be16(tcp + at + 2U);
-                if (mss >= 64U && mss < client.peer_mss)
-                    client.peer_mss = mss;
+                if (mss >= 64U) {
+                    client.peer_mss = mss < TCP_MAX_MSS ? mss : TCP_MAX_MSS;
+                    mss_seen = 1;
+                }
             }
             at += option_length;
         }
+        if (!mss_seen) client.peer_mss = TCP_DEFAULT_MSS;
         send_ack();
         return;
     }
@@ -269,7 +273,7 @@ int net_tcp_connect(net_device_t *device, uint32_t destination,
     client.remote_ip = destination;
     client.remote_port = destination_port;
     client.local_port = (uint16_t)(49152U + (timer_get_ticks() % 16384U));
-    client.peer_mss = TCP_DEFAULT_MSS;
+    client.peer_mss = TCP_MAX_MSS;
     uint32_t initial = (timer_get_ticks() * 1103515245U) ^
                        destination ^ ((uint32_t)destination_port << 16);
     client.snd_una = initial;

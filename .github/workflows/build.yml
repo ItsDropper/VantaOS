@@ -114,6 +114,11 @@ jobs:
       - name: Enforce architecture boundaries
         run: python3 scripts/check_architecture.py
 
+      - name: Test DNS response validation
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_dns_client.c net/dns.c -o /tmp/vantaos-dns-client-test
+          /tmp/vantaos-dns-client-test
+
       - name: Test TCP client state machine
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_tcp_client.c net/tcp.c -o /tmp/vantaos-tcp-client-test

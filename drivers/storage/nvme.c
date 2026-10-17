@@ -58,6 +58,8 @@ typedef struct __attribute__((packed)) {
     uint16_t command_id;
     uint16_t status_phase;
 } nvme_completion_t;
+typedef char nvme_command_must_be_64_bytes[(sizeof(nvme_command_t) == 64U) ? 1 : -1];
+typedef char nvme_completion_must_be_16_bytes[(sizeof(nvme_completion_t) == 16U) ? 1 : -1];
 
 typedef struct {
     dma_page_t admin_submission;
@@ -404,7 +406,10 @@ static storage_probe_result_t nvme_probe(const struct pci_device* pci)
     uint32_t max_entries = (uint32_t)(cap & 0xFFFFU) + 1U;
     uint32_t timeout_units = (uint32_t)((cap >> 24) & 0xFFU);
     uint32_t stride_shift = (uint32_t)((cap >> 32) & 0x0FU);
-    if (max_entries < NVME_QUEUE_DEPTH || stride_shift > 15U) {
+    uint32_t minimum_page_shift = (uint32_t)((cap >> 48) & 0x0FU);
+    uint32_t command_sets = (uint32_t)((cap >> 37) & 0xFFU);
+    if (max_entries < NVME_QUEUE_DEPTH || stride_shift > 15U ||
+        minimum_page_shift != 0U || (command_sets & 1U) == 0U) {
         mmio_unmap_region((void*)c->registers, NVME_REGISTERS_SIZE);
         free_controller_memory(c);
         return STORAGE_PROBE_FAILED;

@@ -31,6 +31,8 @@ jobs:
           test -f kernel/boot/Makefile
           test -f mm/Makefile
           test -f drivers/Makefile
+          test -f drivers/network/e1000.c
+          grep -q 'drivers/network/e1000.c' drivers/network/Makefile
           test -f fs/Makefile
 
       - name: Enforce architecture boundaries
@@ -91,7 +93,7 @@ jobs:
           }
           trap cleanup EXIT
           for attempt in $(seq 1 300); do
-            if grep -q 'VANTAOS_E1000_TX_SELFTEST_OK' "$log" 2>/dev/null; then break; fi
+            if grep -q 'VANTAOS_E1000_TX_SELFTEST_OK' "$log" 2>/dev/null && grep -q 'VANTAOS_BOOT_OK' "$log" 2>/dev/null; then break; fi
             if grep -q 'VANTAOS_E1000_TX_SELFTEST_FAIL' "$log" 2>/dev/null; then
               cat "$log" qemu-e1000-stderr.log
               exit 1

@@ -386,6 +386,114 @@ static int process_idle_lifecycle_probe(void)
     return 1;
 }
 
+static int gui_expect_event(uint32_t pid, uint32_t window_id,
+                             uint32_t expected_type)
+{
+    vanta_gui_event_t event;
+    return gui_server_poll_event(pid, window_id, &event) == 1 &&
+           event.type == expected_type;
+}
+
+static int gui_drain_events(uint32_t pid, uint32_t window_id)
+{
+    vanta_gui_event_t event;
+    int result;
+    do
+    {
+        result = gui_server_poll_event(pid, window_id, &event);
+    } while (result == 1);
+    return result == 0;
+}
+
+static void gui_focus_input_regression_probe(void)
+{
+    if (!graphics_is_initialized() ||
+        graphics_get_width() < 400U || graphics_get_height() < 300U)
+    {
+        serial_write("VANTAOS_GUI_INPUT_REGRESSION_FAIL_GRAPHICS\n");
+        return;
+    }
+
+    uint32_t pid = process_current_pid();
+    vanta_gui_window_request_t first_request = {
+        .width = 240U, .height = 160U, .title = "GUI Probe A"
+    };
+    vanta_gui_window_request_t second_request = {
+        .width = 240U, .height = 160U, .title = "GUI Probe B"
+    };
+    int first = gui_server_create_window(pid, &first_request);
+    if (first <= 0)
+    {
+        serial_write("VANTAOS_GUI_INPUT_REGRESSION_FAIL_FIRST_WINDOW\n");
+        return;
+    }
+
+    int ok = gui_expect_event(pid, (uint32_t)first,
+                              VANTA_GUI_EVENT_FOCUS_GAINED);
+    int second = gui_server_create_window(pid, &second_request);
+    ok = second > 0 && ok;
+    if (second > 0)
+    {
+        ok = gui_expect_event(pid, (uint32_t)first,
+                              VANTA_GUI_EVENT_FOCUS_LOST) && ok;
+        ok = gui_expect_event(pid, (uint32_t)second,
+                              VANTA_GUI_EVENT_FOCUS_GAINED) && ok;
+        ok = gui_server_close_window(pid, (uint32_t)second) == 0 && ok;
+        ok = gui_expect_event(pid, (uint32_t)first,
+                              VANTA_GUI_EVENT_FOCUS_GAINED) && ok;
+    }
+
+    const int32_t window_x =
+        ((int32_t)graphics_get_width() - (int32_t)first_request.width) / 2;
+    const int32_t window_y =
+        ((int32_t)graphics_get_height() - (int32_t)first_request.height) / 2;
+    if (ok)
+    {
+        ok = gui_server_mouse_click(window_x + 40, window_y + 80, 1) == 1;
+        vanta_gui_event_t event;
+        ok = gui_server_poll_event(pid, (uint32_t)first, &event) == 1 &&
+             event.type == VANTA_GUI_EVENT_POINTER_DOWN &&
+             event.x == 32 && event.y == 30 && event.value == 1U && ok;
+        ok = gui_server_poll_event(pid, (uint32_t)first, NULL) == -14 && ok;
+    }
+
+    if (ok)
+    {
+        for (int i = 0; i < 40; i++)
+            gui_server_mouse_move(window_x + 20 + i, window_y + 70);
+
+        vanta_gui_event_t event;
+        int count = 0;
+        while (gui_server_poll_event(pid, (uint32_t)first, &event) == 1)
+        {
+            if (event.type != VANTA_GUI_EVENT_POINTER_MOVE ||
+                (count == 0 && event.x != 20) ||
+                (count == 31 && event.x != 51))
+                ok = 0;
+            count++;
+        }
+        ok = count == 32 && ok;
+    }
+
+    if (ok)
+    {
+        ok = gui_server_mouse_click(
+            window_x + (int32_t)first_request.width - 20,
+            window_y + 20, 1) == 1;
+        ok = gui_expect_event(pid, (uint32_t)first,
+                              VANTA_GUI_EVENT_CLOSE_REQUEST) && ok;
+    }
+
+    if (second > 0)
+        ok = gui_server_close_window(pid, (uint32_t)second) == -9 && ok;
+    ok = gui_server_close_window(pid, (uint32_t)first) == 0 && ok;
+    ok = gui_server_poll_event(pid, (uint32_t)first, &((vanta_gui_event_t){0})) == -9 && ok;
+
+    serial_write(ok ?
+        "VANTAOS_GUI_INPUT_REGRESSION_OK\n" :
+        "VANTAOS_GUI_INPUT_REGRESSION_FAIL\n");
+}
+
 static void gui_dead_owner_cleanup_probe(void)
 {
     int pid = process_create_kernel(
@@ -437,6 +545,7 @@ void os_selftest_initialize(void)
     process_state_transition_probe();
     process_deferred_switch_probe();
     process_owned_terminated_reuse_probe();
+    gui_focus_input_regression_probe();
     gui_dead_owner_cleanup_probe();
 
     if (process_create_kernel(NULL, process_current_pid(),

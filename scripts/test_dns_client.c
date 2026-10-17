@@ -78,13 +78,13 @@ int net_udp_send(net_device_t *device, uint32_t destination, uint16_t source_por
         reply[n++] = 192; reply[n++] = 0; reply[n++] = 2; /* Truncated RDATA. */
     } else if (response_kind == 4) {
         /* A forward pointer to a valid root label appended after this RR. */
-        reply[n++] = 0xC0; reply[n++] = 47;
+        reply[n++] = 0xC0; reply[n++] = 45;
         reply[n++] = 0; reply[n++] = 1;
         reply[n++] = 0; reply[n++] = 1;
         n += 4;
         reply[n++] = 0; reply[n++] = 4;
         reply[n++] = 192; reply[n++] = 0; reply[n++] = 2; reply[n++] = 1;
-        reply[n++] = 0; /* Valid root label at offset 47. */
+        reply[n++] = 0; /* Valid root label at offset 45. */
     } else {
         reply[n++] = 0xC0; reply[n++] = 0x0C;
         reply[n++] = 0; reply[n++] = 1;

@@ -2,6 +2,7 @@
 #include "terminal.h"
 #include "vfs.h"
 #include "net.h"
+#include "net_dns.h"
 #include <stdint.h>
 #include <stddef.h>
 
@@ -521,6 +522,30 @@ static int command_net(uint32_t argc, char **argv)
         terminal_write("\nInterface configured. General outbound Internet traffic still requires IPv4/ARP transmit and DNS/TCP client support.");
         return 1;
     }
+    if (argc == 3U && shell_string_equals(argv[1], "dns")) {
+        net_device_t *d = 0;
+        for (uint32_t i = 0; i < net_device_count(); ++i) {
+            net_device_t *candidate = net_device_get(i);
+            if (candidate && candidate->link_up && candidate->ipv4_configured &&
+                candidate->ipv4_dns) {
+                d = candidate;
+                break;
+            }
+        }
+        if (!d) {
+            terminal_write("\nnet dns: no DHCP DNS server configured; run net connect first");
+            return 1;
+        }
+        uint32_t address = 0;
+        terminal_write("\nResolving "); terminal_write(argv[2]); terminal_write("...");
+        if (!net_dns_resolve(d, argv[2], &address, 5000U)) {
+            terminal_write("\nDNS lookup failed or timed out");
+            return 1;
+        }
+        terminal_write("\n"); terminal_write(argv[2]); terminal_write(" -> ");
+        print_ipv4(address);
+        return 1;
+    }
     if (argc == 2U && shell_string_equals(argv[1], "poll")) {
         size_t packet_work = net_poll(16U);
         terminal_write("\npolled receive packets="); shell_print_decimal((uint32_t)packet_work);
@@ -545,7 +570,7 @@ static int command_net(uint32_t argc, char **argv)
         terminal_write(" (static; no DHCP lease or Internet test performed)");
         return 1;
     }
-    terminal_write("\nusage: net [status|poll|connect [index]|dhcp [index]] | net config <index> <ip> <netmask> <gateway>");
+    terminal_write("\nusage: net [status|poll|connect [index]|dhcp [index]|dns <hostname>] | net config <index> <ip> <netmask> <gateway>");
     return 1;
 }
 

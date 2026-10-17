@@ -1323,15 +1323,6 @@ int fat32_rename_path(const char* old_path, const char* new_path)
         destination.found)
         return -1;
 
-    if (old_leaf[0] == new_leaf[0])
-    {
-        unsigned int same = 1U;
-        for (unsigned int i = 0; i < 11U; i++)
-            if (old_leaf[i] != new_leaf[i]) { same = 0U; break; }
-        if (same && fat32_names_equal(new_name, old_path))
-            return 0;
-    }
-
     if (!fat32_write_named_entry(new_parent, new_name, new_leaf,
                                  source.attributes, source.first_cluster,
                                  source.size))

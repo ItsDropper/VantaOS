@@ -22,6 +22,7 @@ static char entries[ENTRY_CAPACITY][ENTRY_NAME_CAPACITY];
 static unsigned char entry_is_directory[ENTRY_CAPACITY];
 static size_t entry_count;
 static size_t selected_entry;
+static size_t first_visible;
 static char preview_lines[PREVIEW_ROWS][VANTA_GUI_TEXT_MAX + 1U];
 static size_t preview_count;
 static int preview_active;
@@ -118,6 +119,7 @@ static void clear_entries(void)
 {
     entry_count = 0U;
     selected_entry = 0U;
+    first_visible = 0U;
     more_entries = 0;
     for (size_t i = 0U; i < ENTRY_CAPACITY; i++)
     {
@@ -348,12 +350,7 @@ static void render(void)
     }
     add_text(16, 38, path_display, COLOR_MUTED);
 
-    add_rect(16, 58, 52, 24, 0x001D2835U);
-    add_text(28, 62, "Up", COLOR_TEXT);
-    add_rect(76, 58, 64, 24, 0x001D2835U);
-    add_text(88, 62, "Home", COLOR_TEXT);
-    add_rect(148, 58, 84, 24, 0x001D2835U);
-    add_text(160, 62, "Refresh", COLOR_TEXT);
+    add_text(16, 62, "Up     Home     Refresh", COLOR_ACCENT);
 
     add_rect(8, 88, 720, 288, 0x000F151EU);
     if (preview_active)
@@ -365,7 +362,8 @@ static void render(void)
     }
     else
     {
-        for (size_t i = 0U; i < entry_count && i < DISPLAY_ROWS; i++)
+        for (size_t i = first_visible;
+             i < entry_count && i < first_visible + DISPLAY_ROWS; i++)
         {
             char label[VANTA_GUI_TEXT_MAX + 1U];
             size_t used = 0U;
@@ -381,9 +379,7 @@ static void render(void)
             if (entry_is_directory[i])
                 label[used++] = '/';
             label[used] = '\0';
-            if (selected_entry == i)
-                add_rect(12, 92 + (int32_t)i * 23, 708, 21, 0x00232F3DU);
-            add_text(16, 96 + (int32_t)i * 23, label,
+            add_text(16, 96 + (int32_t)(i - first_visible) * 23, label,
                      entry_is_directory[i] ? COLOR_ACCENT : COLOR_TEXT);
         }
         if (entry_count == 0U)
@@ -392,7 +388,7 @@ static void render(void)
 
     add_rect(8, 384, 720, 1, COLOR_BORDER);
     add_text(16, 396, status_text, status_color);
-    add_text(16, 420, "Up/Down select  Enter open  Backspace up  H home  R refresh  Q close",
+    add_text(16, 420, "Arrows select | Enter open | Backspace up | H home | R refresh",
              COLOR_MUTED);
     (void)vanta_gui_draw(window_id, commands, command_count);
 }
@@ -474,22 +470,29 @@ int main(int argc, char** argv)
             {
                 if (selected_entry > 0U)
                     selected_entry--;
+                if (selected_entry < first_visible)
+                    first_visible = selected_entry;
             }
             else if (key == VANTA_GUI_KEY_DOWN && !preview_active)
             {
                 if (selected_entry + 1U < entry_count)
                     selected_entry++;
+                if (selected_entry >= first_visible + DISPLAY_ROWS)
+                    first_visible = selected_entry - DISPLAY_ROWS + 1U;
             }
             else if (key == VANTA_GUI_KEY_PAGE_UP && !preview_active)
             {
                 selected_entry = selected_entry > DISPLAY_ROWS ?
                     selected_entry - DISPLAY_ROWS : 0U;
+                first_visible = selected_entry;
             }
             else if (key == VANTA_GUI_KEY_PAGE_DOWN && !preview_active)
             {
                 size_t last = entry_count == 0U ? 0U : entry_count - 1U;
                 selected_entry = selected_entry + DISPLAY_ROWS < last ?
                     selected_entry + DISPLAY_ROWS : last;
+                first_visible = selected_entry >= DISPLAY_ROWS - 1U ?
+                    selected_entry - DISPLAY_ROWS + 1U : 0U;
             }
             render();
         }
@@ -513,10 +516,11 @@ int main(int argc, char** argv)
                     (void)load_directory();
                 }
             }
-            else if (!preview_active && event.y >= 88 && event.y < 364)
+            else if (!preview_active && event.y >= 92 && event.y < 364)
             {
-                size_t index = (size_t)(event.y - 92) / 23U;
-                if (index < entry_count && index < DISPLAY_ROWS)
+                size_t row = (size_t)(event.y - 92) / 23U;
+                size_t index = first_visible + row;
+                if (row < DISPLAY_ROWS && index < entry_count)
                 {
                     selected_entry = index;
                     open_selected();

@@ -16,7 +16,7 @@ Ethernet-II demultiplexer + bounded receive queue
 PCI network driver registry -> E1000-compatible driver
 ```
 
-Architecture-independent protocol code lives in `net/`; PCI drivers live in `drivers/network/`; shared contracts live in `include/net.h`. Network receive is polling-based: the driver moves frames into a fixed-capacity queue and protocol handlers run in `net_poll()` caller context. The current E1000 driver targets Intel 82540EM / QEMU `8086:100E`; it does not imply compatibility with arbitrary physical NICs.
+Architecture-independent protocol code lives in `net/`; PCI drivers live in `drivers/network/`; shared contracts live in `include/net.h`. Network receive is polling-based: the driver moves frames into a fixed-capacity queue and protocol handlers run in `net_poll()` caller context. The E1000 driver supports QEMU `8086:100E` plus a defined set of legacy Intel 8254x PCI IDs that share this register/descriptor model. It is not a generic driver for all Intel adapters and does not imply compatibility with arbitrary physical NICs. Unsupported devices remain unbound instead of being guessed from the vendor name.
 
 ## Easy connection workflow
 
@@ -38,9 +38,9 @@ A successful DHCP lease alone does not prove Internet access. DNS, gateway routi
 - UDP receive validates lengths and nonzero checksums; a zero UDP checksum is accepted as valid for IPv4. UDP transmit generates the IPv4 pseudo-header checksum.
 - DHCPv4 obtains address, netmask, gateway, DNS, and lease duration. Lease renewal/expiry is not yet implemented.
 - DNS supports bounded A-record lookup from the DHCP-provided DNS server.
-- TCP is currently a **single synchronous client connection** with bounded send/receive buffers, basic handshake/ACK/FIN/RST handling, retransmission timeout, and checksum validation. It does not yet implement multiple simultaneous sockets, congestion control, SACK, out-of-order reassembly, IP fragmentation, or a full socket API.
+- TCP is currently a **single synchronous client connection** with bounded send/receive buffers, peer-MSS and advertised-window handling, segmentation of larger writes, zero-window waiting, retransmission timeout, sequence-checked RST handling, and checksum validation. It does not yet implement multiple simultaneous sockets, congestion control, SACK, out-of-order reassembly, IP fragmentation, or a full socket API.
 - HTTP support is **plain HTTP only**: one bounded HTTP/1.0 GET, response display capped at 4096 bytes. HTTPS is intentionally rejected because TLS and certificate validation are not implemented; the client does not silently downgrade HTTPS to HTTP.
 
 ## Validation and remaining work
 
-The existing QEMU network regression covers E1000 transmit/receive, ARP, ICMP, and UDP validation. TCP/HTTP still needs dedicated end-to-end QEMU tests and real-hardware validation before being described as production-ready. Next priorities are TCP packet-level regression tests, correct behavior under loss/duplicate/out-of-order packets, TLS/certificate infrastructure before HTTPS, lease renewal, and broader NIC compatibility.
+The existing QEMU network regression covers E1000 transmit/receive, ARP, ICMP, and UDP validation. TCP/HTTP still needs dedicated end-to-end QEMU tests and real-hardware validation before being described as production-ready. Remaining priorities are end-to-end TCP loss/duplicate/out-of-order tests, TLS and certificate validation before HTTPS, DHCP lease renewal/expiry, IPv6, additional independently implemented NIC drivers (including common Realtek and VirtIO adapters), and a Wi-Fi driver plus WPA2/WPA3 authentication. Wi-Fi cannot be enabled by a router setting alone: VantaOS needs a supported wireless chipset driver and a secure association/authentication implementation.

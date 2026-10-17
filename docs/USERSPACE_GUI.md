@@ -2,7 +2,7 @@
 
 ## Current state
 
-VantaOS has an initial user-mode GUI boundary and one standalone user-mode desktop application. The current syscall ABI is version 5 and is specific to VantaOS; it is not POSIX, Win32, or Wayland compatible.
+VantaOS has an initial user-mode GUI boundary and three standalone ring-3 desktop applications. The current syscall ABI is version 5 and is specific to VantaOS; it is not POSIX, Win32, or Wayland compatible.
 
 - Static ELF64 `ET_EXEC` programs can be loaded from FAT32 and run at CPL3 (ring 3) in a private address space.
 - The public freestanding header `userspace/include/vanta/syscall.h` exposes the current syscall wrappers; GUI structures live in `userspace/include/vanta/gui.h`.
@@ -11,7 +11,7 @@ VantaOS has an initial user-mode GUI boundary and one standalone user-mode deskt
 - Windows are process-owned. Dead-owner cleanup is tested and required by CI through `VANTAOS_GUI_DEAD_OWNER_CLEANUP_OK`.
 - **Settings runs as a ring-3 ELF** at `/SYSTEM/SETTINGS.ELF`. It creates its own GUI window, provides four accent colors (Blue, Teal, Amber, Violet), light/dark appearance, compact/comfortable Explorer rows, a larger Settings label size, and high-contrast mode. It saves version 2 preferences to `/SYSTEM/VANTASET.CFG`, accepts existing version 1 files, and CI checks storage readback and persistence across a second boot.
 - Accent, light/dark surfaces, contrast, and Explorer row density are applied to the desktop when saved; the text-size option currently changes the Settings controls only. The settings-apply syscall reloads the validated on-disk config without restarting. Settings does not yet provide timezone-aware local time.
-- Terminal's shell, window, text rendering, input editing, and scrollback now run in the ring-3 `/TERMINAL.ELF` app using the bounded GUI ABI. File Explorer remains kernel-rendered.
+- Terminal's shell, window, text rendering, input editing, and bounded scrollback run in the ring-3 `/TERMINAL.ELF` app. File Explorer runs as `/EXPLORER.ELF` at ring 3, supports directory navigation, text preview, taskbar hide/restore, and launching files through the validated ELF loader. Explorer is read-only: create/write/rename/delete are not implemented.
 
 ## Current GUI ABI
 
@@ -41,11 +41,10 @@ The Settings UI must not label an RTC value as local time unless its policy is e
 
 ## Next implementation sequence
 
-1. Expand GUI regression coverage for focus transitions, pointer click routing, queue overflow, close requests, and invalid event buffers.
-2. Harden user-mode process isolation with fault-containment, invalid-mapping, malformed-ELF, and allocation-failure tests.
-3. Migrate File Explorer to ring 3 using directory listing and file APIs; keep launch restricted to validated executable formats.
-4. Move Terminal's visible window, drawing, and input onto the same GUI ABI while retaining its shell logic in ring 3.
-5. Implement RTC UTC/local policy and timezone-rule conversion before exposing region-based local time as functional.
-6. Expand Settings only when each preference has validated persistence, a real effect, and regression coverage; a UI control alone is not evidence of a working system feature.
+1. Harden user-mode process isolation with fault-containment, invalid-mapping, malformed-ELF, allocation-failure, and adversarial address-space tests.
+2. Add a blocking GUI event wait and complete window move/resize/minimize/maximize semantics without weakening process ownership.
+3. Implement RTC UTC/local policy and timezone-rule conversion before exposing region-based local time as functional.
+4. Expand Explorer only after the filesystem API supports safe create/write/rename/delete operations and their regression coverage.
+5. Keep every Settings preference tied to a real effect, validated persistence, and regression coverage; a UI control alone is not evidence of a working system feature.
 
 A control is functional only when its backing API, input path, persistence semantics (where relevant), and regression test exist.

@@ -209,9 +209,9 @@ jobs:
             -drive file=vantaos.img,if=ide,format=raw \
             -boot order=d \
             -display none \
-            -serial "file:${log}" \
+            -serial stdio \
             -monitor "unix:${monitor},server,nowait" \
-            -no-reboot &
+            -no-reboot >"$log" 2>&1 &
           qemu_pid=$!
           cleanup() {
             kill "$qemu_pid" 2>/dev/null || true

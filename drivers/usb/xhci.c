@@ -552,9 +552,12 @@ static int submit_interrupt_trb(uint32_t index)
     uint64_t data_physical, trb_physical;
     if (!dma_address(interrupt_dma[index], &data_physical))
         return 0;
+    /* Interrupt-IN reports may complete as short packets. Request an event
+       for those packets, and publish the fully initialized TRB before ringing
+       the controller doorbell. */
     if (!interrupt_ring_push(index, data_physical, interrupt_packet[index],
-                             (1U << XHCI_TRB_TYPE_SHIFT) | (1U << 5),
-                             &trb_physical))
+                             (1U << XHCI_TRB_TYPE_SHIFT) | (1U << 5) |
+                             (1U << 2), &trb_physical))
         return 0;
     interrupt_expected_trb[index] = trb_physical;
     interrupt_in_flight[index] = 1;
@@ -562,6 +565,7 @@ static int submit_interrupt_trb(uint32_t index)
         hid_transfer_submitted[index] = 1;
         serial_write("VANTAOS_XHCI_HID_TRANSFER_SUBMITTED\n");
     }
+    __atomic_thread_fence(__ATOMIC_RELEASE);
     mmio_write32(doorbells, ((index + 1U) * 4U), interrupt_dci[index]);
     return 1;
 }

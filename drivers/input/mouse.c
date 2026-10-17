@@ -29,7 +29,9 @@ static volatile int mouse_pending_dx = 0;
 static volatile int mouse_pending_dy = 0;
 static volatile int mouse_pending_press = 0;
 static volatile int mouse_pending_release = 0;
+static volatile int mouse_pending_right_press = 0;
 static unsigned char mouse_left_down = 0;
+static unsigned char mouse_right_down = 0;
 static uint32_t mouse_scale_x = 1024;
 static uint32_t mouse_scale_y = 768;
 
@@ -200,7 +202,9 @@ void mouse_initialize(void)
     mouse_pending_dy = 0;
     mouse_pending_press = 0;
     mouse_pending_release = 0;
+    mouse_pending_right_press = 0;
     mouse_left_down = 0;
+    mouse_right_down = 0;
     mouse_scale_x = 1024;
     mouse_scale_y = 768;
 
@@ -313,8 +317,15 @@ void mouse_handle_interrupt(void)
 
     if (!left_down && mouse_left_down)
         mouse_pending_release = 1;
-
     mouse_left_down = left_down;
+
+    unsigned char right_down = (mouse_packet[0] & 0x02U) != 0U;
+    if (right_down && !mouse_right_down)
+    {
+        mouse_pending_right_press = 1;
+        mouse_clicked = 1;
+    }
+    mouse_right_down = right_down;
 
     if (mouse_packet_size == 4)
     {
@@ -373,17 +384,21 @@ void mouse_process_events(void)
     int dy = mouse_pending_dy;
     int press = mouse_pending_press;
     int release = mouse_pending_release;
+    int right_press = mouse_pending_right_press;
 
     mouse_pending_dx = 0;
     mouse_pending_dy = 0;
     mouse_pending_press = 0;
     mouse_pending_release = 0;
+    mouse_pending_right_press = 0;
 
     if (dx != 0 || dy != 0)
         graphics_mouse_move(dx, dy);
 
     if (press)
         graphics_mouse_click(1);
+    if (right_press)
+        graphics_mouse_click(3);
 
     if (release)
         graphics_mouse_release(1);

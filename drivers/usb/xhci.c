@@ -123,6 +123,9 @@ static xhci_trb_t interrupt_rings[XHCI_MAX_SLOTS][XHCI_EP0_RING_TRBS]
 static uint8_t interrupt_dma[XHCI_MAX_SLOTS][64] __attribute__((aligned(64)));
 static uint8_t interrupt_pending[XHCI_MAX_SLOTS][64] __attribute__((aligned(64)));
 static uint64_t interrupt_expected_trb[XHCI_MAX_SLOTS];
+static uint8_t transfer_event_observed;
+static uint8_t hid_completion_observed[XHCI_MAX_SLOTS];
+static uint8_t hid_report_observed[XHCI_MAX_SLOTS];
 static uint32_t interrupt_enqueue[XHCI_MAX_SLOTS];
 static uint32_t interrupt_cycle[XHCI_MAX_SLOTS];
 static uint32_t interrupt_dci[XHCI_MAX_SLOTS];
@@ -216,6 +219,10 @@ static void consume_event_ring(void)
             __atomic_add_fetch(&command_completion_sequence, 1U,
                                __ATOMIC_RELEASE);
         } else if (type == XHCI_TRB_TYPE_EVENT_TRANSFER) {
+            if (!transfer_event_observed) {
+                transfer_event_observed = 1;
+                serial_write("VANTAOS_XHCI_TRANSFER_EVENT_SEEN\n");
+            }
             completed_transfer_pointer = event->parameter;
             completed_transfer_code = (event->status >> 24) & 0xFFU;
             completed_transfer_slot = (control >> 24) & 0xFFU;
@@ -555,6 +562,10 @@ static void handle_interrupt_completion(uint32_t slot_id, uint32_t dci,
         dci != interrupt_dci[index] ||
         trb_pointer != interrupt_expected_trb[index])
         return;
+    if (!hid_completion_observed[index]) {
+        hid_completion_observed[index] = 1;
+        serial_write("VANTAOS_XHCI_HID_COMPLETION_MATCHED\n");
+    }
     interrupt_in_flight[index] = 0;
     uint32_t completion = (status >> 24) & 0xFFU;
     uint32_t residual = status & 0xFFFFFFU;
@@ -565,6 +576,10 @@ static void handle_interrupt_completion(uint32_t slot_id, uint32_t dci,
             interrupt_pending[index][i] = interrupt_dma[index][i];
         interrupt_pending_length[index] = actual;
         interrupt_report_ready[index] = 1;
+        if (!hid_report_observed[index]) {
+            hid_report_observed[index] = 1;
+            serial_write("VANTAOS_XHCI_HID_REPORT_RECEIVED\n");
+        }
     }
 }
 

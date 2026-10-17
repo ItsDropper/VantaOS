@@ -31,7 +31,7 @@ static size_t preview_count;
 static int preview_active;
 static int more_entries;
 static char status_text[VANTA_GUI_TEXT_MAX + 1U] = "Loading directory";
-static uint32_t status_color = COLOR_MUTED;
+static uint32_t status_color = 0x008D9BACU;
 static vanta_gui_draw_command_t commands[VANTA_GUI_MAX_COMMANDS];
 static uint32_t command_count;
 static uint32_t window_id;
@@ -422,6 +422,7 @@ int main(int argc, char** argv)
         vanta_exit(3);
     window_id = (uint32_t)created;
     current_theme = vanta_theme_load();
+    status_color = COLOR_MUTED;
     (void)load_directory();
     render();
 

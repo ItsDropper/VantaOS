@@ -184,7 +184,7 @@ void desktop_update(void)
                  * The backbuffer is inactive here, so restore/redraw only
                  * the saved cursor rectangle directly on the display buffer.
                  */
-                graphics_draw_cursor();
+                graphics_update_cursor();
             }
         }
 

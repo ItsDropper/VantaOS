@@ -1,26 +1,29 @@
 # NVMe driver
 
-The NVMe driver is a polled, kernel-mode PCI driver that exposes supported NVMe namespaces through the generic block-device registry.
+The NVMe driver is a kernel-mode PCI driver that exposes supported NVMe namespaces through the generic block-device registry.
 
-## Current support
+## Implemented data path
 
-- PCI class 01h / subclass 08h / programming interface 02h discovery through the storage-driver registry.
-- BAR0 MMIO mapping sized from CAP.DSTRD; controller capability validation for the NVM command set, 4 KiB minimum page size, and a 64-entry queue.
-- Controller disable/ready handshake, Admin Submission/Completion Queues, Identify Controller, Create I/O Completion Queue, and Create I/O Submission Queue.
-- Active namespace list and Identify Namespace parsing. Namespaces with metadata or logical block sizes outside 512–4096 bytes are rejected rather than misrepresented.
-- Block-device registration with 64-bit sector counts and LBAs, one-sector DMA bounce-buffer transfers, read/write, and Flush.
-- Bounded polling, completion phase tracking, command-ID checking, controller-fatal checks, and a fail-closed controller state after timeout/error.
-- DMA memory is not released after a reset timeout because the controller may still own those pages.
+- PCI class 01h / subclass 08h / programming interface 02h discovery.
+- BAR0 MMIO mapping sized from CAP.DSTRD, capability validation, controller ready handshakes, and Admin Submission/Completion Queues.
+- Identify Controller and active-namespace discovery; unsupported metadata formats and logical block sizes outside 512–4096 bytes are rejected.
+- Block-device read/write/flush, 64-bit LBA handling, range validation, and bounded polling.
+- PRP1/PRP2 and PRP-list construction for multi-page transfers. Each I/O command can transfer up to 16 pages, capped further by Identify Controller MDTS.
+- Up to eight I/O commands are submitted per batch and the submission doorbell is rung once per batch. Completion queue entries are matched by command ID, so commands may complete out of submission order.
+- DMA buffers are preallocated per queue slot to avoid per-I/O allocation. The QEMU self-test exercises all eight slots, multi-page PRP lists, write/readback, flush, out-of-range rejection, and restoration of the scratch range.
+- DMA pages are not released after a controller reset timeout because the device may still own them.
 
-## Deliberate limitations
+## Remaining production work
 
-- Polling only; no MSI/MSI-X interrupt completion path yet.
-- One command in flight per controller and a single shared DMA bounce page. This prioritizes correctness over throughput and makes concurrent block calls serialize.
-- One logical block per NVMe command, including for larger block requests. Larger requests are split into individual commands.
-- DMA allocations currently require identity-mapped, below-4-GiB physical pages. The driver therefore does not yet support controllers that require DMA addresses above 4 GiB.
-- No namespace hotplug/rescan, power-state management, multipath, or controller reset recovery.
-- No verified filesystem write-safety claim: block writes are exposed at the device layer only.
+This is a substantial performance improvement, but it is **not yet a complete production-grade storage stack**.
+
+- Completion is still polled; MSI/MSI-X interrupts and interrupt-driven wait queues are not implemented.
+- The DMA layer is identity-mapped, below-4-GiB, cache-coherent x86 only. No IOMMU mapping, DMA mask negotiation, or high-memory support.
+- The driver copies data through preallocated DMA buffers rather than mapping caller pages directly. Per-controller memory use is approximately 544 KiB for the eight slots at the current 16-page cap, plus queues and Identify data.
+- A single I/O queue is used; per-CPU/multi-queue scaling, queue affinity, and scheduler-aware blocking are not implemented.
+- Error handling fails closed on timeout, controller-fatal status, or queue corruption. Controller reset/reinitialization, namespace hotplug/rescan, power management, and telemetry are not implemented.
+- Filesystem-level crash consistency and write ordering are outside this block driver.
 
 ## Verification
 
-The CI build must pass before merge. End-to-end verification should boot QEMU with an NVMe controller and scratch namespace, then check serial markers for controller and namespace discovery, read a known pattern, write/read it back, flush, and reject out-of-range requests. Do not use the OS's boot disk as a destructive test target.
+CI must pass before merge. The QEMU test uses a disposable NVMe scratch image, not the OS boot disk. It checks namespace discovery, batched multi-page read/write/readback, flush, range validation, and restores the scratch sectors after testing.

@@ -515,6 +515,52 @@ fail:
     return STORAGE_PROBE_FAILED;
 }
 
+#ifdef VANTAOS_SELF_TEST
+static int nvme_run_io_selftest(void)
+{
+    block_device_t* device = 0;
+    uint32_t count = block_device_count();
+    for (uint32_t i = 0; i < count; ++i) {
+        block_device_t* candidate = block_device_get(i);
+        if (candidate && candidate->name[0] == 'n' &&
+            candidate->name[1] == 'v' && candidate->name[2] == 'm' &&
+            candidate->name[3] == 'e') {
+            device = candidate;
+            break;
+        }
+    }
+    if (!device) {
+        serial_write("VANTAOS_NVME_IO_SELFTEST_SKIPPED\\n");
+        return 1;
+    }
+    if (device->sector_count <= 8U || device->sector_size > NVME_PAGE_SIZE) {
+        serial_write("VANTAOS_NVME_IO_SELFTEST_FAIL\\n");
+        return 0;
+    }
+    uint8_t before[NVME_PAGE_SIZE];
+    uint8_t expected[NVME_PAGE_SIZE];
+    uint8_t actual[NVME_PAGE_SIZE];
+    for (uint32_t i = 0; i < device->sector_size; ++i)
+        expected[i] = (uint8_t)((i * 37U) ^ 0xA5U);
+    int ok = block_device_read(device, 7U, 1U, before) == BLOCK_STATUS_OK;
+    ok = ok && block_device_write(device, 7U, 1U, expected) == BLOCK_STATUS_OK;
+    ok = ok && block_device_flush(device) == BLOCK_STATUS_OK;
+    ok = ok && block_device_read(device, 7U, 1U, actual) == BLOCK_STATUS_OK;
+    for (uint32_t i = 0; i < device->sector_size; ++i)
+        ok = ok && actual[i] == expected[i];
+    ok = ok && block_device_read(device, device->sector_count, 1U, actual) ==
+               BLOCK_STATUS_OUT_OF_RANGE;
+    /* Restore the scratch sector even when the data verification fails. */
+    if (block_device_write(device, 7U, 1U, before) != BLOCK_STATUS_OK)
+        ok = 0;
+    if (block_device_flush(device) != BLOCK_STATUS_OK)
+        ok = 0;
+    serial_write(ok ? "VANTAOS_NVME_IO_SELFTEST_OK\\n" :
+                      "VANTAOS_NVME_IO_SELFTEST_FAIL\\n");
+    return ok;
+}
+#endif
+
 static const storage_pci_id_t nvme_ids[] = {
     {0xFFFFU, 0xFFFFU, NVME_CLASS, NVME_SUBCLASS, NVME_PROGIF}
 };

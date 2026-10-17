@@ -25,10 +25,12 @@ static void desktop_gui_present(void)
     if (!graphics_is_initialized())
         return;
 
+    graphics_begin_frame();
     graphics_present();
 
     gui_server_draw_windows();
     graphics_draw_cursor();
+    graphics_end_frame();
 }
 
 int desktop_launch_terminal(void)
@@ -163,7 +165,7 @@ void desktop_update(void)
                 click_event)
                 desktop_gui_present();
             else if (mouse_has_move_event())
-                graphics_draw_cursor();
+                desktop_gui_present();
         }
 
         mouse_clear_event_flags();

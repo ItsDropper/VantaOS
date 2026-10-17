@@ -32,6 +32,9 @@ int fat32_read_file_range(uint32_t first_cluster, uint32_t size,
                           uint32_t offset, char* buffer, uint32_t length);
 
 int fat32_create_file(const char* path);
+int fat32_create_directory(const char* path);
+int fat32_delete_path(const char* path);
+int fat32_rename_path(const char* old_path, const char* new_path);
 int fat32_write_file(const char* path, const char* data, uint32_t size);
 int fat32_write_file_range(const char* path, uint32_t offset,
                            const char* data, uint32_t length);

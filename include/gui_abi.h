@@ -6,7 +6,7 @@
 /* VantaOS-specific ring-3 GUI ABI. This is not a Win32/Wayland ABI. */
 #define VANTA_GUI_ABI_VERSION 1U
 #define VANTA_GUI_MAX_WINDOWS 8U
-#define VANTA_GUI_MAX_COMMANDS 24U
+#define VANTA_GUI_MAX_COMMANDS 128U
 #define VANTA_GUI_TITLE_MAX 31U
 #define VANTA_GUI_TEXT_MAX 63U
 
@@ -21,6 +21,8 @@
 #define VANTA_GUI_EVENT_FOCUS_GAINED  5U
 #define VANTA_GUI_EVENT_FOCUS_LOST    6U
 #define VANTA_GUI_EVENT_THEME_CHANGED  7U
+
+#define VANTA_GUI_MOD_CTRL 0x01U
 
 /* Special-key values carried by VANTA_GUI_EVENT_KEY. */
 #define VANTA_GUI_KEY_PAGE_UP   0x101U

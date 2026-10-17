@@ -98,7 +98,7 @@ void filesystem_selftest_initialize(void)
      */
     if (fat32_is_mounted())
     {
-    if (filesystem_create_file("/BAD NAME.TXT") >= 0)
+    if (filesystem_create_file("/BAD:NAME.TXT") >= 0)
     {
         serial_write("VANTAOS_FAT32_NAME_GUARD_FAIL\n");
         return;
@@ -198,6 +198,42 @@ void filesystem_selftest_initialize(void)
         }
     }
     serial_write("VANTAOS_FAT32_MULTICLUSTER_IO_OK\n");
+
+    /* Exercise directory creation, long-name creation, rename, and deletion. */
+    if (filesystem_create_directory("/FMTEST") < 0)
+    {
+        serial_write("VANTAOS_FILESYSTEM_MUTATION_CREATE_DIR_FAIL\n");
+        return;
+    }
+    if (filesystem_create_file("/FMTEST/Long File Name.txt") < 0)
+    {
+        serial_write("VANTAOS_FILESYSTEM_MUTATION_CREATE_FILE_FAIL\n");
+        return;
+    }
+    if (filesystem_rename_path("/FMTEST/Long File Name.txt",
+                               "/FMTEST/Renamed App.bin") < 0)
+    {
+        serial_write("VANTAOS_FILESYSTEM_MUTATION_RENAME_FAIL\n");
+        return;
+    }
+    if (filesystem_lookup("/FMTEST/Long File Name.txt") >= 0 ||
+        filesystem_lookup("/FMTEST/Renamed App.bin") < 0)
+    {
+        serial_write("VANTAOS_FILESYSTEM_MUTATION_LOOKUP_FAIL\n");
+        return;
+    }
+    if (filesystem_delete_path("/FMTEST/Renamed App.bin") < 0)
+    {
+        serial_write("VANTAOS_FILESYSTEM_MUTATION_DELETE_FILE_FAIL\n");
+        return;
+    }
+    if (filesystem_delete_path("/FMTEST") < 0 ||
+        filesystem_lookup("/FMTEST") >= 0)
+    {
+        serial_write("VANTAOS_FILESYSTEM_MUTATION_DELETE_DIR_FAIL\n");
+        return;
+    }
+    serial_write("VANTAOS_FILESYSTEM_MUTATION_OK\n");
     }
     else
     {

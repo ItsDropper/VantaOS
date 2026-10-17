@@ -65,7 +65,8 @@ This roadmap prioritizes a trustworthy kernel over visual features. A Windows al
 - [x] Exercise FAT32-backed executable loading using a disposable CI disk image.
 - [ ] Expand FAT32 read tests against disposable disk fixtures.
 - [x] Validate bounded FAT32 8.3 regular-file writes and VFS readback in disposable QEMU disk fixtures.
-- [ ] Implement long-filename writes, directory creation, rename/delete, crash-safe replacement, and broader persistence/corruption tests.
+- [x] Implement printable-ASCII long-filename writes, directory creation, rename/delete, and CI regression coverage on disposable FAT32 images.
+- [ ] Add Unicode LFN creation, cross-directory move, crash-safe replacement, concurrent mutation protection, and broader persistence/corruption tests.
 - [ ] Add corruption-safe tests and consistent error propagation.
 
 ### M5.5 — User-space desktop application platform
@@ -76,8 +77,9 @@ This roadmap prioritizes a trustworthy kernel over visual features. A Windows al
 - [x] Implement bounded FAT32-backed regular-file create/write and user-mode write syscalls; verify the supported persistence path across a second boot.
 - [x] Expand GUI regression coverage for click routing, focus transitions, queue overflow, close requests, invalid event buffers, and owner hide/restore.
 - [x] Migrate Settings to a static ELF64 ring-3 app with versioned preferences, four accent colors, light/dark surfaces, compact Explorer rows, larger Settings labels, high contrast, immediate theme reload, and second-boot persistence.
-- [x] Migrate File Explorer to a ring-3 ELF with directory navigation, text preview, and validated ELF launch; mutating filesystem operations remain unsupported.
-- [ ] Move Terminal's window, input, and presentation onto the same GUI API while keeping its shell in ring 3.
+- [x] Migrate File Explorer to a ring-3 ELF with validated launch, long-name file/folder creation, rename/delete, search, properties, multi-selection, and Vanta RLE archive support.
+- [x] Move Terminal's window, input, and presentation onto the ring-3 GUI API while keeping its shell in ring 3.
+- [ ] Add automated end-to-end mouse/keyboard tests, Unicode filename creation, cross-directory rename, and crash-atomic filesystem transactions.
 - [ ] Implement RTC UTC/local policy and a timezone-rule service before claiming region-based local time or DST correctness.
 
 ### M6 — Daily-driver prototype
@@ -89,5 +91,5 @@ This roadmap prioritizes a trustworthy kernel over visual features. A Windows al
 
 - Backup branch: `backup/pre-desktop-reliability-2026-10-15`.
 - Default branch: `master`.
-- Current user-mode status: static ELF64 execution, bounded process/file syscalls, an initial process-owned GUI ABI, and the standalone ring-3 Settings app are implemented. CI checks selected syscall, file-I/O, multi-cluster FAT32, GUI malformed-request, dead-window-cleanup, Settings storage readback, and second-boot persistence cases. Settings applies accent, light/dark, contrast, and compact-row preferences to the desktop; text size remains local to Settings. Terminal and the read-only File Explorer UI run at ring 3. The GUI ABI and storage layer remain intentionally limited. This remains an early bring-up environment, not a stable application platform.
+- Current user-mode status: static ELF64 execution, bounded process/file syscalls, an initial process-owned GUI ABI, and the standalone ring-3 Settings app are implemented. CI checks selected syscall, file-I/O, multi-cluster FAT32, GUI malformed-request, dead-window-cleanup, Settings storage readback, and second-boot persistence cases. Settings applies accent, light/dark, contrast, and compact-row preferences to the desktop; text size remains local to Settings. Terminal and the mutable ring-3 File Explorer UI run at ring 3, with create, rename, delete, recursive copy/move, properties, search, and Vanta RLE archive actions. The GUI ABI and storage layer remain intentionally limited. This remains an early bring-up environment, not a stable application platform.
 - Current next milestone: strengthen user-mode fault containment, add robust window geometry/event-wait semantics, and extend filesystem mutation APIs with tests. Date/time settings must wait for an explicit RTC policy and tested timezone conversion. See [User-space desktop applications](USERSPACE_GUI.md).

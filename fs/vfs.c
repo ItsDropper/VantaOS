@@ -287,3 +287,17 @@ int vfs_create_directory(const char* path)
 
     return filesystem_create_directory(path);
 }
+
+int vfs_delete_path(const char* path)
+{
+    if (!initialized)
+        return -1;
+    return filesystem_delete_path(path);
+}
+
+int vfs_rename_path(const char* old_path, const char* new_path)
+{
+    if (!initialized)
+        return -1;
+    return filesystem_rename_path(old_path, new_path);
+}

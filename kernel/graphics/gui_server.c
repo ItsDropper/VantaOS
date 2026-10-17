@@ -437,7 +437,7 @@ void gui_server_draw_windows(void)
 
 int gui_server_mouse_click(int x, int y, int button)
 {
-    if (button != 1)
+    if (button != 1 && button != 3)
         return 0;
 
     uint64_t flags = spinlock_lock_irqsave(&gui_lock);
@@ -474,7 +474,7 @@ int gui_server_mouse_click(int x, int y, int button)
             x - target->x - GUI_CLIENT_INSET_X,
             y - target->y - GUI_CLIENT_INSET_Y,
             (uint32_t)button,
-            0U
+            keyboard_ctrl_pressed() ? VANTA_GUI_MOD_CTRL : 0U
         };
         gui_queue_event_locked(target, &event);
     }

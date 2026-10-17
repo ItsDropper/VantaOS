@@ -2,6 +2,12 @@
 
 #include "ata.h"
 #include "fat32.h"
+#ifdef VANTAOS_SELF_TEST
+#include "serial.h"
+#define FS_MUTATION_DIAG(message) serial_write(message "\n")
+#else
+#define FS_MUTATION_DIAG(message) ((void)0)
+#endif
 
 static fs_node_t nodes[FS_MAX_NODES];
 /* FAT32 enumeration scratch space; filesystem metadata is currently serialized. */
@@ -433,10 +439,135 @@ int filesystem_write_file_range(const char* path, uint32_t offset,
     return result;
 }
 
+static int fs_split_parent(const char* path, char* parent_path,
+                            unsigned int parent_capacity,
+                            const char** leaf_out)
+{
+    if (!path || path[0] != '/' || !parent_path ||
+        parent_capacity < 2U || !leaf_out)
+        return 0;
+    const char* last = path;
+    for (const char* p = path; *p; ++p)
+        if (*p == '/')
+            last = p;
+    if (!last[1] || last == path && last[1] == 0)
+        return 0;
+    unsigned int length = (unsigned int)(last - path);
+    if (length == 0U)
+        length = 1U;
+    if (length >= parent_capacity)
+        return 0;
+    for (unsigned int i = 0; i < length; i++)
+        parent_path[i] = path[i];
+    parent_path[length] = 0;
+    *leaf_out = last + 1;
+    return 1;
+}
+
+static int fs_find_disk_child(uint32_t parent_id, const char* name,
+                              fat32_dirent_t* result)
+{
+    const fs_node_t* parent = filesystem_get_node(parent_id);
+    if (!parent || parent->type != FS_NODE_DIRECTORY ||
+        parent->first_cluster < 2U)
+        return 0;
+    int count = fat32_list_directory(parent->first_cluster,
+                                     directory_entries, FS_MAX_NODES);
+    if (count < 0)
+        return 0;
+    for (int i = 0; i < count; i++)
+    {
+        if (!fs_equals_ci(directory_entries[i].name, name))
+            continue;
+        if (result)
+            *result = directory_entries[i];
+        return 1;
+    }
+    return 0;
+}
+
 int filesystem_create_directory(const char* path)
 {
-    (void)path;
-    return -2;
+    if (!initialized || !path || !fat32_is_mounted() ||
+        filesystem_lookup(path) >= 0)
+        return -1;
+    char parent_path[FS_PATH_MAX];
+    const char* leaf = 0;
+    if (!fs_split_parent(path, parent_path, sizeof(parent_path), &leaf))
+        return -1;
+    int parent_id = filesystem_lookup(parent_path);
+    if (parent_id < 0 ||
+        fat32_create_directory(path) < 0)
+        return -1;
+    fat32_dirent_t disk_entry;
+    if (!fs_find_disk_child((uint32_t)parent_id, leaf, &disk_entry))
+        return -1;
+    return fs_add_node((uint32_t)parent_id, FS_NODE_DIRECTORY, leaf,
+                       disk_entry.first_cluster, 0U);
+}
+
+int filesystem_delete_path(const char* path)
+{
+    if (!initialized || !path || !fat32_is_mounted())
+        return -1;
+    int id = filesystem_lookup(path);
+    if (id <= 0 || (uint32_t)id == filesystem_root())
+        return -1;
+    fs_node_t* node = &nodes[id];
+    if (node->type != FS_NODE_FILE && node->type != FS_NODE_DIRECTORY)
+        return -1;
+    if (node->type == FS_NODE_DIRECTORY)
+    {
+        int children = filesystem_list((uint32_t)id, 0, 0U);
+        if (children != 0)
+            return -1;
+    }
+    if (fat32_delete_path(path) < 0)
+        return -1;
+    node->parent = UINT32_MAX;
+    node->loaded = 1;
+    return 0;
+}
+
+int filesystem_rename_path(const char* old_path, const char* new_path)
+{
+    if (!initialized || !old_path || !new_path || !fat32_is_mounted())
+    {
+        FS_MUTATION_DIAG("VANTAOS_FS_RENAME_STAGE_1");
+        return -1;
+    }
+    int id = filesystem_lookup(old_path);
+    if (id <= 0)
+    {
+        FS_MUTATION_DIAG("VANTAOS_FS_RENAME_STAGE_2");
+        return -1;
+    }
+    if (filesystem_lookup(new_path) >= 0)
+    {
+        FS_MUTATION_DIAG("VANTAOS_FS_RENAME_STAGE_3");
+        return -1;
+    }
+    char parent_path[FS_PATH_MAX];
+    const char* leaf = 0;
+    if (!fs_split_parent(new_path, parent_path, sizeof(parent_path), &leaf))
+    {
+        FS_MUTATION_DIAG("VANTAOS_FS_RENAME_STAGE_4");
+        return -1;
+    }
+    int parent_id = filesystem_lookup(parent_path);
+    if (parent_id < 0)
+    {
+        FS_MUTATION_DIAG("VANTAOS_FS_RENAME_STAGE_5");
+        return -1;
+    }
+    if (fat32_rename_path(old_path, new_path) < 0)
+    {
+        FS_MUTATION_DIAG("VANTAOS_FS_RENAME_STAGE_6");
+        return -1;
+    }
+    nodes[id].parent = (uint32_t)parent_id;
+    fs_copy_name(nodes[id].name, leaf);
+    return 0;
 }
 
 int filesystem_create_file(const char* path)

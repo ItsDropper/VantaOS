@@ -3,6 +3,7 @@
 #include "dma.h"
 #include "mmio.h"
 #include "pci.h"
+#include "paging.h"
 #include "serial.h"
 #include "spinlock.h"
 #include "storage_driver.h"
@@ -410,7 +411,7 @@ static storage_probe_result_t nvme_probe(const struct pci_device* pci)
     }
     c->doorbell_stride = 4ULL << stride_shift;
     uint64_t required_length = 0x1000ULL + 3ULL * c->doorbell_stride + sizeof(uint32_t);
-    if (required_length > PAGING_MMIO_SIZE || required_length > SIZE_MAX ||
+    if (required_length > PAGING_MMIO_SIZE ||
         !mmio_unmap_region((void*)c->registers, NVME_REGISTERS_SIZE)) {
         c->registers = 0;
         free_controller_memory(c);

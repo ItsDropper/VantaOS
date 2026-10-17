@@ -949,7 +949,9 @@ static void commit_dialog(void)
         return;
     }
     char target[PATH_CAPACITY];
-    if (dialog_mode == DIALOG_RENAME)
+    int renamed = dialog_mode == DIALOG_RENAME;
+    char renamed_name[ENTRY_NAME_CAPACITY] = {0};
+    if (renamed)
     {
         size_t index = first_selected();
         char old_path[PATH_CAPACITY];
@@ -959,6 +961,7 @@ static void commit_dialog(void)
             set_status("Invalid rename path", COLOR_ERROR);
             return;
         }
+        copy_text(renamed_name, sizeof(renamed_name), input_buffer);
         if (vanta_rename_path(old_path, target) < 0)
         {
             set_status("Rename failed; target may exist or be invalid", COLOR_ERROR);
@@ -989,6 +992,27 @@ static void commit_dialog(void)
     input_mode = INPUT_NONE;
     dialog_mode = DIALOG_NONE;
     (void)load_directory();
+    if (renamed)
+    {
+        /* Preserve the user's focus across the directory reload after rename. */
+        for (size_t i = 0; i < entry_count; i++)
+        {
+            if (!text_equals_ci(entries[i], renamed_name))
+                continue;
+            select_single(i);
+            for (size_t visible = 0; visible < visible_count; visible++)
+            {
+                if (visible_indices[visible] != i)
+                    continue;
+                if (visible < first_visible)
+                    first_visible = visible;
+                else if (visible >= first_visible + DISPLAY_ROWS)
+                    first_visible = visible - DISPLAY_ROWS + 1U;
+                break;
+            }
+            break;
+        }
+    }
     set_status("File operation completed", COLOR_ACCENT);
 }
 

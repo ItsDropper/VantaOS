@@ -190,6 +190,7 @@ jobs:
           grep -q 'VANTAOS_DESKTOP_THEME_CONFIG_OK' boot-512m-2cpu.log
 
       - name: USB HID xHCI input end-to-end test
+        if: always()
         shell: bash
         run: |
           set -euo pipefail

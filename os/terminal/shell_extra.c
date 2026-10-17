@@ -442,10 +442,8 @@ static int command_net(uint32_t argc, char **argv)
         return 1;
     }
     if (argc == 2U && shell_string_equals(argv[1], "poll")) {
-        size_t driver_work = net_pci_poll_devices();
         size_t packet_work = net_poll(16U);
-        terminal_write("\npolled drivers="); shell_print_decimal((uint32_t)driver_work);
-        terminal_write(" packets="); shell_print_decimal((uint32_t)packet_work);
+        terminal_write("\npolled receive packets="); shell_print_decimal((uint32_t)packet_work);
         return 1;
     }
     if (argc == 6U && shell_string_equals(argv[1], "config")) {

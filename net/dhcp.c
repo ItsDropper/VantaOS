@@ -259,14 +259,15 @@ int net_dhcp_configure(net_device_t* device, uint32_t timeout_ms,
     uint32_t timeout_ticks = timeout_ms / 10U; /* PIT is initialized at 100 Hz. */
     uint32_t next_retry = start;
     uint8_t requested = 0;
-    int sent = 0;
+    int attempted = 0;
     while ((uint32_t)(timer_get_ticks() - start) < timeout_ticks) {
         uint32_t now = timer_get_ticks();
-        if (!sent || (state.offered && !requested) ||
+        if (!attempted || (state.offered && !requested) ||
             (uint32_t)(now - next_retry) >= DHCP_RETRY_TICKS) {
             uint8_t kind = state.offered ? DHCP_REQUEST : DHCP_DISCOVER;
             if (kind == DHCP_REQUEST) requested = 1U;
-            sent = send_message(kind);
+            (void)send_message(kind);
+            attempted = 1;
             next_retry = now;
         }
         (void)net_poll(16U);

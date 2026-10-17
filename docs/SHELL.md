@@ -22,7 +22,8 @@ The ring-3 terminal shell uses a bounded command buffer and argument parser. Quo
 
 ## Network commands
 
-- `net connect [index]` (alias `net dhcp [index]`) runs a bounded DHCPv4 exchange on the selected link-up interface (or the first link-up interface), then configures its IPv4 address, netmask, gateway, and DNS server. It times out after 30 seconds and reports the result. It does not yet renew/expire leases or prove end-to-end Internet reachability.\n- `net` / `net status` lists registered network devices, link state, MTU, MAC, configured IPv4 address, and RX/TX counters.
+- `net connect [index]` (alias `net dhcp [index]`) runs a bounded DHCPv4 exchange on the selected link-up interface (or the first link-up interface), then configures its IPv4 address, netmask, gateway, and DNS server. It times out after 30 seconds and reports the result. It does not yet renew/expire leases or prove end-to-end Internet reachability.
+- `net` / `net status` lists registered network devices, link state, MTU, MAC, configured IPv4 address, and RX/TX counters.
 - `net poll` runs one bounded network poll cycle.
 - `net config <index> <ip> <netmask> <gateway>` configures a registered interface with a validated static IPv4 configuration.
 

@@ -1,7 +1,5 @@
 #include "net_wifi.h"
 
-#include <string.h>
-
 static const net_wifi_driver_ops_t *wifi_ops;
 static net_wifi_state_t wifi_state = NET_WIFI_DOWN;
 
@@ -69,7 +67,8 @@ int net_wifi_connect(const uint8_t *ssid, size_t ssid_length,
             return 0;
     }
 
-    memcpy(secret, passphrase, passphrase_length);
+    for (size_t i = 0; i < passphrase_length; ++i)
+        secret[i] = passphrase[i];
     accepted = wifi_ops->connect(ssid, ssid_length, secret,
                                  passphrase_length, security);
     wipe_secret(secret, sizeof(secret));

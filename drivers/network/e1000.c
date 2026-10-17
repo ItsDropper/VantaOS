@@ -216,6 +216,19 @@ static int e1000_poll_device(void)
     }
     return received;
 }
+#ifdef VANTAOS_SELF_TEST
+static void e1000_rx_selftest_handler(net_device_t* device,const uint8_t* frame,
+                                      size_t length,uint16_t type,size_t header,
+                                      void* context)
+{
+    (void)device;(void)context;
+    if(!frame||type!=0x88B5U||header>length||length-header!=4U)return;
+    if(frame[header]==0x56U&&frame[header+1U]==0x41U&&
+       frame[header+2U]==0x4EU&&frame[header+3U]==0x54U)
+        serial_write("VANTAOS_E1000_RX_SELFTEST_OK\n");
+}
+#endif
+
 static int e1000_probe(const struct pci_device* pci)
 {
     if(!pci||state.ready)return NET_PCI_PROBE_FAILED;
@@ -260,6 +273,12 @@ static int e1000_probe(const struct pci_device* pci)
     /* Publish descriptors only after their DMA memory and PCI command state are valid. */
     if(!pci_enable_bus_mastering(pci))goto fail_dma;
     if(!net_device_register(&state.netdev))goto fail_dma;
+#ifdef VANTAOS_SELF_TEST
+    if(!net_ethernet_handler_register(0x88B5U,e1000_rx_selftest_handler,0)){
+        (void)net_device_unregister(&state.netdev);
+        goto fail_dma;
+    }
+#endif
     /* No engine is active until registration succeeds, so failure cleanup is DMA-safe. */
     state.ready=1;
     reg_write(REG_TCTL,TCTL_EN|TCTL_PSP|0x00040100U);

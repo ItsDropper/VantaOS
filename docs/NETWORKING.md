@@ -52,7 +52,7 @@ A net_pci_driver_t supplies a persistent name, PCI match IDs, and a probe callba
 
 The current E1000 driver targets PCI ID `8086:100E` (Intel 82540EM/QEMU `e1000`). It maps BAR0 through the shared MMIO allocator, resets the controller, validates the MAC address, allocates below-4-GiB DMA pages for descriptor rings and packet buffers, configures RX/TX rings, and enables PCI bus mastering only after descriptor memory is ready. TX copies into a DMA buffer and waits with a bounded timeout for descriptor completion. RX is polling-based: `net_poll()` invokes the driver poll callback, which moves completed descriptors into the bounded network RX queue. Device interrupts are masked; no IRQ routing is assumed.
 
-The QEMU regression test boots with a real emulated E1000 device and requires driver initialization plus successful descriptor-level Ethernet transmit completion. This validates driver bring-up and TX completion, not Internet protocol connectivity or packet exchange with a remote endpoint.
+The QEMU regression test boots with a real emulated E1000 device, requires descriptor-level transmit completion, then injects a framed Ethernet packet through QEMU's TCP socket backend and requires it to reach an EtherType handler through the receive ring and bounded RX queue. This validates both hardware packet paths through Ethernet dispatch, not Internet protocol connectivity.
 
 ## Current limitations
 

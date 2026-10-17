@@ -4,7 +4,6 @@ set -e
 
 echo "==> Cleaning..."
 make clean
-sh scripts/prepare_bearssl.sh
 
 echo "==> Building kernel..."
 make

@@ -50,6 +50,8 @@ int filesystem_write_file_range(const char* path, uint32_t offset,
                                 const char* data, uint32_t length);
 
 int filesystem_create_directory(const char* path);
+int filesystem_delete_path(const char* path);
+int filesystem_rename_path(const char* old_path, const char* new_path);
 int filesystem_create_file(const char* path);
 int filesystem_write_file(const char* path, const char* data);
 int filesystem_file_exists(const char* path);

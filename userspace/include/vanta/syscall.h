@@ -11,7 +11,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define VANTA_USER_ABI_VERSION 4U
+#define VANTA_USER_ABI_VERSION 5U
 
 #define VANTA_SYS_EXIT          0U
 #define VANTA_SYS_WRITE         1U
@@ -74,6 +74,11 @@ static inline long vanta_console_write(const void* buffer, size_t length)
 static inline long vanta_read_char(void)
 {
     return vanta_syscall3(VANTA_SYS_READ_CHAR, 0U, 0U, 0U);
+}
+
+static inline long vanta_settings_apply(void)
+{
+    return vanta_syscall3(VANTA_SYS_SETTINGS_APPLY, 0U, 0U, 0U);
 }
 
 static inline long vanta_yield(void)

@@ -1,4 +1,6 @@
 #include "net.h"
+#include "net_arp.h"
+#include "net_ipv4.h"
 #include "serial.h"
 #include <stddef.h>
 #include <stdint.h>
@@ -85,4 +87,52 @@ static void ipv4_receive(net_device_t* d,const uint8_t* frame,size_t length,
 int net_ipv4_initialize(void)
 {
     return net_ethernet_handler_register(IPV4_ETHERTYPE,ipv4_receive,0);
+}
+
+
+int net_ipv4_send(net_device_t* device, uint32_t destination,
+                  uint8_t protocol, const void* payload, size_t payload_length)
+{
+    if (!device || !payload || !device->link_up ||
+        (protocol != IPV4_PROTOCOL_ICMP && protocol != IPV4_PROTOCOL_UDP) ||
+        payload_length == 0U || payload_length > (size_t)device->mtu - 20U)
+        return 0;
+
+    uint32_t source = 0, mask = 0, gateway = 0;
+    if (!net_device_get_ipv4(device, &source, &mask, &gateway) ||
+        !unicast_ipv4(source) || !unicast_ipv4(destination) ||
+        source == destination)
+        return 0;
+
+    uint32_t next_hop = ((source & mask) == (destination & mask))
+                      ? destination : gateway;
+    if (!next_hop || !unicast_ipv4(next_hop))
+        return 0;
+
+    uint8_t destination_mac[6];
+    if (!net_arp_resolve(device, next_hop, destination_mac, 3000U))
+        return 0;
+
+    uint8_t frame[NET_ETHERNET_HEADER_SIZE + NET_MTU_DEFAULT] = {0};
+    for (uint32_t i = 0; i < 6U; ++i) {
+        frame[i] = destination_mac[i];
+        frame[6U + i] = device->mac[i];
+    }
+    write_be16(frame + 12U, IPV4_ETHERTYPE);
+    uint8_t* ip = frame + NET_ETHERNET_HEADER_SIZE;
+    ip[0] = 0x45U;
+    ip[1] = 0U;
+    write_be16(ip + 2U, (uint16_t)(20U + payload_length));
+    static uint16_t packet_id = 1U;
+    write_be16(ip + 4U, packet_id++);
+    write_be16(ip + 6U, 0x4000U); /* Don't fragment; fragmentation isn't implemented. */
+    ip[8] = 64U;
+    ip[9] = protocol;
+    write_be32(ip + 12U, source);
+    write_be32(ip + 16U, destination);
+    write_be16(ip + 10U, checksum(ip, 20U));
+    const uint8_t* input = (const uint8_t*)payload;
+    for (size_t i = 0; i < payload_length; ++i) ip[20U + i] = input[i];
+    return net_device_transmit(device, frame,
+                               NET_ETHERNET_HEADER_SIZE + 20U + payload_length);
 }

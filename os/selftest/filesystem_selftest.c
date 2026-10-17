@@ -169,9 +169,14 @@ void filesystem_selftest_initialize(void)
     {
         for (uint32_t i = 0; i < MULTICLUSTER_CHUNK; i++)
             large_chunk[i] = (char)(((offset + i) * 37U + 11U) & 0xFFU);
-        if (filesystem_write_file_range("/BIGTEST.BIN", offset,
-                                        large_chunk, MULTICLUSTER_CHUNK) !=
-            MULTICLUSTER_CHUNK)
+        serial_write(offset == 0U ? "VANTAOS_FAT32_MULTICLUSTER_CHUNK_0\n" :
+                     offset == MULTICLUSTER_CHUNK ? "VANTAOS_FAT32_MULTICLUSTER_CHUNK_1\n" :
+                     offset == 2U * MULTICLUSTER_CHUNK ? "VANTAOS_FAT32_MULTICLUSTER_CHUNK_2\n" :
+                     offset == 3U * MULTICLUSTER_CHUNK ? "VANTAOS_FAT32_MULTICLUSTER_CHUNK_3\n" :
+                     "VANTAOS_FAT32_MULTICLUSTER_CHUNK_4\n");
+        int chunk_result = filesystem_write_file_range(
+            "/BIGTEST.BIN", offset, large_chunk, MULTICLUSTER_CHUNK);
+        if (chunk_result != MULTICLUSTER_CHUNK)
         {
             serial_write("VANTAOS_FAT32_MULTICLUSTER_WRITE_FAIL\n");
             return;

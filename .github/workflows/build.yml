@@ -31,6 +31,8 @@ jobs:
           test -f kernel/boot/Makefile
           test -f mm/Makefile
           test -f drivers/Makefile
+          test -f drivers/network/e1000.c
+          grep -q 'drivers/network/e1000.c' drivers/network/Makefile
           test -f fs/Makefile
 
       - name: Enforce architecture boundaries
@@ -63,6 +65,68 @@ jobs:
           # Keep a pristine template before QEMU regression steps mutate vantaos.img.
           cp vantaos.img nvme-fat32-template.img
 
+      - name: E1000 QEMU transmit end-to-end test
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          log="e1000-boot.log"
+          rm -f "$log" qemu-e1000-stderr.log e1000-network.img
+          cp nvme-fat32-template.img e1000-network.img
+          stdbuf -o0 timeout 45s qemu-system-x86_64 \
+            -machine pc \
+            -nodefaults \
+            -device VGA,id=video0 \
+            -m 256M \
+            -device e1000,netdev=net0 \
+            -netdev socket,id=net0,listen=127.0.0.1:1234 \
+            -drive file=VantaOS.iso,media=cdrom,format=raw \
+            -drive file=e1000-network.img,if=ide,format=raw \
+            -boot order=d \
+            -display vnc=127.0.0.1:1 \
+            -serial stdio \
+            -no-reboot >"$log" 2>qemu-e1000-stderr.log &
+          qemu_pid=$!
+          cleanup() {
+            kill "$qemu_pid" 2>/dev/null || true
+            wait "$qemu_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+          for attempt in $(seq 1 300); do
+            if grep -q 'VANTAOS_E1000_TX_SELFTEST_OK' "$log" 2>/dev/null && grep -q 'VANTAOS_BOOT_OK' "$log" 2>/dev/null; then break; fi
+            if grep -q 'VANTAOS_E1000_TX_SELFTEST_FAIL' "$log" 2>/dev/null; then
+              cat "$log" qemu-e1000-stderr.log
+              exit 1
+            fi
+            if ! kill -0 "$qemu_pid" 2>/dev/null; then
+              echo "QEMU exited before the E1000 transmit test completed."
+              cat "$log" qemu-e1000-stderr.log
+              exit 1
+            fi
+            sleep 0.1
+          done
+          grep -q 'VANTAOS_BOOT_OK' "$log"
+          grep -q 'VANTAOS_E1000_INITIALIZED' "$log"
+          grep -q 'VANTAOS_E1000_TX_SELFTEST_OK' "$log"
+          python3 scripts/test_e1000_network.py || {
+            cat "$log" qemu-e1000-stderr.log
+            exit 1
+          }
+          for attempt in $(seq 1 100); do
+            if grep -q 'VANTAOS_E1000_RX_SELFTEST_OK' "$log" 2>/dev/null; then break; fi
+            if ! kill -0 "$qemu_pid" 2>/dev/null; then
+              echo "QEMU exited before the E1000 receive test completed."
+              cat "$log" qemu-e1000-stderr.log
+              exit 1
+            fi
+            sleep 0.1
+          done
+          if ! grep -q 'VANTAOS_E1000_RX_SELFTEST_OK' "$log" ||
+             ! grep -q 'VANTAOS_ARP_REPLY_OK' "$log" ||
+             ! grep -q 'VANTAOS_ICMP_ECHO_REPLY_OK' "$log"; then
+            cat "$log" qemu-e1000-stderr.log
+            exit 1
+          fi
       - name: USB HID xHCI input end-to-end test
         if: always()
         shell: bash

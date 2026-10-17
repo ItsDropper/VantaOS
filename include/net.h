@@ -24,6 +24,9 @@ struct net_device {
     uint8_t link_up;
     const net_device_ops_t* ops;
     void* driver_data;
+    /* IPv4 values use host byte order; configuration is explicit, never guessed. */
+    uint32_t ipv4_address, ipv4_netmask, ipv4_gateway;
+    uint8_t ipv4_configured;
 };
 typedef struct {
     uint64_t rx_frames, rx_bytes, rx_dropped, rx_malformed;
@@ -32,8 +35,8 @@ typedef struct {
 typedef void (*net_ethernet_handler_fn)(net_device_t*, const uint8_t*, size_t,
                                         uint16_t, size_t, void*);
 typedef struct {
-    uint16_t vendor_id, device_id; /* 0xFFFF matches any. */
-    uint8_t class_code, subclass, prog_if; /* 0xFF matches any. */
+    uint16_t vendor_id, device_id;
+    uint8_t class_code, subclass, prog_if;
 } net_pci_id_t;
 typedef enum {
     NET_PCI_PROBE_NOT_MINE = 0, NET_PCI_PROBE_BOUND = 1, NET_PCI_PROBE_FAILED = 2
@@ -43,21 +46,27 @@ typedef struct {
     const net_pci_id_t* ids;
     uint32_t id_count;
     net_pci_probe_result_t (*probe)(const struct pci_device*);
+    /* Called by net_poll() in process context; must be bounded and nonblocking. */
+    int (*poll)(void);
 } net_pci_driver_t;
 void net_initialize(void);
 int net_device_register(net_device_t*);
 int net_device_unregister(net_device_t*);
 int net_device_set_link(net_device_t*, int);
+int net_device_configure_ipv4(net_device_t*, uint32_t address,
+                              uint32_t netmask, uint32_t gateway);
+int net_device_get_ipv4(net_device_t*, uint32_t* address,
+                        uint32_t* netmask, uint32_t* gateway);
 uint32_t net_device_count(void);
 net_device_t* net_device_get(uint32_t);
 int net_device_get_stats(net_device_t*, net_device_stats_t*);
 int net_device_transmit(net_device_t*, const void*, size_t);
-/* Bounded, allocation-free ingress; protocol handlers run only from net_poll(). */
 int net_receive_frame(net_device_t*, const void*, size_t);
 size_t net_poll(size_t packet_budget);
 int net_ethernet_handler_register(uint16_t, net_ethernet_handler_fn, void*);
 int net_ethernet_handler_unregister(uint16_t, net_ethernet_handler_fn, void*);
 int net_pci_driver_register(const net_pci_driver_t*);
 uint32_t net_probe_pci_devices(void);
+size_t net_pci_poll_devices(void);
 const char* net_pci_bound_driver(const struct pci_device*);
 #endif

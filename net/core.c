@@ -54,12 +54,44 @@ int net_device_unregister(net_device_t* d) {
         if(rxq[pos].device==d){spinlock_unlock_irqrestore(&lock,f);return 0;}
     for(uint32_t i=at;i+1U<device_count_used;i++)devices[i]=devices[i+1U];
     --device_count_used;devices[device_count_used].device=0;devices[device_count_used].stats=(net_device_stats_t){0};
+    d->ipv4_address=0;d->ipv4_netmask=0;d->ipv4_gateway=0;d->ipv4_configured=0;
     spinlock_unlock_irqrestore(&lock,f);return 1;
 }
 int net_device_set_link(net_device_t* d,int up) {
     uint64_t f=spinlock_lock_irqsave(&lock);if(!find_locked(d)){spinlock_unlock_irqrestore(&lock,f);return 0;}
     d->link_up=up?1U:0U;spinlock_unlock_irqrestore(&lock,f);return 1;
 }
+
+static int ipv4_unicast_host(uint32_t address)
+{
+    uint8_t first=(uint8_t)(address>>24);
+    return address!=0U&&address!=0xFFFFFFFFU&&first!=0U&&first!=127U&&first<224U;
+}
+int net_device_configure_ipv4(net_device_t* d,uint32_t address,uint32_t mask,uint32_t gateway)
+{
+    uint32_t inverse=~mask;
+    if(!d||!ipv4_unicast_host(address)||mask==0U||
+       (inverse&(inverse+1U))!=0U||
+       (inverse!=0U&&(address&inverse)==inverse)||
+       (gateway&&(!ipv4_unicast_host(gateway)||
+        (gateway&mask)!=(address&mask)||
+        (inverse!=0U&&(gateway&inverse)==inverse))))return 0;
+    uint64_t f=spinlock_lock_irqsave(&lock);device_slot_t* s=find_locked(d);
+    if(!s){spinlock_unlock_irqrestore(&lock,f);return 0;}
+    d->ipv4_address=address;d->ipv4_netmask=mask;d->ipv4_gateway=gateway;d->ipv4_configured=1U;
+    spinlock_unlock_irqrestore(&lock,f);return 1;
+}
+int net_device_get_ipv4(net_device_t* d,uint32_t* address,uint32_t* mask,uint32_t* gateway)
+{
+    if(!d)return 0;
+    uint64_t f=spinlock_lock_irqsave(&lock);device_slot_t* s=find_locked(d);
+    if(!s||!d->ipv4_configured){spinlock_unlock_irqrestore(&lock,f);return 0;}
+    if(address)*address=d->ipv4_address;
+    if(mask)*mask=d->ipv4_netmask;
+    if(gateway)*gateway=d->ipv4_gateway;
+    spinlock_unlock_irqrestore(&lock,f);return 1;
+}
+
 uint32_t net_device_count(void) {uint64_t f=spinlock_lock_irqsave(&lock);uint32_t n=device_count_used;spinlock_unlock_irqrestore(&lock,f);return n;}
 net_device_t* net_device_get(uint32_t i) {uint64_t f=spinlock_lock_irqsave(&lock);net_device_t* d=i<device_count_used?devices[i].device:0;spinlock_unlock_irqrestore(&lock,f);return d;}
 int net_device_get_stats(net_device_t* d,net_device_stats_t* out) {

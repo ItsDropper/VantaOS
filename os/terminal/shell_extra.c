@@ -522,6 +522,35 @@ static int command_net(uint32_t argc, char **argv)
         terminal_write("\nInterface configured. General outbound Internet traffic still requires IPv4/ARP transmit and DNS/TCP client support.");
         return 1;
     }
+    if (argc == 3U && shell_string_equals(argv[1], "ping")) {
+        uint32_t target = 0;
+        if (!parse_ipv4(argv[2], &target)) {
+            terminal_write("\nusage: net ping <IPv4-address>");
+            return 1;
+        }
+        net_device_t *d = 0;
+        for (uint32_t i = 0; i < net_device_count(); ++i) {
+            net_device_t *candidate = net_device_get(i);
+            if (candidate && candidate->link_up && candidate->ipv4_configured) {
+                d = candidate;
+                break;
+            }
+        }
+        if (!d) {
+            terminal_write("\nnet ping: no configured link-up interface; run net connect first");
+            return 1;
+        }
+        uint32_t elapsed = 0;
+        terminal_write("\nPING "); print_ipv4(target); terminal_write(" ...");
+        if (!net_ipv4_ping(d, target, 3000U, &elapsed)) {
+            terminal_write("\nno ICMP echo reply (check gateway, firewall, and Internet route)");
+            return 1;
+        }
+        terminal_write("\nreply from "); print_ipv4(target);
+        terminal_write(": time="); shell_print_decimal(elapsed);
+        terminal_write(" ms");
+        return 1;
+    }
     if (argc == 3U && shell_string_equals(argv[1], "dns")) {
         net_device_t *d = 0;
         for (uint32_t i = 0; i < net_device_count(); ++i) {

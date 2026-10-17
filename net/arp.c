@@ -200,7 +200,12 @@ static void arp_receive(net_device_t* device, const uint8_t* frame,
     }
     write_be32(reply + 14U, local_ip);
     write_be32(reply + 24U, sender_ip);
-    (void)net_device_transmit(device, out, header + 28U);
+    int sent = net_device_transmit(device, out, header + 28U);
+#ifdef VANTAOS_SELF_TEST
+    if (sent) serial_write("VANTAOS_ARP_REPLY_OK\n");
+#else
+    (void)sent;
+#endif
 }
 
 int net_arp_initialize(void)

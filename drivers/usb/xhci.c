@@ -640,9 +640,19 @@ int xhci_configure_interrupt_in(uint32_t slot_id, uint8_t endpoint_address,
     uint32_t* slot = input_context_word(index, 1);
     uint32_t* endpoint = input_context_word(index, dci + 1U);
     control[1] = 1U | (1U << (dci + 1U));
-    slot[0] = ((uint32_t)slot_speed[index] << 20) |
+
+    /*
+     * Configure Endpoint requires the existing Slot Context to be carried
+     * forward. Rebuilding only speed/port/context-entry fields zeroed the
+     * assigned USB device address in DW3, so the command succeeded but later
+     * interrupt-IN transfers never received replies from the device.
+     */
+    const uint32_t* current_slot =
+        (const uint32_t*)(const void*)device_contexts[index];
+    for (uint32_t word = 0; word < context_size / sizeof(uint32_t); ++word)
+        slot[word] = current_slot[word];
+    slot[0] = (slot[0] & ~(0x1FU << 27)) |
               ((dci > 1U ? dci : 1U) << 27);
-    slot[1] = ((uint32_t)slot_port[index] & 0xFFU) << 16;
     uint32_t interval_value = 0;
     if (slot_speed[index] <= 3U) {
         uint32_t value = interval > 0U ? interval : 1U;

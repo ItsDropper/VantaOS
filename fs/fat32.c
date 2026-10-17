@@ -472,6 +472,15 @@ void fat32_initialize(void)
         return;
     }
 #ifdef VANTAOS_SELF_TEST
+    if (active_device->name[0] == 'n' &&
+        active_device->name[1] == 'v' &&
+        active_device->name[2] == 'm' &&
+        active_device->name[3] == 'e')
+        serial_write("VANTAOS_FAT32_BACKEND_NVME_OK\n");
+    else if (active_device->name[0] == 'a' &&
+             active_device->name[1] == 't' &&
+             active_device->name[2] == 'a')
+        serial_write("VANTAOS_FAT32_BACKEND_ATA_OK\n");
     serial_write("VANTAOS_FAT32_BLOCK_DEVICE_MOUNT_OK\n");
 #endif
 }

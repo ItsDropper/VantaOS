@@ -620,7 +620,12 @@ int xhci_configure_interrupt_in(uint32_t slot_id, uint8_t endpoint_address,
     endpoint[1] = (3U << 1) | (7U << 3) | ((uint32_t)packet_size << 16);
     endpoint[2] = (uint32_t)ring_physical | 1U;
     endpoint[3] = (uint32_t)(ring_physical >> 32);
-    endpoint[4] = (uint32_t)packet_size;
+    /* Endpoint Context DW4: Average TRB Length in bits 0..15 and
+       Max ESIT Payload Low in bits 16..31. Both must be populated for
+       periodic interrupt endpoints; otherwise the controller may never
+       schedule HID interrupt-IN transfers despite successful configuration. */
+    endpoint[4] = (uint32_t)packet_size |
+                  ((uint32_t)packet_size << 16);
     uint32_t completion = 0;
     if (!xhci_submit_command(12U, input_physical, 0, slot_id << 24,
                              &completion, 0))

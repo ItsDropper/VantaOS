@@ -3,6 +3,12 @@
 
 /* Initialize the first usable PCI xHCI host controller. Safe to call once. */
 void xhci_initialize(void);
+int xhci_submit_command(uint32_t type, uint64_t parameter,
+                        uint32_t status, uint32_t control_flags,
+                        uint32_t* completion_code, uint32_t* slot_id);
+uint32_t xhci_port_count(void);
+uint32_t xhci_port_status(uint32_t port);
+int xhci_reset_port(uint32_t port);
 
 /* True after controller reset, rings, and Run/Stop have completed. */
 int xhci_controller_online(void);

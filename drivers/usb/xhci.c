@@ -92,6 +92,10 @@ static uint32_t command_cycle = 1;
 static uint32_t event_dequeue;
 static uint32_t event_cycle = 1;
 static uint32_t port_event_mask;
+static uint64_t completed_command_pointer;
+static uint32_t completed_command_code;
+static uint32_t completed_command_slot;
+static uint32_t command_completion_sequence;
 static int controller_online;
 static int initialized;
 
@@ -173,6 +177,12 @@ static void consume_event_ring(void)
             uint32_t port_id = (control >> 24) & 0xFFU;
             if (port_id >= 1U && port_id <= XHCI_MAX_PORTS)
                 port_event_mask |= 1U << (port_id - 1U);
+        } else if (type == XHCI_TRB_TYPE_EVENT_COMMAND_COMPLETION) {
+            completed_command_pointer = event->parameter;
+            completed_command_code = (event->status >> 24) & 0xFFU;
+            completed_command_slot = (control >> 24) & 0xFFU;
+            __atomic_add_fetch(&command_completion_sequence, 1U,
+                               __ATOMIC_RELEASE);
         }
 
         event_dequeue++;
@@ -187,6 +197,103 @@ static void consume_event_ring(void)
     }
 }
 
+int xhci_submit_command(uint32_t type, uint64_t parameter,
+                         uint32_t status, uint32_t control_flags,
+                         uint32_t* completion_code, uint32_t* slot_id)
+{
+    if (!controller_online || type == XHCI_TRB_TYPE_LINK ||
+        command_enqueue >= XHCI_RING_TRBS - 1U)
+        return 0;
+
+    xhci_trb_t* trb = &command_ring[command_enqueue];
+    uint64_t command_physical;
+    if (!dma_address(trb, &command_physical))
+        return 0;
+
+    uint32_t previous_sequence = __atomic_load_n(
+        &command_completion_sequence, __ATOMIC_ACQUIRE);
+    trb->parameter = parameter;
+    trb->status = status;
+    trb->control = (type << XHCI_TRB_TYPE_SHIFT) |
+                   (control_flags & 0x3FFU) |
+                   (command_cycle ? XHCI_TRB_CYCLE : 0U);
+    __atomic_thread_fence(__ATOMIC_RELEASE);
+
+    command_enqueue++;
+    if (command_enqueue == XHCI_RING_TRBS - 1U) {
+        xhci_trb_t* link = &command_ring[XHCI_RING_TRBS - 1U];
+        uint64_t ring_physical;
+        if (!dma_address(command_ring, &ring_physical))
+            return 0;
+        link->parameter = ring_physical;
+        link->status = 0;
+        link->control = (XHCI_TRB_TYPE_LINK << XHCI_TRB_TYPE_SHIFT) |
+                        (1U << 1) |
+                        (command_cycle ? XHCI_TRB_CYCLE : 0U);
+        command_enqueue = 0;
+        command_cycle ^= 1U;
+    }
+
+    mmio_write32(doorbells, 0, 0);
+    for (uint32_t i = 0; i < XHCI_POLL_LIMIT; ++i) {
+        consume_event_ring();
+        uint32_t sequence = __atomic_load_n(
+            &command_completion_sequence, __ATOMIC_ACQUIRE);
+        if (sequence != previous_sequence &&
+            completed_command_pointer == command_physical) {
+            if (completion_code)
+                *completion_code = completed_command_code;
+            if (slot_id)
+                *slot_id = completed_command_slot;
+            return completed_command_code == 1U;
+        }
+        if (mmio_read32(operational, XHCI_USBSTS) & XHCI_STS_HOST_ERROR)
+            return 0;
+        __asm__ volatile ("pause");
+    }
+    return 0;
+}
+
+uint32_t xhci_port_count(void)
+{
+    return controller_online ? max_ports : 0U;
+}
+
+uint32_t xhci_port_status(uint32_t port)
+{
+    if (!controller_online || port == 0U || port > max_ports)
+        return 0;
+    return mmio_read32(operational,
+                       XHCI_PORTSC_BASE + (port - 1U) * 0x10U);
+}
+
+int xhci_reset_port(uint32_t port)
+{
+    if (!controller_online || port == 0U || port > max_ports)
+        return 0;
+
+    uint32_t offset = XHCI_PORTSC_BASE + (port - 1U) * 0x10U;
+    uint32_t portsc = mmio_read32(operational, offset);
+    if ((portsc & XHCI_PORT_CONNECTED) == 0U)
+        return 0;
+
+    uint32_t writable = portsc & ~(XHCI_PORT_CHANGE_BITS |
+                                   XHCI_PORT_ENABLED |
+                                   XHCI_PORT_RESET |
+                                   XHCI_PORT_WARM_RESET);
+    writable |= XHCI_PORT_POWER;
+    mmio_write32(operational, offset, writable);
+    portsc = mmio_read32(operational, offset);
+    writable = portsc & ~(XHCI_PORT_CHANGE_BITS |
+                          XHCI_PORT_ENABLED |
+                          XHCI_PORT_WARM_RESET);
+    writable |= XHCI_PORT_RESET;
+    mmio_write32(operational, offset, writable);
+    if (!wait_register(operational, offset, XHCI_PORT_RESET, 0))
+        return 0;
+    portsc = mmio_read32(operational, offset);
+    return (portsc & XHCI_PORT_ENABLED) != 0U;
+}
 static int controller_start(const struct pci_device* pci)
 {
     uint64_t bar = 0;

@@ -1,6 +1,12 @@
 #include "fat32.h"
 #include "fat32_lfn.h"
 #include "ata.h"
+#ifdef VANTAOS_SELF_TEST
+#include "serial.h"
+#define FAT32_RENAME_DIAG(message) serial_write(message "\n")
+#else
+#define FAT32_RENAME_DIAG(message) ((void)0)
+#endif
 
 #define FAT32_PARTITION_OFFSET 446
 #define FAT32_MAX_CLUSTER 0x0FFFFFF7U
@@ -1344,23 +1350,54 @@ int fat32_rename_path(const char* old_path, const char* new_path)
     uint8_t old_leaf[11], new_leaf[11];
     char new_name[256];
     fat32_slot_t source, destination;
-    if (!mounted ||
-        !fat32_parent_and_leaf(old_path, &old_parent, old_leaf) ||
-        !fat32_parent_and_leaf(new_path, &new_parent, new_leaf) ||
-        !fat32_leaf_name(new_path, new_name) ||
-        old_parent != new_parent ||
-        !fat32_find_entry(old_parent, old_leaf, &source) || !source.found ||
-        (source.attributes & (0x01U | 0x08U)) != 0U ||
-        !fat32_find_entry(new_parent, new_leaf, &destination) ||
-        destination.found)
+    if (!mounted)
+    {
+        FAT32_RENAME_DIAG("VANTAOS_FAT32_RENAME_STAGE_1");
         return -1;
-
+    }
+    if (!fat32_parent_and_leaf(old_path, &old_parent, old_leaf))
+    {
+        FAT32_RENAME_DIAG("VANTAOS_FAT32_RENAME_STAGE_2");
+        return -1;
+    }
+    if (!fat32_parent_and_leaf(new_path, &new_parent, new_leaf) ||
+        !fat32_leaf_name(new_path, new_name))
+    {
+        FAT32_RENAME_DIAG("VANTAOS_FAT32_RENAME_STAGE_3");
+        return -1;
+    }
+    if (old_parent != new_parent)
+    {
+        FAT32_RENAME_DIAG("VANTAOS_FAT32_RENAME_STAGE_4");
+        return -1;
+    }
+    if (!fat32_find_entry(old_parent, old_leaf, &source) || !source.found)
+    {
+        FAT32_RENAME_DIAG("VANTAOS_FAT32_RENAME_STAGE_5");
+        return -1;
+    }
+    if ((source.attributes & (0x01U | 0x08U)) != 0U)
+    {
+        FAT32_RENAME_DIAG("VANTAOS_FAT32_RENAME_STAGE_6");
+        return -1;
+    }
+    if (!fat32_find_entry(new_parent, new_leaf, &destination) || destination.found)
+    {
+        FAT32_RENAME_DIAG("VANTAOS_FAT32_RENAME_STAGE_7");
+        return -1;
+    }
     if (!fat32_write_named_entry(new_parent, new_name, new_leaf,
                                  source.attributes, source.first_cluster,
                                  source.size))
+    {
+        FAT32_RENAME_DIAG("VANTAOS_FAT32_RENAME_STAGE_8");
         return -1;
+    }
     if (!fat32_mark_entry_deleted(old_parent, &source))
+    {
+        FAT32_RENAME_DIAG("VANTAOS_FAT32_RENAME_STAGE_9");
         return -1;
+    }
     return 0;
 }
 

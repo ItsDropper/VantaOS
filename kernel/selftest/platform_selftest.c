@@ -7,6 +7,7 @@
 #include "serial.h"
 #include "spinlock.h"
 #include "user_mode_selftest.h"
+#include "../proc/process_internal.h"
 
 #ifdef VANTAOS_SELF_TEST
 static void spinlock_primitive_probe(void)
@@ -53,6 +54,8 @@ static void unpublished_image_cleanup_probe(void)
     {
         /* Destruction must fail while this CPU still has the space loaded. */
         paging_switch_address_space(space);
+        /* Deterministically model a teardown blocked by an outstanding shootdown. */
+        __atomic_store_n(&space->pending_shootdowns, 1U, __ATOMIC_RELEASE);
         process_release_unpublished_user_image(space, code_frame, stack_frame);
         ok = space->used != 0 &&
              paging_get_physical((uintptr_t)PAGING_USER_BASE) ==
@@ -60,6 +63,7 @@ static void unpublished_image_cleanup_probe(void)
              paging_get_physical((uintptr_t)(PAGING_USER_BASE + PAGE_SIZE)) ==
                  (uintptr_t)stack_frame &&
              pmm_get_free_blocks() < free_before;
+        __atomic_store_n(&space->pending_shootdowns, 0U, __ATOMIC_RELEASE);
         paging_switch_address_space(paging_get_kernel_address_space());
 
         /* Once inactive, teardown and frame release must complete. */

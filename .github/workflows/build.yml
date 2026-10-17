@@ -84,7 +84,7 @@ jobs:
             -drive file=VantaOS.iso,media=cdrom,format=raw \
             -drive file=vantaos.img,if=ide,format=raw \
             -boot order=d \
-            -display none \
+            -display vnc=127.0.0.1:0 \
             -serial stdio \
             -qmp "unix:$qmp,server=on,wait=off" \
             -no-reboot >"$log" 2>qemu-usb-stderr.log &

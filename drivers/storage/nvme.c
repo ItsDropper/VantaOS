@@ -17,6 +17,7 @@
 #define NVME_MAX_NAMESPACES 16U
 #define NVME_QUEUE_DEPTH 64U
 #define NVME_PAGE_SIZE 4096U
+#define NVME_REGISTERS_SIZE 4096U
 #define NVME_WAIT_LIMIT 10000000U
 #define NVME_CSTS_RDY 0x01U
 #define NVME_CSTS_CFS 0x02U
@@ -286,6 +287,15 @@ static block_status_t namespace_transfer(nvme_namespace_t* ns, uint64_t lba,
     return status;
 }
 
+static size_t append_decimal(char* output, size_t offset, uint32_t value)
+{
+    char digits[10];
+    size_t count = 0;
+    do { digits[count++] = (char)('0' + (value % 10U)); value /= 10U; } while (value && count < sizeof(digits));
+    while (count) output[offset++] = digits[--count];
+    return offset;
+}
+
 static block_status_t namespace_read(block_device_t* block, uint64_t lba,
                                      uint32_t count, void* output)
 {
@@ -341,10 +351,10 @@ static int register_namespace(nvme_controller_t* c, uint32_t nsid)
     ns->sector_size = sector_size;
     ns->used = 1U;
     ns->block.name[0] = 'n'; ns->block.name[1] = 'v'; ns->block.name[2] = 'm'; ns->block.name[3] = 'e';
-    ns->block.name[4] = (char)('0' + (c->controller_index % 10U));
-    ns->block.name[5] = 'n';
-    ns->block.name[6] = (char)('0' + (nsid % 10U));
-    ns->block.name[7] = '\0';
+    size_t name_length = append_decimal(ns->block.name, 4U, c->controller_index);
+    ns->block.name[name_length++] = 'n';
+    name_length = append_decimal(ns->block.name, name_length, nsid);
+    ns->block.name[name_length] = '\0';
     ns->block.sector_count = size;
     ns->block.sector_size = sector_size;
     ns->block.flags = 0U;
@@ -383,8 +393,8 @@ static storage_probe_result_t nvme_probe(const struct pci_device* pci)
         return STORAGE_PROBE_FAILED;
     }
 
-    /* CAP is in the first 8 bytes; map enough for all spec-valid doorbell strides. */
-    c->registers = (volatile uint8_t*)mmio_map_region(bar, 0x42000U);
+    /* Read CAP through a single-page mapping, then map only required doorbells. */
+    c->registers = (volatile uint8_t*)mmio_map_region(bar, NVME_REGISTERS_SIZE);
     if (!c->registers) {
         free_controller_memory(c);
         return STORAGE_PROBE_FAILED;
@@ -394,14 +404,20 @@ static storage_probe_result_t nvme_probe(const struct pci_device* pci)
     uint32_t timeout_units = (uint32_t)((cap >> 24) & 0xFFU);
     uint32_t stride_shift = (uint32_t)((cap >> 32) & 0x0FU);
     if (max_entries < NVME_QUEUE_DEPTH || stride_shift > 15U) {
-        mmio_unmap_region((void*)c->registers, 0x42000U);
+        mmio_unmap_region((void*)c->registers, NVME_REGISTERS_SIZE);
         free_controller_memory(c);
         return STORAGE_PROBE_FAILED;
     }
     c->doorbell_stride = 4ULL << stride_shift;
-    uint64_t last_doorbell = 0x1000ULL + 3ULL * c->doorbell_stride + 4ULL;
-    if (last_doorbell > 0x42000ULL) {
-        mmio_unmap_region((void*)c->registers, 0x42000U);
+    uint64_t required_length = 0x1000ULL + 3ULL * c->doorbell_stride + sizeof(uint32_t);
+    if (required_length > PAGING_MMIO_SIZE || required_length > SIZE_MAX ||
+        !mmio_unmap_region((void*)c->registers, NVME_REGISTERS_SIZE)) {
+        c->registers = 0;
+        free_controller_memory(c);
+        return STORAGE_PROBE_FAILED;
+    }
+    c->registers = (volatile uint8_t*)mmio_map_region(bar, (size_t)required_length);
+    if (!c->registers) {
         free_controller_memory(c);
         return STORAGE_PROBE_FAILED;
     }
@@ -430,9 +446,10 @@ static storage_probe_result_t nvme_probe(const struct pci_device* pci)
                  ((NVME_QUEUE_DEPTH - 1U) << 16) | (NVME_QUEUE_DEPTH - 1U));
     mmio_write64(c->registers, 0x28U, c->admin_submission.physical_address);
     mmio_write64(c->registers, 0x30U, c->admin_completion.physical_address);
+    /* DMA is prepared; enable bus mastering before enabling the controller. */
+    if (!pci_enable_bus_mastering(pci)) goto fail;
     /* IOSQES=64-byte command, IOCQES=16-byte completion, MPS=4 KiB. */
     mmio_write32(c->registers, 0x14U, NVME_CC_EN | (6U << 16) | (4U << 20));
-    if (!pci_enable_bus_mastering(pci)) goto fail;
     if (!wait_ready(c, 1)) goto fail;
 
     c->initialized = 1U;
@@ -479,10 +496,15 @@ fail:
     c->failed = 1U;
     c->initialized = 0U;
     mmio_write32(c->registers, 0x14U, 0U);
-    (void)wait_ready(c, 0);
-    mmio_unmap_region((void*)c->registers, 0x42000U);
-    c->registers = 0;
-    free_controller_memory(c);
+    /* Never release DMA memory unless the controller is confirmed stopped. */
+    if (wait_ready(c, 0)) {
+        uint64_t mapped_length = 0x1000ULL + 3ULL * c->doorbell_stride + sizeof(uint32_t);
+        (void)mmio_unmap_region((void*)c->registers, (size_t)mapped_length);
+        c->registers = 0;
+        free_controller_memory(c);
+    } else {
+        serial_write("VANTAOS_NVME_DMA_RETAINED_AFTER_RESET_TIMEOUT\n");
+    }
     serial_write("VANTAOS_NVME_CONTROLLER_FAIL\n");
     return STORAGE_PROBE_FAILED;
 }

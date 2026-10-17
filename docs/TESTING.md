@@ -16,6 +16,7 @@ On pushes to `master`, pull requests targeting the repository, and manual workfl
 6. Requires all success markers, rejects any `VANTAOS_*_FAIL` marker, and requires QEMU to remain running until the smoke-test timeout.
 7. Runs the GRUB/Multiboot ISO regression in three configurations: 256 MiB RAM with 1 vCPU, 512 MiB with 2 vCPUs, and 512 MiB with 4 vCPUs. Multi-vCPU runs additionally require scheduler-stress, remote-wakeup, and process-migration markers. CI waits briefly after QEMU exits so the serial log is flushed before assertions run.
 8. Builds the separate UEFI system image and boots it with OVMF, requiring loader, `ExitBootServices`, kernel-handoff, and selected kernel/SMP markers.
+9. Compiles the static ring-3 Terminal, Settings, and File Explorer applications with `-Werror`, installs them in the FAT32 image, and captures a graphical boot screenshot artifact. A push to `master` refreshes tracked `media/desktop.png` from that screenshot.
 
 ## Runtime assertions
 
@@ -37,6 +38,8 @@ On pushes to `master`, pull requests targeting the repository, and manual workfl
 | `VANTAOS_USER_GUI_SYSCALL_OK` | The ring-3 GUI smoke test passes its window/draw/event ABI checks, including malformed commands and invalid pointers. |
 | `VANTAOS_SETTINGS_STORAGE_OK` | The ring-3 Settings self-test writes its expected configuration, closes it, reopens it, and verifies the readback. |
 | `VANTAOS_SETTINGS_PERSIST_OK` | The Settings self-test found the expected configuration already present before rewriting it on the later boot, demonstrating the tested cross-boot persistence path. |
+| `VANTAOS_DESKTOP_THEME_CONFIG_OK` | The kernel loaded the versioned desktop theme configuration from the persistent filesystem. |
+| `VANTAOS_GUI_INPUT_REGRESSION_OK` | GUI selftests cover focus transitions, pointer click coordinates, queue overflow, invalid event output buffers, close requests, owner hide/restore, and theme-change notifications. |
 | `VANTAOS_GUI_DEAD_OWNER_CLEANUP_OK` | A window owned by a terminated probe process is removed and its stale ID is rejected. |
 | `VANTAOS_VFS_HANDLE_GUARDS_OK` | Invalid VFS read/write/close handles are rejected. |
 | `VANTAOS_ARGV_STACK_OK` | The ring-3 smoke executable sees the expected argument count and validates `argv[1] = alpha` and `argv[2] = two words` from its initial stack. |
@@ -81,8 +84,8 @@ This test does not yet establish physical-hardware compatibility or complete rem
 - Exhaustive page-table permission tests, invalid syscall-pointer fuzzing, fault containment for arbitrary user programs, and adversarial process-to-process isolation tests.
 - Physical-memory-map malformed-entry/overflow fuzzing, allocator fragmentation, allocation-failure recovery, and long-duration memory-pressure tests.
 - Exhaustive filesystem corruption and power-loss recovery; the CI persistence marker covers only the tested disposable-image round trip.
-- Pixel-level desktop correctness, scripted GUI input/focus/queue-overflow tests, display modes, and full visual regression tests.
+- Pixel-level desktop correctness, end-to-end scripted mouse/keyboard interaction with the ring-3 apps, display modes, and full visual regression tests.
 - Real-device compatibility, USB/HID edge cases, NICs, Wi-Fi, audio, GPU acceleration, sleep/resume, and firmware variations.
 - Security auditing, fuzzing, sanitizers suitable for this freestanding target, and formal verification.
 
-The next useful test increments are scripted GUI focus transitions, pointer click routing, queue overflow, close requests, and invalid event-buffer checks; malformed ELF and user-fault containment tests; repeated scheduler stress; and focused page-table/memory-manager invariants. Tests should be added alongside each new subsystem instead of relying on a single boot marker.
+The next useful test increments are end-to-end interaction tests for the ring-3 apps, malformed ELF and user-fault containment tests, allocation-failure recovery, repeated scheduler stress, and focused page-table/memory-manager invariants. Tests should be added alongside each new subsystem instead of relying on a single boot marker.

@@ -30,6 +30,7 @@ include os/Makefile
 
 ASM_SOURCES := $(VANTAOS_BOOT_ASM) $(VANTAOS_ARCH_ASM)
 VANTAOS_BEARSSL_C := $(shell find third_party/bearssl/src -type f -name '*.c' ! -name 'sysrng.c' ! -name 'ec_prime_i31_secp*.c' 2>/dev/null)
+VANTAOS_BEARSSL_OBJECTS := $(patsubst %.c,$(OBJDIR)/%.o,$(VANTAOS_BEARSSL_C))
 C_SOURCES   := $(VANTAOS_BEARSSL_C) $(VANTAOS_KERNEL_C) $(VANTAOS_ARCH_C) $(VANTAOS_MM_C) \
                $(VANTAOS_PROC_C) $(VANTAOS_SCHED_C) $(VANTAOS_TIME_C) \
                $(VANTAOS_DRIVER_C) $(VANTAOS_NET_DRIVER_C) $(VANTAOS_NET_C) $(VANTAOS_GRAPHICS_C) $(VANTAOS_FS_C) \
@@ -38,8 +39,13 @@ OBJECTS     := $(patsubst %.asm,$(OBJDIR)/%.o,$(ASM_SOURCES)) \
                $(patsubst %.c,$(OBJDIR)/%.o,$(C_SOURCES))
 DEPFILES    := $(OBJECTS:.o=.d)
 
-.PHONY: all clean list-sources uefi
+.PHONY: all clean list-sources uefi prepare-bearssl
 all: kernel.bin
+
+prepare-bearssl:
+	@sh scripts/prepare_bearssl.sh
+
+$(VANTAOS_BEARSSL_OBJECTS): | prepare-bearssl
 
 # A separate ELF entry keeps the existing Multiboot/GRUB image untouched.
 kernel-uefi.elf: $(OBJECTS) build/uefi-linker.ld

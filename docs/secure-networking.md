@@ -26,5 +26,7 @@ and a bounded `net_https_get` helper over the existing IPv4 DNS/TCP stack.
 ## Build
 
 CI checks out the pinned BearSSL submodule recursively. The top-level Makefile
-compiles its library sources (excluding its host OS entropy provider) with VantaOS
-and links the TLS adapter into the kernel.
+compiles its library sources with VantaOS and links the TLS adapter into the kernel.
+The build preparation script disables BearSSL's host-only OS entropy and time hooks;
+VantaOS injects hardware entropy and the caller-provided time explicitly. A small
+freestanding C runtime provides the memory/string primitives required by BearSSL.

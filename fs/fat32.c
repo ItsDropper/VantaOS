@@ -770,7 +770,7 @@ static int fat32_parent_and_leaf(const char* path, uint32_t* parent, uint8_t lea
 }
 
 static int fat32_write_entry(uint32_t lba, uint32_t offset,
-                             const uint8_t name[11],
+                             const uint8_t name[11], uint8_t attributes,
                              uint32_t cluster, uint32_t size)
 {
     if (offset > 480U || (offset & 31U))
@@ -781,7 +781,7 @@ static int fat32_write_entry(uint32_t lba, uint32_t offset,
     uint8_t* entry = &sector_buffer[offset];
     for (unsigned int i = 0; i < 11; i++)
         entry[i] = name[i];
-    entry[11] = 0x20U;
+    entry[11] = attributes;
     entry[12] = entry[13] = 0;
     for (unsigned int i = 14; i < 20; i++)
         entry[i] = 0;
@@ -796,6 +796,30 @@ static int fat32_write_entry(uint32_t lba, uint32_t offset,
     return fat32_write_sector(lba, sector_buffer);
 }
 
+static int fat32_reserve_slot(fat32_slot_t* entry,
+                              uint32_t* lba, uint32_t* offset)
+{
+    if (!entry || !lba || !offset)
+        return 0;
+    if (entry->free_found)
+    {
+        *lba = entry->free_lba;
+        *offset = entry->free_offset;
+        return 1;
+    }
+    uint32_t new_cluster = fat32_allocate_one();
+    if (!new_cluster)
+        return 0;
+    if (!fat32_set_raw_entry(entry->last_cluster, new_cluster))
+    {
+        fat32_release_chain(new_cluster);
+        return 0;
+    }
+    *lba = cluster_lba(new_cluster);
+    *offset = 0U;
+    return *lba != FAT32_INVALID_LBA;
+}
+
 int fat32_create_file(const char* path)
 {
     uint32_t parent;
@@ -805,22 +829,136 @@ int fat32_create_file(const char* path)
         !fat32_find_entry(parent, leaf, &entry) || entry.found)
         return -1;
 
-    uint32_t lba = 0, off = 0;
-    if (!entry.free_found)
+    uint32_t lba, off;
+    if (!fat32_reserve_slot(&entry, &lba, &off))
+        return -1;
+    return fat32_write_entry(lba, off, leaf, 0x20U, 0U, 0U) ? 0 : -1;
+}
+
+int fat32_create_directory(const char* path)
+{
+    uint32_t parent;
+    uint8_t leaf[11];
+    fat32_slot_t entry;
+    if (!mounted || !fat32_parent_and_leaf(path, &parent, leaf) ||
+        !fat32_find_entry(parent, leaf, &entry) || entry.found)
+        return -1;
+
+    uint32_t directory_cluster = fat32_allocate_one();
+    if (!directory_cluster)
+        return -1;
+    uint32_t lba, offset;
+    if (!fat32_reserve_slot(&entry, &lba, &offset))
     {
-        uint32_t new_cluster = fat32_allocate_one();
-        if (!new_cluster || !fat32_set_raw_entry(entry.last_cluster, new_cluster))
+        fat32_release_chain(directory_cluster);
+        return -1;
+    }
+    if (!fat32_write_entry(lba, offset, leaf, 0x10U,
+                           directory_cluster, 0U))
+    {
+        fat32_release_chain(directory_cluster);
+        return -1;
+    }
+
+    uint32_t base = cluster_lba(directory_cluster);
+    if (base == FAT32_INVALID_LBA || !read_sector(base, sector_buffer))
+        return -1;
+    for (unsigned int i = 0; i < 32U; i++)
+        sector_buffer[i] = 0U;
+    sector_buffer[0] = '.';
+    for (unsigned int i = 1; i < 11U; i++) sector_buffer[i] = ' ';
+    sector_buffer[11] = 0x10U;
+    sector_buffer[26] = (uint8_t)directory_cluster;
+    sector_buffer[27] = (uint8_t)(directory_cluster >> 8);
+    sector_buffer[20] = (uint8_t)(directory_cluster >> 16);
+    sector_buffer[21] = (uint8_t)(directory_cluster >> 24);
+    for (unsigned int i = 32U; i < 64U; i++)
+        sector_buffer[i] = 0U;
+    sector_buffer[32] = '.';
+    sector_buffer[33] = '.';
+    for (unsigned int i = 34U; i < 43U; i++) sector_buffer[i] = ' ';
+    sector_buffer[43] = 0x10U;
+    sector_buffer[58] = (uint8_t)parent;
+    sector_buffer[59] = (uint8_t)(parent >> 8);
+    sector_buffer[52] = (uint8_t)(parent >> 16);
+    sector_buffer[53] = (uint8_t)(parent >> 24);
+    if (!fat32_write_sector(base, sector_buffer))
+        return -1;
+    return 0;
+}
+
+int fat32_delete_path(const char* path)
+{
+    uint32_t parent;
+    uint8_t leaf[11];
+    fat32_slot_t entry;
+    if (!mounted || !fat32_parent_and_leaf(path, &parent, leaf) ||
+        !fat32_find_entry(parent, leaf, &entry) || !entry.found ||
+        (entry.attributes & 0x01U) != 0U ||
+        (entry.attributes & 0x08U) != 0U)
+        return -1;
+
+    if (entry.attributes & 0x10U)
+    {
+        fat32_dirent_t children[2];
+        int count = fat32_list_directory(entry.first_cluster, children, 2U);
+        if (count != 0)
             return -1;
-        lba = cluster_lba(new_cluster);
-        off = 0;
-        if (lba == FAT32_INVALID_LBA) return -1;
     }
-    else
+
+    if (!read_sector(entry.entry_lba, sector_buffer))
+        return -1;
+    sector_buffer[entry.entry_offset] = 0xE5U;
+    if (!fat32_write_sector(entry.entry_lba, sector_buffer))
+        return -1;
+    if (entry.first_cluster >= 2U)
+        fat32_release_chain(entry.first_cluster);
+    return 0;
+}
+
+int fat32_rename_path(const char* old_path, const char* new_path)
+{
+    uint32_t old_parent, new_parent;
+    uint8_t old_leaf[11], new_leaf[11];
+    fat32_slot_t source, destination;
+    if (!mounted ||
+        !fat32_parent_and_leaf(old_path, &old_parent, old_leaf) ||
+        !fat32_parent_and_leaf(new_path, &new_parent, new_leaf) ||
+        !fat32_find_entry(old_parent, old_leaf, &source) || !source.found ||
+        (source.attributes & 0x01U) != 0U ||
+        !fat32_find_entry(new_parent, new_leaf, &destination) ||
+        destination.found)
+        return -1;
+
+    if (old_parent == new_parent)
     {
-        lba = entry.free_lba;
-        off = entry.free_offset;
+        if (!read_sector(source.entry_lba, sector_buffer))
+            return -1;
+        for (unsigned int i = 0; i < 11U; i++)
+            sector_buffer[source.entry_offset + i] = new_leaf[i];
+        return fat32_write_sector(source.entry_lba, sector_buffer) ? 0 : -1;
     }
-    return fat32_write_entry(lba, off, leaf, 0, 0) ? 0 : -1;
+
+    uint32_t lba, offset;
+    if (!fat32_reserve_slot(&destination, &lba, &offset))
+        return -1;
+    if (!read_sector(source.entry_lba, sector_buffer))
+        return -1;
+    uint8_t copied[32];
+    for (unsigned int i = 0; i < 32U; i++)
+        copied[i] = sector_buffer[source.entry_offset + i];
+    for (unsigned int i = 0; i < 11U; i++)
+        copied[i] = new_leaf[i];
+    if (!read_sector(lba, sector_buffer))
+        return -1;
+    for (unsigned int i = 0; i < 32U; i++)
+        sector_buffer[offset + i] = copied[i];
+    if (!fat32_write_sector(lba, sector_buffer))
+        return -1;
+    if (!read_sector(source.entry_lba, sector_buffer))
+        return -1;
+    sector_buffer[source.entry_offset] = 0xE5U;
+    return fat32_write_sector(source.entry_lba, sector_buffer) ? 0 : -1;
 }
 
 

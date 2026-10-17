@@ -1,6 +1,9 @@
 #include "desktop_theme.h"
 
 #include "vfs.h"
+#ifdef VANTAOS_SELF_TEST
+#include "serial.h"
+#endif
 
 #include <stddef.h>
 #include <stdint.h>
@@ -76,6 +79,9 @@ int desktop_theme_reload(void)
     theme_light = theme_contains(buffer, "theme=light\n");
     theme_contrast = theme_contains(buffer, "contrast=1\n");
     theme_compact = theme_contains(buffer, "compact=1\n");
+#ifdef VANTAOS_SELF_TEST
+    serial_write("VANTAOS_DESKTOP_THEME_CONFIG_OK\n");
+#endif
     return 1;
 }
 

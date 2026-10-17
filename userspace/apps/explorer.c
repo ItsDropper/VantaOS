@@ -1091,6 +1091,28 @@ static void toolbar_action(unsigned int action)
     }
 }
 
+static void dispatch_context_action(unsigned int item)
+{
+    switch (item)
+    {
+        case 0:
+        {
+            size_t index = first_selected();
+            if (index != (size_t)-1 && selected_count() == 1U)
+                show_properties(index);
+            break;
+        }
+        case 1: start_dialog(DIALOG_RENAME); break;
+        case 2: set_file_clipboard(0); break;
+        case 3: set_file_clipboard(1); break;
+        case 4: toolbar_action(3U); break;
+        case 5: run_compress_selection(); break;
+        case 6: run_extract_selection(); break;
+        default: break;
+    }
+    context_menu = CONTEXT_NONE;
+}
+
 static void open_selected(void)
 {
     size_t index = selected_entry;
@@ -1473,11 +1495,220 @@ static void close_app(void)
     vanta_exit(0);
 }
 
+#if defined(VANTAOS_EXPLORER_E2E_TEST)
+#pragma GCC diagnostic ignored "-Wunused-function"
+
+static void explorer_e2e_fail(void)
+{
+    static const char marker[] = "VANTAOS_EXPLORER_E2E_FAIL\n";
+    (void)vanta_write(marker, sizeof(marker) - 1U);
+    vanta_exit(1);
+}
+
+#define EXPLORER_E2E_STRINGIFY_INNER(value) #value
+#define EXPLORER_E2E_STRINGIFY(value) EXPLORER_E2E_STRINGIFY_INNER(value)
+#define EXPLORER_E2E_REQUIRE(condition) \
+    do { \
+        if (!(condition)) { \
+            static const char marker[] = \
+                "VANTAOS_EXPLORER_E2E_FAIL line=" \
+                EXPLORER_E2E_STRINGIFY(__LINE__) "\n"; \
+            (void)vanta_write(marker, sizeof(marker) - 1U); \
+            vanta_exit(1); \
+        } \
+    } while (0)
+
+static int explorer_e2e_file_equals(const char* path, const char* expected)
+{
+    char actual[256];
+    long descriptor = vanta_open(path, VANTA_OPEN_READ);
+    if (descriptor < 0)
+        return 0;
+    size_t expected_length = text_length(expected);
+    long got = vanta_read((int)descriptor, actual, sizeof(actual));
+    (void)vanta_close((int)descriptor);
+    if (got != (long)expected_length)
+        return 0;
+    for (size_t i = 0; i < expected_length; i++)
+        if (actual[i] != expected[i])
+            return 0;
+    return 1;
+}
+
+static int explorer_e2e_create_through_dialog(const char* name, int directory)
+{
+    toolbar_action(directory ? 1U : 0U);
+    copy_text(input_buffer, sizeof(input_buffer), name);
+    handle_input_key(13U);
+    char path[PATH_CAPACITY];
+    vanta_file_info_t info;
+    return build_child_path(current_path, name, path, sizeof(path)) &&
+           vanta_stat_path(path, &info) == 0 &&
+           info.type == (directory ? 2U : 1U);
+}
+
+static size_t explorer_e2e_find_entry(const char* name)
+{
+    for (size_t i = 0; i < entry_count; i++)
+        if (text_equals_ci(entries[i], name))
+            return i;
+    return (size_t)-1;
+}
+
+static void explorer_e2e_run(void)
+{
+    static const char fixture[] = "/EXPLORER-E2E";
+    static const char payload[] =
+        "VantaOS Explorer end-to-end fixture: repeated repeated repeated\n";
+    static const char success[] = "VANTAOS_EXPLORER_E2E_OK\n";
+    char path[PATH_CAPACITY];
+    vanta_file_info_t info;
+
+    if (vanta_stat_path(fixture, &info) == 0)
+        (void)delete_tree(fixture, 0U);
+    EXPLORER_E2E_REQUIRE(vanta_create_directory(fixture) >= 0);
+    copy_text(current_path, sizeof(current_path), fixture);
+    search_query[0] = '\0';
+    EXPLORER_E2E_REQUIRE(load_directory());
+    EXPLORER_E2E_REQUIRE(explorer_e2e_create_through_dialog("Source", 1));
+    EXPLORER_E2E_REQUIRE(explorer_e2e_create_through_dialog("Dest", 1));
+
+    copy_text(current_path, sizeof(current_path), "/EXPLORER-E2E/Source");
+    EXPLORER_E2E_REQUIRE(load_directory());
+    EXPLORER_E2E_REQUIRE(explorer_e2e_create_through_dialog("note.txt", 0));
+    EXPLORER_E2E_REQUIRE(build_child_path(current_path, "note.txt",
+                                          path, sizeof(path)));
+    long descriptor = vanta_open(path, VANTA_OPEN_WRITE | VANTA_OPEN_TRUNCATE);
+    EXPLORER_E2E_REQUIRE(descriptor >= 0);
+    EXPLORER_E2E_REQUIRE(write_all((int)descriptor, payload,
+                                   text_length(payload)));
+    EXPLORER_E2E_REQUIRE(vanta_close((int)descriptor) == 0);
+    EXPLORER_E2E_REQUIRE(explorer_e2e_create_through_dialog("Nested", 1));
+    copy_text(current_path, sizeof(current_path), "/EXPLORER-E2E/Source/Nested");
+    EXPLORER_E2E_REQUIRE(load_directory());
+    EXPLORER_E2E_REQUIRE(explorer_e2e_create_through_dialog("inside.txt", 0));
+    EXPLORER_E2E_REQUIRE(build_child_path(current_path, "inside.txt",
+                                          path, sizeof(path)));
+    descriptor = vanta_open(path, VANTA_OPEN_WRITE | VANTA_OPEN_TRUNCATE);
+    EXPLORER_E2E_REQUIRE(descriptor >= 0);
+    EXPLORER_E2E_REQUIRE(write_all((int)descriptor, "nested", 6U));
+    EXPLORER_E2E_REQUIRE(vanta_close((int)descriptor) == 0);
+
+    /* Exercise the same context-menu Copy and toolbar Paste handlers as the UI. */
+    copy_text(current_path, sizeof(current_path), fixture);
+    EXPLORER_E2E_REQUIRE(load_directory());
+    size_t source_index = explorer_e2e_find_entry("Source");
+    EXPLORER_E2E_REQUIRE(source_index != (size_t)-1);
+    select_single(source_index);
+    dispatch_context_action(2U);
+    copy_text(current_path, sizeof(current_path), "/EXPLORER-E2E/Dest");
+    EXPLORER_E2E_REQUIRE(load_directory());
+    toolbar_action(7U);
+    EXPLORER_E2E_REQUIRE(vanta_stat_path(
+        "/EXPLORER-E2E/Dest/Source/Nested/inside.txt", &info) == 0);
+    EXPLORER_E2E_REQUIRE(explorer_e2e_file_equals(
+        "/EXPLORER-E2E/Dest/Source/note.txt", payload));
+
+    /* Exercise Cut/Move and verify source removal plus destination contents. */
+    copy_text(current_path, sizeof(current_path), "/EXPLORER-E2E/Source");
+    EXPLORER_E2E_REQUIRE(load_directory());
+    EXPLORER_E2E_REQUIRE(explorer_e2e_create_through_dialog("move.txt", 0));
+    EXPLORER_E2E_REQUIRE(build_child_path(current_path, "move.txt",
+                                          path, sizeof(path)));
+    descriptor = vanta_open(path, VANTA_OPEN_WRITE | VANTA_OPEN_TRUNCATE);
+    EXPLORER_E2E_REQUIRE(descriptor >= 0);
+    EXPLORER_E2E_REQUIRE(write_all((int)descriptor, "move-data", 9U));
+    EXPLORER_E2E_REQUIRE(vanta_close((int)descriptor) == 0);
+    size_t move_index = explorer_e2e_find_entry("move.txt");
+    EXPLORER_E2E_REQUIRE(move_index != (size_t)-1);
+    select_single(move_index);
+    dispatch_context_action(3U);
+    copy_text(current_path, sizeof(current_path), "/EXPLORER-E2E/Dest");
+    EXPLORER_E2E_REQUIRE(load_directory());
+    toolbar_action(7U);
+    EXPLORER_E2E_REQUIRE(vanta_stat_path("/EXPLORER-E2E/Source/move.txt",
+                                         &info) < 0);
+    EXPLORER_E2E_REQUIRE(explorer_e2e_file_equals(
+        "/EXPLORER-E2E/Dest/move.txt", "move-data"));
+
+    /* Search uses the app's actual keyboard-input and visible-list code. */
+    search_input_begin();
+    handle_input_key(1U);
+    const char query[] = "sOuRcE";
+    for (size_t i = 0; i < sizeof(query) - 1U; i++)
+        handle_input_key((uint32_t)(unsigned char)query[i]);
+    handle_input_key(13U);
+    EXPLORER_E2E_REQUIRE(visible_count == 1U);
+    EXPLORER_E2E_REQUIRE(text_equals_ci(
+        entries[visible_indices[0]], "Source"));
+    search_input_begin();
+    handle_input_key(1U);
+    handle_input_key(13U);
+    EXPLORER_E2E_REQUIRE(visible_count == entry_count);
+
+    /* Rename through the app's dialog/key path, then verify retained selection. */
+    copy_text(current_path, sizeof(current_path), "/EXPLORER-E2E/Dest/Source");
+    EXPLORER_E2E_REQUIRE(load_directory());
+    size_t note_index = explorer_e2e_find_entry("note.txt");
+    EXPLORER_E2E_REQUIRE(note_index != (size_t)-1);
+    select_single(note_index);
+    toolbar_action(2U);
+    handle_input_key(1U);
+    const char renamed[] = "renamed.log";
+    for (size_t i = 0; i < sizeof(renamed) - 1U; i++)
+        handle_input_key((uint32_t)(unsigned char)renamed[i]);
+    handle_input_key(13U);
+    EXPLORER_E2E_REQUIRE(vanta_stat_path(
+        "/EXPLORER-E2E/Dest/Source/renamed.log", &info) == 0);
+    EXPLORER_E2E_REQUIRE(first_selected() != (size_t)-1);
+    EXPLORER_E2E_REQUIRE(text_equals_ci(
+        entries[first_selected()], "renamed.log"));
+
+    /* Context-menu Properties, Compress, Extract, and Delete are covered. */
+    size_t renamed_index = explorer_e2e_find_entry("renamed.log");
+    EXPLORER_E2E_REQUIRE(renamed_index != (size_t)-1);
+    select_single(renamed_index);
+    dispatch_context_action(0U);
+    EXPLORER_E2E_REQUIRE(properties_active &&
+                          text_equals_ci(properties_info.name, "renamed.log"));
+    properties_active = 0;
+    dispatch_context_action(5U);
+    EXPLORER_E2E_REQUIRE(vanta_stat_path(
+        "/EXPLORER-E2E/Dest/Source/renamed.log.VZA", &info) == 0);
+    EXPLORER_E2E_REQUIRE(vanta_delete_path(
+        "/EXPLORER-E2E/Dest/Source/renamed.log") == 0);
+    EXPLORER_E2E_REQUIRE(load_directory());
+    size_t archive_index = explorer_e2e_find_entry("renamed.log.VZA");
+    EXPLORER_E2E_REQUIRE(archive_index != (size_t)-1);
+    select_single(archive_index);
+    dispatch_context_action(6U);
+    EXPLORER_E2E_REQUIRE(explorer_e2e_file_equals(
+        "/EXPLORER-E2E/Dest/Source/renamed.log", payload));
+    EXPLORER_E2E_REQUIRE(load_directory());
+    archive_index = explorer_e2e_find_entry("renamed.log.VZA");
+    EXPLORER_E2E_REQUIRE(archive_index != (size_t)-1);
+    select_single(archive_index);
+    dispatch_context_action(4U);
+    handle_input_key(13U);
+    EXPLORER_E2E_REQUIRE(vanta_stat_path(
+        "/EXPLORER-E2E/Dest/Source/renamed.log.VZA", &info) < 0);
+
+    EXPLORER_E2E_REQUIRE(delete_tree(fixture, 0U));
+    (void)vanta_write(success, sizeof(success) - 1U);
+    vanta_exit(0);
+}
+#endif
+
+
 int main(int argc, char** argv)
 {
     (void)argv;
     if (argc != 1)
         vanta_exit(2);
+#if defined(VANTAOS_EXPLORER_E2E_TEST)
+    explorer_e2e_run();
+    vanta_exit(0);
+#endif
     vanta_gui_window_request_t request = {
         .width = WINDOW_WIDTH, .height = WINDOW_HEIGHT, .title = "File Explorer"
     };
@@ -1614,22 +1845,9 @@ int main(int argc, char** argv)
             {
                 if (x >= context_x && x < context_x + 180 &&
                     y >= context_y && y < context_y + 168)
-                {
-                    unsigned int item = (unsigned int)(y - context_y) / 23U;
-                    if (item == 0U)
-                    {
-                        size_t index = first_selected();
-                        if (index != (size_t)-1 && selected_count() == 1U)
-                            show_properties(index);
-                    }
-                    else if (item == 1U) start_dialog(DIALOG_RENAME);
-                    else if (item == 2U) set_file_clipboard(0);
-                    else if (item == 3U) set_file_clipboard(1);
-                    else if (item == 4U) toolbar_action(3U);
-                    else if (item == 5U) run_compress_selection();
-                    else if (item == 6U) run_extract_selection();
-                }
-                context_menu = CONTEXT_NONE;
+                    dispatch_context_action((unsigned int)(y - context_y) / 23U);
+                else
+                    context_menu = CONTEXT_NONE;
             }
             else if (y >= 30 && y < 54 && x >= 8 && x < 456)
                 path_input_begin();

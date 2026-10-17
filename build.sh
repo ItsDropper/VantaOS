@@ -30,9 +30,18 @@ gcc -m64 -mcmodel=large -ffreestanding -fno-pie -fno-stack-protector \
 ld -m elf_x86_64 -static -nostdlib -Ttext-segment=0x8000000000 \
     -e _start -o /tmp/vantaos-explorer.elf \
     /tmp/vantaos-terminal-crt0.o /tmp/vantaos-explorer.o
+echo "==> Building the ring-3 Explorer end-to-end test ELF..."
+gcc -m64 -mcmodel=large -ffreestanding -fno-pie -fno-stack-protector \
+    -mno-red-zone -fno-builtin -nostdlib -Wall -Wextra -Werror \
+    -DVANTAOS_EXPLORER_E2E_TEST -Iuserspace/include -Iinclude \
+    -c userspace/apps/explorer.c -o /tmp/vantaos-explorer-e2e.o
+ld -m elf_x86_64 -static -nostdlib -Ttext-segment=0x8000000000 \
+    -e _start -o /tmp/vantaos-explorer-e2e.elf \
+    /tmp/vantaos-terminal-crt0.o /tmp/vantaos-explorer-e2e.o
 test -s /tmp/vantaos-terminal.elf
 test -s /tmp/vantaos-settings.elf
 test -s /tmp/vantaos-explorer.elf
+test -s /tmp/vantaos-explorer-e2e.elf
 
 echo "==> Preparing ISO..."
 rm -rf isodir/boot/kernel.bin
@@ -78,6 +87,8 @@ if command -v mkfs.fat >/dev/null 2>&1; then
         echo "    Installed /system/SETTINGS.ELF (static ring-3 Settings application)"
         mcopy -o -i vantaos.img /tmp/vantaos-explorer.elf ::/EXPLORER.ELF >/dev/null
         echo "    Installed /EXPLORER.ELF (static ring-3 File Explorer application)"
+        mcopy -o -i vantaos.img /tmp/vantaos-explorer-e2e.elf ::/EXPLORER-E2E.ELF >/dev/null
+        echo "    Installed /EXPLORER-E2E.ELF (automated ring-3 Explorer end-to-end tests)"
 
         install_system_file "system/terminal.vx" \
             "VANTA EXECUTABLE" \

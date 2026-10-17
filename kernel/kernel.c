@@ -14,6 +14,7 @@
 #include "e1000.h"
 #include "net_arp.h"
 #include "net_ipv4.h"
+#include "net_tcp.h"
 #include "xhci.h"
 #include "pmm.h"
 #include "serial.h"
@@ -63,7 +64,8 @@ static void kernel_initialize(const vanta_boot_info_t* boot_info)
     pci_initialize();
     heap_initialize();
     net_initialize();
-    if (!net_arp_initialize() || !net_ipv4_initialize() || !net_udp_initialize())
+    if (!net_arp_initialize() || !net_ipv4_initialize() || !net_udp_initialize() ||
+        !net_tcp_initialize())
         serial_write("VANTAOS_NETWORK_PROTOCOL_REGISTER_FAIL\n");
     if (!e1000_initialize())
         serial_write("VANTAOS_E1000_DRIVER_REGISTER_FAIL\n");

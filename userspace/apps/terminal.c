@@ -187,8 +187,8 @@ static void prompt(void)
 
 static void command_help(void)
 {
-    write_text("Commands: help, about, pwd, ls [path], cat <path>, echo <text>, exec <elf> [args...], clear, exit\n");
-    write_text("Programs are static ELF64 files executed in ring 3.\n");
+    write_text("Commands: help, about, pwd, ls [path], cat <path>, echo <text>, exec <elf> [args...], kernel <command>, clear, exit\n");
+    write_text("kernel <command> runs built-in kernel commands with full privileges.\n");
 }
 
 static void command_list(const char* path)
@@ -317,7 +317,7 @@ static void command_kernel(const char* command)
             write_text("invalid memory range");
         else
             write_text("kernel error");
-        write_text(")\\n");
+        write_text(")\n");
         return;
     }
 
@@ -331,7 +331,7 @@ static void command_kernel(const char* command)
         kernel_output[length - 1U] = '\0';
     write_text(kernel_output);
     if (length == 0U || kernel_output[length - 1U] != '\n')
-        write_text("\\n");
+        write_text("\n");
 }
 
 static void execute_line(char* command)

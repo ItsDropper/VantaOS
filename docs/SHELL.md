@@ -25,9 +25,10 @@ The ring-3 terminal shell uses a bounded command buffer and argument parser. Quo
 - `net connect [index]` (alias `net dhcp [index]`) requests a DHCPv4 lease on a link-up interface and configures its IPv4 address, netmask, gateway, and DNS server. It can take up to 30 seconds.
 - `net` / `net status` lists interfaces, link state, MTU, MAC, IPv4 configuration, DNS, and RX/TX counters.
 - `net dns <hostname>` resolves an IPv4 A record using the configured DNS server.
+- `net dns-server <IPv4-address> [index]` sets a per-interface DNS resolver, including for static IPv4 configurations.
 - `net ping <IPv4-address>` sends an ICMP echo request and waits up to three seconds; firewalls may block ICMP.
 - `net http <http://hostname[:port]/path>` (alias `net get <URL>`) resolves the host if needed, opens a TCP connection, sends one HTTP/1.0 GET, and prints up to 4096 response bytes.
 - `net poll` runs one bounded network polling cycle.
-- `net config <index> <ip> <netmask> <gateway>` configures a validated static IPv4 address, mask, and gateway.
+- `net config <index> <ip> <netmask> <gateway>` configures a validated static IPv4 address, mask, and gateway; set DNS separately with `net dns-server`.
 
-**Limitations:** HTTP is plaintext and intended for connectivity testing. HTTPS is rejected because TLS and certificate validation are not implemented. TCP supports only one synchronous client connection and is not yet a general socket API. DHCP lease renewal/expiry, IPv4 fragmentation, outbound VLAN tagging, and broad physical NIC compatibility remain unfinished. DHCP success alone does not prove Internet reachability.
+**Limitations:** HTTP is plaintext and intended for connectivity testing. HTTPS is rejected because TLS and certificate validation are not implemented. TCP supports only one synchronous client connection and is not yet a general socket API. DHCP lease renewal/expiry, IPv4 fragmentation, outbound VLAN tagging, and additional NIC drivers, broad physical NIC compatibility, and Wi-Fi/WPA2/WPA3 remain unfinished. DHCP success alone does not prove Internet reachability.

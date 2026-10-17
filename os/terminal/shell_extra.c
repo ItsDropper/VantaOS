@@ -498,7 +498,20 @@ static int command_http_url(const char *url)
         terminal_write("\nnet http: invalid or oversized hostname");
         return 1;
     }
-    for (size_t i = 0; i < host_length; ++i) host[i] = authority[i];
+    for (size_t i = 0; i < host_length; ++i) {
+        char c = authority[i];
+        if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+              (c >= '0' && c <= '9') || c == '.' || c == '-')) {
+            terminal_write("\nnet http: invalid hostname; only DNS names and IPv4 literals are supported");
+            return 1;
+        }
+        host[i] = c;
+    }
+    if (host[0] == '.' || host[host_length - 1U] == '.' ||
+        host[0] == '-' || host[host_length - 1U] == '-') {
+        terminal_write("\nnet http: invalid hostname");
+        return 1;
+    }
     host[host_length] = 0;
 
     if (*path_start == '#') {
@@ -522,6 +535,13 @@ static int command_http_url(const char *url)
     }
     path[path_length] = 0;
     if (!path_length) { path[0] = '/'; path[1] = 0; }
+    for (size_t i = 0; i < path_length; ++i) {
+        unsigned char c = (unsigned char)path[i];
+        if (c <= 0x20U || c == 0x7FU) {
+            terminal_write("\nnet http: URL path contains an unescaped control or space character");
+            return 1;
+        }
+    }
 
     for (uint32_t i = 0; i < net_device_count(); ++i) {
         net_device_t *candidate = net_device_get(i);
@@ -746,7 +766,7 @@ static int command_net(uint32_t argc, char **argv)
             }
         }
         if (!d) {
-            terminal_write("\nnet dns: no DHCP DNS server configured; run net connect first");
+            terminal_write("\nnet dns: no DNS server configured; use 'net dns-server <IPv4> [index]'");
             return 1;
         }
         uint32_t address = 0;
@@ -757,6 +777,37 @@ static int command_net(uint32_t argc, char **argv)
         }
         terminal_write("\n"); terminal_write(argv[2]); terminal_write(" -> ");
         print_ipv4(address);
+        return 1;
+    }
+    if ((argc == 3U || argc == 4U) &&
+        shell_string_equals(argv[1], "dns-server")) {
+        uint32_t server = 0U, index = UINT32_MAX;
+        if (!parse_ipv4(argv[2], &server) || !server ||
+            (server >> 24) == 127U || (server >> 24) >= 224U ||
+            server == 0xFFFFFFFFU ||
+            (argc == 4U && !parse_u32(argv[3], &index))) {
+            terminal_write("\nusage: net dns-server <IPv4-address> [interface-index]");
+            return 1;
+        }
+        net_device_t *d = 0;
+        if (index != UINT32_MAX) {
+            d = net_device_get(index);
+        } else {
+            for (uint32_t i = 0; i < net_device_count(); ++i) {
+                net_device_t *candidate = net_device_get(i);
+                if (candidate && candidate->link_up && candidate->ipv4_configured) {
+                    d = candidate;
+                    break;
+                }
+            }
+        }
+        if (!d || !d->link_up || !d->ipv4_configured) {
+            terminal_write("\nnet dns-server: choose a configured link-up interface first");
+            return 1;
+        }
+        d->ipv4_dns = server;
+        terminal_write("\nDNS server for "); terminal_write(d->name);
+        terminal_write(" set to "); print_ipv4(server);
         return 1;
     }
     if (argc == 2U && shell_string_equals(argv[1], "poll")) {
@@ -783,7 +834,7 @@ static int command_net(uint32_t argc, char **argv)
         terminal_write(" (static; no DHCP lease or Internet test performed)");
         return 1;
     }
-    terminal_write("\nusage: net [status|poll|connect [index]|dhcp [index]|dns <hostname>|ping <IPv4>|http <URL>] | net config <index> <ip> <netmask> <gateway>");
+    terminal_write("\nusage: net [status|poll|connect [index]|dhcp [index]|dns <hostname>|dns-server <IPv4> [index]|ping <IPv4>|http <URL>] | net config <index> <ip> <netmask> <gateway>");
     return 1;
 }
 

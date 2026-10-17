@@ -23,7 +23,7 @@ typedef struct {
     net_device_t *device;
     uint32_t remote_ip;
     uint32_t snd_una, snd_nxt, rcv_nxt;
-    uint16_t local_port, remote_port, peer_mss;
+    uint16_t local_port, remote_port, peer_mss, peer_window;
     uint8_t state, remote_fin, failed;
     uint8_t rx[NET_TCP_RX_CAPACITY];
     size_t rx_head, rx_used;
@@ -42,6 +42,7 @@ static void reset_client(void)
     client.local_port = 0U;
     client.remote_port = 0U;
     client.peer_mss = TCP_DEFAULT_MSS;
+    client.peer_window = 0U;
     client.state = TCP_CLOSED;
     client.remote_fin = 0U;
     client.failed = 0U;
@@ -195,6 +196,7 @@ void net_tcp_receive_ipv4(net_device_t *device, const uint8_t *ip,
     uint32_t sequence = be32(tcp + 4U);
     uint32_t acknowledgement = be32(tcp + 8U);
     uint8_t flags = tcp[13];
+    uint16_t advertised_window = be16(tcp + 14U);
     const uint8_t *payload = tcp + header_length;
     size_t payload_length = tcp_length - header_length;
 
@@ -204,8 +206,18 @@ void net_tcp_receive_ipv4(net_device_t *device, const uint8_t *ip,
         return;
 
     if (flags & TCP_FLAG_RST) {
-        client.failed = 1U;
-        client.state = TCP_CLOSED;
+        int reset_valid = 0;
+        if (client.state == TCP_SYN_SENT)
+            reset_valid = (flags & TCP_FLAG_ACK) &&
+                          acknowledgement == client.snd_nxt;
+        else
+            reset_valid = sequence == client.rcv_nxt;
+        if (reset_valid) {
+            client.failed = 1U;
+            client.state = TCP_CLOSED;
+        } else if (client.state != TCP_SYN_SENT) {
+            send_ack();
+        }
         return;
     }
 
@@ -216,6 +228,7 @@ void net_tcp_receive_ipv4(net_device_t *device, const uint8_t *ip,
             return;
         client.rcv_nxt = sequence + 1U;
         client.snd_una = acknowledgement;
+        client.peer_window = advertised_window;
         client.state = TCP_ESTABLISHED;
         client.peer_mss = TCP_DEFAULT_MSS;
         int mss_seen = 0;
@@ -246,8 +259,10 @@ void net_tcp_receive_ipv4(net_device_t *device, const uint8_t *ip,
 
     if (flags & TCP_FLAG_ACK) {
         if ((int32_t)(acknowledgement - client.snd_una) >= 0 &&
-            (int32_t)(client.snd_nxt - acknowledgement) >= 0)
+            (int32_t)(client.snd_nxt - acknowledgement) >= 0) {
             client.snd_una = acknowledgement;
+            client.peer_window = advertised_window;
+        }
     }
 
     if (payload_length && sequence == client.rcv_nxt) {
@@ -333,39 +348,56 @@ int net_tcp_send(net_device_t *device, const void *data, size_t length,
     if (!device || device != client.device || client.state != TCP_ESTABLISHED ||
         !data || !length || timeout_ms < 100U || timeout_ms > 30000U)
         return 0;
+
+    const uint8_t *bytes = (const uint8_t *)data;
     size_t maximum = client.peer_mss;
     if (maximum > (size_t)device->mtu - 40U)
         maximum = (size_t)device->mtu - 40U;
-    if (length > maximum) return 0;
+    if (!maximum) return 0;
 
-    uint32_t sequence = client.snd_nxt;
-    uint32_t target = sequence + (uint32_t)length;
-    if (!emit_segment(device, client.remote_ip, client.local_port,
-                      client.remote_port, sequence, client.rcv_nxt,
-                      TCP_FLAG_ACK | TCP_FLAG_PSH, data, length))
-        return 0;
-    client.snd_nxt = target;
-
-    uint32_t start = timer_get_ticks();
-    uint32_t limit = timeout_ms / 10U;
-    uint32_t last = start;
-    uint32_t retries = 0U;
-    while ((int32_t)(client.snd_una - target) < 0 &&
-           client.state == TCP_ESTABLISHED &&
-           (uint32_t)(timer_get_ticks() - start) < limit) {
-        (void)net_poll(16U);
-        uint32_t now = timer_get_ticks();
-        if ((uint32_t)(now - last) >= TCP_RETRY_TICKS) {
-            if (retries++ >= TCP_MAX_RETRIES) break;
-            (void)emit_segment(device, client.remote_ip, client.local_port,
-                               client.remote_port, sequence, client.rcv_nxt,
-                               TCP_FLAG_ACK | TCP_FLAG_PSH, data, length);
-            last = now;
+    size_t sent = 0U;
+    while (sent < length) {
+        uint32_t start = timer_get_ticks();
+        uint32_t limit = timeout_ms / 10U;
+        while (!client.peer_window && client.state == TCP_ESTABLISHED &&
+               (uint32_t)(timer_get_ticks() - start) < limit) {
+            (void)net_poll(16U);
+            __asm__ volatile("pause");
         }
-        __asm__ volatile("pause");
+        if (client.state != TCP_ESTABLISHED || !client.peer_window) return 0;
+
+        size_t chunk = length - sent;
+        if (chunk > maximum) chunk = maximum;
+        if (chunk > client.peer_window) chunk = client.peer_window;
+        uint32_t sequence = client.snd_nxt;
+        uint32_t target = sequence + (uint32_t)chunk;
+        if (!emit_segment(device, client.remote_ip, client.local_port,
+                          client.remote_port, sequence, client.rcv_nxt,
+                          TCP_FLAG_ACK | TCP_FLAG_PSH, bytes + sent, chunk))
+            return 0;
+        client.snd_nxt = target;
+
+        start = timer_get_ticks();
+        uint32_t last = start, retries = 0U;
+        while ((int32_t)(client.snd_una - target) < 0 &&
+               client.state == TCP_ESTABLISHED &&
+               (uint32_t)(timer_get_ticks() - start) < limit) {
+            (void)net_poll(16U);
+            uint32_t now = timer_get_ticks();
+            if ((uint32_t)(now - last) >= TCP_RETRY_TICKS) {
+                if (retries++ >= TCP_MAX_RETRIES) break;
+                (void)emit_segment(device, client.remote_ip, client.local_port,
+                    client.remote_port, sequence, client.rcv_nxt,
+                    TCP_FLAG_ACK | TCP_FLAG_PSH, bytes + sent, chunk);
+                last = now;
+            }
+            __asm__ volatile("pause");
+        }
+        if (client.state != TCP_ESTABLISHED ||
+            (int32_t)(client.snd_una - target) < 0) return 0;
+        sent += chunk;
     }
-    return client.state == TCP_ESTABLISHED &&
-           (int32_t)(client.snd_una - target) >= 0;
+    return 1;
 }
 
 int net_tcp_receive(net_device_t *device, void *buffer, size_t capacity,

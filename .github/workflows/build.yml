@@ -114,7 +114,8 @@ jobs:
           for attempt in $(seq 1 300); do
             if grep -q 'VANTAOS_XHCI_CONTROLLER_ONLINE' "$log" &&
                grep -q 'VANTAOS_USB_HID_KEYBOARD_ONLINE' "$log" &&
-               grep -q 'VANTAOS_USB_HID_MOUSE_ONLINE' "$log"; then
+               grep -q 'VANTAOS_USB_HID_MOUSE_ONLINE' "$log" &&
+               grep -q 'VANTAOS_DESKTOP_INPUT_LOOP_ONLINE' "$log"; then
               usb_ready=1
               break
             fi

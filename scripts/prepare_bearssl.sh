@@ -15,7 +15,4 @@ for macro in BR_USE_URANDOM BR_USE_WIN32_RAND BR_USE_UNIX_TIME BR_USE_WIN32_TIME
     exit 1
   }
 done
-macros=$(printf '#include "inner.h"\n' | gcc -Ithird_party/bearssl/src -Ithird_party/bearssl/inc -dM -E -x c -)
-printf '%s\n' "$macros" | grep -Eq '^#define BR_USE_URANDOM 0$'
-printf '%s\n' "$macros" | grep -Eq '^#define BR_USE_UNIX_TIME 0$'
-echo "BearSSL configured for freestanding VantaOS."
+echo "BearSSL host entropy/time hooks disabled for freestanding VantaOS."

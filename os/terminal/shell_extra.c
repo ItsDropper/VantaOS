@@ -779,6 +779,37 @@ static int command_net(uint32_t argc, char **argv)
         print_ipv4(address);
         return 1;
     }
+    if ((argc == 3U || argc == 4U) &&
+        shell_string_equals(argv[1], "dns-server")) {
+        uint32_t server = 0U, index = UINT32_MAX;
+        if (!parse_ipv4(argv[2], &server) || !server ||
+            (server >> 24) == 127U || (server >> 24) >= 224U ||
+            server == 0xFFFFFFFFU ||
+            (argc == 4U && !parse_u32(argv[3], &index))) {
+            terminal_write("\nusage: net dns-server <IPv4-address> [interface-index]");
+            return 1;
+        }
+        net_device_t *d = 0;
+        if (index != UINT32_MAX) {
+            d = net_device_get(index);
+        } else {
+            for (uint32_t i = 0; i < net_device_count(); ++i) {
+                net_device_t *candidate = net_device_get(i);
+                if (candidate && candidate->link_up && candidate->ipv4_configured) {
+                    d = candidate;
+                    break;
+                }
+            }
+        }
+        if (!d || !d->link_up || !d->ipv4_configured) {
+            terminal_write("\nnet dns-server: choose a configured link-up interface first");
+            return 1;
+        }
+        d->ipv4_dns = server;
+        terminal_write("\nDNS server for "); terminal_write(d->name);
+        terminal_write(" set to "); print_ipv4(server);
+        return 1;
+    }
     if (argc == 2U && shell_string_equals(argv[1], "poll")) {
         size_t packet_work = net_poll(16U);
         terminal_write("\npolled receive packets="); shell_print_decimal((uint32_t)packet_work);

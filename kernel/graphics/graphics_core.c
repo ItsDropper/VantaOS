@@ -438,9 +438,19 @@ void graphics_clear(uint32_t color)
     {
         volatile uint32_t* row =
             (volatile uint32_t*)(framebuffer + y * framebuffer_pitch);
-
+        int first = -1;
+        int last = -1;
         for (uint32_t x = 0; x < framebuffer_width; x++)
-            row[x] = packed;
+        {
+            if (row[x] != packed)
+            {
+                row[x] = packed;
+                if (first < 0) first = (int)x;
+                last = (int)x;
+            }
+        }
+        if (first >= 0)
+            graphics_mark_damage(first, (int)y, last - first + 1, 1);
     }
 }
 
@@ -475,9 +485,19 @@ void graphics_fill_rect(
     {
         volatile uint32_t* row =
             (volatile uint32_t*)(framebuffer + py * framebuffer_pitch);
-
+        int first = -1;
+        int last = -1;
         for (int px = x0; px < x1; px++)
-            row[px] = packed;
+        {
+            if (row[px] != packed)
+            {
+                row[px] = packed;
+                if (first < 0) first = px;
+                last = px;
+            }
+        }
+        if (first >= 0)
+            graphics_mark_damage(first, py, last - first + 1, 1);
     }
 }
 
@@ -524,7 +544,8 @@ void graphics_fill_rounded_rect(
     {
         volatile uint32_t* row =
             (volatile uint32_t*)(framebuffer + py * framebuffer_pitch);
-
+        int first = -1;
+        int last = -1;
         for (int px = x0; px < x1; px++)
         {
             int cx =
@@ -544,8 +565,14 @@ void graphics_fill_rounded_rect(
             int dx = px - cx;
             int dy = py - cy;
 
-            if (dx * dx + dy * dy <= r2)
+            if (dx * dx + dy * dy <= r2 && row[px] != packed)
+            {
                 row[px] = packed;
+                if (first < 0) first = px;
+                last = px;
+            }
         }
+        if (first >= 0)
+            graphics_mark_damage(first, py, last - first + 1, 1);
     }
 }

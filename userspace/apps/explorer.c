@@ -117,19 +117,16 @@ static int text_contains_ci(const char* text, const char* query)
 
 static int path_is_under(const char* path, const char* root)
 {
-    size_t n = text_length(root);
-    if (n == 1U && root[0] == '/')
-        return path[0] == '/';
-    if (!text_equals_ci(path, root) && 
-        !(text_length(path) > n && path[n] == '/' &&
-          text_equals_ci(path, root)))
-    {
-        for (size_t i = 0; i < n; i++)
-            if (fold_char(path[i]) != fold_char(root[i]))
-                return 0;
-        return path[n] == '/' || path[n] == '\0';
-    }
-    return 1;
+    size_t path_length = text_length(path);
+    size_t root_length = text_length(root);
+    if (root_length == 1U && root[0] == '/')
+        return path_length > 0U && path[0] == '/';
+    if (path_length < root_length)
+        return 0;
+    for (size_t i = 0; i < root_length; i++)
+        if (fold_char(path[i]) != fold_char(root[i]))
+            return 0;
+    return path_length == root_length || path[root_length] == '/';
 }
 
 static void copy_text(char* destination, size_t capacity, const char* source)

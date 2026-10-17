@@ -1,4 +1,5 @@
 #include <vanta/gui.h>
+#include <vanta/theme.h>
 
 #define PROCESS_USER_MAX_ARGS 16U
 #define LINE_CAPACITY 256U
@@ -10,11 +11,12 @@
 #define WINDOW_WIDTH 760U
 #define WINDOW_HEIGHT 460U
 
-#define COLOR_TEXT 0x00E8EDF4U
-#define COLOR_MUTED 0x008D9BACU
-#define COLOR_SURFACE 0x000C1119U
-#define COLOR_BORDER 0x002A3746U
-#define COLOR_ACCENT 0x004B9CFFU
+static vanta_theme_t current_theme;
+#define COLOR_TEXT vanta_theme_text_color(&current_theme)
+#define COLOR_MUTED vanta_theme_muted_color(&current_theme)
+#define COLOR_SURFACE vanta_theme_surface_color(&current_theme)
+#define COLOR_BORDER vanta_theme_border_color(&current_theme)
+#define COLOR_ACCENT vanta_theme_accent_color(&current_theme)
 
 static char line[LINE_CAPACITY];
 static char list_buffer[LIST_CAPACITY];
@@ -356,6 +358,7 @@ int main(int argc, char** argv)
 {
     (void)argc;
     (void)argv;
+    current_theme = vanta_theme_load();
 
     vanta_gui_window_request_t request = {
         .width = WINDOW_WIDTH,

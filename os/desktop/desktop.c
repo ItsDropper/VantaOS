@@ -16,11 +16,9 @@
 #include <stdint.h>
 
 static int terminal_window_open;
-static int terminal_window_prompted;
 static unsigned int terminal_last_blink_state;
 static unsigned int desktop_last_clock_refresh;
 
-static void terminal_window_draw(void);
 
 static void desktop_gui_present(void)
 {
@@ -28,9 +26,6 @@ static void desktop_gui_present(void)
         return;
 
     graphics_present();
-
-    if (terminal_window_open && graphics_get_active_panel() == 3)
-        terminal_window_draw();
 
     gui_server_draw_windows();
     graphics_draw_cursor();
@@ -47,7 +42,6 @@ int desktop_launch_terminal(void)
         return 0;
 
     terminal_window_open = 1;
-    terminal_window_prompted = 1;
     graphics_clear_terminal_close_requested();
     terminal_last_blink_state = interrupts_get_ticks() / 50U;
 
@@ -61,7 +55,6 @@ int desktop_launch_terminal(void)
 static void terminal_close_window(void)
 {
     terminal_window_open = 0;
-    terminal_window_prompted = 0;
     graphics_clear_terminal_open_request();
     file_explorer_initialize();
 
@@ -74,114 +67,10 @@ static void terminal_close_window(void)
     desktop_gui_present();
 }
 
-static void terminal_window_draw(void)
-{
-    if (!graphics_is_initialized() || !terminal_window_open)
-        return;
-
-    int width = (int)graphics_get_width();
-    int height = (int)graphics_get_height();
-
-    int window_w = (int)graphics_get_terminal_width();
-    int window_h = (int)graphics_get_terminal_height();
-    int window_x = graphics_terminal_is_maximized() ? 0 : graphics_get_terminal_x();
-    int window_y = graphics_terminal_is_maximized() ? 0 : graphics_get_terminal_y();
-
-    if (!graphics_terminal_is_maximized() && window_w > width - 20)
-    {
-        window_w = width - 20;
-        window_x = 10;
-    }
-
-    if (!graphics_terminal_is_maximized() && window_h > height - 20)
-    {
-        window_h = height - 20;
-        window_y = 10;
-    }
-
-    graphics_draw_window_frame(window_x, window_y, window_w, window_h, "Terminal", 1);
-
-    /* A compact tab strip separates terminal sessions from window chrome. */
-    graphics_fill_rect(window_x + 1, window_y + 46, window_w - 2, 34, VANTA_UI_TOOLBAR);
-    graphics_fill_rounded_rect(window_x + 14, window_y + 50, 156, 26, 6, VANTA_UI_HOVER);
-    graphics_fill_rect(window_x + 24, window_y + 74, 136, 2, VANTA_UI_ACCENT);
-    graphics_fill_rounded_rect(window_x + 22, window_y + 57, 12, 12, 3,
-                                VANTA_UI_ACCENT);
-    graphics_draw_text(window_x + 42, window_y + 59, "Shell", 0x00E8EDF4, 1);
-    graphics_draw_text(window_x + 184, window_y + 59, "VantaOS", 0x007D8DA1, 1);
-    graphics_fill_rounded_rect(window_x + window_w - 116, window_y + 56,
-                                92, 18, 6, 0x00111A25);
-    graphics_fill_rounded_rect(window_x + window_w - 106, window_y + 62,
-                                5, 5, 3, 0x0069D6AE);
-    graphics_draw_text(window_x + window_w - 96, window_y + 61,
-                       "RUNNING", 0x009AAABD, 1);
-
-    int content_x = window_x + 18;
-    int content_y = window_y + 88;
-    int content_w = window_w - 36;
-    int content_h = window_h - 132;
-
-    graphics_fill_rounded_rect(content_x, content_y, content_w, content_h, 5, VANTA_UI_DESKTOP);
-
-    size_t count = terminal_history_count();
-    size_t visible_lines = (size_t)(content_h / 12);
-    if (visible_lines > 55)
-        visible_lines = 55;
-
-    size_t live_start = count > visible_lines ? count - visible_lines : 0;
-    size_t scroll_offset = terminal_get_scroll_offset();
-    if (scroll_offset > live_start)
-        scroll_offset = live_start;
-    size_t first = live_start - scroll_offset;
-    char line[81];
-    int text_y = content_y + 8;
-
-    for (size_t i = first; i < count && text_y < content_y + content_h - 4; i++)
-    {
-        if (!terminal_history_line(i, line, sizeof(line)))
-            continue;
-
-        graphics_draw_text(content_x + 14, text_y, line, VANTA_UI_TEXT, 1);
-        text_y += 12;
-    }
-
-    size_t cursor_line = terminal_get_cursor_line();
-    size_t cursor_column = terminal_get_cursor_column();
-    size_t cursor_first = live_start - scroll_offset;
-
-    if (scroll_offset == 0 &&
-        cursor_line >= cursor_first &&
-        cursor_line < cursor_first + visible_lines)
-    {
-        int cursor_x = content_x + 14 + (int)cursor_column * 6;
-        int cursor_y = content_y + 8 + (int)(cursor_line - cursor_first) * 12;
-        graphics_fill_rect(cursor_x, cursor_y, 2, 8, 0x00F2F5F8);
-        terminal_window_prompted = 0;
-    }
-
-    /* A dedicated status strip keeps session state out of command output. */
-    int status_y = window_y + window_h - 32;
-    graphics_fill_rect(window_x + 1, status_y, window_w - 2, 31,
-                       VANTA_UI_TOOLBAR);
-    graphics_fill_rect(window_x + 1, status_y, window_w - 2, 1,
-                       0x002A3746);
-    graphics_draw_text(window_x + 18, status_y + 12, "SHELL",
-                       VANTA_UI_TEXT_SECONDARY, 1);
-    graphics_fill_rect(window_x + 65, status_y + 9, 1, 12,
-                       0x00334455);
-    graphics_draw_text(window_x + 78, status_y + 12,
-        scroll_offset == 0 ? "LIVE OUTPUT" : "SCROLLBACK VIEW",
-        VANTA_UI_TEXT_SECONDARY, 1);
-    graphics_draw_text(window_x + window_w - 112, status_y + 12,
-        "UTF-8  |  x86_64", VANTA_UI_TEXT_SECONDARY, 1);
-
-}
-
 void desktop_initialize(multiboot_info_t* mbd)
 {
     (void)mbd;
     terminal_window_open = 0;
-    terminal_window_prompted = 0;
     terminal_last_blink_state = 0;
     desktop_last_clock_refresh = 0;
 }

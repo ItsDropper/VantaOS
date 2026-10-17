@@ -122,8 +122,9 @@ static int emit_segment(net_device_t *device, uint32_t destination,
                         uint32_t sequence, uint32_t acknowledgement,
                         uint8_t flags, const void *payload, size_t payload_length)
 {
-    if (!device || payload_length > TCP_MAX_MSS ||
-        payload_length + TCP_HEADER_SIZE > (size_t)device->mtu - 20U)
+    /* Reject invalid MTUs before subtraction to avoid size_t underflow. */
+    if (!device || device->mtu < 40U || payload_length > TCP_MAX_MSS ||
+        payload_length > (size_t)device->mtu - 40U)
         return 0;
 
     uint32_t source = 0;

@@ -160,7 +160,7 @@ void filesystem_selftest_initialize(void)
     }
     if (large_id < 0)
     {
-        serial_write("VANTAOS_FAT32_MULTICLUSTER_FAIL\n");
+        serial_write("VANTAOS_FAT32_MULTICLUSTER_LOOKUP_FAIL\n");
         return;
     }
 
@@ -173,7 +173,7 @@ void filesystem_selftest_initialize(void)
                                         large_chunk, MULTICLUSTER_CHUNK) !=
             MULTICLUSTER_CHUNK)
         {
-            serial_write("VANTAOS_FAT32_MULTICLUSTER_LOOKUP_FAIL\n");
+            serial_write("VANTAOS_FAT32_MULTICLUSTER_WRITE_FAIL\n");
             return;
         }
     }

@@ -306,9 +306,9 @@ void mouse_handle_interrupt(void)
             if (scaled_x == 0 && delta_x != 0) scaled_x = delta_x > 0 ? 1 : -1;
             if (scaled_y == 0 && delta_y != 0) scaled_y = delta_y > 0 ? 1 : -1;
 
-            mouse_pending_dx += scaled_x;
-            mouse_pending_dy += scaled_y;
-            mouse_moved = 1;
+            __atomic_fetch_add(&mouse_pending_dx, scaled_x, __ATOMIC_RELAXED);
+            __atomic_fetch_add(&mouse_pending_dy, scaled_y, __ATOMIC_RELAXED);
+            __atomic_store_n(&mouse_moved, 1, __ATOMIC_RELEASE);
         }
     }
 
@@ -317,19 +317,19 @@ void mouse_handle_interrupt(void)
 
     if (left_down && !mouse_left_down)
     {
-        mouse_pending_press = 1;
-        mouse_clicked = 1;
+        __atomic_store_n(&mouse_pending_press, 1, __ATOMIC_RELEASE);
+        __atomic_store_n(&mouse_clicked, 1, __ATOMIC_RELEASE);
     }
 
     if (!left_down && mouse_left_down)
-        mouse_pending_release = 1;
+        __atomic_store_n(&mouse_pending_release, 1, __ATOMIC_RELEASE);
     mouse_left_down = left_down;
 
     unsigned char right_down = (mouse_packet[0] & 0x02U) != 0U;
     if (right_down && !mouse_right_down)
     {
-        mouse_pending_right_press = 1;
-        mouse_clicked = 1;
+        __atomic_store_n(&mouse_pending_right_press, 1, __ATOMIC_RELEASE);
+        __atomic_store_n(&mouse_clicked, 1, __ATOMIC_RELEASE);
     }
     mouse_right_down = right_down;
 
@@ -370,7 +370,7 @@ void mouse_handle_interrupt(void)
             wheel -= 16;
         if (wheel != 0)
         {
-            mouse_wheel_delta += wheel;
+            __atomic_fetch_add(&mouse_wheel_delta, wheel, __ATOMIC_RELAXED);
             input_event_t wheel_event = {
                 .device_id = ps2_input_mouse_id(),
                 .type = INPUT_EVENT_WHEEL,
@@ -394,26 +394,26 @@ void mouse_inject_usb_report(int delta_x, int delta_y,
     if (scaled_y == 0 && delta_y != 0)
         scaled_y = delta_y > 0 ? 1 : -1;
     if (scaled_x != 0 || scaled_y != 0) {
-        mouse_pending_dx += scaled_x;
-        mouse_pending_dy += scaled_y;
-        mouse_moved = 1;
+        __atomic_fetch_add(&mouse_pending_dx, scaled_x, __ATOMIC_RELAXED);
+        __atomic_fetch_add(&mouse_pending_dy, scaled_y, __ATOMIC_RELAXED);
+        __atomic_store_n(&mouse_moved, 1, __ATOMIC_RELEASE);
     }
 
     unsigned char left = buttons & 1U;
     unsigned char right = buttons & 2U;
     if (left && !(usb_mouse_buttons & 1U)) {
-        mouse_pending_press = 1;
-        mouse_clicked = 1;
+        __atomic_store_n(&mouse_pending_press, 1, __ATOMIC_RELEASE);
+        __atomic_store_n(&mouse_clicked, 1, __ATOMIC_RELEASE);
     } else if (!left && (usb_mouse_buttons & 1U)) {
-        mouse_pending_release = 1;
+        __atomic_store_n(&mouse_pending_release, 1, __ATOMIC_RELEASE);
     }
     if (right && !(usb_mouse_buttons & 2U)) {
-        mouse_pending_right_press = 1;
-        mouse_clicked = 1;
+        __atomic_store_n(&mouse_pending_right_press, 1, __ATOMIC_RELEASE);
+        __atomic_store_n(&mouse_clicked, 1, __ATOMIC_RELEASE);
     }
     usb_mouse_buttons = buttons;
     if (wheel != 0)
-        mouse_wheel_delta += wheel;
+        __atomic_fetch_add(&mouse_wheel_delta, wheel, __ATOMIC_RELAXED);
 }
 
 bool mouse_has_event(void)
@@ -456,17 +456,16 @@ int mouse_get_wheel_delta(void)
 
 void mouse_process_events(void)
 {
-    int dx = mouse_pending_dx;
-    int dy = mouse_pending_dy;
-    int press = mouse_pending_press;
-    int release = mouse_pending_release;
-    int right_press = mouse_pending_right_press;
-
-    mouse_pending_dx = 0;
-    mouse_pending_dy = 0;
-    mouse_pending_press = 0;
-    mouse_pending_release = 0;
-    mouse_pending_right_press = 0;
+    /*
+     * The PS/2 IRQ producer and desktop consumer may run on different CPUs.
+     * Atomic exchanges prevent lost deltas and button edges while draining
+     * the event queue, which otherwise makes pointer motion feel sticky.
+     */
+    int dx = __atomic_exchange_n(&mouse_pending_dx, 0, __ATOMIC_ACQ_REL);
+    int dy = __atomic_exchange_n(&mouse_pending_dy, 0, __ATOMIC_ACQ_REL);
+    int press = __atomic_exchange_n(&mouse_pending_press, 0, __ATOMIC_ACQ_REL);
+    int release = __atomic_exchange_n(&mouse_pending_release, 0, __ATOMIC_ACQ_REL);
+    int right_press = __atomic_exchange_n(&mouse_pending_right_press, 0, __ATOMIC_ACQ_REL);
 
     if (dx != 0 || dy != 0)
         graphics_mouse_move(dx, dy);

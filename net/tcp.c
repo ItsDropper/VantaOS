@@ -215,7 +215,7 @@ void net_tcp_receive_ipv4(net_device_t *device, const uint8_t *ip,
         if (reset_valid) {
             client.failed = 1U;
             client.state = TCP_CLOSED;
-        } else {
+        } else if (client.state != TCP_SYN_SENT) {
             send_ack();
         }
         return;

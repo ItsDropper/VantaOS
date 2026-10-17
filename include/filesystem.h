@@ -6,7 +6,7 @@
 
 #define FS_MAX_NODES 256
 #define FS_NAME_MAX 255
-#define FS_PATH_MAX 128
+#define FS_PATH_MAX 256
 #define FS_FILE_MAX 512
 
 typedef enum
@@ -22,7 +22,7 @@ typedef struct
     uint32_t size;
     uint32_t first_cluster;
     uint32_t reserved;
-    char name[128];
+    char name[256];
 } fs_path_info_t;
 
 typedef struct

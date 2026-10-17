@@ -109,6 +109,23 @@ static int text_contains_ci(const char* text, const char* query)
     return 0;
 }
 
+static int path_is_under(const char* path, const char* root)
+{
+    size_t n = text_length(root);
+    if (n == 1U && root[0] == '/')
+        return path[0] == '/';
+    if (!text_equals_ci(path, root) && 
+        !(text_length(path) > n && path[n] == '/' &&
+          text_equals_ci(path, root)))
+    {
+        for (size_t i = 0; i < n; i++)
+            if (fold_char(path[i]) != fold_char(root[i]))
+                return 0;
+        return path[n] == '/' || path[n] == '\0';
+    }
+    return 1;
+}
+
 static void copy_text(char* destination, size_t capacity, const char* source)
 {
     if (!destination || capacity == 0U)
@@ -1011,7 +1028,9 @@ static void handle_input_key(uint32_t key)
         dialog_mode = DIALOG_NONE;
         return;
     }
-    if (key == 10U || key == 13U)
+    if (key == 1U)
+        input_buffer[0] = '\0';
+    else if (key == 10U || key == 13U)
     {
         commit_input();
         return;
@@ -1090,10 +1109,21 @@ static void render(void)
     static const char* sidebar_paths[6] = {
         "/", "/system", "/home", "/etc", "/system/drivers", "/system/devices"
     };
+    int active_sidebar = -1;
+    size_t active_path_length = 0U;
+    for (unsigned int i = 0; i < 6U; i++)
+    {
+        if (path_is_under(current_path, sidebar_paths[i]) &&
+            text_length(sidebar_paths[i]) > active_path_length)
+        {
+            active_sidebar = (int)i;
+            active_path_length = text_length(sidebar_paths[i]);
+        }
+    }
     for (unsigned int i = 0; i < 6U; i++)
     {
         int y = 118 + (int)i * 26;
-        int active = text_equals_ci(current_path, sidebar_paths[i]);
+        int active = active_sidebar == (int)i;
         if (active)
         {
             add_rect(12, y - 2, 128, 23, COLOR_SELECTED);

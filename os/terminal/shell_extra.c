@@ -148,6 +148,10 @@ static int command_mv(uint32_t argc, char **argv, int force)
         terminal_write("\nmv: source and destination are identical");
         return 1;
     }
+    if (vfs_lookup(source) < 0) {
+        terminal_write("\nmv: source path not found");
+        return 1;
+    }
     int target = vfs_lookup(destination);
     if (target >= 0) {
         const fs_node_t *node = vfs_get_node((uint32_t)target);

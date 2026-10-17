@@ -54,7 +54,7 @@ int net_device_unregister(net_device_t* d) {
         if(rxq[pos].device==d){spinlock_unlock_irqrestore(&lock,f);return 0;}
     for(uint32_t i=at;i+1U<device_count_used;i++)devices[i]=devices[i+1U];
     --device_count_used;devices[device_count_used].device=0;devices[device_count_used].stats=(net_device_stats_t){0};
-    d->ipv4_address=0;d->ipv4_netmask=0;d->ipv4_gateway=0;d->ipv4_configured=0;
+    d->ipv4_address=0;d->ipv4_netmask=0;d->ipv4_gateway=0;d->ipv4_dns=0;d->ipv4_configured=0;
     spinlock_unlock_irqrestore(&lock,f);return 1;
 }
 int net_device_set_link(net_device_t* d,int up) {
@@ -98,6 +98,7 @@ int net_device_configure_ipv4(net_device_t* d, uint32_t address,
     d->ipv4_address = address;
     d->ipv4_netmask = mask;
     d->ipv4_gateway = gateway;
+    d->ipv4_dns = 0U;
     d->ipv4_configured = 1U;
     spinlock_unlock_irqrestore(&lock, f);
     return 1;

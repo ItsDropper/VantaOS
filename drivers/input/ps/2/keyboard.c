@@ -1,4 +1,6 @@
 #include "keyboard.h"
+#include "input.h"
+#include "ps2.h"
 
 #include <stdint.h>
 #include "spinlock.h"
@@ -306,6 +308,92 @@ static void handle_key_press(uint8_t scancode)
     (void)alt_pressed;
 
     keyboard_buffer_push(c);
+
+    input_event_t text_event = {
+        .device_id = ps2_input_keyboard_id(),
+        .type = INPUT_EVENT_TEXT,
+        .code = (unsigned char)c,
+        .value = (unsigned char)c,
+        .value2 = 0
+    };
+    (void)input_report_event(&text_event);
+}
+
+/* Canonical key codes are USB HID Keyboard/Keypad usage IDs on every bus. */
+static uint16_t keyboard_scancode_to_usage(uint8_t code, bool extended)
+{
+    if (extended)
+    {
+        switch (code)
+        {
+            case 0x1C: return 0x58; /* Keypad Enter */
+            case 0x1D: return 0xE4; /* Right Control */
+            case 0x35: return 0x54; /* Keypad Divide */
+            case 0x38: return 0xE6; /* Right Alt */
+            case 0x47: return 0x4A; /* Home */
+            case 0x48: return 0x52; /* Up */
+            case 0x49: return 0x4B; /* Page Up */
+            case 0x4B: return 0x50; /* Left */
+            case 0x4D: return 0x4F; /* Right */
+            case 0x4F: return 0x4D; /* End */
+            case 0x50: return 0x51; /* Down */
+            case 0x51: return 0x4E; /* Page Down */
+            case 0x52: return 0x49; /* Insert */
+            case 0x53: return 0x4C; /* Delete */
+            case 0x5B: return 0xE3; /* Left GUI/Super */
+            case 0x5C: return 0xE7; /* Right GUI/Super */
+            default: return 0;
+        }
+    }
+
+    switch (code)
+    {
+        case 0x01: return 0x29; /* Escape */
+        case 0x02: return 0x1E; case 0x03: return 0x1F;
+        case 0x04: return 0x20; case 0x05: return 0x21;
+        case 0x06: return 0x22; case 0x07: return 0x23;
+        case 0x08: return 0x24; case 0x09: return 0x25;
+        case 0x0A: return 0x26; case 0x0B: return 0x27;
+        case 0x0C: return 0x2D; case 0x0D: return 0x2E;
+        case 0x0E: return 0x2A; case 0x0F: return 0x2B;
+        case 0x10: return 0x14; case 0x11: return 0x1A;
+        case 0x12: return 0x08; case 0x13: return 0x15;
+        case 0x14: return 0x17; case 0x15: return 0x1C;
+        case 0x16: return 0x18; case 0x17: return 0x0C;
+        case 0x18: return 0x12; case 0x19: return 0x13;
+        case 0x1A: return 0x2F; case 0x1B: return 0x30;
+        case 0x1C: return 0x28; case 0x1D: return 0xE0;
+        case 0x1E: return 0x04; case 0x1F: return 0x16;
+        case 0x20: return 0x07; case 0x21: return 0x09;
+        case 0x22: return 0x0A; case 0x23: return 0x0B;
+        case 0x24: return 0x0D; case 0x25: return 0x0E;
+        case 0x26: return 0x0F; case 0x27: return 0x33;
+        case 0x28: return 0x34; case 0x29: return 0x35;
+        case 0x2A: return 0xE1; case 0x2B: return 0x31;
+        case 0x2C: return 0x1D; case 0x2D: return 0x1B;
+        case 0x2E: return 0x06; case 0x2F: return 0x19;
+        case 0x30: return 0x05; case 0x31: return 0x11;
+        case 0x32: return 0x10; case 0x33: return 0x36;
+        case 0x34: return 0x37; case 0x35: return 0x38;
+        case 0x36: return 0xE5; case 0x37: return 0x55;
+        case 0x38: return 0xE2; case 0x39: return 0x2C;
+        case 0x3A: return 0x39;
+        case 0x3B: return 0x3A; case 0x3C: return 0x3B;
+        case 0x3D: return 0x3C; case 0x3E: return 0x3D;
+        case 0x3F: return 0x3E; case 0x40: return 0x3F;
+        case 0x41: return 0x40; case 0x42: return 0x41;
+        case 0x43: return 0x42; case 0x44: return 0x43;
+        case 0x57: return 0x44; case 0x58: return 0x45;
+        case 0x45: return 0x53; case 0x46: return 0x47;
+        case 0x47: return 0x5F; case 0x48: return 0x60;
+        case 0x49: return 0x61; case 0x4A: return 0x56;
+        case 0x4B: return 0x5C; case 0x4C: return 0x5D;
+        case 0x4D: return 0x5E; case 0x4E: return 0x57;
+        case 0x4F: return 0x59; case 0x50: return 0x5A;
+        case 0x51: return 0x5B; case 0x52: return 0x62;
+        case 0x53: return 0x63;
+        default: return 0;
+    }
 }
 
 static void handle_key_release(uint8_t scancode)
@@ -392,12 +480,37 @@ void keyboard_handle_interrupt(void)
             handle_key_release(released_scancode);
         }
 
+        uint16_t usage = keyboard_scancode_to_usage(released_scancode, extended_scancode);
+        if (usage != 0)
+        {
+            input_event_t key_event = {
+                .device_id = ps2_input_keyboard_id(),
+                .type = INPUT_EVENT_KEY,
+                .code = usage,
+                .value = 0,
+                .value2 = 0
+            };
+            (void)input_report_event(&key_event);
+        }
         extended_scancode = false;
         spinlock_unlock_irqrestore(&keyboard_lock, flags);
         return;
     }
 
+    bool was_extended = extended_scancode;
     handle_key_press(scancode);
+    uint16_t usage = keyboard_scancode_to_usage(scancode, was_extended);
+    if (usage != 0)
+    {
+        input_event_t key_event = {
+            .device_id = ps2_input_keyboard_id(),
+            .type = INPUT_EVENT_KEY,
+            .code = usage,
+            .value = 1,
+            .value2 = 0
+        };
+        (void)input_report_event(&key_event);
+    }
     spinlock_unlock_irqrestore(&keyboard_lock, flags);
 }
 

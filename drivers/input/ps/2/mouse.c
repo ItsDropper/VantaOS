@@ -1,4 +1,6 @@
 #include "mouse.h"
+#include "input.h"
+#include "ps2.h"
 #include "graphics.h"
 #include "terminal.h"
 
@@ -31,6 +33,7 @@ static volatile int mouse_pending_press = 0;
 static volatile int mouse_pending_release = 0;
 static volatile int mouse_pending_right_press = 0;
 static unsigned char mouse_left_down = 0;
+static unsigned char mouse_reported_buttons = 0;
 static unsigned char mouse_right_down = 0;
 static uint32_t mouse_scale_x = 1024;
 static uint32_t mouse_scale_y = 768;
@@ -205,6 +208,7 @@ void mouse_initialize(void)
     mouse_pending_right_press = 0;
     mouse_left_down = 0;
     mouse_right_down = 0;
+    mouse_reported_buttons = 0;
     mouse_scale_x = 1024;
     mouse_scale_y = 768;
 
@@ -327,16 +331,53 @@ void mouse_handle_interrupt(void)
     }
     mouse_right_down = right_down;
 
+    unsigned char buttons = (unsigned char)(mouse_packet[0] & 0x07U);
+    unsigned char changed_buttons = (unsigned char)(buttons ^ mouse_reported_buttons);
+    for (int button = 0; button < 3; ++button)
+    {
+        unsigned char mask = (unsigned char)(1U << button);
+        if (!(changed_buttons & mask))
+            continue;
+        input_event_t button_event = {
+            .device_id = ps2_input_mouse_id(),
+            .type = INPUT_EVENT_BUTTON,
+            .code = button,
+            .value = (buttons & mask) ? 1 : 0,
+            .value2 = 0
+        };
+        (void)input_report_event(&button_event);
+    }
+    mouse_reported_buttons = buttons;
+
+    if (delta_x != 0 || delta_y != 0)
+    {
+        input_event_t motion_event = {
+            .device_id = ps2_input_mouse_id(),
+            .type = INPUT_EVENT_RELATIVE_MOTION,
+            .code = 0,
+            .value = delta_x,
+            .value2 = delta_y
+        };
+        (void)input_report_event(&motion_event);
+    }
+
     if (mouse_packet_size == 4)
     {
-        int wheel =
-            (int)(mouse_packet[3] & 0x0F);
-
+        int wheel = (int)(mouse_packet[3] & 0x0F);
         if (wheel & 0x08)
             wheel -= 16;
-
         if (wheel != 0)
+        {
             mouse_wheel_delta += wheel;
+            input_event_t wheel_event = {
+                .device_id = ps2_input_mouse_id(),
+                .type = INPUT_EVENT_WHEEL,
+                .code = 0,
+                .value = wheel,
+                .value2 = 0
+            };
+            (void)input_report_event(&wheel_event);
+        }
     }
 }
 

@@ -29,6 +29,10 @@ typedef enum {
     INPUT_EVENT_NONE = 0, INPUT_EVENT_KEY, INPUT_EVENT_TEXT,
     INPUT_EVENT_RELATIVE_MOTION, INPUT_EVENT_BUTTON, INPUT_EVENT_WHEEL
 } input_event_type_t;
+/* KEY code is a USB HID Keyboard/Keypad usage ID, independent of bus.
+ * TEXT value/code is an ASCII byte for the current legacy US key mapping.
+ * BUTTON code is a zero-based button index (0 left, 1 right, 2 middle).
+ * RELATIVE_MOTION uses signed X/Y deltas in value/value2. */
 typedef struct {
     uint32_t device_id;
     input_event_type_t type;

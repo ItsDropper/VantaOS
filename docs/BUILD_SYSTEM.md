@@ -10,9 +10,9 @@ VantaOS uses a small GNU Make system inspired by subsystem-oriented kernel build
 - kernel/selftest/: test-only boot-info/PMM and paging/spinlock probes.
 - mm/: physical memory management, paging, and heap.
 - drivers/input/input.c: bus-neutral input-device registry and bounded event queue.
-- drivers/input/ps/2/: existing PS/2 keyboard and mouse implementations plus registry descriptors.
-- drivers/input/usb/: USB input manifest and implementation plan; no USB input driver is claimed yet.
-- drivers/pci/: PCI enumeration and device configuration.
+- drivers/input/ps/2/: existing PS/2 keyboard and mouse drivers, now publishing normalized events.
+- drivers/input/usb/: HID boot-report decoder; xHCI transport and enumeration remain future work.
+- drivers/pci/: PCI enumeration, BAR inspection, and command-register controls.
 - drivers/storage/: ATA/block storage code.
 - fs/: filesystem namespace, FAT32, and VFS.
 - os/: boot orchestration, terminal, shell, desktop, and file explorer.
@@ -22,11 +22,17 @@ VantaOS uses a small GNU Make system inspired by subsystem-oriented kernel build
 
 ## Input driver architecture
 
-Transport-specific drivers register stable device IDs, bus/type metadata, and capability flags with the shared input core. They can publish normalized key, text, relative-motion, button, and wheel events through input_report_event(); consumers drain the bounded FIFO with input_next_event().
+Transport-specific drivers register stable device IDs, bus/type metadata, and capability flags with the shared input core. Drivers publish normalized key, text, relative-motion, button-transition, and wheel events through input_report_event(); consumers drain the bounded FIFO with input_next_event().
 
 The registry and event queue use the kernel spinlock with IRQ save/restore and require no heap allocation. Registry capacity is fixed at 16 devices and the event queue holds 128 events. Queue overflow drops the newest event and increments input_dropped_event_count(). Unregistering a device removes its queued events. Device descriptors and their name strings must outlive registration.
 
-The PS/2 drivers retain their established direct APIs so this change does not alter current desktop input behavior. Their metadata is registered after initialization, but they do not yet publish every keyboard/mouse action to the normalized event queue; that integration is a follow-up. The USB manifest is intentionally empty until xHCI enumeration and HID report parsing are implemented.
+The existing PS/2 keyboard and mouse remain the active desktop path. They now publish raw key transitions, translated text, relative motion, individual button transitions, and wheel deltas into the shared queue while preserving their legacy APIs. This is additive: current GUI input is not switched to consume the queue yet.
+
+The USB HID module decodes boot-protocol keyboard and mouse reports and registers them as USB devices. Its caller must already have enumerated a USB device, selected HID boot protocol, and delivered complete reports. xHCI discovery/controller setup, DMA-safe memory, transfer rings, USB port/device enumeration, and interrupt-IN transfers are not yet implemented; therefore this is a real HID report driver layer, not yet end-to-end USB input support.
+
+## PCI resource APIs
+
+The PCI layer exposes class-code search, BAR inspection (including 64-bit memory BARs and I/O BARs), and explicit memory-space and bus-master command-bit helpers. Enabling bus mastering is intentionally separate: a future DMA-capable driver must establish safe DMA buffers and controller state before calling it. BAR addresses are physical resources, not automatically mapped virtual pointers.
 
 ## Build commands
 

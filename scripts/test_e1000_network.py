@@ -131,6 +131,17 @@ def main():
         udp_ip[12:16] = host_ip
         udp_ip[16:20] = guest_ip
         struct.pack_into("!H", udp_ip, 10, checksum(udp_ip))
+        # A corrupt checksum and inconsistent UDP length must both be dropped.
+        bad_checksum = bytearray(udp)
+        bad_checksum[6] ^= 0x01
+        bad_frame = guest_mac + host_mac + struct.pack("!H", 0x0800) + bytes(udp_ip) + bytes(bad_checksum)
+        send_frame(connection, bad_frame.ljust(60, b"\\x00"))
+
+        bad_length = bytearray(udp)
+        struct.pack_into("!H", bad_length, 4, len(bad_length) + 1)
+        bad_frame = guest_mac + host_mac + struct.pack("!H", 0x0800) + bytes(udp_ip) + bytes(bad_length)
+        send_frame(connection, bad_frame.ljust(60, b"\\x00"))
+
         udp_frame = guest_mac + host_mac + struct.pack("!H", 0x0800) + bytes(udp_ip) + bytes(udp)
         send_frame(connection, udp_frame.ljust(60, b"\\x00"))
     finally:

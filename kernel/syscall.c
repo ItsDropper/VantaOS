@@ -10,6 +10,7 @@
 #include "vfs.h"
 #include "user_mode_test.h"
 #include "gui_server.h"
+#include "desktop_theme.h"
 
 #include <stdint.h>
 
@@ -33,6 +34,7 @@
 #define USER_SYSCALL_GUI_CLOSE_WINDOW 17U
 #define USER_SYSCALL_GUI_DRAW 18U
 #define USER_SYSCALL_GUI_POLL_EVENT 19U
+#define USER_SYSCALL_SETTINGS_APPLY 20U
 #define USER_SYSCALL_IO_MAX 4096U
 #define USER_SYSCALL_WRITE_MAX 4096U
 
@@ -748,6 +750,15 @@ static int syscall_dispatch(struct exception_frame* frame)
             return syscall_gui_draw(frame, &process);
         case USER_SYSCALL_GUI_POLL_EVENT:
             return syscall_gui_poll_event(frame, &process);
+        case USER_SYSCALL_SETTINGS_APPLY:
+            if (desktop_theme_reload())
+            {
+                gui_server_notify_theme_changed();
+                frame->rax = 0U;
+            }
+            else
+                frame->rax = (uint64_t)(int64_t)-22;
+            return 0;
         default:
             frame->rax = (uint64_t)(int64_t)-38;
             return 0;

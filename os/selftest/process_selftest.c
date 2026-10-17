@@ -466,6 +466,20 @@ static void gui_focus_input_regression_probe(void)
 
     if (ok)
     {
+        ok = gui_server_set_owner_visible(pid, 0) == 1 && ok;
+        ok = gui_expect_event(pid, (uint32_t)first,
+                              VANTA_GUI_EVENT_FOCUS_LOST) && ok;
+        ok = gui_server_mouse_click(window_x + 40, window_y + 80, 1) == 0 && ok;
+        ok = gui_server_set_owner_visible(pid, 1) == 1 && ok;
+        ok = gui_expect_event(pid, (uint32_t)first,
+                              VANTA_GUI_EVENT_FOCUS_GAINED) && ok;
+        gui_server_notify_theme_changed();
+        ok = gui_expect_event(pid, (uint32_t)first,
+                              VANTA_GUI_EVENT_THEME_CHANGED) && ok;
+    }
+
+    if (ok)
+    {
         ok = gui_server_mouse_click(
             window_x + (int32_t)first_request.width - 20,
             window_y + 20, 1) == 1;

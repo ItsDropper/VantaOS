@@ -24,6 +24,9 @@ struct net_device {
     uint8_t link_up;
     const net_device_ops_t* ops;
     void* driver_data;
+    /* IPv4 values use host byte order; configuration is explicit, never guessed. */
+    uint32_t ipv4_address, ipv4_netmask, ipv4_gateway;
+    uint8_t ipv4_configured;
 };
 typedef struct {
     uint64_t rx_frames, rx_bytes, rx_dropped, rx_malformed;
@@ -50,6 +53,10 @@ void net_initialize(void);
 int net_device_register(net_device_t*);
 int net_device_unregister(net_device_t*);
 int net_device_set_link(net_device_t*, int);
+int net_device_configure_ipv4(net_device_t*, uint32_t address,
+                              uint32_t netmask, uint32_t gateway);
+int net_device_get_ipv4(net_device_t*, uint32_t* address,
+                        uint32_t* netmask, uint32_t* gateway);
 uint32_t net_device_count(void);
 net_device_t* net_device_get(uint32_t);
 int net_device_get_stats(net_device_t*, net_device_stats_t*);

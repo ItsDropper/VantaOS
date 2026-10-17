@@ -1,6 +1,6 @@
 # Networking architecture
 
-This document defines the initial networking contracts. It does not claim a NIC driver or IP connectivity exists yet.
+This document describes the current networking contracts and the scope still missing before general-purpose network connectivity.
 
 ## Layering
 
@@ -52,11 +52,13 @@ A net_pci_driver_t supplies a persistent name, PCI match IDs, and a probe callba
 
 The current E1000 driver targets PCI ID `8086:100E` (Intel 82540EM/QEMU `e1000`). It maps BAR0 through the shared MMIO allocator, resets the controller, validates the MAC address, allocates below-4-GiB DMA pages for descriptor rings and packet buffers, configures RX/TX rings, and enables PCI bus mastering only after descriptor memory is ready. TX copies into a DMA buffer and waits with a bounded timeout for descriptor completion. RX is polling-based: `net_poll()` invokes the driver poll callback, which moves completed descriptors into the bounded network RX queue. Device interrupts are masked; no IRQ routing is assumed.
 
-The QEMU regression test boots with a real emulated E1000 device, requires descriptor-level transmit completion, then injects a framed Ethernet packet through QEMU's TCP socket backend and requires it to reach an EtherType handler through the receive ring and bounded RX queue. This validates both hardware packet paths through Ethernet dispatch, not Internet protocol connectivity.
+The QEMU regression test boots with a real emulated E1000 device, verifies transmit completion, injects an Ethernet frame through QEMU's TCP socket backend, checks an ARP request/reply, and sends an IPv4 ICMP echo request whose reply must have valid IPv4 and ICMP checksums. This validates the Ethernet TX/RX path plus a basic L2/L3 round trip.
 
 ## Current limitations
 
-ARP, IPv4, ICMP, DHCP, DNS, UDP, TCP, routing, sockets, network syscalls, link event interrupts, and real-hardware validation are not implemented. The current polling driver is a bring-up baseline, not yet a production networking stack; next add receive-path end-to-end tests, ARP/IPv4 validation and checksums, and ICMP echo before claiming IP connectivity.
+The ARP module replies to well-formed Ethernet/IPv4 ARP requests for an explicitly configured interface address. IPv4 validates header length, total length, header checksum, fragment flags, destination address, and ICMP checksum before replying to ICMP echo requests. IPv4 configuration is explicit and currently exercised with a QEMU-only static address; there is no DHCP client or ARP cache yet. VLAN-tagged L3 packets are currently rejected by ARP/IPv4 handlers.
+
+DHCP, DNS, UDP, TCP, routing, sockets, network syscalls, link event interrupts, IPv4 fragmentation, and real-hardware validation remain unimplemented. This is an early usable protocol slice, not yet a complete production networking stack.
 
 ## Next sequence
 

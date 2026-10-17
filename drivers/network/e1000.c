@@ -274,6 +274,10 @@ static int e1000_probe(const struct pci_device* pci)
     if(!pci_enable_bus_mastering(pci))goto fail_dma;
     if(!net_device_register(&state.netdev))goto fail_dma;
 #ifdef VANTAOS_SELF_TEST
+    if(!net_device_configure_ipv4(&state.netdev,0x0A00020FU,0xFFFFFF00U,0x0A000202U)){
+        (void)net_device_unregister(&state.netdev);
+        goto fail_dma;
+    }
     if(!net_ethernet_handler_register(0x88B5U,e1000_rx_selftest_handler,0)){
         (void)net_device_unregister(&state.netdev);
         goto fail_dma;

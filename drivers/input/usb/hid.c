@@ -94,10 +94,23 @@ void usb_hid_keyboard_detach(uint32_t handle)
     usb_hid_keyboard_t *keyboard = &keyboards[handle - 1];
     if (!keyboard->active)
         return;
+    /* A disconnect must not leave modifier/key state stuck in the
+     * legacy keyboard path or in consumers of the shared input queue. */
+    for (uint32_t bit = 0; bit < 8; ++bit) {
+        if (keyboard->modifiers & (uint8_t)(1U << bit))
+            (void)report_key(keyboard->device_id, (uint16_t)(0xE0U + bit),
+                             false);
+    }
+    for (uint32_t key = 0; key < 6; ++key) {
+        if (keyboard->keys[key] != 0U)
+            (void)report_key(keyboard->device_id, keyboard->keys[key], false);
+    }
     (void)input_unregister_device(keyboard->device_id);
     keyboard->active = false;
     keyboard->device_id = 0;
     keyboard->modifiers = 0;
+    for (uint32_t key = 0; key < 6; ++key)
+        keyboard->keys[key] = 0;
 }
 
 void usb_hid_keyboard_report(uint32_t handle, const uint8_t *report, uint32_t length)
@@ -191,6 +204,9 @@ void usb_hid_mouse_detach(uint32_t handle)
     usb_hid_mouse_t *mouse = &mice[handle - 1];
     if (!mouse->active)
         return;
+    /* Synthesize button releases before unregistering the device. */
+    const uint8_t released_report[3] = {0, 0, 0};
+    usb_hid_mouse_report(handle, released_report, sizeof(released_report));
     (void)input_unregister_device(mouse->device_id);
     mouse->active = false;
     mouse->device_id = 0;

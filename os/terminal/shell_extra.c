@@ -471,7 +471,7 @@ static int command_net(uint32_t argc, char **argv)
             }
             terminal_putchar('\n');
         }
-        terminal_write("Note: device visibility does not imply Internet access; DHCP/DNS/TCP are not implemented.\n");
+        terminal_write("Use 'net connect' for DHCP, 'net ping' to test reachability, and 'net dns' to resolve names. TCP/HTTP clients are not implemented yet.\n");
         return 1;
     }
     if ((argc == 2U || argc == 3U) &&

@@ -32,6 +32,8 @@ static int parse_command(char *input, char **argv, uint32_t capacity,
             if (*read != quote) return 0;
             ++read;
             if (*read && *read != ' ' && *read != '\t') return 0;
+        } else if (*read == ' ' || *read == '\t') {
+            ++read;
         }
         if (write > start) {
             *write++ = 0;

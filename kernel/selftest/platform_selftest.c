@@ -150,6 +150,7 @@ void kernel_platform_selftest(void)
         "VANTAOS_TLB_SHOOTDOWN_OK\n" :
         "VANTAOS_TLB_SHOOTDOWN_FAIL\n");
     user_mapping_probe();
+    storage_framework_selftest();
     (void)user_mode_selftest_run();
 }
 #endif

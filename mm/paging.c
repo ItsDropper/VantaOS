@@ -1,4 +1,5 @@
 #include "paging_internal.h"
+#include "paging.h"
 #include "panic.h"
 #include "pmm.h"
 #include "cpu_local.h"
@@ -22,8 +23,7 @@ static uint64_t heap_pt[PAGING_TABLE_ENTRIES] __attribute__((aligned(4096)));
 #define GRAPHICS_PT_COUNT 8U
 static uint64_t graphics_pt[GRAPHICS_PT_COUNT][PAGING_TABLE_ENTRIES]
     __attribute__((aligned(4096)));
-#define MMIO_PT_COUNT 3U
-#define MMIO_WINDOW_BASE 0xE0000000ULL
+#define MMIO_PT_COUNT (PAGING_MMIO_SIZE / PAGE_2M)
 static uint64_t mmio_pt[MMIO_PT_COUNT][PAGING_TABLE_ENTRIES]
     __attribute__((aligned(4096)));
 
@@ -94,7 +94,7 @@ static uint64_t* table_for(uintptr_t virtual_address)
     }
 
     {
-        uint64_t first = (MMIO_WINDOW_BASE >> 21) & 0x1FFU;
+        uint64_t first = (PAGING_MMIO_BASE >> 21) & 0x1FFU;
         if (pd_index >= first && pd_index < first + MMIO_PT_COUNT)
             return mmio_pt[pd_index - first];
     }
@@ -202,7 +202,7 @@ void paging_initialize(void)
                         0xD0000000ULL + (uint64_t)t * PAGE_2M);
     for (uint32_t t = 0; t < MMIO_PT_COUNT; t++)
         map_high_region(high_pd, mmio_pt[t],
-                        MMIO_WINDOW_BASE + (uint64_t)t * PAGE_2M);
+                        PAGING_MMIO_BASE + (uint64_t)t * PAGE_2M);
 
     kernel_address_space.directory = kernel_pml4;
     kernel_address_space.directory_physical =
@@ -285,8 +285,8 @@ int paging_map_mmio_page(uintptr_t virtual_address, uintptr_t physical_address)
     uint64_t saved_flags = paging_lock_acquire();
     if ((virtual_address & (PAGE_SIZE - 1U)) != 0 ||
         (physical_address & (PAGE_SIZE - 1U)) != 0 ||
-        virtual_address < MMIO_WINDOW_BASE ||
-        virtual_address >= MMIO_WINDOW_BASE + MMIO_PT_COUNT * PAGE_2M ||
+        virtual_address < PAGING_MMIO_BASE ||
+        virtual_address >= PAGING_MMIO_BASE + PAGING_MMIO_SIZE ||
         paging_current() != &kernel_address_space)
     {
         paging_lock_release(saved_flags);

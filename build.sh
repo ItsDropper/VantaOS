@@ -14,7 +14,7 @@ gcc -m64 -mcmodel=large -ffreestanding -fno-pie -fno-stack-protector \
     -Iuserspace/include -c userspace/crt/crt0.S -o /tmp/vantaos-terminal-crt0.o
 gcc -m64 -mcmodel=large -ffreestanding -fno-pie -fno-stack-protector \
     -mno-red-zone -fno-builtin -nostdlib -Wall -Wextra -Werror \
-    -Iuserspace/include -c userspace/apps/terminal.c -o /tmp/vantaos-terminal.o
+    -Iuserspace/include -Iinclude -c userspace/apps/terminal.c -o /tmp/vantaos-terminal.o
 ld -m elf_x86_64 -static -nostdlib -Ttext-segment=0x8000000000 \
     -e _start -o /tmp/vantaos-terminal.elf \
     /tmp/vantaos-terminal-crt0.o /tmp/vantaos-terminal.o

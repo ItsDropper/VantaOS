@@ -321,6 +321,36 @@ jobs:
             exit 1
           fi
 
+      - name: Refuse ambiguous FAT32 volumes across ATA and NVMe
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp vantaos.img ambiguous-ata.img
+          cp vantaos.img ambiguous-nvme.img
+          set +e
+          timeout 30s qemu-system-x86_64 \
+            -machine pc -smp 1 -m 256M \
+            -drive file=VantaOS.iso,media=cdrom,format=raw \
+            -drive file=ambiguous-ata.img,if=ide,format=raw \
+            -drive file=ambiguous-nvme.img,if=none,id=ambiguousnvme,format=raw \
+            -device nvme,drive=ambiguousnvme,serial=VANTAAMBIG0001 \
+            -boot order=d -display none -serial file:ambiguous-volumes.log \
+            -monitor none -no-reboot
+          result=$?
+          set -e
+          if [ "$result" -ne 124 ]; then
+            echo "Ambiguous-volume QEMU exited unexpectedly: $result"
+            cat ambiguous-volumes.log 2>/dev/null || true
+            exit 1
+          fi
+          grep -q 'VANTAOS_FAT32_AMBIGUOUS_DEVICES' ambiguous-volumes.log
+          grep -q 'VANTAOS_FILESYSTEM_NAMESPACE_OK' ambiguous-volumes.log
+          if grep -q 'VANTAOS_FAT32_BACKEND_.*_OK' ambiguous-volumes.log; then
+            echo "FAT32 selected one of two valid volumes without an explicit policy."
+            cat ambiguous-volumes.log
+            exit 1
+          fi
+
       - name: QEMU boot and regression tests at multiple memory sizes
         shell: bash
         run: |

@@ -9,7 +9,7 @@ VantaOS has an initial user-mode GUI boundary, but not yet a complete user-space
 - A ring-3 smoke program creates a window, submits draw commands, and exercises invalid pointers and malformed commands. CI requires `VANTAOS_USER_GUI_SYSCALL_OK`.
 - The kernel owns framebuffer access, window registry, z-order, window chrome, event routing, and presentation. Applications never receive a raw kernel framebuffer pointer.
 - Windows are process-owned. Dead-owner cleanup is tested and required by CI through `VANTAOS_GUI_DEAD_OWNER_CLEANUP_OK`.
-- Terminal's shell is a ring-3 executable at `/TERMINAL.ELF`, but its visible window and text rendering remain kernel-side. Settings and File Explorer also remain kernel-rendered; they are not yet independent ring-3 GUI applications.
+- Terminal's shell is a ring-3 executable at `/TERMINAL.ELF`, but its visible window and text rendering remain kernel-side. Settings is now an initial ring-3 application at `/SYSTEM/SETTINGS.ELF`; it can render its own window and edit/save its own compact-row and accent preferences in `/SYSTEM/VANTASET.CFG`. These preferences do not yet control the global desktop theme. File Explorer remains kernel-rendered.
 
 ## Current GUI ABI
 
@@ -31,7 +31,7 @@ The implementation is intentionally small. Window move/resize/minimize/maximize,
 
 User-mode file operations support bounded transfers (up to 4096 bytes per syscall), a small per-process descriptor table, and conservative FAT32 8.3 regular-file create/write behavior. FAT32 range I/O supports multi-cluster files; the on-disk file-size field remains 32-bit and actual capacity is limited by the volume. The regression workflow checks file readback and a second boot using the same disposable image.
 
-This is enough groundwork for a small local configuration file, not a full filesystem API. Long-filename writes, directory creation, rename/delete, crash-atomic replacement, and exhaustive corruption/power-loss handling remain unsupported. A Settings application must parse a versioned format defensively, reject malformed values, preserve defaults on invalid data, and verify that saved values survive a reboot before persistence is described as complete.
+This is enough groundwork for a small local configuration file, not a full filesystem API. Long-filename writes, directory creation, rename/delete, crash-atomic replacement, and exhaustive corruption/power-loss handling remain unsupported. The initial Settings app reads and writes `/SYSTEM/VANTASET.CFG` and includes storage self-tests. CI checks the app's launch/exit path and cross-boot persistence markers. This is an initial local configuration format, not yet a stable system-wide settings contract; broader malformed-data and I/O-failure coverage is still needed.
 
 ## Date, time, and region
 
@@ -40,10 +40,9 @@ The Settings UI must not label an RTC value as local time unless its policy is e
 ## Next implementation sequence
 
 1. Expand GUI regression coverage for focus changes, click routing, queue overflow, close requests, and invalid event buffers.
-2. Implement Settings as a real static ELF64 ring-3 application using the GUI syscall ABI, not as another kernel-rendered panel.
-3. Add a versioned local configuration format and tests for defaults, malformed data, read/write failure, and reboot persistence.
-4. Implement and document RTC UTC/local policy and timezone conversion before exposing region-based local time as functional.
-5. Migrate File Explorer to ring 3 using directory listing and file APIs; keep launch restricted to validated executable formats.
-6. Move Terminal's visible window, drawing, and input onto the same GUI ABI while retaining its shell logic in ring 3.
+2. Harden Settings configuration parsing and I/O failure behavior; distinguish app-local preferences from global desktop settings.
+3. Implement and document RTC UTC/local policy and timezone conversion before exposing region-based local time as functional.
+4. Migrate File Explorer to ring 3 using directory listing and file APIs; keep launch restricted to validated executable formats.
+5. Move Terminal's visible window, drawing, and input onto the same GUI ABI while retaining its shell logic in ring 3.
 
 A control is functional only when its backing API, input path, persistence semantics (where relevant), and regression test exist.

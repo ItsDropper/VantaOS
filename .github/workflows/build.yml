@@ -230,13 +230,30 @@ jobs:
             sleep 0.1
           done
           grep -q 'VANTAOS_BOOT_OK' "$log"
-          for marker in VANTAOS_XHCI_CONTROLLER_ONLINE VANTAOS_USB_HID_KEYBOARD_ONLINE VANTAOS_USB_HID_MOUSE_ONLINE; do
-            if ! grep -q "$marker" "$log"; then
-              echo "Missing USB enumeration marker '$marker'."
+          # VANTAOS_BOOT_OK is emitted before the later USB initialization
+          # phase. Wait for the controller and both HID devices before injecting
+          # input; otherwise QEMU receives the events while no USB endpoint is
+          # polling and the smoke test races device enumeration.
+          usb_ready=0
+          for attempt in $(seq 1 300); do
+            if grep -q 'VANTAOS_XHCI_CONTROLLER_ONLINE' "$log" &&
+               grep -q 'VANTAOS_USB_HID_KEYBOARD_ONLINE' "$log" &&
+               grep -q 'VANTAOS_USB_HID_MOUSE_ONLINE' "$log"; then
+              usb_ready=1
+              break
+            fi
+            if ! kill -0 "$qemu_pid" 2>/dev/null; then
+              echo "QEMU exited before xHCI and both HID devices became ready."
               cat "$log" 2>/dev/null || true
               exit 1
             fi
+            sleep 0.1
           done
+          if [ "$usb_ready" -ne 1 ]; then
+            echo "Timed out waiting for xHCI, USB keyboard, and USB mouse enumeration."
+            cat "$log" 2>/dev/null || true
+            exit 1
+          fi
 
           # Drive real QEMU input events through the emulated USB devices.
           for attempt in $(seq 1 30); do

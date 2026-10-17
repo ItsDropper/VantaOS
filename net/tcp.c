@@ -31,6 +31,23 @@ typedef struct {
 
 static tcp_client_t client;
 
+static void reset_client(void)
+{
+    client.device = 0;
+    client.remote_ip = 0U;
+    client.snd_una = 0U;
+    client.snd_nxt = 0U;
+    client.rcv_nxt = 0U;
+    client.local_port = 0U;
+    client.remote_port = 0U;
+    client.peer_mss = TCP_DEFAULT_MSS;
+    client.state = TCP_CLOSED;
+    client.remote_fin = 0U;
+    client.failed = 0U;
+    client.rx_head = 0U;
+    client.rx_used = 0U;
+}
+
 static uint16_t be16(const uint8_t *p)
 {
     return (uint16_t)(((uint16_t)p[0] << 8) | p[1]);
@@ -143,7 +160,7 @@ static void send_ack(void)
 
 int net_tcp_initialize(void)
 {
-    client = (tcp_client_t){0};
+    reset_client();
     client.peer_mss = TCP_DEFAULT_MSS;
     return 1;
 }

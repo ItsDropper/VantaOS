@@ -18,6 +18,15 @@ typedef enum
 
 typedef struct
 {
+    uint32_t type;
+    uint32_t size;
+    uint32_t first_cluster;
+    uint32_t reserved;
+    char name[128];
+} fs_path_info_t;
+
+typedef struct
+{
     uint32_t id;
     uint32_t parent;
     fs_node_type_t type;

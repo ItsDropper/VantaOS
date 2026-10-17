@@ -1,5 +1,6 @@
 #include "nvme.h"
 #include "block_device.h"
+#include "heap.h"
 #include "dma.h"
 #include "mmio.h"
 #include "pci.h"
@@ -702,20 +703,29 @@ static int nvme_run_io_selftest(void)
         return 0;
     }
     /* Eight outstanding commands, each covering up to sixteen DMA pages. */
-    static uint8_t before[NVME_IO_SLOTS * NVME_MAX_TRANSFER_PAGES * NVME_PAGE_SIZE];
-    static uint8_t expected[NVME_IO_SLOTS * NVME_MAX_TRANSFER_PAGES * NVME_PAGE_SIZE];
-    static uint8_t actual[NVME_IO_SLOTS * NVME_MAX_TRANSFER_PAGES * NVME_PAGE_SIZE];
+    const size_t test_capacity =
+        (size_t)NVME_IO_SLOTS * NVME_MAX_TRANSFER_PAGES * NVME_PAGE_SIZE;
+    uint8_t* test_memory = (uint8_t*)kmalloc(test_capacity * 3U);
+    if (!test_memory) {
+        serial_write("VANTAOS_NVME_IO_SELFTEST_FAIL\n");
+        return 0;
+    }
+    uint8_t* before = test_memory;
+    uint8_t* expected = test_memory + test_capacity;
+    uint8_t* actual = test_memory + 2U * test_capacity;
     const uint32_t test_sectors = NVME_IO_SLOTS * NVME_MAX_TRANSFER_PAGES *
                                   (NVME_PAGE_SIZE / device->sector_size);
     const uint64_t test_lba = 8U;
     const size_t test_bytes = (size_t)test_sectors * device->sector_size;
     if (device->sector_count <= test_lba + test_sectors) {
+        kfree(test_memory);
         serial_write("VANTAOS_NVME_IO_SELFTEST_FAIL\n");
         return 0;
     }
     for (size_t i = 0; i < test_bytes; ++i)
         expected[i] = (uint8_t)((i * 37U) ^ (i >> 7) ^ 0xA5U);
     if (block_device_read(device, test_lba, test_sectors, before) != BLOCK_STATUS_OK) {
+        kfree(test_memory);
         serial_write("VANTAOS_NVME_IO_SELFTEST_FAIL\n");
         return 0;
     }
@@ -731,6 +741,7 @@ static int nvme_run_io_selftest(void)
         ok = 0;
     if (block_device_flush(device) != BLOCK_STATUS_OK)
         ok = 0;
+    kfree(test_memory);
     serial_write(ok ? "VANTAOS_NVME_IO_SELFTEST_OK\n" :
                       "VANTAOS_NVME_IO_SELFTEST_FAIL\n");
     return ok;

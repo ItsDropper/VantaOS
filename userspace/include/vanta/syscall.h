@@ -11,7 +11,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define VANTA_USER_ABI_VERSION 5U
+#define VANTA_USER_ABI_VERSION 6U
 
 #define VANTA_SYS_EXIT          0U
 #define VANTA_SYS_WRITE         1U
@@ -30,6 +30,10 @@
 #define VANTA_SYS_FILE_WRITE          14U
 #define VANTA_SYS_CREATE_FILE         15U
 #define VANTA_SYS_SETTINGS_APPLY       20U
+#define VANTA_SYS_DELETE_PATH          21U
+#define VANTA_SYS_RENAME_PATH          22U
+#define VANTA_SYS_CREATE_DIRECTORY     23U
+#define VANTA_SYS_STAT_PATH            24U
 
 #define VANTA_OPEN_READ      1
 #define VANTA_OPEN_WRITE     2
@@ -139,6 +143,37 @@ static inline long vanta_file_write(int descriptor, const void* buffer,
 static inline long vanta_create_file(const char* path)
 {
     return vanta_syscall3(VANTA_SYS_CREATE_FILE, (uintptr_t)path, 0U, 0U);
+}
+
+typedef struct
+{
+    uint32_t type;
+    uint32_t size;
+    uint32_t first_cluster;
+    uint32_t reserved;
+    char name[128];
+} vanta_file_info_t;
+
+static inline long vanta_create_directory(const char* path)
+{
+    return vanta_syscall3(VANTA_SYS_CREATE_DIRECTORY, (uintptr_t)path, 0U, 0U);
+}
+
+static inline long vanta_delete_path(const char* path)
+{
+    return vanta_syscall3(VANTA_SYS_DELETE_PATH, (uintptr_t)path, 0U, 0U);
+}
+
+static inline long vanta_rename_path(const char* old_path, const char* new_path)
+{
+    return vanta_syscall3(VANTA_SYS_RENAME_PATH, (uintptr_t)old_path,
+                          (uintptr_t)new_path, 0U);
+}
+
+static inline long vanta_stat_path(const char* path, vanta_file_info_t* info)
+{
+    return vanta_syscall3(VANTA_SYS_STAT_PATH, (uintptr_t)path,
+                          (uintptr_t)info, 0U);
 }
 
 /* argc must be in [1, 16]; argv and all strings must be user-readable. */

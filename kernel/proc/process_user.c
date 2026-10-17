@@ -130,11 +130,17 @@ int process_install_user_image(const char* name, uint32_t parent_pid,
     return -1;
 }
 
-static void release_unpublished_user_image(
+void process_release_unpublished_user_image(
     paging_address_space_t* space, void* code_frame, void* stack_frame)
 {
-    if (space)
-        (void)paging_destroy_address_space(space);
+    /*
+     * User frames may still be reachable through the address space if teardown
+     * is refused (for example, while a TLB shootdown is outstanding). Never
+     * return those frames to PMM unless the page tables were actually retired.
+     * A bounded leak is safer than reusing memory still mapped by a CPU.
+     */
+    if (space && !paging_destroy_address_space(space))
+        return;
     if (code_frame)
         pmm_free_block(code_frame);
     if (stack_frame)
@@ -155,7 +161,7 @@ int process_create_user(const char* name, uint32_t parent_pid,
         (uintptr_t)code_frame >= IDENTITY_MAP_LIMIT ||
         (uintptr_t)stack_frame >= IDENTITY_MAP_LIMIT)
     {
-        release_unpublished_user_image(space, code_frame, stack_frame);
+        process_release_unpublished_user_image(space, code_frame, stack_frame);
         return -1;
     }
 
@@ -170,7 +176,7 @@ int process_create_user(const char* name, uint32_t parent_pid,
         !paging_map_user_page_ex(space, USER_STACK_ADDRESS,
                                  (uintptr_t)stack_frame, 1, 0))
     {
-        release_unpublished_user_image(space, code_frame, stack_frame);
+        process_release_unpublished_user_image(space, code_frame, stack_frame);
         return -1;
     }
 
@@ -184,7 +190,7 @@ int process_create_user(const char* name, uint32_t parent_pid,
         image_size, pages, 2U);
     if (pid <= 0)
     {
-        release_unpublished_user_image(space, code_frame, stack_frame);
+        process_release_unpublished_user_image(space, code_frame, stack_frame);
         return -1;
     }
     return pid;

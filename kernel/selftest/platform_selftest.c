@@ -7,6 +7,7 @@
 #include "serial.h"
 #include "spinlock.h"
 #include "user_mode_selftest.h"
+#include "../proc/process_internal.h"
 
 #ifdef VANTAOS_SELF_TEST
 static void spinlock_primitive_probe(void)
@@ -26,6 +27,70 @@ static void spinlock_primitive_probe(void)
     serial_write(ok ?
         "VANTAOS_SPINLOCK_PRIMITIVE_OK\n" :
         "VANTAOS_SPINLOCK_PRIMITIVE_FAIL\n");
+}
+
+static void unpublished_image_cleanup_probe(void)
+{
+    const uint32_t free_before = pmm_get_free_blocks();
+    paging_address_space_t* space = paging_create_address_space();
+    void* code_frame = pmm_alloc_block();
+    void* stack_frame = pmm_alloc_block();
+    int ok = space != NULL && code_frame != NULL && stack_frame != NULL;
+    int code_mapped = 0;
+    int stack_mapped = 0;
+
+    if (ok)
+    {
+        code_mapped = paging_map_user_page_ex(
+            space, (uintptr_t)PAGING_USER_BASE,
+            (uintptr_t)code_frame, 0, 1);
+        stack_mapped = paging_map_user_page_ex(
+            space, (uintptr_t)(PAGING_USER_BASE + PAGE_SIZE),
+            (uintptr_t)stack_frame, 1, 0);
+        ok = code_mapped && stack_mapped;
+    }
+
+    if (ok)
+    {
+        /* Destruction must fail while this CPU still has the space loaded. */
+        paging_switch_address_space(space);
+        /* Deterministically model a teardown blocked by an outstanding shootdown. */
+        __atomic_store_n(&space->pending_shootdowns, 1U, __ATOMIC_RELEASE);
+        process_release_unpublished_user_image(space, code_frame, stack_frame);
+        ok = space->used != 0 &&
+             paging_get_physical((uintptr_t)PAGING_USER_BASE) ==
+                 (uintptr_t)code_frame &&
+             paging_get_physical((uintptr_t)(PAGING_USER_BASE + PAGE_SIZE)) ==
+                 (uintptr_t)stack_frame &&
+             pmm_get_free_blocks() < free_before;
+        __atomic_store_n(&space->pending_shootdowns, 0U, __ATOMIC_RELEASE);
+        paging_switch_address_space(paging_get_kernel_address_space());
+
+        /* Once inactive, teardown and frame release must complete. */
+        process_release_unpublished_user_image(space, code_frame, stack_frame);
+        ok = ok && space->used == 0 &&
+             pmm_get_free_blocks() == free_before;
+    }
+    else
+    {
+        if (space)
+        {
+            if (paging_get_current_address_space() == space)
+                paging_switch_address_space(paging_get_kernel_address_space());
+            process_release_unpublished_user_image(space, code_frame, stack_frame);
+        }
+        else
+        {
+            if (code_frame)
+                pmm_free_block(code_frame);
+            if (stack_frame)
+                pmm_free_block(stack_frame);
+        }
+    }
+
+    serial_write(ok ?
+        "VANTAOS_UNPUBLISHED_IMAGE_CLEANUP_OK\n" :
+        "VANTAOS_UNPUBLISHED_IMAGE_CLEANUP_FAIL\n");
 }
 
 static void user_mapping_probe(void)
@@ -150,6 +215,7 @@ void kernel_platform_selftest(void)
         "VANTAOS_TLB_SHOOTDOWN_OK\n" :
         "VANTAOS_TLB_SHOOTDOWN_FAIL\n");
     user_mapping_probe();
+    unpublished_image_cleanup_probe();
     storage_framework_selftest();
     (void)user_mode_selftest_run();
 }

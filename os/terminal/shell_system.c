@@ -96,6 +96,18 @@ void shell_help(void)
     terminal_write("  ps       - Show processes\n");
     terminal_write("  storage  - Show ATA/FAT32 storage status\n");
     terminal_write("  cp       - Copy a file; -F permits overwriting\n");
+    terminal_write("  mv       - Move/rename a path; -F permits replacing a file\n");
+    terminal_write("  rm       - Delete a path; -F permits deleting directories\n");
+    terminal_write("  stat     - Show file or directory metadata\n");
+    terminal_write("  write    - Write text; -F permits overwriting non-empty files\n");
+    terminal_write("  mkdir    - Create a directory; -F makes existing directories OK\n");
+    terminal_write("  touch    - Create an empty file; -F makes existing files OK\n");
+    terminal_write("  kill     - Terminate a process; -F permits kernel-process termination\n");
+    terminal_write("  net      - Show network devices, IPv4 config and counters\n");
+    terminal_write("  net poll - Poll network receive queues\n");
+    terminal_write("  net config <index> <ip> <mask> <gateway> - Set static IPv4\n");
+    terminal_write("  -F       - Force supported destructive commands (never kills PID 0/current)\n");
+    terminal_write("  cp       - Copy a file; -F permits overwriting\n");
     terminal_write("  mv       - Rename/move a path; -F permits replacing a file\n");
     terminal_write("  rm       - Delete a path; -F permits deleting directories\n");
     terminal_write("  kill     - Terminate a process; -F permits kernel-process termination\n");

@@ -42,6 +42,7 @@ static void reset_client(void)
     client.local_port = 0U;
     client.remote_port = 0U;
     client.peer_mss = TCP_DEFAULT_MSS;
+    client.peer_window = 0U;
     client.state = TCP_CLOSED;
     client.remote_fin = 0U;
     client.failed = 0U;
@@ -195,6 +196,7 @@ void net_tcp_receive_ipv4(net_device_t *device, const uint8_t *ip,
     uint32_t sequence = be32(tcp + 4U);
     uint32_t acknowledgement = be32(tcp + 8U);
     uint8_t flags = tcp[13];
+    uint16_t advertised_window = be16(tcp + 14U);
     const uint8_t *payload = tcp + header_length;
     size_t payload_length = tcp_length - header_length;
 
@@ -216,6 +218,7 @@ void net_tcp_receive_ipv4(net_device_t *device, const uint8_t *ip,
             return;
         client.rcv_nxt = sequence + 1U;
         client.snd_una = acknowledgement;
+        client.peer_window = advertised_window;
         client.state = TCP_ESTABLISHED;
         client.peer_mss = TCP_DEFAULT_MSS;
         int mss_seen = 0;
@@ -248,6 +251,7 @@ void net_tcp_receive_ipv4(net_device_t *device, const uint8_t *ip,
         if ((int32_t)(acknowledgement - client.snd_una) >= 0 &&
             (int32_t)(client.snd_nxt - acknowledgement) >= 0)
             client.snd_una = acknowledgement;
+        client.peer_window = advertised_window;
     }
 
     if (payload_length && sequence == client.rcv_nxt) {

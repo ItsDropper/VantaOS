@@ -258,8 +258,17 @@ void net_tcp_receive_ipv4(net_device_t *device, const uint8_t *ip,
         return;
 
     if (flags & TCP_FLAG_ACK) {
-        if ((int32_t)(acknowledgement - client.snd_una) >= 0 &&
-            (int32_t)(client.snd_nxt - acknowledgement) >= 0) {
+        /*
+         * RFC 9293: an ACK beyond SND.NXT acknowledges data never sent.
+         * Do not let it advance our send state or deliver payload/FIN from
+         * the same invalid segment. Older ACKs are stale and cannot update
+         * the peer window; a valid ACK may advance SND.UNA.
+         */
+        if ((int32_t)(acknowledgement - client.snd_nxt) > 0) {
+            send_ack();
+            return;
+        }
+        if ((int32_t)(acknowledgement - client.snd_una) >= 0) {
             client.snd_una = acknowledgement;
             client.peer_window = advertised_window;
         }

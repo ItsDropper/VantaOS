@@ -165,6 +165,18 @@ int net_ipv4_send(net_device_t *d, uint32_t destination, uint8_t protocol,
     }
     if ((flags & (TCP_ACK | TCP_PSH)) == (TCP_ACK | TCP_PSH)) {
         size_t data_length = payload_length - header_length;
+        /*
+         * First inject a segment whose ACK claims bytes the client has not
+         * sent. Its payload must not be accepted even though its receive
+         * sequence is otherwise correct. This catches ACK-validation
+         * regressions in the real TCP implementation.
+         */
+        static const char invalid_payload[] = "BAD";
+        if (!enqueue_tcp(destination_port, source_port, remote_sequence,
+                         sequence + (uint32_t)data_length + 100U,
+                         TCP_ACK | TCP_PSH, invalid_payload,
+                         sizeof(invalid_payload) - 1U))
+            return 0;
         if (!enqueue_tcp(destination_port, source_port, remote_sequence,
                          sequence + (uint32_t)data_length, TCP_ACK, 0, 0U))
             return 0;

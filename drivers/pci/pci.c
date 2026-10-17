@@ -1,4 +1,5 @@
 #include "pci.h"
+#include "spinlock.h"
 
 #include <stdint.h>
 
@@ -11,6 +12,7 @@
 
 static struct pci_device devices[PCI_MAX_DEVICES];
 static int device_count = 0;
+static spinlock_t pci_config_lock = SPINLOCK_INITIALIZER;
 
 static inline void outl(uint16_t port, uint32_t value)
 {
@@ -53,8 +55,10 @@ static void pci_write_config(
     uint8_t bus, uint8_t slot, uint8_t function, uint8_t offset, uint32_t value
 )
 {
+    uint64_t flags = spinlock_lock_irqsave(&pci_config_lock);
     outl(PCI_CONFIG_ADDRESS, pci_config_address(bus, slot, function, offset));
     outl(PCI_CONFIG_DATA, value);
+    spinlock_unlock_irqrestore(&pci_config_lock, flags);
 }
 
 static uint32_t pci_read_config(
@@ -64,6 +68,7 @@ static uint32_t pci_read_config(
     uint8_t offset
 )
 {
+    uint64_t flags = spinlock_lock_irqsave(&pci_config_lock);
     outl(
         PCI_CONFIG_ADDRESS,
         pci_config_address(
@@ -73,8 +78,9 @@ static uint32_t pci_read_config(
             offset
         )
     );
-
-    return inl(PCI_CONFIG_DATA);
+    uint32_t value = inl(PCI_CONFIG_DATA);
+    spinlock_unlock_irqrestore(&pci_config_lock, flags);
+    return value;
 }
 
 static uint16_t pci_get_vendor(

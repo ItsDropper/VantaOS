@@ -67,8 +67,8 @@ jobs:
         run: |
           set -euo pipefail
           log="usb-xhci-boot.log"
-          qmp="/tmp/vantaos-usb-qmp.sock"
-          rm -f "$qmp" "$log" qemu-usb-stderr.log
+          monitor="/tmp/vantaos-usb-monitor.sock"
+          rm -f "$monitor" "$log" qemu-usb-stderr.log
 
           # Keep QEMU's serial output unbuffered so the readiness and input
           # assertions inspect live kernel output, not data flushed at shutdown.
@@ -86,7 +86,7 @@ jobs:
             -boot order=d \
             -display vnc=127.0.0.1:0 \
             -serial stdio \
-            -qmp "unix:$qmp,server=on,wait=off" \
+            -monitor "unix:$monitor,server=on,wait=off" \
             -no-reboot >"$log" 2>qemu-usb-stderr.log &
           qemu_pid=$!
           cleanup() {
@@ -133,59 +133,18 @@ jobs:
           fi
 
           for attempt in $(seq 1 30); do
-            test -S "$qmp" && break
+            test -S "$monitor" && break
             sleep 0.1
           done
-          test -S "$qmp"
+          test -S "$monitor"
 
-          # QMP input-send-event injects actual guest input events without
-          # relying on an HMP-selected mouse (which is absent with -display
-          # none). Keep the QMP session open and check every command response.
-          python3 - "$qmp" <<'PY'
-          import json
-          import socket
-          import sys
-          import time
-
-          connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-          connection.connect(sys.argv[1])
-          stream = connection.makefile("rwb", buffering=0)
-          greeting = json.loads(stream.readline())
-          if "QMP" not in greeting:
-              raise SystemExit(f"Unexpected QMP greeting: {greeting!r}")
-
-          def command(name, arguments=None):
-              request = {"execute": name}
-              if arguments is not None:
-                  request["arguments"] = arguments
-              stream.write(json.dumps(request).encode() + b"\r\n")
-              while True:
-                  response = json.loads(stream.readline())
-                  if "error" in response:
-                      raise SystemExit(f"QMP {name} failed: {response['error']}")
-                  if "return" in response:
-                      return response["return"]
-
-          command("qmp_capabilities")
-          command("input-send-event", {"events": [
-              {"type": "key", "data": {
-                  "down": True, "key": {"type": "qcode", "data": "a"}}}
-          ]})
-          time.sleep(0.25)
-          command("input-send-event", {"events": [
-              {"type": "key", "data": {
-                  "down": False, "key": {"type": "qcode", "data": "a"}}}
-          ]})
-          command("input-send-event", {"events": [
-              {"type": "rel", "data": {"axis": "x", "value": 80}},
-              {"type": "rel", "data": {"axis": "y", "value": 60}},
-              {"type": "btn", "data": {"down": True, "button": "left"}}
-          ]})
-          command("input-send-event", {"events": [
-              {"type": "btn", "data": {"down": False, "button": "left"}}
-          ]})
-          connection.close()
-          PY
+          # With a VNC display backend active, use QEMU's monitor input commands
+          # to generate keyboard and mouse events for the emulated USB devices.
+          {
+            printf 'info mice\nmouse_set 0\nsendkey a 250\n'
+            sleep 0.3
+            printf 'mouse_move 80 60\nmouse_button 1\nmouse_button 0\n'
+          } | timeout 4s socat -T 1 - "UNIX-CONNECT:$monitor"
 
           for attempt in $(seq 1 100); do
             keyboard_seen=0

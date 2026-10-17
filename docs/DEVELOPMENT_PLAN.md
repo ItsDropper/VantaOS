@@ -75,7 +75,7 @@ This roadmap prioritizes a trustworthy kernel over visual features. A Windows al
 - [x] Add QEMU tests for malformed GUI requests, invalid user pointers, and cleanup when a client exits.
 - [x] Implement bounded FAT32-backed regular-file create/write and user-mode write syscalls; verify the supported persistence path across a second boot.
 - [ ] Expand GUI regression coverage for click routing, focus transitions, queue overflow, close requests, and invalid event buffers.
-- [x] Add an initial static ELF64 ring-3 Settings app using the GUI ABI, with app-local accent/compact-row preferences and a FAT32-backed config file. Global desktop theming and broader malformed-config/error-path coverage remain incomplete.
+- [x] Migrate Settings to a static ELF64 ring-3 app with a versioned local config, interactive preferences, and tested second-boot persistence. The preferences currently apply only inside Settings.
 - [ ] Migrate File Explorer to user mode and support launching only validated ELF64 executables or documented application manifests.
 - [ ] Move Terminal's window, input, and presentation onto the same GUI API while keeping its shell in ring 3.
 - [ ] Implement RTC UTC/local policy and a timezone-rule service before claiming region-based local time or DST correctness.
@@ -89,5 +89,5 @@ This roadmap prioritizes a trustworthy kernel over visual features. A Windows al
 
 - Backup branch: `backup/pre-desktop-reliability-2026-10-15`.
 - Default branch: `master`.
-- Current user-mode status: static ELF64 execution, bounded process/file syscalls, and an initial process-owned GUI ABI are implemented. CI checks selected syscall, file-I/O, multi-cluster FAT32, GUI malformed-request, dead-window-cleanup, and second-boot persistence cases. This remains an early bring-up environment, not a stable application platform.
-- Current next milestone: expand GUI event/focus/input tests, then harden Settings configuration parsing and I/O failure behavior. The Settings app is an initial ring-3 ELF, but its preferences are app-local rather than global desktop settings. Date/time settings must wait for an explicit RTC policy and tested timezone conversion. See [User-space desktop applications](USERSPACE_GUI.md).
+- Current user-mode status: static ELF64 execution, bounded process/file syscalls, an initial process-owned GUI ABI, and the standalone ring-3 Settings app are implemented. CI checks selected syscall, file-I/O, multi-cluster FAT32, GUI malformed-request, dead-window-cleanup, Settings storage readback, and second-boot persistence cases. Settings preferences are app-local; Terminal's visible UI and File Explorer remain kernel-side. This remains an early bring-up environment, not a stable application platform.
+- Current next milestone: expand GUI event/focus/input tests and strengthen user-mode fault containment. Then migrate File Explorer and Terminal presentation to the GUI ABI. Date/time settings must wait for an explicit RTC policy and tested timezone conversion. See [User-space desktop applications](USERSPACE_GUI.md).

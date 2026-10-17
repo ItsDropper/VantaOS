@@ -295,20 +295,50 @@ static int command_mv(uint32_t argc, char **argv, int force)
         return 1;
     }
     int target = vfs_lookup(destination);
+    char backup[FS_PATH_MAX];
+    backup[0] = 0;
+    int backed_up = 0;
     if (target >= 0) {
         const fs_node_t *node = vfs_get_node((uint32_t)target);
         if (!force) {
             terminal_write("\nmv: destination exists; use -F to replace it");
             return 1;
         }
-        if (!node || node->type == FS_NODE_DIRECTORY ||
-            vfs_delete_path(destination) < 0) {
-            terminal_write("\nmv: cannot replace destination");
+        if (!node || node->type != FS_NODE_FILE) {
+            terminal_write("\nmv: only an existing file can be replaced");
             return 1;
         }
+        unsigned int n = 0;
+        while (destination[n] && n < FS_PATH_MAX - 1U) ++n;
+        static const char suffix[] = ".vanta-mv-backup";
+        unsigned int suffix_len = (unsigned int)(sizeof(suffix) - 1U);
+        if (n + suffix_len >= FS_PATH_MAX) {
+            terminal_write("\nmv: destination path too long for safe replacement");
+            return 1;
+        }
+        for (unsigned int i = 0; i < n; ++i) backup[i] = destination[i];
+        for (unsigned int i = 0; i <= suffix_len; ++i) backup[n + i] = suffix[i];
+        if (vfs_lookup(backup) >= 0) {
+            terminal_write("\nmv: safe replacement blocked; backup path already exists");
+            return 1;
+        }
+        if (vfs_rename_path(destination, backup) < 0) {
+            terminal_write("\nmv: could not stage existing destination");
+            return 1;
+        }
+        backed_up = 1;
     }
     if (vfs_rename_path(source, destination) < 0) {
-        terminal_write("\nmv: rename failed");
+        if (backed_up && vfs_rename_path(backup, destination) < 0)
+            terminal_write("\nmv: rename failed; previous destination remains at ");
+        else
+            terminal_write("\nmv: rename failed; destination restored");
+        if (backed_up && vfs_lookup(destination) < 0) terminal_write(backup);
+        return 1;
+    }
+    if (backed_up && vfs_delete_path(backup) < 0) {
+        terminal_write("\nmoved, but old destination backup remains at ");
+        terminal_write(backup);
         return 1;
     }
     terminal_write("\nmoved "); terminal_write(source);

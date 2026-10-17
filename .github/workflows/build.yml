@@ -87,7 +87,7 @@ jobs:
             -display vnc=127.0.0.1:0 \
             -serial stdio \
             -monitor "unix:$monitor,server=on,wait=off" \
-            -d guest_errors,unimp -D qemu-usb-debug.log \\
+            -d guest_errors,unimp -D qemu-usb-debug.log \
             -no-reboot >"$log" 2>qemu-usb-stderr.log &
           qemu_pid=$!
           cleanup() {

@@ -1,12 +1,19 @@
 #include "net.h"
 #include "net_arp.h"
 #include "net_ipv4.h"
+#include "spinlock.h"
+#include "timer.h"
 #include "serial.h"
 #include <stddef.h>
 #include <stdint.h>
 #define IPV4_ETHERTYPE 0x0800U
 #define IPV4_PROTOCOL_ICMP 1U
 #define IPV4_PROTOCOL_UDP 17U
+
+static spinlock_t ping_lock = SPINLOCK_INITIALIZER;
+static uint32_t ping_target;
+static uint16_t ping_identifier, ping_sequence;
+static uint8_t ping_active, ping_received;
 static uint16_t read_be16(const uint8_t* p){return (uint16_t)(((uint16_t)p[0]<<8)|p[1]);}
 static uint32_t read_be32(const uint8_t* p){return ((uint32_t)p[0]<<24)|((uint32_t)p[1]<<16)|((uint32_t)p[2]<<8)|p[3];}
 static void write_be16(uint8_t* p,uint16_t v){p[0]=(uint8_t)(v>>8);p[1]=(uint8_t)v;}
@@ -61,7 +68,17 @@ static void ipv4_receive(net_device_t* d,const uint8_t* frame,size_t length,
         net_udp_receive_ipv4(d,ip,ihl,total);
         return;
     }
-    if(icmp_length<8U||icmp[0]!=8U||icmp[1]!=0U||checksum(icmp,icmp_length)!=0U)return;
+    if(icmp_length<8U||checksum(icmp,icmp_length)!=0U)return;
+    if(icmp[0]==0U&&icmp[1]==0U){
+        uint64_t flags=spinlock_lock_irqsave(&ping_lock);
+        if(ping_active&&source_ip==ping_target&&
+           read_be16(icmp+4U)==ping_identifier&&
+           read_be16(icmp+6U)==ping_sequence)
+            ping_received=1U;
+        spinlock_unlock_irqrestore(&ping_lock,flags);
+        return;
+    }
+    if(icmp[0]!=8U||icmp[1]!=0U)return;
     uint8_t out[NET_ETHERNET_VLAN_HEADER_SIZE+NET_MTU_DEFAULT];
     for(uint32_t i=0;i<12U;i++)out[i]=frame[i];
     if(ethernet_header==NET_ETHERNET_VLAN_HEADER_SIZE){
@@ -136,4 +153,61 @@ int net_ipv4_send(net_device_t* device, uint32_t destination,
     for (size_t i = 0; i < payload_length; ++i) ip[20U + i] = input[i];
     return net_device_transmit(device, frame,
                                NET_ETHERNET_HEADER_SIZE + 20U + payload_length);
+}
+
+
+int net_ipv4_ping(net_device_t* device, uint32_t destination,
+                  uint32_t timeout_ms, uint32_t* elapsed_ms)
+{
+    if (!device || !device->link_up || timeout_ms < 100U ||
+        timeout_ms > 30000U || !device->ipv4_configured ||
+        !unicast_ipv4(destination))
+        return 0;
+
+    uint64_t flags = spinlock_lock_irqsave(&ping_lock);
+    if (ping_active) {
+        spinlock_unlock_irqrestore(&ping_lock, flags);
+        return 0;
+    }
+    ping_target = destination;
+    ping_identifier = (uint16_t)(timer_get_ticks() ^ device->mac[1] ^
+                                 ((uint16_t)device->mac[3] << 8));
+    if (!ping_identifier) ping_identifier = 1U;
+    ping_sequence = (uint16_t)(timer_get_ticks() & 0xFFFFU);
+    ping_received = 0U;
+    ping_active = 1U;
+    uint16_t identifier = ping_identifier;
+    uint16_t sequence = ping_sequence;
+    spinlock_unlock_irqrestore(&ping_lock, flags);
+
+    uint8_t packet[20] = {0};
+    packet[0] = 8U;
+    write_be16(packet + 4U, identifier);
+    write_be16(packet + 6U, sequence);
+    static const uint8_t marker[] = "VANTAOS-PING";
+    for (size_t i = 0; i < sizeof(marker) - 1U; ++i)
+        packet[8U + i] = marker[i];
+    write_be16(packet + 2U, checksum(packet, sizeof(packet)));
+
+    uint32_t start = timer_get_ticks();
+    int sent = net_ipv4_send(device, destination, IPV4_PROTOCOL_ICMP,
+                             packet, sizeof(packet));
+    uint32_t limit = timeout_ms / 10U;
+    while (sent && (uint32_t)(timer_get_ticks() - start) < limit) {
+        (void)net_poll(16U);
+        flags = spinlock_lock_irqsave(&ping_lock);
+        int received = ping_received != 0U;
+        spinlock_unlock_irqrestore(&ping_lock, flags);
+        if (received) break;
+        __asm__ volatile ("pause");
+    }
+
+    uint32_t elapsed = (timer_get_ticks() - start) * 10U;
+    flags = spinlock_lock_irqsave(&ping_lock);
+    int success = sent && ping_received != 0U;
+    ping_active = 0U;
+    ping_received = 0U;
+    spinlock_unlock_irqrestore(&ping_lock, flags);
+    if (success && elapsed_ms) *elapsed_ms = elapsed;
+    return success;
 }

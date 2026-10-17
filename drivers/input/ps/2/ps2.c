@@ -5,7 +5,7 @@
 static uint32_t keyboard_device_id;
 static uint32_t mouse_device_id;
 
-static const input_device_descriptor_t ps2_keyboard =
+static const input_device_descriptor_t ps2_keyboard = {
     .name = "PS/2 keyboard", .bus = INPUT_BUS_PS2, .kind = INPUT_DEVICE_KEYBOARD,
     .capabilities = INPUT_CAP_KEYBOARD_TEXT | INPUT_CAP_KEYBOARD_KEYS
 };

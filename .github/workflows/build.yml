@@ -661,7 +661,7 @@ jobs:
               -smp "${cpus}" \
               -m "${memory}M" \
               -drive file=VantaOS.iso,media=cdrom,format=raw \
-              -drive file=vantaos.img,if=ide,format=raw \
+              -drive file=vantaos-regression.img,if=ide,format=raw \
               -boot order=d \
               -display none \
               -serial "file:${log}" \

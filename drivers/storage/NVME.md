@@ -1,6 +1,6 @@
 # NVMe driver
 
-The NVMe driver is a kernel-mode PCI driver that exposes supported NVMe namespaces through the generic block-device registry.
+The NVMe driver discovers PCI NVMe controllers and registers supported namespaces as generic block devices. FAT32 consumes the same block-device interface for NVMe and ATA; controller-specific commands stay inside each driver.
 
 ## Implemented data path
 
@@ -12,8 +12,15 @@ The NVMe driver is a kernel-mode PCI driver that exposes supported NVMe namespac
 - Direct DMA from validated, mapped caller buffers when every page is present, addressable below 4 GiB, and writable when the controller will write into it; falls back to preallocated DMA buffers when direct mapping is unsafe or unavailable.
 - PRP1/PRP2 and PRP-list construction for multi-page transfers. Each I/O command can transfer up to 16 pages, capped further by Identify Controller MDTS.
 - Up to eight I/O commands are submitted per batch and the submission doorbell is rung once per batch. Completion queue entries are matched by command ID, so commands may complete out of submission order.
-- DMA buffers are preallocated per queue slot to avoid per-I/O allocation. The QEMU self-test exercises all eight slots, multi-page PRP lists, write/readback, flush, out-of-range rejection, and restoration of the scratch range.
-- DMA pages are not released after a controller reset timeout because the device may still own them.
+- DMA buffers are preallocated per queue slot to avoid per-I/O allocation. The QEMU driver self-test exercises multi-page transfers, write/readback, flush, out-of-range rejection, and restoration of the scratch range.
+
+## Filesystem integration
+
+- ATA and NVMe expose block_device_t objects through block_device_register(). Filesystem code must not call controller APIs directly.
+- FAT32 requires 512-byte logical sectors and writable devices. It validates MBR partition extents and FAT32 volume geometry against the selected device's reported capacity, using overflow-safe intermediate arithmetic.
+- FAT32 probes all registered eligible devices. It mounts only when exactly one device contains a valid FAT32 volume. If multiple devices contain valid volumes, mounting is refused rather than choosing by registry order. A volume can be selected deterministically by making it the only eligible FAT32 volume; explicit boot-volume identity is not implemented yet.
+- If no persistent volume is available, VantaOS retains its in-memory namespace. Kernel startup initializes ATA and NVMe before filesystem initialization; filesystem initialization does not reinitialize drivers.
+- The NVMe-only QEMU filesystem test attaches a disposable FAT32 image only as NVMe, asserts VANTAOS_FAT32_BACKEND_NVME_OK, exercises real filesystem mutations and multi-cluster I/O, reboots with the same image, and verifies the persisted file. The ATA regression matrix separately requires VANTAOS_FAT32_BACKEND_ATA_OK.
 
 ## Remaining production work
 
@@ -21,11 +28,11 @@ This is a substantial performance improvement, but it is **not yet a complete pr
 
 - Completion is still polled; MSI/MSI-X interrupts and interrupt-driven wait queues are not implemented.
 - The DMA layer is identity-mapped, below-4-GiB, cache-coherent x86 only. No IOMMU mapping, DMA mask negotiation, or high-memory support.
-- The direct-DMA fast path depends on the current x86 identity-mapped/below-4-GiB DMA contract. It falls back to preallocated DMA buffers and copies when a caller buffer cannot be safely mapped. Per-controller fallback-buffer memory is approximately 544 KiB for the eight slots at the current 16-page cap, plus queues and Identify data.
+- The direct-DMA fast path depends on the current x86 identity-mapped/below-4-GiB DMA contract. It falls back to preallocated DMA buffers and copies when a caller buffer cannot be safely mapped.
 - A single I/O queue is used; per-CPU/multi-queue scaling, queue affinity, and scheduler-aware blocking are not implemented.
 - Error handling fails closed on timeout, controller-fatal status, or queue corruption. Controller reset/reinitialization, namespace hotplug/rescan, power management, and telemetry are not implemented.
-- Filesystem-level crash consistency and write ordering are outside this block driver.
+- FAT32 operations flush each sector write for conservative durability; this is correct but expensive. Filesystem-level crash consistency and multi-sector transactions are not implemented.
 
-## Verification
+## Running the integration tests
 
-CI must pass before merge. The QEMU test uses a disposable NVMe scratch image, not the OS boot disk. It checks namespace discovery, batched multi-page read/write/readback, flush, range validation, and restores the scratch sectors after testing.
+Run the repository GitHub Actions workflow at .github/workflows/build.yml or manually reproduce the NVMe-only FAT32 filesystem integration and reboot persistence step. It copies the disposable CI image before attaching it to QEMU, does not use a real disk, requires explicit NVMe backend and filesystem success markers, and checks /VNTTEST.TXT after reboot using mcopy.

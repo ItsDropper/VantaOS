@@ -67,7 +67,7 @@ static void cache_learn(net_device_t* device, uint32_t address,
 {
     uint32_t now = timer_get_ticks();
     uint32_t selected = ARP_CACHE_CAPACITY;
-    uint32_t oldest = 0;
+    uint32_t least_remaining = UINT32_MAX;
     uint64_t flags = spinlock_lock_irqsave(&cache_lock);
     for (uint32_t i = 0; i < ARP_CACHE_CAPACITY; ++i) {
         if (cache[i].valid && cache[i].device == device &&
@@ -80,8 +80,9 @@ static void cache_learn(net_device_t* device, uint32_t address,
             selected = i;
             break;
         }
-        if ((int32_t)(cache[i].expires - oldest) > 0) {
-            oldest = cache[i].expires;
+        uint32_t remaining = cache[i].expires - now;
+        if (remaining < least_remaining) {
+            least_remaining = remaining;
             selected = i;
         }
     }
@@ -173,11 +174,10 @@ static void arp_receive(net_device_t* device, const uint8_t* frame,
         return;
     }
 
-    /* Learn from requests as well; this is useful for replies and avoids
-     * duplicate ARP requests when peers have already announced themselves. */
-    cache_learn(device, sender_ip, sender_mac);
     if (!net_device_get_ipv4(device, &local_ip, 0, 0) || target_ip != local_ip)
         return;
+    /* Only learn from requests addressed to us; unsolicited ARP is not trusted. */
+    cache_learn(device, sender_ip, sender_mac);
 
     uint8_t out[NET_ETHERNET_VLAN_HEADER_SIZE + 28U] = {0};
     for (uint32_t i = 0; i < 12U; ++i) out[i] = frame[i];

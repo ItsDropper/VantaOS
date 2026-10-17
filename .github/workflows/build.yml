@@ -648,6 +648,9 @@ jobs:
             VANTAOS_SCHEDULER_REAP_OK
           )
 
+          # Earlier device tests boot and mutate vantaos.img. Start this matrix from the pristine fixture.
+          cp nvme-fat32-template.img vantaos-regression.img
+
           for config in "256 1" "512 2" "512 4"; do
             read -r memory cpus <<< "$config"
             log="boot-${memory}m-${cpus}cpu.log"
@@ -814,7 +817,7 @@ jobs:
             -smp 2 \
             -vga std \
             -drive file=VantaOS.iso,media=cdrom,format=raw \
-            -drive file=vantaos.img,if=ide,format=raw \
+            -drive file=vantaos-regression.img,if=ide,format=raw \
             -boot order=d \
             -display sdl \
             -serial file:desktop-boot.log \

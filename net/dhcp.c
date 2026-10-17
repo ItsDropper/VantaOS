@@ -258,7 +258,8 @@ int net_dhcp_configure(net_device_t* device, uint32_t timeout_ms,
     int sent = 0;
     while ((uint32_t)(timer_get_ticks() - start) < timeout_ticks) {
         uint32_t now = timer_get_ticks();
-        if ((uint32_t)(now - next_retry) >= DHCP_RETRY_TICKS || !sent) {
+        if (!sent || (state.offered && !requested) ||
+            (uint32_t)(now - next_retry) >= DHCP_RETRY_TICKS) {
             uint8_t kind = state.offered ? DHCP_REQUEST : DHCP_DISCOVER;
             if (kind == DHCP_REQUEST) requested = 1U;
             sent = send_message(kind);

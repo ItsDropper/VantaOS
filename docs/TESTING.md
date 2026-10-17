@@ -35,6 +35,8 @@ On pushes to `master`, pull requests targeting the repository, and manual workfl
 | `VANTAOS_USER_FILE_RANGE_IO_OK` / `VANTAOS_FAT32_MULTICLUSTER_IO_OK` | User-mode range I/O and multi-cluster FAT32 reads/writes pass the targeted smoke assertions. |
 | `VANTAOS_FAT32_WRITE_READBACK_OK` / `VANTAOS_FAT32_REBOOT_PERSIST_OK` | The disposable FAT32 image passes write/readback and a second-boot persistence assertion. |
 | `VANTAOS_USER_GUI_SYSCALL_OK` | The ring-3 GUI smoke test passes its window/draw/event ABI checks, including malformed commands and invalid pointers. |
+| `VANTAOS_SETTINGS_STORAGE_OK` | The ring-3 Settings self-test writes its expected configuration, closes it, reopens it, and verifies the readback. |
+| `VANTAOS_SETTINGS_PERSIST_OK` | The Settings self-test found the expected configuration already present before rewriting it on the later boot, demonstrating the tested cross-boot persistence path. |
 | `VANTAOS_GUI_DEAD_OWNER_CLEANUP_OK` | A window owned by a terminated probe process is removed and its stale ID is rejected. |
 | `VANTAOS_VFS_HANDLE_GUARDS_OK` | Invalid VFS read/write/close handles are rejected. |
 | `VANTAOS_ARGV_STACK_OK` | The ring-3 smoke executable sees the expected argument count and validates `argv[1] = alpha` and `argv[2] = two words` from its initial stack. |
@@ -83,4 +85,4 @@ This test does not yet establish physical-hardware compatibility or complete rem
 - Real-device compatibility, USB/HID edge cases, NICs, Wi-Fi, audio, GPU acceleration, sleep/resume, and firmware variations.
 - Security auditing, fuzzing, sanitizers suitable for this freestanding target, and formal verification.
 
-The next useful test increments are a user-mode open/read/close round trip against a disposable FAT32 fixture, malformed ELF and invalid user-pointer tests, repeated scheduler stress, focused page-table/memory-manager invariants, and automated input/graphics checks. Tests should be added alongside each new subsystem instead of relying on a single boot marker.
+The next useful test increments are scripted GUI focus transitions, pointer click routing, queue overflow, close requests, and invalid event-buffer checks; malformed ELF and user-fault containment tests; repeated scheduler stress; and focused page-table/memory-manager invariants. Tests should be added alongside each new subsystem instead of relying on a single boot marker.

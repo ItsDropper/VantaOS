@@ -133,6 +133,20 @@ static void graphics_damage_clear(void)
         graphics_damage_bitmap[i] = 0U;
 }
 
+void graphics_invalidate_scene(void)
+{
+    graphics_scene_invalidated = 1;
+}
+
+/* Consume the scene invalidation once. Clock/taskbar updates can then redraw
+ * just their changed pixels without repainting the static wallpaper. */
+int graphics_take_scene_invalidation(void)
+{
+    int invalidated = graphics_scene_invalidated;
+    graphics_scene_invalidated = 0;
+    return invalidated;
+}
+
 static int graphics_ensure_backbuffer(uint32_t required_pages)
 {
     if (required_pages == 0U ||

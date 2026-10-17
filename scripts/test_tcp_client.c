@@ -22,6 +22,9 @@ static queued_packet_t queue[8];
 static size_t queue_head, queue_used;
 static uint32_t ticks;
 static uint32_t remote_sequence = 1000U;
+static int large_send_mode;
+static size_t large_send_bytes;
+static uint32_t large_send_segments;
 static const char response[] =
     "HTTP/1.0 200 OK\r\nContent-Length: 5\r\nConnection: close\r\n\r\nhello";
 

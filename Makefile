@@ -11,7 +11,7 @@ EFI_LDSCRIPT := $(firstword $(wildcard $(EFI_LIBDIR)/elf_x86_64_efi.lds /usr/lib
 
 CFLAGS   := -m64 -march=x86-64 -mtune=generic -ffreestanding -fno-pie \
             -fno-stack-protector -mno-red-zone -mgeneral-regs-only \
-            -nostdlib -Iinclude -MMD -MP
+            -nostdlib -Iinclude -Ithird_party/bearssl/inc -MMD -MP
 ASFLAGS  := -f elf64
 LDFLAGS  := -m elf_x86_64 --no-warn-rwx-segments -T build/linker.ld
 
@@ -29,7 +29,8 @@ include fs/Makefile
 include os/Makefile
 
 ASM_SOURCES := $(VANTAOS_BOOT_ASM) $(VANTAOS_ARCH_ASM)
-C_SOURCES   := $(VANTAOS_KERNEL_C) $(VANTAOS_ARCH_C) $(VANTAOS_MM_C) \
+VANTAOS_BEARSSL_C := $(shell find third_party/bearssl/src -type f -name '*.c' ! -name 'sysrng.c' 2>/dev/null)
+C_SOURCES   := $(VANTAOS_BEARSSL_C) $(VANTAOS_KERNEL_C) $(VANTAOS_ARCH_C) $(VANTAOS_MM_C) \
                $(VANTAOS_PROC_C) $(VANTAOS_SCHED_C) $(VANTAOS_TIME_C) \
                $(VANTAOS_DRIVER_C) $(VANTAOS_NET_DRIVER_C) $(VANTAOS_NET_C) $(VANTAOS_GRAPHICS_C) $(VANTAOS_FS_C) \
                $(VANTAOS_OS_C) $(VANTAOS_TERMINAL_C) $(VANTAOS_DESKTOP_C)

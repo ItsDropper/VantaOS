@@ -410,7 +410,7 @@ int main(int argc, char** argv)
             }
         }
         else if (key >= 32U && key <= 126U &&
-                 input_length < sizeof(line) - 1U)
+                 input_length + prompt_length < OUTPUT_COLUMNS - 1U)
         {
             line[input_length++] = (char)key;
             line[input_length] = '\0';

@@ -44,11 +44,15 @@ static void ipv4_receive(net_device_t* d,const uint8_t* frame,size_t length,
     if(fragments&0xBFFFU)return;
     if(ip[9]!=IPV4_PROTOCOL_ICMP&&ip[9]!=IPV4_PROTOCOL_UDP)return;
     uint32_t local_ip=0,local_mask=0,source_ip=read_be32(ip+12),dest_ip=read_be32(ip+16);
-    if(!net_device_get_ipv4(d,&local_ip,&local_mask,0)||dest_ip!=local_ip||
-       !unicast_ipv4(source_ip)||source_ip==local_ip||ip[8]<=1U||
+    int configured=net_device_get_ipv4(d,&local_ip,&local_mask,0);
+    int dhcp_broadcast=!configured&&ip[9]==IPV4_PROTOCOL_UDP&&
+        dest_ip==0xFFFFFFFFU&&total>=ihl+8U&&
+        read_be16(ip+ihl+2U)==68U;
+    if((!configured&&!dhcp_broadcast)||(configured&&dest_ip!=local_ip)||
+       !unicast_ipv4(source_ip)||(configured&&source_ip==local_ip)||ip[8]<=1U||
        !valid_source_mac(frame+6)||
-       ((source_ip&local_mask)==(local_ip&local_mask)&&
-        (((source_ip&~local_mask)==0U)||((source_ip&~local_mask)==~local_mask))))return;
+       (configured&&((source_ip&local_mask)==(local_ip&local_mask)&&
+        (((source_ip&~local_mask)==0U)||((source_ip&~local_mask)==~local_mask)))))return;
     size_t icmp_length=(size_t)total-ihl;
     const uint8_t* icmp=ip+ihl;
     if(ip[9]==IPV4_PROTOCOL_UDP){

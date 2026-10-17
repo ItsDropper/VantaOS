@@ -669,13 +669,15 @@ static int extract_file(const char* source_path)
 
 static int delete_tree(const char* path, unsigned int depth)
 {
-    if (depth >= 8U)
+    if (depth > 8U)
         return 0;
     vanta_file_info_t info;
     if (vanta_stat_path(path, &info) < 0)
         return 0;
     if (info.type == 2U)
     {
+        if (depth >= 8U)
+            return 0;
         char* listing = delete_list_buffers[depth];
         long bytes = vanta_listdir(path, listing, LIST_CAPACITY);
         if (bytes < 0)
@@ -722,7 +724,7 @@ static const char* path_leaf(const char* path)
 static int copy_tree(const char* source_path, const char* target_path,
                      unsigned int depth)
 {
-    if (depth >= 8U)
+    if (depth > 8U)
         return 0;
     vanta_file_info_t info;
     if (vanta_stat_path(source_path, &info) < 0)
@@ -733,7 +735,7 @@ static int copy_tree(const char* source_path, const char* target_path,
 
     if (info.type == 2U)
     {
-        if (vanta_create_directory(target_path) < 0)
+        if (depth >= 8U || vanta_create_directory(target_path) < 0)
             return 0;
         char* listing = copy_list_buffers[depth];
         long bytes = vanta_listdir(source_path, listing, LIST_CAPACITY);

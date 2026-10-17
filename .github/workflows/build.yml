@@ -204,6 +204,61 @@ jobs:
             exit 1
           fi
 
+      - name: NVMe-only FAT32 filesystem integration and reboot persistence
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Start from the disposable CI FAT32 image, but expose it only via
+          # NVMe. No IDE data disk is attached, so ATA cannot satisfy this test.
+          cp vantaos.img nvme-fat32.img
+          for boot in 1 2; do
+            log="nvme-fat32-boot-\${boot}.log"
+            set +e
+            timeout 35s qemu-system-x86_64 \
+              -machine pc \
+              -smp 2 \
+              -m 512M \
+              -drive file=VantaOS.iso,media=cdrom,format=raw \
+              -drive file=nvme-fat32.img,if=none,id=nvmefs,format=raw \
+              -device nvme,drive=nvmefs,serial=VANTAFS000001 \
+              -boot order=d \
+              -display none \
+              -serial "file:\${log}" \
+              -monitor none \
+              -no-reboot
+            result=$?
+            set -e
+            if [ "$result" -ne 124 ]; then
+              echo "NVMe-only filesystem QEMU exited early (boot $boot, exit $result)."
+              cat "$log" 2>/dev/null || true
+              exit 1
+            fi
+            sleep 1
+            for marker in VANTAOS_NVME_NAMESPACE_OK VANTAOS_NVME_IO_SELFTEST_OK \
+                          VANTAOS_FAT32_BACKEND_NVME_OK VANTAOS_FAT32_BLOCK_DEVICE_MOUNT_OK \
+                          VANTAOS_FILESYSTEM_NAMESPACE_OK VANTAOS_FAT32_WRITE_READBACK_OK \
+                          VANTAOS_FAT32_MULTICLUSTER_IO_OK VANTAOS_FILESYSTEM_MUTATION_OK; do
+              if ! grep -q "$marker" "$log"; then
+                echo "Missing NVMe-backed filesystem assertion '$marker' on boot $boot."
+                cat "$log" 2>/dev/null || true
+                exit 1
+              fi
+            done
+            if grep -Eq '^VANTAOS_[A-Z0-9_]*_FAIL' "$log"; then
+              echo "NVMe-backed filesystem self-test failed on boot $boot."
+              cat "$log"
+              exit 1
+            fi
+            if [ "$boot" -eq 2 ] && ! grep -q 'VANTAOS_FAT32_REBOOT_PERSIST_OK' "$log"; then
+              echo "File written through NVMe-backed FAT32 did not survive reboot."
+              cat "$log"
+              exit 1
+            fi
+          done
+          mcopy -i nvme-fat32.img ::/VNTTEST.TXT /tmp/nvme-fat32-persisted.txt
+          grep -qx 'VANTAOS_FAT32_WRITE_OK' /tmp/nvme-fat32-persisted.txt
+          echo "NVMe-only FAT32 operations and reboot persistence passed."
+
       - name: QEMU boot and regression tests at multiple memory sizes
         shell: bash
         run: |

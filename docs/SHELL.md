@@ -22,8 +22,8 @@ The ring-3 terminal shell uses a bounded command buffer and argument parser. Quo
 
 ## Network commands
 
-- `net` / `net status` lists registered network devices, link state, MTU, MAC, configured IPv4 address, and RX/TX counters.
+- `net connect [index]` (alias `net dhcp [index]`) runs a bounded DHCPv4 exchange on the selected link-up interface (or the first link-up interface), then configures its IPv4 address, netmask, gateway, and DNS server. It times out after 30 seconds and reports the result. It does not yet renew/expire leases or prove end-to-end Internet reachability.\n- `net` / `net status` lists registered network devices, link state, MTU, MAC, configured IPv4 address, and RX/TX counters.
 - `net poll` runs one bounded network poll cycle.
 - `net config <index> <ip> <netmask> <gateway>` configures a registered interface with a validated static IPv4 configuration.
 
-These commands are diagnostics/configuration, not an Internet client. The current stack includes E1000 polling, Ethernet/VLAN demultiplexing, ARP replies, IPv4 ICMP echo replies, and validated UDP receive callbacks. DHCP, DNS, UDP transmit, TCP, routing, sockets, and a general-purpose Internet login/connect flow are not implemented. A configured IP address is not evidence that a gateway or Internet route works.
+These commands provide diagnostics and DHCP/static configuration, but are not yet a general Internet client. The current stack includes E1000 polling, Ethernet/VLAN demultiplexing, ARP replies, IPv4 ICMP echo replies, and validated UDP receive callbacks. DHCP lease acquisition is implemented; DNS query resolution, UDP transmit for general clients, TCP, routing, sockets, and a general-purpose Internet login/connect flow are not implemented. A configured IP address is not evidence that a gateway or Internet route works.

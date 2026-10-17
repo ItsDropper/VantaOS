@@ -98,7 +98,7 @@ void filesystem_selftest_initialize(void)
      */
     if (fat32_is_mounted())
     {
-    if (filesystem_create_file("/BAD NAME.TXT") >= 0)
+    if (filesystem_create_file("/BAD:NAME.TXT") >= 0)
     {
         serial_write("VANTAOS_FAT32_NAME_GUARD_FAIL\n");
         return;

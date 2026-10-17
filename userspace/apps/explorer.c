@@ -1065,7 +1065,6 @@ static void render(void)
         int x = 8 + (int)col * 162;
         int y = 60 + row * 24;
         add_rect(x, y, 154, 20, COLOR_ROW);
-        add_outline(x, y, 154, 20, COLOR_BORDER);
         add_text(x + 6, y + 2, button_labels[i], COLOR_TEXT);
     }
 
@@ -1110,30 +1109,9 @@ static void render(void)
         add_text(164, y, entry_is_directory[index] ? "[D]" : "[F]",
                  entry_is_directory[index] ? COLOR_ACCENT : COLOR_MUTED);
         add_text_tail(190, y, entries[index], COLOR_TEXT, 48U);
-        if (entry_is_directory[index])
-            add_text(600, y, "Folder", COLOR_MUTED);
-        else
-        {
-            char path[PATH_CAPACITY];
-            vanta_file_info_t info;
-            if (build_entry_path(index, path, sizeof(path)) &&
-                vanta_stat_path(path, &info) == 0)
-            {
-                char size_text[32];
-                size_t pos = 0U;
-                uint32_t size = info.size;
-                char reverse[12];
-                size_t digits = 0U;
-                do { reverse[digits++] = (char)('0' + size % 10U); size /= 10U; }
-                while (size && digits < sizeof(reverse));
-                while (digits) size_text[pos++] = reverse[--digits];
-                size_text[pos] = '\0';
-                (void)append_text(size_text, sizeof(size_text), " B");
-                add_text(600, y, size_text, COLOR_MUTED);
-            }
-            else
-                add_text(600, y, "File", COLOR_MUTED);
-        }
+        add_text(600, y, entry_is_directory[index] ? "Folder" :
+                 ends_with_ci(entries[index], ".VZA") ? "Archive" : "File",
+                 entry_is_directory[index] ? COLOR_ACCENT : COLOR_MUTED);
     }
     if (visible_count == 0U)
         add_text(166, 156, search_query[0] ? "No matching items" : "This folder is empty",
@@ -1208,8 +1186,14 @@ static void render(void)
         add_outline(164, 118, 420, 230, COLOR_ACCENT);
         add_text(178, 128, "File properties", COLOR_TEXT);
         add_text_tail(178, 154, properties_info.name, COLOR_ACCENT, 60U);
-        add_text(178, 178, properties_info.type == 2U ? "Type: Folder" : "Type: File",
-                 COLOR_TEXT);
+        add_text(178, 178, properties_info.type == 2U ? "Type: Folder" :
+                 ends_with_ci(properties_info.name, ".VZA") ? "Type: Vanta RLE archive" :
+                 "Type: File", COLOR_TEXT);
+        const char* dot = properties_info.name;
+        for (size_t i = 0; properties_info.name[i]; i++)
+            if (properties_info.name[i] == '.') dot = properties_info.name + i + 1U;
+        if (dot != properties_info.name)
+            add_text_tail(178, 202, dot, COLOR_MUTED, 60U);
         char size_text[64] = "Size: ";
         char reverse[16];
         size_t digits = 0U;
@@ -1223,8 +1207,8 @@ static void render(void)
             size_text[used + 1U] = '\0';
         }
         (void)append_text(size_text, sizeof(size_text), " bytes");
-        add_text(178, 202, size_text, COLOR_TEXT);
-        add_text_tail(178, 226, properties_path, COLOR_MUTED, 60U);
+        add_text(178, 226, size_text, COLOR_TEXT);
+        add_text_tail(178, 250, properties_path, COLOR_MUTED, 60U);
         add_text(178, 320, "Enter or Esc closes properties", COLOR_MUTED);
     }
 

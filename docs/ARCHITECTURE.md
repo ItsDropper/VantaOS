@@ -51,7 +51,9 @@ The two boot paths are not interchangeable evidence: a successful GRUB boot does
 | `mm/tlb_shootdown.c` | Serialized cross-CPU invalidation requests, acknowledgement handling, and fail-closed diagnostics. |
 | `mm/user_mapping.c` | User page-table allocation/walking and validated map/unmap lifecycle. |
 | `mm/paging_internal.h` | Private paging implementation contract shared by paging modules. |
-| `drivers/` | Keyboard/mouse input, PCI enumeration, and ATA storage driver code. |
+| `drivers/` | Input, PCI enumeration, USB, storage, and hardware-driver registries. |
+| `drivers/network/` | PCI network-driver matching and binding framework; concrete NIC drivers are not implemented yet. |
+| `net/` | Bounded network-device registry, receive queue, and Ethernet-II demultiplexer; see [Networking architecture](NETWORKING.md). |
 | `fs/` | Filesystem namespace, FAT32 read path, and VFS handles. |
 | `fs/fat32_lfn.c` | FAT32 long-filename sequence validation and UTF-16-to-UTF-8 decoding. |
 | `os/terminal/` | Terminal, shell, and commands. |
@@ -75,6 +77,10 @@ Paging establishes identity mappings for low memory and high virtual windows use
 ## Filesystem and VFS
 
 The filesystem builds an in-memory namespace such as `/system`, `/home/user`, and `/etc`, and can import directory entries when FAT32 mounting succeeds. The VFS provides lookup/list/open/read/write/close interfaces and bounded open-file slots. User processes have a small per-process descriptor table and bounded syscalls for read/write/close, directory listing, and regular-file creation. FAT32 supports conservative 8.3 file writes and range-based multi-cluster I/O; CI checks write/readback and a second-boot persistence marker. This does not provide long-filename writes, directory creation, rename/delete, crash-atomic replacement, or general corruption recovery.
+
+## Networking foundation
+
+The initial networking core has a bounded device registry, synchronous TX contract, allocation-free bounded RX ingress queue, per-device counters, Ethernet-II EtherType dispatch, and PCI driver matching. It deliberately has no concrete NIC or IP protocol yet. See [Networking architecture](NETWORKING.md) for ownership and execution-context constraints.
 
 ## Graphics and input
 

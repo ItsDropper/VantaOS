@@ -1,0 +1,49 @@
+#include "selftest.h"
+#include "net.h"
+#include "serial.h"
+#include <stdint.h>
+#include <stddef.h>
+#ifdef VANTAOS_SELF_TEST
+static uint32_t mock_tx_count;
+static uint16_t received_type;
+static size_t received_header,received_length;
+static int mock_transmit(net_device_t* d,const uint8_t* frame,size_t len) {
+    (void)d;if(!frame||len<NET_ETHERNET_HEADER_SIZE)return 0;++mock_tx_count;return 1;
+}
+static void mock_handler(net_device_t* d,const uint8_t* frame,size_t len,uint16_t type,size_t header,void* ctx) {
+    (void)d;(void)frame;(void)ctx;received_type=type;received_header=header;received_length=len;
+}
+void network_framework_selftest(void) {
+    static const net_device_ops_t ops={.transmit=mock_transmit};
+    net_device_t d={.name="nettest0",.mac={0x02,0,0,0,0,1},.mtu=NET_MTU_DEFAULT,.link_up=1,.ops=&ops};
+    uint8_t frame[NET_ETHERNET_HEADER_SIZE+4]={0x02,0,0,0,0,2,0x02,0,0,0,0,1,0x88,0xB5,0x56,0x41,0x4E,0x54};
+    uint8_t vlan[NET_ETHERNET_VLAN_HEADER_SIZE+4]={0x02,0,0,0,0,2,0x02,0,0,0,0,1,0x81,0x00,0,1,0x88,0xB5,0x56,0x41,0x4E,0x54};
+    uint8_t short_frame[13]={0};
+    mock_tx_count=0;received_type=0;received_header=received_length=0;
+    int ok=net_device_register(&d);
+    ok=ok&&net_device_count()>0&&net_device_get(0)!=0;
+    ok=ok&&net_ethernet_handler_register(0x88B5U,mock_handler,0);
+    ok=ok&&net_device_transmit(&d,frame,sizeof(frame))&&mock_tx_count==1;
+    ok=net_device_set_link(&d,0)&&ok;
+    ok=!net_device_transmit(&d,frame,sizeof(frame))&&ok;
+    ok=net_device_set_link(&d,1)&&ok;
+    ok=net_receive_frame(&d,frame,sizeof(frame))&&ok;
+    ok=net_poll(1)==1&&ok;
+    ok=received_type==0x88B5U&&received_header==NET_ETHERNET_HEADER_SIZE&&received_length==sizeof(frame)&&ok;
+    ok=net_receive_frame(&d,vlan,sizeof(vlan))&&ok;
+    ok=net_poll(1)==1&&ok;
+    ok=received_type==0x88B5U&&received_header==NET_ETHERNET_VLAN_HEADER_SIZE&&received_length==sizeof(vlan)&&ok;
+    ok=!net_receive_frame(&d,short_frame,sizeof(short_frame))&&ok;
+    for(uint32_t i=0;i<NET_RX_QUEUE_CAPACITY;i++)ok=net_receive_frame(&d,frame,sizeof(frame))&&ok;
+    ok=!net_device_unregister(&d)&&ok; /* queued frames pin the device descriptor */
+    ok=!net_receive_frame(&d,frame,sizeof(frame))&&ok; /* bounded queue reports overflow */
+    ok=net_poll(NET_RX_QUEUE_CAPACITY)==NET_RX_QUEUE_CAPACITY&&ok;
+    net_device_stats_t stats;
+    ok=net_device_get_stats(&d,&stats)&&ok;
+    ok=stats.tx_frames==1&&stats.tx_errors==1&&stats.rx_frames==2+NET_RX_QUEUE_CAPACITY&&
+       stats.rx_dropped==1&&stats.rx_malformed==1&&ok;
+    ok=net_ethernet_handler_unregister(0x88B5U,mock_handler,0)&&ok;
+    ok=net_device_unregister(&d)&&ok;
+    serial_write(ok?"VANTAOS_NETWORK_FRAMEWORK_OK\n":"VANTAOS_NETWORK_FRAMEWORK_FAIL\n");
+}
+#endif

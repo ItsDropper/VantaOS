@@ -919,25 +919,57 @@ static int fat32_parent_and_leaf(const char* path, uint32_t* parent, uint8_t lea
         component[length] = 0;
         cursor += length;
         while (*cursor == '/') cursor++;
+
+        uint8_t short_alias[11];
+        int valid_short = fat32_make_short_name(component, short_alias);
         if (!*cursor)
         {
+            if (valid_short)
+            {
+                fat32_slot_t short_entry;
+                if (fat32_find_entry(directory, short_alias, &short_entry) &&
+                    short_entry.found)
+                {
+                    for (unsigned int i = 0; i < 11U; i++)
+                        leaf[i] = short_alias[i];
+                    *parent = directory;
+                    return 1;
+                }
+            }
             fat32_slot_t existing;
             if (fat32_find_component(directory, component, &existing, leaf))
             {
                 *parent = directory;
                 return 1;
             }
-            if (fat32_make_short_name(component, leaf) ||
-                fat32_make_alias(directory, component, leaf))
+            if (valid_short)
+            {
+                for (unsigned int i = 0; i < 11U; i++)
+                    leaf[i] = short_alias[i];
+                *parent = directory;
+                return 1;
+            }
+            if (fat32_make_alias(directory, component, leaf))
             {
                 *parent = directory;
                 return 1;
             }
             return 0;
         }
+
         fat32_slot_t found;
-        uint8_t alias[11];
-        if (!fat32_find_component(directory, component, &found, alias) ||
+        uint8_t found_alias[11];
+        if (valid_short &&
+            fat32_find_entry(directory, short_alias, &found) && found.found)
+        {
+            if (!(found.attributes & 0x10U) ||
+                found.first_cluster < 2U ||
+                found.first_cluster > cluster_count + 1U)
+                return 0;
+            directory = found.first_cluster;
+            continue;
+        }
+        if (!fat32_find_component(directory, component, &found, found_alias) ||
             !(found.attributes & 0x10U) ||
             found.first_cluster < 2U ||
             found.first_cluster > cluster_count + 1U)

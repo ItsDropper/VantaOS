@@ -356,7 +356,8 @@ int net_tcp_send(net_device_t *device, const void *data, size_t length,
                  uint32_t timeout_ms)
 {
     if (!device || device != client.device || client.state != TCP_ESTABLISHED ||
-        !data || !length || timeout_ms < 100U || timeout_ms > 30000U)
+        device->mtu < 40U || !data || !length ||
+        timeout_ms < 100U || timeout_ms > 30000U)
         return 0;
 
     const uint8_t *bytes = (const uint8_t *)data;

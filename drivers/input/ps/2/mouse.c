@@ -418,40 +418,35 @@ void mouse_inject_usb_report(int delta_x, int delta_y,
 
 bool mouse_has_event(void)
 {
-    return mouse_wheel_delta != 0 ||
-           mouse_moved != 0 ||
-           mouse_clicked != 0;
+    return __atomic_load_n(&mouse_wheel_delta, __ATOMIC_ACQUIRE) != 0 ||
+           __atomic_load_n(&mouse_moved, __ATOMIC_ACQUIRE) != 0 ||
+           __atomic_load_n(&mouse_clicked, __ATOMIC_ACQUIRE) != 0;
 }
 
 bool mouse_has_click_event(void)
 {
-    return mouse_clicked != 0;
+    return __atomic_load_n(&mouse_clicked, __ATOMIC_ACQUIRE) != 0;
 }
 
 bool mouse_has_move_event(void)
 {
-    return mouse_moved != 0;
+    return __atomic_load_n(&mouse_moved, __ATOMIC_ACQUIRE) != 0;
 }
 
 void mouse_clear_event_flags(void)
 {
-    mouse_moved = 0;
-    mouse_clicked = 0;
+    __atomic_store_n(&mouse_moved, 0, __ATOMIC_RELEASE);
+    __atomic_store_n(&mouse_clicked, 0, __ATOMIC_RELEASE);
 }
 
 bool mouse_has_wheel_event(void)
 {
-    return mouse_wheel_delta != 0;
+    return __atomic_load_n(&mouse_wheel_delta, __ATOMIC_ACQUIRE) != 0;
 }
 
 int mouse_get_wheel_delta(void)
 {
-    int delta =
-        mouse_wheel_delta;
-
-    mouse_wheel_delta = 0;
-
-    return delta;
+    return __atomic_exchange_n(&mouse_wheel_delta, 0, __ATOMIC_ACQ_REL);
 }
 
 void mouse_process_events(void)

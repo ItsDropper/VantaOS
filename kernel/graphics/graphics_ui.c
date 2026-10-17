@@ -221,9 +221,12 @@ void graphics_present(void)
     int h = (int)framebuffer_height;
     int taskbar_y = h - 64;
 
-    graphics_draw_desktop_backdrop(w, h);
-    if (active_panel == 0)
-        graphics_draw_desktop_dashboard(w, h);
+    if (graphics_take_scene_invalidation())
+    {
+        graphics_draw_desktop_backdrop(w, h);
+        if (active_panel == 0)
+            graphics_draw_desktop_dashboard(w, h);
+    }
 
     if (active_panel == 4)
     {

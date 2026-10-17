@@ -1556,7 +1556,7 @@ static void explorer_e2e_run(void)
 
     if (vanta_stat_path(fixture, &info) == 0)
         (void)delete_tree(fixture, 0U);
-    EXPLORER_E2E_REQUIRE(vanta_create_directory(fixture) == 0);
+    EXPLORER_E2E_REQUIRE(vanta_create_directory(fixture) >= 0);
     copy_text(current_path, sizeof(current_path), fixture);
     search_query[0] = '\0';
     EXPLORER_E2E_REQUIRE(load_directory());

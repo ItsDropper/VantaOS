@@ -9,22 +9,37 @@
 #include "usb.h"
 #include "net.h"
 #include "serial.h"
+#include "interrupts.h"
 
 static uint32_t desktop_pid;
 
 void desktop_process_main(void)
 {
     serial_write("VANTAOS_DESKTOP_INPUT_LOOP_ONLINE\n");
+    uint32_t last_network_tick = interrupts_get_ticks();
     while (1)
     {
-        /* xHCI is polled, not interrupt-driven: consume transfer events and
-           dispatch pending HID reports before the desktop reads input. */
-        usb_poll();
-        (void)net_poll(32U);
+        /*
+         * Keep latency-sensitive input and frame presentation ahead of
+         * polled devices. A large network-poll budget here used to let a
+         * burst of RX work monopolize the desktop task, making both pointer
+         * motion and keyboard interaction appear delayed in QEMU.
+         *
+         * USB and networking are polled with bounded work after the UI step.
+         * The network stack gets at most one unit of work per timer tick.
+         */
         mouse_process_events();
         terminal_process_set_input_enabled(graphics_get_active_panel() == 3);
         desktop_update();
         file_explorer_process_step();
+
+        usb_poll();
+        uint32_t tick = interrupts_get_ticks();
+        if (tick != last_network_tick)
+        {
+            last_network_tick = tick;
+            (void)net_poll(1U);
+        }
         __asm__ volatile ("hlt");
     }
 }

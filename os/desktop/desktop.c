@@ -85,7 +85,7 @@ void desktop_present(void)
 
 void desktop_update(void)
 {
-    usb_poll();
+    /* USB polling is owned by desktop_process_main after frame/input work. */
     gui_server_cleanup_dead_windows();
 
     /* The physical Super/GUI key is a desktop shortcut, not text input. */

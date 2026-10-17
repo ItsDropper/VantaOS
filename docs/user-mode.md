@@ -8,7 +8,7 @@ The scheduler enters user mode with `CS=0x23` and `SS=0x1B`. Each process has a 
 
 ## Freestanding C syscall interface
 
-Include `<vanta/syscall.h>` from `userspace/include`. It provides inline wrappers for the current syscall ABI and can be used without libc or a runtime startup object. The ABI version macro is `VANTA_USER_ABI_VERSION` (currently `4`).
+Include `<vanta/syscall.h>` from `userspace/include`. It provides inline wrappers for the current syscall ABI and can be used without libc or a runtime startup object. The ABI version macro is `VANTA_USER_ABI_VERSION` (currently `6`).
 
 ```c
 #include <vanta/syscall.h>
@@ -48,8 +48,9 @@ Userspace enters through `int 0x80`. The syscall number is in `RAX`, arguments a
 | 17 | `vanta_gui_close_window(id)` | RDI: window ID | Zero |
 | 18 | `vanta_gui_draw(id, commands, count)` | RDI: window ID, RSI: command array, RDX: count | Commands retained |
 | 19 | `vanta_gui_poll_event(id, event)` | RDI: window ID, RSI: writable event pointer | One event, zero if empty |
+| 25 | `vanta_kernel_command(command, output, capacity)` | RDI: command, RSI: writable output, RDX: capacity | Captured output from the built-in kernel shell; restricted to the active built-in Terminal process |
 
-The current limits are 4096 bytes per read/write syscall, FAT32's 32-bit file-size ceiling (4 GiB minus 1 byte) subject to available volume capacity, eight per-process file descriptors beginning at 3, 16 arguments, 512 total argument bytes, and a 1 MiB executable-file limit in the shell launch path. User-mode writes currently support regular files with conservative 8.3 names. The GUI ABI is VantaOS-specific: eight windows, 24 retained draw commands per window, 31-byte titles, 63-byte text commands, and a 32-event queue that drops the oldest event on overflow. Only filled rectangles and text are drawable; window move/resize/minimize/maximize are not implemented. These GUI calls are implemented on `master`; CI covers the current smoke path and dead-owner cleanup, but not every focus/input edge case. `vanta_waitpid` accepts a null status pointer. A child with a live user parent remains a resource-free zombie until its exit status is collected.
+The `kernel <command>` Terminal command runs the existing kernel command dispatcher with ring-0 privileges; use it carefully. The syscall is limited to the active built-in Terminal PID and validates both user buffers. The current limits are 4096 bytes per read/write syscall, FAT32's 32-bit file-size ceiling (4 GiB minus 1 byte) subject to available volume capacity, eight per-process file descriptors beginning at 3, 16 arguments, 512 total argument bytes, and a 1 MiB executable-file limit in the shell launch path. User-mode writes currently support regular files with conservative 8.3 names. The GUI ABI is VantaOS-specific: eight windows, 24 retained draw commands per window, 31-byte titles, 63-byte text commands, and a 32-event queue that drops the oldest event on overflow. Only filled rectangles and text are drawable; window move/resize/minimize/maximize are not implemented. These GUI calls are implemented on `master`; CI covers the current smoke path and dead-owner cleanup, but not every focus/input edge case. `vanta_waitpid` accepts a null status pointer. A child with a live user parent remains a resource-free zombie until its exit status is collected.
 
 The syscall numbers and semantics are an **initial VantaOS ABI**, not a POSIX interface and not yet a long-term compatibility promise. Keep the public header, kernel dispatch, tests, and documentation synchronized when changing it.
 

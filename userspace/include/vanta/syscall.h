@@ -34,6 +34,7 @@
 #define VANTA_SYS_RENAME_PATH          22U
 #define VANTA_SYS_CREATE_DIRECTORY     23U
 #define VANTA_SYS_STAT_PATH            24U
+#define VANTA_SYS_KERNEL_COMMAND       25U
 
 #define VANTA_OPEN_READ      1
 #define VANTA_OPEN_WRITE     2
@@ -168,6 +169,13 @@ static inline long vanta_rename_path(const char* old_path, const char* new_path)
 {
     return vanta_syscall3(VANTA_SYS_RENAME_PATH, (uintptr_t)old_path,
                           (uintptr_t)new_path, 0U);
+}
+
+static inline long vanta_kernel_command(const char* command, char* output,
+                                        size_t capacity)
+{
+    return vanta_syscall3(VANTA_SYS_KERNEL_COMMAND, (uintptr_t)command,
+                          (uintptr_t)output, (uintptr_t)capacity);
 }
 
 static inline long vanta_stat_path(const char* path, vanta_file_info_t* info)

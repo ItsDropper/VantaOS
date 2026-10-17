@@ -5,6 +5,7 @@
 #define LINE_CAPACITY 256U
 #define LIST_CAPACITY 2048U
 #define IO_CHUNK 256U
+#define KERNEL_OUTPUT_CAPACITY 2048U
 #define OUTPUT_LINES 80U
 #define OUTPUT_COLUMNS (VANTA_GUI_TEXT_MAX + 1U)
 #define DISPLAY_LINES 13U
@@ -21,6 +22,7 @@ static vanta_theme_t current_theme;
 static char line[LINE_CAPACITY];
 static char list_buffer[LIST_CAPACITY];
 static char io_buffer[IO_CHUNK];
+static char kernel_output[KERNEL_OUTPUT_CAPACITY];
 static char output[OUTPUT_LINES][OUTPUT_COLUMNS];
 static size_t output_count = 1U;
 static size_t input_length;
@@ -158,7 +160,7 @@ static void render(void)
     command_count = 0U;
     render_add_rect(8, 8, 720, 330, COLOR_SURFACE);
     render_add_rect(8, 8, 720, 2, COLOR_ACCENT);
-    render_add_text(16, 16, "VantaOS Terminal | user-mode shell", COLOR_TEXT);
+    render_add_text(16, 16, "VantaOS Terminal | user + kernel shell", COLOR_TEXT);
 
     size_t end = output_count - output_scroll_offset;
     size_t first = end > DISPLAY_LINES ? end - DISPLAY_LINES : 0U;
@@ -185,8 +187,8 @@ static void prompt(void)
 
 static void command_help(void)
 {
-    write_text("Commands: help, about, pwd, ls [path], cat <path>, echo <text>, exec <elf> [args...], clear, exit\n");
-    write_text("Programs are static ELF64 files executed in ring 3.\n");
+    write_text("Commands: help, about, pwd, ls [path], cat <path>, echo <text>, exec <elf> [args...], kernel <command>, clear, exit\n");
+    write_text("kernel <command> runs built-in kernel commands with full privileges.\n");
 }
 
 static void command_list(const char* path)
@@ -300,6 +302,38 @@ static void command_exec(char* command)
     write_text("\n");
 }
 
+static void command_kernel(const char* command)
+{
+    long result = vanta_kernel_command(command, kernel_output,
+                                       sizeof(kernel_output));
+    if (result < 0)
+    {
+        write_text("kernel: command rejected or failed (");
+        if (result == -1)
+            write_text("terminal process required");
+        else if (result == -22)
+            write_text("invalid command or output size");
+        else if (result == -14)
+            write_text("invalid memory range");
+        else
+            write_text("kernel error");
+        write_text(")\n");
+        return;
+    }
+
+    size_t length = (size_t)result;
+    if (length >= sizeof(kernel_output))
+        length = sizeof(kernel_output) - 1U;
+    kernel_output[length] = '\0';
+    /* The legacy kernel shell prints its own prompt; the GUI terminal owns
+       the visible prompt, so suppress that final prompt character. */
+    if (length > 0U && kernel_output[length - 1U] == '>')
+        kernel_output[--length] = '\0';
+    write_text(kernel_output);
+    if (length == 0U || kernel_output[length - 1U] != '\n')
+        write_text("\n");
+}
+
 static void execute_line(char* command)
 {
     while (*command == ' ')
@@ -326,6 +360,8 @@ static void execute_line(char* command)
     }
     else if (starts_with(command, "exec "))
         command_exec(command + 5);
+    else if (starts_with(command, "kernel "))
+        command_kernel(command + 7);
     else if (string_equals(command, "clear"))
     {
         for (size_t i = 0U; i < OUTPUT_LINES; i++)

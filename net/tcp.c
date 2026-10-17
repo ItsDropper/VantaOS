@@ -23,7 +23,7 @@ typedef struct {
     net_device_t *device;
     uint32_t remote_ip;
     uint32_t snd_una, snd_nxt, rcv_nxt;
-    uint16_t local_port, remote_port, peer_mss;
+    uint16_t local_port, remote_port, peer_mss, peer_window;
     uint8_t state, remote_fin, failed;
     uint8_t rx[NET_TCP_RX_CAPACITY];
     size_t rx_head, rx_used;

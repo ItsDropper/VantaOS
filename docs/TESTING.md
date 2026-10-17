@@ -31,7 +31,9 @@ On pushes to `master`, pull requests targeting the repository, and manual workfl
 | `VANTAOS_PROCESS_API_GUARDS_OK` | Selected invalid process API arguments are rejected. |
 | `VANTAOS_PROCESS_NAME_OK` | An overlong process name remains null-terminated at the maximum name index. |
 | `VANTAOS_PROCESS_STATE_TRANSITIONS_OK` | A test process transitions through ready, running, sleeping, wake-up, and termination/reaping paths. |
-| `VANTAOS_FILESYSTEM_MUTATION_OK` | The disposable FAT32 image supports creating a directory and long-named file, renaming it with a changed extension, resolving the new name, and deleting both file and empty directory. |\n| `VANTAOS_FILESYSTEM_NAMESPACE_OK` | The filesystem/VFS initializes, root and standard directories can be resolved, a missing path stays missing, and root listing returns without error. |
+| `VANTAOS_FILESYSTEM_MUTATION_OK` | The disposable FAT32 image supports creating a directory and long-named file, renaming it with a changed extension, resolving the new name, and deleting both file and empty directory. |
+| `VANTAOS_FILESYSTEM_NAMESPACE_OK` | The filesystem/VFS initializes, root and standard directories can be resolved, a missing path stays missing, and root listing returns without error. |
+| `VANTAOS_FAT32_NAME_GUARDS_OK` | FAT32 filename mutation rejects the invalid names covered by the focused name-guard regression. |
 | `VANTAOS_USER_FILE_IO_OK` / `VANTAOS_USER_FILE_WRITE_OK` | The ring-3 smoke path validates file-descriptor read/write and bounded regular-file creation/write behavior for the test fixture. |
 | `VANTAOS_USER_FILE_RANGE_IO_OK` / `VANTAOS_FAT32_MULTICLUSTER_IO_OK` | User-mode range I/O and multi-cluster FAT32 reads/writes pass the targeted smoke assertions. |
 | `VANTAOS_FAT32_WRITE_READBACK_OK` / `VANTAOS_FAT32_REBOOT_PERSIST_OK` | The disposable FAT32 image passes write/readback and a second-boot persistence assertion. |
@@ -43,6 +45,8 @@ On pushes to `master`, pull requests targeting the repository, and manual workfl
 | `VANTAOS_GUI_DEAD_OWNER_CLEANUP_OK` | A window owned by a terminated probe process is removed and its stale ID is rejected. |
 | `VANTAOS_VFS_HANDLE_GUARDS_OK` | Invalid VFS read/write/close handles are rejected. |
 | `VANTAOS_ARGV_STACK_OK` | The ring-3 smoke executable sees the expected argument count and validates `argv[1] = alpha` and `argv[2] = two words` from its initial stack. |
+| `VANTAOS_ELF_VALIDATION_OK` | A zero-filled 64-byte buffer is rejected as an ELF image. This is a narrow invalid-magic smoke test, not comprehensive malformed-ELF coverage. |
+| `VANTAOS_USER_PROCESS_FAULT` | The expected ring-3 fault path was reached and handled as a user-process fault rather than a kernel panic; this marker alone does not prove arbitrary-fault containment. |
 | `VANTAOS_FILESYSTEM_EXEC_OK` | The FAT32-loaded user ELF reaches ring 3, performs the tested output calls, and reaches its expected completion marker. |
 | `VANTAOS_SCHEDULER_PROBE_OK` | The scheduler runs the dedicated kernel-mode probe entry. |
 | `VANTAOS_SCHEDULER_REAP_OK` | The observer sees the completed probe process removed from the process table. |
@@ -82,6 +86,7 @@ This test does not yet establish physical-hardware compatibility or complete rem
 
 - Exhaustive process-state combinations, sustained preemption stress, race conditions, or long-duration stability.
 - Exhaustive page-table permission tests, invalid syscall-pointer fuzzing, fault containment for arbitrary user programs, and adversarial process-to-process isolation tests.
+- Comprehensive malformed ELF program-header cases, overlapping segments, integer-boundary cases, and loader allocation-failure cleanup.
 - Physical-memory-map malformed-entry/overflow fuzzing, allocator fragmentation, allocation-failure recovery, and long-duration memory-pressure tests.
 - Exhaustive filesystem corruption and power-loss recovery; the CI persistence marker covers only the tested disposable-image round trip.
 - Pixel-level desktop correctness, end-to-end scripted mouse/keyboard interaction with the ring-3 apps, display modes, and full visual regression tests.

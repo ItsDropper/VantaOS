@@ -1,5 +1,36 @@
 #include "filesystem.h"
 
+/* All namespace-cache and FAT32 operations share mutable scratch buffers.
+ * Serialize public filesystem calls across CPUs; IRQ-save prevents local
+ * interrupt re-entry while a caller owns the lock. Internal calls use the
+ * unlocked helpers below so compound operations remain one transaction.
+ */
+#include "spinlock.h"
+static spinlock_t filesystem_lock = SPINLOCK_INITIALIZER;
+
+static void filesystem_initialize_unlocked(multiboot_info_t* mbd);
+static int filesystem_is_initialized_unlocked(void);
+static int filesystem_lookup_unlocked(const char* path);
+static const fs_node_t* filesystem_get_node_unlocked(uint32_t id);
+static int filesystem_list_unlocked(uint32_t directory_id, uint32_t* ids,
+                                    unsigned int capacity);
+static int filesystem_read_unlocked(uint32_t file_id, char* buffer,
+                                    unsigned int capacity);
+static int filesystem_read_range_unlocked(uint32_t file_id, uint32_t offset,
+                                          char* buffer, uint32_t length);
+static int filesystem_write_file_range_unlocked(const char* path,
+    uint32_t offset, const char* data, uint32_t length);
+static int filesystem_create_directory_unlocked(const char* path);
+static int filesystem_delete_path_unlocked(const char* path);
+static int filesystem_rename_path_unlocked(const char* old_path,
+                                           const char* new_path);
+static int filesystem_create_file_unlocked(const char* path);
+static int filesystem_write_file_unlocked(const char* path, const char* data);
+static int filesystem_file_exists_unlocked(const char* path);
+static int filesystem_ensure_directory_unlocked(const char* path);
+static uint32_t filesystem_root_unlocked(void);
+
+
 #include "ata.h"
 #include "fat32.h"
 #ifdef VANTAOS_SELF_TEST
@@ -197,7 +228,7 @@ static int fs_next_component(
     return 1;
 }
 
-void filesystem_initialize(multiboot_info_t* mbd)
+void filesystem_initialize_unlocked(multiboot_info_t* mbd)
 {
     (void)mbd;
 
@@ -207,7 +238,7 @@ void filesystem_initialize(multiboot_info_t* mbd)
     /*
      * The VantaOS namespace must exist even when the persistent disk
      * cannot be mounted. Explorer, the shell, and VFS all depend on
-     * filesystem_lookup() having a valid root and namespace.
+     * filesystem_lookup_unlocked() having a valid root and namespace.
      *
      * The root starts as an in-memory directory. If FAT32 mounts,
      * its real root cluster is attached below and the on-disk entries
@@ -236,7 +267,7 @@ void filesystem_initialize(multiboot_info_t* mbd)
          * Import the real FAT32 root first. This gives Explorer access to
          * files that were installed into vantaos.img by the build system.
          */
-        fs_load_directory(filesystem_root());
+        fs_load_directory(filesystem_root_unlocked());
     }
 
     /*
@@ -245,28 +276,28 @@ void filesystem_initialize(multiboot_info_t* mbd)
      * their children remain real FAT32 nodes rather than duplicate virtual
      * nodes.
      */
-    filesystem_ensure_directory("/system");
-    filesystem_ensure_directory("/system/drivers");
-    filesystem_ensure_directory("/system/devices");
-    filesystem_ensure_directory("/home");
-    filesystem_ensure_directory("/home/user");
-    filesystem_ensure_directory("/etc");
+    filesystem_ensure_directory_unlocked("/system");
+    filesystem_ensure_directory_unlocked("/system/drivers");
+    filesystem_ensure_directory_unlocked("/system/devices");
+    filesystem_ensure_directory_unlocked("/home");
+    filesystem_ensure_directory_unlocked("/home/user");
+    filesystem_ensure_directory_unlocked("/etc");
 }
 
-int filesystem_is_initialized(void)
+int filesystem_is_initialized_unlocked(void)
 {
     return initialized;
 }
 
-int filesystem_lookup(const char* path)
+int filesystem_lookup_unlocked(const char* path)
 {
     if (!initialized || !path)
         return -1;
 
     if (path[0] == 0 || (path[0] == '/' && path[1] == 0))
-        return (int)filesystem_root();
+        return (int)filesystem_root_unlocked();
 
-    uint32_t current = filesystem_root();
+    uint32_t current = filesystem_root_unlocked();
     const char* cursor = path;
     char component[FS_NAME_MAX + 1];
 
@@ -293,7 +324,7 @@ int filesystem_lookup(const char* path)
     return (int)current;
 }
 
-const fs_node_t* filesystem_get_node(uint32_t id)
+const fs_node_t* filesystem_get_node_unlocked(uint32_t id)
 {
     if (!initialized || id >= node_count)
         return 0;
@@ -301,7 +332,7 @@ const fs_node_t* filesystem_get_node(uint32_t id)
     return &nodes[id];
 }
 
-int filesystem_list(
+int filesystem_list_unlocked(
     uint32_t directory_id,
     uint32_t* ids,
     unsigned int capacity
@@ -311,7 +342,7 @@ int filesystem_list(
         return -1;
 
     const fs_node_t* directory =
-        filesystem_get_node(directory_id);
+        filesystem_get_node_unlocked(directory_id);
 
     if (!directory ||
         directory->type != FS_NODE_DIRECTORY)
@@ -340,7 +371,7 @@ int filesystem_list(
     return (int)count;
 }
 
-int filesystem_read(
+int filesystem_read_unlocked(
     uint32_t file_id,
     char* buffer,
     unsigned int capacity
@@ -366,7 +397,7 @@ int filesystem_read(
 }
 
 
-int filesystem_read_range(uint32_t file_id, uint32_t offset,
+int filesystem_read_unlocked_range(uint32_t file_id, uint32_t offset,
                           char* buffer, uint32_t length)
 {
     if (!initialized || file_id >= node_count || (length && !buffer))
@@ -395,10 +426,10 @@ static int fs_refresh_file_metadata(uint32_t id, const char* path)
         parent_path[i] = path[i];
     parent_path[parent_length] = 0;
 
-    int parent_id = filesystem_lookup(parent_path);
+    int parent_id = filesystem_lookup_unlocked(parent_path);
     if (parent_id < 0)
         return 0;
-    const fs_node_t* parent = filesystem_get_node((uint32_t)parent_id);
+    const fs_node_t* parent = filesystem_get_node_unlocked((uint32_t)parent_id);
     if (!parent || parent->type != FS_NODE_DIRECTORY ||
         parent->first_cluster < 2U)
         return 0;
@@ -419,14 +450,14 @@ static int fs_refresh_file_metadata(uint32_t id, const char* path)
     return 0;
 }
 
-int filesystem_write_file_range(const char* path, uint32_t offset,
+int filesystem_write_file_unlocked_range_unlocked(const char* path, uint32_t offset,
                                 const char* data, uint32_t length)
 {
     if (!initialized || !path || (length && !data) ||
         (uint64_t)offset + length > UINT32_MAX || !fat32_is_mounted())
         return -1;
 
-    int id = filesystem_lookup(path);
+    int id = filesystem_lookup_unlocked(path);
     if (id < 0 || nodes[id].type != FS_NODE_FILE)
         return -1;
     if (offset > nodes[id].size)
@@ -467,7 +498,7 @@ static int fs_split_parent(const char* path, char* parent_path,
 static int fs_find_disk_child(uint32_t parent_id, const char* name,
                               fat32_dirent_t* result)
 {
-    const fs_node_t* parent = filesystem_get_node(parent_id);
+    const fs_node_t* parent = filesystem_get_node_unlocked(parent_id);
     if (!parent || parent->type != FS_NODE_DIRECTORY ||
         parent->first_cluster < 2U)
         return 0;
@@ -486,16 +517,16 @@ static int fs_find_disk_child(uint32_t parent_id, const char* name,
     return 0;
 }
 
-int filesystem_create_directory(const char* path)
+int filesystem_create_directory_unlocked(const char* path)
 {
     if (!initialized || !path || !fat32_is_mounted() ||
-        filesystem_lookup(path) >= 0)
+        filesystem_lookup_unlocked(path) >= 0)
         return -1;
     char parent_path[FS_PATH_MAX];
     const char* leaf = 0;
     if (!fs_split_parent(path, parent_path, sizeof(parent_path), &leaf))
         return -1;
-    int parent_id = filesystem_lookup(parent_path);
+    int parent_id = filesystem_lookup_unlocked(parent_path);
     if (parent_id < 0 ||
         fat32_create_directory(path) < 0)
         return -1;
@@ -506,19 +537,19 @@ int filesystem_create_directory(const char* path)
                        disk_entry.first_cluster, 0U);
 }
 
-int filesystem_delete_path(const char* path)
+int filesystem_delete_path_unlocked(const char* path)
 {
     if (!initialized || !path || !fat32_is_mounted())
         return -1;
-    int id = filesystem_lookup(path);
-    if (id <= 0 || (uint32_t)id == filesystem_root())
+    int id = filesystem_lookup_unlocked(path);
+    if (id <= 0 || (uint32_t)id == filesystem_root_unlocked())
         return -1;
     fs_node_t* node = &nodes[id];
     if (node->type != FS_NODE_FILE && node->type != FS_NODE_DIRECTORY)
         return -1;
     if (node->type == FS_NODE_DIRECTORY)
     {
-        int children = filesystem_list((uint32_t)id, 0, 0U);
+        int children = filesystem_list_unlocked((uint32_t)id, 0, 0U);
         if (children != 0)
             return -1;
     }
@@ -529,20 +560,20 @@ int filesystem_delete_path(const char* path)
     return 0;
 }
 
-int filesystem_rename_path(const char* old_path, const char* new_path)
+int filesystem_rename_path_unlocked(const char* old_path, const char* new_path)
 {
     if (!initialized || !old_path || !new_path || !fat32_is_mounted())
     {
         FS_MUTATION_DIAG("VANTAOS_FS_RENAME_STAGE_1");
         return -1;
     }
-    int id = filesystem_lookup(old_path);
+    int id = filesystem_lookup_unlocked(old_path);
     if (id <= 0)
     {
         FS_MUTATION_DIAG("VANTAOS_FS_RENAME_STAGE_2");
         return -1;
     }
-    if (filesystem_lookup(new_path) >= 0)
+    if (filesystem_lookup_unlocked(new_path) >= 0)
     {
         FS_MUTATION_DIAG("VANTAOS_FS_RENAME_STAGE_3");
         return -1;
@@ -554,7 +585,7 @@ int filesystem_rename_path(const char* old_path, const char* new_path)
         FS_MUTATION_DIAG("VANTAOS_FS_RENAME_STAGE_4");
         return -1;
     }
-    int parent_id = filesystem_lookup(parent_path);
+    int parent_id = filesystem_lookup_unlocked(parent_path);
     if (parent_id < 0)
     {
         FS_MUTATION_DIAG("VANTAOS_FS_RENAME_STAGE_5");
@@ -570,10 +601,10 @@ int filesystem_rename_path(const char* old_path, const char* new_path)
     return 0;
 }
 
-int filesystem_create_file(const char* path)
+int filesystem_create_file_unlocked(const char* path)
 {
     if (!initialized || !path || !fat32_is_mounted() ||
-        filesystem_lookup(path) >= 0)
+        filesystem_lookup_unlocked(path) >= 0)
         return -1;
 
     if (fat32_create_file(path) < 0)
@@ -596,12 +627,12 @@ int filesystem_create_file(const char* path)
     for (unsigned int i = 0; i < n; i++) parent_path[i] = path[i];
     parent_path[n] = 0;
 
-    int parent_id = filesystem_lookup(parent_path);
+    int parent_id = filesystem_lookup_unlocked(parent_path);
     if (parent_id < 0) return -1;
     return fs_add_node((uint32_t)parent_id, FS_NODE_FILE, last + 1, 0, 0);
 }
 
-int filesystem_write_file(const char* path, const char* data)
+int filesystem_write_file_unlocked(const char* path, const char* data)
 {
     if (!initialized || !path || !data || !fat32_is_mounted())
         return -1;
@@ -610,11 +641,11 @@ int filesystem_write_file(const char* path, const char* data)
     while (data[size] && size < FS_FILE_MAX - 1U) size++;
     if (data[size] != 0) return -1;
 
-    int id = filesystem_lookup(path);
+    int id = filesystem_lookup_unlocked(path);
     if (id < 0)
     {
-        if (filesystem_create_file(path) < 0) return -1;
-        id = filesystem_lookup(path);
+        if (filesystem_create_file_unlocked(path) < 0) return -1;
+        id = filesystem_lookup_unlocked(path);
     }
     if (id < 0 || nodes[id].type != FS_NODE_FILE) return -1;
 
@@ -634,9 +665,9 @@ int filesystem_write_file(const char* path, const char* data)
         parent_path[i] = path[i];
     parent_path[parent_length] = 0;
 
-    int parent_id = filesystem_lookup(parent_path);
+    int parent_id = filesystem_lookup_unlocked(parent_path);
     if (parent_id < 0) return -1;
-    const fs_node_t* parent_node = filesystem_get_node((uint32_t)parent_id);
+    const fs_node_t* parent_node = filesystem_get_node_unlocked((uint32_t)parent_id);
     if (!parent_node || parent_node->type != FS_NODE_DIRECTORY ||
         parent_node->first_cluster < 2)
         return -1;
@@ -657,17 +688,17 @@ int filesystem_write_file(const char* path, const char* data)
     return refreshed ? (int)size : -1;
 }
 
-int filesystem_file_exists(const char* path)
+int filesystem_file_exists_unlocked(const char* path)
 {
-    return filesystem_lookup(path) >= 0;
+    return filesystem_lookup_unlocked(path) >= 0;
 }
 
-int filesystem_ensure_directory(const char* path)
+int filesystem_ensure_directory_unlocked(const char* path)
 {
     if (!initialized || !path || path[0] != '/')
         return -1;
 
-    uint32_t current = filesystem_root();
+    uint32_t current = filesystem_root_unlocked();
     const char* cursor = path;
     char component[FS_NAME_MAX + 1];
 
@@ -684,7 +715,7 @@ int filesystem_ensure_directory(const char* path)
         if (child >= 0)
         {
             const fs_node_t* node =
-                filesystem_get_node((uint32_t)child);
+                filesystem_get_node_unlocked((uint32_t)child);
 
             if (!node || node->type != FS_NODE_DIRECTORY)
                 return -1;
@@ -704,7 +735,139 @@ int filesystem_ensure_directory(const char* path)
     return (int)current;
 }
 
-uint32_t filesystem_root(void)
+uint32_t filesystem_root_unlocked(void)
 {
     return 0;
+}
+
+
+/* Public entry points are serialized; internal composition calls *_unlocked. */
+void filesystem_initialize(multiboot_info_t* mbd)
+{
+    uint64_t flags = spinlock_lock_irqsave(&filesystem_lock);
+    filesystem_initialize_unlocked(mbd);
+    spinlock_unlock_irqrestore(&filesystem_lock, flags);
+}
+
+int filesystem_is_initialized(void)
+{
+    uint64_t flags = spinlock_lock_irqsave(&filesystem_lock);
+    int result = filesystem_is_initialized_unlocked();
+    spinlock_unlock_irqrestore(&filesystem_lock, flags);
+    return result;
+}
+
+int filesystem_lookup(const char* path)
+{
+    uint64_t flags = spinlock_lock_irqsave(&filesystem_lock);
+    int result = filesystem_lookup_unlocked(path);
+    spinlock_unlock_irqrestore(&filesystem_lock, flags);
+    return result;
+}
+
+const fs_node_t* filesystem_get_node(uint32_t id)
+{
+    uint64_t flags = spinlock_lock_irqsave(&filesystem_lock);
+    const fs_node_t* result = filesystem_get_node_unlocked(id);
+    spinlock_unlock_irqrestore(&filesystem_lock, flags);
+    return result;
+}
+
+int filesystem_list(uint32_t directory_id, uint32_t* ids,
+                    unsigned int capacity)
+{
+    uint64_t flags = spinlock_lock_irqsave(&filesystem_lock);
+    int result = filesystem_list_unlocked(directory_id, ids, capacity);
+    spinlock_unlock_irqrestore(&filesystem_lock, flags);
+    return result;
+}
+
+int filesystem_read(uint32_t file_id, char* buffer, unsigned int capacity)
+{
+    uint64_t flags = spinlock_lock_irqsave(&filesystem_lock);
+    int result = filesystem_read_unlocked(file_id, buffer, capacity);
+    spinlock_unlock_irqrestore(&filesystem_lock, flags);
+    return result;
+}
+
+int filesystem_read_range(uint32_t file_id, uint32_t offset,
+                          char* buffer, uint32_t length)
+{
+    uint64_t flags = spinlock_lock_irqsave(&filesystem_lock);
+    int result = filesystem_read_range_unlocked(file_id, offset, buffer, length);
+    spinlock_unlock_irqrestore(&filesystem_lock, flags);
+    return result;
+}
+
+int filesystem_write_file_range(const char* path, uint32_t offset,
+                                const char* data, uint32_t length)
+{
+    uint64_t flags = spinlock_lock_irqsave(&filesystem_lock);
+    int result = filesystem_write_file_range_unlocked(path, offset, data, length);
+    spinlock_unlock_irqrestore(&filesystem_lock, flags);
+    return result;
+}
+
+int filesystem_create_directory(const char* path)
+{
+    uint64_t flags = spinlock_lock_irqsave(&filesystem_lock);
+    int result = filesystem_create_directory_unlocked(path);
+    spinlock_unlock_irqrestore(&filesystem_lock, flags);
+    return result;
+}
+
+int filesystem_delete_path(const char* path)
+{
+    uint64_t flags = spinlock_lock_irqsave(&filesystem_lock);
+    int result = filesystem_delete_path_unlocked(path);
+    spinlock_unlock_irqrestore(&filesystem_lock, flags);
+    return result;
+}
+
+int filesystem_rename_path(const char* old_path, const char* new_path)
+{
+    uint64_t flags = spinlock_lock_irqsave(&filesystem_lock);
+    int result = filesystem_rename_path_unlocked(old_path, new_path);
+    spinlock_unlock_irqrestore(&filesystem_lock, flags);
+    return result;
+}
+
+int filesystem_create_file(const char* path)
+{
+    uint64_t flags = spinlock_lock_irqsave(&filesystem_lock);
+    int result = filesystem_create_file_unlocked(path);
+    spinlock_unlock_irqrestore(&filesystem_lock, flags);
+    return result;
+}
+
+int filesystem_write_file(const char* path, const char* data)
+{
+    uint64_t flags = spinlock_lock_irqsave(&filesystem_lock);
+    int result = filesystem_write_file_unlocked(path, data);
+    spinlock_unlock_irqrestore(&filesystem_lock, flags);
+    return result;
+}
+
+int filesystem_file_exists(const char* path)
+{
+    uint64_t flags = spinlock_lock_irqsave(&filesystem_lock);
+    int result = filesystem_file_exists_unlocked(path);
+    spinlock_unlock_irqrestore(&filesystem_lock, flags);
+    return result;
+}
+
+int filesystem_ensure_directory(const char* path)
+{
+    uint64_t flags = spinlock_lock_irqsave(&filesystem_lock);
+    int result = filesystem_ensure_directory_unlocked(path);
+    spinlock_unlock_irqrestore(&filesystem_lock, flags);
+    return result;
+}
+
+uint32_t filesystem_root(void)
+{
+    uint64_t flags = spinlock_lock_irqsave(&filesystem_lock);
+    uint32_t result = filesystem_root_unlocked();
+    spinlock_unlock_irqrestore(&filesystem_lock, flags);
+    return result;
 }

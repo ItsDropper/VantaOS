@@ -444,6 +444,10 @@ static void gui_focus_input_regression_probe(void)
              event.type == VANTA_GUI_EVENT_POINTER_DOWN &&
              event.x == 32 && event.y == 30 && event.value == 1U && ok;
         ok = gui_server_poll_event(pid, (uint32_t)first, NULL) == -14 && ok;
+        ok = gui_server_mouse_click(window_x + 40, window_y + 80, 3) == 1 && ok;
+        ok = gui_server_poll_event(pid, (uint32_t)first, &event) == 1 &&
+             event.type == VANTA_GUI_EVENT_POINTER_DOWN &&
+             event.value == 3U && ok;
     }
 
     if (ok)

@@ -193,7 +193,11 @@ static int map_controller_bar(uint64_t physical_bar)
     return 1;
 }
 
-static void handle_interrupt_completion(uint32_t slot_id, uint32_t dci,\n                                       uint64_t trb_pointer, uint32_t status);\n\nstatic void consume_event_ring(void)\n{
+static void handle_interrupt_completion(uint32_t slot_id, uint32_t dci,
+                                       uint64_t trb_pointer, uint32_t status);
+
+static void consume_event_ring(void)
+{
     for (;;) {
         xhci_trb_t* event = &event_ring[event_dequeue];
         uint32_t control = __atomic_load_n(&event->control, __ATOMIC_ACQUIRE);
@@ -846,7 +850,9 @@ static int controller_start(const struct pci_device* pci)
 
     mmio_write64(operational, XHCI_DCBAAP, dcbaa_address);
     mmio_write64(operational, XHCI_CRCR, command_address | 1U);
-    if (max_slots > XHCI_MAX_SLOTS)\n        max_slots = XHCI_MAX_SLOTS;\n    mmio_write32(operational, XHCI_CONFIG, max_slots);
+    if (max_slots > XHCI_MAX_SLOTS)
+        max_slots = XHCI_MAX_SLOTS;
+    mmio_write32(operational, XHCI_CONFIG, max_slots);
 
     /* Polling mode: keep interrupter zero masked and publish one ERST segment. */
     mmio_write32(runtime, 0x20U, 0);

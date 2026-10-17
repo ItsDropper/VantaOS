@@ -69,3 +69,17 @@ const char* net_pci_bound_driver(const struct pci_device* dev) {
     for(uint32_t i=0;i<binding_count;i++) if(bindings[i].device==dev){name=bindings[i].driver->name;break;}
     spinlock_unlock_irqrestore(&driver_lock,f); return name;
 }
+
+size_t net_pci_poll_devices(void) {
+    const net_pci_driver_t* snapshot[NET_PCI_BINDING_MAX];
+    uint32_t n=0;uint64_t f=spinlock_lock_irqsave(&driver_lock);
+    for(uint32_t i=0;i<binding_count;i++)
+        if(bindings[i].driver->poll)snapshot[n++]=bindings[i].driver;
+    spinlock_unlock_irqrestore(&driver_lock,f);
+    size_t work=0;
+    for(uint32_t i=0;i<n;i++) {
+        int result=snapshot[i]->poll();
+        if(result>0)work+=(size_t)result;
+    }
+    return work;
+}

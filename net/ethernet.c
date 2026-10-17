@@ -11,6 +11,7 @@ static int decode(const uint8_t* f,size_t n,uint16_t* type,size_t* h) {
     *type=t;*h=header;return 1;
 }
 size_t net_poll(size_t budget) {
+    (void)net_pci_poll_devices();
     uint8_t frame[NET_FRAME_MAX_SIZE];size_t done=0;
     while(done<budget){net_device_t* d=0;size_t len=0;
         if(!net_internal_pop_rx(&d,frame,sizeof(frame),&len))break;

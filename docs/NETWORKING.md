@@ -14,7 +14,7 @@ This document defines the initial networking contracts. It does not claim a NIC 
                 |
     PCI network-driver registry (implemented)
                 |
-    NIC driver (E1000/QEMU target next; not implemented yet)
+    E1000-compatible NIC driver (implemented; polling-based)
                 |
     PCI, DMA, interrupts, PMM/paging (existing platform services)
 
@@ -48,14 +48,20 @@ Ethernet-II parsing validates the base header and supports one 802.1Q/802.1ad VL
 
 A net_pci_driver_t supplies a persistent name, PCI match IDs, and a probe callback. Probe results are NOT_MINE, BOUND, or FAILED; successful bindings are recorded to avoid repeated probes. Concrete drivers must validate BAR types/ranges, enable memory decoding and bus mastering only after DMA setup, manage interrupts, and unwind partial initialization.
 
+## E1000 driver
+
+The current E1000 driver targets PCI ID `8086:100E` (Intel 82540EM/QEMU `e1000`). It maps BAR0 through the shared MMIO allocator, resets the controller, validates the MAC address, allocates below-4-GiB DMA pages for descriptor rings and packet buffers, configures RX/TX rings, and enables PCI bus mastering only after descriptor memory is ready. TX copies into a DMA buffer and waits with a bounded timeout for descriptor completion. RX is polling-based: `net_poll()` invokes the driver poll callback, which moves completed descriptors into the bounded network RX queue. Device interrupts are masked; no IRQ routing is assumed.
+
+The QEMU regression test boots with a real emulated E1000 device and requires driver initialization plus successful descriptor-level Ethernet transmit completion. This validates driver bring-up and TX completion, not Internet protocol connectivity or packet exchange with a remote endpoint.
+
 ## Current limitations
 
-No concrete NIC driver, ARP, IPv4, ICMP, DHCP, DNS, UDP, TCP, routing, sockets, or network syscalls are implemented. CI exercises the core registry, TX contract, bounded RX queue, statistics, and Ethernet demultiplexing with a mock device; this does not prove external connectivity.
+ARP, IPv4, ICMP, DHCP, DNS, UDP, TCP, routing, sockets, network syscalls, link event interrupts, and real-hardware validation are not implemented. The current polling driver is a bring-up baseline, not yet a production networking stack; next add receive-path end-to-end tests, ARP/IPv4 validation and checksums, and ICMP echo before claiming IP connectivity.
 
 ## Next sequence
 
-1. Add an E1000-compatible QEMU PCI driver with bounded DMA rings and link detection.
-2. Add QEMU user-network end-to-end packet tests.
-3. Implement ARP and IPv4 validation/checksums, then ICMP echo and a QEMU ping test.
-4. Add DHCP and DNS over UDP, then general UDP and TCP.
-5. Define socket syscalls after protocol and buffer-lifetime contracts are tested.
+1. Add receive-path and queue-overflow end-to-end tests using QEMU user networking.
+2. Implement ARP and strict IPv4 validation/checksums, then ICMP echo and a QEMU ping test.
+3. Add UDP, DHCP, and DNS with packet-level regression tests.
+4. Implement TCP with retransmission, timeout, and buffer-ownership tests.
+5. Define socket syscalls only after protocol and buffer-lifetime contracts are tested.

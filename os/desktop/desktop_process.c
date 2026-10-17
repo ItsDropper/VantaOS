@@ -7,6 +7,7 @@
 #include "terminal_process.h"
 #include "file_explorer_process.h"
 #include "usb.h"
+#include "net.h"
 #include "serial.h"
 
 static uint32_t desktop_pid;
@@ -19,6 +20,7 @@ void desktop_process_main(void)
         /* xHCI is polled, not interrupt-driven: consume transfer events and
            dispatch pending HID reports before the desktop reads input. */
         usb_poll();
+        (void)net_poll(32U);
         mouse_process_events();
         terminal_process_set_input_enabled(graphics_get_active_panel() == 3);
         desktop_update();

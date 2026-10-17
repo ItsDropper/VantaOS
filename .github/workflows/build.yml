@@ -259,6 +259,68 @@ jobs:
           grep -qx 'VANTAOS_FAT32_WRITE_OK' /tmp/nvme-fat32-persisted.txt
           echo "NVMe-only FAT32 operations and reboot persistence passed."
 
+      - name: Missing-storage and malformed-partition fallback tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          # No data disk: VFS must keep its in-memory namespace alive.
+          set +e
+          timeout 30s qemu-system-x86_64 \
+            -machine pc -smp 1 -m 256M \
+            -drive file=VantaOS.iso,media=cdrom,format=raw \
+            -boot order=d -display none -serial file:no-storage.log \
+            -monitor none -no-reboot
+          result=$?
+          set -e
+          if [ "$result" -ne 124 ]; then
+            echo "No-storage QEMU exited unexpectedly: $result"
+            cat no-storage.log 2>/dev/null || true
+            exit 1
+          fi
+          grep -q 'VANTAOS_FAT32_NO_USABLE_VOLUME' no-storage.log
+          grep -q 'VANTAOS_FILESYSTEM_NAMESPACE_OK' no-storage.log
+          grep -q 'VANTAOS_FAT32_WRITE_SKIPPED_NO_VOLUME' no-storage.log
+
+          # Disposable NVMe image with a signed MBR whose FAT32 partition
+          # extends beyond the namespace. It must not be mounted.
+          python3 - <<'PY'
+          image = bytearray(16 * 1024 * 1024)
+          entry = 446
+          image[entry + 4] = 0x0C
+          image[entry + 8:entry + 12] = (32760).to_bytes(4, "little")
+          image[entry + 12:entry + 16] = (64).to_bytes(4, "little")
+          image[510:512] = b"\x55\xaa"
+          with open("nvme-invalid-partition.img", "wb") as f:
+              f.write(image)
+          PY
+          set +e
+          timeout 30s qemu-system-x86_64 \
+            -machine pc -smp 1 -m 256M \
+            -drive file=VantaOS.iso,media=cdrom,format=raw \
+            -drive file=nvme-invalid-partition.img,if=none,id=badnvme,format=raw \
+            -device nvme,drive=badnvme,serial=VANTABAD00001 \
+            -boot order=d -display none -serial file:invalid-partition.log \
+            -monitor none -no-reboot
+          result=$?
+          set -e
+          if [ "$result" -ne 124 ]; then
+            echo "Invalid-partition QEMU exited unexpectedly: $result"
+            cat invalid-partition.log 2>/dev/null || true
+            exit 1
+          fi
+          grep -q 'VANTAOS_FAT32_NO_USABLE_VOLUME' invalid-partition.log
+          grep -q 'VANTAOS_FILESYSTEM_NAMESPACE_OK' invalid-partition.log
+          if grep -q 'VANTAOS_FAT32_BLOCK_DEVICE_MOUNT_OK' invalid-partition.log; then
+            echo "FAT32 mounted an invalid out-of-range partition."
+            cat invalid-partition.log
+            exit 1
+          fi
+          if grep -Eq '^VANTAOS_[A-Z0-9_]*_FAIL' invalid-partition.log; then
+            echo "Malformed-partition fallback emitted a self-test failure."
+            cat invalid-partition.log
+            exit 1
+          fi
+
       - name: QEMU boot and regression tests at multiple memory sizes
         shell: bash
         run: |

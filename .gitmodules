@@ -1,0 +1,4 @@
+[submodule "third_party/bearssl"]
+	path = third_party/bearssl
+	url = https://github.com/unkaktus/bearssl.git
+	branch = master

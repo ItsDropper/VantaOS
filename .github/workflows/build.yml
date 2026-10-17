@@ -22,6 +22,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          submodules: recursive
 
       - name: Detect affected test suites
         id: scope
@@ -109,6 +110,8 @@ jobs:
           test -f drivers/Makefile
           test -f drivers/network/e1000.c
           test -f drivers/network/virtio_net.c
+          test -f third_party/bearssl/inc/bearssl.h
+          grep -q 'net/tls.c' net/Makefile
           grep -q 'drivers/network/e1000.c' drivers/network/Makefile
           grep -q 'drivers/network/virtio_net.c' drivers/network/Makefile
           test -f fs/Makefile
@@ -135,6 +138,16 @@ jobs:
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_wifi_api.c net/wifi.c -o /tmp/vantaos-wifi-api-test
           /tmp/vantaos-wifi-api-test
+
+      - name: Test TLS hostname validation policy
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude -Ithird_party/bearssl/inc scripts/test_tls_hostname.c -o /tmp/vantaos-tls-hostname-test
+          /tmp/vantaos-tls-hostname-test
+
+      - name: Test hardware crypto entropy source
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_crypto_rng.c kernel/crypto_rng.c -o /tmp/vantaos-crypto-rng-test
+          /tmp/vantaos-crypto-rng-test
 
       - name: Build kernel, ISO, and FAT32 image with self-tests
         run: chmod +x build.sh && VANTAOS_SELF_TEST=1 ./build.sh

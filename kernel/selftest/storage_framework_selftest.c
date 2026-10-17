@@ -1,6 +1,7 @@
 #include "block_device.h"
 #include "serial.h"
 #include <stdint.h>
+#include <stddef.h>
 
 #ifdef VANTAOS_SELF_TEST
 static uint8_t mock_storage[8U * 512U];

@@ -6,9 +6,9 @@
 #define IO_CHUNK 256U
 #define OUTPUT_LINES 80U
 #define OUTPUT_COLUMNS (VANTA_GUI_TEXT_MAX + 1U)
-#define DISPLAY_LINES 17U
+#define DISPLAY_LINES 13U
 #define WINDOW_WIDTH 760U
-#define WINDOW_HEIGHT 520U
+#define WINDOW_HEIGHT 460U
 
 #define COLOR_TEXT 0x00E8EDF4U
 #define COLOR_MUTED 0x008D9BACU
@@ -154,7 +154,7 @@ static void render_add_text(int32_t x, int32_t y, const char* text,
 static void render(void)
 {
     command_count = 0U;
-    render_add_rect(8, 8, 720, 440, COLOR_SURFACE);
+    render_add_rect(8, 8, 720, 330, COLOR_SURFACE);
     render_add_rect(8, 8, 720, 2, COLOR_ACCENT);
     render_add_text(16, 16, "VantaOS Terminal | user-mode shell", COLOR_TEXT);
 
@@ -168,9 +168,10 @@ static void render(void)
         y += 22;
     }
 
-    render_add_rect(8, 424, 720, 1, COLOR_BORDER);
-    render_add_text(16, 430, "PgUp/PgDn scrollback  |  help lists commands  |  exit closes",
+    render_add_rect(8, 344, 720, 1, COLOR_BORDER);
+    render_add_text(16, 350, "PgUp/PgDn scrollback  |  help lists commands",
                     COLOR_MUTED);
+    render_add_text(16, 374, "Type exit to close Terminal", COLOR_MUTED);
     (void)vanta_gui_draw(window_id, commands, command_count);
 }
 

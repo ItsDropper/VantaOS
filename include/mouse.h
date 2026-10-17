@@ -16,6 +16,9 @@ void mouse_initialize(void);
 void mouse_handle_interrupt(void);
 void mouse_process_events(void);
 
+/* Feed a decoded USB HID boot-mouse report into the existing desktop cursor. */
+void mouse_inject_usb_report(int dx, int dy, uint8_t buttons, int wheel);
+
 /*
  * Check whether the mouse has accumulated wheel movement.
  */

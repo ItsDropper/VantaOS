@@ -1,38 +1,39 @@
-# USB input drivers
+# USB host and input drivers
 
-## Host controller transport status
+## Implemented path
 
-The xHCI host-controller bring-up lives in `drivers/usb/xhci.c`. It locates
-PCI class 0x0C/0x03/prog-if 0x30 controllers, maps the controller BAR through
-the kernel MMIO window, performs bounded halt/reset/run handshakes, sets up
-the Device Context Base Address Array, command ring, event ring, and ERST,
-enables PCI bus mastering only after DMA addresses are validated, and resets
-connected ports. The current event path polls the event ring; interrupts are
-deliberately disabled until an IRQ routing layer is available.
+VantaOS now has an xHCI polling host-controller path for directly connected
+USB 2.x/3.x root-port devices that expose the USB HID boot keyboard or mouse
+protocol:
 
-DMA ring storage is currently statically allocated in the low kernel image and
-validated against the current identity mapping. This is a bootstrap constraint,
-not the final general-purpose DMA allocator. Controllers requiring more than
-64 scratchpad buffers are rejected safely.
+- PCI xHCI discovery, MMIO mapping, bounded controller halt/reset/run, DMA
+  ring setup, and explicit bus-master enablement.
+- Command and event ring processing, slot enable/address, endpoint-zero control
+  transfers, device/configuration descriptor reads, and EP0 packet-size update.
+- Boot-HID interface/interrupt-IN endpoint selection, SET_CONFIGURATION,
+  SET_PROTOCOL, endpoint configuration, recurring interrupt transfers, and
+  disconnect cleanup.
+- USB keyboard reports feed both the shared input queue and the existing
+  terminal/desktop keyboard buffer. USB mouse reports feed the shared queue
+  and existing cursor/click/wheel path.
+- Port-change polling permits supported HID devices to be attached and removed
+  after boot. PS/2 remains available as a fallback.
 
-## HID report decoder
+## Boundaries
 
-`hid.c` handles boot-protocol keyboard and mouse reports and publishes
-normalized events to the shared input core. It tracks key transitions and
-modifiers, mouse movement, buttons, and wheel data. It does not yet receive
-reports from hardware because USB device addressing, descriptor/configuration
-enumeration, control transfers, endpoint transfer rings, and periodic interrupt
-transfers still need to be connected.
+This is not a claim of universal USB-device compatibility. Current limitations:
 
-## Remaining end-to-end work
+- Root-port devices only; USB hub discovery and downstream hub enumeration are
+  not implemented.
+- HID boot-protocol keyboard/mouse only. Arbitrary HID report-descriptor
+  parsing, gamepads, vendor-specific configuration/features, and non-HID USB
+  classes are unsupported.
+- The controller uses polling and static low-memory DMA rings validated against
+  the current identity map. MSI/MSI-X interrupt routing and a general DMA
+  allocator are future work.
+- Validation must include CI/QEMU and real hardware; passing a compile does not
+  prove a physical keyboard or mouse works.
 
-1. Complete xHCI command-completion handling and endpoint transfer-ring support.
-2. USB port-status handling, Enable Slot / Address Device, and descriptor-based
-   enumeration.
-3. Parse configuration/interface/endpoint descriptors; set configuration and
-   HID boot protocol; submit recurring interrupt-IN transfers.
-4. Route real transfer reports into `usb_hid_keyboard_report()` and
-   `usb_hid_mouse_report()`, with disconnect cleanup and QEMU/hardware tests.
-
-Until these pieces land, this is controller bring-up groundwork, not end-to-end
-USB compatibility. PS/2 remains the active fallback input path.
+The transport deliberately fails safely if required DMA structures cannot be
+addressed below 4 GiB or if a controller needs more than the supported
+scratchpad allocation.

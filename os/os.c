@@ -15,6 +15,7 @@
 #include "shell.h"
 #include "terminal.h"
 #include "terminal_process.h"
+#include "usb.h"
 
 extern void shell_set_multiboot_info(multiboot_info_t* mbd);
 extern void input_register_ps2_devices(void);
@@ -112,6 +113,7 @@ void os_initialize(multiboot_info_t* mbd)
 
     mouse_initialize();
     input_register_ps2_devices();
+    usb_initialize();
     boot_mouse = read_tsc();
 
     shell_initialize();

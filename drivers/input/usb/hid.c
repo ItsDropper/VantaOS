@@ -1,5 +1,7 @@
 #include "hid.h"
 #include "input.h"
+#include "keyboard.h"
+#include "mouse.h"
 #include <stdbool.h>
 
 /*
@@ -51,7 +53,9 @@ static bool report_key(uint32_t device_id, uint16_t usage, bool pressed)
         .value = pressed ? 1 : 0,
         .value2 = 0
     };
-    return input_report_event(&event);
+    bool queued = input_report_event(&event);
+    keyboard_inject_hid_usage(usage, pressed);
+    return queued;
 }
 
 int usb_hid_keyboard_attach(uint32_t *handle_out)
@@ -222,6 +226,8 @@ void usb_hid_mouse_report(uint32_t handle, const uint8_t *report, uint32_t lengt
 
     int32_t dx = (int8_t)report[1];
     int32_t dy = (int8_t)report[2];
+    int wheel_delta = length >= 4 ? (int8_t)report[3] : 0;
+    mouse_inject_usb_report(dx, dy, buttons, wheel_delta);
     if (dx || dy)
     {
         input_event_t motion = {

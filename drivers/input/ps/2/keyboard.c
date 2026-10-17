@@ -514,6 +514,104 @@ void keyboard_handle_interrupt(void)
     spinlock_unlock_irqrestore(&keyboard_lock, flags);
 }
 
+
+static uint8_t keyboard_hid_scancode(uint16_t usage)
+{
+    switch (usage) {
+        case 0x04: return 0x1E; case 0x05: return 0x30;
+        case 0x06: return 0x2E; case 0x07: return 0x20;
+        case 0x08: return 0x12; case 0x09: return 0x21;
+        case 0x0A: return 0x22; case 0x0B: return 0x23;
+        case 0x0C: return 0x17; case 0x0D: return 0x24;
+        case 0x0E: return 0x25; case 0x0F: return 0x26;
+        case 0x10: return 0x32; case 0x11: return 0x31;
+        case 0x12: return 0x18; case 0x13: return 0x19;
+        case 0x14: return 0x10; case 0x15: return 0x13;
+        case 0x16: return 0x1F; case 0x17: return 0x14;
+        case 0x18: return 0x16; case 0x19: return 0x2F;
+        case 0x1A: return 0x11; case 0x1B: return 0x2D;
+        case 0x1C: return 0x15; case 0x1D: return 0x2C;
+        case 0x1E: return 0x02; case 0x1F: return 0x03;
+        case 0x20: return 0x04; case 0x21: return 0x05;
+        case 0x22: return 0x06; case 0x23: return 0x07;
+        case 0x24: return 0x08; case 0x25: return 0x09;
+        case 0x26: return 0x0A; case 0x27: return 0x0B;
+        case 0x28: return 0x1C; case 0x29: return 0x01;
+        case 0x2A: return 0x0E; case 0x2B: return 0x0F;
+        case 0x2C: return 0x39; case 0x2D: return 0x0C;
+        case 0x2E: return 0x0D; case 0x2F: return 0x1A;
+        case 0x30: return 0x1B; case 0x31: return 0x2B;
+        case 0x33: return 0x27; case 0x34: return 0x28;
+        case 0x35: return 0x29; case 0x36: return 0x33;
+        case 0x37: return 0x34; case 0x38: return 0x35;
+        case 0x39: return 0x3A;
+        default: return 0;
+    }
+}
+
+void keyboard_inject_hid_usage(uint16_t usage, bool pressed)
+{
+    uint64_t flags = spinlock_lock_irqsave(&keyboard_lock);
+    switch (usage) {
+        case 0xE0: case 0xE4: ctrl_pressed = pressed; break;
+        case 0xE1: left_shift_pressed = pressed; break;
+        case 0xE5: right_shift_pressed = pressed; break;
+        case 0xE2: case 0xE6: alt_pressed = pressed; break;
+        case 0xE3:
+            if (pressed && !left_super_pressed) super_event_pending = true;
+            left_super_pressed = pressed;
+            break;
+        case 0xE7:
+            if (pressed && !right_super_pressed) super_event_pending = true;
+            right_super_pressed = pressed;
+            break;
+        default: break;
+    }
+
+    if (usage >= 0xE0 && usage <= 0xE7) {
+        spinlock_unlock_irqrestore(&keyboard_lock, flags);
+        return;
+    }
+    if (!pressed) {
+        spinlock_unlock_irqrestore(&keyboard_lock, flags);
+        return;
+    }
+
+    switch (usage) {
+        case 0x4A: keyboard_event_push(KEY_EVENT_HOME); break;
+        case 0x4B: keyboard_event_push(KEY_EVENT_PAGE_UP); break;
+        case 0x4C: keyboard_event_push(KEY_EVENT_DELETE); break;
+        case 0x4D: keyboard_event_push(KEY_EVENT_END); break;
+        case 0x4E: keyboard_event_push(KEY_EVENT_PAGE_DOWN); break;
+        case 0x4F: keyboard_event_push(KEY_EVENT_RIGHT); break;
+        case 0x50: keyboard_event_push(KEY_EVENT_LEFT); break;
+        case 0x51: keyboard_event_push(KEY_EVENT_DOWN); break;
+        case 0x52: keyboard_event_push(KEY_EVENT_UP); break;
+        case 0x39: caps_lock = !caps_lock; break;
+        default: {
+            uint8_t scancode = keyboard_hid_scancode(usage);
+            if (scancode != 0 && scancode < sizeof(keyboard_map_lowercase)) {
+                char normal = keyboard_map_lowercase[scancode];
+                char shifted = keyboard_map_shifted[scancode];
+                if (normal != 0) {
+                    char value = normal;
+                    if (normal >= 'a' && normal <= 'z') {
+                        if (shift_pressed() != caps_lock)
+                            value = shifted;
+                    } else if (shift_pressed()) {
+                        value = shifted;
+                    }
+                    if (ctrl_pressed)
+                        value = apply_ctrl(value);
+                    keyboard_buffer_push(value);
+                }
+            }
+            break;
+        }
+    }
+    spinlock_unlock_irqrestore(&keyboard_lock, flags);
+}
+
 bool keyboard_has_char(void)
 {
     uint64_t flags = spinlock_lock_irqsave(&keyboard_lock);

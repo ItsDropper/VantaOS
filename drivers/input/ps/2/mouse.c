@@ -209,6 +209,7 @@ void mouse_initialize(void)
     mouse_left_down = 0;
     mouse_right_down = 0;
     mouse_reported_buttons = 0;
+    usb_mouse_buttons = 0;
     mouse_scale_x = 1024;
     mouse_scale_y = 768;
 
@@ -379,6 +380,41 @@ void mouse_handle_interrupt(void)
             (void)input_report_event(&wheel_event);
         }
     }
+}
+
+
+static unsigned char usb_mouse_buttons;
+
+void mouse_inject_usb_report(int delta_x, int delta_y,
+                             unsigned char buttons, int wheel)
+{
+    int scaled_x = (delta_x * (int)mouse_scale_x) / 1024;
+    int scaled_y = (delta_y * (int)mouse_scale_y) / 768;
+    if (scaled_x == 0 && delta_x != 0)
+        scaled_x = delta_x > 0 ? 1 : -1;
+    if (scaled_y == 0 && delta_y != 0)
+        scaled_y = delta_y > 0 ? 1 : -1;
+    if (scaled_x != 0 || scaled_y != 0) {
+        mouse_pending_dx += scaled_x;
+        mouse_pending_dy += scaled_y;
+        mouse_moved = 1;
+    }
+
+    unsigned char left = buttons & 1U;
+    unsigned char right = buttons & 2U;
+    if (left && !(usb_mouse_buttons & 1U)) {
+        mouse_pending_press = 1;
+        mouse_clicked = 1;
+    } else if (!left && (usb_mouse_buttons & 1U)) {
+        mouse_pending_release = 1;
+    }
+    if (right && !(usb_mouse_buttons & 2U)) {
+        mouse_pending_right_press = 1;
+        mouse_clicked = 1;
+    }
+    usb_mouse_buttons = buttons;
+    if (wheel != 0)
+        mouse_wheel_delta += wheel;
 }
 
 bool mouse_has_event(void)

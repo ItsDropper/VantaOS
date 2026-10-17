@@ -14,6 +14,8 @@
 #define XHCI_MMIO_BASE       0xE0000000ULL
 #define XHCI_MMIO_MAP_SIZE   0x00040000ULL
 #define XHCI_MAX_PORTS       32U
+#define XHCI_MAX_SLOTS       8U
+#define XHCI_EP0_RING_TRBS   16U
 #define XHCI_RING_TRBS       256U
 #define XHCI_SCRATCHPAD_MAX  64U
 #define XHCI_POLL_LIMIT      10000000U
@@ -50,9 +52,12 @@
 #define XHCI_TRB_CYCLE        (1U << 0)
 #define XHCI_TRB_TYPE_SHIFT   10U
 #define XHCI_TRB_TYPE_LINK    6U
+#define XHCI_TRB_TYPE_EVENT_TRANSFER           32U
 #define XHCI_TRB_TYPE_EVENT_COMMAND_COMPLETION 33U
 #define XHCI_TRB_TYPE_EVENT_PORT_STATUS       34U
 #define XHCI_TRB_TYPE_CMD_ENABLE_SLOT         9U
+#define XHCI_TRB_TYPE_CMD_ADDRESS_DEVICE      11U
+#define XHCI_TRB_TYPE_CMD_EVALUATE_CONTEXT    13U
 #define XHCI_TRB_TYPE_CMD_NOOP                23U
 
 typedef struct __attribute__((aligned(16))) {
@@ -78,6 +83,19 @@ static xhci_trb_t command_ring[XHCI_RING_TRBS] __attribute__((aligned(65536)));
 static xhci_trb_t event_ring[XHCI_RING_TRBS] __attribute__((aligned(65536)));
 static xhci_erst_entry_t erst[1] __attribute__((aligned(64)));
 static uint64_t scratchpad_array[XHCI_SCRATCHPAD_MAX] __attribute__((aligned(64)));
+static uint8_t input_contexts[XHCI_MAX_SLOTS][33U * 64U]
+    __attribute__((aligned(64)));
+static uint8_t device_contexts[XHCI_MAX_SLOTS][32U * 64U]
+    __attribute__((aligned(64)));
+static xhci_trb_t ep0_rings[XHCI_MAX_SLOTS][XHCI_EP0_RING_TRBS]
+    __attribute__((aligned(64)));
+static uint32_t ep0_enqueue[XHCI_MAX_SLOTS];
+static uint32_t ep0_cycle[XHCI_MAX_SLOTS];
+static uint8_t slot_active[XHCI_MAX_SLOTS];
+static uint8_t slot_port[XHCI_MAX_SLOTS];
+static uint8_t slot_speed[XHCI_MAX_SLOTS];
+static uint16_t slot_ep0_packet[XHCI_MAX_SLOTS];
+static uint32_t context_size = 32U;
 static uint8_t scratchpad_buffers[XHCI_SCRATCHPAD_MAX][4096]
     __attribute__((aligned(4096)));
 
@@ -96,6 +114,24 @@ static uint64_t completed_command_pointer;
 static uint32_t completed_command_code;
 static uint32_t completed_command_slot;
 static uint32_t command_completion_sequence;
+static uint64_t completed_transfer_pointer;
+static uint32_t completed_transfer_code;
+static uint32_t completed_transfer_slot;
+static uint32_t transfer_completion_sequence;
+static xhci_trb_t interrupt_rings[XHCI_MAX_SLOTS][XHCI_EP0_RING_TRBS]
+    __attribute__((aligned(64)));
+static uint8_t interrupt_dma[XHCI_MAX_SLOTS][64] __attribute__((aligned(64)));
+static uint8_t interrupt_pending[XHCI_MAX_SLOTS][64] __attribute__((aligned(64)));
+static uint64_t interrupt_expected_trb[XHCI_MAX_SLOTS];
+static uint32_t interrupt_enqueue[XHCI_MAX_SLOTS];
+static uint32_t interrupt_cycle[XHCI_MAX_SLOTS];
+static uint32_t interrupt_dci[XHCI_MAX_SLOTS];
+static uint32_t interrupt_packet[XHCI_MAX_SLOTS];
+static uint32_t interrupt_pending_length[XHCI_MAX_SLOTS];
+static uint8_t interrupt_configured[XHCI_MAX_SLOTS];
+static uint8_t interrupt_in_flight[XHCI_MAX_SLOTS];
+static uint8_t interrupt_report_ready[XHCI_MAX_SLOTS];
+static uint8_t interrupt_endpoint_address[XHCI_MAX_SLOTS];
 static int controller_online;
 static int initialized;
 
@@ -157,8 +193,7 @@ static int map_controller_bar(uint64_t physical_bar)
     return 1;
 }
 
-static void consume_event_ring(void)
-{
+static void handle_interrupt_completion(uint32_t slot_id, uint32_t dci,\n                                       uint64_t trb_pointer, uint32_t status);\n\nstatic void consume_event_ring(void)\n{
     for (;;) {
         xhci_trb_t* event = &event_ring[event_dequeue];
         uint32_t control = __atomic_load_n(&event->control, __ATOMIC_ACQUIRE);
@@ -176,6 +211,16 @@ static void consume_event_ring(void)
             completed_command_slot = (control >> 24) & 0xFFU;
             __atomic_add_fetch(&command_completion_sequence, 1U,
                                __ATOMIC_RELEASE);
+        } else if (type == XHCI_TRB_TYPE_EVENT_TRANSFER) {
+            completed_transfer_pointer = event->parameter;
+            completed_transfer_code = (event->status >> 24) & 0xFFU;
+            completed_transfer_slot = (control >> 24) & 0xFFU;
+            __atomic_add_fetch(&transfer_completion_sequence, 1U,
+                               __ATOMIC_RELEASE);
+            handle_interrupt_completion(completed_transfer_slot,
+                                        (control >> 16) & 0x1FU,
+                                        completed_transfer_pointer,
+                                        event->status);
         }
 
         event_dequeue++;
@@ -247,6 +292,384 @@ int xhci_submit_command(uint32_t type, uint64_t parameter,
     return 0;
 }
 
+static uint32_t* input_context_word(uint32_t slot_index, uint32_t context_index)
+{
+    return (uint32_t*)(input_contexts[slot_index] +
+                       context_index * context_size);
+}
+
+static int ep0_ring_push(uint32_t slot_index, uint64_t parameter,
+                         uint32_t status, uint32_t control,
+                         uint64_t* trb_physical_out)
+{
+    if (ep0_enqueue[slot_index] >= XHCI_EP0_RING_TRBS - 1U)
+        return 0;
+    xhci_trb_t* trb = &ep0_rings[slot_index][ep0_enqueue[slot_index]];
+    uint64_t physical;
+    if (!dma_address(trb, &physical))
+        return 0;
+    trb->parameter = parameter;
+    trb->status = status;
+    trb->control = control | (ep0_cycle[slot_index] ? XHCI_TRB_CYCLE : 0U);
+    if (trb_physical_out)
+        *trb_physical_out = physical;
+    ep0_enqueue[slot_index]++;
+    if (ep0_enqueue[slot_index] == XHCI_EP0_RING_TRBS - 1U) {
+        xhci_trb_t* link = &ep0_rings[slot_index][XHCI_EP0_RING_TRBS - 1U];
+        uint64_t ring_physical;
+        if (!dma_address(ep0_rings[slot_index], &ring_physical))
+            return 0;
+        link->parameter = ring_physical;
+        link->status = 0;
+        link->control = (XHCI_TRB_TYPE_LINK << XHCI_TRB_TYPE_SHIFT) |
+                        (1U << 1) |
+                        (ep0_cycle[slot_index] ? XHCI_TRB_CYCLE : 0U);
+        ep0_enqueue[slot_index] = 0;
+        ep0_cycle[slot_index] ^= 1U;
+    }
+    return 1;
+}
+
+int xhci_enable_device(uint32_t port, uint32_t speed, uint16_t ep0_packet,
+                      uint32_t* slot_id_out)
+{
+    if (!controller_online || !slot_id_out || port == 0U ||
+        port > max_ports || speed == 0U || ep0_packet == 0U)
+        return 0;
+    uint32_t completion = 0, slot_id = 0;
+    if (!xhci_submit_command(XHCI_TRB_TYPE_CMD_ENABLE_SLOT, 0, 0, 0,
+                             &completion, &slot_id) ||
+        slot_id == 0U || slot_id > XHCI_MAX_SLOTS || slot_id > max_slots)
+        return 0;
+
+    uint32_t index = slot_id - 1U;
+    for (uint32_t i = 0; i < 33U * 64U; ++i)
+        input_contexts[index][i] = 0;
+    for (uint32_t i = 0; i < 32U * 64U; ++i)
+        device_contexts[index][i] = 0;
+    for (uint32_t i = 0; i < XHCI_EP0_RING_TRBS; ++i) {
+        ep0_rings[index][i].parameter = 0;
+        ep0_rings[index][i].status = 0;
+        ep0_rings[index][i].control = 0;
+    }
+    ep0_enqueue[index] = 0;
+    ep0_cycle[index] = 1;
+    uint64_t ring_physical, device_context_physical, input_context_physical;
+    if (!dma_address(ep0_rings[index], &ring_physical) ||
+        !dma_address(device_contexts[index], &device_context_physical) ||
+        !dma_address(input_contexts[index], &input_context_physical)) {
+        (void)xhci_submit_command(10U, 0, 0, slot_id << 24, &completion, 0);
+        return 0;
+    }
+    ep0_rings[index][XHCI_EP0_RING_TRBS - 1U].parameter = ring_physical;
+    ep0_rings[index][XHCI_EP0_RING_TRBS - 1U].status = 0;
+    ep0_rings[index][XHCI_EP0_RING_TRBS - 1U].control =
+        (XHCI_TRB_TYPE_LINK << XHCI_TRB_TYPE_SHIFT) | (1U << 1) | 1U;
+    dcbaa[slot_id] = device_context_physical;
+
+    uint32_t* control = input_context_word(index, 0);
+    uint32_t* slot = input_context_word(index, 1);
+    uint32_t* ep0 = input_context_word(index, 2);
+    control[1] = (1U << 0) | (1U << 1);
+    slot[0] = ((speed & 0xFU) << 20) | (1U << 27);
+    slot[1] = (port & 0xFFU) << 16;
+    ep0[1] = (3U << 1) | (4U << 3) | ((uint32_t)ep0_packet << 16);
+    ep0[2] = (uint32_t)ring_physical | 1U;
+    ep0[3] = (uint32_t)(ring_physical >> 32);
+
+    if (!xhci_submit_command(XHCI_TRB_TYPE_CMD_ADDRESS_DEVICE,
+                             input_context_physical, 0, slot_id << 24,
+                             &completion, 0)) {
+        (void)xhci_submit_command(10U, 0, 0, slot_id << 24, &completion, 0);
+        dcbaa[slot_id] = 0;
+        slot_active[index] = 0;
+        return 0;
+    }
+    slot_active[index] = 1;
+    slot_port[index] = (uint8_t)port;
+    slot_speed[index] = (uint8_t)speed;
+    slot_ep0_packet[index] = ep0_packet;
+    *slot_id_out = slot_id;
+    return 1;
+}
+
+int xhci_control_transfer(uint32_t slot_id, const uint8_t setup[8],
+                          void* data, uint16_t length)
+{
+    if (!controller_online || !setup || slot_id == 0U ||
+        slot_id > XHCI_MAX_SLOTS || !slot_active[slot_id - 1U] ||
+        (length != 0U && !data))
+        return 0;
+    uint32_t index = slot_id - 1U;
+    uint64_t setup_value = 0;
+    const uint8_t* setup_bytes = setup;
+    for (uint32_t i = 0; i < 8U; ++i)
+        setup_value |= (uint64_t)setup_bytes[i] << (i * 8U);
+    uint32_t request_type = (setup[0] & 0x80U) ? 3U : 2U;
+    if (length == 0U)
+        request_type = 0U;
+    uint32_t setup_control = (2U << XHCI_TRB_TYPE_SHIFT) |
+                             (1U << 6) | (1U << 4) |
+                             (request_type << 16);
+    if (!ep0_ring_push(index, setup_value, 8U, setup_control, 0))
+        return 0;
+
+    int data_in = (setup[0] & 0x80U) != 0U;
+    if (length != 0U) {
+        uint64_t data_physical;
+        if (!dma_address(data, &data_physical))
+            return 0;
+        uint32_t data_control = (3U << XHCI_TRB_TYPE_SHIFT) |
+                                (1U << 4) |
+                                (data_in ? (1U << 16) : 0U);
+        if (!ep0_ring_push(index, data_physical, length, data_control, 0))
+            return 0;
+    }
+
+    uint64_t status_physical;
+    uint32_t status_in = (length == 0U || !data_in) ? 1U : 0U;
+    uint32_t status_control = (4U << XHCI_TRB_TYPE_SHIFT) | (1U << 5) |
+                              (status_in << 16);
+    if (!ep0_ring_push(index, 0, 0, status_control, &status_physical))
+        return 0;
+    uint32_t previous_sequence = __atomic_load_n(
+        &transfer_completion_sequence, __ATOMIC_ACQUIRE);
+    mmio_write32(doorbells, slot_id * 4U, 1U);
+    for (uint32_t i = 0; i < XHCI_POLL_LIMIT; ++i) {
+        consume_event_ring();
+        uint32_t sequence = __atomic_load_n(
+            &transfer_completion_sequence, __ATOMIC_ACQUIRE);
+        if (sequence != previous_sequence &&
+            completed_transfer_pointer == status_physical &&
+            completed_transfer_slot == slot_id)
+            return completed_transfer_code == 1U;
+        if (mmio_read32(operational, XHCI_USBSTS) & XHCI_STS_HOST_ERROR)
+            return 0;
+        __asm__ volatile ("pause");
+    }
+    return 0;
+}
+
+int xhci_disable_device(uint32_t slot_id)
+{
+    if (!controller_online || slot_id == 0U || slot_id > XHCI_MAX_SLOTS ||
+        !slot_active[slot_id - 1U])
+        return 0;
+    uint32_t completion = 0;
+    if (!xhci_submit_command(10U, 0, 0, slot_id << 24, &completion, 0))
+        return 0;
+    dcbaa[slot_id] = 0;
+    slot_active[slot_id - 1U] = 0;
+    interrupt_configured[slot_id - 1U] = 0;
+    interrupt_in_flight[slot_id - 1U] = 0;
+    interrupt_report_ready[slot_id - 1U] = 0;
+    return 1;
+}
+int xhci_set_ep0_packet(uint32_t slot_id, uint16_t packet_size)
+{
+    if (!controller_online || slot_id == 0U || slot_id > XHCI_MAX_SLOTS ||
+        !slot_active[slot_id - 1U] || packet_size == 0U)
+        return 0;
+    uint32_t index = slot_id - 1U;
+    for (uint32_t i = 0; i < 33U * 64U; ++i)
+        input_contexts[index][i] = 0;
+    uint64_t ring_physical, input_physical;
+    if (!dma_address(ep0_rings[index], &ring_physical) ||
+        !dma_address(input_contexts[index], &input_physical))
+        return 0;
+    uint32_t* control = input_context_word(index, 0);
+    uint32_t* ep0 = input_context_word(index, 2);
+    control[1] = 1U << 1;
+    ep0[1] = (3U << 1) | (4U << 3) | ((uint32_t)packet_size << 16);
+    ep0[2] = (uint32_t)ring_physical | 1U;
+    ep0[3] = (uint32_t)(ring_physical >> 32);
+    uint32_t completion = 0;
+    if (!xhci_submit_command(XHCI_TRB_TYPE_CMD_EVALUATE_CONTEXT,
+                             input_physical, 0, slot_id << 24,
+                             &completion, 0))
+        return 0;
+    slot_ep0_packet[index] = packet_size;
+    return 1;
+}
+
+static int interrupt_ring_push(uint32_t index, uint64_t parameter,
+                               uint32_t status, uint32_t control,
+                               uint64_t* trb_physical_out)
+{
+    if (interrupt_enqueue[index] >= XHCI_EP0_RING_TRBS - 1U)
+        return 0;
+    xhci_trb_t* trb = &interrupt_rings[index][interrupt_enqueue[index]];
+    uint64_t physical;
+    if (!dma_address(trb, &physical))
+        return 0;
+    trb->parameter = parameter;
+    trb->status = status;
+    trb->control = control | (interrupt_cycle[index] ? XHCI_TRB_CYCLE : 0U);
+    if (trb_physical_out)
+        *trb_physical_out = physical;
+    interrupt_enqueue[index]++;
+    if (interrupt_enqueue[index] == XHCI_EP0_RING_TRBS - 1U) {
+        xhci_trb_t* link = &interrupt_rings[index][XHCI_EP0_RING_TRBS - 1U];
+        uint64_t ring_physical;
+        if (!dma_address(interrupt_rings[index], &ring_physical))
+            return 0;
+        link->parameter = ring_physical;
+        link->status = 0;
+        link->control = (XHCI_TRB_TYPE_LINK << XHCI_TRB_TYPE_SHIFT) |
+                        (1U << 1) |
+                        (interrupt_cycle[index] ? XHCI_TRB_CYCLE : 0U);
+        interrupt_enqueue[index] = 0;
+        interrupt_cycle[index] ^= 1U;
+    }
+    return 1;
+}
+
+static int submit_interrupt_trb(uint32_t index)
+{
+    if (interrupt_in_flight[index] || interrupt_report_ready[index])
+        return 1;
+    uint64_t data_physical, trb_physical;
+    if (!dma_address(interrupt_dma[index], &data_physical))
+        return 0;
+    if (!interrupt_ring_push(index, data_physical, interrupt_packet[index],
+                             (1U << XHCI_TRB_TYPE_SHIFT) | (1U << 5),
+                             &trb_physical))
+        return 0;
+    interrupt_expected_trb[index] = trb_physical;
+    interrupt_in_flight[index] = 1;
+    mmio_write32(doorbells, ((index + 1U) * 4U), interrupt_dci[index]);
+    return 1;
+}
+
+static void handle_interrupt_completion(uint32_t slot_id, uint32_t dci,
+                                       uint64_t trb_pointer, uint32_t status)
+{
+    if (slot_id == 0U || slot_id > XHCI_MAX_SLOTS)
+        return;
+    uint32_t index = slot_id - 1U;
+    if (!interrupt_configured[index] || !interrupt_in_flight[index] ||
+        dci != interrupt_dci[index] ||
+        trb_pointer != interrupt_expected_trb[index])
+        return;
+    interrupt_in_flight[index] = 0;
+    uint32_t completion = (status >> 24) & 0xFFU;
+    uint32_t residual = status & 0xFFFFFFU;
+    if (completion == 1U && residual <= interrupt_packet[index]) {
+        uint32_t actual = interrupt_packet[index] - residual;
+        for (uint32_t i = 0; i < actual && i < sizeof(interrupt_pending[index]); ++i)
+            interrupt_pending[index][i] = interrupt_dma[index][i];
+        interrupt_pending_length[index] = actual;
+        interrupt_report_ready[index] = 1;
+    }
+}
+
+int xhci_configure_interrupt_in(uint32_t slot_id, uint8_t endpoint_address,
+                                uint16_t packet_size, uint8_t interval)
+{
+    if (!controller_online || slot_id == 0U || slot_id > XHCI_MAX_SLOTS ||
+        !slot_active[slot_id - 1U] || (endpoint_address & 0x80U) == 0U ||
+        packet_size == 0U || packet_size > sizeof(interrupt_dma[0]))
+        return 0;
+    uint32_t index = slot_id - 1U;
+    uint32_t endpoint_number = endpoint_address & 0x0FU;
+    uint32_t dci = endpoint_number * 2U + 1U;
+    if (endpoint_number == 0U || dci >= 31U)
+        return 0;
+    for (uint32_t i = 0; i < 33U * 64U; ++i)
+        input_contexts[index][i] = 0;
+    for (uint32_t i = 0; i < XHCI_EP0_RING_TRBS; ++i) {
+        interrupt_rings[index][i].parameter = 0;
+        interrupt_rings[index][i].status = 0;
+        interrupt_rings[index][i].control = 0;
+    }
+    interrupt_enqueue[index] = 0;
+    interrupt_cycle[index] = 1;
+    uint64_t ring_physical, input_physical;
+    if (!dma_address(interrupt_rings[index], &ring_physical) ||
+        !dma_address(input_contexts[index], &input_physical))
+        return 0;
+    interrupt_rings[index][XHCI_EP0_RING_TRBS - 1U].parameter = ring_physical;
+    interrupt_rings[index][XHCI_EP0_RING_TRBS - 1U].status = 0;
+    interrupt_rings[index][XHCI_EP0_RING_TRBS - 1U].control =
+        (XHCI_TRB_TYPE_LINK << XHCI_TRB_TYPE_SHIFT) | (1U << 1) | 1U;
+    uint32_t* control = input_context_word(index, 0);
+    uint32_t* slot = input_context_word(index, 1);
+    uint32_t* endpoint = input_context_word(index, dci + 1U);
+    control[1] = 1U | (1U << (dci + 1U));
+    slot[0] = ((uint32_t)slot_speed[index] << 20) |
+              ((dci > 1U ? dci : 1U) << 27);
+    slot[1] = ((uint32_t)slot_port[index] & 0xFFU) << 16;
+    uint32_t interval_value = 0;
+    if (slot_speed[index] <= 3U) {
+        uint32_t value = interval > 0U ? interval : 1U;
+        interval_value = 0;
+        while ((1U << interval_value) < value && interval_value < 7U)
+            interval_value++;
+        interval_value += 3U;
+    } else {
+        interval_value = interval > 0U ? (uint32_t)interval - 1U : 0U;
+    }
+    if (interval_value > 15U)
+        interval_value = 15U;
+    endpoint[0] = interval_value << 16;
+    endpoint[1] = (3U << 1) | (7U << 3) | ((uint32_t)packet_size << 16);
+    endpoint[2] = (uint32_t)ring_physical | 1U;
+    endpoint[3] = (uint32_t)packet_size;
+    uint32_t completion = 0;
+    if (!xhci_submit_command(12U, input_physical, 0, slot_id << 24,
+                             &completion, 0))
+        return 0;
+    interrupt_dci[index] = dci;
+    interrupt_packet[index] = packet_size;
+    interrupt_endpoint_address[index] = endpoint_address;
+    interrupt_configured[index] = 1;
+    interrupt_in_flight[index] = 0;
+    interrupt_report_ready[index] = 0;
+    return 1;
+}
+
+int xhci_start_interrupt_in(uint32_t slot_id)
+{
+    if (!controller_online || slot_id == 0U || slot_id > XHCI_MAX_SLOTS ||
+        !interrupt_configured[slot_id - 1U])
+        return 0;
+    return submit_interrupt_trb(slot_id - 1U);
+}
+
+void xhci_poll(void)
+{
+    if (controller_online)
+        consume_event_ring();
+}
+
+int xhci_take_interrupt_report(uint32_t slot_id, uint8_t* output,
+                               uint32_t capacity, uint32_t* length_out)
+{
+    if (!controller_online || slot_id == 0U || slot_id > XHCI_MAX_SLOTS ||
+        !output || !length_out)
+        return 0;
+    consume_event_ring();
+    uint32_t index = slot_id - 1U;
+    if (!interrupt_configured[index] || !interrupt_report_ready[index]) {
+        if (interrupt_configured[index] && !interrupt_in_flight[index])
+            (void)submit_interrupt_trb(index);
+        return 0;
+    }
+    uint32_t length = interrupt_pending_length[index];
+    if (length > capacity)
+        length = capacity;
+    for (uint32_t i = 0; i < length; ++i)
+        output[i] = interrupt_pending[index][i];
+    *length_out = length;
+    interrupt_report_ready[index] = 0;
+    interrupt_pending_length[index] = 0;
+    (void)submit_interrupt_trb(index);
+    return 1;
+}
+uint32_t xhci_port_speed(uint32_t port)
+{
+    return (xhci_port_status(port) >> 10) & 0xFU;
+}
 uint32_t xhci_port_count(void)
 {
     return controller_online ? max_ports : 0U;
@@ -310,6 +733,7 @@ static int controller_start(const struct pci_device* pci)
     operational = registers + cap_length;
     doorbells = registers + doorbell_offset;
     runtime = registers + runtime_offset;
+    context_size = (hcc1 & (1U << 2)) ? 64U : 32U;
     max_slots = hcs1 & 0xFFU;
     max_ports = (hcs1 >> 24) & 0xFFU;
     if (max_slots == 0 || max_ports == 0)
@@ -348,6 +772,25 @@ static int controller_start(const struct pci_device* pci)
     event_dequeue = 0;
     event_cycle = 1;
     port_event_mask = 0;
+    command_completion_sequence = 0;
+    transfer_completion_sequence = 0;
+    for (uint32_t slot = 0; slot < XHCI_MAX_SLOTS; ++slot) {
+        slot_active[slot] = 0;
+        slot_port[slot] = 0;
+        slot_speed[slot] = 0;
+        slot_ep0_packet[slot] = 0;
+        ep0_enqueue[slot] = 0;
+        ep0_cycle[slot] = 1;
+        interrupt_enqueue[slot] = 0;
+        interrupt_cycle[slot] = 1;
+        interrupt_dci[slot] = 0;
+        interrupt_packet[slot] = 0;
+        interrupt_pending_length[slot] = 0;
+        interrupt_configured[slot] = 0;
+        interrupt_in_flight[slot] = 0;
+        interrupt_report_ready[slot] = 0;
+        interrupt_endpoint_address[slot] = 0;
+    }
 
     uint32_t scratchpads =
         (((hcs2 >> 27) & 0x1FU) << 5) | ((hcs2 >> 21) & 0x1FU);
@@ -385,7 +828,7 @@ static int controller_start(const struct pci_device* pci)
 
     mmio_write64(operational, XHCI_DCBAAP, dcbaa_address);
     mmio_write64(operational, XHCI_CRCR, command_address | 1U);
-    mmio_write32(operational, XHCI_CONFIG, max_slots);
+    if (max_slots > XHCI_MAX_SLOTS)\n        max_slots = XHCI_MAX_SLOTS;\n    mmio_write32(operational, XHCI_CONFIG, max_slots);
 
     /* Polling mode: keep interrupter zero masked and publish one ERST segment. */
     mmio_write32(runtime, 0x20U, 0);

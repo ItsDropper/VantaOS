@@ -14,12 +14,33 @@ static uint32_t read_be32(const uint8_t* p){return ((uint32_t)p[0]<<24)|((uint32
 static void write_be16(uint8_t* p,uint16_t v){p[0]=(uint8_t)(v>>8);p[1]=(uint8_t)v;}
 static int skip_name(const uint8_t* p,size_t n,size_t* off)
 {
-    if(!p||!off||*off>=n)return 0;
-    size_t pos=*off,resume=0,hops=0;int jumped=0;
-    for(;;){if(pos>=n||++hops>n)return 0;uint8_t len=p[pos++];
-        if((len&0xC0U)==0xC0U){if(pos>=n)return 0;size_t to=((size_t)(len&0x3FU)<<8)|p[pos++];if(to>=n||to>=pos-2U)return 0;if(!jumped)resume=pos;jumped=1;pos=to;continue;}
-        if(len&0xC0U)return 0;if(!len){*off=jumped?resume:pos;return 1;}
-        if(len>63U||(size_t)len>n-pos)return 0;pos+=len;
+    if (!p || !off || *off >= n) return 0;
+
+    size_t pos = *off;
+    size_t resume = 0;
+    size_t hops = 0;
+    int jumped = 0;
+    for (;;) {
+        if (pos >= n || ++hops > n) return 0;
+        uint8_t len = p[pos++];
+
+        if ((len & 0xC0U) == 0xC0U) {
+            if (pos >= n) return 0;
+            size_t to = ((size_t)(len & 0x3FU) << 8) | p[pos++];
+            /* DNS compression references an earlier occurrence in the message. */
+            if (to >= n || to >= pos - 2U) return 0;
+            if (!jumped) resume = pos;
+            jumped = 1;
+            pos = to;
+            continue;
+        }
+        if (len & 0xC0U) return 0;
+        if (!len) {
+            *off = jumped ? resume : pos;
+            return 1;
+        }
+        if (len > 63U || (size_t)len > n - pos) return 0;
+        pos += len;
     }
 }
 static void receive_dns(net_device_t* d,uint32_t src,uint16_t sport,uint16_t dport,const uint8_t* p,size_t n,void* ctx)

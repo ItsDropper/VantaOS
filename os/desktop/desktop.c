@@ -191,7 +191,10 @@ void desktop_update(void)
             if (graphics_terminal_is_dragging() ||
                 graphics_explorer_is_dragging() ||
                 click_event)
+            {
+                graphics_invalidate_scene();
                 desktop_gui_present();
+            }
             else if (mouse_has_move_event())
             {
                 /*
@@ -210,5 +213,8 @@ void desktop_update(void)
     }
 
     if (gui_server_take_redraw_request())
+    {
+        graphics_invalidate_scene();
         desktop_gui_present();
+    }
 }

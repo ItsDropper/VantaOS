@@ -22,6 +22,7 @@ void graphics_toggle_start_menu(void)
         return;
 
     start_menu_open = !start_menu_open;
+    graphics_invalidate_scene();
     explorer_dragging = 0;
     terminal_dragging = 0;
 }
@@ -315,6 +316,10 @@ void graphics_mouse_move(int dx, int dy)
     if (cursor_y >= (int)framebuffer_height)
         cursor_y = (int)framebuffer_height - 1;
 
+    if ((explorer_dragging && !explorer_maximized) ||
+        (terminal_dragging && !terminal_maximized))
+        graphics_invalidate_scene();
+
     if (explorer_dragging && !explorer_maximized)
     {
         explorer_x = cursor_x - explorer_drag_offset_x;
@@ -395,6 +400,10 @@ void graphics_cursor_restore(void)
     if (!initialized || !cursor_saved_valid)
         return;
 
+    /* Cursor save-under writes bypass the drawing primitives, so explicitly
+     * mark the old cursor footprint when restoring it into the shadow buffer. */
+    graphics_mark_damage(cursor_saved_x, cursor_saved_y,
+                         cursor_saved_width, cursor_saved_height);
     for (int y = 0; y < cursor_saved_height; y++)
     {
         volatile uint32_t* row =

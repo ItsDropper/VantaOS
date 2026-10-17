@@ -47,6 +47,9 @@ extern int cursor_saved_height;
 extern int cursor_saved_valid;
 
 uint32_t graphics_pack_color(uint32_t color);
+void graphics_mark_damage(int x, int y, int width, int height);
+void graphics_invalidate_scene(void);
+int graphics_take_scene_invalidation(void);
 void graphics_cursor_restore(void);
 int graphics_files_window_x(void);
 int graphics_files_window_y(void);

@@ -34,6 +34,7 @@ static volatile int mouse_pending_release = 0;
 static volatile int mouse_pending_right_press = 0;
 static unsigned char mouse_left_down = 0;
 static unsigned char mouse_reported_buttons = 0;
+static unsigned char usb_mouse_buttons;
 static unsigned char mouse_right_down = 0;
 static uint32_t mouse_scale_x = 1024;
 static uint32_t mouse_scale_y = 768;
@@ -382,8 +383,6 @@ void mouse_handle_interrupt(void)
     }
 }
 
-
-static unsigned char usb_mouse_buttons;
 
 void mouse_inject_usb_report(int delta_x, int delta_y,
                              unsigned char buttons, int wheel)

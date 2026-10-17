@@ -4,6 +4,7 @@
 #include "desktop_process.h"
 #include "filesystem.h"
 #include "graphics.h"
+#include "input.h"
 #include "keyboard.h"
 #include "mouse.h"
 #include "process.h"
@@ -16,6 +17,7 @@
 #include "terminal_process.h"
 
 extern void shell_set_multiboot_info(multiboot_info_t* mbd);
+extern void input_register_ps2_devices(void);
 
 static unsigned long long boot_terminal;
 static unsigned long long boot_keyboard;
@@ -51,6 +53,7 @@ void os_initialize(multiboot_info_t* mbd)
     terminal_initialize();
     boot_terminal = read_tsc();
 
+    input_initialize();
     keyboard_initialize();
     boot_keyboard = read_tsc();
 
@@ -108,6 +111,7 @@ void os_initialize(multiboot_info_t* mbd)
     desktop_process_initialize();
 
     mouse_initialize();
+    input_register_ps2_devices();
     boot_mouse = read_tsc();
 
     shell_initialize();

@@ -96,6 +96,7 @@ typedef struct {
     uint32_t namespace_count;
     uint32_t controller_index;
     uint32_t max_transfer_pages;
+    uint16_t queue_depth;
     uint64_t direct_dma_commands;
     uint64_t bounce_dma_commands;
     uint16_t admin_tail;
@@ -222,7 +223,7 @@ static int wait_completion(nvme_controller_t* c, int admin,
             }
             if (result) *result = completion.result;
             uint16_t status = completion.status_phase >> 1;
-            *head = (uint16_t)((*head + 1U) % NVME_QUEUE_DEPTH);
+            *head = (uint16_t)((*head + 1U) % c->queue_depth);
             if (*head == 0) *phase ^= 1U;
             *doorbell = *head;
             __asm__ volatile ("" ::: "memory");
@@ -254,7 +255,7 @@ static int submit_command(nvme_controller_t* c, int admin,
     if (id == 0) id = ++c->next_command_id;
     command->command_id = id;
     queue[*tail] = *command;
-    *tail = (uint16_t)((*tail + 1U) % NVME_QUEUE_DEPTH);
+    *tail = (uint16_t)((*tail + 1U) % c->queue_depth);
     __atomic_thread_fence(__ATOMIC_SEQ_CST);
     *doorbell = *tail;
     __atomic_thread_fence(__ATOMIC_SEQ_CST);
@@ -393,7 +394,7 @@ static void prepare_io_command(nvme_controller_t* c, nvme_namespace_t* ns,
     volatile nvme_command_t* queue =
         (volatile nvme_command_t*)c->io_submission.virtual_address;
     queue[c->io_tail] = command;
-    c->io_tail = (uint16_t)((c->io_tail + 1U) % NVME_QUEUE_DEPTH);
+    c->io_tail = (uint16_t)((c->io_tail + 1U) % c->queue_depth);
 }
 static int complete_io_batch(nvme_controller_t* c, uint32_t pending)
 {
@@ -436,7 +437,7 @@ static int complete_io_batch(nvme_controller_t* c, uint32_t pending)
         found->completed = 1U;
         found->success = ((completion.status_phase >> 1) == 0U);
         ++completed;
-        c->io_head = (uint16_t)((c->io_head + 1U) % NVME_QUEUE_DEPTH);
+        c->io_head = (uint16_t)((c->io_head + 1U) % c->queue_depth);
         if (c->io_head == 0U) c->io_phase ^= 1U;
         __atomic_thread_fence(__ATOMIC_SEQ_CST);
         *c->io_completion_doorbell = c->io_head;
@@ -479,7 +480,8 @@ static block_status_t namespace_transfer(nvme_namespace_t* ns, uint64_t lba,
 
     while (transferred < count && !c->failed) {
         uint32_t pending = 0U;
-        for (uint32_t i = 0; i < NVME_IO_SLOTS && transferred < count; ++i) {
+        for (uint32_t i = 0; i < NVME_IO_SLOTS &&
+             i < (uint32_t)(c->queue_depth - 1U) && transferred < count; ++i) {
             uint32_t sectors = count - transferred;
             uintptr_t slot_start = (uintptr_t)user_buffer +
                                    (size_t)transferred * ns->sector_size;
@@ -647,12 +649,14 @@ static storage_probe_result_t nvme_probe(const struct pci_device* pci)
     uint32_t stride_shift = (uint32_t)((cap >> 32) & 0x0FU);
     uint32_t minimum_page_shift = (uint32_t)((cap >> 48) & 0x0FU);
     uint32_t command_sets = (uint32_t)((cap >> 37) & 0xFFU);
-    if (max_entries < NVME_QUEUE_DEPTH || stride_shift > 15U ||
+    if (max_entries < 2U || stride_shift > 15U ||
         minimum_page_shift != 0U || (command_sets & 1U) == 0U) {
         mmio_unmap_region((void*)c->registers, NVME_REGISTERS_SIZE);
         free_controller_memory(c);
         return STORAGE_PROBE_FAILED;
     }
+    c->queue_depth = (uint16_t)(max_entries < NVME_QUEUE_DEPTH ?
+                                  max_entries : NVME_QUEUE_DEPTH);
     c->doorbell_stride = 4ULL << stride_shift;
     uint64_t required_length = 0x1000ULL + 3ULL * c->doorbell_stride + sizeof(uint32_t);
     if (required_length > PAGING_MMIO_SIZE ||
@@ -688,7 +692,7 @@ static storage_probe_result_t nvme_probe(const struct pci_device* pci)
     c->admin_phase = 1U;
     c->next_command_id = 0U;
     mmio_write32(c->registers, 0x24U,
-                 ((NVME_QUEUE_DEPTH - 1U) << 16) | (NVME_QUEUE_DEPTH - 1U));
+                 ((uint32_t)(c->queue_depth - 1U) << 16) | (uint32_t)(c->queue_depth - 1U));
     mmio_write64(c->registers, 0x28U, c->admin_submission.physical_address);
     mmio_write64(c->registers, 0x30U, c->admin_completion.physical_address);
     /* DMA is prepared; enable bus mastering before enabling the controller. */
@@ -712,14 +716,14 @@ static storage_probe_result_t nvme_probe(const struct pci_device* pci)
     nvme_command_t create_cq = {0};
     create_cq.opcode = NVME_ADMIN_CREATE_IO_CQ;
     create_cq.prp1 = c->io_completion.physical_address;
-    create_cq.command_dword10 = 1U | ((NVME_QUEUE_DEPTH - 1U) << 16);
+    create_cq.command_dword10 = 1U | ((uint32_t)(c->queue_depth - 1U) << 16);
     create_cq.command_dword11 = 1U; /* physically contiguous, polling completion */
     if (!submit_command(c, 1, &create_cq, 0)) goto fail;
 
     nvme_command_t create_sq = {0};
     create_sq.opcode = NVME_ADMIN_CREATE_IO_SQ;
     create_sq.prp1 = c->io_submission.physical_address;
-    create_sq.command_dword10 = 1U | ((NVME_QUEUE_DEPTH - 1U) << 16);
+    create_sq.command_dword10 = 1U | ((uint32_t)(c->queue_depth - 1U) << 16);
     create_sq.command_dword11 = 1U | (1U << 16); /* CQID=1 */
     if (!submit_command(c, 1, &create_sq, 0)) goto fail;
 

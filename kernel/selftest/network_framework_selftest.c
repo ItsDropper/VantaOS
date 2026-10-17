@@ -22,6 +22,11 @@ void network_framework_selftest(void) {
     mock_tx_count=0;received_type=0;received_header=received_length=0;
     int ok=net_device_register(&d);
     ok=ok&&net_device_count()>0&&net_device_get(0)!=0;
+    ok=ok&&net_device_configure_ipv4(&d,0xC0A80102U,0xFFFFFF00U,0xC0A80101U);
+    uint32_t address=0,mask=0,gateway=0;
+    ok=ok&&net_device_get_ipv4(&d,&address,&mask,&gateway);
+    ok=ok&&address==0xC0A80102U&&mask==0xFFFFFF00U&&gateway==0xC0A80101U;
+    ok=!net_device_configure_ipv4(&d,0xC0A80102U,0xFF00FF00U,0xC0A80101U)&&ok;
     ok=ok&&net_ethernet_handler_register(0x88B5U,mock_handler,0);
     ok=ok&&net_device_transmit(&d,frame,sizeof(frame))&&mock_tx_count==1;
     ok=net_device_set_link(&d,0)&&ok;
@@ -44,6 +49,7 @@ void network_framework_selftest(void) {
        stats.rx_dropped==1&&stats.rx_malformed==1&&ok;
     ok=net_ethernet_handler_unregister(0x88B5U,mock_handler,0)&&ok;
     ok=net_device_unregister(&d)&&ok;
+    ok=!net_device_get_ipv4(&d,&address,&mask,&gateway)&&ok;
     serial_write(ok?"VANTAOS_NETWORK_FRAMEWORK_OK\n":"VANTAOS_NETWORK_FRAMEWORK_FAIL\n");
 }
 #endif

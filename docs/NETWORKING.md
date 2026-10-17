@@ -62,8 +62,8 @@ DHCP, DNS, UDP, TCP, routing, sockets, network syscalls, link event interrupts, 
 
 ## Next sequence
 
-1. Add receive-path and queue-overflow end-to-end tests using QEMU user networking.
-2. Implement ARP and strict IPv4 validation/checksums, then ICMP echo and a QEMU ping test.
-3. Add UDP, DHCP, and DNS with packet-level regression tests.
-4. Implement TCP with retransmission, timeout, and buffer-ownership tests.
+1. Add ARP cache aging and address resolution for outgoing IPv4 traffic.
+2. Implement UDP with strict length/checksum validation and bounded receive buffers.
+3. Add DHCP and DNS clients with packet-level QEMU regression tests.
+4. Implement TCP with retransmission, timeout, congestion control, and buffer-ownership tests.
 5. Define socket syscalls only after protocol and buffer-lifetime contracts are tested.

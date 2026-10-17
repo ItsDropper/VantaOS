@@ -9,6 +9,11 @@ static uint16_t read_be16(const uint8_t* p){return (uint16_t)(((uint16_t)p[0]<<8
 static uint32_t read_be32(const uint8_t* p){return ((uint32_t)p[0]<<24)|((uint32_t)p[1]<<16)|((uint32_t)p[2]<<8)|p[3];}
 static void write_be16(uint8_t* p,uint16_t v){p[0]=(uint8_t)(v>>8);p[1]=(uint8_t)v;}
 static void write_be32(uint8_t* p,uint32_t v){p[0]=(uint8_t)(v>>24);p[1]=(uint8_t)(v>>16);p[2]=(uint8_t)(v>>8);p[3]=(uint8_t)v;}
+static int valid_sender_ip(uint32_t ip)
+{
+    uint8_t first=(uint8_t)(ip>>24);
+    return ip!=0U&&ip!=0xFFFFFFFFU&&first!=0U&&first!=127U&&first<224U;
+}
 static int valid_sender_mac(const uint8_t* m)
 {
     uint8_t any=0;for(uint32_t i=0;i<6;i++)any|=m[i];
@@ -25,8 +30,7 @@ static void arp_receive(net_device_t* d,const uint8_t* frame,size_t length,
        a[4]!=6U||a[5]!=4U||read_be16(a+6)!=ARP_REQUEST)return;
     const uint8_t* sender_mac=a+8;uint32_t sender_ip=read_be32(a+14);
     uint32_t target_ip=read_be32(a+24),local_ip=0;
-    if(!valid_sender_mac(sender_mac)||sender_ip==0U||
-       sender_ip==0xFFFFFFFFU||sender_ip>=0xE0000000U||
+    if(!valid_sender_mac(sender_mac)||!valid_sender_ip(sender_ip)||
        sender_mac[0]!=frame[6]||sender_mac[1]!=frame[7]||
        sender_mac[2]!=frame[8]||sender_mac[3]!=frame[9]||
        sender_mac[4]!=frame[10]||sender_mac[5]!=frame[11]||

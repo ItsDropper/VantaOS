@@ -205,14 +205,15 @@ static int wait_completion(nvme_controller_t* c, int admin,
 
     for (uint32_t spin = 0; spin < NVME_WAIT_LIMIT; ++spin) {
         nvme_completion_t completion;
-        completion.result = queue[*head].result;
-        completion.reserved = queue[*head].reserved;
-        completion.submission_head = queue[*head].submission_head;
-        completion.submission_id = queue[*head].submission_id;
-        completion.command_id = queue[*head].command_id;
-        completion.status_phase = queue[*head].status_phase;
+        uint16_t status_phase = queue[*head].status_phase;
         __atomic_thread_fence(__ATOMIC_ACQUIRE);
-        if ((completion.status_phase & 1U) == *phase) {
+        if ((status_phase & 1U) == *phase) {
+            completion.result = queue[*head].result;
+            completion.reserved = queue[*head].reserved;
+            completion.submission_head = queue[*head].submission_head;
+            completion.submission_id = queue[*head].submission_id;
+            completion.command_id = queue[*head].command_id;
+            completion.status_phase = status_phase;
             if (completion.command_id != command_id) {
                 c->failed = 1;
                 return 0;
@@ -400,18 +401,19 @@ static int complete_io_batch(nvme_controller_t* c, uint32_t pending)
             return 0;
         }
         nvme_completion_t completion;
+        uint16_t status_phase = queue[c->io_head].status_phase;
+        __atomic_thread_fence(__ATOMIC_ACQUIRE);
+        if ((status_phase & 1U) != c->io_phase) {
+            ++spins;
+            __asm__ volatile ("pause");
+            continue;
+        }
         completion.result = queue[c->io_head].result;
         completion.reserved = queue[c->io_head].reserved;
         completion.submission_head = queue[c->io_head].submission_head;
         completion.submission_id = queue[c->io_head].submission_id;
         completion.command_id = queue[c->io_head].command_id;
-        completion.status_phase = queue[c->io_head].status_phase;
-        __atomic_thread_fence(__ATOMIC_ACQUIRE);
-        if ((completion.status_phase & 1U) != c->io_phase) {
-            ++spins;
-            __asm__ volatile ("pause");
-            continue;
-        }
+        completion.status_phase = status_phase;
         nvme_io_slot_t* found = 0;
         for (uint32_t i = 0; i < NVME_IO_SLOTS; ++i) {
             nvme_io_slot_t* candidate = &c->io_slots[i];
@@ -453,6 +455,9 @@ static block_status_t namespace_transfer(nvme_namespace_t* ns, uint64_t lba,
     if (lba >= ns->sector_count || (uint64_t)count > ns->sector_count - lba)
         return BLOCK_STATUS_OUT_OF_RANGE;
     if ((uint64_t)count > UINT32_MAX / ns->sector_size)
+        return BLOCK_STATUS_INVALID;
+    size_t total_bytes = (size_t)count * ns->sector_size;
+    if ((uintptr_t)buffer > UINTPTR_MAX - total_bytes)
         return BLOCK_STATUS_INVALID;
 
     uint64_t flags = spinlock_lock_irqsave(&c->io_lock);

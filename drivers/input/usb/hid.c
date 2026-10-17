@@ -1,5 +1,5 @@
+#include "hid.h"
 #include "input.h"
-#include "stdint.h"
 #include <stdbool.h>
 
 /*

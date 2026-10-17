@@ -1072,14 +1072,14 @@ static void render(void)
     add_text(152, 8, "Ctrl+click multi-select  |  Right-click for actions", COLOR_MUTED);
 
     add_rect(8, 30, 448, 24, COLOR_ROW);
-    add_outline(8, 30, 448, 24, input_mode == INPUT_PATH ? COLOR_ACCENT : COLOR_BORDER);
+    add_rect(8, 53, 448, 1, input_mode == INPUT_PATH ? COLOR_ACCENT : COLOR_BORDER);
     if (input_mode == INPUT_PATH)
         add_text_tail(14, 34, input_buffer, COLOR_TEXT, 54U);
     else
         add_text_tail(14, 34, current_path, COLOR_TEXT, 54U);
 
     add_rect(466, 30, 270, 24, COLOR_ROW);
-    add_outline(466, 30, 270, 24, input_mode == INPUT_SEARCH ? COLOR_ACCENT : COLOR_BORDER);
+    add_rect(466, 53, 270, 1, input_mode == INPUT_SEARCH ? COLOR_ACCENT : COLOR_BORDER);
     add_text(472, 34, "Find:", COLOR_MUTED);
     if (input_mode == INPUT_SEARCH)
         add_text_tail(520, 34, input_buffer, COLOR_TEXT, 25U);
@@ -1127,7 +1127,7 @@ static void render(void)
         if (active)
         {
             add_rect(12, y - 2, 128, 23, COLOR_SELECTED);
-            add_outline(12, y - 2, 128, 23, COLOR_ACCENT);
+            add_rect(12, y + 20, 128, 1, COLOR_ACCENT);
         }
         add_text(18, y + 1, sidebar_labels[i],
                  active ? COLOR_ACCENT : COLOR_TEXT);
@@ -1195,7 +1195,7 @@ static void render(void)
         context_x = x;
         context_y = y;
         add_rect(x, y, 180, 122, COLOR_SURFACE);
-        add_outline(x, y, 180, 122, COLOR_ACCENT);
+        add_rect(x, y + 121, 180, 1, COLOR_ACCENT);
         static const char* menu[5] = {"Properties", "Rename", "Delete",
                                       "Compress", "Extract"};
         for (unsigned int i = 0; i < 5U; i++)
@@ -1205,7 +1205,7 @@ static void render(void)
     if (input_mode == INPUT_DIALOG)
     {
         add_rect(170, 140, 404, 106, COLOR_SURFACE);
-        add_outline(170, 140, 404, 106, COLOR_ACCENT);
+        add_rect(170, 245, 404, 1, COLOR_ACCENT);
         const char* prompt = dialog_mode == DIALOG_CREATE_FILE ? "Create file name:" :
             dialog_mode == DIALOG_CREATE_DIRECTORY ? "Create folder name:" :
             dialog_mode == DIALOG_RENAME ? "Rename selected item:" :
@@ -1216,7 +1216,7 @@ static void render(void)
         else
         {
             add_rect(182, 178, 380, 24, COLOR_ROW);
-            add_outline(182, 178, 380, 24, COLOR_BORDER);
+            add_rect(182, 201, 380, 1, COLOR_BORDER);
             add_text_tail(188, 182, input_buffer, COLOR_TEXT, 46U);
         }
         add_text(184, 216, "Enter confirm   Esc cancel", COLOR_MUTED);
@@ -1225,7 +1225,7 @@ static void render(void)
     if (properties_active)
     {
         add_rect(164, 118, 420, 230, COLOR_SURFACE);
-        add_outline(164, 118, 420, 230, COLOR_ACCENT);
+        add_rect(164, 347, 420, 1, COLOR_ACCENT);
         add_text(178, 128, "File properties", COLOR_TEXT);
         add_text_tail(178, 154, properties_info.name, COLOR_ACCENT, 60U);
         add_text(178, 178, properties_info.type == 2U ? "Type: Folder" : file_type_name(properties_info.name), COLOR_TEXT);

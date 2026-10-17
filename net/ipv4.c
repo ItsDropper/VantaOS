@@ -71,7 +71,7 @@ static void ipv4_receive(net_device_t* d,const uint8_t* frame,size_t length,
     if(icmp_length<8U||checksum(icmp,icmp_length)!=0U)return;
     if(icmp[0]==0U&&icmp[1]==0U){
         uint64_t flags=spinlock_lock_irqsave(&ping_lock);
-        if(ping_active&&source_ip==ping_target&&
+        if(ping_active==1U&&source_ip==ping_target&&
            read_be16(icmp+4U)==ping_identifier&&
            read_be16(icmp+6U)==ping_sequence)
             ping_received=1U;
@@ -175,7 +175,7 @@ int net_ipv4_ping(net_device_t* device, uint32_t destination,
     if (!ping_identifier) ping_identifier = 1U;
     ping_sequence = (uint16_t)(timer_get_ticks() & 0xFFFFU);
     ping_received = 0U;
-    ping_active = 1U;
+    ping_active = 2U; /* Reserved while ARP resolution and TX are in progress. */
     uint16_t identifier = ping_identifier;
     uint16_t sequence = ping_sequence;
     spinlock_unlock_irqrestore(&ping_lock, flags);
@@ -191,6 +191,10 @@ int net_ipv4_ping(net_device_t* device, uint32_t destination,
 
     int sent = net_ipv4_send(device, destination, IPV4_PROTOCOL_ICMP,
                              packet, sizeof(packet));
+    flags = spinlock_lock_irqsave(&ping_lock);
+    ping_received = 0U;
+    ping_active = sent ? 1U : 0U;
+    spinlock_unlock_irqrestore(&ping_lock, flags);
     uint32_t start = timer_get_ticks();
     uint32_t limit = timeout_ms / 10U;
     while (sent && (uint32_t)(timer_get_ticks() - start) < limit) {

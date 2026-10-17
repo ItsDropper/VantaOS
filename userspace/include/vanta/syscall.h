@@ -29,6 +29,7 @@
 #define VANTA_SYS_TERMINAL_CLEAR      13U
 #define VANTA_SYS_FILE_WRITE          14U
 #define VANTA_SYS_CREATE_FILE         15U
+#define VANTA_SYS_SETTINGS_APPLY       20U
 
 #define VANTA_OPEN_READ      1
 #define VANTA_OPEN_WRITE     2

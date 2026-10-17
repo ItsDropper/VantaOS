@@ -50,6 +50,65 @@ int cursor_saved_width;
 int cursor_saved_height;
 int cursor_saved_valid;
 
+/*
+ * The desktop previously painted the background, windows, and cursor directly
+ * into the visible linear framebuffer. Keep a complete frame off-screen and
+ * copy it to the device only after composition is finished.
+ */
+#define GRAPHICS_BACKBUFFER_MAX_WIDTH 1600U
+#define GRAPHICS_BACKBUFFER_MAX_HEIGHT 900U
+static uint8_t graphics_backbuffer[GRAPHICS_BACKBUFFER_MAX_WIDTH *
+                                   GRAPHICS_BACKBUFFER_MAX_HEIGHT * 4U];
+static uint8_t* graphics_display_framebuffer;
+static uint32_t graphics_display_pitch;
+static int graphics_frame_active;
+
+void graphics_begin_frame(void)
+{
+    if (!initialized || graphics_frame_active)
+        return;
+    if (framebuffer_width == 0U || framebuffer_height == 0U ||
+        framebuffer_width > GRAPHICS_BACKBUFFER_MAX_WIDTH ||
+        framebuffer_height > GRAPHICS_BACKBUFFER_MAX_HEIGHT ||
+        framebuffer_pitch < framebuffer_width * 4U)
+        return;
+
+    graphics_display_framebuffer = framebuffer;
+    graphics_display_pitch = framebuffer_pitch;
+    uint32_t backbuffer_pitch = framebuffer_width * 4U;
+    for (uint32_t y = 0; y < framebuffer_height; y++)
+    {
+        const uint8_t* source = graphics_display_framebuffer +
+                                (size_t)y * graphics_display_pitch;
+        uint8_t* target = graphics_backbuffer + (size_t)y * backbuffer_pitch;
+        for (uint32_t x = 0; x < backbuffer_pitch; x++)
+            target[x] = source[x];
+    }
+    framebuffer = graphics_backbuffer;
+    framebuffer_pitch = backbuffer_pitch;
+    graphics_frame_active = 1;
+}
+
+void graphics_end_frame(void)
+{
+    if (!graphics_frame_active)
+        return;
+
+    uint32_t row_bytes = framebuffer_width * 4U;
+    for (uint32_t y = 0; y < framebuffer_height; y++)
+    {
+        uint8_t* target = graphics_display_framebuffer +
+                          (size_t)y * graphics_display_pitch;
+        const uint8_t* source = graphics_backbuffer + (size_t)y * row_bytes;
+        for (uint32_t x = 0; x < row_bytes; x++)
+            target[x] = source[x];
+    }
+    framebuffer = graphics_display_framebuffer;
+    framebuffer_pitch = graphics_display_pitch;
+    graphics_frame_active = 0;
+}
+
+
 void graphics_clear_terminal_close_requested(void)
 {
     terminal_close_requested = 0;

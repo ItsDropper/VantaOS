@@ -206,8 +206,18 @@ void net_tcp_receive_ipv4(net_device_t *device, const uint8_t *ip,
         return;
 
     if (flags & TCP_FLAG_RST) {
-        client.failed = 1U;
-        client.state = TCP_CLOSED;
+        int reset_valid = 0;
+        if (client.state == TCP_SYN_SENT)
+            reset_valid = (flags & TCP_FLAG_ACK) &&
+                          acknowledgement == client.snd_nxt;
+        else
+            reset_valid = sequence == client.rcv_nxt;
+        if (reset_valid) {
+            client.failed = 1U;
+            client.state = TCP_CLOSED;
+        } else {
+            send_ack();
+        }
         return;
     }
 
@@ -249,9 +259,10 @@ void net_tcp_receive_ipv4(net_device_t *device, const uint8_t *ip,
 
     if (flags & TCP_FLAG_ACK) {
         if ((int32_t)(acknowledgement - client.snd_una) >= 0 &&
-            (int32_t)(client.snd_nxt - acknowledgement) >= 0)
+            (int32_t)(client.snd_nxt - acknowledgement) >= 0) {
             client.snd_una = acknowledgement;
-        client.peer_window = advertised_window;
+            client.peer_window = advertised_window;
+        }
     }
 
     if (payload_length && sequence == client.rcv_nxt) {

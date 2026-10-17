@@ -69,7 +69,8 @@ jobs:
         run: |
           set -euo pipefail
           log="e1000-boot.log"
-          rm -f "$log" qemu-e1000-stderr.log
+          rm -f "$log" qemu-e1000-stderr.log e1000-network.img
+          cp nvme-fat32-template.img e1000-network.img
           stdbuf -o0 timeout 45s qemu-system-x86_64 \
             -machine pc \
             -nodefaults \
@@ -78,7 +79,7 @@ jobs:
             -device e1000,netdev=net0 \
             -netdev user,id=net0 \
             -drive file=VantaOS.iso,media=cdrom,format=raw \
-            -drive file=vantaos.img,if=ide,format=raw \
+            -drive file=e1000-network.img,if=ide,format=raw \
             -boot order=d \
             -display vnc=127.0.0.1:1 \
             -serial stdio \

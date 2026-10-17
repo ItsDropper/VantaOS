@@ -9,7 +9,7 @@
 #include "terminal_process.h"
 #include "shell.h"
 #include "terminal.h"
-#include "file_explorer.h"
+#include "file_explorer_process.h"
 #include "gui_server.h"
 
 #include <stddef.h>
@@ -56,8 +56,6 @@ static void terminal_close_window(void)
 {
     terminal_window_open = 0;
     graphics_clear_terminal_open_request();
-    file_explorer_initialize();
-
     graphics_set_terminal_running(0);
 
     terminal_reset();
@@ -83,6 +81,20 @@ void desktop_present(void)
 void desktop_update(void)
 {
     gui_server_cleanup_dead_windows();
+
+    uint32_t explorer_pid = file_explorer_process_pid();
+    if (graphics_get_active_panel() == 2)
+    {
+        if (explorer_pid == 0U)
+        {
+            if (file_explorer_process_start(process_current_pid()) < 0)
+                graphics_select_panel(0);
+        }
+        else
+            (void)gui_server_set_owner_visible(explorer_pid, 1);
+    }
+    else if (explorer_pid != 0U)
+        (void)gui_server_set_owner_visible(explorer_pid, 0);
 
     /* Keep the RTC clock/date current even when the user is not moving the mouse. */
     if (graphics_get_active_panel() != 3)

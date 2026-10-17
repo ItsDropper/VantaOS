@@ -63,7 +63,7 @@ static void kernel_initialize(const vanta_boot_info_t* boot_info)
     pci_initialize();
     heap_initialize();
     net_initialize();
-    if (!net_arp_initialize() || !net_ipv4_initialize())
+    if (!net_arp_initialize() || !net_ipv4_initialize() || !net_udp_initialize())
         serial_write("VANTAOS_NETWORK_PROTOCOL_REGISTER_FAIL\n");
     if (!e1000_initialize())
         serial_write("VANTAOS_E1000_DRIVER_REGISTER_FAIL\n");

@@ -198,6 +198,8 @@ jobs:
           rm -f "$monitor" "$log"
           timeout 45s qemu-system-x86_64 \
             -machine pc \
+            -nodefaults \
+            -vga std \
             -smp 1 \
             -m 256M \
             -device qemu-xhci,id=xhci \

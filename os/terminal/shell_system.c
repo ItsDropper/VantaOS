@@ -115,6 +115,7 @@ void shell_help(void)
     terminal_write("  net connect - Obtain DHCP IPv4/gateway/DNS automatically\n");
     terminal_write("  net dhcp  - Alias for net connect\n");
     terminal_write("  net dns <hostname> - Resolve an A record using DHCP DNS\n");
+    terminal_write("  net ping <IPv4> - Test reachability with ICMP echo\n");
     terminal_write("  net poll - Poll network drivers and receive queues\n");
     terminal_write("  net config <index> <ip> <mask> <gateway> - Set static IPv4\n");
     terminal_write("  -F       - Force supported destructive commands (never kills PID 0/current)\n");

@@ -65,7 +65,7 @@ This roadmap prioritizes a trustworthy kernel over visual features. A Windows al
 - [x] Exercise FAT32-backed executable loading using a disposable CI disk image.
 - [ ] Expand FAT32 read tests against disposable disk fixtures.
 - [x] Validate bounded FAT32 8.3 regular-file writes and VFS readback in disposable QEMU disk fixtures.
-- [ ] Implement long-filename writes, directory creation, rename/delete, crash-safe replacement, and broader persistence/corruption tests.
+- [x] Implement printable-ASCII long-filename writes, directory creation, rename/delete, and CI regression coverage on disposable FAT32 images.\n- [ ] Add Unicode LFN creation, cross-directory move, crash-safe replacement, concurrent mutation protection, and broader persistence/corruption tests.
 - [ ] Add corruption-safe tests and consistent error propagation.
 
 ### M5.5 — User-space desktop application platform

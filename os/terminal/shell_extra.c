@@ -458,6 +458,9 @@ static int command_net(uint32_t argc, char **argv)
             } else terminal_write("\n    IPv4 unconfigured");
             net_device_stats_t stats;
             if (net_device_get_stats(d, &stats)) {
+                if (d->ipv4_dns) {
+                    terminal_write("\n    DNS "); print_ipv4(d->ipv4_dns);
+                }
                 terminal_write("\n    RX "); shell_print_decimal((uint32_t)stats.rx_frames);
                 terminal_write(" frames, "); shell_print_decimal((uint32_t)stats.rx_dropped);
                 terminal_write(" dropped; TX "); shell_print_decimal((uint32_t)stats.tx_frames);
@@ -467,6 +470,55 @@ static int command_net(uint32_t argc, char **argv)
             terminal_putchar('\n');
         }
         terminal_write("Note: device visibility does not imply Internet access; DHCP/DNS/TCP are not implemented.\n");
+        return 1;
+    }
+    if ((argc == 2U || argc == 3U) &&
+        (shell_string_equals(argv[1], "dhcp") ||
+         shell_string_equals(argv[1], "connect"))) {
+        uint32_t index = UINT32_MAX;
+        if (argc == 3U && !parse_u32(argv[2], &index)) {
+            terminal_write("\nusage: net connect [interface-index]");
+            return 1;
+        }
+        net_device_t *d = 0;
+        if (index != UINT32_MAX) {
+            d = net_device_get(index);
+        } else {
+            for (uint32_t i = 0; i < net_device_count(); ++i) {
+                net_device_t *candidate = net_device_get(i);
+                if (candidate && candidate->link_up) {
+                    d = candidate;
+                    index = i;
+                    break;
+                }
+            }
+        }
+        if (!d || !d->link_up) {
+            terminal_write("\nnet connect: no link-up network interface; check cable or virtual NIC");
+            return 1;
+        }
+        terminal_write("\nDHCP: requesting IPv4 configuration on ");
+        terminal_write(d->name);
+        terminal_write(" (up to 30 seconds)...");
+        uint32_t dns = 0, lease = 0;
+        if (!net_dhcp_configure(d, 30000U, &dns, &lease)) {
+            terminal_write("\nDHCP failed or timed out. Check link, DHCP server, VLAN, and driver RX.");
+            return 1;
+        }
+        d->ipv4_dns = dns;
+        terminal_write("\nDHCP lease acquired: ");
+        print_ipv4(d->ipv4_address);
+        terminal_write(" / ");
+        print_ipv4(d->ipv4_netmask);
+        terminal_write("\nGateway: ");
+        if (d->ipv4_gateway) print_ipv4(d->ipv4_gateway);
+        else terminal_write("none");
+        terminal_write("\nDNS: ");
+        if (d->ipv4_dns) print_ipv4(d->ipv4_dns);
+        else terminal_write("not supplied");
+        terminal_write("\nLease seconds: ");
+        shell_print_decimal(lease);
+        terminal_write("\nInterface configured. General outbound Internet traffic still requires IPv4/ARP transmit and DNS/TCP client support.");
         return 1;
     }
     if (argc == 2U && shell_string_equals(argv[1], "poll")) {
@@ -493,7 +545,7 @@ static int command_net(uint32_t argc, char **argv)
         terminal_write(" (static; no DHCP lease or Internet test performed)");
         return 1;
     }
-    terminal_write("\nusage: net [status|poll] | net config <index> <ip> <netmask> <gateway>");
+    terminal_write("\nusage: net [status|poll|connect [index]|dhcp [index]] | net config <index> <ip> <netmask> <gateway>");
     return 1;
 }
 

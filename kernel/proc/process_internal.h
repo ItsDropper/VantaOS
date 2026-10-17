@@ -24,6 +24,8 @@ void process_reset_record(process_t* process);
 void process_reparent_children_locked(uint32_t parent_pid);
 int process_stack_is_valid_locked(const process_t* process);
 int process_release_user_resources(process_t* process);
+void process_release_unpublished_user_image(
+    paging_address_space_t* space, void* code_frame, void* stack_frame);
 int process_install_user_image(const char* name, uint32_t parent_pid,
                                paging_address_space_t* space,
                                uintptr_t entry, uintptr_t stack_base,

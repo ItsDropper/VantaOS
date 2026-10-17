@@ -1,4 +1,5 @@
 #include <vanta/gui.h>
+#include <vanta/theme.h>
 
 #define PATH_CAPACITY 128U
 #define LIST_CAPACITY 2048U
@@ -9,13 +10,14 @@
 #define WINDOW_WIDTH 760U
 #define WINDOW_HEIGHT 460U
 
-#define COLOR_TEXT 0x00E8EDF4U
-#define COLOR_MUTED 0x008D9BACU
-#define COLOR_SURFACE 0x000C1119U
-#define COLOR_ROW 0x001D2835U
-#define COLOR_ACCENT 0x004B9CFFU
-#define COLOR_BORDER 0x002A3746U
-#define COLOR_ERROR 0x00F87171U
+static vanta_theme_t current_theme;
+#define COLOR_TEXT vanta_theme_text_color(&current_theme)
+#define COLOR_MUTED vanta_theme_muted_color(&current_theme)
+#define COLOR_SURFACE vanta_theme_surface_color(&current_theme)
+#define COLOR_ROW vanta_theme_row_color(&current_theme)
+#define COLOR_ACCENT vanta_theme_accent_color(&current_theme)
+#define COLOR_BORDER vanta_theme_border_color(&current_theme)
+#define COLOR_ERROR (current_theme.light ? 0x00B83C49U : 0x00F87171U)
 
 static char current_path[PATH_CAPACITY] = "/";
 static char list_buffer[LIST_CAPACITY];
@@ -353,7 +355,7 @@ static void render(void)
 
     add_text(16, 62, "Up     Home     Refresh", COLOR_ACCENT);
 
-    add_rect(8, 88, 720, 250, 0x000F151EU);
+    add_rect(8, 88, 720, 250, COLOR_ROW);
     if (preview_active)
     {
         for (size_t i = 0U; i < preview_count && i < PREVIEW_ROWS; i++)
@@ -414,6 +416,7 @@ int main(int argc, char** argv)
     if (created <= 0)
         vanta_exit(3);
     window_id = (uint32_t)created;
+    current_theme = vanta_theme_load();
     (void)load_directory();
     render();
 

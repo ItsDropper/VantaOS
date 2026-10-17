@@ -1092,7 +1092,7 @@ static void render(void)
 
     add_rect(152, 112, 584, 236, COLOR_ROW);
     add_text(160, 114, "Name", COLOR_MUTED);
-    add_text(600, 114, "Type / size", COLOR_MUTED);
+    add_text(600, 114, "Kind", COLOR_MUTED);
     size_t end = first_visible + DISPLAY_ROWS;
     if (end > visible_count)
         end = visible_count;
@@ -1106,9 +1106,7 @@ static void render(void)
             add_rect(156, y - 2, 576, 19, COLOR_SELECTED);
             add_outline(156, y - 2, 576, 19, COLOR_ACCENT);
         }
-        add_text(164, y, entry_is_directory[index] ? "[D]" : "[F]",
-                 entry_is_directory[index] ? COLOR_ACCENT : COLOR_MUTED);
-        add_text_tail(190, y, entries[index], COLOR_TEXT, 48U);
+        add_text_tail(164, y, entries[index], COLOR_TEXT, 52U);
         add_text(600, y, entry_is_directory[index] ? "Folder" :
                  ends_with_ci(entries[index], ".VZA") ? "Archive" : "File",
                  entry_is_directory[index] ? COLOR_ACCENT : COLOR_MUTED);
@@ -1288,7 +1286,10 @@ int main(int argc, char** argv)
                     (void)build_entry_path(index, clipboard_path, sizeof(clipboard_path));
             }
             else if (key == 22U)
+            {
                 path_input_begin();
+                copy_text(input_buffer, sizeof(input_buffer), clipboard_path);
+            }
             else if (key == 1U)
             {
                 for (size_t i = 0; i < entry_count; i++)

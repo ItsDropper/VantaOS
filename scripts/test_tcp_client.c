@@ -227,6 +227,13 @@ int main(void)
         return 6;
     }
     net_tcp_close(&device);
-    puts("TCP client handshake, checksum, send/ACK, receive/FIN, and close passed");
+
+    /* A malformed driver-provided MTU must fail closed, never underflow. */
+    device.mtu = 0U;
+    if (net_tcp_connect(&device, REMOTE_IP, 80U, 3000U)) {
+        fputs("TCP accepted an invalid zero MTU\\n", stderr);
+        return 7;
+    }
+    puts("TCP client handshake, checksum, send/ACK, receive/FIN, close, and invalid-MTU rejection passed");
     return 0;
 }

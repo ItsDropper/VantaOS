@@ -650,7 +650,7 @@ static int command_net(uint32_t argc, char **argv)
             }
             terminal_putchar('\n');
         }
-        terminal_write("Use 'net connect' for DHCP, 'net ping' to test reachability, and 'net dns' to resolve names. TCP/HTTP clients are not implemented yet.\n");
+        terminal_write("Use 'net connect' for DHCP, 'net ping' for reachability, 'net dns' for DNS, and 'net http http://host/' for a plain-HTTP GET. HTTPS/TLS is not implemented.\n");
         return 1;
     }
     if ((argc == 2U || argc == 3U) &&
@@ -699,7 +699,7 @@ static int command_net(uint32_t argc, char **argv)
         else terminal_write("not supplied");
         terminal_write("\nLease seconds: ");
         shell_print_decimal(lease);
-        terminal_write("\nInterface configured. General outbound Internet traffic still requires IPv4/ARP transmit and DNS/TCP client support.");
+        terminal_write("\nInterface configured. Try 'net ping 1.1.1.1' then 'net http http://example.com/'.");
         return 1;
     }
     if (argc == 3U && (shell_string_equals(argv[1], "http") ||
@@ -783,7 +783,7 @@ static int command_net(uint32_t argc, char **argv)
         terminal_write(" (static; no DHCP lease or Internet test performed)");
         return 1;
     }
-    terminal_write("\nusage: net [status|poll|connect [index]|dhcp [index]|dns <hostname>] | net config <index> <ip> <netmask> <gateway>");
+    terminal_write("\nusage: net [status|poll|connect [index]|dhcp [index]|dns <hostname>|ping <IPv4>|http <URL>] | net config <index> <ip> <netmask> <gateway>");
     return 1;
 }
 

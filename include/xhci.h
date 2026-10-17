@@ -11,6 +11,7 @@ int xhci_submit_command(uint32_t type, uint64_t parameter,
 uint32_t xhci_port_count(void);
 uint32_t xhci_port_status(uint32_t port);
 int xhci_reset_port(uint32_t port);
+void xhci_ack_port_changes(uint32_t port);
 uint32_t xhci_port_speed(uint32_t port);
 int xhci_enable_device(uint32_t port, uint32_t speed, uint16_t ep0_packet,
                        uint32_t* slot_id_out);

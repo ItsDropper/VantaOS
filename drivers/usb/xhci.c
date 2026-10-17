@@ -12,7 +12,7 @@
 #define XHCI_PCI_PROG_IF     0x30U
 
 #define XHCI_MMIO_BASE       0xE0000000ULL
-#define XHCI_MMIO_MAP_SIZE   0x00040000ULL
+#define XHCI_MMIO_MAP_SIZE   0x00010000ULL
 #define XHCI_MAX_PORTS       32U
 #define XHCI_MAX_SLOTS       8U
 #define XHCI_EP0_RING_TRBS   16U
@@ -47,7 +47,7 @@
 #define XHCI_PORT_RESET       (1U << 4)
 #define XHCI_PORT_WARM_RESET  (1U << 31)
 #define XHCI_PORT_CHANGE_BITS ((1U << 17) | (1U << 18) | (1U << 19) | \
-                               (1U << 20) | (1U << 21) | (1U << 22))
+                               (1U << 20) | (1U << 21) | (1U << 22) | (1U << 23))
 
 #define XHCI_TRB_CYCLE        (1U << 0)
 #define XHCI_TRB_TYPE_SHIFT   10U
@@ -683,6 +683,20 @@ uint32_t xhci_port_status(uint32_t port)
                        XHCI_PORTSC_BASE + (port - 1U) * 0x10U);
 }
 
+void xhci_ack_port_changes(uint32_t port)
+{
+    if (!controller_online || port == 0U || port > max_ports)
+        return;
+    uint32_t offset = XHCI_PORTSC_BASE + (port - 1U) * 0x10U;
+    uint32_t portsc = mmio_read32(operational, offset);
+    uint32_t changes = portsc & XHCI_PORT_CHANGE_BITS;
+    if (changes != 0U) {
+        /* Preserve writable power/indicator/link-write controls, but do not
+           echo the RW1C port-enable or reset bits. */
+        uint32_t controls = portsc & (XHCI_PORT_POWER | (3U << 14) | (1U << 16));
+        mmio_write32(operational, offset, controls | changes);
+    }
+}
 int xhci_reset_port(uint32_t port)
 {
     if (!controller_online || port == 0U || port > max_ports)
@@ -700,12 +714,16 @@ int xhci_reset_port(uint32_t port)
     writable |= XHCI_PORT_POWER;
     mmio_write32(operational, offset, writable);
     portsc = mmio_read32(operational, offset);
+    uint32_t speed = (portsc >> 10) & 0x0FU;
+    uint32_t reset_bit = speed >= 4U
+        ? XHCI_PORT_WARM_RESET : XHCI_PORT_RESET;
     writable = portsc & ~(XHCI_PORT_CHANGE_BITS |
                           XHCI_PORT_ENABLED |
+                          XHCI_PORT_RESET |
                           XHCI_PORT_WARM_RESET);
-    writable |= XHCI_PORT_RESET;
+    writable |= reset_bit;
     mmio_write32(operational, offset, writable);
-    if (!wait_register(operational, offset, XHCI_PORT_RESET, 0))
+    if (!wait_register(operational, offset, reset_bit, 0))
         return 0;
     portsc = mmio_read32(operational, offset);
     return (portsc & XHCI_PORT_ENABLED) != 0U;
@@ -864,10 +882,13 @@ static int controller_start(const struct pci_device* pci)
         portsc = mmio_read32(operational, offset);
         if ((portsc & XHCI_PORT_CONNECTED) != 0U) {
             writable = portsc & ~(XHCI_PORT_CHANGE_BITS | XHCI_PORT_ENABLED |
-                                  XHCI_PORT_WARM_RESET);
-            writable |= XHCI_PORT_RESET;
+                                  XHCI_PORT_RESET | XHCI_PORT_WARM_RESET);
+            uint32_t speed = (portsc >> 10) & 0x0FU;
+            uint32_t reset_bit = speed >= 4U
+                ? XHCI_PORT_WARM_RESET : XHCI_PORT_RESET;
+            writable |= reset_bit;
             mmio_write32(operational, offset, writable);
-            (void)wait_register(operational, offset, XHCI_PORT_RESET, 0);
+            (void)wait_register(operational, offset, reset_bit, 0);
         }
     }
 

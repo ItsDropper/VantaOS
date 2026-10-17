@@ -270,7 +270,9 @@ void usb_poll(void)
     for (uint32_t port = 1; port <= xhci_port_count(); ++port) {
         if ((changed_ports & (1U << (port - 1U))) == 0U)
             continue;
-        if ((xhci_port_status(port) & 1U) == 0U) {
+        uint32_t port_status = xhci_port_status(port);
+        xhci_ack_port_changes(port);
+        if ((port_status & 1U) == 0U) {
             for (uint32_t slot = 1; slot <= USB_MAX_XHCI_SLOTS; ++slot) {
                 if (input_slots[slot].active && input_slots[slot].port == port) {
                     usb_detach_slot(slot);

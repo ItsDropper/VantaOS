@@ -37,6 +37,7 @@ On pushes to `master`, pull requests targeting the repository, and manual workfl
 | `VANTAOS_USER_FILE_IO_OK` / `VANTAOS_USER_FILE_WRITE_OK` | The ring-3 smoke path validates file-descriptor read/write and bounded regular-file creation/write behavior for the test fixture. |
 | `VANTAOS_USER_FILE_RANGE_IO_OK` / `VANTAOS_FAT32_MULTICLUSTER_IO_OK` | User-mode range I/O and multi-cluster FAT32 reads/writes pass the targeted smoke assertions. |
 | `VANTAOS_FAT32_WRITE_READBACK_OK` / `VANTAOS_FAT32_REBOOT_PERSIST_OK` | The disposable FAT32 image passes write/readback and a second-boot persistence assertion. |
+| `VANTAOS_EXPLORER_E2E_OK` | A separately compiled ring-3 build of the actual Explorer source exercises its dialog/key input handlers, directory listing and case-insensitive search, recursive copy, cut/move, rename and selection retention, context-menu Properties/Compress/Extract/Delete dispatch, archive round-trip, and filesystem readback. The disposable `/EXPLORER-E2E` fixture is removed on success. |
 | `VANTAOS_USER_GUI_SYSCALL_OK` | The ring-3 GUI smoke test passes its window/draw/event ABI checks, including malformed commands and invalid pointers. |
 | `VANTAOS_SETTINGS_STORAGE_OK` | The ring-3 Settings self-test writes its expected configuration, closes it, reopens it, and verifies the readback. |
 | `VANTAOS_SETTINGS_PERSIST_OK` | The Settings self-test found the expected configuration already present before rewriting it on the later boot, demonstrating the tested cross-boot persistence path. |

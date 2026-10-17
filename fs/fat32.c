@@ -264,7 +264,11 @@ static int fat32_write_sector(uint32_t lba, const uint8_t* data)
     if (!active_device || !data || active_device->sector_size != 512U ||
         (uint64_t)lba >= active_device->sector_count)
         return 0;
-    return block_device_write(active_device, lba, 1U, data) == BLOCK_STATUS_OK;
+    if (block_device_write(active_device, lba, 1U, data) != BLOCK_STATUS_OK)
+        return 0;
+    /* Keep each metadata/data sector durable before a caller reports success.
+       This is conservative until FAT32 gains an ordered transaction layer. */
+    return block_device_flush(active_device) == BLOCK_STATUS_OK;
 }
 
 static int fat32_raw_entry(uint32_t cluster, uint32_t* value)

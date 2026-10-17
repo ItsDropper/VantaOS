@@ -277,19 +277,17 @@ int gui_server_set_owner_visible(uint32_t pid, int visible)
     int changed = 0;
     int focused_owned = 0;
     gui_window_t* newest_owned = 0;
+
     for (unsigned int i = 0; i < VANTA_GUI_MAX_WINDOWS; i++)
     {
         gui_window_t* window = &windows[i];
         if (!window->used || window->owner_pid != pid)
             continue;
         found = 1;
+        if (window->visible != visible)
+            changed = 1;
         if (window->id == focused_window_id)
             focused_owned = 1;
-        if (window->visible != visible)
-        {
-            window->visible = visible;
-            changed = 1;
-        }
         if (!newest_owned || window->z_order > newest_owned->z_order)
             newest_owned = window;
     }
@@ -300,8 +298,16 @@ int gui_server_set_owner_visible(uint32_t pid, int visible)
         return found;
     }
 
+    /* Emit focus-lost while the old window is still visible in the registry. */
     if (!visible && focused_owned)
         gui_focus_locked(0);
+
+    for (unsigned int i = 0; i < VANTA_GUI_MAX_WINDOWS; i++)
+    {
+        gui_window_t* window = &windows[i];
+        if (window->used && window->owner_pid == pid)
+            window->visible = visible;
+    }
 
     if (visible && newest_owned)
         gui_focus_locked(newest_owned);

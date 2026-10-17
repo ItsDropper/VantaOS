@@ -177,6 +177,12 @@ void graphics_update_cursor(void)
     graphics_draw_cursor();
 }
 
+int graphics_can_redraw_windows_in_place(void)
+{
+    return initialized && !graphics_frame_active && active_panel == 3 &&
+           !start_menu_open && !terminal_dragging && !explorer_dragging;
+}
+
 
 void graphics_clear_terminal_close_requested(void)
 {

@@ -388,6 +388,12 @@ int main(int argc, char** argv)
         }
         if (event.type == VANTA_GUI_EVENT_CLOSE_REQUEST)
             close_app();
+        if (event.type == VANTA_GUI_EVENT_THEME_CHANGED)
+        {
+            current_theme = vanta_theme_load();
+            render();
+            continue;
+        }
 
         if (event.type != VANTA_GUI_EVENT_KEY)
             continue;

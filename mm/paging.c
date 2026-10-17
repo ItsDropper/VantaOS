@@ -94,7 +94,7 @@ static uint64_t* table_for(uintptr_t virtual_address)
     }
 
     {
-        uint64_t first = (MMIO_WINDOW_BASE >> 21) & 0x1FFU;
+        uint64_t first = (PAGING_MMIO_BASE >> 21) & 0x1FFU;
         if (pd_index >= first && pd_index < first + MMIO_PT_COUNT)
             return mmio_pt[pd_index - first];
     }

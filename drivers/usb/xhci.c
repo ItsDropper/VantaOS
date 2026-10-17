@@ -639,7 +639,10 @@ int xhci_configure_interrupt_in(uint32_t slot_id, uint8_t endpoint_address,
     uint32_t* control = input_context_word(index, 0);
     uint32_t* slot = input_context_word(index, 1);
     uint32_t* endpoint = input_context_word(index, dci + 1U);
-    control[1] = 1U | (1U << (dci + 1U));
+    /* Input Control Context Add Context Flags use bit DCI, not DCI + 1.
+       The input-context array places endpoint DCI at context index DCI + 1,
+       but the add-flags bitmap has bit 0 for Slot and bit DCI for Endpoint. */
+    control[1] = 1U | (1U << dci);
 
     /*
      * Configure Endpoint requires the existing Slot Context to be carried

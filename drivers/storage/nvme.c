@@ -530,11 +530,11 @@ static int nvme_run_io_selftest(void)
         }
     }
     if (!device) {
-        serial_write("VANTAOS_NVME_IO_SELFTEST_SKIPPED\\n");
+        serial_write("VANTAOS_NVME_IO_SELFTEST_SKIPPED\n");
         return 1;
     }
     if (device->sector_count <= 8U || device->sector_size > NVME_PAGE_SIZE) {
-        serial_write("VANTAOS_NVME_IO_SELFTEST_FAIL\\n");
+        serial_write("VANTAOS_NVME_IO_SELFTEST_FAIL\n");
         return 0;
     }
     static uint8_t before[NVME_PAGE_SIZE];
@@ -543,7 +543,7 @@ static int nvme_run_io_selftest(void)
     for (uint32_t i = 0; i < device->sector_size; ++i)
         expected[i] = (uint8_t)((i * 37U) ^ 0xA5U);
     if (block_device_read(device, 7U, 1U, before) != BLOCK_STATUS_OK) {
-        serial_write("VANTAOS_NVME_IO_SELFTEST_FAIL\\n");
+        serial_write("VANTAOS_NVME_IO_SELFTEST_FAIL\n");
         return 0;
     }
     int ok = block_device_write(device, 7U, 1U, expected) == BLOCK_STATUS_OK;
@@ -558,8 +558,8 @@ static int nvme_run_io_selftest(void)
         ok = 0;
     if (block_device_flush(device) != BLOCK_STATUS_OK)
         ok = 0;
-    serial_write(ok ? "VANTAOS_NVME_IO_SELFTEST_OK\\n" :
-                      "VANTAOS_NVME_IO_SELFTEST_FAIL\\n");
+    serial_write(ok ? "VANTAOS_NVME_IO_SELFTEST_OK\n" :
+                      "VANTAOS_NVME_IO_SELFTEST_FAIL\n");
     return ok;
 }
 #endif
@@ -583,4 +583,7 @@ void nvme_initialize(void)
     uint32_t bound = storage_probe_pci_devices();
     if (!bound)
         serial_write("VANTAOS_NVME_NO_CONTROLLER_BOUND\n");
+#ifdef VANTAOS_SELF_TEST
+    (void)nvme_run_io_selftest();
+#endif
 }

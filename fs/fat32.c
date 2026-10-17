@@ -719,50 +719,227 @@ static int fat32_find_entry(uint32_t dir, const uint8_t* wanted, fat32_slot_t* o
     return 0;
 }
 
+static char fat32_fold_name(char c)
+{
+    return (c >= 'A' && c <= 'Z') ? (char)(c - 'A' + 'a') : c;
+}
+
+static int fat32_names_equal(const char* left, const char* right)
+{
+    unsigned int i = 0;
+    if (!left || !right)
+        return 0;
+    while (left[i] && right[i])
+    {
+        if (fat32_fold_name(left[i]) != fat32_fold_name(right[i]))
+            return 0;
+        i++;
+    }
+    return left[i] == right[i];
+}
+
+static void fat32_slot_from_entry(fat32_slot_t* out, uint32_t lba,
+                                  uint32_t offset, const uint8_t* entry)
+{
+    out->found = 1;
+    out->entry_lba = lba;
+    out->entry_offset = offset;
+    out->attributes = entry[11];
+    out->first_cluster = ((uint32_t)fat16(&entry[20]) << 16) |
+                         fat16(&entry[26]);
+    out->size = fat32(&entry[28]);
+}
+
+static int fat32_find_component(uint32_t directory, const char* name,
+                                fat32_slot_t* out, uint8_t alias[11])
+{
+    if (!name || !out || !alias ||
+        directory < 2U || directory > cluster_count + 1U)
+        return 0;
+    uint8_t wanted[11];
+    int has_short = fat32_make_short_name(name, wanted);
+    uint32_t cluster = directory;
+    fat32_lfn_state_t lfn;
+    fat32_lfn_reset(&lfn);
+    out->found = 0;
+    out->free_found = 0;
+    for (uint32_t steps = 0; steps < cluster_count; steps++)
+    {
+        uint32_t base = cluster_lba(cluster);
+        if (base == FAT32_INVALID_LBA)
+            return 0;
+        out->last_cluster = cluster;
+        for (uint32_t sector = 0; sector < sectors_per_cluster; sector++)
+        {
+            uint32_t lba = base + sector;
+            if (!read_sector(lba, sector_buffer))
+                return 0;
+            for (uint32_t offset = 0; offset < 512U; offset += 32U)
+            {
+                const uint8_t* entry = &sector_buffer[offset];
+                if (entry[0] == 0U)
+                    return 0;
+                if (entry[0] == 0xE5U)
+                {
+                    fat32_lfn_reset(&lfn);
+                    continue;
+                }
+                if (entry[11] == 0x0FU)
+                {
+                    (void)fat32_lfn_consume(entry, &lfn);
+                    continue;
+                }
+                if ((entry[11] & 0x08U) != 0U)
+                {
+                    fat32_lfn_reset(&lfn);
+                    continue;
+                }
+                char long_name[256];
+                int has_long = lfn.active && fat32_lfn_is_complete(&lfn) &&
+                    lfn.expected_checksum == fat32_lfn_checksum(entry) &&
+                    fat32_lfn_decode(&lfn, long_name);
+                char display_name[256];
+                short_name(entry, display_name);
+                int match_long = has_long && fat32_names_equal(long_name, name);
+                int match_short = has_short &&
+                    fat32_names_equal(display_name, name);
+                if (match_long || match_short)
+                {
+                    fat32_slot_from_entry(out, lba, offset, entry);
+                    for (unsigned int i = 0; i < 11U; i++)
+                        alias[i] = entry[i];
+                    return 1;
+                }
+                fat32_lfn_reset(&lfn);
+            }
+        }
+        uint32_t next;
+        if (!fat32_raw_entry(cluster, &next))
+            return 0;
+        if (next >= FAT32_EOC_MIN)
+            return 0;
+        if (next == FAT32_BAD_CLUSTER || next < 2U ||
+            next > cluster_count + 1U)
+            return 0;
+        cluster = next;
+        fat32_lfn_reset(&lfn);
+    }
+    return 0;
+}
+
+static int fat32_make_alias(uint32_t directory, const char* name,
+                            uint8_t alias[11])
+{
+    char base[7] = {0};
+    char ext[4] = {0};
+    unsigned int base_len = 0U, ext_len = 0U;
+    const char* dot = 0;
+    unsigned int length = 0U;
+    while (name[length])
+    {
+        if (length >= 255U)
+            return 0;
+        if (name[length] == '.')
+            dot = name + length;
+        length++;
+    }
+    if (length == 0U || name[0] == '.' ||
+        (length == 1U && name[0] == '.') ||
+        (length == 2U && name[0] == '.' && name[1] == '.'))
+        return 0;
+    unsigned int raw_base = dot ? (unsigned int)(dot - name) : length;
+    for (unsigned int i = 0; i < raw_base && base_len < 6U; i++)
+    {
+        char ch = name[i];
+        if (ch >= 'a' && ch <= 'z') ch = (char)(ch - 'a' + 'A');
+        if ((ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') ||
+            ch == '_' || ch == '-')
+            base[base_len++] = ch;
+    }
+    if (base_len == 0U)
+    {
+        base[0] = 'F'; base[1] = 'I'; base[2] = 'L'; base[3] = 'E';
+        base_len = 4U;
+    }
+    if (dot)
+    {
+        const char* p = dot + 1;
+        while (*p && ext_len < 3U)
+        {
+            char ch = *p++;
+            if (ch >= 'a' && ch <= 'z') ch = (char)(ch - 'a' + 'A');
+            if ((ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9'))
+                ext[ext_len++] = ch;
+        }
+    }
+    for (unsigned int attempt = 1U; attempt < 1000U; attempt++)
+    {
+        for (unsigned int i = 0; i < 11U; i++) alias[i] = ' ';
+        unsigned int digits = attempt < 10U ? 1U :
+                              attempt < 100U ? 2U : 3U;
+        unsigned int prefix = 7U - digits;
+        if (prefix > base_len) prefix = base_len;
+        for (unsigned int i = 0; i < prefix; i++) alias[i] = (uint8_t)base[i];
+        alias[prefix++] = '~';
+        unsigned int value = attempt;
+        for (unsigned int i = 0; i < digits; i++)
+        {
+            unsigned int pos = prefix + digits - i - 1U;
+            alias[pos] = (uint8_t)('0' + value % 10U);
+            value /= 10U;
+        }
+        for (unsigned int i = 0; i < ext_len; i++) alias[8U + i] = (uint8_t)ext[i];
+        fat32_slot_t existing;
+        if (!fat32_find_entry(directory, alias, &existing) || !existing.found)
+            return 1;
+    }
+    return 0;
+}
+
 static int fat32_parent_and_leaf(const char* path, uint32_t* parent, uint8_t leaf[11])
 {
     if (!path || path[0] != '/' || !parent || !leaf)
         return 0;
-
     const char* cursor = path;
-    while (*cursor == '/')
-        cursor++;
+    while (*cursor == '/') cursor++;
     uint32_t directory = root_cluster;
-
     for (;;)
     {
-        char component[13];
-        unsigned int length = 0;
+        char component[256];
+        unsigned int length = 0U;
         while (cursor[length] && cursor[length] != '/')
         {
-            if (length >= 12)
+            if (length >= sizeof(component) - 1U)
                 return 0;
             component[length] = cursor[length];
             length++;
         }
-        if (!length)
+        if (length == 0U)
             return 0;
         component[length] = 0;
         cursor += length;
-        while (*cursor == '/')
-            cursor++;
-
-        uint8_t short_name[11];
-        if (!fat32_make_short_name(component, short_name))
-            return 0;
-
+        while (*cursor == '/') cursor++;
         if (!*cursor)
         {
-            *parent = directory;
-            for (unsigned int i = 0; i < 11; i++)
-                leaf[i] = short_name[i];
-            return 1;
+            fat32_slot_t existing;
+            if (fat32_find_component(directory, component, &existing, leaf))
+            {
+                *parent = directory;
+                return 1;
+            }
+            if (fat32_make_short_name(component, leaf) ||
+                fat32_make_alias(directory, component, leaf))
+            {
+                *parent = directory;
+                return 1;
+            }
+            return 0;
         }
-
         fat32_slot_t found;
-        if (!fat32_find_entry(directory, short_name, &found) ||
-            !found.found || !(found.attributes & 0x10U) ||
-            found.first_cluster < 2 ||
+        uint8_t alias[11];
+        if (!fat32_find_component(directory, component, &found, alias) ||
+            !(found.attributes & 0x10U) ||
+            found.first_cluster < 2U ||
             found.first_cluster > cluster_count + 1U)
             return 0;
         directory = found.first_cluster;

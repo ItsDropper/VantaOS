@@ -14,12 +14,33 @@ static uint32_t read_be32(const uint8_t* p){return ((uint32_t)p[0]<<24)|((uint32
 static void write_be16(uint8_t* p,uint16_t v){p[0]=(uint8_t)(v>>8);p[1]=(uint8_t)v;}
 static int skip_name(const uint8_t* p,size_t n,size_t* off)
 {
-    if(!p||!off||*off>=n)return 0;
-    size_t pos=*off,resume=0,hops=0;int jumped=0;
-    for(;;){if(pos>=n||++hops>n)return 0;uint8_t len=p[pos++];
-        if((len&0xC0U)==0xC0U){if(pos>=n)return 0;size_t to=((size_t)(len&0x3FU)<<8)|p[pos++];if(to>=n)return 0;if(!jumped)resume=pos;jumped=1;pos=to;continue;}
-        if(len&0xC0U)return 0;if(!len){*off=jumped?resume:pos;return 1;}
-        if(len>63U||(size_t)len>n-pos)return 0;pos+=len;
+    if (!p || !off || *off >= n) return 0;
+
+    size_t pos = *off;
+    size_t resume = 0;
+    size_t hops = 0;
+    int jumped = 0;
+    for (;;) {
+        if (pos >= n || ++hops > n) return 0;
+        uint8_t len = p[pos++];
+
+        if ((len & 0xC0U) == 0xC0U) {
+            if (pos >= n) return 0;
+            size_t to = ((size_t)(len & 0x3FU) << 8) | p[pos++];
+            /* DNS compression references an earlier occurrence in the message. */
+            if (to >= n || to >= pos - 2U) return 0;
+            if (!jumped) resume = pos;
+            jumped = 1;
+            pos = to;
+            continue;
+        }
+        if (len & 0xC0U) return 0;
+        if (!len) {
+            *off = jumped ? resume : pos;
+            return 1;
+        }
+        if (len > 63U || (size_t)len > n - pos) return 0;
+        pos += len;
     }
 }
 static void receive_dns(net_device_t* d,uint32_t src,uint16_t sport,uint16_t dport,const uint8_t* p,size_t n,void* ctx)
@@ -60,8 +81,8 @@ int net_dns_resolve(net_device_t* d,const char* host,uint32_t* out,uint32_t time
     uint8_t packet[DNS_MAX_MESSAGE];size_t plen=0;
     if(!build_query(host,packet,sizeof(packet),&plen)||!net_udp_handler_register(DNS_CLIENT_PORT,receive_dns,0)){query_state.active=0U;return 0;}
     int sent=net_udp_send(d,query_state.server,DNS_CLIENT_PORT,DNS_SERVER_PORT,packet,plen);
-    uint32_t start=timer_get_ticks(),last=start,limit=timeout_ms/10U;
-    while(sent&&!query_state.done&&(uint32_t)(timer_get_ticks()-start)<limit){(void)net_poll(16U);uint32_t now=timer_get_ticks();if((uint32_t)(now-last)>=DNS_RETRY_TICKS){(void)net_udp_send(d,query_state.server,DNS_CLIENT_PORT,DNS_SERVER_PORT,packet,plen);last=now;}__asm__ volatile("pause");}
+    uint32_t start=timer_get_ticks(),last=start,limit=timeout_ms/10U,retries=0U;
+    while(sent&&!query_state.done&&(uint32_t)(timer_get_ticks()-start)<limit){(void)net_poll(16U);uint32_t now=timer_get_ticks();if((uint32_t)(now-last)>=DNS_RETRY_TICKS){if(retries>=3U)break;++retries;(void)net_udp_send(d,query_state.server,DNS_CLIENT_PORT,DNS_SERVER_PORT,packet,plen);last=now;}__asm__ volatile("pause");}
     query_state.active=0U;(void)net_udp_handler_unregister(DNS_CLIENT_PORT,receive_dns,0);
     int ok=sent&&query_state.done&&!query_state.failed&&query_state.result!=0U;if(ok)*out=query_state.result;query_state.device=0;return ok;
 }

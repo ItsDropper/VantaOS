@@ -114,6 +114,11 @@ jobs:
       - name: Enforce architecture boundaries
         run: python3 scripts/check_architecture.py
 
+      - name: Test DNS response validation
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_dns_client.c net/dns.c -o /tmp/vantaos-dns-client-test
+          /tmp/vantaos-dns-client-test
+
       - name: Test TCP client state machine
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_tcp_client.c net/tcp.c -o /tmp/vantaos-tcp-client-test
@@ -147,7 +152,7 @@ jobs:
           cp vantaos.img nvme-fat32-template.img
 
       - name: E1000 QEMU transmit end-to-end test
-        if: always() && (steps.scope.outputs.full == '1' || steps.scope.outputs.e1000 == '1')
+        if: steps.scope.outputs.full == '1' || steps.scope.outputs.e1000 == '1'
         shell: bash
         run: |
           set -euo pipefail
@@ -215,7 +220,7 @@ jobs:
             exit 1
           fi
       - name: USB HID xHCI input end-to-end test
-        if: always() && (steps.scope.outputs.full == '1' || steps.scope.outputs.usb == '1')
+        if: steps.scope.outputs.full == '1' || steps.scope.outputs.usb == '1'
         shell: bash
         run: |
           set -euo pipefail

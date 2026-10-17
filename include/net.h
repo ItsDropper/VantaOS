@@ -12,6 +12,7 @@
 #define NET_FRAME_MAX_SIZE (NET_MTU_DEFAULT + 18U)
 #define NET_RX_QUEUE_CAPACITY 16U
 #define NET_ETH_HANDLER_MAX 16U
+#define NET_UDP_HANDLER_MAX 8U
 #define NET_PCI_DRIVER_MAX 16U
 #define NET_PCI_BINDING_MAX 16U
 typedef struct net_device net_device_t;
@@ -34,6 +35,11 @@ typedef struct {
 } net_device_stats_t;
 typedef void (*net_ethernet_handler_fn)(net_device_t*, const uint8_t*, size_t,
                                         uint16_t, size_t, void*);
+/* Payload pointers are valid only for the duration of the callback. */
+typedef void (*net_udp_handler_fn)(net_device_t*, uint32_t source_address,
+                                   uint16_t source_port, uint16_t destination_port,
+                                   const uint8_t* payload, size_t payload_length,
+                                   void* context);
 typedef struct {
     uint16_t vendor_id, device_id;
     uint8_t class_code, subclass, prog_if;
@@ -65,6 +71,11 @@ int net_receive_frame(net_device_t*, const void*, size_t);
 size_t net_poll(size_t packet_budget);
 int net_ethernet_handler_register(uint16_t, net_ethernet_handler_fn, void*);
 int net_ethernet_handler_unregister(uint16_t, net_ethernet_handler_fn, void*);
+int net_udp_initialize(void);
+int net_udp_handler_register(uint16_t, net_udp_handler_fn, void*);
+int net_udp_handler_unregister(uint16_t, net_udp_handler_fn, void*);
+/* Internal IPv4-to-UDP dispatch; the IP header has already been validated. */
+void net_udp_receive_ipv4(net_device_t*, const uint8_t*, size_t, size_t);
 int net_pci_driver_register(const net_pci_driver_t*);
 uint32_t net_probe_pci_devices(void);
 size_t net_pci_poll_devices(void);

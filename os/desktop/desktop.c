@@ -175,7 +175,17 @@ void desktop_update(void)
                 click_event)
                 desktop_gui_present();
             else if (mouse_has_move_event())
-                desktop_gui_present();
+            {
+                /*
+                 * Pointer-only motion must not redraw the entire desktop.
+                 * A full frame copies every framebuffer pixel twice and
+                 * repaints every window; doing that for every PS/2 packet
+                 * starves visible input feedback under QEMU's software VGA.
+                 * The backbuffer is inactive here, so restore/redraw only
+                 * the saved cursor rectangle directly on the display buffer.
+                 */
+                graphics_update_cursor();
+            }
         }
 
         mouse_clear_event_flags();

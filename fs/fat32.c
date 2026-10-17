@@ -1,8 +1,8 @@
 #include "fat32.h"
 #include "fat32_lfn.h"
-#include "ata.h"
-#ifdef VANTAOS_SELF_TEST
+#include "block_device.h"
 #include "serial.h"
+#ifdef VANTAOS_SELF_TEST
 #define FAT32_RENAME_DIAG(message) serial_write(message "\n")
 #else
 #define FAT32_RENAME_DIAG(message) ((void)0)
@@ -12,10 +12,10 @@
 #define FAT32_MAX_CLUSTER 0x0FFFFFF7U
 #define FAT32_EOC_MIN 0x0FFFFFF8U
 #define FAT32_BAD_CLUSTER 0xFFFFFFFEU
-#define FAT32_LBA28_MAX 0x0FFFFFFFU
 #define FAT32_INVALID_LBA 0xFFFFFFFFU
 
 static int mounted;
+static block_device_t* active_device;
 static uint32_t partition_lba;
 static uint32_t fat_lba;
 static uint32_t data_lba;
@@ -45,7 +45,10 @@ static uint32_t fat32(const uint8_t* p)
 
 static int read_sector(uint32_t lba, uint8_t* buffer)
 {
-    return ata_read_sectors(lba, 1, buffer);
+    if (!active_device || !buffer || active_device->sector_size != 512U ||
+        (uint64_t)lba >= active_device->sector_count)
+        return 0;
+    return block_device_read(active_device, lba, 1U, buffer) == BLOCK_STATUS_OK;
 }
 
 static int valid_boot_sector(const uint8_t* b)
@@ -81,9 +84,10 @@ static int mount_partition(uint32_t lba, uint32_t partition_sectors)
 {
     mounted = 0;
 
-    if (lba > FAT32_LBA28_MAX ||
+    if (!active_device || active_device->sector_size != 512U ||
+        (uint64_t)lba >= active_device->sector_count ||
         (partition_sectors &&
-         (partition_sectors - 1U > FAT32_LBA28_MAX - lba)) ||
+         ((uint64_t)partition_sectors > active_device->sector_count - lba)) ||
         !read_sector(lba, boot_sector_buffer))
         return 0;
 
@@ -105,7 +109,8 @@ static int mount_partition(uint32_t lba, uint32_t partition_sectors)
         reserved == 0 || fats == 0 || fats > 2 || spf == 0 ||
         total == 0 || root < 2 || root >= FAT32_MAX_CLUSTER ||
         (partition_sectors && total > partition_sectors) ||
-        total - 1U > FAT32_LBA28_MAX - lba)
+        (uint64_t)total > active_device->sector_count - lba ||
+        (uint64_t)lba + total > (uint64_t)UINT32_MAX + 1U)
         return 0;
 
     /* Wide intermediates prevent corrupt BPB values wrapping geometry. */
@@ -140,7 +145,8 @@ static int mount_partition(uint32_t lba, uint32_t partition_sectors)
 
 static int find_partition(void)
 {
-    if (!read_sector(0, sector_buffer))
+    if (!active_device || active_device->sector_size != 512U ||
+        active_device->sector_count == 0 || !read_sector(0, sector_buffer))
         return 0;
 
     if (sector_buffer[510] != 0x55 ||
@@ -162,7 +168,10 @@ static int find_partition(void)
         uint32_t length =
             fat32(&sector_buffer[offset + 12]);
 
-        if (length != 0 && mount_partition(start, length))
+        if (length == 0U || (uint64_t)start >= active_device->sector_count ||
+            (uint64_t)length > active_device->sector_count - start)
+            continue;
+        if (mount_partition(start, length))
             return 1;
     }
 
@@ -177,7 +186,8 @@ static uint32_t cluster_lba(uint32_t cluster)
     uint64_t lba = (uint64_t)data_lba +
         (uint64_t)(cluster - 2U) * sectors_per_cluster;
     if (lba + sectors_per_cluster > (uint64_t)partition_lba + total_sectors ||
-        lba + sectors_per_cluster - 1U > FAT32_LBA28_MAX)
+        lba + sectors_per_cluster > active_device->sector_count ||
+        lba + sectors_per_cluster > (uint64_t)UINT32_MAX + 1U)
         return FAT32_INVALID_LBA;
 
     return (uint32_t)lba;
@@ -250,7 +260,14 @@ static void short_name(
 
 static int fat32_write_sector(uint32_t lba, const uint8_t* data)
 {
-    return ata_write_sectors(lba, 1, data);
+    if (!active_device || !data || active_device->sector_size != 512U ||
+        (uint64_t)lba >= active_device->sector_count)
+        return 0;
+    if (block_device_write(active_device, lba, 1U, data) != BLOCK_STATUS_OK)
+        return 0;
+    /* Keep each metadata/data sector durable before a caller reports success.
+       This is conservative until FAT32 gains an ordered transaction layer. */
+    return block_device_flush(active_device) == BLOCK_STATUS_OK;
 }
 
 static int fat32_raw_entry(uint32_t cluster, uint32_t* value)
@@ -393,19 +410,72 @@ static int fat32_make_short_name(const char* input, uint8_t out[11])
 void fat32_initialize(void)
 {
     mounted = 0;
+    active_device = 0;
 
-    if (!ata_is_available())
-        return;
+    /* Never pick a disk by registration order. Probe every writable,
+       512-byte-sector device and mount only when exactly one contains a
+       valid FAT32 volume. Multiple valid candidates are intentionally
+       ambiguous until an explicit boot-volume policy exists. */
+    block_device_t* selected = 0;
+    uint32_t count = block_device_count();
+    for (uint32_t i = 0; i < count; ++i)
+    {
+        block_device_t* candidate = block_device_get(i);
+        if (!candidate || candidate->sector_size != 512U ||
+            candidate->sector_count == 0U ||
+            (candidate->flags & BLOCK_DEVICE_READ_ONLY) != 0U)
+            continue;
 
-    /*
-     * A normal partitioned FAT32 disk is preferred.
-     * Super-floppy FAT32 is also accepted.
-     */
-    if (find_partition())
-        return;
+        active_device = candidate;
+        mounted = 0;
+        int found = find_partition();
+        if (!found)
+        {
+            mounted = 0;
+            found = mount_partition(0U, 0U);
+        }
+        if (!found)
+            continue;
 
-    if (mount_partition(0, 0))
+        if (selected)
+        {
+            mounted = 0;
+            active_device = 0;
+            serial_write("VANTAOS_FAT32_AMBIGUOUS_DEVICES\n");
+            return;
+        }
+        selected = candidate;
+    }
+
+    if (!selected)
+    {
+        mounted = 0;
+        active_device = 0;
+        serial_write("VANTAOS_FAT32_NO_USABLE_VOLUME\n");
         return;
+    }
+
+    active_device = selected;
+    mounted = 0;
+    if (!find_partition() && !mount_partition(0U, 0U))
+    {
+        mounted = 0;
+        active_device = 0;
+        serial_write("VANTAOS_FAT32_SELECTED_VOLUME_MOUNT_FAIL\n");
+        return;
+    }
+#ifdef VANTAOS_SELF_TEST
+    if (active_device->name[0] == 'n' &&
+        active_device->name[1] == 'v' &&
+        active_device->name[2] == 'm' &&
+        active_device->name[3] == 'e')
+        serial_write("VANTAOS_FAT32_BACKEND_NVME_OK\n");
+    else if (active_device->name[0] == 'a' &&
+             active_device->name[1] == 't' &&
+             active_device->name[2] == 'a')
+        serial_write("VANTAOS_FAT32_BACKEND_ATA_OK\n");
+    serial_write("VANTAOS_FAT32_BLOCK_DEVICE_MOUNT_OK\n");
+#endif
 }
 
 int fat32_is_mounted(void)

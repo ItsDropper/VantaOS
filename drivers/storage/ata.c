@@ -1,4 +1,6 @@
 #include "ata.h"
+#include "block_device.h"
+#include "spinlock.h"
 
 #define ATA_CMD_IDENTIFY 0xEC
 #define ATA_CMD_READ_PIO 0x20
@@ -17,6 +19,9 @@ typedef struct
 } ata_channel_t;
 
 static int available;
+static uint64_t available_sectors;
+static block_device_t ata_block;
+static spinlock_t ata_io_lock = SPINLOCK_INITIALIZER;
 static ata_channel_t active_channel;
 static uint8_t active_drive;
 static uint8_t last_status;
@@ -146,17 +151,79 @@ static int ata_probe_device(
     if (!ata_wait_data(channel))
         return 0;
 
+    uint16_t identify[256];
     for (unsigned int word = 0; word < 256; word++)
-        (void)inw(channel->base);
+        identify[word] = inw(channel->base);
+    /* This PIO implementation issues LBA28 commands only. Never advertise
+       capacity beyond the addressable range, and reject malformed IDENTIFY. */
+    uint32_t sectors = (uint32_t)identify[60] |
+                       ((uint32_t)identify[61] << 16);
+    if (sectors == 0U)
+        return 0;
+    if (sectors > 0x10000000U)
+        sectors = 0x10000000U;
 
     active_channel = *channel;
     active_drive = drive;
+    available_sectors = sectors;
     available = 1;
     return 1;
 }
 
+static block_status_t ata_block_read(block_device_t* device, uint64_t lba,
+                                     uint32_t count, void* buffer)
+{
+    (void)device;
+    if (lba > 0x0FFFFFFFU || count > 255U ||
+        lba >= available_sectors || (uint64_t)count > available_sectors - lba)
+        return BLOCK_STATUS_OUT_OF_RANGE;
+    uint64_t flags = spinlock_lock_irqsave(&ata_io_lock);
+    int ok = ata_read_sectors((uint32_t)lba, (uint8_t)count, buffer);
+    spinlock_unlock_irqrestore(&ata_io_lock, flags);
+    return ok ? BLOCK_STATUS_OK : BLOCK_STATUS_IO_ERROR;
+}
+
+static block_status_t ata_block_write(block_device_t* device, uint64_t lba,
+                                      uint32_t count, const void* buffer)
+{
+    (void)device;
+    if (lba > 0x0FFFFFFFU || count > 255U ||
+        lba >= available_sectors || (uint64_t)count > available_sectors - lba)
+        return BLOCK_STATUS_OUT_OF_RANGE;
+    uint64_t flags = spinlock_lock_irqsave(&ata_io_lock);
+    int ok = ata_write_sectors((uint32_t)lba, (uint8_t)count, buffer);
+    spinlock_unlock_irqrestore(&ata_io_lock, flags);
+    return ok ? BLOCK_STATUS_OK : BLOCK_STATUS_IO_ERROR;
+}
+
+static block_status_t ata_block_flush(block_device_t* device)
+{
+    (void)device;
+    if (!available)
+        return BLOCK_STATUS_NOT_READY;
+    uint64_t flags = spinlock_lock_irqsave(&ata_io_lock);
+    if (!ata_wait_not_busy(&active_channel))
+    {
+        spinlock_unlock_irqrestore(&ata_io_lock, flags);
+        return BLOCK_STATUS_IO_ERROR;
+    }
+    outb(active_channel.base + 7, ATA_CMD_CACHE_FLUSH);
+    int ok = ata_wait_not_busy(&active_channel);
+    spinlock_unlock_irqrestore(&ata_io_lock, flags);
+    return ok ? BLOCK_STATUS_OK : BLOCK_STATUS_IO_ERROR;
+}
+
+static const block_device_ops_t ata_block_ops = {
+    .read = ata_block_read,
+    .write = ata_block_write,
+    .flush = ata_block_flush
+};
+
 void ata_initialize(void)
 {
+    if (available && block_device_find("ata0"))
+        return;
+
     static const ata_channel_t channels[] =
     {
         {0x1F0, 0x3F6},
@@ -184,7 +251,19 @@ void ata_initialize(void)
         for (unsigned int j = 0; j < 2; j++)
         {
             if (ata_probe_device(&channels[i], drives[j]))
+            {
+                for (unsigned int n = 0; n < sizeof(ata_block.name); n++)
+                    ata_block.name[n] = 0;
+                ata_block.name[0] = 'a'; ata_block.name[1] = 't';
+                ata_block.name[2] = 'a'; ata_block.name[3] = '0';
+                ata_block.sector_count = available_sectors;
+                ata_block.sector_size = 512U;
+                ata_block.flags = 0U;
+                ata_block.ops = &ata_block_ops;
+                ata_block.driver_data = 0;
+                (void)block_device_register(&ata_block);
                 return;
+            }
         }
     }
 }

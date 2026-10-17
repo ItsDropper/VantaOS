@@ -60,6 +60,8 @@ jobs:
           mcopy -i vantaos.img /tmp/vantaos-user-child.elf ::/CHILD.ELF
           printf 'VANTAOS_USER_FILE_FIXTURE\n' > /tmp/vantaos-user-file.txt
           mcopy -i vantaos.img /tmp/vantaos-user-file.txt ::/USERDATA.TXT
+          # Keep a pristine template before QEMU regression steps mutate vantaos.img.
+          cp vantaos.img nvme-fat32-template.img
 
       - name: USB HID xHCI input end-to-end test
         if: always()
@@ -191,7 +193,7 @@ jobs:
             exit 1
           fi
           sleep 1
-          for marker in VANTAOS_NVME_NAMESPACE_OK VANTAOS_NVME_CONTROLLER_OK VANTAOS_NVME_DIRECT_DMA_OK VANTAOS_NVME_IO_SELFTEST_OK; do
+          for marker in VANTAOS_NVME_NAMESPACE_OK VANTAOS_NVME_CONTROLLER_OK VANTAOS_NVME_DIRECT_DMA_OK VANTAOS_NVME_IO_SELFTEST_OK VANTAOS_FAT32_BACKEND_ATA_OK; do
             if ! grep -q "$marker" "$log"; then
               echo "Missing NVMe end-to-end marker: $marker"
               cat "$log" 2>/dev/null || true
@@ -201,6 +203,153 @@ jobs:
           if grep -q "VANTAOS_NVME_.*_FAIL" "$log"; then
             echo "NVMe driver reported a failure."
             cat "$log"
+            exit 1
+          fi
+
+      - name: NVMe-only FAT32 filesystem integration and reboot persistence
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Start from the disposable CI FAT32 image, but expose it only via
+          # NVMe. No IDE data disk is attached, so ATA cannot satisfy this test.
+          cp nvme-fat32-template.img nvme-fat32.img
+          for boot in 1 2; do
+            log="nvme-fat32-boot-${boot}.log"
+            set +e
+            timeout 35s qemu-system-x86_64 \
+              -machine pc \
+              -smp 2 \
+              -m 512M \
+              -drive file=VantaOS.iso,media=cdrom,format=raw \
+              -drive file=nvme-fat32.img,if=none,id=nvmefs,format=raw \
+              -device nvme,drive=nvmefs,serial=VANTAFS000001 \
+              -boot order=d \
+              -display none \
+              -serial "file:${log}" \
+              -monitor none \
+              -no-reboot
+            result=$?
+            set -e
+            if [ "$result" -ne 124 ]; then
+              echo "NVMe-only filesystem QEMU exited early (boot $boot, exit $result)."
+              cat "$log" 2>/dev/null || true
+              exit 1
+            fi
+            sleep 1
+            for marker in VANTAOS_NVME_NAMESPACE_OK VANTAOS_NVME_IO_SELFTEST_OK \
+                          VANTAOS_FAT32_BACKEND_NVME_OK VANTAOS_FAT32_BLOCK_DEVICE_MOUNT_OK \
+                          VANTAOS_FILESYSTEM_NAMESPACE_OK VANTAOS_FAT32_WRITE_READBACK_OK \
+                          VANTAOS_FAT32_MULTICLUSTER_IO_OK VANTAOS_FILESYSTEM_MUTATION_OK; do
+              if ! grep -q "$marker" "$log"; then
+                echo "Missing NVMe-backed filesystem assertion '$marker' on boot $boot."
+                cat "$log" 2>/dev/null || true
+                exit 1
+              fi
+            done
+            if grep -Eq '^VANTAOS_[A-Z0-9_]*_FAIL' "$log"; then
+              echo "NVMe-backed filesystem self-test failed on boot $boot."
+              cat "$log"
+              exit 1
+            fi
+            if [ "$boot" -eq 2 ] && ! grep -q 'VANTAOS_FAT32_REBOOT_PERSIST_OK' "$log"; then
+              echo "File written through NVMe-backed FAT32 did not survive reboot."
+              cat "$log"
+              exit 1
+            fi
+          done
+          mcopy -i nvme-fat32.img ::/VNTTEST.TXT /tmp/nvme-fat32-persisted.txt
+          grep -qx 'VANTAOS_FAT32_WRITE_OK' /tmp/nvme-fat32-persisted.txt
+          echo "NVMe-only FAT32 operations and reboot persistence passed."
+
+      - name: Missing-storage and malformed-partition fallback tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          # No data disk: VFS must keep its in-memory namespace alive.
+          set +e
+          timeout 30s qemu-system-x86_64 \
+            -machine pc -smp 1 -m 256M \
+            -drive file=VantaOS.iso,media=cdrom,format=raw \
+            -boot order=d -display none -serial file:no-storage.log \
+            -monitor none -no-reboot
+          result=$?
+          set -e
+          if [ "$result" -ne 124 ]; then
+            echo "No-storage QEMU exited unexpectedly: $result"
+            cat no-storage.log 2>/dev/null || true
+            exit 1
+          fi
+          grep -q 'VANTAOS_FAT32_NO_USABLE_VOLUME' no-storage.log
+          grep -q 'VANTAOS_FILESYSTEM_NAMESPACE_OK' no-storage.log
+          grep -q 'VANTAOS_FAT32_WRITE_SKIPPED_NO_VOLUME' no-storage.log
+
+          # Disposable NVMe image with a signed MBR whose FAT32 partition
+          # extends beyond the namespace. It must not be mounted.
+          python3 - <<'PY'
+          image = bytearray(16 * 1024 * 1024)
+          entry = 446
+          image[entry + 4] = 0x0C
+          image[entry + 8:entry + 12] = (32760).to_bytes(4, "little")
+          image[entry + 12:entry + 16] = (64).to_bytes(4, "little")
+          image[510:512] = b"\x55\xaa"
+          with open("nvme-invalid-partition.img", "wb") as f:
+              f.write(image)
+          PY
+          set +e
+          timeout 30s qemu-system-x86_64 \
+            -machine pc -smp 1 -m 256M \
+            -drive file=VantaOS.iso,media=cdrom,format=raw \
+            -drive file=nvme-invalid-partition.img,if=none,id=badnvme,format=raw \
+            -device nvme,drive=badnvme,serial=VANTABAD00001 \
+            -boot order=d -display none -serial file:invalid-partition.log \
+            -monitor none -no-reboot
+          result=$?
+          set -e
+          if [ "$result" -ne 124 ]; then
+            echo "Invalid-partition QEMU exited unexpectedly: $result"
+            cat invalid-partition.log 2>/dev/null || true
+            exit 1
+          fi
+          grep -q 'VANTAOS_FAT32_NO_USABLE_VOLUME' invalid-partition.log
+          grep -q 'VANTAOS_FILESYSTEM_NAMESPACE_OK' invalid-partition.log
+          if grep -q 'VANTAOS_FAT32_BLOCK_DEVICE_MOUNT_OK' invalid-partition.log; then
+            echo "FAT32 mounted an invalid out-of-range partition."
+            cat invalid-partition.log
+            exit 1
+          fi
+          if grep -Eq '^VANTAOS_[A-Z0-9_]*_FAIL' invalid-partition.log; then
+            echo "Malformed-partition fallback emitted a self-test failure."
+            cat invalid-partition.log
+            exit 1
+          fi
+
+      - name: Refuse ambiguous FAT32 volumes across ATA and NVMe
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp nvme-fat32-template.img ambiguous-ata.img
+          cp nvme-fat32-template.img ambiguous-nvme.img
+          set +e
+          timeout 30s qemu-system-x86_64 \
+            -machine pc -smp 1 -m 256M \
+            -drive file=VantaOS.iso,media=cdrom,format=raw \
+            -drive file=ambiguous-ata.img,if=ide,format=raw \
+            -drive file=ambiguous-nvme.img,if=none,id=ambiguousnvme,format=raw \
+            -device nvme,drive=ambiguousnvme,serial=VANTAAMBIG0001 \
+            -boot order=d -display none -serial file:ambiguous-volumes.log \
+            -monitor none -no-reboot
+          result=$?
+          set -e
+          if [ "$result" -ne 124 ]; then
+            echo "Ambiguous-volume QEMU exited unexpectedly: $result"
+            cat ambiguous-volumes.log 2>/dev/null || true
+            exit 1
+          fi
+          grep -q 'VANTAOS_FAT32_AMBIGUOUS_DEVICES' ambiguous-volumes.log
+          grep -q 'VANTAOS_FILESYSTEM_NAMESPACE_OK' ambiguous-volumes.log
+          if grep -q 'VANTAOS_FAT32_BACKEND_.*_OK' ambiguous-volumes.log; then
+            echo "FAT32 selected one of two valid volumes without an explicit policy."
+            cat ambiguous-volumes.log
             exit 1
           fi
 
@@ -258,6 +407,7 @@ jobs:
             VANTAOS_PROCESS_DEFERRED_SWITCH_OK
             VANTAOS_PROCESS_OWNED_REUSE_OK
             VANTAOS_FILESYSTEM_NAMESPACE_OK
+            VANTAOS_FAT32_BACKEND_ATA_OK
             VANTAOS_FAT32_WRITE_READBACK_OK
             VANTAOS_FAT32_MULTICLUSTER_IO_OK
             VANTAOS_FILESYSTEM_MUTATION_OK

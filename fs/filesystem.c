@@ -31,7 +31,6 @@ static int filesystem_ensure_directory_unlocked(const char* path);
 static uint32_t filesystem_root_unlocked(void);
 
 
-#include "ata.h"
 #include "fat32.h"
 #ifdef VANTAOS_SELF_TEST
 #include "serial.h"
@@ -255,7 +254,7 @@ void filesystem_initialize_unlocked(multiboot_info_t* mbd)
     nodes[0].loaded = 1;
     initialized = 1;
 
-    ata_initialize();
+    /* Storage controllers are initialized once by kernel startup before VFS. */
     fat32_initialize();
 
     if (fat32_is_mounted())

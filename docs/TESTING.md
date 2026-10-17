@@ -2,6 +2,12 @@
 
 This document distinguishes what automation actually checks from what is still untested. A green CI run means the listed assertions passed; it does not prove every code path or every hardware configuration works.
 
+## Storage integration coverage
+
+The workflow tests ATA-backed filesystem operations in the standard QEMU regression matrix and separately boots a disposable FAT32 image with only an NVMe data device attached. The NVMe-only test requires an explicit FAT32 NVMe backend marker, runs filesystem-level file write/readback, multi-cluster I/O, directory/file mutation tests, reboots using the same image, and checks the persisted probe with mcopy. This proves the filesystem operations used NVMe rather than the ATA device; the driver-only scratch test is separate. Additional disposable-image scenarios verify no-media fallback, rejection of an MBR partition that extends past device capacity, and refusal to mount when both ATA and NVMe contain valid FAT32 volumes.
+
+FAT32 currently accepts only writable 512-byte-sector devices. Device selection mounts only when exactly one eligible device contains a valid FAT32 volume; multiple valid candidates intentionally result in no persistent mount. The no-device path must retain the in-memory namespace.
+
 ## Continuous integration
 
 Workflow: [`.github/workflows/build.yml`](../.github/workflows/build.yml)

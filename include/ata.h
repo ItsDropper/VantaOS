@@ -6,8 +6,8 @@
 void ata_initialize(void);
 int ata_is_available(void);
 int ata_read_sectors(uint32_t lba, uint8_t count, void* buffer);
-/* Writes raw sectors; callers must restrict this to disposable/test media
-   until a filesystem layer enforces allocation and metadata invariants. */
+/* Low-level controller I/O. Filesystem and general block consumers must use
+   block_device_read/write/flush so capacity and policy checks are enforced. */
 int ata_write_sectors(uint32_t lba, uint8_t count, const void* buffer);
 
 uint8_t ata_status(void);

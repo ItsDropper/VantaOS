@@ -618,7 +618,7 @@ int xhci_configure_interrupt_in(uint32_t slot_id, uint8_t endpoint_address,
     endpoint[0] = interval_value << 16;
     endpoint[1] = (3U << 1) | (7U << 3) | ((uint32_t)packet_size << 16);
     endpoint[2] = (uint32_t)ring_physical | 1U;
-    endpoint[3] = (uint32_t)packet_size;
+    endpoint[3] = (uint32_t)packet_size | ((uint32_t)packet_size << 16);
     uint32_t completion = 0;
     if (!xhci_submit_command(12U, input_physical, 0, slot_id << 24,
                              &completion, 0))

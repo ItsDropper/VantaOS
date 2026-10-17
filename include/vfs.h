@@ -48,6 +48,8 @@ int vfs_write(
 int vfs_close(int handle);
 
 int vfs_create_file(const char* path);
+int vfs_delete_path(const char* path);
+int vfs_rename_path(const char* old_path, const char* new_path);
 int vfs_create_directory(const char* path);
 
 #endif

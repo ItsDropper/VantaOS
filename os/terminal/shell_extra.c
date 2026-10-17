@@ -324,11 +324,14 @@ static int command_mv(uint32_t argc, char **argv, int force)
         backed_up = 1;
     }
     if (vfs_rename_path(source, destination) < 0) {
-        if (backed_up && vfs_rename_path(backup, destination) < 0)
+        if (!backed_up) {
+            terminal_write("\nmv: rename failed; destination was not changed");
+        } else if (vfs_rename_path(backup, destination) < 0) {
             terminal_write("\nmv: rename failed; previous destination remains at ");
-        else
-            terminal_write("\nmv: rename failed; destination restored");
-        if (backed_up && vfs_lookup(destination) < 0) terminal_write(backup);
+            terminal_write(backup);
+        } else {
+            terminal_write("\nmv: rename failed; previous destination restored");
+        }
         return 1;
     }
     if (backed_up && vfs_delete_path(backup) < 0) {

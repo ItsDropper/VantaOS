@@ -48,7 +48,7 @@ prepare-bearssl:
 $(VANTAOS_BEARSSL_OBJECTS): | prepare-bearssl
 
 # A separate ELF entry keeps the existing Multiboot/GRUB image untouched.
-kernel-uefi.elf: $(OBJECTS) build/uefi-linker.ld
+kernel-uefi.elf: prepare-bearssl $(OBJECTS) build/uefi-linker.ld
 	$(LD) -m elf_x86_64 --no-warn-rwx-segments -T build/uefi-linker.ld -e uefi_kernel_entry $(OBJECTS) -o $@
 
 $(UEFI_OBJDIR)/loader.o: boot/uefi/loader.c include/vanta_boot_info.h
@@ -79,7 +79,7 @@ VantaOS-UEFI.img: BOOTX64.EFI kernel-uefi.elf
 
 uefi: VantaOS-UEFI.img
 
-kernel.bin: $(OBJECTS) build/linker.ld
+kernel.bin: prepare-bearssl $(OBJECTS) build/linker.ld
 	$(LD) $(LDFLAGS) $(OBJECTS) -o $@
 
 $(OBJDIR)/arch/x86_64/ap_trampoline.bin: arch/x86_64/ap_trampoline.asm

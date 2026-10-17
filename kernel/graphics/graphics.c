@@ -165,6 +165,25 @@ void graphics_end_frame(void)
 }
 
 
+/*
+ * Mouse-only updates should not begin/end a full frame. When no frame is
+ * active, framebuffer points at the visible display surface and the cursor's
+ * save-under buffer can be restored and redrawn in place.
+ */
+void graphics_update_cursor(void)
+{
+    if (!initialized || graphics_frame_active)
+        return;
+    graphics_draw_cursor();
+}
+
+int graphics_can_redraw_windows_in_place(void)
+{
+    return initialized && !graphics_frame_active && active_panel == 3 &&
+           !start_menu_open && !terminal_dragging && !explorer_dragging;
+}
+
+
 void graphics_clear_terminal_close_requested(void)
 {
     terminal_close_requested = 0;

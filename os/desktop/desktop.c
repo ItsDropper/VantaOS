@@ -35,6 +35,24 @@ static void desktop_gui_present(void)
     graphics_end_frame();
 }
 
+/*
+ * Terminal text changes do not alter the wallpaper, taskbar, or window
+ * geometry. Redraw only the GUI windows directly on the display surface,
+ * avoiding a full-screen copy/render/copy cycle for every typed character.
+ */
+static void desktop_gui_present_terminal_fast(void)
+{
+    if (!graphics_can_redraw_windows_in_place())
+    {
+        desktop_gui_present();
+        return;
+    }
+
+    graphics_cursor_restore();
+    gui_server_draw_windows();
+    graphics_draw_cursor();
+}
+
 int desktop_launch_terminal(void)
 {
     if (terminal_window_open)
@@ -144,7 +162,7 @@ void desktop_update(void)
         {
             if (terminal_process_consume_redraw())
             {
-                desktop_gui_present();
+                desktop_gui_present_terminal_fast();
             }
             else
             {
@@ -152,7 +170,7 @@ void desktop_update(void)
                 if (blink_state != terminal_last_blink_state)
                 {
                     terminal_last_blink_state = blink_state;
-                    desktop_gui_present();
+                    desktop_gui_present_terminal_fast();
                 }
             }
         }
@@ -175,7 +193,17 @@ void desktop_update(void)
                 click_event)
                 desktop_gui_present();
             else if (mouse_has_move_event())
-                desktop_gui_present();
+            {
+                /*
+                 * Pointer-only motion must not redraw the entire desktop.
+                 * A full frame copies every framebuffer pixel twice and
+                 * repaints every window; doing that for every PS/2 packet
+                 * starves visible input feedback under QEMU's software VGA.
+                 * The backbuffer is inactive here, so restore/redraw only
+                 * the saved cursor rectangle directly on the display buffer.
+                 */
+                graphics_update_cursor();
+            }
         }
 
         mouse_clear_event_flags();

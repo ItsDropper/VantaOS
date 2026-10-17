@@ -60,6 +60,8 @@ jobs:
           mcopy -i vantaos.img /tmp/vantaos-user-child.elf ::/CHILD.ELF
           printf 'VANTAOS_USER_FILE_FIXTURE\n' > /tmp/vantaos-user-file.txt
           mcopy -i vantaos.img /tmp/vantaos-user-file.txt ::/USERDATA.TXT
+          # Keep a pristine template before QEMU regression steps mutate vantaos.img.
+          cp vantaos.img nvme-fat32-template.img
 
       - name: USB HID xHCI input end-to-end test
         if: always()
@@ -210,7 +212,7 @@ jobs:
           set -euo pipefail
           # Start from the disposable CI FAT32 image, but expose it only via
           # NVMe. No IDE data disk is attached, so ATA cannot satisfy this test.
-          cp vantaos.img nvme-fat32.img
+          cp nvme-fat32-template.img nvme-fat32.img
           for boot in 1 2; do
             log="nvme-fat32-boot-${boot}.log"
             set +e
@@ -325,8 +327,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cp vantaos.img ambiguous-ata.img
-          cp vantaos.img ambiguous-nvme.img
+          cp nvme-fat32-template.img ambiguous-ata.img
+          cp nvme-fat32-template.img ambiguous-nvme.img
           set +e
           timeout 30s qemu-system-x86_64 \
             -machine pc -smp 1 -m 256M \

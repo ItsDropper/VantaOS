@@ -36,6 +36,11 @@ static vanta_gui_draw_command_t commands[VANTA_GUI_MAX_COMMANDS];
 static uint32_t command_count;
 static uint32_t window_id;
 
+static size_t row_height(void)
+{
+    return current_theme.compact ? 16U : 20U;
+}
+
 static size_t text_length(const char* text)
 {
     size_t length = 0U;
@@ -360,7 +365,7 @@ static void render(void)
     {
         for (size_t i = 0U; i < preview_count && i < PREVIEW_ROWS; i++)
             if (preview_lines[i][0])
-                add_text(16, 96 + (int32_t)i * 20,
+                add_text(16, 96 + (int32_t)i * (int32_t)row_height(),
                          preview_lines[i], COLOR_TEXT);
     }
     else
@@ -382,7 +387,7 @@ static void render(void)
             if (entry_is_directory[i])
                 label[used++] = '/';
             label[used] = '\0';
-            add_text(16, 96 + (int32_t)(i - first_visible) * 20, label,
+            add_text(16, 96 + (int32_t)(i - first_visible) * (int32_t)row_height(), label,
                      entry_is_directory[i] ? COLOR_ACCENT : COLOR_TEXT);
         }
         if (entry_count == 0U)
@@ -528,7 +533,7 @@ int main(int argc, char** argv)
             }
             else if (!preview_active && event.y >= 92 && event.y < 364)
             {
-                size_t row = (size_t)(event.y - 92) / 20U;
+                size_t row = (size_t)(event.y - 92) / row_height();
                 size_t index = first_visible + row;
                 if (row < DISPLAY_ROWS && index < entry_count)
                 {

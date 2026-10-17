@@ -29,7 +29,7 @@ include fs/Makefile
 include os/Makefile
 
 ASM_SOURCES := $(VANTAOS_BOOT_ASM) $(VANTAOS_ARCH_ASM)
-VANTAOS_BEARSSL_C := $(shell find third_party/bearssl/src -type f -name '*.c' ! -name 'sysrng.c' 2>/dev/null)
+VANTAOS_BEARSSL_C := $(shell find third_party/bearssl/src -type f -name '*.c' ! -name 'sysrng.c' ! -name 'ec_prime_i31_secp*.c' 2>/dev/null)
 C_SOURCES   := $(VANTAOS_BEARSSL_C) $(VANTAOS_KERNEL_C) $(VANTAOS_ARCH_C) $(VANTAOS_MM_C) \
                $(VANTAOS_PROC_C) $(VANTAOS_SCHED_C) $(VANTAOS_TIME_C) \
                $(VANTAOS_DRIVER_C) $(VANTAOS_NET_DRIVER_C) $(VANTAOS_NET_C) $(VANTAOS_GRAPHICS_C) $(VANTAOS_FS_C) \

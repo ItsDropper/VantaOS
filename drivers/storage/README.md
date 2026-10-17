@@ -21,7 +21,7 @@ The storage subsystem has three layers.
 
 ## Block-device consumers and selection
 
-ATA registers the supported LBA28 disk as ata0, using its IDENTIFY-reported sector count and 512-byte sectors. NVMe registers each supported namespace with a stable nvme... name and its Identify-reported capacity/sector size. Both drivers implement generic read/write/flush operations; callers should not use ATA or NVMe entry points directly for filesystem I/O.
+ATA currently probes the legacy channels and registers the first supported LBA28 disk as ata0, using its IDENTIFY-reported sector count and 512-byte sectors; additional ATA disks are not enumerated yet. NVMe registers each supported namespace with a stable nvme... name and its Identify-reported capacity/sector size. Both drivers implement generic read/write/flush operations; callers should not use ATA or NVMe entry points directly for filesystem I/O.
 
 FAT32 uses the selected block_device_t for every partition-relative read and write. It currently requires 512-byte sectors and a writable volume. It checks partition and BPB bounds against the selected device's capacity. Device selection is intentionally conservative: probe all eligible devices and mount only if exactly one contains a valid FAT32 volume. If two devices contain valid FAT32 volumes, FAT32 refuses to mount either rather than modifying an arbitrary disk. Explicit boot-volume identity and partition GUID selection are future work.
 

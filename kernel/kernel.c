@@ -10,6 +10,7 @@
 #include "paging.h"
 #include "pci.h"
 #include "nvme.h"
+#include "net.h"
 #include "xhci.h"
 #include "pmm.h"
 #include "serial.h"
@@ -58,6 +59,11 @@ static void kernel_initialize(const vanta_boot_info_t* boot_info)
 #endif
     pci_initialize();
     heap_initialize();
+    net_initialize();
+    (void)net_probe_pci_devices();
+#ifdef VANTAOS_SELF_TEST
+    network_framework_selftest();
+#endif
     xhci_initialize();
     ata_initialize();
     nvme_initialize();

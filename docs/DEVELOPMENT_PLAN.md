@@ -83,7 +83,9 @@ This roadmap prioritizes a trustworthy kernel over visual features. A Windows al
 - [ ] Implement RTC UTC/local policy and a timezone-rule service before claiming region-based local time or DST correctness.
 
 ### M6 — Daily-driver prototype
-- [ ] Networking, audio, practical USB, and reliable graphics/input.
+- [x] Establish networking device/PCI-driver contracts, bounded RX ingress, Ethernet demultiplexing, and mock-device regression coverage.
+- [ ] Add a real QEMU NIC driver, then ARP/IPv4/ICMP and end-to-end ping coverage.
+- [ ] Add audio, practical USB, and reliable graphics/input.
 - [ ] Package installation, signed updates, recovery, and rollback.
 - [ ] Security model, permissions, app APIs, and real-hardware testing.
 

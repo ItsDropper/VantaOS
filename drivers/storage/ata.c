@@ -1,5 +1,6 @@
 #include "ata.h"
 #include "block_device.h"
+#include "spinlock.h"
 
 #define ATA_CMD_IDENTIFY 0xEC
 #define ATA_CMD_READ_PIO 0x20
@@ -20,6 +21,7 @@ typedef struct
 static int available;
 static uint64_t available_sectors;
 static block_device_t ata_block;
+static spinlock_t ata_io_lock = SPINLOCK_INITIALIZER;
 static ata_channel_t active_channel;
 static uint8_t active_drive;
 static uint8_t last_status;
@@ -224,8 +226,10 @@ static block_status_t ata_block_read(block_device_t* device, uint64_t lba,
     if (lba > 0x0FFFFFFFU || count > 255U ||
         lba >= available_sectors || (uint64_t)count > available_sectors - lba)
         return BLOCK_STATUS_OUT_OF_RANGE;
-    return ata_read_sectors((uint32_t)lba, (uint8_t)count, buffer) ?
-        BLOCK_STATUS_OK : BLOCK_STATUS_IO_ERROR;
+    uint64_t flags = spinlock_lock_irqsave(&ata_io_lock);
+    int ok = ata_read_sectors((uint32_t)lba, (uint8_t)count, buffer);
+    spinlock_unlock_irqrestore(&ata_io_lock, flags);
+    return ok ? BLOCK_STATUS_OK : BLOCK_STATUS_IO_ERROR;
 }
 
 static block_status_t ata_block_write(block_device_t* device, uint64_t lba,
@@ -235,8 +239,10 @@ static block_status_t ata_block_write(block_device_t* device, uint64_t lba,
     if (lba > 0x0FFFFFFFU || count > 255U ||
         lba >= available_sectors || (uint64_t)count > available_sectors - lba)
         return BLOCK_STATUS_OUT_OF_RANGE;
-    return ata_write_sectors((uint32_t)lba, (uint8_t)count, buffer) ?
-        BLOCK_STATUS_OK : BLOCK_STATUS_IO_ERROR;
+    uint64_t flags = spinlock_lock_irqsave(&ata_io_lock);
+    int ok = ata_write_sectors((uint32_t)lba, (uint8_t)count, buffer);
+    spinlock_unlock_irqrestore(&ata_io_lock, flags);
+    return ok ? BLOCK_STATUS_OK : BLOCK_STATUS_IO_ERROR;
 }
 
 static block_status_t ata_block_flush(block_device_t* device)
@@ -244,11 +250,16 @@ static block_status_t ata_block_flush(block_device_t* device)
     (void)device;
     if (!available)
         return BLOCK_STATUS_NOT_READY;
+    uint64_t flags = spinlock_lock_irqsave(&ata_io_lock);
     if (!ata_wait_not_busy(&active_channel))
+    {
+        spinlock_unlock_irqrestore(&ata_io_lock, flags);
         return BLOCK_STATUS_IO_ERROR;
+    }
     outb(active_channel.base + 7, ATA_CMD_CACHE_FLUSH);
-    return ata_wait_not_busy(&active_channel) ?
-        BLOCK_STATUS_OK : BLOCK_STATUS_IO_ERROR;
+    int ok = ata_wait_not_busy(&active_channel);
+    spinlock_unlock_irqrestore(&ata_io_lock, flags);
+    return ok ? BLOCK_STATUS_OK : BLOCK_STATUS_IO_ERROR;
 }
 
 static const block_device_ops_t ata_block_ops = {

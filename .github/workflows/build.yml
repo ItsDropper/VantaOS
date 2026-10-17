@@ -191,7 +191,7 @@ jobs:
             exit 1
           fi
           sleep 1
-          for marker in VANTAOS_NVME_NAMESPACE_OK VANTAOS_NVME_CONTROLLER_OK VANTAOS_NVME_DIRECT_DMA_OK VANTAOS_NVME_IO_SELFTEST_OK; do
+          for marker in VANTAOS_NVME_NAMESPACE_OK VANTAOS_NVME_CONTROLLER_OK VANTAOS_NVME_DIRECT_DMA_OK VANTAOS_NVME_IO_SELFTEST_OK VANTAOS_FAT32_BACKEND_ATA_OK; do
             if ! grep -q "$marker" "$log"; then
               echo "Missing NVMe end-to-end marker: $marker"
               cat "$log" 2>/dev/null || true

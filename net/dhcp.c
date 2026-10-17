@@ -215,8 +215,12 @@ static void receive_dhcp(net_device_t* device, uint32_t source_address,
         if (payload[DHCP_CHADDR_OFFSET + i] != device->mac[i]) return;
 
     uint32_t yiaddr = be32(payload + DHCP_YIADDR_OFFSET);
+    uint32_t expected_server = state.server_ip;
     state.message_type = 0;
     if (!parse_options(payload, length)) return;
+    if (state.message_type == DHCP_ACK && expected_server &&
+        state.server_ip != expected_server)
+        return;
     if (!state.server_ip) state.server_ip = source_address;
     if (state.message_type == DHCP_NAK) {
         state.rejected = 1U;

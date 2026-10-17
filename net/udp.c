@@ -185,8 +185,6 @@ int net_udp_send(net_device_t* device, uint32_t destination_address,
     pseudo[9] = IPV4_PROTOCOL_UDP;
     put16(pseudo + 10U, (uint16_t)udp_length);
     uint32_t sum = checksum_add(0U, pseudo, sizeof(pseudo));
-    sum += IPV4_PROTOCOL_UDP;
-    sum += (uint16_t)udp_length;
     sum = checksum_add(sum, segment, udp_length);
     while (sum >> 16)
         sum = (sum & 0xFFFFU) + (sum >> 16);

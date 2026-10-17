@@ -471,8 +471,8 @@ static block_status_t namespace_transfer(nvme_namespace_t* ns, uint64_t lba,
     uint32_t transferred = 0U;
     uint8_t* user_buffer = (uint8_t*)buffer;
     const uint32_t sectors_per_page = NVME_PAGE_SIZE / ns->sector_size;
-    uint32_t sectors_per_command = c->max_transfer_pages * sectors_per_page;
-    if (!sectors_per_command) {
+    uint32_t fallback_sectors_per_command = c->max_transfer_pages * sectors_per_page;
+    if (!fallback_sectors_per_command) {
         spinlock_unlock_irqrestore(&c->io_lock, flags);
         return BLOCK_STATUS_IO_ERROR;
     }
@@ -481,7 +481,17 @@ static block_status_t namespace_transfer(nvme_namespace_t* ns, uint64_t lba,
         uint32_t pending = 0U;
         for (uint32_t i = 0; i < NVME_IO_SLOTS && transferred < count; ++i) {
             uint32_t sectors = count - transferred;
-            if (sectors > sectors_per_command) sectors = sectors_per_command;
+            uintptr_t slot_start = (uintptr_t)user_buffer +
+                                   (size_t)transferred * ns->sector_size;
+            size_t first_page_offset = slot_start & (NVME_PAGE_SIZE - 1U);
+            size_t direct_capacity =
+                (size_t)c->max_transfer_pages * NVME_PAGE_SIZE - first_page_offset;
+            uint32_t direct_sectors = (uint32_t)(direct_capacity / ns->sector_size);
+            uint32_t max_sectors = direct_sectors ? direct_sectors :
+                                   fallback_sectors_per_command;
+            if (max_sectors > fallback_sectors_per_command)
+                max_sectors = fallback_sectors_per_command;
+            if (sectors > max_sectors) sectors = max_sectors;
             prepare_io_command(c, ns, &c->io_slots[i], lba + transferred,
                                sectors, (size_t)transferred * ns->sector_size,
                                user_buffer, write);

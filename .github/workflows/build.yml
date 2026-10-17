@@ -22,7 +22,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          submodules: recursive
 
       - name: Detect affected test suites
         id: scope
@@ -110,7 +109,6 @@ jobs:
           test -f drivers/Makefile
           test -f drivers/network/e1000.c
           test -f drivers/network/virtio_net.c
-          test -f third_party/bearssl/inc/bearssl.h
           grep -q 'net/tls.c' net/Makefile
           grep -q 'drivers/network/e1000.c' drivers/network/Makefile
           grep -q 'drivers/network/virtio_net.c' drivers/network/Makefile
@@ -141,7 +139,7 @@ jobs:
 
       - name: Test TLS hostname validation policy
         run: |
-          gcc -std=c11 -Wall -Wextra -Werror -Iinclude -Ithird_party/bearssl/inc scripts/test_tls_hostname.c -o /tmp/vantaos-tls-hostname-test
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_tls_hostname.c -o /tmp/vantaos-tls-hostname-test
           /tmp/vantaos-tls-hostname-test
 
       - name: Test hardware crypto entropy source

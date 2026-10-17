@@ -1,6 +1,5 @@
-#include "net_tls.h"
+#include "tls_policy.h"
 #include <stdio.h>
-#include <string.h>
 
 static int expect(const char *host, int wanted)
 {
@@ -56,6 +55,6 @@ int main(void)
     too_long_dotted[pos] = 0;
     if (!expect(too_long_dotted, 0)) return 3;
 
-    puts("TLS hostname validation tests passed.");
+    puts("TLS hostname syntax tests passed (syntax only; TLS is not implemented).");
     return 0;
 }

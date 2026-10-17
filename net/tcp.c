@@ -285,7 +285,7 @@ int net_tcp_connect(net_device_t *device, uint32_t destination,
         timeout_ms > 120000U || client.state != TCP_CLOSED)
         return 0;
 
-    client = (tcp_client_t){0};
+    reset_client();
     client.device = device;
     client.remote_ip = destination;
     client.remote_port = destination_port;
@@ -299,7 +299,7 @@ int net_tcp_connect(net_device_t *device, uint32_t destination,
 
     if (!emit_segment(device, destination, client.local_port, destination_port,
                       initial, 0U, TCP_FLAG_SYN, 0, 0U)) {
-        client = (tcp_client_t){0};
+        reset_client();
         return 0;
     }
 
@@ -320,7 +320,7 @@ int net_tcp_connect(net_device_t *device, uint32_t destination,
         }
         __asm__ volatile("pause");
     }
-    client = (tcp_client_t){0};
+    reset_client();
     return 0;
 }
 
@@ -413,5 +413,5 @@ void net_tcp_close(net_device_t *device)
             }
         }
     }
-    client = (tcp_client_t){0};
+    reset_client();
 }

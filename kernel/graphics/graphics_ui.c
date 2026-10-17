@@ -6,6 +6,8 @@
 #include "process.h"
 #include "pmm.h"
 
+void graphics_draw_start_menu_detail(int width, int height);
+
 void graphics_draw_vanta_logo(int x, int y, int size)
 {
     /* Compact electric-blue V mark; intentionally distinct from the Windows panes. */

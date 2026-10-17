@@ -57,7 +57,7 @@ static int queue_allocate(vnet_queue_t*q,uint16_t n){
 }
 static void queue_release(vnet_queue_t*q){
  if(!q)return;for(uint32_t i=0;i<VNET_MAX_QUEUE;i++)dma_free_page(&q->buffers[i]);
- dma_free_contiguous(q->ring_pages,q->ring_page_count);*q=(vnet_queue_t){0};
+ dma_free_contiguous(q->ring_pages,q->ring_page_count);uint8_t*z=(uint8_t*)q;for(size_t i=0;i<sizeof(*q);i++)z[i]=0;
 }
 static void queue_publish(uint16_t base,uint16_t index,vnet_queue_t*q){out16(base+0x0EU,index);out32(base+0x08U,(uint32_t)(q->ring_pages[0].physical_address>>12));}
 static void queue_notify(uint16_t base,uint16_t index){out16(base+0x10U,index);}
@@ -103,7 +103,12 @@ static net_pci_probe_result_t vnet_probe(const struct pci_device*pci){
  uint8_t mac[6],any=0;for(uint32_t i=0;i<6U;i++){mac[i]=in8(state.io_base+0x14U+(uint16_t)i);any|=mac[i];}if(!any||(mac[0]&1U))goto fail;
  if(!pci_enable_bus_mastering(pci))goto fail;
  out8(state.io_base+0x12U,VNET_STATUS_ACK|VNET_STATUS_DRIVER|VNET_STATUS_DRIVER_OK);
- state.netdev=(net_device_t){.name="vnet0",.mac={mac[0],mac[1],mac[2],mac[3],mac[4],mac[5]},.mtu=NET_MTU_DEFAULT,.link_up=state.has_status?((in16(state.io_base+0x1AU)&1U)!=0U):1U,.ops=&vnet_net_ops,.driver_data=&state};
+ uint8_t *ndzero=(uint8_t*)&state.netdev;for(size_t i=0;i<sizeof(state.netdev);i++)ndzero[i]=0;
+ state.netdev.name[0]='v';state.netdev.name[1]='n';state.netdev.name[2]='e';state.netdev.name[3]='t';state.netdev.name[4]='0';
+ for(uint32_t i=0;i<6U;i++)state.netdev.mac[i]=mac[i];
+ state.netdev.mtu=NET_MTU_DEFAULT;
+ state.netdev.link_up=state.has_status?((in16(state.io_base+0x1AU)&1U)!=0U):1U;
+ state.netdev.ops=&vnet_net_ops;state.netdev.driver_data=&state;
  spinlock_init(&state.tx_lock);if(!net_device_register(&state.netdev))goto fail;state.registered=1;state.ready=1;queue_notify(state.io_base,0U);
 #ifdef VANTAOS_SELF_TEST
  uint8_t probe[18]={0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,mac[0],mac[1],mac[2],mac[3],mac[4],mac[5],0x88,0xB5,0x56,0x41,0x4E,0x54};
@@ -115,4 +120,4 @@ fail: out8(state.io_base+0x12U,0U);
  for(uint32_t i=0;i<100000U&&in8(state.io_base+0x12U)!=0U;i++)__asm__ volatile("pause");
  vnet_release();return NET_PCI_PROBE_FAILED;
 }
-int virtio_net_initialize(void){state=(vnet_state_t){0};spinlock_init(&state.tx_lock);return net_pci_driver_register(&vnet_driver);}
+int virtio_net_initialize(void){uint8_t*p=(uint8_t*)&state;for(size_t i=0;i<sizeof(state);i++)p[i]=0;spinlock_init(&state.tx_lock);return net_pci_driver_register(&vnet_driver);}

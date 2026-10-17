@@ -537,9 +537,9 @@ static int nvme_run_io_selftest(void)
         serial_write("VANTAOS_NVME_IO_SELFTEST_FAIL\\n");
         return 0;
     }
-    uint8_t before[NVME_PAGE_SIZE];
-    uint8_t expected[NVME_PAGE_SIZE];
-    uint8_t actual[NVME_PAGE_SIZE];
+    static uint8_t before[NVME_PAGE_SIZE];
+    static uint8_t expected[NVME_PAGE_SIZE];
+    static uint8_t actual[NVME_PAGE_SIZE];
     for (uint32_t i = 0; i < device->sector_size; ++i)
         expected[i] = (uint8_t)((i * 37U) ^ 0xA5U);
     if (block_device_read(device, 7U, 1U, before) != BLOCK_STATUS_OK) {

@@ -11,6 +11,7 @@
 #include "user_mode_test.h"
 #include "gui_server.h"
 #include "desktop_theme.h"
+#include "shell.h"
 
 #include <stdint.h>
 
@@ -39,6 +40,8 @@
 #define USER_SYSCALL_RENAME_PATH 22U
 #define USER_SYSCALL_CREATE_DIRECTORY 23U
 #define USER_SYSCALL_STAT_PATH 24U
+#define USER_SYSCALL_KERNEL_COMMAND 25U
+#define USER_SYSCALL_KERNEL_COMMAND_MAX 2048U
 #define USER_SYSCALL_IO_MAX 4096U
 #define USER_SYSCALL_WRITE_MAX 4096U
 
@@ -679,6 +682,76 @@ static int syscall_stat_path(struct exception_frame* frame,
     return 0;
 }
 
+static int syscall_kernel_command(struct exception_frame* frame,
+                                    const process_t* process)
+{
+    /*
+     * This is an explicit privileged bridge for the built-in Terminal only.
+     * Other user processes cannot use it to run arbitrary kernel commands.
+     */
+    int terminal_process = 0;
+    for (size_t i = 0U; process->name[i] != '\0'; i++)
+    {
+        char a = process->name[i];
+        char b = process->name[i + 1U];
+        if ((a == 't' || a == 'T') &&
+            (b == 'e' || b == 'E') &&
+            (process->name[i + 2U] == 'r' || process->name[i + 2U] == 'R') &&
+            (process->name[i + 3U] == 'm' || process->name[i + 3U] == 'M') &&
+            (process->name[i + 4U] == 'i' || process->name[i + 4U] == 'I') &&
+            (process->name[i + 5U] == 'n' || process->name[i + 5U] == 'N') &&
+            (process->name[i + 6U] == 'a' || process->name[i + 6U] == 'A') &&
+            (process->name[i + 7U] == 'l' || process->name[i + 7U] == 'L'))
+        {
+            terminal_process = 1;
+            break;
+        }
+    }
+    if (!terminal_process)
+    {
+        frame->rax = (uint64_t)(int64_t)-1;
+        return 0;
+    }
+
+    uint64_t capacity = frame->rdx;
+    uintptr_t output_address = (uintptr_t)frame->rsi;
+    if (capacity == 0U || capacity > USER_SYSCALL_KERNEL_COMMAND_MAX ||
+        !paging_user_range_valid(process->address_space, output_address,
+                                 (size_t)capacity, 1))
+    {
+        frame->rax = (uint64_t)(int64_t)-22;
+        return 0;
+    }
+
+    char command[128];
+    size_t command_length = 0U;
+    int copied = syscall_copy_user_string(
+        command, sizeof(command), (uintptr_t)frame->rdi,
+        process, &command_length);
+    if (copied != 0 || command_length == 0U)
+    {
+        frame->rax = (uint64_t)(int64_t)(copied != 0 ? copied : -22);
+        return 0;
+    }
+
+    char output[USER_SYSCALL_KERNEL_COMMAND_MAX];
+    int result = shell_execute_kernel_command(command, output, sizeof(output));
+    if (result < 0)
+    {
+        frame->rax = (uint64_t)(int64_t)result;
+        return 0;
+    }
+
+    size_t bytes = (size_t)result;
+    if (bytes >= capacity)
+        bytes = (size_t)capacity - 1U;
+    for (size_t i = 0U; i < bytes; i++)
+        ((char*)output_address)[i] = output[i];
+    ((char*)output_address)[bytes] = '\0';
+    frame->rax = (uint64_t)bytes;
+    return 0;
+}
+
 static int syscall_gui_create_window(struct exception_frame* frame,
                                      const process_t* process)
 {
@@ -837,6 +910,8 @@ static int syscall_dispatch(struct exception_frame* frame)
             return syscall_create_directory(frame, &process);
         case USER_SYSCALL_STAT_PATH:
             return syscall_stat_path(frame, &process);
+        case USER_SYSCALL_KERNEL_COMMAND:
+            return syscall_kernel_command(frame, &process);
         case USER_SYSCALL_GUI_CREATE_WINDOW:
             return syscall_gui_create_window(frame, &process);
         case USER_SYSCALL_GUI_CLOSE_WINDOW:

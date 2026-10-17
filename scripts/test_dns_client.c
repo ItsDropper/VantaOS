@@ -136,6 +136,10 @@ int main(void)
         fputs("truncated DNS A record was accepted\n", stderr);
         return 4;
     }
+    if (!run_case(4, 0)) {
+        fputs("forward DNS compression pointer was accepted\\n", stderr);
+        return 5;
+    }
     puts("DNS compressed A response and malformed compression/RDATA tests passed");
     return 0;
 }

@@ -970,6 +970,12 @@ static void commit_dialog(void)
             set_status("Invalid path or filename too long", COLOR_ERROR);
             return;
         }
+        vanta_file_info_t existing;
+        if (vanta_stat_path(target, &existing) == 0)
+        {
+            set_status("An item with that name already exists", COLOR_ERROR);
+            return;
+        }
         long result = dialog_mode == DIALOG_CREATE_DIRECTORY ?
             vanta_create_directory(target) : vanta_create_file(target);
         if (result < 0)

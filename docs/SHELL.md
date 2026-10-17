@@ -22,11 +22,12 @@ The ring-3 terminal shell uses a bounded command buffer and argument parser. Quo
 
 ## Network commands
 
-- `net connect [index]` (alias `net dhcp [index]`) runs a bounded DHCPv4 exchange on the selected link-up interface (or the first link-up interface), then configures its IPv4 address, netmask, gateway, and DNS server. It times out after 30 seconds and reports the result. It does not yet renew/expire leases or prove end-to-end Internet reachability.
-- `net` / `net status` lists registered network devices, link state, MTU, MAC, configured IPv4 address, and RX/TX counters.
-- `net dns <hostname>` resolves an IPv4 A record using the DNS server learned by DHCP. It requires a reachable DNS server.
-- `net ping <IPv4-address>` sends one ICMP echo request and waits up to three seconds for the matching reply; firewalls may block ICMP.
-- `net poll` runs one bounded network poll cycle.
-- `net config <index> <ip> <netmask> <gateway>` configures a registered interface with a validated static IPv4 configuration.
+- `net connect [index]` (alias `net dhcp [index]`) requests a DHCPv4 lease on a link-up interface and configures its IPv4 address, netmask, gateway, and DNS server. It can take up to 30 seconds.
+- `net` / `net status` lists interfaces, link state, MTU, MAC, IPv4 configuration, DNS, and RX/TX counters.
+- `net dns <hostname>` resolves an IPv4 A record using the configured DNS server.
+- `net ping <IPv4-address>` sends an ICMP echo request and waits up to three seconds; firewalls may block ICMP.
+- `net http <http://hostname[:port]/path>` (alias `net get <URL>`) resolves the host if needed, opens a TCP connection, sends one HTTP/1.0 GET, and prints up to 4096 response bytes.
+- `net poll` runs one bounded network polling cycle.
+- `net config <index> <ip> <netmask> <gateway>` configures a validated static IPv4 address, mask, and gateway.
 
-These commands provide diagnostics and DHCP/static configuration, but are not yet a general Internet client. The current stack includes E1000 polling, Ethernet/VLAN demultiplexing, ARP replies, IPv4 ICMP echo replies, and validated UDP receive callbacks. DHCP lease acquisition is implemented; Outbound IPv4, bounded ARP resolution/cache, UDP transmit, DNS A-record lookup, and ICMP ping are implemented. TCP, HTTP/HTTPS, general sockets, IP fragmentation, VLAN-tagged outbound transmission, DHCP lease renewal/expiry, and a general-purpose Internet login/connect flow remain unimplemented. A configured IP address is not evidence that a gateway or Internet route works.
+**Limitations:** HTTP is plaintext and intended for connectivity testing. HTTPS is rejected because TLS and certificate validation are not implemented. TCP supports only one synchronous client connection and is not yet a general socket API. DHCP lease renewal/expiry, IPv4 fragmentation, outbound VLAN tagging, and broad physical NIC compatibility remain unfinished. DHCP success alone does not prove Internet reachability.

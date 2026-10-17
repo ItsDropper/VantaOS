@@ -114,6 +114,11 @@ jobs:
       - name: Enforce architecture boundaries
         run: python3 scripts/check_architecture.py
 
+      - name: Test TCP client state machine
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_tcp_client.c net/tcp.c -o /tmp/vantaos-tcp-client-test
+          /tmp/vantaos-tcp-client-test
+
       - name: Build kernel, ISO, and FAT32 image with self-tests
         run: chmod +x build.sh && VANTAOS_SELF_TEST=1 ./build.sh
 

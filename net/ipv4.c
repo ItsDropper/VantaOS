@@ -1,6 +1,7 @@
 #include "net.h"
 #include "net_arp.h"
 #include "net_ipv4.h"
+#include "net_tcp.h"
 #include "spinlock.h"
 #include "timer.h"
 #include "serial.h"
@@ -9,6 +10,7 @@
 #define IPV4_ETHERTYPE 0x0800U
 #define IPV4_PROTOCOL_ICMP 1U
 #define IPV4_PROTOCOL_UDP 17U
+#define IPV4_PROTOCOL_TCP 6U
 
 static spinlock_t ping_lock = SPINLOCK_INITIALIZER;
 static uint32_t ping_target;
@@ -51,7 +53,7 @@ static void ipv4_receive(net_device_t* d,const uint8_t* frame,size_t length,
        checksum(ip,ihl)!=0U)return;
     uint16_t fragments=read_be16(ip+6);
     if(fragments&0xBFFFU)return;
-    if(ip[9]!=IPV4_PROTOCOL_ICMP&&ip[9]!=IPV4_PROTOCOL_UDP)return;
+    if(ip[9]!=IPV4_PROTOCOL_ICMP&&ip[9]!=IPV4_PROTOCOL_UDP&&ip[9]!=IPV4_PROTOCOL_TCP)return;
     uint32_t local_ip=0,local_mask=0,source_ip=read_be32(ip+12),dest_ip=read_be32(ip+16);
     int configured=net_device_get_ipv4(d,&local_ip,&local_mask,0);
     int dhcp_broadcast=!configured&&ip[9]==IPV4_PROTOCOL_UDP&&
@@ -66,6 +68,10 @@ static void ipv4_receive(net_device_t* d,const uint8_t* frame,size_t length,
     const uint8_t* icmp=ip+ihl;
     if(ip[9]==IPV4_PROTOCOL_UDP){
         net_udp_receive_ipv4(d,ip,ihl,total);
+        return;
+    }
+    if(ip[9]==IPV4_PROTOCOL_TCP){
+        net_tcp_receive_ipv4(d,ip,ihl,total);
         return;
     }
     if(icmp_length<8U||checksum(icmp,icmp_length)!=0U)return;
@@ -111,7 +117,8 @@ int net_ipv4_send(net_device_t* device, uint32_t destination,
                   uint8_t protocol, const void* payload, size_t payload_length)
 {
     if (!device || !payload || !device->link_up ||
-        (protocol != IPV4_PROTOCOL_ICMP && protocol != IPV4_PROTOCOL_UDP) ||
+        (protocol != IPV4_PROTOCOL_ICMP && protocol != IPV4_PROTOCOL_UDP &&
+         protocol != IPV4_PROTOCOL_TCP) ||
         payload_length == 0U || payload_length > (size_t)device->mtu - 20U)
         return 0;
 

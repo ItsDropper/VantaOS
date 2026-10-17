@@ -85,8 +85,8 @@ static void unpublished_image_cleanup_probe(void)
     }
 
     serial_write(ok ?
-        "VANTAOS_UNPUBLISHED_IMAGE_CLEANUP_OK\\n" :
-        "VANTAOS_UNPUBLISHED_IMAGE_CLEANUP_FAIL\\n");
+        "VANTAOS_UNPUBLISHED_IMAGE_CLEANUP_OK\n" :
+        "VANTAOS_UNPUBLISHED_IMAGE_CLEANUP_FAIL\n");
 }
 
 static void user_mapping_probe(void)

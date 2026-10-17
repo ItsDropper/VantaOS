@@ -41,6 +41,9 @@ static size_t input_start_column = 0;
  * 0 = live view.
  */
 static size_t scroll_offset = 0;
+static char* capture_buffer;
+static size_t capture_capacity;
+static size_t capture_length;
 
 static uint16_t terminal_entry(char c)
 {
@@ -405,6 +408,13 @@ void terminal_set_input_cursor(unsigned int offset)
 
 void terminal_putchar(char c)
 {
+    if (capture_buffer && capture_capacity > 0U &&
+        capture_length + 1U < capture_capacity)
+    {
+        capture_buffer[capture_length++] = c;
+        capture_buffer[capture_length] = '\0';
+    }
+
     scroll_offset = 0;
 
     if (history_count == 0)
@@ -579,4 +589,25 @@ size_t terminal_get_scroll_offset(void)
 void terminal_render_for_desktop(void)
 {
     terminal_render();
+}
+
+
+void terminal_capture_begin(char* buffer, size_t capacity)
+{
+    capture_buffer = buffer;
+    capture_capacity = capacity;
+    capture_length = 0U;
+    if (capture_buffer && capture_capacity > 0U)
+        capture_buffer[0] = '\0';
+}
+
+size_t terminal_capture_end(void)
+{
+    size_t length = capture_length;
+    if (capture_buffer && capture_capacity > 0U)
+        capture_buffer[length < capture_capacity ? length : capture_capacity - 1U] = '\0';
+    capture_buffer = 0;
+    capture_capacity = 0U;
+    capture_length = 0U;
+    return length;
 }

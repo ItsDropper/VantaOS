@@ -690,7 +690,8 @@ static int syscall_kernel_command(struct exception_frame* frame,
      * Other user processes cannot use it to run arbitrary kernel commands.
      */
     int terminal_process = 0;
-    for (size_t i = 0U; process->name[i] != '\0'; i++)
+    for (size_t i = 0U; i + 7U < sizeof(process->name) &&
+         process->name[i] != '\0'; i++)
     {
         char a = process->name[i];
         char b = process->name[i + 1U];

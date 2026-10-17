@@ -397,7 +397,7 @@ int filesystem_read_unlocked(
 }
 
 
-int filesystem_read_unlocked_range(uint32_t file_id, uint32_t offset,
+int filesystem_read_range_unlocked(uint32_t file_id, uint32_t offset,
                           char* buffer, uint32_t length)
 {
     if (!initialized || file_id >= node_count || (length && !buffer))
@@ -450,7 +450,7 @@ static int fs_refresh_file_metadata(uint32_t id, const char* path)
     return 0;
 }
 
-int filesystem_write_file_unlocked_range_unlocked(const char* path, uint32_t offset,
+int filesystem_write_file_range_unlocked(const char* path, uint32_t offset,
                                 const char* data, uint32_t length)
 {
     if (!initialized || !path || (length && !data) ||

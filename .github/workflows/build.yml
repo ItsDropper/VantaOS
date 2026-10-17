@@ -20,6 +20,82 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect affected test suites
+        id: scope
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
+          BEFORE_SHA: ${{ github.event.before || '' }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          full=0
+          e1000=0
+          usb=0
+          nvme=0
+
+          # Master pushes and manual runs remain full regression runs. For PRs,
+          # compare the complete PR diff to its base, not just the latest commit.
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] ||
+             { [ "$EVENT_NAME" = "push" ] && [ "$REF_NAME" = "refs/heads/master" ]; }; then
+            full=1
+          else
+            base="$BASE_SHA"
+            if [ "$EVENT_NAME" = "push" ]; then base="$BEFORE_SHA"; fi
+            if [ -z "$base" ] || [[ "$base" =~ ^0+$ ]] ||
+               ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
+              full=1
+            else
+              mapfile -t changed_files < <(git diff --name-only "$base" "$HEAD_SHA")
+              if [ "${#changed_files[@]}" -eq 0 ]; then
+                full=1
+              else
+                e1000_only=1
+                usb_only=1
+                nvme_only=1
+                for file in "${changed_files[@]}"; do
+                  case "$file" in
+                    drivers/network/e1000.c|tests/test_e1000_network.py) ;;
+                    *) e1000_only=0 ;;
+                  esac
+                  case "$file" in
+                    drivers/usb/*|drivers/input/usb/*|drivers/hid/usb/*|tests/usb/*) ;;
+                    *) usb_only=0 ;;
+                  esac
+                  case "$file" in
+                    drivers/nvme/*|drivers/storage/nvme/*|drivers/block/nvme*|tests/nvme/*) ;;
+                    *) nvme_only=0 ;;
+                  esac
+                done
+
+                # Narrow fast paths are deliberately strict. Shared kernel,
+                # filesystem, build, header, or workflow changes run everything.
+                if [ "$e1000_only" -eq 1 ]; then
+                  e1000=1
+                elif [ "$usb_only" -eq 1 ]; then
+                  usb=1
+                elif [ "$nvme_only" -eq 1 ]; then
+                  nvme=1
+                else
+                  full=1
+                fi
+              fi
+            fi
+          fi
+
+          echo "full=$full" >> "$GITHUB_OUTPUT"
+          echo "e1000=$e1000" >> "$GITHUB_OUTPUT"
+          echo "usb=$usb" >> "$GITHUB_OUTPUT"
+          echo "nvme=$nvme" >> "$GITHUB_OUTPUT"
+          echo "CI scope: full=$full e1000=$e1000 usb=$usb nvme=$nvme"
+          if [ "$full" -eq 1 ]; then
+            echo "Running complete regression suite (conservative fallback)."
+          fi
 
       - name: Install build dependencies
         run: sudo apt-get update && sudo apt-get install --yes build-essential nasm grub-pc-bin xorriso mtools dosfstools qemu-system-x86 gnu-efi ovmf gdisk xvfb socat imagemagick
@@ -66,7 +142,7 @@ jobs:
           cp vantaos.img nvme-fat32-template.img
 
       - name: E1000 QEMU transmit end-to-end test
-        if: always()
+        if: always() && (steps.scope.outputs.full == '1' || steps.scope.outputs.e1000 == '1')
         shell: bash
         run: |
           set -euo pipefail
@@ -128,7 +204,7 @@ jobs:
             exit 1
           fi
       - name: USB HID xHCI input end-to-end test
-        if: always()
+        if: always() && (steps.scope.outputs.full == '1' || steps.scope.outputs.usb == '1')
         shell: bash
         run: |
           set -euo pipefail
@@ -229,6 +305,7 @@ jobs:
           exit 1
 
       - name: NVMe controller and namespace I/O end-to-end test
+        if: steps.scope.outputs.full == '1' || steps.scope.outputs.nvme == '1'
         shell: bash
         run: |
           set -euo pipefail
@@ -271,6 +348,7 @@ jobs:
           fi
 
       - name: NVMe-only FAT32 filesystem integration and reboot persistence
+        if: steps.scope.outputs.full == '1' || steps.scope.outputs.nvme == '1'
         shell: bash
         run: |
           set -euo pipefail
@@ -326,6 +404,7 @@ jobs:
           echo "NVMe-only FAT32 operations and reboot persistence passed."
 
       - name: Missing-storage and malformed-partition fallback tests
+        if: steps.scope.outputs.full == '1' || steps.scope.outputs.nvme == '1'
         shell: bash
         run: |
           set -euo pipefail
@@ -388,6 +467,7 @@ jobs:
           fi
 
       - name: Refuse ambiguous FAT32 volumes across ATA and NVMe
+        if: steps.scope.outputs.full == '1' || steps.scope.outputs.nvme == '1'
         shell: bash
         run: |
           set -euo pipefail
@@ -418,6 +498,7 @@ jobs:
           fi
 
       - name: QEMU boot and regression tests at multiple memory sizes
+        if: steps.scope.outputs.full == '1'
         shell: bash
         run: |
           set -euo pipefail
@@ -549,9 +630,11 @@ jobs:
           grep -q 'VANTAOS_DESKTOP_THEME_CONFIG_OK' boot-512m-2cpu.log
 
       - name: Build the UEFI boot manager and EFI system image
+        if: steps.scope.outputs.full == '1'
         run: make uefi
 
       - name: UEFI/OVMF boot and kernel handoff regression test
+        if: steps.scope.outputs.full == '1'
         shell: bash
         run: |
           set -euo pipefail
@@ -635,6 +718,7 @@ jobs:
           echo "UEFI loader reached the VantaOS kernel under OVMF."
 
       - name: Capture graphical desktop after boot
+        if: steps.scope.outputs.full == '1'
         shell: bash
         run: |
           set -euo pipefail

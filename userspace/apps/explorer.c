@@ -389,6 +389,21 @@ static int ends_with_ci(const char* name, const char* suffix)
     return text_equals_ci(name + n - s, suffix);
 }
 
+static const char* file_type_name(const char* name)
+{
+    if (ends_with_ci(name, ".ELF")) return "Executable";
+    if (ends_with_ci(name, ".VZA")) return "Vanta archive";
+    if (ends_with_ci(name, ".TXT") || ends_with_ci(name, ".MD") ||
+        ends_with_ci(name, ".LOG")) return "Text document";
+    if (ends_with_ci(name, ".CFG") || ends_with_ci(name, ".INI"))
+        return "Configuration";
+    if (ends_with_ci(name, ".C") || ends_with_ci(name, ".H") ||
+        ends_with_ci(name, ".ASM") || ends_with_ci(name, ".S"))
+        return "Source code";
+    if (ends_with_ci(name, ".BIN")) return "Binary file";
+    return "File";
+}
+
 static int read_exact(int descriptor, char* buffer, size_t length)
 {
     size_t used = 0U;
@@ -1107,8 +1122,7 @@ static void render(void)
             add_outline(156, y - 2, 576, 19, COLOR_ACCENT);
         }
         add_text_tail(164, y, entries[index], COLOR_TEXT, 52U);
-        add_text(600, y, entry_is_directory[index] ? "Folder" :
-                 ends_with_ci(entries[index], ".VZA") ? "Archive" : "File",
+        add_text(600, y, entry_is_directory[index] ? "Folder" : file_type_name(entries[index]),
                  entry_is_directory[index] ? COLOR_ACCENT : COLOR_MUTED);
     }
     if (visible_count == 0U)
@@ -1184,9 +1198,7 @@ static void render(void)
         add_outline(164, 118, 420, 230, COLOR_ACCENT);
         add_text(178, 128, "File properties", COLOR_TEXT);
         add_text_tail(178, 154, properties_info.name, COLOR_ACCENT, 60U);
-        add_text(178, 178, properties_info.type == 2U ? "Type: Folder" :
-                 ends_with_ci(properties_info.name, ".VZA") ? "Type: Vanta RLE archive" :
-                 "Type: File", COLOR_TEXT);
+        add_text(178, 178, properties_info.type == 2U ? "Type: Folder" : file_type_name(properties_info.name), COLOR_TEXT);
         const char* dot = properties_info.name;
         for (size_t i = 0; properties_info.name[i]; i++)
             if (properties_info.name[i] == '.') dot = properties_info.name + i + 1U;

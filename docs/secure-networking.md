@@ -1,32 +1,15 @@
-# TLS and HTTPS client API
+# Native cryptography and TLS roadmap
 
-VantaOS now builds the pinned BearSSL source as part of the freestanding kernel and
-provides `net_tls_connect`, `net_tls_read`, `net_tls_write`, `net_tls_close`,
-and a bounded `net_https_get` helper over the existing IPv4 DNS/TCP stack.
+VantaOS does not currently implement TLS or HTTPS. The previous BearSSL submodule and adapter have been removed. TLS will be implemented as VantaOS-owned source rather than importing a third-party TLS stack.
 
-## Security contract
+## Current security building blocks
 
-- The caller must supply a non-empty set of `br_x509_trust_anchor` entries from a
-  maintained CA store. An empty store is rejected; there is no trust-all option.
-- The caller must supply trusted UTC time as days since the Unix epoch and seconds
-  within that day. VantaOS does not yet have a trusted wall-clock/time-sync service,
-  so callers must not derive this value from the uptime timer.
-- TLS entropy comes from `crypto_rng_fill`; connection setup fails closed if the
-  CPU's RDRAND source is unavailable or fails.
-- `net_https_get` is GET-only, rejects control characters in the path, limits the
-  request size, returns raw HTTP response bytes including headers, and fails rather
-  than silently returning a response that fills the caller's buffer.
-- The current TCP implementation supports one synchronous client connection at a
-  time. The TLS session API inherits that limitation and must not be called
-  concurrently.
-- This does not add a Wi-Fi chipset driver, 802.11 association, WPA2/WPA3, IPv6
-  TLS transport, certificate-store updates, or a trusted RTC/time synchronization
-  implementation. Real Wi-Fi remains hardware-specific.
+- crypto_rng_fill uses CPU RDRAND when available and fails closed when unavailable or when an instruction fails. RDRAND alone is not a complete entropy design for a production OS.
+- tls_policy.h validates ASCII DNS hostname syntax only. It does not validate certificates or authenticate a server.
+- The existing TCP client is synchronous and limited to one client connection.
 
-## Build
+## Required before HTTPS can be enabled
 
-CI checks out the pinned BearSSL submodule recursively. The top-level Makefile
-compiles its library sources with VantaOS and links the TLS adapter into the kernel.
-The build preparation script disables BearSSL's host-only OS entropy and time hooks;
-VantaOS injects hardware entropy and the caller-provided time explicitly. A small
-freestanding C runtime provides the memory/string primitives required by BearSSL.
+A native TLS implementation still needs reviewed and tested cryptographic primitives, TLS 1.3 transcript handling and key schedule, a supported key exchange, authenticated encryption, certificate parsing and path validation, hostname matching against certificate SANs, a maintained CA store, and trusted wall-clock time. Unsupported cipher suites, malformed records, invalid certificates, missing time, and entropy failures must fail closed. No placeholder or unverified primitive may be presented as secure TLS.
+
+Physical Wi-Fi association and WPA2/WPA3 are also unimplemented; a generic Wi-Fi control API is not a chipset driver.

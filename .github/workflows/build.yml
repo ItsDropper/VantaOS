@@ -22,7 +22,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          submodules: recursive
 
       - name: Detect affected test suites
         id: scope
@@ -110,8 +109,8 @@ jobs:
           test -f drivers/Makefile
           test -f drivers/network/e1000.c
           test -f drivers/network/virtio_net.c
-          test -f third_party/bearssl/inc/bearssl.h
-          grep -q 'net/tls.c' net/Makefile
+          grep -q 'net/tcp.c' net/Makefile
+          ! grep -q 'net/tls.c' net/Makefile
           grep -q 'drivers/network/e1000.c' drivers/network/Makefile
           grep -q 'drivers/network/virtio_net.c' drivers/network/Makefile
           test -f fs/Makefile
@@ -141,7 +140,7 @@ jobs:
 
       - name: Test TLS hostname validation policy
         run: |
-          gcc -std=c11 -Wall -Wextra -Werror -Iinclude -Ithird_party/bearssl/inc scripts/test_tls_hostname.c -o /tmp/vantaos-tls-hostname-test
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_tls_hostname.c -o /tmp/vantaos-tls-hostname-test
           /tmp/vantaos-tls-hostname-test
 
       - name: Test hardware crypto entropy source
@@ -649,6 +648,9 @@ jobs:
             VANTAOS_SCHEDULER_REAP_OK
           )
 
+          # Earlier device tests boot and mutate vantaos.img. Start this matrix from the pristine fixture.
+          cp nvme-fat32-template.img vantaos-regression.img
+
           for config in "256 1" "512 2" "512 4"; do
             read -r memory cpus <<< "$config"
             log="boot-${memory}m-${cpus}cpu.log"
@@ -659,7 +661,7 @@ jobs:
               -smp "${cpus}" \
               -m "${memory}M" \
               -drive file=VantaOS.iso,media=cdrom,format=raw \
-              -drive file=vantaos.img,if=ide,format=raw \
+              -drive file=vantaos-regression.img,if=ide,format=raw \
               -boot order=d \
               -display none \
               -serial "file:${log}" \
@@ -815,7 +817,7 @@ jobs:
             -smp 2 \
             -vga std \
             -drive file=VantaOS.iso,media=cdrom,format=raw \
-            -drive file=vantaos.img,if=ide,format=raw \
+            -drive file=vantaos-regression.img,if=ide,format=raw \
             -boot order=d \
             -display sdl \
             -serial file:desktop-boot.log \

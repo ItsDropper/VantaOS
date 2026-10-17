@@ -330,10 +330,10 @@ static void render(void)
         int y = row_y[i];
         add_rect(12, y, 520, 38,
                  selected_setting == i ? selected : surface);
-        add_text(24, y + 10, labels[i], text);
-        add_text_scaled(360, y + 10, i == 0U ? accent_name() : values[i],
-                        i == 0U ? accent_value : muted,
-                        i == 3U ? (uint32_t)text_scale : 1U);
+        add_text_scaled(24, y + 10, labels[i], text,
+                        (uint32_t)text_scale);
+        add_text(360, y + 10, i == 0U ? accent_name() : values[i],
+                 i == 0U ? accent_value : muted);
     }
 
     add_rect(12, 296, 180, 38, accent_value);

@@ -167,21 +167,21 @@ jobs:
                       return response["return"]
 
           command("qmp_capabilities")
-          command("input-send-event", {"device": "video0", "events": [
+          command("input-send-event", {"events": [
               {"type": "key", "data": {
                   "down": True, "key": {"type": "qcode", "data": "a"}}}
           ]})
           time.sleep(0.25)
-          command("input-send-event", {"device": "video0", "events": [
+          command("input-send-event", {"events": [
               {"type": "key", "data": {
                   "down": False, "key": {"type": "qcode", "data": "a"}}}
           ]})
-          command("input-send-event", {"device": "video0", "events": [
+          command("input-send-event", {"events": [
               {"type": "rel", "data": {"axis": "x", "value": 80}},
               {"type": "rel", "data": {"axis": "y", "value": 60}},
               {"type": "btn", "data": {"down": True, "button": "left"}}
           ]})
-          command("input-send-event", {"device": "video0", "events": [
+          command("input-send-event", {"events": [
               {"type": "btn", "data": {"down": False, "button": "left"}}
           ]})
           connection.close()

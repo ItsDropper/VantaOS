@@ -473,6 +473,9 @@ static void gui_focus_input_regression_probe(void)
         ok = gui_server_set_owner_visible(pid, 1) == 1 && ok;
         ok = gui_expect_event(pid, (uint32_t)first,
                               VANTA_GUI_EVENT_FOCUS_GAINED) && ok;
+        gui_server_notify_theme_changed();
+        ok = gui_expect_event(pid, (uint32_t)first,
+                              VANTA_GUI_EVENT_THEME_CHANGED) && ok;
     }
 
     if (ok)

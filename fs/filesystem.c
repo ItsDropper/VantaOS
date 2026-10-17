@@ -2,6 +2,9 @@
 
 #include "ata.h"
 #include "fat32.h"
+#ifdef VANTAOS_SELF_TEST
+#include "serial.h"
+#endif
 
 static fs_node_t nodes[FS_MAX_NODES];
 /* FAT32 enumeration scratch space; filesystem metadata is currently serialized. */
@@ -424,12 +427,27 @@ int filesystem_write_file_range(const char* path, uint32_t offset,
     if (id < 0 || nodes[id].type != FS_NODE_FILE)
         return -1;
     if (offset > nodes[id].size)
+    {
+#ifdef VANTAOS_SELF_TEST
+        serial_write("VANTAOS_FS_RANGE_OFFSET_FAIL\n");
+#endif
         return -1;
+    }
     int result = fat32_write_file_range(path, offset, data, length);
     if (result < 0)
+    {
+#ifdef VANTAOS_SELF_TEST
+        serial_write("VANTAOS_FS_RANGE_BACKEND_FAIL\n");
+#endif
         return -1;
+    }
     if (!fs_refresh_file_metadata((uint32_t)id, path))
+    {
+#ifdef VANTAOS_SELF_TEST
+        serial_write("VANTAOS_FS_RANGE_METADATA_FAIL\n");
+#endif
         return -1;
+    }
     return result;
 }
 

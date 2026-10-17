@@ -27,7 +27,7 @@ Architecture-independent protocol code lives in `net/`; PCI drivers live in `dri
 5. Run `net dns example.com` to test DNS.
 6. Run `net http http://example.com/` to make a real plain-HTTP GET over TCP and print up to 4096 response bytes. `net get` is an alias.
 
-A successful DHCP lease alone does not prove Internet access. DNS, gateway routing, upstream policy, and the selected network driver must all work. For static setups, `net config <index> <ip> <netmask> <gateway>` configures IPv4; the DNS server must be configured separately through the current device configuration path.
+A successful DHCP lease alone does not prove Internet access. DNS, gateway routing, upstream policy, and the selected network driver must all work. For static setups, `net config <index> <ip> <netmask> <gateway>` configures IPv4, then `net dns-server 1.1.1.1 [interface-index]` sets a DNS resolver (choose a resolver reachable from that network). DNS settings are per-interface and are not automatically encrypted.
 
 ## Protocol and resource contracts
 
@@ -37,7 +37,7 @@ A successful DHCP lease alone does not prove Internet access. DNS, gateway routi
 - IPv4 validates header length, total length, checksum, destination, and unsupported fragments. Outbound packets are unfragmented and limited by the interface MTU.
 - UDP receive validates lengths and nonzero checksums; a zero UDP checksum is accepted as valid for IPv4. UDP transmit generates the IPv4 pseudo-header checksum.
 - DHCPv4 obtains address, netmask, gateway, DNS, and lease duration. Lease renewal/expiry is not yet implemented.
-- DNS supports bounded A-record lookup from the DHCP-provided DNS server.
+- DNS supports bounded A-record lookup using the per-interface DNS address supplied by DHCP or set with `net dns-server`. CNAME-only/AAAA resolution and DNS-over-TLS/HTTPS are not implemented.
 - TCP is currently a **single synchronous client connection** with bounded send/receive buffers, peer-MSS and advertised-window handling, segmentation of larger writes, zero-window waiting, retransmission timeout, sequence-checked RST handling, and checksum validation. It does not yet implement multiple simultaneous sockets, congestion control, SACK, out-of-order reassembly, IP fragmentation, or a full socket API.
 - HTTP support is **plain HTTP only**: one bounded HTTP/1.0 GET, response display capped at 4096 bytes. HTTPS is intentionally rejected because TLS and certificate validation are not implemented; the client does not silently downgrade HTTPS to HTTP.
 

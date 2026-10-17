@@ -141,7 +141,7 @@ jobs:
           # With a VNC display backend active, use QEMU's monitor input commands
           # to generate keyboard and mouse events for the emulated USB devices.
           {
-            printf 'info mice\nmouse_set 0\nsendkey a 250\n'
+            printf 'info mice\nmouse_set 4\nsendkey a 250\n'
             sleep 0.3
             printf 'mouse_move 80 60\nmouse_button 1\nmouse_button 0\n'
           } | timeout 4s socat -T 1 - "UNIX-CONNECT:$monitor"

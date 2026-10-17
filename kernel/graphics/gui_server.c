@@ -328,6 +328,17 @@ int gui_server_set_owner_visible(uint32_t pid, int visible)
     return 1;
 }
 
+void gui_server_notify_theme_changed(void)
+{
+    uint64_t flags = spinlock_lock_irqsave(&gui_lock);
+    for (unsigned int i = 0; i < VANTA_GUI_MAX_WINDOWS; i++)
+        if (windows[i].used)
+            gui_emit_simple_event_locked(&windows[i],
+                                         VANTA_GUI_EVENT_THEME_CHANGED);
+    redraw_pending = 1;
+    spinlock_unlock_irqrestore(&gui_lock, flags);
+}
+
 int gui_server_poll_event(uint32_t pid, uint32_t id,
                           vanta_gui_event_t* event_out)
 {

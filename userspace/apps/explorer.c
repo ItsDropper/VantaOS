@@ -329,7 +329,7 @@ static void open_selected(void)
 static void render(void)
 {
     command_count = 0U;
-    add_rect(8, 8, 720, 440, COLOR_SURFACE);
+    add_rect(8, 8, 720, 330, COLOR_SURFACE);
     add_rect(8, 8, 720, 2, COLOR_ACCENT);
     add_text(16, 16, preview_active ? "File preview" : "File Explorer",
              COLOR_TEXT);

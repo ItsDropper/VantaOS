@@ -67,6 +67,12 @@ static uint32_t window_id;
 /* Separate recursion levels keep recursive delete buffers off the user stack. */
 static char delete_list_buffers[8][LIST_CAPACITY];
 static char delete_path_buffers[8][PATH_CAPACITY];
+static char copy_list_buffers[8][LIST_CAPACITY];
+static char copy_source_paths[8][PATH_CAPACITY];
+static char copy_target_paths[8][PATH_CAPACITY];
+static char file_clipboard[ENTRY_CAPACITY][PATH_CAPACITY];
+static size_t file_clipboard_count;
+static int file_clipboard_cut;
 
 static size_t text_length(const char* text)
 {
@@ -707,6 +713,178 @@ static int delete_tree(const char* path, unsigned int depth)
     return vanta_delete_path(path) == 0;
 }
 
+static const char* path_leaf(const char* path)
+{
+    const char* leaf = path;
+    for (const char* p = path; p && *p; p++)
+        if (*p == '/')
+            leaf = p + 1;
+    return leaf;
+}
+
+static int copy_tree(const char* source_path, const char* target_path,
+                     unsigned int depth)
+{
+    if (depth >= 8U)
+        return 0;
+    vanta_file_info_t info;
+    if (vanta_stat_path(source_path, &info) < 0)
+        return 0;
+    vanta_file_info_t existing;
+    if (vanta_stat_path(target_path, &existing) == 0)
+        return 0;
+
+    if (info.type == 2U)
+    {
+        if (vanta_create_directory(target_path) < 0)
+            return 0;
+        char* listing = copy_list_buffers[depth];
+        long bytes = vanta_listdir(source_path, listing, LIST_CAPACITY);
+        if (bytes < 0)
+        {
+            (void)delete_tree(target_path, 0U);
+            return 0;
+        }
+        size_t cursor = 0U;
+        while (cursor < (size_t)bytes)
+        {
+            size_t start = cursor;
+            while (cursor < (size_t)bytes && listing[cursor] != '\n')
+                cursor++;
+            size_t length = cursor - start;
+            if (cursor < (size_t)bytes)
+                cursor++;
+            if (length == 0U)
+                continue;
+            if (listing[start + length - 1U] == '/')
+                length--;
+            if (length == 0U || length >= ENTRY_NAME_CAPACITY)
+            {
+                (void)delete_tree(target_path, 0U);
+                return 0;
+            }
+            char name[ENTRY_NAME_CAPACITY];
+            for (size_t i = 0; i < length; i++)
+                name[i] = listing[start + i];
+            name[length] = '\0';
+            if (!build_child_path(source_path, name,
+                                  copy_source_paths[depth + 1U], PATH_CAPACITY) ||
+                !build_child_path(target_path, name,
+                                  copy_target_paths[depth + 1U], PATH_CAPACITY) ||
+                !copy_tree(copy_source_paths[depth + 1U],
+                           copy_target_paths[depth + 1U], depth + 1U))
+            {
+                (void)delete_tree(target_path, 0U);
+                return 0;
+            }
+        }
+        return 1;
+    }
+
+    if (vanta_create_file(target_path) < 0)
+        return 0;
+    long input = vanta_open(source_path, VANTA_OPEN_READ);
+    if (input < 0)
+    {
+        (void)vanta_delete_path(target_path);
+        return 0;
+    }
+    long output = vanta_open(target_path, VANTA_OPEN_WRITE | VANTA_OPEN_TRUNCATE);
+    if (output < 0)
+    {
+        (void)vanta_close((int)input);
+        (void)vanta_delete_path(target_path);
+        return 0;
+    }
+    char buffer[1024];
+    int ok = 1;
+    while (ok)
+    {
+        long got = vanta_read((int)input, buffer, sizeof(buffer));
+        if (got < 0)
+        {
+            ok = 0;
+            break;
+        }
+        if (got == 0)
+            break;
+        if (!write_all((int)output, buffer, (size_t)got))
+            ok = 0;
+    }
+    (void)vanta_close((int)input);
+    (void)vanta_close((int)output);
+    if (!ok)
+    {
+        (void)vanta_delete_path(target_path);
+        return 0;
+    }
+    return 1;
+}
+
+static void set_file_clipboard(int cut)
+{
+    file_clipboard_count = 0U;
+    size_t selected = selected_count();
+    if (selected == 0U)
+    {
+        set_status("Select items to copy or cut", COLOR_ERROR);
+        return;
+    }
+    for (size_t i = 0; i < entry_count && file_clipboard_count < ENTRY_CAPACITY; i++)
+    {
+        if (!entry_selected[i])
+            continue;
+        if (!build_entry_path(i, file_clipboard[file_clipboard_count],
+                              sizeof(file_clipboard[0])))
+            continue;
+        file_clipboard_count++;
+    }
+    if (file_clipboard_count == 0U)
+    {
+        set_status("Could not copy selected paths", COLOR_ERROR);
+        return;
+    }
+    file_clipboard_cut = cut;
+    copy_text(clipboard_path, sizeof(clipboard_path), file_clipboard[0]);
+    set_status(cut ? "Items marked to move; navigate and paste" :
+               "Items copied; navigate and paste", COLOR_ACCENT);
+}
+
+static void paste_file_clipboard(void)
+{
+    if (file_clipboard_count == 0U)
+    {
+        (void)load_directory();
+        set_status("Clipboard is empty; directory refreshed", COLOR_MUTED);
+        return;
+    }
+    size_t total = file_clipboard_count, done = 0U;
+    size_t removed = 0U;
+    for (size_t i = 0; i < total; i++)
+    {
+        const char* leaf = path_leaf(file_clipboard[i]);
+        char target[PATH_CAPACITY];
+        if (!build_child_path(current_path, leaf, target, sizeof(target)) ||
+            !copy_tree(file_clipboard[i], target, 0U))
+            continue;
+        done++;
+        if (file_clipboard_cut && delete_tree(file_clipboard[i], 0U))
+            removed++;
+    }
+    if (file_clipboard_cut && done == total && removed == total)
+    {
+        file_clipboard_count = 0U;
+        file_clipboard_cut = 0;
+    }
+    (void)load_directory();
+    if (done == total && (!file_clipboard_cut || removed == total))
+        set_status(file_clipboard_cut ? "Move completed" : "Paste completed", COLOR_ACCENT);
+    else if (done > 0U)
+        set_status("Partial paste; existing names are not overwritten", COLOR_ERROR);
+    else
+        set_status("Paste failed; target may already exist", COLOR_ERROR);
+}
+
 static void show_properties(size_t index)
 {
     if (index >= entry_count || !build_entry_path(index, properties_path,
@@ -879,7 +1057,7 @@ static void toolbar_action(unsigned int action)
                 show_properties(index);
             break;
         }
-        case 7: (void)load_directory(); break;
+        case 7: paste_file_clipboard(); break;
     }
 }
 
@@ -1090,7 +1268,7 @@ static void render(void)
 
     static const char* button_labels[8] = {
         "New File [N]", "New Folder [D]", "Rename [R]", "Delete [Del]",
-        "Compress [Z]", "Extract [X]", "Properties [I]", "Refresh [T]"
+        "Compress [Z]", "Extract [X]", "Properties [I]", "Paste [Ctrl+V]"
     };
     for (unsigned int i = 0; i < 8U; i++)
     {
@@ -1181,7 +1359,7 @@ static void render(void)
     }
     else
         add_text(12, 360, status_text, status_color);
-    add_text(12, 382, "Enter open | Backspace up | Ctrl+C/V path | N new | R rename | Del delete",
+    add_text(12, 382, "Enter=open Ctrl+C=copy Ctrl+X=cut Ctrl+V=paste Del=delete",
              COLOR_MUTED);
 
     if (context_menu)
@@ -1322,16 +1500,11 @@ int main(int argc, char** argv)
                 continue;
             }
             if (key == 3U)
-            {
-                size_t index = first_selected();
-                if (index != (size_t)-1)
-                    (void)build_entry_path(index, clipboard_path, sizeof(clipboard_path));
-            }
+                set_file_clipboard(0);
+            else if (key == 24U)
+                set_file_clipboard(1);
             else if (key == 22U)
-            {
-                path_input_begin();
-                copy_text(input_buffer, sizeof(input_buffer), clipboard_path);
-            }
+                paste_file_clipboard();
             else if (key == 1U)
             {
                 for (size_t i = 0; i < entry_count; i++)

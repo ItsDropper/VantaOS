@@ -269,6 +269,8 @@ void graphics_select_panel(int panel)
     if (panel < 0 || panel > 4)
         return;
 
+    if (active_panel != panel)
+        graphics_invalidate_scene();
     active_panel = panel;
 }
 
@@ -321,6 +323,7 @@ int graphics_set_resolution(uint32_t width, uint32_t height)
     }
 
     framebuffer = (uint8_t*)(GRAPHICS_VIRTUAL_BASE + (physical & 0xFFFU));
+    graphics_invalidate_scene();
     framebuffer_pitch = width * 4U;
     framebuffer_width = width;
     framebuffer_height = height;

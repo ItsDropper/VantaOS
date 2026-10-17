@@ -1505,8 +1505,18 @@ static void explorer_e2e_fail(void)
     vanta_exit(1);
 }
 
+#define EXPLORER_E2E_STRINGIFY_INNER(value) #value
+#define EXPLORER_E2E_STRINGIFY(value) EXPLORER_E2E_STRINGIFY_INNER(value)
 #define EXPLORER_E2E_REQUIRE(condition) \
-    do { if (!(condition)) explorer_e2e_fail(); } while (0)
+    do { \
+        if (!(condition)) { \
+            static const char marker[] = \
+                "VANTAOS_EXPLORER_E2E_FAIL line=" \
+                EXPLORER_E2E_STRINGIFY(__LINE__) "\\n"; \
+            (void)vanta_write(marker, sizeof(marker) - 1U); \
+            vanta_exit(1); \
+        } \
+    } while (0)
 
 static int explorer_e2e_file_equals(const char* path, const char* expected)
 {

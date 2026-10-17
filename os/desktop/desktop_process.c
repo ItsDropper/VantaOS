@@ -7,11 +7,13 @@
 #include "terminal_process.h"
 #include "file_explorer_process.h"
 #include "usb.h"
+#include "serial.h"
 
 static uint32_t desktop_pid;
 
 void desktop_process_main(void)
 {
+    serial_write("VANTAOS_DESKTOP_INPUT_LOOP_ONLINE\n");
     while (1)
     {
         /* xHCI is polled, not interrupt-driven: consume transfer events and

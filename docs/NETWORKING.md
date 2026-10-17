@@ -45,3 +45,27 @@ A successful DHCP lease alone does not prove Internet access. DNS, gateway routi
 ## Validation and remaining work
 
 CI now includes focused IPv6 RA/SLAAC/ICMPv6 tests and a QEMU legacy VirtIO-net transmit-completion test, alongside the E1000 Ethernet/ARP/ICMP/UDP regression and DNS/TCP host-side tests. These tests validate only the named assertions. TCP still needs end-to-end loss/duplicate/out-of-order tests; IPv6 needs outbound UDP/TCP and routed neighbor resolution; VirtIO modern PCI support and additional independently implemented NIC drivers (including common Realtek adapters) remain future work. TLS and certificate validation are required before HTTPS. Wi-Fi still requires a chipset-specific driver, firmware handling, scanning, and a secure WPA2/WPA3 association path. Wi-Fi cannot be enabled by a router setting alone: VantaOS needs a supported wireless chipset driver and a secure association/authentication implementation.
+
+
+## Security and compatibility boundary (2026-10)
+
+The current implementation is an early kernel networking stack, not a secure general-purpose Internet client. In particular:
+
+- **Wi-Fi:** no 802.11 MAC driver, scan/association state machine, WPA2/WPA3 handshake, or Wi-Fi firmware loader is implemented. PCI network discovery only binds devices with a matching implemented driver. A wireless chipset is not supported merely because it appears on PCI. E1000 and legacy VirtIO are wired/virtual Ethernet targets.
+- **TLS and HTTPS:** the TCP client is not a TLS implementation. Do not send credentials, tokens, or sensitive content over it. HTTPS must fail closed until a reviewed TLS implementation, cryptographically secure randomness, certificate-chain validation, hostname verification, and a trustworthy time/trust-store path are integrated together. No insecure certificate bypass is acceptable.
+- **IPv6:** current IPv6 work covers neighbor discovery, router advertisements, SLAAC, and ICMPv6 diagnostics; it does not provide a complete IPv6 transport/application path.
+- **TCP:** this is a single-client, bounded-buffer implementation intended for simple HTTP-style use and tests. It is not a general sockets API and lacks the congestion control, comprehensive option handling, concurrent connections, and full retransmission/fragmentation behavior expected of a mature stack.
+
+### Security invariants
+
+- Unknown PCI IDs must remain unbound; do not infer compatibility from vendor alone.
+- Network input must be length-checked before field access and before subtraction or pointer arithmetic.
+- Device-reported MTU values are untrusted. TCP send/connect must reject MTUs too small for the IPv4+TCP headers rather than allowing unsigned arithmetic to wrap.
+- Never log wireless credentials or cryptographic key material.
+- A network diagnostic is not evidence that TLS, certificate validation, or application-layer identity is secure.
+
+### Practical next integration requirements
+
+A real Wi-Fi implementation needs a selected chipset with publicly documented registers and firmware redistribution terms, DMA/interrupt integration, the chipset-specific firmware/init sequence, 802.11 management and data frames, and WPA2-Personal cryptography/handshake tested against actual APs. Intel client adapters commonly depend on firmware and complex device-specific initialization; selecting a specific model and implementing that contract is required before claiming support.
+
+TLS should be integrated as a reviewed library port, not handwritten cryptographic primitives. The port must supply entropy from a suitable kernel CSPRNG, bounded allocation, certificate parsing and path validation, hostname matching, and trusted time. The current kernel has not yet demonstrated that complete foundation, so this branch intentionally does not advertise HTTPS support.

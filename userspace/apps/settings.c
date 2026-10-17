@@ -280,6 +280,8 @@ static int run_storage_self_test(void)
     long closed = vanta_close((int)descriptor);
     if (written != (long)(sizeof(expected) - 1U) || closed != 0)
         return 3;
+    if (vanta_settings_apply() != 0)
+        return 7;
 
     descriptor = vanta_open(SETTINGS_PATH, VANTA_OPEN_READ);
     if (descriptor < 0)

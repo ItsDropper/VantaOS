@@ -188,6 +188,8 @@ jobs:
             cat "$log" qemu-e1000-stderr.log
             exit 1
           }
+          grep -q 'VANTAOS_UDP_RX_SELFTEST_OK' "$log"
+          test "$(grep -c 'VANTAOS_UDP_RX_SELFTEST_OK' "$log")" -eq 1
           for attempt in $(seq 1 100); do
             if grep -q 'VANTAOS_E1000_RX_SELFTEST_OK' "$log" 2>/dev/null; then break; fi
             if ! kill -0 "$qemu_pid" 2>/dev/null; then

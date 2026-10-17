@@ -2,6 +2,7 @@
 #define KEYBOARD_H
 
 #include <stdbool.h>
+#include <stdint.h>
 
 typedef enum
 {
@@ -29,6 +30,9 @@ void keyboard_initialize(void);
  * Called by IRQ1 when the keyboard sends a scancode.
  */
 void keyboard_handle_interrupt(void);
+
+/* Inject a normalized USB HID Keyboard/Keypad usage transition. */
+void keyboard_inject_hid_usage(uint16_t usage, bool pressed);
 
 /*
  * Check whether a character is waiting in the keyboard buffer.

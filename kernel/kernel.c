@@ -9,6 +9,7 @@
 #include "os.h"
 #include "paging.h"
 #include "pci.h"
+#include "xhci.h"
 #include "pmm.h"
 #include "serial.h"
 #include "vanta_boot_info.h"
@@ -55,8 +56,9 @@ static void kernel_initialize(const vanta_boot_info_t* boot_info)
     kernel_platform_selftest();
 #endif
     pci_initialize();
-    ata_initialize();
     heap_initialize();
+    xhci_initialize();
+    ata_initialize();
 }
 
 static void kernel_start_os(multiboot_info_t* mbd)

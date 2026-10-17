@@ -1,5 +1,7 @@
 #include "hid.h"
 #include "input.h"
+#include "keyboard.h"
+#include "mouse.h"
 #include <stdbool.h>
 
 /*
@@ -51,7 +53,9 @@ static bool report_key(uint32_t device_id, uint16_t usage, bool pressed)
         .value = pressed ? 1 : 0,
         .value2 = 0
     };
-    return input_report_event(&event);
+    bool queued = input_report_event(&event);
+    keyboard_inject_hid_usage(usage, pressed);
+    return queued;
 }
 
 int usb_hid_keyboard_attach(uint32_t *handle_out)
@@ -90,10 +94,23 @@ void usb_hid_keyboard_detach(uint32_t handle)
     usb_hid_keyboard_t *keyboard = &keyboards[handle - 1];
     if (!keyboard->active)
         return;
+    /* A disconnect must not leave modifier/key state stuck in the
+     * legacy keyboard path or in consumers of the shared input queue. */
+    for (uint32_t bit = 0; bit < 8; ++bit) {
+        if (keyboard->modifiers & (uint8_t)(1U << bit))
+            (void)report_key(keyboard->device_id, (uint16_t)(0xE0U + bit),
+                             false);
+    }
+    for (uint32_t key = 0; key < 6; ++key) {
+        if (keyboard->keys[key] != 0U)
+            (void)report_key(keyboard->device_id, keyboard->keys[key], false);
+    }
     (void)input_unregister_device(keyboard->device_id);
     keyboard->active = false;
     keyboard->device_id = 0;
     keyboard->modifiers = 0;
+    for (uint32_t key = 0; key < 6; ++key)
+        keyboard->keys[key] = 0;
 }
 
 void usb_hid_keyboard_report(uint32_t handle, const uint8_t *report, uint32_t length)
@@ -187,6 +204,9 @@ void usb_hid_mouse_detach(uint32_t handle)
     usb_hid_mouse_t *mouse = &mice[handle - 1];
     if (!mouse->active)
         return;
+    /* Synthesize button releases before unregistering the device. */
+    const uint8_t released_report[3] = {0, 0, 0};
+    usb_hid_mouse_report(handle, released_report, sizeof(released_report));
     (void)input_unregister_device(mouse->device_id);
     mouse->active = false;
     mouse->device_id = 0;
@@ -222,6 +242,8 @@ void usb_hid_mouse_report(uint32_t handle, const uint8_t *report, uint32_t lengt
 
     int32_t dx = (int8_t)report[1];
     int32_t dy = (int8_t)report[2];
+    int wheel_delta = length >= 4 ? (int8_t)report[3] : 0;
+    mouse_inject_usb_report(dx, dy, buttons, wheel_delta);
     if (dx || dy)
     {
         input_event_t motion = {

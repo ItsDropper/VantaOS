@@ -11,6 +11,7 @@
 #include "terminal.h"
 #include "file_explorer_process.h"
 #include "gui_server.h"
+#include "usb.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -84,6 +85,7 @@ void desktop_present(void)
 
 void desktop_update(void)
 {
+    usb_poll();
     gui_server_cleanup_dead_windows();
 
     /* The physical Super/GUI key is a desktop shortcut, not text input. */

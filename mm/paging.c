@@ -22,7 +22,7 @@ static uint64_t heap_pt[PAGING_TABLE_ENTRIES] __attribute__((aligned(4096)));
 #define GRAPHICS_PT_COUNT 8U
 static uint64_t graphics_pt[GRAPHICS_PT_COUNT][PAGING_TABLE_ENTRIES]
     __attribute__((aligned(4096)));
-#define MMIO_PT_COUNT 2U
+#define MMIO_PT_COUNT 3U
 #define MMIO_WINDOW_BASE 0xE0000000ULL
 static uint64_t mmio_pt[MMIO_PT_COUNT][PAGING_TABLE_ENTRIES]
     __attribute__((aligned(4096)));

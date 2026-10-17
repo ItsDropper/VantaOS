@@ -124,7 +124,8 @@ int net_ipv4_send(net_device_t* device, uint32_t destination,
     ip[1] = 0U;
     write_be16(ip + 2U, (uint16_t)(20U + payload_length));
     static uint16_t packet_id = 1U;
-    write_be16(ip + 4U, packet_id++);
+    uint16_t id = __atomic_fetch_add(&packet_id, 1U, __ATOMIC_RELAXED);
+    write_be16(ip + 4U, id);
     write_be16(ip + 6U, 0x4000U); /* Don't fragment; fragmentation isn't implemented. */
     ip[8] = 64U;
     ip[9] = protocol;

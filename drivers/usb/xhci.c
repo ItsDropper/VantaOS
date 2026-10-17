@@ -558,7 +558,8 @@ static void handle_interrupt_completion(uint32_t slot_id, uint32_t dci,
     interrupt_in_flight[index] = 0;
     uint32_t completion = (status >> 24) & 0xFFU;
     uint32_t residual = status & 0xFFFFFFU;
-    if (completion == 1U && residual <= interrupt_packet[index]) {
+    if ((completion == 1U || completion == 13U) &&
+        residual <= interrupt_packet[index]) {
         uint32_t actual = interrupt_packet[index] - residual;
         for (uint32_t i = 0; i < actual && i < sizeof(interrupt_pending[index]); ++i)
             interrupt_pending[index][i] = interrupt_dma[index][i];

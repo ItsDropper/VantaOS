@@ -22,6 +22,7 @@ void graphics_toggle_start_menu(void)
         return;
 
     start_menu_open = !start_menu_open;
+    graphics_invalidate_scene();
     explorer_dragging = 0;
     terminal_dragging = 0;
 }
@@ -314,6 +315,10 @@ void graphics_mouse_move(int dx, int dy)
         cursor_x = (int)framebuffer_width - 1;
     if (cursor_y >= (int)framebuffer_height)
         cursor_y = (int)framebuffer_height - 1;
+
+    if ((explorer_dragging && !explorer_maximized) ||
+        (terminal_dragging && !terminal_maximized))
+        graphics_invalidate_scene();
 
     if (explorer_dragging && !explorer_maximized)
     {

@@ -9,6 +9,8 @@ typedef struct {
     size_t sent_length;
     unsigned int random_calls;
     unsigned int send_calls;
+    unsigned int install_calls;
+    uint8_t installed_tk[16], installed_gtk[16], installed_gtk_id;
 } test_context_t;
 
 static int test_random(uint8_t *output, size_t length, void *opaque)
@@ -34,9 +36,24 @@ static int test_install(const uint8_t *bssid, const uint8_t *peer,
                         const uint8_t tk[16], const uint8_t *gtk,
                         size_t gtk_length, uint8_t gtk_id, void *opaque)
 {
-    (void)bssid; (void)peer; (void)tk; (void)gtk;
-    (void)gtk_length; (void)gtk_id; (void)opaque;
+    test_context_t *ctx = (test_context_t *)opaque;
+    static const uint8_t expected_bssid[6] = {0x02,0,0,0,0,2};
+    static const uint8_t expected_peer[6] = {0x02,0,0,0,0,1};
+    if (!bssid || !peer || !tk || !gtk || gtk_length != 16U || gtk_id != 0U ||
+        memcmp(bssid, expected_bssid, 6U) != 0 ||
+        memcmp(peer, expected_peer, 6U) != 0)
+        return 0;
+    memcpy(ctx->installed_tk, tk, 16U);
+    memcpy(ctx->installed_gtk, gtk, 16U);
+    ctx->installed_gtk_id = gtk_id;
+    ++ctx->install_calls;
     return 1;
+}
+
+static void put_be16(uint8_t *p, uint16_t value)
+{
+    p[0] = (uint8_t)(value >> 8);
+    p[1] = (uint8_t)value;
 }
 
 int main(void)
@@ -55,6 +72,9 @@ int main(void)
     wifi_wpa2_ops_t ops;
     uint8_t m1[99] = {0};
     uint8_t pmk[WIFI_PMK_SIZE], ptk[64], expected_mic[20], copy[WIFI_WPA2_EAPOL_MAX];
+    uint8_t m3[131] = {0}, kde[24] = {221,22,0,15,172,1,0,0};
+    uint8_t gtk[16], wrapped[32];
+    size_t wrapped_length = 0U;
 
     memset(&supplicant, 0, sizeof(supplicant));
     memset(&context, 0, sizeof(context));
@@ -100,9 +120,35 @@ int main(void)
         memcmp(expected_mic, context.sent + 81U, 16U) != 0)
         return 5;
 
+    /* Build a deterministic M3 with a wrapped GTK KDE and a valid MIC. */
+    for (size_t i = 0U; i < sizeof(gtk); ++i) {
+        gtk[i] = (uint8_t)(0x30U + i);
+        kde[8U + i] = gtk[i];
+    }
+    if (!wifi_aes128_key_wrap(ptk + 16U, kde, sizeof(kde), wrapped,
+                              sizeof(wrapped), &wrapped_length) ||
+        wrapped_length != sizeof(wrapped))
+        return 6;
+    m3[0] = 2U; m3[1] = 3U; put_be16(m3 + 2U, sizeof(m3) - 4U);
+    m3[4] = 2U; put_be16(m3 + 5U, 0x13caU); put_be16(m3 + 7U, 16U);
+    m3[16] = 2U;
+    memcpy(m3 + 17U, m1 + 17U, 32U);
+    put_be16(m3 + 97U, sizeof(wrapped));
+    memcpy(m3 + 99U, wrapped, sizeof(wrapped));
+    if (!wifi_hmac_sha1(ptk, 16U, m3, sizeof(m3), expected_mic))
+        return 7;
+    memcpy(m3 + 81U, expected_mic, 16U);
+    if (wifi_wpa2_receive_eapol(&supplicant, bssid, m3, sizeof(m3)) != 1 ||
+        wifi_wpa2_get_state(&supplicant) != WIFI_WPA2_AUTHENTICATED ||
+        context.install_calls != 1U || context.send_calls != 2U ||
+        memcmp(context.installed_tk, ptk + 32U, 16U) != 0 ||
+        memcmp(context.installed_gtk, gtk, 16U) != 0 ||
+        context.installed_gtk_id != 0U)
+        return 8;
+
     wifi_wpa2_reset(&supplicant);
     if (wifi_wpa2_get_state(&supplicant) != WIFI_WPA2_IDLE)
-        return 6;
-    puts("WPA2 supplicant state and EAPOL M2 MIC tests passed.");
+        return 9;
+    puts("WPA2 EAPOL M1-M2-M3-M4 handshake and key-install tests passed.");
     return 0;
 }

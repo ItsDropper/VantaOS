@@ -110,7 +110,7 @@ static int enqueue_tcp(uint16_t source_port, uint16_t destination_port,
     tcp[13] = flags;
     write16(tcp + 14U, 8192U);
     const uint8_t *bytes = (const uint8_t *)payload;
-    for (size_t i = 0; i < payload_length; ++i) tcp[20U + i] = bytes[i];
+    for (size_t i = 0; i < payload_length; ++i) tcp[tcp_header_length + i] = bytes[i];
     write16(tcp + 16U, pseudo_checksum(REMOTE_IP, LOCAL_IP, tcp, tcp_length));
     item->length = 20U + tcp_length;
     ++queue_used;

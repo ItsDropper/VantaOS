@@ -731,7 +731,7 @@ static int command_net(uint32_t argc, char **argv)
             }
             terminal_putchar('\n');
         }
-        terminal_write("Use 'net connect' for DHCP, 'net ping'/'net ping6' for IPv4/IPv6 reachability, 'net dns' for DNS, and 'net http http://host/' for a plain-HTTP GET. HTTPS/TLS is not implemented.\n");
+        terminal_write("Use 'net connect' for DHCP, 'net ping'/'net ping6' for IPv4/IPv6 reachability, 'net dns'/'net dns6' for A/AAAA lookup, and 'net http http://host/' for plain HTTP. HTTPS/TLS is not implemented.\n");
         return 1;
     }
     if (argc == 2U && shell_string_equals(argv[1], "adapters")) {
@@ -852,6 +852,31 @@ static int command_net(uint32_t argc, char **argv)
         if(!net_ipv6_ping(d,&target,3000U,&elapsed)){terminal_write("\nno IPv6 echo reply (check SLAAC, router advertisements, neighbor discovery, and firewall)");return 1;}
         terminal_write("\nreply from ");print_ipv6(&target);terminal_write(": time=");shell_print_decimal(elapsed);terminal_write(" ms");return 1;
     }
+    if (argc == 3U && shell_string_equals(argv[1], "dns6")) {
+        net_device_t *d = 0;
+        net_ipv6_address_t server = {{0}};
+        for (uint32_t i = 0; i < net_device_count(); ++i) {
+            net_device_t *candidate = net_device_get(i);
+            if (candidate && candidate->link_up &&
+                net_ipv6_get_dns_server(candidate, &server)) {
+                d = candidate;
+                break;
+            }
+        }
+        if (!d) {
+            terminal_write("\nnet dns6: no IPv6 DNS server advertised; check router advertisements/RDNSS");
+            return 1;
+        }
+        net_ipv6_address_t address = {{0}};
+        terminal_write("\nResolving AAAA "); terminal_write(argv[2]); terminal_write("...");
+        if (!net_dns_resolve_aaaa(d, argv[2], &address, 5000U)) {
+            terminal_write("\nIPv6 DNS lookup failed or timed out");
+            return 1;
+        }
+        terminal_write("\n"); terminal_write(argv[2]); terminal_write(" -> ");
+        print_ipv6(&address);
+        return 1;
+    }
     if (argc == 3U && shell_string_equals(argv[1], "dns")) {
         net_device_t *d = 0;
         for (uint32_t i = 0; i < net_device_count(); ++i) {
@@ -931,7 +956,7 @@ static int command_net(uint32_t argc, char **argv)
         terminal_write(" (static; no DHCP lease or Internet test performed)");
         return 1;
     }
-    terminal_write("\nusage: net [status|poll|connect [index]|dhcp [index]|dns <hostname>|dns-server <IPv4> [index]|ping <IPv4>|http <URL>] | net config <index> <ip> <netmask> <gateway>");
+    terminal_write("\nusage: net [status|poll|connect [index]|dhcp [index]|dns <hostname>|dns6 <hostname>|dns-server <IPv4> [index]|ping <IPv4>|http <URL>] | net config <index> <ip> <netmask> <gateway>");
     return 1;
 }
 

@@ -201,6 +201,8 @@ static int test_efuse_logical_map_decoder(void)
 
 int main(void)
 {
+    if (!test_efuse_logical_map_decoder())
+        return 19;
     const uint8_t valid[] = {
         9, 2, 32, 0, 1, 1, 0, 0x80, 50,
         9, 4, 0, 0, 2, 0xFF, 0, 0, 0,

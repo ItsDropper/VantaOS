@@ -120,8 +120,10 @@ static int rtl_find_endpoints(const uint8_t *configuration, size_t length,
              * the control pipe and cannot be selected as a bulk endpoint. */
             if ((address & 0x70U) != 0U || (address & 0x0FU) == 0U ||
                 (attributes & 0x03U) != USB_TRANSFER_BULK ||
-                (raw_packet & 0xF800U) != 0U || packet == 0U)
-                continue;
+                (raw_packet & 0xF800U) != 0U || packet == 0U) {
+                /* Reject malformed endpoint descriptors; never retry this offset. */
+                return 0;
+            }
 
             if ((address & 0x80U) != 0U && !candidate.bulk_in) {
                 candidate.bulk_in = address;

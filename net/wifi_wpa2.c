@@ -270,6 +270,34 @@ int wifi_wpa2_receive_eapol(wifi_wpa2_supplicant_t *s,
         return 0;
     }
 
+    if (s->state == WIFI_WPA2_WAIT_M3 &&
+        (info & (KEY_INFO_ACK | KEY_INFO_MIC | KEY_INFO_INSTALL |
+                 KEY_INFO_SECURE | KEY_INFO_ENCRYPTED_DATA)) == KEY_INFO_ACK &&
+        key_data_length == 0U && s->have_replay && s->have_ptk &&
+        bytes_equal(payload + 9U, s->replay_counter, 8U) &&
+        bytes_equal(payload + 17U, s->anonce, sizeof(s->anonce))) {
+        /* AP retransmitted M1 because M2/MIC was lost. Resend the same M2. */
+        if (!send_key_message(s, 0x010aU, s->snonce, s->rsn_ie,
+                              s->rsn_ie_length)) {
+            fail_session(s);
+            return 0;
+        }
+        return 1;
+    }
+
+    if (s->state == WIFI_WPA2_AUTHENTICATED &&
+        (info & (KEY_INFO_ACK | KEY_INFO_MIC | KEY_INFO_INSTALL |
+                 KEY_INFO_SECURE | KEY_INFO_ENCRYPTED_DATA)) ==
+        (KEY_INFO_ACK | KEY_INFO_MIC | KEY_INFO_INSTALL | KEY_INFO_SECURE |
+         KEY_INFO_ENCRYPTED_DATA) &&
+        s->have_replay && s->have_ptk &&
+        bytes_equal(payload + 9U, s->replay_counter, 8U) &&
+        bytes_equal(payload + 17U, s->anonce, sizeof(s->anonce)) &&
+        verify_mic(s->ptk, payload, length)) {
+        /* Duplicate authenticated M3: do not reinstall keys; retransmit M4. */
+        return send_key_message(s, 0x030aU, 0, 0, 0U);
+    }
+
     if (s->state == WIFI_WPA2_WAIT_M1) {
         if ((info & (KEY_INFO_ACK | KEY_INFO_MIC | KEY_INFO_INSTALL |
                      KEY_INFO_SECURE | KEY_INFO_ENCRYPTED_DATA)) != KEY_INFO_ACK ||

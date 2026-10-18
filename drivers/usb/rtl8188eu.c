@@ -42,7 +42,7 @@ typedef struct {
 static uint32_t rtl_slot;
 static uint8_t rtl_bound;
 static uint8_t rtl_register_buffer[RTL8188EU_FW_WRITE_CHUNK] __attribute__((aligned(64)));
-static uint8_t rtl_firmware[RTL8188EU_FW_MAX_SIZE] __attribute__((aligned(64)));
+static uint8_t rtl_firmware[RTL8188EU_FW_MAX_SIZE + 1U] __attribute__((aligned(64)));
 static uint8_t rtl_firmware_attempted;
 static uint8_t rtl_firmware_ready;
 static int rtl_reg_read16(uint16_t address, uint16_t *value);
@@ -214,7 +214,7 @@ static int rtl_load_firmware_file(uint32_t *firmware_size)
             !rtl_name_equal(entry->name, "RTL8188EU.BIN"))
             continue;
         if (entry->size <= RTL8188EU_FW_HEADER_SIZE ||
-            entry->size > sizeof(rtl_firmware) ||
+            entry->size > RTL8188EU_FW_MAX_SIZE ||
             !fat32_read_file(entry->first_cluster, entry->size,
                              (char *)rtl_firmware, sizeof(rtl_firmware)))
             return 0;
@@ -298,12 +298,12 @@ static int rtl_download_firmware(void)
                          (uint16_t)(control16 & ~RTL8188EU_FWDL_ENABLE)))
         goto abort_download;
 
-    for (uint32_t retry = 0; retry < 1000000U; ++retry) {
+    for (uint32_t retry = 0; retry < 10000U; ++retry) {
         if (!rtl_reg_read32(RTL8188EU_REG_MCU_FW_DL, &value32))
             goto abort_download;
         if (value32 & RTL8188EU_FWDL_CHECKSUM)
             break;
-        if (retry == 999999U)
+        if (retry == 9999U)
             goto abort_download;
     }
 

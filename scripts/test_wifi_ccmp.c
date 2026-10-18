@@ -31,10 +31,22 @@ int main(void)
 
     memcpy(original, payload, sizeof(payload));
     if (!wifi_ccmp_encrypt(key, nonce, aad, sizeof(aad), payload,
-                           sizeof(payload), tag) ||
-        memcmp(payload, expected_ciphertext, sizeof(payload)) != 0 ||
-        memcmp(tag, expected_tag, sizeof(tag)) != 0)
+                           sizeof(payload), tag)) {
+        puts("FAIL: wifi_ccmp_encrypt rejected RFC 3610 vector");
         return 2;
+    }
+    if (memcmp(payload, expected_ciphertext, sizeof(payload)) != 0) {
+        puts("FAIL: AES-CCM ciphertext mismatch");
+        for (size_t i = 0U; i < sizeof(payload); ++i) printf("%02x", payload[i]);
+        puts("");
+        return 3;
+    }
+    if (memcmp(tag, expected_tag, sizeof(tag)) != 0) {
+        puts("FAIL: AES-CCM authentication tag mismatch");
+        for (size_t i = 0U; i < sizeof(tag); ++i) printf("%02x", tag[i]);
+        puts("");
+        return 4;
+    }
 
     if (!wifi_ccmp_decrypt(key, nonce, aad, sizeof(aad), payload,
                            sizeof(payload), tag) ||

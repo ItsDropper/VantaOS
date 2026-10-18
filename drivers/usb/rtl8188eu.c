@@ -1183,6 +1183,7 @@ static int rtl_netdev_transmit(net_device_t *device, const uint8_t *ethernet,
         frame[4U + i] = rtl_station_bssid[i];
         frame[10U + i] = local_mac[i];
         frame[16U + i] = ethernet[i]; /* destination */
+    }
     rtl_station_sequence = (uint16_t)((rtl_station_sequence + 1U) & 0x0FFFU);
     frame[22] = (uint8_t)(rtl_station_sequence << 4);
     frame[23] = (uint8_t)(rtl_station_sequence >> 4);

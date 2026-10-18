@@ -74,6 +74,8 @@ typedef struct {
     uint8_t has_status;
     uint8_t ready;
     uint8_t registered;
+    uint8_t poll_seen;
+    uint8_t rx_seen;
     net_device_t netdev;
     vnet_queue_t rx;
     vnet_queue_t tx;
@@ -268,6 +270,7 @@ static int vnet_modern_transmit(net_device_t *device, const uint8_t *frame, size
 static int vnet_modern_poll(void)
 {
     if (!state.ready) return 0;
+    if (!state.poll_seen) { state.poll_seen = 1U; serial_write("VANTAOS_VIRTIO_NET_MODERN_POLL_SEEN\\n"); }
     vnet_queue_t *q = &state.rx;
     int received = 0;
     for (uint32_t budget = 0; budget < 64U; ++budget) {
@@ -275,6 +278,7 @@ static int vnet_modern_poll(void)
         if (q->last_used == q->used->index) break;
         vnet_used_elem_t element = q->used->ring[q->last_used % q->size];
         ++q->last_used;
+        if (!state.rx_seen) { state.rx_seen = 1U; serial_write("VANTAOS_VIRTIO_NET_MODERN_RX_DESCRIPTOR_SEEN\\n"); }
         if (element.id >= q->size) continue;
         uint16_t slot = (uint16_t)element.id;
         uint8_t *buffer = (uint8_t *)q->buffers[slot].virtual_address;

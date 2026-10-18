@@ -138,12 +138,13 @@ int main(void)
     rtl8188eu_poll();
     net_wifi_scan_result_t results[2];
     size_t result_count = rtl8188eu_get_passive_results(results, 2U);
-    if (result_count != 1U || results[0].ssid_length != 4U ||
-        memcmp(results[0].ssid, "TEST", 4U) != 0 ||
-        results[0].channel != 6U ||
-        memcmp(results[0].bssid, "\\x02\\x11\\x22\\x33\\x44\\x55", 6U) != 0)
-        return 6;
+    if (result_count != 1U) return 6;
+    if (results[0].ssid_length != 4U ||
+        memcmp(results[0].ssid, "TEST", 4U) != 0) return 7;
+    if (results[0].channel != 6U) return 8;
+    const uint8_t expected_bssid[6] = {0x02, 0x11, 0x22, 0x33, 0x44, 0x55};
+    if (memcmp(results[0].bssid, expected_bssid, 6U) != 0) return 9;
     if (!rtl8188eu_port_disconnected(1U) || rtl8188eu_port_is_bound(1U))
-        return 7;
+        return 10;
     return 0;
 }

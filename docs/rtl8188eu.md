@@ -29,4 +29,8 @@ RTL8188EU_FIRMWARE=/path/to/rtl8188eufw.bin ./build.sh
 ```
 
 The build script checks that the file exists and is within the current size bounds, then installs it as `/SYSTEM/RTL8188EU.BIN`. Without this variable, the build continues but reports that firmware is absent. This only provisions the file; it does not imply the driver has completed radio initialization or supports an authenticated network connection.
+## USB transmit primitive
 
+The driver now exposes `rtl8188eu_transmit_frame()` for a complete 802.11 management or data MPDU (without FCS). It builds the 32-byte RTL8188E USB TX descriptor, chooses the management or best-effort queue, submits through the discovered bulk-OUT endpoint, and requires the full transfer length to complete. Host tests validate the descriptor fields and ensure a too-short frame is rejected.
+
+This is a low-level transport primitive only. It does not configure the MAC/PHY/RF, set a channel, authenticate or associate, negotiate keys, encrypt/decrypt CCMP, or bridge frames into `net_device_t`. A successful mocked transfer is not evidence that a physical adapter can transmit over the air. The driver must not be described as end-to-end functional until those missing pieces and real-hardware tests pass.

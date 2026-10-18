@@ -21,6 +21,12 @@ The control/data path now has these implementations:
 
 Realtek's public product page confirms the RTL8188EUS is a 2.4 GHz 802.11b/g/n 1T1R USB chipset, but exposes no register programming manual. Public FCC exhibits for an RTL8188EUS module contain RF compliance reports and product photographs, not a usable MAC/BB/RF initialization specification. I could not locate a publicly accessible official Realtek register-level programming guide or eFuse specification that independently defines the required initialization values.
 
+Research references:
+- Realtek product description: https://www.realtek.com/Product/Index?cate_id=194&id=606&menu_id=391
+- Public RTL8188EU HAL initialization flow (behavioral reference only): https://fossies.org/linux/kernel/v5.15/linux-5.15.214.tar.xz/linux-5.15.214/drivers/staging/r8188eu/hal/rtl8188e_phycfg.c
+- Public RTL8188EU eFuse physical-map/packet-buffer flow (behavioral reference only): https://cos.googlesource.com/third_party/kernel/+/f22e6e847115abc3a0e2ad7bb18d243d42275af1/drivers/staging/rtl8188eu/core/rtw_efuse.c
+- Public RTL8188E PHY bring-up flow for the related PCI interface: https://github.com/torvalds/linux/blob/master/drivers/net/wireless/realtek/rtlwifi/rtl8188ee/phy.c
+
 As behavioral research only, the public Linux RTL8188E driver indicates that initialization is not just setting RF channel register 0x18: the flow separately configures MAC registers, enables BB/RF after power sequencing, applies the 1T baseband table, applies eFuse-derived power-group data when eFuse autoload succeeds, applies the AGC table, programs crystal trim, configures RF path A, computes per-channel TX power, and performs LC/IQ calibration. I have not copied Linux driver code, register tables, calibration routines, or firmware blobs into VantaOS. The current branch must not be described as having completed the eFuse hardware path until verified against a real adapter.
 
 ## Still required before end-to-end support can be claimed

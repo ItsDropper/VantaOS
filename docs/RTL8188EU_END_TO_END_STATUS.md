@@ -2,10 +2,11 @@
 
 ## What is now implemented
 
-The driver binds the supported USB IDs, configures bulk endpoints, loads the externally supplied `/SYSTEM/RTL8188EU.BIN` firmware, reads the station MAC, parses RX aggregates, and caches passive Beacon/Probe Response metadata.
+The driver binds the supported USB IDs, configures bulk endpoints, loads the externally supplied `/SYSTEM/RTL8188EU.BIN` firmware, parses RX aggregates, and caches passive Beacon/Probe Response metadata. Firmware offload now initializes the packet-buffer LLT, reads the physical eFuse map through the packet-buffer debug interface, decodes compressed/extended logical sections with bounds checks, validates required factory identity/calibration fields, and applies the firmware eFuse patch. The runtime MAC must be valid and match the decoded factory MAC.
 
 The control/data path now has these implementations:
 - RF path-A serial register read/write helpers and RF channel-register programming with readback verification for 2.4 GHz channels 1-14.
+- Firmware-offloaded LLT initialization and eFuse-map acquisition, physical-to-logical section decoding, factory MAC/crystal/thermal/board-field validation, and a host regression test for extended eFuse sections.
 - A channel-hopping scan state machine with probe requests and bounded per-channel poll dwell.
 - Live Open System Authentication and Association Request/Response state handling, including response status checks, AID validation, retry limits, and poll-driven timeouts.
 - WPA2-PSK/CCMP EAPOL message handling connected to received 802.11 data frames and the real USB TX path. The kernel CSPRNG is required; no weak fallback is used.

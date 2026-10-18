@@ -46,6 +46,7 @@ static uint8_t rtl_firmware[RTL8188EU_FW_MAX_SIZE] __attribute__((aligned(64)));
 static uint8_t rtl_firmware_attempted;
 static uint8_t rtl_firmware_ready;
 static int rtl_reg_read16(uint16_t address, uint16_t *value);
+static int rtl_reg_read32(uint16_t address, uint32_t *value);
 
 static uint16_t get_le16(const uint8_t *p)
 {
@@ -396,4 +397,16 @@ int rtl8188eu_probe(uint32_t slot_id, uint16_t vendor_id, uint16_t device_id,
     rtl_bound = 1U;
     serial_write("VANTAOS_RTL8188EU_USB_TRANSPORT_READY\n");
     return 1;
+}
+
+void rtl8188eu_poll(void)
+{
+    if (!rtl_bound || rtl_firmware_attempted || !fat32_is_mounted())
+        return;
+    rtl_firmware_attempted = 1U;
+    if (rtl_download_firmware() && rtl_firmware_ready) {
+        serial_write("VANTAOS_RTL8188EU_FIRMWARE_READY\n");
+    } else {
+        serial_write("VANTAOS_RTL8188EU_FIRMWARE_LOAD_FAILED\n");
+    }
 }

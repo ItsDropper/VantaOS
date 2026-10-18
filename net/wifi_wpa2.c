@@ -81,10 +81,23 @@ static int replay_greater(const uint8_t a[8], const uint8_t b[8])
 
 static void fail_session(wifi_wpa2_supplicant_t *s)
 {
+    if (!s) return;
+    /*
+     * Failure is terminal for this handshake. Erase all session material,
+     * including the replay value and negotiated RSN bytes, rather than only
+     * the PMK/PTK. Keep the FAILED state observable to the caller.
+     */
     secure_zero(s->pmk, sizeof(s->pmk));
     secure_zero(s->ptk, sizeof(s->ptk));
     secure_zero(s->anonce, sizeof(s->anonce));
     secure_zero(s->snonce, sizeof(s->snonce));
+    secure_zero(s->replay_counter, sizeof(s->replay_counter));
+    secure_zero(s->rsn_ie, sizeof(s->rsn_ie));
+    secure_zero(s->local_mac, sizeof(s->local_mac));
+    secure_zero(s->bssid, sizeof(s->bssid));
+    secure_zero(&s->ops, sizeof(s->ops));
+    s->rsn_ie_length = 0U;
+    s->have_replay = 0U;
     s->have_ptk = 0U;
     s->state = WIFI_WPA2_FAILED;
 }
@@ -158,7 +171,15 @@ int wifi_wpa2_begin(wifi_wpa2_supplicant_t *s, const wifi_wpa2_ops_t *ops,
                     const uint8_t local_mac[6], const uint8_t bssid[6],
                     const uint8_t *rsn_ie, size_t rsn_ie_length)
 {
-    if (!s || !ops || !ops->random_bytes || !ops->send_eapol ||
+    if (!s) return 0;
+
+    /*
+     * Starting a new attempt supersedes any prior session, even when the new
+     * parameters are invalid. Otherwise a rejected reconnect request could
+     * leave the previous session marked AUTHENTICATED with stale key material.
+     */
+    wifi_wpa2_reset(s);
+    if (!ops || !ops->random_bytes || !ops->send_eapol ||
         !ops->install_ccmp_keys || !ssid || ssid_length == 0U ||
         ssid_length > 32U || !passphrase || passphrase_length < 8U ||
         passphrase_length > 63U || !local_mac || !bssid || !rsn_ie ||
@@ -170,7 +191,6 @@ int wifi_wpa2_begin(wifi_wpa2_supplicant_t *s, const wifi_wpa2_ops_t *ops,
     for (size_t i = 0U; i < passphrase_length; ++i) {
         if (passphrase[i] < 0x20U || passphrase[i] > 0x7eU) return 0;
     }
-    wifi_wpa2_reset(s);
     s->ops = *ops;
     for (size_t i = 0U; i < 6U; ++i) {
         s->local_mac[i] = local_mac[i];
@@ -258,6 +278,7 @@ int wifi_wpa2_receive_eapol(wifi_wpa2_supplicant_t *s,
             return 0;
         }
         for (size_t i = 0U; i < 8U; ++i) s->replay_counter[i] = payload[9U + i];
+        s->have_replay = 1U;
         for (size_t i = 0U; i < 32U; ++i) s->anonce[i] = payload[17U + i];
         if (!s->ops.random_bytes(s->snonce, sizeof(s->snonce), s->ops.context)) {
             fail_session(s);
@@ -278,7 +299,7 @@ int wifi_wpa2_receive_eapol(wifi_wpa2_supplicant_t *s,
         return 1;
     }
 
-    if (s->state != WIFI_WPA2_WAIT_M3 ||
+    if (s->state != WIFI_WPA2_WAIT_M3 || !s->have_replay || !s->have_ptk ||
         (info & (KEY_INFO_ACK | KEY_INFO_MIC | KEY_INFO_INSTALL |
                  KEY_INFO_SECURE | KEY_INFO_ENCRYPTED_DATA)) !=
         (KEY_INFO_ACK | KEY_INFO_MIC | KEY_INFO_INSTALL | KEY_INFO_SECURE |

@@ -161,7 +161,7 @@ int net_udp_send(net_device_t* device, uint32_t destination_address,
                  const void* payload, size_t payload_length)
 {
     if (!device || !payload || source_port == 0U || destination_port == 0U ||
-        payload_length > (size_t)device->mtu - 28U ||
+        !net_udp_payload_fits_mtu(device->mtu, payload_length) ||
         payload_length > 0xFFFFU - UDP_HEADER_SIZE)
         return 0;
 

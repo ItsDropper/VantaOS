@@ -8,8 +8,9 @@
  * AES-128 CCM primitive for 802.11 CCMP frames.
  * The caller constructs the 13-byte CCMP nonce and canonical AAD exactly as
  * specified by IEEE 802.11. Payload is encrypted/decrypted in place.
- * This primitive alone does not implement PN replay protection, key install,
- * EAPOL, association, or a complete authenticated Wi-Fi connection.
+ * The packet-number helpers below implement allocation, wire headers and a
+ * bounded replay window, but callers must still authenticate a received frame
+ * before committing its PN. This is not a complete Wi-Fi connection.
  */
 #define WIFI_CCMP_KEY_SIZE 16U
 #define WIFI_CCMP_NONCE_SIZE 13U
@@ -47,6 +48,7 @@ typedef struct {
 
 void wifi_ccmp_replay_reset(wifi_ccmp_replay_t *state);
 int wifi_ccmp_next_tx_pn(wifi_ccmp_replay_t *state, uint64_t *packet_number);
+/* Call only after CCMP MIC/tag verification succeeds. */
 int wifi_ccmp_accept_rx_pn(wifi_ccmp_replay_t *state, uint64_t packet_number);
 int wifi_ccmp_header_encode(uint8_t header[WIFI_CCMP_HEADER_SIZE],
                             uint64_t packet_number, uint8_t key_id);

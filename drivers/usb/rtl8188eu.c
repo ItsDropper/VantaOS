@@ -49,6 +49,12 @@ static uint8_t rtl_register_buffer[RTL8188EU_FW_WRITE_CHUNK] __attribute__((alig
 static uint8_t rtl_firmware[RTL8188EU_FW_MAX_SIZE + 1U] __attribute__((aligned(64)));
 static uint8_t rtl_firmware_attempted;
 static uint8_t rtl_firmware_ready;
+/*
+ * Firmware readiness is not radio readiness. No independently verified
+ * MAC/BB/RF/eFuse/calibration sequence exists yet, so keep TX disabled until
+ * that sequence is implemented and explicitly completes.
+ */
+static uint8_t rtl_radio_ready;
 static uint8_t rtl_rx_armed;
 static uint8_t rtl_rx_buffer[4096] __attribute__((aligned(64)));
 #define RTL8188EU_TX_DESC_SIZE 32U
@@ -588,8 +594,9 @@ int rtl8188eu_transmit_frame(const uint8_t *frame, size_t length)
     uint8_t *descriptor = rtl_tx_buffer;
     uint8_t frame_type;
 
-    if (!rtl_bound || !rtl_firmware_ready || rtl_bulk_out == 0U || !frame ||
-        length < 24U || length > RTL8188EU_TX_FRAME_MAX)
+    if (!rtl_bound || !rtl_firmware_ready || !rtl_radio_ready ||
+        rtl_bulk_out == 0U || !frame || length < 24U ||
+        length > RTL8188EU_TX_FRAME_MAX)
         return 0;
 
     /* Management/control/data parsing is deliberately conservative. */
@@ -681,6 +688,7 @@ int rtl8188eu_port_disconnected(uint32_t port)
     rtl_rx_armed = 0U;
     rtl_firmware_attempted = 0U;
     rtl_firmware_ready = 0U;
+    rtl_radio_ready = 0U;
     rtl_passive_result_count = 0U;
     if (old_slot != 0U)
         (void)xhci_disable_device(old_slot);

@@ -194,7 +194,7 @@ static int rtl_load_firmware_file(uint32_t *firmware_size)
         return 0;
 
     root_count = fat32_list_directory(fat32_root_cluster(), root, 64U);
-    if (root_count < 0 || root_count > 64)
+    if (root_count < 0 || root_count >= 64)
         return 0;
     for (int i = 0; i < root_count; ++i) {
         if (root[i].directory && rtl_name_equal(root[i].name, "SYSTEM")) {
@@ -206,7 +206,7 @@ static int rtl_load_firmware_file(uint32_t *firmware_size)
         return 0;
 
     system_count = fat32_list_directory(system_cluster, system_entries, 128U);
-    if (system_count < 0 || system_count > 128)
+    if (system_count < 0 || system_count >= 128)
         return 0;
     for (int i = 0; i < system_count; ++i) {
         fat32_dirent_t *entry = &system_entries[i];
@@ -323,7 +323,7 @@ static int rtl_download_firmware(void)
                          (uint16_t)(system_function | 0x0004U)))
         goto abort_download;
 
-    for (uint32_t retry = 0; retry < 1000000U; ++retry) {
+    for (uint32_t retry = 0; retry < 10000U; ++retry) {
         if (!rtl_reg_read32(RTL8188EU_REG_MCU_FW_DL, &value32))
             goto abort_download;
         if (value32 & RTL8188EU_FW_INIT_READY) {

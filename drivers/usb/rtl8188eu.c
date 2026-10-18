@@ -27,11 +27,6 @@ typedef struct {
 
 static uint32_t rtl_slot;
 static uint8_t rtl_bound;
-static uint8_t rtl_interface;
-static uint8_t rtl_bulk_in;
-static uint8_t rtl_bulk_out;
-static uint16_t rtl_bulk_in_packet;
-static uint16_t rtl_bulk_out_packet;
 static uint8_t rtl_register_buffer[4] __attribute__((aligned(64)));
 
 static uint16_t get_le16(const uint8_t *p)
@@ -120,21 +115,6 @@ static int rtl_reg_read(uint16_t address, uint8_t *output, uint16_t length)
     return 1;
 }
 
-static int rtl_reg_write(uint16_t address, const uint8_t *input,
-                         uint16_t length)
-{
-    uint8_t setup[8] = {
-        0x40U, RTL8188EU_USB_VENDOR_REQUEST,
-        (uint8_t)address, (uint8_t)(address >> 8),
-        0U, 0U, (uint8_t)length, (uint8_t)(length >> 8)
-    };
-    if (!input || length == 0U || length > sizeof(rtl_register_buffer))
-        return 0;
-    for (uint16_t i = 0; i < length; ++i)
-        rtl_register_buffer[i] = input[i];
-    return xhci_control_transfer(rtl_slot, setup, rtl_register_buffer, length);
-}
-
 static int rtl_reg_read32(uint16_t address, uint32_t *value)
 {
     uint8_t bytes[4];
@@ -169,11 +149,6 @@ int rtl8188eu_probe(uint32_t slot_id, uint16_t vendor_id, uint16_t device_id,
         return 0;
     }
 
-    rtl_interface = endpoints.interface_number;
-    rtl_bulk_in = endpoints.bulk_in;
-    rtl_bulk_out = endpoints.bulk_out;
-    rtl_bulk_in_packet = endpoints.bulk_in_packet;
-    rtl_bulk_out_packet = endpoints.bulk_out_packet;
 
     /*
      * A successful register read verifies that the USB control path reaches
@@ -185,6 +160,7 @@ int rtl8188eu_probe(uint32_t slot_id, uint16_t vendor_id, uint16_t device_id,
         return 0;
     }
 
+    (void)system_config;
     rtl_bound = 1U;
     serial_write("VANTAOS_RTL8188EU_USB_TRANSPORT_READY\n");
     return 1;

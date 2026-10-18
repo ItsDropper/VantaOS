@@ -1270,10 +1270,9 @@ static int rtl_station_send_eapol(const uint8_t *bssid,
         frame[4U + i] = bssid[i];      /* Address 1: AP receiver */
         frame[10U + i] = local_mac[i]; /* Address 2: station transmitter */
     }
-    /* EAPOL uses the IEEE 802.1X PAE group destination on the DS side. */
-    static const uint8_t pae_group[6] = {0x01U, 0x80U, 0xC2U, 0x00U, 0x00U, 0x03U};
-    for (size_t i = 0U; i < sizeof(pae_group); ++i)
-        frame[16U + i] = pae_group[i];
+    /* EAPOL-Key M2/M4 are unicast to the associated AP/BSSID. */
+    for (size_t i = 0U; i < 6U; ++i)
+        frame[16U + i] = bssid[i];
     rtl_station_sequence = (uint16_t)((rtl_station_sequence + 1U) & 0x0FFFU);
     frame[22] = (uint8_t)(rtl_station_sequence << 4);
     frame[23] = (uint8_t)(rtl_station_sequence >> 4);

@@ -27,6 +27,20 @@ rtl8188eu_status_t rtl8188eu_get_status(void);
 /* Active scan is currently fail-closed: returns 0 until verified radio
  * initialization/calibration and channel programming are implemented. */
 int rtl8188eu_start_active_scan(void);
+/* Begin a WPA2-PSK connection to a matching scanned SSID. This returns only
+ * when the first authentication frame was submitted; use get_connection_state
+ * to observe the actual authentication/association/handshake result. */
+int rtl8188eu_connect(const uint8_t *ssid, size_t ssid_length,
+                      const uint8_t *passphrase, size_t passphrase_length);
+typedef enum {
+    RTL8188EU_CONNECTION_IDLE = 0,
+    RTL8188EU_CONNECTION_AUTHENTICATING,
+    RTL8188EU_CONNECTION_ASSOCIATING,
+    RTL8188EU_CONNECTION_WPA2_HANDSHAKE,
+    RTL8188EU_CONNECTION_AUTHENTICATED,
+    RTL8188EU_CONNECTION_FAILED
+} rtl8188eu_connection_state_t;
+rtl8188eu_connection_state_t rtl8188eu_get_connection_state(void);
 /* Read the station address programmed into the adapter's MACID registers. */
 int rtl8188eu_get_mac_address(uint8_t mac[6]);
 /* Send one complete 802.11 MPDU (without FCS). Currently returns 0 until

@@ -222,14 +222,16 @@ int wifi_wpa2_receive_eapol(wifi_wpa2_supplicant_t *s,
         s->state == WIFI_WPA2_FAILED || length < EAPOL_HEADER_SIZE ||
         length > EAPOL_MESSAGE_MAX || !mac_equal(source_mac, s->bssid))
         return 0;
-    if (payload[1] != EAPOL_TYPE_KEY || get_be16(payload + 2U) != length - 4U)
+    if ((payload[0] != 1U && payload[0] != 2U) ||
+        payload[1] != EAPOL_TYPE_KEY || get_be16(payload + 2U) != length - 4U)
         return 0;
     if (length < EAPOL_KEY_FIXED_SIZE || payload[4] != EAPOL_KEY_DESCRIPTOR_RSN) {
         fail_session(s);
         return 0;
     }
     info = get_be16(payload + 5U);
-    if ((info & KEY_INFO_VERSION_MASK) != 2U ||
+    if (get_be16(payload + 7U) != 16U ||
+        (info & KEY_INFO_VERSION_MASK) != 2U ||
         (info & (uint16_t)~KEY_INFO_ALLOWED) != 0U ||
         (info & KEY_INFO_PAIRWISE) == 0U) {
         fail_session(s);

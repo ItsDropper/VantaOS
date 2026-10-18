@@ -19,26 +19,37 @@ int main(void)
 {
     static const uint8_t password[] = "password";
     static const uint8_t salt[] = "salt";
+    static const uint8_t wifi_ssid[] = "IEEE";
     static const char *expected_one =
         "0c60c80f961f0e71f3a9b524af6012062fe037a6";
     static const char *expected_two =
         "ea6c014dc72d6f8ccd1ed92ace1d41f0d8de8957";
-    uint8_t output[20];
-    uint8_t expected[20];
+    static const char *expected_wifi_pmk =
+        "f42c6fc52df0ebef9ebb4b90b38a5f902e83fe1b135a70e23aed762e9710a12e";
+    uint8_t output[32];
+    uint8_t expected[32];
 
     if (!from_hex(expected_one, expected, sizeof(expected)) ||
         !wifi_pbkdf2_sha1(password, sizeof(password) - 1U,
                           salt, sizeof(salt) - 1U, 1U,
                           output, sizeof(output)) ||
-        memcmp(output, expected, sizeof(output)) != 0)
+        memcmp(output, expected, 20U) != 0)
         return 1;
 
     if (!from_hex(expected_two, expected, sizeof(expected)) ||
         !wifi_pbkdf2_sha1(password, sizeof(password) - 1U,
                           salt, sizeof(salt) - 1U, 2U,
                           output, sizeof(output)) ||
-        memcmp(output, expected, sizeof(output)) != 0)
+        memcmp(output, expected, 20U) != 0)
         return 2;
+
+    if (!from_hex(expected_wifi_pmk, expected, sizeof(expected)) ||
+        !wifi_pbkdf2_sha1(password, sizeof(password) - 1U,
+                          wifi_ssid, sizeof(wifi_ssid) - 1U,
+                          WIFI_PBKDF2_SHA1_ITERATIONS,
+                          output, WIFI_PMK_SIZE) ||
+        memcmp(output, expected, WIFI_PMK_SIZE) != 0)
+        return 6;
 
     memset(output, 0xA5, sizeof(output));
     if (wifi_pbkdf2_sha1(NULL, sizeof(password) - 1U,

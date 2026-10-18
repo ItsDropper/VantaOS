@@ -131,6 +131,7 @@ extern int net_dhcp_start(net_device_t *, uint32_t) __attribute__((weak));
 static void rtl_station_receive_frame(const uint8_t *frame, size_t length);
 static void rtl_station_poll(void);
 static void rtl_station_reset(void);
+static void rtl_station_fail(void);
 static uint8_t rtl_rx_armed;
 static uint8_t rtl_rx_buffer[4096] __attribute__((aligned(64)));
 #define RTL8188EU_TX_DESC_SIZE 32U
@@ -1102,7 +1103,7 @@ int rtl8188eu_connect(const uint8_t *ssid, size_t ssid_length,
     rtl_keys_installed = 0U;
     rtl_station_state = RTL_STATION_WAIT_AUTH;
     if (!rtl_station_send_auth()) {
-        rtl_station_state = RTL_STATION_FAILED;
+        rtl_station_fail();
         return 0;
     }
     return 1;
@@ -1226,6 +1227,27 @@ static void rtl_station_poll(void)
     }
     /* WPA2 message retransmission is handled by the supplicant, not by
        replaying a stale EAPOL frame with an old replay counter. */
+}
+
+static void rtl_station_fail(void)
+{
+    rtl_network_link_down();
+    rtl_dhcp_started = 0U;
+    wifi_wpa2_reset(&rtl_supplicant);
+    for (size_t i = 0U; i < sizeof(rtl_station_passphrase); ++i)
+        rtl_station_passphrase[i] = 0U;
+    for (size_t i = 0U; i < sizeof(rtl_pairwise_key); ++i)
+        rtl_pairwise_key[i] = 0U;
+    for (size_t i = 0U; i < sizeof(rtl_group_key); ++i)
+        rtl_group_key[i] = 0U;
+    rtl_station_passphrase_length = 0U;
+    rtl_group_key_length = 0U;
+    rtl_group_key_id = 0U;
+    rtl_keys_installed = 0U;
+    wifi_ccmp_replay_reset(&rtl_pairwise_pn);
+    wifi_ccmp_replay_reset(&rtl_group_pn);
+    rtl_station_timeout = 0U;
+    rtl_station_state = RTL_STATION_FAILED;
 }
 
 static void rtl_station_reset(void)

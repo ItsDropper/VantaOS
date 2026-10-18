@@ -215,8 +215,8 @@ static int rtl_load_firmware_file(uint32_t *firmware_size)
             continue;
         if (entry->size <= RTL8188EU_FW_HEADER_SIZE ||
             entry->size > RTL8188EU_FW_MAX_SIZE ||
-            !fat32_read_file(entry->first_cluster, entry->size,
-                             (char *)rtl_firmware, sizeof(rtl_firmware)))
+            fat32_read_file(entry->first_cluster, entry->size,
+                            (char *)rtl_firmware, sizeof(rtl_firmware)) != (int)entry->size)
             return 0;
         uint16_t signature = (uint16_t)rtl_firmware[0] |
                              ((uint16_t)rtl_firmware[1] << 8);

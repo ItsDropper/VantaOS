@@ -186,6 +186,86 @@ static void hmac_sha1(const uint8_t *key, size_t key_length,
     wipe(inner_digest, sizeof(inner_digest));
 }
 
+
+int wifi_hmac_sha1(const uint8_t *key, size_t key_length,
+                   const uint8_t *data, size_t data_length,
+                   uint8_t digest[SHA1_DIGEST_SIZE])
+{
+    if (!key || key_length == 0U || (!data && data_length != 0U) || !digest)
+        return 0;
+    hmac_sha1(key, key_length, data, data_length, digest);
+    return 1;
+}
+
+/*
+ * IEEE 802.11i PRF-512 used for the WPA2 pairwise transient key. The context
+ * sorts both MAC addresses and both nonces lexicographically as required by
+ * the protocol; callers must pass the actual authenticator/supplicant values.
+ */
+int wifi_wpa2_prf512(const uint8_t pmk[WIFI_PMK_SIZE],
+                     const uint8_t authenticator[6],
+                     const uint8_t supplicant[6],
+                     const uint8_t authenticator_nonce[32],
+                     const uint8_t supplicant_nonce[32],
+                     uint8_t ptk[64])
+{
+    static const uint8_t label[] = "Pairwise key expansion";
+    uint8_t context[sizeof(label) + 12U + 64U + 1U];
+    uint8_t digest[SHA1_DIGEST_SIZE];
+    const uint8_t *mac_low, *mac_high, *nonce_low, *nonce_high;
+    size_t offset = 0U;
+
+    if (!pmk || !authenticator || !supplicant || !authenticator_nonce ||
+        !supplicant_nonce || !ptk)
+        return 0;
+
+    int mac_order = 0;
+    for (size_t i = 0U; i < 6U; ++i) {
+        if (authenticator[i] != supplicant[i]) {
+            mac_order = authenticator[i] < supplicant[i] ? -1 : 1;
+            break;
+        }
+    }
+    mac_low = mac_order <= 0 ? authenticator : supplicant;
+    mac_high = mac_order <= 0 ? supplicant : authenticator;
+
+    int nonce_order = 0;
+    for (size_t i = 0U; i < 32U; ++i) {
+        if (authenticator_nonce[i] != supplicant_nonce[i]) {
+            nonce_order = authenticator_nonce[i] < supplicant_nonce[i] ? -1 : 1;
+            break;
+        }
+    }
+    nonce_low = nonce_order <= 0 ? authenticator_nonce : supplicant_nonce;
+    nonce_high = nonce_order <= 0 ? supplicant_nonce : authenticator_nonce;
+
+    for (size_t i = 0U; i < sizeof(label); ++i)
+        context[offset++] = label[i]; /* Includes the required NUL separator. */
+    for (size_t i = 0U; i < 6U; ++i) context[offset++] = mac_low[i];
+    for (size_t i = 0U; i < 6U; ++i) context[offset++] = mac_high[i];
+    for (size_t i = 0U; i < 32U; ++i) context[offset++] = nonce_low[i];
+    for (size_t i = 0U; i < 32U; ++i) context[offset++] = nonce_high[i];
+
+    size_t produced = 0U;
+    for (uint8_t counter = 0U; produced < 64U; ++counter) {
+        context[offset] = counter;
+        hmac_sha1(pmk, WIFI_PMK_SIZE, context, offset + 1U, digest);
+        size_t amount = 64U - produced;
+        if (amount > sizeof(digest)) amount = sizeof(digest);
+        for (size_t i = 0U; i < amount; ++i)
+            ptk[produced + i] = digest[i];
+        produced += amount;
+        if (counter == 3U && produced < 64U) {
+            wipe(context, sizeof(context));
+            wipe(digest, sizeof(digest));
+            return 0;
+        }
+    }
+    wipe(context, sizeof(context));
+    wipe(digest, sizeof(digest));
+    return 1;
+}
+
 int wifi_pbkdf2_sha1(const uint8_t *password, size_t password_length,
                      const uint8_t *salt, size_t salt_length,
                      uint32_t iterations, uint8_t *output,

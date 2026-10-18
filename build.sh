@@ -90,6 +90,25 @@ if command -v mkfs.fat >/dev/null 2>&1; then
         mcopy -o -i vantaos.img /tmp/vantaos-explorer-e2e.elf ::/EXPLORER-E2E.ELF >/dev/null
         echo "    Installed /EXPLORER-E2E.ELF (automated ring-3 Explorer end-to-end tests)"
 
+        # Firmware is redistributable only under its upstream terms and is not
+        # checked into this repository. Supply a locally obtained matching
+        # RTL8188EU firmware image explicitly when building a bootable disk.
+        if [ -n "${RTL8188EU_FIRMWARE:-}" ]; then
+            if [ ! -f "$RTL8188EU_FIRMWARE" ]; then
+                echo "ERROR: RTL8188EU_FIRMWARE does not name a readable file." >&2
+                exit 1
+            fi
+            firmware_size=$(wc -c < "$RTL8188EU_FIRMWARE")
+            if [ "$firmware_size" -le 32 ] || [ "$firmware_size" -gt 32768 ]; then
+                echo "ERROR: RTL8188EU firmware image size is outside the supported bounds." >&2
+                exit 1
+            fi
+            mcopy -o -i vantaos.img "$RTL8188EU_FIRMWARE" ::/SYSTEM/RTL8188EU.BIN >/dev/null
+            echo "    Installed /SYSTEM/RTL8188EU.BIN ($firmware_size bytes)"
+        else
+            echo "    RTL8188EU firmware not supplied; USB Wi-Fi firmware bring-up will fail."
+        fi
+
         install_system_file "system/terminal.vx" \
             "VANTA EXECUTABLE" \
             "name=Terminal" \

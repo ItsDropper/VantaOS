@@ -508,6 +508,8 @@ typedef struct {
     uint8_t crystal_trim;
     uint8_t thermal_meter;
     uint8_t board_option;
+    uint8_t chip_cut;
+    uint32_t system_config;
     uint8_t valid;
 } rtl8188eu_efuse_info_t;
 
@@ -686,6 +688,11 @@ static int rtl_load_efuse_identity(void)
                               sizeof(rtl_efuse_info.logical)) ||
         !rtl_reg_read32(RTL8188EU_REG_SYS_CFG, &chip_config))
         return 0;
+    /* SYS_CFG identifies Realtek silicon and exposes the detected chip cut. */
+    if ((chip_config & (1U << 19)) == 0U)
+        return 0;
+    rtl_efuse_info.system_config = chip_config;
+    rtl_efuse_info.chip_cut = (uint8_t)((chip_config >> 12) & 0x0FU);
 
     for (size_t i = 0U; i < 6U; ++i)
         rtl_efuse_info.mac[i] =
@@ -713,7 +720,6 @@ static int rtl_load_efuse_identity(void)
 
     /* Chip cut is recorded for diagnostics; unknown cuts stay TX-disabled. */
     serial_write("VANTAOS_RTL8188EU_EFUSE_IDENTITY_OK\\n");
-    (void)chip_config;
     rtl_efuse_info.valid = 1U;
     return 1;
 }

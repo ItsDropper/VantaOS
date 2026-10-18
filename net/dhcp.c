@@ -271,6 +271,34 @@ static void receive_dhcp(net_device_t* device, uint32_t source_address,
     }
 }
 
+int net_dhcp_start(net_device_t* device, uint32_t timeout_ms)
+{
+    if (!device || !device->link_up || timeout_ms < 1000U ||
+        timeout_ms > 120000U)
+        return 0;
+    if (!handler_registered) {
+        if (!net_udp_handler_register(DHCP_CLIENT_PORT, receive_dhcp, 0))
+            return 0;
+        handler_registered = 1;
+    }
+    dhcp_state_t* state = find_state(device, 1);
+    if (!state || (state->active && state->acquiring))
+        return 0;
+    uint32_t now = timer_get_ticks();
+    *state = (dhcp_state_t){0};
+    state->device = device;
+    state->active = 1U;
+    state->acquiring = 1U;
+    state->xid = 0x564E5400U;
+    for (uint32_t i = 0U; i < 6U; ++i)
+        state->xid = (state->xid * 33U) ^ device->mac[i];
+    if (!state->xid) state->xid = 1U;
+    state->acquisition_deadline = now + timeout_ms / 10U;
+    state->next_retry = now + DHCP_RETRY_TICKS;
+    (void)send_message(state, DHCP_DISCOVER);
+    return 1;
+}
+
 int net_dhcp_configure(net_device_t* device, uint32_t timeout_ms,
                        uint32_t* dns_server, uint32_t* lease_seconds)
 {
@@ -343,8 +371,64 @@ int net_dhcp_configure(net_device_t* device, uint32_t timeout_ms,
 
 static void dhcp_poll_state(dhcp_state_t* state)
 {
-    if (!state->device || !state->lease_valid || !state->device->link_up) return;
+    if (!state->device)
+        return;
+    if (!state->device->link_up) {
+        if (state->acquiring) {
+            state->active = 0U;
+            state->acquiring = 0U;
+        }
+        return;
+    }
+
     uint32_t now = timer_get_ticks();
+    if (state->acquiring) {
+        if (state->acknowledged && state->offered && state->requested &&
+            state->mask && net_device_configure_ipv4(state->device,
+                state->offered_ip, state->mask, state->gateway)) {
+            state->device->ipv4_dns = state->dns;
+            state->lease_address = state->offered_ip;
+            if (!state->lease_seconds) state->lease_seconds = 3600U;
+            state->lease_valid = 1U;
+            state->active = 0U;
+            state->acquiring = 0U;
+            state->renewing = 0U;
+            state->lease_started = now;
+            uint32_t ticks = state->lease_seconds > 21474836U
+                ? 2147483600U : state->lease_seconds * 100U;
+            if (ticks < 300U) ticks = 300U;
+            state->renew_at = now + ticks / 2U;
+            state->rebind_at = now + (ticks * 7U) / 8U;
+            state->expires_at = now + ticks;
+            return;
+        }
+        if (state->rejected ||
+            (int32_t)(now - state->acquisition_deadline) >= 0) {
+            state->active = 0U;
+            state->acquiring = 0U;
+            state->lease_valid = 0U;
+            return;
+        }
+        if (state->offered && !state->requested) {
+            state->requested = 1U;
+            state->retry_count = 0U;
+            state->next_retry = now + DHCP_RETRY_TICKS;
+            (void)send_message(state, DHCP_REQUEST);
+            return;
+        }
+        if ((int32_t)(now - state->next_retry) >= 0) {
+            uint32_t shift = state->retry_count > 3U ? 3U : state->retry_count;
+            uint32_t delay = DHCP_RETRY_TICKS << shift;
+            if (delay > 2400U) delay = 2400U;
+            if (state->retry_count < 255U) ++state->retry_count;
+            state->next_retry = now + delay;
+            (void)send_message(state, state->requested ? DHCP_REQUEST : DHCP_DISCOVER);
+        }
+        return;
+    }
+
+    if (!state->lease_valid)
+        return;
     if (state->active && state->renewing) {
         if (state->acknowledged) {
             if (state->mask && net_device_configure_ipv4(state->device, state->offered_ip,
@@ -393,7 +477,6 @@ static void dhcp_poll_state(dhcp_state_t* state)
     if (!state->xid) state->xid = 1U;
     (void)send_message(state, DHCP_REQUEST);
 }
-
 
 void net_dhcp_poll(void)
 {

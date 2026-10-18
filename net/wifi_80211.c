@@ -353,3 +353,64 @@ int net_wifi_80211_parse_assoc_response(const uint8_t *frame, size_t length,
         *association_id = 0U;
     return 1;
 }
+
+int net_wifi_80211_snap_encapsulate(const uint8_t *ethernet_frame,
+                                    size_t ethernet_length,
+                                    uint8_t *llc_payload,
+                                    size_t llc_capacity,
+                                    size_t *llc_length)
+{
+    size_t payload_length;
+    if (llc_length) *llc_length = 0U;
+    if (!ethernet_frame || !llc_payload || !llc_length ||
+        ethernet_length < 14U)
+        return 0;
+    payload_length = ethernet_length - 14U;
+    if (payload_length > 2304U || llc_capacity < payload_length + 8U)
+        return 0;
+
+    llc_payload[0] = 0xAAU;
+    llc_payload[1] = 0xAAU;
+    llc_payload[2] = 0x03U;
+    llc_payload[3] = 0x00U;
+    llc_payload[4] = 0x00U;
+    llc_payload[5] = 0x00U;
+    llc_payload[6] = ethernet_frame[12];
+    llc_payload[7] = ethernet_frame[13];
+    for (size_t i = 0U; i < payload_length; ++i)
+        llc_payload[8U + i] = ethernet_frame[14U + i];
+    *llc_length = payload_length + 8U;
+    return 1;
+}
+
+int net_wifi_80211_snap_decapsulate(const uint8_t destination[6],
+                                    const uint8_t source[6],
+                                    const uint8_t *llc_payload,
+                                    size_t llc_length,
+                                    uint8_t *ethernet_frame,
+                                    size_t ethernet_capacity,
+                                    size_t *ethernet_length)
+{
+    size_t payload_length;
+    if (ethernet_length) *ethernet_length = 0U;
+    if (!destination || !source || !llc_payload || !ethernet_frame ||
+        !ethernet_length || llc_length < 8U ||
+        llc_payload[0] != 0xAAU || llc_payload[1] != 0xAAU ||
+        llc_payload[2] != 0x03U || llc_payload[3] != 0U ||
+        llc_payload[4] != 0U || llc_payload[5] != 0U)
+        return 0;
+    payload_length = llc_length - 8U;
+    if (payload_length > 2304U || ethernet_capacity < payload_length + 14U)
+        return 0;
+
+    for (size_t i = 0U; i < 6U; ++i) {
+        ethernet_frame[i] = destination[i];
+        ethernet_frame[6U + i] = source[i];
+    }
+    ethernet_frame[12] = llc_payload[6];
+    ethernet_frame[13] = llc_payload[7];
+    for (size_t i = 0U; i < payload_length; ++i)
+        ethernet_frame[14U + i] = llc_payload[8U + i];
+    *ethernet_length = payload_length + 14U;
+    return 1;
+}

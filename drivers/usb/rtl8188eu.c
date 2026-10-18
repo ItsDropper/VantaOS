@@ -511,6 +511,7 @@ typedef struct {
 
 static rtl8188eu_efuse_info_t rtl_efuse_info;
 static uint8_t rtl_efuse_attempted;
+static uint8_t rtl_efuse_ready;
 
 /*
  * Execute the chipset's firmware offload request for the factory eFuse map.
@@ -530,7 +531,7 @@ static int rtl_iol_execute(uint8_t command)
                         (uint8_t)(value | command)))
         return 0;
 
-    for (uint32_t retry = 0U; retry < 100000U; ++retry) {
+    for (uint32_t retry = 0U; retry < 512U; ++retry) {
         if (!rtl_reg_read8(RTL8188EU_REG_HMEBOX_E0, &status))
             return 0;
         if ((status & command) == 0U) {
@@ -551,7 +552,8 @@ static int rtl_iol_execute(uint8_t command)
 
 static int rtl_read_efuse_physical(uint8_t *physical, size_t capacity)
 {
-    uint8_t boundary, access;
+    uint8_t boundary = 0U, access = 0U;
+    uint8_t have_boundary = 0U, have_access = 0U;
     uint16_t debug_address = 0U;
     uint32_t low, high;
     size_t copied = 0U;
@@ -562,9 +564,13 @@ static int rtl_read_efuse_physical(uint8_t *physical, size_t capacity)
         return 0;
 
     /* Give firmware its normal packet-buffer area and select TX-buffer access. */
-    if (!rtl_reg_read8(RTL8188EU_REG_TDECTRL + 1U, &boundary) ||
-        !rtl_reg_write8(RTL8188EU_REG_TDECTRL + 1U, 0U) ||
-        !rtl_reg_read8(RTL8188EU_REG_PKTBUF_ACCESS, &access) ||
+    if (!rtl_reg_read8(RTL8188EU_REG_TDECTRL + 1U, &boundary))
+        return 0;
+    have_boundary = 1U;
+    if (!rtl_reg_read8(RTL8188EU_REG_PKTBUF_ACCESS, &access))
+        goto fail;
+    have_access = 1U;
+    if (!rtl_reg_write8(RTL8188EU_REG_TDECTRL + 1U, 0U) ||
         !rtl_reg_write8(RTL8188EU_REG_PKTBUF_ACCESS,
                         (uint8_t)(access | 0x01U)) ||
         !rtl_iol_execute(RTL8188EU_IOL_READ_EFUSE_MAP))
@@ -614,13 +620,17 @@ static int rtl_read_efuse_physical(uint8_t *physical, size_t capacity)
     }
     if (copied == 0U)
         goto fail;
-    (void)rtl_reg_write8(RTL8188EU_REG_PKTBUF_ACCESS, access);
-    (void)rtl_reg_write8(RTL8188EU_REG_TDECTRL + 1U, boundary);
+    if (have_access)
+        (void)rtl_reg_write8(RTL8188EU_REG_PKTBUF_ACCESS, access);
+    if (have_boundary)
+        (void)rtl_reg_write8(RTL8188EU_REG_TDECTRL + 1U, boundary);
     return 1;
 
 fail:
-    (void)rtl_reg_write8(RTL8188EU_REG_PKTBUF_ACCESS, access);
-    (void)rtl_reg_write8(RTL8188EU_REG_TDECTRL + 1U, boundary);
+    if (have_access)
+        (void)rtl_reg_write8(RTL8188EU_REG_PKTBUF_ACCESS, access);
+    if (have_boundary)
+        (void)rtl_reg_write8(RTL8188EU_REG_TDECTRL + 1U, boundary);
     return 0;
 }
 
@@ -1551,6 +1561,14 @@ void rtl8188eu_poll(void)
     if (!rtl_firmware_ready)
         return;
 
+    if (!rtl_efuse_attempted) {
+        rtl_efuse_attempted = 1U;
+        rtl_efuse_ready = (uint8_t)rtl_load_efuse_identity();
+        serial_write(rtl_efuse_ready
+            ? "VANTAOS_RTL8188EU_EFUSE_READY\\n"
+            : "VANTAOS_RTL8188EU_EFUSE_FAILED_TX_BLOCKED\\n");
+    }
+
     if (!rtl_radio_preflight_attempted) {
         rtl_radio_preflight_attempted = 1U;
         if (rtl_radio_preflight())
@@ -1600,6 +1618,9 @@ int rtl8188eu_port_disconnected(uint32_t port)
     rtl_radio_ready = 0U;
     rtl_radio_preflight_attempted = 0U;
     rtl_radio_preflight_done = 0U;
+    rtl_efuse_attempted = 0U;
+    rtl_efuse_ready = 0U;
+    rtl_efuse_info.valid = 0U;
     rtl_scan_active = 0U;
     rtl_scan_channel = 0U;
     rtl_scan_dwell_polls = 0U;

@@ -775,6 +775,276 @@ int rtl8188eu_transmit_frame(const uint8_t *frame, size_t length)
     return actual == RTL8188EU_TX_DESC_SIZE + length;
 }
 
+static int rtl_station_send_eapol(const uint8_t *bssid,
+                                   const uint8_t *payload, size_t length,
+                                   void *context)
+{
+    uint8_t frame[24U + 8U + WIFI_WPA2_EAPOL_MAX];
+    uint8_t local_mac[6];
+    size_t total;
+    (void)context;
+    if (!bssid || !payload || length == 0U ||
+        length > WIFI_WPA2_EAPOL_MAX || !rtl_radio_ready ||
+        !rtl8188eu_get_mac_address(local_mac))
+        return 0;
+    total = 32U + length;
+    for (size_t i = 0U; i < total; ++i) frame[i] = 0U;
+    frame[0] = 0x08U; /* Data */
+    frame[1] = 0x01U; /* To-DS */
+    for (size_t i = 0U; i < 6U; ++i) {
+        frame[4U + i] = bssid[i];      /* Address 1: AP receiver */
+        frame[10U + i] = local_mac[i]; /* Address 2: station transmitter */
+        frame[16U + i] = bssid[i];     /* Address 3: Ethernet destination */
+    }
+    rtl_station_sequence = (uint16_t)((rtl_station_sequence + 1U) & 0x0FFFU);
+    frame[22] = (uint8_t)(rtl_station_sequence << 4);
+    frame[23] = (uint8_t)(rtl_station_sequence >> 4);
+    frame[24] = 0xAAU; frame[25] = 0xAAU; frame[26] = 0x03U;
+    frame[27] = 0U; frame[28] = 0U; frame[29] = 0U;
+    frame[30] = 0x88U; frame[31] = 0x8EU; /* EAPOL EtherType */
+    for (size_t i = 0U; i < length; ++i) frame[32U + i] = payload[i];
+    return rtl8188eu_transmit_frame(frame, total);
+}
+
+static int rtl_station_random(uint8_t *output, size_t length, void *context)
+{
+    (void)context;
+    return crypto_rng_fill(output, length);
+}
+
+static int rtl_station_install_keys(const uint8_t *bssid, const uint8_t *peer,
+                                    const uint8_t temporal_key[16],
+                                    const uint8_t *gtk, size_t gtk_length,
+                                    uint8_t gtk_id, void *context)
+{
+    (void)context;
+    if (!bssid || !peer || !temporal_key || gtk_length > sizeof(rtl_group_key) ||
+        (gtk_length != 0U && !gtk) ||
+        !rtl_station_state || rtl_station_state != RTL_STATION_WPA2_HANDSHAKE)
+        return 0;
+    for (size_t i = 0U; i < 6U; ++i)
+        if (bssid[i] != rtl_station_bssid[i])
+            return 0;
+    for (size_t i = 0U; i < 16U; ++i) rtl_pairwise_key[i] = temporal_key[i];
+    for (size_t i = 0U; i < sizeof(rtl_group_key); ++i)
+        rtl_group_key[i] = (i < gtk_length) ? gtk[i] : 0U;
+    rtl_group_key_length = gtk_length;
+    rtl_group_key_id = gtk_id;
+    rtl_keys_installed = 1U;
+    return 1;
+}
+
+static int rtl_station_send_auth(void)
+{
+    uint8_t frame[32];
+    uint8_t local_mac[6];
+    size_t length = 0U;
+    if (!rtl8188eu_get_mac_address(local_mac))
+        return 0;
+    rtl_station_sequence = (uint16_t)((rtl_station_sequence + 1U) & 0x0FFFU);
+    if (!net_wifi_80211_build_open_auth_request(frame, sizeof(frame),
+            rtl_station_bssid, local_mac, rtl_station_bssid,
+            rtl_station_sequence, &length))
+        return 0;
+    return rtl8188eu_transmit_frame(frame, length);
+}
+
+static int rtl_station_send_assoc(void)
+{
+    uint8_t frame[128];
+    uint8_t local_mac[6];
+    size_t length = 0U;
+    if (!rtl8188eu_get_mac_address(local_mac))
+        return 0;
+    rtl_station_sequence = (uint16_t)((rtl_station_sequence + 1U) & 0x0FFFU);
+    if (!net_wifi_80211_build_assoc_request(frame, sizeof(frame),
+            rtl_station_bssid, local_mac, rtl_station_bssid,
+            rtl_station_sequence, rtl_station_ssid, rtl_station_ssid_length,
+            rtl_station_rsn_ie, sizeof(rtl_station_rsn_ie), &length))
+        return 0;
+    return rtl8188eu_transmit_frame(frame, length);
+}
+
+int rtl8188eu_connect(const uint8_t *ssid, size_t ssid_length,
+                      const uint8_t *passphrase, size_t passphrase_length)
+{
+    net_wifi_scan_result_t results[NET_WIFI_MAX_SCAN_RESULTS];
+    size_t count;
+    int selected = -1;
+    uint8_t local_mac[6];
+    if (!rtl_radio_ready || rtl_scan_active || !ssid || ssid_length == 0U ||
+        ssid_length > NET_WIFI_SSID_MAX || !passphrase ||
+        passphrase_length < NET_WIFI_PASSPHRASE_MIN ||
+        passphrase_length > NET_WIFI_PASSPHRASE_MAX ||
+        !crypto_rng_available() || !rtl8188eu_get_mac_address(local_mac) ||
+        rtl_station_state == RTL_STATION_WAIT_AUTH ||
+        rtl_station_state == RTL_STATION_WAIT_ASSOC ||
+        rtl_station_state == RTL_STATION_WPA2_HANDSHAKE)
+        return 0;
+    for (size_t i = 0U; i < passphrase_length; ++i)
+        if (passphrase[i] < 0x20U || passphrase[i] > 0x7EU)
+            return 0;
+    count = rtl8188eu_get_passive_results(results, NET_WIFI_MAX_SCAN_RESULTS);
+    for (size_t i = 0U; i < count; ++i) {
+        if (results[i].ssid_length != ssid_length ||
+            results[i].security != NET_WIFI_SECURITY_WPA2_PSK)
+            continue;
+        size_t j = 0U;
+        while (j < ssid_length && results[i].ssid[j] == ssid[j]) ++j;
+        if (j == ssid_length) { selected = (int)i; break; }
+    }
+    if (selected < 0 || !rtl_program_channel(results[selected].channel))
+        return 0;
+
+    for (size_t i = 0U; i < sizeof(rtl_station_ssid); ++i)
+        rtl_station_ssid[i] = (i < ssid_length) ? ssid[i] : 0U;
+    rtl_station_ssid_length = ssid_length;
+    for (size_t i = 0U; i < sizeof(rtl_station_passphrase); ++i)
+        rtl_station_passphrase[i] = (i < passphrase_length) ? passphrase[i] : 0U;
+    rtl_station_passphrase_length = passphrase_length;
+    for (size_t i = 0U; i < sizeof(rtl_station_bssid); ++i)
+        rtl_station_bssid[i] = results[selected].bssid[i];
+    rtl_station_retries = 0U;
+    rtl_station_timeout = 1000U;
+    rtl_station_aid = 0U;
+    rtl_keys_installed = 0U;
+    rtl_station_state = RTL_STATION_WAIT_AUTH;
+    if (!rtl_station_send_auth()) {
+        rtl_station_state = RTL_STATION_FAILED;
+        return 0;
+    }
+    return 1;
+}
+
+rtl8188eu_connection_state_t rtl8188eu_get_connection_state(void)
+{
+    switch (rtl_station_state) {
+    case RTL_STATION_WAIT_AUTH: return RTL8188EU_CONNECTION_AUTHENTICATING;
+    case RTL_STATION_WAIT_ASSOC: return RTL8188EU_CONNECTION_ASSOCIATING;
+    case RTL_STATION_WPA2_HANDSHAKE: return RTL8188EU_CONNECTION_WPA2_HANDSHAKE;
+    case RTL_STATION_AUTHENTICATED: return RTL8188EU_CONNECTION_AUTHENTICATED;
+    case RTL_STATION_FAILED: return RTL8188EU_CONNECTION_FAILED;
+    default: return RTL8188EU_CONNECTION_IDLE;
+    }
+}
+
+static void rtl_station_receive_frame(const uint8_t *frame, size_t length)
+{
+    uint16_t status, aid;
+    if (!frame || length < 24U || rtl_station_state == RTL_STATION_IDLE ||
+        rtl_station_state == RTL_STATION_FAILED ||
+        rtl_station_state == RTL_STATION_AUTHENTICATED)
+        return;
+    if ((frame[0] & 0x0CU) == 0x00U) {
+        if (rtl_station_state == RTL_STATION_WAIT_AUTH &&
+            net_wifi_80211_parse_auth_response(frame, length,
+                rtl_station_bssid, &status)) {
+            if (status != 0U || !rtl_station_send_assoc()) {
+                rtl_station_state = RTL_STATION_FAILED;
+                return;
+            }
+            rtl_station_state = RTL_STATION_WAIT_ASSOC;
+            rtl_station_timeout = 1000U;
+            rtl_station_retries = 0U;
+            return;
+        }
+        if (rtl_station_state == RTL_STATION_WAIT_ASSOC &&
+            net_wifi_80211_parse_assoc_response(frame, length,
+                rtl_station_bssid, &status, &aid)) {
+            if (status != 0U || aid == 0U) {
+                rtl_station_state = RTL_STATION_FAILED;
+                return;
+            }
+            rtl_station_aid = aid;
+            wifi_wpa2_ops_t ops = {
+                .random_bytes = rtl_station_random,
+                .send_eapol = rtl_station_send_eapol,
+                .install_ccmp_keys = rtl_station_install_keys,
+                .context = 0
+            };
+            if (!wifi_wpa2_begin(&rtl_supplicant, &ops,
+                    rtl_station_ssid, rtl_station_ssid_length,
+                    rtl_station_passphrase, rtl_station_passphrase_length,
+                    frame + 10U, rtl_station_bssid,
+                    rtl_station_rsn_ie, sizeof(rtl_station_rsn_ie))) {
+                rtl_station_state = RTL_STATION_FAILED;
+                return;
+            }
+            rtl_station_state = RTL_STATION_WPA2_HANDSHAKE;
+            rtl_station_timeout = 4000U;
+            rtl_station_retries = 0U;
+            return;
+        }
+    }
+
+    /* WPA2 EAPOL is carried in an unprotected From-DS data MPDU before port
+       authorization. Do not feed frames from another BSSID to the supplicant. */
+    if (rtl_station_state == RTL_STATION_WPA2_HANDSHAKE &&
+        (frame[0] & 0x0CU) == 0x08U && (frame[1] & 0x03U) == 0x02U &&
+        (frame[1] & 0x40U) == 0U && length >= 32U) {
+        uint8_t different = 0U;
+        for (size_t i = 0U; i < 6U; ++i) different |= frame[10U + i] ^ rtl_station_bssid[i];
+        if (different != 0U || frame[24] != 0xAAU || frame[25] != 0xAAU ||
+            frame[26] != 0x03U || frame[27] != 0U || frame[28] != 0U ||
+            frame[29] != 0U || frame[30] != 0x88U || frame[31] != 0x8EU)
+            return;
+        (void)wifi_wpa2_receive_eapol(&rtl_supplicant, frame + 10U,
+                                      frame + 32U, length - 32U);
+        if (wifi_wpa2_get_state(&rtl_supplicant) == WIFI_WPA2_AUTHENTICATED &&
+            rtl_keys_installed)
+            rtl_station_state = RTL_STATION_AUTHENTICATED;
+        else if (wifi_wpa2_get_state(&rtl_supplicant) == WIFI_WPA2_FAILED)
+            rtl_station_state = RTL_STATION_FAILED;
+    }
+}
+
+static void rtl_station_poll(void)
+{
+    if (rtl_station_state != RTL_STATION_WAIT_AUTH &&
+        rtl_station_state != RTL_STATION_WAIT_ASSOC &&
+        rtl_station_state != RTL_STATION_WPA2_HANDSHAKE)
+        return;
+    if (rtl_station_timeout != 0U) {
+        --rtl_station_timeout;
+        return;
+    }
+    if (rtl_station_retries >= 3U) {
+        rtl_station_state = RTL_STATION_FAILED;
+        wifi_wpa2_reset(&rtl_supplicant);
+        return;
+    }
+    ++rtl_station_retries;
+    rtl_station_timeout = rtl_station_state == RTL_STATION_WPA2_HANDSHAKE
+        ? 4000U : 1000U;
+    if ((rtl_station_state == RTL_STATION_WAIT_AUTH && !rtl_station_send_auth()) ||
+        (rtl_station_state == RTL_STATION_WAIT_ASSOC && !rtl_station_send_assoc())) {
+        rtl_station_state = RTL_STATION_FAILED;
+        wifi_wpa2_reset(&rtl_supplicant);
+    }
+    /* WPA2 message retransmission is handled by the supplicant, not by
+       replaying a stale EAPOL frame with an old replay counter. */
+}
+
+static void rtl_station_reset(void)
+{
+    wifi_wpa2_reset(&rtl_supplicant);
+    for (size_t i = 0U; i < sizeof(rtl_station_passphrase); ++i)
+        rtl_station_passphrase[i] = 0U;
+    for (size_t i = 0U; i < sizeof(rtl_pairwise_key); ++i)
+        rtl_pairwise_key[i] = 0U;
+    for (size_t i = 0U; i < sizeof(rtl_group_key); ++i)
+        rtl_group_key[i] = 0U;
+    rtl_station_ssid_length = 0U;
+    rtl_station_passphrase_length = 0U;
+    rtl_station_timeout = 0U;
+    rtl_station_retries = 0U;
+    rtl_station_aid = 0U;
+    rtl_group_key_length = 0U;
+    rtl_group_key_id = 0U;
+    rtl_keys_installed = 0U;
+    rtl_station_state = RTL_STATION_IDLE;
+}
+
 rtl8188eu_status_t rtl8188eu_get_status(void)
 {
     if (!rtl_bound)

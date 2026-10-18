@@ -232,6 +232,15 @@ static int test_efuse_logical_map_decoder(void)
         return 0;
     if (rtl8188eu_decode_efuse_map(physical, sizeof(physical), logical, 8U))
         return 0;
+
+    /* Section 64 is outside the RTL8188E 512-byte logical map. */
+    memset(physical, 0xFF, sizeof(physical));
+    physical[0] = 0x0FU;
+    physical[1] = 0x0FU;
+    physical[2] = 0x80U;
+    if (rtl8188eu_decode_efuse_map(physical, sizeof(physical),
+                                   logical, sizeof(logical)))
+        return 0;
     return 1;
 }
 

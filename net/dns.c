@@ -328,7 +328,8 @@ int net_dns_resolve_aaaa(net_device_t* device, const char* host,
     uint8_t validation[DNS_MAX_MESSAGE];
     size_t validation_length = 0U;
     if (!build_query(host, validation, sizeof(validation), &validation_length,
-                     1U, 28U))
+                     1U, 28U) ||
+        validation_length < DNS_HEADER_SIZE + 6U)
         return 0;
 
     net_ipv6_address_t server = {{0}};

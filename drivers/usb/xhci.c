@@ -694,8 +694,13 @@ int xhci_configure_interrupt_in(uint32_t slot_id, uint8_t endpoint_address,
         (const uint32_t*)(const void*)device_contexts[index];
     for (uint32_t word = 0; word < context_size / sizeof(uint32_t); ++word)
         slot[word] = current_slot[word];
+    uint32_t existing_entries = (slot[0] >> 27) & 0x1FU;
+    uint32_t required_entries = dci > existing_entries
+        ? dci : existing_entries;
+    if (required_entries < 1U)
+        required_entries = 1U;
     slot[0] = (slot[0] & ~(0x1FU << 27)) |
-              ((dci > 1U ? dci : 1U) << 27);
+              (required_entries << 27);
     uint32_t interval_value = 0;
     if (slot_speed[index] <= 3U) {
         uint32_t value = interval > 0U ? interval : 1U;
@@ -775,8 +780,13 @@ int xhci_configure_bulk_endpoint(uint32_t slot_id, uint8_t endpoint_address,
         (const uint32_t*)(const void*)device_contexts[index];
     for (uint32_t word = 0; word < context_size / sizeof(uint32_t); ++word)
         slot[word] = current_slot[word];
+    uint32_t existing_entries = (slot[0] >> 27) & 0x1FU;
+    uint32_t required_entries = dci > existing_entries
+        ? dci : existing_entries;
+    if (required_entries < 1U)
+        required_entries = 1U;
     slot[0] = (slot[0] & ~(0x1FU << 27)) |
-              ((dci > 1U ? dci : 1U) << 27);
+              (required_entries << 27);
 
     /* Bulk endpoints use error-count=3 and endpoint type 2 (IN) / 6 (OUT). */
     endpoint[0] = 0U;

@@ -452,21 +452,47 @@ static void rtl_cache_beacon(const uint8_t *frame, size_t length)
 
 static void rtl_process_rx_packet(const uint8_t *packet, size_t length)
 {
-    /* RTL8188E RX descriptor: packet length, driver-info size and shift. */
-    if (!packet || length < 24U)
+    /*
+     * USB bulk-IN may return an aggregate of RX descriptors and 802.11
+     * frames, not exactly one packet. Each descriptor is 24 bytes; the next
+     * packet starts at the next 8-byte boundary after the current frame.
+     * Validate every offset against the actual transfer length before
+     * inspecting a frame, and stop at the first malformed descriptor.
+     */
+    size_t cursor = 0U;
+    if (!packet)
         return;
-    uint32_t descriptor = (uint32_t)packet[0] |
-                          ((uint32_t)packet[1] << 8) |
-                          ((uint32_t)packet[2] << 16) |
-                          ((uint32_t)packet[3] << 24);
-    uint32_t frame_length = descriptor & 0x3FFFU;
-    uint32_t driver_info = ((descriptor >> 16) & 0x0FU) * 8U;
-    uint32_t shift = (descriptor >> 24) & 0x03U;
-    uint32_t frame_offset = 24U + driver_info + shift;
-    if ((descriptor & 0xC000U) != 0U ||
-        frame_offset > length || frame_length > length - frame_offset)
-        return;
-    rtl_cache_beacon(packet + frame_offset, frame_length);
+
+    while (length - cursor >= 24U) {
+        const uint8_t *rx = packet + cursor;
+        uint32_t descriptor = (uint32_t)rx[0] |
+                              ((uint32_t)rx[1] << 8) |
+                              ((uint32_t)rx[2] << 16) |
+                              ((uint32_t)rx[3] << 24);
+        uint32_t frame_length = descriptor & 0x3FFFU;
+        uint32_t driver_info = ((descriptor >> 16) & 0x0FU) * 8U;
+        uint32_t shift = (descriptor >> 24) & 0x03U;
+        size_t frame_offset = 24U + driver_info + shift;
+
+        /* All-zero tail padding is not a valid RX descriptor. */
+        if (descriptor == 0U)
+            break;
+        if ((descriptor & 0xC000U) != 0U || frame_length == 0U ||
+            frame_offset > length - cursor ||
+            frame_length > length - cursor - frame_offset)
+            break;
+
+        rtl_cache_beacon(rx + frame_offset, frame_length);
+
+        size_t packet_end = cursor + frame_offset + frame_length;
+        if (packet_end >= length)
+            break;
+        /* RX packet boundaries are padded to an 8-byte alignment. */
+        size_t next = (packet_end + 7U) & ~(size_t)7U;
+        if (next <= cursor || next > length)
+            break;
+        cursor = next;
+    }
 }
 
 void rtl8188eu_poll(void)

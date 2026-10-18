@@ -40,6 +40,7 @@ typedef void (*net_udp_handler_fn)(net_device_t*, uint32_t source_address,
                                    uint16_t source_port, uint16_t destination_port,
                                    const uint8_t* payload, size_t payload_length,
                                    void* context);
+typedef void (*net_udp6_handler_fn)(net_device_t*, const uint8_t source_address[16], const uint8_t destination_address[16], uint16_t source_port, uint16_t destination_port, const uint8_t* payload, size_t payload_length, void* context);
 typedef struct {
     uint16_t vendor_id, device_id;
     uint8_t class_code, subclass, prog_if;
@@ -84,6 +85,10 @@ int net_udp_handler_register(uint16_t, net_udp_handler_fn, void*);
 int net_udp_handler_unregister(uint16_t, net_udp_handler_fn, void*);
 /* Internal IPv4-to-UDP dispatch; the IP header has already been validated. */
 void net_udp_receive_ipv4(net_device_t*, const uint8_t*, size_t, size_t);
+int net_udp6_send(net_device_t*, const uint8_t destination_address[16], uint16_t source_port, uint16_t destination_port, const void* payload, size_t payload_length);
+int net_udp6_handler_register(uint16_t, net_udp6_handler_fn, void*);
+int net_udp6_handler_unregister(uint16_t, net_udp6_handler_fn, void*);
+void net_udp_receive_ipv6(net_device_t*, const uint8_t source_address[16], const uint8_t destination_address[16], const uint8_t* udp, size_t udp_length);
 int net_pci_driver_register(const net_pci_driver_t*);
 uint32_t net_probe_pci_devices(void);
 size_t net_pci_poll_devices(void);

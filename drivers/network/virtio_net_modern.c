@@ -76,6 +76,7 @@ typedef struct {
     uint8_t registered;
     uint8_t poll_seen;
     uint8_t rx_seen;
+    uint8_t rx_frame_checked;
     uint8_t selftest_handler_registered;
     net_device_t netdev;
     vnet_queue_t rx;
@@ -295,14 +296,22 @@ static int vnet_modern_poll(void)
         vnet_used_elem_t element = q->used->ring[q->last_used % q->size];
         ++q->last_used;
         if (!state.rx_seen) { state.rx_seen = 1U; serial_write("VANTAOS_VIRTIO_NET_MODERN_RX_DESCRIPTOR_SEEN\\n"); }
-        if (element.id >= q->size) continue;
+        if (element.id >= q->size) { serial_write("VANTAOS_VIRTIO_NET_MODERN_RX_BAD_ID\\n"); continue; }
         uint16_t slot = (uint16_t)element.id;
         uint8_t *buffer = (uint8_t *)q->buffers[slot].virtual_address;
         if (element.length >= VNET_HEADER_SIZE + NET_ETHERNET_HEADER_SIZE &&
             element.length <= VNET_BUFFER_SIZE) {
             size_t length = element.length - VNET_HEADER_SIZE;
-            if (length <= NET_FRAME_MAX_SIZE)
-                (void)net_receive_frame(&state.netdev, buffer + VNET_HEADER_SIZE, length);
+            if (length <= NET_FRAME_MAX_SIZE) {
+                int queued = net_receive_frame(&state.netdev, buffer + VNET_HEADER_SIZE, length);
+                if (!state.rx_frame_checked) {
+                    state.rx_frame_checked = 1U;
+                    serial_write(queued ? "VANTAOS_VIRTIO_NET_MODERN_RX_FRAME_QUEUED\\n" : "VANTAOS_VIRTIO_NET_MODERN_RX_FRAME_REJECTED\\n");
+                }
+            }
+        } else if (!state.rx_frame_checked) {
+            state.rx_frame_checked = 1U;
+            serial_write("VANTAOS_VIRTIO_NET_MODERN_RX_BAD_LENGTH\\n");
         }
         q->desc[slot].address = q->buffers[slot].physical_address;
         q->desc[slot].length = VNET_BUFFER_SIZE;

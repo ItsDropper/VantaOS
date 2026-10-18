@@ -20,6 +20,17 @@
 #define RTL8188EU_REG_SYS_FUNC 0x0002U
 #define RTL8188EU_REG_RSV_CTRL 0x001CU
 #define RTL8188EU_REG_MCU_FW_DL 0x0080U
+#define RTL8188EU_REG_RF_CTRL 0x001FU
+#define RTL8188EU_REG_MAC_CR 0x0100U
+#define RTL8188EU_REG_HSSI_PARAM2_A 0x0824U
+#define RTL8188EU_REG_LSSI_PARAM_A 0x0840U
+#define RTL8188EU_REG_RF_READBACK_A 0x08A0U
+#define RTL8188EU_RF_CHNLBW 0x18U
+#define RTL8188EU_RF_DATA_MASK 0x000FFFFFU
+#define RTL8188EU_RF_CHANNEL_MASK 0x000000FFU
+#define RTL8188EU_RF_READ_EDGE (1U << 31)
+#define RTL8188EU_RF_ADDRESS_SHIFT 23U
+#define RTL8188EU_RF_READBACK_MASK 0x000FFFFFU
 #define RTL8188EU_REG_FW_START 0x1000U
 #define RTL8188EU_FW_HEADER_SIZE 32U
 #define RTL8188EU_FW_MAX_SIZE 32768U /* Eight 4-KiB pages, selected by 3 page bits. */
@@ -55,6 +66,11 @@ static uint8_t rtl_firmware_ready;
  * that sequence is implemented and explicitly completes.
  */
 static uint8_t rtl_radio_ready;
+/* A scan is advanced incrementally from poll; no synchronous wait in USB context. */
+static uint8_t rtl_scan_active;
+static uint8_t rtl_scan_channel;
+static uint16_t rtl_scan_dwell_polls;
+static uint8_t rtl_current_channel;
 static uint8_t rtl_rx_armed;
 static uint8_t rtl_rx_buffer[4096] __attribute__((aligned(64)));
 #define RTL8188EU_TX_DESC_SIZE 32U

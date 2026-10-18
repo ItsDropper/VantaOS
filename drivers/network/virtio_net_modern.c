@@ -15,6 +15,7 @@
 #define VNET_CAP_DEVICE 4U
 #define VNET_F_MAC (1ULL << 5)
 #define VNET_F_STATUS (1ULL << 16)
+#define VNET_F_MRG_RXBUF (1ULL << 15)
 #define VNET_F_VERSION_1 (1ULL << 32)
 #define VNET_STATUS_ACK 1U
 #define VNET_STATUS_DRIVER 2U
@@ -22,7 +23,8 @@
 #define VNET_STATUS_FEATURES_OK 8U
 #define VNET_QUEUE_LIMIT 128U
 #define VNET_BUFFER_SIZE 2048U
-#define VNET_HEADER_SIZE 10U
+#define VNET_HEADER_BASE_SIZE 10U
+#define VNET_HEADER_MRG_SIZE 12U
 #define VNET_WAIT_LIMIT 10000000U
 #define VNET_PAGE_SIZE 4096U
 #define VNET_DESC_WRITE 2U
@@ -72,6 +74,7 @@ typedef struct {
     uint32_t notify_multiplier;
     uint32_t device_config_length;
     uint8_t has_status;
+    uint8_t mergeable_rx;
     uint8_t ready;
     uint8_t registered;
     uint8_t poll_seen;
@@ -113,6 +116,10 @@ static void wr64(volatile uint8_t *p, uint32_t o, uint64_t v)
     wr32(p, o + 4U, (uint32_t)(v >> 32));
 }
 static void dma_barrier(void) { __asm__ volatile ("mfence" ::: "memory"); }
+static size_t virtio_header_size(void)
+{
+    return state.mergeable_rx ? VNET_HEADER_MRG_SIZE : VNET_HEADER_BASE_SIZE;
+}
 
 static volatile uint8_t *map_cap(const struct pci_device *pci, uint8_t bar,
                                  uint32_t offset, uint32_t length)
@@ -252,16 +259,17 @@ static int vnet_modern_transmit(net_device_t *device, const uint8_t *frame, size
 {
     if (device != &state.netdev || !state.ready || !frame ||
         length < NET_ETHERNET_HEADER_SIZE || length > NET_FRAME_MAX_SIZE ||
-        length + VNET_HEADER_SIZE > VNET_BUFFER_SIZE)
+        length + virtio_header_size() > VNET_BUFFER_SIZE)
         return 0;
     spinlock_lock(&state.tx_lock);
     vnet_queue_t *q = &state.tx;
     uint16_t slot = (uint16_t)(q->avail_index % q->size);
     uint8_t *buffer = (uint8_t *)q->buffers[slot].virtual_address;
-    for (uint32_t i = 0; i < VNET_HEADER_SIZE; ++i) buffer[i] = 0U;
-    for (size_t i = 0; i < length; ++i) buffer[VNET_HEADER_SIZE + i] = frame[i];
+    size_t header_size = virtio_header_size();
+    for (size_t i = 0; i < header_size; ++i) buffer[i] = 0U;
+    for (size_t i = 0; i < length; ++i) buffer[header_size + i] = frame[i];
     q->desc[slot].address = q->buffers[slot].physical_address;
-    q->desc[slot].length = (uint32_t)(VNET_HEADER_SIZE + length);
+    q->desc[slot].length = (uint32_t)(header_size + length);
     q->desc[slot].flags = 0U;
     q->desc[slot].next = 0U;
     q->avail->ring[q->avail_index % q->size] = slot;
@@ -300,21 +308,24 @@ static int vnet_modern_poll(void)
         if (element.id >= q->size) { serial_write("VANTAOS_VIRTIO_NET_MODERN_RX_BAD_ID\\n"); continue; }
         uint16_t slot = (uint16_t)element.id;
         uint8_t *buffer = (uint8_t *)q->buffers[slot].virtual_address;
-        if (element.length >= VNET_HEADER_SIZE + NET_ETHERNET_HEADER_SIZE &&
+        size_t header_size = virtio_header_size();
+        if (element.length >= header_size + NET_ETHERNET_HEADER_SIZE &&
             element.length <= VNET_BUFFER_SIZE) {
-            size_t length = element.length - VNET_HEADER_SIZE;
+            if (state.mergeable_rx && rd16((volatile uint8_t *)buffer, VNET_HEADER_BASE_SIZE) != 1U) {
+                if (!state.rx_frame_checked) { state.rx_frame_checked = 1U; serial_write("VANTAOS_VIRTIO_NET_MODERN_RX_MERGE_COUNT_INVALID\\n"); }
+            } else {
+            size_t length = element.length - header_size;
             if (!state.rx_type_checked && length >= 14U) {
                 state.rx_type_checked = 1U;
-                uint16_t type10 = (uint16_t)(((uint16_t)buffer[22U] << 8) | buffer[23U]);
-                uint16_t type12 = (uint16_t)(((uint16_t)buffer[24U] << 8) | buffer[25U]);
-                serial_write(type10 == 0x0806U || type10 == 0x88B5U ? "VANTAOS_VIRTIO_NET_MODERN_RX_TYPE_AT_10\\n" : (type12 == 0x0806U || type12 == 0x88B5U ? "VANTAOS_VIRTIO_NET_MODERN_RX_TYPE_AT_12\\n" : "VANTAOS_VIRTIO_NET_MODERN_RX_TYPE_UNKNOWN\\n"));
+                serial_write(header_size == VNET_HEADER_MRG_SIZE ? "VANTAOS_VIRTIO_NET_MODERN_RX_TYPE_AT_12\\n" : "VANTAOS_VIRTIO_NET_MODERN_RX_TYPE_AT_10\\n");
             }
             if (length <= NET_FRAME_MAX_SIZE) {
-                int queued = net_receive_frame(&state.netdev, buffer + VNET_HEADER_SIZE, length);
+                int queued = net_receive_frame(&state.netdev, buffer + header_size, length);
                 if (!state.rx_frame_checked) {
                     state.rx_frame_checked = 1U;
                     serial_write(queued ? "VANTAOS_VIRTIO_NET_MODERN_RX_FRAME_QUEUED\\n" : "VANTAOS_VIRTIO_NET_MODERN_RX_FRAME_REJECTED\\n");
                 }
+            }
             }
         } else if (!state.rx_frame_checked) {
             state.rx_frame_checked = 1U;
@@ -381,8 +392,10 @@ static net_pci_probe_result_t vnet_modern_probe(const struct pci_device *pci)
     if ((features & (VNET_F_MAC | VNET_F_VERSION_1)) != (VNET_F_MAC | VNET_F_VERSION_1))
         { serial_write("VANTAOS_VIRTIO_NET_MODERN_FEATURE_FAIL\\n"); goto fail; }
     state.has_status = (features & VNET_F_STATUS) != 0U;
+    state.mergeable_rx = (features & VNET_F_MRG_RXBUF) != 0U;
     wr32(state.common, 8U, 0U);
-    wr32(state.common, 12U, (uint32_t)(VNET_F_MAC | (state.has_status ? VNET_F_STATUS : 0U)));
+    wr32(state.common, 12U, (uint32_t)(VNET_F_MAC | (state.has_status ? VNET_F_STATUS : 0U) |
+          (state.mergeable_rx ? VNET_F_MRG_RXBUF : 0U)));
     wr32(state.common, 8U, 1U);
     wr32(state.common, 12U, 1U);
     wr8(state.common, 20U, VNET_STATUS_ACK | VNET_STATUS_DRIVER | VNET_STATUS_FEATURES_OK);

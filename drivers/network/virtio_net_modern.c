@@ -77,6 +77,7 @@ typedef struct {
     uint8_t poll_seen;
     uint8_t rx_seen;
     uint8_t rx_frame_checked;
+    uint8_t rx_type_checked;
     uint8_t selftest_handler_registered;
     net_device_t netdev;
     vnet_queue_t rx;
@@ -302,6 +303,12 @@ static int vnet_modern_poll(void)
         if (element.length >= VNET_HEADER_SIZE + NET_ETHERNET_HEADER_SIZE &&
             element.length <= VNET_BUFFER_SIZE) {
             size_t length = element.length - VNET_HEADER_SIZE;
+            if (!state.rx_type_checked && length >= 14U) {
+                state.rx_type_checked = 1U;
+                uint16_t type10 = (uint16_t)(((uint16_t)buffer[22U] << 8) | buffer[23U]);
+                uint16_t type12 = (uint16_t)(((uint16_t)buffer[24U] << 8) | buffer[25U]);
+                serial_write(type10 == 0x0806U || type10 == 0x88B5U ? "VANTAOS_VIRTIO_NET_MODERN_RX_TYPE_AT_10\\n" : (type12 == 0x0806U || type12 == 0x88B5U ? "VANTAOS_VIRTIO_NET_MODERN_RX_TYPE_AT_12\\n" : "VANTAOS_VIRTIO_NET_MODERN_RX_TYPE_UNKNOWN\\n"));
+            }
             if (length <= NET_FRAME_MAX_SIZE) {
                 int queued = net_receive_frame(&state.netdev, buffer + VNET_HEADER_SIZE, length);
                 if (!state.rx_frame_checked) {

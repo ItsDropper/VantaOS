@@ -272,7 +272,7 @@ int net_wifi_80211_build_assoc_request(uint8_t *frame, size_t capacity,
         0x01U, 0x08U, 0x82U, 0x84U, 0x8BU, 0x96U,
         0x0CU, 0x12U, 0x18U, 0x24U
     };
-    const size_t fixed_and_ies = 4U + 2U + 2U + sizeof(rates);
+    const size_t fixed_and_ies = 4U + 2U + sizeof(rates);
     size_t required;
     if (!frame || !destination || !source || !bssid || !ssid || !frame_length ||
         !mac_is_unicast(destination) || !mac_is_unicast(source) ||

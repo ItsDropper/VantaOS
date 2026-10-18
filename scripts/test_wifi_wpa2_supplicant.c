@@ -1,4 +1,5 @@
 #include "wifi_wpa2.h"
+#include "wifi_ccmp.h"
 
 #include <stdint.h>
 #include <stdio.h>

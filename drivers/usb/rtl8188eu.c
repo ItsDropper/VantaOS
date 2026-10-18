@@ -43,6 +43,8 @@ static uint8_t rtl_bound;
 static uint8_t rtl_register_buffer[RTL8188EU_FW_WRITE_CHUNK] __attribute__((aligned(64)));
 static uint8_t rtl_firmware[RTL8188EU_FW_MAX_SIZE] __attribute__((aligned(64)));
 static uint8_t rtl_firmware_attempted;
+static uint8_t rtl_firmware_ready;
+static int rtl_reg_read16(uint16_t address, uint16_t *value);
 
 static uint16_t get_le16(const uint8_t *p)
 {
@@ -292,6 +294,15 @@ abort_download:
         (void)rtl_reg_write8(RTL8188EU_REG_MCU_FW_DL,
                              (uint8_t)(value8 & ~RTL8188EU_FWDL_ENABLE));
     return 0;
+}
+
+static int rtl_reg_read16(uint16_t address, uint16_t *value)
+{
+    uint8_t bytes[2];
+    if (!value || !rtl_reg_read(address, bytes, sizeof(bytes)))
+        return 0;
+    *value = (uint16_t)bytes[0] | ((uint16_t)bytes[1] << 8);
+    return 1;
 }
 
 static int rtl_reg_read32(uint16_t address, uint32_t *value)

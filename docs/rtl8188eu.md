@@ -34,3 +34,9 @@ The build script checks that the file exists and is within the current size boun
 The driver now exposes `rtl8188eu_transmit_frame()` for a complete 802.11 management or data MPDU (without FCS). It builds the 32-byte RTL8188E USB TX descriptor, chooses the management or best-effort queue, submits through the discovered bulk-OUT endpoint, and requires the full transfer length to complete. Host tests validate the descriptor fields and ensure a too-short frame is rejected.
 
 This is a low-level transport primitive only. It does not configure the MAC/PHY/RF, set a channel, authenticate or associate, negotiate keys, encrypt/decrypt CCMP, or bridge frames into `net_device_t`. A successful mocked transfer is not evidence that a physical adapter can transmit over the air. The driver must not be described as end-to-end functional until those missing pieces and real-hardware tests pass.
+
+## Experimental WPA2 crypto primitives
+
+The branch now contains bounded PBKDF2-HMAC-SHA1 PMK derivation and an AES-CCM primitive with host known-answer tests. These are prerequisites only. They are not wired into an EAPOL four-way handshake or the RTL8188EU RX/TX path, and do not establish that CCMP nonce/AAD construction, replay protection, key installation, or packet exchange works on hardware. Do not advertise WPA2 connectivity on the basis of these unit tests.
+
+The AES implementation is newly written and has not undergone an independent security audit. Treat it as experimental; it is not a substitute for a reviewed cryptographic implementation.

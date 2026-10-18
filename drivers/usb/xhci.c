@@ -17,6 +17,7 @@
 #define XHCI_MAX_SLOTS       8U
 #define XHCI_EP0_RING_TRBS   16U
 #define XHCI_RING_TRBS       256U
+#define XHCI_BULK_BUFFER_SIZE 4096U
 #define XHCI_SCRATCHPAD_MAX  64U
 #define XHCI_POLL_LIMIT      10000000U
 
@@ -138,6 +139,15 @@ static uint8_t interrupt_configured[XHCI_MAX_SLOTS];
 static uint8_t interrupt_in_flight[XHCI_MAX_SLOTS];
 static uint8_t interrupt_report_ready[XHCI_MAX_SLOTS];
 static uint8_t interrupt_endpoint_address[XHCI_MAX_SLOTS];
+static xhci_trb_t bulk_rings[XHCI_MAX_SLOTS][2][XHCI_EP0_RING_TRBS]
+    __attribute__((aligned(64)));
+static uint8_t bulk_dma[XHCI_MAX_SLOTS][2][XHCI_BULK_BUFFER_SIZE]
+    __attribute__((aligned(64)));
+static uint32_t bulk_enqueue[XHCI_MAX_SLOTS][2];
+static uint32_t bulk_cycle[XHCI_MAX_SLOTS][2];
+static uint32_t bulk_dci[XHCI_MAX_SLOTS][2];
+static uint16_t bulk_packet[XHCI_MAX_SLOTS][2];
+static uint8_t bulk_configured[XHCI_MAX_SLOTS][2];
 static int controller_online;
 static int initialized;
 
@@ -689,6 +699,153 @@ int xhci_configure_interrupt_in(uint32_t slot_id, uint8_t endpoint_address,
     interrupt_in_flight[index] = 0;
     interrupt_report_ready[index] = 0;
     return 1;
+}
+
+
+/*
+ * Configure one USB bulk endpoint. Direction is encoded by endpoint address;
+ * xHCI DCI is 2*endpoint for OUT and 2*endpoint+1 for IN.
+ */
+int xhci_configure_bulk_endpoint(uint32_t slot_id, uint8_t endpoint_address,
+                                 uint16_t packet_size)
+{
+    if (!controller_online || slot_id == 0U || slot_id > XHCI_MAX_SLOTS ||
+        !slot_active[slot_id - 1U] || (endpoint_address & 0x0FU) == 0U ||
+        packet_size == 0U || packet_size > XHCI_BULK_BUFFER_SIZE)
+        return 0;
+    uint32_t index = slot_id - 1U;
+    uint32_t endpoint_number = endpoint_address & 0x0FU;
+    uint32_t direction = (endpoint_address & 0x80U) != 0U ? 1U : 0U;
+    uint32_t dci = endpoint_number * 2U + direction;
+    if (dci >= 31U)
+        return 0;
+    for (uint32_t i = 0; i < 33U * 64U; ++i)
+        input_contexts[index][i] = 0;
+    for (uint32_t i = 0; i < XHCI_EP0_RING_TRBS; ++i) {
+        bulk_rings[index][direction][i].parameter = 0;
+        bulk_rings[index][direction][i].status = 0;
+        bulk_rings[index][direction][i].control = 0;
+    }
+    bulk_enqueue[index][direction] = 0;
+    bulk_cycle[index][direction] = 1;
+    uint64_t ring_physical, input_physical;
+    if (!dma_address(bulk_rings[index][direction], &ring_physical) ||
+        !dma_address(input_contexts[index], &input_physical))
+        return 0;
+    bulk_rings[index][direction][XHCI_EP0_RING_TRBS - 1U].parameter = ring_physical;
+    bulk_rings[index][direction][XHCI_EP0_RING_TRBS - 1U].status = 0;
+    bulk_rings[index][direction][XHCI_EP0_RING_TRBS - 1U].control =
+        (XHCI_TRB_TYPE_LINK << XHCI_TRB_TYPE_SHIFT) | (1U << 1) | 1U;
+
+    uint32_t* control = input_context_word(index, 0);
+    uint32_t* slot = input_context_word(index, 1);
+    uint32_t* endpoint = input_context_word(index, dci + 1U);
+    control[1] = 1U | (1U << dci);
+    const uint32_t* current_slot =
+        (const uint32_t*)(const void*)device_contexts[index];
+    for (uint32_t word = 0; word < context_size / sizeof(uint32_t); ++word)
+        slot[word] = current_slot[word];
+    slot[0] = (slot[0] & ~(0x1FU << 27)) |
+              ((dci > 1U ? dci : 1U) << 27);
+
+    /* Bulk endpoints use error-count=3 and endpoint type 2 (IN) / 6 (OUT). */
+    endpoint[0] = 0U;
+    endpoint[1] = (3U << 1) |
+                  ((direction ? 2U : 6U) << 3) |
+                  ((uint32_t)packet_size << 16);
+    endpoint[2] = (uint32_t)ring_physical | 1U;
+    endpoint[3] = (uint32_t)(ring_physical >> 32);
+    endpoint[4] = (uint32_t)packet_size;
+    uint32_t completion = 0;
+    if (!xhci_submit_command(12U, input_physical, 0, slot_id << 24,
+                             &completion, 0))
+        return 0;
+    bulk_dci[index][direction] = dci;
+    bulk_packet[index][direction] = packet_size;
+    bulk_configured[index][direction] = 1U;
+    return 1;
+}
+
+/*
+ * Synchronous, bounded bulk transfer for USB network-device bring-up.
+ * The caller's buffer is copied through controller-owned DMA memory. Maximum
+ * transfer is deliberately capped; large firmware images must be chunked.
+ */
+int xhci_bulk_transfer(uint32_t slot_id, uint8_t endpoint_address,
+                       void* buffer, uint32_t length)
+{
+    if (!controller_online || slot_id == 0U || slot_id > XHCI_MAX_SLOTS ||
+        !slot_active[slot_id - 1U] || !buffer || length == 0U ||
+        length > XHCI_BULK_BUFFER_SIZE)
+        return 0;
+    uint32_t index = slot_id - 1U;
+    uint32_t direction = (endpoint_address & 0x80U) != 0U ? 1U : 0U;
+    uint32_t endpoint_number = endpoint_address & 0x0FU;
+    if (endpoint_number == 0U || !bulk_configured[index][direction] ||
+        bulk_dci[index][direction] != endpoint_number * 2U + direction)
+        return 0;
+
+    uint8_t* dma = bulk_dma[index][direction];
+    if (!direction) {
+        const uint8_t* source = (const uint8_t*)buffer;
+        for (uint32_t i = 0; i < length; ++i)
+            dma[i] = source[i];
+    }
+    uint32_t ring_index = bulk_enqueue[index][direction];
+    if (ring_index >= XHCI_EP0_RING_TRBS - 1U)
+        return 0;
+    xhci_trb_t* trb = &bulk_rings[index][direction][ring_index];
+    uint64_t data_physical, trb_physical;
+    if (!dma_address(dma, &data_physical) ||
+        !dma_address(trb, &trb_physical))
+        return 0;
+    uint32_t previous_sequence = __atomic_load_n(
+        &transfer_completion_sequence, __ATOMIC_ACQUIRE);
+    trb->parameter = data_physical;
+    trb->status = length;
+    trb->control = (1U << XHCI_TRB_TYPE_SHIFT) | (1U << 5) |
+                   (direction ? (1U << 2) : 0U) |
+                   (bulk_cycle[index][direction] ? XHCI_TRB_CYCLE : 0U);
+    bulk_enqueue[index][direction]++;
+    if (bulk_enqueue[index][direction] == XHCI_EP0_RING_TRBS - 1U) {
+        xhci_trb_t* link =
+            &bulk_rings[index][direction][XHCI_EP0_RING_TRBS - 1U];
+        uint64_t ring_physical;
+        if (!dma_address(bulk_rings[index][direction], &ring_physical))
+            return 0;
+        link->parameter = ring_physical;
+        link->status = 0;
+        link->control = (XHCI_TRB_TYPE_LINK << XHCI_TRB_TYPE_SHIFT) |
+                        (1U << 1) |
+                        (bulk_cycle[index][direction] ? XHCI_TRB_CYCLE : 0U);
+        bulk_enqueue[index][direction] = 0;
+        bulk_cycle[index][direction] ^= 1U;
+    }
+    __atomic_thread_fence(__ATOMIC_RELEASE);
+    mmio_write32(doorbells, slot_id * 4U, bulk_dci[index][direction]);
+    for (uint32_t i = 0; i < XHCI_POLL_LIMIT; ++i) {
+        consume_event_ring();
+        uint32_t sequence = __atomic_load_n(
+            &transfer_completion_sequence, __ATOMIC_ACQUIRE);
+        if (sequence != previous_sequence &&
+            completed_transfer_pointer == trb_physical &&
+            completed_transfer_slot == slot_id) {
+            if (completed_transfer_code != 1U)
+                return 0;
+            if (direction) {
+                uint32_t residual = 0U;
+                /* xHCI Transfer Event residual is bounded by the requested size. */
+                (void)residual;
+                for (uint32_t j = 0; j < length; ++j)
+                    ((uint8_t*)buffer)[j] = dma[j];
+            }
+            return 1;
+        }
+        if (mmio_read32(operational, XHCI_USBSTS) & XHCI_STS_HOST_ERROR)
+            return 0;
+        __asm__ volatile ("pause");
+    }
+    return 0;
 }
 
 int xhci_start_interrupt_in(uint32_t slot_id)

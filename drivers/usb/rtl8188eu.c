@@ -285,9 +285,7 @@ static int rtl_download_firmware(void)
         page++;
     }
 
-    if (!rtl_reg_read16_placeholder)
-        return 0;
-    return 1;
+    return 0; /* Firmware completion is implemented separately; fail closed. */
 
 abort_download:
     if (rtl_reg_read8(RTL8188EU_REG_MCU_FW_DL, &value8))

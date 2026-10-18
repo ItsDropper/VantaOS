@@ -571,7 +571,8 @@ rtl8188eu_status_t rtl8188eu_get_status(void)
         return RTL8188EU_STATUS_FIRMWARE_READY;
     if (rtl_firmware_attempted)
         return RTL8188EU_STATUS_FIRMWARE_FAILED;
-    return RTL8188EU_STATUS_FIRMWARE_PENDING;
+    return fat32_is_mounted() ? RTL8188EU_STATUS_FIRMWARE_PENDING
+                              : RTL8188EU_STATUS_USB_BOUND;
 }
 
 void rtl8188eu_poll(void)

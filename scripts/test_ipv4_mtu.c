@@ -35,6 +35,13 @@ int main(void)
     ok &= expect(!net_udp_payload_fits_mtu(NET_MTU_DEFAULT + 1U, 0U), "UDP MTU above fixed buffer rejected");
     ok &= expect(!net_udp_payload_fits_mtu(NET_MTU_DEFAULT, SIZE_MAX), "UDP SIZE_MAX payload rejected without overflow");
     if (!ok) return 1;
-    puts("IPv4/UDP MTU bounds: PASS");
+    ok &= expect(net_ipv6_payload_fits_mtu(1280U, 1U), "IPv6 minimum MTU accepts payload");
+    ok &= expect(net_ipv6_payload_fits_mtu(1280U, 1240U), "IPv6 minimum MTU exact limit");
+    ok &= expect(!net_ipv6_payload_fits_mtu(1280U, 1241U), "IPv6 payload beyond minimum MTU rejected");
+    ok &= expect(!net_ipv6_payload_fits_mtu(1279U, 1U), "IPv6 MTU below RFC minimum rejected");
+    ok &= expect(!net_ipv6_payload_fits_mtu(NET_MTU_DEFAULT + 1U, 1U), "IPv6 MTU above fixed buffer rejected");
+    ok &= expect(!net_ipv6_payload_fits_mtu(NET_MTU_DEFAULT, SIZE_MAX), "IPv6 SIZE_MAX payload rejected without overflow");
+    if (!ok) return 1;
+    puts("IPv4/UDP/IPv6 MTU bounds: PASS");
     return 0;
 }

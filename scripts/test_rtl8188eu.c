@@ -11,6 +11,7 @@ static uint8_t configured_in, configured_out;
 static uint16_t packet_in, packet_out;
 static uint8_t registers[65536];
 static uint8_t firmware_read_seen;
+static uint8_t beacon_delivered;
 
 int xhci_controller_online(void) { return 1; }
 int xhci_configure_bulk_endpoint(uint32_t slot, uint8_t ep, uint16_t packet)
@@ -46,7 +47,28 @@ int xhci_start_bulk_in(uint32_t slot, uint8_t ep)
 { (void)slot; (void)ep; return 1; }
 int xhci_take_bulk_in(uint32_t slot, uint8_t ep, void *buffer,
                       uint32_t capacity, uint32_t *actual)
-{ (void)slot; (void)ep; (void)buffer; (void)capacity; (void)actual; return 0; }
+{
+    (void)slot; (void)ep;
+    if (beacon_delivered || !buffer || !actual || capacity < 69U)
+        return 0;
+    uint8_t *packet = buffer;
+    memset(packet, 0, 69U);
+    packet[0] = 45U; /* RX descriptor reports a 45-byte 802.11 frame. */
+    uint8_t *frame = packet + 24U;
+    frame[0] = 0x80U; /* Beacon management frame. */
+    for (uint32_t i = 4U; i < 10U; ++i) frame[i] = 0xFFU;
+    const uint8_t bssid[6] = {0x02, 0x11, 0x22, 0x33, 0x44, 0x55};
+    memcpy(frame + 10U, bssid, sizeof(bssid));
+    memcpy(frame + 16U, bssid, sizeof(bssid));
+    frame[32] = 100U; /* Beacon interval, after 24-byte header + timestamp. */
+    frame[34] = 1U;   /* Capability: ESS. */
+    frame[36] = 0U; frame[37] = 4U;
+    memcpy(frame + 38U, "TEST", 4U);
+    frame[42] = 3U; frame[43] = 1U; frame[44] = 6U;
+    *actual = 69U;
+    beacon_delivered = 1U;
+    return 1;
+}
 
 int fat32_is_mounted(void) { return 1; }
 uint32_t fat32_root_cluster(void) { return 1U; }
@@ -112,7 +134,15 @@ int main(void)
     if (!firmware_read_seen || registers[0x1000] != 0xA0U ||
         registers[0x1007] != 0xA7U)
         return 5;
-    if (!rtl8188eu_port_disconnected(1U))
+    rtl8188eu_poll();
+    net_wifi_scan_result_t results[2];
+    size_t result_count = rtl8188eu_get_passive_results(results, 2U);
+    if (result_count != 1U || results[0].ssid_length != 4U ||
+        memcmp(results[0].ssid, "TEST", 4U) != 0 ||
+        results[0].channel != 6U ||
+        memcmp(results[0].bssid, "\\x02\\x11\\x22\\x33\\x44\\x55", 6U) != 0)
         return 6;
+    if (!rtl8188eu_port_disconnected(1U))
+        return 7;
     return 0;
 }

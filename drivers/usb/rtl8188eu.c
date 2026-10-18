@@ -563,6 +563,17 @@ int rtl8188eu_transmit_frame(const uint8_t *frame, size_t length)
     return actual == RTL8188EU_TX_DESC_SIZE + length;
 }
 
+rtl8188eu_status_t rtl8188eu_get_status(void)
+{
+    if (!rtl_bound)
+        return RTL8188EU_STATUS_UNBOUND;
+    if (rtl_firmware_ready)
+        return RTL8188EU_STATUS_FIRMWARE_READY;
+    if (rtl_firmware_attempted)
+        return RTL8188EU_STATUS_FIRMWARE_FAILED;
+    return RTL8188EU_STATUS_FIRMWARE_PENDING;
+}
+
 void rtl8188eu_poll(void)
 {
     if (!rtl_bound)

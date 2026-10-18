@@ -187,7 +187,7 @@ jobs:
 
       - name: Test RTL8188EU USB descriptor binding
         run: |
-          gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_rtl8188eu.c drivers/usb/rtl8188eu.c net/wifi_80211.c -o /tmp/vantaos-rtl8188eu-test
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_rtl8188eu.c drivers/usb/rtl8188eu.c net/wifi_80211.c net/wifi_wpa2.c net/wifi_crypto.c net/wifi_ccmp.c kernel/crypto_rng.c -o /tmp/vantaos-rtl8188eu-test
           /tmp/vantaos-rtl8188eu-test
 
       - name: Test TLS hostname validation policy

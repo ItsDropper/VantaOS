@@ -295,7 +295,7 @@ jobs:
           grep -q 'VANTAOS_BOOT_OK' "$log"
           grep -q 'VANTAOS_VIRTIO_NET_MODERN_INITIALIZED' "$log"
           grep -q 'VANTAOS_VIRTIO_NET_MODERN_TX_SELFTEST_OK' "$log"
-          VANTAOS_TEST_PORT=1235 python3 scripts/test_e1000_network.py
+          VANTAOS_TEST_PORT=1235 python3 scripts/test_e1000_network.py || { status=$?; echo 'Modern VirtIO socket integration failed; guest serial log follows:'; cat "$log" qemu-virtio-modern-stderr.log; exit "$status"; }
 
       - name: RTL8139 QEMU Ethernet end-to-end test
         if: steps.scope.outputs.full == '1'

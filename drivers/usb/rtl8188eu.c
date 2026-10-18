@@ -954,6 +954,11 @@ int rtl8188eu_get_mac_address(uint8_t mac[6])
     }
     if (any == 0U || all_ff || (address[0] & 1U) != 0U)
         return 0;
+    uint8_t difference = 0U;
+    for (size_t i = 0U; i < sizeof(address); ++i)
+        difference |= (uint8_t)(address[i] ^ rtl_efuse_info.mac[i]);
+    if (difference != 0U)
+        return 0;
     for (size_t i = 0U; i < sizeof(address); ++i)
         mac[i] = address[i];
     return 1;

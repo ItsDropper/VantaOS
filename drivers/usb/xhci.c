@@ -149,6 +149,11 @@ static uint32_t bulk_cycle[XHCI_MAX_SLOTS][2];
 static uint32_t bulk_dci[XHCI_MAX_SLOTS][2];
 static uint16_t bulk_packet[XHCI_MAX_SLOTS][2];
 static uint8_t bulk_configured[XHCI_MAX_SLOTS][2];
+static uint8_t bulk_in_flight[XHCI_MAX_SLOTS][2];
+static uint8_t bulk_done[XHCI_MAX_SLOTS][2];
+static uint64_t bulk_expected_trb[XHCI_MAX_SLOTS][2];
+static uint32_t bulk_completion_code[XHCI_MAX_SLOTS][2];
+static uint32_t bulk_completion_status[XHCI_MAX_SLOTS][2];
 static int controller_online;
 static int initialized;
 
@@ -247,6 +252,23 @@ static void consume_event_ring(void)
                 !hid_transfer_event_observed[completed_transfer_slot - 1U]) {
                 hid_transfer_event_observed[completed_transfer_slot - 1U] = 1;
                 serial_write("VANTAOS_XHCI_HID_TRANSFER_EVENT_SEEN\n");
+            }
+            if (completed_transfer_slot > 0U &&
+                completed_transfer_slot <= XHCI_MAX_SLOTS) {
+                uint32_t transfer_index = completed_transfer_slot - 1U;
+                for (uint32_t direction = 0; direction < 2U; ++direction) {
+                    if (bulk_in_flight[transfer_index][direction] &&
+                        bulk_expected_trb[transfer_index][direction] ==
+                            completed_transfer_pointer &&
+                        bulk_dci[transfer_index][direction] ==
+                            ((control >> 16) & 0x1FU)) {
+                        bulk_completion_code[transfer_index][direction] =
+                            completed_transfer_code;
+                        bulk_completion_status[transfer_index][direction] =
+                            event->status;
+                        bulk_done[transfer_index][direction] = 1U;
+                    }
+                }
             }
             __atomic_add_fetch(&transfer_completion_sequence, 1U,
                                __ATOMIC_RELEASE);
@@ -496,8 +518,12 @@ int xhci_disable_device(uint32_t slot_id)
     interrupt_configured[slot_id - 1U] = 0;
     interrupt_in_flight[slot_id - 1U] = 0;
     interrupt_report_ready[slot_id - 1U] = 0;
-    bulk_configured[slot_id - 1U][0] = 0;
-    bulk_configured[slot_id - 1U][1] = 0;
+    for (uint32_t direction = 0; direction < 2U; ++direction) {
+        bulk_configured[slot_id - 1U][direction] = 0;
+        bulk_in_flight[slot_id - 1U][direction] = 0;
+        bulk_done[slot_id - 1U][direction] = 0;
+        bulk_expected_trb[slot_id - 1U][direction] = 0;
+    }
     return 1;
 }
 int xhci_set_ep0_packet(uint32_t slot_id, uint16_t packet_size)
@@ -804,8 +830,11 @@ int xhci_bulk_transfer(uint32_t slot_id, uint8_t endpoint_address,
     if (!dma_address(dma, &data_physical) ||
         !dma_address(trb, &trb_physical))
         return 0;
-    uint32_t previous_sequence = __atomic_load_n(
-        &transfer_completion_sequence, __ATOMIC_ACQUIRE);
+    if (bulk_in_flight[index][direction])
+        return 0;
+    bulk_done[index][direction] = 0U;
+    bulk_completion_code[index][direction] = 0U;
+    bulk_completion_status[index][direction] = 0U;
     trb->parameter = data_physical;
     trb->status = length;
     trb->control = (1U << XHCI_TRB_TYPE_SHIFT) | (1U << 5) |
@@ -826,18 +855,20 @@ int xhci_bulk_transfer(uint32_t slot_id, uint8_t endpoint_address,
         bulk_enqueue[index][direction] = 0;
         bulk_cycle[index][direction] ^= 1U;
     }
+    bulk_expected_trb[index][direction] = trb_physical;
+    bulk_in_flight[index][direction] = 1U;
     __atomic_thread_fence(__ATOMIC_RELEASE);
     mmio_write32(doorbells, slot_id * 4U, bulk_dci[index][direction]);
     for (uint32_t i = 0; i < XHCI_POLL_LIMIT; ++i) {
         consume_event_ring();
-        uint32_t sequence = __atomic_load_n(
-            &transfer_completion_sequence, __ATOMIC_ACQUIRE);
-        if (sequence != previous_sequence &&
-            completed_transfer_pointer == trb_physical &&
-            completed_transfer_slot == slot_id) {
-            if (completed_transfer_code != 1U)
+        if (bulk_done[index][direction]) {
+            uint32_t completion_code = bulk_completion_code[index][direction];
+            uint32_t completion_status = bulk_completion_status[index][direction];
+            bulk_in_flight[index][direction] = 0U;
+            bulk_done[index][direction] = 0U;
+            if (completion_code != 1U)
                 return 0;
-            uint32_t residual = completed_transfer_status & 0xFFFFFFU;
+            uint32_t residual = completion_status & 0xFFFFFFU;
             if (residual > length)
                 return 0;
             uint32_t actual = length - residual;
@@ -848,10 +879,13 @@ int xhci_bulk_transfer(uint32_t slot_id, uint8_t endpoint_address,
             *actual_length = actual;
             return 1;
         }
-        if (mmio_read32(operational, XHCI_USBSTS) & XHCI_STS_HOST_ERROR)
+        if (mmio_read32(operational, XHCI_USBSTS) & XHCI_STS_HOST_ERROR) {
+            bulk_in_flight[index][direction] = 0U;
             return 0;
+        }
         __asm__ volatile ("pause");
     }
+    bulk_in_flight[index][direction] = 0U;
     return 0;
 }
 
@@ -1038,6 +1072,11 @@ static int controller_start(const struct pci_device* pci)
         for (uint32_t direction = 0; direction < 2U; ++direction) {
             bulk_enqueue[slot][direction] = 0;
             bulk_cycle[slot][direction] = 1;
+            bulk_in_flight[slot][direction] = 0;
+            bulk_done[slot][direction] = 0;
+            bulk_expected_trb[slot][direction] = 0;
+            bulk_completion_code[slot][direction] = 0;
+            bulk_completion_status[slot][direction] = 0;
             bulk_dci[slot][direction] = 0;
             bulk_packet[slot][direction] = 0;
             bulk_configured[slot][direction] = 0;

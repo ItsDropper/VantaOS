@@ -7,6 +7,7 @@
 #include "wifi_wpa2.h"
 #include "wifi_ccmp.h"
 #include "crypto_rng.h"
+#include "net.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -107,6 +108,24 @@ static uint8_t rtl_group_key[WIFI_WPA2_GTK_MAX];
 static size_t rtl_group_key_length;
 static uint8_t rtl_group_key_id;
 static uint8_t rtl_keys_installed;
+static wifi_ccmp_replay_t rtl_pairwise_pn;
+static wifi_ccmp_replay_t rtl_group_pn;
+static uint8_t rtl_netdev_registered;
+static int rtl_netdev_transmit(net_device_t *device, const uint8_t *frame,
+                               size_t length);
+static const net_device_ops_t rtl_netdev_ops = {
+    .transmit = rtl_netdev_transmit
+};
+static net_device_t rtl_netdev = {
+    .name = "wlan0",
+    .mtu = NET_MTU_DEFAULT,
+    .ops = &rtl_netdev_ops
+};
+/* Host-side driver tests omit the network core; kernel builds resolve these. */
+extern int net_device_register(net_device_t *) __attribute__((weak));
+extern int net_device_unregister(net_device_t *) __attribute__((weak));
+extern int net_device_set_link(net_device_t *, int) __attribute__((weak));
+extern int net_receive_frame(net_device_t *, const void *, size_t) __attribute__((weak));
 static void rtl_station_receive_frame(const uint8_t *frame, size_t length);
 static void rtl_station_poll(void);
 static void rtl_station_reset(void);

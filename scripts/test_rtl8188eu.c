@@ -122,6 +122,17 @@ int main(void)
     if (rtl8188eu_probe(1, 1, 0x0BDA, 0x8179, malformed,
                         sizeof(malformed)) != 0)
         return 1;
+    /* The declared configuration length must fit the received buffer. */
+    if (rtl8188eu_probe(1, 1, 0x0BDA, 0x8179, valid,
+                        sizeof(valid) - 1U) != 0)
+        return 11;
+    /* Reserved endpoint-address bits must not be accepted as real pipes. */
+    uint8_t invalid_address[sizeof(valid)];
+    memcpy(invalid_address, valid, sizeof(valid));
+    invalid_address[20] = 0x91U;
+    if (rtl8188eu_probe(1, 1, 0x0BDA, 0x8179, invalid_address,
+                        sizeof(invalid_address)) != 0)
+        return 12;
     if (rtl8188eu_probe(1, 1, 0x1234, 0x8179, valid, sizeof(valid)) != 0)
         return 2;
     if (rtl8188eu_probe(1, 1, 0x0BDA, 0x8179, valid, sizeof(valid)) != 1)

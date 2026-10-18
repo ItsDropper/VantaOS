@@ -43,6 +43,7 @@ typedef struct {
     net_device_t netdev;
     spinlock_t tx_lock;
     uint16_t rx_offset;
+    uint32_t tx_next;
     uint8_t ready;
     uint8_t registered;
 } rtl8139_state_t;
@@ -121,12 +122,7 @@ static int rtl8139_transmit(net_device_t *device, const uint8_t *frame, size_t l
         return 0;
 
     uint64_t flags = spinlock_lock_irqsave(&state.tx_lock);
-    uint32_t slot = (uint32_t)(state.netdev.driver_data ?
-        (uintptr_t)state.netdev.driver_data : 0U);
-    /* driver_data is the state pointer; tx slot ownership is kept separately. */
-    (void)slot;
-    static uint32_t tx_next;
-    slot = tx_next % RTL8139_TX_SLOTS;
+    uint32_t slot = state.tx_next % RTL8139_TX_SLOTS;
     uint16_t tsd = (uint16_t)(state.io_base + RTL8139_REG_TSD0 + slot * 4U);
     int completed = 0;
     for (uint32_t spin = 0; spin < RTL8139_WAIT_LIMIT; ++spin) {
@@ -148,7 +144,7 @@ static int rtl8139_transmit(net_device_t *device, const uint8_t *frame, size_t l
     io_out32((uint16_t)(state.io_base + RTL8139_REG_TSAD0 + slot * 4U),
              (uint32_t)state.tx_pages[slot].physical_address);
     io_out32(tsd, (uint32_t)length);
-    tx_next = (slot + 1U) % RTL8139_TX_SLOTS;
+    state.tx_next = (slot + 1U) % RTL8139_TX_SLOTS;
 
     completed = 0;
     for (uint32_t spin = 0; spin < RTL8139_WAIT_LIMIT; ++spin) {
@@ -225,6 +221,21 @@ static int rtl8139_poll_device(void)
     return received;
 }
 
+#ifdef VANTAOS_SELF_TEST
+static void rtl8139_rx_selftest_handler(net_device_t *device, const uint8_t *frame,
+                                        size_t length, uint16_t type, size_t header,
+                                        void *context)
+{
+    (void)context;
+    if (device != &state.netdev || !frame || type != 0x88B5U ||
+        header > length || length - header < 4U)
+        return;
+    if (frame[header] == 0x56U && frame[header + 1U] == 0x41U &&
+        frame[header + 2U] == 0x4EU && frame[header + 3U] == 0x54U)
+        serial_write("VANTAOS_RTL8139_RX_SELFTEST_OK\\n");
+}
+#endif
+
 static net_pci_probe_result_t rtl8139_probe(const struct pci_device *pci)
 {
     if (!pci || state.ready || state.registered)
@@ -290,6 +301,15 @@ static net_pci_probe_result_t rtl8139_probe(const struct pci_device *pci)
     if (!net_device_register(&state.netdev))
         goto fail;
     state.registered = 1U;
+#ifdef VANTAOS_SELF_TEST
+    if (!net_device_configure_ipv4(&state.netdev, 0x0A00020FU,
+                                   0xFFFFFF00U, 0x0A000202U) ||
+        !net_ethernet_handler_register(0x88B5U, rtl8139_rx_selftest_handler, 0)) {
+        (void)net_device_unregister(&state.netdev);
+        state.registered = 0U;
+        goto fail;
+    }
+#endif
     state.ready = 1U;
     io_out8((uint16_t)(state.io_base + RTL8139_REG_CR),
             RTL8139_CR_RE | RTL8139_CR_TE);

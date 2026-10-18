@@ -8,6 +8,7 @@
 #define DNS_PORT 53U
 #define CLIENT_PORT 53000U
 #define DNS_MAX_MESSAGE 512U
+#define DNS_HEADER_SIZE 12U
 
 static net_udp_handler_fn registered_handler;
 static void *registered_context;

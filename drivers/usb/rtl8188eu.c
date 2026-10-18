@@ -1259,12 +1259,12 @@ static void rtl_station_poll(void)
     rtl_station_timeout = rtl_station_state == RTL_STATION_WPA2_HANDSHAKE
         ? 4000U : 1000U;
     if ((rtl_station_state == RTL_STATION_WAIT_AUTH && !rtl_station_send_auth()) ||
-        (rtl_station_state == RTL_STATION_WAIT_ASSOC && !rtl_station_send_assoc())) {
+        (rtl_station_state == RTL_STATION_WAIT_ASSOC && !rtl_station_send_assoc()) ||
+        (rtl_station_state == RTL_STATION_WPA2_HANDSHAKE &&
+         wifi_wpa2_get_state(&rtl_supplicant) == WIFI_WPA2_WAIT_M3 &&
+         !wifi_wpa2_retry(&rtl_supplicant))) {
         rtl_station_fail();
-        wifi_wpa2_reset(&rtl_supplicant);
     }
-    /* WPA2 message retransmission is handled by the supplicant, not by
-       replaying a stale EAPOL frame with an old replay counter. */
 }
 
 static void rtl_station_fail(void)

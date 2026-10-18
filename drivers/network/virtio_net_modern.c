@@ -139,6 +139,12 @@ static int discover_capabilities(const struct pci_device *pci)
             if (length < 16U || (uint16_t)at + length > 256U)
                 return 0;
             uint8_t type = pci_read_config8(pci, (uint8_t)(at + 3U));
+            /* PCI_CFG and ISR capabilities are not MMIO windows we map. */
+            if (type != VNET_CAP_COMMON && type != VNET_CAP_NOTIFY &&
+                type != VNET_CAP_DEVICE) {
+                at = next;
+                continue;
+            }
             uint8_t bar = pci_read_config8(pci, (uint8_t)(at + 4U));
             uint32_t offset = pci_read_config32(pci, (uint8_t)(at + 8U));
             uint32_t region_length = pci_read_config32(pci, (uint8_t)(at + 12U));

@@ -164,6 +164,9 @@ int main(void)
         uint8_t llc[64] = {0}, decoded[64] = {0};
         const uint8_t destination[6] = {0x02U, 0x10U, 0x20U, 0x30U, 0x40U, 0x50U};
         const uint8_t source[6] = {0x02U, 0x60U, 0x70U, 0x80U, 0x90U, 0xA0U};
+        const uint8_t expected_snap[8] = {
+            0xAAU, 0xAAU, 0x03U, 0x00U, 0x00U, 0x00U, 0x08U, 0x00U
+        };
         size_t llc_length = 0U, decoded_length = 0U;
         for (size_t i = 0U; i < 6U; ++i) {
             ethernet[i] = destination[i];
@@ -174,7 +177,7 @@ int main(void)
         ethernet[16] = 0xAAU; ethernet[17] = 0x55U;
         if (!net_wifi_80211_snap_encapsulate(ethernet, 18U, llc,
                 sizeof(llc), &llc_length) || llc_length != 12U ||
-            memcmp(llc, "\\xAA\\xAA\\x03\\x00\\x00\\x00\\x08\\x00", 8U) != 0)
+            memcmp(llc, expected_snap, sizeof(expected_snap)) != 0)
             return 19;
         if (!net_wifi_80211_snap_decapsulate(destination, source, llc,
                 llc_length, decoded, sizeof(decoded), &decoded_length) ||

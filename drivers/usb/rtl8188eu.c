@@ -44,6 +44,7 @@ static uint32_t rtl_slot;
 static uint32_t rtl_port;
 static uint8_t rtl_bound;
 static uint8_t rtl_bulk_in;
+static uint8_t rtl_bulk_out;
 static uint8_t rtl_register_buffer[RTL8188EU_FW_WRITE_CHUNK] __attribute__((aligned(64)));
 static uint8_t rtl_firmware[RTL8188EU_FW_MAX_SIZE + 1U] __attribute__((aligned(64)));
 static uint8_t rtl_firmware_attempted;
@@ -407,6 +408,7 @@ int rtl8188eu_probe(uint32_t slot_id, uint32_t port, uint16_t vendor_id, uint16_
     rtl_slot = slot_id;
     rtl_port = port;
     rtl_bulk_in = endpoints.bulk_in;
+    rtl_bulk_out = endpoints.bulk_out;
     if (!xhci_configure_bulk_endpoint(slot_id, endpoints.bulk_in,
                                       endpoints.bulk_in_packet) ||
         !xhci_configure_bulk_endpoint(slot_id, endpoints.bulk_out,
@@ -528,7 +530,7 @@ int rtl8188eu_transmit_frame(const uint8_t *frame, size_t length)
     uint8_t *descriptor = rtl_tx_buffer;
     uint8_t frame_type;
 
-    if (!rtl_bound || !rtl_firmware_ready || !frame ||
+    if (!rtl_bound || !rtl_firmware_ready || rtl_bulk_out == 0U || !frame ||
         length < 24U || length > RTL8188EU_TX_FRAME_MAX)
         return 0;
 
@@ -551,7 +553,7 @@ int rtl8188eu_transmit_frame(const uint8_t *frame, size_t length)
     for (size_t i = 0U; i < length; ++i)
         rtl_tx_buffer[RTL8188EU_TX_DESC_SIZE + i] = frame[i];
 
-    if (!xhci_bulk_transfer(rtl_slot, (uint8_t)(rtl_bulk_in & 0x7FU),
+    if (!xhci_bulk_transfer(rtl_slot, rtl_bulk_out,
                             rtl_tx_buffer,
                             (uint32_t)(RTL8188EU_TX_DESC_SIZE + length),
                             &actual))
@@ -605,6 +607,7 @@ int rtl8188eu_port_disconnected(uint32_t port)
     rtl_slot = 0U;
     rtl_port = 0U;
     rtl_bulk_in = 0U;
+    rtl_bulk_out = 0U;
     rtl_rx_armed = 0U;
     rtl_firmware_attempted = 0U;
     rtl_firmware_ready = 0U;

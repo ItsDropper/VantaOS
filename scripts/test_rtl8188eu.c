@@ -14,6 +14,8 @@ static uint8_t firmware_read_seen;
 static uint8_t checksum_reported;
 static uint8_t checksum_reported_too_early;
 static uint8_t beacon_delivered;
+static uint8_t tx_seen;
+static uint8_t tx_descriptor_valid;
 
 int xhci_controller_online(void) { return 1; }
 int xhci_configure_bulk_endpoint(uint32_t slot, uint8_t ep, uint16_t packet)
@@ -54,7 +56,25 @@ int xhci_control_transfer(uint32_t slot, const uint8_t setup[8],
 }
 int xhci_bulk_transfer(uint32_t slot, uint8_t ep, void *buffer,
                        uint32_t length, uint32_t *actual)
-{ (void)slot; (void)ep; (void)buffer; (void)length; (void)actual; return 0; }
+{
+    (void)slot;
+    if (!buffer || !actual || ep != configured_out || length < 56U)
+        return 0;
+    const uint8_t *bytes = buffer;
+    uint16_t packet_length = (uint16_t)bytes[0] |
+                             ((uint16_t)bytes[1] << 8);
+    uint32_t queue = (uint32_t)bytes[4] |
+                     ((uint32_t)bytes[5] << 8) |
+                     ((uint32_t)bytes[6] << 16) |
+                     ((uint32_t)bytes[7] << 24);
+    tx_descriptor_valid = packet_length == length - 32U &&
+                          bytes[2] == 32U && bytes[3] == 0x0CU &&
+                          (queue & 0x1F00U) == 0x1200U &&
+                          bytes[32] == 0x80U;
+    tx_seen = 1U;
+    *actual = length;
+    return 1;
+}
 int xhci_start_bulk_in(uint32_t slot, uint8_t ep)
 { (void)slot; (void)ep; return 1; }
 int xhci_take_bulk_in(uint32_t slot, uint8_t ep, void *buffer,
@@ -187,6 +207,12 @@ int main(void)
     const uint8_t expected_second_bssid[6] = {0x02, 0x21, 0x32, 0x43, 0x54, 0x65};
     if (memcmp(results[0].bssid, expected_bssid, 6U) != 0 ||
         memcmp(results[1].bssid, expected_second_bssid, 6U) != 0) return 9;
+    uint8_t management_frame[24] = {0x80U};
+    if (!rtl8188eu_transmit_frame(management_frame, sizeof(management_frame)) ||
+        !tx_seen || !tx_descriptor_valid)
+        return 13;
+    if (rtl8188eu_transmit_frame(management_frame, 23U))
+        return 14;
     if (!rtl8188eu_port_disconnected(1U) || rtl8188eu_port_is_bound(1U))
         return 10;
     return 0;

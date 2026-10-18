@@ -34,7 +34,7 @@ int xhci_control_transfer(uint32_t slot, const uint8_t setup[8],
             memcpy(data, registers + address, length);
     } else if (data) {
         if (address == 0x80U && length >= 1U &&
-            (registers[0x80] & 0x04U) == 0U &&
+            (registers[0x80] & 0x01U) != 0U &&
             (data[0] & 0x04U) != 0U)
             checksum_reported_too_early = 1U;
         memcpy(registers + address, data, length);

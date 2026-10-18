@@ -341,60 +341,62 @@ int net_dhcp_configure(net_device_t* device, uint32_t timeout_ms,
 
 
 
+static void dhcp_poll_state(dhcp_state_t* state)
+{
+    if (!state->device || !state->lease_valid || !state->device->link_up) return;
+    uint32_t now = timer_get_ticks();
+    if (state->active && state->renewing) {
+        if (state->acknowledged) {
+            if (state->mask && net_device_configure_ipv4(state->device, state->offered_ip,
+                    state->mask, state->gateway)) {
+                state->device->ipv4_dns = state->dns;
+                state->lease_address = state->offered_ip;
+                if (!state->lease_seconds) state->lease_seconds = 3600U;
+                state->lease_started = now;
+                uint32_t ticks = state->lease_seconds > 21474836U ? 2147483600U : state->lease_seconds * 100U;
+                if (ticks < 300U) ticks = 300U;
+                state->renew_at = now + ticks / 2U;
+                state->rebind_at = now + (ticks * 7U) / 8U;
+                state->expires_at = now + ticks;
+            }
+            state->active = 0U; state->renewing = 0U;
+            return;
+        }
+        if (state->rejected || (int32_t)(now - state->expires_at) >= 0) {
+            (void)net_device_clear_ipv4(state->device);
+            state->lease_valid = 0U; state->active = 0U; state->renewing = 0U;
+            return;
+        }
+        if (state->renewing == 1U && (int32_t)(now - state->rebind_at) >= 0) {
+            state->renewing = 2U; state->next_retry = now;
+        }
+        if ((int32_t)(now - state->next_retry) >= 0) {
+            uint32_t shift = state->retry_count > 3U ? 3U : state->retry_count;
+            uint32_t delay = DHCP_RETRY_TICKS << shift;
+            if (delay > 2400U) delay = 2400U;
+            ++state->retry_count; state->next_retry = now + delay;
+            (void)send_message(state, DHCP_REQUEST);
+        }
+        return;
+    }
+    if ((int32_t)(now - state->expires_at) >= 0) {
+        (void)net_device_clear_ipv4(state->device); state->lease_valid = 0U; return;
+    }
+    if ((int32_t)(now - state->renew_at) < 0) return;
+    state->active = 1U; state->renewing = 1U; state->acknowledged = 0U; state->rejected = 0U;
+    state->offered = 1U; state->offered_ip = state->lease_address;
+    state->mask = state->device->ipv4_netmask; state->gateway = state->device->ipv4_gateway;
+    state->dns = state->device->ipv4_dns; state->message_type = 0U;
+    state->retry_count = 1U; state->next_retry = now + DHCP_RETRY_TICKS;
+    state->xid = now ^ 0x564E5400U;
+    for (uint32_t i = 0; i < 6U; ++i) state->xid = (state->xid * 33U) ^ state->device->mac[i];
+    if (!state->xid) state->xid = 1U;
+    (void)send_message(DHCP_REQUEST);
+}
+
+
 void net_dhcp_poll(void)
 {
     for (uint32_t i = 0; i < NET_DEVICE_MAX; ++i)
         if (states[i].device) dhcp_poll_state(&states[i]);
-}
-void net_dhcp_poll(void)
-{
-    if (!state.device || !state.lease_valid || !state.device->link_up) return;
-    uint32_t now = timer_get_ticks();
-    if (state.active && state.renewing) {
-        if (state.acknowledged) {
-            if (state.mask && net_device_configure_ipv4(state.device, state.offered_ip,
-                    state.mask, state.gateway)) {
-                state.device->ipv4_dns = state.dns;
-                state.lease_address = state.offered_ip;
-                if (!state.lease_seconds) state.lease_seconds = 3600U;
-                state.lease_started = now;
-                uint32_t ticks = state.lease_seconds > 21474836U ? 2147483600U : state.lease_seconds * 100U;
-                if (ticks < 300U) ticks = 300U;
-                state.renew_at = now + ticks / 2U;
-                state.rebind_at = now + (ticks * 7U) / 8U;
-                state.expires_at = now + ticks;
-            }
-            state.active = 0U; state.renewing = 0U;
-            return;
-        }
-        if (state.rejected || (int32_t)(now - state.expires_at) >= 0) {
-            (void)net_device_clear_ipv4(state.device);
-            state.lease_valid = 0U; state.active = 0U; state.renewing = 0U;
-            return;
-        }
-        if (state.renewing == 1U && (int32_t)(now - state.rebind_at) >= 0) {
-            state.renewing = 2U; state.next_retry = now;
-        }
-        if ((int32_t)(now - state.next_retry) >= 0) {
-            uint32_t shift = state.retry_count > 3U ? 3U : state.retry_count;
-            uint32_t delay = DHCP_RETRY_TICKS << shift;
-            if (delay > 2400U) delay = 2400U;
-            ++state.retry_count; state.next_retry = now + delay;
-            (void)send_message(DHCP_REQUEST);
-        }
-        return;
-    }
-    if ((int32_t)(now - state.expires_at) >= 0) {
-        (void)net_device_clear_ipv4(state.device); state.lease_valid = 0U; return;
-    }
-    if ((int32_t)(now - state.renew_at) < 0) return;
-    state.active = 1U; state.renewing = 1U; state.acknowledged = 0U; state.rejected = 0U;
-    state.offered = 1U; state.offered_ip = state.lease_address;
-    state.mask = state.device->ipv4_netmask; state.gateway = state.device->ipv4_gateway;
-    state.dns = state.device->ipv4_dns; state.message_type = 0U;
-    state.retry_count = 1U; state.next_retry = now + DHCP_RETRY_TICKS;
-    state.xid = now ^ 0x564E5400U;
-    for (uint32_t i = 0; i < 6U; ++i) state.xid = (state.xid * 33U) ^ state.device->mac[i];
-    if (!state.xid) state.xid = 1U;
-    (void)send_message(DHCP_REQUEST);
 }

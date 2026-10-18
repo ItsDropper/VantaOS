@@ -155,6 +155,11 @@ jobs:
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_wifi_api.c net/wifi.c -o /tmp/vantaos-wifi-api-test
           /tmp/vantaos-wifi-api-test
 
+      - name: Test bounded IEEE 802.11 scan-frame and RSN parsing
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_wifi_80211.c net/wifi_80211.c -o /tmp/vantaos-wifi-80211-test
+          /tmp/vantaos-wifi-80211-test
+
       - name: Test TLS hostname validation policy
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_tls_hostname.c -o /tmp/vantaos-tls-hostname-test

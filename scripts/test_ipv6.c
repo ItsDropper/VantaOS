@@ -1,4 +1,5 @@
 #include "net_ipv6.h"
+#include "net_ipv4.h"
 #include "timer.h"
 #include <assert.h>
 #include <stddef.h>
@@ -11,6 +12,11 @@ static void *ipv6_context;
 static uint32_t ticks = 1000U;
 static uint8_t last_tx[1600];
 static size_t last_tx_length;
+static uint32_t udp6_received;
+static uint8_t udp6_payload[32];
+static size_t udp6_payload_length;
+int net_device_get_ipv4(net_device_t *d, uint32_t *address, uint32_t *mask, uint32_t *gateway) { (void)d; (void)address; (void)mask; (void)gateway; return 0; }
+int net_ipv4_send(net_device_t *d, uint32_t destination, uint8_t protocol, const void *payload, size_t length) { (void)d; (void)destination; (void)protocol; (void)payload; (void)length; return 0; }
 
 uint32_t timer_get_ticks(void) { return ticks; }
 size_t net_poll(size_t budget) { (void)budget; return 0U; }
@@ -72,6 +78,38 @@ static void inject_ra(void)
     put16(p+2,icmp6_checksum(src,dst,p,48));
     ipv6_handler(&device,f,sizeof(f),0x86DDU,14U,ipv6_context);
 }
+static uint16_t udp6_checksum_test(const uint8_t src[16], const uint8_t dst[16], const uint8_t *p, size_t n)
+{
+    uint32_t sum = 0; const uint8_t *blocks[2] = {src, dst};
+    for (uint32_t b = 0; b < 2U; ++b) for (uint32_t i = 0; i < 16U; i += 2U) sum += ((uint32_t)blocks[b][i] << 8) | blocks[b][i + 1U];
+    uint8_t pseudo[8] = {(uint8_t)(n >> 24),(uint8_t)(n >> 16),(uint8_t)(n >> 8),(uint8_t)n,0,0,0,17};
+    for (uint32_t i = 0; i < 8U; i += 2U) sum += ((uint32_t)pseudo[i] << 8) | pseudo[i + 1U];
+    for (size_t i = 0; i + 1U < n; i += 2U) sum += ((uint32_t)p[i] << 8) | p[i + 1U];
+    if (n & 1U) sum += (uint32_t)p[n - 1U] << 8;
+    while (sum >> 16) sum = (sum & 0xFFFFU) + (sum >> 16);
+    return (uint16_t)~sum;
+}
+static void udp6_handler(net_device_t *d, const uint8_t src[16], const uint8_t dst[16], uint16_t source_port, uint16_t destination_port, const uint8_t *payload, size_t length, void *context)
+{
+    (void)context; assert(d == &device && src && dst && source_port == 12345U && destination_port == 4321U);
+    assert(length <= sizeof(udp6_payload)); for (size_t i = 0; i < length; ++i) udp6_payload[i] = payload[i];
+    udp6_payload_length = length; ++udp6_received;
+}
+static void inject_udp6(const uint8_t global[16], int corrupt_checksum)
+{
+    static const uint8_t router_mac[6] = {0x02,0xAA,0xBB,0xCC,0xDD,0xEE};
+    static const uint8_t source[16] = {0x20,0x01,0x0D,0xB8,0,1,0,0,0,0,0,0,0,0,0,2};
+    static const uint8_t message[] = "V6UDP";
+    uint8_t f[14U + 40U + 8U + sizeof(message) - 1U] = {0};
+    for (uint32_t i = 0; i < 6U; ++i) { f[i] = device.mac[i]; f[6U+i] = router_mac[i]; }
+    put16(f + 12U, 0x86DDU); uint8_t *ip = f + 14U, *udp = ip + 40U;
+    make_ip6(ip, source, global, 64U, (uint16_t)(8U + sizeof(message) - 1U)); ip[6] = 17U;
+    put16(udp, 12345U); put16(udp + 2U, 4321U); put16(udp + 4U, (uint16_t)(8U + sizeof(message) - 1U));
+    for (size_t i = 0; i < sizeof(message) - 1U; ++i) udp[8U+i] = message[i];
+    put16(udp + 6U, udp6_checksum_test(source, global, udp, 8U + sizeof(message) - 1U));
+    if (corrupt_checksum) udp[6] ^= 0x80U;
+    ipv6_handler(&device, f, sizeof(f), 0x86DDU, 14U, ipv6_context);
+}
 static void inject_echo(const uint8_t global[16])
 {
     static const uint8_t router_mac[6]={0x02,0xAA,0xBB,0xCC,0xDD,0xEE};
@@ -99,6 +137,22 @@ int main(void)
     assert(router.bytes[0]==0xFEU&&router.bytes[1]==0x80U);
     inject_echo(global.bytes);
     assert(last_tx_length==14U+40U+8U);
+    assert(net_udp6_handler_register(4321U, udp6_handler, 0));
+    assert(!net_udp6_handler_register(4321U, udp6_handler, 0));
+    inject_udp6(global.bytes, 0);
+    assert(udp6_received == 1U && udp6_payload_length == 5U);
+    assert(udp6_payload[0] == 'V' && udp6_payload[1] == '6' && udp6_payload[2] == 'U' && udp6_payload[3] == 'D' && udp6_payload[4] == 'P');
+    inject_udp6(global.bytes, 1);
+    assert(udp6_received == 1U);
+    static const uint8_t all_nodes[16] = {0xFF,2,0,0,0,0,0,0,0,0,0,0,0,0,0,1};
+    static const uint8_t out_payload[] = "OUT6";
+    assert(net_udp6_send(&device, all_nodes, 4321U, 12345U, out_payload, sizeof(out_payload)-1U));
+    assert(last_tx_length == 14U + 40U + 8U + sizeof(out_payload)-1U);
+    assert(last_tx[0] == 0x33U && last_tx[5] == 1U && last_tx[20] == 17U);
+    assert(last_tx[54] == 0x10U && last_tx[55] == 0xE1U);
+    assert(last_tx[56] == 0x30U && last_tx[57] == 0x39U);
+    assert(last_tx[60] != 0U || last_tx[61] != 0U);
+    assert(net_udp6_handler_unregister(4321U, udp6_handler, 0));
     assert(last_tx[12]==0x86U&&last_tx[13]==0xDDU&&last_tx[54]==129U);
     puts("VANTAOS_IPV6_SLAAC_ICMP6_TEST_OK");
     return 0;

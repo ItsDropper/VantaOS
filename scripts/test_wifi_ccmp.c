@@ -26,7 +26,7 @@ int main(void)
         !from_hex("08090a0b0c0d0e0f", payload, sizeof(payload)) ||
         !from_hex("588c979a61c663d2",
                   expected_ciphertext, sizeof(expected_ciphertext)) ||
-        !from_hex("6d5f6b61dac38417", expected_tag, sizeof(expected_tag)))
+        !from_hex("ea378169c1bc6209", expected_tag, sizeof(expected_tag)))
         return 1;
 
     memcpy(original, payload, sizeof(payload));

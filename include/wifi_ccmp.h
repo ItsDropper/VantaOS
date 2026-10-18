@@ -28,4 +28,11 @@ int wifi_ccmp_decrypt(const uint8_t key[WIFI_CCMP_KEY_SIZE],
                       uint8_t *payload, size_t payload_length,
                       const uint8_t tag[WIFI_CCMP_TAG_SIZE]);
 
+/* RFC 3394 AES-128 key unwrap, used for WPA2 GTK key-data recovery. */
+#define WIFI_AES128_WRAP_MAX_CIPHER 256U
+int wifi_aes128_key_unwrap(const uint8_t kek[WIFI_CCMP_KEY_SIZE],
+                           const uint8_t *ciphertext, size_t ciphertext_length,
+                           uint8_t *plaintext, size_t plaintext_capacity,
+                           size_t *plaintext_length);
+
 #endif

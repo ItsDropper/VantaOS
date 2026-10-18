@@ -489,3 +489,23 @@ const char* pci_get_class_name(
             return "Other Device";
     }
 }
+
+uint32_t pci_read_config32(const struct pci_device *device, uint8_t offset)
+{
+    if (!device || offset > 252U) return 0xFFFFFFFFU;
+    return pci_read_config(device->bus, device->slot, device->function, offset);
+}
+uint8_t pci_read_config8(const struct pci_device *device, uint8_t offset)
+{
+    if (!device) return 0xFFU;
+    uint32_t value = pci_read_config(device->bus, device->slot, device->function,
+                                     (uint8_t)(offset & 0xFCU));
+    return (uint8_t)(value >> ((offset & 3U) * 8U));
+}
+uint16_t pci_read_config16(const struct pci_device *device, uint8_t offset)
+{
+    if (!device || offset > 254U) return 0xFFFFU;
+    uint16_t lo = pci_read_config8(device, offset);
+    uint16_t hi = pci_read_config8(device, (uint8_t)(offset + 1U));
+    return (uint16_t)(lo | (uint16_t)(hi << 8));
+}

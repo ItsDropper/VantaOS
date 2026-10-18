@@ -13,6 +13,7 @@
 #include "net.h"
 #include "e1000.h"
 #include "virtio_net.h"
+#include "virtio_net_modern.h"
 #include "rtl8139.h"
 #include "net_ipv6.h"
 #include "net_arp.h"
@@ -74,6 +75,8 @@ static void kernel_initialize(const vanta_boot_info_t* boot_info)
         serial_write("VANTAOS_E1000_DRIVER_REGISTER_FAIL\n");
     if (!virtio_net_initialize())
         serial_write("VANTAOS_VIRTIO_NET_DRIVER_REGISTER_FAIL\n");
+    if (!virtio_net_modern_initialize())
+        serial_write("VANTAOS_VIRTIO_NET_MODERN_DRIVER_REGISTER_FAIL\n");
     if (!rtl8139_initialize())
         serial_write("VANTAOS_RTL8139_DRIVER_REGISTER_FAIL\n");
     (void)net_probe_pci_devices();

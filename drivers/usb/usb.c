@@ -301,7 +301,7 @@ void usb_poll(void)
                 }
             }
         } else {
-            int already_enumerated = 0;
+            int already_enumerated = rtl8188eu_port_is_bound(port);
             for (uint32_t slot = 1; slot <= USB_MAX_XHCI_SLOTS; ++slot)
                 if (input_slots[slot].active && input_slots[slot].port == port)
                     already_enumerated = 1;

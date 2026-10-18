@@ -52,11 +52,38 @@ int main(void)
         if (payload[i] != 0U)
             return 6;
 
+    /* Ciphertext tampering must fail authentication and erase plaintext. */
+    memcpy(payload, original, sizeof(payload));
+    if (!wifi_ccmp_encrypt(key, nonce, aad, sizeof(aad), payload,
+                           sizeof(payload), tag))
+        return 7;
+    payload[3] ^= 0x80U;
+    if (wifi_ccmp_decrypt(key, nonce, aad, sizeof(aad), payload,
+                          sizeof(payload), tag) != 0)
+        return 8;
+    for (size_t i = 0U; i < sizeof(payload); ++i)
+        if (payload[i] != 0U)
+            return 9;
+
+    /* AAD tampering must also be detected, not just a corrupted MIC. */
+    memcpy(payload, original, sizeof(payload));
+    if (!wifi_ccmp_encrypt(key, nonce, aad, sizeof(aad), payload,
+                           sizeof(payload), tag))
+        return 10;
+    aad[0] ^= 0x01U;
+    if (wifi_ccmp_decrypt(key, nonce, aad, sizeof(aad), payload,
+                          sizeof(payload), tag) != 0)
+        return 11;
+    aad[0] ^= 0x01U;
+    for (size_t i = 0U; i < sizeof(payload); ++i)
+        if (payload[i] != 0U)
+            return 12;
+
     if (wifi_ccmp_encrypt(NULL, nonce, aad, sizeof(aad), payload,
                           sizeof(payload), tag) != 0 ||
         wifi_ccmp_decrypt(key, nonce, aad, WIFI_CCMP_MAX_AAD + 1U,
                           payload, sizeof(payload), tag) != 0)
-        return 7;
+        return 13;
 
     puts("Wi-Fi AES-CCM known-answer and tamper tests passed.");
     return 0;

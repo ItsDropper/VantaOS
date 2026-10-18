@@ -326,10 +326,13 @@ static int ccm_compute_tag(const uint8_t round_key[176],
 {
     uint8_t mac[16] = {0};
     uint8_t block[16] = {0};
-    uint8_t aad_encoded[(WIFI_CCMP_MAX_AAD + 2U + 15U) & ~(size_t)15U];
     uint8_t counter_block[16];
     uint8_t s0[16];
 
+    /*
+     * CCM B0: Adata | M' | L', followed by the nonce and message length.
+     * This implementation uses a 13-byte nonce, an 8-byte tag, and L=2.
+     */
     block[0] = (uint8_t)((aad_length != 0U ? 0x40U : 0U) | 0x18U | 0x01U);
     for (size_t i = 0U; i < 13U; ++i)
         block[1U + i] = nonce[i];
@@ -337,25 +340,37 @@ static int ccm_compute_tag(const uint8_t round_key[176],
     block[15] = (uint8_t)payload_length;
     ccm_mac_block(round_key, mac, block);
 
+    /*
+     * AAD is encoded as a two-byte big-endian length followed by AAD bytes,
+     * then zero-padded to a block boundary. Process each encoded block only
+     * after clearing it, so padding is explicit and independent of buffers.
+     */
     if (aad_length != 0U) {
         size_t encoded_length = aad_length + 2U;
-        aad_encoded[0] = (uint8_t)(aad_length >> 8);
-        aad_encoded[1] = (uint8_t)aad_length;
-        for (size_t i = 0U; i < aad_length; ++i)
-            aad_encoded[i + 2U] = aad[i];
-        for (size_t i = encoded_length; i < sizeof(aad_encoded); ++i)
-            aad_encoded[i] = 0U;
-        size_t padded = (encoded_length + 15U) & ~(size_t)15U;
-        for (size_t offset = 0U; offset < padded; offset += 16U)
-            ccm_mac_block(round_key, mac, aad_encoded + offset);
+        size_t consumed = 0U;
+        while (consumed < encoded_length) {
+            for (size_t i = 0U; i < sizeof(block); ++i)
+                block[i] = 0U;
+            for (size_t i = 0U; i < sizeof(block) && consumed < encoded_length;
+                 ++i, ++consumed) {
+                if (consumed == 0U)
+                    block[i] = (uint8_t)(aad_length >> 8);
+                else if (consumed == 1U)
+                    block[i] = (uint8_t)aad_length;
+                else
+                    block[i] = aad[consumed - 2U];
+            }
+            ccm_mac_block(round_key, mac, block);
+        }
     }
 
+    /* CBC-MAC always authenticates the original plaintext, not ciphertext. */
     for (size_t offset = 0U; offset < payload_length; offset += 16U) {
-        for (size_t i = 0U; i < 16U; ++i)
+        for (size_t i = 0U; i < sizeof(block); ++i)
             block[i] = 0U;
         size_t amount = payload_length - offset;
-        if (amount > 16U)
-            amount = 16U;
+        if (amount > sizeof(block))
+            amount = sizeof(block);
         for (size_t i = 0U; i < amount; ++i)
             block[i] = payload[offset + i];
         ccm_mac_block(round_key, mac, block);
@@ -368,7 +383,6 @@ static int ccm_compute_tag(const uint8_t round_key[176],
 
     wipe_bytes(mac, sizeof(mac));
     wipe_bytes(block, sizeof(block));
-    wipe_bytes(aad_encoded, sizeof(aad_encoded));
     wipe_bytes(counter_block, sizeof(counter_block));
     wipe_bytes(s0, sizeof(s0));
     return 1;

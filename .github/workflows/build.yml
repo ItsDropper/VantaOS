@@ -172,6 +172,12 @@ jobs:
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_wifi_ccmp.c net/wifi_ccmp.c -o /tmp/vantaos-wifi-ccmp-test
           /tmp/vantaos-wifi-ccmp-test
 
+      - name: Test WPA2 HMAC, PRF-512, and RFC 3394 key unwrap
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_wifi_wpa2_primitives.c net/wifi_crypto.c net/wifi_ccmp.c -o /tmp/vantaos-wifi-wpa2-primitives-test
+          /tmp/vantaos-wifi-wpa2-primitives-test
+
+
       - name: Test bounded IEEE 802.11 scan-frame and RSN parsing
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_wifi_80211.c net/wifi_80211.c -o /tmp/vantaos-wifi-80211-test

@@ -24,6 +24,11 @@ int rtl8188eu_probe(uint32_t slot_id, uint32_t port, uint16_t vendor_id, uint16_
 void rtl8188eu_poll(void);
 /* Firmware readiness is not equivalent to association or IP connectivity. */
 rtl8188eu_status_t rtl8188eu_get_status(void);
+/* Send a wildcard Probe Request on the radio's currently configured channel.
+ * Does not change channels or claim that the radio was calibrated. */
+int rtl8188eu_start_active_scan(void);
+/* Read the station address programmed into the adapter's MACID registers. */
+int rtl8188eu_get_mac_address(uint8_t mac[6]);
 /* Send one complete 802.11 MPDU (without FCS) through the USB TX queue.
  * This is a transport primitive, not an association/security API. */
 int rtl8188eu_transmit_frame(const uint8_t *frame, size_t length);

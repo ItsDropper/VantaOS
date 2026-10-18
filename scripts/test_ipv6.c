@@ -161,6 +161,8 @@ int main(void)
     assert(last_tx[54] == 0x10U && last_tx[55] == 0xE1U);
     assert(last_tx[56] == 0x30U && last_tx[57] == 0x39U);
     assert(last_tx[60] != 0U || last_tx[61] != 0U);
+    assert(udp6_checksum_test(last_tx + 22U, last_tx + 38U, last_tx + 54U,
+                               8U + sizeof(out_payload) - 1U) == 0U);
     device.mtu = 1279U;
     assert(!net_udp6_send(&device, all_nodes, 4321U, 12345U, out_payload, sizeof(out_payload)-1U));
     device.mtu = 1280U;

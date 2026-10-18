@@ -292,9 +292,11 @@ jobs:
             if ! kill -0 "$qemu_pid" 2>/dev/null; then cat "$log" qemu-virtio-modern-stderr.log; exit 1; fi
             sleep 0.1
           done
-          grep -q 'VANTAOS_BOOT_OK' "$log"
-          grep -q 'VANTAOS_VIRTIO_NET_MODERN_INITIALIZED' "$log"
-          grep -q 'VANTAOS_VIRTIO_NET_MODERN_TX_SELFTEST_OK' "$log"
+          if ! grep -q 'VANTAOS_BOOT_OK' "$log" || ! grep -q 'VANTAOS_VIRTIO_NET_MODERN_INITIALIZED' "$log" || ! grep -q 'VANTAOS_VIRTIO_NET_MODERN_TX_SELFTEST_OK' "$log"; then
+            echo 'Modern VirtIO probe or transmit self-test did not complete; guest serial log follows.'
+            cat "$log" qemu-virtio-modern-stderr.log
+            exit 1
+          fi
           VANTAOS_TEST_PORT=1235 python3 scripts/test_e1000_network.py || { status=$?; echo 'Modern VirtIO socket integration failed; guest serial log follows:'; cat "$log" qemu-virtio-modern-stderr.log; exit "$status"; }
 
       - name: RTL8139 QEMU Ethernet end-to-end test

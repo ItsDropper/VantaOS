@@ -3,6 +3,7 @@
 #include "xhci.h"
 #include "serial.h"
 #include "fat32.h"
+#include "net_wifi_80211.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -45,6 +46,10 @@ static uint8_t rtl_register_buffer[RTL8188EU_FW_WRITE_CHUNK] __attribute__((alig
 static uint8_t rtl_firmware[RTL8188EU_FW_MAX_SIZE + 1U] __attribute__((aligned(64)));
 static uint8_t rtl_firmware_attempted;
 static uint8_t rtl_firmware_ready;
+static uint8_t rtl_rx_armed;
+static uint8_t rtl_rx_buffer[4096] __attribute__((aligned(64)));
+static net_wifi_scan_result_t rtl_passive_results[NET_WIFI_MAX_SCAN_RESULTS];
+static size_t rtl_passive_result_count;
 static int rtl_reg_read16(uint16_t address, uint16_t *value);
 static int rtl_reg_read32(uint16_t address, uint32_t *value);
 
@@ -399,14 +404,84 @@ int rtl8188eu_probe(uint32_t slot_id, uint16_t vendor_id, uint16_t device_id,
     return 1;
 }
 
+static void rtl_cache_beacon(const uint8_t *frame, size_t length)
+{
+    net_wifi_scan_result_t result;
+    if (!net_wifi_80211_parse_scan_frame(frame, length, -127, &result))
+        return;
+
+    for (size_t i = 0; i < rtl_passive_result_count; ++i) {
+        int same = 1;
+        for (size_t j = 0; j < NET_WIFI_BSSID_SIZE; ++j)
+            if (rtl_passive_results[i].bssid[j] != result.bssid[j])
+                same = 0;
+        if (same) {
+            rtl_passive_results[i] = result;
+            return;
+        }
+    }
+    if (rtl_passive_result_count < NET_WIFI_MAX_SCAN_RESULTS)
+        rtl_passive_results[rtl_passive_result_count++] = result;
+}
+
+static void rtl_process_rx_packet(const uint8_t *packet, size_t length)
+{
+    /* RTL8188E RX descriptor: packet length, driver-info size and shift. */
+    if (!packet || length < 24U)
+        return;
+    uint32_t descriptor = (uint32_t)packet[0] |
+                          ((uint32_t)packet[1] << 8) |
+                          ((uint32_t)packet[2] << 16) |
+                          ((uint32_t)packet[3] << 24);
+    uint32_t frame_length = descriptor & 0x3FFFU;
+    uint32_t driver_info = ((descriptor >> 16) & 0x0FU) * 8U;
+    uint32_t shift = (descriptor >> 24) & 0x03U;
+    uint32_t frame_offset = 24U + driver_info + shift;
+    if ((descriptor & 0xC000U) != 0U ||
+        frame_offset > length || frame_length > length - frame_offset)
+        return;
+    rtl_cache_beacon(packet + frame_offset, frame_length);
+}
+
 void rtl8188eu_poll(void)
 {
-    if (!rtl_bound || rtl_firmware_attempted || !fat32_is_mounted())
+    if (!rtl_bound)
         return;
-    rtl_firmware_attempted = 1U;
-    if (rtl_download_firmware() && rtl_firmware_ready) {
-        serial_write("VANTAOS_RTL8188EU_FIRMWARE_READY\n");
-    } else {
-        serial_write("VANTAOS_RTL8188EU_FIRMWARE_LOAD_FAILED\n");
+    if (!rtl_firmware_attempted && fat32_is_mounted()) {
+        rtl_firmware_attempted = 1U;
+        if (rtl_download_firmware() && rtl_firmware_ready)
+            serial_write("VANTAOS_RTL8188EU_FIRMWARE_READY\n");
+        else
+            serial_write("VANTAOS_RTL8188EU_FIRMWARE_LOAD_FAILED\n");
     }
+    if (!rtl_firmware_ready)
+        return;
+
+    if (!rtl_rx_armed) {
+        rtl_rx_armed = (uint8_t)xhci_start_bulk_in(rtl_slot, rtl_bulk_in);
+        return;
+    }
+    uint32_t actual = 0U;
+    int received = xhci_take_bulk_in(rtl_slot, rtl_bulk_in, rtl_rx_buffer,
+                                     sizeof(rtl_rx_buffer), &actual);
+    if (received == 1) {
+        rtl_rx_armed = 0U;
+        rtl_process_rx_packet(rtl_rx_buffer, actual);
+    } else if (received < 0) {
+        rtl_rx_armed = 0U;
+    }
+    if (!rtl_rx_armed)
+        rtl_rx_armed = (uint8_t)xhci_start_bulk_in(rtl_slot, rtl_bulk_in);
+}
+
+size_t rtl8188eu_get_passive_results(net_wifi_scan_result_t *results,
+                                     size_t capacity)
+{
+    if (!results || capacity == 0U)
+        return 0U;
+    size_t count = rtl_passive_result_count < capacity
+        ? rtl_passive_result_count : capacity;
+    for (size_t i = 0; i < count; ++i)
+        results[i] = rtl_passive_results[i];
+    return count;
 }

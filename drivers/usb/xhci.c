@@ -117,6 +117,7 @@ static uint32_t completed_command_slot;
 static uint32_t command_completion_sequence;
 static uint64_t completed_transfer_pointer;
 static uint32_t completed_transfer_code;
+static uint32_t completed_transfer_status;
 static uint32_t completed_transfer_slot;
 static uint32_t transfer_completion_sequence;
 static xhci_trb_t interrupt_rings[XHCI_MAX_SLOTS][XHCI_EP0_RING_TRBS]
@@ -238,6 +239,7 @@ static void consume_event_ring(void)
             }
             completed_transfer_pointer = event->parameter;
             completed_transfer_code = (event->status >> 24) & 0xFFU;
+            completed_transfer_status = event->status;
             completed_transfer_slot = (control >> 24) & 0xFFU;
             if (completed_transfer_slot > 0U &&
                 completed_transfer_slot <= XHCI_MAX_SLOTS &&
@@ -772,12 +774,13 @@ int xhci_configure_bulk_endpoint(uint32_t slot_id, uint8_t endpoint_address,
  * transfer is deliberately capped; large firmware images must be chunked.
  */
 int xhci_bulk_transfer(uint32_t slot_id, uint8_t endpoint_address,
-                       void* buffer, uint32_t length)
+                       void* buffer, uint32_t length, uint32_t* actual_length)
 {
     if (!controller_online || slot_id == 0U || slot_id > XHCI_MAX_SLOTS ||
-        !slot_active[slot_id - 1U] || !buffer || length == 0U ||
+        !slot_active[slot_id - 1U] || !buffer || !actual_length || length == 0U ||
         length > XHCI_BULK_BUFFER_SIZE)
         return 0;
+    *actual_length = 0U;
     uint32_t index = slot_id - 1U;
     uint32_t direction = (endpoint_address & 0x80U) != 0U ? 1U : 0U;
     uint32_t endpoint_number = endpoint_address & 0x0FU;
@@ -832,13 +835,15 @@ int xhci_bulk_transfer(uint32_t slot_id, uint8_t endpoint_address,
             completed_transfer_slot == slot_id) {
             if (completed_transfer_code != 1U)
                 return 0;
+            uint32_t residual = completed_transfer_status & 0xFFFFFFU;
+            if (residual > length)
+                return 0;
+            uint32_t actual = length - residual;
             if (direction) {
-                uint32_t residual = 0U;
-                /* xHCI Transfer Event residual is bounded by the requested size. */
-                (void)residual;
-                for (uint32_t j = 0; j < length; ++j)
+                for (uint32_t j = 0; j < actual; ++j)
                     ((uint8_t*)buffer)[j] = dma[j];
             }
+            *actual_length = actual;
             return 1;
         }
         if (mmio_read32(operational, XHCI_USBSTS) & XHCI_STS_HOST_ERROR)

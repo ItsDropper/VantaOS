@@ -202,6 +202,51 @@ static void aes128_decrypt_block(const uint8_t round_key[176],
  * time; output is erased on every failure so unauthenticated key data cannot
  * accidentally be consumed by a caller.
  */
+
+int wifi_aes128_key_wrap(const uint8_t kek[WIFI_CCMP_KEY_SIZE],
+                         const uint8_t *plaintext, size_t plaintext_length,
+                         uint8_t *ciphertext, size_t ciphertext_capacity,
+                         size_t *ciphertext_length)
+{
+    uint8_t round_key[176], a[8], block[16], encrypted[16];
+    size_t n;
+    if (ciphertext_length) *ciphertext_length = 0U;
+    if (!kek || !plaintext || !ciphertext || !ciphertext_length ||
+        plaintext_length < 16U || plaintext_length > WIFI_AES128_WRAP_MAX_CIPHER - 8U ||
+        (plaintext_length & 7U) != 0U ||
+        ciphertext_capacity < plaintext_length + 8U)
+        return 0;
+
+    n = plaintext_length / 8U;
+    for (size_t i = 0U; i < 8U; ++i) a[i] = 0xA6U;
+    for (size_t i = 0U; i < plaintext_length; ++i) ciphertext[8U + i] = plaintext[i];
+    aes_expand_key(kek, round_key);
+
+    for (uint32_t j = 0U; j < 6U; ++j) {
+        for (size_t i = 1U; i <= n; ++i) {
+            for (size_t k = 0U; k < 8U; ++k)
+                block[k] = a[k];
+            for (size_t k = 0U; k < 8U; ++k)
+                block[8U + k] = ciphertext[8U + (i - 1U) * 8U + k];
+            aes128_encrypt_block(round_key, block, encrypted);
+            uint64_t t = (uint64_t)n * (uint64_t)j + (uint64_t)i;
+            for (size_t k = 0U; k < 8U; ++k)
+                a[k] = (uint8_t)(encrypted[k] ^
+                                  (uint8_t)(t >> (56U - 8U*k)));
+            for (size_t k = 0U; k < 8U; ++k)
+                ciphertext[8U + (i - 1U) * 8U + k] = encrypted[8U + k];
+        }
+    }
+
+    for (size_t i = 0U; i < 8U; ++i) ciphertext[i] = a[i];
+    *ciphertext_length = plaintext_length + 8U;
+    wipe_bytes(round_key, sizeof(round_key));
+    wipe_bytes(a, sizeof(a));
+    wipe_bytes(block, sizeof(block));
+    wipe_bytes(encrypted, sizeof(encrypted));
+    return 1;
+}
+
 int wifi_aes128_key_unwrap(const uint8_t kek[WIFI_CCMP_KEY_SIZE],
                            const uint8_t *ciphertext, size_t ciphertext_length,
                            uint8_t *plaintext, size_t plaintext_capacity,

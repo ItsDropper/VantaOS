@@ -1136,7 +1136,7 @@ static void rtl_station_receive_frame(const uint8_t *frame, size_t length)
             net_wifi_80211_parse_auth_response(frame, length,
                 rtl_station_bssid, &status)) {
             if (status != 0U || !rtl_station_send_assoc()) {
-                rtl_station_state = RTL_STATION_FAILED;
+                rtl_station_fail();
                 return;
             }
             rtl_station_state = RTL_STATION_WAIT_ASSOC;
@@ -1148,7 +1148,7 @@ static void rtl_station_receive_frame(const uint8_t *frame, size_t length)
             net_wifi_80211_parse_assoc_response(frame, length,
                 rtl_station_bssid, &status, &aid)) {
             if (status != 0U || aid == 0U) {
-                rtl_station_state = RTL_STATION_FAILED;
+                rtl_station_fail();
                 return;
             }
             rtl_station_aid = aid;
@@ -1165,7 +1165,7 @@ static void rtl_station_receive_frame(const uint8_t *frame, size_t length)
                     rtl_station_passphrase, rtl_station_passphrase_length,
                     local_mac, rtl_station_bssid,
                     rtl_station_rsn_ie, sizeof(rtl_station_rsn_ie))) {
-                rtl_station_state = RTL_STATION_FAILED;
+                rtl_station_fail();
                 return;
             }
             rtl_station_state = RTL_STATION_WPA2_HANDSHAKE;
@@ -1194,7 +1194,7 @@ static void rtl_station_receive_frame(const uint8_t *frame, size_t length)
             rtl_network_link_up();
         }
         else if (wifi_wpa2_get_state(&rtl_supplicant) == WIFI_WPA2_FAILED)
-            rtl_station_state = RTL_STATION_FAILED;
+            rtl_station_fail();
     }
 }
 
@@ -1213,7 +1213,7 @@ static void rtl_station_poll(void)
         return;
     }
     if (rtl_station_retries >= 3U) {
-        rtl_station_state = RTL_STATION_FAILED;
+        rtl_station_fail();
         wifi_wpa2_reset(&rtl_supplicant);
         return;
     }
@@ -1222,7 +1222,7 @@ static void rtl_station_poll(void)
         ? 4000U : 1000U;
     if ((rtl_station_state == RTL_STATION_WAIT_AUTH && !rtl_station_send_auth()) ||
         (rtl_station_state == RTL_STATION_WAIT_ASSOC && !rtl_station_send_assoc())) {
-        rtl_station_state = RTL_STATION_FAILED;
+        rtl_station_fail();
         wifi_wpa2_reset(&rtl_supplicant);
     }
     /* WPA2 message retransmission is handled by the supplicant, not by

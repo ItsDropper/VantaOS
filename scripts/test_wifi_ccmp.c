@@ -103,6 +103,7 @@ int main(void)
         uint8_t key_id = 0U, header[WIFI_CCMP_HEADER_SIZE];
         uint8_t nonce[WIFI_CCMP_NONCE_SIZE];
         const uint8_t transmitter[6] = {0x02U, 1U, 2U, 3U, 4U, 5U};
+        const uint8_t expected_pn_bytes[6] = {1U, 2U, 3U, 4U, 5U, 6U};
 
         wifi_ccmp_replay_reset(&replay);
         if (!wifi_ccmp_next_tx_pn(&replay, &pn) || pn != 1U ||
@@ -128,7 +129,7 @@ int main(void)
 
         wifi_ccmp_build_nonce(nonce, 5U, transmitter, UINT64_C(0x010203040506));
         if (nonce[0] != 5U || memcmp(nonce + 1U, transmitter, 6U) != 0 ||
-            memcmp(nonce + 7U, "\\x01\\x02\\x03\\x04\\x05\\x06", 6U) != 0)
+            memcmp(nonce + 7U, expected_pn_bytes, sizeof(expected_pn_bytes)) != 0)
             return 19;
 
         wifi_ccmp_replay_reset(&replay);

@@ -76,6 +76,7 @@ typedef struct {
     uint8_t registered;
     uint8_t poll_seen;
     uint8_t rx_seen;
+    uint8_t selftest_handler_registered;
     net_device_t netdev;
     vnet_queue_t rx;
     vnet_queue_t tx;
@@ -172,6 +173,21 @@ static int discover_capabilities(const struct pci_device *pci)
     if (!state.common || !state.notify_region || !state.device_config) { serial_write("VANTAOS_VIRTIO_NET_MODERN_CAP_MISSING_REGION\\n"); return 0; }
     return 1;
 }
+
+#ifdef VANTAOS_SELF_TEST
+static void vnet_modern_rx_selftest_handler(net_device_t *device, const uint8_t *frame,
+                                            size_t length, uint16_t type,
+                                            size_t header, void *context)
+{
+    (void)context;
+    if (device != &state.netdev || !frame || type != 0x88B5U ||
+        header > length || length - header < 4U)
+        return;
+    if (frame[header] == 0x56U && frame[header + 1U] == 0x41U &&
+        frame[header + 2U] == 0x4EU && frame[header + 3U] == 0x54U)
+        serial_write("VANTAOS_VIRTIO_NET_MODERN_RX_SELFTEST_OK\\n");
+}
+#endif
 
 static void release_queue(vnet_queue_t *q)
 {
@@ -312,6 +328,12 @@ static void cleanup(void)
 {
     if (state.common) wr8(state.common, 20U, 0U);
     state.ready = 0U;
+#ifdef VANTAOS_SELF_TEST
+    if (state.selftest_handler_registered) {
+        (void)net_ethernet_handler_unregister(0x88B5U, vnet_modern_rx_selftest_handler, 0);
+        state.selftest_handler_registered = 0U;
+    }
+#endif
     if (state.registered) {
         (void)net_device_unregister(&state.netdev);
         state.registered = 0U;
@@ -377,6 +399,14 @@ static net_pci_probe_result_t vnet_modern_probe(const struct pci_device *pci)
     spinlock_init(&state.tx_lock);
     if (!net_device_register(&state.netdev)) { serial_write("VANTAOS_VIRTIO_NET_MODERN_NET_REGISTER_FAIL\\n"); goto fail; }
     state.registered = 1U;
+#ifdef VANTAOS_SELF_TEST
+    if (!net_device_configure_ipv4(&state.netdev, 0x0A00020FU, 0xFFFFFF00U, 0x0A000202U) ||
+        !net_ethernet_handler_register(0x88B5U, vnet_modern_rx_selftest_handler, 0)) {
+        serial_write("VANTAOS_VIRTIO_NET_MODERN_SELFTEST_SETUP_FAIL\\n");
+        goto fail;
+    }
+    state.selftest_handler_registered = 1U;
+#endif
     wr8(state.common, 20U, VNET_STATUS_ACK | VNET_STATUS_DRIVER |
          VNET_STATUS_FEATURES_OK | VNET_STATUS_DRIVER_OK);
     if (!(rd8(state.common, 20U) & VNET_STATUS_DRIVER_OK)) { serial_write("VANTAOS_VIRTIO_NET_MODERN_DRIVER_OK_FAIL\\n"); goto fail; }

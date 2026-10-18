@@ -179,6 +179,21 @@ static int discover_capabilities(const struct pci_device *pci)
 }
 
 
+#ifdef VANTAOS_SELF_TEST
+static void vnet_modern_rx_selftest_handler(net_device_t *device, const uint8_t *frame,
+                                            size_t length, uint16_t type,
+                                            size_t header, void *context)
+{
+    (void)context;
+    if (device != &state.netdev || !frame || type != 0x88B5U ||
+        header > length || length - header < 4U)
+        return;
+    if (frame[header] == 0x56U && frame[header + 1U] == 0x41U &&
+        frame[header + 2U] == 0x4EU && frame[header + 3U] == 0x54U)
+        serial_write("VANTAOS_VIRTIO_NET_MODERN_RX_SELFTEST_OK\n");
+}
+#endif
+
 static void release_queue(vnet_queue_t *q)
 {
     if (!q) return;

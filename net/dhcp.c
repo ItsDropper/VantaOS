@@ -391,7 +391,7 @@ static void dhcp_poll_state(dhcp_state_t* state)
     state->xid = now ^ 0x564E5400U;
     for (uint32_t i = 0; i < 6U; ++i) state->xid = (state->xid * 33U) ^ state->device->mac[i];
     if (!state->xid) state->xid = 1U;
-    (void)send_message(DHCP_REQUEST);
+    (void)send_message(state, DHCP_REQUEST);
 }
 
 

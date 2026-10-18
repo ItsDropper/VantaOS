@@ -55,8 +55,24 @@ typedef struct {
     uint32_t lease_address, lease_started, renew_at, rebind_at, expires_at, next_retry;
 } dhcp_state_t;
 
-static dhcp_state_t state;
+static dhcp_state_t states[NET_DEVICE_MAX];
 static int handler_registered;
+
+static dhcp_state_t* find_state(net_device_t* device, int create)
+{
+    dhcp_state_t* free_state = 0;
+    if (!device) return 0;
+    for (uint32_t i = 0; i < NET_DEVICE_MAX; ++i) {
+        if (states[i].device == device) return &states[i];
+        if (!states[i].device || (!states[i].active && !states[i].lease_valid)) {
+            if (!free_state) free_state = &states[i];
+        }
+    }
+    if (!create || !free_state) return 0;
+    *free_state = (dhcp_state_t){0};
+    free_state->device = device;
+    return free_state;
+}
 
 static uint32_t be32(const uint8_t* p)
 {
@@ -96,9 +112,9 @@ static void option(uint8_t* packet, size_t* length, uint8_t code,
         packet[(*length)++] = value[i];
 }
 
-static int send_message(uint8_t message_type)
+static int send_message(dhcp_state_t* state, uint8_t message_type)
 {
-    if (!state.device || !state.device->link_up) return 0;
+    if (!state->device || !state->device->link_up) return 0;
 
     uint8_t frame[DHCP_ETH_HEADER + DHCP_IPV4_HEADER + DHCP_UDP_HEADER +
                   DHCP_FIXED_SIZE + DHCP_COOKIE_SIZE + DHCP_MAX_OPTIONS];
@@ -108,19 +124,19 @@ static int send_message(uint8_t message_type)
     uint8_t* udp = ip + DHCP_IPV4_HEADER;
     uint8_t* bootp = udp + DHCP_UDP_HEADER;
     for (uint32_t i = 0; i < 6U; ++i) eth[i] = 0xFFU;
-    for (uint32_t i = 0; i < 6U; ++i) eth[6U + i] = state.device->mac[i];
-    uint32_t source_ip = state.renewing ? state.lease_address : 0U;
+    for (uint32_t i = 0; i < 6U; ++i) eth[6U + i] = state->device->mac[i];
+    uint32_t source_ip = state->renewing ? state->lease_address : 0U;
     uint32_t destination_ip = 0xFFFFFFFFU;
-    if (state.renewing == 1U && state.server_ip) {
-        uint32_t mask = state.device->ipv4_netmask;
-        uint32_t next_hop = ((state.server_ip & mask) == (state.lease_address & mask))
-            ? state.server_ip : state.device->ipv4_gateway;
+    if (state->renewing == 1U && state->server_ip) {
+        uint32_t mask = state->device->ipv4_netmask;
+        uint32_t next_hop = ((state->server_ip & mask) == (state->lease_address & mask))
+            ? state->server_ip : state->device->ipv4_gateway;
         uint8_t destination_mac[6];
-        if (next_hop && net_arp_resolve(state.device, next_hop, destination_mac, 1000U)) {
+        if (next_hop && net_arp_resolve(state->device, next_hop, destination_mac, 1000U)) {
             for (uint32_t i = 0; i < 6U; ++i) eth[i] = destination_mac[i];
-            destination_ip = state.server_ip;
+            destination_ip = state->server_ip;
         } else {
-            state.renewing = 2U;
+            state->renewing = 2U;
         }
     }
     put16(eth + 12U, 0x0800U);
@@ -128,7 +144,7 @@ static int send_message(uint8_t message_type)
     for (size_t i = 0; i < DHCP_IPV4_HEADER; ++i) ip[i] = 0;
     ip[0] = 0x45U; ip[1] = 0;
     put16(ip + 2U, 0);
-    put16(ip + 4U, (uint16_t)state.xid);
+    put16(ip + 4U, (uint16_t)state->xid);
     put16(ip + 6U, 0x4000U);
     ip[8] = 64U; ip[9] = 17U;
     put32(ip + 12U, source_ip); put32(ip + 16U, destination_ip);
@@ -138,23 +154,23 @@ static int send_message(uint8_t message_type)
 
     for (size_t i = 0; i < DHCP_FIXED_SIZE; ++i) bootp[i] = 0;
     bootp[0] = 1U; bootp[1] = 1U; bootp[2] = 6U;
-    put32(bootp + DHCP_XID_OFFSET, state.xid);
-    put16(bootp + 10U, state.renewing == 1U ? 0U : 0x8000U); /* Unicast at T1; broadcast for discovery/rebinding. */
-    if (state.renewing) put32(bootp + 12U, state.lease_address);
+    put32(bootp + DHCP_XID_OFFSET, state->xid);
+    put16(bootp + 10U, state->renewing == 1U ? 0U : 0x8000U); /* Unicast at T1; broadcast for discovery/rebinding. */
+    if (state->renewing) put32(bootp + 12U, state->lease_address);
     for (uint32_t i = 0; i < 6U; ++i)
-        bootp[DHCP_CHADDR_OFFSET + i] = state.device->mac[i];
+        bootp[DHCP_CHADDR_OFFSET + i] = state->device->mac[i];
     put32(bootp + DHCP_COOKIE_OFFSET, DHCP_MAGIC);
 
     size_t option_length = DHCP_COOKIE_OFFSET + DHCP_COOKIE_SIZE;
     uint8_t type = message_type;
     option(bootp, &option_length, DHCP_OPT_MESSAGE_TYPE, &type, 1U);
     uint8_t client_id[7] = {1U, 0, 0, 0, 0, 0, 0};
-    for (uint32_t i = 0; i < 6U; ++i) client_id[i + 1U] = state.device->mac[i];
+    for (uint32_t i = 0; i < 6U; ++i) client_id[i + 1U] = state->device->mac[i];
     option(bootp, &option_length, DHCP_OPT_CLIENT_ID, client_id, sizeof(client_id));
-    if (message_type == DHCP_REQUEST && !state.renewing) {
+    if (message_type == DHCP_REQUEST && !state->renewing) {
         uint8_t requested[4], server[4];
-        put32(requested, state.offered_ip);
-        put32(server, state.server_ip);
+        put32(requested, state->offered_ip);
+        put32(server, state->server_ip);
         option(bootp, &option_length, DHCP_OPT_REQUESTED_IP, requested, 4U);
         option(bootp, &option_length, DHCP_OPT_SERVER_ID, server, 4U);
     }
@@ -173,10 +189,10 @@ static int send_message(uint8_t message_type)
     put16(ip + 2U, (uint16_t)ip_length);
     put16(ip + 10U, checksum(ip, DHCP_IPV4_HEADER));
     frame_length += udp_length;
-    return net_device_transmit(state.device, frame, frame_length);
+    return net_device_transmit(state->device, frame, frame_length);
 }
 
-static int parse_options(const uint8_t* packet, size_t length)
+static int parse_options(dhcp_state_t* state, const uint8_t* packet, size_t length)
 {
     size_t at = DHCP_COOKIE_OFFSET + DHCP_COOKIE_SIZE;
     int message_seen = 0;
@@ -191,22 +207,22 @@ static int parse_options(const uint8_t* packet, size_t length)
         switch (code) {
         case DHCP_OPT_MESSAGE_TYPE:
             if (n != 1U) return 0;
-            state.message_type = v[0]; message_seen = 1; break;
+            state->message_type = v[0]; message_seen = 1; break;
         case DHCP_OPT_MASK:
             if (n != 4U) return 0;
-            state.mask = be32(v); break;
+            state->mask = be32(v); break;
         case DHCP_OPT_ROUTER:
             if (n < 4U || (n % 4U) != 0U) return 0;
-            state.gateway = be32(v); break;
+            state->gateway = be32(v); break;
         case DHCP_OPT_DNS:
             if (n < 4U || (n % 4U) != 0U) return 0;
-            state.dns = be32(v); break;
+            state->dns = be32(v); break;
         case DHCP_OPT_SERVER_ID:
             if (n != 4U) return 0;
-            state.server_ip = be32(v); break;
+            state->server_ip = be32(v); break;
         case DHCP_OPT_LEASE:
             if (n != 4U) return 0;
-            state.lease_seconds = be32(v); break;
+            state->lease_seconds = be32(v); break;
         default: break;
         }
         at += n;
@@ -219,38 +235,39 @@ static void receive_dhcp(net_device_t* device, uint32_t source_address,
                          const uint8_t* payload, size_t length, void* context)
 {
     (void)context;
-    if (!state.active || device != state.device || source_port != DHCP_SERVER_PORT ||
+    dhcp_state_t* state = find_state(device, 0);
+    if (!state || !state->active || device != state->device || source_port != DHCP_SERVER_PORT ||
         destination_port != DHCP_CLIENT_PORT || !payload ||
         length < DHCP_COOKIE_OFFSET + DHCP_COOKIE_SIZE + 3U)
         return;
     if (payload[0] != 2U || payload[1] != 1U || payload[2] != 6U ||
-        be32(payload + DHCP_XID_OFFSET) != state.xid ||
+        be32(payload + DHCP_XID_OFFSET) != state->xid ||
         be32(payload + DHCP_COOKIE_OFFSET) != DHCP_MAGIC)
         return;
     for (uint32_t i = 0; i < 6U; ++i)
         if (payload[DHCP_CHADDR_OFFSET + i] != device->mac[i]) return;
 
     uint32_t yiaddr = be32(payload + DHCP_YIADDR_OFFSET);
-    uint32_t expected_server = state.server_ip;
-    state.message_type = 0;
-    if (!parse_options(payload, length)) return;
-    if (state.message_type == DHCP_ACK && expected_server &&
-        state.server_ip != expected_server)
+    uint32_t expected_server = state->server_ip;
+    state->message_type = 0;
+    if (!parse_options(state, payload, length)) return;
+    if (state->message_type == DHCP_ACK && expected_server &&
+        state->server_ip != expected_server)
         return;
-    if (!state.server_ip) state.server_ip = source_address;
-    if (state.message_type == DHCP_NAK) {
-        state.rejected = 1U;
-        return;
-    }
-    if (state.message_type == DHCP_OFFER && yiaddr) {
-        state.offered_ip = yiaddr;
-        state.offered = 1U;
+    if (!state->server_ip) state->server_ip = source_address;
+    if (state->message_type == DHCP_NAK) {
+        state->rejected = 1U;
         return;
     }
-    if (state.message_type == DHCP_ACK && yiaddr == state.offered_ip &&
-        state.offered && state.mask) {
-        state.offered_ip = yiaddr;
-        state.acknowledged = 1U;
+    if (state->message_type == DHCP_OFFER && yiaddr) {
+        state->offered_ip = yiaddr;
+        state->offered = 1U;
+        return;
+    }
+    if (state->message_type == DHCP_ACK && yiaddr == state->offered_ip &&
+        state->offered && state->mask) {
+        state->offered_ip = yiaddr;
+        state->acknowledged = 1U;
     }
 }
 
@@ -266,13 +283,15 @@ int net_dhcp_configure(net_device_t* device, uint32_t timeout_ms,
         handler_registered = 1;
     }
 
-    state = (dhcp_state_t){0};
-    state.device = device;
-    state.active = 1U;
-    state.xid = 0x564E5400U;
+    dhcp_state_t* state = find_state(device, 1);
+    if (!state) return 0;
+    *state = (dhcp_state_t){0};
+    state->device = device;
+    state->active = 1U;
+    state->xid = 0x564E5400U;
     for (uint32_t i = 0; i < 6U; ++i)
-        state.xid = (state.xid * 33U) ^ device->mac[i];
-    if (!state.xid) state.xid = 1U;
+        state->xid = (state->xid * 33U) ^ device->mac[i];
+    if (!state->xid) state->xid = 1U;
 
     uint32_t start = timer_get_ticks();
     uint32_t timeout_ticks = timeout_ms / 10U; /* PIT is initialized at 100 Hz. */
@@ -281,45 +300,52 @@ int net_dhcp_configure(net_device_t* device, uint32_t timeout_ms,
     int attempted = 0;
     while ((uint32_t)(timer_get_ticks() - start) < timeout_ticks) {
         uint32_t now = timer_get_ticks();
-        if (!attempted || (state.offered && !requested) ||
+        if (!attempted || (state->offered && !requested) ||
             (uint32_t)(now - next_retry) >= DHCP_RETRY_TICKS) {
-            uint8_t kind = state.offered ? DHCP_REQUEST : DHCP_DISCOVER;
+            uint8_t kind = state->offered ? DHCP_REQUEST : DHCP_DISCOVER;
             if (kind == DHCP_REQUEST) requested = 1U;
-            (void)send_message(kind);
+            (void)send_message(state, kind);
             attempted = 1;
             next_retry = now;
         }
         (void)net_poll(16U);
-        if (state.rejected) break;
-        if (state.acknowledged) break;
+        if (state->rejected) break;
+        if (state->acknowledged) break;
         __asm__ volatile ("pause");
     }
 
-    state.active = 0U;
+    state->active = 0U;
     int configured = 0;
-    if (state.acknowledged && state.offered && requested && state.mask &&
-        net_device_configure_ipv4(device, state.offered_ip, state.mask,
-                                  state.gateway)) {
-        if (dns_server) *dns_server = state.dns;
-        if (!state.lease_seconds) state.lease_seconds = 3600U;
-        if (lease_seconds) *lease_seconds = state.lease_seconds;
-        state.lease_address = state.offered_ip;
-        state.lease_valid = 1U;
-        state.renewing = 0U;
-        state.lease_started = timer_get_ticks();
-        uint32_t ticks = state.lease_seconds > 21474836U ? 2147483600U : state.lease_seconds * 100U;
+    if (state->acknowledged && state->offered && requested && state->mask &&
+        net_device_configure_ipv4(device, state->offered_ip, state->mask,
+                                  state->gateway)) {
+        if (dns_server) *dns_server = state->dns;
+        if (!state->lease_seconds) state->lease_seconds = 3600U;
+        if (lease_seconds) *lease_seconds = state->lease_seconds;
+        state->lease_address = state->offered_ip;
+        state->lease_valid = 1U;
+        state->renewing = 0U;
+        state->lease_started = timer_get_ticks();
+        uint32_t ticks = state->lease_seconds > 21474836U ? 2147483600U : state->lease_seconds * 100U;
         if (ticks < 300U) ticks = 300U;
-        state.renew_at = state.lease_started + ticks / 2U;
-        state.rebind_at = state.lease_started + (ticks * 7U) / 8U;
-        state.expires_at = state.lease_started + ticks;
+        state->renew_at = state->lease_started + ticks / 2U;
+        state->rebind_at = state->lease_started + (ticks * 7U) / 8U;
+        state->expires_at = state->lease_started + ticks;
         configured = 1;
     } else {
-        state.lease_valid = 0U;
-        state.device = 0;
+        state->lease_valid = 0U;
+        state->device = 0;
     }
     return configured;
 }
 
+
+
+void net_dhcp_poll(void)
+{
+    for (uint32_t i = 0; i < NET_DEVICE_MAX; ++i)
+        if (states[i].device) dhcp_poll_state(&states[i]);
+}
 void net_dhcp_poll(void)
 {
     if (!state.device || !state.lease_valid || !state.device->link_up) return;

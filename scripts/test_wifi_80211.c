@@ -95,7 +95,7 @@ int main(void)
         const uint8_t sta[6] = {0x02, 0x11, 0x22, 0x33, 0x44, 0x55};
         const uint8_t ssid[] = {'t', 'e', 's', 't'};
         const uint8_t rsn[] = {
-            48U, 18U, 1U, 0U, 0U, 15U, 172U, 4U,
+            48U, 20U, 1U, 0U, 0U, 15U, 172U, 4U,
             1U, 0U, 0U, 15U, 172U, 4U,
             1U, 0U, 0U, 15U, 172U, 2U, 0U, 0U
         };

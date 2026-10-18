@@ -42,6 +42,7 @@ typedef struct {
 
 static uint32_t rtl_slot;
 static uint8_t rtl_bound;
+static uint8_t rtl_bulk_in;
 static uint8_t rtl_register_buffer[RTL8188EU_FW_WRITE_CHUNK] __attribute__((aligned(64)));
 static uint8_t rtl_firmware[RTL8188EU_FW_MAX_SIZE + 1U] __attribute__((aligned(64)));
 static uint8_t rtl_firmware_attempted;
@@ -378,6 +379,7 @@ int rtl8188eu_probe(uint32_t slot_id, uint16_t vendor_id, uint16_t device_id,
         return 0;
 
     rtl_slot = slot_id;
+    rtl_bulk_in = endpoints.bulk_in;
     if (!xhci_configure_bulk_endpoint(slot_id, endpoints.bulk_in,
                                       endpoints.bulk_in_packet) ||
         !xhci_configure_bulk_endpoint(slot_id, endpoints.bulk_out,

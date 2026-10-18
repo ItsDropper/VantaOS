@@ -212,7 +212,12 @@ int main(void)
         registers[0x1007] != 0xA7U || !checksum_reported ||
         checksum_reported_too_early)
         return 5;
-    if (!rtl8188eu_start_active_scan() || !scan_request_valid)
+    /*
+     * Firmware-ready is not radio-ready. Since this driver does not yet
+     * perform verified eFuse/PHY/RF initialization and calibration, it must
+     * fail closed rather than transmit a probe on an unknown radio state.
+     */
+    if (rtl8188eu_start_active_scan() || scan_request_valid || tx_seen)
         return 18;
     rtl8188eu_poll();
     net_wifi_scan_result_t results[2];
@@ -226,8 +231,9 @@ int main(void)
     if (memcmp(results[0].bssid, expected_bssid, 6U) != 0 ||
         memcmp(results[1].bssid, expected_second_bssid, 6U) != 0) return 9;
     uint8_t management_frame[24] = {0x80U};
-    if (!rtl8188eu_transmit_frame(management_frame, sizeof(management_frame)) ||
-        !tx_seen || !tx_descriptor_valid)
+    /* Raw TX must also remain disabled until radio initialization succeeds. */
+    if (rtl8188eu_transmit_frame(management_frame, sizeof(management_frame)) ||
+        tx_seen || tx_descriptor_valid)
         return 13;
     if (rtl8188eu_transmit_frame(management_frame, 23U))
         return 14;

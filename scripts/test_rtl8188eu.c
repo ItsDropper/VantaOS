@@ -191,6 +191,26 @@ static int test_efuse_logical_map_decoder(void)
         logical[0xD8U] != 0xA8U || logical[0xDCU] != 0xACU ||
         logical[0xDDU] != 0xADU || logical[0xD5U] != 0xFFU)
         return 0;
+    /*
+     * 0x5F is a regular section-5 header with all words disabled,
+     * not an extended header. The following 0x00 header must still map
+     * its eight bytes into logical section 0.
+     */
+    memset(physical, 0xFF, sizeof(physical));
+    physical[0] = 0x5FU;
+    physical[1] = 0x00U;
+    for (size_t i = 0U; i < 8U; ++i)
+        physical[2U + i] = (uint8_t)(0x11U + i);
+    if (!rtl8188eu_decode_efuse_map(physical, sizeof(physical),
+                                    logical, sizeof(logical)))
+        return 0;
+    for (size_t i = 0U; i < 8U; ++i)
+        if (logical[i] != (uint8_t)(0x11U + i))
+            return 0;
+    if (logical[16U] != 0xFFU)
+        return 0;
+
+    memset(physical, 0xFF, sizeof(physical));
     physical[0] = 0x4FU;
     if (rtl8188eu_decode_efuse_map(physical, 1U, logical, sizeof(logical)))
         return 0;

@@ -142,7 +142,7 @@ jobs:
 
       - name: Test IPv6 RA, SLAAC, DAD, and ICMPv6
         run: |
-          gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_ipv6.c net/ipv6.c -o /tmp/vantaos-ipv6-test
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_ipv6.c net/ipv6.c net/udp.c -o /tmp/vantaos-ipv6-test
           /tmp/vantaos-ipv6-test
 
       - name: Test TCP client state machine

@@ -6,7 +6,7 @@ The driver binds the supported USB IDs, configures bulk endpoints, loads the ext
 
 The control/data path now has these implementations:
 - RF path-A serial register read/write helpers and channel-register readback code for the default 2.4 GHz channels 1-13. The code is gated and not hardware-validated.
-- Firmware-offloaded LLT initialization and eFuse-map acquisition, physical-to-logical section decoding, factory MAC/crystal/thermal/board-field validation, and a host regression test for extended eFuse sections.
+- Firmware-offloaded eFuse-map acquisition attempt, physical-to-logical section decoding, factory MAC/crystal/thermal/board-field validation, and a host regression test for extended eFuse sections. The physical acquisition path has not been validated on hardware.
 - A channel-hopping scan state machine with probe requests and bounded per-channel poll dwell.
 - Live Open System Authentication and Association Request/Response state handling, including response status checks, AID validation, retry limits, and poll-driven timeouts.
 - WPA2-PSK/CCMP EAPOL message handling connected to received 802.11 data frames and the real USB TX path. The kernel CSPRNG is required; no weak fallback is used.

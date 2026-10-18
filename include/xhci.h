@@ -19,6 +19,10 @@ int xhci_disable_device(uint32_t slot_id);
 int xhci_set_ep0_packet(uint32_t slot_id, uint16_t packet_size);
 int xhci_control_transfer(uint32_t slot_id, const uint8_t setup[8],
                           void* data, uint16_t length);
+int xhci_configure_bulk_endpoint(uint32_t slot_id, uint8_t endpoint_address,
+                                 uint16_t packet_size);
+int xhci_bulk_transfer(uint32_t slot_id, uint8_t endpoint_address,
+                       void* buffer, uint32_t length, uint32_t* actual_length);
 int xhci_configure_interrupt_in(uint32_t slot_id, uint8_t endpoint_address,
                                 uint16_t packet_size, uint8_t interval);
 int xhci_start_interrupt_in(uint32_t slot_id);

@@ -29,17 +29,17 @@ int main(void)
     uint8_t output[32];
     uint8_t expected[32];
 
-    if (!from_hex(expected_one, expected, sizeof(expected)) ||
+    if (!from_hex(expected_one, expected, 20U) ||
         !wifi_pbkdf2_sha1(password, sizeof(password) - 1U,
                           salt, sizeof(salt) - 1U, 1U,
-                          output, sizeof(output)) ||
+                          output, 20U) ||
         memcmp(output, expected, 20U) != 0)
         return 1;
 
-    if (!from_hex(expected_two, expected, sizeof(expected)) ||
+    if (!from_hex(expected_two, expected, 20U) ||
         !wifi_pbkdf2_sha1(password, sizeof(password) - 1U,
                           salt, sizeof(salt) - 1U, 2U,
-                          output, sizeof(output)) ||
+                          output, 20U) ||
         memcmp(output, expected, 20U) != 0)
         return 2;
 

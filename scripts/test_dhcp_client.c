@@ -108,7 +108,7 @@ static int run_case(int mode,int expected)
            device.ipv4_netmask!=0xFFFFFF00U||device.ipv4_gateway!=0xC0000201U||
            dns!=0x01010101U||lease!=3600U)return 0;
     }else if(device.ipv4_configured||dns!=0xDEADBEEFU)return 0;
-    return tx_length!=0U&&!udp_handler&&!udp_context&&!udp_port;
+    return tx_length!=0U&&udp_handler!=0&&udp_context==0&&udp_port==68U;
 }
 
 int main(void)

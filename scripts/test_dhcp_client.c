@@ -23,7 +23,6 @@ static int ack_sent;
 
 uint32_t timer_get_ticks(void) { return ticks++; }
 
-static void put16(uint8_t *p, uint16_t v) { p[0]=(uint8_t)(v>>8);p[1]=(uint8_t)v; }
 static void put32(uint8_t *p, uint32_t v) { p[0]=(uint8_t)(v>>24);p[1]=(uint8_t)(v>>16);p[2]=(uint8_t)(v>>8);p[3]=(uint8_t)v; }
 static uint32_t get32(const uint8_t *p) { return ((uint32_t)p[0]<<24)|((uint32_t)p[1]<<16)|((uint32_t)p[2]<<8)|p[3]; }
 
@@ -43,15 +42,22 @@ int net_device_transmit(net_device_t *d,const void *frame,size_t length)
 {
     if(d!=&device||!frame||length>sizeof(tx_frame))return 0;
     const uint8_t *p=(const uint8_t*)frame;
-    for(size_t i=0;i<length;i++)tx_frame[i]=p[i];tx_length=length;
+    for (size_t i = 0; i < length; i++) {
+        tx_frame[i] = p[i];
+    }
+    tx_length = length;
     if(length>BOOTP_OFFSET+OPTIONS_OFFSET+2U)
         last_message_type=p[BOOTP_OFFSET+OPTIONS_OFFSET+2U];
     return 1;
 }
 int net_device_configure_ipv4(net_device_t *d,uint32_t address,uint32_t mask,uint32_t gateway)
 {
-    if(d!=&device)return 0;d->ipv4_address=address;d->ipv4_netmask=mask;
-    d->ipv4_gateway=gateway;d->ipv4_configured=1;return 1;
+    if (d != &device) return 0;
+    d->ipv4_address = address;
+    d->ipv4_netmask = mask;
+    d->ipv4_gateway = gateway;
+    d->ipv4_configured = 1;
+    return 1;
 }
 int net_device_clear_ipv4(net_device_t *d)
 { if(d!=&device)return 0;d->ipv4_address=d->ipv4_netmask=d->ipv4_gateway=d->ipv4_dns=0;d->ipv4_configured=0;return 1; }

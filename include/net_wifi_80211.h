@@ -50,4 +50,23 @@ int net_wifi_80211_parse_assoc_response(const uint8_t *frame, size_t length,
                                          uint16_t *status_code,
                                          uint16_t *association_id);
 
+
+/*
+ * Convert Ethernet II payloads to/from RFC 1042 LLC/SNAP. The 802.11 header
+ * and security encapsulation are deliberately handled by the radio/data-path
+ * caller; these helpers only translate the link-layer payload.
+ */
+int net_wifi_80211_snap_encapsulate(const uint8_t *ethernet_frame,
+                                    size_t ethernet_length,
+                                    uint8_t *llc_payload,
+                                    size_t llc_capacity,
+                                    size_t *llc_length);
+int net_wifi_80211_snap_decapsulate(const uint8_t destination[6],
+                                    const uint8_t source[6],
+                                    const uint8_t *llc_payload,
+                                    size_t llc_length,
+                                    uint8_t *ethernet_frame,
+                                    size_t ethernet_capacity,
+                                    size_t *ethernet_length);
+
 #endif

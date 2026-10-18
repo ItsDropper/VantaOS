@@ -4,6 +4,9 @@
 #include "serial.h"
 #include "fat32.h"
 #include "net_wifi_80211.h"
+#include "wifi_wpa2.h"
+#include "wifi_ccmp.h"
+#include "crypto_rng.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -71,6 +74,41 @@ static uint8_t rtl_scan_active;
 static uint8_t rtl_scan_channel;
 static uint16_t rtl_scan_dwell_polls;
 static uint8_t rtl_current_channel;
+
+typedef enum {
+    RTL_STATION_IDLE = 0,
+    RTL_STATION_WAIT_AUTH,
+    RTL_STATION_WAIT_ASSOC,
+    RTL_STATION_WPA2_HANDSHAKE,
+    RTL_STATION_AUTHENTICATED,
+    RTL_STATION_FAILED
+} rtl_station_state_t;
+
+static rtl_station_state_t rtl_station_state;
+static uint8_t rtl_station_ssid[NET_WIFI_SSID_MAX];
+static size_t rtl_station_ssid_length;
+static uint8_t rtl_station_passphrase[NET_WIFI_PASSPHRASE_MAX];
+static size_t rtl_station_passphrase_length;
+static uint8_t rtl_station_bssid[6];
+static uint16_t rtl_station_sequence;
+static uint16_t rtl_station_aid;
+static uint16_t rtl_station_timeout;
+static uint8_t rtl_station_retries;
+static uint8_t rtl_station_rsn_ie[22] = {
+    48U, 20U, 1U, 0U,
+    0U, 15U, 172U, 4U, /* group CCMP-128 */
+    1U, 0U, 0U, 15U, 172U, 4U, /* pairwise CCMP-128 */
+    1U, 0U, 0U, 15U, 172U, 2U, /* AKM PSK */
+    0U, 0U /* capabilities: no PMF requirement */
+};
+static wifi_wpa2_supplicant_t rtl_supplicant;
+static uint8_t rtl_pairwise_key[16];
+static uint8_t rtl_group_key[WIFI_WPA2_GTK_MAX];
+static size_t rtl_group_key_length;
+static uint8_t rtl_group_key_id;
+static uint8_t rtl_keys_installed;
+static void rtl_station_receive_frame(const uint8_t *frame, size_t length);
+static void rtl_station_poll(void);
 static uint8_t rtl_rx_armed;
 static uint8_t rtl_rx_buffer[4096] __attribute__((aligned(64)));
 #define RTL8188EU_TX_DESC_SIZE 32U

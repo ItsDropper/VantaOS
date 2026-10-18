@@ -41,6 +41,7 @@ typedef struct {
 } rtl8188eu_endpoints_t;
 
 static uint32_t rtl_slot;
+static uint32_t rtl_port;
 static uint8_t rtl_bound;
 static uint8_t rtl_bulk_in;
 static uint8_t rtl_register_buffer[RTL8188EU_FW_WRITE_CHUNK] __attribute__((aligned(64)));
@@ -364,7 +365,7 @@ static int rtl_reg_read32(uint16_t address, uint32_t *value)
     return 1;
 }
 
-int rtl8188eu_probe(uint32_t slot_id, uint16_t vendor_id, uint16_t device_id,
+int rtl8188eu_probe(uint32_t slot_id, uint32_t port, uint16_t vendor_id, uint16_t device_id,
                     const uint8_t *configuration, size_t length)
 {
     rtl8188eu_endpoints_t endpoints;
@@ -379,6 +380,7 @@ int rtl8188eu_probe(uint32_t slot_id, uint16_t vendor_id, uint16_t device_id,
         return 0;
 
     rtl_slot = slot_id;
+    rtl_port = port;
     rtl_bulk_in = endpoints.bulk_in;
     if (!xhci_configure_bulk_endpoint(slot_id, endpoints.bulk_in,
                                       endpoints.bulk_in_packet) ||
@@ -386,6 +388,7 @@ int rtl8188eu_probe(uint32_t slot_id, uint16_t vendor_id, uint16_t device_id,
                                       endpoints.bulk_out_packet)) {
         (void)xhci_disable_device(slot_id);
         rtl_slot = 0;
+        rtl_port = 0;
         return 0;
     }
 
@@ -474,6 +477,25 @@ void rtl8188eu_poll(void)
     }
     if (!rtl_rx_armed)
         rtl_rx_armed = (uint8_t)xhci_start_bulk_in(rtl_slot, rtl_bulk_in);
+}
+
+int rtl8188eu_port_disconnected(uint32_t port)
+{
+    if (!rtl_bound || port == 0U || port != rtl_port)
+        return 0;
+
+    uint32_t old_slot = rtl_slot;
+    rtl_bound = 0U;
+    rtl_slot = 0U;
+    rtl_port = 0U;
+    rtl_bulk_in = 0U;
+    rtl_rx_armed = 0U;
+    rtl_firmware_attempted = 0U;
+    rtl_firmware_ready = 0U;
+    rtl_passive_result_count = 0U;
+    if (old_slot != 0U)
+        (void)xhci_disable_device(old_slot);
+    return 1;
 }
 
 size_t rtl8188eu_get_passive_results(net_wifi_scan_result_t *results,

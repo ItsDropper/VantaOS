@@ -159,6 +159,40 @@ int main(void)
             return 18;
     }
 
-    puts("802.11 scan/auth/association frame tests passed.");
+    {
+        uint8_t ethernet[64] = {0};
+        uint8_t llc[64] = {0}, decoded[64] = {0};
+        const uint8_t destination[6] = {0x02U, 0x10U, 0x20U, 0x30U, 0x40U, 0x50U};
+        const uint8_t source[6] = {0x02U, 0x60U, 0x70U, 0x80U, 0x90U, 0xA0U};
+        size_t llc_length = 0U, decoded_length = 0U;
+        for (size_t i = 0U; i < 6U; ++i) {
+            ethernet[i] = destination[i];
+            ethernet[6U + i] = source[i];
+        }
+        ethernet[12] = 0x08U; ethernet[13] = 0x00U;
+        ethernet[14] = 0x45U; ethernet[15] = 0x00U;
+        ethernet[16] = 0xAAU; ethernet[17] = 0x55U;
+        if (!net_wifi_80211_snap_encapsulate(ethernet, 18U, llc,
+                sizeof(llc), &llc_length) || llc_length != 12U ||
+            memcmp(llc, "\\xAA\\xAA\\x03\\x00\\x00\\x00\\x08\\x00", 8U) != 0)
+            return 19;
+        if (!net_wifi_80211_snap_decapsulate(destination, source, llc,
+                llc_length, decoded, sizeof(decoded), &decoded_length) ||
+            decoded_length != 18U || memcmp(decoded, ethernet, 18U) != 0)
+            return 20;
+        if (net_wifi_80211_snap_encapsulate(ethernet, 13U, llc,
+                sizeof(llc), &llc_length) ||
+            net_wifi_80211_snap_encapsulate(ethernet, 18U, llc, 11U,
+                &llc_length) ||
+            net_wifi_80211_snap_decapsulate(destination, source, llc, 7U,
+                decoded, sizeof(decoded), &decoded_length))
+            return 21;
+        llc[3] = 1U;
+        if (net_wifi_80211_snap_decapsulate(destination, source, llc,
+                llc_length, decoded, sizeof(decoded), &decoded_length))
+            return 22;
+    }
+
+    puts("802.11 management, LLC/SNAP conversion, and bounds tests passed.");
     return 0;
 }

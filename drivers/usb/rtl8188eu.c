@@ -796,6 +796,169 @@ int rtl8188eu_transmit_frame(const uint8_t *frame, size_t length)
     return actual == RTL8188EU_TX_DESC_SIZE + length;
 }
 
+static int rtl_ccmp_build_aad(const uint8_t *frame, size_t length,
+                                  uint8_t aad[22])
+{
+    if (!frame || !aad || length < 24U ||
+        (frame[0] & 0x80U) != 0U || /* QoS is not implemented yet. */
+        (frame[1] & 0x04U) != 0U || /* fragmented MPDUs are not supported. */
+        (frame[22] & 0x0FU) != 0U)
+        return 0;
+    aad[0] = (uint8_t)(frame[0] & 0x8FU);
+    aad[1] = (uint8_t)(frame[1] & 0xC7U);
+    for (size_t i = 0U; i < 18U; ++i) aad[2U + i] = frame[4U + i];
+    aad[20] = (uint8_t)(frame[22] & 0x0FU);
+    aad[21] = 0U;
+    return 1;
+}
+
+static void rtl_network_link_up(void)
+{
+    uint8_t mac[6];
+    if (rtl_station_state != RTL_STATION_AUTHENTICATED || !rtl_keys_installed ||
+        !rtl8188eu_get_mac_address(mac))
+        return;
+    for (size_t i = 0U; i < sizeof(rtl_netdev.mac); ++i)
+        rtl_netdev.mac[i] = mac[i];
+    if (!rtl_netdev_registered) {
+        if (!net_device_register || !net_device_register(&rtl_netdev))
+            return;
+        rtl_netdev_registered = 1U;
+    }
+    rtl_netdev.link_up = 1U;
+    if (net_device_set_link)
+        (void)net_device_set_link(&rtl_netdev, 1);
+}
+
+static void rtl_network_link_down(void)
+{
+    rtl_netdev.link_up = 0U;
+    if (rtl_netdev_registered && net_device_set_link)
+        (void)net_device_set_link(&rtl_netdev, 0);
+}
+
+static int rtl_netdev_transmit(net_device_t *device, const uint8_t *ethernet,
+                               size_t ethernet_length)
+{
+    uint8_t frame[24U + WIFI_CCMP_HEADER_SIZE + WIFI_CCMP_MAX_PAYLOAD +
+                  WIFI_CCMP_TAG_SIZE];
+    uint8_t payload[WIFI_CCMP_MAX_PAYLOAD], aad[22], nonce[WIFI_CCMP_NONCE_SIZE];
+    uint8_t tag[WIFI_CCMP_TAG_SIZE], local_mac[6];
+    const uint8_t *key;
+    wifi_ccmp_replay_t *pn_state;
+    uint8_t key_id;
+    uint64_t pn;
+    size_t payload_length = 0U, frame_length;
+    int multicast;
+    if (device != &rtl_netdev || !ethernet || ethernet_length < 14U ||
+        ethernet_length > NET_FRAME_MAX_SIZE ||
+        !rtl_netdev_registered || !rtl_netdev.link_up ||
+        rtl_station_state != RTL_STATION_AUTHENTICATED || !rtl_keys_installed ||
+        !rtl8188eu_get_mac_address(local_mac))
+        return 0;
+
+    multicast = (ethernet[0] & 1U) != 0U;
+    if (multicast) {
+        if (rtl_group_key_length != WIFI_CCMP_KEY_SIZE)
+            return 0;
+        key = rtl_group_key;
+        key_id = rtl_group_key_id;
+        pn_state = &rtl_group_pn;
+    } else {
+        key = rtl_pairwise_key;
+        key_id = 0U;
+        pn_state = &rtl_pairwise_pn;
+    }
+    if (!net_wifi_80211_snap_encapsulate(ethernet, ethernet_length, payload,
+            sizeof(payload), &payload_length) ||
+        payload_length > WIFI_CCMP_MAX_PAYLOAD ||
+        !wifi_ccmp_next_tx_pn(pn_state, &pn))
+        return 0;
+
+    for (size_t i = 0U; i < 24U; ++i) frame[i] = 0U;
+    frame[0] = 0x08U; /* Data */
+    frame[1] = 0x41U; /* To-DS + Protected */
+    for (size_t i = 0U; i < 6U; ++i) {
+        frame[4U + i] = rtl_station_bssid[i];
+        frame[10U + i] = local_mac[i];
+        frame[16U + i] = ethernet[i]; /* destination */
+    }
+    rtl_station_sequence = (uint16_t)((rtl_station_sequence + 1U) & 0x0FFFU);
+    frame[22] = (uint8_t)(rtl_station_sequence << 4);
+    frame[23] = (uint8_t)(rtl_station_sequence >> 4);
+    if (!rtl_ccmp_build_aad(frame, 24U, aad) ||
+        !wifi_ccmp_header_encode(frame + 24U, pn, key_id))
+        return 0;
+    wifi_ccmp_build_nonce(nonce, 0U, local_mac, pn);
+    if (!wifi_ccmp_encrypt(key, nonce, aad, sizeof(aad), payload,
+            payload_length, tag))
+        return 0;
+    for (size_t i = 0U; i < payload_length; ++i)
+        frame[32U + i] = payload[i];
+    for (size_t i = 0U; i < sizeof(tag); ++i)
+        frame[32U + payload_length + i] = tag[i];
+    frame_length = 32U + payload_length + sizeof(tag);
+    return rtl8188eu_transmit_frame(frame, frame_length);
+}
+
+static void rtl_process_protected_data(uint8_t *frame, size_t length)
+{
+    uint8_t local_mac[6], aad[22], nonce[WIFI_CCMP_NONCE_SIZE];
+    uint8_t ethernet[NET_FRAME_MAX_SIZE], key_id;
+    uint64_t pn;
+    size_t payload_length, ethernet_length = 0U;
+    const uint8_t *key;
+    wifi_ccmp_replay_t *replay;
+    if (!frame || !rtl_keys_installed || !rtl_netdev_registered ||
+        !net_receive_frame || length < 24U + WIFI_CCMP_HEADER_SIZE +
+                                      WIFI_CCMP_TAG_SIZE ||
+        (frame[0] & 0x0CU) != 0x08U || (frame[0] & 0x80U) != 0U ||
+        (frame[1] & 0x03U) != 0x02U || /* From-DS only */
+        (frame[1] & 0x40U) == 0U ||   /* Protected */
+        (frame[1] & 0x04U) != 0U || (frame[22] & 0x0FU) != 0U ||
+        !rtl8188eu_get_mac_address(local_mac))
+        return;
+
+    /* AP transmitter must match the associated BSSID. Unicast is for this
+       station; multicast is accepted only under the group key. */
+    uint8_t bssid_difference = 0U, local_difference = 0U;
+    for (size_t i = 0U; i < 6U; ++i) {
+        bssid_difference |= (uint8_t)(frame[10U + i] ^ rtl_station_bssid[i]);
+        local_difference |= (uint8_t)(frame[4U + i] ^ local_mac[i]);
+    }
+    if (bssid_difference != 0U ||
+        (local_difference != 0U && (frame[4] & 1U) == 0U))
+        return;
+
+    if (!wifi_ccmp_header_decode(frame + 24U, &pn, &key_id))
+        return;
+    if (key_id == 0U && (frame[4] & 1U) == 0U) {
+        key = rtl_pairwise_key;
+        replay = &rtl_pairwise_pn;
+    } else if (rtl_group_key_length == WIFI_CCMP_KEY_SIZE &&
+               key_id == rtl_group_key_id && (frame[4] & 1U) != 0U) {
+        key = rtl_group_key;
+        replay = &rtl_group_pn;
+    } else {
+        return;
+    }
+    payload_length = length - 24U - WIFI_CCMP_HEADER_SIZE - WIFI_CCMP_TAG_SIZE;
+    if (payload_length == 0U || payload_length > WIFI_CCMP_MAX_PAYLOAD ||
+        !rtl_ccmp_build_aad(frame, length, aad))
+        return;
+    wifi_ccmp_build_nonce(nonce, 0U, frame + 10U, pn);
+    if (!wifi_ccmp_decrypt(key, nonce, aad, sizeof(aad), frame + 32U,
+            payload_length, frame + 32U + payload_length) ||
+        !wifi_ccmp_accept_rx_pn(replay, pn))
+        return;
+
+    if (!net_wifi_80211_snap_decapsulate(frame + 4U, frame + 16U,
+            frame + 32U, payload_length, ethernet, sizeof(ethernet),
+            &ethernet_length))
+        return;
+    (void)net_receive_frame(&rtl_netdev, ethernet, ethernet_length);
+}
+
 static int rtl_station_send_eapol(const uint8_t *bssid,
                                    const uint8_t *payload, size_t length,
                                    void *context)

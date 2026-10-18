@@ -377,6 +377,18 @@ int wifi_wpa2_receive_eapol(wifi_wpa2_supplicant_t *s,
     return result;
 }
 
+int wifi_wpa2_retry(wifi_wpa2_supplicant_t *s)
+{
+    if (!s || !s->ops.send_eapol || !s->have_replay || !s->have_ptk)
+        return 0;
+    if (s->state == WIFI_WPA2_WAIT_M3)
+        return send_key_message(s, 0x010aU, s->snonce, s->rsn_ie,
+                                s->rsn_ie_length);
+    if (s->state == WIFI_WPA2_AUTHENTICATED)
+        return send_key_message(s, 0x030aU, 0, 0, 0U);
+    return 0;
+}
+
 void wifi_wpa2_reset(wifi_wpa2_supplicant_t *s)
 {
     if (!s) return;

@@ -45,6 +45,24 @@ static int mac_equal(const uint8_t *a, const uint8_t *b)
     return different == 0U;
 }
 
+static int rsn_ie_is_wpa2_psk_ccmp(const uint8_t *ie, size_t length)
+{
+    /* Accept only a minimal RSN IE selecting CCMP-128 + PSK, without PMF.
+       The supplicant does not implement SAE, TKIP, or management-frame
+       protection, so silently accepting those suites would be unsafe. */
+    static const uint8_t ccmp[4] = {0x00U, 0x0fU, 0xacU, 0x04U};
+    static const uint8_t psk[4] = {0x00U, 0x0fU, 0xacU, 0x02U};
+    if (!ie || length != 22U || ie[0] != 48U || ie[1] != 20U ||
+        ie[2] != 1U || ie[3] != 0U)
+        return 0;
+    for (size_t i = 0U; i < 4U; ++i)
+        if (ie[4U + i] != ccmp[i] || ie[10U + i] != ccmp[i] ||
+            ie[16U + i] != psk[i])
+            return 0;
+    return ie[8] == 1U && ie[9] == 0U && ie[14] == 1U &&
+           ie[15] == 0U && ie[20] == 0U && ie[21] == 0U;
+}
+
 static int replay_greater(const uint8_t a[8], const uint8_t b[8])
 {
     for (size_t i = 0U; i < 8U; ++i) {
@@ -137,8 +155,8 @@ int wifi_wpa2_begin(wifi_wpa2_supplicant_t *s, const wifi_wpa2_ops_t *ops,
         !ops->install_ccmp_keys || !ssid || ssid_length == 0U ||
         ssid_length > 32U || !passphrase || passphrase_length < 8U ||
         passphrase_length > 63U || !local_mac || !bssid || !rsn_ie ||
-        rsn_ie_length < 2U || rsn_ie_length > WIFI_WPA2_RSN_IE_MAX ||
-        rsn_ie[0] != 48U || rsn_ie[1] != rsn_ie_length - 2U ||
+        rsn_ie_length > WIFI_WPA2_RSN_IE_MAX ||
+        !rsn_ie_is_wpa2_psk_ccmp(rsn_ie, rsn_ie_length) ||
         (local_mac[0] & 1U) != 0U || (bssid[0] & 1U) != 0U)
         return 0;
 

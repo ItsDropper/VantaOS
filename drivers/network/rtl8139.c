@@ -124,19 +124,6 @@ static int rtl8139_transmit(net_device_t *device, const uint8_t *frame, size_t l
     uint64_t flags = spinlock_lock_irqsave(&state.tx_lock);
     uint32_t slot = state.tx_next % RTL8139_TX_SLOTS;
     uint16_t tsd = (uint16_t)(state.io_base + RTL8139_REG_TSD0 + slot * 4U);
-    int completed = 0;
-    for (uint32_t spin = 0; spin < RTL8139_WAIT_LIMIT; ++spin) {
-        if (io_in32(tsd) & RTL8139_TX_TOK) {
-            completed = 1;
-            break;
-        }
-        __asm__ volatile ("pause");
-    }
-    if (!completed) {
-        spinlock_unlock_irqrestore(&state.tx_lock, flags);
-        return 0;
-    }
-
     uint8_t *buffer = (uint8_t *)state.tx_pages[slot].virtual_address;
     for (size_t i = 0; i < length; ++i)
         buffer[i] = frame[i];
@@ -146,7 +133,7 @@ static int rtl8139_transmit(net_device_t *device, const uint8_t *frame, size_t l
     io_out32(tsd, (uint32_t)length);
     state.tx_next = (slot + 1U) % RTL8139_TX_SLOTS;
 
-    completed = 0;
+    int completed = 0;
     for (uint32_t spin = 0; spin < RTL8139_WAIT_LIMIT; ++spin) {
         __asm__ volatile ("" ::: "memory");
         if (io_in32(tsd) & RTL8139_TX_TOK) {

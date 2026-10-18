@@ -214,7 +214,7 @@ static int usb_enumerate_port(uint32_t port)
     /* Bind supported RTL8188EU USB IDs before boot-HID interface matching. */
     if (vendor_id == 0x0BDAU &&
         (product_id == 0x8179U || product_id == 0x0179U)) {
-        if (rtl8188eu_probe(slot, vendor_id, product_id, configuration_buffer,
+        if (rtl8188eu_probe(slot, port, vendor_id, product_id, configuration_buffer,
                             configuration_length)) {
             serial_write("VANTAOS_USB_RTL8188EU_BOUND\n");
             success = 1;
@@ -293,6 +293,7 @@ void usb_poll(void)
         uint32_t port_status = xhci_port_status(port);
         xhci_ack_port_changes(port);
         if ((port_status & 1U) == 0U) {
+            (void)rtl8188eu_port_disconnected(port);
             for (uint32_t slot = 1; slot <= USB_MAX_XHCI_SLOTS; ++slot) {
                 if (input_slots[slot].active && input_slots[slot].port == port) {
                     usb_detach_slot(slot);

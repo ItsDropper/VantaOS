@@ -512,7 +512,7 @@ typedef struct {
 } rtl8188eu_efuse_info_t;
 
 static rtl8188eu_efuse_info_t rtl_efuse_info;
-static uint8_t rtl_efuse_attempted;
+static uint8_t rtl_efuse_attempts;
 static uint8_t rtl_efuse_ready;
 
 /*
@@ -1576,15 +1576,16 @@ void rtl8188eu_poll(void)
     if (!rtl_firmware_ready)
         return;
 
-    if (!rtl_efuse_attempted) {
-        rtl_efuse_attempted = 1U;
+    if (!rtl_efuse_ready && rtl_efuse_attempts < 3U) {
+        ++rtl_efuse_attempts;
         rtl_efuse_ready = (uint8_t)rtl_load_efuse_identity();
         serial_write(rtl_efuse_ready
             ? "VANTAOS_RTL8188EU_EFUSE_READY\\n"
-            : "VANTAOS_RTL8188EU_EFUSE_FAILED_TX_BLOCKED\\n");
+            : "VANTAOS_RTL8188EU_EFUSE_ATTEMPT_FAILED_TX_BLOCKED\\n");
     }
 
-    if (!rtl_radio_preflight_attempted) {
+    /* Never latch a failed preflight while its prerequisites are absent. */
+    if (rtl_efuse_ready && !rtl_radio_preflight_attempted) {
         rtl_radio_preflight_attempted = 1U;
         if (rtl_radio_preflight())
             serial_write("VANTAOS_RTL8188EU_RF_PREFLIGHT_OK_TX_STILL_BLOCKED\\n");
@@ -1633,7 +1634,7 @@ int rtl8188eu_port_disconnected(uint32_t port)
     rtl_radio_ready = 0U;
     rtl_radio_preflight_attempted = 0U;
     rtl_radio_preflight_done = 0U;
-    rtl_efuse_attempted = 0U;
+    rtl_efuse_attempts = 0U;
     rtl_efuse_ready = 0U;
     rtl_efuse_info.valid = 0U;
     rtl_scan_active = 0U;

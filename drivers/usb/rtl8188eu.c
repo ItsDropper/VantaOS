@@ -17,6 +17,7 @@
 #define USB_TRANSFER_BULK 2U
 #define RTL8188EU_REG_SYS_CFG 0x00F0U
 #define RTL8188EU_REG_SYS_FUNC 0x0002U
+#define RTL8188EU_REG_RSV_CTRL 0x001CU
 #define RTL8188EU_REG_MCU_FW_DL 0x0080U
 #define RTL8188EU_REG_FW_START 0x1000U
 #define RTL8188EU_FW_HEADER_SIZE 32U
@@ -287,7 +288,48 @@ static int rtl_download_firmware(void)
         page++;
     }
 
-    return 0; /* Firmware completion is implemented separately; fail closed. */
+    uint16_t control16;
+    uint16_t system_function;
+    uint8_t reserved;
+
+    if (!rtl_reg_read16(RTL8188EU_REG_MCU_FW_DL, &control16) ||
+        !rtl_reg_write16(RTL8188EU_REG_MCU_FW_DL,
+                         (uint16_t)(control16 & ~RTL8188EU_FWDL_ENABLE)))
+        goto abort_download;
+
+    for (uint32_t retry = 0; retry < 1000000U; ++retry) {
+        if (!rtl_reg_read32(RTL8188EU_REG_MCU_FW_DL, &value32))
+            goto abort_download;
+        if (value32 & RTL8188EU_FWDL_CHECKSUM)
+            break;
+        if (retry == 999999U)
+            goto abort_download;
+    }
+
+    value32 |= RTL8188EU_FWDL_READY;
+    value32 &= ~RTL8188EU_FW_INIT_READY;
+    if (!rtl_reg_write32(RTL8188EU_REG_MCU_FW_DL, value32) ||
+        !rtl_reg_read8(RTL8188EU_REG_RSV_CTRL + 1U, &reserved) ||
+        !rtl_reg_write8(RTL8188EU_REG_RSV_CTRL + 1U,
+                        (uint8_t)(reserved & ~1U)) ||
+        !rtl_reg_read16(RTL8188EU_REG_SYS_FUNC, &system_function) ||
+        !rtl_reg_write16(RTL8188EU_REG_SYS_FUNC,
+                         (uint16_t)(system_function & ~0x0004U)) ||
+        !rtl_reg_read8(RTL8188EU_REG_RSV_CTRL + 1U, &reserved) ||
+        !rtl_reg_write8(RTL8188EU_REG_RSV_CTRL + 1U,
+                        (uint8_t)(reserved | 1U)) ||
+        !rtl_reg_write16(RTL8188EU_REG_SYS_FUNC,
+                         (uint16_t)(system_function | 0x0004U)))
+        goto abort_download;
+
+    for (uint32_t retry = 0; retry < 1000000U; ++retry) {
+        if (!rtl_reg_read32(RTL8188EU_REG_MCU_FW_DL, &value32))
+            goto abort_download;
+        if (value32 & RTL8188EU_FW_INIT_READY) {
+            rtl_firmware_ready = 1U;
+            return 1;
+        }
+    }
 
 abort_download:
     if (rtl_reg_read8(RTL8188EU_REG_MCU_FW_DL, &value8))

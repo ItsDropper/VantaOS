@@ -11,6 +11,8 @@ static uint8_t configured_in, configured_out;
 static uint16_t packet_in, packet_out;
 static uint8_t registers[65536];
 static uint8_t firmware_read_seen;
+static uint8_t checksum_reported;
+static uint8_t checksum_reported_too_early;
 static uint8_t beacon_delivered;
 
 int xhci_controller_online(void) { return 1; }
@@ -31,9 +33,19 @@ int xhci_control_transfer(uint32_t slot, const uint8_t setup[8],
         if (data)
             memcpy(data, registers + address, length);
     } else if (data) {
+        if (address == 0x80U && length >= 1U &&
+            (registers[0x80] & 0x04U) == 0U &&
+            (data[0] & 0x04U) != 0U)
+            checksum_reported_too_early = 1U;
         memcpy(registers + address, data, length);
         if (address == 0x1000U && length == 8U)
             firmware_read_seen = (registers[address] == 0xA0U);
+        /* Hardware sets checksum-report only after download is disabled. */
+        if (address == 0x80U && length == 2U &&
+            (registers[0x80] & 0x01U) == 0U && firmware_read_seen) {
+            registers[0x80] |= 0x04U;
+            checksum_reported = 1U;
+        }
         if (address == 0x0002U && length == 2U &&
             (registers[2] & 0x04U))
             registers[0x80] |= 0x40U;
@@ -144,7 +156,8 @@ int main(void)
 
     rtl8188eu_poll();
     if (!firmware_read_seen || registers[0x1000] != 0xA0U ||
-        registers[0x1007] != 0xA7U)
+        registers[0x1007] != 0xA7U || !checksum_reported ||
+        checksum_reported_too_early)
         return 5;
     rtl8188eu_poll();
     net_wifi_scan_result_t results[2];

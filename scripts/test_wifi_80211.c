@@ -90,6 +90,75 @@ int main(void)
         result.security != NET_WIFI_SECURITY_UNKNOWN)
         return 8;
 
-    puts("802.11 scan-frame parser tests passed.");
+    {
+        const uint8_t ap[6] = {0x02, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE};
+        const uint8_t sta[6] = {0x02, 0x11, 0x22, 0x33, 0x44, 0x55};
+        const uint8_t ssid[] = {'t', 'e', 's', 't'};
+        const uint8_t rsn[] = {
+            48U, 18U, 1U, 0U, 0U, 15U, 172U, 4U,
+            1U, 0U, 0U, 15U, 172U, 4U,
+            1U, 0U, 0U, 15U, 172U, 2U, 0U, 0U
+        };
+        size_t frame_length = 0U;
+        uint16_t status = 0xFFFFU, aid = 0xFFFFU;
+        memset(frame, 0xA5, sizeof(frame));
+        if (!net_wifi_80211_build_open_auth_request(frame, sizeof(frame),
+                ap, sta, ap, 7U, &frame_length) || frame_length != 30U ||
+            frame[0] != 0xB0U || memcmp(frame + 4U, ap, 6U) != 0 ||
+            memcmp(frame + 10U, sta, 6U) != 0 ||
+            memcmp(frame + 16U, ap, 6U) != 0 ||
+            frame[24] != 0U || frame[26] != 1U)
+            return 9;
+        if (net_wifi_80211_build_open_auth_request(frame, 29U, ap, sta, ap,
+                0U, &frame_length))
+            return 10;
+        if (!net_wifi_80211_build_assoc_request(frame, sizeof(frame), ap, sta,
+                ap, 8U, ssid, sizeof(ssid), rsn, sizeof(rsn), &frame_length) ||
+            frame[0] != 0U || memcmp(frame + 4U, ap, 6U) != 0 ||
+            frame[28] != 0U || frame[29] != sizeof(ssid) ||
+            memcmp(frame + 30U, ssid, sizeof(ssid)) != 0)
+            return 11;
+        if (net_wifi_80211_build_assoc_request(frame, 32U, ap, sta, ap, 0U,
+                ssid, sizeof(ssid), rsn, sizeof(rsn), &frame_length))
+            return 12;
+
+        memset(frame, 0, sizeof(frame));
+        frame[0] = 0xB0U;
+        memcpy(frame + 4U, sta, 6U);
+        memcpy(frame + 10U, ap, 6U);
+        memcpy(frame + 16U, ap, 6U);
+        put_le16(frame + 24U, 0U);
+        put_le16(frame + 26U, 2U);
+        put_le16(frame + 28U, 0U);
+        if (!net_wifi_80211_parse_auth_response(frame, 30U, ap, &status) ||
+            status != 0U)
+            return 13;
+        frame[28] = 1U;
+        if (!net_wifi_80211_parse_auth_response(frame, 30U, ap, &status) ||
+            status != 1U)
+            return 14;
+        frame[10] ^= 1U;
+        if (net_wifi_80211_parse_auth_response(frame, 30U, ap, &status))
+            return 15;
+
+        memset(frame, 0, sizeof(frame));
+        frame[0] = 0x10U;
+        memcpy(frame + 4U, sta, 6U);
+        memcpy(frame + 10U, ap, 6U);
+        memcpy(frame + 16U, ap, 6U);
+        put_le16(frame + 26U, 0U);
+        put_le16(frame + 28U, 0xC123U);
+        if (!net_wifi_80211_parse_assoc_response(frame, 30U, ap, &status, &aid) ||
+            status != 0U || aid != 0x0123U)
+            return 16;
+        put_le16(frame + 26U, 17U);
+        if (!net_wifi_80211_parse_assoc_response(frame, 30U, ap, &status, &aid) ||
+            status != 17U || aid != 0U)
+            return 17;
+        if (net_wifi_80211_parse_assoc_response(frame, 29U, ap, &status, &aid))
+            return 18;
+    }
+
+    puts("802.11 scan/auth/association frame tests passed.");
     return 0;
 }

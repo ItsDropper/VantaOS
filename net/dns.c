@@ -1,5 +1,6 @@
 #include "net_dns.h"
 #include "net_ipv6.h"
+#include "spinlock.h"
 #include "timer.h"
 #include <stddef.h>
 #include <stdint.h>
@@ -30,6 +31,8 @@ typedef struct {
 static dns6_query_state_t query6_state;
 static dns6_cache_entry_t cache6[DNS_CACHE_CAPACITY];
 static uint32_t cache6_next;
+static spinlock_t cache6_lock = SPINLOCK_INITIALIZER;
+static uint32_t query6_busy;
 static dns_cache_entry_t cache[DNS_CACHE_CAPACITY];
 static uint32_t cache_next;
 static uint16_t read_be16(const uint8_t* p){return (uint16_t)(((uint16_t)p[0]<<8)|p[1]);}
@@ -180,6 +183,7 @@ static int cache6_lookup(net_device_t* device, const uint8_t server[16],
     char normalized[254];
     normalize_host(host, normalized);
     uint32_t now = timer_get_ticks();
+    spinlock_lock(&cache6_lock);
     for (uint32_t i = 0; i < DNS_CACHE_CAPACITY; ++i) {
         dns6_cache_entry_t* entry = &cache6[i];
         if (!entry->valid) continue;
@@ -197,9 +201,11 @@ static int cache6_lookup(net_device_t* device, const uint8_t server[16],
         if (!normalized[j] && !entry->host[j]) {
             for (uint32_t k = 0; k < 16U; ++k)
                 out->bytes[k] = entry->address[k];
+            spinlock_unlock(&cache6_lock);
             return 1;
         }
     }
+    spinlock_unlock(&cache6_lock);
     return 0;
 }
 
@@ -214,6 +220,7 @@ static void cache6_store(net_device_t* device, const uint8_t server[16],
 
     char normalized[254];
     normalize_host(host, normalized);
+    spinlock_lock(&cache6_lock);
     dns6_cache_entry_t* entry = &cache6[cache6_next++ % DNS_CACHE_CAPACITY];
     entry->device = device;
     for (uint32_t i = 0; i < 16U; ++i) {
@@ -222,13 +229,14 @@ static void cache6_store(net_device_t* device, const uint8_t server[16],
     }
     uint32_t ticks = ttl > 21474836U ? 2147483600U : ttl * 100U;
     entry->expires = timer_get_ticks() + ticks;
-    entry->valid = 1U;
     size_t i = 0U;
     while (normalized[i] && i < 253U) {
         entry->host[i] = normalized[i];
         ++i;
     }
     entry->host[i] = 0;
+    entry->valid = 1U;
+    spinlock_unlock(&cache6_lock);
 }
 
 static void receive_dns6(net_device_t* device, const uint8_t source[16],
@@ -336,6 +344,11 @@ int net_dns_resolve_aaaa(net_device_t* device, const char* host,
     if (!net_ipv6_get_dns_server(device, &server)) return 0;
     if (cache6_lookup(device, server.bytes, host, out)) return 1;
 
+    uint32_t expected = 0U;
+    if (!__atomic_compare_exchange_n(&query6_busy, &expected, 1U, 0,
+                                     __ATOMIC_ACQUIRE, __ATOMIC_RELAXED))
+        return 0;
+
     query6_state = (dns6_query_state_t){0};
     query6_state.device = device;
     for (uint32_t i = 0; i < 16U; ++i)
@@ -351,6 +364,7 @@ int net_dns_resolve_aaaa(net_device_t* device, const char* host,
                      query6_state.id, 28U) ||
         !net_udp6_handler_register(DNS_CLIENT_PORT, receive_dns6, 0)) {
         query6_state.active = 0U;
+        __atomic_store_n(&query6_busy, 0U, __ATOMIC_RELEASE);
         return 0;
     }
     query6_state.question_length =
@@ -385,6 +399,7 @@ int net_dns_resolve_aaaa(net_device_t* device, const char* host,
                      query6_state.ttl);
     }
     query6_state.device = 0;
+    __atomic_store_n(&query6_busy, 0U, __ATOMIC_RELEASE);
     return ok;
 }
 

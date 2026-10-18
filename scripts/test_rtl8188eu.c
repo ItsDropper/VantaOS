@@ -61,23 +61,40 @@ int xhci_take_bulk_in(uint32_t slot, uint8_t ep, void *buffer,
                       uint32_t capacity, uint32_t *actual)
 {
     (void)slot; (void)ep;
-    if (beacon_delivered || !buffer || !actual || capacity < 69U)
+    /* Two 45-byte frames, each preceded by a 24-byte descriptor and
+     * aligned to the next 8-byte aggregate boundary. */
+    if (beacon_delivered || !buffer || !actual || capacity < 141U)
         return 0;
     uint8_t *packet = buffer;
-    memset(packet, 0, 69U);
-    packet[0] = 45U; /* RX descriptor reports a 45-byte 802.11 frame. */
+    memset(packet, 0, 141U);
+    packet[0] = 45U;
     uint8_t *frame = packet + 24U;
-    frame[0] = 0x80U; /* Beacon management frame. */
+    frame[0] = 0x80U;
     for (uint32_t i = 4U; i < 10U; ++i) frame[i] = 0xFFU;
     const uint8_t bssid[6] = {0x02, 0x11, 0x22, 0x33, 0x44, 0x55};
     memcpy(frame + 10U, bssid, sizeof(bssid));
     memcpy(frame + 16U, bssid, sizeof(bssid));
-    frame[32] = 100U; /* Beacon interval, after 24-byte header + timestamp. */
-    frame[34] = 1U;   /* Capability: ESS. */
+    frame[32] = 100U;
+    frame[34] = 1U;
     frame[36] = 0U; frame[37] = 4U;
     memcpy(frame + 38U, "TEST", 4U);
     frame[42] = 3U; frame[43] = 1U; frame[44] = 6U;
-    *actual = 69U;
+
+    uint8_t *second_descriptor = packet + 72U;
+    second_descriptor[0] = 45U;
+    frame = second_descriptor + 24U;
+    frame[0] = 0x80U;
+    for (uint32_t i = 4U; i < 10U; ++i) frame[i] = 0xFFU;
+    const uint8_t second_bssid[6] = {0x02, 0x21, 0x32, 0x43, 0x54, 0x65};
+    memcpy(frame + 10U, second_bssid, sizeof(second_bssid));
+    memcpy(frame + 16U, second_bssid, sizeof(second_bssid));
+    frame[32] = 100U;
+    frame[34] = 1U;
+    frame[36] = 0U; frame[37] = 4U;
+    memcpy(frame + 38U, "TEST", 4U);
+    frame[42] = 3U; frame[43] = 1U; frame[44] = 11U;
+
+    *actual = 141U;
     beacon_delivered = 1U;
     return 1;
 }
@@ -162,12 +179,14 @@ int main(void)
     rtl8188eu_poll();
     net_wifi_scan_result_t results[2];
     size_t result_count = rtl8188eu_get_passive_results(results, 2U);
-    if (result_count != 1U) return 6;
+    if (result_count != 2U) return 6;
     if (results[0].ssid_length != 4U ||
         memcmp(results[0].ssid, "TEST", 4U) != 0) return 7;
-    if (results[0].channel != 6U) return 8;
+    if (results[0].channel != 6U || results[1].channel != 11U) return 8;
     const uint8_t expected_bssid[6] = {0x02, 0x11, 0x22, 0x33, 0x44, 0x55};
-    if (memcmp(results[0].bssid, expected_bssid, 6U) != 0) return 9;
+    const uint8_t expected_second_bssid[6] = {0x02, 0x21, 0x32, 0x43, 0x54, 0x65};
+    if (memcmp(results[0].bssid, expected_bssid, 6U) != 0 ||
+        memcmp(results[1].bssid, expected_second_bssid, 6U) != 0) return 9;
     if (!rtl8188eu_port_disconnected(1U) || rtl8188eu_port_is_bound(1U))
         return 10;
     return 0;

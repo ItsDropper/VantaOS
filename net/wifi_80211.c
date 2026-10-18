@@ -45,35 +45,36 @@ static int cipher_supported(const uint8_t *suite)
 }
 
 /* Structural RSN parser. RSN capability bits 6/7 are MFPR/MFPC. */
-static net_wifi_security_t parse_rsn(const uint8_t *p, size_t length)
+static int parse_rsn(const uint8_t *p, size_t length,
+                      net_wifi_security_t *security)
 {
     size_t offset = 0U;
     uint16_t pairwise_count, akm_count, capabilities = 0U;
     int pairwise_ok = 0, psk = 0, sae = 0;
 
-    if (!p || length < 2U || read_le16(p) != 1U)
-        return NET_WIFI_SECURITY_UNKNOWN;
+    if (!p || !security || length < 2U || read_le16(p) != 1U)
+        return 0;
     offset = 2U;
     if (length - offset < 4U || !cipher_supported(p + offset))
-        return NET_WIFI_SECURITY_UNKNOWN;
+        return 0;
     offset += 4U;
     if (length - offset < 2U)
-        return NET_WIFI_SECURITY_UNKNOWN;
+        return 0;
     pairwise_count = read_le16(p + offset);
     offset += 2U;
     if (pairwise_count == 0U || pairwise_count > (length - offset) / 4U)
-        return NET_WIFI_SECURITY_UNKNOWN;
+        return 0;
     for (uint16_t i = 0U; i < pairwise_count; ++i) {
         if (cipher_supported(p + offset))
             pairwise_ok = 1;
         offset += 4U;
     }
     if (!pairwise_ok || length - offset < 2U)
-        return NET_WIFI_SECURITY_UNKNOWN;
+        return 0;
     akm_count = read_le16(p + offset);
     offset += 2U;
     if (akm_count == 0U || akm_count > (length - offset) / 4U)
-        return NET_WIFI_SECURITY_UNKNOWN;
+        return 0;
     for (uint16_t i = 0U; i < akm_count; ++i) {
         if (suite_is(p + offset, 2U))
             psk = 1;
@@ -81,13 +82,44 @@ static net_wifi_security_t parse_rsn(const uint8_t *p, size_t length)
             sae = 1;
         offset += 4U;
     }
-    if (length - offset >= 2U)
+    if (length - offset == 1U)
+        return 0;
+    if (length - offset >= 2U) {
         capabilities = read_le16(p + offset);
+        offset += 2U;
+    }
+    /* Parse optional PMKID count/list and group-management cipher exactly;
+     * unknown optional suites are not claimed as a supported security mode. */
+    if (length != offset) {
+        uint16_t pmkid_count;
+        if (length - offset < 2U)
+            return 0;
+        pmkid_count = read_le16(p + offset);
+        offset += 2U;
+        if (pmkid_count > (length - offset) / 16U)
+            return 0;
+        offset += (size_t)pmkid_count * 16U;
+        if (length - offset == 4U) {
+            const uint8_t *mgmt = p + offset;
+            if (mgmt[0] != 0x00U || mgmt[1] != 0x0FU ||
+                mgmt[2] != 0xACU ||
+                (mgmt[3] != 6U && mgmt[3] != 11U &&
+                 mgmt[3] != 12U && mgmt[3] != 13U))
+                return 0;
+            offset += 4U;
+        }
+        if (offset != length)
+            return 0;
+    }
+
+    *security = NET_WIFI_SECURITY_UNKNOWN;
     if (sae && (capabilities & 0x00C0U) == 0x00C0U)
-        return NET_WIFI_SECURITY_WPA3_SAE;
-    if (psk)
-        return NET_WIFI_SECURITY_WPA2_PSK;
-    return NET_WIFI_SECURITY_UNKNOWN;
+        *security = NET_WIFI_SECURITY_WPA3_SAE;
+    else if (psk)
+        *security = NET_WIFI_SECURITY_WPA2_PSK;
+    /* A structurally valid RSN element with an unknown AKM remains a visible
+     * scan result, but is never mislabeled as WPA2/WPA3. */
+    return 1;
 }
 
 int net_wifi_80211_parse_scan_frame(const uint8_t *frame, size_t length,
@@ -147,8 +179,7 @@ int net_wifi_80211_parse_scan_frame(const uint8_t *frame, size_t length,
             if (rsn_seen)
                 return 0;
             rsn_seen = 1;
-            security = parse_rsn(value, ie_length);
-            if (security == NET_WIFI_SECURITY_UNKNOWN)
+            if (!parse_rsn(value, ie_length, &security))
                 return 0;
         }
         offset += ie_length;

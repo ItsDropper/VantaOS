@@ -479,6 +479,11 @@ void rtl8188eu_poll(void)
         rtl_rx_armed = (uint8_t)xhci_start_bulk_in(rtl_slot, rtl_bulk_in);
 }
 
+int rtl8188eu_port_is_bound(uint32_t port)
+{
+    return rtl_bound && port != 0U && rtl_port == port;
+}
+
 int rtl8188eu_port_disconnected(uint32_t port)
 {
     if (!rtl_bound || port == 0U || port != rtl_port)

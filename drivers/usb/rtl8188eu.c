@@ -22,7 +22,7 @@
 #define RTL8188EU_REG_MCU_FW_DL 0x0080U
 #define RTL8188EU_REG_FW_START 0x1000U
 #define RTL8188EU_FW_HEADER_SIZE 32U
-#define RTL8188EU_FW_MAX_SIZE 65536U
+#define RTL8188EU_FW_MAX_SIZE 32768U /* Eight 4-KiB pages, selected by 3 page bits. */
 #define RTL8188EU_FW_PAGE_SIZE 4096U
 #define RTL8188EU_FW_WRITE_CHUNK 196U
 #define RTL8188EU_FWDL_ENABLE 0x01U
@@ -44,12 +44,17 @@ static uint32_t rtl_slot;
 static uint32_t rtl_port;
 static uint8_t rtl_bound;
 static uint8_t rtl_bulk_in;
+static uint8_t rtl_bulk_out;
 static uint8_t rtl_register_buffer[RTL8188EU_FW_WRITE_CHUNK] __attribute__((aligned(64)));
 static uint8_t rtl_firmware[RTL8188EU_FW_MAX_SIZE + 1U] __attribute__((aligned(64)));
 static uint8_t rtl_firmware_attempted;
 static uint8_t rtl_firmware_ready;
 static uint8_t rtl_rx_armed;
 static uint8_t rtl_rx_buffer[4096] __attribute__((aligned(64)));
+#define RTL8188EU_TX_DESC_SIZE 32U
+#define RTL8188EU_TX_FRAME_MAX 2304U
+static uint8_t rtl_tx_buffer[RTL8188EU_TX_DESC_SIZE + RTL8188EU_TX_FRAME_MAX]
+    __attribute__((aligned(64)));
 static net_wifi_scan_result_t rtl_passive_results[NET_WIFI_MAX_SCAN_RESULTS];
 static size_t rtl_passive_result_count;
 static int rtl_reg_read16(uint16_t address, uint16_t *value);
@@ -115,8 +120,10 @@ static int rtl_find_endpoints(const uint8_t *configuration, size_t length,
              * the control pipe and cannot be selected as a bulk endpoint. */
             if ((address & 0x70U) != 0U || (address & 0x0FU) == 0U ||
                 (attributes & 0x03U) != USB_TRANSFER_BULK ||
-                (raw_packet & 0xF800U) != 0U || packet == 0U)
-                continue;
+                (raw_packet & 0xF800U) != 0U || packet == 0U) {
+                /* Reject malformed endpoint descriptors; never retry this offset. */
+                return 0;
+            }
 
             if ((address & 0x80U) != 0U && !candidate.bulk_in) {
                 candidate.bulk_in = address;
@@ -275,18 +282,24 @@ static int rtl_download_firmware(void)
             return 0;
     }
 
+    /*
+     * Enable MCU download and clear the stale checksum-report state before
+     * writing any payload. FWDL_CHKSUM is a device-reported status bit; writing
+     * it as if it were a command can make software mistake an unverified image
+     * for a completed download.
+     */
     if (!rtl_reg_read8(RTL8188EU_REG_MCU_FW_DL, &value8) ||
         !rtl_reg_write8(RTL8188EU_REG_MCU_FW_DL,
                         (uint8_t)(value8 | RTL8188EU_FWDL_ENABLE)) ||
         !rtl_reg_read32(RTL8188EU_REG_MCU_FW_DL, &value32) ||
-        !rtl_reg_write32(RTL8188EU_REG_MCU_FW_DL, value32 & ~(1U << 19)) ||
-        !rtl_reg_read8(RTL8188EU_REG_MCU_FW_DL, &value8) ||
-        !rtl_reg_write8(RTL8188EU_REG_MCU_FW_DL,
-                        (uint8_t)(value8 | RTL8188EU_FWDL_CHECKSUM)))
+        !rtl_reg_write32(RTL8188EU_REG_MCU_FW_DL, value32 & ~(1U << 19)))
         return 0;
 
     uint32_t offset = 0U;
     uint8_t page = 0U;
+    /* MCUFWDL page selector has three bits; never wrap into page zero. */
+    if (size > 8U * RTL8188EU_FW_PAGE_SIZE)
+        goto abort_download;
     while (offset < size) {
         uint32_t page_remaining = RTL8188EU_FW_PAGE_SIZE -
                                   (offset % RTL8188EU_FW_PAGE_SIZE);
@@ -397,6 +410,7 @@ int rtl8188eu_probe(uint32_t slot_id, uint32_t port, uint16_t vendor_id, uint16_
     rtl_slot = slot_id;
     rtl_port = port;
     rtl_bulk_in = endpoints.bulk_in;
+    rtl_bulk_out = endpoints.bulk_out;
     if (!xhci_configure_bulk_endpoint(slot_id, endpoints.bulk_in,
                                       endpoints.bulk_in_packet) ||
         !xhci_configure_bulk_endpoint(slot_id, endpoints.bulk_out,
@@ -446,21 +460,107 @@ static void rtl_cache_beacon(const uint8_t *frame, size_t length)
 
 static void rtl_process_rx_packet(const uint8_t *packet, size_t length)
 {
-    /* RTL8188E RX descriptor: packet length, driver-info size and shift. */
-    if (!packet || length < 24U)
+    /*
+     * USB bulk-IN may return an aggregate of RX descriptors and 802.11
+     * frames, not exactly one packet. Each descriptor is 24 bytes; the next
+     * packet starts at the next 8-byte boundary after the current frame.
+     * Validate every offset against the actual transfer length before
+     * inspecting a frame, and stop at the first malformed descriptor.
+     */
+    size_t cursor = 0U;
+    if (!packet)
         return;
-    uint32_t descriptor = (uint32_t)packet[0] |
-                          ((uint32_t)packet[1] << 8) |
-                          ((uint32_t)packet[2] << 16) |
-                          ((uint32_t)packet[3] << 24);
-    uint32_t frame_length = descriptor & 0x3FFFU;
-    uint32_t driver_info = ((descriptor >> 16) & 0x0FU) * 8U;
-    uint32_t shift = (descriptor >> 24) & 0x03U;
-    uint32_t frame_offset = 24U + driver_info + shift;
-    if ((descriptor & 0xC000U) != 0U ||
-        frame_offset > length || frame_length > length - frame_offset)
-        return;
-    rtl_cache_beacon(packet + frame_offset, frame_length);
+
+    while (length - cursor >= 24U) {
+        const uint8_t *rx = packet + cursor;
+        uint32_t descriptor = (uint32_t)rx[0] |
+                              ((uint32_t)rx[1] << 8) |
+                              ((uint32_t)rx[2] << 16) |
+                              ((uint32_t)rx[3] << 24);
+        uint32_t frame_length = descriptor & 0x3FFFU;
+        uint32_t driver_info = ((descriptor >> 16) & 0x0FU) * 8U;
+        uint32_t shift = (descriptor >> 24) & 0x03U;
+        size_t frame_offset = 24U + driver_info + shift;
+
+        /* All-zero tail padding is not a valid RX descriptor. */
+        if (descriptor == 0U)
+            break;
+        if ((descriptor & 0xC000U) != 0U || frame_length == 0U ||
+            frame_offset > length - cursor ||
+            frame_length > length - cursor - frame_offset)
+            break;
+
+        rtl_cache_beacon(rx + frame_offset, frame_length);
+
+        size_t packet_end = cursor + frame_offset + frame_length;
+        if (packet_end >= length)
+            break;
+        /* RX packet boundaries are padded to an 8-byte alignment. */
+        size_t next = (packet_end + 7U) & ~(size_t)7U;
+        if (next <= cursor || next > length)
+            break;
+        cursor = next;
+    }
+}
+
+/*
+ * USB TX descriptors for the RTL8188E family are 32 bytes. The host supplies
+ * a complete 802.11 MPDU without FCS; the MAC appends the FCS. Use the
+ * management queue for management frames and best-effort for data frames.
+ *
+ * The caller remains responsible for radio/channel state, sequence numbers,
+ * association and encryption. This routine deliberately does not claim those
+ * higher-level operations are implemented.
+ */
+static void rtl_put_le16(uint8_t *p, uint16_t value)
+{
+    p[0] = (uint8_t)value;
+    p[1] = (uint8_t)(value >> 8);
+}
+
+static void rtl_put_le32(uint8_t *p, uint32_t value)
+{
+    p[0] = (uint8_t)value;
+    p[1] = (uint8_t)(value >> 8);
+    p[2] = (uint8_t)(value >> 16);
+    p[3] = (uint8_t)(value >> 24);
+}
+
+int rtl8188eu_transmit_frame(const uint8_t *frame, size_t length)
+{
+    uint32_t actual = 0U;
+    uint8_t *descriptor = rtl_tx_buffer;
+    uint8_t frame_type;
+
+    if (!rtl_bound || !rtl_firmware_ready || rtl_bulk_out == 0U || !frame ||
+        length < 24U || length > RTL8188EU_TX_FRAME_MAX)
+        return 0;
+
+    /* Management/control/data parsing is deliberately conservative. */
+    frame_type = (uint8_t)(frame[0] & 0x0CU);
+    if (frame_type != 0x00U && frame_type != 0x08U)
+        return 0;
+
+    for (size_t i = 0U; i < sizeof(rtl_tx_buffer); ++i)
+        rtl_tx_buffer[i] = 0U;
+
+    rtl_put_le16(descriptor, (uint16_t)length);
+    descriptor[2] = (uint8_t)RTL8188EU_TX_DESC_SIZE;
+    descriptor[3] = 0x0CU; /* First and last segment. */
+    /* TXDW1: management queue (0x12) or best-effort data queue (0x03). */
+    rtl_put_le32(descriptor + 4U,
+                 (uint32_t)((frame_type == 0x00U ? 0x12U : 0x03U) << 8));
+    /* TXDW4: driver-selected legacy rate; TXDW5 rate zero is 1 Mbps CCK. */
+    rtl_put_le32(descriptor + 16U, 0x00000100U);
+    for (size_t i = 0U; i < length; ++i)
+        rtl_tx_buffer[RTL8188EU_TX_DESC_SIZE + i] = frame[i];
+
+    if (!xhci_bulk_transfer(rtl_slot, rtl_bulk_out,
+                            rtl_tx_buffer,
+                            (uint32_t)(RTL8188EU_TX_DESC_SIZE + length),
+                            &actual))
+        return 0;
+    return actual == RTL8188EU_TX_DESC_SIZE + length;
 }
 
 void rtl8188eu_poll(void)
@@ -509,6 +609,7 @@ int rtl8188eu_port_disconnected(uint32_t port)
     rtl_slot = 0U;
     rtl_port = 0U;
     rtl_bulk_in = 0U;
+    rtl_bulk_out = 0U;
     rtl_rx_armed = 0U;
     rtl_firmware_attempted = 0U;
     rtl_firmware_ready = 0U;

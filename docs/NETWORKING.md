@@ -29,6 +29,10 @@ Architecture-independent protocol code lives in `net/`; PCI drivers live in `dri
 
 A successful DHCP lease alone does not prove Internet access. DNS, gateway routing, upstream policy, and the selected network driver must all work. For static setups, `net config <index> <ip> <netmask> <gateway>` configures IPv4, then `net dns-server 1.1.1.1 [interface-index]` sets a DNS resolver (choose a resolver reachable from that network). DNS settings are per-interface and are not automatically encrypted.
 
+## Experimental USB Wi-Fi status
+
+The open RTL8188EU work in PR [#143](https://github.com/ItsDropper/VantaOS/pull/143) is **not an operational network interface**. It currently covers USB descriptor matching, bounded firmware provisioning/loading, bulk-IN RX aggregate parsing for scan-frame candidates, a low-level USB TX descriptor path, bounded PBKDF2-HMAC-SHA1 and AES-CCM primitives, and host-side tests. It does not yet perform the chipset's complete MAC/baseband/RF/eFuse initialization, active channel scanning, authentication/association, the WPA2 EAPOL four-way handshake, CCMP packet-number/replay/key management, or conversion between authenticated 802.11 data and Ethernet frames. It is not registered as a `net_device_t`, so DHCP/DNS/TCP cannot use it. No physical adapter validation has been recorded. Do not use the Wi-Fi API's generic state tracking as evidence of radio connectivity; the existing Ethernet interfaces remain the supported path.
+
 ## Protocol and resource contracts
 
 - Ethernet-II supports one 802.1Q/802.1ad VLAN tag on receive. Outbound VLAN tagging is not implemented.

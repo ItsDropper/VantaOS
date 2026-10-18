@@ -1,11 +1,42 @@
 # RTL8188EU bring-up status
 
-The experimental RTL8188EU USB driver currently identifies supported USB IDs, validates the configuration descriptor's declared extent and endpoint-address fields, parses bulk endpoints only from alternate setting zero, probes the Realtek register interface, and attempts a bounded firmware download from `/SYSTEM/RTL8188EU.BIN` after FAT32 is mounted. The supplied file must be the matching RTL8188EU firmware image with its 32-byte header intact. Firmware is not bundled in this repository.
+The experimental RTL8188EU USB driver currently identifies supported USB IDs, validates the configuration descriptor's declared extent and endpoint-address fields, parses bulk endpoints only from alternate setting zero, probes the Realtek register interface, and attempts a bounded firmware download from `/SYSTEM/RTL8188EU.BIN` after FAT32 is mounted. Firmware download is limited to the eight 4-KiB pages addressable by the chip's page selector, and checksum completion is treated as a device-reported status rather than a software-set success bit. The supplied file must be the matching RTL8188EU firmware image with its 32-byte header intact. Firmware is not bundled in this repository.
 
-This is not a working Wi-Fi network device yet. MAC/PHY/RF setup and calibration, RX/TX descriptors and queues, 802.11 scanning and association, WPA2 key negotiation and CCMP, and the network-device/IP bridge remain incomplete. CI descriptor tests do not prove hardware functionality. Physical validation requires a supported adapter and access point.
+This is not a working Wi-Fi network device yet. A chipset-independent WPA2-PSK/CCMP supplicant state machine now derives PMK/PTK material, generates EAPOL message 2, verifies message 3 MIC/replay/ANonce, unwraps and validates a GTK KDE, requests atomic key installation, and emits message 4. Its transport, cryptographic-randomness, and key-install callbacks are not connected to this RTL8188EU driver. MAC/PHY/RF setup and calibration, active channel scanning, authentication/association, CCMP packet-number/replay handling in the 802.11 data path, and the authenticated 802.11-to-Ethernet network-device/IP bridge remain incomplete. Host tests validate only the supplicant's initial handshake path and message-2 MIC; they do not prove a real access-point handshake or Internet connectivity. Physical validation requires a supported adapter and access point.
 
 ## Validation status
 
 The host regression test covers unsupported IDs, truncated/malformed configurations, reserved endpoint-address bits, endpoint binding, mocked firmware upload/ready signaling, passive beacon parsing, and disconnect cleanup. These are software-only tests against mocks; they do not validate USB timing, radio initialization, RF calibration, packet exchange, or Internet connectivity on physical hardware.
 
 The branch is still a bring-up effort, not a complete or production-ready Wi-Fi driver. In particular, do not report the adapter as connected merely because USB binding or firmware upload succeeds.
+
+
+## Firmware-download safeguards
+
+- The firmware image must include the Realtek 32-byte header and match the exact RTL8188EU revision.
+- The loader rejects images larger than the currently supported eight-page download window instead of wrapping the page selector.
+- The download sequence waits for the hardware checksum-report status after disabling download mode; software does not set that status bit to manufacture success.
+- The host mock models the checksum-report transition only after download is disabled, so regression tests catch the previous false-success behavior.
+
+These safeguards improve firmware bring-up correctness; they do not complete the radio driver. No supported production connection path should be exposed until MAC/PHY/RF calibration, TX and RX handling, active channel scan, association, WPA2-PSK/CCMP, and network-device integration are implemented and tested.
+
+## Supplying firmware to the boot image
+
+The firmware image is intentionally not vendored here. Obtain a matching RTL8188EU firmware image under its upstream redistribution terms, then build the FAT32 disk image with the path explicitly supplied:
+
+```sh
+RTL8188EU_FIRMWARE=/path/to/rtl8188eufw.bin ./build.sh
+```
+
+The build script checks that the file exists and is within the current size bounds, then installs it as `/SYSTEM/RTL8188EU.BIN`. Without this variable, the build continues but reports that firmware is absent. This only provisions the file; it does not imply the driver has completed radio initialization or supports an authenticated network connection.
+## USB transmit primitive
+
+The driver now exposes `rtl8188eu_transmit_frame()` for a complete 802.11 management or data MPDU (without FCS). It builds the 32-byte RTL8188E USB TX descriptor, chooses the management or best-effort queue, submits through the discovered bulk-OUT endpoint, and requires the full transfer length to complete. Host tests validate the descriptor fields and ensure a too-short frame is rejected.
+
+This is a low-level transport primitive only. It does not configure the MAC/PHY/RF, set a channel, authenticate or associate, negotiate keys, encrypt/decrypt CCMP, or bridge frames into `net_device_t`. A successful mocked transfer is not evidence that a physical adapter can transmit over the air. The driver must not be described as end-to-end functional until those missing pieces and real-hardware tests pass.
+
+## Experimental WPA2 crypto primitives
+
+The branch now contains bounded PBKDF2-HMAC-SHA1 PMK derivation and an AES-CCM primitive with host known-answer tests. The CCMP host test checks successful encrypt/decrypt, MIC tampering, ciphertext tampering, AAD tampering, and zeroing of the output buffer after authentication failure. These tests exercise the primitive's failure behavior, not 802.11 CCMP nonce/AAD construction or key/replay management. These are prerequisites only. They are not wired into an EAPOL four-way handshake or the RTL8188EU RX/TX path, and do not establish that CCMP nonce/AAD construction, replay protection, key installation, or packet exchange works on hardware. Do not advertise WPA2 connectivity on the basis of these unit tests.
+
+The AES implementation is newly written and has not undergone an independent security audit. Treat it as experimental; it is not a substitute for a reviewed cryptographic implementation.

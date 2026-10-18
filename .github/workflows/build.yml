@@ -14,9 +14,16 @@ on:
 permissions:
   contents: read
 
+# Keep only the newest validation run per PR/ref; prevent a stuck QEMU test
+# from occupying a hosted runner indefinitely.
+concurrency:
+  group: vantaos-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -154,6 +161,24 @@ jobs:
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_wifi_api.c net/wifi.c -o /tmp/vantaos-wifi-api-test
           /tmp/vantaos-wifi-api-test
+
+      - name: Test Wi-Fi PBKDF2-HMAC-SHA1 known-answer vectors
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_wifi_crypto.c net/wifi_crypto.c -o /tmp/vantaos-wifi-crypto-test
+          /tmp/vantaos-wifi-crypto-test
+
+      - name: Test Wi-Fi AES-CCM known-answer and tamper handling
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_wifi_ccmp.c net/wifi_ccmp.c -o /tmp/vantaos-wifi-ccmp-test
+          /tmp/vantaos-wifi-ccmp-test
+
+      - name: Test WPA2 HMAC, PRF-512, and RFC 3394 key unwrap
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_wifi_wpa2_primitives.c net/wifi_crypto.c net/wifi_ccmp.c -o /tmp/vantaos-wifi-wpa2-primitives-test
+          /tmp/vantaos-wifi-wpa2-primitives-test
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_wifi_wpa2_supplicant.c net/wifi_wpa2.c net/wifi_crypto.c net/wifi_ccmp.c -o /tmp/vantaos-wifi-wpa2-supplicant-test
+          /tmp/vantaos-wifi-wpa2-supplicant-test
+
 
       - name: Test bounded IEEE 802.11 scan-frame and RSN parsing
         run: |
@@ -1014,6 +1039,7 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/master' && !contains(github.event.head_commit.message, '[skip ci]')
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: write
     steps:

@@ -415,6 +415,62 @@ static int rtl_reg_read32(uint16_t address, uint32_t *value)
     return 1;
 }
 
+/*
+ * RTL8188E RF serial interface (path A, the single 1T1R path). These are
+ * transport primitives only; they do not substitute for board-specific PHY
+ * configuration, transmit-power setup, or LC/IQ calibration.
+ */
+static int rtl_rf_read(uint8_t address, uint32_t *value)
+{
+    uint32_t hssi, trigger, readback;
+    if (!value || !rtl_bound || !rtl_firmware_ready)
+        return 0;
+    if (!rtl_reg_read32(RTL8188EU_REG_HSSI_PARAM2_A, &hssi))
+        return 0;
+    trigger = (hssi & ~(0xFFU << RTL8188EU_RF_ADDRESS_SHIFT)) |
+              ((uint32_t)address << RTL8188EU_RF_ADDRESS_SHIFT) |
+              RTL8188EU_RF_READ_EDGE;
+    if (!rtl_reg_write32(RTL8188EU_REG_HSSI_PARAM2_A,
+                         hssi & ~RTL8188EU_RF_READ_EDGE) ||
+        !rtl_reg_write32(RTL8188EU_REG_HSSI_PARAM2_A, trigger) ||
+        !rtl_reg_read32(RTL8188EU_REG_RF_READBACK_A, &readback))
+        return 0;
+    *value = readback & RTL8188EU_RF_READBACK_MASK;
+    return 1;
+}
+
+static int rtl_rf_write(uint8_t address, uint32_t value)
+{
+    uint32_t command;
+    if (!rtl_bound || !rtl_firmware_ready ||
+        (value & ~RTL8188EU_RF_DATA_MASK) != 0U)
+        return 0;
+    command = ((uint32_t)address << 20) | value;
+    return rtl_reg_write32(RTL8188EU_REG_LSSI_PARAM_A, command);
+}
+
+/*
+ * Tune only after the full radio initialization/calibration gate is set.
+ * RTL8188E RF_CHNLBW register 0x18 carries the channel in its low byte; retain
+ * bandwidth and unrelated RF control bits. Readback is mandatory before the
+ * channel is considered selected.
+ */
+static int rtl_program_channel(uint8_t channel)
+{
+    uint32_t current, updated, verify;
+    if (!rtl_radio_ready || channel < 1U || channel > 14U)
+        return 0;
+    if (!rtl_rf_read(RTL8188EU_RF_CHNLBW, &current))
+        return 0;
+    updated = (current & ~RTL8188EU_RF_CHANNEL_MASK) | channel;
+    if (!rtl_rf_write(RTL8188EU_RF_CHNLBW, updated) ||
+        !rtl_rf_read(RTL8188EU_RF_CHNLBW, &verify) ||
+        (verify & RTL8188EU_RF_CHANNEL_MASK) != channel)
+        return 0;
+    rtl_current_channel = channel;
+    return 1;
+}
+
 int rtl8188eu_probe(uint32_t slot_id, uint32_t port, uint16_t vendor_id, uint16_t device_id,
                     const uint8_t *configuration, size_t length)
 {

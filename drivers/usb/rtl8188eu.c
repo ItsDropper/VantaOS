@@ -778,6 +778,7 @@ void rtl8188eu_poll(void)
     }
     if (!rtl_rx_armed)
         rtl_rx_armed = (uint8_t)xhci_start_bulk_in(rtl_slot, rtl_bulk_in);
+    rtl_scan_poll();
 }
 
 int rtl8188eu_port_is_bound(uint32_t port)
@@ -800,6 +801,10 @@ int rtl8188eu_port_disconnected(uint32_t port)
     rtl_firmware_attempted = 0U;
     rtl_firmware_ready = 0U;
     rtl_radio_ready = 0U;
+    rtl_scan_active = 0U;
+    rtl_scan_channel = 0U;
+    rtl_scan_dwell_polls = 0U;
+    rtl_current_channel = 0U;
     rtl_passive_result_count = 0U;
     if (old_slot != 0U)
         (void)xhci_disable_device(old_slot);

@@ -32,6 +32,21 @@
 #define RTL8188EU_REG_MCU_FW_DL 0x0080U
 #define RTL8188EU_REG_RF_CTRL 0x001FU
 #define RTL8188EU_REG_MAC_CR 0x0100U
+#define RTL8188EU_REG_SYS_OFFLOAD 0x00F0U
+#define RTL8188EU_REG_HMEBOX_E0 0x0088U
+#define RTL8188EU_REG_TX_BOUNDARY_HI 0x010D
+#define RTL8188EU_REG_PKTBUF_ACCESS 0x0106U
+#define RTL8188EU_REG_PKTBUF_DEBUG_ADDR 0x0140U
+#define RTL8188EU_REG_PKTBUF_DEBUG_STATUS 0x0143U
+#define RTL8188EU_REG_PKTBUF_DEBUG_DATA_LO 0x0144U
+#define RTL8188EU_REG_PKTBUF_DEBUG_DATA_HI 0x0148U
+#define RTL8188EU_REG_TDECTRL 0x0208U
+#define RTL8188EU_IOL_READ_EFUSE_MAP 0x02U
+#define RTL8188EU_IOL_ENABLE 0x80U
+#define RTL8188EU_IOL_ERROR_SHIFT 4U
+#define RTL8188EU_EFUSE_PHYSICAL_SIZE 512U
+#define RTL8188EU_EFUSE_LOGICAL_SIZE 512U
+#define RTL8188EU_EFUSE_MAC_OFFSET 0xD7U
 #define RTL8188EU_REG_HSSI_PARAM2_A 0x0824U
 #define RTL8188EU_REG_LSSI_PARAM_A 0x0840U
 #define RTL8188EU_REG_RF_READBACK_A 0x08A0U
@@ -481,6 +496,206 @@ static int rtl_reg_read32(uint16_t address, uint32_t *value)
         return 0;
     *value = (uint32_t)bytes[0] | ((uint32_t)bytes[1] << 8) |
              ((uint32_t)bytes[2] << 16) | ((uint32_t)bytes[3] << 24);
+    return 1;
+}
+
+typedef struct {
+    uint8_t raw[RTL8188EU_EFUSE_PHYSICAL_SIZE];
+    uint8_t logical[RTL8188EU_EFUSE_LOGICAL_SIZE];
+    uint8_t mac[6];
+    uint8_t crystal_trim;
+    uint8_t thermal_meter;
+    uint8_t board_option;
+    uint8_t valid;
+} rtl8188eu_efuse_info_t;
+
+static rtl8188eu_efuse_info_t rtl_efuse_info;
+static uint8_t rtl_efuse_attempted;
+
+/*
+ * Execute the chipset's firmware offload request for the factory eFuse map.
+ * This is intentionally an independent implementation of the transport
+ * contract: bounded status polling, checked packet-buffer reads, and a strict
+ * bounds-checked physical-to-logical map decoder. It does not program RF or
+ * synthesize board calibration values.
+ */
+static int rtl_iol_execute(uint8_t command)
+{
+    uint8_t value, status;
+    if (!rtl_reg_read8(RTL8188EU_REG_SYS_OFFLOAD, &value) ||
+        !rtl_reg_write8(RTL8188EU_REG_SYS_OFFLOAD,
+                        (uint8_t)(value | RTL8188EU_IOL_ENABLE)) ||
+        !rtl_reg_read8(RTL8188EU_REG_HMEBOX_E0, &value) ||
+        !rtl_reg_write8(RTL8188EU_REG_HMEBOX_E0,
+                        (uint8_t)(value | command)))
+        return 0;
+
+    for (uint32_t retry = 0U; retry < 100000U; ++retry) {
+        if (!rtl_reg_read8(RTL8188EU_REG_HMEBOX_E0, &status))
+            return 0;
+        if ((status & command) == 0U) {
+            if ((status & ((uint8_t)command << RTL8188EU_IOL_ERROR_SHIFT)) != 0U)
+                return 0;
+            if (!rtl_reg_read8(RTL8188EU_REG_SYS_OFFLOAD, &value) ||
+                !rtl_reg_write8(RTL8188EU_REG_SYS_OFFLOAD,
+                                (uint8_t)(value & ~RTL8188EU_IOL_ENABLE)))
+                return 0;
+            return 1;
+        }
+    }
+    if (rtl_reg_read8(RTL8188EU_REG_SYS_OFFLOAD, &value))
+        (void)rtl_reg_write8(RTL8188EU_REG_SYS_OFFLOAD,
+                             (uint8_t)(value & ~RTL8188EU_IOL_ENABLE));
+    return 0;
+}
+
+static int rtl_read_efuse_physical(uint8_t *physical, size_t capacity)
+{
+    uint8_t boundary, access;
+    uint16_t debug_address = 0U;
+    uint32_t low, high;
+    size_t copied = 0U;
+    uint16_t declared_length = 0U;
+
+    if (!physical || capacity < RTL8188EU_EFUSE_PHYSICAL_SIZE ||
+        !rtl_bound || !rtl_firmware_ready)
+        return 0;
+
+    /* Give firmware its normal packet-buffer area and select TX-buffer access. */
+    if (!rtl_reg_read8(RTL8188EU_REG_TDECTRL + 1U, &boundary) ||
+        !rtl_reg_write8(RTL8188EU_REG_TDECTRL + 1U, 0U) ||
+        !rtl_reg_read8(RTL8188EU_REG_PKTBUF_ACCESS, &access) ||
+        !rtl_reg_write8(RTL8188EU_REG_PKTBUF_ACCESS,
+                        (uint8_t)(access | 0x01U)) ||
+        !rtl_iol_execute(RTL8188EU_IOL_READ_EFUSE_MAP))
+        goto fail;
+
+    for (size_t i = 0U; i < capacity; ++i)
+        physical[i] = 0xFFU;
+
+    /* Debug port is addressed in 8-byte units. First word includes length. */
+    for (uint16_t block = 0U; block < 80U; ++block) {
+        uint8_t ready = 0U;
+        debug_address = block;
+        if (!rtl_reg_write16(RTL8188EU_REG_PKTBUF_DEBUG_ADDR, debug_address) ||
+            !rtl_reg_write8(RTL8188EU_REG_PKTBUF_DEBUG_STATUS, 0U))
+            goto fail;
+        for (uint32_t retry = 0U; retry < 100000U; ++retry) {
+            if (!rtl_reg_read8(RTL8188EU_REG_PKTBUF_DEBUG_STATUS, &ready))
+                goto fail;
+            if (ready != 0U) break;
+        }
+        if (ready == 0U ||
+            !rtl_reg_read32(RTL8188EU_REG_PKTBUF_DEBUG_DATA_LO, &low) ||
+            !rtl_reg_read32(RTL8188EU_REG_PKTBUF_DEBUG_DATA_HI, &high))
+            goto fail;
+        uint8_t bytes[8] = {
+            (uint8_t)low, (uint8_t)(low >> 8), (uint8_t)(low >> 16),
+            (uint8_t)(low >> 24), (uint8_t)high, (uint8_t)(high >> 8),
+            (uint8_t)(high >> 16), (uint8_t)(high >> 24)
+        };
+        if (block == 0U) {
+            declared_length = (uint16_t)bytes[0] |
+                              ((uint16_t)bytes[1] << 8);
+            if (declared_length < 2U ||
+                declared_length > RTL8188EU_EFUSE_PHYSICAL_SIZE + 2U)
+                goto fail;
+            size_t amount = declared_length - 2U;
+            if (amount > capacity) amount = capacity;
+            for (size_t i = 0U; i < amount && i < 6U; ++i)
+                physical[copied++] = bytes[i + 2U];
+        } else {
+            for (size_t i = 0U; i < sizeof(bytes) && copied < capacity; ++i)
+                physical[copied++] = bytes[i];
+        }
+        if (copied >= RTL8188EU_EFUSE_PHYSICAL_SIZE ||
+            copied >= (size_t)(declared_length - 2U))
+            break;
+    }
+    if (copied == 0U)
+        goto fail;
+    (void)rtl_reg_write8(RTL8188EU_REG_PKTBUF_ACCESS, access);
+    (void)rtl_reg_write8(RTL8188EU_REG_TDECTRL + 1U, boundary);
+    return 1;
+
+fail:
+    (void)rtl_reg_write8(RTL8188EU_REG_PKTBUF_ACCESS, access);
+    (void)rtl_reg_write8(RTL8188EU_REG_TDECTRL + 1U, boundary);
+    return 0;
+}
+
+static int rtl_decode_efuse_map(const uint8_t *physical, size_t physical_length,
+                                uint8_t *logical, size_t logical_length)
+{
+    size_t cursor = 0U;
+    if (!physical || !logical || physical_length == 0U ||
+        logical_length < RTL8188EU_EFUSE_LOGICAL_SIZE)
+        return 0;
+    for (size_t i = 0U; i < logical_length; ++i) logical[i] = 0xFFU;
+
+    while (cursor < physical_length) {
+        uint8_t header = physical[cursor++];
+        uint8_t section, word_enable;
+        if (header == 0xFFU) break;
+        section = (uint8_t)(header >> 4);
+        word_enable = (uint8_t)(header & 0x0FU);
+        if (section == 0x0FU) {
+            if (cursor >= physical_length) return 0;
+            uint8_t extended = physical[cursor++];
+            if (extended == 0xFFU) break;
+            section = (uint8_t)(((header & 0xE0U) >> 5) |
+                                ((extended & 0xF0U) >> 1));
+            word_enable = (uint8_t)(extended & 0x0FU);
+        }
+        if (word_enable == 0x0FU) continue;
+        size_t base = (size_t)section * 8U;
+        if (base + 8U > logical_length) return 0;
+        for (uint8_t word = 0U; word < 4U; ++word) {
+            if ((word_enable & (uint8_t)(1U << word)) != 0U) continue;
+            if (cursor + 2U > physical_length) return 0;
+            logical[base + (size_t)word * 2U] = physical[cursor++];
+            logical[base + (size_t)word * 2U + 1U] = physical[cursor++];
+        }
+    }
+    return 1;
+}
+
+static int rtl_load_efuse_identity(void)
+{
+    uint32_t chip_config;
+    if (!rtl_read_efuse_physical(rtl_efuse_info.raw,
+                                  sizeof(rtl_efuse_info.raw)) ||
+        !rtl_decode_efuse_map(rtl_efuse_info.raw,
+                              sizeof(rtl_efuse_info.raw),
+                              rtl_efuse_info.logical,
+                              sizeof(rtl_efuse_info.logical)) ||
+        !rtl_reg_read32(RTL8188EU_REG_SYS_CFG, &chip_config))
+        return 0;
+
+    for (size_t i = 0U; i < 6U; ++i)
+        rtl_efuse_info.mac[i] =
+            rtl_efuse_info.logical[RTL8188EU_EFUSE_MAC_OFFSET + i];
+    rtl_efuse_info.crystal_trim = rtl_efuse_info.logical[0xB9U];
+    rtl_efuse_info.thermal_meter = rtl_efuse_info.logical[0xBAU];
+    rtl_efuse_info.board_option = rtl_efuse_info.logical[0xC1U];
+
+    uint8_t any = 0U, all_ff = 1U;
+    for (size_t i = 0U; i < 6U; ++i) {
+        any |= rtl_efuse_info.mac[i];
+        if (rtl_efuse_info.mac[i] != 0xFFU) all_ff = 0U;
+    }
+    if (any == 0U || all_ff || (rtl_efuse_info.mac[0] & 1U) != 0U)
+        return 0;
+    /* Do not accept a blank eFuse map or missing board identity/calibration. */
+    if (rtl_efuse_info.crystal_trim == 0xFFU ||
+        rtl_efuse_info.thermal_meter == 0xFFU ||
+        rtl_efuse_info.board_option == 0xFFU)
+        return 0;
+
+    /* Chip cut is recorded for diagnostics; unknown cuts stay TX-disabled. */
+    serial_write("VANTAOS_RTL8188EU_EFUSE_IDENTITY_OK\\n");
+    (void)chip_config;
+    rtl_efuse_info.valid = 1U;
     return 1;
 }
 

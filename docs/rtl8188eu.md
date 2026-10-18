@@ -2,7 +2,9 @@
 
 The experimental RTL8188EU USB driver currently identifies supported USB IDs, validates the configuration descriptor's declared extent and endpoint-address fields, parses bulk endpoints only from alternate setting zero, probes the Realtek register interface, and attempts a bounded firmware download from `/SYSTEM/RTL8188EU.BIN` after FAT32 is mounted. Firmware download is limited to the eight 4-KiB pages addressable by the chip's page selector, and checksum completion is treated as a device-reported status rather than a software-set success bit. The supplied file must be the matching RTL8188EU firmware image with its 32-byte header intact. Firmware is not bundled in this repository.
 
-This is not a working Wi-Fi network device yet. A chipset-independent WPA2-PSK/CCMP supplicant state machine now derives PMK/PTK material, generates EAPOL message 2, verifies message 3 MIC/replay/ANonce, unwraps and validates a GTK KDE, requests atomic key installation, and emits message 4. Its transport, cryptographic-randomness, and key-install callbacks are not connected to this RTL8188EU driver. MAC/PHY/RF setup and calibration, active channel scanning, authentication/association, CCMP packet-number/replay handling in the 802.11 data path, and the authenticated 802.11-to-Ethernet network-device/IP bridge remain incomplete. Host tests validate only the supplicant's initial handshake path and message-2 MIC; they do not prove a real access-point handshake or Internet connectivity. Physical validation requires a supported adapter and access point.
+This driver is still **not a working Wi-Fi network device**. The latest branch now includes RF serial register access and channel-register readback, poll-driven channel-hopping scan logic, live Open System Authentication/Association state handling, WPA2 EAPOL callbacks connected to received frames and USB transmit, CCMP data-frame protection/replay checks, Ethernet/LLC-SNAP bridging, a conditional `net_device_t` registration path, and nonblocking DHCP startup after WPA2 authorization.
+
+However, `rtl_radio_ready` intentionally remains false. The current preflight only enables the BB/RF register interfaces and verifies RF readback; it does not replace the missing MAC/PHY initialization tables, eFuse-derived board configuration, transmit-power programming, or LC/IQ calibration. Because the radio-ready gate is never reached, active scan/authentication/association/data transmission still fail closed. These code paths are not yet proven on a physical adapter.
 
 ## Validation status
 
@@ -18,7 +20,7 @@ The branch is still a bring-up effort, not a complete or production-ready Wi-Fi 
 - The download sequence waits for the hardware checksum-report status after disabling download mode; software does not set that status bit to manufacture success.
 - The host mock models the checksum-report transition only after download is disabled, so regression tests catch the previous false-success behavior.
 
-These safeguards improve firmware bring-up correctness; they do not complete the radio driver. No supported production connection path should be exposed until MAC/PHY/RF calibration, TX and RX handling, active channel scan, association, WPA2-PSK/CCMP, and network-device integration are implemented and tested.
+These safeguards improve firmware bring-up correctness; they do not complete the radio driver. The management, WPA2, CCMP, network-device, and DHCP software paths have now been connected in code, but remain gated behind verified MAC/PHY/RF initialization and calibration. No real connection has been validated.
 
 ## Supplying firmware to the boot image
 
@@ -33,7 +35,7 @@ The build script checks that the file exists and is within the current size boun
 
 The driver now exposes `rtl8188eu_transmit_frame()` for a complete 802.11 management or data MPDU (without FCS). It builds the 32-byte RTL8188E USB TX descriptor, chooses the management or best-effort queue, submits through the discovered bulk-OUT endpoint, and requires the full transfer length to complete. Host tests validate the descriptor fields and ensure a too-short frame is rejected.
 
-This is a low-level transport primitive only. It does not configure the MAC/PHY/RF, set a channel, authenticate or associate, negotiate keys, encrypt/decrypt CCMP, or bridge frames into `net_device_t`. A successful mocked transfer is not evidence that a physical adapter can transmit over the air. The driver must not be described as end-to-end functional until those missing pieces and real-hardware tests pass.
+This is a low-level transport primitive. RF register access and channel programming, authentication/association state handling, WPA2 EAPOL, CCMP framing, and network bridging now exist in code, but are gated until the missing full MAC/PHY/RF initialization and calibration are implemented. A successful mocked transfer is not evidence that a physical adapter can transmit over the air.
 
 ## Experimental WPA2 crypto primitives
 

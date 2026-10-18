@@ -19,4 +19,15 @@ int wifi_pbkdf2_sha1(const uint8_t *password, size_t password_length,
                      uint32_t iterations, uint8_t *output,
                      size_t output_length);
 
+/* WPA2 supplicant primitives. Keep inputs and outputs fixed-size and bounded. */
+int wifi_hmac_sha1(const uint8_t *key, size_t key_length,
+                   const uint8_t *data, size_t data_length,
+                   uint8_t digest[20]);
+int wifi_wpa2_prf512(const uint8_t pmk[WIFI_PMK_SIZE],
+                     const uint8_t authenticator[6],
+                     const uint8_t supplicant[6],
+                     const uint8_t authenticator_nonce[32],
+                     const uint8_t supplicant_nonce[32],
+                     uint8_t ptk[64]);
+
 #endif

@@ -160,6 +160,11 @@ jobs:
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_wifi_crypto.c net/wifi_crypto.c -o /tmp/vantaos-wifi-crypto-test
           /tmp/vantaos-wifi-crypto-test
 
+      - name: Test Wi-Fi AES-CCM known-answer and tamper handling
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_wifi_ccmp.c net/wifi_ccmp.c -o /tmp/vantaos-wifi-ccmp-test
+          /tmp/vantaos-wifi-ccmp-test
+
       - name: Test bounded IEEE 802.11 scan-frame and RSN parsing
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_wifi_80211.c net/wifi_80211.c -o /tmp/vantaos-wifi-80211-test

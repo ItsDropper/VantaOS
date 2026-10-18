@@ -22,6 +22,12 @@
 #define USB_TRANSFER_BULK 2U
 #define RTL8188EU_REG_SYS_CFG 0x00F0U
 #define RTL8188EU_REG_SYS_FUNC 0x0002U
+#define RTL8188EU_SYS_FUNC_BB_RESET 0x0001U
+#define RTL8188EU_SYS_FUNC_BB_GLOBAL_RESET_N 0x0002U
+#define RTL8188EU_SYS_FUNC_RF_DIGITAL_IO 0x2000U
+#define RTL8188EU_RF_CTRL_ENABLE 0x01U
+#define RTL8188EU_RF_CTRL_RESET_N 0x02U
+#define RTL8188EU_RF_CTRL_SDM_RESET_N 0x04U
 #define RTL8188EU_REG_RSV_CTRL 0x001CU
 #define RTL8188EU_REG_MCU_FW_DL 0x0080U
 #define RTL8188EU_REG_RF_CTRL 0x001FU
@@ -70,6 +76,8 @@ static uint8_t rtl_firmware_ready;
  * that sequence is implemented and explicitly completes.
  */
 static uint8_t rtl_radio_ready;
+static uint8_t rtl_radio_preflight_attempted;
+static uint8_t rtl_radio_preflight_done;
 /* A scan is advanced incrementally from poll; no synchronous wait in USB context. */
 static uint8_t rtl_scan_active;
 static uint8_t rtl_scan_channel;
@@ -511,6 +519,36 @@ static int rtl_rf_write(uint8_t address, uint32_t value)
 }
 
 /*
+ * Perform the safe RF-block preflight after firmware starts. This enables the
+ * BB/RF register interfaces and verifies RF serial readback. It is deliberately
+ * NOT sufficient to enable TX: board eFuse decoding, MAC/PHY tables, transmit
+ * power programming, and LC/IQ calibration remain mandatory.
+ */
+static int rtl_radio_preflight(void)
+{
+    uint16_t system_function;
+    uint32_t rf_identity, rf_channel;
+    if (!rtl_bound || !rtl_firmware_ready)
+        return 0;
+    if (!rtl_reg_read16(RTL8188EU_REG_SYS_FUNC, &system_function))
+        return 0;
+    system_function |= RTL8188EU_SYS_FUNC_BB_RESET |
+                       RTL8188EU_SYS_FUNC_BB_GLOBAL_RESET_N |
+                       RTL8188EU_SYS_FUNC_RF_DIGITAL_IO;
+    if (!rtl_reg_write16(RTL8188EU_REG_SYS_FUNC, system_function) ||
+        !rtl_reg_write8(RTL8188EU_REG_RF_CTRL,
+            RTL8188EU_RF_CTRL_ENABLE | RTL8188EU_RF_CTRL_RESET_N |
+            RTL8188EU_RF_CTRL_SDM_RESET_N) ||
+        !rtl_rf_read(0x00U, &rf_identity) ||
+        !rtl_rf_read(RTL8188EU_RF_CHNLBW, &rf_channel) ||
+        rf_identity == RTL8188EU_RF_DATA_MASK ||
+        rf_channel == RTL8188EU_RF_DATA_MASK)
+        return 0;
+    rtl_radio_preflight_done = 1U;
+    return 1;
+}
+
+/*
  * Tune only after the full radio initialization/calibration gate is set.
  * RTL8188E RF_CHNLBW register 0x18 carries the channel in its low byte; retain
  * bandwidth and unrelated RF control bits. Readback is mandatory before the
@@ -519,7 +557,7 @@ static int rtl_rf_write(uint8_t address, uint32_t value)
 static int rtl_program_channel(uint8_t channel)
 {
     uint32_t current, updated, verify;
-    if (!rtl_radio_ready || channel < 1U || channel > 14U)
+    if (!rtl_radio_preflight_done || channel < 1U || channel > 14U)
         return 0;
     if (!rtl_rf_read(RTL8188EU_RF_CHNLBW, &current))
         return 0;
@@ -1298,6 +1336,14 @@ void rtl8188eu_poll(void)
     if (!rtl_firmware_ready)
         return;
 
+    if (!rtl_radio_preflight_attempted) {
+        rtl_radio_preflight_attempted = 1U;
+        if (rtl_radio_preflight())
+            serial_write("VANTAOS_RTL8188EU_RF_PREFLIGHT_OK_TX_STILL_BLOCKED\\n");
+        else
+            serial_write("VANTAOS_RTL8188EU_RF_PREFLIGHT_FAILED\\n");
+    }
+
     if (!rtl_rx_armed) {
         rtl_rx_armed = (uint8_t)xhci_start_bulk_in(rtl_slot, rtl_bulk_in);
         return;
@@ -1337,6 +1383,8 @@ int rtl8188eu_port_disconnected(uint32_t port)
     rtl_firmware_attempted = 0U;
     rtl_firmware_ready = 0U;
     rtl_radio_ready = 0U;
+    rtl_radio_preflight_attempted = 0U;
+    rtl_radio_preflight_done = 0U;
     rtl_scan_active = 0U;
     rtl_scan_channel = 0U;
     rtl_scan_dwell_polls = 0U;

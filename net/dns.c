@@ -76,6 +76,43 @@ static int skip_name(const uint8_t* p,size_t n,size_t* off)
         pos += len;
     }
 }
+static int name_matches_question(const uint8_t *packet, size_t packet_length,
+                                 size_t owner_offset,
+                                 const uint8_t *question, size_t question_length)
+{
+    size_t pos = owner_offset, qpos = 0, hops = 0;
+    int jumped = 0;
+    if (!packet || !question || question_length < 5U || owner_offset >= packet_length)
+        return 0;
+    for (;;) {
+        if (pos >= packet_length || ++hops > packet_length || qpos >= question_length - 4U)
+            return 0;
+        uint8_t label = packet[pos++];
+        if ((label & 0xC0U) == 0xC0U) {
+            if (pos >= packet_length) return 0;
+            size_t target = ((size_t)(label & 0x3FU) << 8) | packet[pos++];
+            if (target >= packet_length || target >= pos - 2U) return 0;
+            jumped = 1;
+            pos = target;
+            continue;
+        }
+        if (label & 0xC0U) return 0;
+        if (label == 0U)
+            return question[qpos] == 0U && qpos + 5U == question_length;
+        if (label > 63U || (size_t)label > packet_length - pos ||
+            question[qpos] != label || (size_t)label > question_length - qpos - 5U)
+            return 0;
+        ++qpos;
+        for (uint8_t i = 0; i < label; ++i) {
+            uint8_t a = packet[pos++], b = question[qpos++];
+            if (a >= 'A' && a <= 'Z') a = (uint8_t)(a - 'A' + 'a');
+            if (b >= 'A' && b <= 'Z') b = (uint8_t)(b - 'A' + 'a');
+            if (a != b) return 0;
+        }
+    }
+    (void)jumped;
+}
+
 static void receive_dns(net_device_t* d,uint32_t src,uint16_t sport,uint16_t dport,const uint8_t* p,size_t n,void* ctx)
 {
     (void)ctx;
@@ -93,10 +130,14 @@ static void receive_dns(net_device_t* d,uint32_t src,uint16_t sport,uint16_t dpo
     if(!skip_name(p,n,&pos)||pos+4U>n||read_be16(p+pos)!=1U||read_be16(p+pos+2U)!=1U){query_state.failed=1U;query_state.done=1U;return;}
     pos+=4U;
     for(uint32_t i=0;i<answers;i++){
+        size_t owner_offset = pos;
+        int owner_matches = name_matches_question(p,n,owner_offset,
+                                                  query_state.question,
+                                                  query_state.question_length);
         if(!skip_name(p,n,&pos)||pos+10U>n){query_state.failed=1U;query_state.done=1U;return;}
         uint16_t type=read_be16(p+pos),klass=read_be16(p+pos+2U),dl=read_be16(p+pos+8U);uint32_t ttl=read_be32(p+pos+4U);pos+=10U;
         if((size_t)dl>n-pos){query_state.failed=1U;query_state.done=1U;return;}
-        if(type==1U&&klass==1U&&dl==4U){uint32_t ip=read_be32(p+pos);uint8_t first=(uint8_t)(ip>>24);if(ip&&ip!=0xFFFFFFFFU&&first!=127U&&first<224U){query_state.result=ip;query_state.ttl=ttl;query_state.done=1U;return;}}
+        if(owner_matches&&type==1U&&klass==1U&&dl==4U){uint32_t ip=read_be32(p+pos);uint8_t first=(uint8_t)(ip>>24);if(ip&&ip!=0xFFFFFFFFU&&first!=127U&&first<224U){query_state.result=ip;query_state.ttl=ttl;query_state.done=1U;return;}}
         pos+=dl;
     }
     query_state.failed=1U;query_state.done=1U;

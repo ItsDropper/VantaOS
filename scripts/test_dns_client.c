@@ -87,6 +87,15 @@ int net_udp_send(net_device_t *device, uint32_t destination, uint16_t source_por
         reply[n++] = 0; reply[n++] = 4;
         reply[n++] = 192; reply[n++] = 0; reply[n++] = 2; reply[n++] = 1;
         reply[n++] = 0; /* Valid root label at offset 45. */
+    } else if (response_kind == 5) {
+        /* Valid A record for an unrelated owner must not answer example.com. */
+        reply[n++] = 7; memcpy(reply + n, "attacker", 8); n += 8;
+        reply[n++] = 3; memcpy(reply + n, "net", 3); n += 3; reply[n++] = 0;
+        reply[n++] = 0; reply[n++] = 1;
+        reply[n++] = 0; reply[n++] = 1;
+        reply[n++] = 0; reply[n++] = 0; reply[n++] = 0; reply[n++] = 60;
+        reply[n++] = 0; reply[n++] = 4;
+        reply[n++] = 203; reply[n++] = 0; reply[n++] = 113; reply[n++] = 77;
     } else {
         reply[n++] = 0xC0; reply[n++] = 0x0C;
         reply[n++] = 0; reply[n++] = 1;
@@ -148,6 +157,10 @@ int main(void)
         fputs("forward DNS compression pointer was accepted\\n", stderr);
         return 5;
     }
-    puts("DNS compressed A response and malformed compression/RDATA tests passed");
+    if (!run_case(5, 0)) {
+        fputs("DNS A record for an unrelated owner was accepted (cache-poisoning regression)\\n", stderr);
+        return 7;
+    }
+    puts("DNS question-owner binding, compressed A response, and malformed packet tests passed");
     return 0;
 }

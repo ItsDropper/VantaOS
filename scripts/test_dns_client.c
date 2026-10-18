@@ -1,4 +1,5 @@
 #include "net_dns.h"
+#include "net_ipv6.h"
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -13,6 +14,11 @@ static uint16_t registered_port;
 static uint32_t fake_ticks;
 static int response_kind;
 static uint32_t send_count;
+static net_udp6_handler_fn registered6_handler;
+static void *registered6_context;
+static uint16_t registered6_port;
+static uint32_t send6_count;
+static int response6_kind;
 
 uint32_t timer_get_ticks(void) { return fake_ticks++; }
 
@@ -110,6 +116,117 @@ int net_udp_send(net_device_t *device, uint32_t destination, uint16_t source_por
     return 1;
 }
 
+
+static const uint8_t dns6_server[16] = {
+    0x20,0x01,0x48,0x60,0x48,0x60,0,0,0,0,0,0,0,0,0x88,0x88
+};
+int net_ipv6_get_dns_server(net_device_t *device, net_ipv6_address_t *out)
+{
+    if (!device || !device->link_up || !out) return 0;
+    memcpy(out->bytes, dns6_server, sizeof(dns6_server));
+    return 1;
+}
+int net_udp6_handler_register(uint16_t port, net_udp6_handler_fn fn, void *context)
+{
+    if (registered6_handler || !fn || port != CLIENT_PORT) return 0;
+    registered6_port = port;
+    registered6_handler = fn;
+    registered6_context = context;
+    return 1;
+}
+int net_udp6_handler_unregister(uint16_t port, net_udp6_handler_fn fn, void *context)
+{
+    if (port != registered6_port || fn != registered6_handler ||
+        context != registered6_context) return 0;
+    registered6_handler = 0;
+    registered6_context = 0;
+    registered6_port = 0;
+    return 1;
+}
+int net_udp6_send(net_device_t *device, const uint8_t destination[16],
+                  uint16_t source_port, uint16_t destination_port,
+                  const void *payload, size_t length)
+{
+    ++send6_count;
+    const uint8_t *query = (const uint8_t *)payload;
+    uint8_t reply[DNS_MAX_MESSAGE] = {0};
+    size_t n = DNS_HEADER_SIZE;
+    if (!device || !destination || memcmp(destination, dns6_server, 16U) ||
+        source_port != CLIENT_PORT || destination_port != DNS_PORT ||
+        !query || length < DNS_HEADER_SIZE + 6U || !registered6_handler ||
+        query[length - 4U] != 0U || query[length - 3U] != 28U)
+        return 0;
+
+    reply[0] = query[0]; reply[1] = query[1];
+    reply[2] = 0x81U; reply[3] = 0x80U;
+    reply[5] = 1U; reply[7] = 1U;
+    memcpy(reply + n, query + DNS_HEADER_SIZE, length - DNS_HEADER_SIZE);
+    n += length - DNS_HEADER_SIZE;
+
+    if (response6_kind == 1) {
+        size_t owner = n;
+        reply[n++] = 0xC0U; reply[n++] = (uint8_t)owner;
+        reply[n++] = 0; reply[n++] = 28U;
+        reply[n++] = 0; reply[n++] = 1U;
+        reply[n++] = 0; reply[n++] = 0; reply[n++] = 0; reply[n++] = 60U;
+        reply[n++] = 0; reply[n++] = 16U;
+        memset(reply + n, 0xAA, 16U); n += 16U;
+    } else if (response6_kind == 2) {
+        reply[n++] = 7U; memcpy(reply + n, "attacker", 8U); n += 8U;
+        reply[n++] = 3U; memcpy(reply + n, "net", 3U); n += 3U; reply[n++] = 0U;
+        reply[n++] = 0; reply[n++] = 28U;
+        reply[n++] = 0; reply[n++] = 1U;
+        reply[n++] = 0; reply[n++] = 0; reply[n++] = 0; reply[n++] = 60U;
+        reply[n++] = 0; reply[n++] = 16U;
+        memset(reply + n, 0xAA, 16U); n += 16U;
+    } else if (response6_kind == 3) {
+        reply[n++] = 0xC0U; reply[n++] = 0x0CU;
+        reply[n++] = 0; reply[n++] = 28U;
+        reply[n++] = 0; reply[n++] = 1U;
+        reply[n++] = 0; reply[n++] = 0; reply[n++] = 0; reply[n++] = 60U;
+        reply[n++] = 0; reply[n++] = 16U;
+        memset(reply + n, 0xAA, 8U); n += 8U;
+    } else {
+        reply[n++] = 0xC0U; reply[n++] = 0x0CU;
+        reply[n++] = 0; reply[n++] = 28U;
+        reply[n++] = 0; reply[n++] = 1U;
+        reply[n++] = 0; reply[n++] = 0; reply[n++] = 0; reply[n++] = 60U;
+        reply[n++] = 0; reply[n++] = 16U;
+        static const uint8_t answer[16] = {
+            0x20,0x01,0x0D,0xB8,0,0,0,0,0,0,0,0,0,0,0x12,0x34
+        };
+        memcpy(reply + n, answer, sizeof(answer)); n += sizeof(answer);
+    }
+
+    static const uint8_t client_address[16] = {
+        0x20,0x01,0x0D,0xB8,0,0,0,0,0,0,0,0,0,0,0,1
+    };
+    registered6_handler(device, dns6_server, client_address, DNS_PORT,
+                        registered6_port, reply, n, registered6_context);
+    return 1;
+}
+
+static int run_aaaa_case(int kind, const char *hostname, int expected_success)
+{
+    static net_device_t device;
+    device = (net_device_t){.link_up = 1U, .mac = {0x02,0x11,0x22,0x33,0x44,0x55}};
+    net_ipv6_address_t result;
+    memset(result.bytes, 0xAA, sizeof(result.bytes));
+    response6_kind = kind;
+    fake_ticks = 0U;
+    int success = net_dns_resolve_aaaa(&device, hostname, &result, 1000U);
+    if (success != expected_success) return 0;
+    static const uint8_t expected[16] = {
+        0x20,0x01,0x0D,0xB8,0,0,0,0,0,0,0,0,0,0,0x12,0x34
+    };
+    if (expected_success && memcmp(result.bytes, expected, 16U)) return 0;
+    if (!expected_success) {
+        for (uint32_t i = 0; i < 16U; ++i)
+            if (result.bytes[i] != 0xAAU) return 0;
+    }
+    return !registered6_handler && !registered6_context && !registered6_port;
+}
+
 size_t net_poll(size_t packet_budget) { (void)packet_budget; return 0; }
 
 static int run_case(int kind, int expected_success)
@@ -161,6 +278,27 @@ int main(void)
         fputs("DNS A record for an unrelated owner was accepted (cache-poisoning regression)\\n", stderr);
         return 7;
     }
-    puts("DNS question-owner binding, compressed A response, and malformed packet tests passed");
+    if (!run_aaaa_case(0, "example.com", 1)) {
+        fputs("valid compressed DNS AAAA response was rejected\\n", stderr);
+        return 8;
+    }
+    uint32_t sends_after_aaaa = send6_count;
+    if (!run_aaaa_case(0, "example.com", 1) || send6_count != sends_after_aaaa) {
+        fputs("DNS AAAA TTL cache did not suppress the repeated query\\n", stderr);
+        return 9;
+    }
+    if (!run_aaaa_case(1, "bad1.example.com", 0)) {
+        fputs("DNS AAAA compression pointer loop was accepted\\n", stderr);
+        return 10;
+    }
+    if (!run_aaaa_case(2, "bad2.example.com", 0)) {
+        fputs("DNS AAAA answer for unrelated owner was accepted\\n", stderr);
+        return 11;
+    }
+    if (!run_aaaa_case(3, "bad3.example.com", 0)) {
+        fputs("truncated DNS AAAA RDATA was accepted\\n", stderr);
+        return 12;
+    }
+    puts("DNS A/AAAA owner binding, TTL caching, and malformed packet tests passed");
     return 0;
 }

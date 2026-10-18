@@ -2,6 +2,7 @@
 
 #include "../input/usb/hid.h"
 #include "xhci.h"
+#include "rtl8188eu.h"
 #include "serial.h"
 
 #include <stdbool.h>
@@ -201,12 +202,28 @@ static int usb_enumerate_port(uint32_t port)
     if (!usb_control(slot, 0x80U, USB_REQUEST_GET_DESCRIPTOR, 0x0200U,
                      0, configuration_buffer, configuration_length))
         goto cleanup;
-    if (!usb_find_boot_interface(configuration_buffer, configuration_length,
-                                 &candidate))
-        goto cleanup;
+    uint16_t vendor_id = (uint16_t)descriptor_buffer[8] |
+                         ((uint16_t)descriptor_buffer[9] << 8);
+    uint16_t product_id = (uint16_t)descriptor_buffer[10] |
+                          ((uint16_t)descriptor_buffer[11] << 8);
 
     if (!usb_control(slot, 0x00U, USB_REQUEST_SET_CONFIGURATION,
                      configuration_value, 0, 0, 0))
+        goto cleanup;
+
+    /* Bind supported RTL8188EU USB IDs before boot-HID interface matching. */
+    if (vendor_id == 0x0BDAU &&
+        (product_id == 0x8179U || product_id == 0x0179U)) {
+        if (rtl8188eu_probe(slot, vendor_id, product_id, configuration_buffer,
+                            configuration_length)) {
+            serial_write("VANTAOS_USB_RTL8188EU_BOUND\n");
+            success = 1;
+        }
+        goto cleanup;
+    }
+
+    if (!usb_find_boot_interface(configuration_buffer, configuration_length,
+                                 &candidate))
         goto cleanup;
     if (!usb_control(slot, 0x21U, USB_HID_SET_PROTOCOL, 0,
                      candidate.interface_number, 0, 0))

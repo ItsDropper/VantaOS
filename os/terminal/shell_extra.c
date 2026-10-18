@@ -718,6 +718,10 @@ static int command_net(uint32_t argc, char **argv)
                 if(!ipv6_is_zero(&global)){terminal_write("\n    IPv6 SLAAC ");print_ipv6(&global);}
                 if(!ipv6_is_zero(&router)){terminal_write("\n    IPv6 router ");print_ipv6(&router);}
             }
+            net_ipv6_address_t dns6 = {{0}};
+            if (net_ipv6_get_dns_server(d, &dns6)) {
+                terminal_write("\n    DNS6 "); print_ipv6(&dns6);
+            }
             net_device_stats_t stats;
             if (net_device_get_stats(d, &stats)) {
                 if (d->ipv4_dns) {

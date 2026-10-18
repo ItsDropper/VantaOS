@@ -68,14 +68,17 @@ static void inject_ra(void)
     static const uint8_t router_mac[6]={0x02,0xAA,0xBB,0xCC,0xDD,0xEE};
     static const uint8_t src[16]={0xFE,0x80,0,0,0,0,0,0,0,0,0,0,0,0,0,1};
     static const uint8_t dst[16]={0xFF,2,0,0,0,0,0,0,0,0,0,0,0,0,0,1};
-    uint8_t f[14+40+48]={0};f[0]=0x33;f[1]=0x33;f[5]=1;
+    uint8_t f[14+40+72]={0};f[0]=0x33;f[1]=0x33;f[5]=1;
     for(uint32_t i=0;i<6U;i++){f[6+i]=router_mac[i];}
     put16(f+12,0x86DD);
-    uint8_t *ip=f+14,*p=ip+40;make_ip6(ip,src,dst,255,48);
+    uint8_t *ip=f+14,*p=ip+40;make_ip6(ip,src,dst,255,72);
     p[0]=134;p[4]=64;put16(p+6,1800);
     p[16]=3;p[17]=4;p[18]=64;p[19]=0xC0;put32(p+20,3600);put32(p+24,1800);
     p[32]=0x20;p[33]=0x01;p[34]=0x0D;p[35]=0xB8;p[37]=1;
-    put16(p+2,icmp6_checksum(src,dst,p,48));
+    p[48]=25;p[49]=3;put32(p+52,1800);
+    p[56]=0x20;p[57]=0x01;p[58]=0x48;p[59]=0x60;p[60]=0x48;p[61]=0x60;p[62]=0x48;p[63]=0x60;
+    p[70]=0x88;p[71]=0x88;
+    put16(p+2,icmp6_checksum(src,dst,p,72));
     ipv6_handler(&device,f,sizeof(f),0x86DDU,14U,ipv6_context);
 }
 static uint16_t udp6_checksum_test(const uint8_t src[16], const uint8_t dst[16], const uint8_t *p, size_t n)
@@ -141,6 +144,11 @@ int main(void)
     assert(global.bytes[8]==0x00U&&global.bytes[9]==0x11U&&global.bytes[10]==0x22U);
     assert(global.bytes[11]==0xFFU&&global.bytes[12]==0xFEU&&global.bytes[15]==0x55U);
     assert(router.bytes[0]==0xFEU&&router.bytes[1]==0x80U);
+    net_ipv6_address_t dns_server={{0}};
+    assert(net_ipv6_get_dns_server(&device,&dns_server));
+    assert(dns_server.bytes[0]==0x20U&&dns_server.bytes[1]==0x01U&&
+           dns_server.bytes[2]==0x48U&&dns_server.bytes[3]==0x60U&&
+           dns_server.bytes[14]==0x88U&&dns_server.bytes[15]==0x88U);
     inject_echo(global.bytes);
     assert(last_tx_length==14U+40U+8U);
     assert(last_tx[12]==0x86U&&last_tx[13]==0xDDU&&last_tx[54]==129U);

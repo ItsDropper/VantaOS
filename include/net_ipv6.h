@@ -15,4 +15,6 @@ int net_ipv6_initialize(void);
 void net_ipv6_poll(void);
 int net_ipv6_ping(net_device_t*,const net_ipv6_address_t*,uint32_t timeout_ms,uint32_t* elapsed_ms);
 int net_ipv6_get_status(net_device_t*,net_ipv6_address_t*,net_ipv6_address_t*,net_ipv6_address_t*);
+/* Internal outbound IPv6 payload path; currently supports UDP (next header 17). */
+int net_ipv6_send_payload(net_device_t*, const uint8_t destination[16], const uint8_t source[16], uint8_t next_header, const void* payload, size_t payload_length);
 #endif

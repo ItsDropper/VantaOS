@@ -1002,9 +1002,9 @@ static int rtl_station_install_keys(const uint8_t *bssid, const uint8_t *peer,
                                     uint8_t gtk_id, void *context)
 {
     (void)context;
-    if (!bssid || !peer || !temporal_key || gtk_length > sizeof(rtl_group_key) ||
-        (gtk_length != 0U && !gtk) ||
-        !rtl_station_state || rtl_station_state != RTL_STATION_WPA2_HANDSHAKE)
+    if (!bssid || !peer || !temporal_key ||
+        gtk_length != WIFI_CCMP_KEY_SIZE || !gtk ||
+        rtl_station_state != RTL_STATION_WPA2_HANDSHAKE)
         return 0;
     for (size_t i = 0U; i < 6U; ++i)
         if (bssid[i] != rtl_station_bssid[i])
@@ -1014,6 +1014,8 @@ static int rtl_station_install_keys(const uint8_t *bssid, const uint8_t *peer,
         rtl_group_key[i] = (i < gtk_length) ? gtk[i] : 0U;
     rtl_group_key_length = gtk_length;
     rtl_group_key_id = gtk_id;
+    wifi_ccmp_replay_reset(&rtl_pairwise_pn);
+    wifi_ccmp_replay_reset(&rtl_group_pn);
     rtl_keys_installed = 1U;
     return 1;
 }
@@ -1117,9 +1119,12 @@ static void rtl_station_receive_frame(const uint8_t *frame, size_t length)
 {
     uint16_t status, aid;
     if (!frame || length < 24U || rtl_station_state == RTL_STATION_IDLE ||
-        rtl_station_state == RTL_STATION_FAILED ||
-        rtl_station_state == RTL_STATION_AUTHENTICATED)
+        rtl_station_state == RTL_STATION_FAILED)
         return;
+    if (rtl_station_state == RTL_STATION_AUTHENTICATED) {
+        rtl_process_protected_data((uint8_t *)frame, length);
+        return;
+    }
     if ((frame[0] & 0x0CU) == 0x00U) {
         if (rtl_station_state == RTL_STATION_WAIT_AUTH &&
             net_wifi_80211_parse_auth_response(frame, length,
@@ -1178,8 +1183,10 @@ static void rtl_station_receive_frame(const uint8_t *frame, size_t length)
         (void)wifi_wpa2_receive_eapol(&rtl_supplicant, frame + 10U,
                                       frame + 32U, length - 32U);
         if (wifi_wpa2_get_state(&rtl_supplicant) == WIFI_WPA2_AUTHENTICATED &&
-            rtl_keys_installed)
+            rtl_keys_installed) {
             rtl_station_state = RTL_STATION_AUTHENTICATED;
+            rtl_network_link_up();
+        }
         else if (wifi_wpa2_get_state(&rtl_supplicant) == WIFI_WPA2_FAILED)
             rtl_station_state = RTL_STATION_FAILED;
     }
@@ -1187,6 +1194,10 @@ static void rtl_station_receive_frame(const uint8_t *frame, size_t length)
 
 static void rtl_station_poll(void)
 {
+    if (rtl_station_state == RTL_STATION_AUTHENTICATED) {
+        rtl_network_link_up();
+        return;
+    }
     if (rtl_station_state != RTL_STATION_WAIT_AUTH &&
         rtl_station_state != RTL_STATION_WAIT_ASSOC &&
         rtl_station_state != RTL_STATION_WPA2_HANDSHAKE)
@@ -1214,6 +1225,7 @@ static void rtl_station_poll(void)
 
 static void rtl_station_reset(void)
 {
+    rtl_network_link_down();
     wifi_wpa2_reset(&rtl_supplicant);
     for (size_t i = 0U; i < sizeof(rtl_station_passphrase); ++i)
         rtl_station_passphrase[i] = 0U;

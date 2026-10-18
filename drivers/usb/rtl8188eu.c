@@ -941,7 +941,8 @@ static void rtl_put_le32(uint8_t *p, uint32_t value)
 int rtl8188eu_get_mac_address(uint8_t mac[6])
 {
     uint8_t address[6];
-    if (!mac || !rtl_bound || !rtl_firmware_ready ||
+    if (!mac || !rtl_bound || !rtl_firmware_ready || !rtl_efuse_ready ||
+        !rtl_efuse_info.valid ||
         !rtl_reg_read(0x0610U, address, sizeof(address)))
         return 0;
     /* A zero, broadcast, or multicast address is not a usable station MAC. */

@@ -465,3 +465,112 @@ int wifi_ccmp_decrypt(const uint8_t key[16], const uint8_t nonce[13],
     wipe_bytes(round_key, sizeof(round_key));
     return difference == 0U;
 }
+
+/*
+ * CCMP packet-number lifecycle and wire-format helpers. These are deliberately
+ * separate from AES-CCM: callers must still build canonical 802.11 AAD, verify
+ * the tag, and scope replay state to the installed key and traffic identifier.
+ */
+void wifi_ccmp_replay_reset(wifi_ccmp_replay_t *state)
+{
+    if (!state) return;
+    state->tx_next_pn = 1U;
+    state->rx_highest_pn = 0U;
+    state->rx_seen_bitmap = 0U;
+    state->rx_initialized = 0U;
+}
+
+int wifi_ccmp_next_tx_pn(wifi_ccmp_replay_t *state, uint64_t *packet_number)
+{
+    if (packet_number) *packet_number = 0U;
+    if (!state || !packet_number || state->tx_next_pn == 0U ||
+        state->tx_next_pn > WIFI_CCMP_PN_MAX)
+        return 0;
+    *packet_number = state->tx_next_pn;
+    if (state->tx_next_pn == WIFI_CCMP_PN_MAX)
+        state->tx_next_pn = 0U; /* Exhausted: never wrap and reuse a nonce. */
+    else
+        ++state->tx_next_pn;
+    return 1;
+}
+
+int wifi_ccmp_accept_rx_pn(wifi_ccmp_replay_t *state, uint64_t pn)
+{
+    uint64_t distance;
+    if (!state || pn == 0U || pn > WIFI_CCMP_PN_MAX) return 0;
+    if (!state->rx_initialized) {
+        state->rx_highest_pn = pn;
+        state->rx_seen_bitmap = 1U;
+        state->rx_initialized = 1U;
+        return 1;
+    }
+    if (pn > state->rx_highest_pn) {
+        distance = pn - state->rx_highest_pn;
+        state->rx_seen_bitmap = distance >= WIFI_CCMP_REPLAY_WINDOW
+            ? 1U : (state->rx_seen_bitmap << distance) | 1U;
+        state->rx_highest_pn = pn;
+        return 1;
+    }
+    distance = state->rx_highest_pn - pn;
+    if (distance >= WIFI_CCMP_REPLAY_WINDOW ||
+        (state->rx_seen_bitmap & (UINT64_C(1) << distance)) != 0U)
+        return 0;
+    state->rx_seen_bitmap |= UINT64_C(1) << distance;
+    return 1;
+}
+
+int wifi_ccmp_header_encode(uint8_t header[WIFI_CCMP_HEADER_SIZE],
+                            uint64_t pn, uint8_t key_id)
+{
+    if (!header || pn == 0U || pn > WIFI_CCMP_PN_MAX || key_id > 3U)
+        return 0;
+    header[0] = (uint8_t)pn;
+    header[1] = (uint8_t)(pn >> 8);
+    header[2] = 0U;
+    header[3] = (uint8_t)(0x20U | (uint8_t)(key_id << 6));
+    header[4] = (uint8_t)(pn >> 16);
+    header[5] = (uint8_t)(pn >> 24);
+    header[6] = (uint8_t)(pn >> 32);
+    header[7] = (uint8_t)(pn >> 40);
+    return 1;
+}
+
+int wifi_ccmp_header_decode(const uint8_t header[WIFI_CCMP_HEADER_SIZE],
+                            uint64_t *pn, uint8_t *key_id)
+{
+    uint64_t value;
+    if (pn) *pn = 0U;
+    if (key_id) *key_id = 0U;
+    if (!header || !pn || !key_id || header[2] != 0U ||
+        (header[3] & 0x3fU) != 0x20U)
+        return 0;
+    value = (uint64_t)header[0] |
+            ((uint64_t)header[1] << 8) |
+            ((uint64_t)header[4] << 16) |
+            ((uint64_t)header[5] << 24) |
+            ((uint64_t)header[6] << 32) |
+            ((uint64_t)header[7] << 40);
+    if (value == 0U) return 0;
+    *pn = value;
+    *key_id = (uint8_t)(header[3] >> 6);
+    return 1;
+}
+
+void wifi_ccmp_build_nonce(uint8_t nonce[WIFI_CCMP_NONCE_SIZE],
+                           uint8_t priority, const uint8_t transmitter[6],
+                           uint64_t pn)
+{
+    if (!nonce) return;
+    if (!transmitter || pn == 0U || pn > WIFI_CCMP_PN_MAX) {
+        for (size_t i = 0U; i < WIFI_CCMP_NONCE_SIZE; ++i) nonce[i] = 0U;
+        return;
+    }
+    nonce[0] = priority;
+    for (size_t i = 0U; i < 6U; ++i) nonce[1U + i] = transmitter[i];
+    nonce[7] = (uint8_t)(pn >> 40);
+    nonce[8] = (uint8_t)(pn >> 32);
+    nonce[9] = (uint8_t)(pn >> 24);
+    nonce[10] = (uint8_t)(pn >> 16);
+    nonce[11] = (uint8_t)(pn >> 8);
+    nonce[12] = (uint8_t)pn;
+}

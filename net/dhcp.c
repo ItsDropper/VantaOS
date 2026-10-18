@@ -52,6 +52,9 @@ typedef struct {
     uint8_t renewing;
     uint8_t lease_valid;
     uint8_t retry_count;
+    uint8_t acquiring;
+    uint8_t requested;
+    uint32_t acquisition_deadline;
     uint32_t lease_address, lease_started, renew_at, rebind_at, expires_at, next_retry;
 } dhcp_state_t;
 

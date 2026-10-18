@@ -68,12 +68,12 @@ int main(void)
         9, 4, 0, 0, 1, 0xFF, 0, 0, 0,
         7, 5, 0x81, 2, 64, 0, 0
     };
-    if (rtl8188eu_probe(1, 0x0BDA, 0x8179, malformed,
+    if (rtl8188eu_probe(1, 1, 0x0BDA, 0x8179, malformed,
                         sizeof(malformed)) != 0)
         return 1;
-    if (rtl8188eu_probe(1, 0x1234, 0x8179, valid, sizeof(valid)) != 0)
+    if (rtl8188eu_probe(1, 1, 0x1234, 0x8179, valid, sizeof(valid)) != 0)
         return 2;
-    if (rtl8188eu_probe(1, 0x0BDA, 0x8179, valid, sizeof(valid)) != 1)
+    if (rtl8188eu_probe(1, 1, 0x0BDA, 0x8179, valid, sizeof(valid)) != 1)
         return 3;
     if (configured_in != 0x81 || configured_out != 0x02 ||
         packet_in != 64 || packet_out != 64)

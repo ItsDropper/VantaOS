@@ -147,9 +147,25 @@ int main(void)
         context.installed_gtk_id != 0U)
         return 8;
 
-    wifi_wpa2_reset(&supplicant);
-    if (wifi_wpa2_get_state(&supplicant) != WIFI_WPA2_IDLE)
-        return 9;
-    puts("WPA2 EAPOL M1-M2-M3-M4 handshake and key-install tests passed.");
+    /*
+     * A rejected reconnect attempt must invalidate the previous authenticated
+     * session rather than leave stale keys/state usable by the caller.
+     */
+    {
+        static const uint8_t invalid_passphrase[] = "short";
+        if (wifi_wpa2_begin(&supplicant, &ops, ssid, sizeof(ssid)-1U,
+                            invalid_passphrase, sizeof(invalid_passphrase)-1U,
+                            local, bssid, rsn, sizeof(rsn)) != 0 ||
+            wifi_wpa2_get_state(&supplicant) != WIFI_WPA2_IDLE)
+            return 9;
+        for (size_t i = 0U; i < sizeof(supplicant.pmk); ++i)
+            if (supplicant.pmk[i] != 0U) return 10;
+        for (size_t i = 0U; i < sizeof(supplicant.ptk); ++i)
+            if (supplicant.ptk[i] != 0U) return 11;
+        if (supplicant.rsn_ie_length != 0U || supplicant.have_ptk ||
+            supplicant.have_replay)
+            return 12;
+    }
+    puts("WPA2 EAPOL handshake, key-install, and failed-reconnect cleanup tests passed.");
     return 0;
 }

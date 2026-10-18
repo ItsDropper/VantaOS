@@ -176,6 +176,8 @@ jobs:
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_wifi_wpa2_primitives.c net/wifi_crypto.c net/wifi_ccmp.c -o /tmp/vantaos-wifi-wpa2-primitives-test
           /tmp/vantaos-wifi-wpa2-primitives-test
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_wifi_wpa2_supplicant.c net/wifi_wpa2.c net/wifi_crypto.c net/wifi_ccmp.c -o /tmp/vantaos-wifi-wpa2-supplicant-test
+          /tmp/vantaos-wifi-wpa2-supplicant-test
 
 
       - name: Test bounded IEEE 802.11 scan-frame and RSN parsing

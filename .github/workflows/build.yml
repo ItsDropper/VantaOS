@@ -14,9 +14,16 @@ on:
 permissions:
   contents: read
 
+# Keep only the newest validation run per PR/ref; prevent a stuck QEMU test
+# from occupying a hosted runner indefinitely.
+concurrency:
+  group: vantaos-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -1014,6 +1021,7 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/master' && !contains(github.event.head_commit.message, '[skip ci]')
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: write
     steps:

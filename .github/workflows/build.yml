@@ -245,7 +245,7 @@ jobs:
           fi
 
       - name: RTL8139 QEMU Ethernet end-to-end test
-        if: steps.scope.outputs.full == '1' || steps.scope.outputs.e1000 == '1'
+        if: steps.scope.outputs.full == '1'
         shell: bash
         run: |
           set -euo pipefail

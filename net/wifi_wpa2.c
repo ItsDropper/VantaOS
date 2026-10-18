@@ -38,6 +38,13 @@ static void put_be16(uint8_t *p, uint16_t value)
     p[1] = (uint8_t)value;
 }
 
+static int bytes_equal(const uint8_t *a, const uint8_t *b, size_t length)
+{
+    uint8_t different = 0U;
+    for (size_t i = 0U; i < length; ++i) different |= (uint8_t)(a[i] ^ b[i]);
+    return different == 0U;
+}
+
 static int mac_equal(const uint8_t *a, const uint8_t *b)
 {
     uint8_t different = 0U;
@@ -277,7 +284,7 @@ int wifi_wpa2_receive_eapol(wifi_wpa2_supplicant_t *s,
         (KEY_INFO_ACK | KEY_INFO_MIC | KEY_INFO_INSTALL | KEY_INFO_SECURE |
          KEY_INFO_ENCRYPTED_DATA) ||
         !replay_greater(payload + 9U, s->replay_counter) ||
-        !mac_equal(payload + 17U, s->anonce) ||
+        !bytes_equal(payload + 17U, s->anonce, sizeof(s->anonce)) ||
         !verify_mic(s->ptk, payload, length) || key_data_length < 24U ||
         key_data_length > sizeof(decrypted) || (key_data_length & 7U) != 0U) {
         fail_session(s);

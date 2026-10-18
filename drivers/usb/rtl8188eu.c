@@ -111,6 +111,7 @@ static uint8_t rtl_keys_installed;
 static wifi_ccmp_replay_t rtl_pairwise_pn;
 static wifi_ccmp_replay_t rtl_group_pn;
 static uint8_t rtl_netdev_registered;
+static uint8_t rtl_dhcp_started;
 static int rtl_netdev_transmit(net_device_t *device, const uint8_t *frame,
                                size_t length);
 static const net_device_ops_t rtl_netdev_ops = {
@@ -126,6 +127,7 @@ extern int net_device_register(net_device_t *) __attribute__((weak));
 extern int net_device_unregister(net_device_t *) __attribute__((weak));
 extern int net_device_set_link(net_device_t *, int) __attribute__((weak));
 extern int net_receive_frame(net_device_t *, const void *, size_t) __attribute__((weak));
+extern int net_dhcp_start(net_device_t *, uint32_t) __attribute__((weak));
 static void rtl_station_receive_frame(const uint8_t *frame, size_t length);
 static void rtl_station_poll(void);
 static void rtl_station_reset(void);
@@ -828,6 +830,9 @@ static void rtl_network_link_up(void)
     rtl_netdev.link_up = 1U;
     if (net_device_set_link)
         (void)net_device_set_link(&rtl_netdev, 1);
+    if (!rtl_dhcp_started && net_dhcp_start &&
+        net_dhcp_start(&rtl_netdev, 10000U))
+        rtl_dhcp_started = 1U;
 }
 
 static void rtl_network_link_down(void)
@@ -1226,6 +1231,7 @@ static void rtl_station_poll(void)
 static void rtl_station_reset(void)
 {
     rtl_network_link_down();
+    rtl_dhcp_started = 0U;
     wifi_wpa2_reset(&rtl_supplicant);
     for (size_t i = 0U; i < sizeof(rtl_station_passphrase); ++i)
         rtl_station_passphrase[i] = 0U;

@@ -41,7 +41,6 @@
 #define RTL8188EU_REG_PKTBUF_DEBUG_DATA_LO 0x0144U
 #define RTL8188EU_REG_PKTBUF_DEBUG_DATA_HI 0x0148U
 #define RTL8188EU_REG_TDECTRL 0x0208U
-#define RTL8188EU_IOL_INIT_LLT 0x01U
 #define RTL8188EU_IOL_READ_EFUSE_MAP 0x02U
 #define RTL8188EU_IOL_EFUSE_PATCH 0x04U
 #define RTL8188EU_IOL_ENABLE 0x80U
@@ -533,8 +532,8 @@ static int rtl_iol_execute(uint8_t command)
         !rtl_reg_write8(RTL8188EU_REG_SYS_OFFLOAD,
                         (uint8_t)(value | RTL8188EU_IOL_ENABLE)) ||
         !rtl_reg_read8(RTL8188EU_REG_HMEBOX_E0, &value) ||
-        !rtl_reg_write8(RTL8188EU_REG_HMEBOX_E0,
-                        (uint8_t)(value | command)))
+        !rtl_reg_write8(RTL8188EU_REG_HMEBOX_E0, 0U) ||
+        !rtl_reg_write8(RTL8188EU_REG_HMEBOX_E0, command))
         return 0;
 
     for (uint32_t retry = 0U; retry < 64U; ++retry) {
@@ -569,19 +568,19 @@ static int rtl_read_efuse_physical(uint8_t *physical, size_t capacity)
         !rtl_bound || !rtl_firmware_ready)
         return 0;
 
-    /* Initialize packet-buffer LLT before using its firmware offload area. */
+    /*
+     * Firmware stores the eFuse map at the TX packet-buffer boundary.
+     * The debug port uses 8-byte units, so preserve the boundary and use
+     * boundary * 128 / 8 as the first debug address.
+     */
     if (!rtl_reg_read8(RTL8188EU_REG_TDECTRL + 1U, &boundary))
         return 0;
     have_boundary = 1U;
-    if (!rtl_iol_execute(RTL8188EU_IOL_INIT_LLT))
-        goto fail;
     if (!rtl_reg_read8(RTL8188EU_REG_PKTBUF_ACCESS, &access))
         goto fail;
     have_access = 1U;
-    /* The eFuse read command returns the physical map in the TX packet buffer. */
-    if (!rtl_reg_write8(RTL8188EU_REG_TDECTRL + 1U, 0U) ||
-        !rtl_reg_write8(RTL8188EU_REG_PKTBUF_ACCESS,
-                        (uint8_t)(access | 0x01U)) ||
+    if (!rtl_reg_write8(RTL8188EU_REG_TDECTRL + 1U, boundary) ||
+        !rtl_reg_write8(RTL8188EU_REG_PKTBUF_ACCESS, 0x69U) ||
         !rtl_iol_execute(RTL8188EU_IOL_READ_EFUSE_MAP))
         goto fail;
 
@@ -591,7 +590,7 @@ static int rtl_read_efuse_physical(uint8_t *physical, size_t capacity)
     /* Debug port is addressed in 8-byte units. First word includes length. */
     for (uint16_t block = 0U; block < 80U; ++block) {
         uint8_t ready = 0U;
-        debug_address = block;
+        debug_address = (uint16_t)((uint16_t)boundary * 16U + block);
         if (!rtl_reg_write16(RTL8188EU_REG_PKTBUF_DEBUG_ADDR, debug_address) ||
             !rtl_reg_write8(RTL8188EU_REG_PKTBUF_DEBUG_STATUS, 0U))
             goto fail;

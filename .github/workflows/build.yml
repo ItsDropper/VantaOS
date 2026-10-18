@@ -155,6 +155,11 @@ jobs:
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_wifi_api.c net/wifi.c -o /tmp/vantaos-wifi-api-test
           /tmp/vantaos-wifi-api-test
 
+      - name: Test Wi-Fi PBKDF2-HMAC-SHA1 known-answer vectors
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_wifi_crypto.c net/wifi_crypto.c -o /tmp/vantaos-wifi-crypto-test
+          /tmp/vantaos-wifi-crypto-test
+
       - name: Test bounded IEEE 802.11 scan-frame and RSN parsing
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_wifi_80211.c net/wifi_80211.c -o /tmp/vantaos-wifi-80211-test

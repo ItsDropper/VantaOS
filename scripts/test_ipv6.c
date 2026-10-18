@@ -107,7 +107,9 @@ static void inject_udp6(const uint8_t global[16], int corrupt_checksum)
     put16(udp, 12345U); put16(udp + 2U, 4321U); put16(udp + 4U, (uint16_t)(8U + sizeof(message) - 1U));
     for (size_t i = 0; i < sizeof(message) - 1U; ++i) udp[8U+i] = message[i];
     put16(udp + 6U, udp6_checksum_test(source, global, udp, 8U + sizeof(message) - 1U));
-    if (corrupt_checksum) udp[6] ^= 0x80U;
+    if (corrupt_checksum == 1) udp[6] ^= 0x80U;
+    else if (corrupt_checksum == 2) udp[6] = udp[7] = 0U;
+    else if (corrupt_checksum == 3) put16(udp + 4U, (uint16_t)(9U + sizeof(message) - 1U));
     ipv6_handler(&device, f, sizeof(f), 0x86DDU, 14U, ipv6_context);
 }
 static void inject_echo(const uint8_t global[16])
@@ -144,6 +146,8 @@ int main(void)
     assert(udp6_received == 1U && udp6_payload_length == 5U);
     assert(udp6_payload[0] == 'V' && udp6_payload[1] == '6' && udp6_payload[2] == 'U' && udp6_payload[3] == 'D' && udp6_payload[4] == 'P');
     inject_udp6(global.bytes, 1);
+    inject_udp6(global.bytes, 2); /* IPv6 UDP checksum may never be zero. */
+    inject_udp6(global.bytes, 3); /* UDP length must exactly match IPv6 payload length. */
     assert(udp6_received == 1U);
     static const uint8_t all_nodes[16] = {0xFF,2,0,0,0,0,0,0,0,0,0,0,0,0,0,1};
     static const uint8_t out_payload[] = "OUT6";
@@ -153,6 +157,11 @@ int main(void)
     assert(last_tx[54] == 0x10U && last_tx[55] == 0xE1U);
     assert(last_tx[56] == 0x30U && last_tx[57] == 0x39U);
     assert(last_tx[60] != 0U || last_tx[61] != 0U);
+    device.mtu = 1279U;
+    assert(!net_udp6_send(&device, all_nodes, 4321U, 12345U, out_payload, sizeof(out_payload)-1U));
+    device.mtu = 1280U;
+    assert(net_udp6_send(&device, all_nodes, 4321U, 12345U, out_payload, sizeof(out_payload)-1U));
+    device.mtu = 1500U;
     assert(net_udp6_handler_unregister(4321U, udp6_handler, 0));
     puts("VANTAOS_IPV6_SLAAC_ICMP6_UDP6_TEST_OK");
     return 0;

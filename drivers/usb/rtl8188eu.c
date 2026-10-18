@@ -525,33 +525,47 @@ static uint8_t rtl_efuse_ready;
  * bounds-checked physical-to-logical map decoder. It does not program RF or
  * synthesize board calibration values.
  */
+extern uint32_t timer_get_ticks(void) __attribute__((weak));
+
 static int rtl_iol_execute(uint8_t command)
 {
-    uint8_t value, status;
+    uint8_t value, mailbox, status;
+    uint8_t completed = 0U;
+    uint32_t start_ticks = timer_get_ticks ? timer_get_ticks() : 0U;
+
     if (!rtl_reg_read8(RTL8188EU_REG_SYS_OFFLOAD, &value) ||
         !rtl_reg_write8(RTL8188EU_REG_SYS_OFFLOAD,
-                        (uint8_t)(value | RTL8188EU_IOL_ENABLE)) ||
-        !rtl_reg_read8(RTL8188EU_REG_HMEBOX_E0, &value) ||
-        !rtl_reg_write8(RTL8188EU_REG_HMEBOX_E0, 0U) ||
-        !rtl_reg_write8(RTL8188EU_REG_HMEBOX_E0, command))
+                        (uint8_t)(value | RTL8188EU_IOL_ENABLE)))
         return 0;
 
-    for (uint32_t retry = 0U; retry < 64U; ++retry) {
+    if (!rtl_reg_read8(RTL8188EU_REG_HMEBOX_E0, &mailbox))
+        goto cleanup;
+    /* Do not erase unrelated mailbox/status bits to force a command through. */
+    if ((mailbox & command) != 0U)
+        goto cleanup;
+    if (!rtl_reg_write8(RTL8188EU_REG_HMEBOX_E0,
+                        (uint8_t)(mailbox | command)))
+        goto cleanup;
+
+    for (uint32_t retry = 0U; retry < 256U; ++retry) {
         if (!rtl_reg_read8(RTL8188EU_REG_HMEBOX_E0, &status))
-            return 0;
+            break;
         if ((status & command) == 0U) {
-            if ((status & ((uint8_t)command << RTL8188EU_IOL_ERROR_SHIFT)) != 0U)
-                return 0;
-            if (!rtl_reg_read8(RTL8188EU_REG_SYS_OFFLOAD, &value) ||
-                !rtl_reg_write8(RTL8188EU_REG_SYS_OFFLOAD,
-                                (uint8_t)(value & ~RTL8188EU_IOL_ENABLE)))
-                return 0;
-            return 1;
+            completed = (uint8_t)(
+                (status & ((uint8_t)command << RTL8188EU_IOL_ERROR_SHIFT)) == 0U);
+            break;
         }
+        if (timer_get_ticks &&
+            (uint32_t)(timer_get_ticks() - start_ticks) >= 100U)
+            break; /* PIT ticks are 10 ms; cap this synchronous bring-up wait. */
     }
-    if (rtl_reg_read8(RTL8188EU_REG_SYS_OFFLOAD, &value))
-        (void)rtl_reg_write8(RTL8188EU_REG_SYS_OFFLOAD,
-                             (uint8_t)(value & ~RTL8188EU_IOL_ENABLE));
+
+cleanup:
+    if (rtl_reg_read8(RTL8188EU_REG_SYS_OFFLOAD, &value) &&
+        rtl_reg_write8(RTL8188EU_REG_SYS_OFFLOAD,
+                       (uint8_t)(value & ~RTL8188EU_IOL_ENABLE)) &&
+        completed != 0U)
+        return 1;
     return 0;
 }
 

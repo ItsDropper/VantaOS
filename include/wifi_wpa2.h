@@ -59,6 +59,8 @@ int wifi_wpa2_begin(wifi_wpa2_supplicant_t *supplicant,
 int wifi_wpa2_receive_eapol(wifi_wpa2_supplicant_t *supplicant,
                             const uint8_t *source_mac,
                             const uint8_t *payload, size_t length);
+/* Retransmit the current handshake response after a bounded timeout. */
+int wifi_wpa2_retry(wifi_wpa2_supplicant_t *supplicant);
 void wifi_wpa2_reset(wifi_wpa2_supplicant_t *supplicant);
 wifi_wpa2_state_t wifi_wpa2_get_state(const wifi_wpa2_supplicant_t *supplicant);
 

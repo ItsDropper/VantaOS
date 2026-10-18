@@ -32,7 +32,8 @@
 #define RTL8139_CR_RE 0x08U
 #define RTL8139_CR_RST 0x10U
 #define RTL8139_RX_ROK 0x0001U
-#define RTL8139_TX_TOK 0x00002000U
+#define RTL8139_TX_TOK 0x00008000U /* TSD.TOK: transmit completed successfully */
+#define RTL8139_TX_ERROR_MASK (0x00004000U | 0x20000000U | 0x40000000U | 0x80000000U) /* underrun, out-of-window, abort, carrier lost */
 #define RTL8139_RX_ACCEPT_ALL 0x0000008EU /* physical, multicast, broadcast, wrap */
 
 typedef struct {
@@ -136,8 +137,10 @@ static int rtl8139_transmit(net_device_t *device, const uint8_t *frame, size_t l
     int completed = 0;
     for (uint32_t spin = 0; spin < RTL8139_WAIT_LIMIT; ++spin) {
         __asm__ volatile ("" ::: "memory");
-        if (io_in32(tsd) & RTL8139_TX_TOK) {
-            completed = 1;
+        uint32_t status = io_in32(tsd);
+        if (status & (RTL8139_TX_TOK | RTL8139_TX_ERROR_MASK)) {
+            completed = (status & RTL8139_TX_TOK) != 0U &&
+                        (status & RTL8139_TX_ERROR_MASK) == 0U;
             break;
         }
         __asm__ volatile ("pause");

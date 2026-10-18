@@ -2,14 +2,14 @@
 
 ## What the current driver proves
 
-The driver recognizes the supported USB IDs, configures bulk endpoints, performs vendor register access, attempts to load `/SYSTEM/RTL8188EU.BIN`, checks firmware-download status, and parses received RX aggregates to cache Beacon/Probe Response metadata. The new status API distinguishes USB binding, firmware-load pending, firmware-init-ready, firmware-load failure, and disconnection.
+The driver recognizes the supported USB IDs, configures bulk endpoints, performs vendor register access, attempts to load `/SYSTEM/RTL8188EU.BIN`, checks firmware-download status, and parses received RX aggregates to cache Beacon/Probe Response metadata. The status API distinguishes USB binding, firmware-load pending, firmware-init-ready, firmware-load failure, and disconnection. The driver also reads the programmed station MAC and can transmit a wildcard Probe Request on the radio's current channel; this is a single-channel primitive, not a channel-hopping scan.
 
 `RTL8188EU_STATUS_FIRMWARE_READY` means only that the device reported its firmware-init-ready bit. It does **not** mean the radio is calibrated, actively scanning, associated, WPA2-authenticated, or able to carry IP traffic. Do not treat firmware readiness as a network link-up signal.
 
 ## Work still required for end-to-end Wi-Fi
 
 - RTL8188EU MAC/eFuse and RF/baseband initialization, board-specific calibration, and power tables.
-- Channel configuration and active probe-request scanning.
+- RF channel selection/hopping and a complete active scan across supported channels. The new probe-request API sends only on the currently configured channel.
 - 802.11 authentication and association request/response state machine.
 - Station MAC address sourced from the adapter, not fabricated.
 - Secure WPA2-PSK/CCMP supplicant wired to real EAPOL TX/RX and atomic key installation.
@@ -20,4 +20,4 @@ The WPA2/CCMP primitives have standalone tests, but passing primitive tests does
 
 ## Validation in this change
 
-The RTL8188EU mocked-device test now checks the observable state transitions. This verifies the status contract only; it is not a substitute for association, secured data transfer, or physical hardware testing.
+The RTL8188EU mocked-device test checks observable state transitions and validates the active Probe Request's destination, station address, BSSID, and wildcard SSID/rates IEs. This verifies the status contract only; it is not a substitute for association, secured data transfer, or physical hardware testing.

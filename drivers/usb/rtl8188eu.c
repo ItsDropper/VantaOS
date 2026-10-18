@@ -50,6 +50,10 @@ static uint8_t rtl_firmware_attempted;
 static uint8_t rtl_firmware_ready;
 static uint8_t rtl_rx_armed;
 static uint8_t rtl_rx_buffer[4096] __attribute__((aligned(64)));
+#define RTL8188EU_TX_DESC_SIZE 32U
+#define RTL8188EU_TX_FRAME_MAX 2304U
+static uint8_t rtl_tx_buffer[RTL8188EU_TX_DESC_SIZE + RTL8188EU_TX_FRAME_MAX]
+    __attribute__((aligned(64)));
 static net_wifi_scan_result_t rtl_passive_results[NET_WIFI_MAX_SCAN_RESULTS];
 static size_t rtl_passive_result_count;
 static int rtl_reg_read16(uint16_t address, uint16_t *value);
@@ -493,6 +497,66 @@ static void rtl_process_rx_packet(const uint8_t *packet, size_t length)
             break;
         cursor = next;
     }
+}
+
+/*
+ * USB TX descriptors for the RTL8188E family are 32 bytes. The host supplies
+ * a complete 802.11 MPDU without FCS; the MAC appends the FCS. Use the
+ * management queue for management frames and best-effort for data frames.
+ *
+ * The caller remains responsible for radio/channel state, sequence numbers,
+ * association and encryption. This routine deliberately does not claim those
+ * higher-level operations are implemented.
+ */
+static void rtl_put_le16(uint8_t *p, uint16_t value)
+{
+    p[0] = (uint8_t)value;
+    p[1] = (uint8_t)(value >> 8);
+}
+
+static void rtl_put_le32(uint8_t *p, uint32_t value)
+{
+    p[0] = (uint8_t)value;
+    p[1] = (uint8_t)(value >> 8);
+    p[2] = (uint8_t)(value >> 16);
+    p[3] = (uint8_t)(value >> 24);
+}
+
+int rtl8188eu_transmit_frame(const uint8_t *frame, size_t length)
+{
+    uint32_t actual = 0U;
+    uint8_t *descriptor = rtl_tx_buffer;
+    uint8_t frame_type;
+
+    if (!rtl_bound || !rtl_firmware_ready || !frame ||
+        length < 24U || length > RTL8188EU_TX_FRAME_MAX)
+        return 0;
+
+    /* Management/control/data parsing is deliberately conservative. */
+    frame_type = (uint8_t)(frame[0] & 0x0CU);
+    if (frame_type != 0x00U && frame_type != 0x08U)
+        return 0;
+
+    for (size_t i = 0U; i < sizeof(rtl_tx_buffer); ++i)
+        rtl_tx_buffer[i] = 0U;
+
+    rtl_put_le16(descriptor, (uint16_t)length);
+    descriptor[2] = (uint8_t)RTL8188EU_TX_DESC_SIZE;
+    descriptor[3] = 0x0CU; /* First and last segment. */
+    /* TXDW1: management queue (0x12) or best-effort data queue (0x03). */
+    rtl_put_le32(descriptor + 4U,
+                 (uint32_t)((frame_type == 0x00U ? 0x12U : 0x03U) << 8));
+    /* TXDW4: driver-selected legacy rate; TXDW5 rate zero is 1 Mbps CCK. */
+    rtl_put_le32(descriptor + 16U, 0x00000100U);
+    for (size_t i = 0U; i < length; ++i)
+        rtl_tx_buffer[RTL8188EU_TX_DESC_SIZE + i] = frame[i];
+
+    if (!xhci_bulk_transfer(rtl_slot, (uint8_t)(rtl_bulk_in & 0x7FU),
+                            rtl_tx_buffer,
+                            (uint32_t)(RTL8188EU_TX_DESC_SIZE + length),
+                            &actual))
+        return 0;
+    return actual == RTL8188EU_TX_DESC_SIZE + length;
 }
 
 void rtl8188eu_poll(void)

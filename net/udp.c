@@ -22,6 +22,7 @@ static uint32_t handlers_used;
 typedef struct { uint16_t port; net_udp6_handler_fn fn; void* context; } udp6_handler_t;
 static udp6_handler_t handlers6[NET_UDP_HANDLER_MAX];
 static uint32_t handlers6_used;
+/* UDPv6 handlers run from net_poll/process context, never hard IRQs. */
 static spinlock_t handler6_lock = SPINLOCK_INITIALIZER;
 static spinlock_t handler_lock = SPINLOCK_INITIALIZER;
 
@@ -276,27 +277,27 @@ int net_udp6_handler_register(uint16_t port, net_udp6_handler_fn fn,
     if (port == 0U || !fn)
         return 0;
 
-    uint64_t flags = spinlock_lock_irqsave(&handler6_lock);
+    spinlock_lock(&handler6_lock);
     for (uint32_t i = 0; i < handlers6_used; ++i) {
         if (handlers6[i].port == port) {
-            spinlock_unlock_irqrestore(&handler6_lock, flags);
+            spinlock_unlock(&handler6_lock);
             return 0;
         }
     }
     if (handlers6_used == NET_UDP_HANDLER_MAX) {
-        spinlock_unlock_irqrestore(&handler6_lock, flags);
+        spinlock_unlock(&handler6_lock);
         return 0;
     }
 
     handlers6[handlers6_used++] = (udp6_handler_t){port, fn, context};
-    spinlock_unlock_irqrestore(&handler6_lock, flags);
+    spinlock_unlock(&handler6_lock);
     return 1;
 }
 
 int net_udp6_handler_unregister(uint16_t port, net_udp6_handler_fn fn,
                                 void* context)
 {
-    uint64_t flags = spinlock_lock_irqsave(&handler6_lock);
+    spinlock_lock(&handler6_lock);
     uint32_t at = handlers6_used;
     for (uint32_t i = 0; i < handlers6_used; ++i) {
         if (handlers6[i].port == port && handlers6[i].fn == fn &&
@@ -306,14 +307,14 @@ int net_udp6_handler_unregister(uint16_t port, net_udp6_handler_fn fn,
         }
     }
     if (at == handlers6_used) {
-        spinlock_unlock_irqrestore(&handler6_lock, flags);
+        spinlock_unlock(&handler6_lock);
         return 0;
     }
 
     for (uint32_t i = at; i + 1U < handlers6_used; ++i)
         handlers6[i] = handlers6[i + 1U];
     --handlers6_used;
-    spinlock_unlock_irqrestore(&handler6_lock, flags);
+    spinlock_unlock(&handler6_lock);
     return 1;
 }
 
@@ -338,7 +339,7 @@ void net_udp_receive_ipv6(net_device_t* device, const uint8_t source[16],
 
     udp6_handler_t snapshot = {0};
     int found = 0;
-    uint64_t flags = spinlock_lock_irqsave(&handler6_lock);
+    spinlock_lock(&handler6_lock);
     for (uint32_t i = 0; i < handlers6_used; ++i) {
         if (handlers6[i].port == destination_port) {
             snapshot = handlers6[i];
@@ -346,7 +347,7 @@ void net_udp_receive_ipv6(net_device_t* device, const uint8_t source[16],
             break;
         }
     }
-    spinlock_unlock_irqrestore(&handler6_lock, flags);
+    spinlock_unlock(&handler6_lock);
 
     if (found) {
         snapshot.fn(device, source, destination, source_port, destination_port,

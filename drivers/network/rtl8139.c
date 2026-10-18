@@ -33,7 +33,7 @@
 #define RTL8139_CR_RST 0x10U
 #define RTL8139_RX_ROK 0x0001U
 #define RTL8139_TX_TOK 0x00002000U
-#define RTL8139_RX_ACCEPT_ALL 0x0000008FU /* physical, multicast, broadcast, wrap */
+#define RTL8139_RX_ACCEPT_ALL 0x0000008EU /* physical, multicast, broadcast, wrap */
 
 typedef struct {
     const struct pci_device *pci;

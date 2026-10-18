@@ -325,6 +325,12 @@ int net_dns_resolve_aaaa(net_device_t* device, const char* host,
         timeout_ms < 500U || timeout_ms > 30000U)
         return 0;
 
+    uint8_t validation[DNS_MAX_MESSAGE];
+    size_t validation_length = 0U;
+    if (!build_query(host, validation, sizeof(validation), &validation_length,
+                     1U, 28U))
+        return 0;
+
     net_ipv6_address_t server = {{0}};
     if (!net_ipv6_get_dns_server(device, &server)) return 0;
     if (cache6_lookup(device, server.bytes, host, out)) return 1;

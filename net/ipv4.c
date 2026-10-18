@@ -119,7 +119,7 @@ int net_ipv4_send(net_device_t* device, uint32_t destination,
     if (!device || !payload || !device->link_up ||
         (protocol != IPV4_PROTOCOL_ICMP && protocol != IPV4_PROTOCOL_UDP &&
          protocol != IPV4_PROTOCOL_TCP) ||
-        payload_length == 0U || payload_length > (size_t)device->mtu - 20U)
+        !net_ipv4_payload_fits_mtu(device->mtu, payload_length))
         return 0;
 
     uint32_t source = 0, mask = 0, gateway = 0;

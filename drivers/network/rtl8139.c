@@ -3,6 +3,7 @@
 #include "pci.h"
 #include "serial.h"
 #include "spinlock.h"
+#include "rtl8139_regs.h"
 #include <stddef.h>
 #include <stdint.h>
 
@@ -32,7 +33,6 @@
 #define RTL8139_CR_RE 0x08U
 #define RTL8139_CR_RST 0x10U
 #define RTL8139_RX_ROK 0x0001U
-#define RTL8139_TX_TOK 0x00002000U
 #define RTL8139_RX_ACCEPT_ALL 0x0000008EU /* physical, multicast, broadcast, wrap */
 
 typedef struct {
@@ -136,8 +136,9 @@ static int rtl8139_transmit(net_device_t *device, const uint8_t *frame, size_t l
     int completed = 0;
     for (uint32_t spin = 0; spin < RTL8139_WAIT_LIMIT; ++spin) {
         __asm__ volatile ("" ::: "memory");
-        if (io_in32(tsd) & RTL8139_TX_TOK) {
-            completed = 1;
+        uint32_t status = io_in32(tsd);
+        if (rtl8139_tsd_is_terminal(status)) {
+            completed = rtl8139_tsd_is_success(status);
             break;
         }
         __asm__ volatile ("pause");

@@ -4,6 +4,25 @@
 #include <stdint.h>
 #include "net.h"
 int net_ipv4_initialize(void);
+/*
+ * The IPv4 implementation uses a fixed NET_MTU_DEFAULT-sized stack buffer.
+ * Reject undersized/oversized interface MTUs before subtracting header bytes;
+ * this also prevents size_t underflow and writes past that buffer.
+ */
+static inline int net_ipv4_payload_fits_mtu(uint16_t mtu, size_t payload_length)
+{
+    return mtu >= NET_MTU_MIN && mtu <= NET_MTU_DEFAULT &&
+           payload_length != 0U && payload_length <= (size_t)mtu - 20U;
+}
+
+/* UDP also builds into a fixed-size stack buffer; its 8-byte header must fit. */
+static inline int net_udp_payload_fits_mtu(uint16_t mtu, size_t payload_length)
+{
+    return mtu >= NET_MTU_MIN && mtu <= NET_MTU_DEFAULT &&
+           payload_length <= (size_t)mtu - 28U &&
+           payload_length <= NET_MTU_DEFAULT - 8U;
+}
+
 /* Sends one unfragmented IPv4 packet; resolves the next-hop MAC through ARP. */
 int net_ipv4_send(net_device_t* device, uint32_t destination,
                   uint8_t protocol, const void* payload, size_t payload_length);

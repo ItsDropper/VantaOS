@@ -118,6 +118,16 @@ jobs:
       - name: Enforce architecture boundaries
         run: python3 scripts/check_architecture.py
 
+      - name: Test RTL8139 transmit status semantics
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_rtl8139_status.c -o /tmp/vantaos-rtl8139-status-test
+          /tmp/vantaos-rtl8139-status-test
+
+      - name: Test IPv4 outbound MTU bounds
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_ipv4_mtu.c -o /tmp/vantaos-ipv4-mtu-test
+          /tmp/vantaos-ipv4-mtu-test
+
       - name: Test DNS response validation
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_dns_client.c net/dns.c -o /tmp/vantaos-dns-client-test

@@ -170,20 +170,22 @@ static int test_efuse_logical_map_decoder(void)
 {
     uint8_t physical[32], logical[512];
     memset(physical, 0xFF, sizeof(physical));
-    /* Section 26, word 3: logical bytes 0xD6-0xD7. */
+    /* Section 26, word 3: three-byte extended header, logical 0xD6-0xD7. */
     physical[0] = 0x4FU;
-    physical[1] = 0x37U;
-    physical[2] = 0xA6U;
-    physical[3] = 0xA7U;
+    physical[1] = 0x0FU;
+    physical[2] = 0x37U;
+    physical[3] = 0xA6U;
+    physical[4] = 0xA7U;
     /* Section 27, words 0-2: logical bytes 0xD8-0xDD. */
-    physical[4] = 0x6FU;
-    physical[5] = 0x38U;
-    physical[6] = 0xA8U;
-    physical[7] = 0xA9U;
-    physical[8] = 0xAAU;
-    physical[9] = 0xABU;
-    physical[10] = 0xACU;
-    physical[11] = 0xADU;
+    physical[5] = 0x6FU;
+    physical[6] = 0x0FU;
+    physical[7] = 0x38U;
+    physical[8] = 0xA8U;
+    physical[9] = 0xA9U;
+    physical[10] = 0xAAU;
+    physical[11] = 0xABU;
+    physical[12] = 0xACU;
+    physical[13] = 0xADU;
     if (!rtl8188eu_decode_efuse_map(physical, sizeof(physical),
                                     logical, sizeof(logical)))
         return 0;

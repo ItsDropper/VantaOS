@@ -682,6 +682,8 @@ int rtl8188eu_decode_efuse_map(const uint8_t *physical, size_t physical_length,
                 word_enable = (uint8_t)(extended & 0x0FU);
             }
         }
+        if (section >= (RTL8188EU_EFUSE_LOGICAL_SIZE / 8U))
+            return 0;
         if (word_enable == 0x0FU) continue;
         size_t base = (size_t)section * 8U;
         if (base + 8U > logical_length) return 0;

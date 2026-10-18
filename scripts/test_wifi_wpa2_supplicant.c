@@ -110,6 +110,20 @@ int main(void)
         memcmp(context.sent + 99U, rsn, sizeof(rsn)) != 0)
         return 3;
 
+    /* Duplicate M1 and a timeout must resend M2 without changing the SNonce. */
+    {
+        uint8_t first_m2[WIFI_WPA2_EAPOL_MAX];
+        size_t first_m2_length = context.sent_length;
+        memcpy(first_m2, context.sent, first_m2_length);
+        if (wifi_wpa2_receive_eapol(&supplicant, bssid, m1, sizeof(m1)) != 1 ||
+            context.send_calls != 2U || context.random_calls != 1U ||
+            context.sent_length != first_m2_length ||
+            memcmp(context.sent, first_m2, first_m2_length) != 0 ||
+            !wifi_wpa2_retry(&supplicant) || context.send_calls != 3U ||
+            memcmp(context.sent, first_m2, first_m2_length) != 0)
+            return 13;
+    }
+
     if (!wifi_pbkdf2_sha1(passphrase, sizeof(passphrase)-1U, ssid,
                           sizeof(ssid)-1U, WIFI_PBKDF2_SHA1_ITERATIONS,
                           pmk, sizeof(pmk)) ||
@@ -141,11 +155,16 @@ int main(void)
     memcpy(m3 + 81U, expected_mic, 16U);
     if (wifi_wpa2_receive_eapol(&supplicant, bssid, m3, sizeof(m3)) != 1 ||
         wifi_wpa2_get_state(&supplicant) != WIFI_WPA2_AUTHENTICATED ||
-        context.install_calls != 1U || context.send_calls != 2U ||
+        context.install_calls != 1U || context.send_calls != 4U ||
         memcmp(context.installed_tk, ptk + 32U, 16U) != 0 ||
         memcmp(context.installed_gtk, gtk, 16U) != 0 ||
         context.installed_gtk_id != 0U)
         return 8;
+
+    /* Duplicate M3 must retransmit M4 but never install the GTK twice. */
+    if (wifi_wpa2_receive_eapol(&supplicant, bssid, m3, sizeof(m3)) != 1 ||
+        context.send_calls != 5U || context.install_calls != 1U)
+        return 14;
 
     /*
      * A rejected reconnect attempt must invalidate the previous authenticated

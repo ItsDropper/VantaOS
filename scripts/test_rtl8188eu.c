@@ -187,7 +187,7 @@ int main(void)
         return 2;
     if (rtl8188eu_probe(1, 1, 0x0BDA, 0x8179, valid, sizeof(valid)) != 1)
         return 3;
-    if (rtl8188eu_get_status() != RTL8188EU_STATUS_USB_BOUND ||
+    if (rtl8188eu_get_status() != RTL8188EU_STATUS_FIRMWARE_PENDING ||
         configured_in != 0x81 || configured_out != 0x02 ||
         packet_in != 64 || packet_out != 64 ||
         !rtl8188eu_port_is_bound(1U) || rtl8188eu_port_is_bound(2U))

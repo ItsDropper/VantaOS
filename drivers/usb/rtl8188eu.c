@@ -2,6 +2,7 @@
 
 #include "xhci.h"
 #include "serial.h"
+#include "fat32.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -15,6 +16,18 @@
 #define USB_DESC_ENDPOINT 5U
 #define USB_TRANSFER_BULK 2U
 #define RTL8188EU_REG_SYS_CFG 0x00F0U
+#define RTL8188EU_REG_SYS_FUNC 0x0002U
+#define RTL8188EU_REG_MCU_FW_DL 0x0080U
+#define RTL8188EU_REG_FW_START 0x1000U
+#define RTL8188EU_FW_HEADER_SIZE 32U
+#define RTL8188EU_FW_MAX_SIZE 65536U
+#define RTL8188EU_FW_PAGE_SIZE 4096U
+#define RTL8188EU_FW_WRITE_CHUNK 196U
+#define RTL8188EU_FWDL_ENABLE 0x01U
+#define RTL8188EU_FWDL_READY 0x02U
+#define RTL8188EU_FWDL_CHECKSUM 0x04U
+#define RTL8188EU_FWDL_RAM_SELECT 0x80U
+#define RTL8188EU_FW_INIT_READY 0x40U
 
 typedef struct {
     uint8_t found;
@@ -27,7 +40,9 @@ typedef struct {
 
 static uint32_t rtl_slot;
 static uint8_t rtl_bound;
-static uint8_t rtl_register_buffer[4] __attribute__((aligned(64)));
+static uint8_t rtl_register_buffer[RTL8188EU_FW_WRITE_CHUNK] __attribute__((aligned(64)));
+static uint8_t rtl_firmware[RTL8188EU_FW_MAX_SIZE] __attribute__((aligned(64)));
+static uint8_t rtl_firmware_attempted;
 
 static uint16_t get_le16(const uint8_t *p)
 {
@@ -113,6 +128,172 @@ static int rtl_reg_read(uint16_t address, uint8_t *output, uint16_t length)
     for (uint16_t i = 0; i < length; ++i)
         output[i] = rtl_register_buffer[i];
     return 1;
+}
+
+static int rtl_reg_write(uint16_t address, const uint8_t *input,
+                         uint16_t length)
+{
+    uint8_t setup[8] = {
+        0x40U, RTL8188EU_USB_VENDOR_REQUEST,
+        (uint8_t)address, (uint8_t)(address >> 8),
+        0U, 0U, (uint8_t)length, (uint8_t)(length >> 8)
+    };
+    if (!input || length == 0U || length > sizeof(rtl_register_buffer))
+        return 0;
+    for (uint16_t i = 0; i < length; ++i)
+        rtl_register_buffer[i] = input[i];
+    return xhci_control_transfer(rtl_slot, setup, rtl_register_buffer, length);
+}
+
+static int rtl_reg_read8(uint16_t address, uint8_t *value)
+{
+    return value && rtl_reg_read(address, value, 1U);
+}
+
+static int rtl_reg_write8(uint16_t address, uint8_t value)
+{
+    return rtl_reg_write(address, &value, 1U);
+}
+
+static int rtl_reg_write16(uint16_t address, uint16_t value)
+{
+    uint8_t bytes[2] = {(uint8_t)value, (uint8_t)(value >> 8)};
+    return rtl_reg_write(address, bytes, sizeof(bytes));
+}
+
+static int rtl_reg_write32(uint16_t address, uint32_t value)
+{
+    uint8_t bytes[4] = {(uint8_t)value, (uint8_t)(value >> 8),
+                        (uint8_t)(value >> 16), (uint8_t)(value >> 24)};
+    return rtl_reg_write(address, bytes, sizeof(bytes));
+}
+
+static int rtl_name_equal(const char *left, const char *right)
+{
+    while (*left && *right) {
+        char a = *left++, b = *right++;
+        if (a >= 'a' && a <= 'z') a = (char)(a - 'a' + 'A');
+        if (b >= 'a' && b <= 'z') b = (char)(b - 'a' + 'A');
+        if (a != b) return 0;
+    }
+    return *left == 0 && *right == 0;
+}
+
+/* Firmware is supplied by the system integrator, not embedded in the kernel. */
+static int rtl_load_firmware_file(uint32_t *firmware_size)
+{
+    fat32_dirent_t root[64];
+    fat32_dirent_t system_entries[128];
+    uint32_t system_cluster = 0U;
+    int root_count, system_count;
+    if (!firmware_size || !fat32_is_mounted())
+        return 0;
+
+    root_count = fat32_list_directory(fat32_root_cluster(), root, 64U);
+    if (root_count < 0 || root_count > 64)
+        return 0;
+    for (int i = 0; i < root_count; ++i) {
+        if (root[i].directory && rtl_name_equal(root[i].name, "SYSTEM")) {
+            system_cluster = root[i].first_cluster;
+            break;
+        }
+    }
+    if (system_cluster < 2U)
+        return 0;
+
+    system_count = fat32_list_directory(system_cluster, system_entries, 128U);
+    if (system_count < 0 || system_count > 128)
+        return 0;
+    for (int i = 0; i < system_count; ++i) {
+        fat32_dirent_t *entry = &system_entries[i];
+        if (entry->directory ||
+            !rtl_name_equal(entry->name, "RTL8188EU.BIN"))
+            continue;
+        if (entry->size <= RTL8188EU_FW_HEADER_SIZE ||
+            entry->size > sizeof(rtl_firmware) ||
+            !fat32_read_file(entry->first_cluster, entry->size,
+                             (char *)rtl_firmware, sizeof(rtl_firmware)))
+            return 0;
+        uint16_t signature = (uint16_t)rtl_firmware[0] |
+                             ((uint16_t)rtl_firmware[1] << 8);
+        if ((signature & 0xFFF0U) != 0x88E0U)
+            return 0;
+        *firmware_size = entry->size - RTL8188EU_FW_HEADER_SIZE;
+        /* Keep only the validated payload; never upload the 32-byte header. */
+        for (uint32_t j = 0; j < *firmware_size; ++j)
+            rtl_firmware[j] = rtl_firmware[j + RTL8188EU_FW_HEADER_SIZE];
+        return 1;
+    }
+    return 0;
+}
+
+static int rtl_download_firmware(void)
+{
+    uint32_t size = 0U;
+    uint8_t value8;
+    uint32_t value32;
+    if (!rtl_load_firmware_file(&size) || size == 0U ||
+        size > RTL8188EU_FW_MAX_SIZE - RTL8188EU_FW_HEADER_SIZE)
+        return 0;
+
+    /* Follow the RTL8xxxU firmware download protocol with bounded polling. */
+    if (!rtl_reg_read8(RTL8188EU_REG_MCU_FW_DL, &value8))
+        return 0;
+    if (value8 & RTL8188EU_FWDL_RAM_SELECT) {
+        if (!rtl_reg_write8(RTL8188EU_REG_MCU_FW_DL, 0U) ||
+            !rtl_reg_read8(RTL8188EU_REG_SYS_FUNC, &value8) ||
+            !rtl_reg_write8(RTL8188EU_REG_SYS_FUNC,
+                            (uint8_t)(value8 & ~0x04U)) ||
+            !rtl_reg_write8(RTL8188EU_REG_SYS_FUNC,
+                            (uint8_t)(value8 | 0x04U)))
+            return 0;
+    }
+
+    if (!rtl_reg_read8(RTL8188EU_REG_MCU_FW_DL, &value8) ||
+        !rtl_reg_write8(RTL8188EU_REG_MCU_FW_DL,
+                        (uint8_t)(value8 | RTL8188EU_FWDL_ENABLE)) ||
+        !rtl_reg_read32(RTL8188EU_REG_MCU_FW_DL, &value32) ||
+        !rtl_reg_write32(RTL8188EU_REG_MCU_FW_DL, value32 & ~(1U << 19)) ||
+        !rtl_reg_read8(RTL8188EU_REG_MCU_FW_DL, &value8) ||
+        !rtl_reg_write8(RTL8188EU_REG_MCU_FW_DL,
+                        (uint8_t)(value8 | RTL8188EU_FWDL_CHECKSUM)))
+        return 0;
+
+    uint32_t offset = 0U;
+    uint8_t page = 0U;
+    while (offset < size) {
+        uint32_t page_remaining = RTL8188EU_FW_PAGE_SIZE -
+                                  (offset % RTL8188EU_FW_PAGE_SIZE);
+        uint32_t amount = size - offset;
+        if (amount > page_remaining) amount = page_remaining;
+        if (!rtl_reg_read8(RTL8188EU_REG_MCU_FW_DL + 2U, &value8) ||
+            !rtl_reg_write8(RTL8188EU_REG_MCU_FW_DL + 2U,
+                            (uint8_t)((value8 & 0xF8U) | page)))
+            goto abort_download;
+        uint32_t chunk_offset = 0U;
+        while (chunk_offset < amount) {
+            uint32_t chunk = amount - chunk_offset;
+            if (chunk > RTL8188EU_FW_WRITE_CHUNK)
+                chunk = RTL8188EU_FW_WRITE_CHUNK;
+            if (!rtl_reg_write(RTL8188EU_REG_FW_START,
+                               rtl_firmware + offset + chunk_offset,
+                               (uint16_t)chunk))
+                goto abort_download;
+            chunk_offset += chunk;
+        }
+        offset += amount;
+        page++;
+    }
+
+    if (!rtl_reg_read16_placeholder)
+        return 0;
+    return 1;
+
+abort_download:
+    if (rtl_reg_read8(RTL8188EU_REG_MCU_FW_DL, &value8))
+        (void)rtl_reg_write8(RTL8188EU_REG_MCU_FW_DL,
+                             (uint8_t)(value8 & ~RTL8188EU_FWDL_ENABLE));
+    return 0;
 }
 
 static int rtl_reg_read32(uint16_t address, uint32_t *value)

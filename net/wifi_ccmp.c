@@ -144,7 +144,7 @@ static int ccm_compute_tag(const uint8_t round_key[176],
 {
     uint8_t mac[16] = {0};
     uint8_t block[16] = {0};
-    uint8_t aad_encoded[WIFI_CCMP_MAX_AAD + 2U];
+    uint8_t aad_encoded[(WIFI_CCMP_MAX_AAD + 2U + 15U) & ~(size_t)15U];
     uint8_t counter_block[16];
     uint8_t s0[16];
 

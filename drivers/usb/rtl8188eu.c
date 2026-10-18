@@ -533,7 +533,7 @@ static int rtl_iol_execute(uint8_t command)
                         (uint8_t)(value | command)))
         return 0;
 
-    for (uint32_t retry = 0U; retry < 512U; ++retry) {
+    for (uint32_t retry = 0U; retry < 64U; ++retry) {
         if (!rtl_reg_read8(RTL8188EU_REG_HMEBOX_E0, &status))
             return 0;
         if ((status & command) == 0U) {
@@ -591,7 +591,7 @@ static int rtl_read_efuse_physical(uint8_t *physical, size_t capacity)
         if (!rtl_reg_write16(RTL8188EU_REG_PKTBUF_DEBUG_ADDR, debug_address) ||
             !rtl_reg_write8(RTL8188EU_REG_PKTBUF_DEBUG_STATUS, 0U))
             goto fail;
-        for (uint32_t retry = 0U; retry < 512U; ++retry) {
+        for (uint32_t retry = 0U; retry < 64U; ++retry) {
             if (!rtl_reg_read8(RTL8188EU_REG_PKTBUF_DEBUG_STATUS, &ready))
                 goto fail;
             if (ready != 0U) break;

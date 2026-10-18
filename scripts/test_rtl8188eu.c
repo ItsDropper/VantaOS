@@ -127,7 +127,8 @@ int main(void)
     if (rtl8188eu_probe(1, 1, 0x0BDA, 0x8179, valid, sizeof(valid)) != 1)
         return 3;
     if (configured_in != 0x81 || configured_out != 0x02 ||
-        packet_in != 64 || packet_out != 64)
+        packet_in != 64 || packet_out != 64 ||
+        !rtl8188eu_port_is_bound(1U) || rtl8188eu_port_is_bound(2U))
         return 4;
 
     rtl8188eu_poll();
@@ -142,7 +143,7 @@ int main(void)
         results[0].channel != 6U ||
         memcmp(results[0].bssid, "\\x02\\x11\\x22\\x33\\x44\\x55", 6U) != 0)
         return 6;
-    if (!rtl8188eu_port_disconnected(1U))
+    if (!rtl8188eu_port_disconnected(1U) || rtl8188eu_port_is_bound(1U))
         return 7;
     return 0;
 }

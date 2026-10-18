@@ -137,6 +137,7 @@ int main(void)
     assert(router.bytes[0]==0xFEU&&router.bytes[1]==0x80U);
     inject_echo(global.bytes);
     assert(last_tx_length==14U+40U+8U);
+    assert(last_tx[12]==0x86U&&last_tx[13]==0xDDU&&last_tx[54]==129U);
     assert(net_udp6_handler_register(4321U, udp6_handler, 0));
     assert(!net_udp6_handler_register(4321U, udp6_handler, 0));
     inject_udp6(global.bytes, 0);
@@ -153,7 +154,6 @@ int main(void)
     assert(last_tx[56] == 0x30U && last_tx[57] == 0x39U);
     assert(last_tx[60] != 0U || last_tx[61] != 0U);
     assert(net_udp6_handler_unregister(4321U, udp6_handler, 0));
-    assert(last_tx[12]==0x86U&&last_tx[13]==0xDDU&&last_tx[54]==129U);
-    puts("VANTAOS_IPV6_SLAAC_ICMP6_TEST_OK");
+    puts("VANTAOS_IPV6_SLAAC_ICMP6_UDP6_TEST_OK");
     return 0;
 }

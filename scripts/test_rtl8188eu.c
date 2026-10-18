@@ -193,6 +193,17 @@ static int test_efuse_logical_map_decoder(void)
         logical[0xD8U] != 0xA8U || logical[0xDCU] != 0xACU ||
         logical[0xDDU] != 0xADU || logical[0xD5U] != 0xFFU)
         return 0;
+
+    /* Two-byte extended header: section 2, word 3. */
+    memset(physical, 0xFF, sizeof(physical));
+    physical[0] = 0x4FU;
+    physical[1] = 0x07U;
+    physical[2] = 0xB6U;
+    physical[3] = 0xB7U;
+    if (!rtl8188eu_decode_efuse_map(physical, sizeof(physical),
+                                    logical, sizeof(logical)) ||
+        logical[0x16U] != 0xB6U || logical[0x17U] != 0xB7U)
+        return 0;
     /*
      * 0x5F is a regular section-5 header with all words disabled,
      * not an extended header. The following 0x00 header must still map
@@ -215,6 +226,9 @@ static int test_efuse_logical_map_decoder(void)
     memset(physical, 0xFF, sizeof(physical));
     physical[0] = 0x4FU;
     if (rtl8188eu_decode_efuse_map(physical, 1U, logical, sizeof(logical)))
+        return 0;
+    physical[1] = 0x0FU;
+    if (rtl8188eu_decode_efuse_map(physical, 2U, logical, sizeof(logical)))
         return 0;
     if (rtl8188eu_decode_efuse_map(physical, sizeof(physical), logical, 8U))
         return 0;

@@ -109,6 +109,7 @@ static uint8_t rtl_group_key_id;
 static uint8_t rtl_keys_installed;
 static void rtl_station_receive_frame(const uint8_t *frame, size_t length);
 static void rtl_station_poll(void);
+static void rtl_station_reset(void);
 static uint8_t rtl_rx_armed;
 static uint8_t rtl_rx_buffer[4096] __attribute__((aligned(64)));
 #define RTL8188EU_TX_DESC_SIZE 32U
@@ -606,6 +607,7 @@ static void rtl_process_rx_packet(const uint8_t *packet, size_t length)
             frame_length > length - cursor - frame_offset)
             break;
 
+        rtl_station_receive_frame(rx + frame_offset, frame_length);
         rtl_cache_beacon(rx + frame_offset, frame_length);
 
         size_t packet_end = cursor + frame_offset + frame_length;
@@ -896,6 +898,7 @@ int rtl8188eu_connect(const uint8_t *ssid, size_t ssid_length,
     if (selected < 0 || !rtl_program_channel(results[selected].channel))
         return 0;
 
+    rtl_station_reset();
     for (size_t i = 0U; i < sizeof(rtl_station_ssid); ++i)
         rtl_station_ssid[i] = (i < ssid_length) ? ssid[i] : 0U;
     rtl_station_ssid_length = ssid_length;
@@ -962,10 +965,12 @@ static void rtl_station_receive_frame(const uint8_t *frame, size_t length)
                 .install_ccmp_keys = rtl_station_install_keys,
                 .context = 0
             };
-            if (!wifi_wpa2_begin(&rtl_supplicant, &ops,
+            uint8_t local_mac[6];
+            if (!rtl8188eu_get_mac_address(local_mac) ||
+                !wifi_wpa2_begin(&rtl_supplicant, &ops,
                     rtl_station_ssid, rtl_station_ssid_length,
                     rtl_station_passphrase, rtl_station_passphrase_length,
-                    frame + 10U, rtl_station_bssid,
+                    local_mac, rtl_station_bssid,
                     rtl_station_rsn_ie, sizeof(rtl_station_rsn_ie))) {
                 rtl_station_state = RTL_STATION_FAILED;
                 return;
@@ -1087,6 +1092,7 @@ void rtl8188eu_poll(void)
     if (!rtl_rx_armed)
         rtl_rx_armed = (uint8_t)xhci_start_bulk_in(rtl_slot, rtl_bulk_in);
     rtl_scan_poll();
+    rtl_station_poll();
 }
 
 int rtl8188eu_port_is_bound(uint32_t port)
@@ -1113,6 +1119,7 @@ int rtl8188eu_port_disconnected(uint32_t port)
     rtl_scan_channel = 0U;
     rtl_scan_dwell_polls = 0U;
     rtl_current_channel = 0U;
+    rtl_station_reset();
     rtl_passive_result_count = 0U;
     if (old_slot != 0U)
         (void)xhci_disable_device(old_slot);

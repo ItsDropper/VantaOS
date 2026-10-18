@@ -178,6 +178,8 @@ int main(void)
     assert(net_udp6_send(&device, all_nodes, 4321U, 12345U, out_payload, sizeof(out_payload)-1U));
     device.mtu = 1500U;
     assert(net_udp6_handler_unregister(4321U, udp6_handler, 0));
+    ticks = 181001U;
+    assert(!net_ipv6_get_dns_server(&device, &dns_server)); /* RDNSS lifetime expires. */
     puts("VANTAOS_IPV6_SLAAC_ICMP6_UDP6_TEST_OK");
     return 0;
 }

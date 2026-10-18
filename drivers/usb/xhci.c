@@ -899,6 +899,96 @@ int xhci_bulk_transfer(uint32_t slot_id, uint8_t endpoint_address,
     return 0;
 }
 
+int xhci_start_bulk_in(uint32_t slot_id, uint8_t endpoint_address)
+{
+    if (!controller_online || slot_id == 0U || slot_id > XHCI_MAX_SLOTS ||
+        !slot_active[slot_id - 1U] || (endpoint_address & 0x80U) == 0U)
+        return 0;
+    uint32_t index = slot_id - 1U;
+    uint32_t endpoint_number = endpoint_address & 0x0FU;
+    uint32_t direction = 1U;
+    if (endpoint_number == 0U || !bulk_configured[index][direction] ||
+        bulk_dci[index][direction] != endpoint_number * 2U + 1U ||
+        bulk_in_flight[index][direction])
+        return 0;
+
+    uint32_t ring_index = bulk_enqueue[index][direction];
+    if (ring_index >= XHCI_EP0_RING_TRBS - 1U)
+        return 0;
+    xhci_trb_t *trb = &bulk_rings[index][direction][ring_index];
+    uint64_t data_physical, trb_physical;
+    if (!dma_address(bulk_dma[index][direction], &data_physical) ||
+        !dma_address(trb, &trb_physical))
+        return 0;
+
+    trb->parameter = data_physical;
+    trb->status = XHCI_BULK_BUFFER_SIZE;
+    trb->control = (1U << XHCI_TRB_TYPE_SHIFT) | (1U << 5) |
+                   (1U << 2) |
+                   (bulk_cycle[index][direction] ? XHCI_TRB_CYCLE : 0U);
+    bulk_enqueue[index][direction]++;
+    if (bulk_enqueue[index][direction] == XHCI_EP0_RING_TRBS - 1U) {
+        xhci_trb_t *link = &bulk_rings[index][direction][XHCI_EP0_RING_TRBS - 1U];
+        uint64_t ring_physical;
+        if (!dma_address(bulk_rings[index][direction], &ring_physical))
+            return 0;
+        link->parameter = ring_physical;
+        link->status = 0;
+        link->control = (XHCI_TRB_TYPE_LINK << XHCI_TRB_TYPE_SHIFT) |
+                        (1U << 1) |
+                        (bulk_cycle[index][direction] ? XHCI_TRB_CYCLE : 0U);
+        bulk_enqueue[index][direction] = 0;
+        bulk_cycle[index][direction] ^= 1U;
+    }
+
+    bulk_expected_trb[index][direction] = trb_physical;
+    bulk_completion_code[index][direction] = 0U;
+    bulk_completion_status[index][direction] = 0U;
+    bulk_done[index][direction] = 0U;
+    bulk_in_flight[index][direction] = 1U;
+    __atomic_thread_fence(__ATOMIC_RELEASE);
+    mmio_write32(doorbells, slot_id * 4U, bulk_dci[index][direction]);
+    return 1;
+}
+
+int xhci_take_bulk_in(uint32_t slot_id, uint8_t endpoint_address,
+                      void *buffer, uint32_t capacity, uint32_t *actual_length)
+{
+    if (!controller_online || slot_id == 0U || slot_id > XHCI_MAX_SLOTS ||
+        !buffer || !actual_length || (endpoint_address & 0x80U) == 0U)
+        return -1;
+    uint32_t index = slot_id - 1U;
+    uint32_t endpoint_number = endpoint_address & 0x0FU;
+    if (endpoint_number == 0U || !bulk_configured[index][1] ||
+        bulk_dci[index][1] != endpoint_number * 2U + 1U)
+        return -1;
+
+    *actual_length = 0U;
+    consume_event_ring();
+    if (!bulk_done[index][1])
+        return 0;
+
+    uint32_t completion_code = bulk_completion_code[index][1];
+    uint32_t completion_status = bulk_completion_status[index][1];
+    bulk_done[index][1] = 0U;
+    bulk_in_flight[index][1] = 0U;
+    if (completion_code != 1U && completion_code != 13U)
+        return -1;
+
+    uint32_t residual = completion_status & 0xFFFFFFU;
+    if (residual > XHCI_BULK_BUFFER_SIZE)
+        return -1;
+    uint32_t actual = XHCI_BULK_BUFFER_SIZE - residual;
+    if (actual > capacity)
+        return -1;
+    uint8_t *source = bulk_dma[index][1];
+    uint8_t *destination = buffer;
+    for (uint32_t i = 0; i < actual; ++i)
+        destination[i] = source[i];
+    *actual_length = actual;
+    return 1;
+}
+
 int xhci_start_interrupt_in(uint32_t slot_id)
 {
     if (!controller_online || slot_id == 0U || slot_id > XHCI_MAX_SLOTS ||

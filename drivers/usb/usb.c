@@ -285,6 +285,7 @@ void usb_poll(void)
     if (!usb_initialized || !xhci_controller_online())
         return;
     xhci_poll();
+    rtl8188eu_poll();
     uint32_t changed_ports = xhci_take_port_events();
     for (uint32_t port = 1; port <= xhci_port_count(); ++port) {
         if ((changed_ports & (1U << (port - 1U))) == 0U)

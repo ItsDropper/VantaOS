@@ -186,13 +186,15 @@ int main(void)
         return 2;
     if (rtl8188eu_probe(1, 1, 0x0BDA, 0x8179, valid, sizeof(valid)) != 1)
         return 3;
-    if (configured_in != 0x81 || configured_out != 0x02 ||
+    if (rtl8188eu_get_status() != RTL8188EU_STATUS_USB_BOUND ||
+        configured_in != 0x81 || configured_out != 0x02 ||
         packet_in != 64 || packet_out != 64 ||
         !rtl8188eu_port_is_bound(1U) || rtl8188eu_port_is_bound(2U))
         return 4;
 
     rtl8188eu_poll();
-    if (!firmware_read_seen || registers[0x1000] != 0xA0U ||
+    if (rtl8188eu_get_status() != RTL8188EU_STATUS_FIRMWARE_READY ||
+        !firmware_read_seen || registers[0x1000] != 0xA0U ||
         registers[0x1007] != 0xA7U || !checksum_reported ||
         checksum_reported_too_early)
         return 5;
@@ -213,7 +215,8 @@ int main(void)
         return 13;
     if (rtl8188eu_transmit_frame(management_frame, 23U))
         return 14;
-    if (!rtl8188eu_port_disconnected(1U) || rtl8188eu_port_is_bound(1U))
+    if (!rtl8188eu_port_disconnected(1U) || rtl8188eu_port_is_bound(1U) ||
+        rtl8188eu_get_status() != RTL8188EU_STATUS_UNBOUND)
         return 10;
     return 0;
 }

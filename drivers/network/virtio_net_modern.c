@@ -319,10 +319,11 @@ static void cleanup(void)
 
 static net_pci_probe_result_t vnet_modern_probe(const struct pci_device *pci)
 {
+    serial_write("VANTAOS_VIRTIO_NET_MODERN_PROBE_ENTER\\n");
     if (!pci || state.ready || state.pci) return NET_PCI_PROBE_NOT_MINE;
-    if (!pci_enable_memory_space(pci)) return NET_PCI_PROBE_FAILED;
+    if (!pci_enable_memory_space(pci)) { serial_write("VANTAOS_VIRTIO_NET_MODERN_PCI_ENABLE_FAIL\\n"); return NET_PCI_PROBE_FAILED; }
     state.pci = pci;
-    if (!discover_capabilities(pci)) goto fail;
+    if (!discover_capabilities(pci)) { serial_write("VANTAOS_VIRTIO_NET_MODERN_CAP_FAIL\\n"); goto fail; }
     wr8(state.common, 20U, 0U);
     for (uint32_t i = 0; i < 100000U && rd8(state.common, 20U) != 0U; ++i)
         __asm__ volatile ("pause");
@@ -333,21 +334,21 @@ static net_pci_probe_result_t vnet_modern_probe(const struct pci_device *pci)
     wr32(state.common, 0U, 1U);
     features |= (uint64_t)rd32(state.common, 4U) << 32;
     if ((features & (VNET_F_MAC | VNET_F_VERSION_1)) != (VNET_F_MAC | VNET_F_VERSION_1))
-        goto fail;
+        { serial_write("VANTAOS_VIRTIO_NET_MODERN_FEATURE_FAIL\\n"); goto fail; }
     state.has_status = (features & VNET_F_STATUS) != 0U;
     wr32(state.common, 8U, 0U);
     wr32(state.common, 12U, (uint32_t)(VNET_F_MAC | (state.has_status ? VNET_F_STATUS : 0U)));
     wr32(state.common, 8U, 1U);
     wr32(state.common, 12U, 1U);
     wr8(state.common, 20U, VNET_STATUS_ACK | VNET_STATUS_DRIVER | VNET_STATUS_FEATURES_OK);
-    if (!(rd8(state.common, 20U) & VNET_STATUS_FEATURES_OK)) goto fail;
+    if (!(rd8(state.common, 20U) & VNET_STATUS_FEATURES_OK)) { serial_write("VANTAOS_VIRTIO_NET_MODERN_FEATURES_OK_FAIL\\n"); goto fail; }
     if (rd16(state.common, 18U) < 2U || state.device_config_length < 6U ||
         (state.has_status && state.device_config_length < 8U)) goto fail;
     if (!pci_enable_bus_mastering(pci)) goto fail;
-    if (!allocate_queue(&state.rx, 0U) || !allocate_queue(&state.tx, 1U)) goto fail;
+    if (!allocate_queue(&state.rx, 0U) || !allocate_queue(&state.tx, 1U)) { serial_write("VANTAOS_VIRTIO_NET_MODERN_QUEUE_FAIL\\n"); goto fail; }
     uint8_t mac[6], any = 0U;
     for (uint32_t i = 0; i < 6U; ++i) { mac[i] = rd8(state.device_config, i); any |= mac[i]; }
-    if (!any || (mac[0] & 1U)) goto fail;
+    if (!any || (mac[0] & 1U)) { serial_write("VANTAOS_VIRTIO_NET_MODERN_MAC_FAIL\\n"); goto fail; }
     for (uint16_t i = 0; i < state.rx.size; ++i) {
         state.rx.desc[i].address = state.rx.buffers[i].physical_address;
         state.rx.desc[i].length = VNET_BUFFER_SIZE;
@@ -367,11 +368,11 @@ static net_pci_probe_result_t vnet_modern_probe(const struct pci_device *pci)
     state.netdev.ops = &vnet_modern_ops;
     state.netdev.driver_data = &state;
     spinlock_init(&state.tx_lock);
-    if (!net_device_register(&state.netdev)) goto fail;
+    if (!net_device_register(&state.netdev)) { serial_write("VANTAOS_VIRTIO_NET_MODERN_NET_REGISTER_FAIL\\n"); goto fail; }
     state.registered = 1U;
     wr8(state.common, 20U, VNET_STATUS_ACK | VNET_STATUS_DRIVER |
          VNET_STATUS_FEATURES_OK | VNET_STATUS_DRIVER_OK);
-    if (!(rd8(state.common, 20U) & VNET_STATUS_DRIVER_OK)) goto fail;
+    if (!(rd8(state.common, 20U) & VNET_STATUS_DRIVER_OK)) { serial_write("VANTAOS_VIRTIO_NET_MODERN_DRIVER_OK_FAIL\\n"); goto fail; }
     state.ready = 1U;
     notify_queue(&state.rx, 0U);
 #ifdef VANTAOS_SELF_TEST
@@ -393,5 +394,7 @@ int virtio_net_modern_initialize(void)
 {
     state = (vnet_modern_state_t){0};
     spinlock_init(&state.tx_lock);
-    return net_pci_driver_register(&vnet_modern_driver);
+    int ok = net_pci_driver_register(&vnet_modern_driver);
+    serial_write(ok ? "VANTAOS_VIRTIO_NET_MODERN_DRIVER_REGISTER_OK\\n" : "VANTAOS_VIRTIO_NET_MODERN_DRIVER_REGISTER_FAIL\\n");
+    return ok;
 }

@@ -1129,6 +1129,15 @@ static void rtl_network_link_down(void)
         (void)net_device_set_link(&rtl_netdev, 0);
 }
 
+static void rtl_network_remove(void)
+{
+    rtl_network_link_down();
+    rtl_dhcp_started = 0U;
+    if (rtl_netdev_registered && net_device_unregister &&
+        net_device_unregister(&rtl_netdev))
+        rtl_netdev_registered = 0U;
+}
+
 static int rtl_netdev_transmit(net_device_t *device, const uint8_t *ethernet,
                                size_t ethernet_length)
 {
@@ -1632,6 +1641,7 @@ int rtl8188eu_port_disconnected(uint32_t port)
         return 0;
 
     uint32_t old_slot = rtl_slot;
+    rtl_network_remove();
     rtl_bound = 0U;
     rtl_slot = 0U;
     rtl_port = 0U;

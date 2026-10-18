@@ -194,7 +194,7 @@ int wifi_wpa2_receive_eapol(wifi_wpa2_supplicant_t *s,
                             const uint8_t *source_mac,
                             const uint8_t *payload, size_t length)
 {
-    uint8_t key_info, gtk[WIFI_WPA2_GTK_MAX], decrypted[WIFI_AES128_WRAP_MAX_CIPHER];
+    uint8_t gtk[WIFI_WPA2_GTK_MAX], decrypted[WIFI_AES128_WRAP_MAX_CIPHER];
     size_t key_data_length, decrypted_length = 0U, gtk_length = 0U;
     uint8_t gtk_id = 0U;
     uint16_t info;

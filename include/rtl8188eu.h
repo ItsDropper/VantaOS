@@ -15,6 +15,7 @@ int rtl8188eu_probe(uint32_t slot_id, uint32_t port, uint16_t vendor_id, uint16_
                     const uint8_t *configuration, size_t length);
 void rtl8188eu_poll(void);
 int rtl8188eu_port_disconnected(uint32_t port);
+int rtl8188eu_port_is_bound(uint32_t port);
 size_t rtl8188eu_get_passive_results(net_wifi_scan_result_t *results,
                                      size_t capacity);
 

@@ -16,6 +16,7 @@ static uint8_t checksum_reported_too_early;
 static uint8_t beacon_delivered;
 static uint8_t tx_seen;
 static uint8_t tx_descriptor_valid;
+static uint8_t firmware_read_fail;
 
 int xhci_controller_online(void) { return 1; }
 int xhci_configure_bulk_endpoint(uint32_t slot, uint8_t ep, uint16_t packet)
@@ -143,7 +144,7 @@ int fat32_list_directory(uint32_t cluster, fat32_dirent_t *entries,
 int fat32_read_file(uint32_t cluster, uint32_t size, char *buffer,
                     unsigned int capacity)
 {
-    if (cluster != 3U || size != 40U || capacity < size || !buffer)
+    if (firmware_read_fail || cluster != 3U || size != 40U || capacity < size || !buffer)
         return -1;
     memset(buffer, 0, size);
     buffer[0] = (char)0xE0U;
@@ -218,5 +219,15 @@ int main(void)
     if (!rtl8188eu_port_disconnected(1U) || rtl8188eu_port_is_bound(1U) ||
         rtl8188eu_get_status() != RTL8188EU_STATUS_UNBOUND)
         return 10;
+
+    /* A firmware read failure must not leave the driver reporting READY. */
+    firmware_read_fail = 1U;
+    if (rtl8188eu_probe(1, 1, 0x0BDA, 0x8179, valid, sizeof(valid)) != 1)
+        return 15;
+    rtl8188eu_poll();
+    if (rtl8188eu_get_status() != RTL8188EU_STATUS_FIRMWARE_FAILED)
+        return 16;
+    if (!rtl8188eu_port_disconnected(1U))
+        return 17;
     return 0;
 }

@@ -22,7 +22,7 @@
 #define RTL8188EU_REG_MCU_FW_DL 0x0080U
 #define RTL8188EU_REG_FW_START 0x1000U
 #define RTL8188EU_FW_HEADER_SIZE 32U
-#define RTL8188EU_FW_MAX_SIZE 65536U
+#define RTL8188EU_FW_MAX_SIZE 32768U /* Eight 4-KiB pages, selected by 3 page bits. */
 #define RTL8188EU_FW_PAGE_SIZE 4096U
 #define RTL8188EU_FW_WRITE_CHUNK 196U
 #define RTL8188EU_FWDL_ENABLE 0x01U
@@ -275,18 +275,24 @@ static int rtl_download_firmware(void)
             return 0;
     }
 
+    /*
+     * Enable MCU download and clear the stale checksum-report state before
+     * writing any payload. FWDL_CHKSUM is a device-reported status bit; writing
+     * it as if it were a command can make software mistake an unverified image
+     * for a completed download.
+     */
     if (!rtl_reg_read8(RTL8188EU_REG_MCU_FW_DL, &value8) ||
         !rtl_reg_write8(RTL8188EU_REG_MCU_FW_DL,
                         (uint8_t)(value8 | RTL8188EU_FWDL_ENABLE)) ||
         !rtl_reg_read32(RTL8188EU_REG_MCU_FW_DL, &value32) ||
-        !rtl_reg_write32(RTL8188EU_REG_MCU_FW_DL, value32 & ~(1U << 19)) ||
-        !rtl_reg_read8(RTL8188EU_REG_MCU_FW_DL, &value8) ||
-        !rtl_reg_write8(RTL8188EU_REG_MCU_FW_DL,
-                        (uint8_t)(value8 | RTL8188EU_FWDL_CHECKSUM)))
+        !rtl_reg_write32(RTL8188EU_REG_MCU_FW_DL, value32 & ~(1U << 19)))
         return 0;
 
     uint32_t offset = 0U;
     uint8_t page = 0U;
+    /* MCUFWDL page selector has three bits; never wrap into page zero. */
+    if (size > 8U * RTL8188EU_FW_PAGE_SIZE)
+        goto abort_download;
     while (offset < size) {
         uint32_t page_remaining = RTL8188EU_FW_PAGE_SIZE -
                                   (offset % RTL8188EU_FW_PAGE_SIZE);

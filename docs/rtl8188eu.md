@@ -37,6 +37,6 @@ This is a low-level transport primitive only. It does not configure the MAC/PHY/
 
 ## Experimental WPA2 crypto primitives
 
-The branch now contains bounded PBKDF2-HMAC-SHA1 PMK derivation and an AES-CCM primitive with host known-answer tests. These are prerequisites only. They are not wired into an EAPOL four-way handshake or the RTL8188EU RX/TX path, and do not establish that CCMP nonce/AAD construction, replay protection, key installation, or packet exchange works on hardware. Do not advertise WPA2 connectivity on the basis of these unit tests.
+The branch now contains bounded PBKDF2-HMAC-SHA1 PMK derivation and an AES-CCM primitive with host known-answer tests. The CCMP host test checks successful encrypt/decrypt, MIC tampering, ciphertext tampering, AAD tampering, and zeroing of the output buffer after authentication failure. These tests exercise the primitive's failure behavior, not 802.11 CCMP nonce/AAD construction or key/replay management. These are prerequisites only. They are not wired into an EAPOL four-way handshake or the RTL8188EU RX/TX path, and do not establish that CCMP nonce/AAD construction, replay protection, key installation, or packet exchange works on hardware. Do not advertise WPA2 connectivity on the basis of these unit tests.
 
 The AES implementation is newly written and has not undergone an independent security audit. Treat it as experimental; it is not a substitute for a reviewed cryptographic implementation.

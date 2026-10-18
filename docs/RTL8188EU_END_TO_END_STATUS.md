@@ -1,22 +1,30 @@
 # RTL8188EU Wi-Fi: verified state versus end-to-end support
 
-## What the current driver proves
+## What is now implemented
 
-The driver recognizes the supported USB IDs, configures bulk endpoints, performs vendor register access, attempts to load `/SYSTEM/RTL8188EU.BIN`, checks firmware-download status, and parses received RX aggregates to cache Beacon/Probe Response metadata. The status API distinguishes USB binding, firmware-load pending, firmware-init-ready, firmware-load failure, and disconnection. It can read the programmed station MAC, but **all TX is now deliberately blocked**: the driver has not completed independently verified MAC/PHY/RF/eFuse initialization, calibration, or channel programming. The previous probe-request helper was only a single-channel transmit primitive and did not prove the radio was operational.
+The driver binds the supported USB IDs, configures bulk endpoints, loads the externally supplied `/SYSTEM/RTL8188EU.BIN` firmware, reads the station MAC, parses RX aggregates, and caches passive Beacon/Probe Response metadata.
 
-`RTL8188EU_STATUS_FIRMWARE_READY` means only that the device reported its firmware-init-ready bit. It does **not** mean the radio is calibrated, actively scanning, associated, WPA2-authenticated, or able to carry IP traffic. Do not treat firmware readiness as a network link-up signal.
+The control/data path now has these implementations:
+- RF path-A serial register read/write helpers and RF channel-register programming with readback verification for 2.4 GHz channels 1-14.
+- A channel-hopping scan state machine with probe requests and bounded per-channel poll dwell.
+- Live Open System Authentication and Association Request/Response state handling, including response status checks, AID validation, retry limits, and poll-driven timeouts.
+- WPA2-PSK/CCMP EAPOL message handling connected to received 802.11 data frames and the real USB TX path. The kernel CSPRNG is required; no weak fallback is used.
+- CCMP protected unicast/multicast data framing, PN allocation and replay-window checks, bounded LLC/SNAP conversion, and a registered `net_device_t` path when the network core is present.
+- Nonblocking DHCP acquisition started after WPA2 authorization, plus credential/key cleanup on connection failure or USB disconnect.
 
-## Work still required for end-to-end Wi-Fi
+## Critical limitation: radio initialization is still incomplete
 
-- RTL8188EU MAC/eFuse and RF/baseband initialization, board-specific calibration, and power tables.
-- RF channel selection/hopping and a complete active scan across supported channels. TX remains fail-closed until the radio initialization/calibration stage exists.
-- The new bounded 802.11 open-authentication and association frame codecs build requests and parse responses, but no live retry/timeout state machine is wired to the RTL8188EU RX/TX path.
-- Station MAC address sourced from the adapter, not fabricated.
-- Secure WPA2-PSK/CCMP supplicant wired to real EAPOL TX/RX and atomic key installation.
-- Protected 802.11 data TX/RX and `net_device_t` registration. Independent CCMP packet-number allocation, 48-bit header encode/decode, a 64-packet replay window, nonce construction, and bounded Ethernet/LLC-SNAP conversion helpers now exist and have host tests, but are not wired into the hardware data path.
-- DHCP/DNS/TCP traffic tests and physical adapter validation.
+**This driver still cannot connect to a real access point yet.** The radio-ready flag is intentionally never enabled. RF serial access and channel programming are implemented, but they are not a substitute for the required RTL8188EU power/MAC/baseband initialization, eFuse-derived board configuration, TX-power setup, and LC/IQ calibration. Without those stages, probe/auth/association transmissions remain fail-closed.
 
-The WPA2/CCMP primitives have standalone tests, but passing primitive tests does not prove association or Internet connectivity. These requirements must be implemented and tested before describing the adapter as end-to-end supported.
+Realtek's public product page identifies the RTL8188EUS as a 2.4 GHz 802.11b/g/n 1T1R USB chipset, but it does not provide the register-level initialization and calibration data needed to complete this independently. I have not copied third-party driver code, register tables, calibration routines, or firmware blobs into VantaOS.
+
+## Still required before end-to-end support can be claimed
+
+- Independently sourced, revision-correct MAC/PHY/RF initialization and eFuse/board calibration.
+- Enable radio TX only after successful initialization and calibration, with stage-specific error reporting.
+- Verify actual channel tuning, scan results, auth/association, WPA2 handshake, CCMP data transfer, and DHCP/DNS against a physical adapter and WPA2-PSK 2.4 GHz AP.
+- Add tests for the new station/data path and validate descriptor/FCS semantics against real hardware. Host tests cannot prove RF behavior.
+
 
 ## Validation in this change
 

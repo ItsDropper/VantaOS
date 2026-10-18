@@ -69,13 +69,23 @@ static int rtl_find_endpoints(const uint8_t *configuration, size_t length,
     rtl8188eu_endpoints_t candidate = {0};
 
     if (!configuration || !found || length < 9U ||
-        configuration[0] < 9U || configuration[1] != 2U)
+        configuration[0] < 9U || configuration[1] != 2U ||
+        configuration[4] == 0U)
         return 0;
 
-    while (offset + 2U <= length) {
+    /*
+     * Do not parse bytes beyond the configuration descriptor's declared
+     * extent, even when the caller supplies a larger DMA buffer. Conversely,
+     * reject a truncated descriptor instead of silently accepting a prefix.
+     */
+    size_t total_length = get_le16(configuration + 2U);
+    if (total_length < configuration[0] || total_length > length)
+        return 0;
+
+    while (offset + 2U <= total_length) {
         uint8_t descriptor_length = configuration[offset];
         uint8_t descriptor_type = configuration[offset + 1U];
-        if (descriptor_length < 2U || descriptor_length > length - offset)
+        if (descriptor_length < 2U || descriptor_length > total_length - offset)
             return 0;
 
         if (descriptor_type == USB_DESC_INTERFACE) {
@@ -87,7 +97,9 @@ static int rtl_find_endpoints(const uint8_t *configuration, size_t length,
                 return 1;
             }
             current_interface = configuration[offset + 2U];
-            current_is_vendor = configuration[offset + 5U] ==
+            /* Only the default alternate setting is configured here. */
+            current_is_vendor = configuration[offset + 3U] == 0U &&
+                                configuration[offset + 5U] ==
                                 RTL8188EU_USB_CLASS_VENDOR;
             candidate = (rtl8188eu_endpoints_t){0};
             candidate.interface_number = current_interface;
@@ -99,7 +111,10 @@ static int rtl_find_endpoints(const uint8_t *configuration, size_t length,
             uint16_t packet = raw_packet & 0x07FFU;
 
             /* Bulk endpoint wMaxPacketSize has no high-bandwidth multiplier. */
-            if ((attributes & 0x03U) != USB_TRANSFER_BULK ||
+            /* Endpoint address bits 4:6 are reserved; endpoint zero is
+             * the control pipe and cannot be selected as a bulk endpoint. */
+            if ((address & 0x70U) != 0U || (address & 0x0FU) == 0U ||
+                (attributes & 0x03U) != USB_TRANSFER_BULK ||
                 (raw_packet & 0xF800U) != 0U || packet == 0U)
                 continue;
 

@@ -36,6 +36,15 @@ int xhci_bulk_transfer(uint32_t slot, uint8_t ep, void *buffer,
     (void)slot; (void)ep; (void)buffer; (void)length; (void)actual;
     return 0;
 }
+
+int xhci_start_bulk_in(uint32_t slot, uint8_t ep)
+{ (void)slot; (void)ep; return 1; }
+int xhci_take_bulk_in(uint32_t slot, uint8_t ep, void *buffer,
+                      uint32_t capacity, uint32_t *actual)
+{
+    (void)slot; (void)ep; (void)buffer; (void)capacity; (void)actual;
+    return 0;
+}
 int fat32_is_mounted(void) { return 0; }
 uint32_t fat32_root_cluster(void) { return 0; }
 int fat32_list_directory(uint32_t c, fat32_dirent_t *e, unsigned int n)

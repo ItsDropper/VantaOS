@@ -12,5 +12,6 @@
  */
 int rtl8188eu_probe(uint32_t slot_id, uint16_t vendor_id, uint16_t device_id,
                     const uint8_t *configuration, size_t length);
+void rtl8188eu_poll(void);
 
 #endif

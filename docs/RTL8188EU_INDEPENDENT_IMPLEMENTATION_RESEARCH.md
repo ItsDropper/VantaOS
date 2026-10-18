@@ -110,6 +110,7 @@ Do not run DHCP until the data port is authorized. Disconnect, failed handshake,
 
 ## Research references (behavioral/standards reference only)
 
+- Realtek's public RTL8188EUS product page confirms 802.11b/g/n, 2.4 GHz, USB 2.0 and 1T1R capability. It does not publish the register-level initialization/calibration sequence needed to safely implement RF bring-up: https://www.realtek.com/Product/Index?cate_id=194&id=606&menu_id=391
 - IEEE 802.11 Working Group and standards access: https://www.ieee802.org/11/ and https://standards.ieee.org/ieee/802.11/7028/
 - Linux Wireless documentation on SoftMAC/mac80211 architecture: https://wireless.docs.kernel.org/en/latest/en/developers/documentation/mac80211.html
 - Linux kernel cfg80211 device registration, scan, crypto and regulatory concepts: https://docs.kernel.org/driver-api/80211/cfg80211.html

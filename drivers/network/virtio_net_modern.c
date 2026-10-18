@@ -136,7 +136,7 @@ static int discover_capabilities(const struct pci_device *pci)
         uint8_t next = pci_read_config8(pci, (uint8_t)(at + 1U));
         if (id == VNET_CAP_ID) {
             uint8_t length = pci_read_config8(pci, (uint8_t)(at + 2U));
-            if (length < 16U)
+            if (length < 16U || (uint16_t)at + length > 256U)
                 return 0;
             uint8_t type = pci_read_config8(pci, (uint8_t)(at + 3U));
             uint8_t bar = pci_read_config8(pci, (uint8_t)(at + 4U));
@@ -341,7 +341,8 @@ static net_pci_probe_result_t vnet_modern_probe(const struct pci_device *pci)
     wr32(state.common, 12U, 1U);
     wr8(state.common, 20U, VNET_STATUS_ACK | VNET_STATUS_DRIVER | VNET_STATUS_FEATURES_OK);
     if (!(rd8(state.common, 20U) & VNET_STATUS_FEATURES_OK)) goto fail;
-    if (rd16(state.common, 18U) < 2U || state.device_config_length < 6U) goto fail;
+    if (rd16(state.common, 18U) < 2U || state.device_config_length < 6U ||
+        (state.has_status && state.device_config_length < 8U)) goto fail;
     if (!pci_enable_bus_mastering(pci)) goto fail;
     if (!allocate_queue(&state.rx, 0U) || !allocate_queue(&state.tx, 1U)) goto fail;
     uint8_t mac[6], any = 0U;

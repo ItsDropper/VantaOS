@@ -526,6 +526,62 @@ static void rtl_put_le32(uint8_t *p, uint32_t value)
     p[3] = (uint8_t)(value >> 24);
 }
 
+int rtl8188eu_get_mac_address(uint8_t mac[6])
+{
+    uint8_t address[6];
+    if (!mac || !rtl_bound || !rtl_firmware_ready ||
+        !rtl_reg_read(0x0610U, address, sizeof(address)))
+        return 0;
+    /* A zero, broadcast, or multicast address is not a usable station MAC. */
+    uint8_t any = 0U, all_ff = 1U;
+    for (size_t i = 0U; i < sizeof(address); ++i) {
+        any |= address[i];
+        if (address[i] != 0xFFU)
+            all_ff = 0U;
+    }
+    if (any == 0U || all_ff || (address[0] & 1U) != 0U)
+        return 0;
+    for (size_t i = 0U; i < sizeof(address); ++i)
+        mac[i] = address[i];
+    return 1;
+}
+
+int rtl8188eu_start_active_scan(void)
+{
+    uint8_t frame[38] = {0};
+    uint8_t mac[6];
+    static uint16_t sequence;
+    if (!rtl8188eu_get_mac_address(mac))
+        return 0;
+
+    /* IEEE 802.11 Probe Request. The chipset's current channel is unchanged. */
+    frame[0] = 0x40U;
+    frame[1] = 0x00U;
+    for (size_t i = 0U; i < 6U; ++i) {
+        frame[4U + i] = 0xFFU;
+        frame[16U + i] = 0xFFU;
+        frame[10U + i] = mac[i];
+    }
+    sequence = (uint16_t)((sequence + 1U) & 0x0FFFU);
+    frame[22] = (uint8_t)(sequence << 4);
+    frame[23] = (uint8_t)(sequence >> 4);
+    /* Wildcard SSID followed by the mandatory legacy supported-rate IE. */
+    frame[24] = 0U;
+    frame[25] = 0U;
+    frame[26] = 1U;
+    frame[27] = 8U;
+    frame[28] = 0x82U;
+    frame[29] = 0x84U;
+    frame[30] = 0x8BU;
+    frame[31] = 0x96U;
+    frame[32] = 0x0CU;
+    frame[33] = 0x12U;
+    frame[34] = 0x18U;
+    frame[35] = 0x24U;
+    /* Leave the remaining bytes zeroed; exact MPDU length is 36 bytes. */
+    return rtl8188eu_transmit_frame(frame, 36U);
+}
+
 int rtl8188eu_transmit_frame(const uint8_t *frame, size_t length)
 {
     uint32_t actual = 0U;

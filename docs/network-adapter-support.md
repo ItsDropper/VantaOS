@@ -10,7 +10,7 @@ VantaOS discovers PCI Ethernet controllers through the network-driver registry. 
 
 The RTL8139 driver supports Ethernet frame TX/RX, feeds received frames into the existing common Ethernet/network stack, updates link state from the media-status register, and uses a bounded poll budget. GitHub Actions runs it in QEMU against a socket-backed network to exercise transmit, ARP, ICMP, and UDP receive paths.
 
-Use `net adapters` in the kernel shell to list PCI devices with network-controller class code, their PCI vendor/device names, and the registered driver binding. An `unbound` result means no in-tree network driver claimed that PCI function; it is not a claim that the hardware is broken.
+Use `net adapters` in the kernel shell to list PCI devices with network-controller class code, their PCI vendor/device names, and the registered driver binding. The CI suite also exercises DHCP offer/request/ACK processing and malformed server replies, separately from the QEMU Ethernet frame-path tests. An `unbound` result means no in-tree network driver claimed that PCI function; it is not a claim that the hardware is broken.
 
 ## Not universal networking
 

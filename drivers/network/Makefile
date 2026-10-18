@@ -1,1 +1,1 @@
-VANTAOS_NET_DRIVER_C := drivers/network/driver.c drivers/network/e1000.c drivers/network/virtio_net.c
+VANTAOS_NET_DRIVER_C := drivers/network/driver.c drivers/network/e1000.c drivers/network/virtio_net.c drivers/network/rtl8139.c

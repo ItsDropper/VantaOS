@@ -243,6 +243,75 @@ jobs:
             cat "$log" qemu-e1000-stderr.log
             exit 1
           fi
+
+      - name: RTL8139 QEMU Ethernet end-to-end test
+        if: steps.scope.outputs.full == '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          log="rtl8139-boot.log"
+          rm -f "$log" qemu-rtl8139-stderr.log rtl8139-network.img
+          cp nvme-fat32-template.img rtl8139-network.img
+          stdbuf -o0 timeout 45s qemu-system-x86_64 \
+            -machine pc \
+            -nodefaults \
+            -device VGA,id=video0 \
+            -m 256M \
+            -device rtl8139,netdev=net0 \
+            -netdev socket,id=net0,listen=127.0.0.1:1234 \
+            -drive file=VantaOS.iso,media=cdrom,format=raw \
+            -drive file=rtl8139-network.img,if=ide,format=raw \
+            -boot order=d \
+            -display vnc=127.0.0.1:1 \
+            -serial stdio \
+            -no-reboot >"$log" 2>qemu-rtl8139-stderr.log &
+          qemu_pid=$!
+          cleanup() {
+            kill "$qemu_pid" 2>/dev/null || true
+            wait "$qemu_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+          for attempt in $(seq 1 300); do
+            if grep -q 'VANTAOS_RTL8139_TX_SELFTEST_OK' "$log" 2>/dev/null && grep -q 'VANTAOS_BOOT_OK' "$log" 2>/dev/null; then break; fi
+            if grep -q 'VANTAOS_RTL8139_TX_SELFTEST_FAIL' "$log" 2>/dev/null; then
+              cat "$log" qemu-rtl8139-stderr.log
+              exit 1
+            fi
+            if ! kill -0 "$qemu_pid" 2>/dev/null; then
+              echo "QEMU exited before the RTL8139 transmit test completed."
+              cat "$log" qemu-rtl8139-stderr.log
+              exit 1
+            fi
+            sleep 0.1
+          done
+          grep -q 'VANTAOS_BOOT_OK' "$log"
+          grep -q 'VANTAOS_RTL8139_INITIALIZED' "$log"
+          grep -q 'VANTAOS_RTL8139_TX_SELFTEST_OK' "$log"
+          python3 scripts/test_e1000_network.py || {
+            cat "$log" qemu-rtl8139-stderr.log
+            exit 1
+          }
+          for attempt in $(seq 1 100); do
+            grep -q 'VANTAOS_UDP_RX_SELFTEST_OK' "$log" && break
+            sleep 0.1
+          done
+          grep -q 'VANTAOS_UDP_RX_SELFTEST_OK' "$log"
+          test "$(grep -c 'VANTAOS_UDP_RX_SELFTEST_OK' "$log")" -eq 1
+          for attempt in $(seq 1 100); do
+            if grep -q 'VANTAOS_RTL8139_RX_SELFTEST_OK' "$log" 2>/dev/null; then break; fi
+            if ! kill -0 "$qemu_pid" 2>/dev/null; then
+              echo "QEMU exited before the RTL8139 receive test completed."
+              cat "$log" qemu-rtl8139-stderr.log
+              exit 1
+            fi
+            sleep 0.1
+          done
+          if ! grep -q 'VANTAOS_RTL8139_RX_SELFTEST_OK' "$log" ||
+             ! grep -q 'VANTAOS_ARP_REPLY_OK' "$log" ||
+             ! grep -q 'VANTAOS_ICMP_ECHO_REPLY_OK' "$log"; then
+            cat "$log" qemu-rtl8139-stderr.log
+            exit 1
+          fi
       - name: VirtIO legacy network device QEMU probe and TX regression
         if: steps.scope.outputs.full == '1'
         shell: bash

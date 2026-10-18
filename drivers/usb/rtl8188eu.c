@@ -562,6 +562,7 @@ static int rtl_read_efuse_physical(uint8_t *physical, size_t capacity)
     uint16_t debug_address = 0U;
     uint32_t low, high;
     size_t copied = 0U;
+    size_t content_length = 0U;
     uint16_t declared_length = 0U;
 
     if (!physical || capacity < RTL8188EU_EFUSE_PHYSICAL_SIZE ||
@@ -614,16 +615,16 @@ static int rtl_read_efuse_physical(uint8_t *physical, size_t capacity)
             if (declared_length < 2U ||
                 declared_length > RTL8188EU_EFUSE_PHYSICAL_SIZE + 2U)
                 goto fail;
-            size_t amount = declared_length - 2U;
-            if (amount > capacity) amount = capacity;
-            for (size_t i = 0U; i < amount && i < 6U; ++i)
+            content_length = (size_t)(declared_length - 2U);
+            if (content_length > capacity) content_length = capacity;
+            for (size_t i = 0U; i < content_length && i < 6U; ++i)
                 physical[copied++] = bytes[i + 2U];
         } else {
-            for (size_t i = 0U; i < sizeof(bytes) && copied < capacity; ++i)
+            for (size_t i = 0U; i < sizeof(bytes) &&
+                 copied < content_length; ++i)
                 physical[copied++] = bytes[i];
         }
-        if (copied >= RTL8188EU_EFUSE_PHYSICAL_SIZE ||
-            copied >= (size_t)(declared_length - 2U))
+        if (copied >= content_length)
             break;
     }
     if (copied == 0U)

@@ -144,6 +144,7 @@ int main(void)
     inject_echo(global.bytes);
     assert(last_tx_length==14U+40U+8U);
     assert(last_tx[12]==0x86U&&last_tx[13]==0xDDU&&last_tx[54]==129U);
+    assert(icmp6_checksum(last_tx + 22U, last_tx + 38U, last_tx + 54U, 8U) == 0U);
     assert(net_udp6_handler_register(4321U, udp6_handler, 0));
     assert(!net_udp6_handler_register(4321U, udp6_handler, 0));
     inject_udp6(global.bytes, 0);

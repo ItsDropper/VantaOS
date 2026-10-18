@@ -1,4 +1,5 @@
 #include "net_ipv4.h"
+#include "net_ipv6.h"
 #include <stdint.h>
 #include <stdio.h>
 

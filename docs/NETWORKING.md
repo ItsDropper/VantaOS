@@ -22,7 +22,7 @@ Architecture-independent protocol code lives in `net/`; PCI drivers live in `dri
 
 1. Ensure the VM's virtual NIC or supported physical NIC is connected to a network.
 2. Run `net connect` to request DHCPv4 configuration.
-3. Run `net status` to verify link, address, gateway, DNS, and RX/TX counters.
+3. Run `net status` to verify link, address, gateway, DNS, and RX/TX counters. Run `net adapters` to inspect PCI network controllers and whether an in-tree driver claimed each one.
 4. Run `net ping 1.1.1.1` as an optional ICMP diagnostic; some networks block ping. After IPv6 Router Advertisements and SLAAC complete, `net ping6 2606:4700:4700::1111` tests routed ICMPv6 reachability when the network permits it.
 5. Run `net dns example.com` to test DNS.
 6. Run `net http http://example.com/` to make a real plain-HTTP GET over TCP and print up to 4096 response bytes. `net get` is an alias.

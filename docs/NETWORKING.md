@@ -16,7 +16,7 @@ Ethernet-II + IPv4/IPv6 demultiplexing + bounded receive queue
 PCI network driver registry -> E1000-compatible + legacy VirtIO-net
 ```
 
-Architecture-independent protocol code lives in `net/`; PCI drivers live in `drivers/network/`; shared contracts live in `include/net.h`. Network receive is polling-based: the driver moves frames into a fixed-capacity queue and protocol handlers run in `net_poll()` caller context. The E1000 driver supports QEMU `8086:100E` plus a defined set of legacy Intel 8254x PCI IDs that share this register/descriptor model. The VirtIO driver supports the **legacy/transitional PCI I/O transport** (`1af4:1000`), including split virtqueues backed by DMA memory below 4 GiB. It is not yet a modern VirtIO PCI capability/notification transport (`1af4:1041`), and this must not be read as support for every VirtIO implementation. The QEMU regression verifies legacy device initialization and transmit completion; it is not a substitute for physical-hardware coverage. Unsupported devices remain unbound instead of being guessed from the vendor name.
+Architecture-independent protocol code lives in `net/`; PCI drivers live in `drivers/network/`; shared contracts live in `include/net.h`. Network receive is polling-based: the driver moves frames into a fixed-capacity queue and protocol handlers run in `net_poll()` caller context. The E1000 driver supports QEMU `8086:100E` plus a defined set of legacy Intel 8254x PCI IDs that share this register/descriptor model. The VirtIO drivers support the **legacy/transitional PCI I/O transport** (`1af4:1000`) and the **modern PCI capability/notification transport** (`1af4:1041`). The modern driver validates the PCI capability chain and MMIO bounds, negotiates `VIRTIO_F_VERSION_1` and MAC support, uses split virtqueues backed by DMA memory below 4 GiB, and has a modern-only QEMU TX plus ARP/ICMP/UDP RX/TX regression. The legacy QEMU regression verifies legacy device initialization and transmit completion; it is not a substitute for physical-hardware coverage. Unsupported devices remain unbound instead of being guessed from the vendor name.
 
 ## Easy connection workflow
 
@@ -72,3 +72,6 @@ TLS should be integrated as a reviewed library port, not handwritten cryptograph
 
 
 DHCP lease negotiation and renewal state is tracked independently for each registered network device, up to `NET_DEVICE_MAX`. This avoids a second interface overwriting the first interface's lease-renewal timers or transaction state. A configured interface still needs a working supported NIC driver and a reachable DHCP server; this is not a promise of universal hardware support.
+
+
+Modern VirtIO support does not make this a universal networking stack. Physical Wi-Fi association/WPA2/WPA3 and TLS/HTTPS remain separate unsupported capabilities; see [adapter support](network-adapter-support.md) and [secure networking](secure-networking.md).

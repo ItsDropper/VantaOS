@@ -496,6 +496,8 @@ int xhci_disable_device(uint32_t slot_id)
     interrupt_configured[slot_id - 1U] = 0;
     interrupt_in_flight[slot_id - 1U] = 0;
     interrupt_report_ready[slot_id - 1U] = 0;
+    bulk_configured[slot_id - 1U][0] = 0;
+    bulk_configured[slot_id - 1U][1] = 0;
     return 1;
 }
 int xhci_set_ep0_packet(uint32_t slot_id, uint16_t packet_size)
@@ -1033,6 +1035,13 @@ static int controller_start(const struct pci_device* pci)
         interrupt_in_flight[slot] = 0;
         interrupt_report_ready[slot] = 0;
         interrupt_endpoint_address[slot] = 0;
+        for (uint32_t direction = 0; direction < 2U; ++direction) {
+            bulk_enqueue[slot][direction] = 0;
+            bulk_cycle[slot][direction] = 1;
+            bulk_dci[slot][direction] = 0;
+            bulk_packet[slot][direction] = 0;
+            bulk_configured[slot][direction] = 0;
+        }
     }
 
     uint32_t scratchpads =

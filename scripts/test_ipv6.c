@@ -109,7 +109,11 @@ static void inject_udp6(const uint8_t global[16], int corrupt_checksum)
     put16(udp + 6U, udp6_checksum_test(source, global, udp, 8U + sizeof(message) - 1U));
     if (corrupt_checksum == 1) udp[6] ^= 0x80U;
     else if (corrupt_checksum == 2) udp[6] = udp[7] = 0U;
-    else if (corrupt_checksum == 3) put16(udp + 4U, (uint16_t)(9U + sizeof(message) - 1U));
+    else if (corrupt_checksum == 3) {
+        put16(udp + 4U, (uint16_t)(9U + sizeof(message) - 1U));
+        udp[6] = udp[7] = 0U;
+        put16(udp + 6U, udp6_checksum_test(source, global, udp, 8U + sizeof(message) - 1U));
+    }
     ipv6_handler(&device, f, sizeof(f), 0x86DDU, 14U, ipv6_context);
 }
 static void inject_echo(const uint8_t global[16])

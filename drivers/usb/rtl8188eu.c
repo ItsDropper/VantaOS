@@ -658,12 +658,11 @@ int rtl8188eu_decode_efuse_map(const uint8_t *physical, size_t physical_length,
         section = (uint8_t)(header >> 4);
         word_enable = (uint8_t)(header & 0x0FU);
         /*
-         * RTL8188E extended headers are selected by word-enable == 0xF
-         * (the low nibble), not by section == 0xF. The first header's
-         * high bits carry section[2:0]; the next byte carries section[6:3]
-         * and the actual word-enable nibble.
+         * RTL8188E extended headers have bits 4:0 equal to 0x0F.
+         * Bit 4 matters: a regular header with word-enable 0xF and bit 4
+         * set is an empty regular packet, not an extended header.
          */
-        if (word_enable == 0x0FU) {
+        if ((header & 0x1FU) == 0x0FU) {
             if (cursor >= physical_length) return 0;
             uint8_t extended = physical[cursor++];
             if (extended == 0xFFU) break;

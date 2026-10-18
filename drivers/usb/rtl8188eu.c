@@ -666,9 +666,21 @@ int rtl8188eu_decode_efuse_map(const uint8_t *physical, size_t physical_length,
             if (cursor >= physical_length) return 0;
             uint8_t extended = physical[cursor++];
             if (extended == 0xFFU) break;
-            section = (uint8_t)(((header & 0xE0U) >> 5) |
-                                ((extended & 0xF0U) >> 1));
+            section = (uint8_t)((header & 0xE0U) >> 5);
             word_enable = (uint8_t)(extended & 0x0FU);
+            /*
+             * An extended header whose second byte has low nibble 0xF
+             * uses a third byte for the upper section bits and word mask.
+             * This follows the RTL8188E packet-format discriminator.
+             */
+            if (word_enable == 0x0FU) {
+                if (cursor >= physical_length) return 0;
+                extended = physical[cursor++];
+                if (extended == 0xFFU) break;
+                section = (uint8_t)(section |
+                                    ((extended & 0xF0U) >> 1));
+                word_enable = (uint8_t)(extended & 0x0FU);
+            }
         }
         if (word_enable == 0x0FU) continue;
         size_t base = (size_t)section * 8U;

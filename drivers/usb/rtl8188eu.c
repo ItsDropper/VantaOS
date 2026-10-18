@@ -41,7 +41,9 @@
 #define RTL8188EU_REG_PKTBUF_DEBUG_DATA_LO 0x0144U
 #define RTL8188EU_REG_PKTBUF_DEBUG_DATA_HI 0x0148U
 #define RTL8188EU_REG_TDECTRL 0x0208U
+#define RTL8188EU_IOL_INIT_LLT 0x01U
 #define RTL8188EU_IOL_READ_EFUSE_MAP 0x02U
+#define RTL8188EU_IOL_EFUSE_PATCH 0x04U
 #define RTL8188EU_IOL_ENABLE 0x80U
 #define RTL8188EU_IOL_ERROR_SHIFT 4U
 #define RTL8188EU_EFUSE_PHYSICAL_SIZE 512U
@@ -563,13 +565,16 @@ static int rtl_read_efuse_physical(uint8_t *physical, size_t capacity)
         !rtl_bound || !rtl_firmware_ready)
         return 0;
 
-    /* Give firmware its normal packet-buffer area and select TX-buffer access. */
+    /* Initialize packet-buffer LLT before using its firmware offload area. */
     if (!rtl_reg_read8(RTL8188EU_REG_TDECTRL + 1U, &boundary))
         return 0;
     have_boundary = 1U;
+    if (!rtl_iol_execute(RTL8188EU_IOL_INIT_LLT))
+        goto fail;
     if (!rtl_reg_read8(RTL8188EU_REG_PKTBUF_ACCESS, &access))
         goto fail;
     have_access = 1U;
+    /* The eFuse read command returns the physical map in the TX packet buffer. */
     if (!rtl_reg_write8(RTL8188EU_REG_TDECTRL + 1U, 0U) ||
         !rtl_reg_write8(RTL8188EU_REG_PKTBUF_ACCESS,
                         (uint8_t)(access | 0x01U)) ||
@@ -702,6 +707,10 @@ static int rtl_load_efuse_identity(void)
         rtl_efuse_info.board_option == 0xFFU)
         return 0;
 
+    /* Apply only firmware-supported eFuse patches; no synthetic defaults. */
+    if (!rtl_iol_execute(RTL8188EU_IOL_EFUSE_PATCH))
+        return 0;
+
     /* Chip cut is recorded for diagnostics; unknown cuts stay TX-disabled. */
     serial_write("VANTAOS_RTL8188EU_EFUSE_IDENTITY_OK\\n");
     (void)chip_config;
@@ -753,7 +762,7 @@ static int rtl_radio_preflight(void)
 {
     uint16_t system_function;
     uint32_t rf_identity, rf_channel;
-    if (!rtl_bound || !rtl_firmware_ready)
+    if (!rtl_bound || !rtl_firmware_ready || !rtl_efuse_ready)
         return 0;
     if (!rtl_reg_read16(RTL8188EU_REG_SYS_FUNC, &system_function))
         return 0;

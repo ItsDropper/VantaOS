@@ -624,15 +624,15 @@ int rtl8188eu_get_mac_address(uint8_t mac[6])
     return 1;
 }
 
-int rtl8188eu_start_active_scan(void)
+static int rtl_send_probe_request(void)
 {
-    uint8_t frame[38] = {0};
+    uint8_t frame[36] = {0};
     uint8_t mac[6];
     static uint16_t sequence;
-    if (!rtl8188eu_get_mac_address(mac))
+    if (!rtl_radio_ready || !rtl_current_channel ||
+        !rtl8188eu_get_mac_address(mac))
         return 0;
 
-    /* IEEE 802.11 Probe Request. The chipset's current channel is unchanged. */
     frame[0] = 0x40U;
     frame[1] = 0x00U;
     for (size_t i = 0U; i < 6U; ++i) {
@@ -643,7 +643,6 @@ int rtl8188eu_start_active_scan(void)
     sequence = (uint16_t)((sequence + 1U) & 0x0FFFU);
     frame[22] = (uint8_t)(sequence << 4);
     frame[23] = (uint8_t)(sequence >> 4);
-    /* Wildcard SSID followed by the mandatory legacy supported-rate IE. */
     frame[24] = 0U;
     frame[25] = 0U;
     frame[26] = 1U;
@@ -656,8 +655,48 @@ int rtl8188eu_start_active_scan(void)
     frame[33] = 0x12U;
     frame[34] = 0x18U;
     frame[35] = 0x24U;
-    /* Leave the remaining bytes zeroed; exact MPDU length is 36 bytes. */
-    return rtl8188eu_transmit_frame(frame, 36U);
+    return rtl8188eu_transmit_frame(frame, sizeof(frame));
+}
+
+int rtl8188eu_start_active_scan(void)
+{
+    if (!rtl_radio_ready || rtl_scan_active)
+        return 0;
+    rtl_passive_result_count = 0U;
+    rtl_scan_channel = 1U;
+    if (!rtl_program_channel(rtl_scan_channel) || !rtl_send_probe_request()) {
+        rtl_scan_active = 0U;
+        rtl_scan_channel = 0U;
+        rtl_scan_dwell_polls = 0U;
+        return 0;
+    }
+    rtl_scan_active = 1U;
+    rtl_scan_dwell_polls = 500U;
+    return 1;
+}
+
+static void rtl_scan_poll(void)
+{
+    if (!rtl_scan_active)
+        return;
+    if (rtl_scan_dwell_polls != 0U) {
+        --rtl_scan_dwell_polls;
+        return;
+    }
+    if (rtl_scan_channel >= 14U) {
+        rtl_scan_active = 0U;
+        rtl_scan_channel = 0U;
+        return;
+    }
+    ++rtl_scan_channel;
+    if (!rtl_program_channel(rtl_scan_channel) || !rtl_send_probe_request()) {
+        rtl_scan_active = 0U;
+        rtl_scan_channel = 0U;
+        rtl_scan_dwell_polls = 0U;
+        serial_write("VANTAOS_RTL8188EU_SCAN_FAILED\\n");
+        return;
+    }
+    rtl_scan_dwell_polls = 500U;
 }
 
 int rtl8188eu_transmit_frame(const uint8_t *frame, size_t length)

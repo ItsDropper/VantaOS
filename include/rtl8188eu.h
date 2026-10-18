@@ -52,3 +52,7 @@ size_t rtl8188eu_get_passive_results(net_wifi_scan_result_t *results,
                                      size_t capacity);
 
 #endif
+
+/* Decode a captured RTL8188E physical eFuse map into its logical map. */
+int rtl8188eu_decode_efuse_map(const uint8_t *physical, size_t physical_length,
+                               uint8_t *logical, size_t logical_length);

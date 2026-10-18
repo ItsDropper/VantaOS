@@ -19,3 +19,14 @@ The branch is still a bring-up effort, not a complete or production-ready Wi-Fi 
 - The host mock models the checksum-report transition only after download is disabled, so regression tests catch the previous false-success behavior.
 
 These safeguards improve firmware bring-up correctness; they do not complete the radio driver. No supported production connection path should be exposed until MAC/PHY/RF calibration, TX and RX handling, active channel scan, association, WPA2-PSK/CCMP, and network-device integration are implemented and tested.
+
+## Supplying firmware to the boot image
+
+The firmware image is intentionally not vendored here. Obtain a matching RTL8188EU firmware image under its upstream redistribution terms, then build the FAT32 disk image with the path explicitly supplied:
+
+```sh
+RTL8188EU_FIRMWARE=/path/to/rtl8188eufw.bin ./build.sh
+```
+
+The build script checks that the file exists and is within the current size bounds, then installs it as `/SYSTEM/RTL8188EU.BIN`. Without this variable, the build continues but reports that firmware is absent. This only provisions the file; it does not imply the driver has completed radio initialization or supports an authenticated network connection.
+

@@ -166,6 +166,39 @@ int fat32_read_file(uint32_t cluster, uint32_t size, char *buffer,
 void serial_write(const char *s) { (void)s; }
 void serial_write_bytes(const char *s, size_t n) { (void)s; (void)n; }
 
+static int test_efuse_logical_map_decoder(void)
+{
+    uint8_t physical[32], logical[512];
+    memset(physical, 0xFF, sizeof(physical));
+    /* Section 26, word 3: logical bytes 0xD6-0xD7. */
+    physical[0] = 0x4FU;
+    physical[1] = 0x37U;
+    physical[2] = 0xA6U;
+    physical[3] = 0xA7U;
+    /* Section 27, words 0-2: logical bytes 0xD8-0xDD. */
+    physical[4] = 0x6FU;
+    physical[5] = 0x38U;
+    physical[6] = 0xA8U;
+    physical[7] = 0xA9U;
+    physical[8] = 0xAAU;
+    physical[9] = 0xABU;
+    physical[10] = 0xACU;
+    physical[11] = 0xADU;
+    if (!rtl8188eu_decode_efuse_map(physical, sizeof(physical),
+                                    logical, sizeof(logical)))
+        return 0;
+    if (logical[0xD6U] != 0xA6U || logical[0xD7U] != 0xA7U ||
+        logical[0xD8U] != 0xA8U || logical[0xDCU] != 0xACU ||
+        logical[0xDDU] != 0xADU || logical[0xD5U] != 0xFFU)
+        return 0;
+    physical[0] = 0x4FU;
+    if (rtl8188eu_decode_efuse_map(physical, 1U, logical, sizeof(logical)))
+        return 0;
+    if (rtl8188eu_decode_efuse_map(physical, sizeof(physical), logical, 8U))
+        return 0;
+    return 1;
+}
+
 int main(void)
 {
     const uint8_t valid[] = {

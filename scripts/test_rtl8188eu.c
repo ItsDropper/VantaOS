@@ -17,6 +17,7 @@ static uint8_t beacon_delivered;
 static uint8_t tx_seen;
 static uint8_t tx_descriptor_valid;
 static uint8_t firmware_read_fail;
+static uint8_t scan_request_valid;
 
 int xhci_controller_online(void) { return 1; }
 int xhci_configure_bulk_endpoint(uint32_t slot, uint8_t ep, uint16_t packet)
@@ -71,7 +72,16 @@ int xhci_bulk_transfer(uint32_t slot, uint8_t ep, void *buffer,
     tx_descriptor_valid = packet_length == length - 32U &&
                           bytes[2] == 32U && bytes[3] == 0x0CU &&
                           (queue & 0x1F00U) == 0x1200U &&
-                          bytes[32] == 0x80U;
+                          (bytes[32] == 0x80U || bytes[32] == 0x40U);
+    if (bytes[32] == 0x40U) {
+        scan_request_valid = bytes[36] == 0xFFU && bytes[41] == 0xFFU &&
+            bytes[42] == 0x02U && bytes[43] == 0x11U &&
+            bytes[44] == 0x22U && bytes[45] == 0x33U &&
+            bytes[46] == 0x44U && bytes[47] == 0x55U &&
+            bytes[48] == 0xFFU && bytes[53] == 0xFFU &&
+            bytes[56] == 0U && bytes[57] == 0U &&
+            bytes[58] == 1U && bytes[59] == 8U;
+    }
     tx_seen = 1U;
     *actual = length;
     return 1;
@@ -193,12 +203,17 @@ int main(void)
         !rtl8188eu_port_is_bound(1U) || rtl8188eu_port_is_bound(2U))
         return 4;
 
+    registers[0x610] = 0x02U; registers[0x611] = 0x11U;
+    registers[0x612] = 0x22U; registers[0x613] = 0x33U;
+    registers[0x614] = 0x44U; registers[0x615] = 0x55U;
     rtl8188eu_poll();
     if (rtl8188eu_get_status() != RTL8188EU_STATUS_FIRMWARE_READY ||
         !firmware_read_seen || registers[0x1000] != 0xA0U ||
         registers[0x1007] != 0xA7U || !checksum_reported ||
         checksum_reported_too_early)
         return 5;
+    if (!rtl8188eu_start_active_scan() || !scan_request_valid)
+        return 18;
     rtl8188eu_poll();
     net_wifi_scan_result_t results[2];
     size_t result_count = rtl8188eu_get_passive_results(results, 2U);

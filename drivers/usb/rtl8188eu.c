@@ -55,6 +55,8 @@
 #define RTL8188EU_RF_CHNLBW 0x18U
 #define RTL8188EU_RF_DATA_MASK 0x000FFFFFU
 #define RTL8188EU_RF_CHANNEL_MASK 0x000000FFU
+/* Channel 14 is excluded until a regulatory-domain policy explicitly allows it. */
+#define RTL8188EU_MAX_CHANNEL 13U
 #define RTL8188EU_RF_READ_EDGE (1U << 31)
 #define RTL8188EU_RF_ADDRESS_SHIFT 23U
 #define RTL8188EU_RF_READBACK_MASK 0x000FFFFFU
@@ -797,7 +799,7 @@ static int rtl_radio_preflight(void)
 static int rtl_program_channel(uint8_t channel)
 {
     uint32_t current, updated, verify;
-    if (!rtl_radio_preflight_done || channel < 1U || channel > 14U)
+    if (!rtl_radio_preflight_done || channel < 1U || channel > RTL8188EU_MAX_CHANNEL)
         return 0;
     if (!rtl_rf_read(RTL8188EU_RF_CHNLBW, &current))
         return 0;
@@ -1029,7 +1031,7 @@ static void rtl_scan_poll(void)
         --rtl_scan_dwell_polls;
         return;
     }
-    if (rtl_scan_channel >= 14U) {
+    if (rtl_scan_channel >= RTL8188EU_MAX_CHANNEL) {
         rtl_scan_active = 0U;
         rtl_scan_channel = 0U;
         return;

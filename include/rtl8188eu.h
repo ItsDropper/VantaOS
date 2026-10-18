@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include "net_wifi.h"
 
 /*
  * Probe a USB device descriptor/configuration for the supported RTL8188EU
@@ -13,5 +14,7 @@
 int rtl8188eu_probe(uint32_t slot_id, uint16_t vendor_id, uint16_t device_id,
                     const uint8_t *configuration, size_t length);
 void rtl8188eu_poll(void);
+size_t rtl8188eu_get_passive_results(net_wifi_scan_result_t *results,
+                                     size_t capacity);
 
 #endif

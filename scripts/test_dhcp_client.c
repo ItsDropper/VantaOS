@@ -14,6 +14,9 @@ static void *udp_context;
 static uint16_t udp_port;
 static uint32_t ticks;
 static net_device_t device;
+static net_device_t second_device;
+static net_device_t *active_device;
+static uint32_t tx_counts[2];
 static uint8_t tx_frame[600];
 static size_t tx_length;
 static uint8_t last_message_type;
@@ -40,7 +43,9 @@ int net_arp_resolve(net_device_t *d,uint32_t target,uint8_t mac[6],uint32_t time
 { (void)d;(void)target;(void)mac;(void)timeout;return 0; }
 int net_device_transmit(net_device_t *d,const void *frame,size_t length)
 {
-    if(d!=&device||!frame||length>sizeof(tx_frame))return 0;
+    if((d!=&device&&d!=&second_device)||!frame||length>sizeof(tx_frame))return 0;
+    active_device=d;
+    if(d==&device)++tx_counts[0];else ++tx_counts[1];
     const uint8_t *p=(const uint8_t*)frame;
     for (size_t i = 0; i < length; i++) {
         tx_frame[i] = p[i];
@@ -52,7 +57,7 @@ int net_device_transmit(net_device_t *d,const void *frame,size_t length)
 }
 int net_device_configure_ipv4(net_device_t *d,uint32_t address,uint32_t mask,uint32_t gateway)
 {
-    if (d != &device) return 0;
+    if (d != &device && d != &second_device) return 0;
     d->ipv4_address = address;
     d->ipv4_netmask = mask;
     d->ipv4_gateway = gateway;
@@ -60,7 +65,7 @@ int net_device_configure_ipv4(net_device_t *d,uint32_t address,uint32_t mask,uin
     return 1;
 }
 int net_device_clear_ipv4(net_device_t *d)
-{ if(d!=&device)return 0;d->ipv4_address=d->ipv4_netmask=d->ipv4_gateway=d->ipv4_dns=0;d->ipv4_configured=0;return 1; }
+{ if(d!=&device&&d!=&second_device)return 0;d->ipv4_address=d->ipv4_netmask=d->ipv4_gateway=d->ipv4_dns=0;d->ipv4_configured=0;return 1; }
 
 static void add_option(uint8_t *p,size_t *n,uint8_t code,const uint8_t *value,uint8_t length)
 {
@@ -74,7 +79,7 @@ static void inject_reply(uint8_t kind,int bad_xid,int malformed_mask)
     uint32_t xid=get32(tx_frame+BOOTP_OFFSET+4U);
     put32(p+4U,bad_xid?xid^0x01020304U:xid);
     put32(p+16U,0xC000020AU);
-    for(size_t i=0;i<6U;i++)p[28U+i]=device.mac[i];
+    for(size_t i=0;i<6U;i++)p[28U+i]=active_device->mac[i];
     put32(p+COOKIE_OFFSET,0x63825363U);
     size_t n=OPTIONS_OFFSET;
     uint8_t type=kind;add_option(p,&n,53U,&type,1U);
@@ -83,9 +88,11 @@ static void inject_reply(uint8_t kind,int bad_xid,int malformed_mask)
     const uint8_t mask[4]={255,255,255,0};add_option(p,&n,1U,malformed_mask?mask_bad:mask,malformed_mask?3U:4U);
     const uint8_t gateway[4]={192,0,2,1};add_option(p,&n,3U,gateway,4U);
     const uint8_t dns[4]={1,1,1,1};add_option(p,&n,6U,dns,4U);
-    const uint8_t lease[4]={0,0,14,16};add_option(p,&n,51U,lease,4U);
+    const uint8_t lease[4]={0,0,0,(uint8_t)(test_mode==4?10:0)};
+    const uint8_t normal_lease[4]={0,0,14,16};
+    add_option(p,&n,51U,test_mode==4?lease:normal_lease,4U);
     p[n++]=255U;
-    if(udp_handler)udp_handler(&device,0xC0000201U,67U,68U,p,n,udp_context);
+    if(udp_handler)udp_handler(active_device,0xC0000201U,67U,68U,p,n,udp_context);
 }
 size_t net_poll(size_t packet_budget)
 {
@@ -105,6 +112,7 @@ static int run_case(int mode,int expected)
 {
     device=(net_device_t){0};device.name[0]='n';device.name[1]='0';
     device.mac[0]=0x02;device.mac[5]=0x42;device.mtu=1500;device.link_up=1;
+    active_device=&device;tx_counts[0]=0;
     test_mode=mode;offer_sent=ack_sent=0;last_message_type=0;tx_length=0;ticks=0;
     uint32_t dns=0xDEADBEEFU,lease=0;
     int result=net_dhcp_configure(&device,1000U,&dns,&lease);
@@ -117,12 +125,35 @@ static int run_case(int mode,int expected)
     return tx_length!=0U&&udp_handler!=0&&udp_context==0&&udp_port==68U;
 }
 
+
+static int run_dual_interface_renewal(void)
+{
+    device=(net_device_t){0}; second_device=(net_device_t){0};
+    device.name[0]='n';device.name[1]='0';device.mac[0]=0x02;device.mac[5]=0x42;device.mtu=1500;device.link_up=1;
+    second_device.name[0]='n';second_device.name[1]='1';second_device.mac[0]=0x02;second_device.mac[5]=0x43;second_device.mtu=1500;second_device.link_up=1;
+    tx_counts[0]=tx_counts[1]=0;ticks=0;test_mode=4;
+    offer_sent=ack_sent=0;last_message_type=0;tx_length=0;active_device=&device;
+    uint32_t dns_a=0,lease_a=0,dns_b=0,lease_b=0;
+    if(!net_dhcp_configure(&device,1000U,&dns_a,&lease_a)||lease_a!=10U)return 0;
+    offer_sent=ack_sent=0;last_message_type=0;tx_length=0;active_device=&second_device;
+    if(!net_dhcp_configure(&second_device,1000U,&dns_b,&lease_b)||lease_b!=10U)return 0;
+    uint32_t initial_a=tx_counts[0],initial_b=tx_counts[1];
+    for(uint32_t i=0;i<2200U;i++){
+        net_dhcp_poll();
+        ack_sent=0;
+        if(last_message_type==3U)(void)net_poll(16U);
+    }
+    return device.ipv4_configured&&second_device.ipv4_configured&&
+           tx_counts[0]>initial_a&&tx_counts[1]>initial_b;
+}
+
 int main(void)
 {
     if(!run_case(0,1)){fputs("DHCP DORA/lease configuration failed\n",stderr);return 1;}
     if(!run_case(1,0)){fputs("DHCP accepted a malformed subnet-mask option\n",stderr);return 2;}
     if(!run_case(2,0)){fputs("DHCP NAK did not fail closed\n",stderr);return 3;}
     if(!run_case(3,1)){fputs("DHCP accepted wrong transaction ID or rejected subsequent valid lease\n",stderr);return 4;}
-    puts("DHCP offer/request/ack, malformed option, NAK, and transaction-ID tests passed");
+    if(!run_dual_interface_renewal()){fputs("DHCP did not maintain independent leases and renewal state for two interfaces\\n",stderr);return 5;}
+    puts("DHCP DORA, malformed replies, transaction IDs, and independent multi-interface renewal passed");
     return 0;
 }

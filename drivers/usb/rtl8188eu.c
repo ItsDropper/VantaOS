@@ -639,7 +639,7 @@ fail:
     return 0;
 }
 
-static int rtl_decode_efuse_map(const uint8_t *physical, size_t physical_length,
+int rtl8188eu_decode_efuse_map(const uint8_t *physical, size_t physical_length,
                                 uint8_t *logical, size_t logical_length)
 {
     size_t cursor = 0U;
@@ -680,7 +680,7 @@ static int rtl_load_efuse_identity(void)
     uint32_t chip_config;
     if (!rtl_read_efuse_physical(rtl_efuse_info.raw,
                                   sizeof(rtl_efuse_info.raw)) ||
-        !rtl_decode_efuse_map(rtl_efuse_info.raw,
+        !rtl8188eu_decode_efuse_map(rtl_efuse_info.raw,
                               sizeof(rtl_efuse_info.raw),
                               rtl_efuse_info.logical,
                               sizeof(rtl_efuse_info.logical)) ||

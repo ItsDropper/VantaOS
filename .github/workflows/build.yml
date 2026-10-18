@@ -128,6 +128,11 @@ jobs:
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_ipv4_mtu.c -o /tmp/vantaos-ipv4-mtu-test
           /tmp/vantaos-ipv4-mtu-test
 
+      - name: Test DHCP client negotiation and malformed replies
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_dhcp_client.c net/dhcp.c -o /tmp/vantaos-dhcp-client-test
+          /tmp/vantaos-dhcp-client-test
+
       - name: Test DNS response validation
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_dns_client.c net/dns.c -o /tmp/vantaos-dns-client-test

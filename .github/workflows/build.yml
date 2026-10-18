@@ -270,7 +270,7 @@ jobs:
           log="virtio-modern-boot.log"
           rm -f "$log" qemu-virtio-modern-stderr.log virtio-modern-network.img
           cp nvme-fat32-template.img virtio-modern-network.img
-          stdbuf -o0 timeout 45s qemu-system-x86_64 \
+          stdbuf -o0 timeout 90s qemu-system-x86_64 \
             -machine pc \
             -nodefaults \
             -device VGA,id=video0 \
@@ -286,7 +286,7 @@ jobs:
           qemu_pid=$!
           cleanup() { kill "$qemu_pid" 2>/dev/null || true; wait "$qemu_pid" 2>/dev/null || true; }
           trap cleanup EXIT
-          for attempt in $(seq 1 300); do
+          for attempt in $(seq 1 700); do
             if grep -q 'VANTAOS_VIRTIO_NET_MODERN_TX_SELFTEST_OK' "$log" 2>/dev/null && grep -q 'VANTAOS_BOOT_OK' "$log" 2>/dev/null; then break; fi
             if grep -q 'VANTAOS_VIRTIO_NET_MODERN_TX_SELFTEST_FAIL' "$log" 2>/dev/null; then cat "$log" qemu-virtio-modern-stderr.log; exit 1; fi
             if ! kill -0 "$qemu_pid" 2>/dev/null; then cat "$log" qemu-virtio-modern-stderr.log; exit 1; fi

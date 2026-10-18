@@ -109,10 +109,12 @@ jobs:
           test -f drivers/Makefile
           test -f drivers/network/e1000.c
           test -f drivers/network/virtio_net.c
+          test -f drivers/network/virtio_net_modern.c
           grep -q 'net/tcp.c' net/Makefile
           ! grep -q 'net/tls.c' net/Makefile
           grep -q 'drivers/network/e1000.c' drivers/network/Makefile
           grep -q 'drivers/network/virtio_net.c' drivers/network/Makefile
+          grep -q 'drivers/network/virtio_net_modern.c' drivers/network/Makefile
           test -f fs/Makefile
 
       - name: Enforce architecture boundaries
@@ -127,6 +129,11 @@ jobs:
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_ipv4_mtu.c -o /tmp/vantaos-ipv4-mtu-test
           /tmp/vantaos-ipv4-mtu-test
+
+      - name: Test DHCP client negotiation and malformed replies
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_dhcp_client.c net/dhcp.c -o /tmp/vantaos-dhcp-client-test
+          /tmp/vantaos-dhcp-client-test
 
       - name: Test DNS response validation
         run: |
@@ -253,6 +260,46 @@ jobs:
             cat "$log" qemu-e1000-stderr.log
             exit 1
           fi
+
+
+      - name: Modern-only VirtIO PCI Ethernet end-to-end test
+        if: steps.scope.outputs.full == '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          log="virtio-modern-boot.log"
+          rm -f "$log" qemu-virtio-modern-stderr.log virtio-modern-network.img
+          cp nvme-fat32-template.img virtio-modern-network.img
+          stdbuf -o0 timeout 90s qemu-system-x86_64 \
+            -machine pc \
+            -nodefaults \
+            -device VGA,id=video0 \
+            -m 256M \
+            -device virtio-net-pci,disable-legacy=on,netdev=net0 \
+            -netdev socket,id=net0,listen=127.0.0.1:1235 \
+            -drive file=VantaOS.iso,media=cdrom,format=raw \
+            -drive file=virtio-modern-network.img,if=ide,format=raw \
+            -boot order=d \
+            -display vnc=127.0.0.1:1 \
+            -serial stdio \
+            -no-reboot >"$log" 2>qemu-virtio-modern-stderr.log &
+          qemu_pid=$!
+          cleanup() { kill "$qemu_pid" 2>/dev/null || true; wait "$qemu_pid" 2>/dev/null || true; }
+          trap cleanup EXIT
+          for attempt in $(seq 1 700); do
+            if grep -q 'VANTAOS_VIRTIO_NET_MODERN_TX_SELFTEST_OK' "$log" 2>/dev/null && grep -q 'VANTAOS_BOOT_OK' "$log" 2>/dev/null; then break; fi
+            if grep -q 'VANTAOS_VIRTIO_NET_MODERN_TX_SELFTEST_FAIL' "$log" 2>/dev/null; then cat "$log" qemu-virtio-modern-stderr.log; exit 1; fi
+            if ! kill -0 "$qemu_pid" 2>/dev/null; then cat "$log" qemu-virtio-modern-stderr.log; exit 1; fi
+            sleep 0.1
+          done
+          if ! grep -q 'VANTAOS_BOOT_OK' "$log" || ! grep -q 'VANTAOS_VIRTIO_NET_MODERN_INITIALIZED' "$log" || ! grep -q 'VANTAOS_VIRTIO_NET_MODERN_TX_SELFTEST_OK' "$log"; then
+            echo 'Modern VirtIO probe or transmit self-test did not complete; guest serial log follows.'
+            cat "$log" qemu-virtio-modern-stderr.log
+            exit 1
+          fi
+          VANTAOS_TEST_PORT=1235 python3 scripts/test_e1000_network.py || { status=$?; echo 'Modern VirtIO socket integration failed; guest serial log follows:'; cat "$log" qemu-virtio-modern-stderr.log; exit "$status"; }
+          for attempt in $(seq 1 100); do grep -q 'VANTAOS_VIRTIO_NET_MODERN_RX_SELFTEST_OK' "$log" && break; sleep 0.1; done
+          grep -q 'VANTAOS_VIRTIO_NET_MODERN_RX_SELFTEST_OK' "$log"
 
       - name: RTL8139 QEMU Ethernet end-to-end test
         if: steps.scope.outputs.full == '1'

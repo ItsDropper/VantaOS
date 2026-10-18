@@ -154,6 +154,32 @@ static int emit_segment(net_device_t *device, uint32_t destination,
     return net_ipv4_send(device, destination, TCP_PROTOCOL, segment, length);
 }
 
+static int parse_syn_options(const uint8_t *tcp, size_t header_length,
+                            uint16_t *peer_mss_out)
+{
+    if (!tcp || !peer_mss_out || header_length < TCP_HEADER_SIZE ||
+        header_length > 60U || (header_length & 3U) != 0U)
+        return 0;
+    uint16_t peer_mss = TCP_DEFAULT_MSS;
+    for (size_t at = TCP_HEADER_SIZE; at < header_length;) {
+        uint8_t kind = tcp[at];
+        if (kind == 0U) break; /* End of option list. */
+        if (kind == 1U) { ++at; continue; } /* NOP. */
+        if (at + 2U > header_length) return 0;
+        uint8_t length = tcp[at + 1U];
+        if (length < 2U || (size_t)length > header_length - at) return 0;
+        if (kind == 2U) {
+            if (length != 4U) return 0;
+            uint16_t mss = be16(tcp + at + 2U);
+            if (mss == 0U) return 0;
+            peer_mss = mss < TCP_MAX_MSS ? mss : TCP_MAX_MSS;
+        }
+        at += length;
+    }
+    *peer_mss_out = peer_mss;
+    return 1;
+}
+
 static void send_ack(void)
 {
     if (client.device && client.state != TCP_CLOSED)
@@ -227,30 +253,15 @@ void net_tcp_receive_ipv4(net_device_t *device, const uint8_t *ip,
                 (TCP_FLAG_SYN | TCP_FLAG_ACK) ||
             acknowledgement != client.snd_nxt)
             return;
+        uint16_t peer_mss = TCP_DEFAULT_MSS;
+        /* Do not establish a connection or ACK a SYN-ACK with malformed options. */
+        if (!parse_syn_options(tcp, header_length, &peer_mss))
+            return;
         client.rcv_nxt = sequence + 1U;
         client.snd_una = acknowledgement;
         client.peer_window = advertised_window;
+        client.peer_mss = peer_mss;
         client.state = TCP_ESTABLISHED;
-        client.peer_mss = TCP_DEFAULT_MSS;
-        int mss_seen = 0;
-        for (size_t at = TCP_HEADER_SIZE; at + 1U < header_length;) {
-            uint8_t kind = tcp[at];
-            if (kind == 0U) break;
-            if (kind == 1U) { ++at; continue; }
-            if (at + 2U > header_length || tcp[at + 1U] < 2U ||
-                (size_t)tcp[at + 1U] > header_length - at)
-                break;
-            uint8_t option_length = tcp[at + 1U];
-            if (kind == 2U && option_length == 4U) {
-                uint16_t mss = be16(tcp + at + 2U);
-                if (mss >= 64U) {
-                    client.peer_mss = mss < TCP_MAX_MSS ? mss : TCP_MAX_MSS;
-                    mss_seen = 1;
-                }
-            }
-            at += option_length;
-        }
-        if (!mss_seen) client.peer_mss = TCP_DEFAULT_MSS;
         send_ack();
         return;
     }

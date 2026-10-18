@@ -22,6 +22,7 @@ static queued_packet_t queue[8];
 static size_t queue_head, queue_used;
 static uint32_t ticks;
 static uint32_t remote_sequence = 1000U;
+static int malformed_syn_options;
 static const char response[] =
     "HTTP/1.0 200 OK\r\nContent-Length: 5\r\nConnection: close\r\n\r\nhello";
 
@@ -84,7 +85,10 @@ static int enqueue_tcp(uint16_t source_port, uint16_t destination_port,
     if (queue_used == sizeof(queue) / sizeof(queue[0]) ||
         payload_length + 40U > sizeof(queue[0].bytes))
         return 0;
-    size_t tcp_length = 20U + payload_length;
+    size_t option_length = ((flags & (TCP_SYN | TCP_ACK)) == (TCP_SYN | TCP_ACK) &&
+                           malformed_syn_options) ? 4U : 0U;
+    size_t tcp_header_length = 20U + option_length;
+    size_t tcp_length = tcp_header_length + payload_length;
     queued_packet_t *item = &queue[(queue_head + queue_used) %
                                    (sizeof(queue) / sizeof(queue[0]))];
     uint8_t *ip = item->bytes;
@@ -101,11 +105,12 @@ static int enqueue_tcp(uint16_t source_port, uint16_t destination_port,
     write16(tcp + 2U, destination_port);
     write32(tcp + 4U, sequence);
     write32(tcp + 8U, acknowledgement);
-    tcp[12] = 0x50U;
+    tcp[12] = (uint8_t)((tcp_header_length / 4U) << 4);
+    if (option_length) { tcp[20] = 2U; tcp[21] = 1U; } /* Invalid MSS option length. */
     tcp[13] = flags;
     write16(tcp + 14U, 8192U);
     const uint8_t *bytes = (const uint8_t *)payload;
-    for (size_t i = 0; i < payload_length; ++i) tcp[20U + i] = bytes[i];
+    for (size_t i = 0; i < payload_length; ++i) tcp[tcp_header_length + i] = bytes[i];
     write16(tcp + 16U, pseudo_checksum(REMOTE_IP, LOCAL_IP, tcp, tcp_length));
     item->length = 20U + tcp_length;
     ++queue_used;
@@ -234,6 +239,12 @@ int main(void)
         fputs("TCP accepted an invalid zero MTU\\n", stderr);
         return 7;
     }
-    puts("TCP client handshake, checksum, send/ACK, receive/FIN, close, and invalid-MTU rejection passed");
+    device.mtu = 1500U;
+    malformed_syn_options = 1;
+    if (net_tcp_connect(&device, REMOTE_IP, 80U, 1000U)) {
+        fputs("TCP established with a malformed MSS option\\n", stderr);
+        return 8;
+    }
+    puts("TCP client handshake, option validation, checksum, send/ACK, receive/FIN, close, and invalid-MTU rejection passed");
     return 0;
 }

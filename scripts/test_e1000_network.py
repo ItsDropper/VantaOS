@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """QEMU socket-backend integration test for VantaOS Ethernet, ARP, and ICMP."""
+import os
 import socket
 import struct
 import time
@@ -40,7 +41,7 @@ def main():
     connection = None
     while time.monotonic() < deadline:
         try:
-            connection = socket.create_connection(("127.0.0.1", 1234), timeout=1)
+            connection = socket.create_connection(("127.0.0.1", int(os.environ.get("VANTAOS_TEST_PORT", "1234"))), timeout=1)
             break
         except OSError:
             time.sleep(0.1)

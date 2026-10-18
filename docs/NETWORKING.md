@@ -13,16 +13,16 @@ IPv4 routing + ARP cache/resolution   IPv6 link-local + /64 SLAAC + ND responses
                 |                         |
 Ethernet-II + IPv4/IPv6 demultiplexing + bounded receive queue
                 |
-PCI network driver registry -> E1000-compatible + legacy VirtIO-net
+PCI network driver registry -> E1000-compatible + RTL8139 + modern/legacy VirtIO-net
 ```
 
-Architecture-independent protocol code lives in `net/`; PCI drivers live in `drivers/network/`; shared contracts live in `include/net.h`. Network receive is polling-based: the driver moves frames into a fixed-capacity queue and protocol handlers run in `net_poll()` caller context. The E1000 driver supports QEMU `8086:100E` plus a defined set of legacy Intel 8254x PCI IDs that share this register/descriptor model. The VirtIO driver supports the **legacy/transitional PCI I/O transport** (`1af4:1000`), including split virtqueues backed by DMA memory below 4 GiB. It is not yet a modern VirtIO PCI capability/notification transport (`1af4:1041`), and this must not be read as support for every VirtIO implementation. The QEMU regression verifies legacy device initialization and transmit completion; it is not a substitute for physical-hardware coverage. Unsupported devices remain unbound instead of being guessed from the vendor name.
+Architecture-independent protocol code lives in `net/`; PCI drivers live in `drivers/network/`; shared contracts live in `include/net.h`. Network receive is polling-based: the driver moves frames into a fixed-capacity queue and protocol handlers run in `net_poll()` caller context. The E1000 driver supports QEMU `8086:100E` plus a defined set of legacy Intel 8254x PCI IDs that share this register/descriptor model. The VirtIO drivers support the **legacy/transitional PCI I/O transport** (`1af4:1000`) and the **modern PCI capability/notification transport** (`1af4:1041`). The modern driver validates the PCI capability chain and MMIO bounds, negotiates `VIRTIO_F_VERSION_1`, MAC, optional link status, and mergeable RX buffers, uses split virtqueues backed by DMA memory below 4 GiB, and has a modern-only QEMU TX plus ARP/ICMP/UDP RX/TX regression. The legacy QEMU regression verifies legacy device initialization and transmit completion; it is not a substitute for physical-hardware coverage. Unsupported devices remain unbound instead of being guessed from the vendor name.
 
 ## Easy connection workflow
 
 1. Ensure the VM's virtual NIC or supported physical NIC is connected to a network.
 2. Run `net connect` to request DHCPv4 configuration.
-3. Run `net status` to verify link, address, gateway, DNS, and RX/TX counters.
+3. Run `net status` to verify link, address, gateway, DNS, and RX/TX counters. Run `net adapters` to inspect PCI network controllers and whether an in-tree driver claimed each one.
 4. Run `net ping 1.1.1.1` as an optional ICMP diagnostic; some networks block ping. After IPv6 Router Advertisements and SLAAC complete, `net ping6 2606:4700:4700::1111` tests routed ICMPv6 reachability when the network permits it.
 5. Run `net dns example.com` to test DNS.
 6. Run `net http http://example.com/` to make a real plain-HTTP GET over TCP and print up to 4096 response bytes. `net get` is an alias.
@@ -44,7 +44,7 @@ A successful DHCP lease alone does not prove Internet access. DNS, gateway routi
 
 ## Validation and remaining work
 
-CI now includes focused IPv6 RA/SLAAC/ICMPv6 tests and a QEMU legacy VirtIO-net transmit-completion test, alongside the E1000 Ethernet/ARP/ICMP/UDP regression and DNS/TCP host-side tests. These tests validate only the named assertions. TCP still needs end-to-end loss/duplicate/out-of-order tests; IPv6 needs outbound UDP/TCP and routed neighbor resolution; VirtIO modern PCI support and additional independently implemented NIC drivers (including common Realtek adapters) remain future work. TLS and certificate validation are required before HTTPS. Wi-Fi still requires a chipset-specific driver, firmware handling, scanning, and a secure WPA2/WPA3 association path. Wi-Fi cannot be enabled by a router setting alone: VantaOS needs a supported wireless chipset driver and a secure association/authentication implementation.
+CI now includes per-interface DHCP lease state plus offer/request/ACK negotiation tests (including malformed subnet-mask options, NAK handling, and transaction-ID rejection), DNS answer-owner binding and malformed-compression tests, focused IPv6 RA/SLAAC/ICMPv6 tests, IPv4/UDP/IPv6 MTU boundary tests, and QEMU E1000/RTL8139/legacy VirtIO Ethernet regressions. These tests validate only the named assertions. TCP still needs end-to-end loss/duplicate/out-of-order tests; IPv6 needs outbound UDP/TCP and routed neighbor resolution; physical hardware compatibility still needs testing on actual adapters, and additional independently implemented NIC drivers (including more common Realtek adapters) remain future work. Modern VirtIO PCI is covered separately by a `disable-legacy=on` QEMU test that verifies initialization, transmit completion, and ARP/ICMP/UDP frame exchange. TLS and certificate validation are required before HTTPS. Wi-Fi still requires a chipset-specific driver, firmware handling, scanning, and a secure WPA2/WPA3 association path. Wi-Fi cannot be enabled by a router setting alone: VantaOS needs a supported wireless chipset driver and a secure association/authentication implementation.
 
 
 ## Security and compatibility boundary (2026-10)
@@ -69,3 +69,9 @@ The current implementation is an early kernel networking stack, not a secure gen
 A real Wi-Fi implementation still needs a selected chipset with publicly documented registers and firmware redistribution terms, DMA/interrupt integration, the chipset-specific firmware/init sequence, 802.11 management and data frames, and WPA2-Personal cryptography/handshake tested against actual APs. The new API is intentionally not advertised as a device driver. Its provider must copy credentials before returning if needed asynchronously, keep them out of logs, and erase driver-owned copies when no longer required. Intel client adapters commonly depend on firmware and complex device-specific initialization; selecting a specific model and implementing that contract is required before claiming support.
 
 TLS should be integrated as a reviewed library port, not handwritten cryptographic primitives. The port must supply entropy from a suitable kernel CSPRNG, bounded allocation, certificate parsing and path validation, hostname matching, and trusted time. The current kernel has not yet demonstrated that complete foundation, so this branch intentionally does not advertise HTTPS support.
+
+
+DHCP lease negotiation and renewal state is tracked independently for each registered network device, up to `NET_DEVICE_MAX`. This avoids a second interface overwriting the first interface's lease-renewal timers or transaction state. A configured interface still needs a working supported NIC driver and a reachable DHCP server; this is not a promise of universal hardware support.
+
+
+Modern VirtIO support does not make this a universal networking stack. Physical Wi-Fi association/WPA2/WPA3 and TLS/HTTPS remain separate unsupported capabilities; see [adapter support](network-adapter-support.md) and [secure networking](secure-networking.md).

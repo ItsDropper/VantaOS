@@ -734,6 +734,32 @@ static int command_net(uint32_t argc, char **argv)
         terminal_write("Use 'net connect' for DHCP, 'net ping'/'net ping6' for IPv4/IPv6 reachability, 'net dns' for DNS, and 'net http http://host/' for a plain-HTTP GET. HTTPS/TLS is not implemented.\n");
         return 1;
     }
+    if (argc == 2U && shell_string_equals(argv[1], "adapters")) {
+        int found = 0;
+        terminal_write("\nPCI network controllers:\n");
+        for (int i = 0; i < pci_get_device_count(); ++i) {
+            const struct pci_device *device = pci_get_device(i);
+            if (!device || device->class_code != 0x02U) continue;
+            found = 1;
+            terminal_write("  PCI "); shell_print_decimal(device->bus);
+            terminal_putchar(':'); shell_print_decimal(device->slot);
+            terminal_putchar('.'); shell_print_decimal(device->function);
+            terminal_write(" ");
+            const char *vendor = pci_get_vendor_name(device->vendor_id);
+            const char *name = pci_get_device_name(device->vendor_id, device->device_id);
+            terminal_write(vendor ? vendor : "Unknown vendor");
+            terminal_write(" / ");
+            terminal_write(name ? name : "Unknown device");
+            terminal_write(" [");
+            const char *driver = net_pci_bound_driver(device);
+            terminal_write(driver ? driver : "unbound: no matching driver");
+            terminal_write("]\n");
+        }
+        if (!found) terminal_write("  No PCI network-class devices found.\n");
+        terminal_write("Unbound means no in-tree driver claimed that PCI function; it does not prove the device is defective.\n");
+        terminal_write("Use 'net status' for registered interfaces and link/IP counters.\n");
+        return 1;
+    }
     if ((argc == 2U || argc == 3U) &&
         (shell_string_equals(argv[1], "dhcp") ||
          shell_string_equals(argv[1], "connect"))) {

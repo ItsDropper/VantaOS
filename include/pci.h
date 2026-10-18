@@ -19,6 +19,9 @@ struct pci_device
 };
 
 void pci_initialize(void);
+uint8_t pci_read_config8(const struct pci_device *device, uint8_t offset);
+uint16_t pci_read_config16(const struct pci_device *device, uint8_t offset);
+uint32_t pci_read_config32(const struct pci_device *device, uint8_t offset);
 
 int pci_get_bar(const struct pci_device* device, uint8_t index,
                 uint64_t* address, int* is_io, int* is_64bit);

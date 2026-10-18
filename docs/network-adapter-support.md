@@ -6,12 +6,15 @@ VantaOS discovers PCI Ethernet controllers through the network-driver registry. 
 | --- | --- | --- |
 | `e1000` | Listed legacy Intel 8254x IDs that share the implemented register/descriptor model | PCI MMIO, DMA polling |
 | `virtio-net-legacy` | Legacy/transitional VirtIO network device ID `1af4:1000` | PCI I/O ports, legacy split virtqueues |
+| `virtio-net-modern` | Modern VirtIO network device ID `1af4:1041` | PCI vendor capabilities, MMIO common/notify/device regions, VERSION_1 split virtqueues |
 | `rtl8139` | Realtek RTL8139 PCI Ethernet, vendor/device `10ec:8139` | PCI I/O ports, DMA ring, bounded polling |
 
 The RTL8139 driver supports Ethernet frame TX/RX, feeds received frames into the existing common Ethernet/network stack, updates link state from the media-status register, and uses a bounded poll budget. GitHub Actions runs it in QEMU against a socket-backed network to exercise transmit, ARP, ICMP, and UDP receive paths.
 
+Use `net adapters` in the kernel shell to list PCI devices with network-controller class code, their PCI vendor/device names, and the registered driver binding. The CI suite also exercises DHCP offer/request/ACK processing and malformed server replies, separately from the QEMU Ethernet frame-path tests. An `unbound` result means no in-tree network driver claimed that PCI function; it is not a claim that the hardware is broken.
+
 ## Not universal networking
 
-A PCI network-driver registry is not a universal driver. These drivers do not imply support for every Intel/Realtek/Broadcom/Qualcomm/MediaTek NIC, modern-only VirtIO PCI, USB Ethernet adapters, Thunderbolt networking, cellular modems, or physical Wi-Fi. Unsupported device IDs must remain unbound rather than being probed with an incompatible register model.
+A PCI network-driver registry is not a universal driver. These drivers do not imply support for every Intel/Realtek/Broadcom/Qualcomm/MediaTek NIC, every VirtIO device revision, USB Ethernet adapters, Thunderbolt networking, cellular modems, or physical Wi-Fi. Unsupported device IDs must remain unbound rather than being probed with an incompatible register model.
 
-Physical Wi-Fi still requires a chipset-specific driver, firmware handling where applicable, 802.11 management/data support, and an authenticated WPA2/WPA3 implementation. The generic Wi-Fi control API alone does not provide those components. HTTPS/TLS is also not enabled; see [secure networking](secure-networking.md).
+Physical Wi-Fi still requires a chipset-specific driver, firmware handling where applicable, 802.11 management/data support, and an authenticated WPA2/WPA3 implementation. The generic Wi-Fi control API alone does not provide those components. Modern VirtIO is covered by a dedicated QEMU `disable-legacy=on` test; that proves the emulated modern PCI transport path, not every host hypervisor or physical adapter. HTTPS/TLS is also not enabled; see [secure networking](secure-networking.md).

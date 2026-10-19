@@ -55,10 +55,10 @@ The driver decodes all six RTL8188E CCK base indices (logical eFuse offsets
 OFDM/HT20 deltas (0x1b). CCK groups cover channels 1–2, 3–5, 6–8, 9–11,
 12–13, and 14; HT40 has five groups, with channel 14 excluded by policy.
 Missing (`0xff`) or out-of-range base indices are rejected rather than replaced
-with guessed values. The calculation helper selects the matching group and
-derives bounded CCK, OFDM, HT20, and HT40 indices with signed-delta handling.
-These remain software calibration inputs: the helper does not yet program the
-hardware transmit-power registers or prove the board's RF output is correct.
+with guessed values. The driver derives channel-specific 1T legacy-rate and
+MCS0–7 indices, programs the corresponding TXAGC baseband registers, and
+checks readback. This is not proof of calibrated RF output or a replacement
+for the board-specific PHY profile and IQ calibration.
 
 ## Required phases
 

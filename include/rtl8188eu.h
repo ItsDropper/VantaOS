@@ -54,6 +54,19 @@ size_t rtl8188eu_get_passive_results(net_wifi_scan_result_t *results,
 /* Decode a captured RTL8188E physical eFuse map into its logical map. */
 int rtl8188eu_decode_efuse_map(const uint8_t *physical, size_t physical_length,
                                uint8_t *logical, size_t logical_length);
+
+typedef struct {
+    uint8_t cck_base[3];
+    uint8_t ht40_base[3];
+    int8_t ofdm_diff;
+    int8_t ht20_diff;
+} rtl8188eu_tx_power_calibration_t;
+
+/* Decode the factory 2.4-GHz, 1T eFuse power bases and signed deltas. */
+int rtl8188eu_decode_tx_power_calibration(
+    const uint8_t *logical, size_t logical_length,
+    rtl8188eu_tx_power_calibration_t *calibration);
+
 /* Validate a board-specific RTL8188EU PHY profile without touching hardware. */
 int rtl8188eu_validate_phy_profile(const uint8_t *profile, size_t length,
                                    uint8_t chip_cut);

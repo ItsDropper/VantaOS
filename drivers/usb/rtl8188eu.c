@@ -1022,7 +1022,7 @@ static int rtl_radio_apply_crystal_trim_and_lc(void)
  *   10..11 header size (24)
  *   12..15 total file size
  *   16..19 CRC-32/IEEE of the record array
- *   20     chip cut (0xff means any cut; otherwise exact eFuse cut)
+ *   20     exact chip cut from eFuse (0xff wildcard is rejected)
  *   21     reserved, zero
  *   22..23 record count
  * Each 16-byte record is {op, phase, reserved, reserved, address:u16,

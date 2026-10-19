@@ -1294,7 +1294,9 @@ static int rtl_radio_execute_profile(void)
         return 0;
 
     /* The reference RF table's final default channel is not necessarily 1.
-       Select channel 1 while preserving the table's 20-MHz bandwidth bits. */
+       Refuse to proceed unless it really selected 20 MHz, then select channel 1. */
+    if((rf_channel&RTL8188EU_RF_BW20_MASK)!=RTL8188EU_RF_BW20_VALUE)
+        return 0;
     rf_channel=(rf_channel&~RTL8188EU_RF_CHANNEL_MASK)|1U;
     if(!rtl_rf_write(RTL8188EU_RF_CHNLBW,rf_channel)||
        !rtl_rf_read(RTL8188EU_RF_CHNLBW,&verify)||

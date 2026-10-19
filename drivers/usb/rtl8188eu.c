@@ -1107,13 +1107,56 @@ static int rtl_phy_execute_record(const uint8_t *record)
     return 0;
 }
 
+
+static int rtl_phy_validate_record(const uint8_t *record)
+{
+    uint8_t op = record[0];
+    uint8_t phase = record[1];
+    uint16_t address = rtl_phy_le16(record + 4U);
+    uint32_t mask = rtl_phy_le32(record + 8U);
+    uint32_t value = rtl_phy_le32(record + 12U);
+    uint32_t width_mask;
+
+    if (record[2] != 0U || record[3] != 0U ||
+        record[6] != 0U || record[7] != 0U ||
+        phase < RTL8188EU_PHY_PHASE_MAC || phase > RTL8188EU_PHY_PHASE_IQ_CAL)
+        return 0;
+    if (op == RTL8188EU_PHY_OP_DELAY_TICKS)
+        return address == 0U && mask == 0U && value > 0U && value <= 100U &&
+               timer_get_ticks != 0;
+    if (op < RTL8188EU_PHY_OP_WRITE8 || op > RTL8188EU_PHY_OP_POLL_RF20)
+        return 0;
+
+    if (op == RTL8188EU_PHY_OP_WRITE8 || op == RTL8188EU_PHY_OP_POLL8) {
+        width_mask = 0xFFU;
+        if (address >= 0x0800U) return 0;
+    } else if (op == RTL8188EU_PHY_OP_WRITE16 || op == RTL8188EU_PHY_OP_POLL16) {
+        width_mask = 0xFFFFU;
+        if (address >= 0x0800U) return 0;
+    } else if (op == RTL8188EU_PHY_OP_WRITE32 || op == RTL8188EU_PHY_OP_POLL32) {
+        width_mask = 0xFFFFFFFFU;
+        if (address >= 0x0800U) return 0;
+    } else if (op == RTL8188EU_PHY_OP_WRITE_BB32 ||
+               op == RTL8188EU_PHY_OP_POLL_BB32) {
+        width_mask = 0xFFFFFFFFU;
+        if (address < 0x0800U || address > 0x0FFFU) return 0;
+    } else {
+        width_mask = RTL8188EU_RF_DATA_MASK;
+        if (address > 0xFFU) return 0;
+    }
+    if ((mask & ~width_mask) != 0U || (value & ~width_mask) != 0U)
+        return 0;
+    if (op >= RTL8188EU_PHY_OP_POLL8 && mask == 0U)
+        return 0;
+    return 1;
+}
+
 static int rtl_radio_execute_profile(void)
 {
     size_t profile_size = 0U;
     uint16_t count = 0U;
     uint8_t phase_writes[RTL8188EU_PHY_PHASE_IQ_CAL + 1U] = {0};
     uint8_t phase_polls[RTL8188EU_PHY_PHASE_IQ_CAL + 1U] = {0};
-    uint8_t phase_delays[RTL8188EU_PHY_PHASE_IQ_CAL + 1U] = {0};
     uint8_t last_phase = 0U;
 
     if (!rtl_efuse_info.valid || !rtl_phy_load_profile(&profile_size, &count))
@@ -1125,19 +1168,13 @@ static int rtl_radio_execute_profile(void)
         const uint8_t *record = records + (size_t)i * RTL8188EU_PHY_PROFILE_RECORD_SIZE;
         uint8_t phase = record[1];
         uint8_t op = record[0];
-        if (phase < RTL8188EU_PHY_PHASE_MAC || phase > RTL8188EU_PHY_PHASE_IQ_CAL ||
-            phase < last_phase || record[2] != 0U || record[3] != 0U ||
-            record[6] != 0U || record[7] != 0U)
+        if (!rtl_phy_validate_record(record) || phase < last_phase)
             return 0;
         last_phase = phase;
         if (op >= RTL8188EU_PHY_OP_WRITE8 && op <= RTL8188EU_PHY_OP_WRITE_RF20)
             phase_writes[phase] = 1U;
         else if (op >= RTL8188EU_PHY_OP_POLL8 && op <= RTL8188EU_PHY_OP_POLL_RF20)
             phase_polls[phase] = 1U;
-        else if (op == RTL8188EU_PHY_OP_DELAY_TICKS)
-            phase_delays[phase] = 1U;
-        else
-            return 0;
     }
     for (uint8_t phase = RTL8188EU_PHY_PHASE_MAC;
          phase <= RTL8188EU_PHY_PHASE_TX_POWER; ++phase)
@@ -1146,7 +1183,6 @@ static int rtl_radio_execute_profile(void)
     if (!phase_writes[RTL8188EU_PHY_PHASE_IQ_CAL] ||
         !phase_polls[RTL8188EU_PHY_PHASE_IQ_CAL])
         return 0;
-    (void)phase_delays;
 
     /* Execute through TX-power programming, then calibrate before IQK. */
     for (uint16_t i = 0U; i < count; ++i) {
@@ -1198,8 +1234,7 @@ static int rtl_radio_preflight(void)
         return 0;
     rtl_radio_preflight_done = 1U;
     rtl_radio_ready = 1U;
-    serial_write("VANTAOS_RTL8188EU_RADIO_PROFILE_READY_TX_ENABLED
-");
+    serial_write("VANTAOS_RTL8188EU_RADIO_PROFILE_READY_TX_ENABLED\\n");
     return 1;
 }
 

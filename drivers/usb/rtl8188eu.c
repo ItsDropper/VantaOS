@@ -1191,20 +1191,23 @@ static int rtl_radio_apply_reference_tables(void)
        !rtl_reg_write32(0x824U,hssi2&~0x00000C00U)||
        !rtl_reg_read32(0x824U,&verify)||(verify&0x00000C00U)!=0U)
         return 0;
+    int rf_ok=1;
     for(size_t i=0U;i<sizeof(rtl8188eu_rf_init)/sizeof(rtl8188eu_rf_init[0]);++i) {
         uint8_t address=rtl8188eu_rf_init[i].address;
-        uint32_t value=rtl8188eu_rf_init[i].value,verify;
+        uint32_t value=rtl8188eu_rf_init[i].value,rf_verify;
         if(address==0xFEU) {
-            if(!rtl_wait_ticks_bounded(value>=50000U?5U:1U))return 0;
+            if(!rtl_wait_ticks_bounded(value>=50000U?5U:1U)){rf_ok=0;break;}
             continue;
         }
-        if(!rtl_rf_write(address,value)) return 0;
-        if(address!=0xFFU && (!rtl_rf_read(address,&verify)||
-           ((verify^value)&RTL8188EU_RF_DATA_MASK)!=0U)) return 0;
+        if(!rtl_rf_write(address,value)){rf_ok=0;break;}
+        if(address!=0xFFU && (!rtl_rf_read(address,&rf_verify)||
+           ((rf_verify^value)&RTL8188EU_RF_DATA_MASK)!=0U)){rf_ok=0;break;}
     }
+    /* Restore the BB-side RF_ENV selector on both success and failure. */
     if(!rtl_reg_write32(0x870U,rf_env)||
        !rtl_reg_read32(0x870U,&verify)||verify!=rf_env)
         return 0;
+    if(!rf_ok)return 0;
     serial_write("VANTAOS_RTL8188EU_REFERENCE_MAC_BB_AGC_RF_TABLES_APPLIED_TX_BLOCKED\n");
     return 1;
 }

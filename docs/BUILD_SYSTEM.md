@@ -30,6 +30,22 @@ The existing PS/2 keyboard and mouse remain the active desktop path. They now pu
 
 The USB HID module decodes boot-protocol keyboard and mouse reports and registers them as USB devices. Its caller must already have enumerated a USB device, selected HID boot protocol, and delivered complete reports. xHCI discovery/controller setup, DMA-safe memory, transfer rings, USB port/device enumeration, and interrupt-IN transfers are not yet implemented; therefore this is a real HID report driver layer, not yet end-to-end USB input support.
 
+## Network initialization ownership
+
+The kernel entry path initializes platform prerequisites (PCI, heap, and other
+core facilities), then calls `net_stack_initialize()`. Network-specific
+composition belongs to `net/init.c`, not `kernel/kernel.c`:
+
+1. Reset and initialize the network core.
+2. Register ARP, IPv4, IPv6, UDP, and TCP protocol handlers.
+3. Register each PCI network driver's IDs and probe callback.
+4. Probe PCI devices only after driver registration is complete.
+
+This ordering keeps driver discovery deterministic and makes the network
+subsystem's startup dependencies reviewable in one place. USB/xHCI startup
+remains owned by the kernel platform initialization path because it is a
+shared transport used by non-network devices as well.
+
 ## PCI resource APIs
 
 The PCI layer exposes class-code search, BAR inspection (including 64-bit memory BARs and I/O BARs), and explicit memory-space and bus-master command-bit helpers. Enabling bus mastering is intentionally separate: a future DMA-capable driver must establish safe DMA buffers and controller state before calling it. BAR addresses are physical resources, not automatically mapped virtual pointers.

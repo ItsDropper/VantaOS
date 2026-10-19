@@ -1407,7 +1407,7 @@ static int rtl_radio_run_iq_calibration(void)
     uint8_t p8;
     if(!rtl_reg_read8(0x522,&p8)||!rtl_reg_read32(0xC80,&oiq)||
        !rtl_reg_read32(0xC94,&oafe)||!rtl_reg_read32(0xC4C,&oecca)||
-       !rtl_reg_read32(0xC14,&orx)||!rtl_reg_read32(0xC5C,&orext))return 0;
+       !rtl_reg_read32(0xC14,&orx)||!rtl_reg_read32(0xCA0,&orext))return 0;
     pause=p8;
     for(size_t i=0;i<16;i++)if(!rtl_reg_write32(adda[i],i==0?0x0B1B25A0U:0x0BDB25A0U))goto restore;
     if(!rtl_reg_write32(0xA04,oc[0]|0x0F000000U)||!rtl_reg_write32(0xC04,0x03A05600U)||
@@ -1424,7 +1424,7 @@ static int rtl_radio_run_iq_calibration(void)
         if(x&0x200)x-=0x400;if(y&0x200)y-=0x400;
         if(!rtl_reg_read32(0xC80,&iq)||!rtl_reg_read32(0xC94,&afe)||
            !rtl_reg_read32(0xC4C,&ecca)||!rtl_reg_read32(0xC14,&rxv)||
-           !rtl_reg_read32(0xC5C,&ext))goto restore;
+           !rtl_reg_read32(0xCA0,&ext))goto restore;
         scale=(iq>>22)&0x3FFU;
         int32_t cx=(x*(int32_t)scale)>>8,cy=(y*(int32_t)scale)>>8;
         iq=(iq&~0x003F03FFU)|((uint32_t)cx&0x3FFU)|(((uint32_t)cy&0x3FU)<<16);
@@ -1434,7 +1434,7 @@ static int rtl_radio_run_iq_calibration(void)
         ext=(ext&~0xF0000000U)|(((uint32_t)r2[1]&0x3C0U)<<22);
         if(!rtl_reg_write32(0xC80,iq)||!rtl_reg_write32(0xC94,afe)||
            !rtl_reg_write32(0xC4C,ecca)||!rtl_reg_write32(0xC14,rxv)||
-           !rtl_reg_write32(0xC5C,ext))goto restore;
+           !rtl_reg_write32(0xCA0,ext))goto restore;
     }
     ok=1;
 restore:
@@ -1443,7 +1443,7 @@ restore:
     (void)rtl_reg_write32(0xE28,0U);(void)rtl_reg_write8(0x522,(uint8_t)pause);
     if(!ok){(void)rtl_reg_write32(0xC80,oiq);(void)rtl_reg_write32(0xC94,oafe);
         (void)rtl_reg_write32(0xC4C,oecca);(void)rtl_reg_write32(0xC14,orx);
-        (void)rtl_reg_write32(0xC5C,orext);}
+        (void)rtl_reg_write32(0xCA0,orext);}
     serial_write(ok?"VANTAOS_RTL8188EU_IQK_STABLE_TX_RX_OK_TX_STILL_BLOCKED\\n":"VANTAOS_RTL8188EU_IQK_FAILED_TX_BLOCKED\\n");
     return ok;
 }

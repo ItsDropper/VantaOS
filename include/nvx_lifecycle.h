@@ -18,6 +18,7 @@ typedef enum nvx_lifecycle_state {
     NVX_STATE_PROBING,
     NVX_STATE_RESOURCES_READY,
     NVX_STATE_INITIALIZING,
+    NVX_STATE_PROBED,
     NVX_STATE_INITIALIZED,
     NVX_STATE_RUNNING,
     NVX_STATE_QUIESCING,
@@ -40,15 +41,11 @@ typedef struct nvx_lifecycle {
     uint64_t verified_capabilities;
 } nvx_lifecycle_t;
 
-/* Initializes to DISCOVERED with no errors or claimed capabilities. */
 void nvx_lifecycle_init(nvx_lifecycle_t *lifecycle);
-/* Returns 1 on an allowed transition; rejected transitions do not mutate state. */
 int nvx_lifecycle_transition(nvx_lifecycle_t *lifecycle,
                              nvx_lifecycle_state_t next_state);
-/* Fail closed: clears capabilities and makes failure terminal. */
 int nvx_lifecycle_fail(nvx_lifecycle_t *lifecycle,
                        nvx_lifecycle_error_t error);
-/* Only initialized/running devices may publish verified capability bits. */
 int nvx_lifecycle_set_capabilities(nvx_lifecycle_t *lifecycle,
                                    uint64_t verified_capabilities);
 

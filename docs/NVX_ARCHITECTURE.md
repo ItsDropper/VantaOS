@@ -108,7 +108,7 @@ interrupt support or proof that the GPU generates valid interrupts.
 | include/nvx_resource.h | Validated BAR metadata and MMIO acquisition contract |
 | include/nvx_mmio.h | Bounded register access over an existing mapping |
 | include/nvx_attach.h | BAR0 mapping, PMC probe and teardown transaction |
-| include/nvx_firmware.h | Verified firmware-provider acquisition contract |\n| include/nvx_dma.h | Bounded, contiguous NVX DMA allocation and lifetime |\n| include/nvx_gpuva.h | GPU virtual-address reservation allocator (no page tables) |\n| include/nvx_object_memory.h | Bounded DMA-backed object ownership and GPU VA reservation |\n| include/nvx_sync.h | Monotonic CPU-side timeline/fence contract |\n| include/nvx_submit.h | Opaque batch and relocation metadata validation |\n| include/nvx_irq_caps.h | Read-only MSI/MSI-X capability and table bounds |
+| include/nvx_firmware.h | Verified firmware-provider acquisition contract |\n| include/nvx_dma.h | Bounded, contiguous NVX DMA allocation and lifetime |\n| include/nvx_gpuva.h | GPU virtual-address reservation allocator |\n| include/nvx_gpuvm.h | 49-bit V2 GPU page-table construction and bounded MMU flush |\n| include/nvx_object_memory.h | Bounded DMA-backed object ownership and GPU VA reservation |\n| include/nvx_sync.h | Monotonic CPU-side timeline/fence contract |\n| include/nvx_submit.h | Opaque batch and relocation metadata validation |\n| include/nvx_irq_caps.h | Read-only MSI/MSI-X capability and table bounds |
 | include/nvx_memory.h | Explicit CPU, system-physical and GPU address-space contracts |
 | include/nvx_firmware.h | Injected firmware-provider interface independent of VFS paths |
 | include/nvx_command.h | Queue, command-buffer and completion-state vocabulary |

@@ -17,6 +17,7 @@ on:
       - "include/nvx_object_memory.h"
       - "include/nvx_sync.h"
       - "include/nvx_submit.h"
+      - "include/nvx_irq_caps.h"
       - "include/pci.h"
       - "include/mmio.h"
       - "include/serial.h"
@@ -33,6 +34,7 @@ on:
       - "scripts/test_nvx_object_memory.c"
       - "scripts/test_nvx_sync.c"
       - "scripts/test_nvx_submit.c"
+      - "scripts/test_nvx_irq_caps.c"
       - "scripts/test_pci_bar_size.c"
       - ".github/workflows/nvx-tests.yml"
   workflow_dispatch:
@@ -168,6 +170,15 @@ jobs:
 
       - name: Test command bounds, relocation overlap and target ranges
         run: /tmp/vantaos-nvx-submit-test
+
+      - name: Compile NVX MSI/MSI-X capability tests with strict warnings
+        run: |
+          gcc -DPCI_TEST -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_irq_caps.c drivers/gpu/nvx/nvx_irq_caps.c \
+            drivers/pci/pci.c -o /tmp/vantaos-nvx-irq-caps-test
+
+      - name: Test read-only MSI/MSI-X metadata and BAR range validation
+        run: /tmp/vantaos-nvx-irq-caps-test
 
       - name: Compile NVX lifecycle tests with strict warnings
         run: |

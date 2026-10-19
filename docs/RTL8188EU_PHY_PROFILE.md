@@ -32,7 +32,7 @@ Each record is 16 bytes:
 | 8 | 4 | Register mask |
 | 12 | 4 | Value / expected value |
 
-The record array must exactly fill the declared file size. The loader checks the magic, version, lengths, cut, reserved bytes, CRC, operation/address ranges, masks, and phase ordering before it starts writing registers. Writes are read back and checked. Polls are bounded to 512 reads; delay operations require the kernel tick source and are capped at 100 ticks.
+The record array must exactly fill the declared file size. The loader checks the magic, version, lengths, exact chip cut, reserved bytes, CRC, operation/address ranges, masks, and phase ordering before it starts writing registers. Wildcard-cut profiles are rejected because RF and calibration values must not be applied to an unidentified silicon cut. Writes are read back and checked. Polls are bounded to 512 reads; delay operations require the kernel tick source and are capped at 100 ticks.
 
 ## Operations
 

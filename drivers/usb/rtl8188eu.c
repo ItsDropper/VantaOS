@@ -1234,7 +1234,7 @@ static int rtl_radio_preflight(void)
         return 0;
     rtl_radio_preflight_done = 1U;
     rtl_radio_ready = 1U;
-    serial_write("VANTAOS_RTL8188EU_RADIO_PROFILE_READY_TX_ENABLED\\n");
+    serial_write("VANTAOS_RTL8188EU_RADIO_PROFILE_READY_TX_ENABLED\n");
     return 1;
 }
 

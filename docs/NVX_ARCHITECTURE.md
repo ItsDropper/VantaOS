@@ -34,9 +34,9 @@ acquisition path requires an explicit, size-known memory resource and uses the
 kernel's `mmio_map_region()` / `mmio_unmap_region()` contract. Since PCI currently
 provides no trustworthy BAR size, discovery produces `SIZE_UNKNOWN` and mapping
 is refused without calling the mapper. No live BAR sizing writes are performed.
-The identity descriptor still leaves MMIO base and length unset. The discovery
-path does not enable PCI command bits, access GPU registers, load firmware, or
-initialize engines.
+The identity descriptor still leaves MMIO base and length unset. The current probe API can inspect PMC_BOOT_0/PMC_BOOT_1 only after a caller has supplied a trusted, already-mapped BAR0; it does not create that mapping or initialize engines.
+
+A new `nvx_mmio` layer provides bounded 32-bit volatile register reads and writes over a caller-owned mapping. It rejects null mappings, unaligned base/offset pairs, and accesses that would cross the supplied mapping length; read failures zero the output. The BAR0 probe now uses this common accessor rather than dereferencing register pointers directly. Its test suite covers valid reads/writes and invalid bounds/alignment. The accessors do not establish memory attributes or provide DMA ordering barriers, which remain responsibilities of the platform mapping/synchronization layers.
 
 The NVX lifecycle contract defines explicit states from discovery through
 probing, validated resources, initialization, running, quiescing, and stop. It
@@ -69,7 +69,9 @@ accelerated. Physical RTX 3060 validation remains outstanding.
 | include/gpu.h | Generic identity, lifecycle and capability vocabulary |
 | include/gpu_display.h | Display-mode and presentation contracts |
 | include/nvx_device.h | NVIDIA identity, profile recognition, descriptor and discovery API |
-| include/nvx_lifecycle.h | NVX-specific fail-closed lifecycle state machine |\n| include/nvx_resource.h | Validated BAR metadata and MMIO acquisition contract |
+| include/nvx_lifecycle.h | NVX-specific fail-closed lifecycle state machine |
+| include/nvx_resource.h | Validated BAR metadata and MMIO acquisition contract |
+| include/nvx_mmio.h | Bounded register access over an existing mapping |
 | include/nvx_memory.h | Explicit CPU, system-physical and GPU address-space contracts |
 | include/nvx_firmware.h | Injected firmware-provider interface independent of VFS paths |
 | include/nvx_command.h | Queue, command-buffer and completion-state vocabulary |
@@ -149,8 +151,9 @@ on NVIDIA command encoding.
 
 The focused NVX workflow compiles tests with `-Wall -Wextra -Werror` and
 exercises PCI matching, exact family/profile IDs, unknown-ID fallback,
-subsystem-ID handling, auxiliary-function filtering, diagnostics, lifecycle
-ordering, capability gating, shutdown and fail-closed behavior. These tests
+subsystem-ID handling, auxiliary-function filtering, diagnostics, bounded MMIO
+reads/writes, mapping bounds and alignment, lifecycle ordering, capability
+gating, shutdown and fail-closed behavior. These tests
 validate software logic, not physical hardware. Use QEMU for generic boot
 regressions and real hardware for RTX 3060 support claims. QEMU success cannot
 prove physical NVIDIA support.
@@ -161,11 +164,12 @@ prove physical NVIDIA support.
 2. Read-only NVIDIA PCI inventory, conservative matching and mocked tests. (Implemented.)
 3. Exact PCI family/profile recognition and lifecycle state gates. (Implemented as software contracts; lifecycle not yet wired to hardware.)
 4. BAR validation and size-gated MMIO mapping. (Validation and refusal paths implemented; trusted BAR sizing remains blocked by the PCI subsystem.)
-5. Firmware provider and validated family-specific hardware initialization.
-6. Device memory management, DMA, interrupts and synchronization.
-7. Command queues, bounded submissions and completion handling.
-8. Display modesetting and scanout integration.
-9. 2D/3D acceleration, shader execution and user-mode graphics interfaces.
+5. Bounded MMIO register access and conservative PMC probing. (Implemented and covered by mocked tests; not hardware-validated.)
+6. Firmware provider and validated family-specific hardware initialization.
+7. Device memory management, DMA, interrupts and synchronization.
+8. Command queues, bounded submissions and completion handling.
+9. Display modesetting and scanout integration.
+10. 2D/3D acceleration, shader execution and user-mode graphics interfaces.
 
 Each phase is a gate, not a promise. Only tested capabilities may be reported as
 supported.

@@ -21,6 +21,11 @@ the table does not imply working initialization, firmware, display, or
 acceleration. PCI IDs can be shared or misreported by hardware, so this is not
 a substitute for hardware validation.
 
+NVX also reads the PCI command register and reports the current I/O-space,
+memory-space, and bus-master bits. This is strictly observational: discovery
+does not write the command register or enable bus mastering. The values are
+preflight diagnostics, not proof that a BAR is valid or that DMA is safe.
+
 For display-controller candidates, BAR0 is reported as a raw address/type/width
 only; its size is not inferred because the current PCI API does not expose BAR
 sizing. The identity descriptor deliberately leaves MMIO base and length unset.

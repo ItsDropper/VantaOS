@@ -1396,7 +1396,8 @@ static int rtl_radio_execute_profile(void)
             return 0;
     }
 
-    serial_write("VANTAOS_RTL8188EU_PHY_PROFILE_AND_IQ_CAL_OK_TX_READY_CANDIDATE\n");
+    /* Profile IQ_CAL records are not a hardware IQK implementation. */
+    serial_write("VANTAOS_RTL8188EU_PHY_PROFILE_RECORDS_OK_TX_STILL_BLOCKED\n");
     return profile_size != 0U;
 }
 

@@ -54,8 +54,9 @@ The driver decodes all six RTL8188E CCK base indices (logical eFuse offsets
 0x10–0x15), all five HT40 base indices (0x16–0x1a), and the packed signed
 OFDM/HT20 deltas (0x1b). CCK groups cover channels 1–2, 3–5, 6–8, 9–11,
 12–13, and 14; HT40 has five groups, with channel 14 excluded by policy.
-Missing (`0xff`) or out-of-range base indices are rejected rather than replaced
-with guessed values. The driver derives channel-specific 1T legacy-rate and
+Missing (`0xff`) or out-of-range base indices used by channels 1–13 are
+rejected rather than replaced with guessed values. The unused channel-14 CCK
+group may remain blank while channel 14 is disabled by policy. The driver derives channel-specific 1T legacy-rate and
 MCS0–7 indices, programs the corresponding TXAGC baseband registers, and
 checks readback. It reapplies power values for each selected channel.
 

@@ -39,8 +39,8 @@ jobs:
 
       - name: Compile host-tested PCI BAR sizing with strict warnings
         run: |
-          gcc -DPCI_TEST -std=c11 -Wall -Wextra -Werror -Iinclude \\
-            scripts/test_pci_bar_size.c drivers/pci/pci.c \\
+          gcc -DPCI_TEST -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_pci_bar_size.c drivers/pci/pci.c \
             -o /tmp/vantaos-pci-bar-size-test
 
       - name: Test PCI BAR size masks, restoration, and active-device refusal

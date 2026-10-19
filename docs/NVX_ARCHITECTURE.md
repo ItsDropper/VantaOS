@@ -1,35 +1,42 @@
 # NVX GPU driver architecture
 
 NVX is an independent, unofficial NVIDIA GPU driver project for VantaOS. It is
-not produced, endorsed, or supported by NVIDIA. This document describes the
-implemented read-only PCI inventory and the remaining planned hardware work.
+not produced, endorsed, or supported by NVIDIA. This document distinguishes
+implemented PCI identification from hardware functionality.
 
 ## Current implementation status
 
-Phase 1 enumerates the existing PCI registry and logs every function with
-vendor ID `0x10DE`. Diagnostics include BDF, vendor/device IDs, revision, class,
-subclass, programming interface, and subsystem IDs for type-0 headers. NVIDIA
-functions with PCI class `03h` (display controller) are labeled GPU candidates;
-NVIDIA audio and other auxiliary functions are reported separately. This class
-check is candidate matching, not a device-family support claim.
+NVX enumerates every function with NVIDIA vendor ID `0x10DE` from VantaOS's
+existing PCI registry. Diagnostics include BDF, vendor/device IDs, revision,
+class/subclass/programming interface, and subsystem IDs for type-0 headers.
+NVIDIA class-`03h` display controllers are treated as GPU candidates; audio and
+other auxiliary functions are reported separately.
+
+The identity layer now recognizes a deliberately small, exact PCI-ID table for
+RTX 3060 variants already named in VantaOS's PCI database (IDs `2503`, `2504`,
+`2507`, `2508`, `2509`, `2544`, and `2548`) as the Ampere generation and
+RTX 3060 profile. All other IDs remain `UNKNOWN`. This is device-family
+identification only: architecture/implementation register IDs remain unset, and
+the table does not imply working initialization, firmware, display, or
+acceleration. PCI IDs can be shared or misreported by hardware, so this is not
+a substitute for hardware validation.
 
 For display-controller candidates, BAR0 is reported as a raw address/type/width
 only; its size is not inferred because the current PCI API does not expose BAR
-sizing. The identity descriptor deliberately leaves MMIO base and length unset
-until a validated resource API exists. Discovery does not map BARs, enable PCI
-command bits, access GPU registers, load firmware, or initialize engines.
+sizing. The identity descriptor deliberately leaves MMIO base and length unset.
+Discovery does not map BARs, enable PCI command bits, access GPU registers, load
+firmware, or initialize engines.
 
-The new NVX lifecycle contract defines explicit states from discovery through
+The NVX lifecycle contract defines explicit states from discovery through
 probing, validated resources, initialization, running, quiescing, and stop. It
 rejects skipped/out-of-order transitions, prevents capability publication before
 initialization, and clears all advertised capabilities on failure. This is a
 tested contract only: current PCI discovery does not instantiate or advance a
 lifecycle object, and no hardware initialization is implemented yet.
 
-The log explicitly reports `DETECTED`, `NOT_ATTEMPTED`, and `UNAVAILABLE`.
-A detected PCI function is not proof of a recognized GPU family, working
-initialization, display support, or acceleration. No family is currently
-claimed as supported. Physical RTX 3060 validation remains outstanding.
+Logs report `DETECTED`, `NOT_ATTEMPTED`, and `UNAVAILABLE` for runtime
+functionality. No NVIDIA device is currently claimed as initialized or
+accelerated. Physical RTX 3060 validation remains outstanding.
 
 ## Design goals
 
@@ -50,7 +57,7 @@ claimed as supported. Physical RTX 3060 validation remains outstanding.
 | drivers/gpu/nvx/ | NVIDIA discovery and future family initialization, firmware, memory, queues and interrupts |
 | include/gpu.h | Generic identity, lifecycle and capability vocabulary |
 | include/gpu_display.h | Display-mode and presentation contracts |
-| include/nvx_device.h | NVIDIA identity and device descriptors plus discovery entry point |
+| include/nvx_device.h | NVIDIA identity, profile recognition, descriptor and discovery API |
 | include/nvx_lifecycle.h | NVX-specific fail-closed lifecycle state machine |
 | include/nvx_memory.h | Explicit CPU, system-physical and GPU address-space contracts |
 | include/nvx_firmware.h | Injected firmware-provider interface independent of VFS paths |
@@ -81,6 +88,7 @@ boot depend on discrete-GPU initialization.
 ## Contracts and safety invariants
 
 ### Discovery and lifecycle
+
 Use the existing PCI registry. Discovery reads identity and configuration-space
 metadata only. BAR addresses are not mapped until resource type, size, alignment,
 address width and overflow conditions can be validated. PCI enumeration and
@@ -96,6 +104,7 @@ only after initialization. These gates are deliberately not wired to the current
 discovery-only path.
 
 ### MMIO, interrupts and DMA
+
 BARs are physical resources, never directly usable virtual pointers. Map MMIO
 through the kernel mapping API with explicit bounds and teardown. DMA allocations
 must distinguish CPU virtual and physical addresses. Do not enable bus mastering
@@ -103,12 +112,14 @@ until DMA-visible state is valid. Interrupt handlers should do bounded work and
 defer longer processing.
 
 ### Firmware
+
 Firmware is injected through a provider rather than hard-coded filesystem paths.
 Validate device-family compatibility, lengths and integrity before use. Missing
 or rejected firmware must fail initialization cleanly and preserve fallback
 display output.
 
 ### Memory and command submission
+
 System physical, CPU virtual and GPU virtual addresses are different address
 spaces. Memory objects must eventually define alignment, access, residency,
 lifetime and synchronization. Queue submission must use driver-owned command
@@ -117,26 +128,29 @@ states. Untrusted applications must not write arbitrary registers or submit
 unchecked commands.
 
 ### Display and rendering
+
 Scanout and 3D acceleration are separate capabilities. Preserve the current
 boot framebuffer first; later add safe mode discovery, modesetting, cursor
 support and presentation. A future compositor or rendering API must not depend
 on NVIDIA command encoding.
 
 ### Diagnostics and validation
+
 The focused NVX workflow compiles tests with `-Wall -Wextra -Werror` and
-exercises candidate matching, subsystem-ID handling, auxiliary-function
-filtering, discovery diagnostics, lifecycle ordering, capability gating,
-shutdown and fail-closed behavior. These tests validate software logic, not
-physical hardware. Use QEMU for generic boot regressions and real hardware for
-RTX 3060 support claims. QEMU success cannot prove physical NVIDIA support.
+exercises PCI matching, exact family/profile IDs, unknown-ID fallback,
+subsystem-ID handling, auxiliary-function filtering, diagnostics, lifecycle
+ordering, capability gating, shutdown and fail-closed behavior. These tests
+validate software logic, not physical hardware. Use QEMU for generic boot
+regressions and real hardware for RTX 3060 support claims. QEMU success cannot
+prove physical NVIDIA support.
 
 ## Implementation phases
 
 1. Generic GPU/display contracts, build ownership and architecture checks. (Merged.)
 2. Read-only NVIDIA PCI inventory, conservative matching and mocked tests. (Implemented.)
-3. Lifecycle state gates and failure semantics. (Contract implemented; not wired to hardware.)
+3. Exact PCI family/profile recognition and lifecycle state gates. (Implemented as software contracts; lifecycle not yet wired to hardware.)
 4. Validated BAR sizing/mapping.
-5. Firmware provider and verified family-specific identification tables.
+5. Firmware provider and validated family-specific hardware initialization.
 6. Device memory management, DMA, interrupts and synchronization.
 7. Command queues, bounded submissions and completion handling.
 8. Display modesetting and scanout integration.

@@ -145,9 +145,9 @@ int main(void)
            NVX_IRQ_ROUTE_OK);
     assert(route.mode == NVX_IRQ_ROUTE_MSI);
     assert(nvx_irq_route_enable(&route) == NVX_IRQ_ROUTE_OK);
-    assert((config_space[0x52U / 4U] & 1U) != 0U);
+    assert((config_space[0x50U / 4U] & (1U << 16U)) != 0U);
     assert(nvx_irq_route_disable(&route) == NVX_IRQ_ROUTE_OK);
-    assert((config_space[0x52U / 4U] & 1U) == 0U);
+    assert((config_space[0x50U / 4U] & (1U << 16U)) == 0U);
     assert(nvx_irq_route_release(&route) == NVX_IRQ_ROUTE_OK);
 
     apic_enabled = 0;

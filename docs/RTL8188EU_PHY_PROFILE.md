@@ -48,6 +48,16 @@ The record array must exactly fill the declared file size. The loader checks the
 
 For writes, a zero mask means the full register width; otherwise the driver performs a masked read-modify-write and verifies the selected bits. Polls require a nonzero mask and succeed only when all masked bits match the expected value.
 
+## eFuse-derived transmit-power data
+
+The driver decodes the three 2.4-GHz channel-group CCK and HT40 base indices
+from the RTL8188E logical eFuse map, along with the packed signed OFDM and
+HT20 deltas. The groups correspond to channels 1–3, 4–9, and 10–14. Missing
+(`0xff`) or out-of-range base indices are rejected instead of being replaced
+with guessed values. These are factory calibration inputs only: decoding them
+does not yet program the transmit-power registers or establish that the
+resulting board power configuration is correct.
+
 ## Required phases
 
 Records must be grouped in nondecreasing phase order:

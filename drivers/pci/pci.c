@@ -468,7 +468,11 @@ int pci_get_bar_size(const struct pci_device* device, uint8_t index,
 
     if (measured_size < (is_io ? 4ULL : 16ULL) ||
         (measured_size & (measured_size - 1ULL)) != 0ULL ||
-        (base & (measured_size - 1ULL)) != 0ULL)
+        (base & (measured_size - 1ULL)) != 0ULL ||
+        measured_size - 1ULL > UINT64_MAX - base)
+        goto done;
+    /* A non-64-bit BAR cannot describe an address range above 4 GiB. */
+    if (!is_64bit && base + measured_size - 1ULL > UINT32_MAX)
         goto done;
 
     *size = measured_size;

@@ -75,7 +75,7 @@ accelerated. Physical RTX 3060 validation remains outstanding.
 | include/nvx_resource.h | Validated BAR metadata and MMIO acquisition contract |
 | include/nvx_mmio.h | Bounded register access over an existing mapping |
 | include/nvx_attach.h | BAR0 mapping, PMC probe and teardown transaction |
-| include/nvx_firmware.h | Verified firmware-provider acquisition contract |
+| include/nvx_firmware.h | Verified firmware-provider acquisition contract |\n| include/nvx_dma.h | Bounded, contiguous NVX DMA allocation and lifetime |
 | include/nvx_memory.h | Explicit CPU, system-physical and GPU address-space contracts |
 | include/nvx_firmware.h | Injected firmware-provider interface independent of VFS paths |
 | include/nvx_command.h | Queue, command-buffer and completion-state vocabulary |
@@ -128,8 +128,7 @@ must distinguish CPU virtual and physical addresses. Do not enable bus mastering
 until DMA-visible state is valid. Interrupt handlers should do bounded work and
 defer longer processing.
 
-### Firmware
-
+### DMA buffers\n\n`nvx_dma_alloc()` obtains a physically contiguous run using the kernel DMA\nallocator, validates every page and both physical/virtual continuity, rounds the\nrequested byte length to pages, caps each object at 64 pages (256 KiB), and checks\nthe complete address range against the caller-declared 32-bit or 64-bit device\naddress width. The current kernel DMA allocator is identity-mapped and below 4 GiB;\nthe NVX layer does not assume future allocators retain that limitation. Failed\nvalidation releases the whole allocation, and `nvx_dma_release()` is idempotent\nfor an already-released/zero-initialized handle. Allocation does not enable PCI\nbus mastering or submit work to the GPU. This is memory plumbing only: no GSP\nfirmware launch, GPU virtual-memory page tables, command queues, or cache/DMA\nbarrier protocol is implemented by this layer.\n\n### Firmware\n
 Firmware is injected through a provider rather than hard-coded filesystem paths.
 Validate device-family compatibility, lengths and integrity before use. Missing
 or rejected firmware must fail initialization cleanly and preserve fallback

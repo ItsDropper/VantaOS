@@ -23,6 +23,7 @@ on:
       - "scripts/test_nvx_mmio.c"
       - "scripts/test_nvx_attach.c"
       - "scripts/test_nvx_firmware.c"
+      - "scripts/test_pci_bar_size.c"
       - ".github/workflows/nvx-tests.yml"
   workflow_dispatch:
 
@@ -35,6 +36,15 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+
+      - name: Compile host-tested PCI BAR sizing with strict warnings
+        run: |
+          gcc -DPCI_TEST -std=c11 -Wall -Wextra -Werror -Iinclude \\
+            scripts/test_pci_bar_size.c drivers/pci/pci.c \\
+            -o /tmp/vantaos-pci-bar-size-test
+
+      - name: Test PCI BAR size masks, restoration, and active-device refusal
+        run: /tmp/vantaos-pci-bar-size-test
 
       - name: Compile NVX identity tests with strict warnings
         run: |

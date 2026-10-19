@@ -35,6 +35,11 @@ int main(void)
     assert(nvx_mmio_read32(&region, 0U, 0) == NVX_MMIO_INVALID_ARGUMENT);
     assert(nvx_mmio_write32(0, 0U, 1U) == NVX_MMIO_INVALID_ARGUMENT);
 
+    region.base = (volatile uint8_t *)(void *)((uintptr_t)registers + 1U);
+    region.length = sizeof(registers) - 1U;
+    assert(nvx_mmio_read32(&region, 0U, &value) == NVX_MMIO_UNALIGNED);
+    assert(nvx_mmio_write32(&region, 0U, 1U) == NVX_MMIO_UNALIGNED);
+
     region.base = 0;
     assert(nvx_mmio_read32(&region, 0U, &value) == NVX_MMIO_INVALID_ARGUMENT);
     return 0;

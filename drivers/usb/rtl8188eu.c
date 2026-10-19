@@ -980,7 +980,7 @@ static int rtl_rf_write(uint8_t address, uint32_t value)
  */
 static int rtl_wait_ticks_bounded(uint32_t ticks)
 {
-    if(!timer_get_ticks || ticks==0U)return 0;
+    if(ticks==0U)return 0;
     while(ticks--!=0U) {
         uint32_t start=timer_get_ticks(),spins=0U;
         while(timer_get_ticks()==start)
@@ -1012,8 +1012,7 @@ static int rtl_radio_apply_crystal_trim_and_lc(void)
         old_channel == RTL8188EU_RF_DATA_MASK)
         return 0;
 
-    if (!timer_get_ticks ||
-        !rtl_rf_write(RTL8188EU_RF_CHNLBW,
+    if (!rtl_rf_write(RTL8188EU_RF_CHNLBW,
                       old_channel | RTL8188EU_RF_LC_CALIBRATE))
         return 0;
 

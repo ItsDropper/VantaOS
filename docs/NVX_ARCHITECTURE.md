@@ -27,7 +27,7 @@ does not write the command register or enable bus mastering. The values are
 preflight diagnostics, not proof that a BAR is valid or that DMA is safe.
 
 For display-controller candidates, BAR0 is reported as a raw address/type/width.
-The PCI subsystem now has a serialized `pci_get_bar_size()` path that saves a BAR,
+The PCI subsystem now has a read-only `pci_find_capability()` walker for conventional capabilities (including future MSI/MSI-X discovery); it validates the capability-list status bit, header type, pointer alignment/range, and cycles. It does not enable or configure interrupts. The PCI subsystem also has a serialized `pci_get_bar_size()` path that saves a BAR,
 probes its hardware mask, restores the original value, and validates the resulting
 power-of-two size and base alignment. It refuses to probe unless I/O decode,
 memory decode, and bus mastering are all disabled; it never disables them on its
@@ -157,7 +157,7 @@ The NVX firmware acquisition layer currently selects `gsp_ga10x.bin` for the rec
 The focused NVX workflow compiles tests with `-Wall -Wextra -Werror` and
 exercises PCI matching, exact family/profile IDs, unknown-ID fallback,
 subsystem-ID handling, auxiliary-function filtering, diagnostics, bounded MMIO
-reads/writes, host-simulated 32/64-bit PCI BAR sizing and register restoration,
+reads/writes, conventional PCI capability-list traversal/cycle rejection, host-simulated 32/64-bit PCI BAR sizing and register restoration,
 active-device sizing refusal, attach/probe rollback and teardown, firmware
 acquisition and verification failures, mapping bounds and alignment, lifecycle
 ordering, capability gating, shutdown and fail-closed behavior. These tests

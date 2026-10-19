@@ -1349,11 +1349,14 @@ static void rtl_cache_beacon(const uint8_t *frame, size_t length)
                 same = 0;
         if (same) {
             rtl_passive_results[i] = result;
+            serial_write("VANTAOS_RTL8188EU_SCAN_RESULT_SEEN\n");
             return;
         }
     }
-    if (rtl_passive_result_count < NET_WIFI_MAX_SCAN_RESULTS)
+    if (rtl_passive_result_count < NET_WIFI_MAX_SCAN_RESULTS) {
         rtl_passive_results[rtl_passive_result_count++] = result;
+        serial_write("VANTAOS_RTL8188EU_SCAN_RESULT_SEEN\n");
+    }
 }
 
 static void rtl_process_rx_packet(const uint8_t *packet, size_t length)
@@ -1499,6 +1502,7 @@ int rtl8188eu_start_active_scan(void)
     }
     rtl_scan_active = 1U;
     rtl_scan_dwell_polls = 500U;
+    serial_write("VANTAOS_RTL8188EU_ACTIVE_SCAN_STARTED\n");
     return 1;
 }
 
@@ -1597,8 +1601,10 @@ static void rtl_network_link_up(void)
     if (net_device_set_link)
         (void)net_device_set_link(&rtl_netdev, 1);
     if (!rtl_dhcp_started && net_dhcp_start &&
-        net_dhcp_start(&rtl_netdev, 10000U))
+        net_dhcp_start(&rtl_netdev, 10000U)) {
         rtl_dhcp_started = 1U;
+        serial_write("VANTAOS_RTL8188EU_DHCP_STARTED\n");
+    }
 }
 
 static void rtl_network_link_down(void)
@@ -1916,6 +1922,7 @@ static void rtl_station_receive_frame(const uint8_t *frame, size_t length)
                 return;
             }
             rtl_station_state = RTL_STATION_WAIT_ASSOC;
+            serial_write("VANTAOS_RTL8188EU_AUTH_OK\n");
             rtl_station_timeout = 1000U;
             rtl_station_retries = 0U;
             return;
@@ -1928,6 +1935,7 @@ static void rtl_station_receive_frame(const uint8_t *frame, size_t length)
                 return;
             }
             rtl_station_aid = aid;
+            serial_write("VANTAOS_RTL8188EU_ASSOC_OK\n");
             wifi_wpa2_ops_t ops = {
                 .random_bytes = rtl_station_random,
                 .send_eapol = rtl_station_send_eapol,
@@ -1945,6 +1953,7 @@ static void rtl_station_receive_frame(const uint8_t *frame, size_t length)
                 return;
             }
             rtl_station_state = RTL_STATION_WPA2_HANDSHAKE;
+            serial_write("VANTAOS_RTL8188EU_WPA2_HANDSHAKE_STARTED\n");
             rtl_station_timeout = 4000U;
             rtl_station_retries = 0U;
             return;
@@ -1967,6 +1976,7 @@ static void rtl_station_receive_frame(const uint8_t *frame, size_t length)
         if (wifi_wpa2_get_state(&rtl_supplicant) == WIFI_WPA2_AUTHENTICATED &&
             rtl_keys_installed) {
             rtl_station_state = RTL_STATION_AUTHENTICATED;
+            serial_write("VANTAOS_RTL8188EU_WPA2_AUTHENTICATED\n");
             rtl_network_link_up();
         }
         else if (wifi_wpa2_get_state(&rtl_supplicant) == WIFI_WPA2_FAILED)

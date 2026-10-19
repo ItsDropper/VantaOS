@@ -396,6 +396,14 @@ int main(void)
      */
     if (rtl8188eu_start_active_scan() || scan_request_valid || tx_seen)
         return 18;
+    /* No successful association may be reported while radio initialization
+     * is blocked. This is a negative test, not a simulated Wi-Fi success. */
+    const uint8_t test_ssid[] = {'T', 'E', 'S', 'T'};
+    const uint8_t test_passphrase[] = {'t','e','s','t','p','a','s','s'};
+    if (rtl8188eu_connect(test_ssid, sizeof(test_ssid),
+                          test_passphrase, sizeof(test_passphrase)) != 0 ||
+        rtl8188eu_get_connection_state() != RTL8188EU_CONNECTION_IDLE)
+        return 22;
     rtl8188eu_poll();
     net_wifi_scan_result_t results[2];
     size_t result_count = rtl8188eu_get_passive_results(results, 2U);

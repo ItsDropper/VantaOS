@@ -190,6 +190,9 @@ jobs:
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_rtl8188eu.c drivers/usb/rtl8188eu.c net/wifi_80211.c net/wifi_wpa2.c net/wifi_crypto.c net/wifi_ccmp.c kernel/crypto_rng.c -o /tmp/vantaos-rtl8188eu-test
           /tmp/vantaos-rtl8188eu-test
 
+      - name: Test RTL8188EU hardware-log validator
+        run: python3 scripts/test_rtl8188eu_hardware_log.py --self-test
+
       - name: Test TLS hostname validation policy
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_tls_hostname.c -o /tmp/vantaos-tls-hostname-test

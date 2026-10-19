@@ -1,6 +1,9 @@
 #include "net.h"
 #include "net_arp.h"
 #include "timer.h"
+
+/* Optional serial diagnostics; host-side DHCP tests need no serial device. */
+extern void serial_write(const char *) __attribute__((weak));
 #include <stddef.h>
 #include <stdint.h>
 
@@ -363,6 +366,7 @@ int net_dhcp_configure(net_device_t* device, uint32_t timeout_ms,
         state->rebind_at = state->lease_started + (ticks * 7U) / 8U;
         state->expires_at = state->lease_started + ticks;
         configured = 1;
+        if (serial_write) serial_write("VANTAOS_DHCP_LEASE_ACQUIRED\n");
     } else {
         state->lease_valid = 0U;
         state->device = 0;
@@ -403,6 +407,7 @@ static void dhcp_poll_state(dhcp_state_t* state)
             state->renew_at = now + ticks / 2U;
             state->rebind_at = now + (ticks * 7U) / 8U;
             state->expires_at = now + ticks;
+            if (serial_write) serial_write("VANTAOS_DHCP_LEASE_ACQUIRED\n");
             return;
         }
         if (state->rejected ||

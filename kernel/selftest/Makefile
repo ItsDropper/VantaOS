@@ -2,5 +2,4 @@
 VANTAOS_KERNEL_C += kernel/selftest/boot_info_selftest.c \
                     kernel/selftest/platform_selftest.c \
                     kernel/selftest/user_mode_selftest.c \
-                    kernel/selftest/storage_framework_selftest.c \
-                    kernel/selftest/network_framework_selftest.c
+                    kernel/selftest/storage_framework_selftest.c

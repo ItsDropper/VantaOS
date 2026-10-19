@@ -5,11 +5,12 @@
  * See the LICENSE file in the project root for the full license text.
  */
 
-#include "selftest.h"
+#include "net_selftest.h"
 #include "net.h"
 #include "serial.h"
 #include <stdint.h>
 #include <stddef.h>
+
 #ifdef VANTAOS_SELF_TEST
 static uint32_t mock_tx_count;
 static uint16_t received_type;
@@ -72,4 +73,4 @@ void network_framework_selftest(void) {
     ok=!net_device_get_ipv4(&d,&address,&mask,&gateway)&&ok;
     serial_write(ok?"VANTAOS_NETWORK_FRAMEWORK_OK\n":"VANTAOS_NETWORK_FRAMEWORK_FAIL\n");
 }
-#endif
+#endif /* VANTAOS_SELF_TEST */

@@ -62,6 +62,8 @@ typedef struct {
     /* Called by net_poll() in process context; must be bounded and nonblocking. */
     int (*poll)(void);
 } net_pci_driver_t;
+/* Initialize network core, protocols, drivers, and PCI probing in order. */
+void net_stack_initialize(void);
 void net_initialize(void);
 int net_device_register(net_device_t*);
 int net_device_unregister(net_device_t*);

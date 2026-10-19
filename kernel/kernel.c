@@ -5,29 +5,9 @@
  * See the LICENSE file in the project root for the full license text.
  */
 
-#include "ata.h"
-#include "apic.h"
-#include "smp.h"
-#include "panic.h"
-#include "gdt.h"
-#include "heap.h"
-#include "interrupts.h"
 #include "boot_info_multiboot.h"
 #include "os.h"
-#include "paging.h"
-#include "pci.h"
-#include "nvme.h"
-#include "net.h"
-#include "e1000.h"
-#include "virtio_net.h"
-#include "virtio_net_modern.h"
-#include "rtl8139.h"
-#include "net_ipv6.h"
-#include "net_arp.h"
-#include "net_ipv4.h"
-#include "net_tcp.h"
-#include "xhci.h"
-#include "pmm.h"
+#include "kernel_init.h"
 #include "serial.h"
 #include "vanta_boot_info.h"
 #ifdef VANTAOS_SELF_TEST
@@ -48,52 +28,7 @@ static inline unsigned long long read_tsc(void)
 }
 
 static unsigned long long boot_start;
-static unsigned long long boot_gdt;
-static unsigned long long boot_interrupts;
 static vanta_boot_info_t normalized_boot_info;
-
-static void kernel_initialize(const vanta_boot_info_t* boot_info)
-{
-    gdt_initialize();
-    boot_gdt = read_tsc();
-
-    pmm_initialize(boot_info);
-    interrupts_initialize();
-    boot_interrupts = read_tsc();
-
-    paging_initialize();
-    apic_initialize();
-    smp_init_result_t smp_result = smp_initialize();
-    if (smp_result == SMP_INIT_FAILED)
-    {
-        serial_write("VANTAOS_SMP_INIT_FATAL_FAIL\n");
-        kernel_panic_halt_all();
-    }
-#ifdef VANTAOS_SELF_TEST
-    kernel_platform_selftest();
-#endif
-    pci_initialize();
-    heap_initialize();
-    net_initialize();
-    if (!net_arp_initialize() || !net_ipv4_initialize() || !net_ipv6_initialize() ||
-        !net_udp_initialize() || !net_tcp_initialize())
-        serial_write("VANTAOS_NETWORK_PROTOCOL_REGISTER_FAIL\n");
-    if (!e1000_initialize())
-        serial_write("VANTAOS_E1000_DRIVER_REGISTER_FAIL\n");
-    if (!virtio_net_initialize())
-        serial_write("VANTAOS_VIRTIO_NET_DRIVER_REGISTER_FAIL\n");
-    if (!virtio_net_modern_initialize())
-        serial_write("VANTAOS_VIRTIO_NET_MODERN_DRIVER_REGISTER_FAIL\n");
-    if (!rtl8139_initialize())
-        serial_write("VANTAOS_RTL8139_DRIVER_REGISTER_FAIL\n");
-    (void)net_probe_pci_devices();
-#ifdef VANTAOS_SELF_TEST
-    network_framework_selftest();
-#endif
-    xhci_initialize();
-    ata_initialize();
-    nvme_initialize();
-}
 
 static void kernel_start_os(multiboot_info_t* mbd)
 {
@@ -227,12 +162,3 @@ unsigned long long kernel_boot_start(void)
     return boot_start;
 }
 
-unsigned long long kernel_boot_gdt(void)
-{
-    return boot_gdt;
-}
-
-unsigned long long kernel_boot_interrupts(void)
-{
-    return boot_interrupts;
-}

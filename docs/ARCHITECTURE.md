@@ -29,9 +29,10 @@ The diagram expresses intended subsystem relationships, not independent protecti
 
 1. On the GRUB path, GRUB loads the kernel through the Multiboot-compatible entry in `arch/x86_64/boot/boot.asm`, which creates early page tables, enters long mode, and transfers control to the kernel. VantaOS does not yet have its own bootloader.
 2. The UEFI path uses a separate EFI loader and kernel handoff. The OVMF regression checks loader execution, ELF loading, `ExitBootServices`, kernel entry, and the normalized handoff.
-3. `kernel/kernel.c` initializes serial diagnostics, GDT, physical-memory bookkeeping, interrupt infrastructure, paging, PCI/ATA discovery, and heap.
-4. `os/os.c` initializes terminal/input, graphics, filesystem/VFS, process management, scheduler, shell, and desktop components.
-5. The OS draws an initial desktop frame, enables interrupts, writes `VANTAOS_BOOT_OK` to serial, and enters the desktop process loop.
+3. `kernel/kernel.c` owns boot-path adaptation: serial diagnostics, Multiboot normalization or UEFI handoff validation, and the transition to the OS startup path.
+4. `kernel/init.c` owns ordered platform bring-up: GDT, PMM, interrupts, paging, APIC/SMP, PCI enumeration, and heap initialization. It hands off to `drivers_initialize()` only after PCI and heap prerequisites are ready.
+5. `drivers/init.c` coordinates the network, USB, and storage subsystem entry points. Each subsystem owns its concrete registration and discovery sequence: `net/init.c`, `drivers/usb/init.c`, and `drivers/storage/init.c`.
+6. `os/os.c` initializes terminal/input, graphics, filesystem/VFS, process management, scheduler, shell, and desktop components. The OS draws an initial desktop frame, enables interrupts, writes `VANTAOS_BOOT_OK` to serial, and enters the desktop process loop.
 
 The two boot paths are not interchangeable evidence: a successful GRUB boot does not prove the UEFI path, and a successful OVMF boot does not prove physical firmware compatibility.
 
@@ -42,8 +43,8 @@ The two boot paths are not interchangeable evidence: a successful GRUB boot does
 | `arch/x86_64/` | Active long-mode GDT, IDT, interrupt entry/dispatch, PIC, and boot code. |
 | `arch/x86/` | Legacy 32-bit source retained for audit; not linked into the active target. |
 | `boot/` | Boot-related assets and configuration. |
-| `kernel/` | Boot orchestration, serial diagnostics, panic/fault tracing, and shared kernel services. |
-| `kernel/selftest/` | Test-only boot-info/PMM and paging/spinlock regression probes. |
+| `kernel/kernel.c` | Bootloader handoff adaptation, normalized boot-info ownership, serial diagnostics, and transition into OS startup. |\n| `kernel/init.c` | Ordered platform initialization and boot-stage timing; delegates concrete device startup to the driver coordinator. |\n| `drivers/init.c` | Cross-subsystem coordinator for networking, USB, and storage. It does not initialize individual controllers directly. |\n| `net/init.c`, `drivers/usb/init.c`, `drivers/storage/init.c` | Subsystem-owned startup order, registration, and discovery for their respective drivers/protocols. |
+| `kernel/selftest/` | Test-only boot-info, platform, storage, and memory/process infrastructure regression probes. |\n| `net/selftest/` | Networking-owned regression probes, included only in self-test builds. |
 | `kernel/proc/` | `process.c` owns table initialization/creation; `process_context.c` owns atomic CPU claims and context-switch transitions; `process_lifecycle.c` owns wake/block/terminate/reap and snapshots. `process_internal.h` is private shared state, not a public API. |
 | `kernel/sched/` | Ready-process selection and scheduling. |
 | `kernel/time/` | Timer subsystem. |

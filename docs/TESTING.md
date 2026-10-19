@@ -12,6 +12,14 @@ FAT32 currently accepts only writable 512-byte-sector devices. Device selection 
 
 Workflow: [`.github/workflows/build.yml`](../.github/workflows/build.yml)
 
+Before compiling, CI runs `scripts/check_architecture.py`. This static boundary
+check verifies that kernel entry does not depend on concrete driver headers,
+that platform initialization hands off through the driver coordinator, that
+network/USB/storage initialization remains owned by each subsystem, and that
+all coordinator sources are registered in their corresponding Makefiles. This
+check validates source ownership and ordering declarations, not runtime device
+support; QEMU/OVMF and targeted hardware-driver tests remain separate evidence.
+
 On pushes to `master`, pull requests targeting the repository, and manual workflow runs, GitHub Actions:
 
 1. Checks out the repository on a clean Ubuntu runner.

@@ -16,6 +16,10 @@ static uint32_t config_space[64];
 static uint32_t selected_address;
 static unsigned eoi_count;
 static unsigned callback_count;
+static int map_fail;
+static int unmap_fail;
+static unsigned map_calls;
+static unsigned unmap_calls;
 static uint8_t callback_vector;
 static void *callback_context;
 static int apic_enabled = 1;
@@ -45,13 +49,17 @@ void *mmio_map_region(uint64_t address, size_t length)
 {
     assert(address == 0x80001000ULL);
     assert(length == sizeof(msix_table));
+    ++map_calls;
+    if (map_fail)
+        return 0;
     memset(msix_table, 0, sizeof(msix_table));
     return msix_table;
 }
 int mmio_unmap_region(void *address, size_t length)
 {
     assert(address == msix_table && length == sizeof(msix_table));
-    return 1;
+    ++unmap_calls;
+    return !unmap_fail;
 }
 
 static void set_byte(uint8_t offset, uint8_t value)
@@ -113,6 +121,17 @@ int main(void)
     assert(route.capabilities.msix.present && route.vector != 0x80U);
     assert(nvx_irq_route_prepare(&device, bars, handler, &context, &route) ==
            NVX_IRQ_ROUTE_INVALID_ARGUMENT);
+    config_space[0x60U / 4U] |= (1U << 31U);
+    assert(nvx_irq_route_enable(&route) ==
+           NVX_IRQ_ROUTE_DEVICE_ALREADY_ENABLED);
+    config_space[0x60U / 4U] &= ~(1U << 31U);
+
+    map_fail = 1;
+    assert(nvx_irq_route_enable(&route) == NVX_IRQ_ROUTE_MAPPING_FAILED);
+    assert(!route.enabled && route.table_mapping == 0);
+    assert((config_space[0x60U / 4U] & 0xC0000000U) == 0U);
+    map_fail = 0;
+
     assert(nvx_irq_route_enable(&route) == NVX_IRQ_ROUTE_OK);
     assert(route.enabled && msix_table[0] == 0xFEE00000U);
     assert(msix_table[1] == 0U && msix_table[2] == route.vector);
@@ -123,9 +142,14 @@ int main(void)
     assert(callback_count == 1U && callback_vector == route.vector);
     assert(callback_context == &context && eoi_count == 1U);
 
+    unmap_fail = 1;
+    assert(nvx_irq_route_disable(&route) == NVX_IRQ_ROUTE_MAPPING_FAILED);
+    assert(route.enabled && route.table_mapping != 0);
+    unmap_fail = 0;
     assert(nvx_irq_route_disable(&route) == NVX_IRQ_ROUTE_OK);
-    assert(!route.enabled);
-    assert((config_space[0x62U / 4U] & 0xC0000000U) == 0x40000000U);
+    assert(!route.enabled && route.table_mapping == 0);
+    assert((config_space[0x60U / 4U] & 0xC0000000U) == 0x40000000U);
+    assert(map_calls == 2U && unmap_calls == 2U);
     assert(nvx_irq_route_release(&route) == NVX_IRQ_ROUTE_OK);
     assert(!route.prepared && route.mode == NVX_IRQ_ROUTE_NONE);
     assert(nvx_irq_route_release(&route) == NVX_IRQ_ROUTE_NOT_PREPARED);

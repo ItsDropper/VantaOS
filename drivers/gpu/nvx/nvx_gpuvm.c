@@ -536,14 +536,14 @@ nvx_gpuvm_status_t nvx_gpuvm_release(nvx_gpuvm_t *vm,
         return NVX_GPUVM_DEVICE_FAULTED;
 
     spinlock_lock(&vm->lock);
-    if (vm->root_published && !vm->quiesced) {
-        spinlock_unlock(&vm->lock);
-        return NVX_GPUVM_BUSY;
-    }
     record = nvx_gpuvm_validate_handle(vm, mapping);
     if (record == 0) {
         spinlock_unlock(&vm->lock);
         return NVX_GPUVM_STALE_HANDLE;
+    }
+    if (record->mapped && vm->root_published && !vm->quiesced) {
+        spinlock_unlock(&vm->lock);
+        return NVX_GPUVM_BUSY;
     }
 
     if (record->mapped) {

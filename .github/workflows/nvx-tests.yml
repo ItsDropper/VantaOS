@@ -14,6 +14,7 @@ on:
       - "include/nvx_firmware.h"
       - "include/nvx_dma.h"
       - "include/nvx_gpuva.h"
+      - "include/nvx_memory.h"
       - "include/pci.h"
       - "include/mmio.h"
       - "include/serial.h"
@@ -27,6 +28,7 @@ on:
       - "scripts/test_nvx_firmware.c"
       - "scripts/test_nvx_dma.c"
       - "scripts/test_nvx_gpuva.c"
+      - "scripts/test_nvx_memory.c"
       - "scripts/test_pci_bar_size.c"
       - ".github/workflows/nvx-tests.yml"
   workflow_dispatch:
@@ -133,6 +135,16 @@ jobs:
 
       - name: Test GPU VA split/merge, guards, handles, and randomized invariants
         run: /tmp/vantaos-nvx-gpuva-test
+
+      - name: Compile NVX memory object tests with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_memory.c drivers/gpu/nvx/nvx_memory.c \
+            drivers/gpu/nvx/nvx_gpuva.c drivers/gpu/nvx/nvx_dma.c \
+            -o /tmp/vantaos-nvx-memory-test
+
+      - name: Test NVX memory object ownership, rollback and stale handles
+        run: /tmp/vantaos-nvx-memory-test
 
       - name: Compile NVX lifecycle tests with strict warnings
         run: |

@@ -23,6 +23,8 @@ uint8_t pci_read_config8(const struct pci_device *device, uint8_t offset)
 uint16_t pci_read_config16(const struct pci_device *device, uint8_t offset)
 {
     (void)device;
+    if (offset == 0x04U)
+        return NVX_PCI_COMMAND_MEMORY_SPACE;
     if (offset == 0x2CU)
         return test_subsystem_vendor;
     if (offset == 0x2EU)
@@ -91,6 +93,8 @@ int main(void)
     assert(descriptor.identity.subclass == 0x80);
     assert(descriptor.family == NVX_FAMILY_UNKNOWN);
     assert(descriptor.profile == NVX_PROFILE_UNKNOWN);
+    assert(descriptor.pci_command == NVX_PCI_COMMAND_MEMORY_SPACE);
+    assert((descriptor.pci_command & NVX_PCI_COMMAND_BUS_MASTER) == 0);
     assert(descriptor.architecture_id == 0);
     assert(descriptor.implementation_id == 0);
     assert(descriptor.mmio_base == 0);

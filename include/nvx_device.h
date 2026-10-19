@@ -25,4 +25,6 @@ typedef struct nvx_device nvx_device_t;
 int nvx_match_pci_device(const struct pci_device *pci_device);
 int nvx_describe_pci_device(const struct pci_device *pci_device,
                             nvx_device_descriptor_t *out_descriptor);
+/* Read-only inventory of NVIDIA PCI functions; returns the detected count. */
+int nvx_pci_discover(void);
 #endif

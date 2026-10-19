@@ -10,11 +10,53 @@
 #include <stdint.h>
 #include <string.h>
 
-static nvx_gpuva_space_t va_space;
+static nvx_gpuvm_t gpuvm;
+static uint8_t table_pages[64][NVX_GPUVM_PAGE_SIZE] __attribute__((aligned(NVX_GPUVM_PAGE_SIZE)));
+static unsigned next_table_page;
+static uint8_t fake_mmio;
 static nvx_memory_manager_t manager;
 static uint8_t dma_memory[1024U * 1024U]
     __attribute__((aligned(NVX_DMA_PAGE_SIZE)));
 static size_t next_page;
+
+int dma_alloc_page(dma_page_t *out)
+{
+    if (out == 0 || next_table_page >= 64U)
+        return 0;
+    out->virtual_address = table_pages[next_table_page];
+    out->physical_address = 0x10000000ULL +
+                           (uint64_t)next_table_page * NVX_GPUVM_PAGE_SIZE;
+    out->size = NVX_GPUVM_PAGE_SIZE;
+    ++next_table_page;
+    return 1;
+}
+
+void dma_free_page(dma_page_t *page)
+{
+    assert(page != 0 && page->virtual_address != 0);
+    page->virtual_address = 0;
+    page->physical_address = 0;
+    page->size = 0;
+}
+
+nvx_mmio_status_t nvx_gpuvm_test_mmio_write32(
+    const nvx_mmio_region_t *region, size_t offset, uint32_t value)
+{
+    (void)value;
+    assert(region != 0 && region->base == &fake_mmio);
+    assert(offset == 0xB830A0U || offset == 0xB830A4U || offset == 0xB830B0U);
+    return NVX_MMIO_OK;
+}
+
+nvx_mmio_status_t nvx_gpuvm_test_mmio_read32(
+    const nvx_mmio_region_t *region, size_t offset, uint32_t *out)
+{
+    assert(region != 0 && region->base == &fake_mmio && out != 0);
+    if (offset != 0xB830B0U)
+        return NVX_MMIO_OUT_OF_RANGE;
+    *out = 1U;
+    return NVX_MMIO_OK;
+}
 
 int dma_alloc_contiguous(dma_page_t *pages, size_t count)
 {
@@ -55,11 +97,12 @@ int main(void)
     nvx_relocation_t relocations[2] = {{0}};
     nvx_submit_report_t report;
 
-    memset(&va_space, 0, sizeof(va_space));
+    nvx_mmio_region_t bar0 = {.base = &fake_mmio, .length = 0xB830B4U};
+    memset(&gpuvm, 0, sizeof(gpuvm));
     memset(&manager, 0, sizeof(manager));
-    assert(nvx_gpuva_init(&va_space, 0x10000000ULL,
-                          64ULL * 1024ULL * 1024ULL) == NVX_GPUVA_OK);
-    assert(nvx_memory_init(&manager, &va_space, 64U) == NVX_MEMORY_OK);
+    assert(nvx_gpuvm_init(&gpuvm, 0x10000000ULL,
+                          64ULL * 1024ULL * 1024ULL, &bar0) == NVX_GPUVM_OK);
+    assert(nvx_memory_init(&manager, &gpuvm, 64U) == NVX_MEMORY_OK);
     assert(nvx_memory_alloc(&manager, 4096U, NVX_MEMORY_COMMAND_STORAGE,
                             &command) == NVX_MEMORY_OK);
     assert(nvx_memory_alloc(&manager, 8192U, NVX_MEMORY_STAGING,
@@ -116,5 +159,6 @@ int main(void)
 
     assert(nvx_memory_release(&manager, &command) == NVX_MEMORY_OK);
     assert(nvx_memory_release(&manager, &target) == NVX_MEMORY_OK);
+    assert(nvx_gpuvm_destroy(&gpuvm) == NVX_GPUVM_OK);
     return 0;
 }

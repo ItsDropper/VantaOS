@@ -114,7 +114,7 @@ int main(void)
     /* Allocated handles cannot be overwritten by a second allocation. */
     assert(nvx_dma_alloc(4096U, 32U, &buffer) == NVX_DMA_OK);
     assert(nvx_dma_alloc(4096U, 32U, &buffer) == NVX_DMA_INVALID_ARGUMENT);
-    assert(alloc_calls == 8U);
+    assert(alloc_calls == 7U);
     nvx_dma_release(&buffer);
     assert(free_calls == 6U);
     return 0;

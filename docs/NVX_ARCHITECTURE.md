@@ -28,9 +28,15 @@ preflight diagnostics, not proof that a BAR is valid or that DMA is safe.
 
 For display-controller candidates, BAR0 is reported as a raw address/type/width
 only; its size is not inferred because the current PCI API does not expose BAR
-sizing. The identity descriptor deliberately leaves MMIO base and length unset.
-Discovery does not map BARs, enable PCI command bits, access GPU registers, load
-firmware, or initialize engines.
+sizing. The new `nvx_resource` layer validates BAR type, width, base alignment,
+resource size, range overflow, and `size_t` conversion before mapping. Its MMIO
+acquisition path requires an explicit, size-known memory resource and uses the
+kernel's `mmio_map_region()` / `mmio_unmap_region()` contract. Since PCI currently
+provides no trustworthy BAR size, discovery produces `SIZE_UNKNOWN` and mapping
+is refused without calling the mapper. No live BAR sizing writes are performed.
+The identity descriptor still leaves MMIO base and length unset. The discovery
+path does not enable PCI command bits, access GPU registers, load firmware, or
+initialize engines.
 
 The NVX lifecycle contract defines explicit states from discovery through
 probing, validated resources, initialization, running, quiescing, and stop. It
@@ -63,7 +69,7 @@ accelerated. Physical RTX 3060 validation remains outstanding.
 | include/gpu.h | Generic identity, lifecycle and capability vocabulary |
 | include/gpu_display.h | Display-mode and presentation contracts |
 | include/nvx_device.h | NVIDIA identity, profile recognition, descriptor and discovery API |
-| include/nvx_lifecycle.h | NVX-specific fail-closed lifecycle state machine |
+| include/nvx_lifecycle.h | NVX-specific fail-closed lifecycle state machine |\n| include/nvx_resource.h | Validated BAR metadata and MMIO acquisition contract |
 | include/nvx_memory.h | Explicit CPU, system-physical and GPU address-space contracts |
 | include/nvx_firmware.h | Injected firmware-provider interface independent of VFS paths |
 | include/nvx_command.h | Queue, command-buffer and completion-state vocabulary |
@@ -154,7 +160,7 @@ prove physical NVIDIA support.
 1. Generic GPU/display contracts, build ownership and architecture checks. (Merged.)
 2. Read-only NVIDIA PCI inventory, conservative matching and mocked tests. (Implemented.)
 3. Exact PCI family/profile recognition and lifecycle state gates. (Implemented as software contracts; lifecycle not yet wired to hardware.)
-4. Validated BAR sizing/mapping.
+4. BAR validation and size-gated MMIO mapping. (Validation and refusal paths implemented; trusted BAR sizing remains blocked by the PCI subsystem.)
 5. Firmware provider and validated family-specific hardware initialization.
 6. Device memory management, DMA, interrupts and synchronization.
 7. Command queues, bounded submissions and completion handling.

@@ -25,6 +25,26 @@ static device_irq_slot_t slots[DEVICE_IRQ_VECTOR_COUNT];
 static spinlock_t slots_lock = SPINLOCK_INITIALIZER;
 static uint8_t initialized;
 
+static uint64_t device_irq_lock(void)
+{
+#ifdef DEVICE_IRQ_TEST
+    spinlock_lock(&slots_lock);
+    return 0U;
+#else
+    return spinlock_lock_irqsave(&slots_lock);
+#endif
+}
+
+static void device_irq_unlock(uint64_t flags)
+{
+#ifdef DEVICE_IRQ_TEST
+    (void)flags;
+    spinlock_unlock(&slots_lock);
+#else
+    spinlock_unlock_irqrestore(&slots_lock, flags);
+#endif
+}
+
 extern void (*device_irq_stub_table[DEVICE_IRQ_VECTOR_COUNT])(void);
 
 static int device_irq_slot_index(uint8_t vector, size_t *out_index)
@@ -38,9 +58,9 @@ static int device_irq_slot_index(uint8_t vector, size_t *out_index)
 
 int device_irq_initialize(void)
 {
-    uint64_t flags = spinlock_lock_irqsave(&slots_lock);
+    uint64_t flags = device_irq_lock();
     if (initialized) {
-        spinlock_unlock_irqrestore(&slots_lock, flags);
+        device_irq_unlock(flags);
         return 0;
     }
 
@@ -62,7 +82,7 @@ int device_irq_initialize(void)
                      0x08U, 0x8EU);
     }
     initialized = 1U;
-    spinlock_unlock_irqrestore(&slots_lock, flags);
+    device_irq_unlock(flags);
     return 1;
 }
 
@@ -73,7 +93,7 @@ int device_irq_vector_claim(uint8_t *out_vector)
     if (out_vector == 0 || !initialized || !apic_is_enabled())
         return 0;
 
-    uint64_t flags = spinlock_lock_irqsave(&slots_lock);
+    uint64_t flags = device_irq_lock();
     for (unsigned vector = DEVICE_IRQ_VECTOR_FIRST;
          vector <= DEVICE_IRQ_VECTOR_LAST; ++vector) {
         size_t index;
@@ -82,11 +102,11 @@ int device_irq_vector_claim(uint8_t *out_vector)
         if (!slots[index].claimed && !slots[index].releasing) {
             slots[index].claimed = 1U;
             *out_vector = (uint8_t)vector;
-            spinlock_unlock_irqrestore(&slots_lock, flags);
+            device_irq_unlock(flags);
             return 1;
         }
     }
-    spinlock_unlock_irqrestore(&slots_lock, flags);
+    device_irq_unlock(flags);
     return 0;
 }
 
@@ -98,16 +118,16 @@ int device_irq_vector_register(uint8_t vector, device_irq_handler_t handler,
         !device_irq_slot_index(vector, &index))
         return 0;
 
-    uint64_t flags = spinlock_lock_irqsave(&slots_lock);
+    uint64_t flags = device_irq_lock();
     device_irq_slot_t *slot = &slots[index];
     if (!slot->claimed || slot->releasing ||
         __atomic_load_n(&slot->handler, __ATOMIC_ACQUIRE) != 0) {
-        spinlock_unlock_irqrestore(&slots_lock, flags);
+        device_irq_unlock(flags);
         return 0;
     }
     __atomic_store_n(&slot->context, context, __ATOMIC_RELAXED);
     __atomic_store_n(&slot->handler, handler, __ATOMIC_RELEASE);
-    spinlock_unlock_irqrestore(&slots_lock, flags);
+    device_irq_unlock(flags);
     return 1;
 }
 
@@ -117,24 +137,24 @@ int device_irq_vector_release(uint8_t vector)
     if (!initialized || !device_irq_slot_index(vector, &index))
         return 0;
 
-    uint64_t flags = spinlock_lock_irqsave(&slots_lock);
+    uint64_t flags = device_irq_lock();
     device_irq_slot_t *slot = &slots[index];
     if (!slot->claimed || slot->releasing) {
-        spinlock_unlock_irqrestore(&slots_lock, flags);
+        device_irq_unlock(flags);
         return 0;
     }
     slot->releasing = 1U;
     __atomic_store_n(&slot->handler, (device_irq_handler_t)0, __ATOMIC_RELEASE);
-    spinlock_unlock_irqrestore(&slots_lock, flags);
+    device_irq_unlock(flags);
 
     while (__atomic_load_n(&slot->in_flight, __ATOMIC_ACQUIRE) != 0U)
         __asm__ volatile ("pause" ::: "memory");
 
-    flags = spinlock_lock_irqsave(&slots_lock);
+    flags = device_irq_lock();
     __atomic_store_n(&slot->context, (void *)0, __ATOMIC_RELAXED);
     slot->claimed = 0U;
     slot->releasing = 0U;
-    spinlock_unlock_irqrestore(&slots_lock, flags);
+    device_irq_unlock(flags);
     return 1;
 }
 

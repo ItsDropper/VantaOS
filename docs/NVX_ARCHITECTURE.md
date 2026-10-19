@@ -63,6 +63,13 @@ and documents that the device source must be masked before its handler context
 can be reclaimed. Host tests cover vector uniqueness/exhaustion, callback
 dispatch, duplicate registration, release, and EOI accounting.
 
+`nvx_irq_route_prepare()` now composes capability validation with OS vector
+reservation and handler registration as one rollback-safe transaction. It prefers
+MSI-X metadata when present, falls back to MSI only when MSI-X is absent, and
+releases a claimed vector if handler registration fails. The route handle records
+its chosen mode and capability snapshot; release drains the registered callback.
+The handle must be zero-initialized before first use.
+
 This is interrupt plumbing only. No NVX code currently enables MSI/MSI-X,
 programs message address/data, maps an MSI-X table, or registers an NVIDIA
 handler. Callers must not enable a device interrupt until the vector is claimed,

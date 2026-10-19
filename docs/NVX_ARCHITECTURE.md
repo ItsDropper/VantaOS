@@ -107,16 +107,17 @@ support and presentation. A future compositor or rendering API must not depend
 on NVIDIA command encoding.
 
 ### Diagnostics and validation
-Each bring-up phase needs an observable state and failure reason through serial
-logging. Test pure parsing/state transitions separately from hardware access.
-Use mocked resources for unit tests, QEMU for generic boot regressions, and real
-hardware for RTX 3060 support claims. QEMU success cannot prove physical NVIDIA
-support.
+The focused NVX workflow compiles with `-Wall -Wextra -Werror` and exercises
+candidate matching, subsystem-ID handling, auxiliary-function filtering, and
+diagnostic output using mocked PCI/serial interfaces. These tests validate
+software logic, not physical hardware. Use QEMU for generic boot regressions
+and real hardware for RTX 3060 support claims. QEMU success cannot prove
+physical NVIDIA support.
 
 ## Implementation phases
 
 1. Generic GPU/display contracts, build ownership and architecture checks. (Merged.)
-2. Read-only NVIDIA PCI inventory and conservative display-controller matching. (Implemented in this change; CI evidence pending.)
+2. Read-only NVIDIA PCI inventory, conservative matching and mocked tests. (Implemented; focused workflow result pending for the latest test expansion.)
 3. Validated BAR sizing/mapping, lifecycle state machine and failure recovery.
 4. Firmware provider and verified family-specific identification tables.
 5. Device memory management, DMA, interrupts and synchronization.

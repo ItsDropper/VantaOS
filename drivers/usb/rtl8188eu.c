@@ -1215,7 +1215,7 @@ static int rtl_iqk_wait(void)
 {
     if(!timer_get_ticks)return 0;
     uint32_t start=timer_get_ticks(),spins=0U;
-    while((uint32_t)(timer_get_ticks()-start)<1U)if(++spins>=1000000U)return 0;
+    while((uint32_t)(timer_get_ticks()-start)<10U)if(++spins>=10000000U)return 0;
     return 1;
 }
 static int rtl_iqk_once(uint16_t tx[2],uint16_t rx[2])
@@ -1275,8 +1275,13 @@ static int rtl_radio_run_iq_calibration(void)
     }
     ok=1;
 restore:
-    for(size_t i=0;i<16;i++)(void)rtl_reg_write32(adda[i],oa[i]);
-    for(size_t i=0;i<9;i++)(void)rtl_reg_write32(ctl[i],oc[i]);(void)rtl_reg_write8(0x522,(uint8_t)pause);
+    {
+        int restore_ok=1;
+        for(size_t i=0;i<16;i++)if(!rtl_reg_write32(adda[i],oa[i]))restore_ok=0;
+        for(size_t i=0;i<9;i++)if(!rtl_reg_write32(ctl[i],oc[i]))restore_ok=0;
+        if(!rtl_reg_write8(0x522,(uint8_t)pause))restore_ok=0;
+        if(!restore_ok)ok=0;
+    }
     if(!ok){(void)rtl_reg_write32(0xC80,oiq);(void)rtl_reg_write32(0xC94,oafe);
         (void)rtl_reg_write32(0xC4C,oecca);(void)rtl_reg_write32(0xC14,orx);
         (void)rtl_reg_write32(0xCA0,orext);}
@@ -1325,7 +1330,7 @@ static int rtl_radio_preflight(void)
         return 0;
     rtl_radio_preflight_done = 1U;
     rtl_radio_ready = 1U;
-    serial_write("VANTAOS_RTL8188EU_RADIO_PROFILE_READY_TX_ENABLED\n");
+    serial_write("VANTAOS_RTL8188EU_RADIO_PHY_IQK_READY_TX_ENABLED\n");
     return 1;
 }
 

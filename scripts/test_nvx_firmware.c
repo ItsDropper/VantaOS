@@ -66,6 +66,9 @@ int main(void)
     assert(image.family == NVX_FAMILY_AMPERE);
     assert(strcmp(requested_name, "gsp_ga10x.bin") == 0);
     assert(verifies == 1U && releases == 0U);
+    assert(nvx_firmware_acquire(&provider, NVX_FAMILY_AMPERE, &image)
+           == NVX_FIRMWARE_INVALID_ARGUMENT);
+    assert(releases == 0U);
     nvx_firmware_release(&image);
     assert(image.acquired == 0U && image.blob.data == 0);
     assert(releases == 1U);

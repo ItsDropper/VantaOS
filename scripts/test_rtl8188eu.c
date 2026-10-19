@@ -372,6 +372,14 @@ int main(void)
         !rtl8188eu_port_is_bound(1U) || rtl8188eu_port_is_bound(2U))
         return 4;
 
+    /* The current driver has one global device context: reject a second
+     * adapter without disturbing the first adapter's binding. */
+    if (rtl8188eu_probe(2U, 2U, 0x0BDAU, 0x8179U, valid,
+                        sizeof(valid)) != 0 ||
+        !rtl8188eu_port_is_bound(1U) || rtl8188eu_port_is_bound(2U) ||
+        rtl8188eu_get_status() != RTL8188EU_STATUS_FIRMWARE_PENDING)
+        return 21;
+
     registers[0x610] = 0x02U; registers[0x611] = 0x11U;
     registers[0x612] = 0x22U; registers[0x613] = 0x33U;
     registers[0x614] = 0x44U; registers[0x615] = 0x55U;

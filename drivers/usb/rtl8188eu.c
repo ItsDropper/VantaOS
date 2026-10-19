@@ -702,6 +702,11 @@ int rtl8188eu_decode_tx_power_calibration(
     /* RTL8188E logical eFuse map: six CCK groups, five HT40 groups. */
     for (size_t group = 0U; group < 6U; ++group) {
         uint8_t cck = logical[0x10U + group];
+        /* Group 5 is channel 14, disabled by policy; it may be unprogrammed. */
+        if (group == 5U && cck == 0xFFU) {
+            calibration->cck_base[group] = cck;
+            continue;
+        }
         if (cck == 0xFFU || cck > 0x3FU)
             return 0;
         calibration->cck_base[group] = cck;

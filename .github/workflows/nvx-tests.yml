@@ -152,9 +152,10 @@ jobs:
 
       - name: Compile NVX memory object tests with strict warnings
         run: |
-          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+          gcc -DNVX_GPUVM_TEST -std=c11 -Wall -Wextra -Werror -Iinclude \
             scripts/test_nvx_object_memory.c drivers/gpu/nvx/nvx_object_memory.c \
-            drivers/gpu/nvx/nvx_gpuva.c drivers/gpu/nvx/nvx_dma.c \
+            drivers/gpu/nvx/nvx_gpuvm.c drivers/gpu/nvx/nvx_gpuva.c \
+            drivers/gpu/nvx/nvx_dma.c \
             -o /tmp/vantaos-nvx-memory-test
 
       - name: Test NVX memory object ownership, rollback and stale handles

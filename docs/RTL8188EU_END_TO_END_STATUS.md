@@ -40,3 +40,12 @@ As behavioral research only, the public Linux RTL8188E driver indicates that ini
 ## Validation in this change
 
 The RTL8188EU mocked-device test checks observable state transitions, firmware-download ordering, passive beacon parsing, and that scan/raw TX fail closed while radio initialization is absent. The standalone eFuse decoder tests exercise section 2 and high logical sections 26/27, and distinguish regular 0x?F all-words-disabled headers from the extended-header marker. The 802.11 host test exercises Open System Authentication request construction, Authentication Response parsing, Association Request construction with a bounded RSN IE, Association Response/status/AID parsing, and bounded Ethernet/LLC-SNAP conversion, including malformed/truncated inputs. CCMP host tests cover the AES-CCM known-answer vector, tamper handling, packet-number allocation/exhaustion, header/nonce encoding, and out-of-order/replayed/too-old packet numbers. WPA2 tests also cover invalid reconnect cleanup. These tests validate selected components only; they do not establish live association, secured data transfer, or physical hardware functionality.
+
+## Additional bring-up implementation attempt (PR #146 follow-up)
+
+The driver now has a bounded early calibration stage after firmware/eFuse identity checks:
+- applies the board's six-bit crystal trim to both documented crystal-cap fields and verifies the readback;
+- requests RF path-A LC calibration, polls for completion with a finite limit, and restores/verifies the previous channel/bandwidth register;
+- logs the result separately from full radio readiness.
+
+This is an incremental hardware bring-up attempt, not complete Wi-Fi support. It does **not** replace the missing MAC/baseband/AGC initialization, per-channel TX-power-group programming, or IQ calibration. The driver continues to keep over-the-air TX disabled until those requirements are implemented. No physical adapter validation is claimed.

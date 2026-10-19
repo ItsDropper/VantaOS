@@ -1217,6 +1217,12 @@ static int rtl_iqk_wait(void)
 {
     return rtl_wait_ticks_bounded(10U);
 }
+static int rtl_iqk_write_verify32(uint16_t address,uint32_t value,uint32_t mask)
+{
+    uint32_t verify;
+    return rtl_reg_write32(address,value)&&rtl_reg_read32(address,&verify)&&
+           ((verify^value)&mask)==0U;
+}
 static int rtl_iqk_once(uint16_t tx[2],uint16_t rx[2])
 {
     uint32_t st,a,b;
@@ -1273,9 +1279,11 @@ static int rtl_radio_run_iq_calibration(void)
         ecca=(ecca&~0xA0000000U)|(((uint32_t)(x*(int32_t)scale)&0x80U)<<24)|(((uint32_t)(y*(int32_t)scale)&0x80U)<<22);
         rxv=(rxv&~0x0000FFFFU)|(r2[0]&0x3FFU)|((r2[1]&0x3FU)<<10);
         ext=(ext&~0xF0000000U)|(((uint32_t)r2[1]&0x3C0U)<<22);
-        if(!rtl_reg_write32(0xC80,iq)||!rtl_reg_write32(0xC94,afe)||
-           !rtl_reg_write32(0xC4C,ecca)||!rtl_reg_write32(0xC14,rxv)||
-           !rtl_reg_write32(0xCA0,ext))goto restore;
+        if(!rtl_iqk_write_verify32(0xC80,iq,0x003F03FFU)||
+           !rtl_iqk_write_verify32(0xC94,afe,0xF0000000U)||
+           !rtl_iqk_write_verify32(0xC4C,ecca,0xA0000000U)||
+           !rtl_iqk_write_verify32(0xC14,rxv,0x0000FFFFU)||
+           !rtl_iqk_write_verify32(0xCA0,ext,0xF0000000U))goto restore;
     }
     ok=1;
 restore:

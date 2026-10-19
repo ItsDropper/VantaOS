@@ -8,19 +8,15 @@
 #include "nvx_device.h"
 
 /*
- * PCI class 03h identifies display controllers. Class 03h subclasses 00h
- * (VGA-compatible) and 02h (3D controller) are GPU candidates. Vendor ID alone
- * is insufficient: NVIDIA also ships audio and other PCI functions.
+ * PCI class 03h identifies display controllers. Keep subclass matching broad:
+ * NVIDIA devices can expose different display-controller subclasses. Vendor ID
+ * alone is insufficient because NVIDIA also ships audio and other PCI functions.
  */
 int nvx_match_pci_device(const struct pci_device *device)
 {
-    if (device == 0 || device->vendor_id != NVX_PCI_VENDOR_NVIDIA)
-        return 0;
-
-    if (device->class_code != 0x03U)
-        return 0;
-
-    return device->subclass == 0x00U || device->subclass == 0x02U;
+    return device != 0 &&
+           device->vendor_id == NVX_PCI_VENDOR_NVIDIA &&
+           device->class_code == 0x03U;
 }
 
 /*

@@ -28,7 +28,10 @@ struct pci_device
 void pci_initialize(void);
 uint8_t pci_read_config8(const struct pci_device *device, uint8_t offset);
 uint16_t pci_read_config16(const struct pci_device *device, uint8_t offset);
-uint32_t pci_read_config32(const struct pci_device *device, uint8_t offset);\n/* Find a conventional capability (for example MSI 0x05 or MSI-X 0x11). */\nint pci_find_capability(const struct pci_device *device, uint8_t capability_id,\n                        uint8_t *out_offset);
+uint32_t pci_read_config32(const struct pci_device *device, uint8_t offset);
+/* Find a conventional capability (for example MSI 0x05 or MSI-X 0x11). */
+int pci_find_capability(const struct pci_device *device, uint8_t capability_id,
+                        uint8_t *out_offset);
 
 int pci_get_bar(const struct pci_device* device, uint8_t index,
                 uint64_t* address, int* is_io, int* is_64bit);

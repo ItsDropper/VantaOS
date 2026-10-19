@@ -305,6 +305,13 @@ static int test_efuse_tx_power_calibration(void)
     if (calibration.ofdm_diff != -2 || calibration.ht20_diff != 3)
         return 0;
 
+    /* Channel 14 is disabled by policy, so its CCK group may be blank. */
+    logical[0x15U] = 0xFFU;
+    if (!rtl8188eu_decode_tx_power_calibration(logical, sizeof(logical),
+                                                &calibration))
+        return 0;
+    logical[0x15U] = 0x25U;
+
     logical[0x11U] = 0xFFU;
     if (rtl8188eu_decode_tx_power_calibration(logical, sizeof(logical),
                                                &calibration))

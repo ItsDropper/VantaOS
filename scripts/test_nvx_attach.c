@@ -72,7 +72,7 @@ int main(void)
     assert(nvx_device_attach(&gpu, &bar0, &device) == NVX_ATTACH_OK);
     assert(device.attached == 1U);
     assert(device.bar0_mapping == (void *)(uintptr_t)fake_registers);
-    assert(device.lifecycle.state == NVX_STATE_INITIALIZING);
+    assert(device.lifecycle.state == NVX_STATE_PROBED);
     assert(device.lifecycle.verified_capabilities == 0U);
     assert(device.registers.identified_profile == NVX_PROFILE_GEFORCE_RTX_3060);
     assert(map_calls == 1U && unmap_calls == 0U);

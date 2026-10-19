@@ -10,13 +10,24 @@ Do not use records as a task list or for routine bug fixes. Keep each record foc
 
 ## Suggested format
 
-    # ADR-NNN: Short decision title
-    - Status: proposed | accepted | superseded | rejected
-    - Date: YYYY-MM-DD
-    ## Context
-    ## Decision
-    ## Alternatives considered
-    ## Consequences
+```markdown
+# ADR-NNN: Short decision title
+
+- Status: proposed | accepted | superseded | rejected
+- Date: YYYY-MM-DD
+
+## Context
+What constraints and problem led to the decision?
+
+## Decision
+What is being chosen? Which invariants must remain true?
+
+## Alternatives considered
+What credible alternatives were evaluated, and why were they not chosen?
+
+## Consequences
+What becomes easier or harder? What risks, migration steps, or follow-up work remain?
+```
 
 Number records sequentially. Do not backdate a record or mark a proposal accepted before the project has actually chosen it.
 

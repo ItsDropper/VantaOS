@@ -24,8 +24,8 @@ int rtl8188eu_probe(uint32_t slot_id, uint32_t port, uint16_t vendor_id, uint16_
 void rtl8188eu_poll(void);
 /* Firmware readiness is not equivalent to association or IP connectivity. */
 rtl8188eu_status_t rtl8188eu_get_status(void);
-/* Active scan is currently fail-closed: returns 0 until verified radio
- * initialization/calibration and channel programming are implemented. */
+/* Start active scan only after reference PHY initialization, TX-power setup,
+ * crystal/LC calibration and stable IQ calibration all pass. */
 int rtl8188eu_start_active_scan(void);
 /* Begin a WPA2-PSK connection to a matching scanned SSID. This returns only
  * when the first authentication frame was submitted; use get_connection_state
@@ -43,8 +43,8 @@ typedef enum {
 rtl8188eu_connection_state_t rtl8188eu_get_connection_state(void);
 /* Read the station address programmed into the adapter's MACID registers. */
 int rtl8188eu_get_mac_address(uint8_t mac[6]);
-/* Send one complete 802.11 MPDU (without FCS). Currently returns 0 until
- * verified MAC/PHY/RF initialization and calibration enable radio TX. */
+/* Send one complete 802.11 MPDU (without FCS). Returns 0 unless the full
+ * MAC/PHY/RF initialization and calibration gate has opened. */
 int rtl8188eu_transmit_frame(const uint8_t *frame, size_t length);
 int rtl8188eu_port_disconnected(uint32_t port);
 int rtl8188eu_port_is_bound(uint32_t port);

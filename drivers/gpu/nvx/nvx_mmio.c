@@ -13,7 +13,8 @@ static nvx_mmio_status_t nvx_mmio_validate(
 {
     if (region == 0 || region->base == 0)
         return NVX_MMIO_INVALID_ARGUMENT;
-    if ((offset & (sizeof(uint32_t) - 1U)) != 0U)
+    if ((((uintptr_t)region->base | (uintptr_t)offset) &
+         (sizeof(uint32_t) - 1U)) != 0U)
         return NVX_MMIO_UNALIGNED;
     if (offset > region->length ||
         sizeof(uint32_t) > region->length - offset)

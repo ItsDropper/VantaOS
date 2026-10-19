@@ -1,3 +1,10 @@
+/*
+ * Copyright (c) 2026 ItsDropper
+ *
+ * This file is part of VantaOS and is licensed under the MIT License.
+ * See the LICENSE file in the project root for the full license text.
+ */
+
 #include "fat32_lfn.h"
 
 static uint16_t lfn_read_u16(const uint8_t* bytes)

@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 ItsDropper
+#
+# This file is part of VantaOS and is licensed under the MIT License.
+# See the LICENSE file in the project root for the full license text.
+
 """Validate a captured VantaOS RTL8188EU hardware-test serial log.
 
 This checks observed driver milestones, not mocked CI output. It does not claim

@@ -1,3 +1,10 @@
+/*
+ * Copyright (c) 2026 ItsDropper
+ *
+ * This file is part of VantaOS and is licensed under the MIT License.
+ * See the LICENSE file in the project root for the full license text.
+ */
+
 #include "net.h"
 #include "net_ipv6.h"
 extern int net_internal_pop_rx(net_device_t**,uint8_t*,size_t,size_t*);

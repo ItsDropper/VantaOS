@@ -1,3 +1,10 @@
+/*
+ * Copyright (c) 2026 ItsDropper
+ *
+ * This file is part of VantaOS and is licensed under the MIT License.
+ * See the LICENSE file in the project root for the full license text.
+ */
+
 #include "net.h"
 #include "spinlock.h"
 typedef struct { net_device_t* device; net_device_stats_t stats; } device_slot_t;

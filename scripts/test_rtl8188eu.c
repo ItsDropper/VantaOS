@@ -1,3 +1,10 @@
+/*
+ * Copyright (c) 2026 ItsDropper
+ *
+ * This file is part of VantaOS and is licensed under the MIT License.
+ * See the LICENSE file in the project root for the full license text.
+ */
+
 #include "rtl8188eu.h"
 #include "../drivers/usb/rtl8188eu_phy_tables.h"
 #include "xhci.h"

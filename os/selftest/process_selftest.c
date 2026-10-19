@@ -1,4 +1,11 @@
 /*
+ * Copyright (c) 2026 ItsDropper
+ *
+ * This file is part of VantaOS and is licensed under the MIT License.
+ * See the LICENSE file in the project root for the full license text.
+ */
+
+/*
  * Test-only kernel regression probes. This translation unit is empty in
  * ordinary builds; VANTAOS_SELF_TEST enables the test implementation.
  */

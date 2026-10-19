@@ -1,3 +1,10 @@
+/*
+ * Copyright (c) 2026 ItsDropper
+ *
+ * This file is part of VantaOS and is licensed under the MIT License.
+ * See the LICENSE file in the project root for the full license text.
+ */
+
 #ifndef STORAGE_DRIVER_H
 #define STORAGE_DRIVER_H
 #include "pci.h"

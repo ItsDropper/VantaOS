@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 ItsDropper
+#
+# This file is part of VantaOS and is licensed under the MIT License.
+# See the LICENSE file in the project root for the full license text.
+
 """Fail-closed verifier for a *real-hardware* VantaOS RTL8188EU serial capture.
 
 This parses evidence emitted by the running kernel. It does not emulate the

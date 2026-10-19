@@ -1189,7 +1189,8 @@ static int rtl_radio_apply_reference_tables(void)
        !rtl_reg_write32(0x860U,rf_oe|0x00100010U)||
        !rtl_reg_write32(0x824U,hssi2&~0x00000400U)||
        !rtl_reg_write32(0x824U,hssi2&~0x00000C00U)||
-       !rtl_reg_read32(0x824U,&verify)||(verify&0x00000C00U)!=0U)
+       !rtl_reg_read32(0x824U,&verify)||(verify&0x00000C00U)!=0U||
+       !rtl_reg_read32(0x860U,&verify)||(verify&0x00100010U)!=0x00100010U)
         return 0;
     int rf_ok=1;
     for(size_t i=0U;i<sizeof(rtl8188eu_rf_init)/sizeof(rtl8188eu_rf_init[0]);++i) {

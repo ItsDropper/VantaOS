@@ -334,6 +334,978 @@ irq12_stub:
     RESTORE_IRQ_ALL
     iretq
 
+
+; Generic APIC/MSI device vectors. The device must be quiesced before
+; unregistering its handler; each entry supplies its own vector number.
+device_irq_64_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 64
+    jmp device_irq_common_stub
+
+device_irq_65_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 65
+    jmp device_irq_common_stub
+
+device_irq_66_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 66
+    jmp device_irq_common_stub
+
+device_irq_67_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 67
+    jmp device_irq_common_stub
+
+device_irq_68_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 68
+    jmp device_irq_common_stub
+
+device_irq_69_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 69
+    jmp device_irq_common_stub
+
+device_irq_70_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 70
+    jmp device_irq_common_stub
+
+device_irq_71_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 71
+    jmp device_irq_common_stub
+
+device_irq_72_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 72
+    jmp device_irq_common_stub
+
+device_irq_73_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 73
+    jmp device_irq_common_stub
+
+device_irq_74_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 74
+    jmp device_irq_common_stub
+
+device_irq_75_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 75
+    jmp device_irq_common_stub
+
+device_irq_76_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 76
+    jmp device_irq_common_stub
+
+device_irq_77_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 77
+    jmp device_irq_common_stub
+
+device_irq_78_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 78
+    jmp device_irq_common_stub
+
+device_irq_79_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 79
+    jmp device_irq_common_stub
+
+device_irq_80_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 80
+    jmp device_irq_common_stub
+
+device_irq_81_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 81
+    jmp device_irq_common_stub
+
+device_irq_82_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 82
+    jmp device_irq_common_stub
+
+device_irq_83_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 83
+    jmp device_irq_common_stub
+
+device_irq_84_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 84
+    jmp device_irq_common_stub
+
+device_irq_85_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 85
+    jmp device_irq_common_stub
+
+device_irq_86_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 86
+    jmp device_irq_common_stub
+
+device_irq_87_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 87
+    jmp device_irq_common_stub
+
+device_irq_88_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 88
+    jmp device_irq_common_stub
+
+device_irq_89_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 89
+    jmp device_irq_common_stub
+
+device_irq_90_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 90
+    jmp device_irq_common_stub
+
+device_irq_91_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 91
+    jmp device_irq_common_stub
+
+device_irq_92_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 92
+    jmp device_irq_common_stub
+
+device_irq_93_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 93
+    jmp device_irq_common_stub
+
+device_irq_94_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 94
+    jmp device_irq_common_stub
+
+device_irq_95_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 95
+    jmp device_irq_common_stub
+
+device_irq_96_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 96
+    jmp device_irq_common_stub
+
+device_irq_97_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 97
+    jmp device_irq_common_stub
+
+device_irq_98_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 98
+    jmp device_irq_common_stub
+
+device_irq_99_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 99
+    jmp device_irq_common_stub
+
+device_irq_100_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 100
+    jmp device_irq_common_stub
+
+device_irq_101_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 101
+    jmp device_irq_common_stub
+
+device_irq_102_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 102
+    jmp device_irq_common_stub
+
+device_irq_103_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 103
+    jmp device_irq_common_stub
+
+device_irq_104_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 104
+    jmp device_irq_common_stub
+
+device_irq_105_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 105
+    jmp device_irq_common_stub
+
+device_irq_106_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 106
+    jmp device_irq_common_stub
+
+device_irq_107_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 107
+    jmp device_irq_common_stub
+
+device_irq_108_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 108
+    jmp device_irq_common_stub
+
+device_irq_109_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 109
+    jmp device_irq_common_stub
+
+device_irq_110_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 110
+    jmp device_irq_common_stub
+
+device_irq_111_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 111
+    jmp device_irq_common_stub
+
+device_irq_112_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 112
+    jmp device_irq_common_stub
+
+device_irq_113_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 113
+    jmp device_irq_common_stub
+
+device_irq_114_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 114
+    jmp device_irq_common_stub
+
+device_irq_115_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 115
+    jmp device_irq_common_stub
+
+device_irq_116_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 116
+    jmp device_irq_common_stub
+
+device_irq_117_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 117
+    jmp device_irq_common_stub
+
+device_irq_118_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 118
+    jmp device_irq_common_stub
+
+device_irq_119_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 119
+    jmp device_irq_common_stub
+
+device_irq_120_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 120
+    jmp device_irq_common_stub
+
+device_irq_121_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 121
+    jmp device_irq_common_stub
+
+device_irq_122_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 122
+    jmp device_irq_common_stub
+
+device_irq_123_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 123
+    jmp device_irq_common_stub
+
+device_irq_124_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 124
+    jmp device_irq_common_stub
+
+device_irq_125_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 125
+    jmp device_irq_common_stub
+
+device_irq_126_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 126
+    jmp device_irq_common_stub
+
+device_irq_127_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 127
+    jmp device_irq_common_stub
+
+device_irq_128_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 128
+    jmp device_irq_common_stub
+
+device_irq_129_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 129
+    jmp device_irq_common_stub
+
+device_irq_130_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 130
+    jmp device_irq_common_stub
+
+device_irq_131_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 131
+    jmp device_irq_common_stub
+
+device_irq_132_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 132
+    jmp device_irq_common_stub
+
+device_irq_133_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 133
+    jmp device_irq_common_stub
+
+device_irq_134_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 134
+    jmp device_irq_common_stub
+
+device_irq_135_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 135
+    jmp device_irq_common_stub
+
+device_irq_136_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 136
+    jmp device_irq_common_stub
+
+device_irq_137_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 137
+    jmp device_irq_common_stub
+
+device_irq_138_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 138
+    jmp device_irq_common_stub
+
+device_irq_139_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 139
+    jmp device_irq_common_stub
+
+device_irq_140_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 140
+    jmp device_irq_common_stub
+
+device_irq_141_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 141
+    jmp device_irq_common_stub
+
+device_irq_142_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 142
+    jmp device_irq_common_stub
+
+device_irq_143_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 143
+    jmp device_irq_common_stub
+
+device_irq_144_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 144
+    jmp device_irq_common_stub
+
+device_irq_145_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 145
+    jmp device_irq_common_stub
+
+device_irq_146_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 146
+    jmp device_irq_common_stub
+
+device_irq_147_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 147
+    jmp device_irq_common_stub
+
+device_irq_148_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 148
+    jmp device_irq_common_stub
+
+device_irq_149_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 149
+    jmp device_irq_common_stub
+
+device_irq_150_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 150
+    jmp device_irq_common_stub
+
+device_irq_151_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 151
+    jmp device_irq_common_stub
+
+device_irq_152_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 152
+    jmp device_irq_common_stub
+
+device_irq_153_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 153
+    jmp device_irq_common_stub
+
+device_irq_154_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 154
+    jmp device_irq_common_stub
+
+device_irq_155_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 155
+    jmp device_irq_common_stub
+
+device_irq_156_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 156
+    jmp device_irq_common_stub
+
+device_irq_157_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 157
+    jmp device_irq_common_stub
+
+device_irq_158_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 158
+    jmp device_irq_common_stub
+
+device_irq_159_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 159
+    jmp device_irq_common_stub
+
+device_irq_160_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 160
+    jmp device_irq_common_stub
+
+device_irq_161_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 161
+    jmp device_irq_common_stub
+
+device_irq_162_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 162
+    jmp device_irq_common_stub
+
+device_irq_163_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 163
+    jmp device_irq_common_stub
+
+device_irq_164_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 164
+    jmp device_irq_common_stub
+
+device_irq_165_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 165
+    jmp device_irq_common_stub
+
+device_irq_166_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 166
+    jmp device_irq_common_stub
+
+device_irq_167_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 167
+    jmp device_irq_common_stub
+
+device_irq_168_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 168
+    jmp device_irq_common_stub
+
+device_irq_169_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 169
+    jmp device_irq_common_stub
+
+device_irq_170_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 170
+    jmp device_irq_common_stub
+
+device_irq_171_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 171
+    jmp device_irq_common_stub
+
+device_irq_172_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 172
+    jmp device_irq_common_stub
+
+device_irq_173_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 173
+    jmp device_irq_common_stub
+
+device_irq_174_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 174
+    jmp device_irq_common_stub
+
+device_irq_175_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 175
+    jmp device_irq_common_stub
+
+device_irq_176_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 176
+    jmp device_irq_common_stub
+
+device_irq_177_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 177
+    jmp device_irq_common_stub
+
+device_irq_178_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 178
+    jmp device_irq_common_stub
+
+device_irq_179_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 179
+    jmp device_irq_common_stub
+
+device_irq_180_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 180
+    jmp device_irq_common_stub
+
+device_irq_181_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 181
+    jmp device_irq_common_stub
+
+device_irq_182_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 182
+    jmp device_irq_common_stub
+
+device_irq_183_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 183
+    jmp device_irq_common_stub
+
+device_irq_184_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 184
+    jmp device_irq_common_stub
+
+device_irq_185_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 185
+    jmp device_irq_common_stub
+
+device_irq_186_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 186
+    jmp device_irq_common_stub
+
+device_irq_187_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 187
+    jmp device_irq_common_stub
+
+device_irq_188_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 188
+    jmp device_irq_common_stub
+
+device_irq_189_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 189
+    jmp device_irq_common_stub
+
+device_irq_190_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 190
+    jmp device_irq_common_stub
+
+device_irq_191_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 191
+    jmp device_irq_common_stub
+
+device_irq_192_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 192
+    jmp device_irq_common_stub
+
+device_irq_193_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 193
+    jmp device_irq_common_stub
+
+device_irq_194_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 194
+    jmp device_irq_common_stub
+
+device_irq_195_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 195
+    jmp device_irq_common_stub
+
+device_irq_196_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 196
+    jmp device_irq_common_stub
+
+device_irq_197_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 197
+    jmp device_irq_common_stub
+
+device_irq_198_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 198
+    jmp device_irq_common_stub
+
+device_irq_199_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 199
+    jmp device_irq_common_stub
+
+device_irq_200_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 200
+    jmp device_irq_common_stub
+
+device_irq_201_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 201
+    jmp device_irq_common_stub
+
+device_irq_202_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 202
+    jmp device_irq_common_stub
+
+device_irq_203_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 203
+    jmp device_irq_common_stub
+
+device_irq_204_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 204
+    jmp device_irq_common_stub
+
+device_irq_205_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 205
+    jmp device_irq_common_stub
+
+device_irq_206_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 206
+    jmp device_irq_common_stub
+
+device_irq_207_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 207
+    jmp device_irq_common_stub
+
+device_irq_208_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 208
+    jmp device_irq_common_stub
+
+device_irq_209_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 209
+    jmp device_irq_common_stub
+
+device_irq_210_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 210
+    jmp device_irq_common_stub
+
+device_irq_211_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 211
+    jmp device_irq_common_stub
+
+device_irq_212_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 212
+    jmp device_irq_common_stub
+
+device_irq_213_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 213
+    jmp device_irq_common_stub
+
+device_irq_214_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 214
+    jmp device_irq_common_stub
+
+device_irq_215_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 215
+    jmp device_irq_common_stub
+
+device_irq_216_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 216
+    jmp device_irq_common_stub
+
+device_irq_217_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 217
+    jmp device_irq_common_stub
+
+device_irq_218_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 218
+    jmp device_irq_common_stub
+
+device_irq_219_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 219
+    jmp device_irq_common_stub
+
+device_irq_220_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 220
+    jmp device_irq_common_stub
+
+device_irq_221_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 221
+    jmp device_irq_common_stub
+
+device_irq_222_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 222
+    jmp device_irq_common_stub
+
+device_irq_223_stub:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    push qword 223
+    jmp device_irq_common_stub
+
+device_irq_common_stub:
+    SAVE_IRQ_ALL
+    mov rdi, [rsp + 128]
+    call device_irq_dispatch
+    SWAPGS_IF_USER rsp, 144
+    RESTORE_IRQ_ALL
+    add rsp, 8
+    iretq
+
 %macro EXCEPTION_NO_ERROR 1
 exception%1_stub:
     SWAPGS_IF_USER rsp, 8
@@ -422,6 +1394,169 @@ EXCEPTION_NO_ERROR 31
 
 section .rodata
 align 16
+global device_irq_stub_table
+device_irq_stub_table:
+    dq device_irq_64_stub
+    dq device_irq_65_stub
+    dq device_irq_66_stub
+    dq device_irq_67_stub
+    dq device_irq_68_stub
+    dq device_irq_69_stub
+    dq device_irq_70_stub
+    dq device_irq_71_stub
+    dq device_irq_72_stub
+    dq device_irq_73_stub
+    dq device_irq_74_stub
+    dq device_irq_75_stub
+    dq device_irq_76_stub
+    dq device_irq_77_stub
+    dq device_irq_78_stub
+    dq device_irq_79_stub
+    dq device_irq_80_stub
+    dq device_irq_81_stub
+    dq device_irq_82_stub
+    dq device_irq_83_stub
+    dq device_irq_84_stub
+    dq device_irq_85_stub
+    dq device_irq_86_stub
+    dq device_irq_87_stub
+    dq device_irq_88_stub
+    dq device_irq_89_stub
+    dq device_irq_90_stub
+    dq device_irq_91_stub
+    dq device_irq_92_stub
+    dq device_irq_93_stub
+    dq device_irq_94_stub
+    dq device_irq_95_stub
+    dq device_irq_96_stub
+    dq device_irq_97_stub
+    dq device_irq_98_stub
+    dq device_irq_99_stub
+    dq device_irq_100_stub
+    dq device_irq_101_stub
+    dq device_irq_102_stub
+    dq device_irq_103_stub
+    dq device_irq_104_stub
+    dq device_irq_105_stub
+    dq device_irq_106_stub
+    dq device_irq_107_stub
+    dq device_irq_108_stub
+    dq device_irq_109_stub
+    dq device_irq_110_stub
+    dq device_irq_111_stub
+    dq device_irq_112_stub
+    dq device_irq_113_stub
+    dq device_irq_114_stub
+    dq device_irq_115_stub
+    dq device_irq_116_stub
+    dq device_irq_117_stub
+    dq device_irq_118_stub
+    dq device_irq_119_stub
+    dq device_irq_120_stub
+    dq device_irq_121_stub
+    dq device_irq_122_stub
+    dq device_irq_123_stub
+    dq device_irq_124_stub
+    dq device_irq_125_stub
+    dq device_irq_126_stub
+    dq device_irq_127_stub
+    dq device_irq_128_stub
+    dq device_irq_129_stub
+    dq device_irq_130_stub
+    dq device_irq_131_stub
+    dq device_irq_132_stub
+    dq device_irq_133_stub
+    dq device_irq_134_stub
+    dq device_irq_135_stub
+    dq device_irq_136_stub
+    dq device_irq_137_stub
+    dq device_irq_138_stub
+    dq device_irq_139_stub
+    dq device_irq_140_stub
+    dq device_irq_141_stub
+    dq device_irq_142_stub
+    dq device_irq_143_stub
+    dq device_irq_144_stub
+    dq device_irq_145_stub
+    dq device_irq_146_stub
+    dq device_irq_147_stub
+    dq device_irq_148_stub
+    dq device_irq_149_stub
+    dq device_irq_150_stub
+    dq device_irq_151_stub
+    dq device_irq_152_stub
+    dq device_irq_153_stub
+    dq device_irq_154_stub
+    dq device_irq_155_stub
+    dq device_irq_156_stub
+    dq device_irq_157_stub
+    dq device_irq_158_stub
+    dq device_irq_159_stub
+    dq device_irq_160_stub
+    dq device_irq_161_stub
+    dq device_irq_162_stub
+    dq device_irq_163_stub
+    dq device_irq_164_stub
+    dq device_irq_165_stub
+    dq device_irq_166_stub
+    dq device_irq_167_stub
+    dq device_irq_168_stub
+    dq device_irq_169_stub
+    dq device_irq_170_stub
+    dq device_irq_171_stub
+    dq device_irq_172_stub
+    dq device_irq_173_stub
+    dq device_irq_174_stub
+    dq device_irq_175_stub
+    dq device_irq_176_stub
+    dq device_irq_177_stub
+    dq device_irq_178_stub
+    dq device_irq_179_stub
+    dq device_irq_180_stub
+    dq device_irq_181_stub
+    dq device_irq_182_stub
+    dq device_irq_183_stub
+    dq device_irq_184_stub
+    dq device_irq_185_stub
+    dq device_irq_186_stub
+    dq device_irq_187_stub
+    dq device_irq_188_stub
+    dq device_irq_189_stub
+    dq device_irq_190_stub
+    dq device_irq_191_stub
+    dq device_irq_192_stub
+    dq device_irq_193_stub
+    dq device_irq_194_stub
+    dq device_irq_195_stub
+    dq device_irq_196_stub
+    dq device_irq_197_stub
+    dq device_irq_198_stub
+    dq device_irq_199_stub
+    dq device_irq_200_stub
+    dq device_irq_201_stub
+    dq device_irq_202_stub
+    dq device_irq_203_stub
+    dq device_irq_204_stub
+    dq device_irq_205_stub
+    dq device_irq_206_stub
+    dq device_irq_207_stub
+    dq device_irq_208_stub
+    dq device_irq_209_stub
+    dq device_irq_210_stub
+    dq device_irq_211_stub
+    dq device_irq_212_stub
+    dq device_irq_213_stub
+    dq device_irq_214_stub
+    dq device_irq_215_stub
+    dq device_irq_216_stub
+    dq device_irq_217_stub
+    dq device_irq_218_stub
+    dq device_irq_219_stub
+    dq device_irq_220_stub
+    dq device_irq_221_stub
+    dq device_irq_222_stub
+    dq device_irq_223_stub
+
 global ap_trampoline_blob_start
 global ap_trampoline_blob_end
 ap_trampoline_blob_start:

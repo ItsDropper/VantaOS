@@ -15,7 +15,9 @@ The control/data path now has these implementations:
 
 ## Critical limitation: radio initialization is still incomplete
 
-**This driver still cannot connect to a real access point yet.** The radio-ready flag is intentionally never enabled. RF serial access and channel programming are implemented, but they are not a substitute for the required RTL8188EU power/MAC/baseband initialization, eFuse-derived board configuration, TX-power setup, and LC/IQ calibration. Without those stages, probe/auth/association transmissions remain fail-closed.
+**This driver still cannot connect to a real access point out of the box.** The driver now has a bounded, readback-checked profile executor that can apply board-specific MAC/baseband/AGC/TX-power/IQ-calibration records from `/SYSTEM/RTL8188EU.PHY`, with factory crystal trim and LC calibration inserted before IQ calibration. It validates the profile header, chip cut, record count, CRC, register address ranges, masks, phase ordering, and bounded polls before applying it. The radio-ready flag is set only after this profile and calibration sequence succeeds.
+
+No verified board-specific profile is bundled or available in this repository. Consequently, without a trusted profile matching the exact adapter and silicon cut, the driver remains fail-closed and cannot connect to an AP. The profile executor is infrastructure for the missing hardware-specific data, not proof that the required values are known or correct.
 
 ## Research findings and constraints
 
@@ -31,8 +33,8 @@ As behavioral research only, the public Linux RTL8188E driver indicates that ini
 
 ## Still required before end-to-end support can be claimed
 
-- An independently usable, revision-correct MAC/PHY/RF programming specification and validated eFuse/board-calibration mapping.
-- Enable radio TX only after successful initialization and calibration, with stage-specific error reporting.
+- A trusted, independently validated `RTL8188EU.PHY` profile for the exact board and chip cut, including correct eFuse-derived power groups and IQ-calibration operations.
+- Verify the profile's register values and power limits against the actual adapter; CRC is corruption detection only, not authenticity.
 - Verify actual channel tuning, scan results, auth/association, WPA2 handshake, CCMP data transfer, and DHCP/DNS against a physical adapter and WPA2-PSK 2.4 GHz AP.
 - Add tests for the new station/data path and validate descriptor/FCS semantics against real hardware. Host tests cannot prove RF behavior.
 
@@ -49,3 +51,10 @@ The driver now has a bounded early calibration stage after firmware/eFuse identi
 - logs the result separately from full radio readiness.
 
 This is an incremental hardware bring-up attempt, not complete Wi-Fi support. It does **not** replace the missing MAC/baseband/AGC initialization, per-channel TX-power-group programming, or IQ calibration. The driver continues to keep over-the-air TX disabled until those requirements are implemented. No physical adapter validation is claimed.
+
+
+## Profile-driven initialization added on PR #146
+
+The driver now loads `/SYSTEM/RTL8188EU.PHY` using the format in [RTL8188EU_PHY_PROFILE.md](RTL8188EU_PHY_PROFILE.md). The executor checks the complete record program before applying writes, performs masked register read-modify-write with readback, bounds poll loops, inserts the existing factory crystal-trim/LC-calibration stage between TX-power and IQ-calibration phases, and only opens the software TX gate after the profile succeeds. `build.sh` accepts `RTL8188EU_PHY_PROFILE=/path/to/profile.bin` and installs the supplied file into the FAT32 system image.
+
+This is a real code path, but it does not supply the missing calibration values: no profile is bundled, and a correct profile still needs physical-adapter validation. End-to-end Wi-Fi is therefore not yet claimed.

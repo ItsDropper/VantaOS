@@ -28,6 +28,11 @@ static const struct pci_device devices[] = {
         .bus = 2, .slot = 0, .function = 0,
         .vendor_id = 0x8086, .device_id = 0x1234,
         .class_code = 0x03, .subclass = 0x00, .prog_if = 0, .revision = 1
+    },
+    {
+        .bus = 3, .slot = 0, .function = 0,
+        .vendor_id = NVX_PCI_VENDOR_NVIDIA, .device_id = 0x9999,
+        .class_code = 0x03, .subclass = 0x00, .prog_if = 0, .revision = 1
     }
 };
 
@@ -97,15 +102,17 @@ int pci_get_bar(const struct pci_device *device, uint8_t index,
 
 int main(void)
 {
-    assert(nvx_pci_discover() == 2);
-    assert(bar_queries == 1);
+    assert(nvx_pci_discover() == 3);
+    assert(bar_queries == 2); /* Both display candidates; never the audio function. */
 
     assert(strstr(log_buffer, "vendor=0x10DE device=0x2503") != 0);
-    assert(strstr(log_buffer, "role=GPU-candidate family=UNKNOWN") != 0);
+    assert(strstr(log_buffer, "role=GPU-candidate family=AMPERE profile=GEFORCE-RTX-3060 identification=PCI-ID-TABLE-ONLY") != 0);
     assert(strstr(log_buffer, "subsystem=0x1043:0x88A1") != 0);
     assert(strstr(log_buffer, "BAR0 address=0x00000012ABC00000 type=memory width=64") != 0);
     assert(strstr(log_buffer, "device=0x228B") != 0);
     assert(strstr(log_buffer, "role=non-GPU-NVIDIA-function") != 0);
+    assert(strstr(log_buffer, "device=0x9999") != 0);
+    assert(strstr(log_buffer, "family=UNKNOWN profile=UNKNOWN identification=UNRECOGNIZED-PCI-ID") != 0);
     assert(strstr(log_buffer, "state=DETECTED; initialization=NOT_ATTEMPTED; acceleration=UNAVAILABLE") != 0);
     assert(strstr(log_buffer, "vendor=0x8086") == 0);
     assert(strstr(log_buffer, "no NVIDIA PCI functions detected") == 0);

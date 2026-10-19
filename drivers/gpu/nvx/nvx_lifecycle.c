@@ -17,14 +17,15 @@ static int nvx_transition_allowed(nvx_lifecycle_state_t current,
             return next == NVX_STATE_RESOURCES_READY ||
                    next == NVX_STATE_QUIESCING;
         case NVX_STATE_RESOURCES_READY:
-            return next == NVX_STATE_INITIALIZING ||
+            return next == NVX_STATE_PROBED ||
+                   next == NVX_STATE_INITIALIZING ||
                    next == NVX_STATE_QUIESCING;
         case NVX_STATE_INITIALIZING:
-            return next == NVX_STATE_PROBED ||
-                   next == NVX_STATE_INITIALIZED ||
+            return next == NVX_STATE_INITIALIZED ||
                    next == NVX_STATE_QUIESCING;
         case NVX_STATE_PROBED:
-            return next == NVX_STATE_QUIESCING;
+            return next == NVX_STATE_INITIALIZING ||
+                   next == NVX_STATE_QUIESCING;
         case NVX_STATE_INITIALIZED:
             return next == NVX_STATE_RUNNING || next == NVX_STATE_QUIESCING;
         case NVX_STATE_RUNNING:

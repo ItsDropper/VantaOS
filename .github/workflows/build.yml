@@ -193,6 +193,9 @@ jobs:
       - name: Test RTL8188EU hardware-log validator
         run: python3 scripts/test_rtl8188eu_hardware_log.py --self-test
 
+      - name: Test fail-closed RTL8188EU hardware evidence verifier
+        run: python3 scripts/test_rtl8188eu_hardware_verifier.py
+
       - name: Test TLS hostname validation policy
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_tls_hostname.c -o /tmp/vantaos-tls-hostname-test

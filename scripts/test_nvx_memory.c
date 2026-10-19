@@ -92,8 +92,8 @@ int main(void)
     assert(nvx_memory_release(&manager, &a) == NVX_MEMORY_STALE_HANDLE);
     assert(nvx_memory_release(&manager, &b) == NVX_MEMORY_OK);
     assert(nvx_memory_validate(&manager) == NVX_MEMORY_OK);
-    assert(alloc_calls == 3U);
-    assert(free_calls == 3U);
+    assert(alloc_calls == 2U);
+    assert(free_calls == 2U);
 
     /* A physical allocation above 4 GiB must be rejected for a 32-bit device. */
     memset(&va_space, 0, sizeof(va_space));

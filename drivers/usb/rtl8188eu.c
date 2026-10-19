@@ -1288,12 +1288,24 @@ restore:
 
 static int rtl_radio_execute_profile(void)
 {
-    if(!rtl_efuse_info.valid || !rtl_radio_apply_reference_tables())
+    uint32_t rf_channel, verify;
+    if(!rtl_efuse_info.valid || !rtl_radio_apply_reference_tables() ||
+       !rtl_rf_read(RTL8188EU_RF_CHNLBW,&rf_channel))
         return 0;
+
+    /* The reference RF table's final default channel is not necessarily 1.
+       Select channel 1 while preserving the table's 20-MHz bandwidth bits. */
+    rf_channel=(rf_channel&~RTL8188EU_RF_CHANNEL_MASK)|1U;
+    if(!rtl_rf_write(RTL8188EU_RF_CHNLBW,rf_channel)||
+       !rtl_rf_read(RTL8188EU_RF_CHNLBW,&verify)||
+       ((verify^rf_channel)&(RTL8188EU_RF_CHANNEL_MASK|RTL8188EU_RF_BW20_MASK))!=0U)
+        return 0;
+
     if(!rtl_apply_tx_power_for_channel(1U) ||
        !rtl_radio_apply_crystal_trim_and_lc() ||
        !rtl_radio_run_iq_calibration())
         return 0;
+    rtl_current_channel=1U;
     serial_write("VANTAOS_RTL8188EU_REFERENCE_PHY_SEQUENCE_COMPLETE_TX_BLOCKED\n");
     return 1;
 }

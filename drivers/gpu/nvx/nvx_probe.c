@@ -7,6 +7,7 @@
 #include "nvx_probe.h"
 
 #include "nvx_lifecycle.h"
+#include "nvx_mmio.h"
 
 #include <stdint.h>
 
@@ -16,10 +17,11 @@
 
 nvx_probe_status_t nvx_probe_mapped_bar0(
     const struct pci_device *device,
-    volatile const uint32_t *bar0,
+    volatile uint32_t *bar0,
     size_t mapped_length,
     nvx_register_snapshot_t *out_snapshot)
 {
+    nvx_mmio_region_t region;
     uint32_t boot0;
     uint32_t boot1;
 
@@ -43,13 +45,20 @@ nvx_probe_status_t nvx_probe_mapped_bar0(
     if (((uintptr_t)bar0 & (sizeof(uint32_t) - 1U)) != 0U)
         return NVX_PROBE_BAD_MAPPING_ALIGNMENT;
 
+    region.base = (volatile uint8_t *)(void *)bar0;
+    region.length = mapped_length;
+
     /*
-     * Volatile loads are required for device registers. Do not infer an
-     * architecture from undocumented bits: record the silicon response first.
+     * Use the shared bounded accessor for every register read. Volatile loads
+     * are required for device registers; unknown values are preserved rather
+     * than interpreted as undocumented architecture IDs.
      */
-    boot0 = bar0[NVX_PMC_BOOT_0_OFFSET / sizeof(uint32_t)];
-    boot1 = bar0[NVX_PMC_BOOT_1_OFFSET / sizeof(uint32_t)];
-    if (boot0 == 0xFFFFFFFFU || (boot0 == 0U && boot1 == 0U))
+    if (nvx_mmio_read32(&region, NVX_PMC_BOOT_0_OFFSET, &boot0) != NVX_MMIO_OK ||
+        nvx_mmio_read32(&region, NVX_PMC_BOOT_1_OFFSET, &boot1) != NVX_MMIO_OK)
+        return NVX_PROBE_REGISTER_ACCESS_FAILED;
+
+    if (boot0 == 0xFFFFFFFFU || boot1 == 0xFFFFFFFFU ||
+        (boot0 == 0U && boot1 == 0U))
         return NVX_PROBE_UNRESPONSIVE_REGISTERS;
 
     out_snapshot->pmc_boot_0 = boot0;

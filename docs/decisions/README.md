@@ -38,3 +38,4 @@ Number records sequentially. Do not backdate a record or mark a proposal accepte
 ## Proposed decisions
 
 - [ADR-002: Subsystem-owned initialization coordinators](0002-subsystem-owned-initialization.md) — separate boot handoff, platform bring-up, and subsystem-owned driver startup; pending review.
+- [ADR-003: Layered GPU driver architecture for NVX](0003-nvx-gpu-driver-architecture.md) — separate generic GPU, display and NVIDIA-specific driver boundaries; pending review.

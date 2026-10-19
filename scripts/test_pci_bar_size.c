@@ -111,7 +111,16 @@ int main(void)
     assert(!pci_get_bar_size(&gpu, 1U, &size));
     assert(size == 0U);
 
-    /* Reserved memory BAR type, absent BAR and null output all fail closed. */
+    /* Malformed masks are rejected after the original BAR is restored. */
+    reset_config();
+    config_space[TEST_BAR0_INDEX] = 0x80000000U;
+    bar_masks[0] = 0xFFF0F000U;
+    assert(!pci_get_bar_size(&gpu, 0U, &size));
+    assert(size == 0U);
+    assert(config_space[TEST_BAR0_INDEX] == 0x80000000U);
+    assert(bar_write_count == 2U);
+
+    /* Reserved memory BAR type, absent BAR and null output fail closed. */
     reset_config();
     config_space[TEST_BAR0_INDEX] = 0x80000006U;
     assert(!pci_get_bar_size(&gpu, 0U, &size));

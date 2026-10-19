@@ -24,7 +24,10 @@ typedef enum nvx_irq_route_status {
     NVX_IRQ_ROUTE_UNSUPPORTED,
     NVX_IRQ_ROUTE_VECTOR_UNAVAILABLE,
     NVX_IRQ_ROUTE_HANDLER_ERROR,
-    NVX_IRQ_ROUTE_NOT_PREPARED
+    NVX_IRQ_ROUTE_NOT_PREPARED,
+    NVX_IRQ_ROUTE_DEVICE_ALREADY_ENABLED,
+    NVX_IRQ_ROUTE_HARDWARE_CONFIG_FAILED,
+    NVX_IRQ_ROUTE_MAPPING_FAILED
 } nvx_irq_route_status_t;
 
 /* Zero-initialize the output route before first use. */

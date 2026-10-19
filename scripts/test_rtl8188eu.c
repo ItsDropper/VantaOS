@@ -286,25 +286,23 @@ static int test_efuse_tx_power_calibration(void)
     uint8_t logical[512];
     rtl8188eu_tx_power_calibration_t calibration;
     memset(logical, 0xFF, sizeof(logical));
-    logical[0x10U] = 0x20U;
-    logical[0x11U] = 0x21U;
-    logical[0x12U] = 0x22U;
-    logical[0x16U] = 0x30U;
-    logical[0x17U] = 0x31U;
-    logical[0x18U] = 0x32U;
+    for (size_t i = 0U; i < 6U; ++i)
+        logical[0x10U + i] = (uint8_t)(0x20U + i);
+    for (size_t i = 0U; i < 5U; ++i)
+        logical[0x16U + i] = (uint8_t)(0x30U + i);
     /* Low nibble OFDM = -2; high nibble HT20 = +3. */
     logical[0x1BU] = 0x3EU;
 
     if (!rtl8188eu_decode_tx_power_calibration(logical, sizeof(logical),
                                                &calibration))
         return 0;
-    if (calibration.cck_base[0] != 0x20U ||
-        calibration.cck_base[1] != 0x21U ||
-        calibration.cck_base[2] != 0x22U ||
-        calibration.ht40_base[0] != 0x30U ||
-        calibration.ht40_base[1] != 0x31U ||
-        calibration.ht40_base[2] != 0x32U ||
-        calibration.ofdm_diff != -2 || calibration.ht20_diff != 3)
+    for (size_t i = 0U; i < 6U; ++i)
+        if (calibration.cck_base[i] != (uint8_t)(0x20U + i))
+            return 0;
+    for (size_t i = 0U; i < 5U; ++i)
+        if (calibration.ht40_base[i] != (uint8_t)(0x30U + i))
+            return 0;
+    if (calibration.ofdm_diff != -2 || calibration.ht20_diff != 3)
         return 0;
 
     logical[0x11U] = 0xFFU;
@@ -324,8 +322,8 @@ static int test_efuse_tx_power_calibration(void)
 static int test_tx_power_index_calculation(void)
 {
     rtl8188eu_tx_power_calibration_t calibration = {
-        .cck_base = {10U, 20U, 30U},
-        .ht40_base = {12U, 22U, 32U},
+        .cck_base = {10U, 20U, 30U, 40U, 50U, 60U},
+        .ht40_base = {12U, 22U, 32U, 42U, 52U},
         .ofdm_diff = -3,
         .ht20_diff = 4
     };
@@ -334,21 +332,31 @@ static int test_tx_power_index_calculation(void)
         indices.cck != 10U || indices.ht40 != 12U ||
         indices.ofdm != 9U || indices.ht20 != 16U)
         return 0;
-    if (!rtl8188eu_calculate_tx_power_indices(&calibration, 6U, &indices) ||
+    if (!rtl8188eu_calculate_tx_power_indices(&calibration, 4U, &indices) ||
         indices.cck != 20U || indices.ht40 != 22U ||
         indices.ofdm != 19U || indices.ht20 != 26U)
         return 0;
-    calibration.ht40_base[2] = 2U;
+    if (!rtl8188eu_calculate_tx_power_indices(&calibration, 7U, &indices) ||
+        indices.cck != 30U || indices.ht40 != 32U)
+        return 0;
+    if (!rtl8188eu_calculate_tx_power_indices(&calibration, 10U, &indices) ||
+        indices.cck != 40U || indices.ht40 != 42U)
+        return 0;
+    if (!rtl8188eu_calculate_tx_power_indices(&calibration, 13U, &indices) ||
+        indices.cck != 50U || indices.ht40 != 52U ||
+        indices.ofdm != 49U || indices.ht20 != 56U)
+        return 0;
+    calibration.ht40_base[4] = 2U;
     calibration.ofdm_diff = -8;
     calibration.ht20_diff = 7;
     if (!rtl8188eu_calculate_tx_power_indices(&calibration, 13U, &indices) ||
-        indices.cck != 30U || indices.ht40 != 2U ||
+        indices.cck != 50U || indices.ht40 != 2U ||
         indices.ofdm != 0U || indices.ht20 != 9U)
         return 0;
     if (rtl8188eu_calculate_tx_power_indices(&calibration, 0U, &indices) ||
         rtl8188eu_calculate_tx_power_indices(&calibration, 14U, &indices))
         return 0;
-    calibration.ht40_base[2] = 63U;
+    calibration.ht40_base[4] = 63U;
     calibration.ofdm_diff = 7;
     calibration.ht20_diff = -8;
     if (!rtl8188eu_calculate_tx_power_indices(&calibration, 13U, &indices) ||

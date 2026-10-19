@@ -314,7 +314,8 @@ static nvx_gpuvm_record_t *nvx_gpuvm_validate_handle(
         return 0;
     nvx_gpuvm_record_t *record = &vm->mappings[index];
     if (record->generation != mapping->generation ||
-        record->va.base != mapping->base || record->va.size != mapping->size)
+        record->va.base != mapping->base || record->va.size != mapping->size ||
+        record->mapped != mapping->mapped)
         return 0;
     return record;
 }
@@ -453,9 +454,14 @@ nvx_gpuvm_status_t nvx_gpuvm_map_pages(nvx_gpuvm_t *vm,
         return NVX_GPUVM_INVALID_RANGE;
     }
     for (size_t i = 0; i < page_count; ++i) {
-        if (!nvx_gpuvm_page_address_valid(physical_pages[i])) {
+        if (physical_pages[i] == 0U ||
+            (physical_pages[i] & (NVX_GPUVM_PAGE_SIZE - 1U)) != 0U) {
             spinlock_unlock(&vm->lock);
             return NVX_GPUVM_PAGE_INVALID;
+        }
+        if (physical_pages[i] >= (1ULL << NVX_GPUVM_PA_BITS)) {
+            spinlock_unlock(&vm->lock);
+            return NVX_GPUVM_ADDRESS_WIDTH;
         }
     }
 
@@ -625,6 +631,57 @@ nvx_gpuvm_status_t nvx_gpuvm_set_quiesced(nvx_gpuvm_t *vm, int quiesced)
     return NVX_GPUVM_OK;
 }
 
+
+static int nvx_gpuvm_table_entries_consistent(const nvx_gpuvm_t *vm,
+                                               size_t table_index)
+{
+    const nvx_gpuvm_table_t *table = &vm->tables[table_index];
+    const volatile uint64_t *words =
+        (const volatile uint64_t *)table->backing.virtual_address;
+    size_t nonzero_entries = 0U;
+    size_t child_tables = 0U;
+    size_t limit;
+
+    for (size_t i = 0; i < NVX_GPUVM_MAX_TABLES; ++i)
+        if (vm->tables[i].active &&
+            vm->tables[i].parent_index == table_index)
+            ++child_tables;
+
+    if (table->level == 0U) {
+        limit = 512U;
+        for (size_t i = 0; i < limit; ++i) {
+            uint64_t entry = words[i];
+            if (entry != 0U) {
+                if ((entry & NVX_GPUVM_PTE_VALID) == 0U)
+                    return 0;
+                ++nonzero_entries;
+            }
+        }
+        return child_tables == 0U &&
+               nonzero_entries == table->entry_count;
+    }
+
+    limit = table->level == 4U ? 512U :
+            table->level == 1U ? 256U : 512U;
+    for (size_t i = 0; i < limit; ++i) {
+        const uint64_t *entry = (const uint64_t *)(
+            (uintptr_t)table->backing.virtual_address +
+            (uintptr_t)i * (table->level == 1U ? 16U : 8U));
+        if (table->level == 4U && i >= 4U) {
+            if (entry[0] != 0U)
+                return 0;
+            continue;
+        }
+        if (table->level == 1U && entry[1] != 0U)
+            return 0;
+        if (entry[0] != 0U)
+            ++nonzero_entries;
+    }
+
+    return nonzero_entries == table->entry_count &&
+           nonzero_entries == child_tables;
+}
+
 nvx_gpuvm_status_t nvx_gpuvm_validate(nvx_gpuvm_t *vm)
 {
     size_t active_tables = 0U;
@@ -634,6 +691,11 @@ nvx_gpuvm_status_t nvx_gpuvm_validate(nvx_gpuvm_t *vm)
     if (!vm->initialized)
         return NVX_GPUVM_NOT_INITIALIZED;
     spinlock_lock(&vm->lock);
+    if (vm->root_index >= NVX_GPUVM_MAX_TABLES ||
+        !vm->tables[vm->root_index].active) {
+        spinlock_unlock(&vm->lock);
+        return NVX_GPUVM_CORRUPT_STATE;
+    }
     for (size_t i = 0; i < NVX_GPUVM_MAX_TABLES; ++i) {
         nvx_gpuvm_table_t *table = &vm->tables[i];
         if (!table->active)
@@ -648,6 +710,10 @@ nvx_gpuvm_status_t nvx_gpuvm_validate(nvx_gpuvm_t *vm)
              (table->parent_index >= NVX_GPUVM_MAX_TABLES ||
               !vm->tables[table->parent_index].active ||
               vm->tables[table->parent_index].level != table->level + 1U))) {
+            spinlock_unlock(&vm->lock);
+            return NVX_GPUVM_CORRUPT_STATE;
+        }
+        if (!nvx_gpuvm_table_entries_consistent(vm, i)) {
             spinlock_unlock(&vm->lock);
             return NVX_GPUVM_CORRUPT_STATE;
         }

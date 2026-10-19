@@ -78,6 +78,9 @@ int main(void)
     relocations[1].access = NVX_RELOC_READ_WRITE;
     relocations[1].target = target;
 
+    assert(nvx_submit_validate_batch(&manager, &target, 64U, relocations,
+                                     2U, &report) ==
+           NVX_SUBMIT_INVALID_COMMAND_RANGE);
     assert(nvx_submit_validate_batch(&manager, &command, 64U, relocations,
                                      2U, &report) == NVX_SUBMIT_OK);
     assert(report.relocation_count == 2U && report.address64_count == 2U);

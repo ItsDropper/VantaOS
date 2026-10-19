@@ -109,6 +109,24 @@ if command -v mkfs.fat >/dev/null 2>&1; then
             echo "    RTL8188EU firmware not supplied; USB Wi-Fi firmware bring-up will fail."
         fi
 
+        # The register profile is board/cut-specific and is not synthesized
+        # from guessed values or bundled from third-party driver tables.
+        if [ -n "${RTL8188EU_PHY_PROFILE:-}" ]; then
+            if [ ! -f "$RTL8188EU_PHY_PROFILE" ]; then
+                echo "ERROR: RTL8188EU_PHY_PROFILE does not name a readable file." >&2
+                exit 1
+            fi
+            profile_size=$(wc -c < "$RTL8188EU_PHY_PROFILE")
+            if [ "$profile_size" -lt 24 ] || [ "$profile_size" -gt 8192 ]; then
+                echo "ERROR: RTL8188EU PHY profile size is outside the supported bounds." >&2
+                exit 1
+            fi
+            mcopy -o -i vantaos.img "$RTL8188EU_PHY_PROFILE" ::/SYSTEM/RTL8188EU.PHY >/dev/null
+            echo "    Installed /SYSTEM/RTL8188EU.PHY ($profile_size bytes)"
+        else
+            echo "    RTL8188EU PHY profile not supplied; radio initialization and TX remain disabled."
+        fi
+
         install_system_file "system/terminal.vx" \
             "VANTA EXECUTABLE" \
             "name=Terminal" \

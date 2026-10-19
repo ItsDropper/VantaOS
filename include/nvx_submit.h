@@ -9,7 +9,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include "nvx_memory.h"
+#include "nvx_object_memory.h"
 
 #define NVX_SUBMIT_MAX_RELOCATIONS 1024U
 #define NVX_SUBMIT_MAX_COMMAND_BYTES NVX_DMA_MAX_BYTES

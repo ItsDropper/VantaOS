@@ -13,6 +13,7 @@ on:
       - "include/nvx_attach.h"
       - "include/nvx_firmware.h"
       - "include/nvx_dma.h"
+      - "include/nvx_gpuva.h"
       - "include/pci.h"
       - "include/mmio.h"
       - "include/serial.h"
@@ -25,6 +26,7 @@ on:
       - "scripts/test_nvx_attach.c"
       - "scripts/test_nvx_firmware.c"
       - "scripts/test_nvx_dma.c"
+      - "scripts/test_nvx_gpuva.c"
       - "scripts/test_pci_bar_size.c"
       - ".github/workflows/nvx-tests.yml"
   workflow_dispatch:
@@ -122,6 +124,15 @@ jobs:
 
       - name: Test contiguous DMA allocation bounds, validation and cleanup
         run: /tmp/vantaos-nvx-dma-test
+
+      - name: Compile NVX GPU virtual-address allocator tests with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gpuva.c drivers/gpu/nvx/nvx_gpuva.c \
+            -o /tmp/vantaos-nvx-gpuva-test
+
+      - name: Test GPU VA split/merge, guards, handles, and randomized invariants
+        run: /tmp/vantaos-nvx-gpuva-test
 
       - name: Compile NVX lifecycle tests with strict warnings
         run: |

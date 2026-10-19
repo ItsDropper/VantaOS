@@ -163,7 +163,7 @@ jobs:
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
             scripts/test_nvx_submit.c drivers/gpu/nvx/nvx_submit.c \
-            drivers/gpu/nvx/nvx_memory.c drivers/gpu/nvx/nvx_gpuva.c \
+            drivers/gpu/nvx/nvx_object_memory.c drivers/gpu/nvx/nvx_gpuva.c \
             drivers/gpu/nvx/nvx_dma.c -o /tmp/vantaos-nvx-submit-test
 
       - name: Test command bounds, relocation overlap and target ranges

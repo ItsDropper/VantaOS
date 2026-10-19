@@ -13,6 +13,7 @@
 static uint64_t mock_bar_base;
 static int mock_bar_io;
 static int mock_bar_64;
+static uint64_t mock_bar_size;
 static int mock_bar_present = 1;
 static unsigned map_calls;
 static unsigned unmap_calls;
@@ -28,6 +29,17 @@ int pci_get_bar(const struct pci_device *device, uint8_t index,
     *address = mock_bar_base;
     *is_io = mock_bar_io;
     *is_64bit = mock_bar_64;
+    return 1;
+}
+
+int pci_get_bar_size(const struct pci_device *device, uint8_t index,
+                     uint64_t *size)
+{
+    if (size != 0)
+        *size = 0;
+    if (device == 0 || index >= 6U || size == 0 || mock_bar_size == 0U)
+        return 0;
+    *size = mock_bar_size;
     return 1;
 }
 
@@ -76,6 +88,13 @@ int main(void)
     assert(nvx_bar_resource_validate(&resource) == NVX_RESOURCE_SIZE_UNKNOWN);
     assert(nvx_bar_mmio_map(&resource, &mapping) == NVX_RESOURCE_SIZE_UNKNOWN);
     assert(mapping == 0 && map_calls == 0U);
+
+    /* A quiescent PCI layer may provide an independently measured BAR size. */
+    mock_bar_size = 0x1000ULL;
+    assert(nvx_bar_resource_read(&device, 0U, &resource) == NVX_RESOURCE_OK);
+    assert(resource.size_known == 1U && resource.size == 0x1000ULL);
+    assert(nvx_bar_resource_validate(&resource) == NVX_RESOURCE_OK);
+    mock_bar_size = 0U;
 
     assert(nvx_bar_resource_read(&device, 0U, 0) == NVX_RESOURCE_INVALID_ARGUMENT);
     assert(nvx_bar_resource_read(0, 0U, &resource) == NVX_RESOURCE_INVALID_ARGUMENT);

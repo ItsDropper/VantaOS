@@ -535,6 +535,7 @@ typedef struct {
     uint8_t thermal_meter;
     uint8_t board_option;
     uint8_t chip_cut;
+    rtl8188eu_tx_power_calibration_t tx_power;
     uint32_t system_config;
     uint8_t valid;
 } rtl8188eu_efuse_info_t;
@@ -682,6 +683,36 @@ fail:
     return 0;
 }
 
+/* Decode factory 1T power indices without inventing fallback calibration. */
+static int8_t rtl_efuse_signed_nibble(uint8_t value)
+{
+    value &= 0x0FU;
+    return (int8_t)((value & 0x08U) ? (int)value - 16 : (int)value);
+}
+
+int rtl8188eu_decode_tx_power_calibration(
+    const uint8_t *logical, size_t logical_length,
+    rtl8188eu_tx_power_calibration_t *calibration)
+{
+    if (!logical || !calibration ||
+        logical_length < RTL8188EU_EFUSE_LOGICAL_SIZE)
+        return 0;
+    for (size_t group = 0U; group < 3U; ++group) {
+        uint8_t cck = logical[0x10U + group];
+        uint8_t ht40 = logical[0x16U + group];
+        if (cck == 0xFFU || ht40 == 0xFFU || cck > 0x3FU || ht40 > 0x3FU)
+            return 0;
+        calibration->cck_base[group] = cck;
+        calibration->ht40_base[group] = ht40;
+    }
+    uint8_t difference = logical[0x1BU];
+    if (difference == 0xFFU)
+        return 0;
+    calibration->ofdm_diff = rtl_efuse_signed_nibble(difference);
+    calibration->ht20_diff = rtl_efuse_signed_nibble((uint8_t)(difference >> 4));
+    return 1;
+}
+
 int rtl8188eu_decode_efuse_map(const uint8_t *physical, size_t physical_length,
                                 uint8_t *logical, size_t logical_length)
 {
@@ -760,6 +791,12 @@ static int rtl_load_efuse_identity(void)
     rtl_efuse_info.crystal_trim = rtl_efuse_info.logical[0xB9U];
     rtl_efuse_info.thermal_meter = rtl_efuse_info.logical[0xBAU];
     rtl_efuse_info.board_option = rtl_efuse_info.logical[0xC1U];
+    if (!rtl8188eu_decode_tx_power_calibration(
+            rtl_efuse_info.logical, sizeof(rtl_efuse_info.logical),
+            &rtl_efuse_info.tx_power)) {
+        serial_write("VANTAOS_RTL8188EU_EFUSE_TX_POWER_CALIBRATION_INVALID\n");
+        return 0;
+    }
 
     uint8_t any = 0U, all_ff = 1U;
     for (size_t i = 0U; i < 6U; ++i) {

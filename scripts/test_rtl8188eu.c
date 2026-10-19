@@ -1,4 +1,5 @@
 #include "rtl8188eu.h"
+#include "../drivers/usb/rtl8188eu_phy_tables.h"
 #include "xhci.h"
 #include "fat32.h"
 #include "serial.h"
@@ -281,6 +282,109 @@ static void test_phy_record(uint8_t *record, uint8_t op, uint8_t phase,
     test_phy_put_le32(record + 12U, value);
 }
 
+static int test_efuse_tx_power_calibration(void)
+{
+    uint8_t logical[512];
+    rtl8188eu_tx_power_calibration_t calibration;
+    memset(logical, 0xFF, sizeof(logical));
+    for (size_t i = 0U; i < 6U; ++i)
+        logical[0x10U + i] = (uint8_t)(0x20U + i);
+    for (size_t i = 0U; i < 5U; ++i)
+        logical[0x16U + i] = (uint8_t)(0x30U + i);
+    /* Low nibble OFDM = -2; high nibble HT20 = +3. */
+    logical[0x1BU] = 0x3EU;
+
+    if (!rtl8188eu_decode_tx_power_calibration(logical, sizeof(logical),
+                                               &calibration))
+        return 0;
+    for (size_t i = 0U; i < 6U; ++i)
+        if (calibration.cck_base[i] != (uint8_t)(0x20U + i))
+            return 0;
+    for (size_t i = 0U; i < 5U; ++i)
+        if (calibration.ht40_base[i] != (uint8_t)(0x30U + i))
+            return 0;
+    if (calibration.ofdm_diff != -2 || calibration.ht20_diff != 3)
+        return 0;
+
+    /* Channel 14 is disabled by policy, so its CCK group may be blank. */
+    logical[0x15U] = 0xFFU;
+    if (!rtl8188eu_decode_tx_power_calibration(logical, sizeof(logical),
+                                                &calibration))
+        return 0;
+    logical[0x15U] = 0x25U;
+
+    logical[0x11U] = 0xFFU;
+    if (rtl8188eu_decode_tx_power_calibration(logical, sizeof(logical),
+                                               &calibration))
+        return 0;
+    logical[0x11U] = 0x21U;
+    logical[0x12U] = 0x40U;
+    if (rtl8188eu_decode_tx_power_calibration(logical, sizeof(logical),
+                                               &calibration))
+        return 0;
+    if (rtl8188eu_decode_tx_power_calibration(logical, 511U, &calibration))
+        return 0;
+    return 1;
+}
+
+static int test_tx_power_index_calculation(void)
+{
+    rtl8188eu_tx_power_calibration_t calibration = {
+        .cck_base = {10U, 20U, 30U, 40U, 50U, 60U},
+        .ht40_base = {12U, 22U, 32U, 42U, 52U},
+        .ofdm_diff = -3,
+        .ht20_diff = 4
+    };
+    rtl8188eu_tx_power_indices_t indices;
+    if (!rtl8188eu_calculate_tx_power_indices(&calibration, 1U, &indices) ||
+        indices.cck != 10U || indices.ht40 != 12U ||
+        indices.ofdm != 9U || indices.ht20 != 16U)
+        return 0;
+    if (!rtl8188eu_calculate_tx_power_indices(&calibration, 3U, &indices) ||
+        indices.cck != 20U || indices.ht40 != 12U)
+        return 0;
+    if (!rtl8188eu_calculate_tx_power_indices(&calibration, 6U, &indices) ||
+        indices.cck != 30U || indices.ht40 != 22U)
+        return 0;
+    if (!rtl8188eu_calculate_tx_power_indices(&calibration, 9U, &indices) ||
+        indices.cck != 40U || indices.ht40 != 32U)
+        return 0;
+    if (!rtl8188eu_calculate_tx_power_indices(&calibration, 12U, &indices) ||
+        indices.cck != 50U || indices.ht40 != 42U)
+        return 0;
+    if (!rtl8188eu_calculate_tx_power_indices(&calibration, 4U, &indices) ||
+        indices.cck != 20U || indices.ht40 != 22U ||
+        indices.ofdm != 19U || indices.ht20 != 26U)
+        return 0;
+    if (!rtl8188eu_calculate_tx_power_indices(&calibration, 7U, &indices) ||
+        indices.cck != 30U || indices.ht40 != 32U)
+        return 0;
+    if (!rtl8188eu_calculate_tx_power_indices(&calibration, 10U, &indices) ||
+        indices.cck != 40U || indices.ht40 != 42U)
+        return 0;
+    if (!rtl8188eu_calculate_tx_power_indices(&calibration, 13U, &indices) ||
+        indices.cck != 50U || indices.ht40 != 52U ||
+        indices.ofdm != 49U || indices.ht20 != 56U)
+        return 0;
+    calibration.ht40_base[4] = 2U;
+    calibration.ofdm_diff = -8;
+    calibration.ht20_diff = 7;
+    if (!rtl8188eu_calculate_tx_power_indices(&calibration, 13U, &indices) ||
+        indices.cck != 50U || indices.ht40 != 2U ||
+        indices.ofdm != 0U || indices.ht20 != 9U)
+        return 0;
+    if (rtl8188eu_calculate_tx_power_indices(&calibration, 0U, &indices) ||
+        rtl8188eu_calculate_tx_power_indices(&calibration, 14U, &indices))
+        return 0;
+    calibration.ht40_base[4] = 63U;
+    calibration.ofdm_diff = 7;
+    calibration.ht20_diff = -8;
+    if (!rtl8188eu_calculate_tx_power_indices(&calibration, 13U, &indices) ||
+        indices.ofdm != 63U || indices.ht20 != 55U)
+        return 0;
+    return 1;
+}
+
 static int test_phy_profile_validator(void)
 {
     uint8_t profile[24U + 6U * 16U];
@@ -289,18 +393,29 @@ static int test_phy_profile_validator(void)
     test_phy_put_le16(profile + 8U, 1U);
     test_phy_put_le16(profile + 10U, 24U);
     test_phy_put_le32(profile + 12U, (uint32_t)sizeof(profile));
-    profile[20U] = 0xFFU;
+    profile[20U] = 2U;
     test_phy_put_le16(profile + 22U, 6U);
 
     uint8_t *records = profile + 24U;
     test_phy_record(records + 0U * 16U, 1U, 1U, 0x0020U, 0U, 0U);
     test_phy_record(records + 1U * 16U, 4U, 2U, 0x0800U, 0U, 0U);
     test_phy_record(records + 2U * 16U, 4U, 3U, 0x0804U, 0U, 0U);
-    test_phy_record(records + 3U * 16U, 5U, 4U, 0x0018U, 0U, 0U);
+    test_phy_record(records + 3U * 16U, 5U, 4U, 0x0018U,
+                     0x00000400U, 0x00000400U);
     test_phy_record(records + 4U * 16U, 4U, 5U, 0x0810U, 0U, 0U);
     test_phy_record(records + 5U * 16U, 9U, 5U, 0x0810U, 1U, 0U);
     test_phy_put_le32(profile + 16U, test_phy_crc32(records, sizeof(profile) - 24U));
 
+    if (!rtl8188eu_validate_phy_profile(profile, sizeof(profile), 2U))
+        return 0;
+
+    /* TX-power programming is only valid when the profile explicitly selects 20 MHz. */
+    test_phy_put_le32(records + 3U * 16U + 12U, 0U);
+    test_phy_put_le32(profile + 16U, test_phy_crc32(records, sizeof(profile) - 24U));
+    if (rtl8188eu_validate_phy_profile(profile, sizeof(profile), 2U))
+        return 0;
+    test_phy_put_le32(records + 3U * 16U + 12U, 0x00000400U);
+    test_phy_put_le32(profile + 16U, test_phy_crc32(records, sizeof(profile) - 24U));
     if (!rtl8188eu_validate_phy_profile(profile, sizeof(profile), 2U))
         return 0;
 
@@ -314,7 +429,11 @@ static int test_phy_profile_validator(void)
     profile[20U] = 3U;
     if (rtl8188eu_validate_phy_profile(profile, sizeof(profile), 2U))
         return 0;
+    /* Wildcard chip cuts are unsafe for calibration-bearing RF profiles. */
     profile[20U] = 0xFFU;
+    if (rtl8188eu_validate_phy_profile(profile, sizeof(profile), 2U))
+        return 0;
+    profile[20U] = 2U;
 
     /* BB operations cannot target the MAC register window. */
     test_phy_put_le16(records + 1U * 16U + 4U, 0x07FFU);
@@ -331,10 +450,40 @@ static int test_phy_profile_validator(void)
     return 1;
 }
 
+
+static int test_reference_phy_tables(void)
+{
+    if(sizeof(rtl8188eu_mac_init)/sizeof(rtl8188eu_mac_init[0])!=91U ||
+       sizeof(rtl8188eu_bb_init)/sizeof(rtl8188eu_bb_init[0])!=192U ||
+       sizeof(rtl8188eu_agc_init)/sizeof(rtl8188eu_agc_init[0])!=128U ||
+       sizeof(rtl8188eu_rf_init)/sizeof(rtl8188eu_rf_init[0])!=95U)
+        return 0;
+    if(rtl8188eu_mac_init[0].address!=0x026U ||
+       rtl8188eu_mac_init[0].value!=0x41U ||
+       rtl8188eu_bb_init[0].address!=0x800U ||
+       rtl8188eu_bb_init[0].value!=0x80040000U ||
+       rtl8188eu_agc_init[0]!=0xFB000001U ||
+       rtl8188eu_rf_init[0].address!=0x00U ||
+       rtl8188eu_rf_init[0].value!=0x30000U)
+        return 0;
+    unsigned delays=0U;
+    for(size_t i=0U;i<sizeof(rtl8188eu_rf_init)/sizeof(rtl8188eu_rf_init[0]);++i)
+        if(rtl8188eu_rf_init[i].address==0xFEU) {
+            if(rtl8188eu_rf_init[i].value<1U) return 0;
+            ++delays;
+        }
+    return delays==4U;
+}
+
 int main(void)
 {
+    if (!test_reference_phy_tables()) return 25;
     if (!test_efuse_logical_map_decoder())
         return 19;
+    if (!test_efuse_tx_power_calibration())
+        return 23;
+    if (!test_tx_power_index_calculation())
+        return 24;
     if (!test_phy_profile_validator())
         return 20;
     const uint8_t valid[] = {
@@ -390,9 +539,8 @@ int main(void)
         checksum_reported_too_early)
         return 5;
     /*
-     * Firmware-ready is not radio-ready. Since this driver does not yet
-     * perform verified eFuse/PHY/RF initialization and calibration, it must
-     * fail closed rather than transmit a probe on an unknown radio state.
+     * Firmware-ready is not radio-ready. This host fixture does not emulate valid eFuse calibration or IQK hardware
+     * result registers, so it must fail closed rather than fabricate radio readiness.
      */
     if (rtl8188eu_start_active_scan() || scan_request_valid || tx_seen)
         return 18;

@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "drivers/gpu/nvx/**"
+      - "drivers/pci/**"
       - "include/nvx_device.h"
       - "include/nvx_lifecycle.h"
       - "include/nvx_resource.h"

@@ -1028,24 +1028,9 @@ static int rtl_radio_apply_crystal_trim_and_lc(void)
 
 
 /*
- * VantaOS-owned, bounded PHY profile executor. The profile is deliberately
- * supplied by the system integrator because the repository has no verified
- * revision/board-specific RTL8188EU register profile. No guessed power values
- * are synthesized here.
- *
- * File format (little-endian):
- *   0..7   "V8EUPHY1"
- *   8..9   version (1)
- *   10..11 header size (24)
- *   12..15 total file size
- *   16..19 CRC-32/IEEE of the record array
- *   20     exact chip cut from eFuse (0xff wildcard is rejected)
- *   21     reserved, zero
- *   22..23 record count
- * Each 16-byte record is {op, phase, reserved, reserved, address:u16,
- * reserved:u16, mask:u32, value:u32}. Phases are strictly ordered:
- * MAC, BB, AGC, TX power, IQ calibration. The driver inserts its verified
- * crystal-trim/LC stage between TX-power and IQ-calibration records.
+ * Optional board-profile format validator. The normal bring-up path uses the
+ * embedded reference tables below; no external profile is required. The
+ * validator remains public for tooling and future board-specific overrides.
  */
 static uint16_t rtl_phy_le16(const uint8_t *p)
 {
@@ -1285,7 +1270,7 @@ restore:
     if(!ok){(void)rtl_reg_write32(0xC80,oiq);(void)rtl_reg_write32(0xC94,oafe);
         (void)rtl_reg_write32(0xC4C,oecca);(void)rtl_reg_write32(0xC14,orx);
         (void)rtl_reg_write32(0xCA0,orext);}
-    serial_write(ok?"VANTAOS_RTL8188EU_IQK_STABLE_TX_RX_OK_TX_STILL_BLOCKED\\n":"VANTAOS_RTL8188EU_IQK_FAILED_TX_BLOCKED\\n");
+    serial_write(ok?"VANTAOS_RTL8188EU_IQK_STABLE_TX_RX_OK_TX_STILL_BLOCKED\n":"VANTAOS_RTL8188EU_IQK_FAILED_TX_BLOCKED\n");
     return ok;
 }
 
@@ -1297,7 +1282,7 @@ static int rtl_radio_execute_profile(void)
        !rtl_radio_apply_crystal_trim_and_lc() ||
        !rtl_radio_run_iq_calibration())
         return 0;
-    serial_write("VANTAOS_RTL8188EU_REFERENCE_PHY_SEQUENCE_COMPLETE_TX_BLOCKED\\n");
+    serial_write("VANTAOS_RTL8188EU_REFERENCE_PHY_SEQUENCE_COMPLETE_TX_BLOCKED\n");
     return 1;
 }
 

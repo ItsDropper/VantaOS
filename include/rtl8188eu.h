@@ -56,8 +56,8 @@ int rtl8188eu_decode_efuse_map(const uint8_t *physical, size_t physical_length,
                                uint8_t *logical, size_t logical_length);
 
 typedef struct {
-    uint8_t cck_base[3];
-    uint8_t ht40_base[3];
+    uint8_t cck_base[6];
+    uint8_t ht40_base[5];
     int8_t ofdm_diff;
     int8_t ht20_diff;
 } rtl8188eu_tx_power_calibration_t;

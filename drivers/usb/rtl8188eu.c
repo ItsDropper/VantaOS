@@ -54,6 +54,9 @@
 #define RTL8188EU_RF_CHNLBW 0x18U
 #define RTL8188EU_RF_DATA_MASK 0x000FFFFFU
 #define RTL8188EU_RF_CHANNEL_MASK 0x000000FFU
+#define RTL8188EU_REG_AFE_XTAL_CTRL 0x0024U
+#define RTL8188EU_AFE_XTAL_CAP_MASK 0x007FF800U
+#define RTL8188EU_RF_LC_CALIBRATE (1U << 15)
 /* Channel 14 is excluded until a regulatory-domain policy explicitly allows it. */
 #define RTL8188EU_MAX_CHANNEL 13U
 #define RTL8188EU_RF_READ_EDGE (1U << 31)
@@ -794,10 +797,63 @@ static int rtl_rf_write(uint8_t address, uint32_t value)
 }
 
 /*
- * Perform the safe RF-block preflight after firmware starts. This enables the
- * BB/RF register interfaces and verifies RF serial readback. It is deliberately
- * NOT sufficient to enable TX: board eFuse decoding, MAC/PHY tables, transmit
- * power programming, and LC/IQ calibration remain mandatory.
+ * Apply the factory crystal trim and request LC calibration. The calibration
+ * request is bounded and the previous RF channel register is restored on all
+ * exits. This is an incremental bring-up stage, not proof that the full PHY
+ * tables, transmit-power groups, or IQ calibration have been applied.
+ */
+static int rtl_radio_apply_crystal_trim_and_lc(void)
+{
+    uint32_t crystal, old_channel, value, verify;
+    uint8_t trim = (uint8_t)(rtl_efuse_info.crystal_trim & 0x3FU);
+    int complete = 0;
+
+    if (!rtl_efuse_info.valid || trim == 0x3FU ||
+        !rtl_reg_read32(RTL8188EU_REG_AFE_XTAL_CTRL, &crystal))
+        return 0;
+
+    /* The 6-bit factory trim drives both halves of the crystal-cap field. */
+    value = (crystal & ~RTL8188EU_AFE_XTAL_CAP_MASK) |
+            ((uint32_t)trim << 11) | ((uint32_t)trim << 17);
+    if (!rtl_reg_write32(RTL8188EU_REG_AFE_XTAL_CTRL, value) ||
+        !rtl_reg_read32(RTL8188EU_REG_AFE_XTAL_CTRL, &verify) ||
+        (verify & RTL8188EU_AFE_XTAL_CAP_MASK) !=
+            (value & RTL8188EU_AFE_XTAL_CAP_MASK))
+        return 0;
+
+    if (!rtl_rf_read(RTL8188EU_RF_CHNLBW, &old_channel) ||
+        old_channel == RTL8188EU_RF_DATA_MASK)
+        return 0;
+
+    if (!rtl_rf_write(RTL8188EU_RF_CHNLBW,
+                      old_channel | RTL8188EU_RF_LC_CALIBRATE))
+        return 0;
+
+    /* Poll for hardware to clear the LC-calibration request; never spin forever. */
+    for (uint32_t attempt = 0U; attempt < 128U; ++attempt) {
+        if (!rtl_rf_read(RTL8188EU_RF_CHNLBW, &value))
+            break;
+        if ((value & RTL8188EU_RF_LC_CALIBRATE) == 0U) {
+            complete = 1;
+            break;
+        }
+    }
+
+    /* Restore the original RF channel/bandwidth state even after timeout. */
+    if (!rtl_rf_write(RTL8188EU_RF_CHNLBW, old_channel))
+        return 0;
+    if (!complete || !rtl_rf_read(RTL8188EU_RF_CHNLBW, &verify) ||
+        ((verify ^ old_channel) & ~RTL8188EU_RF_LC_CALIBRATE) != 0U)
+        return 0;
+
+    serial_write("VANTAOS_RTL8188EU_CRYSTAL_TRIM_LC_OK_TX_STILL_BLOCKED\\n");
+    return 1;
+}
+
+/*
+ * Bring up the BB/RF register interface and execute the first board-specific
+ * calibration stage. TX remains disabled until the full MAC/PHY/AGC tables,
+ * channel power groups, and IQ calibration are completed and validated.
  */
 static int rtl_radio_preflight(void)
 {
@@ -818,6 +874,8 @@ static int rtl_radio_preflight(void)
         !rtl_rf_read(RTL8188EU_RF_CHNLBW, &rf_channel) ||
         rf_identity == RTL8188EU_RF_DATA_MASK ||
         rf_channel == RTL8188EU_RF_DATA_MASK)
+        return 0;
+    if (!rtl_radio_apply_crystal_trim_and_lc())
         return 0;
     rtl_radio_preflight_done = 1U;
     return 1;

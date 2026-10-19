@@ -244,10 +244,99 @@ static int test_efuse_logical_map_decoder(void)
     return 1;
 }
 
+
+static uint32_t test_phy_crc32(const uint8_t *data, size_t length)
+{
+    uint32_t crc = 0xFFFFFFFFU;
+    for (size_t i = 0U; i < length; ++i) {
+        crc ^= data[i];
+        for (uint32_t bit = 0U; bit < 8U; ++bit)
+            crc = (crc >> 1) ^ ((crc & 1U) ? 0xEDB88320U : 0U);
+    }
+    return ~crc;
+}
+
+static void test_phy_put_le16(uint8_t *p, uint16_t value)
+{
+    p[0] = (uint8_t)value;
+    p[1] = (uint8_t)(value >> 8);
+}
+
+static void test_phy_put_le32(uint8_t *p, uint32_t value)
+{
+    p[0] = (uint8_t)value;
+    p[1] = (uint8_t)(value >> 8);
+    p[2] = (uint8_t)(value >> 16);
+    p[3] = (uint8_t)(value >> 24);
+}
+
+static void test_phy_record(uint8_t *record, uint8_t op, uint8_t phase,
+                            uint16_t address, uint32_t mask, uint32_t value)
+{
+    memset(record, 0, 16U);
+    record[0] = op;
+    record[1] = phase;
+    test_phy_put_le16(record + 4U, address);
+    test_phy_put_le32(record + 8U, mask);
+    test_phy_put_le32(record + 12U, value);
+}
+
+static int test_phy_profile_validator(void)
+{
+    uint8_t profile[24U + 6U * 16U];
+    memset(profile, 0, sizeof(profile));
+    memcpy(profile, "V8EUPHY1", 8U);
+    test_phy_put_le16(profile + 8U, 1U);
+    test_phy_put_le16(profile + 10U, 24U);
+    test_phy_put_le32(profile + 12U, (uint32_t)sizeof(profile));
+    profile[20U] = 0xFFU;
+    test_phy_put_le16(profile + 22U, 6U);
+
+    uint8_t *records = profile + 24U;
+    test_phy_record(records + 0U * 16U, 1U, 1U, 0x0020U, 0U, 0U);
+    test_phy_record(records + 1U * 16U, 4U, 2U, 0x0800U, 0U, 0U);
+    test_phy_record(records + 2U * 16U, 4U, 3U, 0x0804U, 0U, 0U);
+    test_phy_record(records + 3U * 16U, 5U, 4U, 0x0018U, 0U, 0U);
+    test_phy_record(records + 4U * 16U, 4U, 5U, 0x0810U, 0U, 0U);
+    test_phy_record(records + 5U * 16U, 9U, 5U, 0x0810U, 1U, 0U);
+    test_phy_put_le32(profile + 16U, test_phy_crc32(records, sizeof(profile) - 24U));
+
+    if (!rtl8188eu_validate_phy_profile(profile, sizeof(profile), 2U))
+        return 0;
+
+    /* CRC must cover every operation byte. */
+    profile[24U + 12U] ^= 1U;
+    if (rtl8188eu_validate_phy_profile(profile, sizeof(profile), 2U))
+        return 0;
+    profile[24U + 12U] ^= 1U;
+
+    /* A board-specific profile must not silently match another chip cut. */
+    profile[20U] = 3U;
+    if (rtl8188eu_validate_phy_profile(profile, sizeof(profile), 2U))
+        return 0;
+    profile[20U] = 0xFFU;
+
+    /* BB operations cannot target the MAC register window. */
+    test_phy_put_le16(records + 1U * 16U + 4U, 0x07FFU);
+    test_phy_put_le32(profile + 16U, test_phy_crc32(records, sizeof(profile) - 24U));
+    if (rtl8188eu_validate_phy_profile(profile, sizeof(profile), 2U))
+        return 0;
+
+    /* Restore the address but deliberately reorder phases. */
+    test_phy_put_le16(records + 1U * 16U + 4U, 0x0800U);
+    records[2U * 16U + 1U] = 1U;
+    test_phy_put_le32(profile + 16U, test_phy_crc32(records, sizeof(profile) - 24U));
+    if (rtl8188eu_validate_phy_profile(profile, sizeof(profile), 2U))
+        return 0;
+    return 1;
+}
+
 int main(void)
 {
     if (!test_efuse_logical_map_decoder())
         return 19;
+    if (!test_phy_profile_validator())
+        return 20;
     const uint8_t valid[] = {
         9, 2, 32, 0, 1, 1, 0, 0x80, 50,
         9, 4, 0, 0, 2, 0xFF, 0, 0, 0,

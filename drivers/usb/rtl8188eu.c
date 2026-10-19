@@ -697,12 +697,17 @@ int rtl8188eu_decode_tx_power_calibration(
     if (!logical || !calibration ||
         logical_length < RTL8188EU_EFUSE_LOGICAL_SIZE)
         return 0;
-    for (size_t group = 0U; group < 3U; ++group) {
+    /* RTL8188E logical eFuse map: six CCK groups, five HT40 groups. */
+    for (size_t group = 0U; group < 6U; ++group) {
         uint8_t cck = logical[0x10U + group];
-        uint8_t ht40 = logical[0x16U + group];
-        if (cck == 0xFFU || ht40 == 0xFFU || cck > 0x3FU || ht40 > 0x3FU)
+        if (cck == 0xFFU || cck > 0x3FU)
             return 0;
         calibration->cck_base[group] = cck;
+    }
+    for (size_t group = 0U; group < 5U; ++group) {
+        uint8_t ht40 = logical[0x16U + group];
+        if (ht40 == 0xFFU || ht40 > 0x3FU)
+            return 0;
         calibration->ht40_base[group] = ht40;
     }
     uint8_t difference = logical[0x1BU];
@@ -832,14 +837,20 @@ int rtl8188eu_calculate_tx_power_indices(
     const rtl8188eu_tx_power_calibration_t *calibration, uint8_t channel,
     rtl8188eu_tx_power_indices_t *indices)
 {
-    size_t group;
+    size_t cck_group, ht40_group;
     if (!calibration || !indices || channel < 1U || channel > 13U)
         return 0;
-    if (channel <= 3U) group = 0U;
-    else if (channel <= 9U) group = 1U;
-    else group = 2U;
-    int ht40 = calibration->ht40_base[group];
-    indices->cck = calibration->cck_base[group];
+
+    /* RTL8188E has six CCK groups and five HT40 groups; channel 14 is
+       excluded by the driver's regulatory policy. */
+    if (channel <= 2U) { cck_group = 0U; ht40_group = 0U; }
+    else if (channel <= 5U) { cck_group = 1U; ht40_group = 1U; }
+    else if (channel <= 8U) { cck_group = 2U; ht40_group = 2U; }
+    else if (channel <= 11U) { cck_group = 3U; ht40_group = 3U; }
+    else { cck_group = 4U; ht40_group = 4U; }
+
+    int ht40 = calibration->ht40_base[ht40_group];
+    indices->cck = calibration->cck_base[cck_group];
     indices->ht40 = rtl_power_clamp(ht40);
     indices->ofdm = rtl_power_clamp(ht40 + calibration->ofdm_diff);
     indices->ht20 = rtl_power_clamp(ht40 + calibration->ht20_diff);

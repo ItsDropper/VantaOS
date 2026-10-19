@@ -85,7 +85,7 @@ nvx_mmio_status_t nvx_gpuvm_test_mmio_read32(
         --flush_busy_reads;
         *out = 0x80000001U;
     } else {
-        *out = NVX_GPUVM_FLUSH_PAGE_ALL;
+        *out = 1U;
     }
     return NVX_MMIO_OK;
 }
@@ -168,7 +168,7 @@ int main(void)
     uint64_t *entry = (uint64_t *)((uintptr_t)vm.tables[leaf].backing.virtual_address +
         (uintptr_t)test_index_for_level(mapping.base, 0U) * sizeof(uint64_t));
     assert(entry != 0 && (*entry & 0xFFU) == 0xCDU);
-    assert((*entry >> 4U) == (physical[0] >> 4U));
+    assert((*entry & ~0xFFULL) == (physical[0] >> 4U));
 
     assert(nvx_gpuvm_activate(&vm) == NVX_GPUVM_OK);
     assert(vm.root_published && registers[0] ==

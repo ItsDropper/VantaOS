@@ -78,13 +78,6 @@ nvx_attach_status_t nvx_device_attach(
         return NVX_ATTACH_MAPPING_ERROR;
     }
 
-    if (!nvx_lifecycle_transition(&out_device->lifecycle,
-                                  NVX_STATE_INITIALIZING)) {
-        nvx_bar_mmio_unmap(trusted_bar0, out_device->bar0_mapping);
-        nvx_attach_clear(out_device);
-        return NVX_ATTACH_LIFECYCLE_ERROR;
-    }
-
     probe_status = nvx_probe_mapped_bar0(
         pci_device, (volatile uint32_t *)out_device->bar0_mapping,
         (size_t)trusted_bar0->size, &out_device->registers);
@@ -101,8 +94,8 @@ nvx_attach_status_t nvx_device_attach(
 
     /*
      * Do not mark INITIALIZED: this only proves a responsive PMC register
-     * aperture. GSP, engines, memory management, display and acceleration
-     * still require their own verified initialization stages.
+     * aperture. The next stage may begin GSP/engine initialization; memory
+     * management, display and acceleration still need separate verification.
      */
     if (!nvx_lifecycle_transition(&out_device->lifecycle, NVX_STATE_PROBED)) {
         nvx_bar_mmio_unmap(trusted_bar0, out_device->bar0_mapping);

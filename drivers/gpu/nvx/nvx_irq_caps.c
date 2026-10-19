@@ -22,7 +22,13 @@ static int nvx_irq_msix_region_valid(const nvx_bar_resource_t *bar,
 {
     uint64_t end;
     if (bar == 0 || bar->is_io || !bar->size_known ||
-        bar->base == 0U || bar->size == 0U)
+        bar->base == 0U || bar->size == 0U ||
+        (bar->size & (bar->size - 1U)) != 0U ||
+        (bar->base & (bar->size - 1U)) != 0U ||
+        (!bar->is_64bit && bar->base > UINT32_MAX) ||
+        (!bar->is_64bit &&
+         bar->size - 1U > UINT32_MAX - bar->base) ||
+        nvx_irq_add_overflow(bar->base, bar->size - 1U, &end))
         return 0;
     if (nvx_irq_add_overflow(offset, bytes, &end) || end > bar->size)
         return 0;

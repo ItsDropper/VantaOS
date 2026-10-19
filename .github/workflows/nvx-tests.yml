@@ -22,6 +22,7 @@ on:
       - "include/nvx_sync.h"
       - "include/nvx_submit.h"
       - "include/nvx_irq_caps.h"
+      - "include/nvx_irq_route.h"
       - "include/pci.h"
       - "include/mmio.h"
       - "include/serial.h"
@@ -39,6 +40,7 @@ on:
       - "scripts/test_nvx_sync.c"
       - "scripts/test_nvx_submit.c"
       - "scripts/test_nvx_irq_caps.c"
+      - "scripts/test_nvx_irq_route.c"
       - "scripts/test_pci_bar_size.c"
       - ".github/workflows/nvx-tests.yml"
   workflow_dispatch:
@@ -192,6 +194,16 @@ jobs:
 
       - name: Test vector exhaustion, registration, dispatch and release
         run: /tmp/vantaos-device-irq-test
+
+      - name: Compile NVX interrupt route transaction tests with strict warnings
+        run: |
+          gcc -DDEVICE_IRQ_TEST -DPCI_TEST -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_irq_route.c drivers/gpu/nvx/nvx_irq_route.c \
+            drivers/gpu/nvx/nvx_irq_caps.c arch/x86_64/device_irq.c \
+            drivers/pci/pci.c -o /tmp/vantaos-nvx-irq-route-test
+
+      - name: Test NVX interrupt route preparation and rollback
+        run: /tmp/vantaos-nvx-irq-route-test
 
       - name: Compile NVX lifecycle tests with strict warnings
         run: |

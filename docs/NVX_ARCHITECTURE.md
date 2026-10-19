@@ -70,11 +70,19 @@ releases a claimed vector if handler registration fails. The route handle record
 its chosen mode and capability snapshot; release drains the registered callback.
 The handle must be zero-initialized before first use.
 
-This is interrupt plumbing only. No NVX code currently enables MSI/MSI-X,
-programs message address/data, maps an MSI-X table, or registers an NVIDIA
-handler. Callers must not enable a device interrupt until the vector is claimed,
-the handler is registered, and the device's own masking/acknowledgement protocol
-is implemented.
+The route API now programs a single MSI or MSI-X message only when explicitly
+called, after vector claim and handler registration. MSI-X setup masks the
+function, maps the validated table, masks the selected entry while writing its
+APIC message address/data, then enables the function; teardown masks and disables
+delivery before draining callbacks and unmapping the table. MSI setup writes
+address/data before setting the enable bit and refuses to take over a capability
+already enabled by firmware. PCI config writes use exact-width serialized access
+and readback verification.
+
+However, no boot-time NVX path currently calls route enable, and no NVIDIA
+interrupt status/acknowledgement handler or engine-specific interrupt decoding
+is implemented. This is a tested generic route primitive, not working GPU
+interrupt support or proof that the GPU generates valid interrupts.
 
 ## Design goals
 

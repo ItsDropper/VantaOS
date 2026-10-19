@@ -10,24 +10,13 @@ Do not use records as a task list or for routine bug fixes. Keep each record foc
 
 ## Suggested format
 
-```markdown
-# ADR-NNN: Short decision title
-
-- Status: proposed | accepted | superseded | rejected
-- Date: YYYY-MM-DD
-
-## Context
-What constraints and problem led to the decision?
-
-## Decision
-What is being chosen? Which invariants must remain true?
-
-## Alternatives considered
-What credible alternatives were evaluated, and why were they not chosen?
-
-## Consequences
-What becomes easier or harder? What risks, migration steps, or follow-up work remain?
-```
+    # ADR-NNN: Short decision title
+    - Status: proposed | accepted | superseded | rejected
+    - Date: YYYY-MM-DD
+    ## Context
+    ## Decision
+    ## Alternatives considered
+    ## Consequences
 
 Number records sequentially. Do not backdate a record or mark a proposal accepted before the project has actually chosen it.
 
@@ -38,3 +27,4 @@ Number records sequentially. Do not backdate a record or mark a proposal accepte
 ## Proposed decisions
 
 - [ADR-002: Subsystem-owned initialization coordinators](0002-subsystem-owned-initialization.md) — separate boot handoff, platform bring-up, and subsystem-owned driver startup; pending review.
+- [ADR-003: Layered GPU driver architecture for NVX](0003-nvx-gpu-driver-architecture.md) — separate generic GPU, display and NVIDIA-specific driver boundaries; pending review.

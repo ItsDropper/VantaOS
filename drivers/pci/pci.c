@@ -63,7 +63,7 @@ static uint64_t pci_lock_config(void)
     spinlock_lock(&pci_config_lock);
     return 0;
 #else
-    return pci_lock_config();
+    return spinlock_lock_irqsave(&pci_config_lock);
 #endif
 }
 
@@ -73,7 +73,7 @@ static void pci_unlock_config(uint64_t flags)
     (void)flags;
     spinlock_unlock(&pci_config_lock);
 #else
-    pci_unlock_config(flags);
+    spinlock_unlock_irqrestore(&pci_config_lock, flags);
 #endif
 }
 

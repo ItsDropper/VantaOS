@@ -51,6 +51,24 @@ Logs report `DETECTED`, `NOT_ATTEMPTED`, and `UNAVAILABLE` for runtime
 functionality. No NVIDIA device is currently claimed as initialized or
 accelerated. Physical RTX 3060 validation remains outstanding.
 
+### APIC device interrupt groundwork
+
+The x86-64 interrupt path now reserves a generic vector window (0x40-0xDF,
+excluding the existing 0x80 syscall vector) for device MSI/MSI-X handlers.
+Dedicated assembly stubs preserve the interrupted register context, pass the
+actual vector to a C dispatcher, and issue local-APIC EOI after dispatch. The
+registry requires APIC availability before vector allocation, supports
+single-owner claim/register/release, drains in-flight callbacks during release,
+and documents that the device source must be masked before its handler context
+can be reclaimed. Host tests cover vector uniqueness/exhaustion, callback
+dispatch, duplicate registration, release, and EOI accounting.
+
+This is interrupt plumbing only. No NVX code currently enables MSI/MSI-X,
+programs message address/data, maps an MSI-X table, or registers an NVIDIA
+handler. Callers must not enable a device interrupt until the vector is claimed,
+the handler is registered, and the device's own masking/acknowledgement protocol
+is implemented.
+
 ## Design goals
 
 - Keep generic GPU lifecycle and display contracts independent of NVIDIA details.

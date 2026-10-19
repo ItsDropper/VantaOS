@@ -116,8 +116,8 @@ jobs:
 
       - name: Compile NVX DMA buffer tests with strict warnings
         run: |
-          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \\
-            scripts/test_nvx_dma.c drivers/gpu/nvx/nvx_dma.c \\
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_dma.c drivers/gpu/nvx/nvx_dma.c \
             -o /tmp/vantaos-nvx-dma-test
 
       - name: Test contiguous DMA allocation bounds, validation and cleanup

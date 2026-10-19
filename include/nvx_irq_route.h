@@ -57,7 +57,7 @@ nvx_irq_route_status_t nvx_irq_route_prepare(
     void *context,
     nvx_irq_route_t *out_route);
 
-/* Caller must disable/mask device interrupts before releasing the route. */
+/* Disable masks/disables MSI/MSI-X before callback drain and route release. */
 nvx_irq_route_status_t nvx_irq_route_enable(nvx_irq_route_t *route);
 nvx_irq_route_status_t nvx_irq_route_disable(nvx_irq_route_t *route);
 nvx_irq_route_status_t nvx_irq_route_release(nvx_irq_route_t *route);

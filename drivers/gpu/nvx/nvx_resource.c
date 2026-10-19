@@ -26,6 +26,7 @@ nvx_resource_status_t nvx_bar_resource_read(
     uint64_t base = 0;
     int is_io = 0;
     int is_64bit = 0;
+    uint64_t size = 0;
 
     if (out_resource == 0)
         return NVX_RESOURCE_INVALID_ARGUMENT;
@@ -50,9 +51,11 @@ nvx_resource_status_t nvx_bar_resource_read(
     out_resource->base = base;
     out_resource->is_io = 0;
     out_resource->is_64bit = (uint8_t)is_64bit;
-    /* pci_get_bar does not report BAR size; never infer it from the base. */
-    out_resource->size = 0;
-    out_resource->size_known = 0;
+    /* BAR sizing refuses active decode/DMA; failure remains SIZE_UNKNOWN. */
+    if (pci_get_bar_size(device, index, &size) && size != 0U) {
+        out_resource->size = size;
+        out_resource->size_known = 1;
+    }
     return NVX_RESOURCE_OK;
 }
 

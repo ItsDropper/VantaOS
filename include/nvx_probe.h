@@ -18,6 +18,7 @@ typedef enum nvx_probe_status {
     NVX_PROBE_MEMORY_DECODE_DISABLED,
     NVX_PROBE_BAR_TOO_SMALL,
     NVX_PROBE_BAD_MAPPING_ALIGNMENT,
+    NVX_PROBE_REGISTER_ACCESS_FAILED,
     NVX_PROBE_UNRESPONSIVE_REGISTERS
 } nvx_probe_status_t;
 
@@ -34,12 +35,12 @@ typedef struct nvx_register_snapshot {
  * extent and map it with the kernel MMIO API first. This routine does not
  * enable PCI decode, size BARs, or map arbitrary physical addresses.
  *
- * Reads only PMC_BOOT_0/PMC_BOOT_1. Raw values are preserved; unknown values
- * are not guessed into architecture IDs and this is not engine initialization.
+ * Reads only PMC_BOOT_0/PMC_BOOT_1 through the bounds-checked MMIO layer.
+ * Raw values are preserved; this is not engine initialization.
  */
 nvx_probe_status_t nvx_probe_mapped_bar0(
     const struct pci_device *device,
-    volatile const uint32_t *bar0,
+    volatile uint32_t *bar0,
     size_t mapped_length,
     nvx_register_snapshot_t *out_snapshot);
 

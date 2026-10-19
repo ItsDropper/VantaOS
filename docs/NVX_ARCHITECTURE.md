@@ -19,6 +19,13 @@ sizing. The identity descriptor deliberately leaves MMIO base and length unset
 until a validated resource API exists. Discovery does not map BARs, enable PCI
 command bits, access GPU registers, load firmware, or initialize engines.
 
+The new NVX lifecycle contract defines explicit states from discovery through
+probing, validated resources, initialization, running, quiescing, and stop. It
+rejects skipped/out-of-order transitions, prevents capability publication before
+initialization, and clears all advertised capabilities on failure. This is a
+tested contract only: current PCI discovery does not instantiate or advance a
+lifecycle object, and no hardware initialization is implemented yet.
+
 The log explicitly reports `DETECTED`, `NOT_ATTEMPTED`, and `UNAVAILABLE`.
 A detected PCI function is not proof of a recognized GPU family, working
 initialization, display support, or acceleration. No family is currently
@@ -44,6 +51,7 @@ claimed as supported. Physical RTX 3060 validation remains outstanding.
 | include/gpu.h | Generic identity, lifecycle and capability vocabulary |
 | include/gpu_display.h | Display-mode and presentation contracts |
 | include/nvx_device.h | NVIDIA identity and device descriptors plus discovery entry point |
+| include/nvx_lifecycle.h | NVX-specific fail-closed lifecycle state machine |
 | include/nvx_memory.h | Explicit CPU, system-physical and GPU address-space contracts |
 | include/nvx_firmware.h | Injected firmware-provider interface independent of VFS paths |
 | include/nvx_command.h | Queue, command-buffer and completion-state vocabulary |
@@ -79,6 +87,14 @@ address width and overflow conditions can be validated. PCI enumeration and
 command-register operations remain owned by the PCI subsystem. NVX owns
 NVIDIA-specific interpretation after receiving a PCI device.
 
+The lifecycle state machine permits only:
+`DISCOVERED -> PROBING -> RESOURCES_READY -> INITIALIZING -> INITIALIZED`,
+then optional `RUNNING -> QUIESCING -> STOPPED` (or direct quiescing from
+initialized). Any nonterminal state can fail closed with a nonzero error; failure
+is terminal and clears verified capability bits. Capability bits may be published
+only after initialization. These gates are deliberately not wired to the current
+discovery-only path.
+
 ### MMIO, interrupts and DMA
 BARs are physical resources, never directly usable virtual pointers. Map MMIO
 through the kernel mapping API with explicit bounds and teardown. DMA allocations
@@ -107,23 +123,24 @@ support and presentation. A future compositor or rendering API must not depend
 on NVIDIA command encoding.
 
 ### Diagnostics and validation
-The focused NVX workflow compiles with `-Wall -Wextra -Werror` and exercises
-candidate matching, subsystem-ID handling, auxiliary-function filtering, and
-diagnostic output using mocked PCI/serial interfaces. These tests validate
-software logic, not physical hardware. Use QEMU for generic boot regressions
-and real hardware for RTX 3060 support claims. QEMU success cannot prove
-physical NVIDIA support.
+The focused NVX workflow compiles tests with `-Wall -Wextra -Werror` and
+exercises candidate matching, subsystem-ID handling, auxiliary-function
+filtering, discovery diagnostics, lifecycle ordering, capability gating,
+shutdown and fail-closed behavior. These tests validate software logic, not
+physical hardware. Use QEMU for generic boot regressions and real hardware for
+RTX 3060 support claims. QEMU success cannot prove physical NVIDIA support.
 
 ## Implementation phases
 
 1. Generic GPU/display contracts, build ownership and architecture checks. (Merged.)
-2. Read-only NVIDIA PCI inventory, conservative matching and mocked tests. (Implemented; focused workflow result pending for the latest test expansion.)
-3. Validated BAR sizing/mapping, lifecycle state machine and failure recovery.
-4. Firmware provider and verified family-specific identification tables.
-5. Device memory management, DMA, interrupts and synchronization.
-6. Command queues, bounded submissions and completion handling.
-7. Display modesetting and scanout integration.
-8. 2D/3D acceleration, shader execution and user-mode graphics interfaces.
+2. Read-only NVIDIA PCI inventory, conservative matching and mocked tests. (Implemented.)
+3. Lifecycle state gates and failure semantics. (Contract implemented; not wired to hardware.)
+4. Validated BAR sizing/mapping.
+5. Firmware provider and verified family-specific identification tables.
+6. Device memory management, DMA, interrupts and synchronization.
+7. Command queues, bounded submissions and completion handling.
+8. Display modesetting and scanout integration.
+9. 2D/3D acceleration, shader execution and user-mode graphics interfaces.
 
 Each phase is a gate, not a promise. Only tested capabilities may be reported as
 supported.

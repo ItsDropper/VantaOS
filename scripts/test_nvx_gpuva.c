@@ -32,6 +32,7 @@ static void check_stats(uint64_t expected_free, size_t expected_ranges,
 static void test_basic_split_merge(void)
 {
     nvx_gpuva_allocation_t a = {0}, b = {0}, c = {0};
+    memset(&space, 0, sizeof(space));
     assert(nvx_gpuva_init(&space, VA_START, VA_SIZE) == NVX_GPUVA_OK);
     check_stats(VA_SIZE, 1U, 0U);
     assert(nvx_gpuva_alloc(&space, 0x2000U, 0x1000U, 0U, &a) == NVX_GPUVA_OK);
@@ -51,6 +52,7 @@ static void test_basic_split_merge(void)
 static void test_guard_pages(void)
 {
     nvx_gpuva_allocation_t a = {0};
+    memset(&space, 0, sizeof(space));
     assert(nvx_gpuva_init(&space, VA_START, VA_SIZE) == NVX_GPUVA_OK);
     assert(nvx_gpuva_alloc(&space, 1U, NVX_GPUVA_PAGE_SIZE,
                            NVX_GPUVA_GUARD_ONE_PAGE, &a) == NVX_GPUVA_OK);
@@ -64,6 +66,7 @@ static void test_guard_pages(void)
 static void test_invalid_and_overflow_inputs(void)
 {
     nvx_gpuva_allocation_t a = {0};
+    memset(&space, 0, sizeof(space));
     assert(nvx_gpuva_init(&space, VA_START, VA_SIZE) == NVX_GPUVA_OK);
     assert(nvx_gpuva_alloc(&space, 0U, 0x1000U, 0U, &a) ==
            NVX_GPUVA_INVALID_ARGUMENT);
@@ -83,6 +86,7 @@ static void test_invalid_and_overflow_inputs(void)
 static void test_out_of_space_and_handle_tampering(void)
 {
     nvx_gpuva_allocation_t a = {0}, b = {0}, forged;
+    memset(&space, 0, sizeof(space));
     assert(nvx_gpuva_init(&space, VA_START, 0x4000U) == NVX_GPUVA_OK);
     assert(nvx_gpuva_alloc(&space, 0x4000U, 0x1000U, 0U, &a) == NVX_GPUVA_OK);
     assert(nvx_gpuva_alloc(&space, 0x1000U, 0x1000U, 0U, &b) ==
@@ -98,6 +102,7 @@ static void test_out_of_space_and_handle_tampering(void)
 static void test_fragmentation_and_recovery(void)
 {
     nvx_gpuva_allocation_t blocks[32] = {{0}};
+    memset(&space, 0, sizeof(space));
     assert(nvx_gpuva_init(&space, VA_START, VA_SIZE) == NVX_GPUVA_OK);
     for (size_t i = 0; i < 32U; ++i)
         assert(nvx_gpuva_alloc(&space, NVX_GPUVA_PAGE_SIZE,
@@ -115,6 +120,7 @@ static void test_randomized_deterministic_sequence(void)
 {
     nvx_gpuva_allocation_t handles[128] = {{0}};
     uint32_t seed = 0xC001D00DU;
+    memset(&space, 0, sizeof(space));
     assert(nvx_gpuva_init(&space, VA_START, VA_SIZE) == NVX_GPUVA_OK);
     for (unsigned step = 0; step < 2500U; ++step) {
         seed = seed * 1664525U + 1013904223U;

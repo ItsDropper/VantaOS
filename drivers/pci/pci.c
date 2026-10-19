@@ -90,6 +90,22 @@ static uint32_t pci_read_config(
     return value;
 }
 
+/* These helpers require pci_config_lock to be held by the caller. */
+static uint32_t pci_read_config_locked(
+    uint8_t bus, uint8_t slot, uint8_t function, uint8_t offset)
+{
+    outl(PCI_CONFIG_ADDRESS, pci_config_address(bus, slot, function, offset));
+    return inl(PCI_CONFIG_DATA);
+}
+
+static void pci_write_config_locked(
+    uint8_t bus, uint8_t slot, uint8_t function, uint8_t offset,
+    uint32_t value)
+{
+    outl(PCI_CONFIG_ADDRESS, pci_config_address(bus, slot, function, offset));
+    outl(PCI_CONFIG_DATA, value);
+}
+
 static uint16_t pci_get_vendor(
     uint8_t bus,
     uint8_t slot,
@@ -305,6 +321,159 @@ int pci_get_bar(const struct pci_device* device, uint8_t index,
     *is_io = 0;
     *is_64bit = wide;
     return *address != 0U;
+}
+
+/*
+ * PCI BAR sizing is destructive to the BAR register for a short interval.
+ * To avoid disrupting a live device, refuse unless I/O decode, memory decode,
+ * and bus mastering are all disabled. Hold the configuration lock across
+ * save/probe/restore so another CPU cannot interleave a config-space access.
+ */
+int pci_get_bar_size(const struct pci_device* device, uint8_t index,
+                     uint64_t* size)
+{
+    uint64_t flags;
+    uint64_t base = 0;
+    uint64_t mask = 0;
+    uint64_t measured_size = 0;
+    uint8_t header_type;
+    uint8_t bar_count;
+    uint8_t offset;
+    uint32_t command_status;
+    uint32_t low;
+    uint32_t high = 0;
+    uint32_t mask_low;
+    uint32_t mask_high = 0;
+    int is_io;
+    int is_64bit = 0;
+    int touched = 0;
+    int valid = 0;
+
+    if (size != 0)
+        *size = 0;
+    if (device == 0 || size == 0)
+        return 0;
+
+    flags = spinlock_lock_irqsave(&pci_config_lock);
+    command_status = pci_read_config_locked(
+        device->bus, device->slot, device->function, 0x04U);
+    if ((command_status & 0x0007U) != 0U)
+        goto done;
+
+    header_type = (uint8_t)((pci_read_config_locked(
+        device->bus, device->slot, device->function, 0x0CU) >> 16) & 0x7FU);
+    if (header_type == 0U)
+        bar_count = 6U;
+    else if (header_type == 1U)
+        bar_count = 2U;
+    else
+        goto done;
+    if (index >= bar_count)
+        goto done;
+
+    /* Refuse an index that is the upper half of an earlier 64-bit BAR. */
+    for (uint8_t prior = 0; prior < index; ++prior)
+    {
+        uint32_t prior_low = pci_read_config_locked(
+            device->bus, device->slot, device->function,
+            (uint8_t)(0x10U + prior * 4U));
+        if (prior_low != 0U && prior_low != 0xFFFFFFFFU &&
+            !(prior_low & 1U) && ((prior_low >> 1) & 0x03U) == 0x02U)
+        {
+            if ((uint8_t)(prior + 1U) == index)
+                goto done;
+            ++prior;
+        }
+    }
+
+    offset = (uint8_t)(0x10U + index * 4U);
+    low = pci_read_config_locked(
+        device->bus, device->slot, device->function, offset);
+    if (low == 0U || low == 0xFFFFFFFFU)
+        goto done;
+
+    is_io = (low & 1U) != 0U;
+    if (is_io)
+        base = (uint64_t)(low & 0xFFFFFFFCU);
+    else
+    {
+        uint32_t memory_type = (low >> 1) & 0x03U;
+        if (memory_type == 0x03U)
+            goto done;
+        is_64bit = memory_type == 0x02U;
+        if (is_64bit)
+        {
+            if ((uint8_t)(index + 1U) >= bar_count)
+                goto done;
+            high = pci_read_config_locked(
+                device->bus, device->slot, device->function,
+                (uint8_t)(offset + 4U));
+        }
+        base = ((uint64_t)high << 32) |
+               (uint64_t)(low & 0xFFFFFFF0U);
+    }
+    if (base == 0U)
+        goto done;
+
+    /* Probe mask while decode and DMA are disabled; always restore original. */
+    pci_write_config_locked(device->bus, device->slot, device->function,
+                            offset, 0xFFFFFFFFU);
+    if (is_64bit)
+        pci_write_config_locked(device->bus, device->slot, device->function,
+                                (uint8_t)(offset + 4U), 0xFFFFFFFFU);
+    touched = 1;
+    mask_low = pci_read_config_locked(
+        device->bus, device->slot, device->function, offset);
+    if (is_64bit)
+        mask_high = pci_read_config_locked(
+            device->bus, device->slot, device->function,
+            (uint8_t)(offset + 4U));
+
+    /* Restore upper half before low half so the original 64-bit BAR is whole. */
+    if (is_64bit)
+        pci_write_config_locked(device->bus, device->slot, device->function,
+                                (uint8_t)(offset + 4U), high);
+    pci_write_config_locked(device->bus, device->slot, device->function,
+                            offset, low);
+    touched = 0;
+
+    if (is_io)
+    {
+        mask = (uint64_t)(mask_low & 0xFFFFFFFCU);
+        measured_size = (uint32_t)(~(uint32_t)mask + 1U);
+    }
+    else if (is_64bit)
+    {
+        mask = ((uint64_t)mask_high << 32) |
+               (uint64_t)(mask_low & 0xFFFFFFF0U);
+        measured_size = ~mask + 1ULL;
+    }
+    else
+    {
+        mask = (uint64_t)(mask_low & 0xFFFFFFF0U);
+        measured_size = (uint32_t)(~(uint32_t)mask + 1U);
+    }
+
+    if (measured_size < (is_io ? 4ULL : 16ULL) ||
+        (measured_size & (measured_size - 1ULL)) != 0ULL ||
+        (base & (measured_size - 1ULL)) != 0ULL)
+        goto done;
+
+    *size = measured_size;
+    valid = 1;
+
+done:
+    /* Defensive restoration if future validation is added after probing. */
+    if (touched)
+    {
+        if (is_64bit)
+            pci_write_config_locked(device->bus, device->slot, device->function,
+                                    (uint8_t)(0x10U + (index + 1U) * 4U), high);
+        pci_write_config_locked(device->bus, device->slot, device->function,
+                                (uint8_t)(0x10U + index * 4U), low);
+    }
+    spinlock_unlock_irqrestore(&pci_config_lock, flags);
+    return valid;
 }
 
 int pci_enable_io_space(const struct pci_device* device)

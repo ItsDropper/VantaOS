@@ -57,8 +57,12 @@ OFDM/HT20 deltas (0x1b). CCK groups cover channels 1–2, 3–5, 6–8, 9–11,
 Missing (`0xff`) or out-of-range base indices are rejected rather than replaced
 with guessed values. The driver derives channel-specific 1T legacy-rate and
 MCS0–7 indices, programs the corresponding TXAGC baseband registers, and
-checks readback. This is not proof of calibrated RF output or a replacement
-for the board-specific PHY profile and IQ calibration.
+checks readback. It reapplies power values for each selected channel.
+
+Because the programmed MCS table currently targets 20-MHz operation, the
+profile must explicitly set the RF_CHNLBW 20-MHz bits before the radio-ready
+gate can open. This is not proof of calibrated RF output and does not replace
+the board-specific MAC/baseband/AGC profile or IQ calibration.
 
 ## Required phases
 

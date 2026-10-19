@@ -9,6 +9,7 @@ on:
       - "include/nvx_lifecycle.h"
       - "include/nvx_resource.h"
       - "include/nvx_probe.h"
+      - "include/nvx_mmio.h"
       - "include/pci.h"
       - "include/mmio.h"
       - "include/serial.h"
@@ -17,6 +18,7 @@ on:
       - "scripts/test_nvx_lifecycle.c"
       - "scripts/test_nvx_resource.c"
       - "scripts/test_nvx_probe.c"
+      - "scripts/test_nvx_mmio.c"
       - ".github/workflows/nvx-tests.yml"
   workflow_dispatch:
 
@@ -61,10 +63,20 @@ jobs:
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
             scripts/test_nvx_probe.c drivers/gpu/nvx/nvx_probe.c \
-            drivers/gpu/nvx/nvx_device.c -o /tmp/vantaos-nvx-probe-test
+            drivers/gpu/nvx/nvx_mmio.c drivers/gpu/nvx/nvx_device.c \
+            -o /tmp/vantaos-nvx-probe-test
 
       - name: Test conservative NVIDIA PMC register probing
         run: /tmp/vantaos-nvx-probe-test
+
+      - name: Compile NVX MMIO access tests with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_mmio.c drivers/gpu/nvx/nvx_mmio.c \
+            -o /tmp/vantaos-nvx-mmio-test
+
+      - name: Test MMIO bounds, alignment, reads and writes
+        run: /tmp/vantaos-nvx-mmio-test
 
       - name: Compile NVX lifecycle tests with strict warnings
         run: |

@@ -8,6 +8,7 @@
 #include "net.h"
 #include "net_ipv6.h"
 extern int net_internal_pop_rx(net_device_t**,uint8_t*,size_t,size_t*);
+extern void net_internal_release_rx_device(net_device_t*);
 extern int net_internal_dispatch_ethernet(net_device_t*,const uint8_t*,size_t,uint16_t,size_t);
 static uint16_t be16(const uint8_t* p){return (uint16_t)(((uint16_t)p[0]<<8)|p[1]);}
 static int decode(const uint8_t* f,size_t n,uint16_t* type,size_t* h) {
@@ -25,6 +26,7 @@ size_t net_poll(size_t budget) {
         if(!net_internal_pop_rx(&d,frame,sizeof(frame),&len))break;
         uint16_t type=0;size_t header=0;
         if(decode(frame,len,&type,&header))(void)net_internal_dispatch_ethernet(d,frame,len,type,header);
+        net_internal_release_rx_device(d);
         ++done;
     }
     net_dhcp_poll();

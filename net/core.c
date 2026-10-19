@@ -7,7 +7,7 @@
 
 #include "net.h"
 #include "spinlock.h"
-typedef struct { net_device_t* device; net_device_stats_t stats; } device_slot_t;
+typedef struct { net_device_t* device; net_device_stats_t stats; uint32_t rx_inflight; } device_slot_t;
 typedef struct { net_device_t* device; uint16_t length; uint8_t frame[NET_FRAME_MAX_SIZE]; } rx_entry_t;
 typedef struct { uint16_t type; net_ethernet_handler_fn fn; void* context; } eth_handler_t;
 static device_slot_t devices[NET_DEVICE_MAX];
@@ -30,7 +30,7 @@ static int frame_length_valid(const uint8_t* frame,size_t len,uint16_t mtu) {
 }
 void net_initialize(void) {
     uint64_t f=spinlock_lock_irqsave(&lock);
-    for(uint32_t i=0;i<NET_DEVICE_MAX;i++){devices[i].device=0;devices[i].stats=(net_device_stats_t){0};}
+    for(uint32_t i=0;i<NET_DEVICE_MAX;i++){devices[i].device=0;devices[i].stats=(net_device_stats_t){0};devices[i].rx_inflight=0;}
     device_count_used=rx_head=rx_tail=rx_used=handlers_used=0; initialized=1;
     spinlock_unlock_irqrestore(&lock,f);
 }
@@ -49,18 +49,18 @@ int net_device_register(net_device_t* d) {
        d->mtu>NET_MTU_DEFAULT||!d->ops||!d->ops->transmit)return 0;
     uint64_t f=spinlock_lock_irqsave(&lock);
     if(!initialized||find_locked(d)||device_count_used==NET_DEVICE_MAX){spinlock_unlock_irqrestore(&lock,f);return 0;}
-    devices[device_count_used].device=d;devices[device_count_used].stats=(net_device_stats_t){0};++device_count_used;
+    devices[device_count_used].device=d;devices[device_count_used].stats=(net_device_stats_t){0};devices[device_count_used].rx_inflight=0;++device_count_used;
     spinlock_unlock_irqrestore(&lock,f);return 1;
 }
 int net_device_unregister(net_device_t* d) {
     if(!d)return 0;
     uint64_t f=spinlock_lock_irqsave(&lock);uint32_t at=device_count_used;
     for(uint32_t i=0;i<device_count_used;i++)if(devices[i].device==d){at=i;break;}
-    if(at==device_count_used){spinlock_unlock_irqrestore(&lock,f);return 0;}
+    if(at==device_count_used||devices[at].rx_inflight){spinlock_unlock_irqrestore(&lock,f);return 0;}
     for(uint32_t i=0,pos=rx_head;i<rx_used;i++,pos=(pos+1U)%NET_RX_QUEUE_CAPACITY)
         if(rxq[pos].device==d){spinlock_unlock_irqrestore(&lock,f);return 0;}
     for(uint32_t i=at;i+1U<device_count_used;i++)devices[i]=devices[i+1U];
-    --device_count_used;devices[device_count_used].device=0;devices[device_count_used].stats=(net_device_stats_t){0};
+    --device_count_used;devices[device_count_used].device=0;devices[device_count_used].stats=(net_device_stats_t){0};devices[device_count_used].rx_inflight=0;
     d->ipv4_address=0;d->ipv4_netmask=0;d->ipv4_gateway=0;d->ipv4_dns=0;d->ipv4_configured=0;
     spinlock_unlock_irqrestore(&lock,f);return 1;
 }
@@ -167,8 +167,11 @@ int net_internal_pop_rx(net_device_t** d,uint8_t* frame,size_t cap,size_t* len) 
     if(!d||!frame||!len)return 0;
     uint64_t f=spinlock_lock_irqsave(&lock);
     if(!rx_used||rxq[rx_head].length>cap){spinlock_unlock_irqrestore(&lock,f);return 0;}
-    rx_entry_t* e=&rxq[rx_head];*d=e->device;*len=e->length;
+    rx_entry_t* e=&rxq[rx_head];device_slot_t* s=find_locked(e->device);
+    if(!s){spinlock_unlock_irqrestore(&lock,f);return 0;}
+    *d=e->device;*len=e->length;
     for(size_t i=0;i<e->length;i++)frame[i]=e->frame[i];
+    ++s->rx_inflight;
     rx_head=(rx_head+1U)%NET_RX_QUEUE_CAPACITY;--rx_used;spinlock_unlock_irqrestore(&lock,f);return 1;
 }
 int net_internal_dispatch_ethernet(net_device_t* d,const uint8_t* frame,size_t len,uint16_t type,size_t header) {
@@ -191,4 +194,12 @@ int net_ethernet_handler_unregister(uint16_t type,net_ethernet_handler_fn fn,voi
     if(at==handlers_used){spinlock_unlock_irqrestore(&lock,f);return 0;}
     for(uint32_t i=at;i+1U<handlers_used;i++)handlers[i]=handlers[i+1U];
     --handlers_used;spinlock_unlock_irqrestore(&lock,f);return 1;
+}
+
+/* Keep the device registered while a dequeued frame is dispatched. */
+void net_internal_release_rx_device(net_device_t* d) {
+    if(!d)return;
+    uint64_t f=spinlock_lock_irqsave(&lock);device_slot_t* s=find_locked(d);
+    if(s&&s->rx_inflight)--s->rx_inflight;
+    spinlock_unlock_irqrestore(&lock,f);
 }

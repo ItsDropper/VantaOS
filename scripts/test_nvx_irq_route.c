@@ -39,6 +39,20 @@ void idt_set_gate(int n, uint64_t b, uint16_t s, uint8_t f)
 }
 int apic_is_enabled(void) { return apic_enabled; }
 void apic_send_eoi(void) { ++eoi_count; }
+uint32_t apic_get_bsp_id(void) { return 0U; }
+static uint32_t msix_table[8U * 4U];
+void *mmio_map_region(uint64_t address, size_t length)
+{
+    assert(address == 0x80001000ULL);
+    assert(length == sizeof(msix_table));
+    memset(msix_table, 0, sizeof(msix_table));
+    return msix_table;
+}
+int mmio_unmap_region(void *address, size_t length)
+{
+    assert(address == msix_table && length == sizeof(msix_table));
+    return 1;
+}
 
 static void set_byte(uint8_t offset, uint8_t value)
 {
@@ -99,10 +113,19 @@ int main(void)
     assert(route.capabilities.msix.present && route.vector != 0x80U);
     assert(nvx_irq_route_prepare(&device, bars, handler, &context, &route) ==
            NVX_IRQ_ROUTE_INVALID_ARGUMENT);
+    assert(nvx_irq_route_enable(&route) == NVX_IRQ_ROUTE_OK);
+    assert(route.enabled && msix_table[0] == 0xFEE00000U);
+    assert(msix_table[1] == 0U && msix_table[2] == route.vector);
+    assert(msix_table[3] == 0U);
+    assert((config_space[0x62U / 4U] & 0xC0000000U) == 0x80000000U);
+    assert(nvx_irq_route_enable(&route) == NVX_IRQ_ROUTE_INVALID_ARGUMENT);
     device_irq_dispatch(route.vector);
     assert(callback_count == 1U && callback_vector == route.vector);
     assert(callback_context == &context && eoi_count == 1U);
 
+    assert(nvx_irq_route_disable(&route) == NVX_IRQ_ROUTE_OK);
+    assert(!route.enabled);
+    assert((config_space[0x62U / 4U] & 0xC0000000U) == 0x40000000U);
     assert(nvx_irq_route_release(&route) == NVX_IRQ_ROUTE_OK);
     assert(!route.prepared && route.mode == NVX_IRQ_ROUTE_NONE);
     assert(nvx_irq_route_release(&route) == NVX_IRQ_ROUTE_NOT_PREPARED);
@@ -112,6 +135,20 @@ int main(void)
     assert(nvx_irq_route_prepare(&device, bars, handler, &context, &route) ==
            NVX_IRQ_ROUTE_UNSUPPORTED);
     assert(!route.prepared);
+
+    /* MSI-only devices use a 64-bit address field and a single message. */
+    prepare_pci();
+    set_byte(0x34U, 0x50U);
+    set_byte(0x51U, 0U);
+    set_byte(0x60U, 0U);
+    assert(nvx_irq_route_prepare(&device, bars, handler, &context, &route) ==
+           NVX_IRQ_ROUTE_OK);
+    assert(route.mode == NVX_IRQ_ROUTE_MSI);
+    assert(nvx_irq_route_enable(&route) == NVX_IRQ_ROUTE_OK);
+    assert((config_space[0x52U / 4U] & 1U) != 0U);
+    assert(nvx_irq_route_disable(&route) == NVX_IRQ_ROUTE_OK);
+    assert((config_space[0x52U / 4U] & 1U) == 0U);
+    assert(nvx_irq_route_release(&route) == NVX_IRQ_ROUTE_OK);
 
     apic_enabled = 0;
     prepare_pci();

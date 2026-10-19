@@ -858,6 +858,68 @@ int rtl8188eu_calculate_tx_power_indices(
 }
 
 /*
+ * Program the RTL8188E path-A transmit-power tables from decoded factory
+ * calibration. Registers are updated with read/modify/write and verified
+ * readback. This configures the 1T legacy rates and MCS0-7 for 20-MHz
+ * operation; it does not replace the required board PHY profile or IQK.
+ */
+#define RTL8188EU_REG_TXAGC_RATE18_06 0x0E00U
+#define RTL8188EU_REG_TXAGC_RATE54_24 0x0E04U
+#define RTL8188EU_REG_TXAGC_CCK1_MCS32 0x0E08U
+#define RTL8188EU_REG_TXAGC_CCK2_11 0x086CU
+#define RTL8188EU_REG_TXAGC_MCS03_MCS00 0x0E10U
+#define RTL8188EU_REG_TXAGC_MCS07_MCS04 0x0E14U
+
+static uint32_t rtl_power_pack4(uint8_t value)
+{
+    return (uint32_t)value * 0x01010101U;
+}
+
+static int rtl_power_update_bb32(uint16_t address, uint32_t mask, uint32_t value)
+{
+    uint32_t old_value, next_value, verify;
+    if (!rtl_reg_read32(address, &old_value))
+        return 0;
+    next_value = (old_value & ~mask) | (value & mask);
+    if (!rtl_reg_write32(address, next_value) ||
+        !rtl_reg_read32(address, &verify))
+        return 0;
+    return ((verify ^ next_value) & mask) == 0U;
+}
+
+static int rtl_apply_tx_power_for_channel(uint8_t channel)
+{
+    rtl8188eu_tx_power_indices_t indices;
+    if (!rtl_efuse_info.valid ||
+        !rtl8188eu_calculate_tx_power_indices(&rtl_efuse_info.tx_power,
+                                               channel, &indices))
+        return 0;
+
+    /* CCK2 is 4.5 dB below the other CCK rates; avoid unsigned underflow. */
+    uint8_t cck2 = indices.cck >= 9U ? (uint8_t)(indices.cck - 9U) : 0U;
+    uint32_t cck_rates = ((uint32_t)cck2 << 8) |
+                         ((uint32_t)indices.cck << 16) |
+                         ((uint32_t)indices.cck << 24);
+    if (!rtl_power_update_bb32(RTL8188EU_REG_TXAGC_CCK1_MCS32,
+                               0x0000FF00U, (uint32_t)indices.cck << 8) ||
+        !rtl_power_update_bb32(RTL8188EU_REG_TXAGC_CCK2_11,
+                               0xFFFFFF00U, cck_rates) ||
+        !rtl_power_update_bb32(RTL8188EU_REG_TXAGC_RATE18_06,
+                               0xFFFFFFFFU, rtl_power_pack4(indices.ofdm)) ||
+        !rtl_power_update_bb32(RTL8188EU_REG_TXAGC_RATE54_24,
+                               0xFFFFFFFFU, rtl_power_pack4(indices.ofdm)) ||
+        !rtl_power_update_bb32(RTL8188EU_REG_TXAGC_MCS03_MCS00,
+                               0xFFFFFFFFU, rtl_power_pack4(indices.ht20)) ||
+        !rtl_power_update_bb32(RTL8188EU_REG_TXAGC_MCS07_MCS04,
+                               0xFFFFFFFFU, rtl_power_pack4(indices.ht20))) {
+        serial_write("VANTAOS_RTL8188EU_TX_POWER_PROGRAM_FAILED_TX_BLOCKED\n");
+        return 0;
+    }
+    serial_write("VANTAOS_RTL8188EU_TX_POWER_TABLE_READBACK_OK\n");
+    return 1;
+}
+
+/*
  * RTL8188E RF serial interface (path A, the single 1T1R path). These are
  * transport primitives only; they do not substitute for board-specific PHY
  * configuration, transmit-power setup, or LC/IQ calibration.
@@ -1297,6 +1359,8 @@ static int rtl_radio_execute_profile(void)
         if (!rtl_phy_execute_record(record))
             return 0;
     }
+    if (!rtl_apply_tx_power_for_channel(1U))
+        return 0;
     if (!rtl_radio_apply_crystal_trim_and_lc())
         return 0;
     for (uint16_t i = 0U; i < count; ++i) {
@@ -1354,13 +1418,24 @@ static int rtl_program_channel(uint8_t channel)
     uint32_t current, updated, verify;
     if (!rtl_radio_preflight_done || channel < 1U || channel > RTL8188EU_MAX_CHANNEL)
         return 0;
-    if (!rtl_rf_read(RTL8188EU_RF_CHNLBW, &current))
+    if (!rtl_apply_tx_power_for_channel(channel)) {
+        rtl_radio_ready = 0U;
+        rtl_radio_preflight_done = 0U;
         return 0;
+    }
+    if (!rtl_rf_read(RTL8188EU_RF_CHNLBW, &current)) {
+        rtl_radio_ready = 0U;
+        rtl_radio_preflight_done = 0U;
+        return 0;
+    }
     updated = (current & ~RTL8188EU_RF_CHANNEL_MASK) | channel;
     if (!rtl_rf_write(RTL8188EU_RF_CHNLBW, updated) ||
         !rtl_rf_read(RTL8188EU_RF_CHNLBW, &verify) ||
-        (verify & RTL8188EU_RF_CHANNEL_MASK) != channel)
+        (verify & RTL8188EU_RF_CHANNEL_MASK) != channel) {
+        rtl_radio_ready = 0U;
+        rtl_radio_preflight_done = 0U;
         return 0;
+    }
     rtl_current_channel = channel;
     return 1;
 }

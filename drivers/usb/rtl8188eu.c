@@ -846,7 +846,7 @@ static int rtl_radio_apply_crystal_trim_and_lc(void)
         ((verify ^ old_channel) & ~RTL8188EU_RF_LC_CALIBRATE) != 0U)
         return 0;
 
-    serial_write("VANTAOS_RTL8188EU_CRYSTAL_TRIM_LC_OK_TX_STILL_BLOCKED\\n");
+    serial_write("VANTAOS_RTL8188EU_CRYSTAL_TRIM_LC_OK_TX_STILL_BLOCKED\n");
     return 1;
 }
 

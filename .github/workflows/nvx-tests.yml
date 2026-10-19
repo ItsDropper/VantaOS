@@ -18,6 +18,7 @@ on:
       - "include/nvx_firmware.h"
       - "include/nvx_dma.h"
       - "include/nvx_gpuva.h"
+      - "include/nvx_gpuvm.h"
       - "include/nvx_object_memory.h"
       - "include/nvx_sync.h"
       - "include/nvx_submit.h"
@@ -36,6 +37,7 @@ on:
       - "scripts/test_nvx_firmware.c"
       - "scripts/test_nvx_dma.c"
       - "scripts/test_nvx_gpuva.c"
+      - "scripts/test_nvx_gpuvm.c"
       - "scripts/test_nvx_object_memory.c"
       - "scripts/test_nvx_sync.c"
       - "scripts/test_nvx_submit.c"
@@ -204,6 +206,15 @@ jobs:
 
       - name: Test NVX interrupt route preparation and rollback
         run: /tmp/vantaos-nvx-irq-route-test
+
+      - name: Compile NVX GPU page-table tests with strict warnings
+        run: |
+          gcc -DNVX_GPUVM_TEST -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gpuvm.c drivers/gpu/nvx/nvx_gpuvm.c \
+            drivers/gpu/nvx/nvx_gpuva.c -o /tmp/vantaos-nvx-gpuvm-test
+
+      - name: Test Ampere V2 page tables and MMU flush failure handling
+        run: /tmp/vantaos-nvx-gpuvm-test
 
       - name: Compile NVX lifecycle tests with strict warnings
         run: |

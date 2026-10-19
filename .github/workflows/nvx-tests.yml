@@ -82,10 +82,10 @@ jobs:
 
       - name: Compile NVX attach transaction tests with strict warnings
         run: |
-          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \\
-            scripts/test_nvx_attach.c drivers/gpu/nvx/nvx_attach.c \\
-            drivers/gpu/nvx/nvx_resource.c drivers/gpu/nvx/nvx_probe.c \\
-            drivers/gpu/nvx/nvx_mmio.c drivers/gpu/nvx/nvx_device.c \\
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_attach.c drivers/gpu/nvx/nvx_attach.c \
+            drivers/gpu/nvx/nvx_resource.c drivers/gpu/nvx/nvx_probe.c \
+            drivers/gpu/nvx/nvx_mmio.c drivers/gpu/nvx/nvx_device.c \
             drivers/gpu/nvx/nvx_lifecycle.c -o /tmp/vantaos-nvx-attach-test
 
       - name: Test NVX attach, register probe, rollback and teardown

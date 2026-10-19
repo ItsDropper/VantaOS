@@ -49,6 +49,19 @@ int main(void)
     assert(!nvx_lifecycle_fail(&lifecycle, NVX_ERROR_RUNTIME));
     assert(!nvx_lifecycle_fail(&lifecycle, NVX_ERROR_NONE));
     assert(!nvx_lifecycle_set_capabilities(&lifecycle, UINT64_MAX));
+
+    /* A late runtime failure must revoke previously verified capabilities. */
+    nvx_lifecycle_init(&lifecycle);
+    assert(nvx_lifecycle_transition(&lifecycle, NVX_STATE_PROBING));
+    assert(nvx_lifecycle_transition(&lifecycle, NVX_STATE_RESOURCES_READY));
+    assert(nvx_lifecycle_transition(&lifecycle, NVX_STATE_INITIALIZING));
+    assert(nvx_lifecycle_transition(&lifecycle, NVX_STATE_INITIALIZED));
+    assert(nvx_lifecycle_set_capabilities(&lifecycle, UINT64_MAX));
+    assert(nvx_lifecycle_fail(&lifecycle, NVX_ERROR_RUNTIME));
+    assert(lifecycle.state == NVX_STATE_FAILED);
+    assert(lifecycle.error == NVX_ERROR_RUNTIME);
+    assert(lifecycle.verified_capabilities == 0);
+
     assert(!nvx_lifecycle_transition(0, NVX_STATE_PROBING));
     assert(!nvx_lifecycle_set_capabilities(0, 0));
 

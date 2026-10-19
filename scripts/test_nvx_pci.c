@@ -78,6 +78,8 @@ uint8_t pci_read_config8(const struct pci_device *device, uint8_t offset)
 uint16_t pci_read_config16(const struct pci_device *device, uint8_t offset)
 {
     (void)device;
+    if (offset == 0x04U)
+        return NVX_PCI_COMMAND_MEMORY_SPACE;
     if (offset == 0x2CU)
         return 0x1043U;
     if (offset == 0x2EU)
@@ -106,7 +108,7 @@ int main(void)
     assert(bar_queries == 2); /* Both display candidates; never the audio function. */
 
     assert(strstr(log_buffer, "vendor=0x10DE device=0x2503") != 0);
-    assert(strstr(log_buffer, "role=GPU-candidate family=AMPERE profile=GEFORCE-RTX-3060 identification=PCI-ID-TABLE-ONLY") != 0);
+    assert(strstr(log_buffer, "role=GPU-candidate family=AMPERE profile=GEFORCE-RTX-3060 identification=PCI-ID-TABLE-ONLY pci-command=0x0002 memory-space=enabled bus-master=disabled") != 0);
     assert(strstr(log_buffer, "subsystem=0x1043:0x88A1") != 0);
     assert(strstr(log_buffer, "BAR0 address=0x00000012ABC00000 type=memory width=64") != 0);
     assert(strstr(log_buffer, "device=0x228B") != 0);

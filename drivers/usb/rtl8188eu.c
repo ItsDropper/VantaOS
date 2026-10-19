@@ -1,4 +1,5 @@
 #include "rtl8188eu.h"
+#include "rtl8188eu_phy_tables.h"
 
 #include "xhci.h"
 #include "serial.h"
@@ -1344,61 +1345,42 @@ int rtl8188eu_validate_phy_profile(const uint8_t *profile, size_t length,
            phase_polls[RTL8188EU_PHY_PHASE_IQ_CAL];
 }
 
+
+/* Apply the RTL8188E reference MAC/BB/AGC/RF tables in hardware bring-up order. */
+static int rtl_radio_apply_reference_tables(void)
+{
+    for(size_t i=0U;i<sizeof(rtl8188eu_mac_init)/sizeof(rtl8188eu_mac_init[0]);++i)
+        if(!rtl_reg_write8(rtl8188eu_mac_init[i].address,rtl8188eu_mac_init[i].value)) return 0;
+    for(size_t i=0U;i<sizeof(rtl8188eu_bb_init)/sizeof(rtl8188eu_bb_init[0]);++i)
+        if(!rtl_reg_write32(rtl8188eu_bb_init[i].address,rtl8188eu_bb_init[i].value)) return 0;
+    for(size_t i=0U;i<sizeof(rtl8188eu_agc_init)/sizeof(rtl8188eu_agc_init[0]);++i)
+        if(!rtl_reg_write32(0x0C78U,rtl8188eu_agc_init[i])) return 0;
+    for(size_t i=0U;i<sizeof(rtl8188eu_rf_init)/sizeof(rtl8188eu_rf_init[0]);++i) {
+        uint8_t address=rtl8188eu_rf_init[i].address;
+        uint32_t value=rtl8188eu_rf_init[i].value,verify;
+        if(address==0xFEU) {
+            if(!timer_get_ticks) return 0;
+            uint32_t start=timer_get_ticks(),ticks=value>=50000U?5U:1U,spins=0U;
+            while((uint32_t)(timer_get_ticks()-start)<ticks) if(++spins>=1000000U) return 0;
+            continue;
+        }
+        if(!rtl_rf_write(address,value)) return 0;
+        if(address!=0xFFU && (!rtl_rf_read(address,&verify)||
+           ((verify^value)&RTL8188EU_RF_DATA_MASK)!=0U)) return 0;
+    }
+    serial_write("VANTAOS_RTL8188EU_REFERENCE_MAC_BB_AGC_RF_TABLES_APPLIED_TX_BLOCKED\n");
+    return 1;
+}
+
 static int rtl_radio_execute_profile(void)
 {
-    size_t profile_size = 0U;
-    uint16_t count = 0U;
-    uint8_t phase_writes[RTL8188EU_PHY_PHASE_IQ_CAL + 1U] = {0};
-    uint8_t phase_polls[RTL8188EU_PHY_PHASE_IQ_CAL + 1U] = {0};
-    uint8_t last_phase = 0U;
-
-    if (!rtl_efuse_info.valid || !rtl_phy_load_profile(&profile_size, &count))
+    if(!rtl_efuse_info.valid || !rtl_radio_apply_reference_tables())
         return 0;
-
-    const uint8_t *records = rtl_phy_profile + RTL8188EU_PHY_PROFILE_HEADER_SIZE;
-    /* Validate the whole program before the first hardware write. */
-    for (uint16_t i = 0U; i < count; ++i) {
-        const uint8_t *record = records + (size_t)i * RTL8188EU_PHY_PROFILE_RECORD_SIZE;
-        uint8_t phase = record[1];
-        uint8_t op = record[0];
-        if (!rtl_phy_validate_record(record) || phase < last_phase)
-            return 0;
-        last_phase = phase;
-        if (op >= RTL8188EU_PHY_OP_WRITE8 && op <= RTL8188EU_PHY_OP_WRITE_RF20)
-            phase_writes[phase] = 1U;
-        else if (op >= RTL8188EU_PHY_OP_POLL8 && op <= RTL8188EU_PHY_OP_POLL_RF20)
-            phase_polls[phase] = 1U;
-    }
-    for (uint8_t phase = RTL8188EU_PHY_PHASE_MAC;
-         phase <= RTL8188EU_PHY_PHASE_TX_POWER; ++phase)
-        if (!phase_writes[phase])
-            return 0;
-    if (!phase_writes[RTL8188EU_PHY_PHASE_IQ_CAL] ||
-        !phase_polls[RTL8188EU_PHY_PHASE_IQ_CAL])
+    if(!rtl_apply_tx_power_for_channel(1U) ||
+       !rtl_radio_apply_crystal_trim_and_lc())
         return 0;
-
-    /* Execute through TX-power programming, then calibrate before IQK. */
-    for (uint16_t i = 0U; i < count; ++i) {
-        const uint8_t *record = records + (size_t)i * RTL8188EU_PHY_PROFILE_RECORD_SIZE;
-        if (record[1] == RTL8188EU_PHY_PHASE_IQ_CAL)
-            break;
-        if (!rtl_phy_execute_record(record))
-            return 0;
-    }
-    if (!rtl_apply_tx_power_for_channel(1U))
-        return 0;
-    if (!rtl_radio_apply_crystal_trim_and_lc())
-        return 0;
-    for (uint16_t i = 0U; i < count; ++i) {
-        const uint8_t *record = records + (size_t)i * RTL8188EU_PHY_PROFILE_RECORD_SIZE;
-        if (record[1] == RTL8188EU_PHY_PHASE_IQ_CAL &&
-            !rtl_phy_execute_record(record))
-            return 0;
-    }
-
-    /* Profile IQ_CAL records are not a hardware IQK implementation. */
-    serial_write("VANTAOS_RTL8188EU_PHY_PROFILE_RECORDS_OK_TX_STILL_BLOCKED\n");
-    return profile_size != 0U;
+    serial_write("VANTAOS_RTL8188EU_REFERENCE_PHY_SEQUENCE_COMPLETE_TX_BLOCKED\n");
+    return 1;
 }
 
 /*

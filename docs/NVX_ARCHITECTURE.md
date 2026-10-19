@@ -26,15 +26,17 @@ memory-space, and bus-master bits. This is strictly observational: discovery
 does not write the command register or enable bus mastering. The values are
 preflight diagnostics, not proof that a BAR is valid or that DMA is safe.
 
-For display-controller candidates, BAR0 is reported as a raw address/type/width
-only; its size is not inferred because the current PCI API does not expose BAR
-sizing. The new `nvx_resource` layer validates BAR type, width, base alignment,
-resource size, range overflow, and `size_t` conversion before mapping. Its MMIO
-acquisition path requires an explicit, size-known memory resource and uses the
-kernel's `mmio_map_region()` / `mmio_unmap_region()` contract. Since PCI currently
-provides no trustworthy BAR size, discovery produces `SIZE_UNKNOWN` and mapping
-is refused without calling the mapper. No live BAR sizing writes are performed.
-The identity descriptor still leaves MMIO base and length unset. The new `nvx_attach` path consumes a caller-supplied BAR0 resource with trusted size metadata, validates it, maps it, checks PCI memory decoding, probes PMC_BOOT_0/PMC_BOOT_1, and retains the mapping only when the register aperture responds. Failure paths unmap and fail closed; detach unmaps and transitions through QUIESCING to STOPPED. A successful attach is explicitly `PROBED`, not `INITIALIZED`, and publishes no capabilities. This is real attach/probe orchestration, but the PCI subsystem still has no trusted BAR-size discovery path, so hardware discovery cannot yet supply the resource automatically.
+For display-controller candidates, BAR0 is reported as a raw address/type/width.
+The PCI subsystem now has a serialized `pci_get_bar_size()` path that saves a BAR,
+probes its hardware mask, restores the original value, and validates the resulting
+power-of-two size and base alignment. It refuses to probe unless I/O decode,
+memory decode, and bus mastering are all disabled; it never disables them on its
+own. Thus a live GPU with firmware display or DMA state active will still yield
+`SIZE_UNKNOWN`, and mapping remains refused. The `nvx_resource` layer consumes a
+measured size only when this guarded probe succeeds, then validates width, range
+overflow, and `size_t` conversion before using `mmio_map_region()` /
+`mmio_unmap_region()`. The identity descriptor still leaves MMIO base and length
+unset until a later resource/attach layer has established them. The new `nvx_attach` path consumes a caller-supplied BAR0 resource with trusted size metadata, validates it, maps it, checks PCI memory decoding, probes PMC_BOOT_0/PMC_BOOT_1, and retains the mapping only when the register aperture responds. Failure paths unmap and fail closed; detach unmaps and transitions through QUIESCING to STOPPED. A successful attach is explicitly `PROBED`, not `INITIALIZED`, and publishes no capabilities. This is real attach/probe orchestration, but the PCI subsystem still has no trusted BAR-size discovery path, so hardware discovery cannot yet supply the resource automatically.
 
 A new `nvx_mmio` layer provides bounded 32-bit volatile register reads and writes over a caller-owned mapping. It rejects null mappings, unaligned base/offset pairs, and accesses that would cross the supplied mapping length; read failures zero the output. The BAR0 probe now uses this common accessor rather than dereferencing register pointers directly. Its test suite covers valid reads/writes and invalid bounds/alignment. The accessors do not establish memory attributes or provide DMA ordering barriers, which remain responsibilities of the platform mapping/synchronization layers.
 

@@ -158,9 +158,10 @@ The NVX firmware acquisition layer currently selects `gsp_ga10x.bin` for the rec
 The focused NVX workflow compiles tests with `-Wall -Wextra -Werror` and
 exercises PCI matching, exact family/profile IDs, unknown-ID fallback,
 subsystem-ID handling, auxiliary-function filtering, diagnostics, bounded MMIO
-reads/writes, attach/probe rollback and teardown, firmware acquisition and
-verification failures, mapping bounds and alignment, lifecycle ordering, capability
-gating, shutdown and fail-closed behavior. These tests
+reads/writes, host-simulated 32/64-bit PCI BAR sizing and register restoration,
+active-device sizing refusal, attach/probe rollback and teardown, firmware
+acquisition and verification failures, mapping bounds and alignment, lifecycle
+ordering, capability gating, shutdown and fail-closed behavior. These tests
 validate software logic, not physical hardware. Use QEMU for generic boot
 regressions and real hardware for RTX 3060 support claims. QEMU success cannot
 prove physical NVIDIA support.

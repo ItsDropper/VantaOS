@@ -112,7 +112,6 @@ static uint8_t rtl_bulk_in;
 static uint8_t rtl_bulk_out;
 static uint8_t rtl_register_buffer[RTL8188EU_FW_WRITE_CHUNK] __attribute__((aligned(64)));
 static uint8_t rtl_firmware[RTL8188EU_FW_MAX_SIZE + 1U] __attribute__((aligned(64)));
-static uint8_t rtl_phy_profile[RTL8188EU_PHY_PROFILE_MAX_SIZE] __attribute__((aligned(64)));
 static uint8_t rtl_firmware_attempted;
 static uint8_t rtl_firmware_ready;
 /*

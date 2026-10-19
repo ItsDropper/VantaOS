@@ -16,6 +16,7 @@ on:
       - "include/nvx_gpuva.h"
       - "include/nvx_memory.h"
       - "include/nvx_sync.h"
+      - "include/nvx_submit.h"
       - "include/pci.h"
       - "include/mmio.h"
       - "include/serial.h"
@@ -31,6 +32,7 @@ on:
       - "scripts/test_nvx_gpuva.c"
       - "scripts/test_nvx_memory.c"
       - "scripts/test_nvx_sync.c"
+      - "scripts/test_nvx_submit.c"
       - "scripts/test_pci_bar_size.c"
       - ".github/workflows/nvx-tests.yml"
   workflow_dispatch:
@@ -156,6 +158,16 @@ jobs:
 
       - name: Test NVX monotonic fences, invalid signals and device loss
         run: /tmp/vantaos-nvx-sync-test
+
+      - name: Compile NVX batch validation tests with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_submit.c drivers/gpu/nvx/nvx_submit.c \
+            drivers/gpu/nvx/nvx_memory.c drivers/gpu/nvx/nvx_gpuva.c \
+            drivers/gpu/nvx/nvx_dma.c -o /tmp/vantaos-nvx-submit-test
+
+      - name: Test command bounds, relocation overlap and target ranges
+        run: /tmp/vantaos-nvx-submit-test
 
       - name: Compile NVX lifecycle tests with strict warnings
         run: |

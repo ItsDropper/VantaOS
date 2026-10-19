@@ -15,6 +15,7 @@ on:
       - "include/nvx_dma.h"
       - "include/nvx_gpuva.h"
       - "include/nvx_memory.h"
+      - "include/nvx_sync.h"
       - "include/pci.h"
       - "include/mmio.h"
       - "include/serial.h"
@@ -29,6 +30,7 @@ on:
       - "scripts/test_nvx_dma.c"
       - "scripts/test_nvx_gpuva.c"
       - "scripts/test_nvx_memory.c"
+      - "scripts/test_nvx_sync.c"
       - "scripts/test_pci_bar_size.c"
       - ".github/workflows/nvx-tests.yml"
   workflow_dispatch:
@@ -145,6 +147,15 @@ jobs:
 
       - name: Test NVX memory object ownership, rollback and stale handles
         run: /tmp/vantaos-nvx-memory-test
+
+      - name: Compile NVX software fence timeline tests with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_sync.c drivers/gpu/nvx/nvx_sync.c \
+            -o /tmp/vantaos-nvx-sync-test
+
+      - name: Test NVX monotonic fences, invalid signals and device loss
+        run: /tmp/vantaos-nvx-sync-test
 
       - name: Compile NVX lifecycle tests with strict warnings
         run: |

@@ -1439,8 +1439,7 @@ static int rtl_radio_run_iq_calibration(void)
     ok=1;
 restore:
     for(size_t i=0;i<16;i++)(void)rtl_reg_write32(adda[i],oa[i]);
-    for(size_t i=0;i<8;i++)(void)rtl_reg_write32(ctl[i],oc[i]);
-    (void)rtl_reg_write32(0xE28,0U);(void)rtl_reg_write8(0x522,(uint8_t)pause);
+    for(size_t i=0;i<9;i++)(void)rtl_reg_write32(ctl[i],oc[i]);(void)rtl_reg_write8(0x522,(uint8_t)pause);
     if(!ok){(void)rtl_reg_write32(0xC80,oiq);(void)rtl_reg_write32(0xC94,oafe);
         (void)rtl_reg_write32(0xC4C,oecca);(void)rtl_reg_write32(0xC14,orx);
         (void)rtl_reg_write32(0xCA0,orext);}

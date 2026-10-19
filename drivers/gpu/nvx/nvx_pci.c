@@ -12,9 +12,8 @@
 #include <stdint.h>
 
 /*
- * Phase 1 only: inventory NVIDIA PCI functions. This code deliberately does
- * not map BARs, enable PCI command bits, touch device registers, or initialize
- * any GPU engine. PCI identity is not a claim of hardware support.
+ * PCI discovery and family identification only. No BAR mapping, PCI command
+ * changes, device-register access, firmware loading, or engine initialization.
  */
 
 static void nvx_write_hex(uint32_t value, unsigned digits)
@@ -30,6 +29,30 @@ static void nvx_write_hex(uint32_t value, unsigned digits)
         buffer[i] = hex[(value >> shift) & 0xFU];
     }
     serial_write_bytes(buffer, digits);
+}
+
+static const char *nvx_family_name(nvx_generation_family_t family)
+{
+    switch (family)
+    {
+        case NVX_FAMILY_LEGACY: return "LEGACY";
+        case NVX_FAMILY_TURING: return "TURING";
+        case NVX_FAMILY_AMPERE: return "AMPERE";
+        case NVX_FAMILY_ADA: return "ADA";
+        case NVX_FAMILY_HOPPER: return "HOPPER";
+        case NVX_FAMILY_UNKNOWN:
+        default: return "UNKNOWN";
+    }
+}
+
+static const char *nvx_profile_name(nvx_device_profile_t profile)
+{
+    switch (profile)
+    {
+        case NVX_PROFILE_GEFORCE_RTX_3060: return "GEFORCE-RTX-3060";
+        case NVX_PROFILE_UNKNOWN:
+        default: return "UNKNOWN";
+    }
 }
 
 static void nvx_log_bar0(const struct pci_device *device)
@@ -93,12 +116,21 @@ static void nvx_log_identity(const struct pci_device *device)
         nvx_write_hex(subsystem_device, 4);
     }
 
-    serial_write(gpu_candidate
-        ? " role=GPU-candidate family=UNKNOWN\n"
-        : " role=non-GPU-NVIDIA-function\n");
-
     if (gpu_candidate)
+    {
+        serial_write(" role=GPU-candidate family=");
+        serial_write(nvx_family_name(descriptor.family));
+        serial_write(" profile=");
+        serial_write(nvx_profile_name(descriptor.profile));
+        serial_write(descriptor.profile == NVX_PROFILE_UNKNOWN
+            ? " identification=UNRECOGNIZED-PCI-ID\n"
+            : " identification=PCI-ID-TABLE-ONLY\n");
         nvx_log_bar0(device);
+    }
+    else
+    {
+        serial_write(" role=non-GPU-NVIDIA-function\n");
+    }
 
     serial_write("[NVX] state=DETECTED; initialization=NOT_ATTEMPTED; acceleration=UNAVAILABLE\n");
 }

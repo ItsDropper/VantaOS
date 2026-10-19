@@ -775,3 +775,54 @@ uint16_t pci_read_config16(const struct pci_device *device, uint8_t offset)
     uint16_t hi = pci_read_config8(device, (uint8_t)(offset + 1U));
     return (uint16_t)(lo | (uint16_t)(hi << 8));
 }
+
+/* Find one conventional PCI capability without writing config space. */
+int pci_find_capability(const struct pci_device *device, uint8_t capability_id,
+                        uint8_t *out_offset)
+{
+    uint8_t header_type;
+    uint8_t offset;
+    uint64_t visited = 0;
+
+    if (out_offset != 0)
+        *out_offset = 0;
+    if (device == 0 || out_offset == 0 || capability_id == 0U ||
+        capability_id == 0xFFU)
+        return 0;
+
+    if ((pci_read_config16(device, 0x06U) & 0x0010U) == 0U)
+        return 0;
+
+    header_type = (uint8_t)(pci_read_config8(device, 0x0EU) & 0x7FU);
+    if (header_type != 0U && header_type != 1U)
+        return 0;
+
+    offset = pci_read_config8(device, 0x34U);
+    for (unsigned hops = 0; offset != 0U && hops < 48U; ++hops)
+    {
+        uint8_t id;
+        uint8_t next;
+        unsigned slot;
+
+        if (offset < 0x40U || offset > 0xFCU || (offset & 0x03U) != 0U)
+            return 0;
+        slot = (unsigned)(offset - 0x40U) / 4U;
+        if (slot >= 48U || (visited & (1ULL << slot)) != 0U)
+            return 0;
+        visited |= 1ULL << slot;
+
+        id = pci_read_config8(device, offset);
+        if (id == 0U || id == 0xFFU)
+            return 0;
+        if (id == capability_id)
+        {
+            *out_offset = offset;
+            return 1;
+        }
+        next = pci_read_config8(device, (uint8_t)(offset + 1U));
+        if (next == 0U)
+            return 0;
+        offset = next;
+    }
+    return 0;
+}

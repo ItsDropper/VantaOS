@@ -35,6 +35,16 @@ static inline uint32_t inl(uint16_t port)
 {
     return pci_test_inl(port);
 }
+
+static inline void outw(uint16_t port, uint16_t value)
+{
+    uint16_t aligned_port = (uint16_t)(port & (uint16_t)~3U);
+    uint32_t old_value = pci_test_inl(aligned_port);
+    unsigned shift = (unsigned)(port & 2U) * 8U;
+    uint32_t mask = 0xFFFFU << shift;
+    pci_test_outl(aligned_port, (old_value & ~mask) |
+                  ((uint32_t)value << shift));
+}
 #else
 static inline void outl(uint16_t port, uint32_t value)
 {
@@ -54,6 +64,11 @@ static inline uint32_t inl(uint16_t port)
         : "Nd"(port)
     );
     return value;
+}
+
+static inline void outw(uint16_t port, uint16_t value)
+{
+    __asm__ volatile ("outw %0, %1" : : "a"(value), "Nd"(port));
 }
 #endif
 
@@ -754,6 +769,41 @@ const char* pci_get_class_name(
         default:
             return "Other Device";
     }
+}
+
+
+int pci_write_config16(const struct pci_device *device, uint8_t offset,
+                       uint16_t value)
+{
+    uint64_t flags;
+    uint16_t actual;
+    if (device == 0 || offset > 254U)
+        return 0;
+    flags = pci_lock_config();
+    outl(PCI_CONFIG_ADDRESS,
+         pci_config_address(device->bus, device->slot, device->function, offset));
+    outw((uint16_t)(PCI_CONFIG_DATA + (offset & 2U)), value);
+    actual = (uint16_t)(pci_read_config_locked(
+        device->bus, device->slot, device->function, offset) >>
+        ((offset & 2U) * 8U));
+    pci_unlock_config(flags);
+    return actual == value;
+}
+
+int pci_write_config32(const struct pci_device *device, uint8_t offset,
+                       uint32_t value)
+{
+    uint64_t flags;
+    uint32_t actual;
+    if (device == 0 || offset > 252U || (offset & 3U) != 0U)
+        return 0;
+    flags = pci_lock_config();
+    pci_write_config_locked(device->bus, device->slot, device->function,
+                            offset, value);
+    actual = pci_read_config_locked(device->bus, device->slot,
+                                    device->function, offset);
+    pci_unlock_config(flags);
+    return actual == value;
 }
 
 uint32_t pci_read_config32(const struct pci_device *device, uint8_t offset)

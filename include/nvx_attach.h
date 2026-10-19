@@ -23,6 +23,7 @@ typedef enum nvx_attach_status {
 } nvx_attach_status_t;
 
 /*
+ * The caller must zero-initialize the output handle before first attach.
  * Runtime handle for a mapped, register-responsive candidate. The BAR extent
  * must come from a trusted platform resource allocator; NVX never guesses it.
  * A successful attach means PCI/MMIO probe succeeded, not that 3D acceleration

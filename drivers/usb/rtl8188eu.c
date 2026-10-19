@@ -1237,21 +1237,25 @@ static int rtl_iqk_once(uint16_t tx[2],uint16_t rx[2])
 static int rtl_radio_run_iq_calibration(void)
 {
     static const uint16_t adda[16]={0x85C,0xE6C,0xE70,0xE74,0xE78,0xE7C,0xE80,0xE84,0xE88,0xE8C,0xED0,0xED4,0xED8,0xEDC,0xEE0,0xEEC};
-    static const uint16_t ctl[9]={0xA04,0xC04,0xC08,0x870,0x874,0x860,0x864,0x858,0xE28};
-    uint32_t oa[16],oc[9],pause,oiq,oafe,oecca,orx,orext;
+    static const uint16_t ctl[9]={0xA04,0xC04,0xC08,0x870,0x874,0x860,0x864,0xB68,0xE28};
+    uint32_t oa[16],oc[9],pause,oiq,oafe,oecca,orx,orext,hssi0,hssi1,lssi0,lssi1;
     uint16_t t1[2],r1[2],t2[2],r2[2];int ok=0;
     for(size_t i=0;i<16;i++)if(!rtl_reg_read32(adda[i],&oa[i]))return 0;
     for(size_t i=0;i<9;i++)if(!rtl_reg_read32(ctl[i],&oc[i]))return 0;
-    uint8_t p8;
-    if(!rtl_reg_read8(0x522,&p8)||!rtl_reg_read32(0xC80,&oiq)||
+    uint8_t p8,bcn0,bcn1;
+    if(!rtl_reg_read8(0x522,&p8)||!rtl_reg_read8(0x550,&bcn0)||!rtl_reg_read8(0x551,&bcn1)||
+       !rtl_reg_read32(0x820,&hssi0)||!rtl_reg_read32(0x828,&hssi1)||
+       !rtl_reg_read32(0x840,&lssi0)||!rtl_reg_read32(0x844,&lssi1)||!rtl_reg_read32(0xC80,&oiq)||
        !rtl_reg_read32(0xC94,&oafe)||!rtl_reg_read32(0xC4C,&oecca)||
        !rtl_reg_read32(0xC14,&orx)||!rtl_reg_read32(0xCA0,&orext))return 0;
     pause=p8;
     for(size_t i=0;i<16;i++)if(!rtl_reg_write32(adda[i],i==0?0x0B1B25A0U:0x0BDB25A0U))goto restore;
+    if(!(hssi0&0x100U)&&(!rtl_reg_write32(0x820,hssi0|0x100U)||!rtl_reg_write32(0x828,hssi1|0x100U)))goto restore;
     if(!rtl_reg_write32(0xA04,oc[0]|0x0F000000U)||!rtl_reg_write32(0xC04,0x03A05600U)||
        !rtl_reg_write32(0xC08,0x000800E4U)||!rtl_reg_write32(0x874,0x22204000U)||
        !rtl_reg_write32(0x870,oc[3]|0x04000400U)||!rtl_reg_write32(0x860,oc[5]&~0x400U)||
-       !rtl_reg_write32(0x864,oc[6]&~0x400U)||!rtl_reg_write32(0x858,0x00080000U)||
+       !rtl_reg_write32(0x864,oc[6]&~0x400U)||!rtl_reg_write32(0xB68,0x00080000U)||
+       !rtl_reg_write8(0x550,(uint8_t)(bcn0&~0x08U))||!rtl_reg_write8(0x551,(uint8_t)(bcn1&~0x08U))||
        !rtl_reg_write32(0xE28,0x80800000U)||!rtl_reg_write32(0xE40,0x01007C00U)||
        !rtl_reg_write32(0xE44,0x01004800U)||!rtl_reg_write8(0x522,0xE7U)||
        !rtl_iqk_once(t1,r1)||!rtl_iqk_once(t2,r2))goto restore;
@@ -1281,7 +1285,9 @@ restore:
         int restore_ok=1;
         for(size_t i=0;i<16;i++)if(!rtl_reg_write32(adda[i],oa[i]))restore_ok=0;
         for(size_t i=0;i<9;i++)if(!rtl_reg_write32(ctl[i],oc[i]))restore_ok=0;
-        if(!rtl_reg_write8(0x522,(uint8_t)pause))restore_ok=0;
+        if(!rtl_reg_write8(0x522,(uint8_t)pause)||!rtl_reg_write8(0x550,bcn0)||!rtl_reg_write8(0x551,bcn1))restore_ok=0;
+        if(!rtl_reg_write32(0x820,hssi0)||!rtl_reg_write32(0x828,hssi1)||
+           !rtl_reg_write32(0x840,lssi0)||!rtl_reg_write32(0x844,lssi1))restore_ok=0;
         if(!restore_ok)ok=0;
     }
     if(!ok){(void)rtl_reg_write32(0xC80,oiq);(void)rtl_reg_write32(0xC94,oafe);
@@ -1318,9 +1324,9 @@ static int rtl_radio_execute_profile(void)
 }
 
 /*
- * Bring up the BB/RF interface, apply a validated integrator-supplied PHY
- * profile, then enable TX only after MAC/BB/AGC/power and calibration stages
- * all pass register readback and bounded status polling.
+ * Bring up the BB/RF interface, apply embedded reference PHY tables, and
+ * enable TX only after factory power programming, LC calibration and stable
+ * TX/RX IQ calibration pass their checks.
  */
 static int rtl_radio_preflight(void)
 {

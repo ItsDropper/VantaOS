@@ -94,6 +94,8 @@ int main(void)
     unsigned writes_before = bar_write_count;
     assert(!pci_get_bar_size(&gpu, 0U, &size));
     assert(size == 0U && bar_write_count == writes_before);
+    config_space[1] = 0x0001U;
+    assert(!pci_get_bar_size(&gpu, 0U, &size));
     config_space[1] = 0x0004U;
     assert(!pci_get_bar_size(&gpu, 0U, &size));
     assert(bar_write_count == writes_before);

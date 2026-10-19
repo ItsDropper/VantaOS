@@ -444,8 +444,10 @@ int pci_get_bar_size(const struct pci_device* device, uint8_t index,
             device->bus, device->slot, device->function,
             (uint8_t)(offset + 4U));
     touched = 0;
-    if (restored_low != low || (is_64bit && restored_high != high))
+    if (restored_low != low || (is_64bit && restored_high != high)) {
+        touched = 1;
         goto done;
+    }
 
     if (is_io)
     {

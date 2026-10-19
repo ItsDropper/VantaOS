@@ -9,16 +9,15 @@ implemented read-only PCI inventory and the remaining planned hardware work.
 Phase 1 enumerates the existing PCI registry and logs every function with
 vendor ID `0x10DE`. Diagnostics include BDF, vendor/device IDs, revision, class,
 subclass, programming interface, and subsystem IDs for type-0 headers. NVIDIA
-functions with PCI class `03h` and subclass `00h` (VGA) or `02h` (3D
-controller) are labeled GPU candidates; NVIDIA audio and other auxiliary
-functions are reported separately. This class check is candidate matching, not
-a device-family support claim.
+functions with PCI class `03h` (display controller) are labeled GPU candidates;
+NVIDIA audio and other auxiliary functions are reported separately. This class
+check is candidate matching, not a device-family support claim.
 
-For GPU candidates, BAR0 is reported as a raw address/type/width only; its size
-is not inferred because the current PCI API does not expose BAR sizing. The
-identity descriptor deliberately leaves MMIO base and length unset until a
-validated resource API exists. Discovery does not map BARs, enable PCI command
-bits, access GPU registers, load firmware, or initialize engines.
+For display-controller candidates, BAR0 is reported as a raw address/type/width
+only; its size is not inferred because the current PCI API does not expose BAR
+sizing. The identity descriptor deliberately leaves MMIO base and length unset
+until a validated resource API exists. Discovery does not map BARs, enable PCI
+command bits, access GPU registers, load firmware, or initialize engines.
 
 The log explicitly reports `DETECTED`, `NOT_ATTEMPTED`, and `UNAVAILABLE`.
 A detected PCI function is not proof of a recognized GPU family, working
@@ -117,7 +116,7 @@ support.
 ## Implementation phases
 
 1. Generic GPU/display contracts, build ownership and architecture checks. (Merged.)
-2. Read-only NVIDIA PCI inventory and conservative GPU-candidate matching. (Implemented in this change; CI evidence pending.)
+2. Read-only NVIDIA PCI inventory and conservative display-controller matching. (Implemented in this change; CI evidence pending.)
 3. Validated BAR sizing/mapping, lifecycle state machine and failure recovery.
 4. Firmware provider and verified family-specific identification tables.
 5. Device memory management, DMA, interrupts and synchronization.

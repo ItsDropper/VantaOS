@@ -50,14 +50,15 @@ For writes, a zero mask means the full register width; otherwise the driver perf
 
 ## eFuse-derived transmit-power data
 
-The driver decodes the three 2.4-GHz channel-group CCK and HT40 base indices
-from the RTL8188E logical eFuse map, along with the packed signed OFDM and
-HT20 deltas. The groups correspond to channels 1–3, 4–9, and 10–14. Missing
-(`0xff`) or out-of-range base indices are rejected instead of being replaced
-with guessed values. A separate helper selects the channel group and derives
-bounded CCK, OFDM, HT20, and HT40 indices with signed-delta handling and 6-bit
-clamping. These are still software calibration inputs: the helper does not
-program transmit-power registers or prove the board's RF output is correct.
+The driver decodes all six RTL8188E CCK base indices (logical eFuse offsets
+0x10–0x15), all five HT40 base indices (0x16–0x1a), and the packed signed
+OFDM/HT20 deltas (0x1b). CCK groups cover channels 1–2, 3–5, 6–8, 9–11,
+12–13, and 14; HT40 has five groups, with channel 14 excluded by policy.
+Missing (`0xff`) or out-of-range base indices are rejected rather than replaced
+with guessed values. The calculation helper selects the matching group and
+derives bounded CCK, OFDM, HT20, and HT40 indices with signed-delta handling.
+These remain software calibration inputs: the helper does not yet program the
+hardware transmit-power registers or prove the board's RF output is correct.
 
 ## Required phases
 

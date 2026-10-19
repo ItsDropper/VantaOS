@@ -14,7 +14,7 @@ on:
       - "include/nvx_firmware.h"
       - "include/nvx_dma.h"
       - "include/nvx_gpuva.h"
-      - "include/nvx_memory.h"
+      - "include/nvx_object_memory.h"
       - "include/nvx_sync.h"
       - "include/nvx_submit.h"
       - "include/pci.h"
@@ -30,7 +30,7 @@ on:
       - "scripts/test_nvx_firmware.c"
       - "scripts/test_nvx_dma.c"
       - "scripts/test_nvx_gpuva.c"
-      - "scripts/test_nvx_memory.c"
+      - "scripts/test_nvx_object_memory.c"
       - "scripts/test_nvx_sync.c"
       - "scripts/test_nvx_submit.c"
       - "scripts/test_pci_bar_size.c"
@@ -143,7 +143,7 @@ jobs:
       - name: Compile NVX memory object tests with strict warnings
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
-            scripts/test_nvx_memory.c drivers/gpu/nvx/nvx_memory.c \
+            scripts/test_nvx_object_memory.c drivers/gpu/nvx/nvx_object_memory.c \
             drivers/gpu/nvx/nvx_gpuva.c drivers/gpu/nvx/nvx_dma.c \
             -o /tmp/vantaos-nvx-memory-test
 

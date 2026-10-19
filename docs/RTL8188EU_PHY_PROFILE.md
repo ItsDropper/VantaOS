@@ -15,7 +15,7 @@ The 24-byte header is:
 | 10 | 2 | Header size, 24 |
 | 12 | 4 | Total file size, including header |
 | 16 | 4 | CRC-32/IEEE of all record bytes |
-| 20 | 1 | RTL8188E chip cut; `0xff` accepts any cut |
+| 20 | 1 | Exact RTL8188E chip cut; wildcard `0xff` is rejected |
 | 21 | 1 | Reserved, must be zero |
 | 22 | 2 | Record count |
 

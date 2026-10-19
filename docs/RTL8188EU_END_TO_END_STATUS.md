@@ -58,3 +58,8 @@ This is an incremental hardware bring-up attempt, not complete Wi-Fi support. It
 The driver now loads `/SYSTEM/RTL8188EU.PHY` using the format in [RTL8188EU_PHY_PROFILE.md](RTL8188EU_PHY_PROFILE.md). The executor checks the complete record program before applying writes, performs masked register read-modify-write with readback, bounds poll loops, inserts the existing factory crystal-trim/LC-calibration stage between TX-power and IQ-calibration phases, and only opens the software TX gate after the profile succeeds. `build.sh` accepts `RTL8188EU_PHY_PROFILE=/path/to/profile.bin` and installs the supplied file into the FAT32 system image.
 
 This is a real code path, but it does not supply the missing calibration values: no profile is bundled, and a correct profile still needs physical-adapter validation. End-to-end Wi-Fi is therefore not yet claimed.
+
+
+## Architecture review follow-up
+
+See [RTL8188EU_ARCHITECTURE_REVIEW.md](RTL8188EU_ARCHITECTURE_REVIEW.md) for a corrected assessment of the Gemini review. In particular, 5 GHz is a silicon limitation (not a missing RTL8188EU driver feature), HT negotiation remains unimplemented, and the global-state driver safely rejects a second adapter. Firmware wait loops and per-device state still need proper state-machine/context refactors; this follow-up does not claim those larger changes are complete.

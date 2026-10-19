@@ -821,6 +821,31 @@ static int rtl_load_efuse_identity(void)
     return 1;
 }
 
+static uint8_t rtl_power_clamp(int value)
+{
+    if (value < 0) return 0U;
+    if (value > 0x3F) return 0x3FU;
+    return (uint8_t)value;
+}
+
+int rtl8188eu_calculate_tx_power_indices(
+    const rtl8188eu_tx_power_calibration_t *calibration, uint8_t channel,
+    rtl8188eu_tx_power_indices_t *indices)
+{
+    size_t group;
+    if (!calibration || !indices || channel < 1U || channel > 13U)
+        return 0;
+    if (channel <= 3U) group = 0U;
+    else if (channel <= 9U) group = 1U;
+    else group = 2U;
+    int ht40 = calibration->ht40_base[group];
+    indices->cck = calibration->cck_base[group];
+    indices->ht40 = rtl_power_clamp(ht40);
+    indices->ofdm = rtl_power_clamp(ht40 + calibration->ofdm_diff);
+    indices->ht20 = rtl_power_clamp(ht40 + calibration->ht20_diff);
+    return 1;
+}
+
 /*
  * RTL8188E RF serial interface (path A, the single 1T1R path). These are
  * transport primitives only; they do not substitute for board-specific PHY

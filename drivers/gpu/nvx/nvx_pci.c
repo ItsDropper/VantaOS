@@ -123,8 +123,16 @@ static void nvx_log_identity(const struct pci_device *device)
         serial_write(" profile=");
         serial_write(nvx_profile_name(descriptor.profile));
         serial_write(descriptor.profile == NVX_PROFILE_UNKNOWN
-            ? " identification=UNRECOGNIZED-PCI-ID\n"
-            : " identification=PCI-ID-TABLE-ONLY\n");
+            ? " identification=UNRECOGNIZED-PCI-ID"
+            : " identification=PCI-ID-TABLE-ONLY");
+        serial_write(" pci-command=0x");
+        nvx_write_hex(descriptor.pci_command, 4);
+        serial_write((descriptor.pci_command & NVX_PCI_COMMAND_MEMORY_SPACE) != 0
+            ? " memory-space=enabled"
+            : " memory-space=disabled");
+        serial_write((descriptor.pci_command & NVX_PCI_COMMAND_BUS_MASTER) != 0
+            ? " bus-master=enabled\n"
+            : " bus-master=disabled\n");
         nvx_log_bar0(device);
     }
     else

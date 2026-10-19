@@ -988,60 +988,43 @@ static int rtl_wait_ticks_bounded(uint32_t ticks)
     return 1;
 }
 
-static int rtl_radio_apply_crystal_trim_and_lc(void)
+static int rtl_radio_apply_crystal_trim(void)
 {
-    uint32_t crystal, old_channel, value, verify;
-    uint8_t trim = (uint8_t)(rtl_efuse_info.crystal_trim & 0x3FU);
-    int complete = 0;
-
-    if (!rtl_efuse_info.valid || trim == 0x3FU ||
-        !rtl_reg_read32(RTL8188EU_REG_AFE_XTAL_CTRL, &crystal))
+    uint32_t crystal,value,verify;
+    uint8_t trim=(uint8_t)(rtl_efuse_info.crystal_trim&0x3FU);
+    if(!rtl_efuse_info.valid||trim==0x3FU||
+       !rtl_reg_read32(RTL8188EU_REG_AFE_XTAL_CTRL,&crystal))
         return 0;
+    value=(crystal&~RTL8188EU_AFE_XTAL_CAP_MASK)|
+          ((uint32_t)trim<<11)|((uint32_t)trim<<17);
+    return rtl_reg_write32(RTL8188EU_REG_AFE_XTAL_CTRL,value)&&
+           rtl_reg_read32(RTL8188EU_REG_AFE_XTAL_CTRL,&verify)&&
+           ((verify^value)&RTL8188EU_AFE_XTAL_CAP_MASK)==0U;
+}
 
-    /* The 6-bit factory trim drives both halves of the crystal-cap field. */
-    value = (crystal & ~RTL8188EU_AFE_XTAL_CAP_MASK) |
-            ((uint32_t)trim << 11) | ((uint32_t)trim << 17);
-    if (!rtl_reg_write32(RTL8188EU_REG_AFE_XTAL_CTRL, value) ||
-        !rtl_reg_read32(RTL8188EU_REG_AFE_XTAL_CTRL, &verify) ||
-        (verify & RTL8188EU_AFE_XTAL_CAP_MASK) !=
-            (value & RTL8188EU_AFE_XTAL_CAP_MASK))
+static int rtl_radio_run_lc_calibration(void)
+{
+    uint32_t old_channel,value,verify;
+    int complete=0;
+    if(!rtl_rf_read(RTL8188EU_RF_CHNLBW,&old_channel)||
+       old_channel==RTL8188EU_RF_DATA_MASK||
+       (old_channel&RTL8188EU_RF_LC_CALIBRATE)!=0U)
         return 0;
-
-    if (!rtl_rf_read(RTL8188EU_RF_CHNLBW, &old_channel) ||
-        old_channel == RTL8188EU_RF_DATA_MASK)
+    if(!rtl_rf_write(RTL8188EU_RF_CHNLBW,old_channel|RTL8188EU_RF_LC_CALIBRATE))
         return 0;
-
-    if (!rtl_rf_write(RTL8188EU_RF_CHNLBW,
-                      old_channel | RTL8188EU_RF_LC_CALIBRATE))
-        return 0;
-
-    /*
-     * LC calibration takes milliseconds. Space status reads across timer
-     * ticks instead of issuing 128 immediate reads that can falsely time out.
-     * The 100-tick deadline is bounded; a stalled timer fails closed.
-     */
-    for (uint32_t attempt = 0U; attempt < 100U; ++attempt) {
-        if (!rtl_rf_read(RTL8188EU_RF_CHNLBW, &value))
-            break;
-        if ((value & RTL8188EU_RF_LC_CALIBRATE) == 0U) {
-            complete = 1;
-            break;
-        }
-        if(!rtl_wait_ticks_bounded(1U))
-            break;
+    /* LC calibration takes milliseconds; poll once per 10-ms kernel tick. */
+    for(uint32_t attempt=0U;attempt<100U;++attempt) {
+        if(!rtl_rf_read(RTL8188EU_RF_CHNLBW,&value))break;
+        if((value&RTL8188EU_RF_LC_CALIBRATE)==0U){complete=1;break;}
+        if(!rtl_wait_ticks_bounded(1U))break;
     }
-
-    /* Restore the original RF channel/bandwidth state even after timeout. */
-    if (!rtl_rf_write(RTL8188EU_RF_CHNLBW, old_channel))
+    if(!rtl_rf_write(RTL8188EU_RF_CHNLBW,old_channel))return 0;
+    if(!complete||!rtl_rf_read(RTL8188EU_RF_CHNLBW,&verify)||
+       ((verify^old_channel)&~RTL8188EU_RF_LC_CALIBRATE)!=0U)
         return 0;
-    if (!complete || !rtl_rf_read(RTL8188EU_RF_CHNLBW, &verify) ||
-        ((verify ^ old_channel) & ~RTL8188EU_RF_LC_CALIBRATE) != 0U)
-        return 0;
-
     serial_write("VANTAOS_RTL8188EU_CRYSTAL_TRIM_LC_OK_TX_STILL_BLOCKED\n");
     return 1;
 }
-
 
 /*
  * Optional board-profile format validator. The normal bring-up path uses the
@@ -1191,11 +1174,23 @@ static int rtl_radio_apply_reference_tables(void)
         if(!rtl_reg_write8(rtl8188eu_mac_init[i].address,rtl8188eu_mac_init[i].value)) return 0;
     for(size_t i=0U;i<sizeof(rtl8188eu_bb_init)/sizeof(rtl8188eu_bb_init[0]);++i)
         if(!rtl_reg_write32(rtl8188eu_bb_init[i].address,rtl8188eu_bb_init[i].value)) return 0;
-    /* RTL8188E common BB init toggles AGC core bit 1 before loading AGC data. */
-    if(!rtl_reg_write32(0x0C50U,0x69553422U)||!rtl_wait_ticks_bounded(1U)||
-       !rtl_reg_write32(0x0C50U,0x69553420U)||!rtl_wait_ticks_bounded(1U))return 0;
+    /* Match r88e_init_bb_common: load AGC, toggle its core, then trim crystal. */
     for(size_t i=0U;i<sizeof(rtl8188eu_agc_init)/sizeof(rtl8188eu_agc_init[0]);++i)
         if(!rtl_reg_write32(0x0C78U,rtl8188eu_agc_init[i])) return 0;
+    if(!rtl_reg_write32(0x0C50U,0x69553422U)||!rtl_wait_ticks_bounded(1U)||
+       !rtl_reg_write32(0x0C50U,0x69553420U)||!rtl_wait_ticks_bounded(1U)||
+       !rtl_radio_apply_crystal_trim())return 0;
+
+    /* Configure the path-A RF environment and HSSI transfer lengths first. */
+    uint32_t rf_env,rf_oe,hssi2,verify;
+    if(!rtl_reg_read32(0x870U,&rf_env)||!rtl_reg_read32(0x860U,&rf_oe)||
+       !rtl_reg_read32(0x824U,&hssi2))return 0;
+    if(!rtl_reg_write32(0x860U,rf_oe|0x00100000U)||
+       !rtl_reg_write32(0x860U,rf_oe|0x00100010U)||
+       !rtl_reg_write32(0x824U,hssi2&~0x00000400U)||
+       !rtl_reg_write32(0x824U,hssi2&~0x00000C00U)||
+       !rtl_reg_read32(0x824U,&verify)||(verify&0x00000C00U)!=0U)
+        return 0;
     for(size_t i=0U;i<sizeof(rtl8188eu_rf_init)/sizeof(rtl8188eu_rf_init[0]);++i) {
         uint8_t address=rtl8188eu_rf_init[i].address;
         uint32_t value=rtl8188eu_rf_init[i].value,verify;
@@ -1207,6 +1202,9 @@ static int rtl_radio_apply_reference_tables(void)
         if(address!=0xFFU && (!rtl_rf_read(address,&verify)||
            ((verify^value)&RTL8188EU_RF_DATA_MASK)!=0U)) return 0;
     }
+    if(!rtl_reg_write32(0x870U,rf_env)||
+       !rtl_reg_read32(0x870U,&verify)||verify!=rf_env)
+        return 0;
     serial_write("VANTAOS_RTL8188EU_REFERENCE_MAC_BB_AGC_RF_TABLES_APPLIED_TX_BLOCKED\n");
     return 1;
 }
@@ -1321,7 +1319,7 @@ static int rtl_radio_execute_profile(void)
         return 0;
 
     if(!rtl_apply_tx_power_for_channel(1U) ||
-       !rtl_radio_apply_crystal_trim_and_lc() ||
+       !rtl_radio_run_lc_calibration() ||
        !rtl_radio_run_iq_calibration())
         return 0;
     rtl_current_channel=1U;

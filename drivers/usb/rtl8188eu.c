@@ -1153,7 +1153,7 @@ int rtl8188eu_validate_phy_profile(const uint8_t *profile, size_t length,
     if (rtl_phy_le16(profile + 8U) != RTL8188EU_PHY_PROFILE_VERSION ||
         rtl_phy_le16(profile + 10U) != RTL8188EU_PHY_PROFILE_HEADER_SIZE ||
         total_size != length || profile[21U] != 0U || count == 0U ||
-        (profile[20U] != 0xFFU && profile[20U] != chip_cut) ||
+        profile[20U] != chip_cut ||
         (size_t)count > (length - RTL8188EU_PHY_PROFILE_HEADER_SIZE) /
                         RTL8188EU_PHY_PROFILE_RECORD_SIZE ||
         total_size != RTL8188EU_PHY_PROFILE_HEADER_SIZE +

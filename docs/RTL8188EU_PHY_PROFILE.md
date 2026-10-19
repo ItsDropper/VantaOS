@@ -83,3 +83,8 @@ Phases 1–4 must each contain at least one write. Phase 5 must contain at least
 - This format is an execution mechanism, not a source of calibration values. Do not fill it with guessed register values or a profile for a different board.
 - A syntactically valid profile can still be electrically or functionally wrong. Host CI cannot establish safe RF power, correct calibration, actual scanning, association, WPA2 traffic, or Internet connectivity.
 - No profile is currently bundled with VantaOS. Until a correct profile is provided and physical-adapter tests pass, end-to-end RTL8188EU support is **not complete**.
+
+
+## Built-in reference initialization
+
+The driver includes MAC, baseband, AGC and RF initialization tables derived from FreeBSD's permissively licensed RTL8188E `r88e_priv.h`; attribution and the permission notice are retained in `rtl8188eu_phy_tables.h`. The baseline sequence applies these tables before eFuse-derived transmit power and crystal/LC calibration, so a generated `RTL8188EU.PHY` file is no longer required for baseline bring-up. This reference port is not proof of physical-device validation. Firmware compatibility, silicon-cut variants, RF timing/readback, IQ calibration, scan/receive behavior and real AP/WPA2/DHCP/DNS/HTTP interoperability still require CI and hardware validation. Transmission must remain disabled when any required stage fails.

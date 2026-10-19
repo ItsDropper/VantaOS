@@ -948,31 +948,11 @@ static int rtl_phy_load_profile(size_t *profile_size, uint16_t *record_count)
                 (char *)rtl_phy_profile, sizeof(rtl_phy_profile)) != (int)entry->size)
             return 0;
 
-        const uint8_t magic[8] = {'V','8','E','U','P','H','Y','1'};
-        for (size_t j = 0U; j < sizeof(magic); ++j)
-            if (rtl_phy_profile[j] != magic[j])
-                return 0;
-        uint16_t version = rtl_phy_le16(rtl_phy_profile + 8U);
-        uint16_t header_size = rtl_phy_le16(rtl_phy_profile + 10U);
-        uint32_t total_size = rtl_phy_le32(rtl_phy_profile + 12U);
-        uint32_t expected_crc = rtl_phy_le32(rtl_phy_profile + 16U);
-        uint8_t profile_cut = rtl_phy_profile[20U];
-        uint16_t count = rtl_phy_le16(rtl_phy_profile + 22U);
-        if (version != RTL8188EU_PHY_PROFILE_VERSION ||
-            header_size != RTL8188EU_PHY_PROFILE_HEADER_SIZE ||
-            total_size != entry->size || rtl_phy_profile[21U] != 0U ||
-            count == 0U ||
-            (size_t)count > (sizeof(rtl_phy_profile) -
-                             RTL8188EU_PHY_PROFILE_HEADER_SIZE) /
-                            RTL8188EU_PHY_PROFILE_RECORD_SIZE ||
-            total_size != RTL8188EU_PHY_PROFILE_HEADER_SIZE +
-                          (uint32_t)count * RTL8188EU_PHY_PROFILE_RECORD_SIZE ||
-            (profile_cut != 0xFFU && profile_cut != rtl_efuse_info.chip_cut) ||
-            rtl_phy_crc32(rtl_phy_profile + RTL8188EU_PHY_PROFILE_HEADER_SIZE,
-                          total_size - RTL8188EU_PHY_PROFILE_HEADER_SIZE) != expected_crc)
+        if (!rtl8188eu_validate_phy_profile(rtl_phy_profile, entry->size,
+                                             rtl_efuse_info.chip_cut))
             return 0;
-        *profile_size = total_size;
-        *record_count = count;
+        *profile_size = rtl_phy_le32(rtl_phy_profile + 12U);
+        *record_count = rtl_phy_le16(rtl_phy_profile + 22U);
         return 1;
     }
     return 0;
@@ -1149,6 +1129,57 @@ static int rtl_phy_validate_record(const uint8_t *record)
     if (op >= RTL8188EU_PHY_OP_POLL8 && mask == 0U)
         return 0;
     return 1;
+}
+
+
+int rtl8188eu_validate_phy_profile(const uint8_t *profile, size_t length,
+                                   uint8_t chip_cut)
+{
+    static const uint8_t magic[8] = {'V','8','E','U','P','H','Y','1'};
+    uint8_t phase_writes[RTL8188EU_PHY_PHASE_IQ_CAL + 1U] = {0};
+    uint8_t phase_polls[RTL8188EU_PHY_PHASE_IQ_CAL + 1U] = {0};
+    uint8_t last_phase = 0U;
+    uint16_t count;
+    uint32_t total_size;
+
+    if (!profile || length < RTL8188EU_PHY_PROFILE_HEADER_SIZE ||
+        length > RTL8188EU_PHY_PROFILE_MAX_SIZE)
+        return 0;
+    for (size_t i = 0U; i < sizeof(magic); ++i)
+        if (profile[i] != magic[i]) return 0;
+    count = rtl_phy_le16(profile + 22U);
+    total_size = rtl_phy_le32(profile + 12U);
+    if (rtl_phy_le16(profile + 8U) != RTL8188EU_PHY_PROFILE_VERSION ||
+        rtl_phy_le16(profile + 10U) != RTL8188EU_PHY_PROFILE_HEADER_SIZE ||
+        total_size != length || profile[21U] != 0U || count == 0U ||
+        (profile[20U] != 0xFFU && profile[20U] != chip_cut) ||
+        (size_t)count > (length - RTL8188EU_PHY_PROFILE_HEADER_SIZE) /
+                        RTL8188EU_PHY_PROFILE_RECORD_SIZE ||
+        total_size != RTL8188EU_PHY_PROFILE_HEADER_SIZE +
+                      (uint32_t)count * RTL8188EU_PHY_PROFILE_RECORD_SIZE ||
+        rtl_phy_crc32(profile + RTL8188EU_PHY_PROFILE_HEADER_SIZE,
+                      length - RTL8188EU_PHY_PROFILE_HEADER_SIZE) !=
+                      rtl_phy_le32(profile + 16U))
+        return 0;
+
+    const uint8_t *records = profile + RTL8188EU_PHY_PROFILE_HEADER_SIZE;
+    for (uint16_t i = 0U; i < count; ++i) {
+        const uint8_t *record = records + (size_t)i * RTL8188EU_PHY_PROFILE_RECORD_SIZE;
+        uint8_t phase = record[1];
+        uint8_t op = record[0];
+        if (!rtl_phy_validate_record(record) || phase < last_phase)
+            return 0;
+        last_phase = phase;
+        if (op >= RTL8188EU_PHY_OP_WRITE8 && op <= RTL8188EU_PHY_OP_WRITE_RF20)
+            phase_writes[phase] = 1U;
+        else if (op >= RTL8188EU_PHY_OP_POLL8 && op <= RTL8188EU_PHY_OP_POLL_RF20)
+            phase_polls[phase] = 1U;
+    }
+    for (uint8_t phase = RTL8188EU_PHY_PHASE_MAC;
+         phase <= RTL8188EU_PHY_PHASE_TX_POWER; ++phase)
+        if (!phase_writes[phase]) return 0;
+    return phase_writes[RTL8188EU_PHY_PHASE_IQ_CAL] &&
+           phase_polls[RTL8188EU_PHY_PHASE_IQ_CAL];
 }
 
 static int rtl_radio_execute_profile(void)

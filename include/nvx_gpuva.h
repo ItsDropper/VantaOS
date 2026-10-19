@@ -20,7 +20,7 @@
  * with a separately verified architecture-specific implementation.
  */
 #define NVX_GPUVA_PAGE_SIZE       4096ULL
-#define NVX_GPUVA_MAX_FREE_RANGES 256U
+#define NVX_GPUVA_MAX_FREE_RANGES 1024U
 #define NVX_GPUVA_MAX_ALLOCS      512U
 #define NVX_GPUVA_GUARD_NONE      0U
 #define NVX_GPUVA_GUARD_ONE_PAGE  1U

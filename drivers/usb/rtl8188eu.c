@@ -57,6 +57,26 @@
 #define RTL8188EU_REG_AFE_XTAL_CTRL 0x0024U
 #define RTL8188EU_AFE_XTAL_CAP_MASK 0x007FF800U
 #define RTL8188EU_RF_LC_CALIBRATE (1U << 15)
+#define RTL8188EU_PHY_PROFILE_MAX_SIZE 8192U
+#define RTL8188EU_PHY_PROFILE_HEADER_SIZE 24U
+#define RTL8188EU_PHY_PROFILE_RECORD_SIZE 16U
+#define RTL8188EU_PHY_PROFILE_VERSION 1U
+#define RTL8188EU_PHY_PHASE_MAC 1U
+#define RTL8188EU_PHY_PHASE_BB 2U
+#define RTL8188EU_PHY_PHASE_AGC 3U
+#define RTL8188EU_PHY_PHASE_TX_POWER 4U
+#define RTL8188EU_PHY_PHASE_IQ_CAL 5U
+#define RTL8188EU_PHY_OP_WRITE8 1U
+#define RTL8188EU_PHY_OP_WRITE16 2U
+#define RTL8188EU_PHY_OP_WRITE32 3U
+#define RTL8188EU_PHY_OP_WRITE_BB32 4U
+#define RTL8188EU_PHY_OP_WRITE_RF20 5U
+#define RTL8188EU_PHY_OP_POLL8 6U
+#define RTL8188EU_PHY_OP_POLL16 7U
+#define RTL8188EU_PHY_OP_POLL32 8U
+#define RTL8188EU_PHY_OP_POLL_BB32 9U
+#define RTL8188EU_PHY_OP_POLL_RF20 10U
+#define RTL8188EU_PHY_OP_DELAY_TICKS 11U
 /* Channel 14 is excluded until a regulatory-domain policy explicitly allows it. */
 #define RTL8188EU_MAX_CHANNEL 13U
 #define RTL8188EU_RF_READ_EDGE (1U << 31)
@@ -89,6 +109,7 @@ static uint8_t rtl_bulk_in;
 static uint8_t rtl_bulk_out;
 static uint8_t rtl_register_buffer[RTL8188EU_FW_WRITE_CHUNK] __attribute__((aligned(64)));
 static uint8_t rtl_firmware[RTL8188EU_FW_MAX_SIZE + 1U] __attribute__((aligned(64)));
+static uint8_t rtl_phy_profile[RTL8188EU_PHY_PROFILE_MAX_SIZE] __attribute__((aligned(64)));
 static uint8_t rtl_firmware_attempted;
 static uint8_t rtl_firmware_ready;
 /*
@@ -850,10 +871,308 @@ static int rtl_radio_apply_crystal_trim_and_lc(void)
     return 1;
 }
 
+
 /*
- * Bring up the BB/RF register interface and execute the first board-specific
- * calibration stage. TX remains disabled until the full MAC/PHY/AGC tables,
- * channel power groups, and IQ calibration are completed and validated.
+ * VantaOS-owned, bounded PHY profile executor. The profile is deliberately
+ * supplied by the system integrator because the repository has no verified
+ * revision/board-specific RTL8188EU register profile. No guessed power values
+ * are synthesized here.
+ *
+ * File format (little-endian):
+ *   0..7   "V8EUPHY1"
+ *   8..9   version (1)
+ *   10..11 header size (24)
+ *   12..15 total file size
+ *   16..19 CRC-32/IEEE of the record array
+ *   20     chip cut (0xff means any cut; otherwise exact eFuse cut)
+ *   21     reserved, zero
+ *   22..23 record count
+ * Each 16-byte record is {op, phase, reserved, reserved, address:u16,
+ * reserved:u16, mask:u32, value:u32}. Phases are strictly ordered:
+ * MAC, BB, AGC, TX power, IQ calibration. The driver inserts its verified
+ * crystal-trim/LC stage between TX-power and IQ-calibration records.
+ */
+static uint16_t rtl_phy_le16(const uint8_t *p)
+{
+    return (uint16_t)p[0] | ((uint16_t)p[1] << 8);
+}
+
+static uint32_t rtl_phy_le32(const uint8_t *p)
+{
+    return (uint32_t)p[0] | ((uint32_t)p[1] << 8) |
+           ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+}
+
+static uint32_t rtl_phy_crc32(const uint8_t *data, size_t length)
+{
+    uint32_t crc = 0xFFFFFFFFU;
+    for (size_t i = 0U; i < length; ++i) {
+        crc ^= data[i];
+        for (uint32_t bit = 0U; bit < 8U; ++bit)
+            crc = (crc >> 1) ^ ((crc & 1U) ? 0xEDB88320U : 0U);
+    }
+    return ~crc;
+}
+
+static int rtl_phy_load_profile(size_t *profile_size, uint16_t *record_count)
+{
+    fat32_dirent_t root[64];
+    fat32_dirent_t entries[128];
+    uint32_t system_cluster = 0U;
+    int root_count, entry_count;
+
+    if (!profile_size || !record_count || !fat32_is_mounted())
+        return 0;
+    root_count = fat32_list_directory(fat32_root_cluster(), root, 64U);
+    if (root_count < 0 || root_count >= 64)
+        return 0;
+    for (int i = 0; i < root_count; ++i) {
+        if (root[i].directory && rtl_name_equal(root[i].name, "SYSTEM")) {
+            system_cluster = root[i].first_cluster;
+            break;
+        }
+    }
+    if (system_cluster < 2U)
+        return 0;
+    entry_count = fat32_list_directory(system_cluster, entries, 128U);
+    if (entry_count < 0 || entry_count >= 128)
+        return 0;
+
+    for (int i = 0; i < entry_count; ++i) {
+        fat32_dirent_t *entry = &entries[i];
+        if (entry->directory || !rtl_name_equal(entry->name, "RTL8188EU.PHY"))
+            continue;
+        if (entry->size < RTL8188EU_PHY_PROFILE_HEADER_SIZE ||
+            entry->size > sizeof(rtl_phy_profile) ||
+            fat32_read_file(entry->first_cluster, entry->size,
+                (char *)rtl_phy_profile, sizeof(rtl_phy_profile)) != (int)entry->size)
+            return 0;
+
+        const uint8_t magic[8] = {'V','8','E','U','P','H','Y','1'};
+        for (size_t j = 0U; j < sizeof(magic); ++j)
+            if (rtl_phy_profile[j] != magic[j])
+                return 0;
+        uint16_t version = rtl_phy_le16(rtl_phy_profile + 8U);
+        uint16_t header_size = rtl_phy_le16(rtl_phy_profile + 10U);
+        uint32_t total_size = rtl_phy_le32(rtl_phy_profile + 12U);
+        uint32_t expected_crc = rtl_phy_le32(rtl_phy_profile + 16U);
+        uint8_t profile_cut = rtl_phy_profile[20U];
+        uint16_t count = rtl_phy_le16(rtl_phy_profile + 22U);
+        if (version != RTL8188EU_PHY_PROFILE_VERSION ||
+            header_size != RTL8188EU_PHY_PROFILE_HEADER_SIZE ||
+            total_size != entry->size || rtl_phy_profile[21U] != 0U ||
+            count == 0U ||
+            (size_t)count > (sizeof(rtl_phy_profile) -
+                             RTL8188EU_PHY_PROFILE_HEADER_SIZE) /
+                            RTL8188EU_PHY_PROFILE_RECORD_SIZE ||
+            total_size != RTL8188EU_PHY_PROFILE_HEADER_SIZE +
+                          (uint32_t)count * RTL8188EU_PHY_PROFILE_RECORD_SIZE ||
+            (profile_cut != 0xFFU && profile_cut != rtl_efuse_info.chip_cut) ||
+            rtl_phy_crc32(rtl_phy_profile + RTL8188EU_PHY_PROFILE_HEADER_SIZE,
+                          total_size - RTL8188EU_PHY_PROFILE_HEADER_SIZE) != expected_crc)
+            return 0;
+        *profile_size = total_size;
+        *record_count = count;
+        return 1;
+    }
+    return 0;
+}
+
+static int rtl_phy_read_record(uint8_t op, uint16_t address, uint32_t *value)
+{
+    if (!value)
+        return 0;
+    switch (op) {
+    case RTL8188EU_PHY_OP_WRITE8:
+    case RTL8188EU_PHY_OP_POLL8: {
+        uint8_t v;
+        if (address >= 0x0800U || !rtl_reg_read8(address, &v)) return 0;
+        *value = v;
+        return 1;
+    }
+    case RTL8188EU_PHY_OP_WRITE16:
+    case RTL8188EU_PHY_OP_POLL16: {
+        uint16_t v;
+        if (address >= 0x0800U || !rtl_reg_read16(address, &v)) return 0;
+        *value = v;
+        return 1;
+    }
+    case RTL8188EU_PHY_OP_WRITE32:
+    case RTL8188EU_PHY_OP_POLL32:
+        if (address >= 0x0800U || !rtl_reg_read32(address, value)) return 0;
+        return 1;
+    case RTL8188EU_PHY_OP_WRITE_BB32:
+    case RTL8188EU_PHY_OP_POLL_BB32:
+        if (address < 0x0800U || address > 0x0FFFU ||
+            !rtl_reg_read32(address, value)) return 0;
+        return 1;
+    case RTL8188EU_PHY_OP_WRITE_RF20:
+    case RTL8188EU_PHY_OP_POLL_RF20:
+        if (address > 0xFFU || !rtl_rf_read((uint8_t)address, value)) return 0;
+        return 1;
+    default:
+        return 0;
+    }
+}
+
+static int rtl_phy_write_record(uint8_t op, uint16_t address,
+                                uint32_t mask, uint32_t value)
+{
+    uint32_t old_value = 0U, next_value, verify = 0U, width_mask;
+    if (op == RTL8188EU_PHY_OP_WRITE8) width_mask = 0xFFU;
+    else if (op == RTL8188EU_PHY_OP_WRITE16) width_mask = 0xFFFFU;
+    else if (op == RTL8188EU_PHY_OP_WRITE_RF20) width_mask = RTL8188EU_RF_DATA_MASK;
+    else width_mask = 0xFFFFFFFFU;
+    if (mask == 0U) mask = width_mask;
+    if ((mask & ~width_mask) != 0U || (value & ~width_mask) != 0U ||
+        !rtl_phy_read_record(op, address, &old_value))
+        return 0;
+    next_value = (old_value & ~mask) | (value & mask);
+    switch (op) {
+    case RTL8188EU_PHY_OP_WRITE8:
+        if (!rtl_reg_write8(address, (uint8_t)next_value)) return 0;
+        break;
+    case RTL8188EU_PHY_OP_WRITE16:
+        if (!rtl_reg_write16(address, (uint16_t)next_value)) return 0;
+        break;
+    case RTL8188EU_PHY_OP_WRITE32:
+    case RTL8188EU_PHY_OP_WRITE_BB32:
+        if (!rtl_reg_write32(address, next_value)) return 0;
+        break;
+    case RTL8188EU_PHY_OP_WRITE_RF20:
+        if (!rtl_rf_write((uint8_t)address, next_value)) return 0;
+        break;
+    default:
+        return 0;
+    }
+    if (!rtl_phy_read_record(op, address, &verify))
+        return 0;
+    return ((verify ^ next_value) & mask) == 0U;
+}
+
+static int rtl_phy_execute_record(const uint8_t *record)
+{
+    uint8_t op = record[0];
+    uint8_t phase = record[1];
+    uint16_t address = rtl_phy_le16(record + 4U);
+    uint32_t mask = rtl_phy_le32(record + 8U);
+    uint32_t value = rtl_phy_le32(record + 12U);
+
+    if (record[2] != 0U || record[3] != 0U ||
+        record[6] != 0U || record[7] != 0U ||
+        phase < RTL8188EU_PHY_PHASE_MAC || phase > RTL8188EU_PHY_PHASE_IQ_CAL)
+        return 0;
+
+    if (op >= RTL8188EU_PHY_OP_WRITE8 && op <= RTL8188EU_PHY_OP_WRITE_RF20) {
+        if (op == RTL8188EU_PHY_OP_WRITE8 && (value > 0xFFU || (mask & ~0xFFU)))
+            return 0;
+        if (op == RTL8188EU_PHY_OP_WRITE16 && (value > 0xFFFFU || (mask & ~0xFFFFU)))
+            return 0;
+        if (op == RTL8188EU_PHY_OP_WRITE_RF20 &&
+            (value > RTL8188EU_RF_DATA_MASK || (mask & ~RTL8188EU_RF_DATA_MASK)))
+            return 0;
+        return rtl_phy_write_record(op, address, mask, value);
+    }
+
+    if (op >= RTL8188EU_PHY_OP_POLL8 && op <= RTL8188EU_PHY_OP_POLL_RF20) {
+        uint8_t read_op = (uint8_t)(op - RTL8188EU_PHY_OP_POLL8 +
+                                    RTL8188EU_PHY_OP_WRITE8);
+        uint32_t width_mask = op == RTL8188EU_PHY_OP_POLL8 ? 0xFFU :
+            op == RTL8188EU_PHY_OP_POLL16 ? 0xFFFFU :
+            op == RTL8188EU_PHY_OP_POLL_RF20 ? RTL8188EU_RF_DATA_MASK : 0xFFFFFFFFU;
+        if (mask == 0U || (mask & ~width_mask) != 0U || (value & ~width_mask) != 0U)
+            return 0;
+        for (uint32_t retry = 0U; retry < 512U; ++retry) {
+            uint32_t observed;
+            if (!rtl_phy_read_record(read_op, address, &observed))
+                return 0;
+            if ((observed & mask) == (value & mask))
+                return 1;
+        }
+        return 0;
+    }
+
+    if (op == RTL8188EU_PHY_OP_DELAY_TICKS) {
+        if (address != 0U || mask != 0U || value == 0U || value > 100U ||
+            !timer_get_ticks)
+            return 0;
+        uint32_t start = timer_get_ticks();
+        uint32_t spins = 0U;
+        while ((uint32_t)(timer_get_ticks() - start) < value) {
+            if (++spins >= 1000000U)
+                return 0;
+        }
+        return 1;
+    }
+    return 0;
+}
+
+static int rtl_radio_execute_profile(void)
+{
+    size_t profile_size = 0U;
+    uint16_t count = 0U;
+    uint8_t phase_writes[RTL8188EU_PHY_PHASE_IQ_CAL + 1U] = {0};
+    uint8_t phase_polls[RTL8188EU_PHY_PHASE_IQ_CAL + 1U] = {0};
+    uint8_t phase_delays[RTL8188EU_PHY_PHASE_IQ_CAL + 1U] = {0};
+    uint8_t last_phase = 0U;
+
+    if (!rtl_efuse_info.valid || !rtl_phy_load_profile(&profile_size, &count))
+        return 0;
+
+    const uint8_t *records = rtl_phy_profile + RTL8188EU_PHY_PROFILE_HEADER_SIZE;
+    /* Validate the whole program before the first hardware write. */
+    for (uint16_t i = 0U; i < count; ++i) {
+        const uint8_t *record = records + (size_t)i * RTL8188EU_PHY_PROFILE_RECORD_SIZE;
+        uint8_t phase = record[1];
+        uint8_t op = record[0];
+        if (phase < RTL8188EU_PHY_PHASE_MAC || phase > RTL8188EU_PHY_PHASE_IQ_CAL ||
+            phase < last_phase || record[2] != 0U || record[3] != 0U ||
+            record[6] != 0U || record[7] != 0U)
+            return 0;
+        last_phase = phase;
+        if (op >= RTL8188EU_PHY_OP_WRITE8 && op <= RTL8188EU_PHY_OP_WRITE_RF20)
+            phase_writes[phase] = 1U;
+        else if (op >= RTL8188EU_PHY_OP_POLL8 && op <= RTL8188EU_PHY_OP_POLL_RF20)
+            phase_polls[phase] = 1U;
+        else if (op == RTL8188EU_PHY_OP_DELAY_TICKS)
+            phase_delays[phase] = 1U;
+        else
+            return 0;
+    }
+    for (uint8_t phase = RTL8188EU_PHY_PHASE_MAC;
+         phase <= RTL8188EU_PHY_PHASE_TX_POWER; ++phase)
+        if (!phase_writes[phase])
+            return 0;
+    if (!phase_writes[RTL8188EU_PHY_PHASE_IQ_CAL] ||
+        !phase_polls[RTL8188EU_PHY_PHASE_IQ_CAL])
+        return 0;
+    (void)phase_delays;
+
+    /* Execute through TX-power programming, then calibrate before IQK. */
+    for (uint16_t i = 0U; i < count; ++i) {
+        const uint8_t *record = records + (size_t)i * RTL8188EU_PHY_PROFILE_RECORD_SIZE;
+        if (record[1] == RTL8188EU_PHY_PHASE_IQ_CAL)
+            break;
+        if (!rtl_phy_execute_record(record))
+            return 0;
+    }
+    if (!rtl_radio_apply_crystal_trim_and_lc())
+        return 0;
+    for (uint16_t i = 0U; i < count; ++i) {
+        const uint8_t *record = records + (size_t)i * RTL8188EU_PHY_PROFILE_RECORD_SIZE;
+        if (record[1] == RTL8188EU_PHY_PHASE_IQ_CAL &&
+            !rtl_phy_execute_record(record))
+            return 0;
+    }
+
+    serial_write("VANTAOS_RTL8188EU_PHY_PROFILE_AND_IQ_CAL_OK_TX_READY_CANDIDATE\n");
+    return profile_size != 0U;
+}
+
+/*
+ * Bring up the BB/RF interface, apply a validated integrator-supplied PHY
+ * profile, then enable TX only after MAC/BB/AGC/power and calibration stages
+ * all pass register readback and bounded status polling.
  */
 static int rtl_radio_preflight(void)
 {
@@ -875,9 +1194,12 @@ static int rtl_radio_preflight(void)
         rf_identity == RTL8188EU_RF_DATA_MASK ||
         rf_channel == RTL8188EU_RF_DATA_MASK)
         return 0;
-    if (!rtl_radio_apply_crystal_trim_and_lc())
+    if (!rtl_radio_execute_profile())
         return 0;
     rtl_radio_preflight_done = 1U;
+    rtl_radio_ready = 1U;
+    serial_write("VANTAOS_RTL8188EU_RADIO_PROFILE_READY_TX_ENABLED
+");
     return 1;
 }
 

@@ -49,6 +49,7 @@ typedef struct nvx_firmware_image {
     uint8_t acquired;
 } nvx_firmware_image_t;
 
+/* Zero-initialize the output image; release it before attempting another acquisition. */
 /* Currently only Ampere GSP firmware is selected by the implemented profile table. */
 nvx_firmware_status_t nvx_firmware_acquire(
     const nvx_firmware_provider_t *provider,

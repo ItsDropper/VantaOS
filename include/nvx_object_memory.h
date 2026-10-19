@@ -45,6 +45,13 @@ typedef struct nvx_memory_slot {
     uint8_t kind, state;
 } nvx_memory_slot_t;
 
+typedef struct nvx_memory_info {
+    void *cpu_address;
+    uint64_t gpu_virtual_address;
+    uint64_t size;
+    nvx_memory_kind_t kind;
+} nvx_memory_info_t;
+
 /* Allocate this manager in static/long-lived storage; it is intentionally large. */
 typedef struct nvx_memory_manager {
     spinlock_t lock;
@@ -60,7 +67,7 @@ nvx_memory_status_t nvx_memory_init(nvx_memory_manager_t *, nvx_gpuva_space_t *,
                                     unsigned address_bits);
 nvx_memory_status_t nvx_memory_alloc(nvx_memory_manager_t *, size_t,
                                      nvx_memory_kind_t, nvx_memory_handle_t *);
-nvx_memory_status_t nvx_memory_cpu_address(nvx_memory_manager_t *,
+nvx_memory_status_t nvx_memory_get_info(nvx_memory_manager_t *,\n                                         const nvx_memory_handle_t *,\n                                         nvx_memory_info_t *);\nnvx_memory_status_t nvx_memory_cpu_address(nvx_memory_manager_t *,
                                            const nvx_memory_handle_t *, void **);
 nvx_memory_status_t nvx_memory_release(nvx_memory_manager_t *,
                                        nvx_memory_handle_t *);

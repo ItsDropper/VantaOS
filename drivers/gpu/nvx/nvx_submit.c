@@ -31,6 +31,7 @@ nvx_submit_status_t nvx_submit_validate_batch(
     nvx_submit_report_t *out_report)
 {
     void *command_cpu = 0;
+    nvx_memory_info_t command_info;
     nvx_memory_status_t memory_status;
     nvx_submit_report_t report = {0};
     uint64_t command_end;
@@ -48,11 +49,15 @@ nvx_submit_status_t nvx_submit_validate_batch(
     if (relocation_count > NVX_SUBMIT_MAX_RELOCATIONS)
         return NVX_SUBMIT_TOO_MANY_RELOCATIONS;
 
-    memory_status = nvx_memory_cpu_address(memory, command_buffer, &command_cpu);
-    if (memory_status != NVX_MEMORY_OK || command_cpu == 0)
+    memory_status = nvx_memory_get_info(memory, command_buffer, &command_info);
+    if (memory_status != NVX_MEMORY_OK || command_info.cpu_address == 0)
         return NVX_SUBMIT_MEMORY_ERROR;
+    if (command_info.kind != NVX_MEMORY_COMMAND_STORAGE)
+        return NVX_SUBMIT_INVALID_COMMAND_RANGE;
+    command_cpu = command_info.cpu_address;
+    (void)command_cpu;
 
-    report.command_gpu_address = command_buffer->gpu_virtual_address;
+    report.command_gpu_address = command_info.gpu_virtual_address;
     report.command_bytes = command_bytes;
     report.relocation_count = (uint32_t)relocation_count;
 

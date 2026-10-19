@@ -12,6 +12,7 @@ on:
       - "include/nvx_mmio.h"
       - "include/nvx_attach.h"
       - "include/nvx_firmware.h"
+      - "include/nvx_dma.h"
       - "include/pci.h"
       - "include/mmio.h"
       - "include/serial.h"
@@ -23,6 +24,7 @@ on:
       - "scripts/test_nvx_mmio.c"
       - "scripts/test_nvx_attach.c"
       - "scripts/test_nvx_firmware.c"
+      - "scripts/test_nvx_dma.c"
       - "scripts/test_pci_bar_size.c"
       - ".github/workflows/nvx-tests.yml"
   workflow_dispatch:
@@ -111,6 +113,15 @@ jobs:
 
       - name: Test bounded GSP firmware acquisition and verification
         run: /tmp/vantaos-nvx-firmware-test
+
+      - name: Compile NVX DMA buffer tests with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \\
+            scripts/test_nvx_dma.c drivers/gpu/nvx/nvx_dma.c \\
+            -o /tmp/vantaos-nvx-dma-test
+
+      - name: Test contiguous DMA allocation bounds, validation and cleanup
+        run: /tmp/vantaos-nvx-dma-test
 
       - name: Compile NVX lifecycle tests with strict warnings
         run: |

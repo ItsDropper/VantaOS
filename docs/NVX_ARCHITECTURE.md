@@ -1,9 +1,22 @@
 # NVX GPU driver architecture
 
 NVX is an independent, unofficial NVIDIA GPU driver project for VantaOS. It is
-not produced, endorsed, or supported by NVIDIA. This document defines intended
-source boundaries and contracts; it does not claim GPU detection, firmware
-loading, modesetting, command submission, or acceleration is implemented.
+not produced, endorsed, or supported by NVIDIA. This document describes the
+implemented read-only PCI inventory and the remaining planned hardware work.
+
+## Current implementation status
+
+Phase 1 now enumerates the existing PCI registry and logs every function with
+vendor ID `0x10DE`. Diagnostics include BDF, vendor/device IDs, revision, class,
+subclass, programming interface, and subsystem IDs for type-0 headers. BAR0 is
+reported as a raw address/type/width only; its size is not inferred because the
+current PCI API does not expose BAR sizing. Discovery does not map BARs, enable
+PCI command bits, access GPU registers, load firmware, or initialize engines.
+
+The log explicitly reports `DETECTED`, `NOT_ATTEMPTED`, and
+`UNAVAILABLE`. A detected PCI function is not proof of a recognized GPU family,
+working initialization, display support, or acceleration. No family is currently
+claimed as supported. Physical RTX 3060 validation remains outstanding.
 
 ## Design goals
 
@@ -21,17 +34,14 @@ loading, modesetting, command submission, or acceleration is implemented.
 | --- | --- |
 | drivers/gpu/core/ | Generic GPU lifecycle, capability and resource contracts |
 | drivers/gpu/display/ | Display modes and presentation, separate from command execution |
-| drivers/gpu/nvx/ | NVIDIA matching, family initialization, firmware, memory, queues and interrupts |
+| drivers/gpu/nvx/ | NVIDIA discovery and future family initialization, firmware, memory, queues and interrupts |
 | include/gpu.h | Generic identity, lifecycle and capability vocabulary |
 | include/gpu_display.h | Display-mode and presentation contracts |
-| include/nvx_device.h | NVIDIA identity and device descriptors |
+| include/nvx_device.h | NVIDIA identity and device descriptors plus discovery entry point |
 | include/nvx_memory.h | Explicit CPU, system-physical and GPU address-space contracts |
 | include/nvx_firmware.h | Injected firmware-provider interface independent of VFS paths |
 | include/nvx_command.h | Queue, command-buffer and completion-state vocabulary |
 | drivers/gpu/*/Makefile | Per-layer source ownership; root build consumes aggregate list |
-
-These headers establish proposed contracts only. No NVX implementation source is
-linked by this architecture-only change.
 
 ## Dependency direction
 
@@ -50,17 +60,18 @@ linked by this architecture-only change.
                   x86-64 kernel facilities
 
 Generic GPU code must not include NVX-specific headers. NVX may depend on generic
-GPU contracts and existing PCI, MMIO, DMA, interrupt, memory and logging
+GPU contracts and existing PCI, MMIO, DMA, interrupt, memory and serial logging
 interfaces. NVX must not take over the existing framebuffer renderer or make
 boot depend on discrete-GPU initialization.
 
 ## Contracts and safety invariants
 
 ### Discovery and lifecycle
-Use the existing PCI registry. Validate device identity, revision, BAR shape and
-length, and family requirements before touching registers. PCI enumeration and
-command-register operations remain owned by the PCI subsystem. NVX owns NVIDIA-
-specific interpretation after receiving a PCI device.
+Use the existing PCI registry. Discovery reads identity and configuration-space
+metadata only. BAR addresses are not mapped until resource type, size, alignment,
+address width and overflow conditions can be validated. PCI enumeration and
+command-register operations remain owned by the PCI subsystem. NVX owns
+NVIDIA-specific interpretation after receiving a PCI device.
 
 ### MMIO, interrupts and DMA
 BARs are physical resources, never directly usable virtual pointers. Map MMIO
@@ -98,10 +109,10 @@ support.
 
 ## Implementation phases
 
-1. Generic GPU/display contracts, build ownership and architecture checks.
-2. PCI identification and safe, read-only device inventory.
-3. Validated BAR mapping, lifecycle state machine and failure recovery.
-4. Firmware provider and family-specific capability tables.
+1. Generic GPU/display contracts, build ownership and architecture checks. (Merged.)
+2. Read-only NVIDIA PCI inventory. (Implemented in this change; CI and hardware evidence pending.)
+3. Validated BAR sizing/mapping, lifecycle state machine and failure recovery.
+4. Firmware provider and verified family-specific identification tables.
 5. Device memory management, DMA, interrupts and synchronization.
 6. Command queues, bounded submissions and completion handling.
 7. Display modesetting and scanout integration.

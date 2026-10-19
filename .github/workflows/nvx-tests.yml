@@ -5,6 +5,10 @@ on:
     paths:
       - "drivers/gpu/nvx/**"
       - "drivers/pci/**"
+      - "arch/x86_64/device_irq.c"
+      - "arch/x86_64/isr.asm"
+      - "include/device_irq.h"
+      - "scripts/test_device_irq.c"
       - "include/nvx_device.h"
       - "include/nvx_lifecycle.h"
       - "include/nvx_resource.h"
@@ -179,6 +183,15 @@ jobs:
 
       - name: Test read-only MSI/MSI-X metadata and BAR range validation
         run: /tmp/vantaos-nvx-irq-caps-test
+
+      - name: Compile device interrupt registry tests with strict warnings
+        run: |
+          gcc -DDEVICE_IRQ_TEST -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_device_irq.c arch/x86_64/device_irq.c \
+            -o /tmp/vantaos-device-irq-test
+
+      - name: Test vector exhaustion, registration, dispatch and release
+        run: /tmp/vantaos-device-irq-test
 
       - name: Compile NVX lifecycle tests with strict warnings
         run: |

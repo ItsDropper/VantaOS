@@ -36,7 +36,7 @@ own. Thus a live GPU with firmware display or DMA state active will still yield
 measured size only when this guarded probe succeeds, then validates width, range
 overflow, and `size_t` conversion before using `mmio_map_region()` /
 `mmio_unmap_region()`. The identity descriptor still leaves MMIO base and length
-unset until a later resource/attach layer has established them. The new `nvx_attach` path consumes a caller-supplied BAR0 resource with trusted size metadata, validates it, maps it, checks PCI memory decoding, probes PMC_BOOT_0/PMC_BOOT_1, and retains the mapping only when the register aperture responds. Failure paths unmap and fail closed; detach unmaps and transitions through QUIESCING to STOPPED. A successful attach is explicitly `PROBED`, not `INITIALIZED`, and publishes no capabilities. This is real attach/probe orchestration, but the PCI subsystem still has no trusted BAR-size discovery path, so hardware discovery cannot yet supply the resource automatically.
+unset until a later resource/attach layer has established them. The new `nvx_attach` path consumes a caller-supplied BAR0 resource with trusted size metadata, validates it, maps it, checks PCI memory decoding, probes PMC_BOOT_0/PMC_BOOT_1, and retains the mapping only when the register aperture responds. Failure paths unmap and fail closed; detach unmaps and transitions through QUIESCING to STOPPED. A successful attach is explicitly `PROBED`, not `INITIALIZED`, and publishes no capabilities. The guarded BAR-sizing path can provide size metadata only when decode and bus mastering are already disabled; it deliberately cannot automatically attach to a GPU that is active for firmware display or DMA. The remaining integration blocker is a safe handoff/resource contract for such live devices.
 
 A new `nvx_mmio` layer provides bounded 32-bit volatile register reads and writes over a caller-owned mapping. It rejects null mappings, unaligned base/offset pairs, and accesses that would cross the supplied mapping length; read failures zero the output. The BAR0 probe now uses this common accessor rather than dereferencing register pointers directly. Its test suite covers valid reads/writes and invalid bounds/alignment. The accessors do not establish memory attributes or provide DMA ordering barriers, which remain responsibilities of the platform mapping/synchronization layers.
 
@@ -169,15 +169,15 @@ prove physical NVIDIA support.
 
 1. Generic GPU/display contracts, build ownership and architecture checks. (Merged.)
 2. Read-only NVIDIA PCI inventory, conservative matching and mocked tests. (Implemented.)
-3. Exact PCI family/profile recognition and lifecycle state gates. (Implemented as software contracts; lifecycle not yet wired to hardware.)
-4. BAR validation and size-gated MMIO mapping. (Validation and refusal paths implemented; trusted BAR sizing remains blocked by the PCI subsystem.)
+3. Exact PCI family/profile recognition and lifecycle state gates. (Implemented; probe attach uses the lifecycle, while engine initialization remains unwired.)
+4. BAR validation and size-gated MMIO mapping. (Guarded hardware sizing is implemented only when decode and bus mastering are disabled; live-device handoff remains unresolved.)
 5. Bounded MMIO register access, attach/probe lifecycle and conservative PMC probing. (Implemented and covered by mocked tests; not hardware-validated.)
 6. Bounded GSP firmware acquisition with mandatory platform verification callback. (Implemented; provider signature verification and firmware loading remain external/not yet integrated.)
-6. Firmware provider and validated family-specific hardware initialization.
-7. Device memory management, DMA, interrupts and synchronization.
-8. Command queues, bounded submissions and completion handling.
-9. Display modesetting and scanout integration.
-10. 2D/3D acceleration, shader execution and user-mode graphics interfaces.
+7. Validated family-specific GSP/engine initialization and firmware launch.
+8. Device memory management, DMA, interrupts and synchronization.
+9. Command queues, bounded submissions and completion handling.
+10. Display modesetting and scanout integration.
+11. 2D/3D acceleration, shader execution and user-mode graphics interfaces.
 
 Each phase is a gate, not a promise. Only tested capabilities may be reported as
 supported.

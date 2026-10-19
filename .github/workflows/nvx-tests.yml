@@ -1,4 +1,4 @@
-name: NVX PCI and lifecycle tests
+name: NVX PCI, resource and lifecycle tests
 
 on:
   pull_request:
@@ -6,11 +6,14 @@ on:
       - "drivers/gpu/nvx/**"
       - "include/nvx_device.h"
       - "include/nvx_lifecycle.h"
+      - "include/nvx_resource.h"
       - "include/pci.h"
+      - "include/mmio.h"
       - "include/serial.h"
       - "scripts/test_nvx_device.c"
       - "scripts/test_nvx_pci.c"
       - "scripts/test_nvx_lifecycle.c"
+      - "scripts/test_nvx_resource.c"
       - ".github/workflows/nvx-tests.yml"
   workflow_dispatch:
 
@@ -41,6 +44,15 @@ jobs:
 
       - name: Test PCI inventory diagnostics and auxiliary-function filtering
         run: /tmp/vantaos-nvx-pci-test
+
+      - name: Compile NVX BAR resource tests with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_resource.c drivers/gpu/nvx/nvx_resource.c \
+            -o /tmp/vantaos-nvx-resource-test
+
+      - name: Test BAR validation, mapping refusal, mapping and cleanup
+        run: /tmp/vantaos-nvx-resource-test
 
       - name: Compile NVX lifecycle tests with strict warnings
         run: |

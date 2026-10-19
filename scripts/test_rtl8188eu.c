@@ -380,11 +380,22 @@ static int test_phy_profile_validator(void)
     test_phy_record(records + 0U * 16U, 1U, 1U, 0x0020U, 0U, 0U);
     test_phy_record(records + 1U * 16U, 4U, 2U, 0x0800U, 0U, 0U);
     test_phy_record(records + 2U * 16U, 4U, 3U, 0x0804U, 0U, 0U);
-    test_phy_record(records + 3U * 16U, 5U, 4U, 0x0018U, 0U, 0U);
+    test_phy_record(records + 3U * 16U, 5U, 4U, 0x0018U,
+                     0x00000C00U, 0x00000C00U);
     test_phy_record(records + 4U * 16U, 4U, 5U, 0x0810U, 0U, 0U);
     test_phy_record(records + 5U * 16U, 9U, 5U, 0x0810U, 1U, 0U);
     test_phy_put_le32(profile + 16U, test_phy_crc32(records, sizeof(profile) - 24U));
 
+    if (!rtl8188eu_validate_phy_profile(profile, sizeof(profile), 2U))
+        return 0;
+
+    /* TX-power programming is only valid when the profile explicitly selects 20 MHz. */
+    test_phy_put_le32(records + 3U * 16U + 12U, 0U);
+    test_phy_put_le32(profile + 16U, test_phy_crc32(records, sizeof(profile) - 24U));
+    if (rtl8188eu_validate_phy_profile(profile, sizeof(profile), 2U))
+        return 0;
+    test_phy_put_le32(records + 3U * 16U + 12U, 0x00000C00U);
+    test_phy_put_le32(profile + 16U, test_phy_crc32(records, sizeof(profile) - 24U));
     if (!rtl8188eu_validate_phy_profile(profile, sizeof(profile), 2U))
         return 0;
 

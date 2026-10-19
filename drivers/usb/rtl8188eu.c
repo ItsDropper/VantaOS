@@ -791,11 +791,16 @@ static int rtl_load_efuse_identity(void)
                               sizeof(rtl_efuse_info.logical)) ||
         !rtl_reg_read32(RTL8188EU_REG_SYS_CFG, &chip_config))
         return 0;
-    /* SYS_CFG identifies Realtek silicon and exposes the detected chip cut. */
-    if ((chip_config & (1U << 19)) == 0U)
+    /* SYS_CFG identifies Realtek silicon, chip cut, and test-chip status. */
+    if ((chip_config & (1U << 19)) == 0U || (chip_config & (1U << 23)) != 0U)
         return 0;
     rtl_efuse_info.system_config = chip_config;
     rtl_efuse_info.chip_cut = (uint8_t)((chip_config >> 12) & 0x0FU);
+    /* The reference driver does not support RTL8188E cut I (raw value 8) or later. */
+    if (rtl_efuse_info.chip_cut >= 8U) {
+        serial_write("VANTAOS_RTL8188EU_UNSUPPORTED_CHIP_CUT_TX_BLOCKED\n");
+        return 0;
+    }
 
     for (size_t i = 0U; i < 6U; ++i)
         rtl_efuse_info.mac[i] =

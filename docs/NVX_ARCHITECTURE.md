@@ -75,7 +75,7 @@ accelerated. Physical RTX 3060 validation remains outstanding.
 | include/nvx_resource.h | Validated BAR metadata and MMIO acquisition contract |
 | include/nvx_mmio.h | Bounded register access over an existing mapping |
 | include/nvx_attach.h | BAR0 mapping, PMC probe and teardown transaction |
-| include/nvx_firmware.h | Verified firmware-provider acquisition contract |\n| include/nvx_dma.h | Bounded, contiguous NVX DMA allocation and lifetime |\n| include/nvx_gpuva.h | GPU virtual-address reservation allocator (no page tables) |\n| include/nvx_memory.h | Bounded DMA-backed object ownership and GPU VA reservation |\n| include/nvx_sync.h | Monotonic CPU-side timeline/fence contract |
+| include/nvx_firmware.h | Verified firmware-provider acquisition contract |\n| include/nvx_dma.h | Bounded, contiguous NVX DMA allocation and lifetime |\n| include/nvx_gpuva.h | GPU virtual-address reservation allocator (no page tables) |\n| include/nvx_memory.h | Bounded DMA-backed object ownership and GPU VA reservation |\n| include/nvx_sync.h | Monotonic CPU-side timeline/fence contract |\n| include/nvx_submit.h | Opaque batch and relocation metadata validation |
 | include/nvx_memory.h | Explicit CPU, system-physical and GPU address-space contracts |
 | include/nvx_firmware.h | Injected firmware-provider interface independent of VFS paths |
 | include/nvx_command.h | Queue, command-buffer and completion-state vocabulary |

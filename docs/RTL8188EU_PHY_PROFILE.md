@@ -54,9 +54,10 @@ The driver decodes the three 2.4-GHz channel-group CCK and HT40 base indices
 from the RTL8188E logical eFuse map, along with the packed signed OFDM and
 HT20 deltas. The groups correspond to channels 1–3, 4–9, and 10–14. Missing
 (`0xff`) or out-of-range base indices are rejected instead of being replaced
-with guessed values. These are factory calibration inputs only: decoding them
-does not yet program the transmit-power registers or establish that the
-resulting board power configuration is correct.
+with guessed values. A separate helper selects the channel group and derives
+bounded CCK, OFDM, HT20, and HT40 indices with signed-delta handling and 6-bit
+clamping. These are still software calibration inputs: the helper does not
+program transmit-power registers or prove the board's RF output is correct.
 
 ## Required phases
 

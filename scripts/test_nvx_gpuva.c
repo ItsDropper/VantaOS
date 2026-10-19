@@ -116,6 +116,32 @@ static void test_fragmentation_and_recovery(void)
     check_stats(VA_SIZE, 1U, 0U);
 }
 
+static void test_full_record_table_and_worst_case_fragmentation(void)
+{
+    nvx_gpuva_allocation_t handles[NVX_GPUVA_MAX_ALLOCS] = {{0}};
+    nvx_gpuva_allocation_t overflow = {0};
+    memset(&space, 0, sizeof(space));
+    assert(nvx_gpuva_init(&space, VA_START, VA_SIZE) == NVX_GPUVA_OK);
+
+    for (size_t i = 0; i < NVX_GPUVA_MAX_ALLOCS; ++i)
+        assert(nvx_gpuva_alloc(&space, NVX_GPUVA_PAGE_SIZE,
+                               NVX_GPUVA_PAGE_SIZE, 0U, &handles[i]) ==
+               NVX_GPUVA_OK);
+    assert(nvx_gpuva_alloc(&space, NVX_GPUVA_PAGE_SIZE,
+                           NVX_GPUVA_PAGE_SIZE, 0U, &overflow) ==
+           NVX_GPUVA_TABLE_FULL);
+    assert(nvx_gpuva_validate(&space) == NVX_GPUVA_OK);
+
+    for (size_t i = 0; i < NVX_GPUVA_MAX_ALLOCS; i += 2U)
+        assert(nvx_gpuva_free(&space, &handles[i]) == NVX_GPUVA_OK);
+    check_stats(VA_SIZE - (NVX_GPUVA_MAX_ALLOCS / 2U) *
+                NVX_GPUVA_PAGE_SIZE, (NVX_GPUVA_MAX_ALLOCS / 2U) + 1U,
+                NVX_GPUVA_MAX_ALLOCS / 2U);
+    for (size_t i = 1; i < NVX_GPUVA_MAX_ALLOCS; i += 2U)
+        assert(nvx_gpuva_free(&space, &handles[i]) == NVX_GPUVA_OK);
+    check_stats(VA_SIZE, 1U, 0U);
+}
+
 static void test_randomized_deterministic_sequence(void)
 {
     nvx_gpuva_allocation_t handles[128] = {{0}};
@@ -155,6 +181,7 @@ int main(void)
     test_invalid_and_overflow_inputs();
     test_out_of_space_and_handle_tampering();
     test_fragmentation_and_recovery();
+    test_full_record_table_and_worst_case_fragmentation();
     test_randomized_deterministic_sequence();
     return 0;
 }

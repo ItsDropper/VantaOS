@@ -81,8 +81,10 @@ nvx_resource_status_t nvx_bar_resource_validate(
         return NVX_RESOURCE_RANGE_OVERFLOW;
     if ((resource->base & (size - 1U)) != 0)
         return NVX_RESOURCE_INVALID_SIZE;
+    #if SIZE_MAX < UINT64_MAX
     if (size > (uint64_t)SIZE_MAX)
         return NVX_RESOURCE_INVALID_SIZE;
+    #endif
     return NVX_RESOURCE_OK;
 }
 

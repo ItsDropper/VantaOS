@@ -86,10 +86,12 @@ int main(void)
     assert(report.command_gpu_address == command.gpu_virtual_address);
 
     relocations[1].command_offset = 4U;
+    relocations[1].width = NVX_RELOC_ADDRESS32;
     assert(nvx_submit_validate_batch(&manager, &command, 64U, relocations,
                                      2U, &report) ==
            NVX_SUBMIT_RELOCATION_OVERLAP);
     relocations[1].command_offset = 8U;
+    relocations[1].width = NVX_RELOC_ADDRESS64;
     relocations[0].command_offset = 2U;
     assert(nvx_submit_validate_batch(&manager, &command, 64U, relocations,
                                      2U, &report) ==

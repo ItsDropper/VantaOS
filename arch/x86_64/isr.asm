@@ -66,6 +66,7 @@ extern apic_is_enabled
 extern lapic_timer_handle_interrupt
 extern reschedule_ipi_handle_interrupt
 extern paging_tlb_shootdown_handle_interrupt
+extern device_irq_dispatch
 extern user_mode_syscall_dispatch
 extern scheduler_reschedule
 extern user_mode_test_saved_rsp

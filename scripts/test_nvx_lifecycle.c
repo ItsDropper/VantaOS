@@ -27,8 +27,9 @@ int main(void)
 
     assert(nvx_lifecycle_transition(&lifecycle, NVX_STATE_PROBING));
     assert(nvx_lifecycle_transition(&lifecycle, NVX_STATE_RESOURCES_READY));
-    assert(nvx_lifecycle_transition(&lifecycle, NVX_STATE_INITIALIZING));
+    assert(nvx_lifecycle_transition(&lifecycle, NVX_STATE_PROBED));
     assert(!nvx_lifecycle_set_capabilities(&lifecycle, UINT64_MAX));
+    assert(nvx_lifecycle_transition(&lifecycle, NVX_STATE_INITIALIZING));
     assert(nvx_lifecycle_transition(&lifecycle, NVX_STATE_INITIALIZED));
     assert(nvx_lifecycle_set_capabilities(&lifecycle, 1U));
     assert(lifecycle.verified_capabilities == 1U);

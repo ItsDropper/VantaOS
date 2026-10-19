@@ -1,14 +1,16 @@
-name: NVX PCI candidate tests
+name: NVX PCI and lifecycle tests
 
 on:
   pull_request:
     paths:
       - "drivers/gpu/nvx/**"
       - "include/nvx_device.h"
+      - "include/nvx_lifecycle.h"
       - "include/pci.h"
       - "include/serial.h"
       - "scripts/test_nvx_device.c"
       - "scripts/test_nvx_pci.c"
+      - "scripts/test_nvx_lifecycle.c"
       - ".github/workflows/nvx-tests.yml"
   workflow_dispatch:
 
@@ -16,7 +18,7 @@ permissions:
   contents: read
 
 jobs:
-  nvx-pci-candidate-tests:
+  nvx-tests:
     runs-on: ubuntu-latest
     steps:
       - name: Check out source
@@ -39,3 +41,12 @@ jobs:
 
       - name: Test PCI inventory diagnostics and auxiliary-function filtering
         run: /tmp/vantaos-nvx-pci-test
+
+      - name: Compile NVX lifecycle tests with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_lifecycle.c drivers/gpu/nvx/nvx_lifecycle.c \
+            -o /tmp/vantaos-nvx-lifecycle-test
+
+      - name: Test lifecycle gates, capabilities, shutdown, and failure
+        run: /tmp/vantaos-nvx-lifecycle-test

@@ -14,11 +14,14 @@
 static uint32_t mock_tx_count;
 static uint16_t received_type;
 static size_t received_header,received_length;
+static int attempt_unregister_during_dispatch;
+static int unregister_during_dispatch_result;
 static int mock_transmit(net_device_t* d,const uint8_t* frame,size_t len) {
     (void)d;if(!frame||len<NET_ETHERNET_HEADER_SIZE)return 0;++mock_tx_count;return 1;
 }
 static void mock_handler(net_device_t* d,const uint8_t* frame,size_t len,uint16_t type,size_t header,void* ctx) {
-    (void)d;(void)frame;(void)ctx;received_type=type;received_header=header;received_length=len;
+    (void)frame;(void)ctx;received_type=type;received_header=header;received_length=len;
+    if(attempt_unregister_during_dispatch)unregister_during_dispatch_result=net_device_unregister(d);
 }
 void network_framework_selftest(void) {
     static const net_device_ops_t ops={.transmit=mock_transmit};
@@ -44,8 +47,11 @@ void network_framework_selftest(void) {
     ok=net_device_set_link(&d,0)&&ok;
     ok=!net_device_transmit(&d,frame,sizeof(frame))&&ok;
     ok=net_device_set_link(&d,1)&&ok;
+    attempt_unregister_during_dispatch=1;unregister_during_dispatch_result=1;
     ok=net_receive_frame(&d,frame,sizeof(frame))&&ok;
     ok=net_poll(1)==1&&ok;
+    attempt_unregister_during_dispatch=0;
+    ok=unregister_during_dispatch_result==0&&ok;
     ok=received_type==0x88B5U&&received_header==NET_ETHERNET_HEADER_SIZE&&received_length==sizeof(frame)&&ok;
     ok=net_receive_frame(&d,vlan,sizeof(vlan))&&ok;
     ok=net_poll(1)==1&&ok;

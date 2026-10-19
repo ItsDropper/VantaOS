@@ -1272,8 +1272,8 @@ static int rtl_radio_run_iq_calibration(void)
        !rtl_reg_write32(0xE28,0x80800000U)||!rtl_reg_write32(0xE40,0x01007C00U)||
        !rtl_reg_write32(0xE44,0x01004800U)||!rtl_reg_write8(0x522,0xE7U)||
        !rtl_iqk_once(t1,r1)||!rtl_iqk_once(t2,r2))goto restore;
-    for(size_t i=0;i<2;i++)if((t1[i]>t2[i]?t1[i]-t2[i]:t2[i]-t1[i])>5U||
-       (r1[i]>r2[i]?r1[i]-r2[i]:r2[i]-r1[i])>5U)goto restore;
+    for(size_t i=0;i<2;i++)if((unsigned)(t1[i]>t2[i]?t1[i]-t2[i]:t2[i]-t1[i])>5U||
+       (unsigned)(r1[i]>r2[i]?r1[i]-r2[i]:r2[i]-r1[i])>5U)goto restore;
     {
         uint32_t iq,afe,ecca,scale,rxv,ext;int32_t x=t2[0],y=t2[1];
         if(x&0x200)x-=0x400;

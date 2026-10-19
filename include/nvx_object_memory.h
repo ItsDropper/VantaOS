@@ -67,7 +67,10 @@ nvx_memory_status_t nvx_memory_init(nvx_memory_manager_t *, nvx_gpuva_space_t *,
                                     unsigned address_bits);
 nvx_memory_status_t nvx_memory_alloc(nvx_memory_manager_t *, size_t,
                                      nvx_memory_kind_t, nvx_memory_handle_t *);
-nvx_memory_status_t nvx_memory_get_info(nvx_memory_manager_t *,\n                                         const nvx_memory_handle_t *,\n                                         nvx_memory_info_t *);\nnvx_memory_status_t nvx_memory_cpu_address(nvx_memory_manager_t *,
+nvx_memory_status_t nvx_memory_get_info(nvx_memory_manager_t *,
+                                         const nvx_memory_handle_t *,
+                                         nvx_memory_info_t *);
+nvx_memory_status_t nvx_memory_cpu_address(nvx_memory_manager_t *,
                                            const nvx_memory_handle_t *, void **);
 nvx_memory_status_t nvx_memory_release(nvx_memory_manager_t *,
                                        nvx_memory_handle_t *);

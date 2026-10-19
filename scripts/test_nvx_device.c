@@ -44,6 +44,8 @@ int main(void)
         .revision = 7
     };
     nvx_device_descriptor_t descriptor;
+    nvx_generation_family_t family;
+    nvx_device_profile_t profile;
 
     assert(!nvx_match_pci_device(0));
 
@@ -57,10 +59,24 @@ int main(void)
     assert(!nvx_describe_pci_device(0, &descriptor));
     assert(!nvx_describe_pci_device(&device, 0));
 
+    /* Only explicitly listed PCI IDs receive a family/profile classification. */
+    assert(nvx_identify_pci_device(0x2503U, &family, &profile));
+    assert(family == NVX_FAMILY_AMPERE);
+    assert(profile == NVX_PROFILE_GEFORCE_RTX_3060);
+    assert(nvx_identify_pci_device(0x2504U, &family, &profile));
+    assert(family == NVX_FAMILY_AMPERE);
+    assert(profile == NVX_PROFILE_GEFORCE_RTX_3060);
+    assert(nvx_identify_pci_device(0x2548U, &family, &profile));
+    assert(family == NVX_FAMILY_AMPERE);
+    assert(profile == NVX_PROFILE_GEFORCE_RTX_3060);
+    assert(!nvx_identify_pci_device(0x1234U, &family, &profile));
+    assert(family == NVX_FAMILY_UNKNOWN);
+    assert(profile == NVX_PROFILE_UNKNOWN);
+    assert(!nvx_identify_pci_device(0x2503U, 0, &profile));
+    assert(!nvx_identify_pci_device(0x2503U, &family, 0));
+
     device.class_code = 0x03;
     device.subclass = 0x80; /* Do not overfit matching to one display subclass. */
-    assert(nvx_match_pci_device(&device));
-
     test_header_type = 0;
     test_subsystem_vendor = 0x1043;
     test_subsystem_device = 0x88A1;
@@ -74,11 +90,19 @@ int main(void)
     assert(descriptor.identity.class_code == 0x03);
     assert(descriptor.identity.subclass == 0x80);
     assert(descriptor.family == NVX_FAMILY_UNKNOWN);
+    assert(descriptor.profile == NVX_PROFILE_UNKNOWN);
     assert(descriptor.architecture_id == 0);
     assert(descriptor.implementation_id == 0);
     assert(descriptor.mmio_base == 0);
     assert(descriptor.mmio_length == 0);
     assert(descriptor.is_64bit_bar == 0);
+
+    device.device_id = 0x2503;
+    assert(nvx_describe_pci_device(&device, &descriptor));
+    assert(descriptor.family == NVX_FAMILY_AMPERE);
+    assert(descriptor.profile == NVX_PROFILE_GEFORCE_RTX_3060);
+    assert(descriptor.architecture_id == 0);
+    assert(descriptor.implementation_id == 0);
 
     test_header_type = 1;
     assert(nvx_describe_pci_device(&device, &descriptor));

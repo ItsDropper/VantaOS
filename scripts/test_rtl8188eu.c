@@ -289,7 +289,7 @@ static int test_phy_profile_validator(void)
     test_phy_put_le16(profile + 8U, 1U);
     test_phy_put_le16(profile + 10U, 24U);
     test_phy_put_le32(profile + 12U, (uint32_t)sizeof(profile));
-    profile[20U] = 0xFFU;
+    profile[20U] = 2U;
     test_phy_put_le16(profile + 22U, 6U);
 
     uint8_t *records = profile + 24U;
@@ -314,7 +314,11 @@ static int test_phy_profile_validator(void)
     profile[20U] = 3U;
     if (rtl8188eu_validate_phy_profile(profile, sizeof(profile), 2U))
         return 0;
+    /* Wildcard chip cuts are unsafe for calibration-bearing RF profiles. */
     profile[20U] = 0xFFU;
+    if (rtl8188eu_validate_phy_profile(profile, sizeof(profile), 2U))
+        return 0;
+    profile[20U] = 2U;
 
     /* BB operations cannot target the MAC register window. */
     test_phy_put_le16(records + 1U * 16U + 4U, 0x07FFU);

@@ -34,3 +34,7 @@ Number records sequentially. Do not backdate a record or mark a proposal accepte
 ## Accepted decisions
 
 - [ADR-001: Subsystem-owned source manifests and boot coordinators](0001-subsystem-source-manifests-and-boot-coordinators.md) — keep initialization order in coordinators, test implementations in subsystem-owned modules, and protect the boundary with CI.
+
+## Proposed decisions
+
+- [ADR-002: Subsystem-owned initialization coordinators](0002-subsystem-owned-initialization.md) — separate boot handoff, platform bring-up, and subsystem-owned driver startup; pending review.

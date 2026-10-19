@@ -12,5 +12,4 @@
 void kernel_boot_info_selftest(const vanta_boot_info_t* normalized);
 void kernel_platform_selftest(void);
 void storage_framework_selftest(void);
-void network_framework_selftest(void);
 #endif

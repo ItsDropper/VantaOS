@@ -30,6 +30,31 @@ The existing PS/2 keyboard and mouse remain the active desktop path. They now pu
 
 The USB HID module decodes boot-protocol keyboard and mouse reports and registers them as USB devices. Its caller must already have enumerated a USB device, selected HID boot protocol, and delivered complete reports. xHCI discovery/controller setup, DMA-safe memory, transfer rings, USB port/device enumeration, and interrupt-IN transfers are not yet implemented; therefore this is a real HID report driver layer, not yet end-to-end USB input support.
 
+## Boot coordinator ownership
+
+Initialization is split by responsibility rather than accumulated in the kernel
+entry point:
+
+- `kernel/kernel.c` adapts the Multiboot and UEFI handoffs, owns normalized
+  boot-info storage, and transitions into OS startup.
+- `kernel/init.c` performs ordered platform setup. PCI enumeration and heap
+  initialization complete before it calls `drivers_initialize()`.
+- `drivers/init.c` coordinates subsystem entry points only; it must not call
+  individual controller or protocol initialization functions.
+- `net/init.c`, `drivers/usb/init.c`, and `drivers/storage/init.c` own the
+  registration and discovery order within networking, USB, and storage.
+- Each coordinator's implementation must be listed in the matching subsystem
+  Makefile. `scripts/check_architecture.py` guards these boundaries in CI.
+- Subsystem regression code belongs to its owner: the networking self-test is
+  listed in `net/selftest/Makefile` and is only compiled when
+  `VANTAOS_SELF_TEST` is enabled, not as part of the kernel test manifest.
+
+Preserve the established startup order when changing these files: platform
+memory/interrupt setup, PCI enumeration, heap availability, network protocol
+and driver registration followed by PCI network probing, USB controller setup,
+then ATA/NVMe initialization. The architecture check protects source ownership;
+QEMU/OVMF regressions remain necessary to validate runtime behavior.
+
 ## PCI resource APIs
 
 The PCI layer exposes class-code search, BAR inspection (including 64-bit memory BARs and I/O BARs), and explicit memory-space and bus-master command-bit helpers. Enabling bus mastering is intentionally separate: a future DMA-capable driver must establish safe DMA buffers and controller state before calling it. BAR addresses are physical resources, not automatically mapped virtual pointers.

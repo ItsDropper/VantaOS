@@ -5,7 +5,7 @@
  * See the LICENSE file in the project root for the full license text.
  */
 
-#include "selftest.h"
+#include "net_selftest.h"
 #include "net.h"
 #include "serial.h"
 #include <stdint.h>

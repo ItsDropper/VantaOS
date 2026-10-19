@@ -7,6 +7,7 @@
 #ifndef VANTA_NVX_SYNC_H
 #define VANTA_NVX_SYNC_H
 
+#include <stddef.h>
 #include <stdint.h>
 #include "spinlock.h"
 

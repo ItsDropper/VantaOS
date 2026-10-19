@@ -234,37 +234,77 @@ const struct pci_device* pci_get_device(int index)
 int pci_get_bar(const struct pci_device* device, uint8_t index,
                 uint64_t* address, int* is_io, int* is_64bit)
 {
-    if (!device || !address || index >= 6)
+    uint8_t header_type;
+    uint8_t bar_count;
+    uint8_t offset;
+    uint32_t low;
+    uint32_t high = 0;
+    int wide = 0;
+
+    /* Require all outputs so callers never consume partially initialized data. */
+    if (address)
+        *address = 0;
+    if (is_io)
+        *is_io = 0;
+    if (is_64bit)
+        *is_64bit = 0;
+    if (!device || !address || !is_io || !is_64bit)
         return 0;
 
-    uint8_t offset = (uint8_t)(0x10 + index * 4);
-    uint32_t low = pci_read_config(device->bus, device->slot, device->function, offset);
-    if (low == 0 || low == 0xFFFFFFFFU)
+    header_type = (uint8_t)(pci_read_config8(device, 0x0EU) & 0x7FU);
+    /* Type-0 endpoint headers have six BARs; type-1 PCI bridges have two. */
+    if (header_type == 0U)
+        bar_count = 6U;
+    else if (header_type == 1U)
+        bar_count = 2U;
+    else
+        return 0;
+    if (index >= bar_count)
+        return 0;
+
+    /* A 64-bit BAR consumes the following BAR slot as its high dword. */
+    for (uint8_t prior = 0; prior < index; ++prior)
+    {
+        uint32_t prior_low = pci_read_config32(
+            device, (uint8_t)(0x10U + prior * 4U));
+        if (prior_low != 0U && prior_low != 0xFFFFFFFFU &&
+            !(prior_low & 1U) && ((prior_low >> 1) & 0x03U) == 0x02U)
+        {
+            if ((uint8_t)(prior + 1U) == index)
+                return 0;
+            ++prior;
+        }
+    }
+
+    offset = (uint8_t)(0x10U + index * 4U);
+    low = pci_read_config32(device, offset);
+    if (low == 0U || low == 0xFFFFFFFFU)
         return 0;
 
     if (low & 1U)
     {
         *address = (uint64_t)(low & 0xFFFFFFFCU);
-        if (is_io) *is_io = 1;
-        if (is_64bit) *is_64bit = 0;
-        return *address != 0;
+        *is_io = 1;
+        return *address != 0U;
     }
 
-    uint32_t memory_type = (low >> 1) & 0x03U;
-    if (memory_type == 0x03U)
-        return 0;
-    int wide = memory_type == 0x02U;
-    if (wide && index >= 5)
-        return 0;
-
-    uint64_t high = 0;
+    {
+        uint32_t memory_type = (low >> 1) & 0x03U;
+        if (memory_type == 0x03U)
+            return 0;
+        wide = memory_type == 0x02U;
+    }
     if (wide)
-        high = pci_read_config(device->bus, device->slot, device->function,
-                               (uint8_t)(offset + 4));
-    *address = (high << 32) | (uint64_t)(low & 0xFFFFFFF0U);
-    if (is_io) *is_io = 0;
-    if (is_64bit) *is_64bit = wide;
-    return *address != 0;
+    {
+        if ((uint8_t)(index + 1U) >= bar_count)
+            return 0;
+        high = pci_read_config32(device, (uint8_t)(offset + 4U));
+    }
+
+    *address = ((uint64_t)high << 32) | (uint64_t)(low & 0xFFFFFFF0U);
+    *is_io = 0;
+    *is_64bit = wide;
+    return *address != 0U;
 }
 
 int pci_enable_io_space(const struct pci_device* device)

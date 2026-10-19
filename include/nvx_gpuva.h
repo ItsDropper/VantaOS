@@ -75,7 +75,7 @@ typedef struct nvx_gpuva_space {
     uint8_t initialized;
 } nvx_gpuva_space_t;
 
-/* Space is initialized in place; the range is [start, start + size). */
+/* Zero-initialize before first init; the range is [start, start + size). */
 nvx_gpuva_status_t nvx_gpuva_init(nvx_gpuva_space_t *space,
                                   uint64_t start, uint64_t size);
 

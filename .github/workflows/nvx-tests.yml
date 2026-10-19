@@ -6,7 +6,9 @@ on:
       - "drivers/gpu/nvx/**"
       - "include/nvx_device.h"
       - "include/pci.h"
+      - "include/serial.h"
       - "scripts/test_nvx_device.c"
+      - "scripts/test_nvx_pci.c"
       - ".github/workflows/nvx-tests.yml"
   workflow_dispatch:
 
@@ -20,7 +22,7 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
 
-      - name: Compile NVX candidate tests with strict warnings
+      - name: Compile NVX identity tests with strict warnings
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
             scripts/test_nvx_device.c drivers/gpu/nvx/nvx_device.c \
@@ -28,3 +30,12 @@ jobs:
 
       - name: Test NVIDIA PCI matching and descriptor invariants
         run: /tmp/vantaos-nvx-device-test
+
+      - name: Compile NVX PCI inventory tests with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_pci.c drivers/gpu/nvx/nvx_device.c \
+            drivers/gpu/nvx/nvx_pci.c -o /tmp/vantaos-nvx-pci-test
+
+      - name: Test PCI inventory diagnostics and auxiliary-function filtering
+        run: /tmp/vantaos-nvx-pci-test

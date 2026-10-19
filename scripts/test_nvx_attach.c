@@ -36,6 +36,15 @@ int pci_get_bar(const struct pci_device *device, uint8_t index,
     return 0;
 }
 
+int pci_get_bar_size(const struct pci_device *device, uint8_t index,
+                     uint64_t *size)
+{
+    (void)device; (void)index;
+    if (size != 0)
+        *size = 0;
+    return 0;
+}
+
 void *mmio_map_region(uint64_t physical_address, size_t length)
 {
     ++map_calls;

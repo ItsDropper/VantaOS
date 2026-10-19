@@ -40,7 +40,11 @@ typedef struct nvx_irq_route {
     void *context;
     uint8_t vector;
     uint8_t mode;
+    nvx_bar_resource_t bars[6];
+    void *table_mapping;
+    uint64_t table_mapping_size;
     uint8_t prepared;
+    uint8_t enabled;
 } nvx_irq_route_t;
 
 nvx_irq_route_status_t nvx_irq_route_prepare(
@@ -51,6 +55,8 @@ nvx_irq_route_status_t nvx_irq_route_prepare(
     nvx_irq_route_t *out_route);
 
 /* Caller must disable/mask device interrupts before releasing the route. */
+nvx_irq_route_status_t nvx_irq_route_enable(nvx_irq_route_t *route);
+nvx_irq_route_status_t nvx_irq_route_disable(nvx_irq_route_t *route);
 nvx_irq_route_status_t nvx_irq_route_release(nvx_irq_route_t *route);
 
 #endif

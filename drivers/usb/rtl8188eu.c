@@ -54,6 +54,8 @@
 #define RTL8188EU_RF_CHNLBW 0x18U
 #define RTL8188EU_RF_DATA_MASK 0x000FFFFFU
 #define RTL8188EU_RF_CHANNEL_MASK 0x000000FFU
+#define RTL8188EU_RF_BW20_MASK 0x00000C00U
+#define RTL8188EU_RF_BW20_VALUE 0x00000C00U
 #define RTL8188EU_REG_AFE_XTAL_CTRL 0x0024U
 #define RTL8188EU_AFE_XTAL_CAP_MASK 0x007FF800U
 #define RTL8188EU_RF_LC_CALIBRATE (1U << 15)
@@ -1275,6 +1277,7 @@ int rtl8188eu_validate_phy_profile(const uint8_t *profile, size_t length,
     uint8_t phase_writes[RTL8188EU_PHY_PHASE_IQ_CAL + 1U] = {0};
     uint8_t phase_polls[RTL8188EU_PHY_PHASE_IQ_CAL + 1U] = {0};
     uint8_t last_phase = 0U;
+    uint8_t rf_bw20_configured = 0U;
     uint16_t count;
     uint32_t total_size;
 
@@ -1310,7 +1313,25 @@ int rtl8188eu_validate_phy_profile(const uint8_t *profile, size_t length,
             phase_writes[phase] = 1U;
         else if (op >= RTL8188EU_PHY_OP_POLL8 && op <= RTL8188EU_PHY_OP_POLL_RF20)
             phase_polls[phase] = 1U;
+
+        /*
+         * The software TX-power table below is for 20-MHz operation. Require
+         * the profile to explicitly program RF_CHNLBW's 20-MHz bits before
+         * calibration and before the radio-ready gate can open.
+         */
+        if (op == RTL8188EU_PHY_OP_WRITE_RF20 &&
+            phase <= RTL8188EU_PHY_PHASE_TX_POWER &&
+            rtl_phy_le16(record + 4U) == RTL8188EU_RF_CHNLBW) {
+            uint32_t mask = rtl_phy_le32(record + 8U);
+            uint32_t value = rtl_phy_le32(record + 12U);
+            if (mask == 0U) mask = RTL8188EU_RF_DATA_MASK;
+            if ((mask & RTL8188EU_RF_BW20_MASK) == RTL8188EU_RF_BW20_MASK &&
+                (value & RTL8188EU_RF_BW20_MASK) == RTL8188EU_RF_BW20_VALUE)
+                rf_bw20_configured = 1U;
+        }
     }
+    if (!rf_bw20_configured)
+        return 0;
     for (uint8_t phase = RTL8188EU_PHY_PHASE_MAC;
          phase <= RTL8188EU_PHY_PHASE_TX_POWER; ++phase)
         if (!phase_writes[phase]) return 0;

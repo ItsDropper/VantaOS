@@ -32,7 +32,7 @@ nvx_firmware_status_t nvx_firmware_acquire(
     const char *name;
     nvx_firmware_blob_t blob = {0};
 
-    if (out_image == 0)
+    if (out_image == 0 || out_image->acquired)
         return NVX_FIRMWARE_INVALID_ARGUMENT;
 
     nvx_blob_clear(&out_image->blob);

@@ -104,6 +104,13 @@ nvx_attach_status_t nvx_device_attach(
      * aperture. GSP, engines, memory management, display and acceleration
      * still require their own verified initialization stages.
      */
+    if (!nvx_lifecycle_transition(&out_device->lifecycle, NVX_STATE_PROBED)) {
+        nvx_bar_mmio_unmap(trusted_bar0, out_device->bar0_mapping);
+        nvx_attach_clear(out_device);
+        (void)nvx_lifecycle_fail(&out_device->lifecycle,
+                                 NVX_ERROR_INITIALIZATION);
+        return NVX_ATTACH_LIFECYCLE_ERROR;
+    }
     out_device->pci_device = pci_device;
     out_device->bar0 = *trusted_bar0;
     out_device->attached = 1;

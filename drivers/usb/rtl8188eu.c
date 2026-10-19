@@ -94,7 +94,6 @@ static uint8_t rtl_firmware_ready;
  * that sequence is implemented and explicitly completes.
  */
 static uint8_t rtl_radio_ready;
-static uint8_t rtl_radio_preflight_attempted;
 static uint8_t rtl_radio_preflight_attempts;
 static uint8_t rtl_radio_preflight_done;
 /* A scan is advanced incrementally from poll; no synchronous wait in USB context. */
@@ -755,7 +754,7 @@ static int rtl_load_efuse_identity(void)
         return 0;
 
     /* Chip cut is recorded for diagnostics; unknown cuts stay TX-disabled. */
-    serial_write("VANTAOS_RTL8188EU_EFUSE_IDENTITY_OK\\n");
+    serial_write("VANTAOS_RTL8188EU_EFUSE_IDENTITY_OK\n");
     rtl_efuse_info.valid = 1U;
     return 1;
 }
@@ -1075,7 +1074,7 @@ static void rtl_scan_poll(void)
         rtl_scan_active = 0U;
         rtl_scan_channel = 0U;
         rtl_scan_dwell_polls = 0U;
-        serial_write("VANTAOS_RTL8188EU_SCAN_FAILED\\n");
+        serial_write("VANTAOS_RTL8188EU_SCAN_FAILED\n");
         return;
     }
     rtl_scan_dwell_polls = 500U;
@@ -1633,8 +1632,8 @@ void rtl8188eu_poll(void)
         ++rtl_efuse_attempts;
         rtl_efuse_ready = (uint8_t)rtl_load_efuse_identity();
         serial_write(rtl_efuse_ready
-            ? "VANTAOS_RTL8188EU_EFUSE_READY\\n"
-            : "VANTAOS_RTL8188EU_EFUSE_ATTEMPT_FAILED_TX_BLOCKED\\n");
+            ? "VANTAOS_RTL8188EU_EFUSE_READY\n"
+            : "VANTAOS_RTL8188EU_EFUSE_ATTEMPT_FAILED_TX_BLOCKED\n");
     }
 
     /* Retry transient register/USB failures; preflight still does not enable TX. */
@@ -1642,10 +1641,9 @@ void rtl8188eu_poll(void)
         rtl_radio_preflight_attempts < 3U) {
         ++rtl_radio_preflight_attempts;
         if (rtl_radio_preflight()) {
-            rtl_radio_preflight_attempted = 1U;
-            serial_write("VANTAOS_RTL8188EU_RF_PREFLIGHT_OK_TX_STILL_BLOCKED\\n");
+            serial_write("VANTAOS_RTL8188EU_RF_PREFLIGHT_OK_TX_STILL_BLOCKED\n");
         } else {
-            serial_write("VANTAOS_RTL8188EU_RF_PREFLIGHT_FAILED_RETRYABLE\\n");
+            serial_write("VANTAOS_RTL8188EU_RF_PREFLIGHT_FAILED_RETRYABLE\n");
         }
     }
 
@@ -1689,7 +1687,6 @@ int rtl8188eu_port_disconnected(uint32_t port)
     rtl_firmware_attempted = 0U;
     rtl_firmware_ready = 0U;
     rtl_radio_ready = 0U;
-    rtl_radio_preflight_attempted = 0U;
     rtl_radio_preflight_attempts = 0U;
     rtl_radio_preflight_done = 0U;
     rtl_efuse_attempts = 0U;

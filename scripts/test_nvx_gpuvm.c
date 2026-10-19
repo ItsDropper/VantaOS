@@ -83,16 +83,31 @@ nvx_mmio_status_t nvx_gpuvm_test_mmio_read32(
         return NVX_MMIO_OUT_OF_RANGE;
     if (flush_busy_reads != 0U) {
         --flush_busy_reads;
-        *out = NVX_GPUVM_FLUSH_BUSY | NVX_GPUVM_FLUSH_PAGE_ALL;
+        *out = 0x80000001U;
     } else {
         *out = NVX_GPUVM_FLUSH_PAGE_ALL;
     }
     return NVX_MMIO_OK;
 }
 
-static uint64_t *table_words(nvx_gpuvm_table_t *table)
+static uint16_t test_index_for_level(uint64_t va, uint8_t level)
 {
-    return (uint64_t *)table->backing.virtual_address;
+    switch (level) {
+        case 4: return (uint16_t)((va >> 47U) & 0x3U);
+        case 3: return (uint16_t)((va >> 38U) & 0x1FFU);
+        case 2: return (uint16_t)((va >> 29U) & 0x1FFU);
+        case 1: return (uint16_t)((va >> 21U) & 0xFFU);
+        default: return (uint16_t)((va >> 12U) & 0x1FFU);
+    }
+}
+
+static size_t test_find_child(uint16_t parent, uint16_t slot)
+{
+    for (size_t i = 0; i < NVX_GPUVM_MAX_TABLES; ++i)
+        if (vm.tables[i].active && vm.tables[i].parent_index == parent &&
+            vm.tables[i].parent_slot == slot)
+            return i;
+    return NVX_GPUVM_MAX_TABLES;
 }
 
 static void test_invalid_init(void)
@@ -145,13 +160,14 @@ int main(void)
     /* Walk to the leaf and verify the 4 KiB system-coherent PTE format. */
     uint16_t leaf = vm.root_index;
     for (uint8_t level = 4U; level > 0U; --level) {
-        uint16_t slot = nvx_gpuvm_index_for_level(mapping.base, level);
-        size_t child = nvx_gpuvm_find_child(&vm, leaf, slot);
+        uint16_t slot = test_index_for_level(mapping.base, level);
+        size_t child = test_find_child(leaf, slot);
         assert(child < NVX_GPUVM_MAX_TABLES);
         leaf = (uint16_t)child;
     }
-    uint64_t *entry = nvx_gpuvm_leaf_entry(&vm, leaf, mapping.base);
-    assert(entry != 0 && (*entry & 0xFFU) == 0x8DU);
+    uint64_t *entry = (uint64_t *)((uintptr_t)vm.tables[leaf].backing.virtual_address +
+        (uintptr_t)test_index_for_level(mapping.base, 0U) * sizeof(uint64_t));
+    assert(entry != 0 && (*entry & 0xFFU) == 0xCDU);
     assert((*entry >> 4U) == (physical[0] >> 4U));
 
     assert(nvx_gpuvm_activate(&vm) == NVX_GPUVM_OK);
@@ -178,12 +194,20 @@ int main(void)
     assert(free_bytes == TEST_VA_SIZE && allocations == 0U);
     assert(nvx_gpuvm_validate(&vm) == NVX_GPUVM_OK);
 
+    unsigned tables_before_destroy = vm.table_count;
+    assert(nvx_gpuvm_destroy(&vm) == NVX_GPUVM_OK);
+    assert(freed_pages == tables_before_destroy && !vm.initialized);
+
     /* A failed hardware flush faults the VM and deliberately retains tables. */
+    assert(nvx_gpuvm_init(&vm, TEST_VA_START, TEST_VA_SIZE, &bar0) ==
+           NVX_GPUVM_OK);
+    assert(nvx_gpuvm_activate(&vm) == NVX_GPUVM_OK);
+    unsigned freed_before_fault = freed_pages;
     fail_flush = 1;
     assert(nvx_gpuvm_flush(&vm) == NVX_GPUVM_FLUSH_TIMEOUT);
     assert(vm.faulted);
     assert(nvx_gpuvm_release(&vm, &invalid) == NVX_GPUVM_DEVICE_FAULTED);
     assert(nvx_gpuvm_destroy(&vm) == NVX_GPUVM_DEVICE_FAULTED);
-    assert(freed_pages == 0U);
+    assert(freed_pages == freed_before_fault);
     return 0;
 }

@@ -281,6 +281,46 @@ static void test_phy_record(uint8_t *record, uint8_t op, uint8_t phase,
     test_phy_put_le32(record + 12U, value);
 }
 
+static int test_efuse_tx_power_calibration(void)
+{
+    uint8_t logical[512];
+    rtl8188eu_tx_power_calibration_t calibration;
+    memset(logical, 0xFF, sizeof(logical));
+    logical[0x10U] = 0x20U;
+    logical[0x11U] = 0x21U;
+    logical[0x12U] = 0x22U;
+    logical[0x16U] = 0x30U;
+    logical[0x17U] = 0x31U;
+    logical[0x18U] = 0x32U;
+    /* Low nibble OFDM = -2; high nibble HT20 = +3. */
+    logical[0x1BU] = 0x3EU;
+
+    if (!rtl8188eu_decode_tx_power_calibration(logical, sizeof(logical),
+                                               &calibration))
+        return 0;
+    if (calibration.cck_base[0] != 0x20U ||
+        calibration.cck_base[1] != 0x21U ||
+        calibration.cck_base[2] != 0x22U ||
+        calibration.ht40_base[0] != 0x30U ||
+        calibration.ht40_base[1] != 0x31U ||
+        calibration.ht40_base[2] != 0x32U ||
+        calibration.ofdm_diff != -2 || calibration.ht20_diff != 3)
+        return 0;
+
+    logical[0x11U] = 0xFFU;
+    if (rtl8188eu_decode_tx_power_calibration(logical, sizeof(logical),
+                                               &calibration))
+        return 0;
+    logical[0x11U] = 0x21U;
+    logical[0x12U] = 0x40U;
+    if (rtl8188eu_decode_tx_power_calibration(logical, sizeof(logical),
+                                               &calibration))
+        return 0;
+    if (rtl8188eu_decode_tx_power_calibration(logical, 511U, &calibration))
+        return 0;
+    return 1;
+}
+
 static int test_phy_profile_validator(void)
 {
     uint8_t profile[24U + 6U * 16U];
@@ -339,6 +379,8 @@ int main(void)
 {
     if (!test_efuse_logical_map_decoder())
         return 19;
+    if (!test_efuse_tx_power_calibration())
+        return 23;
     if (!test_phy_profile_validator())
         return 20;
     const uint8_t valid[] = {

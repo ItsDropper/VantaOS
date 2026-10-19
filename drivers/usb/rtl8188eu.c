@@ -973,6 +973,16 @@ static int rtl_rf_write(uint8_t address, uint32_t value)
  * exits. This is an incremental bring-up stage, not proof that the full PHY
  * tables, transmit-power groups, or IQ calibration have been applied.
  */
+static int rtl_wait_ticks_bounded(uint32_t ticks)
+{
+    if(!timer_get_ticks || ticks==0U)return 0;
+    uint32_t start=timer_get_ticks(),spins=0U;
+    uint32_t limit=ticks>10U?10000000U:1000000U;
+    while((uint32_t)(timer_get_ticks()-start)<ticks)
+        if(++spins>=limit)return 0;
+    return 1;
+}
+
 static int rtl_radio_apply_crystal_trim_and_lc(void)
 {
     uint32_t crystal, old_channel, value, verify;
@@ -1013,12 +1023,7 @@ static int rtl_radio_apply_crystal_trim_and_lc(void)
             complete = 1;
             break;
         }
-        uint32_t tick = timer_get_ticks(), spins = 0U;
-        while (timer_get_ticks() == tick) {
-            if (++spins >= 1000000U)
-                break;
-        }
-        if (spins >= 1000000U)
+        if(!rtl_wait_ticks_bounded(1U))
             break;
     }
 
@@ -1182,15 +1187,16 @@ static int rtl_radio_apply_reference_tables(void)
         if(!rtl_reg_write8(rtl8188eu_mac_init[i].address,rtl8188eu_mac_init[i].value)) return 0;
     for(size_t i=0U;i<sizeof(rtl8188eu_bb_init)/sizeof(rtl8188eu_bb_init[0]);++i)
         if(!rtl_reg_write32(rtl8188eu_bb_init[i].address,rtl8188eu_bb_init[i].value)) return 0;
+    /* RTL8188E common BB init toggles AGC core bit 1 before loading AGC data. */
+    if(!rtl_reg_write32(0x0C50U,0x69553422U)||!rtl_wait_ticks_bounded(1U)||
+       !rtl_reg_write32(0x0C50U,0x69553420U)||!rtl_wait_ticks_bounded(1U))return 0;
     for(size_t i=0U;i<sizeof(rtl8188eu_agc_init)/sizeof(rtl8188eu_agc_init[0]);++i)
         if(!rtl_reg_write32(0x0C78U,rtl8188eu_agc_init[i])) return 0;
     for(size_t i=0U;i<sizeof(rtl8188eu_rf_init)/sizeof(rtl8188eu_rf_init[0]);++i) {
         uint8_t address=rtl8188eu_rf_init[i].address;
         uint32_t value=rtl8188eu_rf_init[i].value,verify;
         if(address==0xFEU) {
-            if(!timer_get_ticks) return 0;
-            uint32_t start=timer_get_ticks(),ticks=value>=50000U?5U:1U,spins=0U;
-            while((uint32_t)(timer_get_ticks()-start)<ticks) if(++spins>=1000000U) return 0;
+            if(!rtl_wait_ticks_bounded(value>=50000U?5U:1U))return 0;
             continue;
         }
         if(!rtl_rf_write(address,value)) return 0;
@@ -1205,10 +1211,7 @@ static int rtl_radio_apply_reference_tables(void)
 /* RTL8188E 1T1R IQK with bounded completion and two-run stability check. */
 static int rtl_iqk_wait(void)
 {
-    if(!timer_get_ticks)return 0;
-    uint32_t start=timer_get_ticks(),spins=0U;
-    while((uint32_t)(timer_get_ticks()-start)<10U)if(++spins>=10000000U)return 0;
-    return 1;
+    return rtl_wait_ticks_bounded(10U);
 }
 static int rtl_iqk_once(uint16_t tx[2],uint16_t rx[2])
 {
@@ -1250,7 +1253,8 @@ static int rtl_radio_run_iq_calibration(void)
        (r1[i]>r2[i]?r1[i]-r2[i]:r2[i]-r1[i])>5U)goto restore;
     {
         uint32_t iq,afe,ecca,scale,rxv,ext;int32_t x=t2[0],y=t2[1];
-        if(x&0x200)x-=0x400;if(y&0x200)y-=0x400;
+        if(x&0x200)x-=0x400;
+        if(y&0x200)y-=0x400;
         if(!rtl_reg_read32(0xC80,&iq)||!rtl_reg_read32(0xC94,&afe)||
            !rtl_reg_read32(0xC4C,&ecca)||!rtl_reg_read32(0xC14,&rxv)||
            !rtl_reg_read32(0xCA0,&ext))goto restore;

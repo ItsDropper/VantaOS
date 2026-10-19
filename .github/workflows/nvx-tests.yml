@@ -1,0 +1,30 @@
+name: NVX PCI candidate tests
+
+on:
+  pull_request:
+    paths:
+      - "drivers/gpu/nvx/**"
+      - "include/nvx_device.h"
+      - "include/pci.h"
+      - "scripts/test_nvx_device.c"
+      - ".github/workflows/nvx-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  nvx-pci-candidate-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Compile NVX candidate tests with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_device.c drivers/gpu/nvx/nvx_device.c \
+            -o /tmp/vantaos-nvx-device-test
+
+      - name: Test NVIDIA PCI matching and descriptor invariants
+        run: /tmp/vantaos-nvx-device-test

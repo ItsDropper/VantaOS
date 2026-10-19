@@ -13,6 +13,8 @@
 static void nvx_irq_route_clear(nvx_irq_route_t *route)
 {
     route->device = 0;
+    for (size_t i = 0; i < 6U; ++i)
+        route->bars[i] = (nvx_bar_resource_t){0};
     route->capabilities = (nvx_irq_capabilities_t){0};
     route->handler = 0;
     route->context = 0;

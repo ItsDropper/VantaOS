@@ -340,6 +340,18 @@ static int test_tx_power_index_calculation(void)
         indices.cck != 10U || indices.ht40 != 12U ||
         indices.ofdm != 9U || indices.ht20 != 16U)
         return 0;
+    if (!rtl8188eu_calculate_tx_power_indices(&calibration, 3U, &indices) ||
+        indices.cck != 20U || indices.ht40 != 12U)
+        return 0;
+    if (!rtl8188eu_calculate_tx_power_indices(&calibration, 6U, &indices) ||
+        indices.cck != 30U || indices.ht40 != 22U)
+        return 0;
+    if (!rtl8188eu_calculate_tx_power_indices(&calibration, 9U, &indices) ||
+        indices.cck != 40U || indices.ht40 != 32U)
+        return 0;
+    if (!rtl8188eu_calculate_tx_power_indices(&calibration, 12U, &indices) ||
+        indices.cck != 50U || indices.ht40 != 42U)
+        return 0;
     if (!rtl8188eu_calculate_tx_power_indices(&calibration, 4U, &indices) ||
         indices.cck != 20U || indices.ht40 != 22U ||
         indices.ofdm != 19U || indices.ht20 != 26U)

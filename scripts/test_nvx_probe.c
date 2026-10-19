@@ -45,7 +45,7 @@ int main(void)
            == NVX_PROBE_BAR_TOO_SMALL);
     assert(nvx_probe_mapped_bar0(&gpu,
            (volatile uint32_t *)(void *)((uintptr_t)registers + 1U),
-           sizeof(registers) - 1U, &snapshot)
+           sizeof(registers), &snapshot)
            == NVX_PROBE_BAD_MAPPING_ALIGNMENT);
     assert(snapshot.pmc_boot_0 == 0U);
     assert(nvx_probe_mapped_bar0(&other, registers, sizeof(registers), &snapshot)

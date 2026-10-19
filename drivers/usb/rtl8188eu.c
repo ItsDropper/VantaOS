@@ -994,14 +994,27 @@ static int rtl_radio_apply_crystal_trim_and_lc(void)
                       old_channel | RTL8188EU_RF_LC_CALIBRATE))
         return 0;
 
-    /* Poll for hardware to clear the LC-calibration request; never spin forever. */
-    for (uint32_t attempt = 0U; attempt < 128U; ++attempt) {
+    /*
+     * LC calibration takes milliseconds. Space status reads across timer
+     * ticks instead of issuing 128 immediate reads that can falsely time out.
+     * The 100-tick deadline is bounded; a stalled timer fails closed.
+     */
+    if (!timer_get_ticks)
+        return 0;
+    for (uint32_t attempt = 0U; attempt < 100U; ++attempt) {
         if (!rtl_rf_read(RTL8188EU_RF_CHNLBW, &value))
             break;
         if ((value & RTL8188EU_RF_LC_CALIBRATE) == 0U) {
             complete = 1;
             break;
         }
+        uint32_t tick = timer_get_ticks(), spins = 0U;
+        while (timer_get_ticks() == tick) {
+            if (++spins >= 1000000U)
+                break;
+        }
+        if (spins >= 1000000U)
+            break;
     }
 
     /* Restore the original RF channel/bandwidth state even after timeout. */

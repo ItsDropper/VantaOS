@@ -164,6 +164,31 @@ nvx_memory_status_t nvx_memory_alloc(nvx_memory_manager_t *manager,
     return NVX_MEMORY_OK;
 }
 
+nvx_memory_status_t nvx_memory_get_info(nvx_memory_manager_t *manager,
+                                         const nvx_memory_handle_t *handle,
+                                         nvx_memory_info_t *out_info)
+{
+    const nvx_memory_slot_t *slot;
+    if (out_info != 0)
+        *out_info = (nvx_memory_info_t){0};
+    if (manager == 0 || handle == 0 || out_info == 0)
+        return NVX_MEMORY_INVALID_ARGUMENT;
+    if (!manager->initialized)
+        return NVX_MEMORY_NOT_INITIALIZED;
+
+    spinlock_lock(&manager->lock);
+    if (!nvx_memory_handle_matches(manager, handle, &slot)) {
+        spinlock_unlock(&manager->lock);
+        return NVX_MEMORY_STALE_HANDLE;
+    }
+    out_info->cpu_address = slot->dma.cpu_address;
+    out_info->gpu_virtual_address = slot->va.base;
+    out_info->size = slot->requested_size;
+    out_info->kind = (nvx_memory_kind_t)slot->kind;
+    spinlock_unlock(&manager->lock);
+    return NVX_MEMORY_OK;
+}
+
 nvx_memory_status_t nvx_memory_cpu_address(nvx_memory_manager_t *manager,
                                            const nvx_memory_handle_t *handle,
                                            void **out_address)

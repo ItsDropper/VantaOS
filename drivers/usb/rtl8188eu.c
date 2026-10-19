@@ -992,7 +992,7 @@ static int rtl_radio_apply_crystal_trim(void)
 {
     uint32_t crystal,value,verify;
     uint8_t trim=(uint8_t)(rtl_efuse_info.crystal_trim&0x3FU);
-    if(!rtl_efuse_info.valid||trim==0x3FU||
+    if(!rtl_efuse_info.valid||
        !rtl_reg_read32(RTL8188EU_REG_AFE_XTAL_CTRL,&crystal))
         return 0;
     value=(crystal&~RTL8188EU_AFE_XTAL_CAP_MASK)|

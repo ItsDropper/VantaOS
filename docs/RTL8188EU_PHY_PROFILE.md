@@ -60,10 +60,7 @@ group may remain blank while channel 14 is disabled by policy. The driver derive
 MCS0–7 indices, programs the corresponding TXAGC baseband registers, and
 checks readback. It reapplies power values for each selected channel.
 
-Because the programmed MCS table currently targets 20-MHz operation, the
-profile must explicitly set the RF_CHNLBW 20-MHz bits before the radio-ready
-gate can open. This is not proof of calibrated RF output and does not replace
-the board-specific MAC/baseband/AGC profile or IQ calibration.
+Because the programmed MCS table currently targets 20-MHz operation, the embedded reference RF table configures the 20-MHz mode before TX-power programming. The optional profile validator also requires this setting in any future board-specific profile. This is not proof of calibrated RF output.
 
 ## Required phases
 
@@ -82,7 +79,7 @@ Phases 1–4 must each contain at least one write. Phase 5 must contain at least
 - CRC-32 detects accidental corruption; it is **not** a signature or authenticity check. Only use a profile obtained from a trusted source and validated for the exact adapter board and silicon cut.
 - This format is an execution mechanism, not a source of calibration values. Do not fill it with guessed register values or a profile for a different board.
 - A syntactically valid profile can still be electrically or functionally wrong. Host CI cannot establish safe RF power, correct calibration, actual scanning, association, WPA2 traffic, or Internet connectivity.
-- No profile is currently bundled with VantaOS. Until a correct profile is provided and physical-adapter tests pass, end-to-end RTL8188EU support is **not complete**.
+- No external profile is bundled or required for the built-in baseline. End-to-end RTL8188EU support remains unproven until physical-adapter tests pass.
 
 
 ## Built-in reference initialization

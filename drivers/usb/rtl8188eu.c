@@ -914,9 +914,8 @@ static int rtl_apply_tx_power_for_channel(uint8_t channel)
                                                channel, &indices))
         return 0;
 
-    /* CCK2 is 4.5 dB below the other CCK rates; avoid unsigned underflow. */
-    uint8_t cck2 = indices.cck >= 9U ? (uint8_t)(indices.cck - 9U) : 0U;
-    uint32_t cck_rates = ((uint32_t)cck2 << 8) |
+    /* RTL8188E's path-A CCK2/5.5/11 TXAGC bytes share the CCK base. */
+    uint32_t cck_rates = ((uint32_t)indices.cck << 8) |
                          ((uint32_t)indices.cck << 16) |
                          ((uint32_t)indices.cck << 24);
     if (!rtl_power_update_bb32(RTL8188EU_REG_TXAGC_CCK1_MCS32,

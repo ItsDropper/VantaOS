@@ -32,6 +32,9 @@ uint32_t pci_read_config32(const struct pci_device *device, uint8_t offset);
 
 int pci_get_bar(const struct pci_device* device, uint8_t index,
                 uint64_t* address, int* is_io, int* is_64bit);
+/* Size a BAR only when I/O decode, memory decode, and bus mastering are disabled. */
+int pci_get_bar_size(const struct pci_device* device, uint8_t index,
+                     uint64_t* size);
 int pci_enable_memory_space(const struct pci_device* device);
 int pci_enable_io_space(const struct pci_device* device);
 /* Enable bus mastering only after DMA buffers and device state are ready. */

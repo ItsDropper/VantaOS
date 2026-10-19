@@ -527,9 +527,8 @@ int main(void)
         checksum_reported_too_early)
         return 5;
     /*
-     * Firmware-ready is not radio-ready. Since this driver does not yet
-     * perform verified eFuse/PHY/RF initialization and calibration, it must
-     * fail closed rather than transmit a probe on an unknown radio state.
+     * Firmware-ready is not radio-ready. This host fixture does not emulate valid eFuse calibration or IQK hardware
+     * result registers, so it must fail closed rather than fabricate radio readiness.
      */
     if (rtl8188eu_start_active_scan() || scan_request_valid || tx_seen)
         return 18;

@@ -74,6 +74,9 @@ int nvx_describe_pci_device(const struct pci_device *device,
     out_descriptor->identity.subclass = device->subclass;
     out_descriptor->identity.programming_interface = device->prog_if;
 
+    /* Read current command bits only; NVX never changes them during discovery. */
+    out_descriptor->pci_command = pci_read_config16(device, 0x04U);
+
     if ((pci_read_config8(device, 0x0EU) & 0x7FU) == 0U)
     {
         out_descriptor->identity.subsystem_vendor_id =

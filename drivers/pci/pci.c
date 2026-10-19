@@ -21,6 +21,21 @@ static struct pci_device devices[PCI_MAX_DEVICES];
 static int device_count = 0;
 static spinlock_t pci_config_lock = SPINLOCK_INITIALIZER;
 
+#ifdef PCI_TEST
+/* Host-side tests replace privileged port I/O with a deterministic config model. */
+void pci_test_outl(uint16_t port, uint32_t value);
+uint32_t pci_test_inl(uint16_t port);
+
+static inline void outl(uint16_t port, uint32_t value)
+{
+    pci_test_outl(port, value);
+}
+
+static inline uint32_t inl(uint16_t port)
+{
+    return pci_test_inl(port);
+}
+#else
 static inline void outl(uint16_t port, uint32_t value)
 {
     __asm__ volatile (
@@ -33,14 +48,33 @@ static inline void outl(uint16_t port, uint32_t value)
 static inline uint32_t inl(uint16_t port)
 {
     uint32_t value;
-
     __asm__ volatile (
         "inl %1, %0"
         : "=a"(value)
         : "Nd"(port)
     );
-
     return value;
+}
+#endif
+
+static uint64_t pci_lock_config(void)
+{
+#ifdef PCI_TEST
+    spinlock_lock(&pci_config_lock);
+    return 0;
+#else
+    return pci_lock_config();
+#endif
+}
+
+static void pci_unlock_config(uint64_t flags)
+{
+#ifdef PCI_TEST
+    (void)flags;
+    spinlock_unlock(&pci_config_lock);
+#else
+    pci_unlock_config(flags);
+#endif
 }
 
 static uint32_t pci_config_address(
@@ -62,10 +96,10 @@ static void pci_write_config(
     uint8_t bus, uint8_t slot, uint8_t function, uint8_t offset, uint32_t value
 )
 {
-    uint64_t flags = spinlock_lock_irqsave(&pci_config_lock);
+    uint64_t flags = pci_lock_config();
     outl(PCI_CONFIG_ADDRESS, pci_config_address(bus, slot, function, offset));
     outl(PCI_CONFIG_DATA, value);
-    spinlock_unlock_irqrestore(&pci_config_lock, flags);
+    pci_unlock_config(flags);
 }
 
 static uint32_t pci_read_config(
@@ -75,7 +109,7 @@ static uint32_t pci_read_config(
     uint8_t offset
 )
 {
-    uint64_t flags = spinlock_lock_irqsave(&pci_config_lock);
+    uint64_t flags = pci_lock_config();
     outl(
         PCI_CONFIG_ADDRESS,
         pci_config_address(
@@ -86,7 +120,7 @@ static uint32_t pci_read_config(
         )
     );
     uint32_t value = inl(PCI_CONFIG_DATA);
-    spinlock_unlock_irqrestore(&pci_config_lock, flags);
+    pci_unlock_config(flags);
     return value;
 }
 
@@ -356,7 +390,7 @@ int pci_get_bar_size(const struct pci_device* device, uint8_t index,
     if (device == 0 || size == 0)
         return 0;
 
-    flags = spinlock_lock_irqsave(&pci_config_lock);
+    flags = pci_lock_config();
     command_status = pci_read_config_locked(
         device->bus, device->slot, device->function, 0x04U);
     if ((command_status & 0x0007U) != 0U)
@@ -488,7 +522,7 @@ done:
         pci_write_config_locked(device->bus, device->slot, device->function,
                                 (uint8_t)(0x10U + index * 4U), low);
     }
-    spinlock_unlock_irqrestore(&pci_config_lock, flags);
+    pci_unlock_config(flags);
     return valid;
 }
 

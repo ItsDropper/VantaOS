@@ -850,11 +850,18 @@ int rtl8188eu_calculate_tx_power_indices(
 
     /* RTL8188E has six CCK groups and five HT40 groups; channel 14 is
        excluded by the driver's regulatory policy. */
-    if (channel <= 2U) { cck_group = 0U; ht40_group = 0U; }
-    else if (channel <= 5U) { cck_group = 1U; ht40_group = 1U; }
-    else if (channel <= 8U) { cck_group = 2U; ht40_group = 2U; }
-    else if (channel <= 11U) { cck_group = 3U; ht40_group = 3U; }
-    else { cck_group = 4U; ht40_group = 4U; }
+    if (channel <= 2U) cck_group = 0U;
+    else if (channel <= 5U) cck_group = 1U;
+    else if (channel <= 8U) cck_group = 2U;
+    else if (channel <= 11U) cck_group = 3U;
+    else cck_group = 4U;
+
+    /* HT40 calibration has five 3-channel groups, unlike CCK's 2/3/3/3/2. */
+    if (channel <= 3U) ht40_group = 0U;
+    else if (channel <= 6U) ht40_group = 1U;
+    else if (channel <= 9U) ht40_group = 2U;
+    else if (channel <= 12U) ht40_group = 3U;
+    else ht40_group = 4U;
 
     int ht40 = calibration->ht40_base[ht40_group];
     indices->cck = calibration->cck_base[cck_group];
@@ -868,7 +875,7 @@ int rtl8188eu_calculate_tx_power_indices(
  * Program the RTL8188E path-A transmit-power tables from decoded factory
  * calibration. Registers are updated with read/modify/write and verified
  * readback. This configures the 1T legacy rates and MCS0-7 for 20-MHz
- * operation; it does not replace the required board PHY profile or IQK.
+ * operation; it is followed by the bounded IQK sequence.
  */
 #define RTL8188EU_REG_TXAGC_RATE18_06 0x0E00U
 #define RTL8188EU_REG_TXAGC_RATE54_24 0x0E04U

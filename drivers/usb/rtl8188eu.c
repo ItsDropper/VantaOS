@@ -976,10 +976,11 @@ static int rtl_rf_write(uint8_t address, uint32_t value)
 static int rtl_wait_ticks_bounded(uint32_t ticks)
 {
     if(!timer_get_ticks || ticks==0U)return 0;
-    uint32_t start=timer_get_ticks(),spins=0U;
-    uint32_t limit=ticks>10U?10000000U:1000000U;
-    while((uint32_t)(timer_get_ticks()-start)<ticks)
-        if(++spins>=limit)return 0;
+    while(ticks--!=0U) {
+        uint32_t start=timer_get_ticks(),spins=0U;
+        while(timer_get_ticks()==start)
+            if(++spins>=100000000U)return 0;
+    }
     return 1;
 }
 

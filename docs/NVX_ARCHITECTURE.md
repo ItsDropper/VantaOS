@@ -72,6 +72,8 @@ accelerated. Physical RTX 3060 validation remains outstanding.
 | include/nvx_lifecycle.h | NVX-specific fail-closed lifecycle state machine |
 | include/nvx_resource.h | Validated BAR metadata and MMIO acquisition contract |
 | include/nvx_mmio.h | Bounded register access over an existing mapping |
+| include/nvx_attach.h | BAR0 mapping, PMC probe and teardown transaction |
+| include/nvx_firmware.h | Verified firmware-provider acquisition contract |
 | include/nvx_memory.h | Explicit CPU, system-physical and GPU address-space contracts |
 | include/nvx_firmware.h | Injected firmware-provider interface independent of VFS paths |
 | include/nvx_command.h | Queue, command-buffer and completion-state vocabulary |
@@ -149,10 +151,13 @@ on NVIDIA command encoding.
 
 ### Diagnostics and validation
 
+The NVX firmware acquisition layer currently selects `gsp_ga10x.bin` for the recognized Ampere profile. It requires a platform firmware provider with request, release, and authenticity-verification callbacks, rejects empty or oversized blobs (over 64 MiB), and releases failed acquisitions. It does not implement a signature verifier itself and does not load or execute GSP firmware yet; the platform callback must perform trusted verification before any firmware can be accepted.
+
 The focused NVX workflow compiles tests with `-Wall -Wextra -Werror` and
 exercises PCI matching, exact family/profile IDs, unknown-ID fallback,
 subsystem-ID handling, auxiliary-function filtering, diagnostics, bounded MMIO
-reads/writes, mapping bounds and alignment, lifecycle ordering, capability
+reads/writes, attach/probe rollback and teardown, firmware acquisition and
+verification failures, mapping bounds and alignment, lifecycle ordering, capability
 gating, shutdown and fail-closed behavior. These tests
 validate software logic, not physical hardware. Use QEMU for generic boot
 regressions and real hardware for RTX 3060 support claims. QEMU success cannot
@@ -164,7 +169,8 @@ prove physical NVIDIA support.
 2. Read-only NVIDIA PCI inventory, conservative matching and mocked tests. (Implemented.)
 3. Exact PCI family/profile recognition and lifecycle state gates. (Implemented as software contracts; lifecycle not yet wired to hardware.)
 4. BAR validation and size-gated MMIO mapping. (Validation and refusal paths implemented; trusted BAR sizing remains blocked by the PCI subsystem.)
-5. Bounded MMIO register access and conservative PMC probing. (Implemented and covered by mocked tests; not hardware-validated.)
+5. Bounded MMIO register access, attach/probe lifecycle and conservative PMC probing. (Implemented and covered by mocked tests; not hardware-validated.)
+6. Bounded GSP firmware acquisition with mandatory platform verification callback. (Implemented; provider signature verification and firmware loading remain external/not yet integrated.)
 6. Firmware provider and validated family-specific hardware initialization.
 7. Device memory management, DMA, interrupts and synchronization.
 8. Command queues, bounded submissions and completion handling.

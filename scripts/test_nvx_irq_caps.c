@@ -101,6 +101,14 @@ int main(void)
     assert(nvx_irq_read_capabilities(&device, bars, &caps) ==
            NVX_IRQ_CAPS_RANGE_INVALID);
     bars[0].is_io = 0U;
+    bars[0].base += 0x1000U;
+    assert(nvx_irq_read_capabilities(&device, bars, &caps) ==
+           NVX_IRQ_CAPS_RANGE_INVALID);
+    bars[0].base -= 0x1000U;
+    bars[0].size = 0x18000U;
+    assert(nvx_irq_read_capabilities(&device, bars, &caps) ==
+           NVX_IRQ_CAPS_RANGE_INVALID);
+    bars[0].size = 0x10000U;
 
     /* Reserved BIR values are rejected. */
     set_dword(0x64U, 0x00001006U);

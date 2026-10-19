@@ -67,6 +67,18 @@ int rtl8188eu_decode_tx_power_calibration(
     const uint8_t *logical, size_t logical_length,
     rtl8188eu_tx_power_calibration_t *calibration);
 
+typedef struct {
+    uint8_t cck;
+    uint8_t ofdm;
+    uint8_t ht20;
+    uint8_t ht40;
+} rtl8188eu_tx_power_indices_t;
+
+/* Derive bounded 1T power indices for channels 1-13 from factory eFuse data. */
+int rtl8188eu_calculate_tx_power_indices(
+    const rtl8188eu_tx_power_calibration_t *calibration, uint8_t channel,
+    rtl8188eu_tx_power_indices_t *indices);
+
 /* Validate a board-specific RTL8188EU PHY profile without touching hardware. */
 int rtl8188eu_validate_phy_profile(const uint8_t *profile, size_t length,
                                    uint8_t chip_cut);

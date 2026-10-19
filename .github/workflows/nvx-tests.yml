@@ -95,8 +95,8 @@ jobs:
 
       - name: Compile NVX firmware verification tests with strict warnings
         run: |
-          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \\
-            scripts/test_nvx_firmware.c drivers/gpu/nvx/nvx_firmware.c \\
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_firmware.c drivers/gpu/nvx/nvx_firmware.c \
             -o /tmp/vantaos-nvx-firmware-test
 
       - name: Test bounded GSP firmware acquisition and verification

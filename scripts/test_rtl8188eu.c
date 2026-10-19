@@ -321,6 +321,42 @@ static int test_efuse_tx_power_calibration(void)
     return 1;
 }
 
+static int test_tx_power_index_calculation(void)
+{
+    rtl8188eu_tx_power_calibration_t calibration = {
+        .cck_base = {10U, 20U, 30U},
+        .ht40_base = {12U, 22U, 32U},
+        .ofdm_diff = -3,
+        .ht20_diff = 4
+    };
+    rtl8188eu_tx_power_indices_t indices;
+    if (!rtl8188eu_calculate_tx_power_indices(&calibration, 1U, &indices) ||
+        indices.cck != 10U || indices.ht40 != 12U ||
+        indices.ofdm != 9U || indices.ht20 != 16U)
+        return 0;
+    if (!rtl8188eu_calculate_tx_power_indices(&calibration, 6U, &indices) ||
+        indices.cck != 20U || indices.ht40 != 22U ||
+        indices.ofdm != 19U || indices.ht20 != 26U)
+        return 0;
+    calibration.ht40_base[2] = 2U;
+    calibration.ofdm_diff = -8;
+    calibration.ht20_diff = 7;
+    if (!rtl8188eu_calculate_tx_power_indices(&calibration, 13U, &indices) ||
+        indices.cck != 30U || indices.ht40 != 2U ||
+        indices.ofdm != 0U || indices.ht20 != 9U)
+        return 0;
+    if (rtl8188eu_calculate_tx_power_indices(&calibration, 0U, &indices) ||
+        rtl8188eu_calculate_tx_power_indices(&calibration, 14U, &indices))
+        return 0;
+    calibration.ht40_base[2] = 63U;
+    calibration.ofdm_diff = 7;
+    calibration.ht20_diff = -8;
+    if (!rtl8188eu_calculate_tx_power_indices(&calibration, 13U, &indices) ||
+        indices.ofdm != 63U || indices.ht20 != 55U)
+        return 0;
+    return 1;
+}
+
 static int test_phy_profile_validator(void)
 {
     uint8_t profile[24U + 6U * 16U];
@@ -381,6 +417,8 @@ int main(void)
         return 19;
     if (!test_efuse_tx_power_calibration())
         return 23;
+    if (!test_tx_power_index_calculation())
+        return 24;
     if (!test_phy_profile_validator())
         return 20;
     const uint8_t valid[] = {

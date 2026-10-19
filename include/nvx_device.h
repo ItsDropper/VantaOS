@@ -11,6 +11,9 @@
 #include "pci.h"
 
 #define NVX_PCI_VENDOR_NVIDIA 0x10DEu
+#define NVX_PCI_COMMAND_IO_SPACE       (1U << 0)
+#define NVX_PCI_COMMAND_MEMORY_SPACE   (1U << 1)
+#define NVX_PCI_COMMAND_BUS_MASTER     (1U << 2)
 
 typedef enum nvx_generation_family {
     NVX_FAMILY_UNKNOWN = 0,
@@ -30,6 +33,7 @@ typedef struct nvx_device_descriptor {
     gpu_device_identity_t identity;
     nvx_generation_family_t family;
     nvx_device_profile_t profile;
+    uint16_t pci_command;
     uint32_t architecture_id;
     uint32_t implementation_id;
     uint64_t mmio_base;
@@ -39,15 +43,12 @@ typedef struct nvx_device_descriptor {
 
 typedef struct nvx_device nvx_device_t;
 
-/* PCI match means candidate discovery only, not functional GPU support. */
 int nvx_match_pci_device(const struct pci_device *pci_device);
-/* Exact PCI-ID recognition only; unknown IDs must remain UNKNOWN. */
 int nvx_identify_pci_device(uint16_t device_id,
                             nvx_generation_family_t *out_family,
                             nvx_device_profile_t *out_profile);
 int nvx_describe_pci_device(const struct pci_device *pci_device,
                             nvx_device_descriptor_t *out_descriptor);
-/* Read-only inventory of NVIDIA PCI functions; returns the detected count. */
 int nvx_pci_discover(void);
 
 #endif

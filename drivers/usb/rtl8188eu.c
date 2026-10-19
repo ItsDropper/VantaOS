@@ -990,7 +990,8 @@ static int rtl_radio_apply_crystal_trim_and_lc(void)
         old_channel == RTL8188EU_RF_DATA_MASK)
         return 0;
 
-    if (!rtl_rf_write(RTL8188EU_RF_CHNLBW,
+    if (!timer_get_ticks ||
+        !rtl_rf_write(RTL8188EU_RF_CHNLBW,
                       old_channel | RTL8188EU_RF_LC_CALIBRATE))
         return 0;
 
@@ -999,8 +1000,6 @@ static int rtl_radio_apply_crystal_trim_and_lc(void)
      * ticks instead of issuing 128 immediate reads that can falsely time out.
      * The 100-tick deadline is bounded; a stalled timer fails closed.
      */
-    if (!timer_get_ticks)
-        return 0;
     for (uint32_t attempt = 0U; attempt < 100U; ++attempt) {
         if (!rtl_rf_read(RTL8188EU_RF_CHNLBW, &value))
             break;
@@ -1070,180 +1069,6 @@ static uint32_t rtl_phy_crc32(const uint8_t *data, size_t length)
     }
     return ~crc;
 }
-
-static int rtl_phy_load_profile(size_t *profile_size, uint16_t *record_count)
-{
-    fat32_dirent_t root[64];
-    fat32_dirent_t entries[128];
-    uint32_t system_cluster = 0U;
-    int root_count, entry_count;
-
-    if (!profile_size || !record_count || !fat32_is_mounted())
-        return 0;
-    root_count = fat32_list_directory(fat32_root_cluster(), root, 64U);
-    if (root_count < 0 || root_count >= 64)
-        return 0;
-    for (int i = 0; i < root_count; ++i) {
-        if (root[i].directory && rtl_name_equal(root[i].name, "SYSTEM")) {
-            system_cluster = root[i].first_cluster;
-            break;
-        }
-    }
-    if (system_cluster < 2U)
-        return 0;
-    entry_count = fat32_list_directory(system_cluster, entries, 128U);
-    if (entry_count < 0 || entry_count >= 128)
-        return 0;
-
-    for (int i = 0; i < entry_count; ++i) {
-        fat32_dirent_t *entry = &entries[i];
-        if (entry->directory || !rtl_name_equal(entry->name, "RTL8188EU.PHY"))
-            continue;
-        if (entry->size < RTL8188EU_PHY_PROFILE_HEADER_SIZE ||
-            entry->size > sizeof(rtl_phy_profile) ||
-            fat32_read_file(entry->first_cluster, entry->size,
-                (char *)rtl_phy_profile, sizeof(rtl_phy_profile)) != (int)entry->size)
-            return 0;
-
-        if (!rtl8188eu_validate_phy_profile(rtl_phy_profile, entry->size,
-                                             rtl_efuse_info.chip_cut))
-            return 0;
-        *profile_size = rtl_phy_le32(rtl_phy_profile + 12U);
-        *record_count = rtl_phy_le16(rtl_phy_profile + 22U);
-        return 1;
-    }
-    return 0;
-}
-
-static int rtl_phy_read_record(uint8_t op, uint16_t address, uint32_t *value)
-{
-    if (!value)
-        return 0;
-    switch (op) {
-    case RTL8188EU_PHY_OP_WRITE8:
-    case RTL8188EU_PHY_OP_POLL8: {
-        uint8_t v;
-        if (address >= 0x0800U || !rtl_reg_read8(address, &v)) return 0;
-        *value = v;
-        return 1;
-    }
-    case RTL8188EU_PHY_OP_WRITE16:
-    case RTL8188EU_PHY_OP_POLL16: {
-        uint16_t v;
-        if (address >= 0x0800U || !rtl_reg_read16(address, &v)) return 0;
-        *value = v;
-        return 1;
-    }
-    case RTL8188EU_PHY_OP_WRITE32:
-    case RTL8188EU_PHY_OP_POLL32:
-        if (address >= 0x0800U || !rtl_reg_read32(address, value)) return 0;
-        return 1;
-    case RTL8188EU_PHY_OP_WRITE_BB32:
-    case RTL8188EU_PHY_OP_POLL_BB32:
-        if (address < 0x0800U || address > 0x0FFFU ||
-            !rtl_reg_read32(address, value)) return 0;
-        return 1;
-    case RTL8188EU_PHY_OP_WRITE_RF20:
-    case RTL8188EU_PHY_OP_POLL_RF20:
-        if (address > 0xFFU || !rtl_rf_read((uint8_t)address, value)) return 0;
-        return 1;
-    default:
-        return 0;
-    }
-}
-
-static int rtl_phy_write_record(uint8_t op, uint16_t address,
-                                uint32_t mask, uint32_t value)
-{
-    uint32_t old_value = 0U, next_value, verify = 0U, width_mask;
-    if (op == RTL8188EU_PHY_OP_WRITE8) width_mask = 0xFFU;
-    else if (op == RTL8188EU_PHY_OP_WRITE16) width_mask = 0xFFFFU;
-    else if (op == RTL8188EU_PHY_OP_WRITE_RF20) width_mask = RTL8188EU_RF_DATA_MASK;
-    else width_mask = 0xFFFFFFFFU;
-    if (mask == 0U) mask = width_mask;
-    if ((mask & ~width_mask) != 0U || (value & ~width_mask) != 0U ||
-        !rtl_phy_read_record(op, address, &old_value))
-        return 0;
-    next_value = (old_value & ~mask) | (value & mask);
-    switch (op) {
-    case RTL8188EU_PHY_OP_WRITE8:
-        if (!rtl_reg_write8(address, (uint8_t)next_value)) return 0;
-        break;
-    case RTL8188EU_PHY_OP_WRITE16:
-        if (!rtl_reg_write16(address, (uint16_t)next_value)) return 0;
-        break;
-    case RTL8188EU_PHY_OP_WRITE32:
-    case RTL8188EU_PHY_OP_WRITE_BB32:
-        if (!rtl_reg_write32(address, next_value)) return 0;
-        break;
-    case RTL8188EU_PHY_OP_WRITE_RF20:
-        if (!rtl_rf_write((uint8_t)address, next_value)) return 0;
-        break;
-    default:
-        return 0;
-    }
-    if (!rtl_phy_read_record(op, address, &verify))
-        return 0;
-    return ((verify ^ next_value) & mask) == 0U;
-}
-
-static int rtl_phy_execute_record(const uint8_t *record)
-{
-    uint8_t op = record[0];
-    uint8_t phase = record[1];
-    uint16_t address = rtl_phy_le16(record + 4U);
-    uint32_t mask = rtl_phy_le32(record + 8U);
-    uint32_t value = rtl_phy_le32(record + 12U);
-
-    if (record[2] != 0U || record[3] != 0U ||
-        record[6] != 0U || record[7] != 0U ||
-        phase < RTL8188EU_PHY_PHASE_MAC || phase > RTL8188EU_PHY_PHASE_IQ_CAL)
-        return 0;
-
-    if (op >= RTL8188EU_PHY_OP_WRITE8 && op <= RTL8188EU_PHY_OP_WRITE_RF20) {
-        if (op == RTL8188EU_PHY_OP_WRITE8 && (value > 0xFFU || (mask & ~0xFFU)))
-            return 0;
-        if (op == RTL8188EU_PHY_OP_WRITE16 && (value > 0xFFFFU || (mask & ~0xFFFFU)))
-            return 0;
-        if (op == RTL8188EU_PHY_OP_WRITE_RF20 &&
-            (value > RTL8188EU_RF_DATA_MASK || (mask & ~RTL8188EU_RF_DATA_MASK)))
-            return 0;
-        return rtl_phy_write_record(op, address, mask, value);
-    }
-
-    if (op >= RTL8188EU_PHY_OP_POLL8 && op <= RTL8188EU_PHY_OP_POLL_RF20) {
-        uint8_t read_op = (uint8_t)(op - RTL8188EU_PHY_OP_POLL8 +
-                                    RTL8188EU_PHY_OP_WRITE8);
-        uint32_t width_mask = op == RTL8188EU_PHY_OP_POLL8 ? 0xFFU :
-            op == RTL8188EU_PHY_OP_POLL16 ? 0xFFFFU :
-            op == RTL8188EU_PHY_OP_POLL_RF20 ? RTL8188EU_RF_DATA_MASK : 0xFFFFFFFFU;
-        if (mask == 0U || (mask & ~width_mask) != 0U || (value & ~width_mask) != 0U)
-            return 0;
-        for (uint32_t retry = 0U; retry < 512U; ++retry) {
-            uint32_t observed;
-            if (!rtl_phy_read_record(read_op, address, &observed))
-                return 0;
-            if ((observed & mask) == (value & mask))
-                return 1;
-        }
-        return 0;
-    }
-
-    if (op == RTL8188EU_PHY_OP_DELAY_TICKS) {
-        if (address != 0U || mask != 0U || value == 0U || value > 100U ||
-            !timer_get_ticks)
-            return 0;
-        uint32_t start = timer_get_ticks();
-        uint32_t spins = 0U;
-        while ((uint32_t)(timer_get_ticks() - start) < value) {
-            if (++spins >= 1000000U)
-                return 0;
-        }
-        return 1;
-    }
-    return 0;
-}
-
 
 static int rtl_phy_validate_record(const uint8_t *record)
 {

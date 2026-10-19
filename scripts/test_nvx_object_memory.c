@@ -17,17 +17,19 @@ static uint8_t dma_memory[NVX_DMA_MAX_BYTES * NVX_MEMORY_MAX_OBJECTS]
 static size_t next_page;
 static unsigned alloc_calls;
 static unsigned free_calls;
+static int fail_alloc;
+static uint64_t physical_base = 0x10000000ULL;
 
 int dma_alloc_contiguous(dma_page_t *pages, size_t count)
 {
-    if (pages == 0 || count == 0U ||
+    if (fail_alloc || pages == 0 || count == 0U ||
         count > NVX_DMA_MAX_PAGES ||
         next_page + count * NVX_DMA_PAGE_SIZE > sizeof(dma_memory))
         return 0;
     ++alloc_calls;
     for (size_t i = 0; i < count; ++i) {
         pages[i].virtual_address = &dma_memory[next_page];
-        pages[i].physical_address = 0x10000000ULL + next_page;
+        pages[i].physical_address = physical_base + next_page;
         pages[i].size = NVX_DMA_PAGE_SIZE;
         next_page += NVX_DMA_PAGE_SIZE;
     }
@@ -75,6 +77,10 @@ int main(void)
     assert(a.token != 0U && a.gpu_virtual_address != 0U);
     assert(nvx_memory_cpu_address(&manager, &a, &cpu) == NVX_MEMORY_OK);
     assert(cpu != 0 && cpu != (void *)(uintptr_t)1U);
+    nvx_memory_info_t info;
+    assert(nvx_memory_get_info(&manager, &a, &info) == NVX_MEMORY_OK);
+    assert(info.kind == NVX_MEMORY_STAGING && info.size == 4096U);
+    assert(info.gpu_virtual_address == a.gpu_virtual_address && info.cpu_address == cpu);
     memset(cpu, 0xA5, 4096U);
     assert(nvx_memory_validate(&manager) == NVX_MEMORY_OK);
 
@@ -101,5 +107,22 @@ int main(void)
     assert(nvx_gpuva_init(&va_space, 0x20000000ULL,
                           16ULL * 1024ULL * 1024ULL) == NVX_GPUVA_OK);
     assert(nvx_memory_init(&manager, &va_space, 32U) == NVX_MEMORY_OK);
+    physical_base = 0x100000000ULL;
+    uint64_t free_before = 0U, free_after = 0U;
+    size_t ranges = 0U, allocations = 0U;
+    assert(nvx_gpuva_get_stats(&va_space, &free_before, &ranges, &allocations) ==
+           NVX_GPUVA_OK);
+    assert(nvx_memory_alloc(&manager, 4096U, NVX_MEMORY_STAGING, &a) ==
+           NVX_MEMORY_ALLOCATION_FAILED);
+    assert(nvx_gpuva_get_stats(&va_space, &free_after, &ranges, &allocations) ==
+           NVX_GPUVA_OK);
+    assert(free_after == free_before && allocations == 0U);
+    fail_alloc = 1;
+    assert(nvx_memory_alloc(&manager, 4096U, NVX_MEMORY_STAGING, &a) ==
+           NVX_MEMORY_ALLOCATION_FAILED);
+    fail_alloc = 0;
+    assert(nvx_gpuva_get_stats(&va_space, &free_after, &ranges, &allocations) ==
+           NVX_GPUVA_OK);
+    assert(free_after == free_before && allocations == 0U);
     return 0;
 }

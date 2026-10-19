@@ -1,4 +1,5 @@
 #include "rtl8188eu.h"
+#include "../drivers/usb/rtl8188eu_phy_tables.h"
 #include "xhci.h"
 #include "fat32.h"
 #include "serial.h"
@@ -437,8 +438,34 @@ static int test_phy_profile_validator(void)
     return 1;
 }
 
+
+static int test_reference_phy_tables(void)
+{
+    if(sizeof(rtl8188eu_mac_init)/sizeof(rtl8188eu_mac_init[0])!=91U ||
+       sizeof(rtl8188eu_bb_init)/sizeof(rtl8188eu_bb_init[0])!=192U ||
+       sizeof(rtl8188eu_agc_init)/sizeof(rtl8188eu_agc_init[0])!=128U ||
+       sizeof(rtl8188eu_rf_init)/sizeof(rtl8188eu_rf_init[0])!=95U)
+        return 0;
+    if(rtl8188eu_mac_init[0].address!=0x026U ||
+       rtl8188eu_mac_init[0].value!=0x41U ||
+       rtl8188eu_bb_init[0].address!=0x800U ||
+       rtl8188eu_bb_init[0].value!=0x80040000U ||
+       rtl8188eu_agc_init[0]!=0xFB000001U ||
+       rtl8188eu_rf_init[0].address!=0x00U ||
+       rtl8188eu_rf_init[0].value!=0x30000U)
+        return 0;
+    unsigned delays=0U;
+    for(size_t i=0U;i<sizeof(rtl8188eu_rf_init)/sizeof(rtl8188eu_rf_init[0]);++i)
+        if(rtl8188eu_rf_init[i].address==0xFEU) {
+            if(rtl8188eu_rf_init[i].value<1U) return 0;
+            ++delays;
+        }
+    return delays==4U;
+}
+
 int main(void)
 {
+    if (!test_reference_phy_tables()) return 25;
     if (!test_efuse_logical_map_decoder())
         return 19;
     if (!test_efuse_tx_power_calibration())

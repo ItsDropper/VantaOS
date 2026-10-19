@@ -326,6 +326,7 @@ nvx_gpuvm_status_t nvx_gpuvm_init(nvx_gpuvm_t *vm, uint64_t va_start,
     uint64_t va_end;
     uint16_t root;
     nvx_gpuvm_status_t status;
+    nvx_gpuva_status_t va_status;
     if (vm == 0 || bar0 == 0 || bar0->base == 0)
         return NVX_GPUVM_INVALID_ARGUMENT;
     if (vm->initialized)
@@ -338,8 +339,8 @@ nvx_gpuvm_status_t nvx_gpuvm_init(nvx_gpuvm_t *vm, uint64_t va_start,
         return NVX_GPUVM_INVALID_RANGE;
 
     spinlock_init(&vm->lock);
-    status = nvx_gpuva_init(&vm->va_space, va_start, va_size);
-    if (status != NVX_GPUVA_OK)
+    va_status = nvx_gpuva_init(&vm->va_space, va_start, va_size);
+    if (va_status != NVX_GPUVA_OK)
         return NVX_GPUVM_INVALID_RANGE;
     vm->bar0 = *bar0;
     vm->next_token = 1U;

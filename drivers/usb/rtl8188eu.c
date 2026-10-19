@@ -1244,14 +1244,14 @@ static int rtl_radio_run_iq_calibration(void)
 {
     static const uint16_t adda[16]={0x85C,0xE6C,0xE70,0xE74,0xE78,0xE7C,0xE80,0xE84,0xE88,0xE8C,0xED0,0xED4,0xED8,0xEDC,0xEE0,0xEEC};
     static const uint16_t ctl[9]={0xA04,0xC04,0xC08,0x870,0x874,0x860,0x864,0xB68,0xE28};
-    uint32_t oa[16],oc[9],pause,oiq,oafe,oecca,orx,orext,hssi0,hssi1,lssi0,lssi1;
+    uint32_t oa[16],oc[9],pause,oiq,oafe,oecca,orx,orext,hssi0,hssi1;
     uint16_t t1[2],r1[2],t2[2],r2[2];int ok=0;
     for(size_t i=0;i<16;i++)if(!rtl_reg_read32(adda[i],&oa[i]))return 0;
     for(size_t i=0;i<9;i++)if(!rtl_reg_read32(ctl[i],&oc[i]))return 0;
     uint8_t p8,bcn0,bcn1;
     if(!rtl_reg_read8(0x522,&p8)||!rtl_reg_read8(0x550,&bcn0)||!rtl_reg_read8(0x551,&bcn1)||
        !rtl_reg_read32(0x820,&hssi0)||!rtl_reg_read32(0x828,&hssi1)||
-       !rtl_reg_read32(0x840,&lssi0)||!rtl_reg_read32(0x844,&lssi1)||!rtl_reg_read32(0xC80,&oiq)||
+       !rtl_reg_read32(0xC80,&oiq)||
        !rtl_reg_read32(0xC94,&oafe)||!rtl_reg_read32(0xC4C,&oecca)||
        !rtl_reg_read32(0xC14,&orx)||!rtl_reg_read32(0xCA0,&orext))return 0;
     pause=p8;
@@ -1295,7 +1295,7 @@ restore:
         for(size_t i=0;i<9;i++)if(!rtl_reg_write32(ctl[i],oc[i]))restore_ok=0;
         if(!rtl_reg_write8(0x522,(uint8_t)pause)||!rtl_reg_write8(0x550,bcn0)||!rtl_reg_write8(0x551,bcn1))restore_ok=0;
         if(!rtl_reg_write32(0x820,hssi0)||!rtl_reg_write32(0x828,hssi1)||
-           !rtl_reg_write32(0x840,lssi0)||!rtl_reg_write32(0x844,lssi1))restore_ok=0;
+           !rtl_reg_write32(0x840,0x00032ED3U))restore_ok=0;
         if(!restore_ok)ok=0;
     }
     if(!ok){(void)rtl_reg_write32(0xC80,oiq);(void)rtl_reg_write32(0xC94,oafe);

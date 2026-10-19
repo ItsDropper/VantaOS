@@ -344,6 +344,8 @@ int pci_get_bar_size(const struct pci_device* device, uint8_t index,
     uint32_t high = 0;
     uint32_t mask_low;
     uint32_t mask_high = 0;
+    uint32_t restored_low;
+    uint32_t restored_high = 0;
     int is_io;
     int is_64bit = 0;
     int touched = 0;
@@ -435,7 +437,15 @@ int pci_get_bar_size(const struct pci_device* device, uint8_t index,
                                 (uint8_t)(offset + 4U), high);
     pci_write_config_locked(device->bus, device->slot, device->function,
                             offset, low);
+    restored_low = pci_read_config_locked(
+        device->bus, device->slot, device->function, offset);
+    if (is_64bit)
+        restored_high = pci_read_config_locked(
+            device->bus, device->slot, device->function,
+            (uint8_t)(offset + 4U));
     touched = 0;
+    if (restored_low != low || (is_64bit && restored_high != high))
+        goto done;
 
     if (is_io)
     {

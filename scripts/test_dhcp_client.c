@@ -147,6 +147,30 @@ static int run_dual_interface_renewal(void)
            tx_counts[0]>initial_a&&tx_counts[1]>initial_b;
 }
 
+static int run_async_acquisition(void)
+{
+    second_device = (net_device_t){0};
+    second_device.name[0] = 'w'; second_device.name[1] = '0';
+    second_device.mac[0] = 0x02U; second_device.mac[5] = 0x77U;
+    second_device.mtu = NET_MTU_DEFAULT; second_device.link_up = 1U;
+    active_device = &second_device;
+    test_mode = 0; offer_sent = ack_sent = 0;
+    last_message_type = 0U; tx_length = 0U; ticks = 0U;
+    if (!net_dhcp_start(&second_device, 10000U) || last_message_type != 1U)
+        return 0;
+    (void)net_poll(16U); /* Deliver OFFER. */
+    net_dhcp_poll();    /* Send REQUEST without blocking. */
+    if (last_message_type != 3U)
+        return 0;
+    (void)net_poll(16U); /* Deliver ACK. */
+    net_dhcp_poll();     /* Commit the lease. */
+    return second_device.ipv4_configured &&
+           second_device.ipv4_address == 0xC000020AU &&
+           second_device.ipv4_netmask == 0xFFFFFF00U &&
+           second_device.ipv4_gateway == 0xC0000201U &&
+           second_device.ipv4_dns == 0x01010101U;
+}
+
 int main(void)
 {
     if(!run_case(0,1)){fputs("DHCP DORA/lease configuration failed\n",stderr);return 1;}
@@ -154,6 +178,7 @@ int main(void)
     if(!run_case(2,0)){fputs("DHCP NAK did not fail closed\n",stderr);return 3;}
     if(!run_case(3,1)){fputs("DHCP accepted wrong transaction ID or rejected subsequent valid lease\n",stderr);return 4;}
     if(!run_dual_interface_renewal()){fputs("DHCP did not maintain independent leases and renewal state for two interfaces\\n",stderr);return 5;}
-    puts("DHCP DORA, malformed replies, transaction IDs, and independent multi-interface renewal passed");
+    if(!run_async_acquisition()){fputs("Nonblocking DHCP acquisition did not complete DORA\\n",stderr);return 6;}
+    puts("DHCP DORA, malformed replies, transaction IDs, async acquisition, and independent multi-interface renewal passed");
     return 0;
 }

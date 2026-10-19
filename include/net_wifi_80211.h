@@ -6,15 +6,67 @@
 #include <stdint.h>
 
 /*
- * Bounded parser for IEEE 802.11 Beacon and Probe Response management frames.
- * It does not transmit frames, implement a radio, or authenticate an AP.
- * A chipset driver supplies a complete received management frame and RSSI.
- *
- * Returns 1 for a structurally valid Beacon/Probe Response and fills result;
- * returns 0 for unsupported frame types, malformed fields, or invalid bounds.
+ * Bounded IEEE 802.11 management-frame helpers.
+ * These encode/parse frames only; a chipset driver must provide a configured
+ * radio, channel control, RX delivery, timeouts and the connection state
+ * machine. Successful frame construction is never evidence of association.
  */
 int net_wifi_80211_parse_scan_frame(const uint8_t *frame, size_t length,
                                     int8_t rssi_dbm,
                                     net_wifi_scan_result_t *result);
+
+/* Build an Open System Authentication request (30 bytes). */
+int net_wifi_80211_build_open_auth_request(uint8_t *frame, size_t capacity,
+                                           const uint8_t destination[6],
+                                           const uint8_t source[6],
+                                           const uint8_t bssid[6],
+                                           uint16_t sequence,
+                                           size_t *frame_length);
+
+/*
+ * Build an association request with caller-supplied, complete RSN IE (including
+ * Element ID and length). SSID and RSN IE are length-checked; rates are the
+ * mandatory legacy 2.4-GHz rates. Returns 1 on success.
+ */
+int net_wifi_80211_build_assoc_request(uint8_t *frame, size_t capacity,
+                                       const uint8_t destination[6],
+                                       const uint8_t source[6],
+                                       const uint8_t bssid[6],
+                                       uint16_t sequence,
+                                       const uint8_t *ssid,
+                                       size_t ssid_length,
+                                       const uint8_t *rsn_ie,
+                                       size_t rsn_ie_length,
+                                       size_t *frame_length);
+
+/* Parse Open System Authentication response (subtype 0xB0). */
+int net_wifi_80211_parse_auth_response(const uint8_t *frame, size_t length,
+                                        const uint8_t expected_bssid[6],
+                                        uint16_t *status_code);
+
+/* Parse Association Response (subtype 0x10); AID is returned on success. */
+int net_wifi_80211_parse_assoc_response(const uint8_t *frame, size_t length,
+                                         const uint8_t expected_bssid[6],
+                                         uint16_t *status_code,
+                                         uint16_t *association_id);
+
+
+/*
+ * Convert Ethernet II payloads to/from RFC 1042 LLC/SNAP. The 802.11 header
+ * and security encapsulation are deliberately handled by the radio/data-path
+ * caller; these helpers only translate the link-layer payload.
+ */
+int net_wifi_80211_snap_encapsulate(const uint8_t *ethernet_frame,
+                                    size_t ethernet_length,
+                                    uint8_t *llc_payload,
+                                    size_t llc_capacity,
+                                    size_t *llc_length);
+int net_wifi_80211_snap_decapsulate(const uint8_t destination[6],
+                                    const uint8_t source[6],
+                                    const uint8_t *llc_payload,
+                                    size_t llc_length,
+                                    uint8_t *ethernet_frame,
+                                    size_t ethernet_capacity,
+                                    size_t *ethernet_length);
 
 #endif

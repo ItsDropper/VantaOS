@@ -16,6 +16,8 @@ static uint8_t checksum_reported_too_early;
 static uint8_t beacon_delivered;
 static uint8_t tx_seen;
 static uint8_t tx_descriptor_valid;
+static uint8_t firmware_read_fail;
+static uint8_t scan_request_valid;
 
 int xhci_controller_online(void) { return 1; }
 int xhci_configure_bulk_endpoint(uint32_t slot, uint8_t ep, uint16_t packet)
@@ -70,7 +72,16 @@ int xhci_bulk_transfer(uint32_t slot, uint8_t ep, void *buffer,
     tx_descriptor_valid = packet_length == length - 32U &&
                           bytes[2] == 32U && bytes[3] == 0x0CU &&
                           (queue & 0x1F00U) == 0x1200U &&
-                          bytes[32] == 0x80U;
+                          (bytes[32] == 0x80U || bytes[32] == 0x40U);
+    if (bytes[32] == 0x40U) {
+        scan_request_valid = bytes[36] == 0xFFU && bytes[41] == 0xFFU &&
+            bytes[42] == 0x02U && bytes[43] == 0x11U &&
+            bytes[44] == 0x22U && bytes[45] == 0x33U &&
+            bytes[46] == 0x44U && bytes[47] == 0x55U &&
+            bytes[48] == 0xFFU && bytes[53] == 0xFFU &&
+            bytes[56] == 0U && bytes[57] == 0U &&
+            bytes[58] == 1U && bytes[59] == 8U;
+    }
     tx_seen = 1U;
     *actual = length;
     return 1;
@@ -143,7 +154,7 @@ int fat32_list_directory(uint32_t cluster, fat32_dirent_t *entries,
 int fat32_read_file(uint32_t cluster, uint32_t size, char *buffer,
                     unsigned int capacity)
 {
-    if (cluster != 3U || size != 40U || capacity < size || !buffer)
+    if (firmware_read_fail || cluster != 3U || size != 40U || capacity < size || !buffer)
         return -1;
     memset(buffer, 0, size);
     buffer[0] = (char)0xE0U;
@@ -155,8 +166,177 @@ int fat32_read_file(uint32_t cluster, uint32_t size, char *buffer,
 void serial_write(const char *s) { (void)s; }
 void serial_write_bytes(const char *s, size_t n) { (void)s; (void)n; }
 
+static int test_efuse_logical_map_decoder(void)
+{
+    uint8_t physical[32], logical[512];
+    memset(physical, 0xFF, sizeof(physical));
+    /* Section 26, word 3: three-byte extended header, logical 0xD6-0xD7. */
+    physical[0] = 0x4FU;
+    physical[1] = 0x0FU;
+    physical[2] = 0x37U;
+    physical[3] = 0xA6U;
+    physical[4] = 0xA7U;
+    /* Section 27, words 0-2: logical bytes 0xD8-0xDD. */
+    physical[5] = 0x6FU;
+    physical[6] = 0x0FU;
+    physical[7] = 0x38U;
+    physical[8] = 0xA8U;
+    physical[9] = 0xA9U;
+    physical[10] = 0xAAU;
+    physical[11] = 0xABU;
+    physical[12] = 0xACU;
+    physical[13] = 0xADU;
+    if (!rtl8188eu_decode_efuse_map(physical, sizeof(physical),
+                                    logical, sizeof(logical)))
+        return 0;
+    if (logical[0xD6U] != 0xA6U || logical[0xD7U] != 0xA7U ||
+        logical[0xD8U] != 0xA8U || logical[0xDCU] != 0xACU ||
+        logical[0xDDU] != 0xADU || logical[0xD5U] != 0xFFU)
+        return 0;
+
+    /* Two-byte extended header: section 2, word 3. */
+    memset(physical, 0xFF, sizeof(physical));
+    physical[0] = 0x4FU;
+    physical[1] = 0x07U;
+    physical[2] = 0xB6U;
+    physical[3] = 0xB7U;
+    if (!rtl8188eu_decode_efuse_map(physical, sizeof(physical),
+                                    logical, sizeof(logical)) ||
+        logical[0x16U] != 0xB6U || logical[0x17U] != 0xB7U)
+        return 0;
+    /*
+     * 0x5F is a regular section-5 header with all words disabled,
+     * not an extended header. The following 0x00 header must still map
+     * its eight bytes into logical section 0.
+     */
+    memset(physical, 0xFF, sizeof(physical));
+    physical[0] = 0x5FU;
+    physical[1] = 0x00U;
+    for (size_t i = 0U; i < 8U; ++i)
+        physical[2U + i] = (uint8_t)(0x11U + i);
+    if (!rtl8188eu_decode_efuse_map(physical, sizeof(physical),
+                                    logical, sizeof(logical)))
+        return 0;
+    for (size_t i = 0U; i < 8U; ++i)
+        if (logical[i] != (uint8_t)(0x11U + i))
+            return 0;
+    if (logical[16U] != 0xFFU)
+        return 0;
+
+    memset(physical, 0xFF, sizeof(physical));
+    physical[0] = 0x4FU;
+    if (rtl8188eu_decode_efuse_map(physical, 1U, logical, sizeof(logical)))
+        return 0;
+    physical[1] = 0x0FU;
+    if (rtl8188eu_decode_efuse_map(physical, 2U, logical, sizeof(logical)))
+        return 0;
+    if (rtl8188eu_decode_efuse_map(physical, sizeof(physical), logical, 8U))
+        return 0;
+
+    /* Section 64 is outside the RTL8188E 512-byte logical map. */
+    memset(physical, 0xFF, sizeof(physical));
+    physical[0] = 0x0FU;
+    physical[1] = 0x0FU;
+    physical[2] = 0x80U;
+    if (rtl8188eu_decode_efuse_map(physical, sizeof(physical),
+                                   logical, sizeof(logical)))
+        return 0;
+    return 1;
+}
+
+
+static uint32_t test_phy_crc32(const uint8_t *data, size_t length)
+{
+    uint32_t crc = 0xFFFFFFFFU;
+    for (size_t i = 0U; i < length; ++i) {
+        crc ^= data[i];
+        for (uint32_t bit = 0U; bit < 8U; ++bit)
+            crc = (crc >> 1) ^ ((crc & 1U) ? 0xEDB88320U : 0U);
+    }
+    return ~crc;
+}
+
+static void test_phy_put_le16(uint8_t *p, uint16_t value)
+{
+    p[0] = (uint8_t)value;
+    p[1] = (uint8_t)(value >> 8);
+}
+
+static void test_phy_put_le32(uint8_t *p, uint32_t value)
+{
+    p[0] = (uint8_t)value;
+    p[1] = (uint8_t)(value >> 8);
+    p[2] = (uint8_t)(value >> 16);
+    p[3] = (uint8_t)(value >> 24);
+}
+
+static void test_phy_record(uint8_t *record, uint8_t op, uint8_t phase,
+                            uint16_t address, uint32_t mask, uint32_t value)
+{
+    memset(record, 0, 16U);
+    record[0] = op;
+    record[1] = phase;
+    test_phy_put_le16(record + 4U, address);
+    test_phy_put_le32(record + 8U, mask);
+    test_phy_put_le32(record + 12U, value);
+}
+
+static int test_phy_profile_validator(void)
+{
+    uint8_t profile[24U + 6U * 16U];
+    memset(profile, 0, sizeof(profile));
+    memcpy(profile, "V8EUPHY1", 8U);
+    test_phy_put_le16(profile + 8U, 1U);
+    test_phy_put_le16(profile + 10U, 24U);
+    test_phy_put_le32(profile + 12U, (uint32_t)sizeof(profile));
+    profile[20U] = 0xFFU;
+    test_phy_put_le16(profile + 22U, 6U);
+
+    uint8_t *records = profile + 24U;
+    test_phy_record(records + 0U * 16U, 1U, 1U, 0x0020U, 0U, 0U);
+    test_phy_record(records + 1U * 16U, 4U, 2U, 0x0800U, 0U, 0U);
+    test_phy_record(records + 2U * 16U, 4U, 3U, 0x0804U, 0U, 0U);
+    test_phy_record(records + 3U * 16U, 5U, 4U, 0x0018U, 0U, 0U);
+    test_phy_record(records + 4U * 16U, 4U, 5U, 0x0810U, 0U, 0U);
+    test_phy_record(records + 5U * 16U, 9U, 5U, 0x0810U, 1U, 0U);
+    test_phy_put_le32(profile + 16U, test_phy_crc32(records, sizeof(profile) - 24U));
+
+    if (!rtl8188eu_validate_phy_profile(profile, sizeof(profile), 2U))
+        return 0;
+
+    /* CRC must cover every operation byte. */
+    profile[24U + 12U] ^= 1U;
+    if (rtl8188eu_validate_phy_profile(profile, sizeof(profile), 2U))
+        return 0;
+    profile[24U + 12U] ^= 1U;
+
+    /* A board-specific profile must not silently match another chip cut. */
+    profile[20U] = 3U;
+    if (rtl8188eu_validate_phy_profile(profile, sizeof(profile), 2U))
+        return 0;
+    profile[20U] = 0xFFU;
+
+    /* BB operations cannot target the MAC register window. */
+    test_phy_put_le16(records + 1U * 16U + 4U, 0x07FFU);
+    test_phy_put_le32(profile + 16U, test_phy_crc32(records, sizeof(profile) - 24U));
+    if (rtl8188eu_validate_phy_profile(profile, sizeof(profile), 2U))
+        return 0;
+
+    /* Restore the address but deliberately reorder phases. */
+    test_phy_put_le16(records + 1U * 16U + 4U, 0x0800U);
+    records[2U * 16U + 1U] = 1U;
+    test_phy_put_le32(profile + 16U, test_phy_crc32(records, sizeof(profile) - 24U));
+    if (rtl8188eu_validate_phy_profile(profile, sizeof(profile), 2U))
+        return 0;
+    return 1;
+}
+
 int main(void)
 {
+    if (!test_efuse_logical_map_decoder())
+        return 19;
+    if (!test_phy_profile_validator())
+        return 20;
     const uint8_t valid[] = {
         9, 2, 32, 0, 1, 1, 0, 0x80, 50,
         9, 4, 0, 0, 2, 0xFF, 0, 0, 0,
@@ -186,16 +366,28 @@ int main(void)
         return 2;
     if (rtl8188eu_probe(1, 1, 0x0BDA, 0x8179, valid, sizeof(valid)) != 1)
         return 3;
-    if (configured_in != 0x81 || configured_out != 0x02 ||
+    if (rtl8188eu_get_status() != RTL8188EU_STATUS_FIRMWARE_PENDING ||
+        configured_in != 0x81 || configured_out != 0x02 ||
         packet_in != 64 || packet_out != 64 ||
         !rtl8188eu_port_is_bound(1U) || rtl8188eu_port_is_bound(2U))
         return 4;
 
+    registers[0x610] = 0x02U; registers[0x611] = 0x11U;
+    registers[0x612] = 0x22U; registers[0x613] = 0x33U;
+    registers[0x614] = 0x44U; registers[0x615] = 0x55U;
     rtl8188eu_poll();
-    if (!firmware_read_seen || registers[0x1000] != 0xA0U ||
+    if (rtl8188eu_get_status() != RTL8188EU_STATUS_FIRMWARE_READY ||
+        !firmware_read_seen || registers[0x1000] != 0xA0U ||
         registers[0x1007] != 0xA7U || !checksum_reported ||
         checksum_reported_too_early)
         return 5;
+    /*
+     * Firmware-ready is not radio-ready. Since this driver does not yet
+     * perform verified eFuse/PHY/RF initialization and calibration, it must
+     * fail closed rather than transmit a probe on an unknown radio state.
+     */
+    if (rtl8188eu_start_active_scan() || scan_request_valid || tx_seen)
+        return 18;
     rtl8188eu_poll();
     net_wifi_scan_result_t results[2];
     size_t result_count = rtl8188eu_get_passive_results(results, 2U);
@@ -208,12 +400,24 @@ int main(void)
     if (memcmp(results[0].bssid, expected_bssid, 6U) != 0 ||
         memcmp(results[1].bssid, expected_second_bssid, 6U) != 0) return 9;
     uint8_t management_frame[24] = {0x80U};
-    if (!rtl8188eu_transmit_frame(management_frame, sizeof(management_frame)) ||
-        !tx_seen || !tx_descriptor_valid)
+    /* Raw TX must also remain disabled until radio initialization succeeds. */
+    if (rtl8188eu_transmit_frame(management_frame, sizeof(management_frame)) ||
+        tx_seen || tx_descriptor_valid)
         return 13;
     if (rtl8188eu_transmit_frame(management_frame, 23U))
         return 14;
-    if (!rtl8188eu_port_disconnected(1U) || rtl8188eu_port_is_bound(1U))
+    if (!rtl8188eu_port_disconnected(1U) || rtl8188eu_port_is_bound(1U) ||
+        rtl8188eu_get_status() != RTL8188EU_STATUS_UNBOUND)
         return 10;
+
+    /* A firmware read failure must not leave the driver reporting READY. */
+    firmware_read_fail = 1U;
+    if (rtl8188eu_probe(1, 1, 0x0BDA, 0x8179, valid, sizeof(valid)) != 1)
+        return 15;
+    rtl8188eu_poll();
+    if (rtl8188eu_get_status() != RTL8188EU_STATUS_FIRMWARE_FAILED)
+        return 16;
+    if (!rtl8188eu_port_disconnected(1U))
+        return 17;
     return 0;
 }

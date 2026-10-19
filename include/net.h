@@ -65,6 +65,8 @@ int net_device_get_ipv4(net_device_t*, uint32_t* address,
                         uint32_t* netmask, uint32_t* gateway);
 int net_dhcp_configure(net_device_t*, uint32_t timeout_ms,
                        uint32_t* dns_server, uint32_t* lease_seconds);
+/* Start DHCP acquisition without blocking the network/USB polling loop. */
+int net_dhcp_start(net_device_t*, uint32_t timeout_ms);
 void net_dhcp_poll(void);
 int net_device_clear_ipv4(net_device_t*);
 uint32_t net_device_count(void);

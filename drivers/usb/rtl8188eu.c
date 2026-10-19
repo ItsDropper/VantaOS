@@ -4,6 +4,10 @@
 #include "serial.h"
 #include "fat32.h"
 #include "net_wifi_80211.h"
+#include "wifi_wpa2.h"
+#include "wifi_ccmp.h"
+#include "crypto_rng.h"
+#include "net.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -18,8 +22,66 @@
 #define USB_TRANSFER_BULK 2U
 #define RTL8188EU_REG_SYS_CFG 0x00F0U
 #define RTL8188EU_REG_SYS_FUNC 0x0002U
+#define RTL8188EU_SYS_FUNC_BB_RESET 0x0001U
+#define RTL8188EU_SYS_FUNC_BB_GLOBAL_RESET_N 0x0002U
+#define RTL8188EU_SYS_FUNC_RF_DIGITAL_IO 0x2000U
+#define RTL8188EU_RF_CTRL_ENABLE 0x01U
+#define RTL8188EU_RF_CTRL_RESET_N 0x02U
+#define RTL8188EU_RF_CTRL_SDM_RESET_N 0x04U
 #define RTL8188EU_REG_RSV_CTRL 0x001CU
 #define RTL8188EU_REG_MCU_FW_DL 0x0080U
+#define RTL8188EU_REG_RF_CTRL 0x001FU
+#define RTL8188EU_REG_MAC_CR 0x0100U
+#define RTL8188EU_REG_SYS_OFFLOAD 0x00F0U
+#define RTL8188EU_REG_HMEBOX_E0 0x0088U
+#define RTL8188EU_REG_TX_BOUNDARY_HI 0x010D
+#define RTL8188EU_REG_PKTBUF_ACCESS 0x0106U
+#define RTL8188EU_REG_PKTBUF_DEBUG_ADDR 0x0140U
+#define RTL8188EU_REG_PKTBUF_DEBUG_STATUS 0x0143U
+#define RTL8188EU_REG_PKTBUF_DEBUG_DATA_LO 0x0144U
+#define RTL8188EU_REG_PKTBUF_DEBUG_DATA_HI 0x0148U
+#define RTL8188EU_REG_TDECTRL 0x0208U
+#define RTL8188EU_IOL_READ_EFUSE_MAP 0x02U
+#define RTL8188EU_IOL_EFUSE_PATCH 0x04U
+#define RTL8188EU_IOL_ENABLE 0x80U
+#define RTL8188EU_IOL_ERROR_SHIFT 4U
+#define RTL8188EU_EFUSE_PHYSICAL_SIZE 512U
+#define RTL8188EU_EFUSE_LOGICAL_SIZE 512U
+#define RTL8188EU_EFUSE_MAC_OFFSET 0xD7U
+#define RTL8188EU_REG_HSSI_PARAM2_A 0x0824U
+#define RTL8188EU_REG_LSSI_PARAM_A 0x0840U
+#define RTL8188EU_REG_RF_READBACK_A 0x08A0U
+#define RTL8188EU_RF_CHNLBW 0x18U
+#define RTL8188EU_RF_DATA_MASK 0x000FFFFFU
+#define RTL8188EU_RF_CHANNEL_MASK 0x000000FFU
+#define RTL8188EU_REG_AFE_XTAL_CTRL 0x0024U
+#define RTL8188EU_AFE_XTAL_CAP_MASK 0x007FF800U
+#define RTL8188EU_RF_LC_CALIBRATE (1U << 15)
+#define RTL8188EU_PHY_PROFILE_MAX_SIZE 8192U
+#define RTL8188EU_PHY_PROFILE_HEADER_SIZE 24U
+#define RTL8188EU_PHY_PROFILE_RECORD_SIZE 16U
+#define RTL8188EU_PHY_PROFILE_VERSION 1U
+#define RTL8188EU_PHY_PHASE_MAC 1U
+#define RTL8188EU_PHY_PHASE_BB 2U
+#define RTL8188EU_PHY_PHASE_AGC 3U
+#define RTL8188EU_PHY_PHASE_TX_POWER 4U
+#define RTL8188EU_PHY_PHASE_IQ_CAL 5U
+#define RTL8188EU_PHY_OP_WRITE8 1U
+#define RTL8188EU_PHY_OP_WRITE16 2U
+#define RTL8188EU_PHY_OP_WRITE32 3U
+#define RTL8188EU_PHY_OP_WRITE_BB32 4U
+#define RTL8188EU_PHY_OP_WRITE_RF20 5U
+#define RTL8188EU_PHY_OP_POLL8 6U
+#define RTL8188EU_PHY_OP_POLL16 7U
+#define RTL8188EU_PHY_OP_POLL32 8U
+#define RTL8188EU_PHY_OP_POLL_BB32 9U
+#define RTL8188EU_PHY_OP_POLL_RF20 10U
+#define RTL8188EU_PHY_OP_DELAY_TICKS 11U
+/* Channel 14 is excluded until a regulatory-domain policy explicitly allows it. */
+#define RTL8188EU_MAX_CHANNEL 13U
+#define RTL8188EU_RF_READ_EDGE (1U << 31)
+#define RTL8188EU_RF_ADDRESS_SHIFT 23U
+#define RTL8188EU_RF_READBACK_MASK 0x000FFFFFU
 #define RTL8188EU_REG_FW_START 0x1000U
 #define RTL8188EU_FW_HEADER_SIZE 32U
 #define RTL8188EU_FW_MAX_SIZE 32768U /* Eight 4-KiB pages, selected by 3 page bits. */
@@ -47,8 +109,79 @@ static uint8_t rtl_bulk_in;
 static uint8_t rtl_bulk_out;
 static uint8_t rtl_register_buffer[RTL8188EU_FW_WRITE_CHUNK] __attribute__((aligned(64)));
 static uint8_t rtl_firmware[RTL8188EU_FW_MAX_SIZE + 1U] __attribute__((aligned(64)));
+static uint8_t rtl_phy_profile[RTL8188EU_PHY_PROFILE_MAX_SIZE] __attribute__((aligned(64)));
 static uint8_t rtl_firmware_attempted;
 static uint8_t rtl_firmware_ready;
+/*
+ * Firmware readiness is not radio readiness. No independently verified
+ * MAC/BB/RF/eFuse/calibration sequence exists yet, so keep TX disabled until
+ * that sequence is implemented and explicitly completes.
+ */
+static uint8_t rtl_radio_ready;
+static uint8_t rtl_radio_preflight_attempts;
+static uint8_t rtl_radio_preflight_done;
+/* A scan is advanced incrementally from poll; no synchronous wait in USB context. */
+static uint8_t rtl_scan_active;
+static uint8_t rtl_scan_channel;
+static uint16_t rtl_scan_dwell_polls;
+static uint8_t rtl_current_channel;
+
+typedef enum {
+    RTL_STATION_IDLE = 0,
+    RTL_STATION_WAIT_AUTH,
+    RTL_STATION_WAIT_ASSOC,
+    RTL_STATION_WPA2_HANDSHAKE,
+    RTL_STATION_AUTHENTICATED,
+    RTL_STATION_FAILED
+} rtl_station_state_t;
+
+static rtl_station_state_t rtl_station_state;
+static uint8_t rtl_station_ssid[NET_WIFI_SSID_MAX];
+static size_t rtl_station_ssid_length;
+static uint8_t rtl_station_passphrase[NET_WIFI_PASSPHRASE_MAX];
+static size_t rtl_station_passphrase_length;
+static uint8_t rtl_station_bssid[6];
+static uint16_t rtl_station_sequence;
+static uint16_t rtl_station_aid;
+static uint16_t rtl_station_timeout;
+static uint8_t rtl_station_retries;
+static uint8_t rtl_station_rsn_ie[22] = {
+    48U, 20U, 1U, 0U,
+    0U, 15U, 172U, 4U, /* group CCMP-128 */
+    1U, 0U, 0U, 15U, 172U, 4U, /* pairwise CCMP-128 */
+    1U, 0U, 0U, 15U, 172U, 2U, /* AKM PSK */
+    0U, 0U /* capabilities: no PMF requirement */
+};
+static wifi_wpa2_supplicant_t rtl_supplicant;
+static uint8_t rtl_pairwise_key[16];
+static uint8_t rtl_group_key[WIFI_WPA2_GTK_MAX];
+static size_t rtl_group_key_length;
+static uint8_t rtl_group_key_id;
+static uint8_t rtl_keys_installed;
+static wifi_ccmp_replay_t rtl_pairwise_pn;
+static wifi_ccmp_replay_t rtl_group_pn;
+static uint8_t rtl_netdev_registered;
+static uint8_t rtl_dhcp_started;
+static int rtl_netdev_transmit(net_device_t *device, const uint8_t *frame,
+                               size_t length);
+static const net_device_ops_t rtl_netdev_ops = {
+    .transmit = rtl_netdev_transmit
+};
+static net_device_t rtl_netdev = {
+    .name = "wlan0",
+    .mtu = NET_MTU_DEFAULT,
+    .ops = &rtl_netdev_ops
+};
+/* Host-side driver tests omit the network core; kernel builds resolve these. */
+extern int net_device_register(net_device_t *) __attribute__((weak));
+extern int net_device_unregister(net_device_t *) __attribute__((weak));
+extern int net_device_set_link(net_device_t *, int) __attribute__((weak));
+extern int net_receive_frame(net_device_t *, const void *, size_t) __attribute__((weak));
+extern int net_dhcp_start(net_device_t *, uint32_t) __attribute__((weak));
+static void rtl_station_receive_frame(const uint8_t *frame, size_t length);
+static void rtl_station_poll(void);
+static void rtl_station_reset(void);
+static void rtl_station_fail(void);
 static uint8_t rtl_rx_armed;
 static uint8_t rtl_rx_buffer[4096] __attribute__((aligned(64)));
 #define RTL8188EU_TX_DESC_SIZE 32U
@@ -393,6 +526,771 @@ static int rtl_reg_read32(uint16_t address, uint32_t *value)
     return 1;
 }
 
+typedef struct {
+    uint8_t raw[RTL8188EU_EFUSE_PHYSICAL_SIZE];
+    uint8_t logical[RTL8188EU_EFUSE_LOGICAL_SIZE];
+    uint8_t mac[6];
+    uint8_t crystal_trim;
+    uint8_t thermal_meter;
+    uint8_t board_option;
+    uint8_t chip_cut;
+    uint32_t system_config;
+    uint8_t valid;
+} rtl8188eu_efuse_info_t;
+
+static rtl8188eu_efuse_info_t rtl_efuse_info;
+static uint8_t rtl_efuse_attempts;
+static uint8_t rtl_efuse_ready;
+
+/*
+ * Execute the chipset's firmware offload request for the factory eFuse map.
+ * This is intentionally an independent implementation of the transport
+ * contract: bounded status polling, checked packet-buffer reads, and a strict
+ * bounds-checked physical-to-logical map decoder. It does not program RF or
+ * synthesize board calibration values.
+ */
+extern uint32_t timer_get_ticks(void) __attribute__((weak));
+
+static int rtl_iol_execute(uint8_t command)
+{
+    uint8_t value, mailbox, status;
+    uint8_t completed = 0U;
+    uint32_t start_ticks = timer_get_ticks ? timer_get_ticks() : 0U;
+
+    if (!rtl_reg_read8(RTL8188EU_REG_SYS_OFFLOAD, &value) ||
+        !rtl_reg_write8(RTL8188EU_REG_SYS_OFFLOAD,
+                        (uint8_t)(value | RTL8188EU_IOL_ENABLE)))
+        return 0;
+
+    if (!rtl_reg_read8(RTL8188EU_REG_HMEBOX_E0, &mailbox))
+        goto cleanup;
+    /* Do not erase unrelated mailbox/status bits to force a command through. */
+    if ((mailbox & command) != 0U)
+        goto cleanup;
+    if (!rtl_reg_write8(RTL8188EU_REG_HMEBOX_E0,
+                        (uint8_t)(mailbox | command)))
+        goto cleanup;
+
+    for (uint32_t retry = 0U; retry < 256U; ++retry) {
+        if (!rtl_reg_read8(RTL8188EU_REG_HMEBOX_E0, &status))
+            break;
+        if ((status & command) == 0U) {
+            completed = (uint8_t)(
+                (status & ((uint8_t)command << RTL8188EU_IOL_ERROR_SHIFT)) == 0U);
+            break;
+        }
+        if (timer_get_ticks &&
+            (uint32_t)(timer_get_ticks() - start_ticks) >= 100U)
+            break; /* PIT ticks are 10 ms; cap this synchronous bring-up wait. */
+    }
+
+cleanup:
+    if (rtl_reg_read8(RTL8188EU_REG_SYS_OFFLOAD, &value) &&
+        rtl_reg_write8(RTL8188EU_REG_SYS_OFFLOAD,
+                       (uint8_t)(value & ~RTL8188EU_IOL_ENABLE)) &&
+        completed != 0U)
+        return 1;
+    return 0;
+}
+
+static int rtl_read_efuse_physical(uint8_t *physical, size_t capacity)
+{
+    uint8_t boundary = 0U, access = 0U;
+    uint8_t have_boundary = 0U, have_access = 0U;
+    uint16_t debug_address = 0U;
+    uint32_t low, high;
+    size_t copied = 0U;
+    size_t content_length = 0U;
+    uint16_t declared_length = 0U;
+
+    if (!physical || capacity < RTL8188EU_EFUSE_PHYSICAL_SIZE ||
+        !rtl_bound || !rtl_firmware_ready)
+        return 0;
+
+    /*
+     * Firmware stores the eFuse map at the TX packet-buffer boundary.
+     * The debug port uses 8-byte units, so preserve the boundary and use
+     * boundary * 128 / 8 as the first debug address.
+     */
+    if (!rtl_reg_read8(RTL8188EU_REG_TDECTRL + 1U, &boundary))
+        return 0;
+    have_boundary = 1U;
+    if (!rtl_reg_read8(RTL8188EU_REG_PKTBUF_ACCESS, &access))
+        goto fail;
+    have_access = 1U;
+    if (!rtl_reg_write8(RTL8188EU_REG_TDECTRL + 1U, boundary) ||
+        !rtl_reg_write8(RTL8188EU_REG_PKTBUF_ACCESS, 0x69U) ||
+        !rtl_iol_execute(RTL8188EU_IOL_READ_EFUSE_MAP))
+        goto fail;
+
+    for (size_t i = 0U; i < capacity; ++i)
+        physical[i] = 0xFFU;
+
+    /* Debug port is addressed in 8-byte units. First word includes length. */
+    for (uint16_t block = 0U; block < 80U; ++block) {
+        uint8_t ready = 0U;
+        debug_address = (uint16_t)((uint16_t)boundary * 16U + block);
+        if (!rtl_reg_write16(RTL8188EU_REG_PKTBUF_DEBUG_ADDR, debug_address) ||
+            !rtl_reg_write8(RTL8188EU_REG_PKTBUF_DEBUG_STATUS, 0U))
+            goto fail;
+        for (uint32_t retry = 0U; retry < 64U; ++retry) {
+            if (!rtl_reg_read8(RTL8188EU_REG_PKTBUF_DEBUG_STATUS, &ready))
+                goto fail;
+            if (ready != 0U) break;
+        }
+        if (ready == 0U ||
+            !rtl_reg_read32(RTL8188EU_REG_PKTBUF_DEBUG_DATA_LO, &low) ||
+            !rtl_reg_read32(RTL8188EU_REG_PKTBUF_DEBUG_DATA_HI, &high))
+            goto fail;
+        uint8_t bytes[8] = {
+            (uint8_t)low, (uint8_t)(low >> 8), (uint8_t)(low >> 16),
+            (uint8_t)(low >> 24), (uint8_t)high, (uint8_t)(high >> 8),
+            (uint8_t)(high >> 16), (uint8_t)(high >> 24)
+        };
+        if (block == 0U) {
+            declared_length = (uint16_t)bytes[0] |
+                              ((uint16_t)bytes[1] << 8);
+            if (declared_length < 2U ||
+                declared_length > RTL8188EU_EFUSE_PHYSICAL_SIZE + 2U)
+                goto fail;
+            content_length = (size_t)(declared_length - 2U);
+            if (content_length > capacity) content_length = capacity;
+            for (size_t i = 0U; i < content_length && i < 6U; ++i)
+                physical[copied++] = bytes[i + 2U];
+        } else {
+            for (size_t i = 0U; i < sizeof(bytes) &&
+                 copied < content_length; ++i)
+                physical[copied++] = bytes[i];
+        }
+        if (copied >= content_length)
+            break;
+    }
+    if (copied == 0U)
+        goto fail;
+    if (have_access)
+        (void)rtl_reg_write8(RTL8188EU_REG_PKTBUF_ACCESS, access);
+    if (have_boundary)
+        (void)rtl_reg_write8(RTL8188EU_REG_TDECTRL + 1U, boundary);
+    return 1;
+
+fail:
+    if (have_access)
+        (void)rtl_reg_write8(RTL8188EU_REG_PKTBUF_ACCESS, access);
+    if (have_boundary)
+        (void)rtl_reg_write8(RTL8188EU_REG_TDECTRL + 1U, boundary);
+    return 0;
+}
+
+int rtl8188eu_decode_efuse_map(const uint8_t *physical, size_t physical_length,
+                                uint8_t *logical, size_t logical_length)
+{
+    size_t cursor = 0U;
+    if (!physical || !logical || physical_length == 0U ||
+        logical_length < RTL8188EU_EFUSE_LOGICAL_SIZE)
+        return 0;
+    for (size_t i = 0U; i < logical_length; ++i) logical[i] = 0xFFU;
+
+    while (cursor < physical_length) {
+        uint8_t header = physical[cursor++];
+        uint8_t section, word_enable;
+        if (header == 0xFFU) break;
+        section = (uint8_t)(header >> 4);
+        word_enable = (uint8_t)(header & 0x0FU);
+        /*
+         * RTL8188E extended headers have bits 4:0 equal to 0x0F.
+         * Bit 4 matters: a regular header with word-enable 0xF and bit 4
+         * set is an empty regular packet, not an extended header.
+         */
+        if ((header & 0x1FU) == 0x0FU) {
+            if (cursor >= physical_length) return 0;
+            uint8_t extended = physical[cursor++];
+            if (extended == 0xFFU) break;
+            section = (uint8_t)((header & 0xE0U) >> 5);
+            word_enable = (uint8_t)(extended & 0x0FU);
+            /*
+             * An extended header whose second byte has low nibble 0xF
+             * uses a third byte for the upper section bits and word mask.
+             * This follows the RTL8188E packet-format discriminator.
+             */
+            if (word_enable == 0x0FU) {
+                if (cursor >= physical_length) return 0;
+                extended = physical[cursor++];
+                if (extended == 0xFFU) break;
+                section = (uint8_t)(section |
+                                    ((extended & 0xF0U) >> 1));
+                word_enable = (uint8_t)(extended & 0x0FU);
+            }
+        }
+        if (section >= (RTL8188EU_EFUSE_LOGICAL_SIZE / 8U))
+            return 0;
+        if (word_enable == 0x0FU) continue;
+        size_t base = (size_t)section * 8U;
+        if (base + 8U > logical_length) return 0;
+        for (uint8_t word = 0U; word < 4U; ++word) {
+            if ((word_enable & (uint8_t)(1U << word)) != 0U) continue;
+            if (cursor + 2U > physical_length) return 0;
+            logical[base + (size_t)word * 2U] = physical[cursor++];
+            logical[base + (size_t)word * 2U + 1U] = physical[cursor++];
+        }
+    }
+    return 1;
+}
+
+static int rtl_load_efuse_identity(void)
+{
+    uint32_t chip_config;
+    if (!rtl_read_efuse_physical(rtl_efuse_info.raw,
+                                  sizeof(rtl_efuse_info.raw)) ||
+        !rtl8188eu_decode_efuse_map(rtl_efuse_info.raw,
+                              sizeof(rtl_efuse_info.raw),
+                              rtl_efuse_info.logical,
+                              sizeof(rtl_efuse_info.logical)) ||
+        !rtl_reg_read32(RTL8188EU_REG_SYS_CFG, &chip_config))
+        return 0;
+    /* SYS_CFG identifies Realtek silicon and exposes the detected chip cut. */
+    if ((chip_config & (1U << 19)) == 0U)
+        return 0;
+    rtl_efuse_info.system_config = chip_config;
+    rtl_efuse_info.chip_cut = (uint8_t)((chip_config >> 12) & 0x0FU);
+
+    for (size_t i = 0U; i < 6U; ++i)
+        rtl_efuse_info.mac[i] =
+            rtl_efuse_info.logical[RTL8188EU_EFUSE_MAC_OFFSET + i];
+    rtl_efuse_info.crystal_trim = rtl_efuse_info.logical[0xB9U];
+    rtl_efuse_info.thermal_meter = rtl_efuse_info.logical[0xBAU];
+    rtl_efuse_info.board_option = rtl_efuse_info.logical[0xC1U];
+
+    uint8_t any = 0U, all_ff = 1U;
+    for (size_t i = 0U; i < 6U; ++i) {
+        any |= rtl_efuse_info.mac[i];
+        if (rtl_efuse_info.mac[i] != 0xFFU) all_ff = 0U;
+    }
+    if (any == 0U || all_ff || (rtl_efuse_info.mac[0] & 1U) != 0U)
+        return 0;
+    /* Do not accept a blank eFuse map or missing board identity/calibration. */
+    if (rtl_efuse_info.crystal_trim == 0xFFU ||
+        rtl_efuse_info.thermal_meter == 0xFFU ||
+        rtl_efuse_info.board_option == 0xFFU)
+        return 0;
+
+    /* Apply only firmware-supported eFuse patches; no synthetic defaults. */
+    if (!rtl_iol_execute(RTL8188EU_IOL_EFUSE_PATCH))
+        return 0;
+
+    /* Chip cut is recorded for diagnostics; unknown cuts stay TX-disabled. */
+    serial_write("VANTAOS_RTL8188EU_EFUSE_IDENTITY_OK\n");
+    rtl_efuse_info.valid = 1U;
+    return 1;
+}
+
+/*
+ * RTL8188E RF serial interface (path A, the single 1T1R path). These are
+ * transport primitives only; they do not substitute for board-specific PHY
+ * configuration, transmit-power setup, or LC/IQ calibration.
+ */
+static int rtl_rf_read(uint8_t address, uint32_t *value)
+{
+    uint32_t hssi, trigger, readback;
+    if (!value || !rtl_bound || !rtl_firmware_ready)
+        return 0;
+    if (!rtl_reg_read32(RTL8188EU_REG_HSSI_PARAM2_A, &hssi))
+        return 0;
+    trigger = (hssi & ~(0xFFU << RTL8188EU_RF_ADDRESS_SHIFT)) |
+              ((uint32_t)address << RTL8188EU_RF_ADDRESS_SHIFT) |
+              RTL8188EU_RF_READ_EDGE;
+    if (!rtl_reg_write32(RTL8188EU_REG_HSSI_PARAM2_A,
+                         hssi & ~RTL8188EU_RF_READ_EDGE) ||
+        !rtl_reg_write32(RTL8188EU_REG_HSSI_PARAM2_A, trigger) ||
+        !rtl_reg_read32(RTL8188EU_REG_RF_READBACK_A, &readback))
+        return 0;
+    *value = readback & RTL8188EU_RF_READBACK_MASK;
+    return 1;
+}
+
+static int rtl_rf_write(uint8_t address, uint32_t value)
+{
+    uint32_t command;
+    if (!rtl_bound || !rtl_firmware_ready ||
+        (value & ~RTL8188EU_RF_DATA_MASK) != 0U)
+        return 0;
+    command = ((uint32_t)address << 20) | value;
+    return rtl_reg_write32(RTL8188EU_REG_LSSI_PARAM_A, command);
+}
+
+/*
+ * Apply the factory crystal trim and request LC calibration. The calibration
+ * request is bounded and the previous RF channel register is restored on all
+ * exits. This is an incremental bring-up stage, not proof that the full PHY
+ * tables, transmit-power groups, or IQ calibration have been applied.
+ */
+static int rtl_radio_apply_crystal_trim_and_lc(void)
+{
+    uint32_t crystal, old_channel, value, verify;
+    uint8_t trim = (uint8_t)(rtl_efuse_info.crystal_trim & 0x3FU);
+    int complete = 0;
+
+    if (!rtl_efuse_info.valid || trim == 0x3FU ||
+        !rtl_reg_read32(RTL8188EU_REG_AFE_XTAL_CTRL, &crystal))
+        return 0;
+
+    /* The 6-bit factory trim drives both halves of the crystal-cap field. */
+    value = (crystal & ~RTL8188EU_AFE_XTAL_CAP_MASK) |
+            ((uint32_t)trim << 11) | ((uint32_t)trim << 17);
+    if (!rtl_reg_write32(RTL8188EU_REG_AFE_XTAL_CTRL, value) ||
+        !rtl_reg_read32(RTL8188EU_REG_AFE_XTAL_CTRL, &verify) ||
+        (verify & RTL8188EU_AFE_XTAL_CAP_MASK) !=
+            (value & RTL8188EU_AFE_XTAL_CAP_MASK))
+        return 0;
+
+    if (!rtl_rf_read(RTL8188EU_RF_CHNLBW, &old_channel) ||
+        old_channel == RTL8188EU_RF_DATA_MASK)
+        return 0;
+
+    if (!rtl_rf_write(RTL8188EU_RF_CHNLBW,
+                      old_channel | RTL8188EU_RF_LC_CALIBRATE))
+        return 0;
+
+    /* Poll for hardware to clear the LC-calibration request; never spin forever. */
+    for (uint32_t attempt = 0U; attempt < 128U; ++attempt) {
+        if (!rtl_rf_read(RTL8188EU_RF_CHNLBW, &value))
+            break;
+        if ((value & RTL8188EU_RF_LC_CALIBRATE) == 0U) {
+            complete = 1;
+            break;
+        }
+    }
+
+    /* Restore the original RF channel/bandwidth state even after timeout. */
+    if (!rtl_rf_write(RTL8188EU_RF_CHNLBW, old_channel))
+        return 0;
+    if (!complete || !rtl_rf_read(RTL8188EU_RF_CHNLBW, &verify) ||
+        ((verify ^ old_channel) & ~RTL8188EU_RF_LC_CALIBRATE) != 0U)
+        return 0;
+
+    serial_write("VANTAOS_RTL8188EU_CRYSTAL_TRIM_LC_OK_TX_STILL_BLOCKED\n");
+    return 1;
+}
+
+
+/*
+ * VantaOS-owned, bounded PHY profile executor. The profile is deliberately
+ * supplied by the system integrator because the repository has no verified
+ * revision/board-specific RTL8188EU register profile. No guessed power values
+ * are synthesized here.
+ *
+ * File format (little-endian):
+ *   0..7   "V8EUPHY1"
+ *   8..9   version (1)
+ *   10..11 header size (24)
+ *   12..15 total file size
+ *   16..19 CRC-32/IEEE of the record array
+ *   20     chip cut (0xff means any cut; otherwise exact eFuse cut)
+ *   21     reserved, zero
+ *   22..23 record count
+ * Each 16-byte record is {op, phase, reserved, reserved, address:u16,
+ * reserved:u16, mask:u32, value:u32}. Phases are strictly ordered:
+ * MAC, BB, AGC, TX power, IQ calibration. The driver inserts its verified
+ * crystal-trim/LC stage between TX-power and IQ-calibration records.
+ */
+static uint16_t rtl_phy_le16(const uint8_t *p)
+{
+    return (uint16_t)p[0] | ((uint16_t)p[1] << 8);
+}
+
+static uint32_t rtl_phy_le32(const uint8_t *p)
+{
+    return (uint32_t)p[0] | ((uint32_t)p[1] << 8) |
+           ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+}
+
+static uint32_t rtl_phy_crc32(const uint8_t *data, size_t length)
+{
+    uint32_t crc = 0xFFFFFFFFU;
+    for (size_t i = 0U; i < length; ++i) {
+        crc ^= data[i];
+        for (uint32_t bit = 0U; bit < 8U; ++bit)
+            crc = (crc >> 1) ^ ((crc & 1U) ? 0xEDB88320U : 0U);
+    }
+    return ~crc;
+}
+
+static int rtl_phy_load_profile(size_t *profile_size, uint16_t *record_count)
+{
+    fat32_dirent_t root[64];
+    fat32_dirent_t entries[128];
+    uint32_t system_cluster = 0U;
+    int root_count, entry_count;
+
+    if (!profile_size || !record_count || !fat32_is_mounted())
+        return 0;
+    root_count = fat32_list_directory(fat32_root_cluster(), root, 64U);
+    if (root_count < 0 || root_count >= 64)
+        return 0;
+    for (int i = 0; i < root_count; ++i) {
+        if (root[i].directory && rtl_name_equal(root[i].name, "SYSTEM")) {
+            system_cluster = root[i].first_cluster;
+            break;
+        }
+    }
+    if (system_cluster < 2U)
+        return 0;
+    entry_count = fat32_list_directory(system_cluster, entries, 128U);
+    if (entry_count < 0 || entry_count >= 128)
+        return 0;
+
+    for (int i = 0; i < entry_count; ++i) {
+        fat32_dirent_t *entry = &entries[i];
+        if (entry->directory || !rtl_name_equal(entry->name, "RTL8188EU.PHY"))
+            continue;
+        if (entry->size < RTL8188EU_PHY_PROFILE_HEADER_SIZE ||
+            entry->size > sizeof(rtl_phy_profile) ||
+            fat32_read_file(entry->first_cluster, entry->size,
+                (char *)rtl_phy_profile, sizeof(rtl_phy_profile)) != (int)entry->size)
+            return 0;
+
+        if (!rtl8188eu_validate_phy_profile(rtl_phy_profile, entry->size,
+                                             rtl_efuse_info.chip_cut))
+            return 0;
+        *profile_size = rtl_phy_le32(rtl_phy_profile + 12U);
+        *record_count = rtl_phy_le16(rtl_phy_profile + 22U);
+        return 1;
+    }
+    return 0;
+}
+
+static int rtl_phy_read_record(uint8_t op, uint16_t address, uint32_t *value)
+{
+    if (!value)
+        return 0;
+    switch (op) {
+    case RTL8188EU_PHY_OP_WRITE8:
+    case RTL8188EU_PHY_OP_POLL8: {
+        uint8_t v;
+        if (address >= 0x0800U || !rtl_reg_read8(address, &v)) return 0;
+        *value = v;
+        return 1;
+    }
+    case RTL8188EU_PHY_OP_WRITE16:
+    case RTL8188EU_PHY_OP_POLL16: {
+        uint16_t v;
+        if (address >= 0x0800U || !rtl_reg_read16(address, &v)) return 0;
+        *value = v;
+        return 1;
+    }
+    case RTL8188EU_PHY_OP_WRITE32:
+    case RTL8188EU_PHY_OP_POLL32:
+        if (address >= 0x0800U || !rtl_reg_read32(address, value)) return 0;
+        return 1;
+    case RTL8188EU_PHY_OP_WRITE_BB32:
+    case RTL8188EU_PHY_OP_POLL_BB32:
+        if (address < 0x0800U || address > 0x0FFFU ||
+            !rtl_reg_read32(address, value)) return 0;
+        return 1;
+    case RTL8188EU_PHY_OP_WRITE_RF20:
+    case RTL8188EU_PHY_OP_POLL_RF20:
+        if (address > 0xFFU || !rtl_rf_read((uint8_t)address, value)) return 0;
+        return 1;
+    default:
+        return 0;
+    }
+}
+
+static int rtl_phy_write_record(uint8_t op, uint16_t address,
+                                uint32_t mask, uint32_t value)
+{
+    uint32_t old_value = 0U, next_value, verify = 0U, width_mask;
+    if (op == RTL8188EU_PHY_OP_WRITE8) width_mask = 0xFFU;
+    else if (op == RTL8188EU_PHY_OP_WRITE16) width_mask = 0xFFFFU;
+    else if (op == RTL8188EU_PHY_OP_WRITE_RF20) width_mask = RTL8188EU_RF_DATA_MASK;
+    else width_mask = 0xFFFFFFFFU;
+    if (mask == 0U) mask = width_mask;
+    if ((mask & ~width_mask) != 0U || (value & ~width_mask) != 0U ||
+        !rtl_phy_read_record(op, address, &old_value))
+        return 0;
+    next_value = (old_value & ~mask) | (value & mask);
+    switch (op) {
+    case RTL8188EU_PHY_OP_WRITE8:
+        if (!rtl_reg_write8(address, (uint8_t)next_value)) return 0;
+        break;
+    case RTL8188EU_PHY_OP_WRITE16:
+        if (!rtl_reg_write16(address, (uint16_t)next_value)) return 0;
+        break;
+    case RTL8188EU_PHY_OP_WRITE32:
+    case RTL8188EU_PHY_OP_WRITE_BB32:
+        if (!rtl_reg_write32(address, next_value)) return 0;
+        break;
+    case RTL8188EU_PHY_OP_WRITE_RF20:
+        if (!rtl_rf_write((uint8_t)address, next_value)) return 0;
+        break;
+    default:
+        return 0;
+    }
+    if (!rtl_phy_read_record(op, address, &verify))
+        return 0;
+    return ((verify ^ next_value) & mask) == 0U;
+}
+
+static int rtl_phy_execute_record(const uint8_t *record)
+{
+    uint8_t op = record[0];
+    uint8_t phase = record[1];
+    uint16_t address = rtl_phy_le16(record + 4U);
+    uint32_t mask = rtl_phy_le32(record + 8U);
+    uint32_t value = rtl_phy_le32(record + 12U);
+
+    if (record[2] != 0U || record[3] != 0U ||
+        record[6] != 0U || record[7] != 0U ||
+        phase < RTL8188EU_PHY_PHASE_MAC || phase > RTL8188EU_PHY_PHASE_IQ_CAL)
+        return 0;
+
+    if (op >= RTL8188EU_PHY_OP_WRITE8 && op <= RTL8188EU_PHY_OP_WRITE_RF20) {
+        if (op == RTL8188EU_PHY_OP_WRITE8 && (value > 0xFFU || (mask & ~0xFFU)))
+            return 0;
+        if (op == RTL8188EU_PHY_OP_WRITE16 && (value > 0xFFFFU || (mask & ~0xFFFFU)))
+            return 0;
+        if (op == RTL8188EU_PHY_OP_WRITE_RF20 &&
+            (value > RTL8188EU_RF_DATA_MASK || (mask & ~RTL8188EU_RF_DATA_MASK)))
+            return 0;
+        return rtl_phy_write_record(op, address, mask, value);
+    }
+
+    if (op >= RTL8188EU_PHY_OP_POLL8 && op <= RTL8188EU_PHY_OP_POLL_RF20) {
+        uint8_t read_op = (uint8_t)(op - RTL8188EU_PHY_OP_POLL8 +
+                                    RTL8188EU_PHY_OP_WRITE8);
+        uint32_t width_mask = op == RTL8188EU_PHY_OP_POLL8 ? 0xFFU :
+            op == RTL8188EU_PHY_OP_POLL16 ? 0xFFFFU :
+            op == RTL8188EU_PHY_OP_POLL_RF20 ? RTL8188EU_RF_DATA_MASK : 0xFFFFFFFFU;
+        if (mask == 0U || (mask & ~width_mask) != 0U || (value & ~width_mask) != 0U)
+            return 0;
+        for (uint32_t retry = 0U; retry < 512U; ++retry) {
+            uint32_t observed;
+            if (!rtl_phy_read_record(read_op, address, &observed))
+                return 0;
+            if ((observed & mask) == (value & mask))
+                return 1;
+        }
+        return 0;
+    }
+
+    if (op == RTL8188EU_PHY_OP_DELAY_TICKS) {
+        if (address != 0U || mask != 0U || value == 0U || value > 100U ||
+            !timer_get_ticks)
+            return 0;
+        uint32_t start = timer_get_ticks();
+        uint32_t spins = 0U;
+        while ((uint32_t)(timer_get_ticks() - start) < value) {
+            if (++spins >= 1000000U)
+                return 0;
+        }
+        return 1;
+    }
+    return 0;
+}
+
+
+static int rtl_phy_validate_record(const uint8_t *record)
+{
+    uint8_t op = record[0];
+    uint8_t phase = record[1];
+    uint16_t address = rtl_phy_le16(record + 4U);
+    uint32_t mask = rtl_phy_le32(record + 8U);
+    uint32_t value = rtl_phy_le32(record + 12U);
+    uint32_t width_mask;
+
+    if (record[2] != 0U || record[3] != 0U ||
+        record[6] != 0U || record[7] != 0U ||
+        phase < RTL8188EU_PHY_PHASE_MAC || phase > RTL8188EU_PHY_PHASE_IQ_CAL)
+        return 0;
+    if (op == RTL8188EU_PHY_OP_DELAY_TICKS)
+        return address == 0U && mask == 0U && value > 0U && value <= 100U &&
+               timer_get_ticks != 0;
+    if (op < RTL8188EU_PHY_OP_WRITE8 || op > RTL8188EU_PHY_OP_POLL_RF20)
+        return 0;
+
+    if (op == RTL8188EU_PHY_OP_WRITE8 || op == RTL8188EU_PHY_OP_POLL8) {
+        width_mask = 0xFFU;
+        if (address >= 0x0800U) return 0;
+    } else if (op == RTL8188EU_PHY_OP_WRITE16 || op == RTL8188EU_PHY_OP_POLL16) {
+        width_mask = 0xFFFFU;
+        if (address >= 0x0800U) return 0;
+    } else if (op == RTL8188EU_PHY_OP_WRITE32 || op == RTL8188EU_PHY_OP_POLL32) {
+        width_mask = 0xFFFFFFFFU;
+        if (address >= 0x0800U) return 0;
+    } else if (op == RTL8188EU_PHY_OP_WRITE_BB32 ||
+               op == RTL8188EU_PHY_OP_POLL_BB32) {
+        width_mask = 0xFFFFFFFFU;
+        if (address < 0x0800U || address > 0x0FFFU) return 0;
+    } else {
+        width_mask = RTL8188EU_RF_DATA_MASK;
+        if (address > 0xFFU) return 0;
+    }
+    if ((mask & ~width_mask) != 0U || (value & ~width_mask) != 0U)
+        return 0;
+    if (op >= RTL8188EU_PHY_OP_POLL8 && mask == 0U)
+        return 0;
+    return 1;
+}
+
+
+int rtl8188eu_validate_phy_profile(const uint8_t *profile, size_t length,
+                                   uint8_t chip_cut)
+{
+    static const uint8_t magic[8] = {'V','8','E','U','P','H','Y','1'};
+    uint8_t phase_writes[RTL8188EU_PHY_PHASE_IQ_CAL + 1U] = {0};
+    uint8_t phase_polls[RTL8188EU_PHY_PHASE_IQ_CAL + 1U] = {0};
+    uint8_t last_phase = 0U;
+    uint16_t count;
+    uint32_t total_size;
+
+    if (!profile || length < RTL8188EU_PHY_PROFILE_HEADER_SIZE ||
+        length > RTL8188EU_PHY_PROFILE_MAX_SIZE)
+        return 0;
+    for (size_t i = 0U; i < sizeof(magic); ++i)
+        if (profile[i] != magic[i]) return 0;
+    count = rtl_phy_le16(profile + 22U);
+    total_size = rtl_phy_le32(profile + 12U);
+    if (rtl_phy_le16(profile + 8U) != RTL8188EU_PHY_PROFILE_VERSION ||
+        rtl_phy_le16(profile + 10U) != RTL8188EU_PHY_PROFILE_HEADER_SIZE ||
+        total_size != length || profile[21U] != 0U || count == 0U ||
+        (profile[20U] != 0xFFU && profile[20U] != chip_cut) ||
+        (size_t)count > (length - RTL8188EU_PHY_PROFILE_HEADER_SIZE) /
+                        RTL8188EU_PHY_PROFILE_RECORD_SIZE ||
+        total_size != RTL8188EU_PHY_PROFILE_HEADER_SIZE +
+                      (uint32_t)count * RTL8188EU_PHY_PROFILE_RECORD_SIZE ||
+        rtl_phy_crc32(profile + RTL8188EU_PHY_PROFILE_HEADER_SIZE,
+                      length - RTL8188EU_PHY_PROFILE_HEADER_SIZE) !=
+                      rtl_phy_le32(profile + 16U))
+        return 0;
+
+    const uint8_t *records = profile + RTL8188EU_PHY_PROFILE_HEADER_SIZE;
+    for (uint16_t i = 0U; i < count; ++i) {
+        const uint8_t *record = records + (size_t)i * RTL8188EU_PHY_PROFILE_RECORD_SIZE;
+        uint8_t phase = record[1];
+        uint8_t op = record[0];
+        if (!rtl_phy_validate_record(record) || phase < last_phase)
+            return 0;
+        last_phase = phase;
+        if (op >= RTL8188EU_PHY_OP_WRITE8 && op <= RTL8188EU_PHY_OP_WRITE_RF20)
+            phase_writes[phase] = 1U;
+        else if (op >= RTL8188EU_PHY_OP_POLL8 && op <= RTL8188EU_PHY_OP_POLL_RF20)
+            phase_polls[phase] = 1U;
+    }
+    for (uint8_t phase = RTL8188EU_PHY_PHASE_MAC;
+         phase <= RTL8188EU_PHY_PHASE_TX_POWER; ++phase)
+        if (!phase_writes[phase]) return 0;
+    return phase_writes[RTL8188EU_PHY_PHASE_IQ_CAL] &&
+           phase_polls[RTL8188EU_PHY_PHASE_IQ_CAL];
+}
+
+static int rtl_radio_execute_profile(void)
+{
+    size_t profile_size = 0U;
+    uint16_t count = 0U;
+    uint8_t phase_writes[RTL8188EU_PHY_PHASE_IQ_CAL + 1U] = {0};
+    uint8_t phase_polls[RTL8188EU_PHY_PHASE_IQ_CAL + 1U] = {0};
+    uint8_t last_phase = 0U;
+
+    if (!rtl_efuse_info.valid || !rtl_phy_load_profile(&profile_size, &count))
+        return 0;
+
+    const uint8_t *records = rtl_phy_profile + RTL8188EU_PHY_PROFILE_HEADER_SIZE;
+    /* Validate the whole program before the first hardware write. */
+    for (uint16_t i = 0U; i < count; ++i) {
+        const uint8_t *record = records + (size_t)i * RTL8188EU_PHY_PROFILE_RECORD_SIZE;
+        uint8_t phase = record[1];
+        uint8_t op = record[0];
+        if (!rtl_phy_validate_record(record) || phase < last_phase)
+            return 0;
+        last_phase = phase;
+        if (op >= RTL8188EU_PHY_OP_WRITE8 && op <= RTL8188EU_PHY_OP_WRITE_RF20)
+            phase_writes[phase] = 1U;
+        else if (op >= RTL8188EU_PHY_OP_POLL8 && op <= RTL8188EU_PHY_OP_POLL_RF20)
+            phase_polls[phase] = 1U;
+    }
+    for (uint8_t phase = RTL8188EU_PHY_PHASE_MAC;
+         phase <= RTL8188EU_PHY_PHASE_TX_POWER; ++phase)
+        if (!phase_writes[phase])
+            return 0;
+    if (!phase_writes[RTL8188EU_PHY_PHASE_IQ_CAL] ||
+        !phase_polls[RTL8188EU_PHY_PHASE_IQ_CAL])
+        return 0;
+
+    /* Execute through TX-power programming, then calibrate before IQK. */
+    for (uint16_t i = 0U; i < count; ++i) {
+        const uint8_t *record = records + (size_t)i * RTL8188EU_PHY_PROFILE_RECORD_SIZE;
+        if (record[1] == RTL8188EU_PHY_PHASE_IQ_CAL)
+            break;
+        if (!rtl_phy_execute_record(record))
+            return 0;
+    }
+    if (!rtl_radio_apply_crystal_trim_and_lc())
+        return 0;
+    for (uint16_t i = 0U; i < count; ++i) {
+        const uint8_t *record = records + (size_t)i * RTL8188EU_PHY_PROFILE_RECORD_SIZE;
+        if (record[1] == RTL8188EU_PHY_PHASE_IQ_CAL &&
+            !rtl_phy_execute_record(record))
+            return 0;
+    }
+
+    serial_write("VANTAOS_RTL8188EU_PHY_PROFILE_AND_IQ_CAL_OK_TX_READY_CANDIDATE\n");
+    return profile_size != 0U;
+}
+
+/*
+ * Bring up the BB/RF interface, apply a validated integrator-supplied PHY
+ * profile, then enable TX only after MAC/BB/AGC/power and calibration stages
+ * all pass register readback and bounded status polling.
+ */
+static int rtl_radio_preflight(void)
+{
+    uint16_t system_function;
+    uint32_t rf_identity, rf_channel;
+    if (!rtl_bound || !rtl_firmware_ready || !rtl_efuse_ready)
+        return 0;
+    if (!rtl_reg_read16(RTL8188EU_REG_SYS_FUNC, &system_function))
+        return 0;
+    system_function |= RTL8188EU_SYS_FUNC_BB_RESET |
+                       RTL8188EU_SYS_FUNC_BB_GLOBAL_RESET_N |
+                       RTL8188EU_SYS_FUNC_RF_DIGITAL_IO;
+    if (!rtl_reg_write16(RTL8188EU_REG_SYS_FUNC, system_function) ||
+        !rtl_reg_write8(RTL8188EU_REG_RF_CTRL,
+            RTL8188EU_RF_CTRL_ENABLE | RTL8188EU_RF_CTRL_RESET_N |
+            RTL8188EU_RF_CTRL_SDM_RESET_N) ||
+        !rtl_rf_read(0x00U, &rf_identity) ||
+        !rtl_rf_read(RTL8188EU_RF_CHNLBW, &rf_channel) ||
+        rf_identity == RTL8188EU_RF_DATA_MASK ||
+        rf_channel == RTL8188EU_RF_DATA_MASK)
+        return 0;
+    if (!rtl_radio_execute_profile())
+        return 0;
+    rtl_radio_preflight_done = 1U;
+    rtl_radio_ready = 1U;
+    serial_write("VANTAOS_RTL8188EU_RADIO_PROFILE_READY_TX_ENABLED\n");
+    return 1;
+}
+
+/*
+ * Tune only after the full radio initialization/calibration gate is set.
+ * RTL8188E RF_CHNLBW register 0x18 carries the channel in its low byte; retain
+ * bandwidth and unrelated RF control bits. Readback is mandatory before the
+ * channel is considered selected.
+ */
+static int rtl_program_channel(uint8_t channel)
+{
+    uint32_t current, updated, verify;
+    if (!rtl_radio_preflight_done || channel < 1U || channel > RTL8188EU_MAX_CHANNEL)
+        return 0;
+    if (!rtl_rf_read(RTL8188EU_RF_CHNLBW, &current))
+        return 0;
+    updated = (current & ~RTL8188EU_RF_CHANNEL_MASK) | channel;
+    if (!rtl_rf_write(RTL8188EU_RF_CHNLBW, updated) ||
+        !rtl_rf_read(RTL8188EU_RF_CHNLBW, &verify) ||
+        (verify & RTL8188EU_RF_CHANNEL_MASK) != channel)
+        return 0;
+    rtl_current_channel = channel;
+    return 1;
+}
+
 int rtl8188eu_probe(uint32_t slot_id, uint32_t port, uint16_t vendor_id, uint16_t device_id,
                     const uint8_t *configuration, size_t length)
 {
@@ -490,6 +1388,7 @@ static void rtl_process_rx_packet(const uint8_t *packet, size_t length)
             frame_length > length - cursor - frame_offset)
             break;
 
+        rtl_station_receive_frame(rx + frame_offset, frame_length);
         rtl_cache_beacon(rx + frame_offset, frame_length);
 
         size_t packet_end = cursor + frame_offset + frame_length;
@@ -526,14 +1425,116 @@ static void rtl_put_le32(uint8_t *p, uint32_t value)
     p[3] = (uint8_t)(value >> 24);
 }
 
+int rtl8188eu_get_mac_address(uint8_t mac[6])
+{
+    uint8_t address[6];
+    if (!mac || !rtl_bound || !rtl_firmware_ready || !rtl_efuse_ready ||
+        !rtl_efuse_info.valid ||
+        !rtl_reg_read(0x0610U, address, sizeof(address)))
+        return 0;
+    /* A zero, broadcast, or multicast address is not a usable station MAC. */
+    uint8_t any = 0U, all_ff = 1U;
+    for (size_t i = 0U; i < sizeof(address); ++i) {
+        any |= address[i];
+        if (address[i] != 0xFFU)
+            all_ff = 0U;
+    }
+    if (any == 0U || all_ff || (address[0] & 1U) != 0U)
+        return 0;
+    uint8_t difference = 0U;
+    for (size_t i = 0U; i < sizeof(address); ++i)
+        difference |= (uint8_t)(address[i] ^ rtl_efuse_info.mac[i]);
+    if (difference != 0U)
+        return 0;
+    for (size_t i = 0U; i < sizeof(address); ++i)
+        mac[i] = address[i];
+    return 1;
+}
+
+static int rtl_send_probe_request(void)
+{
+    uint8_t frame[36] = {0};
+    uint8_t mac[6];
+    static uint16_t sequence;
+    if (!rtl_radio_ready || !rtl_current_channel ||
+        !rtl8188eu_get_mac_address(mac))
+        return 0;
+
+    frame[0] = 0x40U;
+    frame[1] = 0x00U;
+    for (size_t i = 0U; i < 6U; ++i) {
+        frame[4U + i] = 0xFFU;
+        frame[16U + i] = 0xFFU;
+        frame[10U + i] = mac[i];
+    }
+    sequence = (uint16_t)((sequence + 1U) & 0x0FFFU);
+    frame[22] = (uint8_t)(sequence << 4);
+    frame[23] = (uint8_t)(sequence >> 4);
+    frame[24] = 0U;
+    frame[25] = 0U;
+    frame[26] = 1U;
+    frame[27] = 8U;
+    frame[28] = 0x82U;
+    frame[29] = 0x84U;
+    frame[30] = 0x8BU;
+    frame[31] = 0x96U;
+    frame[32] = 0x0CU;
+    frame[33] = 0x12U;
+    frame[34] = 0x18U;
+    frame[35] = 0x24U;
+    return rtl8188eu_transmit_frame(frame, sizeof(frame));
+}
+
+int rtl8188eu_start_active_scan(void)
+{
+    if (!rtl_radio_ready || rtl_scan_active)
+        return 0;
+    rtl_passive_result_count = 0U;
+    rtl_scan_channel = 1U;
+    if (!rtl_program_channel(rtl_scan_channel) || !rtl_send_probe_request()) {
+        rtl_scan_active = 0U;
+        rtl_scan_channel = 0U;
+        rtl_scan_dwell_polls = 0U;
+        return 0;
+    }
+    rtl_scan_active = 1U;
+    rtl_scan_dwell_polls = 500U;
+    return 1;
+}
+
+static void rtl_scan_poll(void)
+{
+    if (!rtl_scan_active)
+        return;
+    if (rtl_scan_dwell_polls != 0U) {
+        --rtl_scan_dwell_polls;
+        return;
+    }
+    if (rtl_scan_channel >= RTL8188EU_MAX_CHANNEL) {
+        rtl_scan_active = 0U;
+        rtl_scan_channel = 0U;
+        return;
+    }
+    ++rtl_scan_channel;
+    if (!rtl_program_channel(rtl_scan_channel) || !rtl_send_probe_request()) {
+        rtl_scan_active = 0U;
+        rtl_scan_channel = 0U;
+        rtl_scan_dwell_polls = 0U;
+        serial_write("VANTAOS_RTL8188EU_SCAN_FAILED\n");
+        return;
+    }
+    rtl_scan_dwell_polls = 500U;
+}
+
 int rtl8188eu_transmit_frame(const uint8_t *frame, size_t length)
 {
     uint32_t actual = 0U;
     uint8_t *descriptor = rtl_tx_buffer;
     uint8_t frame_type;
 
-    if (!rtl_bound || !rtl_firmware_ready || rtl_bulk_out == 0U || !frame ||
-        length < 24U || length > RTL8188EU_TX_FRAME_MAX)
+    if (!rtl_bound || !rtl_firmware_ready || !rtl_radio_ready ||
+        rtl_bulk_out == 0U || !frame || length < 24U ||
+        length > RTL8188EU_TX_FRAME_MAX)
         return 0;
 
     /* Management/control/data parsing is deliberately conservative. */
@@ -563,6 +1564,502 @@ int rtl8188eu_transmit_frame(const uint8_t *frame, size_t length)
     return actual == RTL8188EU_TX_DESC_SIZE + length;
 }
 
+static int rtl_ccmp_build_aad(const uint8_t *frame, size_t length,
+                                  uint8_t aad[22])
+{
+    if (!frame || !aad || length < 24U ||
+        (frame[0] & 0x80U) != 0U || /* QoS is not implemented yet. */
+        (frame[1] & 0x04U) != 0U || /* fragmented MPDUs are not supported. */
+        (frame[22] & 0x0FU) != 0U)
+        return 0;
+    aad[0] = (uint8_t)(frame[0] & 0x8FU);
+    aad[1] = (uint8_t)(frame[1] & 0xC7U);
+    for (size_t i = 0U; i < 18U; ++i) aad[2U + i] = frame[4U + i];
+    aad[20] = (uint8_t)(frame[22] & 0x0FU);
+    aad[21] = 0U;
+    return 1;
+}
+
+static void rtl_network_link_up(void)
+{
+    uint8_t mac[6];
+    if (rtl_station_state != RTL_STATION_AUTHENTICATED || !rtl_keys_installed ||
+        !rtl8188eu_get_mac_address(mac))
+        return;
+    for (size_t i = 0U; i < sizeof(rtl_netdev.mac); ++i)
+        rtl_netdev.mac[i] = mac[i];
+    if (!rtl_netdev_registered) {
+        if (!net_device_register || !net_device_register(&rtl_netdev))
+            return;
+        rtl_netdev_registered = 1U;
+    }
+    rtl_netdev.link_up = 1U;
+    if (net_device_set_link)
+        (void)net_device_set_link(&rtl_netdev, 1);
+    if (!rtl_dhcp_started && net_dhcp_start &&
+        net_dhcp_start(&rtl_netdev, 10000U))
+        rtl_dhcp_started = 1U;
+}
+
+static void rtl_network_link_down(void)
+{
+    rtl_netdev.link_up = 0U;
+    if (rtl_netdev_registered && net_device_set_link)
+        (void)net_device_set_link(&rtl_netdev, 0);
+}
+
+static void rtl_network_remove(void)
+{
+    rtl_network_link_down();
+    rtl_dhcp_started = 0U;
+    if (rtl_netdev_registered && net_device_unregister &&
+        net_device_unregister(&rtl_netdev))
+        rtl_netdev_registered = 0U;
+}
+
+static int rtl_netdev_transmit(net_device_t *device, const uint8_t *ethernet,
+                               size_t ethernet_length)
+{
+    uint8_t frame[24U + WIFI_CCMP_HEADER_SIZE + WIFI_CCMP_MAX_PAYLOAD +
+                  WIFI_CCMP_TAG_SIZE];
+    uint8_t payload[WIFI_CCMP_MAX_PAYLOAD], aad[22], nonce[WIFI_CCMP_NONCE_SIZE];
+    uint8_t tag[WIFI_CCMP_TAG_SIZE], local_mac[6];
+    const uint8_t *key;
+    wifi_ccmp_replay_t *pn_state;
+    uint8_t key_id;
+    uint64_t pn;
+    size_t payload_length = 0U, frame_length;
+    int multicast;
+    if (device != &rtl_netdev || !ethernet || ethernet_length < 14U ||
+        ethernet_length > NET_FRAME_MAX_SIZE ||
+        !rtl_netdev_registered || !rtl_netdev.link_up ||
+        rtl_station_state != RTL_STATION_AUTHENTICATED || !rtl_keys_installed ||
+        !rtl8188eu_get_mac_address(local_mac))
+        return 0;
+
+    multicast = (ethernet[0] & 1U) != 0U;
+    if (multicast) {
+        if (rtl_group_key_length != WIFI_CCMP_KEY_SIZE)
+            return 0;
+        key = rtl_group_key;
+        key_id = rtl_group_key_id;
+        pn_state = &rtl_group_pn;
+    } else {
+        key = rtl_pairwise_key;
+        key_id = 0U;
+        pn_state = &rtl_pairwise_pn;
+    }
+    if (!net_wifi_80211_snap_encapsulate(ethernet, ethernet_length, payload,
+            sizeof(payload), &payload_length) ||
+        payload_length > WIFI_CCMP_MAX_PAYLOAD ||
+        !wifi_ccmp_next_tx_pn(pn_state, &pn))
+        return 0;
+
+    for (size_t i = 0U; i < 24U; ++i) frame[i] = 0U;
+    frame[0] = 0x08U; /* Data */
+    frame[1] = 0x41U; /* To-DS + Protected */
+    for (size_t i = 0U; i < 6U; ++i) {
+        frame[4U + i] = rtl_station_bssid[i];
+        frame[10U + i] = local_mac[i];
+        frame[16U + i] = ethernet[i]; /* destination */
+    }
+    rtl_station_sequence = (uint16_t)((rtl_station_sequence + 1U) & 0x0FFFU);
+    frame[22] = (uint8_t)(rtl_station_sequence << 4);
+    frame[23] = (uint8_t)(rtl_station_sequence >> 4);
+    if (!rtl_ccmp_build_aad(frame, 24U, aad) ||
+        !wifi_ccmp_header_encode(frame + 24U, pn, key_id))
+        return 0;
+    wifi_ccmp_build_nonce(nonce, 0U, local_mac, pn);
+    if (!wifi_ccmp_encrypt(key, nonce, aad, sizeof(aad), payload,
+            payload_length, tag))
+        return 0;
+    for (size_t i = 0U; i < payload_length; ++i)
+        frame[32U + i] = payload[i];
+    for (size_t i = 0U; i < sizeof(tag); ++i)
+        frame[32U + payload_length + i] = tag[i];
+    frame_length = 32U + payload_length + sizeof(tag);
+    return rtl8188eu_transmit_frame(frame, frame_length);
+}
+
+static void rtl_process_protected_data(uint8_t *frame, size_t length)
+{
+    uint8_t local_mac[6], aad[22], nonce[WIFI_CCMP_NONCE_SIZE];
+    uint8_t ethernet[NET_FRAME_MAX_SIZE], key_id;
+    uint64_t pn;
+    size_t payload_length, ethernet_length = 0U;
+    const uint8_t *key;
+    wifi_ccmp_replay_t *replay;
+    if (!frame || !rtl_keys_installed || !rtl_netdev_registered ||
+        !net_receive_frame || length < 24U + WIFI_CCMP_HEADER_SIZE +
+                                      WIFI_CCMP_TAG_SIZE ||
+        (frame[0] & 0x0CU) != 0x08U || (frame[0] & 0x80U) != 0U ||
+        (frame[1] & 0x03U) != 0x02U || /* From-DS only */
+        (frame[1] & 0x40U) == 0U ||   /* Protected */
+        (frame[1] & 0x04U) != 0U || (frame[22] & 0x0FU) != 0U ||
+        !rtl8188eu_get_mac_address(local_mac))
+        return;
+
+    /* AP transmitter must match the associated BSSID. Unicast is for this
+       station; multicast is accepted only under the group key. */
+    uint8_t bssid_difference = 0U, local_difference = 0U;
+    for (size_t i = 0U; i < 6U; ++i) {
+        bssid_difference |= (uint8_t)(frame[10U + i] ^ rtl_station_bssid[i]);
+        local_difference |= (uint8_t)(frame[4U + i] ^ local_mac[i]);
+    }
+    if (bssid_difference != 0U ||
+        (local_difference != 0U && (frame[4] & 1U) == 0U))
+        return;
+
+    if (!wifi_ccmp_header_decode(frame + 24U, &pn, &key_id))
+        return;
+    if (key_id == 0U && (frame[4] & 1U) == 0U) {
+        key = rtl_pairwise_key;
+        replay = &rtl_pairwise_pn;
+    } else if (rtl_group_key_length == WIFI_CCMP_KEY_SIZE &&
+               key_id == rtl_group_key_id && (frame[4] & 1U) != 0U) {
+        key = rtl_group_key;
+        replay = &rtl_group_pn;
+    } else {
+        return;
+    }
+    payload_length = length - 24U - WIFI_CCMP_HEADER_SIZE - WIFI_CCMP_TAG_SIZE;
+    if (payload_length == 0U || payload_length > WIFI_CCMP_MAX_PAYLOAD ||
+        !rtl_ccmp_build_aad(frame, length, aad))
+        return;
+    wifi_ccmp_build_nonce(nonce, 0U, frame + 10U, pn);
+    if (!wifi_ccmp_decrypt(key, nonce, aad, sizeof(aad), frame + 32U,
+            payload_length, frame + 32U + payload_length) ||
+        !wifi_ccmp_accept_rx_pn(replay, pn))
+        return;
+
+    if (!net_wifi_80211_snap_decapsulate(frame + 4U, frame + 16U,
+            frame + 32U, payload_length, ethernet, sizeof(ethernet),
+            &ethernet_length))
+        return;
+    (void)net_receive_frame(&rtl_netdev, ethernet, ethernet_length);
+}
+
+static int rtl_station_send_eapol(const uint8_t *bssid,
+                                   const uint8_t *payload, size_t length,
+                                   void *context)
+{
+    uint8_t frame[24U + 8U + WIFI_WPA2_EAPOL_MAX];
+    uint8_t local_mac[6];
+    size_t total;
+    (void)context;
+    if (!bssid || !payload || length == 0U ||
+        length > WIFI_WPA2_EAPOL_MAX || !rtl_radio_ready ||
+        !rtl8188eu_get_mac_address(local_mac))
+        return 0;
+    total = 32U + length;
+    for (size_t i = 0U; i < total; ++i) frame[i] = 0U;
+    frame[0] = 0x08U; /* Data */
+    frame[1] = 0x01U; /* To-DS */
+    for (size_t i = 0U; i < 6U; ++i) {
+        frame[4U + i] = bssid[i];      /* Address 1: AP receiver */
+        frame[10U + i] = local_mac[i]; /* Address 2: station transmitter */
+    }
+    /* EAPOL-Key M2/M4 are unicast to the associated AP/BSSID. */
+    for (size_t i = 0U; i < 6U; ++i)
+        frame[16U + i] = bssid[i];
+    rtl_station_sequence = (uint16_t)((rtl_station_sequence + 1U) & 0x0FFFU);
+    frame[22] = (uint8_t)(rtl_station_sequence << 4);
+    frame[23] = (uint8_t)(rtl_station_sequence >> 4);
+    frame[24] = 0xAAU; frame[25] = 0xAAU; frame[26] = 0x03U;
+    frame[27] = 0U; frame[28] = 0U; frame[29] = 0U;
+    frame[30] = 0x88U; frame[31] = 0x8EU; /* EAPOL EtherType */
+    for (size_t i = 0U; i < length; ++i) frame[32U + i] = payload[i];
+    return rtl8188eu_transmit_frame(frame, total);
+}
+
+static int rtl_station_random(uint8_t *output, size_t length, void *context)
+{
+    (void)context;
+    return crypto_rng_fill(output, length);
+}
+
+static int rtl_station_install_keys(const uint8_t *bssid, const uint8_t *peer,
+                                    const uint8_t temporal_key[16],
+                                    const uint8_t *gtk, size_t gtk_length,
+                                    uint8_t gtk_id, void *context)
+{
+    (void)context;
+    if (!bssid || !peer || !temporal_key ||
+        gtk_length != WIFI_CCMP_KEY_SIZE || !gtk ||
+        rtl_station_state != RTL_STATION_WPA2_HANDSHAKE)
+        return 0;
+    for (size_t i = 0U; i < 6U; ++i)
+        if (bssid[i] != rtl_station_bssid[i])
+            return 0;
+    for (size_t i = 0U; i < 16U; ++i) rtl_pairwise_key[i] = temporal_key[i];
+    for (size_t i = 0U; i < sizeof(rtl_group_key); ++i)
+        rtl_group_key[i] = (i < gtk_length) ? gtk[i] : 0U;
+    rtl_group_key_length = gtk_length;
+    rtl_group_key_id = gtk_id;
+    wifi_ccmp_replay_reset(&rtl_pairwise_pn);
+    wifi_ccmp_replay_reset(&rtl_group_pn);
+    rtl_keys_installed = 1U;
+    return 1;
+}
+
+static int rtl_station_send_auth(void)
+{
+    uint8_t frame[32];
+    uint8_t local_mac[6];
+    size_t length = 0U;
+    if (!rtl8188eu_get_mac_address(local_mac))
+        return 0;
+    rtl_station_sequence = (uint16_t)((rtl_station_sequence + 1U) & 0x0FFFU);
+    if (!net_wifi_80211_build_open_auth_request(frame, sizeof(frame),
+            rtl_station_bssid, local_mac, rtl_station_bssid,
+            rtl_station_sequence, &length))
+        return 0;
+    return rtl8188eu_transmit_frame(frame, length);
+}
+
+static int rtl_station_send_assoc(void)
+{
+    uint8_t frame[128];
+    uint8_t local_mac[6];
+    size_t length = 0U;
+    if (!rtl8188eu_get_mac_address(local_mac))
+        return 0;
+    rtl_station_sequence = (uint16_t)((rtl_station_sequence + 1U) & 0x0FFFU);
+    if (!net_wifi_80211_build_assoc_request(frame, sizeof(frame),
+            rtl_station_bssid, local_mac, rtl_station_bssid,
+            rtl_station_sequence, rtl_station_ssid, rtl_station_ssid_length,
+            rtl_station_rsn_ie, sizeof(rtl_station_rsn_ie), &length))
+        return 0;
+    return rtl8188eu_transmit_frame(frame, length);
+}
+
+int rtl8188eu_connect(const uint8_t *ssid, size_t ssid_length,
+                      const uint8_t *passphrase, size_t passphrase_length)
+{
+    net_wifi_scan_result_t results[NET_WIFI_MAX_SCAN_RESULTS];
+    size_t count;
+    int selected = -1;
+    uint8_t local_mac[6];
+    if (!rtl_radio_ready || rtl_scan_active || !ssid || ssid_length == 0U ||
+        ssid_length > NET_WIFI_SSID_MAX || !passphrase ||
+        passphrase_length < NET_WIFI_PASSPHRASE_MIN ||
+        passphrase_length > NET_WIFI_PASSPHRASE_MAX ||
+        !crypto_rng_available() || !rtl8188eu_get_mac_address(local_mac) ||
+        rtl_station_state == RTL_STATION_WAIT_AUTH ||
+        rtl_station_state == RTL_STATION_WAIT_ASSOC ||
+        rtl_station_state == RTL_STATION_WPA2_HANDSHAKE)
+        return 0;
+    for (size_t i = 0U; i < passphrase_length; ++i)
+        if (passphrase[i] < 0x20U || passphrase[i] > 0x7EU)
+            return 0;
+    count = rtl8188eu_get_passive_results(results, NET_WIFI_MAX_SCAN_RESULTS);
+    for (size_t i = 0U; i < count; ++i) {
+        if (results[i].ssid_length != ssid_length ||
+            results[i].security != NET_WIFI_SECURITY_WPA2_PSK)
+            continue;
+        size_t j = 0U;
+        while (j < ssid_length && results[i].ssid[j] == ssid[j]) ++j;
+        if (j == ssid_length) { selected = (int)i; break; }
+    }
+    if (selected < 0 || !rtl_program_channel(results[selected].channel))
+        return 0;
+
+    rtl_station_reset();
+    for (size_t i = 0U; i < sizeof(rtl_station_ssid); ++i)
+        rtl_station_ssid[i] = (i < ssid_length) ? ssid[i] : 0U;
+    rtl_station_ssid_length = ssid_length;
+    for (size_t i = 0U; i < sizeof(rtl_station_passphrase); ++i)
+        rtl_station_passphrase[i] = (i < passphrase_length) ? passphrase[i] : 0U;
+    rtl_station_passphrase_length = passphrase_length;
+    for (size_t i = 0U; i < sizeof(rtl_station_bssid); ++i)
+        rtl_station_bssid[i] = results[selected].bssid[i];
+    rtl_station_retries = 0U;
+    rtl_station_timeout = 1000U;
+    rtl_station_aid = 0U;
+    rtl_keys_installed = 0U;
+    rtl_station_state = RTL_STATION_WAIT_AUTH;
+    if (!rtl_station_send_auth()) {
+        rtl_station_fail();
+        return 0;
+    }
+    return 1;
+}
+
+rtl8188eu_connection_state_t rtl8188eu_get_connection_state(void)
+{
+    switch (rtl_station_state) {
+    case RTL_STATION_WAIT_AUTH: return RTL8188EU_CONNECTION_AUTHENTICATING;
+    case RTL_STATION_WAIT_ASSOC: return RTL8188EU_CONNECTION_ASSOCIATING;
+    case RTL_STATION_WPA2_HANDSHAKE: return RTL8188EU_CONNECTION_WPA2_HANDSHAKE;
+    case RTL_STATION_AUTHENTICATED: return RTL8188EU_CONNECTION_AUTHENTICATED;
+    case RTL_STATION_FAILED: return RTL8188EU_CONNECTION_FAILED;
+    default: return RTL8188EU_CONNECTION_IDLE;
+    }
+}
+
+static void rtl_station_receive_frame(const uint8_t *frame, size_t length)
+{
+    uint16_t status, aid;
+    if (!frame || length < 24U || rtl_station_state == RTL_STATION_IDLE ||
+        rtl_station_state == RTL_STATION_FAILED)
+        return;
+    if (rtl_station_state == RTL_STATION_AUTHENTICATED) {
+        rtl_process_protected_data((uint8_t *)frame, length);
+        return;
+    }
+    if ((frame[0] & 0x0CU) == 0x00U) {
+        if (rtl_station_state == RTL_STATION_WAIT_AUTH &&
+            net_wifi_80211_parse_auth_response(frame, length,
+                rtl_station_bssid, &status)) {
+            if (status != 0U || !rtl_station_send_assoc()) {
+                rtl_station_fail();
+                return;
+            }
+            rtl_station_state = RTL_STATION_WAIT_ASSOC;
+            rtl_station_timeout = 1000U;
+            rtl_station_retries = 0U;
+            return;
+        }
+        if (rtl_station_state == RTL_STATION_WAIT_ASSOC &&
+            net_wifi_80211_parse_assoc_response(frame, length,
+                rtl_station_bssid, &status, &aid)) {
+            if (status != 0U || aid == 0U) {
+                rtl_station_fail();
+                return;
+            }
+            rtl_station_aid = aid;
+            wifi_wpa2_ops_t ops = {
+                .random_bytes = rtl_station_random,
+                .send_eapol = rtl_station_send_eapol,
+                .install_ccmp_keys = rtl_station_install_keys,
+                .context = 0
+            };
+            uint8_t local_mac[6];
+            if (!rtl8188eu_get_mac_address(local_mac) ||
+                !wifi_wpa2_begin(&rtl_supplicant, &ops,
+                    rtl_station_ssid, rtl_station_ssid_length,
+                    rtl_station_passphrase, rtl_station_passphrase_length,
+                    local_mac, rtl_station_bssid,
+                    rtl_station_rsn_ie, sizeof(rtl_station_rsn_ie))) {
+                rtl_station_fail();
+                return;
+            }
+            rtl_station_state = RTL_STATION_WPA2_HANDSHAKE;
+            rtl_station_timeout = 4000U;
+            rtl_station_retries = 0U;
+            return;
+        }
+    }
+
+    /* WPA2 EAPOL is carried in an unprotected From-DS data MPDU before port
+       authorization. Do not feed frames from another BSSID to the supplicant. */
+    if (rtl_station_state == RTL_STATION_WPA2_HANDSHAKE &&
+        (frame[0] & 0x0CU) == 0x08U && (frame[1] & 0x03U) == 0x02U &&
+        (frame[1] & 0x40U) == 0U && length >= 32U) {
+        uint8_t different = 0U;
+        for (size_t i = 0U; i < 6U; ++i) different |= frame[10U + i] ^ rtl_station_bssid[i];
+        if (different != 0U || frame[24] != 0xAAU || frame[25] != 0xAAU ||
+            frame[26] != 0x03U || frame[27] != 0U || frame[28] != 0U ||
+            frame[29] != 0U || frame[30] != 0x88U || frame[31] != 0x8EU)
+            return;
+        (void)wifi_wpa2_receive_eapol(&rtl_supplicant, frame + 10U,
+                                      frame + 32U, length - 32U);
+        if (wifi_wpa2_get_state(&rtl_supplicant) == WIFI_WPA2_AUTHENTICATED &&
+            rtl_keys_installed) {
+            rtl_station_state = RTL_STATION_AUTHENTICATED;
+            rtl_network_link_up();
+        }
+        else if (wifi_wpa2_get_state(&rtl_supplicant) == WIFI_WPA2_FAILED)
+            rtl_station_fail();
+    }
+}
+
+static void rtl_station_poll(void)
+{
+    if (rtl_station_state == RTL_STATION_AUTHENTICATED) {
+        rtl_network_link_up();
+        return;
+    }
+    if (rtl_station_state != RTL_STATION_WAIT_AUTH &&
+        rtl_station_state != RTL_STATION_WAIT_ASSOC &&
+        rtl_station_state != RTL_STATION_WPA2_HANDSHAKE)
+        return;
+    if (rtl_station_timeout != 0U) {
+        --rtl_station_timeout;
+        return;
+    }
+    if (rtl_station_retries >= 3U) {
+        rtl_station_fail();
+        wifi_wpa2_reset(&rtl_supplicant);
+        return;
+    }
+    ++rtl_station_retries;
+    rtl_station_timeout = rtl_station_state == RTL_STATION_WPA2_HANDSHAKE
+        ? 4000U : 1000U;
+    if ((rtl_station_state == RTL_STATION_WAIT_AUTH && !rtl_station_send_auth()) ||
+        (rtl_station_state == RTL_STATION_WAIT_ASSOC && !rtl_station_send_assoc()) ||
+        (rtl_station_state == RTL_STATION_WPA2_HANDSHAKE &&
+         wifi_wpa2_get_state(&rtl_supplicant) == WIFI_WPA2_WAIT_M3 &&
+         !wifi_wpa2_retry(&rtl_supplicant))) {
+        rtl_station_fail();
+    }
+}
+
+static void rtl_station_fail(void)
+{
+    rtl_network_link_down();
+    rtl_dhcp_started = 0U;
+    wifi_wpa2_reset(&rtl_supplicant);
+    for (size_t i = 0U; i < sizeof(rtl_station_passphrase); ++i)
+        rtl_station_passphrase[i] = 0U;
+    for (size_t i = 0U; i < sizeof(rtl_pairwise_key); ++i)
+        rtl_pairwise_key[i] = 0U;
+    for (size_t i = 0U; i < sizeof(rtl_group_key); ++i)
+        rtl_group_key[i] = 0U;
+    rtl_station_passphrase_length = 0U;
+    rtl_group_key_length = 0U;
+    rtl_group_key_id = 0U;
+    rtl_keys_installed = 0U;
+    wifi_ccmp_replay_reset(&rtl_pairwise_pn);
+    wifi_ccmp_replay_reset(&rtl_group_pn);
+    rtl_station_timeout = 0U;
+    rtl_station_state = RTL_STATION_FAILED;
+}
+
+static void rtl_station_reset(void)
+{
+    rtl_network_link_down();
+    rtl_dhcp_started = 0U;
+    wifi_wpa2_reset(&rtl_supplicant);
+    for (size_t i = 0U; i < sizeof(rtl_station_passphrase); ++i)
+        rtl_station_passphrase[i] = 0U;
+    for (size_t i = 0U; i < sizeof(rtl_pairwise_key); ++i)
+        rtl_pairwise_key[i] = 0U;
+    for (size_t i = 0U; i < sizeof(rtl_group_key); ++i)
+        rtl_group_key[i] = 0U;
+    rtl_station_ssid_length = 0U;
+    rtl_station_passphrase_length = 0U;
+    rtl_station_timeout = 0U;
+    rtl_station_retries = 0U;
+    rtl_station_aid = 0U;
+    rtl_group_key_length = 0U;
+    rtl_group_key_id = 0U;
+    rtl_keys_installed = 0U;
+    rtl_station_state = RTL_STATION_IDLE;
+}
+
+rtl8188eu_status_t rtl8188eu_get_status(void)
+{
+    if (!rtl_bound)
+        return RTL8188EU_STATUS_UNBOUND;
+    if (rtl_firmware_ready)
+        return RTL8188EU_STATUS_FIRMWARE_READY;
+    if (rtl_firmware_attempted)
+        return RTL8188EU_STATUS_FIRMWARE_FAILED;
+    return fat32_is_mounted() ? RTL8188EU_STATUS_FIRMWARE_PENDING
+                              : RTL8188EU_STATUS_USB_BOUND;
+}
+
 void rtl8188eu_poll(void)
 {
     if (!rtl_bound)
@@ -576,6 +2073,25 @@ void rtl8188eu_poll(void)
     }
     if (!rtl_firmware_ready)
         return;
+
+    if (!rtl_efuse_ready && rtl_efuse_attempts < 3U) {
+        ++rtl_efuse_attempts;
+        rtl_efuse_ready = (uint8_t)rtl_load_efuse_identity();
+        serial_write(rtl_efuse_ready
+            ? "VANTAOS_RTL8188EU_EFUSE_READY\n"
+            : "VANTAOS_RTL8188EU_EFUSE_ATTEMPT_FAILED_TX_BLOCKED\n");
+    }
+
+    /* Retry transient register/USB failures; preflight still does not enable TX. */
+    if (rtl_efuse_ready && !rtl_radio_preflight_done &&
+        rtl_radio_preflight_attempts < 3U) {
+        ++rtl_radio_preflight_attempts;
+        if (rtl_radio_preflight()) {
+            serial_write("VANTAOS_RTL8188EU_RF_PREFLIGHT_OK_TX_STILL_BLOCKED\n");
+        } else {
+            serial_write("VANTAOS_RTL8188EU_RF_PREFLIGHT_FAILED_RETRYABLE\n");
+        }
+    }
 
     if (!rtl_rx_armed) {
         rtl_rx_armed = (uint8_t)xhci_start_bulk_in(rtl_slot, rtl_bulk_in);
@@ -592,6 +2108,8 @@ void rtl8188eu_poll(void)
     }
     if (!rtl_rx_armed)
         rtl_rx_armed = (uint8_t)xhci_start_bulk_in(rtl_slot, rtl_bulk_in);
+    rtl_scan_poll();
+    rtl_station_poll();
 }
 
 int rtl8188eu_port_is_bound(uint32_t port)
@@ -605,6 +2123,7 @@ int rtl8188eu_port_disconnected(uint32_t port)
         return 0;
 
     uint32_t old_slot = rtl_slot;
+    rtl_network_remove();
     rtl_bound = 0U;
     rtl_slot = 0U;
     rtl_port = 0U;
@@ -613,6 +2132,17 @@ int rtl8188eu_port_disconnected(uint32_t port)
     rtl_rx_armed = 0U;
     rtl_firmware_attempted = 0U;
     rtl_firmware_ready = 0U;
+    rtl_radio_ready = 0U;
+    rtl_radio_preflight_attempts = 0U;
+    rtl_radio_preflight_done = 0U;
+    rtl_efuse_attempts = 0U;
+    rtl_efuse_ready = 0U;
+    rtl_efuse_info.valid = 0U;
+    rtl_scan_active = 0U;
+    rtl_scan_channel = 0U;
+    rtl_scan_dwell_polls = 0U;
+    rtl_current_channel = 0U;
+    rtl_station_reset();
     rtl_passive_result_count = 0U;
     if (old_slot != 0U)
         (void)xhci_disable_device(old_slot);

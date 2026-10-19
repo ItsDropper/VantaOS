@@ -197,3 +197,220 @@ int net_wifi_80211_parse_scan_frame(const uint8_t *frame, size_t length,
     *result = parsed;
     return 1;
 }
+
+
+#define IEEE80211_SUBTYPE_AUTH 0xB0U
+#define IEEE80211_SUBTYPE_ASSOC_RESPONSE 0x10U
+#define IEEE80211_SUBTYPE_ASSOC_REQUEST 0x00U
+#define IEEE80211_SUBTYPE_AUTH_REQUEST 0xB0U
+#define IEEE80211_FC_PROTECTED 0x40U
+#define IEEE80211_MIN_MGMT_HEADER 24U
+
+static void write_le16(uint8_t *p, uint16_t value)
+{
+    p[0] = (uint8_t)value;
+    p[1] = (uint8_t)(value >> 8);
+}
+
+static int mac_is_unicast(const uint8_t *mac)
+{
+    uint8_t any = 0U;
+    if (!mac || (mac[0] & 1U) != 0U)
+        return 0;
+    for (size_t i = 0U; i < 6U; ++i)
+        any |= mac[i];
+    return any != 0U;
+}
+
+static void fill_mgmt_header(uint8_t *frame, uint8_t subtype,
+                             const uint8_t destination[6],
+                             const uint8_t source[6],
+                             const uint8_t bssid[6], uint16_t sequence)
+{
+    frame[0] = subtype;
+    frame[1] = 0U;
+    for (size_t i = 0U; i < 6U; ++i) {
+        frame[4U + i] = destination[i];
+        frame[10U + i] = source[i];
+        frame[16U + i] = bssid[i];
+    }
+    write_le16(frame + 22U, (uint16_t)((sequence & 0x0FFFU) << 4));
+}
+
+int net_wifi_80211_build_open_auth_request(uint8_t *frame, size_t capacity,
+                                           const uint8_t destination[6],
+                                           const uint8_t source[6],
+                                           const uint8_t bssid[6],
+                                           uint16_t sequence,
+                                           size_t *frame_length)
+{
+    if (!frame || capacity < 30U || !destination || !source || !bssid ||
+        !mac_is_unicast(destination) || !mac_is_unicast(source) ||
+        !mac_is_unicast(bssid) || !frame_length || sequence > 0x0FFFU)
+        return 0;
+    fill_mgmt_header(frame, IEEE80211_SUBTYPE_AUTH_REQUEST, destination,
+                     source, bssid, sequence);
+    write_le16(frame + 24U, 0U); /* Open System authentication algorithm. */
+    write_le16(frame + 26U, 1U); /* Transaction sequence number. */
+    write_le16(frame + 28U, 0U);
+    *frame_length = 30U;
+    return 1;
+}
+
+int net_wifi_80211_build_assoc_request(uint8_t *frame, size_t capacity,
+                                       const uint8_t destination[6],
+                                       const uint8_t source[6],
+                                       const uint8_t bssid[6],
+                                       uint16_t sequence,
+                                       const uint8_t *ssid,
+                                       size_t ssid_length,
+                                       const uint8_t *rsn_ie,
+                                       size_t rsn_ie_length,
+                                       size_t *frame_length)
+{
+    static const uint8_t rates[] = {
+        0x01U, 0x08U, 0x82U, 0x84U, 0x8BU, 0x96U,
+        0x0CU, 0x12U, 0x18U, 0x24U
+    };
+    const size_t fixed_and_ies = 4U + 2U + sizeof(rates);
+    size_t required;
+    if (!frame || !destination || !source || !bssid || !ssid || !frame_length ||
+        !mac_is_unicast(destination) || !mac_is_unicast(source) ||
+        !mac_is_unicast(bssid) || sequence > 0x0FFFU ||
+        ssid_length == 0U || ssid_length > NET_WIFI_SSID_MAX ||
+        !rsn_ie || rsn_ie_length < 2U || rsn_ie_length > 257U ||
+        rsn_ie[0] != IEEE80211_IE_RSN ||
+        (size_t)rsn_ie[1] + 2U != rsn_ie_length ||
+        rsn_ie_length > SIZE_MAX - IEEE80211_MIN_MGMT_HEADER - fixed_and_ies ||
+        ssid_length > SIZE_MAX - IEEE80211_MIN_MGMT_HEADER - fixed_and_ies - rsn_ie_length)
+        return 0;
+    required = IEEE80211_MIN_MGMT_HEADER + fixed_and_ies + ssid_length + rsn_ie_length;
+    if (capacity < required)
+        return 0;
+
+    fill_mgmt_header(frame, IEEE80211_SUBTYPE_ASSOC_REQUEST, destination,
+                     source, bssid, sequence);
+    write_le16(frame + 24U, 0x0431U); /* ESS + short preamble + short slot. */
+    write_le16(frame + 26U, 10U);     /* Listen interval. */
+    size_t offset = 28U;
+    frame[offset++] = IEEE80211_IE_SSID;
+    frame[offset++] = (uint8_t)ssid_length;
+    for (size_t i = 0U; i < ssid_length; ++i) {
+        if (ssid[i] == 0U || ssid[i] < 0x20U || ssid[i] == 0x7FU)
+            return 0;
+        frame[offset++] = ssid[i];
+    }
+    for (size_t i = 0U; i < sizeof(rates); ++i)
+        frame[offset++] = rates[i];
+    for (size_t i = 0U; i < rsn_ie_length; ++i)
+        frame[offset++] = rsn_ie[i];
+    *frame_length = offset;
+    return 1;
+}
+
+static int parse_mgmt_response(const uint8_t *frame, size_t length,
+                               uint8_t expected_subtype,
+                               const uint8_t expected_bssid[6])
+{
+    if (!frame || !expected_bssid || length < IEEE80211_MIN_MGMT_HEADER ||
+        (frame[0] & IEEE80211_FC_TYPE_MASK) != IEEE80211_FC_MANAGEMENT ||
+        (frame[0] & IEEE80211_FC_SUBTYPE_MASK) != expected_subtype ||
+        (frame[1] & (IEEE80211_FC_PROTECTED | 0x03U)) != 0U)
+        return 0;
+    for (size_t i = 0U; i < 6U; ++i) {
+        if (frame[10U + i] != expected_bssid[i] ||
+            frame[16U + i] != expected_bssid[i])
+            return 0;
+    }
+    return 1;
+}
+
+int net_wifi_80211_parse_auth_response(const uint8_t *frame, size_t length,
+                                        const uint8_t expected_bssid[6],
+                                        uint16_t *status_code)
+{
+    if (!status_code || length < 30U ||
+        !parse_mgmt_response(frame, length, IEEE80211_SUBTYPE_AUTH,
+                             expected_bssid) ||
+        read_le16(frame + 24U) != 0U || read_le16(frame + 26U) != 2U)
+        return 0;
+    *status_code = read_le16(frame + 28U);
+    return 1;
+}
+
+int net_wifi_80211_parse_assoc_response(const uint8_t *frame, size_t length,
+                                         const uint8_t expected_bssid[6],
+                                         uint16_t *status_code,
+                                         uint16_t *association_id)
+{
+    if (!status_code || !association_id || length < 30U ||
+        !parse_mgmt_response(frame, length, IEEE80211_SUBTYPE_ASSOC_RESPONSE,
+                             expected_bssid))
+        return 0;
+    *status_code = read_le16(frame + 26U);
+    *association_id = (uint16_t)(read_le16(frame + 28U) & 0x3FFFU);
+    if (*status_code != 0U)
+        *association_id = 0U;
+    return 1;
+}
+
+int net_wifi_80211_snap_encapsulate(const uint8_t *ethernet_frame,
+                                    size_t ethernet_length,
+                                    uint8_t *llc_payload,
+                                    size_t llc_capacity,
+                                    size_t *llc_length)
+{
+    size_t payload_length;
+    if (llc_length) *llc_length = 0U;
+    if (!ethernet_frame || !llc_payload || !llc_length ||
+        ethernet_length < 14U)
+        return 0;
+    payload_length = ethernet_length - 14U;
+    if (payload_length > 2304U || llc_capacity < payload_length + 8U)
+        return 0;
+
+    llc_payload[0] = 0xAAU;
+    llc_payload[1] = 0xAAU;
+    llc_payload[2] = 0x03U;
+    llc_payload[3] = 0x00U;
+    llc_payload[4] = 0x00U;
+    llc_payload[5] = 0x00U;
+    llc_payload[6] = ethernet_frame[12];
+    llc_payload[7] = ethernet_frame[13];
+    for (size_t i = 0U; i < payload_length; ++i)
+        llc_payload[8U + i] = ethernet_frame[14U + i];
+    *llc_length = payload_length + 8U;
+    return 1;
+}
+
+int net_wifi_80211_snap_decapsulate(const uint8_t destination[6],
+                                    const uint8_t source[6],
+                                    const uint8_t *llc_payload,
+                                    size_t llc_length,
+                                    uint8_t *ethernet_frame,
+                                    size_t ethernet_capacity,
+                                    size_t *ethernet_length)
+{
+    size_t payload_length;
+    if (ethernet_length) *ethernet_length = 0U;
+    if (!destination || !source || !llc_payload || !ethernet_frame ||
+        !ethernet_length || llc_length < 8U ||
+        llc_payload[0] != 0xAAU || llc_payload[1] != 0xAAU ||
+        llc_payload[2] != 0x03U || llc_payload[3] != 0U ||
+        llc_payload[4] != 0U || llc_payload[5] != 0U)
+        return 0;
+    payload_length = llc_length - 8U;
+    if (payload_length > 2304U || ethernet_capacity < payload_length + 14U)
+        return 0;
+
+    for (size_t i = 0U; i < 6U; ++i) {
+        ethernet_frame[i] = destination[i];
+        ethernet_frame[6U + i] = source[i];
+    }
+    ethernet_frame[12] = llc_payload[6];
+    ethernet_frame[13] = llc_payload[7];
+    for (size_t i = 0U; i < payload_length; ++i)
+        ethernet_frame[14U + i] = llc_payload[8U + i];
+    *ethernet_length = payload_length + 14U;
+    return 1;
+}

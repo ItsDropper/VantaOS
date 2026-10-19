@@ -97,6 +97,60 @@ int main(void)
                           payload, sizeof(payload), tag) != 0)
         return 13;
 
-    puts("Wi-Fi AES-CCM known-answer and tamper tests passed.");
+    {
+        wifi_ccmp_replay_t replay;
+        uint64_t pn = 0U;
+        uint8_t key_id = 0U, header[WIFI_CCMP_HEADER_SIZE];
+        uint8_t nonce[WIFI_CCMP_NONCE_SIZE];
+        const uint8_t transmitter[6] = {0x02U, 1U, 2U, 3U, 4U, 5U};
+        const uint8_t expected_pn_bytes[6] = {1U, 2U, 3U, 4U, 5U, 6U};
+
+        wifi_ccmp_replay_reset(&replay);
+        if (!wifi_ccmp_next_tx_pn(&replay, &pn) || pn != 1U ||
+            !wifi_ccmp_next_tx_pn(&replay, &pn) || pn != 2U)
+            return 14;
+        if (!wifi_ccmp_header_encode(header, pn, 2U) ||
+            !wifi_ccmp_header_decode(header, &pn, &key_id) ||
+            pn != 2U || key_id != 2U)
+            return 15;
+        header[2] = 1U;
+        if (wifi_ccmp_header_decode(header, &pn, &key_id))
+            return 16;
+        header[2] = 0U;
+        header[3] &= (uint8_t)~0x20U;
+        if (wifi_ccmp_header_decode(header, &pn, &key_id))
+            return 17;
+        if (!wifi_ccmp_header_encode(header, WIFI_CCMP_PN_MAX, 3U) ||
+            !wifi_ccmp_header_decode(header, &pn, &key_id) ||
+            pn != WIFI_CCMP_PN_MAX || key_id != 3U ||
+            wifi_ccmp_header_encode(header, 0U, 0U) ||
+            wifi_ccmp_header_encode(header, WIFI_CCMP_PN_MAX + 1U, 0U))
+            return 18;
+
+        wifi_ccmp_build_nonce(nonce, 5U, transmitter, UINT64_C(0x010203040506));
+        if (nonce[0] != 5U || memcmp(nonce + 1U, transmitter, 6U) != 0 ||
+            memcmp(nonce + 7U, expected_pn_bytes, sizeof(expected_pn_bytes)) != 0)
+            return 19;
+
+        wifi_ccmp_replay_reset(&replay);
+        if (!wifi_ccmp_accept_rx_pn(&replay, 10U) ||
+            !wifi_ccmp_accept_rx_pn(&replay, 12U) ||
+            !wifi_ccmp_accept_rx_pn(&replay, 11U) ||
+            wifi_ccmp_accept_rx_pn(&replay, 11U) ||
+            wifi_ccmp_accept_rx_pn(&replay, 0U) ||
+            wifi_ccmp_accept_rx_pn(&replay, WIFI_CCMP_PN_MAX + 1U))
+            return 20;
+        if (!wifi_ccmp_accept_rx_pn(&replay, 100U) ||
+            wifi_ccmp_accept_rx_pn(&replay, 35U))
+            return 21; /* A packet older than the 64-PN window is rejected. */
+
+        wifi_ccmp_replay_reset(&replay);
+        replay.tx_next_pn = WIFI_CCMP_PN_MAX;
+        if (!wifi_ccmp_next_tx_pn(&replay, &pn) || pn != WIFI_CCMP_PN_MAX ||
+            wifi_ccmp_next_tx_pn(&replay, &pn))
+            return 22; /* PN exhaustion must never wrap and reuse a nonce. */
+    }
+
+    puts("Wi-Fi AES-CCM, CCMP header/nonce, PN replay-window and tamper tests passed.");
     return 0;
 }

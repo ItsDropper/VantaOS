@@ -27,6 +27,7 @@ typedef enum nvx_irq_route_status {
     NVX_IRQ_ROUTE_NOT_PREPARED
 } nvx_irq_route_status_t;
 
+/* Zero-initialize the output route before first use. */
 /*
  * Reserves one OS vector and registers a callback after validating the device's
  * MSI/MSI-X capability metadata. This does not program PCI MSI registers or the

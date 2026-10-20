@@ -153,8 +153,6 @@ static void pmm_boot_info_probe(const vanta_boot_info_t* normalized)
     /* Remove synthetic boot-info reservations from the small test window. */
     synthetic.legacy_info_address = 0x200000ULL;
     synthetic.legacy_mmap_address = 0x201000ULL;
-    synthetic.memory_regions[1].base = 0x106000ULL;
-    synthetic.memory_regions[1].length = 0x1000ULL;
     pmm_initialize(&synthetic);
     ok = pmm_is_initialized() && pmm_get_free_blocks() == 4U && ok;
     contiguous = NULL;

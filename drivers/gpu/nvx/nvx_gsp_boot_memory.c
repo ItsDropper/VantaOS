@@ -109,6 +109,12 @@ nvx_gsp_boot_memory_status_t nvx_gsp_boot_memory_acquire(
         return NVX_GSP_BOOT_MEMORY_COPY_FAILED;
     }
 
+    memory.monitor_code_offset = bootloader_info.monitor_code_offset;
+    memory.monitor_data_offset = bootloader_info.monitor_data_offset;
+    memory.manifest_offset = bootloader_info.manifest_offset;
+    memory.monitor_code_size = bootloader_info.monitor_code_size;
+    memory.monitor_data_size = bootloader_info.monitor_data_size;
+    memory.manifest_size = bootloader_info.manifest_size;
     memory.acquired = 1U;
     *out = memory;
     return NVX_GSP_BOOT_MEMORY_OK;
@@ -144,5 +150,8 @@ nvx_gsp_boot_memory_status_t nvx_gsp_boot_memory_bind_wpr(
     layout->bootloader_size = memory->bootloader_payload.size;
     layout->sysmem_signature_addr = memory->signature.gpu_address;
     layout->signature_size = memory->signature.size;
+    layout->bootloader_code_offset = memory->monitor_code_offset;
+    layout->bootloader_data_offset = memory->monitor_data_offset;
+    layout->bootloader_manifest_offset = memory->manifest_offset;
     return NVX_GSP_BOOT_MEMORY_OK;
 }

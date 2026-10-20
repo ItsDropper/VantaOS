@@ -55,6 +55,7 @@ on:
       - "scripts/test_nvx_gsp_ga10x.c"
       - "scripts/test_nvx_gsp_rpc.c"
       - "scripts/test_nvx_gsp_elf.c"
+      - "scripts/test_nvx_gsp_elf_sections.c"
       - "scripts/test_nvx_gsp_preflight.c"
       - "scripts/test_nvx_dma.c"
       - "scripts/test_nvx_dma_sync.c"
@@ -180,6 +181,15 @@ jobs:
 
       - name: Test contiguous DMA allocation bounds, validation and cleanup
         run: /tmp/vantaos-nvx-dma-test
+
+      - name: Compile GSP ELF section lookup tests
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_elf_sections.c drivers/gpu/nvx/nvx_gsp_elf.c \
+            -o /tmp/vantaos-nvx-gsp-elf-sections-test
+
+      - name: Test bounded firmware section lookup
+        run: /tmp/vantaos-nvx-gsp-elf-sections-test
 
       - name: Compile GSP firmware preflight tests
         run: |

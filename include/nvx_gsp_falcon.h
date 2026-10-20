@@ -23,6 +23,7 @@
 #define NVX_GSP_FALCON_MAILBOX1          (NVX_GSP_FALCON_BASE + 0x044U)
 #define NVX_GSP_FALCON_HWCFG2            (NVX_GSP_FALCON_BASE + 0x0F4U)
 #define NVX_GSP_FALCON_CPUCTL            (NVX_GSP_FALCON_BASE + 0x100U)
+#define NVX_GSP_FALCON_BOOTVEC           (NVX_GSP_FALCON_BASE + 0x104U)
 #define NVX_GSP_RISCV_CPUCTL             (NVX_GSP_FALCON2_BASE + 0x388U)
 #define NVX_GSP_FALCON_BROM_MOD_SEL       (NVX_GSP_FALCON2_BASE + 0x180U)
 #define NVX_GSP_FALCON_BROM_UCODE_ID      (NVX_GSP_FALCON2_BASE + 0x198U)
@@ -50,7 +51,8 @@ typedef enum nvx_gsp_falcon_status {
     NVX_GSP_FALCON_PRIVILEGED_WINDOW_LOCKED,
     NVX_GSP_FALCON_RISCV_TIMEOUT,
     NVX_GSP_FALCON_BROM_INVALID_PARAMETERS,
-    NVX_GSP_FALCON_NOT_HALTED
+    NVX_GSP_FALCON_NOT_HALTED,
+    NVX_GSP_FALCON_BOOT_VECTOR_INVALID
 } nvx_gsp_falcon_status_t;
 
 typedef struct nvx_gsp_falcon_snapshot {
@@ -94,5 +96,8 @@ nvx_gsp_falcon_status_t nvx_gsp_ga10x_wait_riscv_active(
 nvx_gsp_falcon_status_t nvx_gsp_ga10x_program_brom(
     const nvx_mmio_region_t *bar0, uint32_t engine_id_mask,
     uint32_t ucode_id, uint32_t pkc_data_offset);
+/* Set BOOTVEC and issue STARTCPU for an already loaded/verified Falcon image. */
+nvx_gsp_falcon_status_t nvx_gsp_ga10x_start_falcon(
+    const nvx_mmio_region_t *bar0, uint32_t boot_vector);
 
 #endif

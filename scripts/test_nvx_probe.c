@@ -80,6 +80,15 @@ int main(void)
     assert(snapshot.identity_mismatch == 1U);
     assert(snapshot.identified_family == NVX_FAMILY_AMPERE);
 
+    /* Register identity outranks a PCI-ID hint when the two disagree. */
+    registers[0] = 0x19000000U;
+    registers[0xA00U / sizeof(uint32_t)] = 0x19000000U;
+    assert(nvx_probe_mapped_bar0(&gpu, registers, sizeof(registers), &snapshot)
+           == NVX_PROBE_OK);
+    assert(snapshot.identified_family == NVX_FAMILY_ADA);
+    assert(snapshot.identified_profile == NVX_PROFILE_UNKNOWN);
+    assert(snapshot.identity_mismatch == 1U);
+
     registers[0xA00U / sizeof(uint32_t)] = 0xFFFFFFFFU;
     registers[0] = 0xFFFFFFFFU;
     registers[1] = 0xFFFFFFFFU;

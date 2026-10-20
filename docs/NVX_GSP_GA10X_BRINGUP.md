@@ -138,3 +138,23 @@ Falcon DMA transfer, reset/boot register sequence, or GSP-RM init RPC is wired
 to physical hardware. The loader's map callback must not be mistaken for a
 real BAR1/VRAM mapping implementation. Do not mark the device initialized or
 enable acceleration based on these host tests.
+
+
+## System-memory boot artifacts and WPR handoff
+
+`nvx_gsp_boot_memory_acquire()` now performs full bundle preflight before allocating
+three distinct physically contiguous DMA buffers for the RISC-V runtime ELF,
+the extracted GA10x bootloader payload, and the runtime's `.fwsignature_ga10x`
+section. It copies only validated source ranges, checks physical ranges for
+overlap, and unwinds every allocation if any later allocation or copy fails.
+`nvx_gsp_boot_memory_bind_wpr()` transfers the actual DMA physical addresses
+and exact byte lengths into a caller-owned WPR layout while preserving its
+framebuffer offsets.
+
+This closes the CPU-side SYSRAM artifact allocation/binding step; it does not
+supply the missing VRAM/WPR allocator or bootloader descriptor semantics. The
+platform still must derive the code/data/manifest offsets from the validated
+GA10x descriptor, plan non-overlapping framebuffer regions against real FB
+size, build and validate the 256-byte WPR metadata, perform the vendor-defined
+SEC2/FWSEC secure boot flow, launch the GSP, and complete the first real GSP-RM
+RPC. The allocator never enables PCI bus mastering or writes a boot register.

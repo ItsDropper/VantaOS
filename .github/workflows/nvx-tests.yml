@@ -256,8 +256,8 @@ jobs:
 
       - name: Compile GA10x Falcon register inspection tests
         run: |
-          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \\
-            scripts/test_nvx_gsp_falcon.c drivers/gpu/nvx/nvx_gsp_falcon.c \\
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_falcon.c drivers/gpu/nvx/nvx_gsp_falcon.c \
             drivers/gpu/nvx/nvx_mmio.c -o /tmp/vantaos-nvx-ga10x-falcon-test
 
       - name: Test read-only GA10x Falcon state and locked-window detection

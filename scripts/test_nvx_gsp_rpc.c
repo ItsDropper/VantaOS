@@ -17,15 +17,16 @@ static void notify(void *p) { assert(p==&notified); notified++; }
 static void put32(uint8_t *p,uint32_t v) {
  p[0]=(uint8_t)v; p[1]=(uint8_t)(v>>8U); p[2]=(uint8_t)(v>>16U); p[3]=(uint8_t)(v>>24U);
 }
-static void send_reply(nvx_gsp_ring_t *ring,uint8_t *memory,
+static void send_reply_status(nvx_gsp_ring_t *ring,uint8_t *memory,
                        volatile uint32_t *write_ptr,uint32_t function,
-                       uint32_t wire_sequence,const void *payload,size_t payload_size) {
+                       uint32_t wire_sequence,uint32_t firmware_result,
+                       const void *payload,size_t payload_size) {
  uint32_t ticket=0U, page=*write_ptr;
  assert(nvx_gsp_ring_send(ring,NVX_GSP_RPC_HEADER_VERSION_R535,
      NVX_GSP_RPC_SIGNATURE_R535,function,payload,payload_size,
      scratch,sizeof(scratch),&ticket)==NVX_GSP_RING_OK);
  size_t base=(size_t)page*NVX_GSP_PAGE_SIZE;
- put32(memory+base+40U,0U);
+ put32(memory+base+40U,firmware_result);
  put32(memory+base+44U,0U);
  put32(memory+base+48U,wire_sequence);
 }

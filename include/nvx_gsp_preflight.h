@@ -5,6 +5,7 @@
  */
 #ifndef VANTA_NVX_GSP_PREFLIGHT_H
 #define VANTA_NVX_GSP_PREFLIGHT_H
+#include <stddef.h>
 #include <stdint.h>
 #include "nvx_gsp_elf.h"
 #include "nvx_gsp_image.h"
@@ -14,7 +15,10 @@ typedef enum nvx_gsp_preflight_status {
     NVX_GSP_PREFLIGHT_BUNDLE_NOT_READY,NVX_GSP_PREFLIGHT_COMPONENT_INVALID,
     NVX_GSP_PREFLIGHT_RUNTIME_INVALID,NVX_GSP_PREFLIGHT_CONTAINER_INVALID,
     NVX_GSP_PREFLIGHT_VERSION_MISMATCH,
-    NVX_GSP_PREFLIGHT_UNSUPPORTED_CHIP
+    NVX_GSP_PREFLIGHT_UNSUPPORTED_CHIP,
+    NVX_GSP_PREFLIGHT_STAGING_TOO_SMALL,
+    NVX_GSP_PREFLIGHT_FUSE_VERSION_UNSUPPORTED,
+    NVX_GSP_PREFLIGHT_STAGING_ALIAS
 } nvx_gsp_preflight_status_t;
 typedef struct nvx_gsp_preflight_report {
     nvx_gsp_elf_info_t runtime;
@@ -30,4 +34,10 @@ typedef struct nvx_gsp_preflight_report {
  * signatures cryptographically; the provider's verify callback owns that policy. */
 nvx_gsp_preflight_status_t nvx_gsp_preflight_validate(
     const nvx_gsp_bundle_t *,nvx_gsp_preflight_report_t *out_report);
+/* Validate the complete bundle, then stage both fuse-selected booter payloads. */
+nvx_gsp_preflight_status_t nvx_gsp_preflight_stage_booters(
+    const nvx_gsp_bundle_t *bundle,
+    uint32_t load_fuse_version, uint8_t *load_staging, size_t load_capacity,
+    uint32_t unload_fuse_version, uint8_t *unload_staging, size_t unload_capacity,
+    nvx_gsp_image_info_t *out_load_info, nvx_gsp_image_info_t *out_unload_info);
 #endif

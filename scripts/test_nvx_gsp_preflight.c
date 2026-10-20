@@ -22,7 +22,7 @@ static void build_elf(void){
  memcpy(elf+448,"\0.shstrtab\0.fwimage\0.fwversion\0.fwsignature_ga10x\0",50U);memcpy(elf+576,"535.113.01",11U);
 }
 int main(void){
- nvx_gsp_bundle_t b={0};nvx_gsp_preflight_report_t report={0};b.family=NVX_FAMILY_AMPERE;b.acquired=1U;b.provider.verify=verify_stub;strcpy(b.version,"535.113.01");build_elf();
+ nvx_gsp_bundle_t b={0};nvx_gsp_preflight_report_t report={0};b.family=NVX_FAMILY_AMPERE;b.acquired=1U;b.provider.verify=verify_stub;strcpy(b.chip,"ga106");strcpy(b.version,"535.113.01");build_elf();
  b.components[0]=(nvx_gsp_component_t){.blob={elf,sizeof(elf),0},.kind=NVX_GSP_RUNTIME,.acquired=1U};
  b.components[1]=(nvx_gsp_component_t){.blob={ucodes,sizeof(ucodes),0},.kind=NVX_GSP_UCODE_ARCHIVE,.acquired=1U};
  for(unsigned i=2U;i<5U;i++)b.components[i]=(nvx_gsp_component_t){.blob={boot_assets[i-2U],sizeof(boot_assets[0]),0},.kind=(nvx_gsp_component_kind_t)i,.acquired=1U};
@@ -33,6 +33,8 @@ int main(void){
  assert(report.booter_load_bytes==64U&&report.booter_unload_bytes==64U&&report.bootloader_bytes==64U);
  assert(report.firmware_image.offset==512U&&report.firmware_image.size==64U);
  assert(report.firmware_version.offset==576U&&strcmp(report.version,"535.113.01")==0);
+ strcpy(b.chip,"ga100");assert(nvx_gsp_preflight_validate(&b,&report)==NVX_GSP_PREFLIGHT_UNSUPPORTED_CHIP);
+ strcpy(b.chip,"ga106");assert(nvx_gsp_preflight_validate(&b,&report)==NVX_GSP_PREFLIGHT_OK);
  strcpy(b.version,"535.113.02");assert(nvx_gsp_preflight_validate(&b,&report)==NVX_GSP_PREFLIGHT_VERSION_MISMATCH);
  strcpy(b.version,"535.113.01");elf[586]=1U;assert(nvx_gsp_preflight_validate(&b,&report)==NVX_GSP_PREFLIGHT_CONTAINER_INVALID);elf[586]=0U;
  b.components[4].acquired=0U;assert(nvx_gsp_preflight_validate(&b,&report)==NVX_GSP_PREFLIGHT_COMPONENT_INVALID);assert(report.runtime_bytes==0U);b.components[4].acquired=1U;

@@ -16,7 +16,8 @@ typedef enum nvx_gsp_elf_load_status {
     NVX_GSP_ELF_LOAD_UNSUPPORTED_RELOCATION,
     NVX_GSP_ELF_LOAD_ADDRESS_OVERFLOW,
     NVX_GSP_ELF_LOAD_DESTINATION_UNAVAILABLE,
-    NVX_GSP_ELF_LOAD_DESTINATION_OVERLAP
+    NVX_GSP_ELF_LOAD_DESTINATION_OVERLAP,
+    NVX_GSP_ELF_LOAD_ENTRY_INVALID
 } nvx_gsp_elf_load_status_t;
 
 /*
@@ -32,7 +33,8 @@ typedef int (*nvx_gsp_elf_map_fn)(void *context, uint64_t physical_address,
  * This supports ET_EXEC only: ET_DYN needs a separately implemented relocation
  * policy and is rejected. All mappings are resolved and checked before the
  * first byte is written, file bytes are copied, and the BSS tail is zeroed.
- * The caller is responsible for secure boot/authentication and GSP reset/launch.
+ * The ELF entry point must fall inside a PF_X PT_LOAD segment. The caller is
+ * responsible for secure boot/authentication and GSP reset/launch.
  */
 nvx_gsp_elf_load_status_t nvx_gsp_elf_load_segments(
     const nvx_gsp_component_t *component, nvx_gsp_elf_map_fn map,

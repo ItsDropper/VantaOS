@@ -45,7 +45,7 @@ https://github.com/torvalds/linux/blob/master/drivers/gpu/nova-core/falcon/gsp.r
 - Host tests cover decoded bitfields, the locked-window signature, short BARs,
   null arguments, and alias rejection.
 
-## Bo​​oter payload staging
+## Booter payload staging
 
 The public NVIDIA firmware extraction script documents the signed booter container
 layout: a 24-byte outer header, a version-2 secure-load header, a packed signature
@@ -65,7 +65,7 @@ Research references:
 - https://github.com/NVIDIA/open-gpu-kernel-modules/blob/main/nouveau/extract-firmware-nouveau.py
 - https://github.com/NVIDIA/open-gpu-kernel-modules/blob/main/src/nvidia/src/kernel/gpu/gsp/kernel_gsp_booter.c
 
-This is signature **selection and placement**, not cryptographic authentication
+The parser also enforces the actual v1 layout documented by NVIDIA's extraction script: signature array immediately after the secure-load header, patch metadata and count immediately after the signature array, exactly one application descriptor, and payload immediately after the descriptor. It rejects unsupported container versions, nonzero patch_sig, invalid app layout, and unaligned outer sizes.\n\nThis is signature **selection and placement**, not cryptographic authentication
 and not a firmware launch. The hardware SEC2/FWSEC fuse-version read and actual
 DMA upload/boot sequence are still missing.
 

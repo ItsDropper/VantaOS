@@ -79,7 +79,8 @@ typedef enum nvx_gsp_falcon_status {
     NVX_GSP_FALCON_NOT_HALTED,
     NVX_GSP_FALCON_BOOT_VECTOR_INVALID,
     NVX_GSP_FALCON_DMA_INVALID_TRANSFER,
-    NVX_GSP_FALCON_DMA_TIMEOUT
+    NVX_GSP_FALCON_DMA_TIMEOUT,
+    NVX_GSP_FALCON_RESET_TIMEOUT
 } nvx_gsp_falcon_status_t;
 
 typedef struct nvx_gsp_falcon_snapshot {
@@ -147,6 +148,11 @@ typedef enum nvx_ga10x_falcon_memory {
  * reset the engine and prepared a coherent, physically contiguous DMA buffer.
  * Timeout/poll interval are milliseconds; delay callback must yield/sleep.
  */
+/* Reset the engine, pulse reset for at least 1 ms, then wait for scrub completion. */
+nvx_gsp_falcon_status_t nvx_ga10x_falcon_reset(
+    const nvx_mmio_region_t *bar0, uint32_t falcon_base,
+    uint32_t timeout_ms, uint32_t poll_interval_ms,
+    nvx_gsp_delay_ms_fn delay_ms, void *context);
 nvx_gsp_falcon_status_t nvx_ga10x_falcon_dma_upload(
     const nvx_mmio_region_t *bar0, uint32_t falcon_base,
     uint64_t source_phys, uint32_t source_offset,

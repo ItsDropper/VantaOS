@@ -11,7 +11,6 @@
 #include <stdint.h>
 #include "dma.h"
 #include "nvx_gpuva.h"
-#include "nvx_mmio.h"
 #include "spinlock.h"
 
 #define NVX_GPUVM_PAGE_SIZE       4096ULL
@@ -41,6 +40,17 @@ typedef enum nvx_gpuvm_status {
     NVX_GPUVM_DEVICE_FAULTED,
     NVX_GPUVM_CORRUPT_STATE
 } nvx_gpuvm_status_t;
+
+/*
+ * The platform must provide a hardware-verified context-root programming and
+ * invalidation sequence. NVX must never write guessed BAR0 register offsets.
+ * Callbacks run under the GPUVM lock and must not re-enter this manager.
+ */
+typedef struct nvx_gpuvm_hw_ops {
+    void *context;
+    nvx_gpuvm_status_t (*publish_root)(void *context, uint64_t root_physical);
+    nvx_gpuvm_status_t (*invalidate)(void *context);
+} nvx_gpuvm_hw_ops_t;
 
 typedef struct nvx_gpuvm_table {
     dma_page_t backing;
@@ -75,16 +85,17 @@ typedef struct nvx_gpuvm_record {
  * compression, VRAM aperture mappings and engine-specific PTE policy are not
  * implemented. Keep the manager in static/long-lived kernel storage.
  *
- * The MMIO mapping must be a validated BAR0 mapping covering 0xB830B4.
+ * Hardware activation is only permitted with explicit platform callbacks whose
+ * root-programming and invalidation sequence is verified for the target GPU.
  * Page-table changes after activation require all GPU engines to be quiesced.
- * This is a bring-up primitive; it does not initialize the GSP or GR engines.
+ * This primitive does not initialize GSP or GR engines.
  */
 typedef struct nvx_gpuvm {
     spinlock_t lock;
     nvx_gpuva_space_t va_space;
     nvx_gpuvm_table_t tables[NVX_GPUVM_MAX_TABLES];
     nvx_gpuvm_record_t mappings[NVX_GPUVM_MAX_MAPPINGS];
-    nvx_mmio_region_t bar0;
+    nvx_gpuvm_hw_ops_t hw;
     uint64_t next_token;
     uint32_t generation;
     uint16_t table_count;
@@ -98,7 +109,7 @@ typedef struct nvx_gpuvm {
 
 nvx_gpuvm_status_t nvx_gpuvm_init(nvx_gpuvm_t *vm, uint64_t va_start,
                                   uint64_t va_size,
-                                  const nvx_mmio_region_t *bar0);
+                                  const nvx_gpuvm_hw_ops_t *hw);
 nvx_gpuvm_status_t nvx_gpuvm_reserve(nvx_gpuvm_t *vm, uint64_t size,
                                      uint64_t alignment, unsigned guard_pages,
                                      nvx_gpuvm_mapping_t *out_mapping);

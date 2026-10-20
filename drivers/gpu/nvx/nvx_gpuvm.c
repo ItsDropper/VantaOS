@@ -255,6 +255,50 @@ static nvx_gpuvm_status_t nvx_gpuvm_leaf_for_va(nvx_gpuvm_t *vm,
     return NVX_GPUVM_OK;
 }
 
+static nvx_gpuvm_status_t nvx_gpuvm_prune_empty_path(nvx_gpuvm_t *vm,
+                                                        uint64_t va)
+{
+    uint16_t current;
+    nvx_gpuvm_status_t status=nvx_gpuvm_leaf_for_va(vm,va,0,&current);
+    if(status==NVX_GPUVM_NOT_MAPPED) return NVX_GPUVM_OK;
+    if(status!=NVX_GPUVM_OK) return status;
+    while(current!=vm->root_index) {
+        nvx_gpuvm_table_t *table=&vm->tables[current];
+        uint16_t parent_index,slot,limit;
+        nvx_gpuvm_table_t *parent;
+        uint64_t *entry;
+        if(!table->active) return NVX_GPUVM_CORRUPT_STATE;
+        if(table->entry_count!=0U) break;
+        for(size_t i=0;i<NVX_GPUVM_MAX_TABLES;i++)
+            if(vm->tables[i].active&&vm->tables[i].parent_index==current)
+                return NVX_GPUVM_CORRUPT_STATE;
+        parent_index=table->parent_index; slot=table->parent_slot;
+        if(parent_index>=NVX_GPUVM_MAX_TABLES) return NVX_GPUVM_CORRUPT_STATE;
+        parent=&vm->tables[parent_index];
+        if(!parent->active||parent->level!=table->level+1U)
+            return NVX_GPUVM_CORRUPT_STATE;
+        limit=parent->level==4U?4U:(parent->level==1U?256U:512U);
+        if(slot>=limit||parent->entry_count==0U)
+            return NVX_GPUVM_CORRUPT_STATE;
+        entry=nvx_gpuvm_parent_entry(vm,parent_index,slot);
+        if(!entry||entry[0]!=nvx_gpuvm_pde_value(table->backing.physical_address))
+            return NVX_GPUVM_CORRUPT_STATE;
+        if(parent->level==1U&&entry[1]!=0U)
+            return NVX_GPUVM_CORRUPT_STATE;
+        entry[0]=0U;
+        if(parent->level==1U) entry[1]=0U;
+        __atomic_thread_fence(__ATOMIC_RELEASE);
+        --parent->entry_count;
+        dma_free_page(&table->backing);
+        table->active=0U;
+        table->entry_count=0U;
+        if(vm->table_count==0U) return NVX_GPUVM_CORRUPT_STATE;
+        --vm->table_count;
+        current=parent_index;
+    }
+    return NVX_GPUVM_OK;
+}
+
 static uint64_t *nvx_gpuvm_leaf_entry(nvx_gpuvm_t *vm, uint16_t leaf,
                                       uint64_t va)
 {
@@ -503,6 +547,16 @@ nvx_gpuvm_status_t nvx_gpuvm_map_pages(nvx_gpuvm_t *vm,
                 vm, vm->tables[vm->root_index].backing.physical_address)) {
             vm->faulted = 1U;
             status = NVX_GPUVM_FLUSH_TIMEOUT;
+        } else {
+            for (size_t i=0;i<record->page_count;i++) {
+                uint64_t va=record->va.base+i*NVX_GPUVM_PAGE_SIZE;
+                nvx_gpuvm_status_t prune_status=nvx_gpuvm_prune_empty_path(vm,va);
+                if(prune_status!=NVX_GPUVM_OK) {
+                    vm->faulted=1U;
+                    status=NVX_GPUVM_CORRUPT_STATE;
+                    break;
+                }
+            }
         }
         spinlock_unlock(&vm->lock);
         return status;
@@ -574,6 +628,15 @@ nvx_gpuvm_status_t nvx_gpuvm_release(nvx_gpuvm_t *vm,
             if (status != NVX_GPUVM_OK) {
                 spinlock_unlock(&vm->lock);
                 return status;
+            }
+        }
+        for(uint64_t page=0;page<record->page_count;page++) {
+            uint64_t va=record->va.base+page*NVX_GPUVM_PAGE_SIZE;
+            status=nvx_gpuvm_prune_empty_path(vm,va);
+            if(status!=NVX_GPUVM_OK) {
+                vm->faulted=1U;
+                spinlock_unlock(&vm->lock);
+                return NVX_GPUVM_CORRUPT_STATE;
             }
         }
     }

@@ -30,6 +30,10 @@ typedef struct nvx_gsp_bootloader_info {
     uint32_t descriptor_size;
     uint32_t payload_offset;
     uint32_t payload_size;
+    uint32_t descriptor_version;
+    uint32_t manifest_offset, manifest_size;
+    uint32_t monitor_data_offset, monitor_data_size;
+    uint32_t monitor_code_offset, monitor_code_size;
 } nvx_gsp_bootloader_info_t;
 
 /* Validate the GA10x external bootloader.bin container without modifying it. */

@@ -104,8 +104,7 @@ nvx_gsp_ga10x_status_t nvx_gsp_ga10x_read_usable_fb_size(
     if (nvx_mmio_read32(bar0, NVX_GSP_GA10X_USABLE_FB_SIZE_MB,
                         &size_mib) != NVX_MMIO_OK)
         return NVX_GSP_GA10X_MMIO_ERROR;
-    if (size_mib == 0U ||
-        (uint64_t)size_mib > UINT64_MAX / (1024ULL * 1024ULL))
+    if (size_mib == 0U)
         return NVX_GSP_GA10X_FB_SIZE_INVALID;
     *out_bytes = (uint64_t)size_mib * 1024ULL * 1024ULL;
     return NVX_GSP_GA10X_OK;

@@ -10,7 +10,7 @@
 #include <stdint.h>
 #include <string.h>
 
-static uint8_t bar[NVX_GSP_FALCON_DIAGNOSTIC_BYTES]
+static uint8_t bar[NVX_GA10X_BAR0_REQUIRED_BYTES]
     __attribute__((aligned(4)));
 
 static void put32(size_t offset, uint32_t value)
@@ -94,6 +94,27 @@ int main(void)
     put32(NVX_GSP_FALCON_CPUCTL, NVX_GSP_CPUCTL_HALTED);
     assert(nvx_gsp_ga10x_program_brom(&region, 0x0400U, 1U, 0x100U) ==
            NVX_GSP_FALCON_OK);
+    put32(NVX_SEC2_FALCON_BASE + 0x0F4U, NVX_GSP_HWCFG2_RESET_READY);
+    put32(NVX_SEC2_FALCON_BASE + 0x100U, NVX_GSP_CPUCTL_HALTED);
+    assert(nvx_ga10x_falcon_program_brom(&region, NVX_SEC2_FALCON_BASE,
+           NVX_SEC2_FALCON2_BASE, 0x0001U, 3U, 0x240U) ==
+           NVX_GSP_FALCON_OK);
+    assert(nvx_mmio_read32(&region,
+           NVX_GA10X_FALCON_BROM_PARAM_ADDR(NVX_SEC2_FALCON2_BASE),
+           &register_value) == NVX_MMIO_OK);
+    assert(register_value == 0x240U);
+    assert(nvx_mmio_read32(&region,
+           NVX_GA10X_FALCON_BROM_ENGINE_MASK(NVX_SEC2_FALCON2_BASE),
+           &register_value) == NVX_MMIO_OK);
+    assert(register_value == 0x0001U);
+    assert(nvx_ga10x_falcon_program_brom(&region, NVX_SEC2_FALCON_BASE,
+           NVX_SEC2_FALCON2_BASE, 0x0400U, 3U, 0x240U) ==
+           NVX_GSP_FALCON_BROM_INVALID_PARAMETERS);
+    assert(nvx_ga10x_falcon_start(&region, NVX_SEC2_FALCON_BASE, 0x400U) ==
+           NVX_GSP_FALCON_OK);
+    assert(nvx_mmio_read32(&region, NVX_SEC2_FALCON_BASE + 0x104U,
+           &register_value) == NVX_MMIO_OK);
+    assert(register_value == 0x400U);
     uint32_t register_value = 0U;
     assert(nvx_mmio_read32(&region, NVX_GSP_FALCON_BROM_PARAM_ADDR,
                            &register_value) == NVX_MMIO_OK);

@@ -11,6 +11,9 @@
 static uint8_t ring_mem[4U*NVX_GSP_PAGE_SIZE] __attribute__((aligned(NVX_GSP_PAGE_SIZE)));
 static uint8_t scratch[16U*NVX_GSP_PAGE_SIZE] __attribute__((aligned(NVX_GSP_PAGE_SIZE)));
 static uint32_t read_index,write_index; static unsigned notifications;
+static uint32_t read32(const uint8_t *p) {
+ return (uint32_t)p[0]|((uint32_t)p[1]<<8U)|((uint32_t)p[2]<<16U)|((uint32_t)p[3]<<24U);
+}
 static void notify(void *p) { assert(p==&notifications); notifications++; }
 int main(void) {
  nvx_gsp_ring_t ring={0}; nvx_gsp_rpc_view_t view;
@@ -28,6 +31,13 @@ int main(void) {
  assert(nvx_gsp_ring_send(&ring,NVX_GSP_RPC_HEADER_VERSION_R535,NVX_GSP_RPC_SIGNATURE_R535,0x1234U,0,1U,scratch,sizeof(scratch),&seq)==NVX_GSP_RING_INVALID_ARGUMENT);
  assert(nvx_gsp_ring_send(&ring,NVX_GSP_RPC_HEADER_VERSION_R535,NVX_GSP_RPC_SIGNATURE_R535,0x1234U,payload,sizeof(payload),scratch,sizeof(scratch),&seq)==NVX_GSP_RING_OK);
  assert(seq==1U&&notifications==1U&&write_index==2U);
+ assert(read32(ring_mem)==NVX_GSP_MCTP_MAGIC);
+ assert(read32(ring_mem+4U)==NVX_GSP_MSG_HEADER_SIZE+NVX_GSP_RPC_HEADER_SIZE+sizeof(payload));
+ assert(read32(ring_mem+8U)==NVX_GSP_MCTP_HEADER_SINGLE);
+ assert(read32(ring_mem+12U)==NVX_GSP_NVDM_HEADER_RM_RPC);
+ assert(read32(ring_mem+16U)==NVX_GSP_RPC_HEADER_SIZE+sizeof(payload));
+ assert(read32(ring_mem+20U)==0U);
+ assert(nvx_gsp_ring_send(&ring,1U,2U,0x1234U,payload,1U,scratch,sizeof(scratch),&seq)==NVX_GSP_RING_BAD_MESSAGE);
  assert(nvx_gsp_ring_receive(&ring,scratch,sizeof(scratch),&view)==NVX_GSP_RING_OK);
  assert(view.header_version==NVX_GSP_RPC_HEADER_VERSION_R535&&
          view.signature==NVX_GSP_RPC_SIGNATURE_R535&&view.function==0x1234U);

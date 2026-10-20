@@ -6,9 +6,11 @@ on:
       - "drivers/gpu/nvx/**"
       - "include/nvx_gsp_boot_memory.h"
       - "include/nvx_gsp_secure_boot.h"
+      - "include/nvx_gsp_fwsec_interface.h"
       - "scripts/test_nvx_gsp_boot_memory.c"
       - "scripts/test_nvx_gsp_secure_boot.c"
       - "scripts/test_nvx_gsp_vbios.c"
+      - "scripts/test_nvx_gsp_fwsec_interface.c"
       - "drivers/gpu/core/**"
       - "include/gpu_pci_resources.h"
       - "scripts/test_gpu_pci_resources.c"
@@ -516,3 +518,13 @@ jobs:
 
       - name: Test VBIOS BIT traversal, FWSEC V3 metadata and malformed ranges
         run: /tmp/vantaos-nvx-gsp-vbios-test
+
+      - name: Compile FWSEC interface parser tests with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_fwsec_interface.c \
+            drivers/gpu/nvx/nvx_gsp_fwsec_interface.c \
+            -o /tmp/vantaos-nvx-fwsec-interface-test
+
+      - name: Test bounded FWSEC DMEM mapper and command window parsing
+        run: /tmp/vantaos-nvx-fwsec-interface-test

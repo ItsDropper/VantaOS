@@ -10,6 +10,9 @@
 static uint8_t ring_mem[4U*NVX_GSP_PAGE_SIZE] __attribute__((aligned(NVX_GSP_PAGE_SIZE)));
 static uint8_t scratch[16U*NVX_GSP_PAGE_SIZE] __attribute__((aligned(NVX_GSP_PAGE_SIZE)));
 static uint8_t large_payload[100000U];
+static uint8_t big_mem[PAGES*NVX_GSP_PAGE_SIZE] __attribute__((aligned(NVX_GSP_PAGE_SIZE)));
+static volatile uint32_t big_read,big_write;
+static nvx_gsp_ring_t big_ring;
 static uint32_t read_index,write_index; static unsigned notifications;
 static void notify(void *p) { assert(p==&notifications); notifications++; }
 int main(void) {
@@ -48,24 +51,25 @@ int main(void) {
  assert(read_index==write_index);
  /* Fragmented RPCs reserve all pages atomically and use continuation IDs. */
  for(size_t i=0;i<sizeof(large_payload);i++) large_payload[i]=(uint8_t)(i*13U);
+ assert(nvx_gsp_ring_init(&big_ring,big_mem,PAGES,&big_read,&big_write,notify,&notified)==NVX_GSP_RING_OK);
  for(unsigned i=0;i<50U;i++)
-   assert(nvx_gsp_ring_send(&ring,1U,2U,500U,payload,1U,scratch,sizeof(scratch),&seq)==NVX_GSP_RING_OK);
- uint32_t write_before=write_index;
- assert(nvx_gsp_ring_send_large(&ring,1U,2U,400U,0xFFFFFFFEU,large_payload,
+   assert(nvx_gsp_ring_send(&big_ring,1U,2U,500U,payload,1U,scratch,sizeof(scratch),&seq)==NVX_GSP_RING_OK);
+ uint32_t write_before=big_write;
+ assert(nvx_gsp_ring_send_large(&big_ring,1U,2U,400U,0xFFFFFFFEU,large_payload,
      sizeof(large_payload),scratch,sizeof(scratch),&seq)==NVX_GSP_RING_QUEUE_FULL);
- assert(write_index==write_before);
+ assert(big_write==write_before);
  for(unsigned i=0;i<50U;i++)
-   assert(nvx_gsp_ring_receive(&ring,scratch,sizeof(scratch),&view)==NVX_GSP_RING_OK&&view.function==500U);
- assert(nvx_gsp_ring_send_large(&ring,1U,2U,400U,0xFFFFFFFEU,large_payload,
+   assert(nvx_gsp_ring_receive(&big_ring,scratch,sizeof(scratch),&view)==NVX_GSP_RING_OK&&view.function==500U);
+ assert(nvx_gsp_ring_send_large(&big_ring,1U,2U,400U,0xFFFFFFFEU,large_payload,
      sizeof(large_payload),scratch,sizeof(scratch),&seq)==NVX_GSP_RING_OK);
  assert(seq!=0U);
- assert(nvx_gsp_ring_receive(&ring,scratch,sizeof(scratch),&view)==NVX_GSP_RING_OK);
+ assert(nvx_gsp_ring_receive(&big_ring,scratch,sizeof(scratch),&view)==NVX_GSP_RING_OK);
  assert(view.function==400U&&view.element_pages==16U&&view.payload_size==65456U);
  assert(memcmp(view.payload,large_payload,view.payload_size)==0);
- assert(nvx_gsp_ring_receive(&ring,scratch,sizeof(scratch),&view)==NVX_GSP_RING_OK);
+ assert(nvx_gsp_ring_receive(&big_ring,scratch,sizeof(scratch),&view)==NVX_GSP_RING_OK);
  assert(view.function==0xFFFFFFFEU&&view.element_pages==9U&&view.payload_size==34544U);
  assert(memcmp(view.payload,large_payload+65456U,view.payload_size)==0);
- assert(read_index==write_index);
+ assert(big_read==big_write);
  /* Corrupt data is rejected without consuming the entry. */
  assert(nvx_gsp_ring_send(&ring,1U,2U,300U,payload,8U,scratch,sizeof(scratch),&seq)==NVX_GSP_RING_OK);
  ring_mem[(size_t)read_index*NVX_GSP_PAGE_SIZE+NVX_GSP_MSG_HEADER_SIZE+NVX_GSP_RPC_HEADER_SIZE]^=1U;

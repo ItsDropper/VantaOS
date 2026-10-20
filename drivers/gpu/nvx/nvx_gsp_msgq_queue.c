@@ -5,6 +5,13 @@
  */
 #include "nvx_gsp_msgq_queue.h"
 #include <string.h>
+static int overlaps(const void *a,size_t an,const void *b,size_t bn)
+{
+    uintptr_t x=(uintptr_t)a,y=(uintptr_t)b;
+    if(!an||!bn)return 0;
+    if(x>UINTPTR_MAX-an||y>UINTPTR_MAX-bn)return 1;
+    return x<y+bn&&y<x+an;
+}
 static int mmio_read32(void *context,uint32_t reg,uint32_t *out)
 {
     nvx_gsp_msgq_mmio_context_t *m=(nvx_gsp_msgq_mmio_context_t *)context;
@@ -33,6 +40,10 @@ nvx_gsp_msgq_queue_status_t nvx_gsp_msgq_io_init_mmio(
 {
     if(!out||!context||!region||!region->base||!region->length)
         return NVX_GSP_MSGQ_QUEUE_INVALID_ARGUMENT;
+    if(overlaps(out,sizeof(*out),context,sizeof(*context))||
+       overlaps(out,sizeof(*out),region,sizeof(*region))||
+       overlaps(context,sizeof(*context),region,sizeof(*region)))
+        return NVX_GSP_MSGQ_QUEUE_INVALID_ARGUMENT;
     context->region=region;
     *out=(nvx_gsp_msgq_io_t){mmio_read32,mmio_write32,
         mmio_before_device,mmio_after_device,context};
@@ -48,6 +59,10 @@ static nvx_gsp_msgq_queue_status_t init_common(nvx_gsp_msgq_queue_t *q,
 {
     nvx_gsp_msgq_status_t status;
     if(!q||!store||!io_valid(io)||head==tail||(head&3U)||(tail&3U))
+        return NVX_GSP_MSGQ_QUEUE_INVALID_ARGUMENT;
+    if(overlaps(q,sizeof(*q),store,bytes)||
+       overlaps(q,sizeof(*q),io,sizeof(*io))||
+       overlaps(store,bytes,io,sizeof(*io)))
         return NVX_GSP_MSGQ_QUEUE_INVALID_ARGUMENT;
     if(q->initialized) return NVX_GSP_MSGQ_QUEUE_INVALID_ARGUMENT;
     memset(q,0,sizeof(*q));

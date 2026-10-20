@@ -15,6 +15,7 @@
  * promise that multiple calls return physically adjacent pages.
  */
 typedef struct { void* virtual_address; uint64_t physical_address; size_t size; } dma_page_t;
+#define DMA_MAX_CONTIGUOUS_PAGES 4096U
 int dma_alloc_page(dma_page_t*);
 int dma_alloc_contiguous(dma_page_t* pages, size_t count);
 void dma_free_contiguous(dma_page_t* pages, size_t count);

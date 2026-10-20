@@ -9,8 +9,8 @@
 #include <stdint.h>
 #include "nvx_gsp_msgq_rpc.h"
 /* Offsets follow NVIDIA's published TU102/GA102 GSP register definitions. */
-#define NVX_GSP_GA10X_FALCON_MAILBOX0 0x110040U
-#define NVX_GSP_GA10X_FALCON_MAILBOX1 0x110044U
+#define NVX_GSP_GA10X_MAILBOX(i) (0x110804U+((uint32_t)(i)*4U))
+#define NVX_GSP_GA10X_MAILBOX_COUNT 4U
 #define NVX_GSP_GA10X_QUEUE_HEAD(i) (0x110C00U+((uint32_t)(i)*8U))
 #define NVX_GSP_GA10X_QUEUE_TAIL(i) (0x110C04U+((uint32_t)(i)*8U))
 #define NVX_GSP_GA10X_MSGQ_HEAD(i) (0x110C80U+((uint32_t)(i)*8U))

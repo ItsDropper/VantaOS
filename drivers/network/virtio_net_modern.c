@@ -135,13 +135,19 @@ static volatile uint8_t *map_cap(const struct pci_device *pci, uint8_t bar,
         return 0;
     }
     if (!pci_get_bar(pci, bar, &base, &io, 0)) {
+        uint32_t raw = pci_read_config32(pci, (uint8_t)(0x10U + (uint32_t)bar * 4U));
+        if (raw == 0U) serial_write("VANTAOS_VIRTIO_NET_MODERN_MAP_BAR_ZERO\n");
+        else if (raw == 0xFFFFFFFFU) serial_write("VANTAOS_VIRTIO_NET_MODERN_MAP_BAR_ABSENT\n");
+        else if (!(raw & 1U) && ((raw >> 1U) & 3U) == 3U)
+            serial_write("VANTAOS_VIRTIO_NET_MODERN_MAP_BAR_RESERVED_TYPE\n");
+        else serial_write("VANTAOS_VIRTIO_NET_MODERN_MAP_BAR_INVALID_BASE\n");
         switch (bar) {
-            case 0U: serial_write("VANTAOS_VIRTIO_NET_MODERN_MAP_BAR_READ_FAIL_0\n"); break;
-            case 1U: serial_write("VANTAOS_VIRTIO_NET_MODERN_MAP_BAR_READ_FAIL_1\n"); break;
-            case 2U: serial_write("VANTAOS_VIRTIO_NET_MODERN_MAP_BAR_READ_FAIL_2\n"); break;
-            case 3U: serial_write("VANTAOS_VIRTIO_NET_MODERN_MAP_BAR_READ_FAIL_3\n"); break;
-            case 4U: serial_write("VANTAOS_VIRTIO_NET_MODERN_MAP_BAR_READ_FAIL_4\n"); break;
-            default: serial_write("VANTAOS_VIRTIO_NET_MODERN_MAP_BAR_READ_FAIL_5\n"); break;
+            case 0U: serial_write("VANTAOS_VIRTIO_NET_MODERN_MAP_BAR_INDEX_0\n"); break;
+            case 1U: serial_write("VANTAOS_VIRTIO_NET_MODERN_MAP_BAR_INDEX_1\n"); break;
+            case 2U: serial_write("VANTAOS_VIRTIO_NET_MODERN_MAP_BAR_INDEX_2\n"); break;
+            case 3U: serial_write("VANTAOS_VIRTIO_NET_MODERN_MAP_BAR_INDEX_3\n"); break;
+            case 4U: serial_write("VANTAOS_VIRTIO_NET_MODERN_MAP_BAR_INDEX_4\n"); break;
+            default: serial_write("VANTAOS_VIRTIO_NET_MODERN_MAP_BAR_INDEX_5\n"); break;
         }
         return 0;
     }

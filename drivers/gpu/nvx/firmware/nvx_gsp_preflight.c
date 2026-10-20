@@ -137,10 +137,20 @@ nvx_gsp_preflight_status_t nvx_gsp_preflight_stage_booters(
     if (load_capacity < report.booter_load.data_size ||
         unload_capacity < report.booter_unload.data_size)
         return NVX_GSP_PREFLIGHT_STAGING_TOO_SMALL;
-    if ((report.booter_load.signature_count > 1U &&
-         load_fuse_version >= report.booter_load.signature_count) ||
-        (report.booter_unload.signature_count > 1U &&
-         unload_fuse_version >= report.booter_unload.signature_count))
+    /*
+     * FUSE in the booter descriptor is the firmware's signature baseline;
+     * the BAR0 value is the hardware fuse version. Zero is a special case
+     * meaning "use the final signature", as in the public GA102+ loader.
+     * Validate the relative index before either staging buffer is modified.
+     */
+    if ((load_fuse_version != 0U &&
+         (load_fuse_version > report.booter_load.fuse_version ||
+          report.booter_load.fuse_version - load_fuse_version >=
+              report.booter_load.signature_count)) ||
+        (unload_fuse_version != 0U &&
+         (unload_fuse_version > report.booter_unload.fuse_version ||
+          report.booter_unload.fuse_version - unload_fuse_version >=
+              report.booter_unload.signature_count)))
         return NVX_GSP_PREFLIGHT_FUSE_VERSION_UNSUPPORTED;
 
     image_status = nvx_gsp_image_prepare(&b->components[2], load_fuse_version,

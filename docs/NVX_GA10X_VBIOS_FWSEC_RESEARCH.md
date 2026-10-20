@@ -26,6 +26,7 @@ This distinction is important: applying the expansion-ROM base to the BIT token 
 - Require an available V3 descriptor, reject reserved descriptor bits and reserved V3 fields, and validate the SEC2 engine mask.
 - Validate IMEM/DMEM lengths against the stored image and ensure the PKC signature destination fits in the DMEM range.
 - Require signature metadata to match the RSA-3072 signature width and declared signature count.
+- Resolve the fuse-version signature slot from the descriptor bitmap. The selected slot is the count of supported-version bits below the hardware fuse version, matching the selection behavior documented in NVIDIA's public `kernel_gsp_frts_tu102.c`; absent fuse versions are rejected.
 - Return offsets and parsed metadata only; the parser does not allocate DMA memory, authenticate signatures, patch firmware, or start SEC2.
 
 ## Explicit limitations
@@ -37,4 +38,4 @@ This distinction is important: applying the expansion-ROM base to the BIT token 
 
 ## Next hardware boundary
 
-The next step is to integrate this parsed FWSEC descriptor with the existing DMA ownership and Falcon upload abstractions only after the descriptor's signature selection, signed-image extent, and SEC2 mailbox result semantics are independently checked against the exact target VBIOS/firmware generation. Do not infer success from a register write or synthetic MMIO test.
+The signature-slot selector now implements the documented bitmap-to-array mapping, but it only returns an offset; it does not authenticate or copy the signature. The next step is to integrate the parsed FWSEC descriptor with the existing DMA ownership and Falcon upload abstractions only after the descriptor's signed-image extent and SEC2 mailbox result semantics are independently checked against the exact target VBIOS/firmware generation. Do not infer success from a register write or synthetic MMIO test.

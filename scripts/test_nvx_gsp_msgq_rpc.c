@@ -81,7 +81,6 @@ int main(void){
  assert(nvx_gsp_msgq_rpc_send(&transport,0x999U,large_payload,sizeof(large_payload),scratch,sizeof(scratch),&seq)==NVX_GSP_MSGQ_RPC_OK);
  assert(seq==3U&&f.regs[0]==4U);
  /* Fill through the physical end, then prove that the next record wraps to slot zero. */
- f.regs[1]=4U;
  for(unsigned i=0;i<15U;i++)
      assert(nvx_gsp_msgq_rpc_send(&transport,0x2000U+i,payload,sizeof(payload),scratch,sizeof(scratch),&seq)==NVX_GSP_MSGQ_RPC_OK);
  assert(f.regs[0]==19U);

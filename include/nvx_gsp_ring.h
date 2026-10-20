@@ -46,6 +46,11 @@ nvx_gsp_ring_status_t nvx_gsp_ring_init(nvx_gsp_ring_t *, void *storage,
 nvx_gsp_ring_status_t nvx_gsp_ring_send(nvx_gsp_ring_t *, uint32_t header_version,
     uint32_t signature, uint32_t function, const void *payload, size_t payload_size,
     void *scratch, size_t scratch_size, uint32_t *out_sequence);
+/* Atomic multi-element send for caller-supplied firmware continuation function IDs. */
+nvx_gsp_ring_status_t nvx_gsp_ring_send_large(nvx_gsp_ring_t *, uint32_t header_version,
+    uint32_t signature, uint32_t function, uint32_t continuation_function,
+    const void *payload, size_t payload_size, void *scratch, size_t scratch_size,
+    uint32_t *out_first_sequence);
 nvx_gsp_ring_status_t nvx_gsp_ring_receive(nvx_gsp_ring_t *, void *scratch,
     size_t scratch_size, nvx_gsp_rpc_view_t *out_message);
 #endif

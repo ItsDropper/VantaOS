@@ -71,7 +71,7 @@ int gpu_pci_resources_scan(const struct pci_device *device,
         }
 
         /* A zero address is unassigned; a 64-bit BAR still consumes its pair. */
-        if ((raw & (is_io ? ~3U : ~15U)) == 0U)
+        if ((raw & ((raw & 1U) != 0U ? ~3U : ~15U)) == 0U)
             continue;
 
         if (!pci_get_bar(device, index, &base, &is_io, &is_64bit))

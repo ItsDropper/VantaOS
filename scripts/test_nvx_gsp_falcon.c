@@ -307,6 +307,7 @@ int main(void)
            NVX_GSP_FALCON_BOOT_TIMEOUT);
     assert(boot_state.delays == 2U);
     assert(mailbox0_out == 0U && mailbox1_out == 0U);
+    put32(NVX_GSP_FALCON_HWCFG2, 0xBADF41A5U);
     memset(&snapshot, 0xA5, sizeof(snapshot));
     assert(nvx_gsp_ga10x_inspect_falcon(&region, &snapshot) ==
            NVX_GSP_FALCON_PRIVILEGED_WINDOW_LOCKED);

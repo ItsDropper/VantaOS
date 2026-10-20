@@ -9,6 +9,7 @@
 #include <stdint.h>
 #include "nvx_gsp_msgq_queue.h"
 #include "nvx_gsp_ring.h"
+#include "spinlock.h"
 #define NVX_GSP_MSGQ_RPC_MAX_ELEMENTS 16U
 typedef enum nvx_gsp_msgq_rpc_status {
     NVX_GSP_MSGQ_RPC_OK=0,
@@ -23,6 +24,7 @@ typedef enum nvx_gsp_msgq_rpc_status {
 typedef struct nvx_gsp_msgq_rpc_transport {
     nvx_gsp_msgq_queue_t *command_queue;
     nvx_gsp_msgq_queue_t *response_queue;
+    spinlock_t tx_lock; /* Serializes the single hardware-visible TX producer. */
     uint32_t next_sequence;
     uint8_t initialized;
 } nvx_gsp_msgq_rpc_transport_t;

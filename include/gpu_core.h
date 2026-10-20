@@ -9,6 +9,7 @@
 
 #include "gpu.h"
 #include "gpu_vendor.h"
+#include <stddef.h>
 
 typedef struct gpu_device {
     gpu_device_identity_t identity;
@@ -39,6 +40,9 @@ int gpu_device_transition(gpu_device_t *device, gpu_device_state_t next_state);
 int gpu_device_publish_capabilities(gpu_device_t *device,
                                     uint64_t capabilities);
 void gpu_device_clear_capabilities(gpu_device_t *device);
+/* Read-only inventory; returns 0 without partial writes when capacity is too small. */
+int gpu_discover_pci(gpu_device_t *out_devices, size_t capacity,
+                     size_t *out_count);
 int gpu_driver_matches(const gpu_driver_descriptor_t *driver,
                        const struct pci_device *device);
 

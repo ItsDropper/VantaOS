@@ -54,7 +54,7 @@ descriptor, and firmware payload. The Linux NVIDIA open module selects the
 signature with index `num_sigs - 1 - fuse_version` (when multiple signatures
 exist) and rejects a nonzero `patch_sig` for this format.
 
-NVX now implements that data path in `nvx_gsp_image_prepare()`: it copies only the
+The separate `bootloader-<version>.bin` is now parsed as the GA10x NVFW container too: version 1, a 24-byte outer header, an 84-byte descriptor, payload offset 108, and a 256-byte-aligned total size. Its payload can be copied into private staging, and the preflight report stores descriptor offsets rather than pointers that could outlive the verified bundle.\n\nNVX now implements that data path in `nvx_gsp_image_prepare()`: it copies only the
 firmware payload into private staging, selects the fuse-indexed signature, and
 patches it at the payload-relative location. The integrated
 `nvx_gsp_preflight_stage_booters()` path validates the whole bundle, prechecks

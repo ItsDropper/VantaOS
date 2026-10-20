@@ -10,11 +10,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define NVX_GPUVM_REG_PDB_LO  0xB830A0U
-#define NVX_GPUVM_REG_PDB_HI  0xB830A4U
-#define NVX_GPUVM_REG_FLUSH   0xB830B0U
-#define NVX_GPUVM_FLUSH_PAGE_ALL 0x00000001U
-#define NVX_GPUVM_FLUSH_BUSY     0x80000000U
 #define NVX_GPUVM_FLUSH_POLL_LIMIT 1000000U
 #define NVX_GPUVM_INVALID_TABLE UINT16_MAX
 /*
@@ -32,17 +27,7 @@
 #define NVX_GPUVM_PTE_VOLATILE (1ULL << 32U)
 #define NVX_GPUVM_PTE_SYSTEM_COHERENT (2ULL << 33U)
 
-#ifdef NVX_GPUVM_TEST
-nvx_mmio_status_t nvx_gpuvm_test_mmio_read32(
-    const nvx_mmio_region_t *, size_t, uint32_t *);
-nvx_mmio_status_t nvx_gpuvm_test_mmio_write32(
-    const nvx_mmio_region_t *, size_t, uint32_t);
-#define gpuvm_mmio_read nvx_gpuvm_test_mmio_read32
-#define gpuvm_mmio_write nvx_gpuvm_test_mmio_write32
-#else
-#define gpuvm_mmio_read nvx_mmio_read32
-#define gpuvm_mmio_write nvx_mmio_write32
-#endif
+
 
 static int nvx_gpuvm_add_overflow(uint64_t a, uint64_t b, uint64_t *out)
 {
@@ -321,37 +306,31 @@ static uint64_t *nvx_gpuvm_leaf_entry(nvx_gpuvm_t *vm, uint16_t leaf,
                         (uintptr_t)slot * sizeof(uint64_t));
 }
 
-static int nvx_gpuvm_flush_root_locked(nvx_gpuvm_t *vm, uint64_t root_address)
+static nvx_gpuvm_status_t nvx_gpuvm_flush_root_locked(
+    nvx_gpuvm_t *vm, uint64_t root_address)
 {
-    uint32_t value;
-    if (root_address > UINT32_MAX || (root_address & 0xFFFU) != 0U)
-        return 0;
-    if (gpuvm_mmio_write(&vm->bar0, NVX_GPUVM_REG_PDB_LO,
-                         (uint32_t)(root_address >> 8U)) != NVX_MMIO_OK ||
-        gpuvm_mmio_write(&vm->bar0, NVX_GPUVM_REG_PDB_HI, 0U) != NVX_MMIO_OK ||
-        gpuvm_mmio_write(&vm->bar0, NVX_GPUVM_REG_FLUSH,
-                         NVX_GPUVM_FLUSH_BUSY |
-                         NVX_GPUVM_FLUSH_PAGE_ALL) != NVX_MMIO_OK)
-        return 0;
+    nvx_gpuvm_status_t status;
+    if (vm->hw.publish_root == 0 || vm->hw.invalidate == 0)
+        return NVX_GPUVM_MMIO_ERROR;
+    if (root_address != 0U &&
+        (!nvx_gpuvm_page_address_valid(root_address) ||
+         root_address > UINT32_MAX))
+        return NVX_GPUVM_ADDRESS_WIDTH;
 
+    status = vm->hw.publish_root(vm->hw.context, root_address);
+    if (status != NVX_GPUVM_OK)
+        return status;
     __atomic_thread_fence(__ATOMIC_SEQ_CST);
-    for (uint32_t i = 0; i < NVX_GPUVM_FLUSH_POLL_LIMIT; ++i) {
-        if (gpuvm_mmio_read(&vm->bar0, NVX_GPUVM_REG_FLUSH, &value) !=
-            NVX_MMIO_OK)
-            return 0;
-        if ((value & NVX_GPUVM_FLUSH_BUSY) == 0U)
-            return 1;
-        __asm__ volatile ("pause" ::: "memory");
-    }
-    return 0;
+    return vm->hw.invalidate(vm->hw.context);
 }
 
 static nvx_gpuvm_status_t nvx_gpuvm_flush_locked(nvx_gpuvm_t *vm,
                                                   uint64_t root_address)
 {
-    if (!nvx_gpuvm_flush_root_locked(vm, root_address)) {
+    nvx_gpuvm_status_t status = nvx_gpuvm_flush_root_locked(vm, root_address);
+    if (status != NVX_GPUVM_OK) {
         vm->faulted = 1U;
-        return NVX_GPUVM_FLUSH_TIMEOUT;
+        return status;
     }
     vm->root_published = root_address != 0U;
     return NVX_GPUVM_OK;
@@ -377,18 +356,17 @@ static nvx_gpuvm_record_t *nvx_gpuvm_validate_handle(
 
 nvx_gpuvm_status_t nvx_gpuvm_init(nvx_gpuvm_t *vm, uint64_t va_start,
                                   uint64_t va_size,
-                                  const nvx_mmio_region_t *bar0)
+                                  const nvx_gpuvm_hw_ops_t *hw)
 {
     uint64_t va_end;
     uint16_t root;
     nvx_gpuvm_status_t status;
     nvx_gpuva_status_t va_status;
-    if (vm == 0 || bar0 == 0 || bar0->base == 0)
+    if (vm == 0 || hw == 0 || hw->publish_root == 0 || hw->invalidate == 0)
         return NVX_GPUVM_INVALID_ARGUMENT;
     if (vm->initialized)
         return NVX_GPUVM_INVALID_ARGUMENT;
-    if (bar0->length < (size_t)NVX_GPUVM_REG_FLUSH + sizeof(uint32_t) ||
-        va_size == 0U || nvx_gpuvm_add_overflow(va_start, va_size, &va_end) ||
+    if (va_size == 0U || nvx_gpuvm_add_overflow(va_start, va_size, &va_end) ||
         va_end > (1ULL << NVX_GPUVM_VA_BITS) ||
         (va_start & (NVX_GPUVM_PAGE_SIZE - 1U)) != 0U ||
         (va_size & (NVX_GPUVM_PAGE_SIZE - 1U)) != 0U)
@@ -398,7 +376,7 @@ nvx_gpuvm_status_t nvx_gpuvm_init(nvx_gpuvm_t *vm, uint64_t va_start,
     va_status = nvx_gpuva_init(&vm->va_space, va_start, va_size);
     if (va_status != NVX_GPUVA_OK)
         return NVX_GPUVM_INVALID_RANGE;
-    vm->bar0 = *bar0;
+    vm->hw = *hw;
     vm->next_token = 1U;
     ++vm->generation;
     if (vm->generation == 0U)
@@ -554,10 +532,11 @@ nvx_gpuvm_status_t nvx_gpuvm_map_pages(nvx_gpuvm_t *vm,
             }
         }
         __atomic_thread_fence(__ATOMIC_SEQ_CST);
-        if (vm->root_published && !nvx_gpuvm_flush_root_locked(
-                vm, vm->tables[vm->root_index].backing.physical_address)) {
+        if (vm->root_published &&
+            (status = nvx_gpuvm_flush_root_locked(
+                vm, vm->tables[vm->root_index].backing.physical_address)) !=
+                NVX_GPUVM_OK) {
             vm->faulted = 1U;
-            status = NVX_GPUVM_FLUSH_TIMEOUT;
         } else {
             for (size_t i=0;i<record->page_count;i++) {
                 uint64_t va=record->va.base+i*NVX_GPUVM_PAGE_SIZE;

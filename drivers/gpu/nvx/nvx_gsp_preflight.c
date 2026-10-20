@@ -81,3 +81,76 @@ nvx_gsp_preflight_status_t nvx_gsp_preflight_validate(
     out->runtime_verified=1U;out->ucode_archive_verified=1U;out->boot_assets_present=1U;
     return NVX_GSP_PREFLIGHT_OK;
 }
+
+nvx_gsp_preflight_status_t nvx_gsp_preflight_stage_booters(
+    const nvx_gsp_bundle_t *b,
+    uint32_t load_fuse_version, uint8_t *load_staging, size_t load_capacity,
+    uint32_t unload_fuse_version, uint8_t *unload_staging, size_t unload_capacity,
+    nvx_gsp_image_info_t *out_load_info, nvx_gsp_image_info_t *out_unload_info)
+{
+    nvx_gsp_preflight_report_t report;
+    nvx_gsp_image_status_t image_status;
+
+    if (!b || !load_staging || !unload_staging ||
+        !out_load_info || !out_unload_info)
+        return NVX_GSP_PREFLIGHT_INVALID_ARGUMENT;
+
+    if (overlaps(out_load_info, sizeof(*out_load_info),
+                 out_unload_info, sizeof(*out_unload_info)) ||
+        overlaps(out_load_info, sizeof(*out_load_info), b, sizeof(*b)) ||
+        overlaps(out_unload_info, sizeof(*out_unload_info), b, sizeof(*b)) ||
+        overlaps(load_staging, load_capacity, unload_staging, unload_capacity) ||
+        overlaps(load_staging, load_capacity, out_load_info, sizeof(*out_load_info)) ||
+        overlaps(load_staging, load_capacity, out_unload_info, sizeof(*out_unload_info)) ||
+        overlaps(unload_staging, unload_capacity, out_load_info, sizeof(*out_load_info)) ||
+        overlaps(unload_staging, unload_capacity, out_unload_info, sizeof(*out_unload_info)))
+        return NVX_GSP_PREFLIGHT_STAGING_ALIAS;
+
+    for (size_t i = 0U; i < NVX_GSP_COMPONENT_COUNT; ++i) {
+        const nvx_gsp_component_t *component = &b->components[i];
+        if (!component->blob.data || !component->blob.size)
+            continue;
+        if (overlaps(load_staging, load_capacity,
+                     component->blob.data, component->blob.size) ||
+            overlaps(unload_staging, unload_capacity,
+                     component->blob.data, component->blob.size) ||
+            overlaps(out_load_info, sizeof(*out_load_info),
+                     component->blob.data, component->blob.size) ||
+            overlaps(out_unload_info, sizeof(*out_unload_info),
+                     component->blob.data, component->blob.size))
+            return NVX_GSP_PREFLIGHT_STAGING_ALIAS;
+    }
+
+    nvx_gsp_preflight_status_t preflight_status =
+        nvx_gsp_preflight_validate(b, &report);
+    if (preflight_status != NVX_GSP_PREFLIGHT_OK)
+        return preflight_status;
+
+    if (load_capacity < report.booter_load.data_size ||
+        unload_capacity < report.booter_unload.data_size)
+        return NVX_GSP_PREFLIGHT_STAGING_TOO_SMALL;
+    if ((report.booter_load.signature_count > 1U &&
+         load_fuse_version >= report.booter_load.signature_count) ||
+        (report.booter_unload.signature_count > 1U &&
+         unload_fuse_version >= report.booter_unload.signature_count))
+        return NVX_GSP_PREFLIGHT_FUSE_VERSION_UNSUPPORTED;
+
+    image_status = nvx_gsp_image_prepare(&b->components[2], load_fuse_version,
+                                         load_staging, load_capacity);
+    if (image_status != NVX_GSP_IMAGE_OK) {
+        memset(load_staging, 0, report.booter_load.data_size);
+        return NVX_GSP_PREFLIGHT_CONTAINER_INVALID;
+    }
+
+    image_status = nvx_gsp_image_prepare(&b->components[3], unload_fuse_version,
+                                         unload_staging, unload_capacity);
+    if (image_status != NVX_GSP_IMAGE_OK) {
+        memset(load_staging, 0, report.booter_load.data_size);
+        memset(unload_staging, 0, report.booter_unload.data_size);
+        return NVX_GSP_PREFLIGHT_CONTAINER_INVALID;
+    }
+
+    *out_load_info = report.booter_load;
+    *out_unload_info = report.booter_unload;
+    return NVX_GSP_PREFLIGHT_OK;
+}

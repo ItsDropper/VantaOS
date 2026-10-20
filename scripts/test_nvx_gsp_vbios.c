@@ -56,7 +56,8 @@ static void make_image(uint8_t image[IMAGE_BYTES])
     token[0U] = 0x70U;
     token[1U] = 2U;
     put16(token + 2U, 4U);
-    put32(token + 4U, 0x40U);
+    put32(token + 4U, 0x80U);
+    put32(image + 0x80U, 0x40U);
 
     table[0U] = 1U;
     table[1U] = 6U;

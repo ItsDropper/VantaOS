@@ -18,7 +18,7 @@
 #define FWSEC_INTERFACE_MIN_ENTRIES 2U
 #define FWSEC_INTERFACE_DMEM_MAPPER_ID 4U
 #define FWSEC_DMEM_MAPPER_VERSION 3U
-#define FWSEC_DMEM_MAPPER_V3_SIZE 68U
+#define FWSEC_DMEM_MAPPER_V3_SIZE 64U
 
 static int range_ok(size_t offset, size_t length, size_t limit)
 {

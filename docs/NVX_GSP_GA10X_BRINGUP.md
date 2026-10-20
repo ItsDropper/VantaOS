@@ -231,3 +231,8 @@ This is now the reset primitive needed before the DMA uploader. It still needs a
 Added `nvx_ga10x_falcon_boot()`: it validates engine/BAR/output ranges, checks the privilege lock and halted state, writes optional input mailboxes, programs BOOTVEC and STARTCPU, polls CPUCTL.HALTED with a timeout, then returns both firmware mailboxes. Output values are cleared before the transaction and remain zero on failure. Host tests exercise input mailbox writes, a successful firmware-completion mailbox response, and a stuck-running timeout.
 
 This follows the GA102 Falcon boot contract documented by Linux Nova/OpenRM. A returned mailbox pair is only a firmware-specific result; callers must decode the correct status for each SEC2/FWSEC or booter image. This still depends on correct firmware parsing, DMA upload, WPR setup, and the overall boot order.
+
+
+## CPUCTL alias handling
+
+The Falcon launch path now follows the documented GA102 `CPUCTL.ALIAS_EN` bit: when enabled, STARTCPU is issued through `CPUCTL_ALIAS` at engine-base + `0x130`; otherwise it uses CPUCTL directly. The alias-window bounds are checked before BOOTVEC is written. A host test covers both paths. This avoids assuming that the non-alias CPUCTL write is valid for every Falcon configuration.

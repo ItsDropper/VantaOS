@@ -270,7 +270,7 @@ The strict-warning SEC2 test drives the actual MMIO helpers against a synthetic 
 
 ## GSP-RM cached initialization arguments and shared queue layout
 
-A dedicated ABI helper now defines the 184-byte GA10x/R535+ cached GSP init
+A dedicated ABI helper now defines the 184-byte modern GA10x cached GSP init
 argument structure with compile-time size/offset assertions. It plans the
 contiguous SYSRAM region containing the PTE table, command queue, and status
 queue using the same page-count formula as NVIDIA's public open kernel modules.
@@ -278,7 +278,9 @@ The helper validates physical alignment, allocation bounds, queue sizes, offsets
 PTE counts, and integer overflow; it materializes a zero-filled 4 KiB argument
 page and only enables the explicitly selected DMEM-stack flag.
 
-This is an ABI/planning layer, not an initialization claim. The first profile
+This is an ABI/planning layer, not an initialization claim. The `R535` RPC-header
+constant elsewhere in NVX does not identify the cached-init-argument ABI; the
+firmware branch must be matched explicitly before wiring this structure into boot. The first profile
 supports the non-encrypted queue ABI only; NVIDIA documents queue encryption as
 unstable. NVX still needs to allocate and map the single shared DMA region, build
 the helper can now populate the self-mapping PTE array for the supported

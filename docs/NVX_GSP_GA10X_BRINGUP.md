@@ -266,3 +266,20 @@ A new high-secure transfer planner translates the parsed GA10x booter descriptor
 `nvx_gsp_ga10x_execute_booter_load()` now sequences: SEC2 reset; explicit CPU-to-device ownership handoff for the signed booter; secure IMEM DMA; DMEM DMA; return ownership after transfer completion; BROM parameter programming; WPR metadata DMA ownership handoff; SEC2 start with the 64-bit WPR metadata SYSRAM address in mailboxes 0/1; wait for SEC2 halt; validate mailbox 0; and reclaim metadata ownership after the handoff completes. On transfer/boot failure it attempts a reset before reclaiming device-owned buffers. If reset cannot prove the engine quiescent, ownership is retained and boot-memory release refuses to free those buffers.
 
 The strict-warning SEC2 test drives the actual MMIO helpers against a synthetic BAR0 register bank. It checks the transfer plan, reset/DMA/BROM/BOOTVEC/mailbox ordering and ownership transitions. This proves software sequencing only: synthetic MMIO cannot authenticate real firmware or establish that a physical GA102 GPU boots.
+
+
+## GSP-RM cached initialization arguments and shared queue layout
+
+A dedicated ABI helper now defines the 184-byte GA10x/R535+ cached GSP init
+argument structure with compile-time size/offset assertions. It plans the
+contiguous SYSRAM region containing the PTE table, command queue, and status
+queue using the same page-count formula as NVIDIA's public open kernel modules.
+The helper validates physical alignment, allocation bounds, queue sizes, offsets,
+PTE counts, and integer overflow; it materializes a zero-filled 4 KiB argument
+page and only enables the explicitly selected DMEM-stack flag.
+
+This is an ABI/planning layer, not an initialization claim. The first profile
+supports the non-encrypted queue ABI only; NVIDIA documents queue encryption as
+unstable. NVX still needs to allocate and map the single shared DMA region, build
+its GPU-visible page table, pass the argument-page address through the actual
+GA10x boot path, and validate the complete GSP launch/RM handshake on hardware.

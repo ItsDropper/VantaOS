@@ -52,7 +52,7 @@ int main(void) {
  assert(read_index==write_index);
  /* Fragmented RPCs reserve all pages atomically and use continuation IDs. */
  for(size_t i=0;i<sizeof(large_payload);i++) large_payload[i]=(uint8_t)(i*13U);
- assert(nvx_gsp_ring_init(&big_ring,big_mem,PAGES,&big_read,&big_write,notify,&notified)==NVX_GSP_RING_OK);
+ assert(nvx_gsp_ring_init(&big_ring,big_mem,PAGES,&big_read,&big_write,notify,&notifications)==NVX_GSP_RING_OK);
  for(unsigned i=0;i<50U;i++)
    assert(nvx_gsp_ring_send(&big_ring,1U,2U,500U,payload,1U,scratch,sizeof(scratch),&seq)==NVX_GSP_RING_OK);
  uint32_t write_before=big_write;

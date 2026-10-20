@@ -16,7 +16,8 @@ typedef enum nvx_gsp_image_status {
     NVX_GSP_IMAGE_METADATA_INVALID, NVX_GSP_IMAGE_APP_INVALID,
     NVX_GSP_IMAGE_UNSUPPORTED_LAYOUT,
     NVX_GSP_IMAGE_FUSE_VERSION_UNSUPPORTED,
-    NVX_GSP_IMAGE_STAGING_TOO_SMALL
+    NVX_GSP_IMAGE_STAGING_TOO_SMALL,
+    NVX_GSP_IMAGE_UNSUPPORTED_VERSION
 } nvx_gsp_image_status_t;
 typedef struct nvx_gsp_image_info {
     uint32_t binary_magic, binary_version, binary_size;

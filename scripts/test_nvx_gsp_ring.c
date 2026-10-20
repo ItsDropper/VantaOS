@@ -17,10 +17,13 @@ int main(void) {
  uint8_t payload[5000]; uint32_t seq=0; memset(payload,0x5A,sizeof(payload));
  assert(nvx_gsp_ring_init(0,ring_mem,4,&read_index,&write_index,notify,&notifications)==NVX_GSP_RING_INVALID_ARGUMENT);
  assert(nvx_gsp_ring_init(&ring,ring_mem,1,&read_index,&write_index,notify,&notifications)==NVX_GSP_RING_INVALID_ARGUMENT);
+ assert(nvx_gsp_ring_init(&ring,ring_mem,4,(volatile uint32_t *)ring_mem,&write_index,notify,&notifications)==NVX_GSP_RING_INVALID_ARGUMENT);
+ assert(nvx_gsp_ring_init(&ring,ring_mem,4,&read_index,&read_index,notify,&notifications)==NVX_GSP_RING_INVALID_ARGUMENT);
  assert(nvx_gsp_ring_init(&ring,(void *)(ring_mem+1),4,&read_index,&write_index,notify,&notifications)==NVX_GSP_RING_INVALID_ARGUMENT);
  read_index=4; assert(nvx_gsp_ring_init(&ring,ring_mem,4,&read_index,&write_index,notify,&notifications)==NVX_GSP_RING_BAD_POINTER); read_index=0;
  assert(nvx_gsp_ring_init(&ring,ring_mem,4,&read_index,&write_index,notify,&notifications)==NVX_GSP_RING_OK);
  assert(nvx_gsp_ring_receive(&ring,scratch,sizeof(scratch),&view)==NVX_GSP_RING_QUEUE_EMPTY);
+ assert(nvx_gsp_ring_receive(&ring,scratch,sizeof(scratch),(nvx_gsp_rpc_view_t *)scratch)==NVX_GSP_RING_INVALID_ARGUMENT);
  assert(nvx_gsp_ring_send(&ring,NVX_GSP_RPC_HEADER_VERSION_R535,NVX_GSP_RPC_SIGNATURE_R535,0x1234U,payload,sizeof(payload),scratch,4095U,&seq)==NVX_GSP_RING_BUFFER_TOO_SMALL);
  assert(nvx_gsp_ring_send(&ring,NVX_GSP_RPC_HEADER_VERSION_R535,NVX_GSP_RPC_SIGNATURE_R535,0x1234U,0,1U,scratch,sizeof(scratch),&seq)==NVX_GSP_RING_INVALID_ARGUMENT);
  assert(nvx_gsp_ring_send(&ring,NVX_GSP_RPC_HEADER_VERSION_R535,NVX_GSP_RPC_SIGNATURE_R535,0x1234U,payload,sizeof(payload),scratch,sizeof(scratch),&seq)==NVX_GSP_RING_OK);

@@ -65,11 +65,8 @@ nvx_gsp_elf_status_t nvx_gsp_elf_parse(const nvx_gsp_component_t *component,
         const uint8_t *sh=data+shoff+(uint64_t)i*shentsize;
         uint32_t name=le32(sh),stype=le32(sh+4U);
         uint64_t off=le64(sh+24U),bytes=le64(sh+32U),align=le64(sh+48U);
-        if(!string_matches(data+str_off,(size_t)str_size,name,"")) {
-            /* Validate termination separately; names may not match the target. */
-            if(name>=str_size||!memchr(data+str_off+name,0,(size_t)(str_size-name)))
-                return NVX_GSP_ELF_STRING_TABLE_INVALID;
-        }
+        if(name>=str_size||!memchr(data+str_off+name,0,(size_t)(str_size-name)))
+            return NVX_GSP_ELF_STRING_TABLE_INVALID;
         if(align>1U&&!power2(align)) return NVX_GSP_ELF_SECTION_TABLE_INVALID;
         if(stype!=ELF_SHT_NOBITS&&!range_ok(size,off,bytes))
             return NVX_GSP_ELF_SECTION_TABLE_INVALID;

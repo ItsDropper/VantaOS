@@ -47,17 +47,22 @@ int main(void) {
  assert(view.payload_size==sizeof(payload)&&memcmp(view.payload,payload,sizeof(payload))==0);
  assert(view.sequence==seq&&view.message_sequence==0U&&view.element_pages==2U);
  assert(read_index==write_index&&notifications==1U);
- /* Fill the ring with three one-page messages; the fourth must be rejected. */
- for(unsigned i=0;i<3U;i++) assert(nvx_gsp_ring_send(&ring,NVX_GSP_RPC_HEADER_VERSION_R535,NVX_GSP_RPC_SIGNATURE_R535,100U+i,payload,32U,scratch,sizeof(scratch),&seq)==NVX_GSP_RING_OK);
- assert(nvx_gsp_ring_send(&ring,NVX_GSP_RPC_HEADER_VERSION_R535,NVX_GSP_RPC_SIGNATURE_R535,104U,payload,32U,scratch,sizeof(scratch),&seq)==NVX_GSP_RING_QUEUE_FULL);
- assert(nvx_gsp_ring_receive(&ring,scratch,sizeof(scratch),&view)==NVX_GSP_RING_OK&&view.function==100U);
- assert(nvx_gsp_ring_receive(&ring,scratch,sizeof(scratch),&view)==NVX_GSP_RING_OK&&view.function==101U);
- assert(nvx_gsp_ring_receive(&ring,scratch,sizeof(scratch),&view)==NVX_GSP_RING_OK&&view.function==102U);
- assert(nvx_gsp_ring_send(&ring,NVX_GSP_RPC_HEADER_VERSION_R535,NVX_GSP_RPC_SIGNATURE_R535,201U,payload,32U,scratch,sizeof(scratch),&seq)==NVX_GSP_RING_OK);
+ /* NVIDIA MSGQ uses monotonic counters; all four queue slots are usable. */
+ for(unsigned i=0;i<4U;i++)
+   assert(nvx_gsp_ring_send(&ring,NVX_GSP_RPC_HEADER_VERSION_R535,
+     NVX_GSP_RPC_SIGNATURE_R535,100U+i,payload,32U,scratch,sizeof(scratch),&seq)==NVX_GSP_RING_OK);
+ assert(nvx_gsp_ring_send(&ring,NVX_GSP_RPC_HEADER_VERSION_R535,
+   NVX_GSP_RPC_SIGNATURE_R535,104U,payload,32U,scratch,sizeof(scratch),&seq)==NVX_GSP_RING_QUEUE_FULL);
+ for(unsigned i=0;i<4U;i++)
+   assert(nvx_gsp_ring_receive(&ring,scratch,sizeof(scratch),&view)==NVX_GSP_RING_OK&&view.function==100U+i);
+ assert(read_index==write_index&&write_index==6U);
+ assert(nvx_gsp_ring_send(&ring,NVX_GSP_RPC_HEADER_VERSION_R535,
+   NVX_GSP_RPC_SIGNATURE_R535,201U,payload,32U,scratch,sizeof(scratch),&seq)==NVX_GSP_RING_OK);
  assert(nvx_gsp_ring_receive(&ring,scratch,sizeof(scratch),&view)==NVX_GSP_RING_OK&&view.function==201U);
- assert(nvx_gsp_ring_send(&ring,NVX_GSP_RPC_HEADER_VERSION_R535,NVX_GSP_RPC_SIGNATURE_R535,202U,payload,32U,scratch,sizeof(scratch),&seq)==NVX_GSP_RING_OK);
+ assert(nvx_gsp_ring_send(&ring,NVX_GSP_RPC_HEADER_VERSION_R535,
+   NVX_GSP_RPC_SIGNATURE_R535,202U,payload,32U,scratch,sizeof(scratch),&seq)==NVX_GSP_RING_OK);
  assert(nvx_gsp_ring_receive(&ring,scratch,sizeof(scratch),&view)==NVX_GSP_RING_OK&&view.function==202U);
- assert(read_index==3U&&write_index==3U);
+ assert(read_index==write_index&&write_index==8U);
  assert(nvx_gsp_ring_send(&ring,NVX_GSP_RPC_HEADER_VERSION_R535,NVX_GSP_RPC_SIGNATURE_R535,200U,payload,5000U,scratch,sizeof(scratch),&seq)==NVX_GSP_RING_OK);
  assert(write_index==10U);
  assert(nvx_gsp_ring_receive(&ring,scratch,sizeof(scratch),&view)==NVX_GSP_RING_OK&&view.function==200U);

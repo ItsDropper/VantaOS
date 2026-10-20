@@ -44,7 +44,7 @@ nvx_gsp_elf_load_status_t nvx_gsp_elf_load_segments(
         return NVX_GSP_ELF_LOAD_INVALID_ARGUMENT;
     *out_entry = 0U;
 
-    if (nvx_gsp_elf_parse(component, NVX_GSP_GA10X_SIGNATURE_SECTION, &info) !=
+    if (nvx_gsp_elf_parse(component, ".fwsignature_ga10x", &info) !=
         NVX_GSP_ELF_OK)
         return NVX_GSP_ELF_LOAD_BAD_IMAGE;
     if (info.type != 2U)

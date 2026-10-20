@@ -35,7 +35,8 @@ typedef enum nvx_gsp_vbios_status {
     NVX_GSP_VBIOS_UNSUPPORTED_DESCRIPTOR,
     NVX_GSP_VBIOS_MALFORMED_DESCRIPTOR,
     NVX_GSP_VBIOS_RANGE_ERROR,
-    NVX_GSP_VBIOS_OVERLAPPING_OUTPUT
+    NVX_GSP_VBIOS_OVERLAPPING_OUTPUT,
+    NVX_GSP_VBIOS_FUSE_VERSION_UNSUPPORTED
 } nvx_gsp_vbios_status_t;
 
 typedef struct nvx_gsp_vbios_fwsec_info {
@@ -70,5 +71,14 @@ typedef struct nvx_gsp_vbios_fwsec_info {
 nvx_gsp_vbios_status_t nvx_gsp_vbios_find_ga10x_fwsec(
     const void *vbios, size_t vbios_size, size_t expansion_rom_offset,
     nvx_gsp_vbios_fwsec_info_t *out_info);
+
+/*
+ * Resolve the VBIOS signature slot for the hardware ucode fuse version.
+ * The result is an absolute offset into the original VBIOS buffer. The caller
+ * must still validate the buffer extent and copy/authenticate the signature.
+ */
+nvx_gsp_vbios_status_t nvx_gsp_vbios_fwsec_signature_offset(
+    const nvx_gsp_vbios_fwsec_info_t *info, uint32_t fuse_version,
+    uint32_t *out_offset);
 
 #endif

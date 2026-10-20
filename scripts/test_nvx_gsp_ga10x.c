@@ -13,7 +13,7 @@ static uint8_t response_store[8U*NVX_GSP_PAGE_SIZE] __attribute__((aligned(NVX_G
 int main(void)
 {
  nvx_gsp_ga10x_t g={0};nvx_mmio_region_t region={bar,sizeof(bar)};
- nvx_gsp_msgq_layout_t response_header={0};uint8_t *slot=0;const char request[]="GSP queue 0";
+ nvx_gsp_msgq_layout_t response_header={0};uint8_t *slot=0;uint32_t reg_value=UINT32_MAX;const char request[]="GSP queue 0";
  assert(NVX_GSP_GA10X_QUEUE_HEAD(0U)==0x110C00U);
  assert(NVX_GSP_GA10X_QUEUE_TAIL(0U)==0x110C04U);
  assert(NVX_GSP_GA10X_MSGQ_HEAD(0U)==0x110C80U);
@@ -26,18 +26,17 @@ int main(void)
  assert(nvx_gsp_ga10x_link_response_queue(&g,response_store,sizeof(response_store))==NVX_GSP_GA10X_QUEUE_NOT_READY);
  assert(nvx_gsp_ga10x_create_command_queue(&g,command_store,sizeof(command_store))==NVX_GSP_GA10X_OK);
  assert(g.command_queue.layout.element_count==7U);
- assert(nvx_mmio_read32(&region,NVX_GSP_GA10X_QUEUE_HEAD(0U),(uint32_t *)&slot)==NVX_MMIO_OK);
- assert(*(uint32_t *)(void *)(bar+NVX_GSP_GA10X_QUEUE_HEAD(0U))==0U);
+ assert(nvx_mmio_read32(&region,NVX_GSP_GA10X_QUEUE_HEAD(0U),&reg_value)==NVX_MMIO_OK&&reg_value==0U);
  assert(nvx_gsp_msgq_tx_get(&g.command_queue,0U,&slot)==NVX_GSP_MSGQ_QUEUE_OK);
  memcpy(slot,request,sizeof(request));
  assert(nvx_gsp_msgq_tx_submit(&g.command_queue,1U)==NVX_GSP_MSGQ_QUEUE_OK);
- assert(*(uint32_t *)(void *)(bar+NVX_GSP_GA10X_QUEUE_HEAD(0U))==1U);
+ assert(nvx_mmio_read32(&region,NVX_GSP_GA10X_QUEUE_HEAD(0U),&reg_value)==NVX_MMIO_OK&&reg_value==1U);
  /* Before GSP creates the response header, link must fail without publishing readiness. */
  assert(nvx_gsp_ga10x_link_response_queue(&g,response_store,sizeof(response_store))==NVX_GSP_GA10X_QUEUE_ERROR);
  assert(!g.response_ready);
  assert(nvx_gsp_msgq_prepare_tx(response_store,sizeof(response_store),NVX_GSP_PAGE_SIZE,&response_header)==NVX_GSP_MSGQ_OK);
  assert(nvx_gsp_ga10x_link_response_queue(&g,response_store,sizeof(response_store))==NVX_GSP_GA10X_OK);
- assert(*(uint32_t *)(void *)(bar+NVX_GSP_GA10X_MSGQ_TAIL(0U))==0U);
+ assert(nvx_mmio_read32(&region,NVX_GSP_GA10X_MSGQ_TAIL(0U),&reg_value)==NVX_MMIO_OK&&reg_value==0U);
  assert(nvx_gsp_ga10x_init_rpc(&g)==NVX_GSP_GA10X_OK);
  assert(nvx_gsp_ga10x_init_rpc(&g)==NVX_GSP_GA10X_ALREADY_INITIALIZED);
  assert(g.rpc_ready&&g.rpc.command_queue==&g.command_queue&&g.rpc.response_queue==&g.response_queue);

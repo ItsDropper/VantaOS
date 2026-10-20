@@ -100,3 +100,45 @@ nvx_gsp_falcon_status_t nvx_gsp_ga10x_inspect_falcon(
     *out_snapshot = snapshot;
     return NVX_GSP_FALCON_OK;
 }
+
+nvx_gsp_falcon_status_t nvx_gsp_ga10x_wait_riscv_active(
+    const nvx_mmio_region_t *bar0, uint32_t timeout_ms,
+    uint32_t poll_interval_ms, nvx_gsp_delay_ms_fn delay_ms, void *context)
+{
+    uint32_t elapsed_ms = 0U;
+
+    if (bar0 == 0 || bar0->base == 0 || delay_ms == 0 ||
+        timeout_ms == 0U || poll_interval_ms == 0U)
+        return NVX_GSP_FALCON_INVALID_ARGUMENT;
+    if (bar0->length < NVX_GSP_FALCON_DIAGNOSTIC_BYTES)
+        return NVX_GSP_FALCON_BAR_TOO_SMALL;
+
+    for (;;) {
+        uint32_t hwcfg2 = 0U;
+        uint32_t riscv_cpuctl = 0U;
+        nvx_mmio_status_t status;
+
+        status = nvx_mmio_read32(bar0, NVX_GSP_FALCON_HWCFG2, &hwcfg2);
+        if (status != NVX_MMIO_OK)
+            return NVX_GSP_FALCON_MMIO_ERROR;
+        if ((hwcfg2 & NVX_GSP_PRIV_LOCKED_MASK) ==
+            NVX_GSP_PRIV_LOCKED_PATTERN)
+            return NVX_GSP_FALCON_PRIVILEGED_WINDOW_LOCKED;
+
+        status = nvx_mmio_read32(bar0, NVX_GSP_RISCV_CPUCTL,
+                                 &riscv_cpuctl);
+        if (status != NVX_MMIO_OK)
+            return NVX_GSP_FALCON_MMIO_ERROR;
+        if ((riscv_cpuctl & NVX_GSP_RISCV_ACTIVE) != 0U)
+            return NVX_GSP_FALCON_OK;
+
+        if (elapsed_ms >= timeout_ms)
+            return NVX_GSP_FALCON_RISCV_TIMEOUT;
+
+        uint32_t remaining_ms = timeout_ms - elapsed_ms;
+        uint32_t sleep_ms = poll_interval_ms < remaining_ms ?
+                            poll_interval_ms : remaining_ms;
+        delay_ms(sleep_ms, context);
+        elapsed_ms += sleep_ms;
+    }
+}

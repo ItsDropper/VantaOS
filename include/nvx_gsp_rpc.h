@@ -45,11 +45,6 @@ nvx_gsp_rpc_status_t nvx_gsp_rpc_submit(nvx_gsp_rpc_manager_t *,
     uint32_t response_function, const void *payload, size_t payload_size,
     void *scratch, size_t scratch_size, void *response_buffer,
     size_t response_capacity, nvx_gsp_rpc_handle_t *out_handle);
-nvx_gsp_rpc_status_t nvx_gsp_rpc_submit_large(nvx_gsp_rpc_manager_t *,
-    uint32_t header_version, uint32_t signature, uint32_t request_function,
-    uint32_t response_function, uint32_t continuation_function,
-    const void *payload, size_t payload_size, void *scratch, size_t scratch_size,
-    void *response_buffer, size_t response_capacity, nvx_gsp_rpc_handle_t *out_handle);
 nvx_gsp_rpc_status_t nvx_gsp_rpc_pump(nvx_gsp_rpc_manager_t *,
     void *scratch, size_t scratch_size, nvx_gsp_rpc_view_t *out_unmatched);
 nvx_gsp_rpc_status_t nvx_gsp_rpc_query(nvx_gsp_rpc_manager_t *,

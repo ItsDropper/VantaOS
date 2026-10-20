@@ -38,7 +38,8 @@ nvx_gsp_image_status_t nvx_gsp_image_parse(
     if(out) memset(out,0,sizeof(*out));
     if(!component||!out||!component->acquired||!component->blob.data)
         return NVX_GSP_IMAGE_INVALID_ARGUMENT;
-    if(component->kind!=NVX_GSP_BOOTER_LOAD)
+    if(component->kind!=NVX_GSP_BOOTER_LOAD &&
+       component->kind!=NVX_GSP_BOOTER_UNLOAD)
         return NVX_GSP_IMAGE_UNSUPPORTED_LAYOUT;
     data=component->blob.data; size=component->blob.size;
     if(size<BIN_HEADER_SIZE) return NVX_GSP_IMAGE_TRUNCATED;

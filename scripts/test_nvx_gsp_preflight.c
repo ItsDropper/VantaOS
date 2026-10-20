@@ -15,14 +15,14 @@ static void p64(size_t o,uint64_t v){for(unsigned i=0;i<8U;i++)elf[o+i]=(uint8_t
 static void asset32(uint8_t *dest,size_t offset,uint32_t value){
  for(unsigned i=0U;i<4U;i++)dest[offset+i]=(uint8_t)(value>>(i*8U));
 }
-static void build_booter(uint8_t *dest){
+static void build_booter(uint8_t *dest,uint32_t fuse_version){
  memset(dest,0,512U);
  asset32(dest,0U,0x10DEU);asset32(dest,4U,1U);asset32(dest,8U,512U);
  asset32(dest,12U,24U);asset32(dest,16U,184U);asset32(dest,20U,128U);
  asset32(dest,24U,60U);asset32(dest,28U,64U);asset32(dest,32U,124U);
  asset32(dest,36U,128U);asset32(dest,40U,132U);asset32(dest,44U,12U);
  asset32(dest,48U,144U);asset32(dest,52U,148U);asset32(dest,56U,36U);
- asset32(dest,124U,40U);asset32(dest,128U,0U);asset32(dest,132U,0x1234U);
+ asset32(dest,124U,40U);asset32(dest,128U,0U);asset32(dest,132U,fuse_version);
  asset32(dest,136U,0x400U);asset32(dest,140U,1U);asset32(dest,144U,2U);
  asset32(dest,148U,0U);asset32(dest,152U,32U);asset32(dest,156U,32U);
  asset32(dest,160U,64U);asset32(dest,164U,1U);asset32(dest,168U,32U);
@@ -51,7 +51,7 @@ int main(void){
  nvx_gsp_bundle_t b={0};nvx_gsp_preflight_report_t report={0};b.family=NVX_FAMILY_AMPERE;b.acquired=1U;b.provider.verify=verify_stub;strcpy(b.chip,"ga106");strcpy(b.version,"535.113.01");build_elf();
  b.components[0]=(nvx_gsp_component_t){.blob={elf,sizeof(elf),0},.kind=NVX_GSP_RUNTIME,.acquired=1U};
  b.components[1]=(nvx_gsp_component_t){.blob={ucodes,sizeof(ucodes),0},.kind=NVX_GSP_UCODE_ARCHIVE,.acquired=1U};
- for(unsigned i=2U;i<4U;i++){build_booter(boot_assets[i-2U]);b.components[i]=(nvx_gsp_component_t){.blob={boot_assets[i-2U],sizeof(boot_assets[0]),0},.kind=(nvx_gsp_component_kind_t)i,.acquired=1U};}build_gsp_bootloader(boot_assets[2]);b.components[4]=(nvx_gsp_component_t){.blob={boot_assets[2],256U,0},.kind=NVX_GSP_BOOTLOADER,.acquired=1U};
+ for(unsigned i=2U;i<4U;i++){build_booter(boot_assets[i-2U],i==2U?2U:1U);b.components[i]=(nvx_gsp_component_t){.blob={boot_assets[i-2U],sizeof(boot_assets[0]),0},.kind=(nvx_gsp_component_kind_t)i,.acquired=1U};}build_gsp_bootloader(boot_assets[2]);b.components[4]=(nvx_gsp_component_t){.blob={boot_assets[2],256U,0},.kind=NVX_GSP_BOOTLOADER,.acquired=1U};
  assert(nvx_gsp_preflight_validate(&b,&report)==NVX_GSP_PREFLIGHT_OK);
  assert(report.runtime_verified&&report.ucode_archive_verified&&report.boot_assets_present);
  assert(report.runtime.machine==243U&&report.runtime.load_segment_count==1U);
@@ -79,11 +79,11 @@ int main(void){
   boot_assets[0][60U+i]=(uint8_t)(0x10U+i);boot_assets[0][92U+i]=(uint8_t)(0x30U+i);
   boot_assets[1][60U+i]=(uint8_t)(0x50U+i);boot_assets[1][92U+i]=(uint8_t)(0x70U+i);
  }
- assert(nvx_gsp_preflight_stage_booters(&b,0U,load_stage,sizeof(load_stage),
-        1U,unload_stage,sizeof(unload_stage),&load_info,&unload_info)==NVX_GSP_PREFLIGHT_OK);
+ assert(nvx_gsp_preflight_stage_booters(&b,1U,load_stage,sizeof(load_stage),
+        0U,unload_stage,sizeof(unload_stage),&load_info,&unload_info)==NVX_GSP_PREFLIGHT_OK);
  assert(load_info.data_size==128U&&unload_info.data_size==128U);
  assert(load_stage[0]==0U&&load_stage[40]==0x30U&&load_stage[71]==0x4FU);
- assert(unload_stage[0]==0x80U&&unload_stage[40]==0x50U&&unload_stage[71]==0x6FU);
+ assert(unload_stage[0]==0x80U&&unload_stage[40]==0x70U&&unload_stage[71]==0x8FU);
  /* A BAR mapping too short for the fuse array must fail closed without staging. */
  uint8_t short_bar_bytes[4]={0U,0U,0U,0U};
  nvx_mmio_region_t short_bar_region={short_bar_bytes,sizeof(short_bar_bytes)};

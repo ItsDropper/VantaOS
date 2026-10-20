@@ -9,6 +9,28 @@
 
 #include <assert.h>
 #include <string.h>
+#include <stddef.h>
+
+
+static const struct pci_device inventory[] = {
+    { .vendor_id = 0x8086U, .device_id = 0x56A0U, .class_code = 0x03U, .subclass = 0x00U },
+    { .vendor_id = 0x1002U, .device_id = 0x744CU, .class_code = 0x03U, .subclass = 0x00U },
+    { .vendor_id = 0x10DEU, .device_id = 0x2503U, .class_code = 0x03U, .subclass = 0x00U },
+    { .vendor_id = 0x8086U, .device_id = 0xA0C8U, .class_code = 0x04U, .subclass = 0x03U },
+    { .vendor_id = 0x1234U, .device_id = 0x9999U, .class_code = 0x03U, .subclass = 0x00U }
+};
+
+int pci_get_device_count(void)
+{
+    return (int)(sizeof(inventory) / sizeof(inventory[0]));
+}
+
+const struct pci_device *pci_get_device(int index)
+{
+    if (index < 0 || index >= pci_get_device_count())
+        return 0;
+    return &inventory[index];
+}
 
 int main(void)
 {
@@ -85,7 +107,23 @@ int main(void)
     assert(gpu_device_transition(&device, GPU_DEVICE_INITIALIZED));
     assert(!gpu_device_transition(&device, GPU_DEVICE_DISCOVERED));
 
+
+    {
+        gpu_device_t discovered[3];
+        size_t discovered_count = 99U;
+        assert(!gpu_discover_pci(discovered, 2U, &discovered_count));
+        assert(discovered_count == 0U);
+        assert(gpu_discover_pci(discovered, 3U, &discovered_count));
+        assert(discovered_count == 3U);
+        assert(discovered[0].vendor == GPU_VENDOR_INTEL);
+        assert(discovered[1].vendor == GPU_VENDOR_AMD);
+        assert(discovered[2].vendor == GPU_VENDOR_NVIDIA);
+        assert(discovered[2].architecture == GPU_ARCH_NVIDIA_AMPERE);
+        assert(discovered[0].state == GPU_DEVICE_DISCOVERED);
+        assert(discovered[0].verified_capabilities == 0U);
+    }
     assert(strcmp(gpu_vendor_name(GPU_VENDOR_AMD), "AMD") == 0);
     assert(strcmp(gpu_architecture_name(GPU_ARCH_AMD_RDNA3), "AMD RDNA 3") == 0);
+    assert(strcmp(gpu_architecture_name(GPU_ARCH_NVIDIA_AMPERE), "NVIDIA Ampere") == 0);
     return 0;
 }

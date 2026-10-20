@@ -104,10 +104,12 @@ nvx_gsp_ring_status_t nvx_gsp_ring_send(nvx_gsp_ring_t *r,
     if(pages>free_pages) { spinlock_unlock(&r->lock); return NVX_GSP_RING_QUEUE_FULL; }
     sequence=r->next_sequence++;
     if(r->next_sequence==0U) r->next_sequence=1U;
+    /* The RPC wire sequence is the correlation key echoed by GSP replies. */
+    put32(msg+48U,sequence);
     ring_copy_in(r,write,msg,total_len);
     __atomic_thread_fence(__ATOMIC_RELEASE);
-    store_ptr(r->write_ptr,(write+(uint32_t)pages)%r->capacity_pages);
     __atomic_store_n(out_sequence,sequence,__ATOMIC_RELEASE);
+    store_ptr(r->write_ptr,(write+(uint32_t)pages)%r->capacity_pages);
     notify=r->notify; notify_context=r->notify_context;
     spinlock_unlock(&r->lock);
     if(notify) notify(notify_context);

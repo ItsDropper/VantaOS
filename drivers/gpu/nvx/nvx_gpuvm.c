@@ -125,7 +125,6 @@ static nvx_gpuvm_status_t nvx_gpuvm_alloc_table(nvx_gpuvm_t *vm,
         return NVX_GPUVM_DMA_FAILED;
     if (!dma_page_is_valid(&page) ||
         !nvx_gpuvm_page_address_valid(page.physical_address) ||
-        page.physical_address > UINT32_MAX ||
         page.virtual_address == 0) {
         dma_free_page(&page);
         return NVX_GPUVM_PAGE_INVALID;
@@ -313,8 +312,7 @@ static nvx_gpuvm_status_t nvx_gpuvm_flush_root_locked(
     if (vm->hw.publish_root == 0 || vm->hw.invalidate == 0)
         return NVX_GPUVM_MMIO_ERROR;
     if (root_address != 0U &&
-        (!nvx_gpuvm_page_address_valid(root_address) ||
-         root_address > UINT32_MAX))
+        !nvx_gpuvm_page_address_valid(root_address))
         return NVX_GPUVM_ADDRESS_WIDTH;
 
     status = vm->hw.publish_root(vm->hw.context, root_address);

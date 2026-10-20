@@ -11,8 +11,11 @@
 #include <string.h>
 
 #define QUEUE_SIZE UINT64_C(0x40000)
+#define SHARED_SIZE (NVX_GSP_PAGE_SIZE + 2U * QUEUE_SIZE)
 static uint8_t args_page[NVX_GSP_INIT_ARGS_PAGE_SIZE]
     __attribute__((aligned(NVX_GSP_INIT_ARGS_PAGE_SIZE)));
+static uint8_t shared_memory[SHARED_SIZE]
+    __attribute__((aligned(NVX_GSP_PAGE_SIZE)));
 
 static nvx_gsp_shared_queue_config_t config_for(uint64_t physical,
                                                 uint64_t allocation_size)
@@ -52,6 +55,20 @@ int main(void)
     assert(layout.status_queue_offset == NVX_GSP_PAGE_SIZE + QUEUE_SIZE);
     assert(layout.status_queue_offset + layout.status_queue_size == required);
     assert(nvx_gsp_shared_queue_validate(&layout) == NVX_GSP_INIT_ARGS_OK);
+    assert(nvx_gsp_shared_queue_build_pte_table(&layout, shared_memory,
+        sizeof(shared_memory)) == NVX_GSP_INIT_ARGS_OK);
+    for (uint32_t i = 0U; i < pte_count; ++i) {
+        uint64_t entry;
+        memcpy(&entry, shared_memory + (size_t)i * sizeof(entry), sizeof(entry));
+        assert(entry == config.shared_mem_phys_addr +
+            (uint64_t)i * NVX_GSP_PAGE_SIZE);
+    }
+    for (uint32_t i = pte_count;
+         i < NVX_GSP_PAGE_SIZE / sizeof(uint64_t); ++i) {
+        uint64_t entry;
+        memcpy(&entry, shared_memory + (size_t)i * sizeof(entry), sizeof(entry));
+        assert(entry == 0U);
+    }
 
     assert(nvx_gsp_arguments_cached_build(&layout, 0U,
         NVX_GSP_INIT_ARGS_FLAG_STACK_IN_DMEM, &args) == NVX_GSP_INIT_ARGS_OK);
@@ -90,6 +107,11 @@ int main(void)
     config = config_for(UINT64_MAX - NVX_GSP_PAGE_SIZE + 1U, required);
     assert(nvx_gsp_shared_queue_plan(&config, &bad_layout) ==
         NVX_GSP_INIT_ARGS_SIZE_OVERFLOW);
+    config = config_for(UINT64_C(0x10000000), UINT64_C(0x400000));
+    config.command_queue_size = UINT64_C(0x200000);
+    config.status_queue_size = UINT64_C(0x2000);
+    assert(nvx_gsp_shared_queue_plan(&config, &bad_layout) ==
+        NVX_GSP_INIT_ARGS_UNSUPPORTED_CONFIGURATION);
     config = config_for(UINT64_C(0x10000000), required);
     config.queue_element_header_size = 40U; /* CC/encrypted ABI not implemented. */
     assert(nvx_gsp_shared_queue_plan(&config, &bad_layout) ==

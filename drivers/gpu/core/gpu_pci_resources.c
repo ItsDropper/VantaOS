@@ -52,6 +52,8 @@ int gpu_pci_resources_scan(const struct pci_device *device,
         uint64_t base = 0U;
         int is_io = 0;
         int is_64bit = 0;
+        int expected_is_io;
+        int expected_is_64bit = 0;
         gpu_pci_bar_resource_t *resource;
 
         if (consumed_upper != 0U) {
@@ -64,11 +66,13 @@ int gpu_pci_resources_scan(const struct pci_device *device,
             return 0;
 
         is_io = (raw & 1U) != 0U;
+        expected_is_io = is_io;
         if (!is_io) {
             uint32_t memory_type = (raw >> 1) & 0x03U;
             if (memory_type == 0x03U)
                 return 0;
             is_64bit = memory_type == 0x02U;
+            expected_is_64bit = is_64bit;
             if (is_64bit) {
                 uint32_t high;
                 if ((uint8_t)(index + 1U) >= bar_count)
@@ -93,6 +97,7 @@ int gpu_pci_resources_scan(const struct pci_device *device,
             return 0;
         if ((is_io != 0 && is_io != 1) ||
             (is_64bit != 0 && is_64bit != 1) ||
+            is_io != expected_is_io || is_64bit != expected_is_64bit ||
             (is_io != 0 && is_64bit != 0))
             return 0;
         if (base == 0U)

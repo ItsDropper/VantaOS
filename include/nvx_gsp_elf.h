@@ -14,7 +14,9 @@ typedef enum nvx_gsp_elf_status {
     NVX_GSP_ELF_HEADER_INVALID, NVX_GSP_ELF_PROGRAM_TABLE_INVALID,
     NVX_GSP_ELF_SECTION_TABLE_INVALID, NVX_GSP_ELF_STRING_TABLE_INVALID,
     NVX_GSP_ELF_SIGNATURE_MISSING, NVX_GSP_ELF_SIGNATURE_INVALID,
-    NVX_GSP_ELF_LOAD_SEGMENT_INVALID, NVX_GSP_ELF_ENTRY_INVALID
+    NVX_GSP_ELF_LOAD_SEGMENT_INVALID, NVX_GSP_ELF_ENTRY_INVALID,
+    NVX_GSP_ELF_SECTION_NOT_FOUND, NVX_GSP_ELF_SECTION_AMBIGUOUS,
+    NVX_GSP_ELF_SECTION_NO_DATA
 } nvx_gsp_elf_status_t;
 typedef struct nvx_gsp_elf_segment {
     uint64_t file_offset, virtual_address, physical_address;
@@ -29,6 +31,14 @@ typedef struct nvx_gsp_elf_info {
     uint32_t signature_section_index;
     nvx_gsp_elf_segment_t load_segments[NVX_GSP_ELF_MAX_LOAD_SEGMENTS];
 } nvx_gsp_elf_info_t;
+typedef struct nvx_gsp_elf_section {
+    const uint8_t *data;
+    uint64_t offset,size,alignment;
+    uint32_t type,flags,index;
+} nvx_gsp_elf_section_t;
+/* Returns a bounded section view into the acquired ELF; data is not copied. */
+nvx_gsp_elf_status_t nvx_gsp_elf_find_section(const nvx_gsp_component_t *,
+    const char *section_name,nvx_gsp_elf_section_t *out_section);
 /* Parses ELF64 LE RISC-V GSP runtime firmware; never executes or authenticates it. */
 nvx_gsp_elf_status_t nvx_gsp_elf_parse(const nvx_gsp_component_t *,
     const char *signature_section_name, nvx_gsp_elf_info_t *out_info);

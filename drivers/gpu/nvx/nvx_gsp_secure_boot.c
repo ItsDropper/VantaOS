@@ -233,7 +233,7 @@ static nvx_gsp_falcon_status_t execute_booter_load_internal(
         return NVX_GSP_FALCON_DMA_OWNERSHIP_ERROR;
     if (trace) trace->last_completed_phase = NVX_GSP_BOOT_PHASE_TRANSFER_WPR_TO_DEVICE;
 
-    if (trace) trace->current_phase = NVX_GSP_BOOT_PHASE_START_SEC2;
+    if (trace) { trace->current_phase = NVX_GSP_BOOT_PHASE_START_SEC2; trace->sec2_quiescence_confirmed = 0U; }
     status = nvx_ga10x_falcon_boot(
         bar0, NVX_SEC2_FALCON_BASE, plan.boot_vector,
         1U, (uint32_t)memory->wpr_metadata.gpu_address,
@@ -246,12 +246,12 @@ static nvx_gsp_falcon_status_t execute_booter_load_internal(
         return reclaim == NVX_GSP_FALCON_OK ? status : reclaim;
     }
 
-    if (trace) trace->last_completed_phase = NVX_GSP_BOOT_PHASE_START_SEC2;
+    if (trace) { trace->last_completed_phase = NVX_GSP_BOOT_PHASE_START_SEC2; trace->sec2_quiescence_confirmed = 1U; }
     if (trace) trace->current_phase = NVX_GSP_BOOT_PHASE_RECLAIM_WPR;
     if (nvx_dma_sync_for_cpu(&memory->wpr_metadata_sync, 0U,
                              memory->wpr_metadata.size) != NVX_DMA_SYNC_OK)
         return NVX_GSP_FALCON_DMA_OWNERSHIP_ERROR;
-    if (trace) trace->last_completed_phase = NVX_GSP_BOOT_PHASE_RECLAIM_WPR;
+    if (trace) { trace->last_completed_phase = NVX_GSP_BOOT_PHASE_RECLAIM_WPR; trace->current_phase = NVX_GSP_BOOT_PHASE_VALIDATE_RESULT; }
     if (mailbox0 != 0U)
         return NVX_GSP_FALCON_BOOTER_REPORTED_ERROR;
 

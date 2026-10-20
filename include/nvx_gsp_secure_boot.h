@@ -35,7 +35,8 @@ nvx_gsp_falcon_status_t nvx_gsp_ga10x_secure_image_plan(
 
 
 typedef enum nvx_gsp_boot_phase {
-    NVX_GSP_BOOT_PHASE_PRECHECK = 0,
+    NVX_GSP_BOOT_PHASE_NONE = 0,
+    NVX_GSP_BOOT_PHASE_PRECHECK,
     NVX_GSP_BOOT_PHASE_RESET_SEC2,
     NVX_GSP_BOOT_PHASE_TRANSFER_BOOTER_TO_DEVICE,
     NVX_GSP_BOOT_PHASE_UPLOAD_IMEM,

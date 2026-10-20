@@ -238,4 +238,4 @@ This follows the GA102 Falcon boot contract documented by Linux Nova/OpenRM. A r
 
 ## CPUCTL alias handling
 
-The Falcon launch path now follows the documented GA102 `CPUCTL.ALIAS_EN` bit: when enabled, STARTCPU is issued through `CPUCTL_ALIAS` at engine-base + `0x130`; otherwise it uses CPUCTL directly. The alias-window bounds are checked before BOOTVEC is written. A host test covers both paths. This avoids assuming that the non-alias CPUCTL write is valid for every Falcon configuration.
+The Falcon launch path now follows the documented GA102 `CPUCTL.ALIAS_EN` bit: when enabled, STARTCPU is issued through `CPUCTL_ALIAS` at engine-base + `0x130`; otherwise it uses CPUCTL directly. The alias-window bounds are checked before BOOTVEC is written; the full boot helper checks them before it writes either input mailbox, so a truncated mapping cannot leave partial boot arguments behind. Host tests cover direct and alias starts plus no-write failure behavior. This avoids assuming that the non-alias CPUCTL write is valid for every Falcon configuration.

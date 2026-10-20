@@ -16,6 +16,7 @@ on:
       - "include/nvx_mmio.h"
       - "include/nvx_attach.h"
       - "include/nvx_firmware.h"
+      - "include/nvx_gsp_bundle.h"
       - "include/nvx_dma.h"
       - "include/nvx_gpuva.h"
       - "include/nvx_gpuvm.h"
@@ -35,6 +36,7 @@ on:
       - "scripts/test_nvx_mmio.c"
       - "scripts/test_nvx_attach.c"
       - "scripts/test_nvx_firmware.c"
+      - "scripts/test_nvx_gsp_bundle.c"
       - "scripts/test_nvx_dma.c"
       - "scripts/test_nvx_gpuva.c"
       - "scripts/test_nvx_gpuvm.c"
@@ -131,6 +133,15 @@ jobs:
 
       - name: Test bounded GSP firmware acquisition and verification
         run: /tmp/vantaos-nvx-firmware-test
+
+      - name: Compile NVX GSP firmware bundle tests with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_bundle.c drivers/gpu/nvx/nvx_gsp_bundle.c \
+            -o /tmp/vantaos-nvx-gsp-bundle-test
+
+      - name: Test GSP component paths, verification and transactional cleanup
+        run: /tmp/vantaos-nvx-gsp-bundle-test
 
       - name: Compile NVX DMA buffer tests with strict warnings
         run: |

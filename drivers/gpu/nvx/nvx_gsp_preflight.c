@@ -16,7 +16,9 @@ nvx_gsp_preflight_status_t nvx_gsp_preflight_validate(
     const nvx_gsp_bundle_t *b,nvx_gsp_preflight_report_t *out)
 {
     nvx_gsp_elf_info_t info;
+    nvx_gsp_elf_section_t image,version;
     nvx_gsp_elf_status_t es;
+    size_t expected_len=0U;
     if(!b||!out)return NVX_GSP_PREFLIGHT_INVALID_ARGUMENT;
     if(overlaps(out,sizeof(*out),b,sizeof(*b)))return NVX_GSP_PREFLIGHT_INVALID_ARGUMENT;
     for(size_t i=0;i<NVX_GSP_COMPONENT_COUNT;i++)
@@ -37,7 +39,20 @@ nvx_gsp_preflight_status_t nvx_gsp_preflight_validate(
         return NVX_GSP_PREFLIGHT_COMPONENT_INVALID;
     es=nvx_gsp_elf_parse(runtime,NVX_GSP_GA10X_SIGNATURE_SECTION,&info);
     if(es!=NVX_GSP_ELF_OK)return NVX_GSP_PREFLIGHT_RUNTIME_INVALID;
+    if(nvx_gsp_elf_find_section(runtime,".fwimage",&image)!=NVX_GSP_ELF_OK||
+       !image.size||
+       nvx_gsp_elf_find_section(runtime,".fwversion",&version)!=NVX_GSP_ELF_OK||
+       !version.size||version.size>=sizeof(out->version)||
+       version.data[version.size-1U]!=0U)
+        return NVX_GSP_PREFLIGHT_CONTAINER_INVALID;
+    while(expected_len<sizeof(b->version)&&b->version[expected_len])++expected_len;
+    if(expected_len==sizeof(b->version)||version.size!=expected_len+1U||
+       memcmp(version.data,b->version,expected_len)!=0)
+        return NVX_GSP_PREFLIGHT_VERSION_MISMATCH;
     out->runtime=info;
+    out->firmware_image=image;
+    out->firmware_version=version;
+    memcpy(out->version,b->version,expected_len+1U);
     out->runtime_bytes=runtime->blob.size;
     out->ucode_archive_bytes=ucodes->blob.size;
     out->runtime_verified=1U;

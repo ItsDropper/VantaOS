@@ -314,7 +314,8 @@ nvx_gsp_falcon_status_t nvx_ga10x_falcon_dma_upload(
         return NVX_GSP_FALCON_DMA_INVALID_TRANSFER;
     source_end = source_phys + (uint64_t)source_offset + length;
     destination_end = (uint64_t)destination_offset + length;
-    if (source_end < source_phys || destination_end > 0x01000000ULL)
+    if (source_end < source_phys || source_end > (1ULL << 49U) ||
+        destination_end > 0x01000000ULL)
         return NVX_GSP_FALCON_DMA_INVALID_TRANSFER;
 
     command_register = NVX_GA10X_FALCON_DMATRFCMD(falcon_base);

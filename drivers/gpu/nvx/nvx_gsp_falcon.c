@@ -148,80 +148,104 @@ nvx_gsp_falcon_status_t nvx_gsp_ga10x_wait_riscv_active(
  * ga102 Falcon HAL and NVIDIA's published dev_falcon_v4.h:
  * parameter address, engine mask, ucode ID, then RSA-3K selector.
  */
-nvx_gsp_falcon_status_t nvx_gsp_ga10x_program_brom(
-    const nvx_mmio_region_t *bar0, uint32_t engine_id_mask,
+
+static int nvx_ga10x_falcon_pair_valid(uint32_t falcon_base,
+                                       uint32_t falcon2_base,
+                                       uint32_t engine_id_mask)
+{
+    return (falcon_base == NVX_GSP_FALCON_BASE &&
+            falcon2_base == NVX_GSP_FALCON2_BASE &&
+            engine_id_mask == 0x0400U) ||
+           (falcon_base == NVX_SEC2_FALCON_BASE &&
+            falcon2_base == NVX_SEC2_FALCON2_BASE &&
+            engine_id_mask == 0x0001U);
+}
+
+nvx_gsp_falcon_status_t nvx_ga10x_falcon_program_brom(
+    const nvx_mmio_region_t *bar0, uint32_t falcon_base,
+    uint32_t falcon2_base, uint32_t engine_id_mask,
     uint32_t ucode_id, uint32_t pkc_data_offset)
 {
     uint32_t hwcfg2 = 0U;
     uint32_t cpuctl = 0U;
+    size_t required_bytes;
 
     if (bar0 == 0 || bar0->base == 0)
         return NVX_GSP_FALCON_INVALID_ARGUMENT;
-    if (bar0->length < NVX_GSP_FALCON_BROM_REQUIRED_BYTES)
+    if (!nvx_ga10x_falcon_pair_valid(falcon_base, falcon2_base,
+                                    engine_id_mask))
+        return NVX_GSP_FALCON_BROM_INVALID_PARAMETERS;
+    required_bytes = (size_t)NVX_GA10X_FALCON_BROM_PARAM_ADDR(falcon2_base) + 4U;
+    if (bar0->length < required_bytes)
         return NVX_GSP_FALCON_BAR_TOO_SMALL;
-    if ((engine_id_mask != 0x0001U && engine_id_mask != 0x0004U &&
-         engine_id_mask != 0x0400U) ||
-        ucode_id == 0U || ucode_id > NVX_GSP_FALCON_BROM_UCODE_COUNT ||
+    if (ucode_id == 0U || ucode_id > NVX_GSP_FALCON_BROM_UCODE_COUNT ||
         (pkc_data_offset & 3U) != 0U)
         return NVX_GSP_FALCON_BROM_INVALID_PARAMETERS;
 
-    if (nvx_mmio_read32(bar0, NVX_GSP_FALCON_HWCFG2, &hwcfg2) != NVX_MMIO_OK ||
-        nvx_mmio_read32(bar0, NVX_GSP_FALCON_CPUCTL, &cpuctl) != NVX_MMIO_OK)
+    if (nvx_mmio_read32(bar0, falcon_base + 0x0F4U, &hwcfg2) != NVX_MMIO_OK ||
+        nvx_mmio_read32(bar0, falcon_base + 0x100U, &cpuctl) != NVX_MMIO_OK)
         return NVX_GSP_FALCON_MMIO_ERROR;
     if ((hwcfg2 & NVX_GSP_PRIV_LOCKED_MASK) == NVX_GSP_PRIV_LOCKED_PATTERN)
         return NVX_GSP_FALCON_PRIVILEGED_WINDOW_LOCKED;
     if ((cpuctl & NVX_GSP_CPUCTL_HALTED) == 0U)
         return NVX_GSP_FALCON_NOT_HALTED;
 
-    /*
-     * All target registers are range-checked above before the first write.
-     * A hardware bus fault cannot be rolled back; callers must treat any
-     * write error as a failed boot transaction and reset/recover the engine.
-     */
-    if (nvx_mmio_write32(bar0, NVX_GSP_FALCON_BROM_PARAM_ADDR,
+    /* GA102 OpenRM/Nova order: parameter address, engine mask, ucode ID,
+       and RSA-3K selector. Validate all bounds before the first write. */
+    if (nvx_mmio_write32(bar0, NVX_GA10X_FALCON_BROM_PARAM_ADDR(falcon2_base),
                          pkc_data_offset) != NVX_MMIO_OK ||
-        nvx_mmio_write32(bar0, NVX_GSP_FALCON_BROM_ENGINE_MASK,
+        nvx_mmio_write32(bar0, NVX_GA10X_FALCON_BROM_ENGINE_MASK(falcon2_base),
                          engine_id_mask) != NVX_MMIO_OK ||
-        nvx_mmio_write32(bar0, NVX_GSP_FALCON_BROM_UCODE_ID,
+        nvx_mmio_write32(bar0, NVX_GA10X_FALCON_BROM_UCODE_ID(falcon2_base),
                          ucode_id) != NVX_MMIO_OK ||
-        nvx_mmio_write32(bar0, NVX_GSP_FALCON_BROM_MOD_SEL,
+        nvx_mmio_write32(bar0, NVX_GA10X_FALCON_BROM_MOD_SEL(falcon2_base),
                          NVX_GSP_FALCON_BROM_RSA3K) != NVX_MMIO_OK)
         return NVX_GSP_FALCON_MMIO_ERROR;
-
     return NVX_GSP_FALCON_OK;
 }
 
-/*
- * Launch the already-loaded Falcon image. The caller must have completed the
- * appropriate firmware authentication and loading sequence before invoking
- * this function; this primitive deliberately does not claim to authenticate.
- */
-nvx_gsp_falcon_status_t nvx_gsp_ga10x_start_falcon(
-    const nvx_mmio_region_t *bar0, uint32_t boot_vector)
+nvx_gsp_falcon_status_t nvx_gsp_ga10x_program_brom(
+    const nvx_mmio_region_t *bar0, uint32_t engine_id_mask,
+    uint32_t ucode_id, uint32_t pkc_data_offset)
+{
+    return nvx_ga10x_falcon_program_brom(bar0, NVX_GSP_FALCON_BASE,
+        NVX_GSP_FALCON2_BASE, engine_id_mask, ucode_id, pkc_data_offset);
+}
+
+nvx_gsp_falcon_status_t nvx_ga10x_falcon_start(
+    const nvx_mmio_region_t *bar0, uint32_t falcon_base,
+    uint32_t boot_vector)
 {
     uint32_t hwcfg2 = 0U;
     uint32_t cpuctl = 0U;
 
     if (bar0 == 0 || bar0->base == 0)
         return NVX_GSP_FALCON_INVALID_ARGUMENT;
-    if (bar0->length < NVX_GSP_FALCON_BOOTVEC + 4U)
+    if (falcon_base != NVX_GSP_FALCON_BASE &&
+        falcon_base != NVX_SEC2_FALCON_BASE)
+        return NVX_GSP_FALCON_BROM_INVALID_PARAMETERS;
+    if (bar0->length < (size_t)(falcon_base + 0x108U))
         return NVX_GSP_FALCON_BAR_TOO_SMALL;
     if ((boot_vector & 3U) != 0U)
         return NVX_GSP_FALCON_BOOT_VECTOR_INVALID;
 
-    if (nvx_mmio_read32(bar0, NVX_GSP_FALCON_HWCFG2, &hwcfg2) != NVX_MMIO_OK ||
-        nvx_mmio_read32(bar0, NVX_GSP_FALCON_CPUCTL, &cpuctl) != NVX_MMIO_OK)
+    if (nvx_mmio_read32(bar0, falcon_base + 0x0F4U, &hwcfg2) != NVX_MMIO_OK ||
+        nvx_mmio_read32(bar0, falcon_base + 0x100U, &cpuctl) != NVX_MMIO_OK)
         return NVX_GSP_FALCON_MMIO_ERROR;
     if ((hwcfg2 & NVX_GSP_PRIV_LOCKED_MASK) == NVX_GSP_PRIV_LOCKED_PATTERN)
         return NVX_GSP_FALCON_PRIVILEGED_WINDOW_LOCKED;
     if ((cpuctl & NVX_GSP_CPUCTL_HALTED) == 0U)
         return NVX_GSP_FALCON_NOT_HALTED;
-
-    if (nvx_mmio_write32(bar0, NVX_GSP_FALCON_BOOTVEC,
-                         boot_vector) != NVX_MMIO_OK)
-        return NVX_GSP_FALCON_MMIO_ERROR;
-    if (nvx_mmio_write32(bar0, NVX_GSP_FALCON_CPUCTL,
+    if (nvx_mmio_write32(bar0, falcon_base + 0x104U,
+                         boot_vector) != NVX_MMIO_OK ||
+        nvx_mmio_write32(bar0, falcon_base + 0x100U,
                          NVX_GSP_CPUCTL_START) != NVX_MMIO_OK)
         return NVX_GSP_FALCON_MMIO_ERROR;
     return NVX_GSP_FALCON_OK;
+}
+
+nvx_gsp_falcon_status_t nvx_gsp_ga10x_start_falcon(
+    const nvx_mmio_region_t *bar0, uint32_t boot_vector)
+{
+    return nvx_ga10x_falcon_start(bar0, NVX_GSP_FALCON_BASE, boot_vector);
 }

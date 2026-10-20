@@ -145,6 +145,13 @@ before consuming a message. There is no invented checksum field in the wire
 format. Tests cover full/empty queues, multi-page wraparound, malformed
 headers, request/reply sequence correlation, and notification counts.
 
+The implementation is grounded in NVIDIA's own published source rather than
+Nouveau: `src/nvidia/arch/nvalloc/common/inc/mctp_format.h`,
+`nvdm_format.h`, `src/nvidia/inc/kernel/gpu/gsp/message_queue_priv.h`,
+`src/nvidia/generated/g_rpc-message-header.h`, and the GSP queue/RPC call
+paths in `message_queue_cpu.c` and `kernel_gsp.c` from
+[NVIDIA/open-gpu-kernel-modules](https://github.com/NVIDIA/open-gpu-kernel-modules).
+
 This is transport framing only. It is not wired to a booted GSP, does not yet
 implement the payload schema for NVIDIA's CONTINUATION_RECORD RPC function for
 messages exceeding 16 pages, and does not implement RPC function schemas or

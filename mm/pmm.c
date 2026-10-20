@@ -6,6 +6,7 @@
  */
 
 #include "pmm.h"
+#include "spinlock.h"
 
 #include <stdint.h>
 #include <stddef.h>
@@ -24,6 +25,7 @@ static uint32_t pmm_reserved_bitmap[PMM_BITMAP_WORDS]
 static uint32_t total_blocks;
 static uint32_t free_blocks;
 static int initialized;
+static spinlock_t pmm_lock = SPINLOCK_INITIALIZER;
 
 static inline void bitmap_set(uint32_t* bitmap, uint32_t bit)
 {
@@ -122,6 +124,7 @@ static int is_releasable_type(uint32_t type)
 
 void pmm_initialize(const vanta_boot_info_t* boot_info)
 {
+    spinlock_init(&pmm_lock);
     initialized = 0;
     total_blocks = 0;
     free_blocks = 0;
@@ -303,8 +306,14 @@ void pmm_initialize(const vanta_boot_info_t* boot_info)
 
 void* pmm_alloc_block(void)
 {
+    void *result = NULL;
+
+    spinlock_lock(&pmm_lock);
     if (!initialized || total_blocks == 0)
+    {
+        spinlock_unlock(&pmm_lock);
         return NULL;
+    }
 
     for (uint32_t word = 0;
          word < (total_blocks + 31U) / 32U;
@@ -326,38 +335,101 @@ void* pmm_alloc_block(void)
                 !bitmap_test(pmm_reserved_bitmap, block))
             {
                 bitmap_set(pmm_bitmap, block);
-
-                if (free_blocks > 0)
+                if (free_blocks > 0U)
                     free_blocks--;
-
-                return (void*)(uintptr_t)(block * PAGE_SIZE);
+                result = (void *)(uintptr_t)((uint64_t)block * PAGE_SIZE);
+                spinlock_unlock(&pmm_lock);
+                return result;
             }
         }
     }
 
+    spinlock_unlock(&pmm_lock);
     return NULL;
+}
+
+int pmm_alloc_contiguous_blocks(uint32_t count, void **base_address)
+{
+    uint32_t run_start = 0U;
+    uint32_t run_length = 0U;
+
+    if (base_address == NULL)
+        return 0;
+    *base_address = NULL;
+    if (count == 0U)
+        return 0;
+
+    spinlock_lock(&pmm_lock);
+    if (!initialized || count > total_blocks || count > free_blocks)
+    {
+        spinlock_unlock(&pmm_lock);
+        return 0;
+    }
+
+    /*
+     * Search for the whole run before marking any frame. The previous DMA
+     * implementation allocated pages one at a time and then rejected a
+     * fragmented first-fit result even if a suitable run existed later.
+     */
+    for (uint32_t block = 0U; block < total_blocks; ++block)
+    {
+        if (!bitmap_test(pmm_bitmap, block) &&
+            !bitmap_test(pmm_reserved_bitmap, block))
+        {
+            if (run_length == 0U)
+                run_start = block;
+            ++run_length;
+            if (run_length == count)
+            {
+                for (uint32_t i = 0U; i < count; ++i)
+                    bitmap_set(pmm_bitmap, run_start + i);
+                free_blocks -= count;
+                *base_address =
+                    (void *)(uintptr_t)((uint64_t)run_start * PAGE_SIZE);
+                spinlock_unlock(&pmm_lock);
+                return 1;
+            }
+        }
+        else
+        {
+            run_length = 0U;
+        }
+    }
+
+    spinlock_unlock(&pmm_lock);
+    return 0;
 }
 
 void pmm_free_block(void* ptr)
 {
-    if (!initialized || !ptr)
+    if (!ptr)
         return;
 
     uintptr_t address = (uintptr_t)ptr;
-
     if ((address % PAGE_SIZE) != 0 ||
         address >= PMM_MAX_PHYSICAL_ADDRESS)
         return;
+
+    spinlock_lock(&pmm_lock);
+    if (!initialized)
+    {
+        spinlock_unlock(&pmm_lock);
+        return;
+    }
 
     uint32_t block = (uint32_t)(address / PAGE_SIZE);
 
     if (block >= total_blocks ||
         bitmap_test(pmm_reserved_bitmap, block) ||
         !bitmap_test(pmm_bitmap, block))
+    {
+        spinlock_unlock(&pmm_lock);
         return;
+    }
 
     bitmap_clear(pmm_bitmap, block);
-    free_blocks++;
+    ++free_blocks;
+    spinlock_unlock(&pmm_lock);
 }
 
 uint32_t pmm_get_total_blocks(void)

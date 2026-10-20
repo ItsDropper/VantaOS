@@ -13,7 +13,7 @@ static uint16_t mock_command = NVX_PCI_COMMAND_MEMORY_SPACE;
 static unsigned map_calls;
 static unsigned unmap_calls;
 static int map_failure;
-static volatile uint32_t fake_registers[0xA04U / sizeof(uint32_t)] = { 0x17000000U, 1U };
+static volatile uint32_t fake_registers[0x1000U / sizeof(uint32_t)] = { 0x17000000U, 1U };
 
 uint16_t pci_read_config16(const struct pci_device *device, uint8_t offset)
 {

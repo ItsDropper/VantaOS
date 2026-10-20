@@ -53,11 +53,18 @@ int main(void) {
  make_image(&c); put32(128,1U); assert(nvx_gsp_image_parse(&c,&info)==NVX_GSP_IMAGE_SIGNATURE_INVALID);
  make_image(&c); put32(144,0U); assert(nvx_gsp_image_parse(&c,&info)==NVX_GSP_IMAGE_SIGNATURE_INVALID);
  make_image(&c); put32(144,3U); assert(nvx_gsp_image_parse(&c,&info)==NVX_GSP_IMAGE_SIGNATURE_INVALID);
+ make_image(&c); put32(144,16U); assert(nvx_gsp_image_parse(&c,&info)==NVX_GSP_IMAGE_SIGNATURE_INVALID);
  make_image(&c); put32(44,8U); assert(nvx_gsp_image_parse(&c,&info)==NVX_GSP_IMAGE_METADATA_INVALID);
  make_image(&c); put32(56,UINT32_MAX); assert(nvx_gsp_image_parse(&c,&info)==NVX_GSP_IMAGE_HEADER_INVALID);
  make_image(&c); put32(164,UINT32_MAX); assert(nvx_gsp_image_parse(&c,&info)==NVX_GSP_IMAGE_APP_INVALID);
  make_image(&c); put32(124,93U); assert(nvx_gsp_image_parse(&c,&info)==NVX_GSP_IMAGE_SIGNATURE_INVALID);
  assert(nvx_gsp_image_parse(0,&info)==NVX_GSP_IMAGE_INVALID_ARGUMENT); assert(nvx_gsp_image_parse(&c,0)==NVX_GSP_IMAGE_INVALID_ARGUMENT);
+ make_image(&c);put32(144U,1U);put32(160U,80U);
+ for(size_t i=0U;i<64U;i++)bytes[60U+i]=(uint8_t)(0x30U+i);
+ for(size_t i=0U;i<128U;i++)bytes[184U+i]=(uint8_t)i;
+ assert(nvx_gsp_image_parse(&c,&info)==NVX_GSP_IMAGE_OK&&info.signature_size==64U);
+ assert(nvx_gsp_image_prepare(&c,UINT32_MAX,staged,sizeof(staged))==NVX_GSP_IMAGE_OK);
+ assert(staged[40]==0x30U&&staged[103]==0x6FU);
  make_image(&c);put32(4U,2U);assert(nvx_gsp_image_parse(&c,&info)==NVX_GSP_IMAGE_UNSUPPORTED_VERSION);
  make_image(&c);put32(0U,0U);assert(nvx_gsp_image_parse(&c,&info)==NVX_GSP_IMAGE_BAD_MAGIC);
  make_image(&c);assert(nvx_gsp_image_parse(&c,(nvx_gsp_image_info_t *)(void *)bytes)==NVX_GSP_IMAGE_INVALID_ARGUMENT);

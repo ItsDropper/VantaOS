@@ -113,6 +113,25 @@ coordinated set of version-matched files. This is still acquisition/verification
 plumbing, not firmware-container parsing, signature patching, Falcon loading,
 GSP boot, or RPC queue initialization.
 
+### GSP RPC ring transport
+
+The driver now has a bounded producer/consumer ring primitive for GSP RPC
+messages. It encodes the message-element and RPC headers in little-endian form,
+allocates page-aligned message extents, enforces the 16-page element limit,
+reserves one empty ring page, checks producer/consumer indices, calculates the
+R535-style XOR checksum, publishes pointers with memory ordering, and supports
+wraparound across the queue's end. The receive path validates element counts,
+RPC lengths, page counts and checksums before consuming a message. Tests cover
+full/empty queues, multi-page wraparound, malformed inputs, checksum corruption,
+and notification counts.
+
+This is transport framing only. It is not wired to a booted GSP, does not
+implement the full continuation-record protocol for messages exceeding 16 pages,
+and does not implement RPC function schemas, response correlation, or hardware
+doorbell register programming. The caller must supply the correct firmware-shared
+pointer locations and notification callback after a real GSP queue has been
+initialized.
+
 ### Bounded GSP booter-image parser
 
 A read-only parser validates the version-2 signed booter-load container before

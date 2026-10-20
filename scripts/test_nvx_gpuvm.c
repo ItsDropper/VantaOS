@@ -163,12 +163,20 @@ int main(void)
         uint16_t slot = test_index_for_level(mapping.base, level);
         size_t child = test_find_child(leaf, slot);
         assert(child < NVX_GPUVM_MAX_TABLES);
+        uint64_t *pde = (uint64_t *)((uintptr_t)vm.tables[leaf].backing.virtual_address +
+                                     (uintptr_t)slot * sizeof(uint64_t));
+        uint64_t expected_pde =
+            (vm.tables[child].backing.physical_address >> 8U) |
+            (2ULL << 32U) | (1ULL << 34U);
+        assert(*pde == expected_pde);
         leaf = (uint16_t)child;
     }
     uint64_t *entry = (uint64_t *)((uintptr_t)vm.tables[leaf].backing.virtual_address +
         (uintptr_t)test_index_for_level(mapping.base, 0U) * sizeof(uint64_t));
-    assert(entry != 0 && (*entry & 0xFFU) == 0xCDU);
-    assert((*entry & ~0xFFULL) == (physical[0] >> 4U));
+    const uint64_t expected_pte = (physical[0] >> 8U) | 1ULL | (1ULL << 1U) |
+                                  (1ULL << 2U) | (1ULL << 32U) |
+                                  (2ULL << 33U);
+    assert(entry != 0 && *entry == expected_pte);
 
     assert(nvx_gpuvm_activate(&vm) == NVX_GPUVM_OK);
     assert(vm.root_published && registers[0] ==

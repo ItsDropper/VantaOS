@@ -8,6 +8,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "nvx_gsp_ring.h"
+#include "nvx_gsp_msgq_rpc.h"
 #define NVX_GSP_RPC_MAX_PENDING 32U
 typedef struct nvx_gsp_rpc_handle { uint32_t generation; uint16_t slot; uint16_t valid; } nvx_gsp_rpc_handle_t;
 typedef enum nvx_gsp_rpc_status {
@@ -31,15 +32,25 @@ typedef struct nvx_gsp_rpc_slot {
     nvx_gsp_rpc_status_t state;
     uint8_t active;
 } nvx_gsp_rpc_slot_t;
+typedef enum nvx_gsp_rpc_transport_kind {
+    NVX_GSP_RPC_TRANSPORT_NONE=0,
+    NVX_GSP_RPC_TRANSPORT_RING,
+    NVX_GSP_RPC_TRANSPORT_MSGQ
+} nvx_gsp_rpc_transport_kind_t;
 typedef struct nvx_gsp_rpc_manager {
     spinlock_t lock;
     nvx_gsp_ring_t *command_ring;
     nvx_gsp_ring_t *response_ring;
+    nvx_gsp_msgq_rpc_transport_t *msgq_transport;
+    nvx_gsp_rpc_transport_kind_t transport_kind;
     nvx_gsp_rpc_slot_t slots[NVX_GSP_RPC_MAX_PENDING];
     uint8_t initialized, device_lost;
 } nvx_gsp_rpc_manager_t;
 /* Zero-initialize manager. Response storage must remain valid until handle release. */
 nvx_gsp_rpc_status_t nvx_gsp_rpc_init(nvx_gsp_rpc_manager_t *, nvx_gsp_ring_t *command_ring, nvx_gsp_ring_t *response_ring);
+/* Same correlation/handle API over the hardware-oriented MSGQ transport. */
+nvx_gsp_rpc_status_t nvx_gsp_rpc_init_msgq(nvx_gsp_rpc_manager_t *,
+    nvx_gsp_msgq_rpc_transport_t *transport);
 nvx_gsp_rpc_status_t nvx_gsp_rpc_submit(nvx_gsp_rpc_manager_t *,
     uint32_t header_version, uint32_t signature, uint32_t request_function,
     uint32_t response_function, const void *payload, size_t payload_size,

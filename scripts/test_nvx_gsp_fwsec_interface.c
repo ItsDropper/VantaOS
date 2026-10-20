@@ -53,8 +53,8 @@ static void make_dmem(uint8_t dmem[DMEM_SIZE])
     put32(mapper, 0x33504D44U); /* Opaque signature: preserved, not trusted. */
     put16(mapper + 4U, 3U);
     put16(mapper + 6U, 68U);
-    put32(mapper + 12U, INPUT_OFFSET);
-    put32(mapper + 16U, 64U);
+    put32(mapper + 8U, INPUT_OFFSET);
+    put32(mapper + 12U, 64U);
 }
 
 int main(void)
@@ -95,14 +95,14 @@ int main(void)
         NVX_GSP_FWSEC_INTERFACE_RANGE_ERROR);
 
     make_dmem(dmem);
-    put32(dmem + IFACE_OFFSET + 4U + 8U, 4U);
-    put32(dmem + IFACE_OFFSET + 4U + 8U + 4U, MAPPER_OFFSET + 1U);
+    put32(dmem + IFACE_OFFSET + 4U, 4U);
+    put32(dmem + IFACE_OFFSET + 4U + 4U, 200U);
     assert(nvx_gsp_fwsec_find_command_window(
         dmem, sizeof(dmem), IFACE_OFFSET, 0x15U, 1U, &window) ==
         NVX_GSP_FWSEC_INTERFACE_AMBIGUOUS);
 
     make_dmem(dmem);
-    put32(dmem + MAPPER_OFFSET + 12U, UINT32_MAX - 8U);
+    put32(dmem + MAPPER_OFFSET + 8U, UINT32_MAX - 8U);
     assert(nvx_gsp_fwsec_find_command_window(
         dmem, sizeof(dmem), IFACE_OFFSET, 0x15U, 1U, &window) ==
         NVX_GSP_FWSEC_INTERFACE_RANGE_ERROR);

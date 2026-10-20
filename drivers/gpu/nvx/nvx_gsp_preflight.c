@@ -243,3 +243,27 @@ nvx_gsp_preflight_status_t nvx_gsp_preflight_stage_booters_from_bar0(
         unload_fuse_version, unload_staging, unload_capacity,
         out_load_info, out_unload_info);
 }
+
+nvx_gsp_preflight_status_t nvx_gsp_preflight_load_runtime(
+    const nvx_gsp_bundle_t *bundle, nvx_gsp_elf_map_fn map,
+    void *map_context, uint64_t *out_entry)
+{
+    nvx_gsp_preflight_report_t report;
+    nvx_gsp_preflight_status_t status;
+    nvx_gsp_elf_load_status_t load_status;
+
+    if (!bundle || !map || !out_entry)
+        return NVX_GSP_PREFLIGHT_INVALID_ARGUMENT;
+    *out_entry = 0U;
+
+    status = nvx_gsp_preflight_validate(bundle, &report);
+    if (status != NVX_GSP_PREFLIGHT_OK)
+        return status;
+
+    load_status = nvx_gsp_elf_load_segments(
+        &bundle->components[0], map, map_context, out_entry);
+    if (load_status == NVX_GSP_ELF_LOAD_OK)
+        return NVX_GSP_PREFLIGHT_OK;
+    *out_entry = 0U;
+    return NVX_GSP_PREFLIGHT_RUNTIME_LOAD_FAILED;
+}

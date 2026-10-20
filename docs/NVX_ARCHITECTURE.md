@@ -212,14 +212,17 @@ image.
 
 ### Bounded GSP booter-image parser
 
-A read-only parser validates the version-2 signed booter-load container before
-a future loader uses its offsets. It checks the outer binary size, payload
-range, security-header range, signature table/count, patch metadata pointers,
-minimum metadata fields, load-header size, application count, and every code/data
-segment range. It extracts fuse/engine/ucode metadata and the first application
-descriptor without modifying firmware bytes. Synthetic tests cover truncated
-input, invalid offsets, malformed signature counts, missing metadata, invalid
-application ranges, and unsupported component types.
+A read-only parser validates the version-2 signed booter-load/unload containers before
+a future loader uses their offsets. It checks the NVIDIA binary magic, outer
+binary size, payload range, security-header range, signature table/count, patch
+metadata pointers, minimum metadata fields, load-header size, application count,
+and every code/data segment range. It extracts fuse/engine/ucode metadata and
+the first application descriptor without modifying firmware bytes. GSP
+preflight now runs this parser on both booter-load and booter-unload components
+instead of treating them as opaque present files. Synthetic tests cover malformed
+magic, truncated input, invalid offsets, malformed signature counts, missing
+metadata, invalid application ranges, output/input aliasing, and unsupported
+component types.
 
 Structural validation does not authenticate NVIDIA's signature cryptography,
 patch signatures, load Falcon IMEM/DMEM, boot the GSP, or establish an RPC queue.

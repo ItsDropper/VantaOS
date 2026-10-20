@@ -6,12 +6,14 @@ on:
       - "drivers/gpu/nvx/**"
       - "include/nvx_gsp_boot_memory.h"
       - "include/nvx_gsp_secure_boot.h"
+      - "include/nvx_gsp_pci_rom.h"
       - "include/nvx_gsp_fwsec_interface.h"
       - "include/nvx_gsp_fwsec_command.h"
       - "include/nvx_gsp_fwsec_result.h"
       - "scripts/test_nvx_gsp_boot_memory.c"
       - "scripts/test_nvx_gsp_secure_boot.c"
       - "scripts/test_nvx_gsp_vbios.c"
+      - "scripts/test_nvx_gsp_pci_rom.c"
       - "scripts/test_nvx_gsp_fwsec_interface.c"
       - "scripts/test_nvx_gsp_fwsec_command.c"
       - "scripts/test_nvx_gsp_fwsec_result.c"
@@ -522,6 +524,16 @@ jobs:
 
       - name: Test VBIOS BIT traversal, FWSEC V3 metadata and malformed ranges
         run: /tmp/vantaos-nvx-gsp-vbios-test
+
+      - name: Compile bounded PCI expansion-ROM chain tests with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_pci_rom.c drivers/gpu/nvx/nvx_gsp_pci_rom.c \
+            -o /tmp/vantaos-nvx-pci-rom-test
+
+      - name: Test PCI ROM chain boundaries, vendor matching and malformed images
+        run: /tmp/vantaos-nvx-pci-rom-test
+
 
       - name: Compile FWSEC interface parser tests with strict warnings
         run: |

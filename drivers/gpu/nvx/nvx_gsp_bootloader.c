@@ -86,6 +86,31 @@ nvx_gsp_bootloader_status_t nvx_gsp_bootloader_parse(
     if (rounded_end != info.binary_size)
         return NVX_GSP_BOOTLOADER_BAD_LAYOUT;
 
+    /*
+     * GA10x's 84-byte descriptor is the 21-word RM_RISCV_UCODE_DESC prefix.
+     * The monitor code/data and manifest offsets are relative to the copied
+     * RISC-V bootloader payload, not to the outer NVFW container.
+     */
+    const uint8_t *desc = data + info.descriptor_offset;
+    info.descriptor_version = read_le32(desc);
+    info.manifest_offset = read_le32(desc + 8U * 4U);
+    info.manifest_size = read_le32(desc + 9U * 4U);
+    info.monitor_data_offset = read_le32(desc + 10U * 4U);
+    info.monitor_data_size = read_le32(desc + 11U * 4U);
+    info.monitor_code_offset = read_le32(desc + 12U * 4U);
+    info.monitor_code_size = read_le32(desc + 13U * 4U);
+    if ((info.descriptor_version != 0U && info.descriptor_version > 5U) ||
+        (info.manifest_size != 0U &&
+         !range_ok(info.payload_size, info.manifest_offset, info.manifest_size)) ||
+        (info.monitor_data_size != 0U &&
+         !range_ok(info.payload_size, info.monitor_data_offset, info.monitor_data_size)) ||
+        (info.monitor_code_size != 0U &&
+         !range_ok(info.payload_size, info.monitor_code_offset, info.monitor_code_size)) ||
+        (info.manifest_offset != 0U && info.manifest_offset >= info.payload_size) ||
+        (info.monitor_data_offset != 0U && info.monitor_data_offset >= info.payload_size) ||
+        (info.monitor_code_offset != 0U && info.monitor_code_offset >= info.payload_size))
+        return NVX_GSP_BOOTLOADER_RANGE_INVALID;
+
     *out_info = info;
     return NVX_GSP_BOOTLOADER_OK;
 }

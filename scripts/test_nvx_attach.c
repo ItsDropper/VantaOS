@@ -13,7 +13,7 @@ static uint16_t mock_command = NVX_PCI_COMMAND_MEMORY_SPACE;
 static unsigned map_calls;
 static unsigned unmap_calls;
 static int map_failure;
-static volatile uint32_t fake_registers[2] = { 0x12345678U, 1U };
+static volatile uint32_t fake_registers[0xA04U / sizeof(uint32_t)] = { 0x17000000U, 1U };
 
 uint16_t pci_read_config16(const struct pci_device *device, uint8_t offset)
 {
@@ -89,6 +89,12 @@ int main(void)
     assert(nvx_device_detach(&device) == NVX_ATTACH_OK);
     assert(device.attached == 0U && device.bar0_mapping == 0);
     assert(device.lifecycle.state == NVX_STATE_STOPPED);
+    assert(device.registers.pmc_boot_0 == 0U);
+    assert(device.registers.pmc_boot_42 == 0U);
+    assert(device.registers.extended_chip_id == 0U);
+    assert(device.registers.extended_revision_valid == 0U);
+    assert(device.registers.identity_mismatch == 0U);
+    assert(device.bar0.base == 0U && device.bar0.size == 0U);
     assert(unmap_calls == 1U);
 
     assert(nvx_device_attach(&other, &bar0, &device) == NVX_ATTACH_INVALID_ARGUMENT);

@@ -5,6 +5,7 @@
  */
 #include "nvx_gsp_wpr_meta.h"
 #include <string.h>
+#include <stdatomic.h>
 _Static_assert(sizeof(nvx_gsp_wpr_meta_v1_t)==NVX_GSP_WPR_META_V1_SIZE,"WPR V1 must remain 256 bytes");
 _Static_assert(offsetof(nvx_gsp_wpr_meta_v1_t,sysmem_addr_of_radix3_elf)==16U,"WPR V1 ELF address offset");
 _Static_assert(offsetof(nvx_gsp_wpr_meta_v1_t,gsp_fw_wpr_start)==112U,"WPR V1 WPR start offset");
@@ -265,5 +266,27 @@ nvx_gsp_wpr_status_t nvx_gsp_wpr_layout_plan(
     if (status != NVX_GSP_WPR_OK)
         return status;
     *out_layout = plan;
+    return NVX_GSP_WPR_OK;
+}
+
+
+nvx_gsp_wpr_status_t nvx_gsp_wpr_meta_materialize(
+    const nvx_gsp_wpr_layout_t *layout, void *sysmem_cpu,
+    size_t capacity, uint64_t sysmem_phys)
+{
+    nvx_gsp_wpr_meta_v1_t metadata;
+
+    if (!layout || !sysmem_cpu || sysmem_phys == 0U ||
+        capacity < sizeof(metadata) || !aligned(sysmem_phys, 4096U) ||
+        sysmem_phys > UINT64_MAX - sizeof(metadata) ||
+        overlaps_ptr(layout, sizeof(*layout), sysmem_cpu, sizeof(metadata)))
+        return NVX_GSP_WPR_INVALID_ARGUMENT;
+
+    nvx_gsp_wpr_status_t status = nvx_gsp_wpr_meta_build(layout, &metadata);
+    if (status != NVX_GSP_WPR_OK)
+        return status;
+
+    memcpy(sysmem_cpu, &metadata, sizeof(metadata));
+    atomic_thread_fence(memory_order_release);
     return NVX_GSP_WPR_OK;
 }

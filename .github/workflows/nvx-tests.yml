@@ -4,6 +4,10 @@ on:
   pull_request:
     paths:
       - "drivers/gpu/nvx/**"
+      - "include/nvx_gsp_boot_memory.h"
+      - "include/nvx_gsp_secure_boot.h"
+      - "scripts/test_nvx_gsp_boot_memory.c"
+      - "scripts/test_nvx_gsp_secure_boot.c"
       - "drivers/gpu/core/**"
       - "drivers/gpu/intel/**"
       - "drivers/gpu/amd/**"
@@ -234,6 +238,25 @@ jobs:
 
       - name: Test exact 256-byte WPR V1 layout and range validation
         run: /tmp/vantaos-nvx-wpr-meta-test
+
+      - name: Compile GA10x boot-memory ownership tests
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_boot_memory.c drivers/gpu/nvx/nvx_gsp_boot_memory.c \
+            drivers/gpu/nvx/nvx_gsp_wpr_meta.c drivers/gpu/nvx/nvx_dma_sync.c -o /tmp/vantaos-nvx-gsp-boot-memory-test
+
+      - name: Test DMA artifact acquisition, WPR metadata handoff and rollback
+        run: /tmp/vantaos-nvx-gsp-boot-memory-test
+
+      - name: Compile GA10x SEC2 secure-booter execution tests
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_secure_boot.c drivers/gpu/nvx/nvx_gsp_secure_boot.c \
+            drivers/gpu/nvx/nvx_gsp_falcon.c drivers/gpu/nvx/nvx_mmio.c \
+            drivers/gpu/nvx/nvx_dma_sync.c -o /tmp/vantaos-nvx-secure-boot-test
+
+      - name: Test SEC2 transfer planning, BROM setup and Booter Load handoff
+        run: /tmp/vantaos-nvx-secure-boot-test
 
       - name: Compile GSP ELF section lookup tests
         run: |

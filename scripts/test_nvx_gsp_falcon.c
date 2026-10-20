@@ -62,6 +62,27 @@ static void fake_reset_delay(uint32_t milliseconds, void *context)
     }
 }
 
+typedef struct boot_test_context {
+    uint32_t base;
+    uint32_t delays;
+    uint32_t complete_after;
+    uint32_t mailbox0;
+    uint32_t mailbox1;
+} boot_test_context_t;
+
+static void fake_boot_delay(uint32_t milliseconds, void *context)
+{
+    boot_test_context_t *state = (boot_test_context_t *)context;
+    assert(milliseconds != 0U);
+    ++state->delays;
+    if (state->complete_after != 0U &&
+        state->delays >= state->complete_after) {
+        put32(state->base + 0x100U, NVX_GSP_CPUCTL_HALTED);
+        put32(state->base + 0x040U, state->mailbox0);
+        put32(state->base + 0x044U, state->mailbox1);
+    }
+}
+
 static unsigned delay_calls;
 static unsigned activate_after;
 
@@ -258,6 +279,34 @@ int main(void)
     put32(NVX_GSP_FALCON_CPUCTL, NVX_GSP_CPUCTL_HALTED);
     assert(nvx_gsp_ga10x_start_falcon(&region, 0x200U) ==
            NVX_GSP_FALCON_PRIVILEGED_WINDOW_LOCKED);
+
+    /* Full boot contract: inputs, STARTCPU, bounded HALTED wait, outputs. */
+    put32(NVX_GSP_FALCON_HWCFG2, NVX_GSP_HWCFG2_RESET_READY);
+    put32(NVX_GSP_FALCON_CPUCTL, NVX_GSP_CPUCTL_HALTED);
+    boot_test_context_t boot_state = {
+        NVX_GSP_FALCON_BASE, 0U, 1U, 0U, 0xA55AU
+    };
+    uint32_t mailbox0_out = UINT32_MAX;
+    uint32_t mailbox1_out = UINT32_MAX;
+    assert(nvx_ga10x_falcon_boot(&region, NVX_GSP_FALCON_BASE, 0x200U,
+           1U, 0x1111U, 1U, 0x2222U,
+           &mailbox0_out, &mailbox1_out, 10U, 1U,
+           fake_boot_delay, &boot_state) == NVX_GSP_FALCON_OK);
+    assert(get32(NVX_GSP_FALCON_MAILBOX0) == 0U);
+    assert(get32(NVX_GSP_FALCON_MAILBOX1) == 0x2222U);
+    assert(mailbox0_out == 0U && mailbox1_out == 0xA55AU);
+    assert(boot_state.delays == 1U);
+    put32(NVX_GSP_FALCON_CPUCTL, NVX_GSP_CPUCTL_HALTED);
+    boot_state.delays = 0U;
+    boot_state.complete_after = 0U;
+    mailbox0_out = UINT32_MAX;
+    mailbox1_out = UINT32_MAX;
+    assert(nvx_ga10x_falcon_boot(&region, NVX_GSP_FALCON_BASE, 0x200U,
+           0U, 0U, 0U, 0U, &mailbox0_out, &mailbox1_out,
+           2U, 1U, fake_boot_delay, &boot_state) ==
+           NVX_GSP_FALCON_BOOT_TIMEOUT);
+    assert(boot_state.delays == 2U);
+    assert(mailbox0_out == 0U && mailbox1_out == 0U);
     memset(&snapshot, 0xA5, sizeof(snapshot));
     assert(nvx_gsp_ga10x_inspect_falcon(&region, &snapshot) ==
            NVX_GSP_FALCON_PRIVILEGED_WINDOW_LOCKED);

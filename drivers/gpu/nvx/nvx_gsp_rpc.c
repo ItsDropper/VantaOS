@@ -45,8 +45,12 @@ nvx_gsp_rpc_status_t nvx_gsp_rpc_submit(nvx_gsp_rpc_manager_t *m,
     if(!m->initialized) return NVX_GSP_RPC_NOT_INITIALIZED;
     flags=rpc_lock(m);
     if(m->device_lost) { rpc_unlock(m,flags); return NVX_GSP_RPC_DEVICE_LOST; }
-    for(size_t i=0;i<NVX_GSP_RPC_MAX_PENDING;i++)
-        if(!m->slots[i].active) { index=i; break; }
+    for(size_t i=0;i<NVX_GSP_RPC_MAX_PENDING;i++) {
+        if(m->slots[i].active&&m->slots[i].state==NVX_GSP_RPC_PENDING) {
+            rpc_unlock(m,flags); return NVX_GSP_RPC_BUSY;
+        }
+        if(!m->slots[i].active&&index==NVX_GSP_RPC_MAX_PENDING) index=i;
+    }
     if(index==NVX_GSP_RPC_MAX_PENDING) { rpc_unlock(m,flags); return NVX_GSP_RPC_NO_SLOTS; }
     slot=&m->slots[index]; generation=slot->generation+1U;
     if(generation==0U) generation=1U;
@@ -84,9 +88,7 @@ nvx_gsp_rpc_status_t nvx_gsp_rpc_pump(nvx_gsp_rpc_manager_t *m,void *scratch,
     flags=rpc_lock(m);
     for(size_t i=0;i<NVX_GSP_RPC_MAX_PENDING;i++) {
         nvx_gsp_rpc_slot_t *candidate=&m->slots[i];
-        if(candidate->active&&candidate->state==NVX_GSP_RPC_PENDING&&
-           __atomic_load_n(&candidate->sequence,__ATOMIC_ACQUIRE)!=0U&&
-           __atomic_load_n(&candidate->sequence,__ATOMIC_ACQUIRE)==view.sequence) {
+        if(candidate->active&&candidate->state==NVX_GSP_RPC_PENDING) {
             slot=candidate; break;
         }
     }

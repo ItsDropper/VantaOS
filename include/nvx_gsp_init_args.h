@@ -131,6 +131,10 @@ nvx_gsp_init_args_status_t nvx_gsp_shared_queue_plan(
     nvx_gsp_shared_queue_layout_t *out_layout);
 nvx_gsp_init_args_status_t nvx_gsp_shared_queue_validate(
     const nvx_gsp_shared_queue_layout_t *layout);
+/* Fill the self-mapping GSP bootloader PTE array at the start of shared memory. */
+nvx_gsp_init_args_status_t nvx_gsp_shared_queue_build_pte_table(
+    const nvx_gsp_shared_queue_layout_t *layout, void *shared_mem_cpu,
+    size_t capacity);
 
 /* Builds normal-boot arguments; only the explicit DMEM-stack flag is supported. */
 nvx_gsp_init_args_status_t nvx_gsp_arguments_cached_build(

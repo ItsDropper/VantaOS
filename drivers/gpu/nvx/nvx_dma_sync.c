@@ -12,7 +12,8 @@ static int valid_buffer(const nvx_dma_sync_t *s)
     b=s->buffer;
     return b->acquired&&b->cpu_address==(void *)s->cpu_address&&
            b->gpu_address==s->gpu_address&&b->size==s->size&&
-           b->page_count==s->page_count&&b->page_count>0U;
+           b->page_count==s->page_count&&b->allocation_id==s->allocation_id&&
+           b->allocation_id!=0U&&b->page_count>0U;
 }
 static int valid_range(const nvx_dma_sync_t *s,size_t offset,size_t length)
 {
@@ -37,6 +38,7 @@ nvx_dma_sync_status_t nvx_dma_sync_init(nvx_dma_sync_t *s,nvx_dma_buffer_t *b)
     memset(s,0,sizeof(*s));
     s->buffer=b; s->cpu_address=(uintptr_t)b->cpu_address;
     s->gpu_address=b->gpu_address; s->size=b->size; s->page_count=b->page_count;
+    s->allocation_id=b->allocation_id;
     s->owner=NVX_DMA_OWNER_CPU; s->initialized=1U;
     return NVX_DMA_SYNC_OK;
 }

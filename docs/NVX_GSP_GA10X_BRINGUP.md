@@ -45,6 +45,30 @@ https://github.com/torvalds/linux/blob/master/drivers/gpu/nova-core/falcon/gsp.r
 - Host tests cover decoded bitfields, the locked-window signature, short BARs,
   null arguments, and alias rejection.
 
+## Bo​​oter payload staging
+
+The public NVIDIA firmware extraction script documents the signed booter container
+layout: a 24-byte outer header, a version-2 secure-load header, a packed signature
+array, patch-location/signature metadata, patch metadata, signature count, load
+descriptor, and firmware payload. The Linux NVIDIA open module selects the
+signature with index `num_sigs - 1 - fuse_version` (when multiple signatures
+exist) and rejects a nonzero `patch_sig` for this format.
+
+NVX now implements that data path in `nvx_gsp_image_prepare()`: it copies only the
+firmware payload into private staging, selects the fuse-indexed signature, and
+patches it at the payload-relative location. It rejects unsupported fuse
+versions, truncated staging buffers, input/output aliasing, and signatures that
+would extend outside the payload's DMEM range. Host tests cover both signature
+orders and ensure failure leaves the staging buffer untouched.
+
+Research references:
+- https://github.com/NVIDIA/open-gpu-kernel-modules/blob/main/nouveau/extract-firmware-nouveau.py
+- https://github.com/NVIDIA/open-gpu-kernel-modules/blob/main/src/nvidia/src/kernel/gpu/gsp/kernel_gsp_booter.c
+
+This is signature **selection and placement**, not cryptographic authentication
+and not a firmware launch. The hardware SEC2/FWSEC fuse-version read and actual
+DMA upload/boot sequence are still missing.
+
 ## What this does not mean
 
 A readable Falcon register window does not mean the GSP is running. These

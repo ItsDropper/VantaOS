@@ -33,6 +33,7 @@ nvx_gsp_elf_load_status_t nvx_gsp_elf_load_segments(
     size_t lengths[NVX_GSP_ELF_MAX_LOAD_SEGMENTS] = {0};
     const uint8_t *image;
     size_t image_size;
+    int entry_is_executable = 0;
 
     if (!component || !map || !out_entry || !component->blob.data ||
         !component->blob.size)
@@ -50,19 +51,36 @@ nvx_gsp_elf_load_status_t nvx_gsp_elf_load_segments(
     if (info.type != 2U)
         return NVX_GSP_ELF_LOAD_UNSUPPORTED_RELOCATION;
 
+    /*
+     * ELF e_entry is a virtual address. Require it to land inside an
+     * executable PT_LOAD segment before resolving any destination mapping
+     * or modifying RAM. A parseable ELF with a stray entry point must never
+     * be allowed to reach the Falcon launch path.
+     */
+    for (uint32_t i = 0U; i < info.load_segment_count; ++i) {
+        const nvx_gsp_elf_segment_t *seg = &info.load_segments[i];
+        if ((seg->flags & 1U) == 0U || seg->memory_size == 0U ||
+            seg->virtual_address > UINT64_MAX - seg->memory_size)
+            continue;
+        if (info.entry >= seg->virtual_address &&
+            info.entry < seg->virtual_address + seg->memory_size) {
+            entry_is_executable = 1;
+            break;
+        }
+    }
+    if (!entry_is_executable)
+        return NVX_GSP_ELF_LOAD_ENTRY_INVALID;
+
     image = component->blob.data;
     image_size = component->blob.size;
     for (uint32_t i = 0U; i < info.load_segment_count; ++i) {
         const nvx_gsp_elf_segment_t *seg = &info.load_segments[i];
-        uint64_t end;
         if (seg->memory_size == 0U || seg->memory_size > SIZE_MAX ||
             seg->file_size > SIZE_MAX ||
             seg->file_offset > image_size ||
             seg->file_size > image_size - (size_t)seg->file_offset ||
             seg->physical_address > UINT64_MAX - seg->memory_size)
             return NVX_GSP_ELF_LOAD_ADDRESS_OVERFLOW;
-        end = seg->physical_address + seg->memory_size;
-        (void)end;
 
         for (uint32_t j = 0U; j < i; ++j) {
             const nvx_gsp_elf_segment_t *previous = &info.load_segments[j];

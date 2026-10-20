@@ -85,9 +85,11 @@ typedef struct nvx_gpuvm_record {
  * compression, VRAM aperture mappings and engine-specific PTE policy are not
  * implemented. Keep the manager in static/long-lived kernel storage.
  *
- * Hardware activation is only permitted with explicit platform callbacks whose
- * root-programming and invalidation sequence is verified for the target GPU.
- * Page-table changes after activation require all GPU engines to be quiesced.
+ * Zero-initialize the manager before its first init. Hardware activation is
+ * only permitted with explicit platform callbacks whose root-programming and
+ * invalidation sequence is verified for the target GPU. publish_root(0) must
+ * disable this root before invalidate() during teardown. Page-table changes
+ * after activation require all GPU engines to be quiesced.
  * This primitive does not initialize GSP or GR engines.
  */
 typedef struct nvx_gpuvm {

@@ -1,8 +1,10 @@
 # VantaOS documentation
 
+The documentation is grouped by purpose: top-level subsystem guides stay here, architecture decisions live under `decisions/`, and hardware/vendor-specific GPU work lives under `gpu/`.
+
 Use this index to find the document that answers a specific engineering question. Feature availability is described conservatively: source presence is not the same as validated behavior.
 
-## Understand the system
+## System architecture and interfaces
 
 - [Desktop UI system](DESKTOP_UI.md) — shared visual rules, rendering/input ownership, and the current GUI process-model limitation.
 
@@ -14,17 +16,17 @@ Use this index to find the document that answers a specific engineering question
 
 - [Terminal shell](SHELL.md) — file operations, process commands, force-flag behavior, and current network CLI limits.
 
-## Build and validate
+## Build and verification
 
 - [Build system](BUILD_SYSTEM.md) — build targets, generated artifacts, and source manifests.
 - [Testing](TESTING.md) — automated checks, regression markers, and what CI does and does not prove.
 
-## Plan work
+## Roadmap and decisions
 
 - [Development plan](DEVELOPMENT_PLAN.md) — current project priorities and staged goals.
 - [Decision records](decisions/README.md) — rationale for changes that affect long-term architecture.
 
-## Contribute and report issues
+## Contribution and security
 
 - [Contributing guide](../CONTRIBUTING.md) — branch workflow, engineering expectations, validation, and pull-request checklist.
 - [Security policy](../SECURITY.md) — security-related reporting and scope.
@@ -33,6 +35,12 @@ When a document conflicts with actual code or CI, treat the implementation and r
 
 
 ## GPU driver framework
+
+- [GPU documentation index](gpu/README.md) — vendor-neutral GPU framework and NVX vendor-specific docs.
+- [NVX GA10x bring-up](gpu/nvx/GA10X_BRINGUP.md) — SEC2/GSP state, implemented primitives, and hardware blockers.
+- [NVX firmware reverse-engineering notebook](gpu/nvx/FIRMWARE_REVERSE_ENGINEERING.md) — public-source findings and independent parser contracts.
+
+
 
 The GPU subsystem is split into vendor-neutral PCI classification and lifecycle contracts, with independent NVIDIA (NVX), Intel, and AMD backends. `gpu_classify_pci_function()` performs read-only PCI identity classification and only labels a generation when a curated device-ID entry exists. Unknown device IDs from supported vendors remain valid GPU candidates with an unknown architecture.
 

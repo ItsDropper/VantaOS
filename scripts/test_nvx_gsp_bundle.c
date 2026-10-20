@@ -7,7 +7,7 @@
 #include <assert.h>
 #include <string.h>
 static const uint8_t bytes[16]={0x47,0x53,0x50};
-static const char *const names[NVX_GSP_COMPONENT_COUNT]={"gsp","ucodes","booter_load","booter_unload","bootloader"};
+static const char *const names[NVX_GSP_COMPONENT_COUNT]={"gsp-","ucodes-","booter_load-","booter_unload-","bootloader-"};
 static unsigned requests,verifies,releases;static char paths[5][128];
 static int fail_request=-1,fail_verify=-1,invalid_blob=-1,oversized=-1;
 static int component(const char *p){for(int i=0;i<5;i++)if(strstr(p,names[i]))return i;return -1;}
@@ -36,6 +36,5 @@ int main(void){
  assert(nvx_gsp_bundle_acquire(&p,NVX_FAMILY_AMPERE,"ga106","535..113",&b)==NVX_GSP_BUNDLE_INVALID_ARGUMENT);
  assert(nvx_gsp_bundle_acquire(&p,NVX_FAMILY_AMPERE,"ga106","535.113.01",0)==NVX_GSP_BUNDLE_INVALID_ARGUMENT);
  assert(nvx_gsp_bundle_acquire(0,NVX_FAMILY_AMPERE,"ga106","535.113.01",&b)==NVX_GSP_BUNDLE_PROVIDER_INCOMPLETE);
- assert(nvx_gsp_bundle_acquire(&p,NVX_FAMILY_ADA,"ad106","535.113.01",&b)==NVX_GSP_BUNDLE_UNSUPPORTED_FAMILY);
- return 0;
+ assert(nvx_gsp_bundle_acquire(&p,NVX_FAMILY_ADA,"ad106","535.113.01",&b)==NVX_GSP_BUNDLE_UNSUPPORTED_FAMILY);return 0;
 }

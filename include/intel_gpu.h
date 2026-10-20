@@ -17,7 +17,7 @@ typedef struct intel_gpu_descriptor {
     uint8_t firmware_required;
     uint8_t acceleration_ready;
     uint8_t memory_space_enabled;
-    uint8_t mmio_aperture_assigned;
+    uint8_t mmio_aperture_enabled;
     uint16_t pci_command;
     gpu_pci_resource_inventory_t resources;
 } intel_gpu_descriptor_t;

@@ -101,6 +101,22 @@ coordinated set of version-matched files. This is still acquisition/verification
 plumbing, not firmware-container parsing, signature patching, Falcon loading,
 GSP boot, or RPC queue initialization.
 
+### Bounded GSP booter-image parser
+
+A read-only parser validates the version-2 signed booter-load container before
+a future loader uses its offsets. It checks the outer binary size, payload
+range, security-header range, signature table/count, patch metadata pointers,
+minimum metadata fields, load-header size, application count, and every code/data
+segment range. It extracts fuse/engine/ucode metadata and the first application
+descriptor without modifying firmware bytes. Synthetic tests cover truncated
+input, invalid offsets, malformed signature counts, missing metadata, invalid
+application ranges, and unsupported component types.
+
+Structural validation does not authenticate NVIDIA's signature cryptography,
+patch signatures, load Falcon IMEM/DMEM, boot the GSP, or establish an RPC queue.
+Execution remains disabled until hardware-profile checks and trusted signature
+handling are implemented.
+
 ## Design goals
 
 - Keep generic GPU lifecycle and display contracts independent of NVIDIA details.

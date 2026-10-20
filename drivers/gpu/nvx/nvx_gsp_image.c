@@ -131,3 +131,51 @@ nvx_gsp_image_status_t nvx_gsp_image_parse(
         return NVX_GSP_IMAGE_SIGNATURE_INVALID;
     *out=info; return NVX_GSP_IMAGE_OK;
 }
+
+nvx_gsp_image_status_t nvx_gsp_image_prepare(
+    const nvx_gsp_component_t *component, uint32_t fuse_version,
+    uint8_t *staging, size_t staging_size)
+{
+    nvx_gsp_image_info_t info;
+    nvx_gsp_image_status_t status;
+    uint32_t signature_index;
+    uint64_t signature_source;
+
+    if (!component || !staging)
+        return NVX_GSP_IMAGE_INVALID_ARGUMENT;
+
+    status = nvx_gsp_image_parse(component, &info);
+    if (status != NVX_GSP_IMAGE_OK)
+        return status;
+    if (staging_size < info.data_size)
+        return NVX_GSP_IMAGE_STAGING_TOO_SMALL;
+    if (overlaps(staging, info.data_size, component, sizeof(*component)) ||
+        overlaps(staging, info.data_size, component->blob.data,
+                 component->blob.size))
+        return NVX_GSP_IMAGE_INVALID_ARGUMENT;
+
+    if (info.signature_count > 1U) {
+        if (fuse_version >= info.signature_count)
+            return NVX_GSP_IMAGE_FUSE_VERSION_UNSUPPORTED;
+        signature_index = info.signature_count - 1U - fuse_version;
+    } else {
+        signature_index = 0U;
+    }
+
+    signature_source = (uint64_t)info.signature_offset +
+        (uint64_t)signature_index * info.signature_size;
+    if (!range_ok(info.binary_size, signature_source, info.signature_size))
+        return NVX_GSP_IMAGE_SIGNATURE_INVALID;
+
+    /*
+     * The .bin container holds metadata/signatures before the actual Falcon
+     * payload. Hardware loaders consume the payload only, with the selected
+     * fuse-version signature patched at the payload-relative patch location.
+     * Never mutate the provider's verified source blob.
+     */
+    memcpy(staging, component->blob.data + info.data_offset, info.data_size);
+    memcpy(staging + info.patch_location,
+           component->blob.data + (size_t)signature_source,
+           info.signature_size);
+    return NVX_GSP_IMAGE_OK;
+}

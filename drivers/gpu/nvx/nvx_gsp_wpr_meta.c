@@ -29,7 +29,7 @@ static int overlap(uint64_t a,uint64_t as,uint64_t b,uint64_t bs)
 }
 static nvx_gsp_wpr_status_t validate_layout(const nvx_gsp_wpr_layout_t *l)
 {
-    uint64_t wpr_end,nonwpr_end,vga_end,heap_end,fw_end,boot_end,frts_end;
+    uint64_t nonwpr_end,vga_end,heap_end,fw_end,boot_end,frts_end;
     if(!l)return NVX_GSP_WPR_INVALID_ARGUMENT;
     if((l->flags&~NVX_GSP_FW_FLAGS_VALID)!=0U)return NVX_GSP_WPR_BAD_FLAGS;
     if(!l->framebuffer_size||!aligned(l->framebuffer_size,NVX_GSP_FB_ALIGN)||
@@ -45,7 +45,10 @@ static nvx_gsp_wpr_status_t validate_layout(const nvx_gsp_wpr_layout_t *l)
        !range_ok(l->frts_offset,l->frts_size,l->framebuffer_size)||
        !range_ok(l->sysmem_radix3_addr,l->radix3_size,UINT64_MAX)||
        !range_ok(l->sysmem_bootloader_addr,l->bootloader_size,UINT64_MAX)||
-       !range_ok(l->sysmem_signature_addr,l->signature_size,UINT64_MAX))
+       !range_ok(l->sysmem_signature_addr,l->signature_size,UINT64_MAX)||
+       (l->crash_report_queue_size&&
+        (!l->crash_report_queue_addr||!aligned(l->crash_report_queue_addr,16U)||
+         !range_ok(l->crash_report_queue_addr,l->crash_report_queue_size,UINT64_MAX))))
         return NVX_GSP_WPR_BAD_RANGE;
     if(!l->radix3_size||!l->bootloader_size||!l->signature_size||
        !l->wpr_heap_size||!l->nonwpr_heap_size)
@@ -63,8 +66,7 @@ static nvx_gsp_wpr_status_t validate_layout(const nvx_gsp_wpr_layout_t *l)
        l->boot_bin_offset<l->firmware_offset||
        l->frts_offset<l->boot_bin_offset)
         return NVX_GSP_WPR_BAD_RANGE;
-    if(!add_ok(l->wpr_start,0U,&wpr_end)||
-       !add_ok(l->nonwpr_heap_offset,l->nonwpr_heap_size,&nonwpr_end)||
+    if(!add_ok(l->nonwpr_heap_offset,l->nonwpr_heap_size,&nonwpr_end)||
        !add_ok(l->vga_workspace_offset,l->vga_workspace_size,&vga_end)||
        !add_ok(l->wpr_heap_offset,l->wpr_heap_size,&heap_end)||
        !add_ok(l->firmware_offset,l->radix3_size,&fw_end)||
@@ -72,17 +74,20 @@ static nvx_gsp_wpr_status_t validate_layout(const nvx_gsp_wpr_layout_t *l)
        !add_ok(l->frts_offset,l->frts_size,&frts_end))
         return NVX_GSP_WPR_BAD_RANGE;
     if(heap_end>l->wpr_end||fw_end>l->wpr_end||boot_end>l->wpr_end||
-       (l->frts_size&&frts_end>l->framebuffer_size)||
+       (l->frts_size&&(frts_end>l->wpr_end||l->frts_offset<l->wpr_start))||
        l->wpr_end<l->wpr_start+NVX_GSP_WPR_META_V1_SIZE)
         return NVX_GSP_WPR_BAD_RANGE;
     if(overlap(l->wpr_heap_offset,l->wpr_heap_size,l->firmware_offset,l->radix3_size)||
        overlap(l->wpr_heap_offset,l->wpr_heap_size,l->boot_bin_offset,l->bootloader_size)||
        overlap(l->firmware_offset,l->radix3_size,l->boot_bin_offset,l->bootloader_size)||
+       overlap(l->frts_offset,l->frts_size,l->wpr_heap_offset,l->wpr_heap_size)||
+       overlap(l->frts_offset,l->frts_size,l->firmware_offset,l->radix3_size)||
+       overlap(l->frts_offset,l->frts_size,l->boot_bin_offset,l->bootloader_size)||
        overlap(l->nonwpr_heap_offset,l->nonwpr_heap_size,l->wpr_start,l->wpr_end-l->wpr_start)||
        overlap(l->vga_workspace_offset,l->vga_workspace_size,l->nonwpr_heap_offset,l->nonwpr_heap_size)||
        overlap(l->vga_workspace_offset,l->vga_workspace_size,l->wpr_start,l->wpr_end-l->wpr_start))
         return NVX_GSP_WPR_OVERLAP;
-    (void)wpr_end;(void)nonwpr_end;(void)vga_end;
+    (void)nonwpr_end;(void)vga_end;
     return NVX_GSP_WPR_OK;
 }
 nvx_gsp_wpr_status_t nvx_gsp_wpr_meta_build(const nvx_gsp_wpr_layout_t *l,
@@ -108,7 +113,7 @@ nvx_gsp_wpr_status_t nvx_gsp_wpr_meta_build(const nvx_gsp_wpr_layout_t *l,
     out->boot_count=l->boot_count;out->sysmem_addr_of_crash_report_queue=l->crash_report_queue_addr;
     out->size_of_crash_report_queue=l->crash_report_queue_size;
     out->gsp_fw_heap_vf_partition_count=l->vf_partition_count;out->flags=l->flags;
-    out->paging_config=l->paging_config;out->reserved3=l->pmu_reserved_size;
+    out->paging_config=l->paging_config;out->reserved3=0U;
     out->verified=0U;
     return NVX_GSP_WPR_OK;
 }
@@ -136,7 +141,7 @@ nvx_gsp_wpr_status_t nvx_gsp_wpr_meta_validate(const nvx_gsp_wpr_meta_v1_t *m)
     l.crash_report_queue_addr=m->sysmem_addr_of_crash_report_queue;
     l.crash_report_queue_size=m->size_of_crash_report_queue;
     l.vf_partition_count=m->gsp_fw_heap_vf_partition_count;l.flags=m->flags;
-    l.paging_config=m->paging_config;l.pmu_reserved_size=m->reserved3;
+    l.paging_config=m->paging_config;
     if(m->verified!=0U&&m->verified!=NVX_GSP_WPR_META_V1_VERIFIED)return NVX_GSP_WPR_BAD_RESERVED;
     return validate_layout(&l);
 }

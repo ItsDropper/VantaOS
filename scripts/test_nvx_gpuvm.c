@@ -20,10 +20,8 @@ static uint8_t page_pool[TEST_PAGE_COUNT][NVX_GPUVM_PAGE_SIZE]
 static unsigned next_page;
 static unsigned freed_pages;
 static uint32_t registers[3];
-static unsigned flush_busy_reads;
 static unsigned flush_writes;
 static int fail_flush;
-static uint8_t fake_mmio;
 
 int dma_alloc_page(dma_page_t *out)
 {
@@ -55,39 +53,25 @@ int dma_page_is_valid(const dma_page_t *page)
            ((page->physical_address & (NVX_GPUVM_PAGE_SIZE - 1U)) == 0U);
 }
 
-nvx_mmio_status_t nvx_gpuvm_test_mmio_write32(
-    const nvx_mmio_region_t *region, size_t offset, uint32_t value)
+static nvx_gpuvm_status_t test_publish_root(void *context,
+                                                    uint64_t root_physical)
 {
-    assert(region != 0 && region->base == &fake_mmio);
-    if (offset == 0xB830A0U)
-        registers[0] = value;
-    else if (offset == 0xB830A4U)
-        registers[1] = value;
-    else if (offset == 0xB830B0U) {
-        registers[2] = value;
-        ++flush_writes;
-        flush_busy_reads = 1U;
-    } else {
-        return NVX_MMIO_OUT_OF_RANGE;
-    }
-    return NVX_MMIO_OK;
+    (void)context;
+    if (root_physical != 0U &&
+        ((root_physical & 0xFFFU) != 0U || root_physical > UINT32_MAX))
+        return NVX_GPUVM_ADDRESS_WIDTH;
+    registers[0] = (uint32_t)(root_physical >> 8U);
+    registers[1] = 0U;
+    return NVX_GPUVM_OK;
 }
 
-nvx_mmio_status_t nvx_gpuvm_test_mmio_read32(
-    const nvx_mmio_region_t *region, size_t offset, uint32_t *out)
+static nvx_gpuvm_status_t test_invalidate(void *context)
 {
-    assert(region != 0 && region->base == &fake_mmio && out != 0);
-    if (offset != 0xB830B0U)
-        return NVX_MMIO_OUT_OF_RANGE;
+    (void)context;
+    ++flush_writes;
     if (fail_flush)
-        return NVX_MMIO_OUT_OF_RANGE;
-    if (flush_busy_reads != 0U) {
-        --flush_busy_reads;
-        *out = 0x80000001U;
-    } else {
-        *out = 1U;
-    }
-    return NVX_MMIO_OK;
+        return NVX_GPUVM_FLUSH_TIMEOUT;
+    return NVX_GPUVM_OK;
 }
 
 static uint16_t test_index_for_level(uint64_t va, uint8_t level)
@@ -122,9 +106,10 @@ static void test_invalid_init(void)
 
 int main(void)
 {
-    nvx_mmio_region_t bar0 = {
-        .base = &fake_mmio,
-        .length = 0xB830B4U
+    nvx_gpuvm_hw_ops_t hw_ops = {
+        .context = 0,
+        .publish_root = test_publish_root,
+        .invalidate = test_invalidate
     };
     nvx_gpuvm_mapping_t mapping = {0}, second = {0}, invalid = {0};
     uint64_t physical[2] = {0x30000000ULL, 0x30001000ULL};
@@ -133,7 +118,7 @@ int main(void)
 
     memset(&vm, 0, sizeof(vm));
     test_invalid_init();
-    assert(nvx_gpuvm_init(&vm, TEST_VA_START, TEST_VA_SIZE, &bar0) ==
+    assert(nvx_gpuvm_init(&vm, TEST_VA_START, TEST_VA_SIZE, &hw_ops) ==
            NVX_GPUVM_OK);
     assert(vm.table_count == 1U && vm.root_published == 0U);
     assert(nvx_gpuvm_validate(&vm) == NVX_GPUVM_OK);
@@ -181,7 +166,7 @@ int main(void)
     assert(nvx_gpuvm_activate(&vm) == NVX_GPUVM_OK);
     assert(vm.root_published && registers[0] ==
            (uint32_t)(vm.tables[vm.root_index].backing.physical_address >> 8U));
-    assert(registers[1] == 0U && registers[2] == 0x80000001U);
+    assert(registers[1] == 0U && registers[2] == 0U);
     assert(nvx_gpuvm_set_quiesced(&vm, 0) == NVX_GPUVM_OK);
     assert(nvx_gpuvm_reserve(&vm, 4096U, NVX_GPUVM_PAGE_SIZE, 0U,
                              &second) == NVX_GPUVM_OK);

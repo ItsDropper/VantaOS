@@ -20,6 +20,7 @@ typedef struct nvx_dma_sync {
     uint64_t gpu_address;
     size_t size;
     size_t page_count;
+    uint64_t allocation_id;
     nvx_dma_owner_t owner;
     uint8_t initialized;
 } nvx_dma_sync_t;

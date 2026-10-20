@@ -194,3 +194,12 @@ This is a **real register-programming primitive**, not a completed secure-boot t
 `nvx_gsp_ga10x_start_falcon()` now performs the GA102 Falcon launch register sequence for an image that the caller has already loaded and authenticated: it validates a complete BOOTVEC/CPUCTL mapping, checks the PRIV-lock signature and halted state, writes BOOTVEC, then issues STARTCPU. Host tests verify register order/results and reject misaligned entry points, running Falcon state, locked access, and truncated mappings.
 
 This primitive does **not** load or authenticate FWSEC, configure SEC2, select the RISC-V core, create the framebuffer WPR, or prove a boot succeeded. It must only be called after the correct engine-specific secure firmware path is complete. The current API uses the GSP Falcon register window; SEC2/FWSEC still needs its own engine-base-aware path.
+
+
+## SEC2 and GSP engine-specific boot register paths
+
+The BROM and Falcon launch helpers now support both documented GA102 engine windows:
+- GSP Falcon: `0x110000`, second Falcon window `0x111000`, GSP engine mask `0x0400`.
+- SEC2 Falcon: `0x840000`, second Falcon window `0x841000`, SEC2 engine mask `0x0001`.
+
+The engine-aware API rejects mismatched base pairs and engine masks instead of allowing a SEC2 descriptor to be programmed into GSP registers (or vice versa). Host tests exercise both sets of real BAR0 offsets. This enables the SEC2/FWSEC stage to use the correct register window, but it still does not implement SEC2 firmware parsing/loading, the FWSEC handshake, WPR writes, or a verified GSP boot.

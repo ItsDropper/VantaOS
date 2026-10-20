@@ -118,6 +118,7 @@ static nvx_gsp_falcon_status_t reset_and_reclaim(
 }
 
 static void trace_recovery_result(nvx_gsp_boot_trace_t *trace,
+                                  nvx_gsp_falcon_status_t trigger_status,
                                   nvx_gsp_falcon_status_t recovery_status);
 
 static nvx_gsp_falcon_status_t execute_booter_load_internal(
@@ -191,7 +192,7 @@ static nvx_gsp_falcon_status_t execute_booter_load_internal(
     if (status != NVX_GSP_FALCON_OK) {
         nvx_gsp_falcon_status_t reclaim = reset_and_reclaim(
             memory, bar0, timeout_ms, poll_interval_ms, delay_ms, context, 1U, 0U);
-        trace_recovery_result(trace, reclaim);
+        trace_recovery_result(trace, status, reclaim);
         return reclaim == NVX_GSP_FALCON_OK ? status : reclaim;
     }
 
@@ -205,7 +206,7 @@ static nvx_gsp_falcon_status_t execute_booter_load_internal(
     if (status != NVX_GSP_FALCON_OK) {
         nvx_gsp_falcon_status_t reclaim = reset_and_reclaim(
             memory, bar0, timeout_ms, poll_interval_ms, delay_ms, context, 1U, 0U);
-        trace_recovery_result(trace, reclaim);
+        trace_recovery_result(trace, status, reclaim);
         return reclaim == NVX_GSP_FALCON_OK ? status : reclaim;
     }
 
@@ -215,7 +216,7 @@ static nvx_gsp_falcon_status_t execute_booter_load_internal(
                              memory->booter_load.size) != NVX_DMA_SYNC_OK) {
         nvx_gsp_falcon_status_t reclaim = reset_and_reclaim(
             memory, bar0, timeout_ms, poll_interval_ms, delay_ms, context, 1U, 0U);
-        trace_recovery_result(trace, reclaim);
+        trace_recovery_result(trace, status, reclaim);
         return NVX_GSP_FALCON_DMA_OWNERSHIP_ERROR;
     }
 
@@ -243,7 +244,7 @@ static nvx_gsp_falcon_status_t execute_booter_load_internal(
     if (status != NVX_GSP_FALCON_OK) {
         nvx_gsp_falcon_status_t reclaim = reset_and_reclaim(
             memory, bar0, timeout_ms, poll_interval_ms, delay_ms, context, 0U, 1U);
-        trace_recovery_result(trace, reclaim);
+        trace_recovery_result(trace, status, reclaim);
         return reclaim == NVX_GSP_FALCON_OK ? status : reclaim;
     }
 
@@ -261,9 +262,12 @@ static nvx_gsp_falcon_status_t execute_booter_load_internal(
 }
 
 static void trace_recovery_result(nvx_gsp_boot_trace_t *trace,
+                                  nvx_gsp_falcon_status_t trigger_status,
                                   nvx_gsp_falcon_status_t recovery_status)
 {
     if (!trace) return;
+    trace->recovery_trigger_status = trigger_status;
+    trace->recovery_result = recovery_status;
     trace->recovery_attempted = 1U;
     trace->recovery_succeeded = recovery_status == NVX_GSP_FALCON_OK;
     trace->sec2_quiescence_confirmed = recovery_status == NVX_GSP_FALCON_OK;

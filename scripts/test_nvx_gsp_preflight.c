@@ -55,6 +55,15 @@ int main(void){
  assert(report.runtime_bytes==sizeof(elf)&&report.ucode_archive_bytes==sizeof(ucodes));
  assert(report.booter_load_bytes==512U&&report.booter_unload_bytes==512U&&report.bootloader_bytes==256U);
  assert(report.gsp_bootloader.descriptor_size==84U&&report.gsp_bootloader.payload_offset==108U&&report.gsp_bootloader.payload_size==128U);
+ uint8_t bootloader_stage[128],bootloader_backup[128];
+ nvx_gsp_bootloader_info_t bootloader_info;
+ assert(nvx_gsp_bootloader_prepare(&b.components[4],bootloader_stage,sizeof(bootloader_stage),&bootloader_info)==NVX_GSP_BOOTLOADER_OK);
+ assert(bootloader_info.descriptor_size==84U&&bootloader_info.descriptor[0]==1U);
+ assert(bootloader_stage[0]==0x80U&&bootloader_stage[127]==0xFFU);
+ memset(bootloader_stage,0xA5U,sizeof(bootloader_stage));memcpy(bootloader_backup,bootloader_stage,sizeof(bootloader_stage));
+ assert(nvx_gsp_bootloader_prepare(&b.components[4],bootloader_stage,sizeof(bootloader_stage)-1U,&bootloader_info)==NVX_GSP_BOOTLOADER_BUFFER_TOO_SMALL);
+ assert(memcmp(bootloader_stage,bootloader_backup,sizeof(bootloader_stage))==0);
+ assert(nvx_gsp_bootloader_prepare(&b.components[4],boot_assets[2]+108U,128U,&bootloader_info)==NVX_GSP_BOOTLOADER_INVALID_ARGUMENT);
  assert(report.booter_load.engine_id==0x400U&&report.booter_unload.ucode_id==1U);
  assert(report.firmware_image.offset==512U&&report.firmware_image.size==64U);
  assert(report.firmware_version.offset==576U&&strcmp(report.version,"535.113.01")==0);
@@ -88,6 +97,7 @@ int main(void){
         0U,unload_stage,sizeof(unload_stage),&load_info,&unload_info)==NVX_GSP_PREFLIGHT_STAGING_ALIAS);
  boot_assets[0][0]=0U;assert(nvx_gsp_preflight_validate(&b,&report)==NVX_GSP_PREFLIGHT_CONTAINER_INVALID);assert(report.runtime_bytes==0U);boot_assets[0][0]=0xDEU;
  boot_assets[1][0]=0U;assert(nvx_gsp_preflight_validate(&b,&report)==NVX_GSP_PREFLIGHT_CONTAINER_INVALID);boot_assets[1][0]=0xDEU;
+ boot_assets[2][0]=0U;assert(nvx_gsp_preflight_validate(&b,&report)==NVX_GSP_PREFLIGHT_CONTAINER_INVALID);boot_assets[2][0]=0xDEU;
  assert(nvx_gsp_preflight_validate(&b,&report)==NVX_GSP_PREFLIGHT_OK);
  strcpy(b.version,"535.113.02");assert(nvx_gsp_preflight_validate(&b,&report)==NVX_GSP_PREFLIGHT_VERSION_MISMATCH);
  strcpy(b.version,"535.113.01");elf[586]=1U;assert(nvx_gsp_preflight_validate(&b,&report)==NVX_GSP_PREFLIGHT_CONTAINER_INVALID);elf[586]=0U;

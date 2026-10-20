@@ -117,6 +117,10 @@ NVX has two related but distinct parsers/paths:
 
 The formulas look different because the data formats encode supported versions differently. Do not “normalize” them into one selector unless the format is an explicit parameter and each mapping has separate test vectors.
 
+## Engine identity for GA10x Booter images
+
+Booter Load and Booter Unload execute on SEC2. Their `ENID` metadata must select the SEC2 engine mask (`0x0001`), not the GSP engine mask (`0x0400`). NVX's SEC2 execution planner deliberately rejects a mismatched engine. The synthetic booter parser/preflight fixtures now use `ENID=1`; the fuse-version register is selected from the same engine/ucode pair carried by each validated image descriptor.
+
 ## 5. SEC2 Booter Load: transaction reconstructed so far
 
 The current NVX high-secure transaction follows this bounded software sequence:

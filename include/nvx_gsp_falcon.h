@@ -80,7 +80,8 @@ typedef enum nvx_gsp_falcon_status {
     NVX_GSP_FALCON_BOOT_VECTOR_INVALID,
     NVX_GSP_FALCON_DMA_INVALID_TRANSFER,
     NVX_GSP_FALCON_DMA_TIMEOUT,
-    NVX_GSP_FALCON_RESET_TIMEOUT
+    NVX_GSP_FALCON_RESET_TIMEOUT,
+    NVX_GSP_FALCON_BOOT_TIMEOUT
 } nvx_gsp_falcon_status_t;
 
 typedef struct nvx_gsp_falcon_snapshot {
@@ -148,6 +149,17 @@ typedef enum nvx_ga10x_falcon_memory {
  * reset the engine and prepared a coherent, physically contiguous DMA buffer.
  * Timeout/poll interval are milliseconds; delay callback must yield/sleep.
  */
+/*
+ * Boot a previously loaded/authenticated Falcon image: optional input
+ * mailboxes, BOOTVEC/STARTCPU, bounded wait for CPUCTL.HALTED, output mailboxes.
+ */
+nvx_gsp_falcon_status_t nvx_ga10x_falcon_boot(
+    const nvx_mmio_region_t *bar0, uint32_t falcon_base,
+    uint32_t boot_vector, uint8_t write_mailbox0, uint32_t mailbox0_in,
+    uint8_t write_mailbox1, uint32_t mailbox1_in,
+    uint32_t *mailbox0_out, uint32_t *mailbox1_out,
+    uint32_t timeout_ms, uint32_t poll_interval_ms,
+    nvx_gsp_delay_ms_fn delay_ms, void *context);
 /* Reset the engine, pulse reset for at least 1 ms, then wait for scrub completion. */
 nvx_gsp_falcon_status_t nvx_ga10x_falcon_reset(
     const nvx_mmio_region_t *bar0, uint32_t falcon_base,

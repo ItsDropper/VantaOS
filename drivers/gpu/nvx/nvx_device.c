@@ -80,7 +80,7 @@ int nvx_identify_architecture(uint8_t architecture,
     case 0x1AU: /* Blackwell GB100 */
     case 0x1BU: /* Blackwell GB200 */
     case 0x1CU: /* Rubin GR100 */
-        *out_family = NVX_FAMILY_BLACKWELL;
+        *out_family = NVX_FAMILY_RUBIN;
         return 1;
     default:
         *out_family = NVX_FAMILY_UNKNOWN;

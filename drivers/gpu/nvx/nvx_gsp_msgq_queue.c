@@ -53,7 +53,10 @@ static nvx_gsp_msgq_queue_status_t update_peer(nvx_gsp_msgq_queue_t *q)
         return NVX_GSP_MSGQ_QUEUE_IO_ERROR;
     q->io.after_device(q->io.context);
     q->peer_counter=v;
-    if((uint32_t)(q->local_counter-q->peer_counter)>q->layout.element_count)
+    uint32_t distance=q->transmit?
+        (uint32_t)(q->local_counter-q->peer_counter):
+        (uint32_t)(q->peer_counter-q->local_counter);
+    if(distance>q->layout.element_count)
         return NVX_GSP_MSGQ_QUEUE_BAD_COUNTER;
     return NVX_GSP_MSGQ_QUEUE_OK;
 }

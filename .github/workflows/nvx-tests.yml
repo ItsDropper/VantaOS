@@ -8,6 +8,7 @@ on:
       - "include/nvx_gsp_secure_boot.h"
       - "include/nvx_gsp_pci_rom.h"
       - "include/nvx_gsp_fwsec_interface.h"
+      - "include/nvx_gsp_fwsec_stage.h"
       - "include/nvx_gsp_fwsec_command.h"
       - "include/nvx_gsp_fwsec_result.h"
       - "scripts/test_nvx_gsp_boot_memory.c"
@@ -540,6 +541,8 @@ jobs:
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
             scripts/test_nvx_gsp_fwsec_interface.c \
             drivers/gpu/nvx/firmware/nvx_gsp_fwsec_interface.c \
+            drivers/gpu/nvx/firmware/nvx_gsp_fwsec_command.c \
+            drivers/gpu/nvx/firmware/nvx_gsp_fwsec_stage.c \
             -o /tmp/vantaos-nvx-fwsec-interface-test
 
       - name: Test bounded FWSEC DMEM mapper and command window parsing

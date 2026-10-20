@@ -39,6 +39,8 @@ When a document conflicts with actual code or CI, treat the implementation and r
 - [GPU documentation index](gpu/README.md) — vendor-neutral GPU framework and NVX vendor-specific docs.
 - [NVX GA10x bring-up](gpu/nvx/GA10X_BRINGUP.md) — SEC2/GSP state, implemented primitives, and hardware blockers.
 - [NVX firmware reverse-engineering notebook](gpu/nvx/FIRMWARE_REVERSE_ENGINEERING.md) — public-source findings and independent parser contracts.
+- [VBIOS FWSEC metadata research](gpu/nvx/VBIOS_FWSEC_RESEARCH.md) — parser constraints and pointer-chain reconstruction.
+- [GPU framework and bring-up plan](gpu/FRAMEWORK.md) — shared lifecycle and vendor-backend maturity.
 
 
 

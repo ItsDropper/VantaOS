@@ -53,6 +53,14 @@ static int range_valid(uint64_t start, uint64_t size, uint64_t limit)
     return !add_overflow_u64(start, size, &end) && end <= limit;
 }
 
+static int bytes_are_zero(const uint8_t *bytes, size_t size)
+{
+    for (size_t i = 0U; i < size; ++i)
+        if (bytes[i] != 0U)
+            return 0;
+    return 1;
+}
+
 static int queue_profile_valid(uint32_t header_size, uint32_t min_size,
                                uint32_t max_size, uint32_t header_alignment,
                                uint32_t element_alignment)
@@ -75,7 +83,13 @@ nvx_gsp_init_args_status_t nvx_gsp_shared_queue_required_size(
     uint64_t queue_bytes, queue_pages, pte_bytes, pte_pages;
     uint64_t pte_count, page_table_size, total_size;
 
-    if (!out_required || !out_page_table_size || !out_pte_count)
+    if (!out_required || !out_page_table_size || !out_pte_count ||
+        ranges_overlap(out_required, sizeof(*out_required),
+                       out_page_table_size, sizeof(*out_page_table_size)) ||
+        ranges_overlap(out_required, sizeof(*out_required),
+                       out_pte_count, sizeof(*out_pte_count)) ||
+        ranges_overlap(out_page_table_size, sizeof(*out_page_table_size),
+                       out_pte_count, sizeof(*out_pte_count)))
         return NVX_GSP_INIT_ARGS_INVALID_ARGUMENT;
     *out_required = 0U;
     *out_page_table_size = 0U;
@@ -126,11 +140,10 @@ nvx_gsp_init_args_status_t nvx_gsp_shared_queue_plan(
     nvx_gsp_init_args_status_t status;
     uint64_t status_offset, status_end;
 
-    if (!out)
+    if (!out || !config ||
+        ranges_overlap(out, sizeof(*out), config, sizeof(*config)))
         return NVX_GSP_INIT_ARGS_INVALID_ARGUMENT;
     memset(out, 0, sizeof(*out));
-    if (!config)
-        return NVX_GSP_INIT_ARGS_INVALID_ARGUMENT;
     if (!queue_profile_valid(config->queue_element_header_size,
             config->queue_element_size_min, config->queue_element_size_max,
             config->queue_header_alignment, config->queue_element_alignment))
@@ -256,6 +269,12 @@ nvx_gsp_init_args_status_t nvx_gsp_arguments_cached_materialize(
         args->size != sizeof(*args) ||
         (args->flags & ~NVX_GSP_INIT_ARGS_FLAG_STACK_IN_DMEM) != 0U ||
         args->message_queue.flags != 0U ||
+        args->sr.old_level != 0U || args->sr.flags != 0U ||
+        !bytes_are_zero(args->reserved, sizeof(args->reserved)) ||
+        !bytes_are_zero(args->message_queue.reserved,
+                        sizeof(args->message_queue.reserved)) ||
+        !bytes_are_zero(args->sr.reserved, sizeof(args->sr.reserved)) ||
+        !bytes_are_zero(args->reserved2, sizeof(args->reserved2)) ||
         args->message_queue.shared_mem_phys_addr == 0U ||
         (args->message_queue.shared_mem_phys_addr &
          (NVX_GSP_PAGE_SIZE - 1U)) != 0U ||

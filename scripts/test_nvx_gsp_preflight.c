@@ -18,15 +18,15 @@ static void asset32(uint8_t *dest,size_t offset,uint32_t value){
 static void build_booter(uint8_t *dest){
  memset(dest,0,512U);
  asset32(dest,0U,0x10DEU);asset32(dest,4U,1U);asset32(dest,8U,512U);
- asset32(dest,12U,24U);asset32(dest,16U,256U);asset32(dest,20U,128U);
- asset32(dest,24U,160U);asset32(dest,28U,64U);asset32(dest,32U,64U);
- asset32(dest,36U,68U);asset32(dest,40U,80U);asset32(dest,44U,12U);
- asset32(dest,48U,72U);asset32(dest,52U,96U);asset32(dest,56U,56U);
- asset32(dest,64U,40U);asset32(dest,68U,0U);asset32(dest,72U,2U);
- asset32(dest,80U,0x1234U);asset32(dest,84U,0x400U);asset32(dest,88U,1U);
- asset32(dest,96U,0U);asset32(dest,100U,32U);asset32(dest,104U,32U);
- asset32(dest,108U,64U);asset32(dest,112U,1U);asset32(dest,116U,0U);
- asset32(dest,120U,32U);asset32(dest,124U,32U);asset32(dest,128U,16U);
+ asset32(dest,12U,24U);asset32(dest,16U,184U);asset32(dest,20U,128U);
+ asset32(dest,24U,60U);asset32(dest,28U,64U);asset32(dest,32U,124U);
+ asset32(dest,36U,128U);asset32(dest,40U,132U);asset32(dest,44U,12U);
+ asset32(dest,48U,144U);asset32(dest,52U,148U);asset32(dest,56U,36U);
+ asset32(dest,124U,40U);asset32(dest,128U,0U);asset32(dest,132U,0x1234U);
+ asset32(dest,136U,0x400U);asset32(dest,140U,1U);asset32(dest,144U,2U);
+ asset32(dest,148U,0U);asset32(dest,152U,32U);asset32(dest,156U,32U);
+ asset32(dest,160U,64U);asset32(dest,164U,1U);asset32(dest,168U,32U);
+ asset32(dest,172U,32U);asset32(dest,176U,32U);asset32(dest,180U,16U);
 }
 static void build_elf(void){
  memset(elf,0,sizeof(elf));elf[0]=0x7F;elf[1]='E';elf[2]='L';elf[3]='F';elf[4]=2;elf[5]=1;elf[6]=1;

@@ -71,7 +71,8 @@ The traced Booter Load entry point exposes:
 - `current_phase`: operation currently attempted;
 - `last_completed_phase`: last helper/ownership operation that returned success;
 - `failed_phase`: phase associated with an error, or `NONE` on success;
-- `result`: returned NVX status;
+- `result`: final returned NVX status;
+- `recovery_trigger_status` and `recovery_result`: the original error that triggered recovery and the recovery outcome, kept separate so a reset failure does not erase the initiating DMA timeout;
 - `recovery_attempted` / `recovery_succeeded`: reset/reclaim outcome for paths that invoke recovery;
 - `sec2_quiescence_confirmed`: whether the reset/boot helper returned its success condition.
 

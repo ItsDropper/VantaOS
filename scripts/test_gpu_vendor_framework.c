@@ -100,7 +100,7 @@ int main(void)
     assert(intel_desc.firmware_required == 1U);
     assert(intel_desc.acceleration_ready == 0U);
     assert(intel_desc.resources.count == 0U);
-    assert(intel_desc.mmio_aperture_assigned == 0U);
+    assert(intel_desc.mmio_aperture_enabled == 0U);
     assert(gpu_driver_matches(intel_gpu_driver(), &intel));
     assert(!gpu_driver_matches(intel_gpu_driver(), &amd));
 
@@ -112,7 +112,7 @@ int main(void)
     assert(amd_desc.firmware_required == 1U);
     assert(amd_desc.acceleration_ready == 0U);
     assert(amd_desc.resources.count == 0U);
-    assert(amd_desc.mmio_aperture_assigned == 0U);
+    assert(amd_desc.mmio_aperture_enabled == 0U);
     assert(gpu_driver_matches(amd_gpu_driver(), &amd));
     assert(!gpu_driver_matches(amd_gpu_driver(), &intel));
 

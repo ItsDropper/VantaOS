@@ -290,3 +290,15 @@ The platform must still allocate the contiguous DMA region, populate and flush
 its memory as required by the platform coherency contract, pass the argument
 page address through the actual GA10x boot path, and validate GSP launch and
 GSP-RM initialization on physical hardware.
+
+## Cached-init argument materialization guard
+
+The modern cached-init argument materializer now rejects a zero status-queue
+offset and rejects status-queue offsets that are not strictly after the command
+queue offset. This is a structural consistency check on the serialized ABI
+object: unlike the queue planner, the wire structure does not carry both queue
+lengths, so materialization cannot independently prove that the two complete
+queue ranges do not overlap. Callers must build arguments from a validated
+queue layout rather than hand-editing the wire structure. Strict-warning host
+tests cover zero, equal, and reversed offsets. This remains synthetic validation,
+not evidence of a particular firmware branch accepting the ABI.

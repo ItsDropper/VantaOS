@@ -8,6 +8,7 @@ on:
       - "include/nvx_gsp_secure_boot.h"
       - "scripts/test_nvx_gsp_boot_memory.c"
       - "scripts/test_nvx_gsp_secure_boot.c"
+      - "scripts/test_nvx_gsp_vbios.c"
       - "drivers/gpu/core/**"
       - "include/gpu_pci_resources.h"
       - "scripts/test_gpu_pci_resources.c"
@@ -506,3 +507,12 @@ jobs:
 
       - name: Test lifecycle gates, capabilities, shutdown, and failure
         run: /tmp/vantaos-nvx-lifecycle-test
+
+      - name: Compile GA10x VBIOS FWSEC parser tests with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_vbios.c drivers/gpu/nvx/nvx_gsp_vbios.c \
+            -o /tmp/vantaos-nvx-gsp-vbios-test
+
+      - name: Test VBIOS BIT traversal, FWSEC V3 metadata and malformed ranges
+        run: /tmp/vantaos-nvx-gsp-vbios-test

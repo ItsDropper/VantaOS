@@ -24,11 +24,11 @@ static nvx_gsp_rpc_slot_t *find_handle(nvx_gsp_rpc_manager_t *m,const nvx_gsp_rp
     nvx_gsp_rpc_slot_t *s=&m->slots[h->slot];
     return s->active&&s->generation==h->generation?s:0;
 }
-nvx_gsp_rpc_status_t nvx_gsp_rpc_init(nvx_gsp_rpc_manager_t *m,nvx_gsp_ring_t *ring) {
-    if(!m||!ring) return NVX_GSP_RPC_INVALID_ARGUMENT;
+nvx_gsp_rpc_status_t nvx_gsp_rpc_init(nvx_gsp_rpc_manager_t *m,nvx_gsp_ring_t *command_ring,nvx_gsp_ring_t *response_ring) {
+    if(!m||!command_ring||!response_ring) return NVX_GSP_RPC_INVALID_ARGUMENT;
     if(m->initialized) return NVX_GSP_RPC_INVALID_ARGUMENT;
-    if(!ring->initialized) return NVX_GSP_RPC_NOT_INITIALIZED;
-    memset(m,0,sizeof(*m)); spinlock_init(&m->lock); m->ring=ring; m->initialized=1U;
+    if(!command_ring->initialized||!response_ring->initialized) return NVX_GSP_RPC_NOT_INITIALIZED;
+    memset(m,0,sizeof(*m)); spinlock_init(&m->lock); m->command_ring=command_ring; m->response_ring=response_ring; m->initialized=1U;
     return NVX_GSP_RPC_OK;
 }
 nvx_gsp_rpc_status_t nvx_gsp_rpc_submit(nvx_gsp_rpc_manager_t *m,
@@ -58,11 +58,11 @@ nvx_gsp_rpc_status_t nvx_gsp_rpc_submit(nvx_gsp_rpc_manager_t *m,
     rpc_unlock(m,flags);
 
     /* ring_send writes slot->sequence before publishing the queue write pointer. */
-    sent=nvx_gsp_ring_send(m->ring,version,signature,request_function,payload,
+    sent=nvx_gsp_ring_send(m->command_ring,version,signature,request_function,payload,
                            payload_size,scratch,scratch_size,&slot->sequence);
     if(sent!=NVX_GSP_RING_OK) {
         flags=rpc_lock(m);
-        if(slot->active&&slot->generation==generation&&slot->state==NVX_GSP_RPC_PENDING) {
+        if(slot->active&&slot->generation==generation) {
             memset(slot,0,sizeof(*slot)); slot->generation=generation;
         }
         rpc_unlock(m,flags); *out_handle=(nvx_gsp_rpc_handle_t){0};
@@ -78,7 +78,7 @@ nvx_gsp_rpc_status_t nvx_gsp_rpc_pump(nvx_gsp_rpc_manager_t *m,void *scratch,
     if(unmatched) memset(unmatched,0,sizeof(*unmatched));
     if(!m||!scratch) return NVX_GSP_RPC_INVALID_ARGUMENT;
     if(!m->initialized) return NVX_GSP_RPC_NOT_INITIALIZED;
-    received=nvx_gsp_ring_receive(m->ring,scratch,scratch_size,&view);
+    received=nvx_gsp_ring_receive(m->response_ring,scratch,scratch_size,&view);
     if(received==NVX_GSP_RING_QUEUE_EMPTY) return NVX_GSP_RPC_PENDING;
     if(received!=NVX_GSP_RING_OK) return NVX_GSP_RPC_TRANSPORT_ERROR;
     flags=rpc_lock(m);

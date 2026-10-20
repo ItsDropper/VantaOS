@@ -117,39 +117,38 @@ GSP boot, or RPC queue initialization.
 
 A transaction manager now sits above separate command and response rings. It
 reserves bounded result slots before queue publication, publishes queue sequence IDs
-before the doorbell callback can expose a request, uses a single in-flight reply-bearing RPC because the R535 wire protocol does
-not provide a verified request/response sequence-correlation guarantee, matches
-the response function, bounds response copies, reports raw firmware
+before the doorbell callback can expose a request, writes the R535 RPC sequence into each request before publishing the queue
+pointer and correlates replies by both sequence and expected function, bounds response copies, reports raw firmware
 result fields, rejects stale handles, and transitions outstanding requests to
 device-lost on fatal failure. Its lock disables local interrupts in kernel
 builds to prevent same-CPU interrupt re-entry. Tests cover pending/completed
 requests, stale handles, unmatched messages, function mismatch, undersized
 response buffers, slot exhaustion, and device loss.
 
-The manager is not yet called by NVX initialization, and the large-request path now uses the continuation-ring sender, but no real
-GSP RPC function schemas or boot-time queue memory setup exist. It provides the transaction
+The manager is not yet called by NVX initialization. Requests exceeding one
+16-page queue record are rejected until NVIDIA's continuation-record payload
+schema is implemented; no real GSP RPC function schemas or boot-time queue
+memory setup exist. It provides the transaction
 lifecycle needed by those later steps, not working firmware control by itself.
 
 ### GSP RPC ring transport
 
-The driver now has a bounded producer/consumer ring primitive for GSP RPC
-messages. It encodes the message-element and RPC headers in little-endian form,
-allocates page-aligned message extents, enforces the 16-page element limit,
-reserves one empty ring page, checks producer/consumer indices, calculates the
-R535-style XOR checksum, publishes pointers with memory ordering, and supports
-wraparound across the queue's end. A separate atomic fragmented-send path can split
-larger payloads into a first function record and caller-selected continuation
-records; it preflights total ring capacity and publishes the final write pointer
-only after every fragment is copied. The receive path validates element counts,
-RPC lengths, page counts and checksums before consuming a message. Tests cover
-full/empty queues, multi-page wraparound, malformed inputs, checksum corruption,
-and notification counts, multi-fragment ordering, and all-or-nothing behavior
-when queue capacity is insufficient.
+The driver now implements the NVIDIA MCTP/NVDM/RPC v03.00 queue envelope:
+`MCTP` magic, total message length, MCTP 1.0 single-message header, NVIDIA
+vendor-defined PCI NVDM header with RM-RPC type 0x25, NVDM payload length,
+reserved field, and the 32-byte RPC header. It uses NVIDIA's documented
+version 3.00 and signature constants, pending-result sentinels, and echoed RPC
+sequence IDs. Queue entries are 4 KiB pages, messages can span up to 16 pages,
+one ring page remains empty, and publication uses release/acquire ordering.
+The receive path validates every envelope length and protocol discriminator
+before consuming a message. There is no invented checksum field in the wire
+format. Tests cover full/empty queues, multi-page wraparound, malformed
+headers, request/reply sequence correlation, and notification counts.
 
-This is transport framing only. It is not wired to a booted GSP, does not
-implement the full continuation-record protocol for messages exceeding 16 pages,
-and does not implement RPC function schemas, response correlation, or hardware
-doorbell register programming. The caller must supply the correct firmware-shared
+This is transport framing only. It is not wired to a booted GSP, does not yet
+implement the payload schema for NVIDIA's CONTINUATION_RECORD RPC function for
+messages exceeding 16 pages, and does not implement RPC function schemas or
+hardware doorbell register programming. The caller must supply the correct firmware-shared
 pointer locations and notification callback after a real GSP queue has been
 initialized.
 

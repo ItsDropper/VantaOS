@@ -10,7 +10,7 @@ The project focuses on learning and validating operating-system fundamentals: bo
 - **User-mode milestone:** VantaOS loads static ELF64 `ET_EXEC` programs from FAT32 into private address spaces and runs them at ring 3. The `int 0x80` ABI includes process spawn/wait, bounded file descriptors and I/O, directory listing, terminal input, file and directory creation, rename/delete, metadata queries, and process-owned GUI windows.
 - **Storage boundary:** bounded FAT32 regular-file create/write, ASCII long filenames, directory creation, rename/delete, and multi-cluster range I/O are implemented and exercised by QEMU regression tests. Crash-atomic replacement, Unicode filename creation, concurrent filesystem mutation, and broad corruption testing remain incomplete.
 - **GUI boundary:** the kernel retains framebuffer/compositor ownership; user processes can request windows, submit bounded text/rectangle draw lists, and poll input/focus/close events. Terminal's shell runs as a ring-3 ELF, and Settings is now a separate ring-3 ELF at `/SYSTEM/SETTINGS.ELF`. Terminal's visible window, rendering, input editing, and scrollback now run in ring 3. Settings persists four accent colors, light/dark surfaces, contrast, and compact Explorer rows, and reloads those desktop preferences when saved; text size currently applies to Settings labels only. File Explorer is a ring-3 app with path entry, current-folder search, sidebar location highlighting, multi-selection, right-click properties/actions, create/rename/delete, recursive copy/move, and per-file RLE compression/extraction using the Vanta `.VZA` format. Deleting non-empty folders is recursive but bounded; Explorer does not yet provide general document editing, Unicode filename creation, or crash-safe filesystem transactions. The GUI ABI is a project-specific bring-up interface, not a stable platform API.
-- **Still experimental:** process isolation needs broader fault and adversarial testing; demand paging, dynamic linking, networking, audio, modern GPU acceleration, and broad physical-hardware compatibility are not established.
+- **Still experimental:** process isolation needs broader fault and adversarial testing; demand paging, dynamic linking, networking, audio, modern GPU acceleration, and broad physical-hardware compatibility are not established. NVX has bounded GA10x firmware parsers and host-tested SEC2/GSP transaction primitives, but no physical RTX 3060 secure boot, GSP-RM initialization, or accelerated rendering has been verified; see [GPU driver status](docs/gpu/README.md).
 - **Quality rule:** source presence is not proof of completion. See [Testing](docs/TESTING.md) for the exact automated assertions and their limits.
 
 ## Start here
@@ -24,6 +24,7 @@ The project focuses on learning and validating operating-system fundamentals: bo
 - [Build system](docs/BUILD_SYSTEM.md) — build targets and generated artifacts.
 - [Testing and verification](docs/TESTING.md) — CI checks and their limits.
 - [Hardware support](docs/HARDWARE_SUPPORT.md) — known constraints and unverified areas.
+- [GPU driver documentation](docs/gpu/README.md) — vendor-neutral framework and NVX NVIDIA bring-up/research notes.
 - [Development plan](docs/DEVELOPMENT_PLAN.md) — staged project priorities.
 - [Contributing](CONTRIBUTING.md) — engineering expectations and pull-request checklist.
 - [Security policy](SECURITY.md) — reporting security concerns.
@@ -42,6 +43,8 @@ The project focuses on learning and validating operating-system fundamentals: bo
 | `os/` | Terminal, shell, desktop, and file-explorer UI. |
 | `include/` | Shared interfaces. |
 | `docs/` | Architecture, engineering standards, build, testing, support, and roadmap. |
+| `docs/gpu/` | GPU framework status and vendor-specific driver documentation. |
+| `docs/gpu/nvx/` | NVIDIA GA10x firmware contracts, SEC2/GSP bring-up, and validation boundaries. |
 | `.github/` | CI workflows and contribution templates. |
 
 ## Build and run in QEMU

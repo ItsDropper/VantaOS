@@ -75,9 +75,14 @@ tests use synthetic memory; they do not validate physical GPU fuse values.
 The public NVIDIA firmware extraction script documents the signed booter container
 layout: a 24-byte outer header, a version-2 secure-load header, a packed signature
 array, patch-location/signature metadata, patch metadata, signature count, load
-descriptor, and firmware payload. The Linux NVIDIA open module selects the
-signature with index `num_sigs - 1 - fuse_version` (when multiple signatures
-exist) and rejects a nonzero `patch_sig` for this format.
+descriptor, and firmware payload. Older NVIDIA OpenRM source expresses selection as `num_sigs - 1 - fuse_version`.
+The current public Linux Nova GA102+ path makes the two inputs explicit: the
+firmware descriptor's `FUSE` baseline and the engine-specific hardware fuse
+version. Hardware version zero selects the final packed signature; otherwise
+the slot is `firmware_fuse_baseline - hardware_fuse_version`, bounds-checked
+against the packed signature array. NVX now follows this baseline-relative
+contract and rejects underflow/out-of-range selections before staging. Both
+implementations reject a nonzero `patch_sig` for this container format.
 
 The separate `bootloader-<version>.bin` is now parsed as the GA10x NVFW container too: version 1, a 24-byte outer header, an 84-byte descriptor, payload offset 108, and a 256-byte-aligned total size. Its payload can be copied into private staging, and the preflight report stores descriptor offsets rather than pointers that could outlive the verified bundle.\n\nNVX now implements that data path in `nvx_gsp_image_prepare()`: it copies only the
 firmware payload into private staging, selects the fuse-indexed signature, and

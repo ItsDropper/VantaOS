@@ -41,7 +41,10 @@ typedef enum nvx_gsp_ga10x_status {
     NVX_GSP_GA10X_QUEUE_NOT_READY,
     NVX_GSP_GA10X_QUEUE_ERROR,
     NVX_GSP_GA10X_PRIVILEGED_WINDOW_LOCKED,
-    NVX_GSP_GA10X_MMIO_ERROR
+    NVX_GSP_GA10X_MMIO_ERROR,
+    NVX_GSP_GA10X_FUSE_UNSUPPORTED_ENGINE,
+    NVX_GSP_GA10X_FUSE_INVALID_UCODE_ID,
+    NVX_GSP_GA10X_FUSE_RESERVED_BITS
 } nvx_gsp_ga10x_status_t;
 typedef struct nvx_gsp_ga10x {
     nvx_gsp_msgq_mmio_context_t mmio_context;

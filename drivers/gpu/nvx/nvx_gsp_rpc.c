@@ -85,7 +85,8 @@ nvx_gsp_rpc_status_t nvx_gsp_rpc_pump(nvx_gsp_rpc_manager_t *m,void *scratch,
     for(size_t i=0;i<NVX_GSP_RPC_MAX_PENDING;i++) {
         nvx_gsp_rpc_slot_t *candidate=&m->slots[i];
         if(candidate->active&&candidate->state==NVX_GSP_RPC_PENDING&&
-           candidate->sequence!=0U&&candidate->sequence==view.sequence) {
+           __atomic_load_n(&candidate->sequence,__ATOMIC_ACQUIRE)!=0U&&
+           __atomic_load_n(&candidate->sequence,__ATOMIC_ACQUIRE)==view.sequence) {
             slot=candidate; break;
         }
     }
@@ -116,7 +117,7 @@ nvx_gsp_rpc_status_t nvx_gsp_rpc_query(nvx_gsp_rpc_manager_t *m,
     if(!m->initialized) return NVX_GSP_RPC_NOT_INITIALIZED;
     flags=rpc_lock(m); s=find_handle(m,h);
     if(!s) { rpc_unlock(m,flags); return NVX_GSP_RPC_STALE_HANDLE; }
-    out->sequence=s->sequence; out->function=s->request_function;
+    out->sequence=__atomic_load_n(&s->sequence,__ATOMIC_ACQUIRE); out->function=s->request_function;
     out->firmware_result=s->firmware_result; out->firmware_result_private=s->firmware_result_private;
     out->response_size=s->response_size; out->status=s->state;
     nvx_gsp_rpc_status_t status=s->state; rpc_unlock(m,flags); return status;

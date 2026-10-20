@@ -42,7 +42,9 @@ nvx_gsp_preflight_status_t nvx_gsp_preflight_validate(
 {
     nvx_gsp_elf_info_t info;nvx_gsp_elf_section_t image,version;
     nvx_gsp_image_info_t booter_load,booter_unload;
-    nvx_gsp_elf_status_t es;nvx_gsp_image_status_t is;size_t expected_len=0U;
+    nvx_gsp_bootloader_info_t gsp_bootloader;
+    nvx_gsp_elf_status_t es;nvx_gsp_image_status_t is;
+    nvx_gsp_bootloader_status_t bs;size_t expected_len=0U;
     if(!b||!out||overlaps(out,sizeof(*out),b,sizeof(*b)))return NVX_GSP_PREFLIGHT_INVALID_ARGUMENT;
     for(size_t i=0;i<NVX_GSP_COMPONENT_COUNT;i++)
         if(b->components[i].blob.data&&overlaps(out,sizeof(*out),b->components[i].blob.data,b->components[i].blob.size))
@@ -66,6 +68,8 @@ nvx_gsp_preflight_status_t nvx_gsp_preflight_validate(
     if(is!=NVX_GSP_IMAGE_OK)return NVX_GSP_PREFLIGHT_CONTAINER_INVALID;
     is=nvx_gsp_image_parse(&b->components[3],&booter_unload);
     if(is!=NVX_GSP_IMAGE_OK)return NVX_GSP_PREFLIGHT_CONTAINER_INVALID;
+    bs=nvx_gsp_bootloader_parse(&b->components[4],&gsp_bootloader);
+    if(bs!=NVX_GSP_BOOTLOADER_OK)return NVX_GSP_PREFLIGHT_CONTAINER_INVALID;
     if(nvx_gsp_elf_find_section(runtime,".fwimage",&image)!=NVX_GSP_ELF_OK||!image.size||
        nvx_gsp_elf_find_section(runtime,".fwversion",&version)!=NVX_GSP_ELF_OK||
        !version.size||version.size>=sizeof(out->version)||version.data[version.size-1U]!=0U)
@@ -74,6 +78,7 @@ nvx_gsp_preflight_status_t nvx_gsp_preflight_validate(
     if(expected_len==0U||expected_len==sizeof(b->version)||version.size!=expected_len+1U||
        memcmp(version.data,b->version,expected_len)!=0)return NVX_GSP_PREFLIGHT_VERSION_MISMATCH;
     out->runtime=info;out->booter_load=booter_load;out->booter_unload=booter_unload;
+    out->gsp_bootloader=gsp_bootloader;
     out->firmware_image=image;out->firmware_version=version;
     memcpy(out->version,b->version,expected_len+1U);out->runtime_bytes=runtime->blob.size;
     out->ucode_archive_bytes=ucodes->blob.size;out->booter_load_bytes=b->components[2].blob.size;

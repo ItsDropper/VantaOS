@@ -71,7 +71,7 @@ int main(void) {
  assert(nvx_gsp_ring_send(&ring,NVX_GSP_RPC_HEADER_VERSION_R535,NVX_GSP_RPC_SIGNATURE_R535,300U,payload,8U,scratch,sizeof(scratch),&seq)==NVX_GSP_RING_OK);
  ring_mem[(size_t)(read_index%4U)*NVX_GSP_PAGE_SIZE+28U]^=1U;
  assert(nvx_gsp_ring_receive(&ring,scratch,sizeof(scratch),&view)==NVX_GSP_RING_BAD_MESSAGE);
- ring_mem[(size_t)read_index*NVX_GSP_PAGE_SIZE+28U]^=1U;
+ ring_mem[(size_t)(read_index%4U)*NVX_GSP_PAGE_SIZE+28U]^=1U;
  assert(nvx_gsp_ring_receive(&ring,scratch,sizeof(scratch),&view)==NVX_GSP_RING_OK&&view.function==300U);
  assert(nvx_gsp_ring_send(&ring,NVX_GSP_RPC_HEADER_VERSION_R535,NVX_GSP_RPC_SIGNATURE_R535,301U,payload,NVX_GSP_MAX_RPC_PAYLOAD+1U,scratch,sizeof(scratch),&seq)==NVX_GSP_RING_MESSAGE_TOO_LARGE);
  assert(nvx_gsp_ring_send(&ring,NVX_GSP_RPC_HEADER_VERSION_R535,NVX_GSP_RPC_SIGNATURE_R535,301U,scratch,16U,scratch,sizeof(scratch),&seq)==NVX_GSP_RING_INVALID_ARGUMENT);

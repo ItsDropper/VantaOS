@@ -29,7 +29,15 @@ int main(void) {
  assert(nvx_gsp_msgq_prepare_tx(small,sizeof(small),4096U,&tx)==NVX_GSP_MSGQ_OK);
  assert(tx.element_count==1U);
  assert(nvx_gsp_msgq_validate_rx(small,sizeof(small),4096U,&rx)==NVX_GSP_MSGQ_OK);
- assert(nvx_gsp_msgq_prepare_tx(store,sizeof(store),2048U,&tx)==NVX_GSP_MSGQ_BAD_SIZE);
+ assert(nvx_gsp_msgq_prepare_tx(store,sizeof(store),2048U,&tx)==NVX_GSP_MSGQ_OK);
+ assert(tx.element_size==2048U&&tx.element_count==127U);
+ assert(nvx_gsp_msgq_validate_rx(store,sizeof(store),2048U,&rx)==NVX_GSP_MSGQ_OK);
+ assert(nvx_gsp_msgq_prepare_tx(store,sizeof(store),16U,&tx)==NVX_GSP_MSGQ_OK);
+ assert(nvx_gsp_msgq_validate_rx(store,sizeof(store),16U,&rx)==NVX_GSP_MSGQ_OK);
+ assert(nvx_gsp_msgq_prepare_tx(store,sizeof(store),65536U,&tx)==NVX_GSP_MSGQ_OK);
+ assert(tx.element_count==3U);
+ assert(nvx_gsp_msgq_validate_rx(store,sizeof(store),65536U,&rx)==NVX_GSP_MSGQ_OK);
+ assert(nvx_gsp_msgq_prepare_tx(store,sizeof(store),8U,&tx)==NVX_GSP_MSGQ_BAD_SIZE);
  assert(nvx_gsp_msgq_prepare_tx(store,sizeof(store),4096U,0)==NVX_GSP_MSGQ_INVALID_ARGUMENT);
  assert(nvx_gsp_msgq_prepare_tx(0,sizeof(store),4096U,&tx)==NVX_GSP_MSGQ_INVALID_ARGUMENT);
  assert(nvx_gsp_msgq_prepare_tx(store+1U,sizeof(store)-1U,4096U,&tx)==NVX_GSP_MSGQ_BAD_ALIGNMENT);

@@ -268,23 +268,25 @@ A new high-secure transfer planner translates the parsed GA10x booter descriptor
 The strict-warning SEC2 test drives the actual MMIO helpers against a synthetic BAR0 register bank. It checks the transfer plan, reset/DMA/BROM/BOOTVEC/mailbox ordering and ownership transitions. This proves software sequencing only: synthetic MMIO cannot authenticate real firmware or establish that a physical GA102 GPU boots.
 
 
-## GSP-RM cached initialization arguments and shared queue layout
+## Modern GSP-RM cached initialization arguments and shared queue layout
 
-A dedicated ABI helper now defines the 184-byte modern GA10x cached GSP init
+A dedicated ABI helper defines the 184-byte **modern** GA10x cached GSP init
 argument structure with compile-time size/offset assertions. It plans the
 contiguous SYSRAM region containing the PTE table, command queue, and status
-queue using the same page-count formula as NVIDIA's public open kernel modules.
-The helper validates physical alignment, allocation bounds, queue sizes, offsets,
-PTE counts, and integer overflow; it materializes a zero-filled 4 KiB argument
-page and only enables the explicitly selected DMEM-stack flag.
+queue using NVIDIA's public OpenRM page-count formula. The helper validates
+physical alignment, allocation bounds, queue sizes, offsets, PTE counts, and
+integer overflow; it can populate the self-mapping PTE array for the supported
+single-page table profile and materialize a zero-filled 4 KiB argument page.
 
-This is an ABI/planning layer, not an initialization claim. The `R535` RPC-header
-constant elsewhere in NVX does not identify the cached-init-argument ABI; the
-firmware branch must be matched explicitly before wiring this structure into boot. The first profile
-supports the non-encrypted queue ABI only; NVIDIA documents queue encryption as
-unstable. NVX still needs to allocate and map the single shared DMA region, build
-the helper can now populate the self-mapping PTE array for the supported
-single-page table profile. The platform must still allocate the contiguous DMA
-region, pass the argument-page address through the actual GA10x boot path, and
-validate the complete GSP launch/RM handshake on hardware. Queue layouts needing
-a multi-page PTE table are explicitly rejected rather than guessed.
+This is an ABI/planning layer, not an initialization claim. The `R535` RPC
+header constant elsewhere in NVX does **not** identify the cached-init-argument
+ABI. NVIDIA's R535-era `GSP_ARGUMENTS_CACHED` structure differs from the modern
+structure implemented here, so the exact firmware branch must be selected
+before wiring this helper into boot. The first profile supports only the
+non-encrypted queue ABI; NVIDIA documents queue encryption as unstable. Queue
+layouts requiring a multi-page PTE table are rejected rather than guessed.
+
+The platform must still allocate the contiguous DMA region, populate and flush
+its memory as required by the platform coherency contract, pass the argument
+page address through the actual GA10x boot path, and validate GSP launch and
+GSP-RM initialization on physical hardware.

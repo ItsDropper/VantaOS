@@ -60,6 +60,8 @@ typedef struct nvx_gsp_boot_trace {
     nvx_gsp_boot_phase_t last_completed_phase;
     nvx_gsp_boot_phase_t failed_phase;
     nvx_gsp_falcon_status_t result;
+    nvx_gsp_falcon_status_t recovery_trigger_status;
+    nvx_gsp_falcon_status_t recovery_result;
     uint8_t recovery_attempted;
     uint8_t recovery_succeeded;
     uint8_t sec2_quiescence_confirmed;

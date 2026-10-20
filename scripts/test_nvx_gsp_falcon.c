@@ -43,6 +43,25 @@ static void fake_dma_delay(uint32_t milliseconds, void *context)
                               NVX_GA10X_FALCON_DMA_IDLE);
 }
 
+typedef struct reset_test_context {
+    uint32_t base;
+    uint32_t delays;
+    uint32_t clear_scrub_after;
+} reset_test_context_t;
+
+static void fake_reset_delay(uint32_t milliseconds, void *context)
+{
+    reset_test_context_t *state = (reset_test_context_t *)context;
+    assert(milliseconds != 0U);
+    ++state->delays;
+    if (state->clear_scrub_after != 0U &&
+        state->delays >= state->clear_scrub_after) {
+        uint32_t hwcfg2 = get32(state->base + 0x0F4U);
+        put32(state->base + 0x0F4U,
+              hwcfg2 & ~NVX_GSP_HWCFG2_MEMORY_SCRUBBING);
+    }
+}
+
 static unsigned delay_calls;
 static unsigned activate_after;
 
@@ -186,6 +205,24 @@ int main(void)
            fake_dma_delay, &dma_state) == NVX_GSP_FALCON_DMA_TIMEOUT);
     assert(dma_state.delays == 2U);
     dma_state.stuck_full = 0U;
+
+    /* Reset pulse and bounded post-reset memory-scrub wait. */
+    put32(NVX_GSP_FALCON_HWCFG2,
+          NVX_GSP_HWCFG2_RESET_READY | NVX_GSP_HWCFG2_MEMORY_SCRUBBING);
+    reset_test_context_t reset_state = {NVX_GSP_FALCON_BASE, 0U, 2U};
+    assert(nvx_ga10x_falcon_reset(&region, NVX_GSP_FALCON_BASE,
+           10U, 1U, fake_reset_delay, &reset_state) == NVX_GSP_FALCON_OK);
+    assert(reset_state.delays == 2U);
+    assert(get32(NVX_GA10X_FALCON_ENGINE(NVX_GSP_FALCON_BASE)) == 0U);
+    assert((get32(NVX_GSP_FALCON_HWCFG2) &
+            NVX_GSP_HWCFG2_MEMORY_SCRUBBING) == 0U);
+    put32(NVX_GSP_FALCON_HWCFG2, NVX_GSP_HWCFG2_MEMORY_SCRUBBING);
+    reset_state.delays = 0U;
+    reset_state.clear_scrub_after = 0U;
+    assert(nvx_ga10x_falcon_reset(&region, NVX_GSP_FALCON_BASE,
+           2U, 1U, fake_reset_delay, &reset_state) ==
+           NVX_GSP_FALCON_RESET_TIMEOUT);
+    assert(reset_state.delays == 3U);
     assert(nvx_gsp_ga10x_program_brom(&region, 0x0002U, 1U, 0x100U) ==
            NVX_GSP_FALCON_BROM_INVALID_PARAMETERS);
     assert(nvx_gsp_ga10x_program_brom(&region, 0x0400U, 0U, 0x100U) ==

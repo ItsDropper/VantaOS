@@ -162,7 +162,12 @@ single-producer/single-consumer queue. It creates or validates the 32-byte
 NVIDIA header, calculates fixed-size slots, reads peer counters through supplied
 MMIO callbacks, enforces monotonic head/tail capacity rules, wraps slot addressing,
 and publishes counter updates only after the configured memory-ordering callback.
-Register offsets remain platform inputs and are not guessed. The ring caller must still
+Register offsets remain platform inputs and are not guessed. A separate RPC
+transport now serializes the R535 RPC header into NVIDIA MSGQ's 4096-byte
+elements, handles multi-element records and ring wrap, validates received
+MCTP/NVDM/RPC envelopes, and only advances RX tail after a complete valid
+message. The older page-ring implementation remains a testable transport model;
+hardware queue integration should use the MSGQ queue/transport APIs. The ring caller must still
 supply software counter adapters backed by verified queue-head/tail registers
 and the notification callback.
 

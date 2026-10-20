@@ -109,8 +109,6 @@ nvx_gsp_pci_rom_status_t nvx_gsp_pci_rom_next_image(
     image_blocks = read_le16(rom + pcir_offset + PCIR_IMAGE_LENGTH);
     if (image_blocks == 0U)
         return NVX_GSP_PCI_ROM_MALFORMED;
-    if ((size_t)image_blocks > SIZE_MAX / PCI_ROM_BLOCK_BYTES)
-        return NVX_GSP_PCI_ROM_RANGE_ERROR;
     image_size = (size_t)image_blocks * PCI_ROM_BLOCK_BYTES;
     if (cursor > SIZE_MAX - image_size)
         return NVX_GSP_PCI_ROM_RANGE_ERROR;

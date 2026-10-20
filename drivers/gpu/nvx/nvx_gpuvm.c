@@ -17,12 +17,20 @@
 #define NVX_GPUVM_FLUSH_BUSY     0x80000000U
 #define NVX_GPUVM_FLUSH_POLL_LIMIT 1000000U
 #define NVX_GPUVM_INVALID_TABLE UINT16_MAX
-#define NVX_GPUVM_PDE_SYSTEM_COHERENT (2ULL << 1U)
-#define NVX_GPUVM_PDE_VOLATILE (1ULL << 3U)
+/*
+ * GA100/TU102 published dev_mmu.h V2 descriptor fields:
+ * PDE address starts at descriptor bit 4 for PA bit 12 (PA >> 8);
+ * PDE aperture is bits 32..33 and VOL is bit 34.
+ * PTE address uses the same shift; VALID/PRIV/RO are bits 0/1/2,
+ * VOL is bit 32, and aperture is bits 33..34.
+ */
+#define NVX_GPUVM_PDE_SYSTEM_COHERENT (2ULL << 32U)
+#define NVX_GPUVM_PDE_VOLATILE (1ULL << 34U)
 #define NVX_GPUVM_PTE_VALID 1ULL
-#define NVX_GPUVM_PTE_VOLATILE (1ULL << 3U)
-#define NVX_GPUVM_PTE_READ_ONLY (1ULL << 6U)
-#define NVX_GPUVM_PTE_ATOMIC_DISABLE (1ULL << 7U)
+#define NVX_GPUVM_PTE_PRIVILEGE (1ULL << 1U)
+#define NVX_GPUVM_PTE_READ_ONLY (1ULL << 2U)
+#define NVX_GPUVM_PTE_VOLATILE (1ULL << 32U)
+#define NVX_GPUVM_PTE_SYSTEM_COHERENT (2ULL << 33U)
 
 #ifdef NVX_GPUVM_TEST
 nvx_mmio_status_t nvx_gpuvm_test_mmio_read32(
@@ -99,17 +107,17 @@ static uint16_t nvx_gpuvm_index_for_level(uint64_t va, uint8_t level)
 
 static uint64_t nvx_gpuvm_pde_value(uint64_t physical_address)
 {
-    /* V2 PDEs use address >> 4, system-coherent aperture, and VOL. */
-    return (physical_address >> 4U) |
+    /* V2 PDE address field begins at descriptor bit 4: PA is shifted by 8. */
+    return (physical_address >> 8U) |
            NVX_GPUVM_PDE_SYSTEM_COHERENT |
            NVX_GPUVM_PDE_VOLATILE;
 }
 
 static uint64_t nvx_gpuvm_pte_value(uint64_t physical_address, unsigned access)
 {
-    uint64_t value = (physical_address >> 4U) | NVX_GPUVM_PTE_VALID |
-                     (2ULL << 1U) | NVX_GPUVM_PTE_VOLATILE |
-                     NVX_GPUVM_PTE_ATOMIC_DISABLE;
+    uint64_t value = (physical_address >> 8U) | NVX_GPUVM_PTE_VALID |
+                     NVX_GPUVM_PTE_PRIVILEGE | NVX_GPUVM_PTE_VOLATILE |
+                     NVX_GPUVM_PTE_SYSTEM_COHERENT;
     if ((access & NVX_GPUVM_ACCESS_WRITE) == 0U)
         value |= NVX_GPUVM_PTE_READ_ONLY;
     return value;
@@ -162,11 +170,9 @@ static uint64_t *nvx_gpuvm_parent_entry(nvx_gpuvm_t *vm,
     parent = &vm->tables[parent_index];
     if (!parent->active || parent->level == 0U)
         return 0;
-    if (parent->level == 1U)
-        return (uint64_t *)((uintptr_t)parent->backing.virtual_address +
-                            (uintptr_t)slot * 16U);
+    /* Published GA100/TU102 V2 PDE descriptors are 64 bits at every level. */
     return (uint64_t *)((uintptr_t)parent->backing.virtual_address +
-                        (uintptr_t)slot * 8U);
+                        (uintptr_t)slot * sizeof(uint64_t));
 }
 
 static size_t nvx_gpuvm_find_child(const nvx_gpuvm_t *vm,
@@ -217,8 +223,6 @@ static nvx_gpuvm_status_t nvx_gpuvm_get_child(nvx_gpuvm_t *vm,
         return status;
 
     *entry = nvx_gpuvm_pde_value(vm->tables[created].backing.physical_address);
-    if (parent->level == 1U)
-        entry[1] = 0U; /* Large-page half remains invalid; only 4 KiB pages exist. */
     __atomic_thread_fence(__ATOMIC_RELEASE);
     ++parent->entry_count;
     *out_child = created;
@@ -293,10 +297,7 @@ static nvx_gpuvm_status_t nvx_gpuvm_prune_empty_path(nvx_gpuvm_t *vm,
         entry=nvx_gpuvm_parent_entry(vm,parent_index,table->parent_slot);
         if(!entry||entry[0]!=nvx_gpuvm_pde_value(table->backing.physical_address))
             return NVX_GPUVM_CORRUPT_STATE;
-        if(parent->level==1U&&entry[1]!=0U)
-            return NVX_GPUVM_CORRUPT_STATE;
         entry[0]=0U;
-        if(parent->level==1U) entry[1]=0U;
         __atomic_thread_fence(__ATOMIC_RELEASE);
         --parent->entry_count;
         dma_free_page(&table->backing);

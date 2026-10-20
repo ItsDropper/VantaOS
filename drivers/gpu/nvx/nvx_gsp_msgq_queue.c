@@ -9,13 +9,6 @@ static int io_valid(const nvx_gsp_msgq_io_t *io)
 {
     return io&&io->read32&&io->write32&&io->before_device&&io->after_device;
 }
-static nvx_gsp_msgq_queue_status_t read_peer(nvx_gsp_msgq_queue_t *q,uint32_t *value)
-{
-    if(!q->io.read32(q->io.context,q->tail_register,value))
-        return NVX_GSP_MSGQ_QUEUE_IO_ERROR;
-    q->peer_counter=*value;
-    return NVX_GSP_MSGQ_QUEUE_OK;
-}
 static nvx_gsp_msgq_queue_status_t init_common(nvx_gsp_msgq_queue_t *q,
     void *store,size_t bytes,size_t elem,const nvx_gsp_msgq_io_t *io,
     uint32_t head,uint32_t tail,int transmit)
@@ -58,6 +51,7 @@ static nvx_gsp_msgq_queue_status_t update_peer(nvx_gsp_msgq_queue_t *q)
     if(!q||!q->initialized) return NVX_GSP_MSGQ_QUEUE_NOT_INITIALIZED;
     if(!q->io.read32(q->io.context,q->transmit?q->tail_register:q->head_register,&v))
         return NVX_GSP_MSGQ_QUEUE_IO_ERROR;
+    q->io.after_device(q->io.context);
     q->peer_counter=v;
     if((uint32_t)(q->local_counter-q->peer_counter)>q->layout.element_count)
         return NVX_GSP_MSGQ_QUEUE_BAD_COUNTER;

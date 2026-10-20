@@ -22,6 +22,7 @@ on:
       - "include/nvx_gsp_msgq.h"
       - "include/nvx_gsp_msgq_queue.h"
       - "include/nvx_gsp_msgq_rpc.h"
+      - "include/nvx_gsp_ga10x.h"
       - "include/nvx_gsp_rpc.h"
       - "include/nvx_gsp_elf.h"
       - "include/nvx_gsp_preflight.h"
@@ -51,6 +52,7 @@ on:
       - "scripts/test_nvx_gsp_msgq.c"
       - "scripts/test_nvx_gsp_msgq_queue.c"
       - "scripts/test_nvx_gsp_msgq_rpc.c"
+      - "scripts/test_nvx_gsp_ga10x.c"
       - "scripts/test_nvx_gsp_rpc.c"
       - "scripts/test_nvx_gsp_elf.c"
       - "scripts/test_nvx_gsp_preflight.c"
@@ -216,6 +218,17 @@ jobs:
 
       - name: Test NVIDIA MSGQ RPC transport framing and slot consumption
         run: /tmp/vantaos-nvx-msgq-rpc-test
+
+      - name: Compile GA10x GSP register-map integration tests
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_ga10x.c drivers/gpu/nvx/nvx_gsp_ga10x.c \
+            drivers/gpu/nvx/nvx_gsp_msgq_rpc.c drivers/gpu/nvx/nvx_gsp_msgq_queue.c \
+            drivers/gpu/nvx/nvx_gsp_msgq.c drivers/gpu/nvx/nvx_mmio.c \
+            -o /tmp/vantaos-nvx-ga10x-queues-test
+
+      - name: Test NVIDIA GA10x queue register map and post-boot response linking
+        run: /tmp/vantaos-nvx-ga10x-queues-test
 
       - name: Compile GSP RPC ring tests
         run: |

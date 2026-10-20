@@ -24,6 +24,7 @@ on:
       - "include/nvx_gsp_msgq_rpc.h"
       - "include/nvx_gsp_rpc.h"
       - "include/nvx_gsp_elf.h"
+      - "include/nvx_gsp_preflight.h"
       - "include/nvx_dma.h"
       - "include/nvx_dma_sync.h"
       - "include/nvx_gpuva.h"
@@ -52,6 +53,7 @@ on:
       - "scripts/test_nvx_gsp_msgq_rpc.c"
       - "scripts/test_nvx_gsp_rpc.c"
       - "scripts/test_nvx_gsp_elf.c"
+      - "scripts/test_nvx_gsp_preflight.c"
       - "scripts/test_nvx_dma.c"
       - "scripts/test_nvx_dma_sync.c"
       - "scripts/test_nvx_gpuva.c"
@@ -176,6 +178,15 @@ jobs:
 
       - name: Test contiguous DMA allocation bounds, validation and cleanup
         run: /tmp/vantaos-nvx-dma-test
+
+      - name: Compile GSP firmware preflight tests
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_preflight.c drivers/gpu/nvx/nvx_gsp_preflight.c \
+            drivers/gpu/nvx/nvx_gsp_elf.c -o /tmp/vantaos-nvx-gsp-preflight-test
+
+      - name: Test verified firmware bundle preflight
+        run: /tmp/vantaos-nvx-gsp-preflight-test
 
       - name: Compile NVIDIA MSGQ header tests
         run: |

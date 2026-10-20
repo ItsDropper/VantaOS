@@ -39,6 +39,9 @@ https://github.com/torvalds/linux/blob/master/drivers/gpu/nova-core/falcon/gsp.r
 - GA10x queue setup now requires the entire diagnostic register range to be
   mapped and refuses to mark the queue transport ready when the PRIV target is
   still masked.
+- `nvx_gsp_ga10x_wait_riscv_active()` polls the actual RISC-V active bit with a
+  caller-supplied scheduler delay, checks the PRIV lock on each iteration, and
+  returns a distinct timeout rather than spinning forever.
 - Host tests cover decoded bitfields, the locked-window signature, short BARs,
   null arguments, and alias rejection.
 

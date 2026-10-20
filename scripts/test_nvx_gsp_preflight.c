@@ -28,6 +28,13 @@ static void build_booter(uint8_t *dest){
  asset32(dest,160U,64U);asset32(dest,164U,1U);asset32(dest,168U,32U);
  asset32(dest,172U,32U);asset32(dest,176U,32U);asset32(dest,180U,16U);
 }
+static void build_gsp_bootloader(uint8_t *dest){
+ memset(dest,0,512U);
+ asset32(dest,0U,0x10DEU);asset32(dest,4U,1U);asset32(dest,8U,256U);
+ asset32(dest,12U,24U);asset32(dest,16U,108U);asset32(dest,20U,128U);
+ for(size_t i=0U;i<84U;i++)dest[24U+i]=(uint8_t)(i+1U);
+ for(size_t i=0U;i<128U;i++)dest[108U+i]=(uint8_t)(0x80U+i);
+}
 static void build_elf(void){
  memset(elf,0,sizeof(elf));elf[0]=0x7F;elf[1]='E';elf[2]='L';elf[3]='F';elf[4]=2;elf[5]=1;elf[6]=1;
  p16(16,2);p16(18,243);p32(20,1);p64(24,0x1000);p64(32,64);p64(40,128);
@@ -41,12 +48,13 @@ int main(void){
  nvx_gsp_bundle_t b={0};nvx_gsp_preflight_report_t report={0};b.family=NVX_FAMILY_AMPERE;b.acquired=1U;b.provider.verify=verify_stub;strcpy(b.chip,"ga106");strcpy(b.version,"535.113.01");build_elf();
  b.components[0]=(nvx_gsp_component_t){.blob={elf,sizeof(elf),0},.kind=NVX_GSP_RUNTIME,.acquired=1U};
  b.components[1]=(nvx_gsp_component_t){.blob={ucodes,sizeof(ucodes),0},.kind=NVX_GSP_UCODE_ARCHIVE,.acquired=1U};
- for(unsigned i=2U;i<5U;i++){build_booter(boot_assets[i-2U]);b.components[i]=(nvx_gsp_component_t){.blob={boot_assets[i-2U],sizeof(boot_assets[0]),0},.kind=(nvx_gsp_component_kind_t)i,.acquired=1U};}
+ for(unsigned i=2U;i<4U;i++){build_booter(boot_assets[i-2U]);b.components[i]=(nvx_gsp_component_t){.blob={boot_assets[i-2U],sizeof(boot_assets[0]),0},.kind=(nvx_gsp_component_kind_t)i,.acquired=1U};}build_gsp_bootloader(boot_assets[2]);b.components[4]=(nvx_gsp_component_t){.blob={boot_assets[2],256U,0},.kind=NVX_GSP_BOOTLOADER,.acquired=1U};
  assert(nvx_gsp_preflight_validate(&b,&report)==NVX_GSP_PREFLIGHT_OK);
  assert(report.runtime_verified&&report.ucode_archive_verified&&report.boot_assets_present);
  assert(report.runtime.machine==243U&&report.runtime.load_segment_count==1U);
  assert(report.runtime_bytes==sizeof(elf)&&report.ucode_archive_bytes==sizeof(ucodes));
- assert(report.booter_load_bytes==512U&&report.booter_unload_bytes==512U&&report.bootloader_bytes==512U);
+ assert(report.booter_load_bytes==512U&&report.booter_unload_bytes==512U&&report.bootloader_bytes==256U);
+ assert(report.gsp_bootloader.descriptor_size==84U&&report.gsp_bootloader.payload_offset==108U&&report.gsp_bootloader.payload_size==128U);
  assert(report.booter_load.engine_id==0x400U&&report.booter_unload.ucode_id==1U);
  assert(report.firmware_image.offset==512U&&report.firmware_image.size==64U);
  assert(report.firmware_version.offset==576U&&strcmp(report.version,"535.113.01")==0);

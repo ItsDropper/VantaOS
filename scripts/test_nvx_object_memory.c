@@ -5,15 +5,17 @@
  * See the LICENSE file in the project root for the full license text.
  */
 #include "nvx_object_memory.h"
+#include "heap.h"
 
 #include <assert.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 
 #define TABLE_PAGE_COUNT 256U
 static nvx_gpuvm_t gpuvm;
 static nvx_memory_manager_t manager;
-static uint8_t dma_memory[NVX_DMA_MAX_BYTES * NVX_MEMORY_MAX_OBJECTS]
+static uint8_t dma_memory[4U * 1024U * 1024U]
     __attribute__((aligned(NVX_DMA_PAGE_SIZE)));
 static uint8_t table_memory[TABLE_PAGE_COUNT][NVX_GPUVM_PAGE_SIZE]
     __attribute__((aligned(NVX_GPUVM_PAGE_SIZE)));
@@ -25,6 +27,10 @@ static unsigned table_free_calls;
 static int fail_alloc;
 static uint64_t physical_base = 0x10000000ULL;
 static int fail_flush;
+
+int heap_is_initialized(void) { return 1; }
+void *kmalloc(size_t size) { return malloc(size); }
+void kfree(void *ptr) { free(ptr); }
 
 int dma_alloc_contiguous(dma_page_t *pages, size_t count)
 {

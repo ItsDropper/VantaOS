@@ -281,5 +281,8 @@ page and only enables the explicitly selected DMEM-stack flag.
 This is an ABI/planning layer, not an initialization claim. The first profile
 supports the non-encrypted queue ABI only; NVIDIA documents queue encryption as
 unstable. NVX still needs to allocate and map the single shared DMA region, build
-its GPU-visible page table, pass the argument-page address through the actual
-GA10x boot path, and validate the complete GSP launch/RM handshake on hardware.
+the helper can now populate the self-mapping PTE array for the supported
+single-page table profile. The platform must still allocate the contiguous DMA
+region, pass the argument-page address through the actual GA10x boot path, and
+validate the complete GSP launch/RM handshake on hardware. Queue layouts needing
+a multi-page PTE table are explicitly rejected rather than guessed.

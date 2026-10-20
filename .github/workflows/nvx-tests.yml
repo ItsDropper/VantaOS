@@ -37,6 +37,7 @@ on:
       - "include/nvx_gsp_msgq.h"
       - "include/nvx_gsp_msgq_queue.h"
       - "include/nvx_gsp_msgq_rpc.h"
+      - "include/nvx_gsp_init_args.h"
       - "include/nvx_gsp_ga10x.h"
       - "include/nvx_gsp_falcon.h"
       - "drivers/gpu/nvx/nvx_gsp_falcon.c"
@@ -79,6 +80,7 @@ on:
       - "scripts/test_nvx_gsp_msgq.c"
       - "scripts/test_nvx_gsp_msgq_queue.c"
       - "scripts/test_nvx_gsp_msgq_rpc.c"
+      - "scripts/test_nvx_gsp_init_args.c"
       - "scripts/test_nvx_gsp_msgq_rpc_concurrency.c"
       - "scripts/test_nvx_gsp_ga10x.c"
       - "scripts/test_nvx_gsp_falcon.c"
@@ -331,6 +333,15 @@ jobs:
 
       - name: Test concurrent NVX MSGQ sends do not interleave multi-page RPCs
         run: /tmp/vantaos-nvx-msgq-rpc-concurrency-test
+
+      - name: Compile GSP cached-init-arguments ABI tests
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_init_args.c drivers/gpu/nvx/nvx_gsp_init_args.c \
+            -o /tmp/vantaos-nvx-gsp-init-args-test
+
+      - name: Test GSP init ABI offsets and shared queue layout planning
+        run: /tmp/vantaos-nvx-gsp-init-args-test
 
       - name: Compile GA10x GSP register-map integration tests
         run: |

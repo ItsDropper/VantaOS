@@ -7,6 +7,7 @@
 
 #include "dma.h"
 #include "pmm.h"
+#include <string.h>
 #define DMA_PAGE_SIZE 4096U
 #define DMA_LIMIT 0x100000000ULL
 int dma_alloc_page(dma_page_t* p) {
@@ -31,20 +32,35 @@ void dma_free_page(dma_page_t* p) {
 }
 
 int dma_alloc_contiguous(dma_page_t* pages, size_t count) {
- if(!pages||!count||count>64U)return 0;
- for(size_t i=0;i<count;i++){
-  if(!dma_alloc_page(&pages[i])){
-   while(i>0U)dma_free_page(&pages[--i]);
+ void *base_address = 0;
+ uint64_t base_physical;
+ if(!pages||!count||count>DMA_MAX_CONTIGUOUS_PAGES||count>UINT32_MAX)return 0;
+ if(!pmm_alloc_contiguous_blocks((uint32_t)count,&base_address)||!base_address)return 0;
+ base_physical=(uint64_t)(uintptr_t)base_address;
+ for(size_t i=0U;i<count;i++){
+  uint64_t physical=base_physical+(uint64_t)i*DMA_PAGE_SIZE;
+  void *virtual_address=(void *)(uintptr_t)physical;
+  if(physical>=DMA_LIMIT||physical>UINT64_MAX-DMA_PAGE_SIZE||
+     !virtual_address||((uintptr_t)virtual_address&(DMA_PAGE_SIZE-1U))){
+   for(size_t j=0U;j<count;j++)pmm_free_block((void *)(uintptr_t)(base_physical+(uint64_t)j*DMA_PAGE_SIZE));
+   for(size_t j=0U;j<count;j++){pages[j].virtual_address=0;pages[j].physical_address=0;pages[j].size=0;}
    return 0;
   }
-  if(i>0U&&pages[i].physical_address!=pages[i-1U].physical_address+PAGE_SIZE){
-   for(size_t j=0;j<=i;j++)dma_free_page(&pages[j]);
+  pages[i].virtual_address=virtual_address;
+  pages[i].physical_address=physical;
+  pages[i].size=DMA_PAGE_SIZE;
+ }
+ for(size_t i=0U;i<count;i++){
+  if(!dma_page_is_valid(&pages[i])){
+   for(size_t j=0U;j<count;j++)pmm_free_block((void *)(uintptr_t)(base_physical+(uint64_t)j*DMA_PAGE_SIZE));
+   for(size_t j=0U;j<count;j++){pages[j].virtual_address=0;pages[j].physical_address=0;pages[j].size=0;}
    return 0;
   }
+  memset(pages[i].virtual_address,0,DMA_PAGE_SIZE);
  }
  return 1;
 }
 void dma_free_contiguous(dma_page_t* pages,size_t count) {
- if(!pages||count>64U)return;
+ if(!pages||count>DMA_MAX_CONTIGUOUS_PAGES)return;
  for(size_t i=0;i<count;i++)dma_free_page(&pages[i]);
 }

@@ -5,15 +5,17 @@
  * See the LICENSE file in the project root for the full license text.
  */
 #include "nvx_object_memory.h"
+#include "heap.h"
 
 #include <assert.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 
 #define TABLE_PAGE_COUNT 256U
 static nvx_gpuvm_t gpuvm;
 static nvx_memory_manager_t manager;
-static uint8_t dma_memory[NVX_DMA_MAX_BYTES * NVX_MEMORY_MAX_OBJECTS]
+static uint8_t dma_memory[4U * 1024U * 1024U]
     __attribute__((aligned(NVX_DMA_PAGE_SIZE)));
 static uint8_t table_memory[TABLE_PAGE_COUNT][NVX_GPUVM_PAGE_SIZE]
     __attribute__((aligned(NVX_GPUVM_PAGE_SIZE)));
@@ -25,6 +27,10 @@ static unsigned table_free_calls;
 static int fail_alloc;
 static uint64_t physical_base = 0x10000000ULL;
 static int fail_flush;
+
+int heap_is_initialized(void) { return 1; }
+void *kmalloc(size_t size) { return malloc(size); }
+void kfree(void *ptr) { free(ptr); }
 
 int dma_alloc_contiguous(dma_page_t *pages, size_t count)
 {
@@ -156,6 +162,19 @@ int main(void)
     assert(nvx_memory_release(&manager, &b) == NVX_MEMORY_OK);
     assert(nvx_memory_validate(&manager) == NVX_MEMORY_OK);
     assert(alloc_calls == 2U && free_calls == 2U);
+
+    /* A 1 MiB object exercises hundreds of DMA pages without a kernel-stack array. */
+    nvx_memory_handle_t large = {0};
+    assert(nvx_memory_alloc(&manager, 1024U * 1024U,
+                            NVX_MEMORY_FIRMWARE_IMAGE, &large) ==
+           NVX_MEMORY_OK);
+    assert(large.size == 1024U * 1024U);
+    assert(nvx_memory_get_info(&manager, &large, &info) == NVX_MEMORY_OK);
+    assert(info.size == 1024U * 1024U &&
+           info.kind == NVX_MEMORY_FIRMWARE_IMAGE);
+    assert(nvx_memory_release(&manager, &large) == NVX_MEMORY_OK);
+    assert(nvx_memory_validate(&manager) == NVX_MEMORY_OK);
+    assert(alloc_calls == 3U && free_calls == 3U);
 
     assert(nvx_gpuvm_destroy(&gpuvm) == NVX_GPUVM_OK);
     memset(&manager, 0, sizeof(manager));

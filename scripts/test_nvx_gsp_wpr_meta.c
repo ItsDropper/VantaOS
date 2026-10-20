@@ -19,16 +19,48 @@ static nvx_gsp_wpr_layout_t valid_layout(void)
   .wpr_start=0x30000000U,.wpr_heap_offset=0x30001000U,.wpr_heap_size=0x100000U,
   .firmware_offset=0x30101000U,.boot_bin_offset=0x30301000U,
   .frts_offset=0x30311000U,.frts_size=0x10000U,.wpr_end=0x38000000U,
-  .framebuffer_size=0x100000000ULL,.vga_workspace_offset=0x3F000000U,.vga_workspace_size=0x1000000U,
+  .framebuffer_size=0x100000000ULL,.vga_workspace_offset=0xFFF00000ULL,.vga_workspace_size=0x100000U,
   .boot_count=7U,.crash_report_queue_addr=0x600000U,.crash_report_queue_size=0x10000U,
   .vf_partition_count=1U,.flags=NVX_GSP_FW_FLAG_CLOCK_BOOST|NVX_GSP_FW_FLAG_PPCIE_ENABLED,
   .paging_config=0x1234U
  };
 }
+
+static int test_heap_policy(void *context,uint64_t pre,uint64_t post,uint64_t *out)
+{
+    uint64_t *calls=(uint64_t *)context;
+    assert(pre>=NVX_GSP_FB_ALIGN);
+    assert(post>=NVX_GSP_FB_ALIGN);
+    ++*calls;
+    *out=64U*1024U*1024U;
+    return 1;
+}
+
 int main(void)
 {
  nvx_gsp_wpr_layout_t l=valid_layout();nvx_gsp_wpr_meta_v1_t m={0};
+ uint64_t policy_calls=0U;
+ nvx_gsp_wpr_plan_config_t cfg={.framebuffer_size=0x100000000ULL,
+  .vga_workspace_offset=0xFFF00000ULL,.mmu_lock_valid=0U,.wpr_end_margin=0U,
+  .frts_size=0x10000U,.nonwpr_heap_size=0x1000000U,
+  .compute_wpr_heap_size=test_heap_policy,.heap_policy_context=&policy_calls};
+ nvx_gsp_wpr_layout_t planned={0};
  assert(sizeof(m)==256U&&offsetof(nvx_gsp_wpr_meta_v1_t,verified)==248U);
+ assert(nvx_gsp_wpr_layout_plan(&l,&cfg,&planned)==NVX_GSP_WPR_OK);
+ assert(policy_calls==1U&&planned.framebuffer_size==cfg.framebuffer_size);
+ assert(planned.wpr_end%NVX_GSP_WPR_ALIGN==0U);
+ assert(planned.firmware_offset%65536U==0U);
+ assert(planned.boot_bin_offset%4096U==0U);
+ assert(nvx_gsp_wpr_meta_build(&planned,&m)==NVX_GSP_WPR_OK);
+ assert(nvx_gsp_wpr_meta_validate(&m)==NVX_GSP_WPR_OK);
+ cfg.mmu_lock_valid=1U;cfg.mmu_lock_low=0xFFE00000ULL;
+ assert(nvx_gsp_wpr_layout_plan(&l,&cfg,&planned)==NVX_GSP_WPR_OK);
+ assert(planned.wpr_end<=cfg.mmu_lock_low);
+ cfg.mmu_lock_low=cfg.framebuffer_size;
+ assert(nvx_gsp_wpr_layout_plan(&l,&cfg,&planned)==NVX_GSP_WPR_BAD_RANGE);
+ cfg.mmu_lock_valid=0U;cfg.compute_wpr_heap_size=0;
+ assert(nvx_gsp_wpr_layout_plan(&l,&cfg,&planned)==NVX_GSP_WPR_BAD_RANGE);
+ cfg.compute_wpr_heap_size=test_heap_policy;
  assert(nvx_gsp_wpr_meta_build(&l,&m)==NVX_GSP_WPR_OK);
  assert(m.magic==NVX_GSP_WPR_META_V1_MAGIC&&m.revision==1U&&m.verified==0U);
  assert(m.sysmem_addr_of_radix3_elf==l.sysmem_radix3_addr&&m.gsp_fw_wpr_start==l.wpr_start);

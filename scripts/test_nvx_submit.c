@@ -5,9 +5,11 @@
  * See the LICENSE file in the project root for the full license text.
  */
 #include "nvx_submit.h"
+#include "heap.h"
 
 #include <assert.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 
 static nvx_gpuvm_t gpuvm;
@@ -17,6 +19,10 @@ static nvx_memory_manager_t manager;
 static uint8_t dma_memory[1024U * 1024U]
     __attribute__((aligned(NVX_DMA_PAGE_SIZE)));
 static size_t next_page;
+
+int heap_is_initialized(void) { return 1; }
+void *kmalloc(size_t size) { return malloc(size); }
+void kfree(void *ptr) { free(ptr); }
 
 int dma_alloc_page(dma_page_t *out)
 {

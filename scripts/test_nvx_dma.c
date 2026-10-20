@@ -5,9 +5,11 @@
  * See the LICENSE file in the project root for the full license text.
  */
 #include "nvx_dma.h"
+#include "heap.h"
 
 #include <assert.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 
 static unsigned alloc_calls;
@@ -16,8 +18,30 @@ static int fail_alloc;
 static int invalid_page;
 static int noncontiguous;
 static int high_address;
+static int heap_ready = 1;
+static int fail_metadata_alloc;
+static unsigned metadata_allocs;
+static unsigned metadata_frees;
 static uint8_t memory[NVX_DMA_MAX_BYTES + NVX_DMA_PAGE_SIZE]
     __attribute__((aligned(NVX_DMA_PAGE_SIZE)));
+
+int heap_is_initialized(void) { return heap_ready; }
+void *kmalloc(size_t size)
+{
+    if (fail_metadata_alloc)
+        return 0;
+    void *p = malloc(size);
+    if (p)
+        ++metadata_allocs;
+    return p;
+}
+void kfree(void *ptr)
+{
+    if (ptr) {
+        ++metadata_frees;
+        free(ptr);
+    }
+}
 
 int dma_alloc_contiguous(dma_page_t *pages, size_t count)
 {
@@ -71,6 +95,16 @@ int main(void)
            NVX_DMA_TOO_LARGE);
     assert(nvx_dma_alloc(1U, 32U, 0) == NVX_DMA_INVALID_ARGUMENT);
 
+    heap_ready = 0;
+    assert(nvx_dma_alloc(4096U, 32U, &buffer) ==
+           NVX_DMA_ALLOCATION_FAILED);
+    heap_ready = 1;
+    fail_metadata_alloc = 1;
+    assert(nvx_dma_alloc(4096U, 32U, &buffer) ==
+           NVX_DMA_ALLOCATION_FAILED);
+    assert(buffer.pages == 0 && !buffer.acquired);
+    fail_metadata_alloc = 0;
+
     fail_alloc = 1;
     assert(nvx_dma_alloc(4096U, 32U, &buffer) ==
            NVX_DMA_ALLOCATION_FAILED);
@@ -117,5 +151,15 @@ int main(void)
     assert(alloc_calls == 7U);
     nvx_dma_release(&buffer);
     assert(free_calls == 6U);
+
+    /* Real GSP runtime images exceed the former 256 KiB ceiling. */
+    assert(nvx_dma_alloc(NVX_DMA_MAX_BYTES, 64U, &buffer) == NVX_DMA_OK);
+    assert(buffer.page_count == NVX_DMA_MAX_PAGES &&
+           buffer.size == NVX_DMA_MAX_BYTES &&
+           buffer.allocated_size == NVX_DMA_MAX_BYTES);
+    assert(buffer.pages != 0 && buffer.gpu_address == 0x20000000ULL);
+    nvx_dma_release(&buffer);
+    assert(free_calls == 7U && buffer.pages == 0);
+    assert(metadata_allocs == metadata_frees);
     return 0;
 }

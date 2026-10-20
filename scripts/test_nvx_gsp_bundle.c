@@ -36,5 +36,7 @@ int main(void){
  assert(nvx_gsp_bundle_acquire(&p,NVX_FAMILY_AMPERE,"ga106","535..113",&b)==NVX_GSP_BUNDLE_INVALID_ARGUMENT);
  assert(nvx_gsp_bundle_acquire(&p,NVX_FAMILY_AMPERE,"ga106","535.113.01",0)==NVX_GSP_BUNDLE_INVALID_ARGUMENT);
  assert(nvx_gsp_bundle_acquire(0,NVX_FAMILY_AMPERE,"ga106","535.113.01",&b)==NVX_GSP_BUNDLE_PROVIDER_INCOMPLETE);
- assert(nvx_gsp_bundle_acquire(&p,NVX_FAMILY_ADA,"ad106","535.113.01",&b)==NVX_GSP_BUNDLE_UNSUPPORTED_FAMILY);return 0;
+ assert(nvx_gsp_bundle_acquire(&p,NVX_FAMILY_ADA,"ad106","535.113.01",&b)==NVX_GSP_BUNDLE_UNSUPPORTED_FAMILY);
+ reset();assert(nvx_gsp_bundle_acquire(&p,NVX_FAMILY_AMPERE,"ga100","535.113.01",&b)==NVX_GSP_BUNDLE_UNSUPPORTED_FAMILY);assert(requests==0U);
+ assert(nvx_gsp_bundle_acquire(&p,NVX_FAMILY_AMPERE,"unknown","535.113.01",&b)==NVX_GSP_BUNDLE_UNSUPPORTED_FAMILY);assert(requests==0U);return 0;
 }

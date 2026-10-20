@@ -23,11 +23,22 @@ on:
       - "include/nvx_gsp_msgq_queue.h"
       - "include/nvx_gsp_msgq_rpc.h"
       - "include/nvx_gsp_ga10x.h"
+      - "include/nvx_gsp_falcon.h"
+      - "drivers/gpu/nvx/nvx_gsp_falcon.c"
+      - "scripts/test_nvx_gsp_falcon.c"
+      - "include/nvx_gsp_bootloader.h"
       - "include/nvx_gsp_rpc.h"
       - "include/nvx_gsp_elf.h"
       - "include/nvx_gsp_preflight.h"
       - "include/nvx_gsp_wpr_meta.h"
       - "include/nvx_dma.h"
+      - "include/dma.h"
+      - "include/pmm.h"
+      - "include/heap.h"
+      - "mm/dma.c"
+      - "mm/pmm.c"
+      - "kernel/selftest/boot_info_selftest.c"
+      - "scripts/test_pmm_contiguous.c"
       - "include/nvx_dma_sync.h"
       - "include/nvx_gpuva.h"
       - "include/nvx_gpuvm.h"
@@ -54,6 +65,8 @@ on:
       - "scripts/test_nvx_gsp_msgq_queue.c"
       - "scripts/test_nvx_gsp_msgq_rpc.c"
       - "scripts/test_nvx_gsp_ga10x.c"
+      - "scripts/test_nvx_gsp_falcon.c"
+      - "drivers/gpu/nvx/nvx_gsp_bootloader.c"
       - "scripts/test_nvx_gsp_rpc.c"
       - "scripts/test_nvx_gsp_rpc_msgq.c"
       - "scripts/test_nvx_gsp_elf.c"
@@ -82,6 +95,15 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+
+      - name: Compile PMM contiguous-run tests with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_pmm_contiguous.c mm/pmm.c \
+            -o /tmp/vantaos-pmm-contiguous-test
+
+      - name: Test contiguous PMM runs across fragmentation and rollback
+        run: /tmp/vantaos-pmm-contiguous-test
 
       - name: Compile host-tested PCI BAR sizing with strict warnings
         run: |
@@ -207,7 +229,10 @@ jobs:
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
             scripts/test_nvx_gsp_preflight.c drivers/gpu/nvx/nvx_gsp_preflight.c \
-            drivers/gpu/nvx/nvx_gsp_elf.c -o /tmp/vantaos-nvx-gsp-preflight-test
+            drivers/gpu/nvx/nvx_gsp_fuse.c drivers/gpu/nvx/nvx_mmio.c \
+            drivers/gpu/nvx/nvx_gsp_elf.c drivers/gpu/nvx/nvx_gsp_elf_load.c \
+            drivers/gpu/nvx/nvx_gsp_image.c drivers/gpu/nvx/nvx_gsp_bootloader.c \
+            -o /tmp/vantaos-nvx-gsp-preflight-test
 
       - name: Test verified firmware bundle preflight
         run: /tmp/vantaos-nvx-gsp-preflight-test
@@ -245,12 +270,21 @@ jobs:
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
             scripts/test_nvx_gsp_ga10x.c drivers/gpu/nvx/nvx_gsp_ga10x.c \
-            drivers/gpu/nvx/nvx_gsp_msgq_rpc.c drivers/gpu/nvx/nvx_gsp_msgq_queue.c \
-            drivers/gpu/nvx/nvx_gsp_msgq.c drivers/gpu/nvx/nvx_mmio.c \
-            -o /tmp/vantaos-nvx-ga10x-queues-test
+            drivers/gpu/nvx/nvx_gsp_fuse.c drivers/gpu/nvx/nvx_gsp_falcon.c drivers/gpu/nvx/nvx_gsp_msgq_rpc.c \
+            drivers/gpu/nvx/nvx_gsp_msgq_queue.c drivers/gpu/nvx/nvx_gsp_msgq.c \
+            drivers/gpu/nvx/nvx_mmio.c -o /tmp/vantaos-nvx-ga10x-queues-test
 
       - name: Test NVIDIA GA10x queue register map and post-boot response linking
         run: /tmp/vantaos-nvx-ga10x-queues-test
+
+      - name: Compile GA10x Falcon register inspection tests
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_falcon.c drivers/gpu/nvx/nvx_gsp_falcon.c \
+            drivers/gpu/nvx/nvx_mmio.c -o /tmp/vantaos-nvx-ga10x-falcon-test
+
+      - name: Test GA10x Falcon diagnostics, BROM programming and lock guards
+        run: /tmp/vantaos-nvx-ga10x-falcon-test
 
       - name: Compile GSP RPC ring tests
         run: |
@@ -269,6 +303,15 @@ jobs:
 
       - name: Test ELF bounds, load segments and signature section
         run: /tmp/vantaos-nvx-gsp-elf-test
+
+      - name: Compile GSP ELF segment materialization tests
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_elf_load.c drivers/gpu/nvx/nvx_gsp_elf_load.c \
+            drivers/gpu/nvx/nvx_gsp_elf.c -o /tmp/vantaos-nvx-gsp-elf-load-test
+
+      - name: Test GSP ELF copy, BSS zeroing, mapping validation and atomic failure
+        run: /tmp/vantaos-nvx-gsp-elf-load-test
 
       - name: Compile GSP RPC transaction tests
         run: |

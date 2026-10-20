@@ -18,7 +18,7 @@ nvx_gsp_ga10x_status_t nvx_gsp_ga10x_setup(nvx_gsp_ga10x_t *g,
     if(!g||!bar0||!bar0->base)return NVX_GSP_GA10X_INVALID_ARGUMENT;
     if(g->mmio_ready||g->command_ready||g->response_ready||g->rpc_ready)
         return NVX_GSP_GA10X_ALREADY_INITIALIZED;
-    if(bar0->length<NVX_GSP_GA10X_MSGQ_REQUIRED_BAR_BYTES||
+    if(bar0->length<NVX_GSP_GA10X_REQUIRED_BAR_BYTES||
        overlaps(g,sizeof(*g),bar0,sizeof(*bar0))||
        overlaps(g,sizeof(*g),bar0->base,bar0->length))
         return NVX_GSP_GA10X_BAD_BAR;
@@ -27,6 +27,22 @@ nvx_gsp_ga10x_status_t nvx_gsp_ga10x_setup(nvx_gsp_ga10x_t *g,
         memset(g,0,sizeof(*g));return NVX_GSP_GA10X_BAD_BAR;
     }
     g->mmio_ready=1U;
+
+    /*
+     * A readable BAR is not enough: GA102+ can return a fabricated pattern
+     * while the GSP PRIV target remains locked. Refuse queue use in that state
+     * rather than publishing a queue that cannot communicate with the engine.
+     */
+    nvx_gsp_falcon_status_t falcon_status =
+        nvx_gsp_ga10x_inspect_falcon(bar0, &g->falcon);
+    if (falcon_status != NVX_GSP_FALCON_OK) {
+        memset(g, 0, sizeof(*g));
+        if (falcon_status == NVX_GSP_FALCON_PRIVILEGED_WINDOW_LOCKED)
+            return NVX_GSP_GA10X_PRIVILEGED_WINDOW_LOCKED;
+        if (falcon_status == NVX_GSP_FALCON_MMIO_ERROR)
+            return NVX_GSP_GA10X_MMIO_ERROR;
+        return NVX_GSP_GA10X_BAD_BAR;
+    }
     return NVX_GSP_GA10X_OK;
 }
 nvx_gsp_ga10x_status_t nvx_gsp_ga10x_create_command_queue(
@@ -70,4 +86,26 @@ nvx_gsp_ga10x_status_t nvx_gsp_ga10x_init_rpc(nvx_gsp_ga10x_t *g)
     if(nvx_gsp_msgq_rpc_init(&g->rpc,&g->command_queue,&g->response_queue)!=NVX_GSP_MSGQ_RPC_OK)
         return NVX_GSP_GA10X_QUEUE_ERROR;
     g->rpc_ready=1U;return NVX_GSP_GA10X_OK;
+}
+
+/*
+ * NV_PGC6_AON_SECURE_SCRATCH_GROUP_42 is documented by Linux Nova as the
+ * usable framebuffer size in MiB. Do not infer VRAM size from PCI BAR length.
+ */
+nvx_gsp_ga10x_status_t nvx_gsp_ga10x_read_usable_fb_size(
+    const nvx_mmio_region_t *bar0, uint64_t *out_bytes)
+{
+    uint32_t size_mib = 0U;
+    if (!bar0 || !bar0->base || !out_bytes)
+        return NVX_GSP_GA10X_INVALID_ARGUMENT;
+    *out_bytes = 0U;
+    if (bar0->length < (size_t)NVX_GSP_GA10X_USABLE_FB_SIZE_MB + 4U)
+        return NVX_GSP_GA10X_BAD_BAR;
+    if (nvx_mmio_read32(bar0, NVX_GSP_GA10X_USABLE_FB_SIZE_MB,
+                        &size_mib) != NVX_MMIO_OK)
+        return NVX_GSP_GA10X_MMIO_ERROR;
+    if (size_mib == 0U)
+        return NVX_GSP_GA10X_FB_SIZE_INVALID;
+    *out_bytes = (uint64_t)size_mib * 1024ULL * 1024ULL;
+    return NVX_GSP_GA10X_OK;
 }

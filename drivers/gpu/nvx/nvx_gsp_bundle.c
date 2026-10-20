@@ -24,6 +24,31 @@ static int valid_token(const char *s,size_t max,int dots)
     }
     return !dots||(s[0]!='.'&&s[n-1U]!='.');
 }
+static int string_equals_literal(const char *a, const char *b)
+{
+    size_t i = 0U;
+    if (!a || !b)
+        return 0;
+    while (b[i] != '\0') {
+        if (a[i] != b[i])
+            return 0;
+        ++i;
+    }
+    return a[i] == '\0';
+}
+
+static int supported_ga10x_chip(const char *chip)
+{
+    static const char *const chips[] = {
+        "ga102", "ga103", "ga104", "ga106", "ga107"
+    };
+    if (!chip)
+        return 0;
+    for (size_t i = 0U; i < sizeof(chips) / sizeof(chips[0]); ++i)
+        if (string_equals_literal(chip, chips[i]))
+            return 1;
+    return 0;
+}
 static int valid_version(const char *s,size_t max)
 {
     size_t n=0U;int previous_dot=1;
@@ -85,6 +110,8 @@ nvx_gsp_bundle_status_t nvx_gsp_bundle_acquire(
     if(family!=NVX_FAMILY_AMPERE)return NVX_GSP_BUNDLE_UNSUPPORTED_FAMILY;
     if(!valid_token(chip,NVX_GSP_CHIP_MAX,0)||!valid_version(version,NVX_GSP_VERSION_MAX))
         return NVX_GSP_BUNDLE_INVALID_ARGUMENT;
+    /* GA100 uses the Turing-style boot path, not this GA10x bundle contract. */
+    if(!supported_ga10x_chip(chip))return NVX_GSP_BUNDLE_UNSUPPORTED_FAMILY;
     memset(out,0,sizeof(*out));out->provider=*p;out->family=family;
     memcpy(out->chip,chip,strlen(chip)+1U);memcpy(out->version,version,strlen(version)+1U);
     for(size_t i=0;i<NVX_GSP_COMPONENT_COUNT;i++) {

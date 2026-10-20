@@ -43,7 +43,8 @@ typedef struct nvx_gsp_bundle {
  * Ampere firmware package layout follows NVIDIA's MIT-licensed
  * open-gpu-kernel-modules/nouveau/extract-firmware-nouveau.py output:
  * nvidia/<chip>/gsp/{gsp,ucodes,booter_load,booter_unload,bootloader}-<version>.bin.
- * chip may be ga106 for RTX 3060; packaging maps it to GA102 assets.
+ * chip must be a supported GA10x target (ga102/ga103/ga104/ga106/ga107);
+ * GA100 is deliberately excluded because it follows a different boot path.
  * All five components are required. Acquisition/verification is not a boot.
  */
 nvx_gsp_bundle_status_t nvx_gsp_bundle_acquire(

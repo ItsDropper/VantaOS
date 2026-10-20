@@ -20,7 +20,7 @@ static int component(const char *p) {
 static int request(const char *n,nvx_firmware_blob_t *b,void *ctx) {
     (void)ctx; int i=component(n); assert(i>=0); requests++;
     if(requests<=4U) { strncpy(requested_paths[requests-1U],n,95U);
-        requested_paths[requests-1U][95]='\\0'; }
+        requested_paths[requests-1U][95]='\0'; }
     b->data=i==invalid_blob?0:bytes;
     b->size=i==oversized?(size_t)NVX_FIRMWARE_MAX_BYTES+1U:reported_size;
     b->release_context=(void *)bytes; return i!=fail_request;

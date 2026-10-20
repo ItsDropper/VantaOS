@@ -61,6 +61,12 @@ static int bytes_are_zero(const uint8_t *bytes, size_t size)
     return 1;
 }
 
+static void write_le64(uint8_t *destination, uint64_t value)
+{
+    for (unsigned i = 0U; i < 8U; ++i)
+        destination[i] = (uint8_t)(value >> (i * 8U));
+}
+
 static int queue_profile_valid(uint32_t header_size, uint32_t min_size,
                                uint32_t max_size, uint32_t header_alignment,
                                uint32_t element_alignment)
@@ -162,6 +168,15 @@ nvx_gsp_init_args_status_t nvx_gsp_shared_queue_plan(
         return status;
     if (config->allocation_size < layout.required_size)
         return NVX_GSP_INIT_ARGS_INSUFFICIENT_MEMORY;
+    /*
+     * This first implementation supports a single self-mapping PTE page.
+     * That covers NVIDIA's normal 256 KiB queues and up to 511 combined queue
+     * pages; larger layouts need a verified multi-page PTE bootstrap.
+     */
+    if (layout.page_table_size != NVX_GSP_PAGE_SIZE ||
+        layout.page_table_entry_count !=
+            layout.required_size / NVX_GSP_PAGE_SIZE)
+        return NVX_GSP_INIT_ARGS_UNSUPPORTED_CONFIGURATION;
 
     layout.command_queue_offset = layout.page_table_size;
     if (add_overflow_u64(layout.command_queue_offset,
@@ -217,6 +232,42 @@ nvx_gsp_init_args_status_t nvx_gsp_shared_queue_validate(
         layout->status_queue_offset != expected.status_queue_offset ||
         layout->page_table_entry_count != expected.page_table_entry_count)
         return NVX_GSP_INIT_ARGS_BAD_LAYOUT;
+    return NVX_GSP_INIT_ARGS_OK;
+}
+
+nvx_gsp_init_args_status_t nvx_gsp_shared_queue_build_pte_table(
+    const nvx_gsp_shared_queue_layout_t *layout, void *shared_mem_cpu,
+    size_t capacity)
+{
+    nvx_gsp_init_args_status_t status;
+    uint8_t *table = (uint8_t *)shared_mem_cpu;
+
+    if (!layout || !shared_mem_cpu)
+        return NVX_GSP_INIT_ARGS_INVALID_ARGUMENT;
+    if (ranges_overlap(layout, sizeof(*layout), shared_mem_cpu, capacity))
+        return NVX_GSP_INIT_ARGS_INVALID_ARGUMENT;
+    status = nvx_gsp_shared_queue_validate(layout);
+    if (status != NVX_GSP_INIT_ARGS_OK)
+        return status;
+    if (capacity < layout->allocation_size)
+        return NVX_GSP_INIT_ARGS_INSUFFICIENT_MEMORY;
+    if (layout->page_table_size != NVX_GSP_PAGE_SIZE ||
+        layout->page_table_entry_count >
+            NVX_GSP_PAGE_SIZE / sizeof(uint64_t) ||
+        layout->page_table_entry_count !=
+            layout->required_size / NVX_GSP_PAGE_SIZE)
+        return NVX_GSP_INIT_ARGS_UNSUPPORTED_CONFIGURATION;
+
+    memset(table, 0, (size_t)layout->page_table_size);
+    for (uint32_t i = 0U; i < layout->page_table_entry_count; ++i) {
+        uint64_t offset = (uint64_t)i * NVX_GSP_PAGE_SIZE;
+        uint64_t physical_address;
+        if (add_overflow_u64(layout->shared_mem_phys_addr, offset,
+                             &physical_address))
+            return NVX_GSP_INIT_ARGS_SIZE_OVERFLOW;
+        write_le64(table + (size_t)i * sizeof(uint64_t), physical_address);
+    }
+    __atomic_thread_fence(__ATOMIC_RELEASE);
     return NVX_GSP_INIT_ARGS_OK;
 }
 

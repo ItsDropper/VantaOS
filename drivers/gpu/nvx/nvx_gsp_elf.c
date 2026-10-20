@@ -46,8 +46,19 @@ nvx_gsp_elf_status_t nvx_gsp_elf_parse(const nvx_gsp_component_t *component,
     uint16_t type,machine,ehsize,phentsize,phnum,shentsize,shnum,shstrndx;
     uint32_t signature_index=0U,signature_matches=0U; uint64_t str_off,str_size;
     nvx_gsp_elf_info_t info={0};
-    if(out) memset(out,0,sizeof(*out));
-    if(!component||!out||!signature_name||!component->acquired||!component->blob.data)
+    if(!component||!out||!signature_name)
+        return NVX_GSP_ELF_INVALID_ARGUMENT;
+    /*
+     * The output is caller-owned, but it must never alias the descriptor or
+     * firmware bytes: clearing the result before validating this would destroy
+     * the very ELF image being parsed.
+     */
+    if(overlaps(out,sizeof(*out),component,sizeof(*component)) ||
+       (component->blob.data &&
+        overlaps(out,sizeof(*out),component->blob.data,component->blob.size)))
+        return NVX_GSP_ELF_INVALID_ARGUMENT;
+    memset(out,0,sizeof(*out));
+    if(!component->acquired||!component->blob.data)
         return NVX_GSP_ELF_INVALID_ARGUMENT;
     if(component->kind!=NVX_GSP_RUNTIME) return NVX_GSP_ELF_UNSUPPORTED_FORMAT;
     size=component->blob.size; data=component->blob.data;
@@ -101,6 +112,7 @@ nvx_gsp_elf_status_t nvx_gsp_elf_parse(const nvx_gsp_component_t *component,
         if(ptype!=ELF_PT_LOAD) continue;
         if(info.load_segment_count>=NVX_GSP_ELF_MAX_LOAD_SEGMENTS||filesz>memsz||
            !range_ok(size,off,filesz)||vaddr>UINT64_MAX-memsz||
+           paddr>UINT64_MAX-memsz||
            (align>1U&&(!power2(align)||(off%align)!=(vaddr%align))))
             return NVX_GSP_ELF_LOAD_SEGMENT_INVALID;
         nvx_gsp_elf_segment_t *seg=&info.load_segments[info.load_segment_count++];

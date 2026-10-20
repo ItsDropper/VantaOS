@@ -177,7 +177,7 @@ jobs:
             scripts/test_nvx_gsp_ring.c drivers/gpu/nvx/nvx_gsp_ring.c \
             -o /tmp/vantaos-nvx-gsp-ring-test
 
-      - name: Test GSP RPC ring framing, wraparound and checksum rejection
+      - name: Test NVIDIA GSP MCTP/NVDM framing, wraparound and malformed-envelope rejection
         run: /tmp/vantaos-nvx-gsp-ring-test
 
       - name: Compile GSP runtime ELF parser tests

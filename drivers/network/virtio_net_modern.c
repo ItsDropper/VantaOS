@@ -124,6 +124,16 @@ static size_t virtio_header_size(void)
     return state.mergeable_rx ? VNET_HEADER_MRG_SIZE : VNET_HEADER_BASE_SIZE;
 }
 
+static void vnet_log_hex32(uint32_t value)
+{
+    static const char digits[] = "0123456789ABCDEF";
+    char text[9];
+    for (unsigned i = 0; i < 8U; ++i)
+        text[i] = digits[(value >> ((7U - i) * 4U)) & 0x0FU];
+    text[8] = '\0';
+    serial_write(text);
+}
+
 static volatile uint8_t *map_cap(const struct pci_device *pci, uint8_t bar,
                                  uint32_t offset, uint32_t length)
 {
@@ -135,10 +145,22 @@ static volatile uint8_t *map_cap(const struct pci_device *pci, uint8_t bar,
         return 0;
     }
     if (!pci_get_bar(pci, bar, &base, &io, 0)) {
+        uint32_t raw = pci_read_config32(pci, (uint8_t)(0x10U + bar * 4U));
+        serial_write("VANTAOS_VIRTIO_NET_MODERN_BAR_INDEX=");
+        vnet_log_hex32(bar);
+        serial_write(" RAW=");
+        vnet_log_hex32(raw);
+        if (bar > 0U) {
+            uint32_t previous = pci_read_config32(
+                pci, (uint8_t)(0x10U + (bar - 1U) * 4U));
+            serial_write(" PREV=");
+            vnet_log_hex32(previous);
+        }
+        serial_write("\\n");
         /*
-         * Firmware can leave the 64-bit modern BAR unassigned. Ask the PCI
-         * core to size it with decode disabled and place it in a verified
-         * non-RAM aperture; never guess a physical address in the driver.
+         * Firmware can leave an implemented 64-bit modern BAR unassigned.
+         * The PCI core may assign it only after validating its size and the
+         * platform memory map; the driver never guesses an MMIO address.
          */
         if (!pci_allocate_unassigned_bar(pci, bar) ||
             !pci_get_bar(pci, bar, &base, &io, 0)) {

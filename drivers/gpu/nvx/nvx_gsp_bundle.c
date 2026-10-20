@@ -6,7 +6,10 @@
 #include "nvx_gsp_bundle.h"
 #include <string.h>
 static const char *const names[NVX_GSP_COMPONENT_COUNT] = {
-    "booter_load", "booter_unload", "bootloader", "gsp"
+    "gsp_ga10x", "ucodes_ga10x", "gsp_log_ga10x"
+};
+static const nvx_gsp_component_kind_t kinds[NVX_GSP_COMPONENT_COUNT] = {
+    NVX_GSP_RUNTIME, NVX_GSP_UCODE_ARCHIVE, NVX_GSP_LOG
 };
 static int valid_token(const char *s, size_t max, int dots)
 {
@@ -105,17 +108,20 @@ nvx_gsp_bundle_status_t nvx_gsp_bundle_acquire(
         size_t length=0U;
         path[0]='\0';
         if(!append_text(path,sizeof(path),&length,"nvidia/") ||
-           !append_text(path,sizeof(path),&length,out->chip) ||
-           !append_text(path,sizeof(path),&length,"/gsp/") ||
-           !append_text(path,sizeof(path),&length,names[i]) ||
-           !append_text(path,sizeof(path),&length,"-") ||
            !append_text(path,sizeof(path),&length,out->version) ||
+           !append_text(path,sizeof(path),&length,"/") ||
+           !append_text(path,sizeof(path),&length,names[i]) ||
            !append_text(path,sizeof(path),&length,".bin")) {
             status=NVX_GSP_BUNDLE_INVALID_ARGUMENT;
             break;
         }
         status=acquire_one(out,i,path);
-        if(status!=NVX_GSP_BUNDLE_OK) break;
+        if(status!=NVX_GSP_BUNDLE_OK) {
+            /* NVIDIA's own RM treats the GSP log ELF as optional/non-fatal. */
+            if(i==2U) { status=NVX_GSP_BUNDLE_OK; continue; }
+            break;
+        }
+        if(out->components[i].acquired) out->components[i].kind=kinds[i];
     }
     if(status!=NVX_GSP_BUNDLE_OK) {
         release_parts(out);

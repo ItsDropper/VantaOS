@@ -34,6 +34,9 @@ typedef struct nvx_gsp_boot_memory {
     nvx_dma_buffer_t booter_load;
     nvx_dma_buffer_t booter_unload;
     nvx_dma_buffer_t wpr_metadata;
+    nvx_dma_sync_t radix3_elf_sync;
+    nvx_dma_sync_t bootloader_payload_sync;
+    nvx_dma_sync_t signature_sync;
     nvx_dma_sync_t booter_load_sync;
     nvx_dma_sync_t booter_unload_sync;
     nvx_dma_sync_t wpr_metadata_sync;

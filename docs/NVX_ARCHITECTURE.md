@@ -100,8 +100,8 @@ currently consumes these buffers.
 
 ### Versioned GSP firmware bundle acquisition
 
-A new bundle API acquires the four independently versioned R535-style components:
-booter-load, booter-unload, bootloader, and GSP runtime firmware. The caller
+A new bundle API acquires the five independently versioned R535-style components:
+GSP runtime firmware, the ucode archive, booter-load, booter-unload, and the generic bootloader. The caller
 supplies the chip directory and exact version rather than having NVX guess a
 firmware release. Every component is individually size-bounded and passed
 through the platform verification callback before ownership is accepted; the
@@ -306,7 +306,7 @@ must distinguish CPU virtual and physical addresses. Do not enable bus mastering
 until DMA-visible state is valid. Interrupt handlers should do bounded work and
 defer longer processing.
 
-### DMA buffers\n\n`nvx_dma_alloc()` obtains a physically contiguous run using the kernel DMA\nallocator, validates every page and both physical/virtual continuity, rounds the\nrequested byte length to pages, caps each object at 64 pages (256 KiB), and checks\nthe complete address range against the caller-declared 32-bit or 64-bit device\naddress width. The current kernel DMA allocator is identity-mapped and below 4 GiB;\nthe NVX layer does not assume future allocators retain that limitation. Failed\nvalidation releases the whole allocation, and `nvx_dma_release()` is idempotent\nfor an already-released/zero-initialized handle. Allocation does not enable PCI\nbus mastering or submit work to the GPU. This is memory plumbing only: no GSP\nfirmware launch, GPU virtual-memory page tables, command queues, or cache/DMA\nbarrier protocol is implemented by this layer.\n\n### Firmware\n
+### DMA buffers\n\n`nvx_dma_alloc()` obtains a physically contiguous run using the kernel DMA\nallocator, validates every page and both physical/virtual continuity, rounds the\nrequested byte length to pages, caps each object at 4096 pages (16 MiB), using bounded dynamic page metadata, and checks\nthe complete address range against the caller-declared 32-bit or 64-bit device\naddress width. The current kernel DMA allocator is identity-mapped and below 4 GiB;\nthe NVX layer does not assume future allocators retain that limitation. Failed\nvalidation releases the whole allocation, and `nvx_dma_release()` is idempotent\nfor an already-released/zero-initialized handle. Allocation does not enable PCI\nbus mastering or submit work to the GPU. This is memory plumbing only: no GSP\nfirmware launch, GPU virtual-memory page tables, command queues, or cache/DMA\nbarrier protocol is implemented by this layer.\n\n### Firmware\n
 Firmware is injected through a provider rather than hard-coded filesystem paths.
 Validate device-family compatibility, lengths and integrity before use. Missing
 or rejected firmware must fail initialization cleanly and preserve fallback

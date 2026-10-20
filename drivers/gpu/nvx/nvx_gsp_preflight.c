@@ -4,6 +4,7 @@
  * See the LICENSE file in the project root for the full license text.
  */
 #include "nvx_gsp_preflight.h"
+#include "nvx_gsp_ga10x.h"
 #include <string.h>
 static int string_equals_literal(const char *a, const char *b)
 {
@@ -202,4 +203,43 @@ nvx_gsp_preflight_status_t nvx_gsp_preflight_stage_gsp_bootloader(
     if (boot_status == NVX_GSP_BOOTLOADER_INVALID_ARGUMENT)
         return NVX_GSP_PREFLIGHT_STAGING_ALIAS;
     return NVX_GSP_PREFLIGHT_CONTAINER_INVALID;
+}
+
+nvx_gsp_preflight_status_t nvx_gsp_preflight_stage_booters_from_bar0(
+    const nvx_gsp_bundle_t *b, const nvx_mmio_region_t *bar0,
+    uint8_t *load_staging, size_t load_capacity,
+    uint8_t *unload_staging, size_t unload_capacity,
+    nvx_gsp_image_info_t *out_load_info, nvx_gsp_image_info_t *out_unload_info)
+{
+    nvx_gsp_preflight_report_t report;
+    uint32_t load_fuse_version = 0U;
+    uint32_t unload_fuse_version = 0U;
+    nvx_gsp_ga10x_status_t fuse_status;
+    nvx_gsp_preflight_status_t status;
+
+    if (!b || !bar0 || !bar0->base || !load_staging || !unload_staging ||
+        !out_load_info || !out_unload_info)
+        return NVX_GSP_PREFLIGHT_INVALID_ARGUMENT;
+
+    status = nvx_gsp_preflight_validate(b, &report);
+    if (status != NVX_GSP_PREFLIGHT_OK)
+        return status;
+
+    /* Engine mask and ucode ID come from the validated signed booter metadata. */
+    fuse_status = nvx_gsp_ga10x_read_ucode_fuse_version(
+        bar0, report.booter_load.engine_id, report.booter_load.ucode_id,
+        &load_fuse_version);
+    if (fuse_status != NVX_GSP_GA10X_OK)
+        return NVX_GSP_PREFLIGHT_FUSE_READ_FAILED;
+
+    fuse_status = nvx_gsp_ga10x_read_ucode_fuse_version(
+        bar0, report.booter_unload.engine_id, report.booter_unload.ucode_id,
+        &unload_fuse_version);
+    if (fuse_status != NVX_GSP_GA10X_OK)
+        return NVX_GSP_PREFLIGHT_FUSE_READ_FAILED;
+
+    return nvx_gsp_preflight_stage_booters(
+        b, load_fuse_version, load_staging, load_capacity,
+        unload_fuse_version, unload_staging, unload_capacity,
+        out_load_info, out_unload_info);
 }

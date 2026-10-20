@@ -136,10 +136,14 @@ messages. It encodes the message-element and RPC headers in little-endian form,
 allocates page-aligned message extents, enforces the 16-page element limit,
 reserves one empty ring page, checks producer/consumer indices, calculates the
 R535-style XOR checksum, publishes pointers with memory ordering, and supports
-wraparound across the queue's end. The receive path validates element counts,
+wraparound across the queue's end. A separate atomic fragmented-send path can split
+larger payloads into a first function record and caller-selected continuation
+records; it preflights total ring capacity and publishes the final write pointer
+only after every fragment is copied. The receive path validates element counts,
 RPC lengths, page counts and checksums before consuming a message. Tests cover
 full/empty queues, multi-page wraparound, malformed inputs, checksum corruption,
-and notification counts.
+and notification counts, multi-fragment ordering, and all-or-nothing behavior
+when queue capacity is insufficient.
 
 This is transport framing only. It is not wired to a booted GSP, does not
 implement the full continuation-record protocol for messages exceeding 16 pages,

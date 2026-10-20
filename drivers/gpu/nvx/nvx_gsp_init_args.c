@@ -124,7 +124,7 @@ nvx_gsp_init_args_status_t nvx_gsp_shared_queue_plan(
 {
     nvx_gsp_shared_queue_layout_t layout = {0};
     nvx_gsp_init_args_status_t status;
-    uint64_t status_offset, status_end, physical_end;
+    uint64_t status_offset, status_end;
 
     if (!out)
         return NVX_GSP_INIT_ARGS_INVALID_ARGUMENT;
@@ -139,8 +139,7 @@ nvx_gsp_init_args_status_t nvx_gsp_shared_queue_plan(
         (config->shared_mem_phys_addr & (NVX_GSP_PAGE_SIZE - 1U)) != 0U ||
         (config->allocation_size & (NVX_GSP_PAGE_SIZE - 1U)) != 0U)
         return NVX_GSP_INIT_ARGS_BAD_ALIGNMENT;
-    if (add_overflow_u64(config->shared_mem_phys_addr,
-                         config->allocation_size, &physical_end))
+    if (config->shared_mem_phys_addr > UINT64_MAX - config->allocation_size)
         return NVX_GSP_INIT_ARGS_SIZE_OVERFLOW;
 
     status = nvx_gsp_shared_queue_required_size(config->command_queue_size,

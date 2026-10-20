@@ -467,6 +467,8 @@ nvx_gsp_falcon_status_t nvx_ga10x_falcon_boot(
         return NVX_GSP_FALCON_BAR_TOO_SMALL;
     if ((boot_vector & 3U) != 0U)
         return NVX_GSP_FALCON_BOOT_VECTOR_INVALID;
+    *mailbox0_out = 0U;
+    *mailbox1_out = 0U;
 
     if (nvx_mmio_read32(bar0, falcon_base + 0x0F4U, &hwcfg2) != NVX_MMIO_OK ||
         nvx_mmio_read32(bar0, falcon_base + 0x100U, &cpuctl) != NVX_MMIO_OK)

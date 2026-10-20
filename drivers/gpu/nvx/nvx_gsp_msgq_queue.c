@@ -21,7 +21,10 @@ static nvx_gsp_msgq_queue_status_t init_common(nvx_gsp_msgq_queue_t *q,
     q->backing_store=(uint8_t *)store;q->io=*io;
     q->head_register=head;q->tail_register=tail;q->transmit=(uint8_t)(transmit!=0);
     if(transmit) status=nvx_gsp_msgq_prepare_tx(store,bytes,elem,&q->layout);
-    else status=nvx_gsp_msgq_validate_rx(store,bytes,elem,&q->layout);
+    else {
+        q->io.after_device(q->io.context);
+        status=nvx_gsp_msgq_validate_rx(store,bytes,elem,&q->layout);
+    }
     if(status!=NVX_GSP_MSGQ_OK) { memset(q,0,sizeof(*q)); return NVX_GSP_MSGQ_QUEUE_BAD_LAYOUT; }
     q->local_counter=0U;q->peer_counter=0U;
     q->io.before_device(q->io.context);

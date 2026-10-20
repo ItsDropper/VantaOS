@@ -21,7 +21,8 @@ typedef enum nvx_generation_family {
     NVX_FAMILY_TURING,
     NVX_FAMILY_AMPERE,
     NVX_FAMILY_ADA,
-    NVX_FAMILY_HOPPER
+    NVX_FAMILY_HOPPER,
+    NVX_FAMILY_BLACKWELL
 } nvx_generation_family_t;
 
 typedef enum nvx_device_profile {
@@ -47,6 +48,9 @@ int nvx_match_pci_device(const struct pci_device *pci_device);
 int nvx_identify_pci_device(uint16_t device_id,
                             nvx_generation_family_t *out_family,
                             nvx_device_profile_t *out_profile);
+/* Maps public PMC architecture codes; unknown codes are rejected, never guessed. */
+int nvx_identify_architecture(uint8_t architecture,
+                              nvx_generation_family_t *out_family);
 int nvx_describe_pci_device(const struct pci_device *pci_device,
                             nvx_device_descriptor_t *out_descriptor);
 int nvx_pci_discover(void);

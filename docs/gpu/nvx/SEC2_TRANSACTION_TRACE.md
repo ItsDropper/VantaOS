@@ -6,7 +6,7 @@ path as the compatibility entry point and reports software-observed milestones:
 
 - current phase and last phase whose operation returned success;
 - the phase associated with the returned error (`NONE` when the transaction succeeds);
-- the returned status;
+- the returned status, the status that triggered recovery, and the recovery result separately;
 - whether reset-based recovery was attempted and whether reset/reclamation
   reported success;
 - whether SEC2 quiescence was confirmed by the reset/boot helper.
@@ -37,3 +37,15 @@ The synthetic executor test now deliberately leaves the SEC2 DMA command busy un
 The DMEM-upload failure branch also records its reset/reclaim result. A successful transaction reports `failed_phase = NONE`, rather than mislabeling the `COMPLETE` phase as a failure.
 
 These tests exercise NVX's software response to a modeled fault. They do not simulate SEC2 hardware or prove that real DMA commands time out or reset exactly this way.
+
+
+## Preserve the root cause when recovery also fails
+
+A timeout followed by failed reset/reclamation has two distinct outcomes: the initiating phase error and the reason the transaction finally returned. The trace now preserves both as `recovery_trigger_status` and `recovery_result`, while `result` remains the public API's final return status.
+
+For example, the synthetic IMEM-timeout case can report:
+- `recovery_trigger_status = DMA_TIMEOUT`;
+- `recovery_result = OK`;
+- `result = DMA_TIMEOUT`, because recovery restored ownership but the original transfer still failed.
+
+If reset/reclamation fails, the trace preserves `recovery_trigger_status = DMA_TIMEOUT` while `recovery_result` and final `result` report the ownership/recovery failure. This prevents recovery from hiding the initiating failure during later serial-log analysis.

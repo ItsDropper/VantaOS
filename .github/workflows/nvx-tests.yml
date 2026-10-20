@@ -24,6 +24,8 @@ on:
       - "include/nvx_gsp_msgq_rpc.h"
       - "include/nvx_gsp_ga10x.h"
       - "include/nvx_gsp_falcon.h"
+      - "drivers/gpu/nvx/nvx_gsp_falcon.c"
+      - "scripts/test_nvx_gsp_falcon.c"
       - "include/nvx_gsp_bootloader.h"
       - "include/nvx_gsp_rpc.h"
       - "include/nvx_gsp_elf.h"
@@ -281,7 +283,7 @@ jobs:
             scripts/test_nvx_gsp_falcon.c drivers/gpu/nvx/nvx_gsp_falcon.c \
             drivers/gpu/nvx/nvx_mmio.c -o /tmp/vantaos-nvx-ga10x-falcon-test
 
-      - name: Test read-only GA10x Falcon state and locked-window detection
+      - name: Test GA10x Falcon diagnostics, BROM programming and lock guards
         run: /tmp/vantaos-nvx-ga10x-falcon-test
 
       - name: Compile GSP RPC ring tests

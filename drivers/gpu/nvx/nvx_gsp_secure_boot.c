@@ -117,6 +117,9 @@ static nvx_gsp_falcon_status_t reset_and_reclaim(
     return NVX_GSP_FALCON_OK;
 }
 
+static void trace_recovery_result(nvx_gsp_boot_trace_t *trace,
+                                  nvx_gsp_falcon_status_t recovery_status);
+
 static nvx_gsp_falcon_status_t execute_booter_load_internal(
     nvx_gsp_boot_memory_t *memory, const nvx_mmio_region_t *bar0,
     uint32_t timeout_ms, uint32_t poll_interval_ms,

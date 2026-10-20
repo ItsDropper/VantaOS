@@ -14,11 +14,7 @@ static void put32(uint8_t *p,uint32_t v) {
     p[0]=(uint8_t)v; p[1]=(uint8_t)(v>>8U); p[2]=(uint8_t)(v>>16U); p[3]=(uint8_t)(v>>24U);
 }
 static int aligned_uintptr(const void *p,size_t a) { return ((uintptr_t)p&(a-1U))==0U; }
-static int valid_size(void *store,size_t bytes,size_t elem) {
-    return store&&bytes<=UINT32_MAX&&bytes>=2U*NVX_GSP_MSGQ_HEADER_PAGE_SIZE&&
-        bytes%NVX_GSP_MSGQ_ELEMENT_SIZE==0U&&elem==NVX_GSP_MSGQ_ELEMENT_SIZE&&
-        aligned_uintptr(store,NVX_GSP_MSGQ_HEADER_PAGE_SIZE);
-}
+
 static nvx_gsp_msgq_status_t decode(const void *store,size_t bytes,size_t elem,
     nvx_gsp_msgq_layout_t *out,int check_reserved)
 {
@@ -26,9 +22,10 @@ static nvx_gsp_msgq_status_t decode(const void *store,size_t bytes,size_t elem,
     uint32_t total,msg_size,count,off;
     if(!store||!out) return NVX_GSP_MSGQ_INVALID_ARGUMENT;
     memset(out,0,sizeof(*out));
+    if(!aligned_uintptr(store,NVX_GSP_MSGQ_HEADER_PAGE_SIZE))
+        return NVX_GSP_MSGQ_BAD_ALIGNMENT;
     if(bytes>UINT32_MAX||bytes<2U*NVX_GSP_MSGQ_HEADER_PAGE_SIZE||
-       bytes%NVX_GSP_MSGQ_ELEMENT_SIZE!=0U||elem!=NVX_GSP_MSGQ_ELEMENT_SIZE||
-       !aligned_uintptr(store,NVX_GSP_MSGQ_HEADER_PAGE_SIZE))
+       bytes%NVX_GSP_MSGQ_ELEMENT_SIZE!=0U||elem!=NVX_GSP_MSGQ_ELEMENT_SIZE)
         return NVX_GSP_MSGQ_BAD_SIZE;
     if(get16(p)!=NVX_GSP_MSGQ_VERSION_MAJOR) return NVX_GSP_MSGQ_BAD_VERSION;
     total=get32(p+4U); msg_size=get32(p+8U); count=get32(p+12U); off=get32(p+16U);
@@ -49,7 +46,12 @@ nvx_gsp_msgq_status_t nvx_gsp_msgq_prepare_tx(void *store,size_t bytes,size_t el
     uint32_t off,count;
     if(!out) return NVX_GSP_MSGQ_INVALID_ARGUMENT;
     memset(out,0,sizeof(*out));
-    if(!valid_size(store,bytes,elem)) return NVX_GSP_MSGQ_BAD_SIZE;
+    if(!store) return NVX_GSP_MSGQ_INVALID_ARGUMENT;
+    if(!aligned_uintptr(store,NVX_GSP_MSGQ_HEADER_PAGE_SIZE))
+        return NVX_GSP_MSGQ_BAD_ALIGNMENT;
+    if(bytes>UINT32_MAX||bytes<2U*NVX_GSP_MSGQ_HEADER_PAGE_SIZE||
+       bytes%NVX_GSP_MSGQ_ELEMENT_SIZE!=0U||elem!=NVX_GSP_MSGQ_ELEMENT_SIZE)
+        return NVX_GSP_MSGQ_BAD_SIZE;
     off=NVX_GSP_MSGQ_HEADER_PAGE_SIZE;
     count=(uint32_t)((bytes-off)/elem);
     if(count<1U||count>NVX_GSP_MSGQ_MAX_ELEMENTS) return NVX_GSP_MSGQ_BAD_LAYOUT;

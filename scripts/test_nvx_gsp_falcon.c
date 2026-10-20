@@ -122,7 +122,26 @@ int main(void)
     put32(NVX_GSP_FALCON_CPUCTL, NVX_GSP_CPUCTL_HALTED);
     assert(nvx_gsp_ga10x_program_brom(&region, 0x0400U, 1U, 0x100U) ==
            NVX_GSP_FALCON_PRIVILEGED_WINDOW_LOCKED);
+    put32(NVX_GSP_FALCON_HWCFG2, NVX_GSP_HWCFG2_RESET_READY);
+    put32(NVX_GSP_FALCON_CPUCTL, NVX_GSP_CPUCTL_HALTED);
+    assert(nvx_gsp_ga10x_start_falcon(&region, 0x200U) ==
+           NVX_GSP_FALCON_OK);
+    assert(nvx_mmio_read32(&region, NVX_GSP_FALCON_BOOTVEC,
+                           &register_value) == NVX_MMIO_OK);
+    assert(register_value == 0x200U);
+    assert(nvx_mmio_read32(&region, NVX_GSP_FALCON_CPUCTL,
+                           &register_value) == NVX_MMIO_OK);
+    assert(register_value == NVX_GSP_CPUCTL_START);
+    put32(NVX_GSP_FALCON_CPUCTL, NVX_GSP_CPUCTL_HALTED);
+    assert(nvx_gsp_ga10x_start_falcon(&region, 3U) ==
+           NVX_GSP_FALCON_BOOT_VECTOR_INVALID);
+    put32(NVX_GSP_FALCON_CPUCTL, 0U);
+    assert(nvx_gsp_ga10x_start_falcon(&region, 0x200U) ==
+           NVX_GSP_FALCON_NOT_HALTED);
     put32(NVX_GSP_FALCON_HWCFG2, 0xBADF41A5U);
+    put32(NVX_GSP_FALCON_CPUCTL, NVX_GSP_CPUCTL_HALTED);
+    assert(nvx_gsp_ga10x_start_falcon(&region, 0x200U) ==
+           NVX_GSP_FALCON_PRIVILEGED_WINDOW_LOCKED);
     memset(&snapshot, 0xA5, sizeof(snapshot));
     assert(nvx_gsp_ga10x_inspect_falcon(&region, &snapshot) ==
            NVX_GSP_FALCON_PRIVILEGED_WINDOW_LOCKED);
@@ -138,6 +157,8 @@ int main(void)
         NVX_GSP_FALCON_BROM_REQUIRED_BYTES - 1U};
     assert(nvx_gsp_ga10x_program_brom(&brom_short_region, 0x0400U, 1U,
            0x100U) == NVX_GSP_FALCON_BAR_TOO_SMALL);
+    assert(nvx_gsp_ga10x_start_falcon(&brom_short_region, 0x200U) ==
+           NVX_GSP_FALCON_BAR_TOO_SMALL);
     assert(nvx_gsp_ga10x_inspect_falcon(0, &snapshot) ==
            NVX_GSP_FALCON_INVALID_ARGUMENT);
     assert(nvx_gsp_ga10x_inspect_falcon(&region, 0) ==

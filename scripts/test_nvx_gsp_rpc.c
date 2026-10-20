@@ -21,7 +21,7 @@ static void send_reply_status(nvx_gsp_ring_t *ring,uint8_t *memory,
                        volatile uint32_t *write_ptr,uint32_t function,
                        uint32_t wire_sequence,uint32_t firmware_result,
                        const void *payload,size_t payload_size) {
- uint32_t ticket=0U, page=*write_ptr;
+ uint32_t ticket=0U, page=*write_ptr%ring->capacity_pages;
  assert(nvx_gsp_ring_send(ring,NVX_GSP_RPC_HEADER_VERSION_R535,
      NVX_GSP_RPC_SIGNATURE_R535,function,payload,payload_size,
      scratch,sizeof(scratch),&ticket)==NVX_GSP_RING_OK);

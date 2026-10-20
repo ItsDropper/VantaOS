@@ -329,7 +329,11 @@ jobs:
           trap cleanup EXIT
           for attempt in $(seq 1 700); do
             if grep -q 'VANTAOS_VIRTIO_NET_MODERN_TX_SELFTEST_OK' "$log" 2>/dev/null && grep -q 'VANTAOS_BOOT_OK' "$log" 2>/dev/null; then break; fi
-            if grep -q 'VANTAOS_VIRTIO_NET_MODERN_TX_SELFTEST_FAIL' "$log" 2>/dev/null; then cat "$log" qemu-virtio-modern-stderr.log; exit 1; fi
+            if grep -q 'VANTAOS_VIRTIO_NET_MODERN_TX_SELFTEST_FAIL' "$log" 2>/dev/null ||
+               grep -Eq 'VANTAOS_VIRTIO_NET_MODERN_(CAP_|MAP_|FAIL_)' "$log" 2>/dev/null; then
+              cat "$log" qemu-virtio-modern-stderr.log
+              exit 1
+            fi
             if ! kill -0 "$qemu_pid" 2>/dev/null; then cat "$log" qemu-virtio-modern-stderr.log; exit 1; fi
             sleep 0.1
           done

@@ -22,7 +22,7 @@ static nvx_gsp_wpr_layout_t valid_layout(void)
   .framebuffer_size=0x100000000ULL,.vga_workspace_offset=0x3F000000U,.vga_workspace_size=0x1000000U,
   .boot_count=7U,.crash_report_queue_addr=0x600000U,.crash_report_queue_size=0x10000U,
   .vf_partition_count=1U,.flags=NVX_GSP_FW_FLAG_CLOCK_BOOST|NVX_GSP_FW_FLAG_PPCIE_ENABLED,
-  .paging_config=0x1234U,.pmu_reserved_size=0x20000U
+  .paging_config=0x1234U
  };
 }
 int main(void)

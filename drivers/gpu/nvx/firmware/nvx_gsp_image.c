@@ -146,7 +146,7 @@ nvx_gsp_image_status_t nvx_gsp_image_parse(
 }
 
 nvx_gsp_image_status_t nvx_gsp_image_prepare(
-    const nvx_gsp_component_t *component, uint32_t fuse_version,
+    const nvx_gsp_component_t *component, uint32_t hardware_fuse_version,
     uint8_t *staging, size_t staging_size)
 {
     nvx_gsp_image_info_t info;
@@ -175,12 +175,12 @@ nvx_gsp_image_status_t nvx_gsp_image_prepare(
      * version). Reject a fuse newer than the firmware baseline and any index
      * outside the signed container instead of silently choosing another key.
      */
-    if (fuse_version == 0U) {
+    if (hardware_fuse_version == 0U) {
         signature_index = info.signature_count - 1U;
     } else {
-        if (info.fuse_version < fuse_version)
+        if (info.fuse_version < hardware_fuse_version)
             return NVX_GSP_IMAGE_FUSE_VERSION_UNSUPPORTED;
-        signature_index = info.fuse_version - fuse_version;
+        signature_index = info.fuse_version - hardware_fuse_version;
         if (signature_index >= info.signature_count)
             return NVX_GSP_IMAGE_FUSE_VERSION_UNSUPPORTED;
     }

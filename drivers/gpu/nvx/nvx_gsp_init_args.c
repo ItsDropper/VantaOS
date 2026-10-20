@@ -334,6 +334,9 @@ nvx_gsp_init_args_status_t nvx_gsp_arguments_cached_modern_materialize(
         args->message_queue.command_queue_offset == 0U ||
         (args->message_queue.command_queue_offset &
          (NVX_GSP_PAGE_SIZE - 1U)) != 0U ||
+        args->message_queue.status_queue_offset == 0U ||
+        args->message_queue.status_queue_offset <=
+            args->message_queue.command_queue_offset ||
         (args->message_queue.status_queue_offset &
          (NVX_GSP_PAGE_SIZE - 1U)) != 0U ||
         args->message_queue.page_table_entry_count == 0U ||

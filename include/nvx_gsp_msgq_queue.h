@@ -22,10 +22,6 @@ typedef struct nvx_gsp_msgq_io {
     nvx_gsp_msgq_barrier_fn after_device;
     void *context;
 } nvx_gsp_msgq_io_t;
-/* Builds checked BAR-backed register callbacks. Region/context must outlive the queue. */
-nvx_gsp_msgq_queue_status_t nvx_gsp_msgq_io_init_mmio(
-    nvx_gsp_msgq_io_t *out_io,nvx_gsp_msgq_mmio_context_t *context,
-    const nvx_mmio_region_t *region);
 typedef enum nvx_gsp_msgq_queue_status {
     NVX_GSP_MSGQ_QUEUE_OK=0,
     NVX_GSP_MSGQ_QUEUE_INVALID_ARGUMENT,
@@ -36,6 +32,10 @@ typedef enum nvx_gsp_msgq_queue_status {
     NVX_GSP_MSGQ_QUEUE_IO_ERROR,
     NVX_GSP_MSGQ_QUEUE_BAD_LAYOUT
 } nvx_gsp_msgq_queue_status_t;
+/* Builds checked BAR-backed register callbacks. Region/context must outlive the queue. */
+nvx_gsp_msgq_queue_status_t nvx_gsp_msgq_io_init_mmio(
+    nvx_gsp_msgq_io_t *out_io,nvx_gsp_msgq_mmio_context_t *context,
+    const nvx_mmio_region_t *region);
 typedef struct nvx_gsp_msgq_queue {
     nvx_gsp_msgq_layout_t layout;
     nvx_gsp_msgq_io_t io;

@@ -98,8 +98,8 @@ nvx_gsp_image_status_t nvx_gsp_image_parse(
         return NVX_GSP_IMAGE_HEADER_INVALID;
     /*
      * The published GA10x booter format requires patch_sig == 0. Signatures
-     * are a packed array and the selected signature is indexed by fuse version;
-     * patch_sig is not an offset into that array.
+     * are a packed array. Selection uses the descriptor's FUSE baseline and the
+     * hardware fuse version; patch_sig is not an offset into that array.
      */
     if(sig!=0U||!count||count>NVX_GSP_IMAGE_MAX_SIGNATURES||!sig_prod_size||
        sig_prod_size%count||!range_ok(info.binary_size,sig_prod_off,sig_prod_size))

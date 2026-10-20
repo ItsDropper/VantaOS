@@ -1,3 +1,7 @@
+# NVX GA10x bring-up notes (compatibility path)
+
+The organized, maintained guide is [docs/gpu/nvx/GA10X_BRINGUP.md](gpu/nvx/GA10X_BRINGUP.md). This copy retains historical links and the notes from merged queue-validation work.
+
 # NVX GA10x GSP Falcon bring-up notes
 
 This note records the next hardware boundary for Ampere GA10x (including the

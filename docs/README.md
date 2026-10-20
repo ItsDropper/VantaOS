@@ -1,30 +1,36 @@
 # VantaOS documentation
 
+The documentation is grouped by purpose: the index stays here, OS interface guides live under `architecture/`, validation docs under `build/`, planning/status under `project/`, decisions under `decisions/`, and GPU vendor work under `gpu/`.
+
 Use this index to find the document that answers a specific engineering question. Feature availability is described conservatively: source presence is not the same as validated behavior.
 
-## Understand the system
+## System architecture and interfaces
 
-- [Desktop UI system](DESKTOP_UI.md) — shared visual rules, rendering/input ownership, and the current GUI process-model limitation.
+- [Architecture docs index](architecture/README.md) — core OS architecture and subsystem boundaries.
+- [Build and validation docs index](build/README.md) — build targets and CI evidence.
+- [Project status and plans index](project/README.md) — roadmap, bootloader plans, and hardware support.
 
-- [Architecture overview](ARCHITECTURE.md) — boot sequence, subsystem responsibilities, kernel processes, early ring-3 execution, memory, VFS, and diagnostics.
-- [User-mode programs](user-mode-programs.md) — current static ELF64 loader, initial stack, syscall interface, and explicit limitations.
-- [Engineering model](ENGINEERING_MODEL.md) — evidence levels, subsystem contracts, concurrency review, and test layers.
-- [Hardware support](HARDWARE_SUPPORT.md) — current hardware and emulator limitations.
-- [Bootloader plan](BOOTLOADER_PLAN.md) — planned work toward an independent boot path; not a description of a completed bootloader.
+- [Desktop UI system](architecture/DESKTOP_UI.md) — shared visual rules, rendering/input ownership, and the current GUI process-model limitation.
 
-- [Terminal shell](SHELL.md) — file operations, process commands, force-flag behavior, and current network CLI limits.
+- [Architecture overview](architecture/ARCHITECTURE.md) — boot sequence, subsystem responsibilities, kernel processes, early ring-3 execution, memory, VFS, and diagnostics.
+- [User-mode programs](architecture/user-mode-programs.md) — current static ELF64 loader, initial stack, syscall interface, and explicit limitations.
+- [Engineering model](architecture/ENGINEERING_MODEL.md) — evidence levels, subsystem contracts, concurrency review, and test layers.
+- [Hardware support](project/HARDWARE_SUPPORT.md) — current hardware and emulator limitations.
+- [Bootloader plan](project/BOOTLOADER_PLAN.md) — planned work toward an independent boot path; not a description of a completed bootloader.
 
-## Build and validate
+- [Terminal shell](architecture/SHELL.md) — file operations, process commands, force-flag behavior, and current network CLI limits.
 
-- [Build system](BUILD_SYSTEM.md) — build targets, generated artifacts, and source manifests.
-- [Testing](TESTING.md) — automated checks, regression markers, and what CI does and does not prove.
+## Build and verification
 
-## Plan work
+- [Build system](build/BUILD_SYSTEM.md) — build targets, generated artifacts, and source manifests.
+- [Testing](build/TESTING.md) — automated checks, regression markers, and what CI does and does not prove.
 
-- [Development plan](DEVELOPMENT_PLAN.md) — current project priorities and staged goals.
+## Roadmap and decisions
+
+- [Development plan](project/DEVELOPMENT_PLAN.md) — current project priorities and staged goals.
 - [Decision records](decisions/README.md) — rationale for changes that affect long-term architecture.
 
-## Contribute and report issues
+## Contribution and security
 
 - [Contributing guide](../CONTRIBUTING.md) — branch workflow, engineering expectations, validation, and pull-request checklist.
 - [Security policy](../SECURITY.md) — security-related reporting and scope.
@@ -33,6 +39,15 @@ When a document conflicts with actual code or CI, treat the implementation and r
 
 
 ## GPU driver framework
+
+- [GPU documentation index](gpu/README.md) — vendor-neutral GPU framework and NVX vendor-specific docs.
+- [NVX GA10x bring-up](gpu/nvx/GA10X_BRINGUP.md) — SEC2/GSP state, implemented primitives, and hardware blockers.
+- [NVX firmware reverse-engineering notebook](gpu/nvx/FIRMWARE_REVERSE_ENGINEERING.md) — public-source findings and independent parser contracts.
+- [VBIOS FWSEC metadata research](gpu/nvx/VBIOS_FWSEC_RESEARCH.md) — parser constraints and pointer-chain reconstruction.
+- [FWSEC command result contract](gpu/nvx/FIRMWARE_REVERSE_ENGINEERING.md#35-sbfrts-result-validation-reconstructed-from-the-public-execution-path) — published postconditions and implementation boundary.
+- [GPU framework and bring-up plan](gpu/FRAMEWORK.md) — shared lifecycle and vendor-backend maturity.
+
+
 
 The GPU subsystem is split into vendor-neutral PCI classification and lifecycle contracts, with independent NVIDIA (NVX), Intel, and AMD backends. `gpu_classify_pci_function()` performs read-only PCI identity classification and only labels a generation when a curated device-ID entry exists. Unknown device IDs from supported vendors remain valid GPU candidates with an unknown architecture.
 

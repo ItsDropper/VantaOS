@@ -30,6 +30,11 @@ static void send_reply_status(nvx_gsp_ring_t *ring,uint8_t *memory,
  put32(memory+base+44U,0U);
  put32(memory+base+48U,wire_sequence);
 }
+static void send_reply(nvx_gsp_ring_t *ring,uint8_t *memory,
+                       volatile uint32_t *write_ptr,uint32_t function,
+                       uint32_t wire_sequence,const void *payload,size_t payload_size) {
+ send_reply_status(ring,memory,write_ptr,function,wire_sequence,0U,payload,payload_size);
+}
 int main(void) {
  nvx_gsp_ring_t tx={0},rx={0}; nvx_gsp_rpc_manager_t m={0};
  nvx_gsp_rpc_handle_t h={0},handles[NVX_GSP_RPC_MAX_PENDING];
@@ -71,6 +76,15 @@ int main(void) {
  send_reply(&rx,rx_mem,&rx_w,30U,4U,reply,sizeof(reply));
  assert(nvx_gsp_rpc_pump(&m,scratch,sizeof(scratch),&unmatched)==NVX_GSP_RPC_RESPONSE_TOO_LARGE);
  assert(nvx_gsp_rpc_query(&m,&h,&result)==NVX_GSP_RPC_RESPONSE_TOO_LARGE&&result.response_size==sizeof(reply));
+ assert(nvx_gsp_rpc_release(&m,&h)==NVX_GSP_RPC_OK);
+
+ assert(nvx_gsp_rpc_submit(&m,NVX_GSP_RPC_HEADER_VERSION_R535,
+     NVX_GSP_RPC_SIGNATURE_R535,36U,36U,req,sizeof(req),scratch,sizeof(scratch),
+     response,sizeof(response),&h)==NVX_GSP_RPC_OK);
+ send_reply_status(&rx,rx_mem,&rx_w,36U,5U,0x1234U,reply,sizeof(reply));
+ assert(nvx_gsp_rpc_pump(&m,scratch,sizeof(scratch),&unmatched)==NVX_GSP_RPC_FAILED);
+ assert(nvx_gsp_rpc_query(&m,&h,&result)==NVX_GSP_RPC_FAILED);
+ assert(result.firmware_result==0x1234U);
  assert(nvx_gsp_rpc_release(&m,&h)==NVX_GSP_RPC_OK);
 
  memset(large_request,0xA5,sizeof(large_request));

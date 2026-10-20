@@ -30,6 +30,9 @@ int main(void) {
  assert(h.valid&&tx_w==1U&&notified==1U);
  assert(nvx_gsp_rpc_query(&m,&h,&result)==NVX_GSP_RPC_PENDING);
  assert(nvx_gsp_rpc_release(&m,&h)==NVX_GSP_RPC_BUSY);
+ nvx_gsp_rpc_handle_t concurrent={0};
+ assert(nvx_gsp_rpc_submit(&m,1U,2U,11U,11U,req,sizeof(req),scratch,sizeof(scratch),response,sizeof(response),&concurrent)==NVX_GSP_RPC_BUSY);
+ assert(!concurrent.valid);
  assert(nvx_gsp_ring_send(&rx,1U,2U,10U,reply,sizeof(reply),scratch,sizeof(scratch),&seq)==NVX_GSP_RING_OK);
  assert(seq==1U);
  assert(nvx_gsp_rpc_pump(&m,scratch,sizeof(scratch),&unmatched)==NVX_GSP_RPC_COMPLETE);
@@ -52,15 +55,29 @@ int main(void) {
  assert(nvx_gsp_rpc_query(&m,&h,&result)==NVX_GSP_RPC_RESPONSE_TOO_LARGE&&result.response_size==sizeof(reply));
  assert(nvx_gsp_rpc_release(&m,&h)==NVX_GSP_RPC_OK);
 
- for(size_t i=0;i<NVX_GSP_RPC_MAX_PENDING;i++)
-   assert(nvx_gsp_rpc_submit(&m,1U,2U,100U+(uint32_t)i,100U+(uint32_t)i,req,sizeof(req),scratch,sizeof(scratch),0,0,&handles[i])==NVX_GSP_RPC_OK);
- assert(nvx_gsp_rpc_submit(&m,1U,2U,999U,999U,req,sizeof(req),scratch,sizeof(scratch),0,0,&h)==NVX_GSP_RPC_NO_SLOTS);
+ assert(nvx_gsp_rpc_submit(&m,1U,2U,40U,40U,req,sizeof(req),scratch,sizeof(scratch),response,sizeof(response),&h)==NVX_GSP_RPC_OK);
  assert(nvx_gsp_rpc_mark_device_lost(&m)==NVX_GSP_RPC_OK);
+ assert(nvx_gsp_rpc_query(&m,&h,&result)==NVX_GSP_RPC_DEVICE_LOST);
+ assert(nvx_gsp_rpc_release(&m,&h)==NVX_GSP_RPC_OK);
  assert(nvx_gsp_rpc_submit(&m,1U,2U,1U,1U,req,sizeof(req),scratch,sizeof(scratch),0,0,&h)==NVX_GSP_RPC_DEVICE_LOST);
+
+ /* Reinitialize a drained test manager, then retain 32 completed handles. */
+ memset(&m,0,sizeof(m));
+ assert(nvx_gsp_rpc_init(&m,&tx,&rx)==NVX_GSP_RPC_OK);
  for(size_t i=0;i<NVX_GSP_RPC_MAX_PENDING;i++) {
-   assert(nvx_gsp_rpc_query(&m,&handles[i],&result)==NVX_GSP_RPC_DEVICE_LOST);
+   assert(nvx_gsp_rpc_submit(&m,1U,2U,100U+(uint32_t)i,100U+(uint32_t)i,
+       req,sizeof(req),scratch,sizeof(scratch),0,0,&handles[i])==NVX_GSP_RPC_OK);
+   assert(nvx_gsp_ring_send(&rx,1U,2U,100U+(uint32_t)i,0,0,
+       scratch,sizeof(scratch),&seq)==NVX_GSP_RING_OK);
+   assert(nvx_gsp_rpc_pump(&m,scratch,sizeof(scratch),&unmatched)==NVX_GSP_RPC_COMPLETE);
+ }
+ assert(nvx_gsp_rpc_submit(&m,1U,2U,999U,999U,req,sizeof(req),scratch,sizeof(scratch),0,0,&h)==NVX_GSP_RPC_NO_SLOTS);
+ for(size_t i=0;i<NVX_GSP_RPC_MAX_PENDING;i++) {
+   assert(nvx_gsp_rpc_query(&m,&handles[i],&result)==NVX_GSP_RPC_COMPLETE);
    assert(nvx_gsp_rpc_release(&m,&handles[i])==NVX_GSP_RPC_OK);
  }
+ assert(nvx_gsp_rpc_mark_device_lost(&m)==NVX_GSP_RPC_OK);
+ assert(nvx_gsp_rpc_submit(&m,1U,2U,1U,1U,req,sizeof(req),scratch,sizeof(scratch),0,0,&h)==NVX_GSP_RPC_DEVICE_LOST);
  assert(nvx_gsp_rpc_mark_device_lost(0)==NVX_GSP_RPC_INVALID_ARGUMENT);
  return 0;
 }

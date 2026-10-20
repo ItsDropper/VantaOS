@@ -13,10 +13,15 @@ typedef enum nvx_gsp_preflight_status {
     NVX_GSP_PREFLIGHT_INVALID_ARGUMENT,
     NVX_GSP_PREFLIGHT_BUNDLE_NOT_READY,
     NVX_GSP_PREFLIGHT_COMPONENT_INVALID,
-    NVX_GSP_PREFLIGHT_RUNTIME_INVALID
+    NVX_GSP_PREFLIGHT_RUNTIME_INVALID,
+    NVX_GSP_PREFLIGHT_CONTAINER_INVALID,
+    NVX_GSP_PREFLIGHT_VERSION_MISMATCH
 } nvx_gsp_preflight_status_t;
 typedef struct nvx_gsp_preflight_report {
     nvx_gsp_elf_info_t runtime;
+    nvx_gsp_elf_section_t firmware_image;
+    nvx_gsp_elf_section_t firmware_version;
+    char version[64];
     uint64_t runtime_bytes;
     uint64_t ucode_archive_bytes;
     uint64_t log_bytes;
@@ -27,8 +32,9 @@ typedef struct nvx_gsp_preflight_report {
 /*
  * Structural gate before any future boot path. Bundle acquisition must already
  * have passed the platform verification callback. This validates the GA10x
- * RISC-V runtime ELF/signature-section layout; it does not cryptographically
- * verify signatures, parse the ucode archive, allocate WPR memory, or boot GSP.
+ * RISC-V runtime ELF, .fwimage, .fwversion and signature sections, including
+ * exact firmware-version match. It does not cryptographically verify signatures,
+ * parse the ucode archive, allocate WPR memory, or boot GSP.
  */
 nvx_gsp_preflight_status_t nvx_gsp_preflight_validate(
     const nvx_gsp_bundle_t *,nvx_gsp_preflight_report_t *out_report);

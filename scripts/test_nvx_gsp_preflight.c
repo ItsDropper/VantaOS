@@ -52,6 +52,9 @@ int main(void){
  assert(report.firmware_version.offset==576U&&strcmp(report.version,"535.113.01")==0);
  strcpy(b.chip,"ga100");assert(nvx_gsp_preflight_validate(&b,&report)==NVX_GSP_PREFLIGHT_UNSUPPORTED_CHIP);
  strcpy(b.chip,"ga106");assert(nvx_gsp_preflight_validate(&b,&report)==NVX_GSP_PREFLIGHT_OK);
+ boot_assets[0][0]=0U;assert(nvx_gsp_preflight_validate(&b,&report)==NVX_GSP_PREFLIGHT_CONTAINER_INVALID);assert(report.runtime_bytes==0U);boot_assets[0][0]=0xDEU;
+ boot_assets[1][0]=0U;assert(nvx_gsp_preflight_validate(&b,&report)==NVX_GSP_PREFLIGHT_CONTAINER_INVALID);boot_assets[1][0]=0xDEU;
+ assert(nvx_gsp_preflight_validate(&b,&report)==NVX_GSP_PREFLIGHT_OK);
  strcpy(b.version,"535.113.02");assert(nvx_gsp_preflight_validate(&b,&report)==NVX_GSP_PREFLIGHT_VERSION_MISMATCH);
  strcpy(b.version,"535.113.01");elf[586]=1U;assert(nvx_gsp_preflight_validate(&b,&report)==NVX_GSP_PREFLIGHT_CONTAINER_INVALID);elf[586]=0U;
  b.components[4].acquired=0U;assert(nvx_gsp_preflight_validate(&b,&report)==NVX_GSP_PREFLIGHT_COMPONENT_INVALID);assert(report.runtime_bytes==0U);b.components[4].acquired=1U;

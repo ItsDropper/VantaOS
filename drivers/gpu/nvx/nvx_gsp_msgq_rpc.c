@@ -24,10 +24,16 @@ nvx_gsp_msgq_rpc_status_t nvx_gsp_msgq_rpc_init(nvx_gsp_msgq_rpc_transport_t *t,
     nvx_gsp_msgq_queue_t *tx,nvx_gsp_msgq_queue_t *rx)
 {
     if(!t||!tx||!rx)return NVX_GSP_MSGQ_RPC_INVALID_ARGUMENT;
+    if(overlaps(t,sizeof(*t),tx,sizeof(*tx))||
+       overlaps(t,sizeof(*t),rx,sizeof(*rx))||
+       overlaps(tx,sizeof(*tx),rx,sizeof(*rx)))
+        return NVX_GSP_MSGQ_RPC_INVALID_ARGUMENT;
     if(t->initialized)return NVX_GSP_MSGQ_RPC_INVALID_ARGUMENT;
     if(!tx->initialized||!rx->initialized)return NVX_GSP_MSGQ_RPC_NOT_INITIALIZED;
     if(!tx->transmit||rx->transmit||tx->layout.element_size!=NVX_GSP_PAGE_SIZE||
-       rx->layout.element_size!=NVX_GSP_PAGE_SIZE)
+       rx->layout.element_size!=NVX_GSP_PAGE_SIZE||
+       overlaps(tx->backing_store,tx->layout.backing_store_size,
+                rx->backing_store,rx->layout.backing_store_size))
         return NVX_GSP_MSGQ_RPC_INVALID_ARGUMENT;
     t->command_queue=tx;t->response_queue=rx;t->next_sequence=1U;t->initialized=1U;
     return NVX_GSP_MSGQ_RPC_OK;
@@ -45,6 +51,10 @@ nvx_gsp_msgq_rpc_status_t nvx_gsp_msgq_rpc_send(nvx_gsp_msgq_rpc_transport_t *t,
        overlaps(t,sizeof(*t),out_sequence,sizeof(*out_sequence))||
        overlaps(t,sizeof(*t),payload,payload_size)||
        overlaps(out_sequence,sizeof(*out_sequence),payload,payload_size)||
+       overlaps(scratch,scratch_size,t->response_queue->backing_store,
+                t->response_queue->layout.backing_store_size)||
+       overlaps(out_sequence,sizeof(*out_sequence),t->response_queue->backing_store,
+                t->response_queue->layout.backing_store_size)||
        overlaps(scratch,scratch_size,payload,payload_size)||
        overlaps(scratch,scratch_size,t->command_queue->backing_store,
                 t->command_queue->layout.backing_store_size)||

@@ -1,0 +1,61 @@
+# NVX GA10x GSP Falcon bring-up notes
+
+This note records the next hardware boundary for Ampere GA10x (including the
+RTX 3060 GA106 family). It separates register observations from claims about
+firmware execution.
+
+## Independently checked register facts
+
+NVX's GA10x read-only inspector uses the following BAR0-relative locations:
+
+| Register | BAR0 offset | Purpose |
+| --- | ---: | --- |
+| GSP Falcon mailbox 0 | `0x110040` | Firmware-to-host status mailbox |
+| GSP Falcon mailbox 1 | `0x110044` | Secondary firmware mailbox |
+| GSP Falcon HWCFG2 | `0x1100F4` | Reset-ready, memory-scrub, and RISC-V capability bits |
+| GSP Falcon CPUCTL | `0x110100` | Falcon halted/start control state |
+| GSP RISC-V CPUCTL | `0x111388` | RISC-V active/halted state |
+
+The register locations and decoded bits were cross-checked against the public
+Linux Nova register definitions:
+https://github.com/torvalds/linux/blob/master/drivers/gpu/nova-core/regs.rs
+
+The GSP Falcon windows are based at `0x110000` and `0x111000`, respectively:
+https://github.com/torvalds/linux/blob/master/drivers/gpu/nova-core/falcon/gsp.rs
+
+Linux Nova documents the `0xBADF41xx` read pattern as evidence that the GSP
+PRIV target is still masked. NVX masks off the varying low byte and refuses to
+initialize queue state when that pattern is observed. It does not attempt to
+bypass the mask or write any register during this check:
+https://github.com/torvalds/linux/blob/master/drivers/gpu/nova-core/falcon/gsp.rs
+
+## Implemented in NVX
+
+- `nvx_gsp_ga10x_inspect_falcon()` performs bounded, read-only MMIO reads and
+  returns raw register values plus decoded reset-ready, memory-scrubbing,
+  Falcon-halted/start-requested, RISC-V-present/active/halted, and mailbox
+  suspended fields.
+- It rejects truncated mappings and output objects that alias the BAR mapping.
+- GA10x queue setup now requires the entire diagnostic register range to be
+  mapped and refuses to mark the queue transport ready when the PRIV target is
+  still masked.
+- Host tests cover decoded bitfields, the locked-window signature, short BARs,
+  null arguments, and alias rejection.
+
+## What this does not mean
+
+A readable Falcon register window does not mean the GSP is running. These
+checks do not upload firmware, authenticate NVIDIA's signed payloads, configure
+the secure boot chain, allocate and map the GSP's firmware working set, build
+the real firmware WPR layout, start the RISC-V core, or receive a genuine GSP
+RPC. The queue integration test uses host memory and a fake BAR; it cannot prove
+physical GPU support.
+
+The next implementation step is the **GA10x-specific SEC2/FWSEC and GSP boot
+sequence**, with verified register definitions, firmware-specific signing and
+patch rules, a physically DMA-visible working set, WPR metadata, and bounded
+polling of real hardware status. Do not substitute guessed register writes or
+a fake "boot succeeded" flag for these requirements. NVIDIA's open kernel
+module implementation and the independent Nova driver are research references;
+their GPL-covered implementation code must not be copied into NVX without a
+compatible licensing decision.

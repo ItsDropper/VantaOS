@@ -87,6 +87,41 @@ int main(void)
 
     assert(nvx_gsp_ga10x_wait_riscv_active(&region, 0U, 10U,
            fake_delay, &elapsed_ms) == NVX_GSP_FALCON_INVALID_ARGUMENT);
+
+    /* BROM setup is ordered, validates the signed descriptor fields and
+       refuses to touch a running or privilege-locked Falcon. */
+    put32(NVX_GSP_FALCON_HWCFG2, NVX_GSP_HWCFG2_RESET_READY);
+    put32(NVX_GSP_FALCON_CPUCTL, NVX_GSP_CPUCTL_HALTED);
+    assert(nvx_gsp_ga10x_program_brom(&region, 0x0400U, 1U, 0x100U) ==
+           NVX_GSP_FALCON_OK);
+    uint32_t register_value = 0U;
+    assert(nvx_mmio_read32(&region, NVX_GSP_FALCON_BROM_PARAM_ADDR,
+                           &register_value) == NVX_MMIO_OK);
+    assert(register_value == 0x100U);
+    assert(nvx_mmio_read32(&region, NVX_GSP_FALCON_BROM_ENGINE_MASK,
+                           &register_value) == NVX_MMIO_OK);
+    assert(register_value == 0x0400U);
+    assert(nvx_mmio_read32(&region, NVX_GSP_FALCON_BROM_UCODE_ID,
+                           &register_value) == NVX_MMIO_OK);
+    assert(register_value == 1U);
+    assert(nvx_mmio_read32(&region, NVX_GSP_FALCON_BROM_MOD_SEL,
+                           &register_value) == NVX_MMIO_OK);
+    assert(register_value == NVX_GSP_FALCON_BROM_RSA3K);
+    assert(nvx_gsp_ga10x_program_brom(&region, 0x0002U, 1U, 0x100U) ==
+           NVX_GSP_FALCON_BROM_INVALID_PARAMETERS);
+    assert(nvx_gsp_ga10x_program_brom(&region, 0x0400U, 0U, 0x100U) ==
+           NVX_GSP_FALCON_BROM_INVALID_PARAMETERS);
+    assert(nvx_gsp_ga10x_program_brom(&region, 0x0400U, 17U, 0x100U) ==
+           NVX_GSP_FALCON_BROM_INVALID_PARAMETERS);
+    assert(nvx_gsp_ga10x_program_brom(&region, 0x0400U, 1U, 3U) ==
+           NVX_GSP_FALCON_BROM_INVALID_PARAMETERS);
+    put32(NVX_GSP_FALCON_CPUCTL, 0U);
+    assert(nvx_gsp_ga10x_program_brom(&region, 0x0400U, 1U, 0x100U) ==
+           NVX_GSP_FALCON_NOT_HALTED);
+    put32(NVX_GSP_FALCON_HWCFG2, 0xBADF41A5U);
+    put32(NVX_GSP_FALCON_CPUCTL, NVX_GSP_CPUCTL_HALTED);
+    assert(nvx_gsp_ga10x_program_brom(&region, 0x0400U, 1U, 0x100U) ==
+           NVX_GSP_FALCON_PRIVILEGED_WINDOW_LOCKED);
     put32(NVX_GSP_FALCON_HWCFG2, 0xBADF41A5U);
     memset(&snapshot, 0xA5, sizeof(snapshot));
     assert(nvx_gsp_ga10x_inspect_falcon(&region, &snapshot) ==
@@ -99,6 +134,8 @@ int main(void)
     assert(nvx_gsp_ga10x_inspect_falcon(&short_region, &snapshot) ==
            NVX_GSP_FALCON_BAR_TOO_SMALL);
     assert(snapshot.snapshot_valid == 0U);
+    assert(nvx_gsp_ga10x_program_brom(&short_region, 0x0400U, 1U, 0x100U) ==
+           NVX_GSP_FALCON_BAR_TOO_SMALL);
     assert(nvx_gsp_ga10x_inspect_falcon(0, &snapshot) ==
            NVX_GSP_FALCON_INVALID_ARGUMENT);
     assert(nvx_gsp_ga10x_inspect_falcon(&region, 0) ==

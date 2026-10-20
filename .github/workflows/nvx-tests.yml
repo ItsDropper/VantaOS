@@ -533,9 +533,9 @@ jobs:
 
       - name: Compile FWSEC SB/FRTS command builder tests with strict warnings
         run: |
-          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \\
-            scripts/test_nvx_gsp_fwsec_command.c \\
-            drivers/gpu/nvx/nvx_gsp_fwsec_command.c \\
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_fwsec_command.c \
+            drivers/gpu/nvx/nvx_gsp_fwsec_command.c \
             -o /tmp/vantaos-nvx-fwsec-command-test
 
       - name: Test versioned FWSEC SB/FRTS command layouts

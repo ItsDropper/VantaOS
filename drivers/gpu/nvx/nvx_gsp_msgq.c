@@ -58,7 +58,7 @@ nvx_gsp_msgq_status_t nvx_gsp_msgq_prepare_tx(void *store,size_t bytes,size_t el
         return NVX_GSP_MSGQ_BAD_SIZE;
     off=NVX_GSP_MSGQ_HEADER_PAGE_SIZE;
     count=(uint32_t)((bytes-off)/elem);
-    if(count<1U||count>NVX_GSP_MSGQ_MAX_ELEMENTS) return NVX_GSP_MSGQ_BAD_LAYOUT;
+    if(count<1U) return NVX_GSP_MSGQ_BAD_LAYOUT;
     memset(store,0,off);
     uint8_t *p=(uint8_t *)store;
     put16(p,NVX_GSP_MSGQ_VERSION_MAJOR); put16(p+2U,NVX_GSP_MSGQ_VERSION_MINOR);

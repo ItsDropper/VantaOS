@@ -5,6 +5,18 @@
  */
 #include "nvx_gsp_preflight.h"
 #include <string.h>
+static int supported_ga10x_chip(const char *chip)
+{
+    static const char *const chips[] = {
+        "ga102", "ga103", "ga104", "ga106", "ga107"
+    };
+    if (!chip)
+        return 0;
+    for (size_t i = 0U; i < sizeof(chips) / sizeof(chips[0]); ++i)
+        if (strcmp(chip, chips[i]) == 0)
+            return 1;
+    return 0;
+}
 static int overlaps(const void *a,size_t an,const void *b,size_t bn)
 {
     uintptr_t x=(uintptr_t)a,y=(uintptr_t)b;
@@ -24,6 +36,8 @@ nvx_gsp_preflight_status_t nvx_gsp_preflight_validate(
     memset(out,0,sizeof(*out));
     if(!b->acquired||b->family!=NVX_FAMILY_AMPERE||!b->provider.verify)
         return NVX_GSP_PREFLIGHT_BUNDLE_NOT_READY;
+    if(!supported_ga10x_chip(b->chip))
+        return NVX_GSP_PREFLIGHT_UNSUPPORTED_CHIP;
     const nvx_gsp_component_t *runtime=&b->components[0],*ucodes=&b->components[1];
     if(!runtime->acquired||runtime->kind!=NVX_GSP_RUNTIME||!runtime->blob.data||!runtime->blob.size||
        !ucodes->acquired||ucodes->kind!=NVX_GSP_UCODE_ARCHIVE||!ucodes->blob.data||!ucodes->blob.size)

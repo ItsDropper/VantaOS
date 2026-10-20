@@ -88,7 +88,8 @@ static nvx_gpuvm_status_t test_publish_root(void *context,
 {
     (void)context;
     if (root_physical != 0U &&
-        ((root_physical & 0xFFFU) != 0U || root_physical > UINT32_MAX))
+        ((root_physical & 0xFFFU) != 0U ||
+         root_physical >= (1ULL << NVX_GPUVM_PA_BITS)))
         return NVX_GPUVM_ADDRESS_WIDTH;
     return NVX_GPUVM_OK;
 }

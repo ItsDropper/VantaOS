@@ -23,6 +23,7 @@ on:
       - "include/nvx_gsp_msgq_queue.h"
       - "include/nvx_gsp_msgq_rpc.h"
       - "include/nvx_gsp_ga10x.h"
+      - "include/nvx_gsp_falcon.h"
       - "include/nvx_gsp_rpc.h"
       - "include/nvx_gsp_elf.h"
       - "include/nvx_gsp_preflight.h"
@@ -54,6 +55,7 @@ on:
       - "scripts/test_nvx_gsp_msgq_queue.c"
       - "scripts/test_nvx_gsp_msgq_rpc.c"
       - "scripts/test_nvx_gsp_ga10x.c"
+      - "scripts/test_nvx_gsp_falcon.c"
       - "scripts/test_nvx_gsp_rpc.c"
       - "scripts/test_nvx_gsp_rpc_msgq.c"
       - "scripts/test_nvx_gsp_elf.c"
@@ -251,6 +253,15 @@ jobs:
 
       - name: Test NVIDIA GA10x queue register map and post-boot response linking
         run: /tmp/vantaos-nvx-ga10x-queues-test
+
+      - name: Compile GA10x Falcon register inspection tests
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \\
+            scripts/test_nvx_gsp_falcon.c drivers/gpu/nvx/nvx_gsp_falcon.c \\
+            drivers/gpu/nvx/nvx_mmio.c -o /tmp/vantaos-nvx-ga10x-falcon-test
+
+      - name: Test read-only GA10x Falcon state and locked-window detection
+        run: /tmp/vantaos-nvx-ga10x-falcon-test
 
       - name: Compile GSP RPC ring tests
         run: |

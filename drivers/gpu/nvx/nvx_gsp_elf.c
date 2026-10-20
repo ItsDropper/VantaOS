@@ -109,3 +109,51 @@ nvx_gsp_elf_status_t nvx_gsp_elf_parse(const nvx_gsp_component_t *component,
     if(!entry_valid) return NVX_GSP_ELF_ENTRY_INVALID;
     *out=info; return NVX_GSP_ELF_OK;
 }
+
+nvx_gsp_elf_status_t nvx_gsp_elf_find_section(const nvx_gsp_component_t *component,
+    const char *expected,nvx_gsp_elf_section_t *out)
+{
+    const uint8_t *data,*strtab;size_t size;uint64_t shoff,str_off,str_size;
+    uint16_t shentsize,shnum,shstrndx;uint32_t matches=0U;
+    nvx_gsp_elf_section_t found={0};
+    if(!component||!out||!expected||!component->acquired||!component->blob.data)
+        return NVX_GSP_ELF_INVALID_ARGUMENT;
+    data=component->blob.data;size=component->blob.size;
+    if(overlaps(out,sizeof(*out),component,sizeof(*component))||
+       overlaps(out,sizeof(*out),data,size))
+        return NVX_GSP_ELF_INVALID_ARGUMENT;
+    memset(out,0,sizeof(*out));
+    if(component->kind!=NVX_GSP_RUNTIME)return NVX_GSP_ELF_UNSUPPORTED_FORMAT;
+    if(size<ELF_HEADER_SIZE)return NVX_GSP_ELF_TRUNCATED;
+    if(data[0]!=0x7FU||data[1]!='E'||data[2]!='L'||data[3]!='F')
+        return NVX_GSP_ELF_BAD_MAGIC;
+    if(data[4]!=2U||data[5]!=1U||data[6]!=1U||le32(data+20U)!=1U)
+        return NVX_GSP_ELF_UNSUPPORTED_FORMAT;
+    shoff=le64(data+40U);shentsize=le16(data+58U);
+    shnum=le16(data+60U);shstrndx=le16(data+62U);
+    if(shentsize!=ELF_SECTION_SIZE||!shnum||shnum>256U||
+       shstrndx>=shnum||!range_ok(size,shoff,(uint64_t)shnum*shentsize))
+        return NVX_GSP_ELF_SECTION_TABLE_INVALID;
+    const uint8_t *strhdr=data+shoff+(uint64_t)shstrndx*shentsize;
+    if(le32(strhdr+4U)!=ELF_SHT_STRTAB)return NVX_GSP_ELF_STRING_TABLE_INVALID;
+    str_off=le64(strhdr+24U);str_size=le64(strhdr+32U);
+    if(!str_size||!range_ok(size,str_off,str_size))return NVX_GSP_ELF_STRING_TABLE_INVALID;
+    strtab=data+str_off;
+    for(uint32_t i=0U;i<shnum;i++) {
+        const uint8_t *sh=data+shoff+(uint64_t)i*shentsize;
+        uint32_t name=le32(sh),type=le32(sh+4U),flags=le32(sh+8U);
+        uint64_t off=le64(sh+24U),bytes=le64(sh+32U),align=le64(sh+48U);
+        if(name>=str_size||!has_nul_terminator(strtab+name,(size_t)(str_size-name)))
+            return NVX_GSP_ELF_STRING_TABLE_INVALID;
+        if(align>1U&&!power2(align))return NVX_GSP_ELF_SECTION_TABLE_INVALID;
+        if(type!=ELF_SHT_NOBITS&&!range_ok(size,off,bytes))
+            return NVX_GSP_ELF_SECTION_TABLE_INVALID;
+        if(!string_matches(strtab,(size_t)str_size,name,expected))continue;
+        if(++matches>1U)return NVX_GSP_ELF_SECTION_AMBIGUOUS;
+        if(type==ELF_SHT_NOBITS)return NVX_GSP_ELF_SECTION_NO_DATA;
+        found.data=data+off;found.offset=off;found.size=bytes;
+        found.alignment=align;found.type=type;found.flags=flags;found.index=i;
+    }
+    if(!matches)return NVX_GSP_ELF_SECTION_NOT_FOUND;
+    *out=found;return NVX_GSP_ELF_OK;
+}

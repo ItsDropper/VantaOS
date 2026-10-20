@@ -22,7 +22,8 @@ typedef enum nvx_generation_family {
     NVX_FAMILY_AMPERE,
     NVX_FAMILY_ADA,
     NVX_FAMILY_HOPPER,
-    NVX_FAMILY_BLACKWELL
+    NVX_FAMILY_BLACKWELL,
+    NVX_FAMILY_RUBIN
 } nvx_generation_family_t;
 
 typedef enum nvx_device_profile {

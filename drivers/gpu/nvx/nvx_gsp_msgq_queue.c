@@ -5,6 +5,39 @@
  */
 #include "nvx_gsp_msgq_queue.h"
 #include <string.h>
+static int mmio_read32(void *context,uint32_t reg,uint32_t *out)
+{
+    nvx_gsp_msgq_mmio_context_t *m=(nvx_gsp_msgq_mmio_context_t *)context;
+    return m&&m->region&&nvx_mmio_read32(m->region,reg,out)==NVX_MMIO_OK;
+}
+static int mmio_write32(void *context,uint32_t reg,uint32_t value)
+{
+    nvx_gsp_msgq_mmio_context_t *m=(nvx_gsp_msgq_mmio_context_t *)context;
+    return m&&m->region&&nvx_mmio_write32(m->region,reg,value)==NVX_MMIO_OK;
+}
+static void mmio_before_device(void *context)
+{
+    (void)context;
+    __atomic_thread_fence(__ATOMIC_RELEASE);
+    __asm__ volatile("mfence" ::: "memory");
+}
+static void mmio_after_device(void *context)
+{
+    (void)context;
+    __asm__ volatile("mfence" ::: "memory");
+    __atomic_thread_fence(__ATOMIC_ACQUIRE);
+}
+nvx_gsp_msgq_queue_status_t nvx_gsp_msgq_io_init_mmio(
+    nvx_gsp_msgq_io_t *out,nvx_gsp_msgq_mmio_context_t *context,
+    const nvx_mmio_region_t *region)
+{
+    if(!out||!context||!region||!region->base||!region->length)
+        return NVX_GSP_MSGQ_QUEUE_INVALID_ARGUMENT;
+    context->region=region;
+    *out=(nvx_gsp_msgq_io_t){mmio_read32,mmio_write32,
+        mmio_before_device,mmio_after_device,context};
+    return NVX_GSP_MSGQ_QUEUE_OK;
+}
 static int io_valid(const nvx_gsp_msgq_io_t *io)
 {
     return io&&io->read32&&io->write32&&io->before_device&&io->after_device;

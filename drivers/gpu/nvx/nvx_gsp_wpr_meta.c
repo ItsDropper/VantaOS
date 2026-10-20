@@ -221,7 +221,7 @@ nvx_gsp_wpr_status_t nvx_gsp_wpr_layout_plan(
     if (resources->bootloader_size > frts_offset)
         return NVX_GSP_WPR_BAD_RANGE;
     boot_offset = align_down_u64(frts_offset - resources->bootloader_size,
-                                 NVX_GSP_FB_ALIGN / 256U);
+                                 4096U);
     if (resources->radix3_size > boot_offset)
         return NVX_GSP_WPR_BAD_RANGE;
     fw_offset = align_down_u64(boot_offset - resources->radix3_size, 65536U);

@@ -243,6 +243,10 @@ This follows the GA102 Falcon boot contract documented by Linux Nova/OpenRM. A r
 The Falcon launch path now follows the documented GA102 `CPUCTL.ALIAS_EN` bit: when enabled, STARTCPU is issued through `CPUCTL_ALIAS` at engine-base + `0x130`; otherwise it uses CPUCTL directly. The alias-window bounds are checked before BOOTVEC is written; the full boot helper checks them before it writes either input mailbox, so a truncated mapping cannot leave partial boot arguments behind. Host tests cover direct and alias starts plus no-write failure behavior. This avoids assuming that the non-alias CPUCTL write is valid for every Falcon configuration.
 
 
+## DMA ownership covers every boot artifact
+
+The boot-memory owner now initializes an ownership tracker for all six hardware-visible allocations: runtime ELF, GSP bootloader payload, signature section, Booter Load, Booter Unload, and WPR metadata. Release first checks all six ownership states and refuses to free *any* allocation if even one may still be device-owned. Previously only the two Booter buffers and WPR metadata were guarded, leaving the runtime ELF, bootloader payload, and signature allocation outside the release safety boundary. The host test transfers all six to simulated device ownership, verifies release retains every allocation, returns ownership to the CPU, and then verifies normal release. This is a resource-lifetime safety fix; it does not imply a real GPU has consumed these buffers.
+
 ## WPR metadata in DMA-visible SYSRAM
 
 The boot-memory owner now allocates a fourth, dedicated 4 KiB contiguous DMA page for the 256-byte WPR metadata object. `nvx_gsp_boot_memory_prepare_wpr_metadata()` copies the platform-planned framebuffer layout, binds the actual physical SYSRAM addresses and bootloader descriptor offsets from the acquired artifacts, validates the resulting layout, serializes the exact V1 metadata structure into the DMA page, and returns that page's physical address for the Booter Load argument.

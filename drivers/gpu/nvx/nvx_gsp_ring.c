@@ -145,14 +145,15 @@ nvx_gsp_ring_status_t nvx_gsp_ring_receive(nvx_gsp_ring_t *r,void *scratch,
     if(!r||!scratch||!out) return NVX_GSP_RING_INVALID_ARGUMENT;
     if(overlaps(r,sizeof(*r),scratch,scratch_size)||
        overlaps(r,sizeof(*r),out,sizeof(*out))||
-       overlaps(out,sizeof(*out),scratch,scratch_size)||
-       overlaps(out,sizeof(*out),r->storage,(size_t)r->capacity_pages*NVX_GSP_PAGE_SIZE)||
+       overlaps(out,sizeof(*out),scratch,scratch_size))
+        return NVX_GSP_RING_INVALID_ARGUMENT;
+    if(!r->initialized) return NVX_GSP_RING_NOT_INITIALIZED;
+    if(overlaps(out,sizeof(*out),r->storage,(size_t)r->capacity_pages*NVX_GSP_PAGE_SIZE)||
        overlaps(scratch,scratch_size,(const void *)r->read_ptr,sizeof(*r->read_ptr))||
        overlaps(scratch,scratch_size,(const void *)r->write_ptr,sizeof(*r->write_ptr))||
        overlaps(out,sizeof(*out),(const void *)r->read_ptr,sizeof(*r->read_ptr))||
        overlaps(out,sizeof(*out),(const void *)r->write_ptr,sizeof(*r->write_ptr)))
         return NVX_GSP_RING_INVALID_ARGUMENT;
-    if(!r->initialized) return NVX_GSP_RING_NOT_INITIALIZED;
     if(overlaps(scratch,scratch_size,r->storage,(size_t)r->capacity_pages*NVX_GSP_PAGE_SIZE))
         return NVX_GSP_RING_INVALID_ARGUMENT;
     memset(out,0,sizeof(*out));

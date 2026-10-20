@@ -35,6 +35,7 @@ on:
       - "mm/dma.c"
       - "mm/pmm.c"
       - "kernel/selftest/boot_info_selftest.c"
+      - "scripts/test_pmm_contiguous.c"
       - "include/nvx_dma_sync.h"
       - "include/nvx_gpuva.h"
       - "include/nvx_gpuvm.h"
@@ -90,6 +91,15 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+
+      - name: Compile PMM contiguous-run tests with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_pmm_contiguous.c mm/pmm.c \
+            -o /tmp/vantaos-pmm-contiguous-test
+
+      - name: Test contiguous PMM runs across fragmentation and rollback
+        run: /tmp/vantaos-pmm-contiguous-test
 
       - name: Compile host-tested PCI BAR sizing with strict warnings
         run: |

@@ -28,8 +28,19 @@ nvx_gsp_rpc_status_t nvx_gsp_rpc_init(nvx_gsp_rpc_manager_t *m,nvx_gsp_ring_t *c
     if(!m||!command_ring||!response_ring) return NVX_GSP_RPC_INVALID_ARGUMENT;
     if(m->initialized) return NVX_GSP_RPC_INVALID_ARGUMENT;
     if(!command_ring->initialized||!response_ring->initialized) return NVX_GSP_RPC_NOT_INITIALIZED;
-    memset(m,0,sizeof(*m)); spinlock_init(&m->lock); m->command_ring=command_ring; m->response_ring=response_ring; m->initialized=1U;
+    memset(m,0,sizeof(*m)); spinlock_init(&m->lock); m->command_ring=command_ring;
+    m->response_ring=response_ring;m->transport_kind=NVX_GSP_RPC_TRANSPORT_RING;m->initialized=1U;
     return NVX_GSP_RPC_OK;
+}
+nvx_gsp_rpc_status_t nvx_gsp_rpc_init_msgq(nvx_gsp_rpc_manager_t *m,
+    nvx_gsp_msgq_rpc_transport_t *transport)
+{
+    if(!m||!transport)return NVX_GSP_RPC_INVALID_ARGUMENT;
+    if(m->initialized)return NVX_GSP_RPC_INVALID_ARGUMENT;
+    if(!transport->initialized)return NVX_GSP_RPC_NOT_INITIALIZED;
+    memset(m,0,sizeof(*m));spinlock_init(&m->lock);
+    m->msgq_transport=transport;m->transport_kind=NVX_GSP_RPC_TRANSPORT_MSGQ;
+    m->initialized=1U;return NVX_GSP_RPC_OK;
 }
 static nvx_gsp_rpc_status_t rpc_submit_internal(nvx_gsp_rpc_manager_t *m,
     uint32_t version,uint32_t signature,uint32_t request_function,
@@ -39,10 +50,14 @@ static nvx_gsp_rpc_status_t rpc_submit_internal(nvx_gsp_rpc_manager_t *m,
 {
     size_t index=NVX_GSP_RPC_MAX_PENDING; nvx_gsp_rpc_slot_t *slot;
     uint64_t flags; uint32_t generation; nvx_gsp_ring_status_t sent;
+    nvx_gsp_rpc_status_t send_status=NVX_GSP_RPC_OK;
     if(out_handle) *out_handle=(nvx_gsp_rpc_handle_t){0};
     if(!m||!out_handle||!scratch||(payload_size&&!payload)||
        (response_capacity&&!response)) return NVX_GSP_RPC_INVALID_ARGUMENT;
     if(!m->initialized) return NVX_GSP_RPC_NOT_INITIALIZED;
+    if(m->transport_kind==NVX_GSP_RPC_TRANSPORT_MSGQ&&
+       (version!=NVX_GSP_RPC_HEADER_VERSION_R535||signature!=NVX_GSP_RPC_SIGNATURE_R535))
+        return NVX_GSP_RPC_INVALID_ARGUMENT;
     flags=rpc_lock(m);
     if(m->device_lost) { rpc_unlock(m,flags); return NVX_GSP_RPC_DEVICE_LOST; }
     for(size_t i=0;i<NVX_GSP_RPC_MAX_PENDING;i++)
@@ -57,16 +72,27 @@ static nvx_gsp_rpc_status_t rpc_submit_internal(nvx_gsp_rpc_manager_t *m,
     out_handle->slot=(uint16_t)index; out_handle->generation=generation; out_handle->valid=1U;
     rpc_unlock(m,flags);
 
-    /* ring_send writes slot->sequence before publishing the queue write pointer. */
-    sent=nvx_gsp_ring_send(m->command_ring,version,signature,request_function,payload,
-                           payload_size,scratch,scratch_size,&slot->sequence);
-    if(sent!=NVX_GSP_RING_OK) {
+    /* Publish a pending slot before sending so an immediate reply can correlate. */
+    if(m->transport_kind==NVX_GSP_RPC_TRANSPORT_RING) {
+        sent=nvx_gsp_ring_send(m->command_ring,version,signature,request_function,payload,
+                               payload_size,scratch,scratch_size,&slot->sequence);
+        if(sent!=NVX_GSP_RING_OK)
+            send_status=sent==NVX_GSP_RING_NOT_INITIALIZED?
+                NVX_GSP_RPC_NOT_INITIALIZED:NVX_GSP_RPC_SEND_FAILED;
+    } else if(m->transport_kind==NVX_GSP_RPC_TRANSPORT_MSGQ) {
+        nvx_gsp_msgq_rpc_status_t ms=nvx_gsp_msgq_rpc_send(m->msgq_transport,
+            request_function,payload,payload_size,scratch,scratch_size,&slot->sequence);
+        if(ms!=NVX_GSP_MSGQ_RPC_OK)
+            send_status=ms==NVX_GSP_MSGQ_RPC_NOT_INITIALIZED?
+                NVX_GSP_RPC_NOT_INITIALIZED:NVX_GSP_RPC_SEND_FAILED;
+    } else send_status=NVX_GSP_RPC_TRANSPORT_ERROR;
+    if(send_status!=NVX_GSP_RPC_OK) {
         flags=rpc_lock(m);
         if(slot->active&&slot->generation==generation) {
-            memset(slot,0,sizeof(*slot)); slot->generation=generation;
+            memset(slot,0,sizeof(*slot));slot->generation=generation;
         }
-        rpc_unlock(m,flags); *out_handle=(nvx_gsp_rpc_handle_t){0};
-        return sent==NVX_GSP_RING_NOT_INITIALIZED?NVX_GSP_RPC_NOT_INITIALIZED:NVX_GSP_RPC_SEND_FAILED;
+        rpc_unlock(m,flags);*out_handle=(nvx_gsp_rpc_handle_t){0};
+        return send_status;
     }
     return NVX_GSP_RPC_OK;
 }
@@ -87,9 +113,16 @@ nvx_gsp_rpc_status_t nvx_gsp_rpc_pump(nvx_gsp_rpc_manager_t *m,void *scratch,
     if(unmatched) memset(unmatched,0,sizeof(*unmatched));
     if(!m||!scratch) return NVX_GSP_RPC_INVALID_ARGUMENT;
     if(!m->initialized) return NVX_GSP_RPC_NOT_INITIALIZED;
-    received=nvx_gsp_ring_receive(m->response_ring,scratch,scratch_size,&view);
-    if(received==NVX_GSP_RING_QUEUE_EMPTY) return NVX_GSP_RPC_PENDING;
-    if(received!=NVX_GSP_RING_OK) return NVX_GSP_RPC_TRANSPORT_ERROR;
+    if(m->transport_kind==NVX_GSP_RPC_TRANSPORT_RING) {
+        received=nvx_gsp_ring_receive(m->response_ring,scratch,scratch_size,&view);
+        if(received==NVX_GSP_RING_QUEUE_EMPTY)return NVX_GSP_RPC_PENDING;
+        if(received!=NVX_GSP_RING_OK)return NVX_GSP_RPC_TRANSPORT_ERROR;
+    } else if(m->transport_kind==NVX_GSP_RPC_TRANSPORT_MSGQ) {
+        nvx_gsp_msgq_rpc_status_t ms=nvx_gsp_msgq_rpc_receive(m->msgq_transport,
+            scratch,scratch_size,&view);
+        if(ms==NVX_GSP_MSGQ_RPC_QUEUE_EMPTY)return NVX_GSP_RPC_PENDING;
+        if(ms!=NVX_GSP_MSGQ_RPC_OK)return NVX_GSP_RPC_TRANSPORT_ERROR;
+    } else return NVX_GSP_RPC_TRANSPORT_ERROR;
     flags=rpc_lock(m);
     for(size_t i=0;i<NVX_GSP_RPC_MAX_PENDING;i++) {
         nvx_gsp_rpc_slot_t *candidate=&m->slots[i];

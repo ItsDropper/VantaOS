@@ -9,6 +9,13 @@ _Static_assert(sizeof(nvx_gsp_wpr_meta_v1_t)==NVX_GSP_WPR_META_V1_SIZE,"WPR V1 m
 _Static_assert(offsetof(nvx_gsp_wpr_meta_v1_t,sysmem_addr_of_radix3_elf)==16U,"WPR V1 ELF address offset");
 _Static_assert(offsetof(nvx_gsp_wpr_meta_v1_t,gsp_fw_wpr_start)==112U,"WPR V1 WPR start offset");
 _Static_assert(offsetof(nvx_gsp_wpr_meta_v1_t,verified)==248U,"WPR V1 verified offset");
+static int overlaps_ptr(const void *a,size_t an,const void *b,size_t bn)
+{
+    uintptr_t x=(uintptr_t)a,y=(uintptr_t)b;
+    if(!an||!bn)return 0;
+    if(x>UINTPTR_MAX-an||y>UINTPTR_MAX-bn)return 1;
+    return x<y+bn&&y<x+an;
+}
 static int add_ok(uint64_t a,uint64_t b,uint64_t *end)
 {
     if(a>UINT64_MAX-b)return 0;
@@ -55,6 +62,13 @@ static nvx_gsp_wpr_status_t validate_layout(const nvx_gsp_wpr_layout_t *l)
     if(!l->radix3_size||!l->bootloader_size||!l->signature_size||
        !l->wpr_heap_size||!l->nonwpr_heap_size)
         return NVX_GSP_WPR_BAD_RANGE;
+    if(overlap(l->sysmem_radix3_addr,l->radix3_size,l->sysmem_bootloader_addr,l->bootloader_size)||
+       overlap(l->sysmem_radix3_addr,l->radix3_size,l->sysmem_signature_addr,l->signature_size)||
+       overlap(l->sysmem_bootloader_addr,l->bootloader_size,l->sysmem_signature_addr,l->signature_size)||
+       overlap(l->crash_report_queue_addr,l->crash_report_queue_size,l->sysmem_radix3_addr,l->radix3_size)||
+       overlap(l->crash_report_queue_addr,l->crash_report_queue_size,l->sysmem_bootloader_addr,l->bootloader_size)||
+       overlap(l->crash_report_queue_addr,l->crash_report_queue_size,l->sysmem_signature_addr,l->signature_size))
+        return NVX_GSP_WPR_OVERLAP;
     if(!aligned(l->sysmem_radix3_addr,16U)||!aligned(l->sysmem_bootloader_addr,16U)||
        !aligned(l->sysmem_signature_addr,16U))
         return NVX_GSP_WPR_BAD_ALIGNMENT;
@@ -97,6 +111,7 @@ nvx_gsp_wpr_status_t nvx_gsp_wpr_meta_build(const nvx_gsp_wpr_layout_t *l,
 {
     nvx_gsp_wpr_status_t s;
     if(!l||!out)return NVX_GSP_WPR_INVALID_ARGUMENT;
+    if(overlaps_ptr(l,sizeof(*l),out,sizeof(*out)))return NVX_GSP_WPR_INVALID_ARGUMENT;
     s=validate_layout(l);if(s!=NVX_GSP_WPR_OK)return s;
     memset(out,0,sizeof(*out));
     out->magic=NVX_GSP_WPR_META_V1_MAGIC;out->revision=NVX_GSP_WPR_META_V1_REVISION;

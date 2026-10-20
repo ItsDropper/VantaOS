@@ -188,7 +188,8 @@ jobs:
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
             scripts/test_nvx_gsp_msgq_queue.c drivers/gpu/nvx/nvx_gsp_msgq_queue.c \
-            drivers/gpu/nvx/nvx_gsp_msgq.c -o /tmp/vantaos-nvx-msgq-queue-test
+            drivers/gpu/nvx/nvx_gsp_msgq.c drivers/gpu/nvx/nvx_mmio.c \
+            -o /tmp/vantaos-nvx-msgq-queue-test
 
       - name: Test NVIDIA MSGQ register and slot semantics
         run: /tmp/vantaos-nvx-msgq-queue-test

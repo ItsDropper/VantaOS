@@ -8,7 +8,7 @@
 #include <stdint.h>
 #include <string.h>
 static uint8_t elf[768],ucodes[256],boot_assets[3][512];
-static int verify_stub(const char *p,const nvx_firmware_blob_t *b,void *c){(void)p;(void)b;(void)c;return 1;}
+static int verify_fail; static unsigned verify_calls;\nstatic int verify_stub(const char *p,const nvx_firmware_blob_t *b,void *c){(void)p;(void)b;(void)c;++verify_calls;return !verify_fail;}
 static void p16(size_t o,uint16_t v){elf[o]=(uint8_t)v;elf[o+1]=(uint8_t)(v>>8U);}
 static void p32(size_t o,uint32_t v){for(unsigned i=0;i<4U;i++)elf[o+i]=(uint8_t)(v>>(i*8U));}
 static void p64(size_t o,uint64_t v){for(unsigned i=0;i<8U;i++)elf[o+i]=(uint8_t)(v>>(i*8U));}
@@ -52,7 +52,10 @@ int main(void){
  b.components[0]=(nvx_gsp_component_t){.blob={elf,sizeof(elf),0},.kind=NVX_GSP_RUNTIME,.acquired=1U};
  b.components[1]=(nvx_gsp_component_t){.blob={ucodes,sizeof(ucodes),0},.kind=NVX_GSP_UCODE_ARCHIVE,.acquired=1U};
  for(unsigned i=2U;i<4U;i++){build_booter(boot_assets[i-2U],i==2U?2U:1U);b.components[i]=(nvx_gsp_component_t){.blob={boot_assets[i-2U],sizeof(boot_assets[0]),0},.kind=(nvx_gsp_component_kind_t)i,.acquired=1U};}build_gsp_bootloader(boot_assets[2]);b.components[4]=(nvx_gsp_component_t){.blob={boot_assets[2],256U,0},.kind=NVX_GSP_BOOTLOADER,.acquired=1U};
+ verify_fail=1;assert(nvx_gsp_preflight_validate(&b,&report)==NVX_GSP_PREFLIGHT_VERIFICATION_FAILED);
+ assert(report.runtime_bytes==0U);verify_fail=0;verify_calls=0U;
  assert(nvx_gsp_preflight_validate(&b,&report)==NVX_GSP_PREFLIGHT_OK);
+ assert(verify_calls==NVX_GSP_COMPONENT_COUNT);
  assert(report.runtime_verified&&report.ucode_archive_verified&&report.boot_assets_present);
  assert(report.runtime.machine==243U&&report.runtime.load_segment_count==1U);
  assert(report.runtime_bytes==sizeof(elf)&&report.ucode_archive_bytes==sizeof(ucodes));

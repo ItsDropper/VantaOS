@@ -186,7 +186,7 @@ nvx_gsp_wpr_status_t nvx_gsp_wpr_layout_plan(
     uint64_t vga_end, reserved_end, meta_size, nonwpr_size;
     uint64_t pre_heap, post_heap, fw_heap_offset, actual_fw_heap;
     uint64_t fw_offset, boot_offset, frts_offset, wpr_end, wpr_start;
-    uint64_t nonwpr_offset, minimum;
+    uint64_t nonwpr_offset, requested_wpr_heap_size;
     const uint64_t mb = UINT64_C(1024) * 1024U;
 
     if (!resources || !config || !out_layout ||
@@ -202,7 +202,7 @@ nvx_gsp_wpr_status_t nvx_gsp_wpr_layout_plan(
                   config->framebuffer_size) ||
         (config->mmu_lock_valid && config->mmu_lock_low >= config->framebuffer_size) ||
         !resources->radix3_size || !resources->bootloader_size ||
-        !resources->signature_size || !config->requested_wpr_heap_size ||
+        !resources->signature_size || !config->compute_wpr_heap_size ||
         !config->nonwpr_heap_size ||
         config->frts_size > config->framebuffer_size)
         return NVX_GSP_WPR_BAD_RANGE;
@@ -231,11 +231,11 @@ nvx_gsp_wpr_status_t nvx_gsp_wpr_layout_plan(
         !add_ok(meta_size, nonwpr_size, &pre_heap) ||
         !align_up_u64(config->framebuffer_size - fw_offset, mb, &post_heap))
         return NVX_GSP_WPR_BAD_RANGE;
-    (void)pre_heap;
-    (void)post_heap; /* Inputs to the platform's firmware heap policy. */
-    if (config->requested_wpr_heap_size > fw_offset)
+    if (!config->compute_wpr_heap_size(config->heap_policy_context, pre_heap,
+                                       post_heap, &requested_wpr_heap_size) ||
+        requested_wpr_heap_size == 0U || requested_wpr_heap_size > fw_offset)
         return NVX_GSP_WPR_BAD_RANGE;
-    fw_heap_offset = align_down_u64(fw_offset - config->requested_wpr_heap_size, mb);
+    fw_heap_offset = align_down_u64(fw_offset - requested_wpr_heap_size, mb);
     actual_fw_heap = align_down_u64(fw_offset - fw_heap_offset, mb);
     if (!actual_fw_heap || fw_heap_offset < meta_size)
         return NVX_GSP_WPR_BAD_RANGE;
@@ -265,6 +265,5 @@ nvx_gsp_wpr_status_t nvx_gsp_wpr_layout_plan(
     if (status != NVX_GSP_WPR_OK)
         return status;
     *out_layout = plan;
-    (void)minimum;
     return NVX_GSP_WPR_OK;
 }

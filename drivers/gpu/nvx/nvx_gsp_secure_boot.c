@@ -216,7 +216,8 @@ static nvx_gsp_falcon_status_t execute_booter_load_internal(
                              memory->booter_load.size) != NVX_DMA_SYNC_OK) {
         nvx_gsp_falcon_status_t reclaim = reset_and_reclaim(
             memory, bar0, timeout_ms, poll_interval_ms, delay_ms, context, 1U, 0U);
-        trace_recovery_result(trace, status, reclaim);
+        trace_recovery_result(trace, NVX_GSP_FALCON_DMA_OWNERSHIP_ERROR,
+                              reclaim);
         return NVX_GSP_FALCON_DMA_OWNERSHIP_ERROR;
     }
 

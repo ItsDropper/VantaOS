@@ -33,6 +33,13 @@ static int add_size(size_t a, size_t b, size_t *out)
     return 1;
 }
 
+static int offset_ranges_overlap(size_t a, size_t a_size,
+                                 size_t b, size_t b_size)
+{
+    return a_size != 0U && b_size != 0U &&
+           a < b + b_size && b < a + a_size;
+}
+
 static int overlaps(const void *a, size_t a_size,
                     const void *b, size_t b_size)
 {
@@ -140,6 +147,12 @@ nvx_gsp_fwsec_interface_status_t nvx_gsp_fwsec_find_command_window(
         if (input_capacity == 0U ||
             !range_ok(input_offset, input_capacity, dmem_size))
             return NVX_GSP_FWSEC_INTERFACE_RANGE_ERROR;
+        /* Command writes must not destroy the mapper or its own index table. */
+        if (offset_ranges_overlap(input_offset, input_capacity,
+                                  mapper_offset, mapper_size) ||
+            offset_ranges_overlap(input_offset, input_capacity,
+                                  interface_offset, entries_end - interface_offset))
+            return NVX_GSP_FWSEC_INTERFACE_BAD_MAPPER;
         if (command_size > input_capacity)
             return NVX_GSP_FWSEC_INTERFACE_COMMAND_TOO_LARGE;
 

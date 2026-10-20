@@ -159,6 +159,8 @@ nvx_gsp_fwsec_interface_status_t nvx_gsp_fwsec_find_command_window(
 
         result.mapper_offset = (uint32_t)mapper_offset;
         result.mapper_size = mapper_size;
+        /* V3 mapper layout: init_cmd is the 12th 32-bit field, byte offset 44. */
+        result.init_cmd_offset = (uint32_t)mapper_offset + 44U;
         result.command_input_offset = input_offset;
         result.command_input_capacity = input_capacity;
         result.command_id = command_id;

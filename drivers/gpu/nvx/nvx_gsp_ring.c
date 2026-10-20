@@ -42,6 +42,15 @@ nvx_gsp_ring_status_t nvx_gsp_ring_init(nvx_gsp_ring_t *r,void *storage,
     if(pages<2U||pages>NVX_GSP_MAX_QUEUE_PAGES||
        ((uintptr_t)storage&(NVX_GSP_PAGE_SIZE-1U))!=0U)
         return NVX_GSP_RING_INVALID_ARGUMENT;
+    size_t storage_bytes=pages*(size_t)NVX_GSP_PAGE_SIZE;
+    if(overlaps(r,sizeof(*r),storage,storage_bytes)||
+       overlaps(r,sizeof(*r),(const void *)read_ptr,sizeof(*read_ptr))||
+       overlaps(r,sizeof(*r),(const void *)write_ptr,sizeof(*write_ptr))||
+       overlaps(storage,storage_bytes,(const void *)read_ptr,sizeof(*read_ptr))||
+       overlaps(storage,storage_bytes,(const void *)write_ptr,sizeof(*write_ptr))||
+       overlaps((const void *)read_ptr,sizeof(*read_ptr),
+                (const void *)write_ptr,sizeof(*write_ptr)))
+        return NVX_GSP_RING_INVALID_ARGUMENT;
     if(load_ptr(read_ptr)>=pages||load_ptr(write_ptr)>=pages)
         return NVX_GSP_RING_BAD_POINTER;
     memset(r,0,sizeof(*r)); spinlock_init(&r->lock);
@@ -59,8 +68,10 @@ nvx_gsp_ring_status_t nvx_gsp_ring_send(nvx_gsp_ring_t *r,
     uint8_t *msg=(uint8_t *)scratch;
     uint32_t read,write,used,free_pages,sequence;
     nvx_gsp_ring_notify_t notify; void *notify_context;
-    if(out_sequence) __atomic_store_n(out_sequence,0U,__ATOMIC_RELAXED);
     if(!r||!scratch||!out_sequence||(payload_size&&!payload))
+        return NVX_GSP_RING_INVALID_ARGUMENT;
+    if(overlaps(r,sizeof(*r),scratch,scratch_size)||
+       overlaps(r,sizeof(*r),out_sequence,sizeof(*out_sequence)))
         return NVX_GSP_RING_INVALID_ARGUMENT;
     if(!r->initialized) return NVX_GSP_RING_NOT_INITIALIZED;
     if(version!=NVX_GSP_RPC_HEADER_VERSION_R535||signature!=NVX_GSP_RPC_SIGNATURE_R535)
@@ -76,8 +87,18 @@ nvx_gsp_ring_status_t nvx_gsp_ring_send(nvx_gsp_ring_t *r,
     pages=total_len/NVX_GSP_PAGE_SIZE;
     if(scratch_size<total_len) return NVX_GSP_RING_BUFFER_TOO_SMALL;
     if(overlaps(scratch,total_len,r->storage,(size_t)r->capacity_pages*NVX_GSP_PAGE_SIZE)||
-       overlaps(scratch,total_len,payload,payload_size))
+       overlaps(scratch,total_len,payload,payload_size)||
+       overlaps(scratch,total_len,(const void *)r->read_ptr,sizeof(*r->read_ptr))||
+       overlaps(scratch,total_len,(const void *)r->write_ptr,sizeof(*r->write_ptr))||
+       overlaps(out_sequence,sizeof(*out_sequence),scratch,total_len)||
+       overlaps(out_sequence,sizeof(*out_sequence),r->storage,
+                (size_t)r->capacity_pages*NVX_GSP_PAGE_SIZE)||
+       overlaps(out_sequence,sizeof(*out_sequence),payload,payload_size)||
+       overlaps(payload,payload_size,r,sizeof(*r))||
+       overlaps(payload,payload_size,r->storage,
+                (size_t)r->capacity_pages*NVX_GSP_PAGE_SIZE))
         return NVX_GSP_RING_INVALID_ARGUMENT;
+    __atomic_store_n(out_sequence,0U,__ATOMIC_RELAXED);
     memset(msg,0,total_len);
     put32(msg+0U,NVX_GSP_MCTP_MAGIC);
     put32(msg+4U,(uint32_t)message_len);
@@ -121,11 +142,20 @@ nvx_gsp_ring_status_t nvx_gsp_ring_receive(nvx_gsp_ring_t *r,void *scratch,
     uint8_t header[NVX_GSP_MSG_HEADER_SIZE]; uint8_t *msg=(uint8_t *)scratch;
     uint32_t read,write,message_len,pages,rpc_len,mctp_header,nvdm_header;
     size_t total_len; nvx_gsp_ring_status_t status=NVX_GSP_RING_OK;
-    if(out) memset(out,0,sizeof(*out));
     if(!r||!scratch||!out) return NVX_GSP_RING_INVALID_ARGUMENT;
+    if(overlaps(r,sizeof(*r),scratch,scratch_size)||
+       overlaps(r,sizeof(*r),out,sizeof(*out))||
+       overlaps(out,sizeof(*out),scratch,scratch_size)||
+       overlaps(out,sizeof(*out),r->storage,(size_t)r->capacity_pages*NVX_GSP_PAGE_SIZE)||
+       overlaps(scratch,scratch_size,(const void *)r->read_ptr,sizeof(*r->read_ptr))||
+       overlaps(scratch,scratch_size,(const void *)r->write_ptr,sizeof(*r->write_ptr))||
+       overlaps(out,sizeof(*out),(const void *)r->read_ptr,sizeof(*r->read_ptr))||
+       overlaps(out,sizeof(*out),(const void *)r->write_ptr,sizeof(*r->write_ptr)))
+        return NVX_GSP_RING_INVALID_ARGUMENT;
     if(!r->initialized) return NVX_GSP_RING_NOT_INITIALIZED;
     if(overlaps(scratch,scratch_size,r->storage,(size_t)r->capacity_pages*NVX_GSP_PAGE_SIZE))
         return NVX_GSP_RING_INVALID_ARGUMENT;
+    memset(out,0,sizeof(*out));
     spinlock_lock(&r->lock);
     read=load_ptr(r->read_ptr); write=load_ptr(r->write_ptr);
     if(read>=r->capacity_pages||write>=r->capacity_pages) status=NVX_GSP_RING_BAD_POINTER;

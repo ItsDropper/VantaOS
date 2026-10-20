@@ -24,6 +24,8 @@ int main(void) {
  nvx_gsp_msgq_queue_t tx={0},rx={0};uint8_t *w;const uint8_t *r;
  assert(nvx_gsp_msgq_queue_init_tx(&tx,tx_store,sizeof(tx_store),4096U,&io,4U,8U)==NVX_GSP_MSGQ_QUEUE_OK);
  assert(tx.layout.element_count==7U&&f.regs[1]==0U);
+ nvx_gsp_msgq_layout_t simulated_gsp_header={0};
+ assert(nvx_gsp_msgq_prepare_tx(rx_store,sizeof(rx_store),4096U,&simulated_gsp_header)==NVX_GSP_MSGQ_OK);
  assert(nvx_gsp_msgq_queue_init_rx(&rx,rx_store,sizeof(rx_store),4096U,&io,12U,16U)==NVX_GSP_MSGQ_QUEUE_OK);
  assert(rx.layout.element_count==7U&&f.regs[4]==0U);
  assert(nvx_gsp_msgq_tx_get(&tx,0U,&w)==NVX_GSP_MSGQ_QUEUE_OK&&w==tx_store+4096U);

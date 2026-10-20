@@ -14,8 +14,7 @@ typedef struct fake_hardware {
     nvx_mmio_region_t *bar0;
     uint8_t hold_dma_busy;
     uint8_t stick_scrub_on_dma_timeout;
-    uint32_t busy_delay_count;
-    uint32_t hold_after_busy_delay;
+    uint8_t hold_dmem_dma;
 } fake_hardware_t;
 
 static void fake_delay(uint32_t milliseconds, void *context)
@@ -24,19 +23,20 @@ static void fake_delay(uint32_t milliseconds, void *context)
     nvx_mmio_region_t *bar0 = hardware->bar0;
     (void)milliseconds;
     uint32_t dma_command = NVX_GA10X_FALCON_DMA_IDLE;
+    uint32_t dma_source_offset = 0U;
     assert(nvx_mmio_read32(bar0,
         NVX_GA10X_FALCON_DMATRFCMD(NVX_SEC2_FALCON_BASE),
         &dma_command) == NVX_MMIO_OK);
-    if (dma_command != NVX_GA10X_FALCON_DMA_IDLE) {
-        hardware->busy_delay_count++;
-        if (hardware->hold_dma_busy && hardware->stick_scrub_on_dma_timeout) {
-            assert(nvx_mmio_write32(bar0, NVX_SEC2_FALCON_BASE + 0x0F4U,
-                NVX_GSP_HWCFG2_MEMORY_SCRUBBING) == NVX_MMIO_OK);
-        }
+    assert(nvx_mmio_read32(bar0,
+        NVX_GA10X_FALCON_DMATRFFBOFFS(NVX_SEC2_FALCON_BASE),
+        &dma_source_offset) == NVX_MMIO_OK);
+    if (dma_command != NVX_GA10X_FALCON_DMA_IDLE &&
+        hardware->hold_dma_busy && hardware->stick_scrub_on_dma_timeout) {
+        assert(nvx_mmio_write32(bar0, NVX_SEC2_FALCON_BASE + 0x0F4U,
+            NVX_GSP_HWCFG2_MEMORY_SCRUBBING) == NVX_MMIO_OK);
     }
     if (!hardware->hold_dma_busy &&
-        (hardware->hold_after_busy_delay == 0U ||
-         hardware->busy_delay_count < hardware->hold_after_busy_delay)) {
+        !(hardware->hold_dmem_dma && dma_source_offset >= 0x2000U)) {
         assert(nvx_mmio_write32(bar0,
             NVX_GA10X_FALCON_DMATRFCMD(NVX_SEC2_FALCON_BASE),
             NVX_GA10X_FALCON_DMA_IDLE) == NVX_MMIO_OK);
@@ -165,9 +165,9 @@ int main(void)
         NVX_GA10X_FALCON_DMATRFCMD(NVX_SEC2_FALCON_BASE),
         NVX_GA10X_FALCON_DMA_IDLE) == NVX_MMIO_OK);
 
-    /* Fail the DMEM upload after the 16 successful IMEM chunks. */
-    hardware.busy_delay_count = 0U;
-    hardware.hold_after_busy_delay = 17U;
+    /* Fail DMEM DMA specifically by its source offset; IMEM remains successful.
+       This avoids depending on a guessed count of polling delays. */
+    hardware.hold_dmem_dma = 1U;
     assert(nvx_gsp_ga10x_execute_booter_load_traced(&memory, &bar0, 2U, 1U,
         fake_delay, &hardware, &mailbox1, &trace) == NVX_GSP_FALCON_DMA_TIMEOUT);
     assert(trace.failed_phase == NVX_GSP_BOOT_PHASE_UPLOAD_DMEM);
@@ -176,8 +176,7 @@ int main(void)
     assert(trace.recovery_succeeded == 1U);
     assert(trace.sec2_quiescence_confirmed == 1U);
     assert(memory.booter_load_sync.owner == NVX_DMA_OWNER_CPU);
-    hardware.hold_after_busy_delay = 0U;
-    hardware.busy_delay_count = 0U;
+    hardware.hold_dmem_dma = 0U;
     assert(nvx_mmio_write32(&bar0,
         NVX_GA10X_FALCON_DMATRFCMD(NVX_SEC2_FALCON_BASE),
         NVX_GA10X_FALCON_DMA_IDLE) == NVX_MMIO_OK);

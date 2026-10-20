@@ -139,7 +139,9 @@ vendor-defined PCI NVDM header with RM-RPC type 0x25, NVDM payload length,
 reserved field, and the 32-byte RPC header. It uses NVIDIA's documented
 version 3.00 and signature constants, pending-result sentinels, and echoed RPC
 sequence IDs. Queue entries are 4 KiB pages, messages can span up to 16 pages,
-one ring page remains empty, and publication uses release/acquire ordering.
+the producer/consumer indices are monotonic 32-bit counters (matching NVIDIA
+MSGQ 2.0), and all queue slots are usable; publication uses release/acquire
+ordering.
 The receive path validates every envelope length and protocol discriminator
 before consuming a message. There is no invented checksum field in the wire
 format. Tests cover full/empty queues, multi-page wraparound, malformed
@@ -155,9 +157,9 @@ paths in `message_queue_cpu.c` and `kernel_gsp.c` from
 This is transport framing only. It is not wired to a booted GSP, does not yet
 implement the payload schema for NVIDIA's CONTINUATION_RECORD RPC function for
 messages exceeding 16 pages, and does not implement RPC function schemas or
-hardware doorbell register programming. The caller must supply the correct firmware-shared
-pointer locations and notification callback after a real GSP queue has been
-initialized.
+hardware doorbell register programming. The caller must supply software counter adapters backed by the target's
+verified queue-head/tail registers, plus the notification callback, after the
+NVIDIA MSGQ header and backing-store layout have been initialized.
 
 ### Bounded GSP runtime ELF parser
 

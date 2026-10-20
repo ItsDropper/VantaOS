@@ -305,7 +305,7 @@ nvx_gsp_vbios_status_t nvx_gsp_vbios_find_ga10x_fwsec(
     size_t offset;
 
     if (!vbios || !out_info || vbios_size < BIT_HEADER_MIN_SIZE ||
-        expansion_rom_offset >= vbios_size)
+        vbios_size > UINT32_MAX || expansion_rom_offset >= vbios_size)
         return NVX_GSP_VBIOS_INVALID_ARGUMENT;
     if (ranges_overlap(vbios, vbios_size, out_info, sizeof(*out_info)))
         return NVX_GSP_VBIOS_OVERLAPPING_OUTPUT;

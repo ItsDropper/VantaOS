@@ -173,6 +173,28 @@ hardware queue integration should use the MSGQ queue/transport APIs. The ring ca
 supply software counter adapters backed by verified queue-head/tail registers
 and the notification callback.
 
+### GA10x GSP Falcon readiness diagnostics
+
+The GA102+ path now has a read-only Falcon inspector for the GSP Falcon
+mailboxes, HWCFG2, Falcon CPUCTL, and RISC-V CPUCTL. It decodes reset-ready,
+memory-scrubbing, Falcon halted/start-requested, RISC-V present/active/halted,
+and mailbox suspended state. It recognizes the documented `0xBADF41xx` PRIV
+target mask pattern and refuses GA10x queue setup while the register window is
+locked. A bounded RISC-V-active wait uses a platform-supplied scheduler delay,
+checks the lock on each poll, and returns an explicit timeout; it never busy
+spins indefinitely. These definitions were independently checked against
+public register descriptions in Linux Nova's `regs.rs` and `falcon/gsp.rs`.
+See [GA10x GSP bring-up notes](NVX_GSP_GA10X_BRINGUP.md).
+
+The Ampere GSP bundle selector now accepts only GA10x targets (GA102/103/104/106/107)
+and rejects GA100, which follows a different boot path. Preflight repeats this
+chip-family gate so a hand-constructed bundle cannot bypass the selector.
+GSP ELF parsing also rejects output buffers that alias the input descriptor or
+firmware bytes, and rejects PT_LOAD physical-address ranges that overflow
+64-bit address space. Host fixtures cover these failure paths and simulated
+Falcon state transitions. They do not establish that firmware has been loaded
+or that a physical GPU has booted.
+
 ### Bounded GSP runtime ELF parser
 
 The runtime-firmware path now has a separate ELF64 little-endian RISC-V parser.

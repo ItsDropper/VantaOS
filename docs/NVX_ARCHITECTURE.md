@@ -12,6 +12,8 @@ class/subclass/programming interface, and subsystem IDs for type-0 headers.
 NVIDIA class-`03h` display controllers are treated as GPU candidates; audio and
 other auxiliary functions are reported separately.
 
+The BAR0 probe now decodes the public NVIDIA PMC identity fields rather than preserving only opaque register values. PMC_BOOT_0 (offset 0x0000) is decoded using its split architecture field (bits 28:24 plus bit 8), implementation (bits 23:20), and major/minor revision nibbles. When the caller's validated mapping spans offset 0x0A00 through 0x0A03, the probe also reads PMC_BOOT_42 and records its extended architecture and implementation fields when the value is neither zero nor all-ones. This optional read is read-only and does not make the attach state more advanced than PROBED. The masks and field positions follow NVIDIA's public OpenRM `nv_ref.h` register definitions; the test fixture checks an Ampere architecture code of 0x17 and the short-mapping/optional-register path. Mocked register tests establish decoder behavior only, not that a physical GPU responds correctly.
+
 The identity layer now recognizes a deliberately small, exact PCI-ID table for
 RTX 3060 variants already named in VantaOS's PCI database (IDs `2503`, `2504`,
 `2507`, `2508`, `2509`, `2544`, and `2548`) as the Ampere generation and

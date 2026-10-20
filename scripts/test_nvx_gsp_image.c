@@ -35,5 +35,8 @@ int main(void) {
  make_image(&c); put32(112,UINT32_MAX); assert(nvx_gsp_image_parse(&c,&info)==NVX_GSP_IMAGE_APP_INVALID);
  make_image(&c); put32(64,61U); assert(nvx_gsp_image_parse(&c,&info)==NVX_GSP_IMAGE_SIGNATURE_INVALID);
  assert(nvx_gsp_image_parse(0,&info)==NVX_GSP_IMAGE_INVALID_ARGUMENT); assert(nvx_gsp_image_parse(&c,0)==NVX_GSP_IMAGE_INVALID_ARGUMENT);
+ make_image(&c);put32(0U,0U);assert(nvx_gsp_image_parse(&c,&info)==NVX_GSP_IMAGE_BAD_MAGIC);
+ make_image(&c);assert(nvx_gsp_image_parse(&c,(nvx_gsp_image_info_t *)(void *)bytes)==NVX_GSP_IMAGE_INVALID_ARGUMENT);
+ assert(bytes[0]==0xDEU&&bytes[1]==0x10U&&bytes[2]==0U&&bytes[3]==0U);
  return 0;
 }

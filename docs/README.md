@@ -6,9 +6,9 @@ Use this index to find the document that answers a specific engineering question
 
 ## System architecture and interfaces
 
-- [Architecture docs folder](architecture/ARCHITECTURE.md) — core OS architecture and subsystem boundaries.
-- [Build and validation docs folder](build/BUILD_SYSTEM.md) — build targets and CI evidence.
-- [Project status and plans folder](project/DEVELOPMENT_PLAN.md) — roadmap, bootloader plans, and hardware support.
+- [Architecture docs index](architecture/README.md) — core OS architecture and subsystem boundaries.
+- [Build and validation docs index](build/README.md) — build targets and CI evidence.
+- [Project status and plans index](project/README.md) — roadmap, bootloader plans, and hardware support.
 
 - [Desktop UI system](architecture/DESKTOP_UI.md) — shared visual rules, rendering/input ownership, and the current GUI process-model limitation.
 

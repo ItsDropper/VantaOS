@@ -31,11 +31,11 @@ nvx_gsp_rpc_status_t nvx_gsp_rpc_init(nvx_gsp_rpc_manager_t *m,nvx_gsp_ring_t *c
     memset(m,0,sizeof(*m)); spinlock_init(&m->lock); m->command_ring=command_ring; m->response_ring=response_ring; m->initialized=1U;
     return NVX_GSP_RPC_OK;
 }
-nvx_gsp_rpc_status_t nvx_gsp_rpc_submit(nvx_gsp_rpc_manager_t *m,
+static nvx_gsp_rpc_status_t rpc_submit_internal(nvx_gsp_rpc_manager_t *m,
     uint32_t version,uint32_t signature,uint32_t request_function,
-    uint32_t response_function,const void *payload,size_t payload_size,
-    void *scratch,size_t scratch_size,void *response,size_t response_capacity,
-    nvx_gsp_rpc_handle_t *out_handle)
+    uint32_t response_function,uint32_t continuation_function,int fragmented,
+    const void *payload,size_t payload_size,void *scratch,size_t scratch_size,
+    void *response,size_t response_capacity,nvx_gsp_rpc_handle_t *out_handle)
 {
     size_t index=NVX_GSP_RPC_MAX_PENDING; nvx_gsp_rpc_slot_t *slot;
     uint64_t flags; uint32_t generation; nvx_gsp_ring_status_t sent;
@@ -62,8 +62,13 @@ nvx_gsp_rpc_status_t nvx_gsp_rpc_submit(nvx_gsp_rpc_manager_t *m,
     rpc_unlock(m,flags);
 
     /* ring_send writes slot->sequence before publishing the queue write pointer. */
-    sent=nvx_gsp_ring_send(m->command_ring,version,signature,request_function,payload,
-                           payload_size,scratch,scratch_size,&slot->sequence);
+    if(fragmented)
+        sent=nvx_gsp_ring_send_large(m->command_ring,version,signature,
+            request_function,continuation_function,payload,payload_size,
+            scratch,scratch_size,&slot->sequence);
+    else
+        sent=nvx_gsp_ring_send(m->command_ring,version,signature,request_function,payload,
+                               payload_size,scratch,scratch_size,&slot->sequence);
     if(sent!=NVX_GSP_RING_OK) {
         flags=rpc_lock(m);
         if(slot->active&&slot->generation==generation) {
@@ -73,6 +78,24 @@ nvx_gsp_rpc_status_t nvx_gsp_rpc_submit(nvx_gsp_rpc_manager_t *m,
         return sent==NVX_GSP_RING_NOT_INITIALIZED?NVX_GSP_RPC_NOT_INITIALIZED:NVX_GSP_RPC_SEND_FAILED;
     }
     return NVX_GSP_RPC_OK;
+}
+nvx_gsp_rpc_status_t nvx_gsp_rpc_submit(nvx_gsp_rpc_manager_t *m,
+    uint32_t version,uint32_t signature,uint32_t request_function,
+    uint32_t response_function,const void *payload,size_t payload_size,
+    void *scratch,size_t scratch_size,void *response,size_t response_capacity,
+    nvx_gsp_rpc_handle_t *out_handle)
+{
+    return rpc_submit_internal(m,version,signature,request_function,response_function,
+        0U,0,payload,payload_size,scratch,scratch_size,response,response_capacity,out_handle);
+}
+nvx_gsp_rpc_status_t nvx_gsp_rpc_submit_large(nvx_gsp_rpc_manager_t *m,
+    uint32_t version,uint32_t signature,uint32_t request_function,
+    uint32_t response_function,uint32_t continuation_function,
+    const void *payload,size_t payload_size,void *scratch,size_t scratch_size,
+    void *response,size_t response_capacity,nvx_gsp_rpc_handle_t *out_handle)
+{
+    return rpc_submit_internal(m,version,signature,request_function,response_function,
+        continuation_function,1,payload,payload_size,scratch,scratch_size,response,response_capacity,out_handle);
 }
 nvx_gsp_rpc_status_t nvx_gsp_rpc_pump(nvx_gsp_rpc_manager_t *m,void *scratch,
     size_t scratch_size,nvx_gsp_rpc_view_t *unmatched)

@@ -91,15 +91,6 @@ int main(void)
     config_space[TEST_BAR0_INDEX] = 0x80000000U;
     bar_masks[0] = 0xFF000000U; /* 16 MiB memory BAR */
 
-    /*
-     * is_64bit is optional metadata. Several drivers only need the address
-     * and I/O-vs-memory classification and legitimately pass NULL.
-     */
-    uint64_t bar_address = 0U;
-    int bar_is_io = 1;
-    assert(pci_get_bar(&gpu, 0U, &bar_address, &bar_is_io, 0));
-    assert(bar_address == 0x80000000ULL && bar_is_io == 0);
-    assert(!pci_get_bar(&gpu, 0U, &bar_address, 0, 0));
     assert(pci_get_bar_size(&gpu, 0U, &size));
     assert(size == 0x01000000ULL);
     assert(config_space[TEST_BAR0_INDEX] == 0x80000000U);

@@ -4,6 +4,15 @@ on:
   pull_request:
     paths:
       - "drivers/gpu/nvx/**"
+      - "drivers/gpu/core/**"
+      - "drivers/gpu/intel/**"
+      - "drivers/gpu/amd/**"
+      - "include/gpu.h"
+      - "include/gpu_core.h"
+      - "include/gpu_vendor.h"
+      - "include/intel_gpu.h"
+      - "include/amd_gpu.h"
+      - "scripts/test_gpu_vendor_framework.c"
       - "drivers/pci/**"
       - "arch/x86_64/device_irq.c"
       - "arch/x86_64/isr.asm"
@@ -95,6 +104,16 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+
+      - name: Compile generic GPU and Intel/AMD vendor framework tests
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_gpu_vendor_framework.c drivers/gpu/core/gpu_vendor.c \
+            drivers/gpu/core/gpu_core.c drivers/gpu/intel/intel_gpu.c \
+            drivers/gpu/amd/amd_gpu.c -o /tmp/vantaos-gpu-vendor-framework-test
+
+      - name: Test GPU classification, lifecycle and fail-closed capabilities
+        run: /tmp/vantaos-gpu-vendor-framework-test
 
       - name: Compile PMM contiguous-run tests with strict warnings
         run: |

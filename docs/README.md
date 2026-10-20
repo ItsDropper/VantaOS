@@ -30,3 +30,12 @@ Use this index to find the document that answers a specific engineering question
 - [Security policy](../SECURITY.md) — security-related reporting and scope.
 
 When a document conflicts with actual code or CI, treat the implementation and reproducible tests as evidence, correct the documentation, and record unresolved discrepancies instead of silently assuming either is right.
+
+
+## GPU driver framework
+
+The GPU subsystem is split into vendor-neutral PCI classification and lifecycle contracts, with independent NVIDIA (NVX), Intel, and AMD backends. `gpu_classify_pci_function()` performs read-only PCI identity classification and only labels a generation when a curated device-ID entry exists. Unknown device IDs from supported vendors remain valid GPU candidates with an unknown architecture.
+
+The Intel and AMD modules currently provide matching, descriptor reporting, and lifecycle-operation contracts only. Their initialization callbacks intentionally fail closed until the vendor firmware, memory-management, engine, interrupt, and command-submission paths are implemented. No hardware acceleration is advertised by these initial backends. Generic capabilities can only be published while a device is in the running state, and are cleared when it leaves that state.
+
+Host verification: `scripts/test_gpu_vendor_framework.c`, compiled with `-std=c11 -Wall -Wextra -Werror` by the NVX/GPU framework workflow. This validates identity classification, audio-function rejection, unknown-ID handling, vendor driver matching, legal lifecycle transitions, and capability publication guards; it is not a hardware test.

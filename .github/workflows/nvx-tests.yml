@@ -19,6 +19,7 @@ on:
       - "include/nvx_gsp_bundle.h"
       - "include/nvx_gsp_image.h"
       - "include/nvx_gsp_ring.h"
+      - "include/nvx_gsp_rpc.h"
       - "include/nvx_dma.h"
       - "include/nvx_dma_sync.h"
       - "include/nvx_gpuva.h"
@@ -42,6 +43,7 @@ on:
       - "scripts/test_nvx_gsp_bundle.c"
       - "scripts/test_nvx_gsp_image.c"
       - "scripts/test_nvx_gsp_ring.c"
+      - "scripts/test_nvx_gsp_rpc.c"
       - "scripts/test_nvx_dma.c"
       - "scripts/test_nvx_dma_sync.c"
       - "scripts/test_nvx_gpuva.c"
@@ -175,6 +177,15 @@ jobs:
 
       - name: Test GSP RPC ring framing, wraparound and checksum rejection
         run: /tmp/vantaos-nvx-gsp-ring-test
+
+      - name: Compile GSP RPC transaction tests
+        run: |
+          gcc -DNVX_GSP_RPC_TEST -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_rpc.c drivers/gpu/nvx/nvx_gsp_rpc.c \
+            drivers/gpu/nvx/nvx_gsp_ring.c -o /tmp/vantaos-nvx-gsp-rpc-test
+
+      - name: Test GSP RPC correlation, response buffers and device-loss handling
+        run: /tmp/vantaos-nvx-gsp-rpc-test
 
       - name: Compile NVX DMA ownership and ordering tests
         run: |

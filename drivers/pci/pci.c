@@ -8,6 +8,7 @@
 #include "pci.h"
 #include "spinlock.h"
 #include "vanta_boot_info.h"
+#include "serial.h"
 
 #include <stdint.h>
 
@@ -637,7 +638,7 @@ static int pci_bar_address_conflicts(uint64_t base, uint64_t size)
 int pci_allocate_unassigned_bar(const struct pci_device* device, uint8_t index)
 {
     const vanta_boot_info_t* boot = kernel_get_boot_info();
-    uint16_t command;
+    uint16_t command = 0U;
     uint32_t low;
     uint32_t high = 0U;
     uint8_t offset;
@@ -647,6 +648,7 @@ int pci_allocate_unassigned_bar(const struct pci_device* device, uint8_t index)
     const uint64_t mmio_limit = 0xFEC00000ULL;
     int is_64bit;
     int success = 0;
+    const char* failure = "BOOT_INFO";
 
     if (!device || !boot || index >= 6U ||
         boot->magic != VANTA_BOOT_INFO_MAGIC ||
@@ -656,30 +658,49 @@ int pci_allocate_unassigned_bar(const struct pci_device* device, uint8_t index)
         (boot->flags & VANTA_BOOT_FLAG_MEMORY_MAP_TRUNCATED) != 0U ||
         boot->memory_region_count == 0U ||
         boot->memory_region_count > VANTA_BOOT_INFO_MAX_MEMORY_REGIONS)
-        return 0;
+        goto fail_early;
 
     offset = (uint8_t)(0x10U + index * 4U);
     low = pci_read_config32(device, offset);
     if (low == 0U || low == 0xFFFFFFFFU || (low & 1U) != 0U)
-        return 0;
+    {
+        failure = "BAR_NOT_MEMORY";
+        goto fail_early;
+    }
     uint32_t memory_type = (low >> 1U) & 0x03U;
     if (memory_type == 0x03U)
-        return 0;
+    {
+        failure = "BAR_RESERVED_TYPE";
+        goto fail_early;
+    }
     is_64bit = memory_type == 0x02U;
     if (is_64bit)
     {
         if (index >= 5U)
-            return 0;
+        {
+            failure = "BAR_INDEX";
+            goto fail_early;
+        }
         high = pci_read_config32(device, (uint8_t)(offset + 4U));
         if (high != 0U || (low & 0xFFFFFFF0U) != 0U)
-            return 0; /* Only allocate a genuinely unassigned 64-bit BAR. */
+        {
+            failure = "BAR_ALREADY_ASSIGNED";
+            goto fail_early;
+        }
     }
     else if ((low & 0xFFFFFFF0U) != 0U)
-        return 0;
+    {
+        failure = "BAR_ALREADY_ASSIGNED";
+        goto fail_early;
+    }
 
     command = pci_read_config16(device, 0x04U);
     if (!pci_write_config16(device, 0x04U, (uint16_t)(command & ~0x0007U)))
-        return 0;
+    {
+        failure = "COMMAND_DISABLE";
+        goto fail_early;
+    }
+    failure = "BAR_SIZE";
     if (!pci_get_bar_size(device, index, &size) || size == 0U ||
         size > mmio_limit)
         goto restore_command;
@@ -689,7 +710,10 @@ int pci_allocate_unassigned_bar(const struct pci_device* device, uint8_t index)
         const vanta_memory_region_t* region = &boot->memory_regions[i];
         uint64_t region_end;
         if (region->length > UINT64_MAX - region->base)
+        {
+            failure = "MEMORY_MAP_RANGE";
             goto restore_command;
+        }
         region_end = region->base + region->length;
         if ((region->type == VANTA_MEMORY_USABLE ||
              region->type == VANTA_MEMORY_BOOTLOADER_RECLAIMABLE) &&
@@ -697,9 +721,13 @@ int pci_allocate_unassigned_bar(const struct pci_device* device, uint8_t index)
             highest_usable = region_end;
     }
     if (highest_usable == 0U || highest_usable >= mmio_limit)
+    {
+        failure = "NO_RAM_TOP";
         goto restore_command;
+    }
 
     candidate = (highest_usable + size - 1U) & ~(size - 1U);
+    failure = "NO_CANDIDATE";
     while (candidate < mmio_limit && size <= mmio_limit - candidate)
     {
         if (pci_memory_map_allows_bar(boot, candidate, size) &&
@@ -710,9 +738,15 @@ int pci_allocate_unassigned_bar(const struct pci_device* device, uint8_t index)
             if (is_64bit &&
                 !pci_write_config32(device, (uint8_t)(offset + 4U),
                                     (uint32_t)(candidate >> 32U)))
+            {
+                failure = "WRITE_BAR_HIGH";
                 goto restore_command;
+            }
             if (!pci_write_config32(device, offset, assigned_low))
+            {
+                failure = "WRITE_BAR_LOW";
                 goto restore_command;
+            }
             uint64_t assigned_address = 0U;
             int assigned_io = 0;
             int assigned_64 = 0;
@@ -720,7 +754,12 @@ int pci_allocate_unassigned_bar(const struct pci_device* device, uint8_t index)
                             &assigned_io, &assigned_64) &&
                 !assigned_io && assigned_address == candidate &&
                 assigned_64 == is_64bit)
+            {
                 success = 1;
+                failure = "OK";
+            }
+            else
+                failure = "VERIFY_BAR";
             break;
         }
         if (candidate > UINT64_MAX - size)
@@ -730,8 +769,23 @@ int pci_allocate_unassigned_bar(const struct pci_device* device, uint8_t index)
 
 restore_command:
     if (!pci_write_config16(device, 0x04U, command))
-        return 0;
+    {
+        failure = "COMMAND_RESTORE";
+        success = 0;
+    }
+    if (!success)
+    {
+        serial_write("VANTAOS_PCI_BAR_ALLOC_");
+        serial_write(failure);
+        serial_write("\n");
+    }
     return success;
+
+fail_early:
+    serial_write("VANTAOS_PCI_BAR_ALLOC_");
+    serial_write(failure);
+    serial_write("\n");
+    return 0;
 }
 
 #endif

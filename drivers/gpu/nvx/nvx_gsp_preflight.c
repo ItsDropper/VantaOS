@@ -161,3 +161,45 @@ nvx_gsp_preflight_status_t nvx_gsp_preflight_stage_booters(
     *out_unload_info = report.booter_unload;
     return NVX_GSP_PREFLIGHT_OK;
 }
+
+nvx_gsp_preflight_status_t nvx_gsp_preflight_stage_gsp_bootloader(
+    const nvx_gsp_bundle_t *b, uint8_t *staging, size_t staging_capacity,
+    nvx_gsp_bootloader_info_t *out_info)
+{
+    nvx_gsp_preflight_report_t report;
+    nvx_gsp_preflight_status_t preflight_status;
+    nvx_gsp_bootloader_status_t boot_status;
+
+    if (!b || !staging || !out_info)
+        return NVX_GSP_PREFLIGHT_INVALID_ARGUMENT;
+    if (overlaps(staging, staging_capacity, b, sizeof(*b)) ||
+        overlaps(out_info, sizeof(*out_info), b, sizeof(*b)) ||
+        overlaps(staging, staging_capacity, out_info, sizeof(*out_info)))
+        return NVX_GSP_PREFLIGHT_STAGING_ALIAS;
+    for (size_t i = 0U; i < NVX_GSP_COMPONENT_COUNT; ++i) {
+        const nvx_gsp_component_t *component = &b->components[i];
+        if (!component->blob.data || !component->blob.size)
+            continue;
+        if (overlaps(staging, staging_capacity,
+                     component->blob.data, component->blob.size) ||
+            overlaps(out_info, sizeof(*out_info),
+                     component->blob.data, component->blob.size))
+            return NVX_GSP_PREFLIGHT_STAGING_ALIAS;
+    }
+
+    preflight_status = nvx_gsp_preflight_validate(b, &report);
+    if (preflight_status != NVX_GSP_PREFLIGHT_OK)
+        return preflight_status;
+    if (staging_capacity < report.gsp_bootloader.payload_size)
+        return NVX_GSP_PREFLIGHT_STAGING_TOO_SMALL;
+
+    boot_status = nvx_gsp_bootloader_prepare(&b->components[4], staging,
+                                              staging_capacity, out_info);
+    if (boot_status == NVX_GSP_BOOTLOADER_OK)
+        return NVX_GSP_PREFLIGHT_OK;
+    if (boot_status == NVX_GSP_BOOTLOADER_BUFFER_TOO_SMALL)
+        return NVX_GSP_PREFLIGHT_STAGING_TOO_SMALL;
+    if (boot_status == NVX_GSP_BOOTLOADER_INVALID_ARGUMENT)
+        return NVX_GSP_PREFLIGHT_STAGING_ALIAS;
+    return NVX_GSP_PREFLIGHT_CONTAINER_INVALID;
+}

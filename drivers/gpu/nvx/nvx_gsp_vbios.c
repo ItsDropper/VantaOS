@@ -134,6 +134,7 @@ static nvx_gsp_vbios_status_t parse_fwsec_from_bit(
         uint8_t data_version = token[1U];
         uint16_t data_size = le16(token + 2U);
         uint32_t data_pointer;
+        uint32_t falcon_table_pointer;
         size_t table_offset;
         const uint8_t *table;
         uint8_t table_version;
@@ -151,7 +152,13 @@ static nvx_gsp_vbios_status_t parse_fwsec_from_bit(
             data_version != BIT_FALCON_DATA_VERSION || data_size < 4U)
             continue;
 
-        if (!add_size(expansion_offset, (size_t)data_pointer, &table_offset) ||
+        /* BIT token DataPtr is an absolute VBIOS offset; only the Falcon
+         * table pointer stored there is relative to the expansion-ROM base. */
+        if (!range_ok((size_t)data_pointer, data_size, size) ||
+            !read32_at(image, size, (size_t)data_pointer,
+                       &falcon_table_pointer) ||
+            !add_size(expansion_offset, (size_t)falcon_table_pointer,
+                      &table_offset) ||
             !range_ok(table_offset, FALCON_TABLE_HEADER_MIN_SIZE, size))
             return NVX_GSP_VBIOS_MALFORMED_TABLE;
 

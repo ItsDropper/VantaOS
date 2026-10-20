@@ -11,4 +11,4 @@ This directory documents the vendor-neutral GPU framework and vendor-specific br
 
 ## Vendor-neutral framework
 
-The generic PCI classification and lifecycle framework is implemented separately from vendor firmware and execution engines. Intel and AMD backends remain lifecycle/matching scaffolds and do not advertise hardware acceleration. See [GPU framework status](../README.md#gpu-driver-framework) in the main documentation index.
+The generic PCI classification and lifecycle framework is implemented separately from vendor firmware and execution engines. Intel and AMD backends remain lifecycle/matching scaffolds and do not advertise hardware acceleration. See [GPU framework status](FRAMEWORK.md) in the main documentation index.

@@ -52,7 +52,9 @@ nvx_gsp_msgq_status_t nvx_gsp_msgq_prepare_tx(void *store,size_t bytes,size_t el
     if(!aligned_uintptr(store,NVX_GSP_MSGQ_HEADER_PAGE_SIZE))
         return NVX_GSP_MSGQ_BAD_ALIGNMENT;
     if(bytes>UINT32_MAX||bytes<2U*NVX_GSP_MSGQ_HEADER_PAGE_SIZE||
-       bytes%NVX_GSP_MSGQ_ELEMENT_SIZE!=0U||elem!=NVX_GSP_MSGQ_ELEMENT_SIZE)
+       elem<NVX_GSP_MSGQ_MIN_ELEMENT_SIZE||
+       elem>NVX_GSP_MSGQ_MAX_ELEMENT_SIZE||(elem&(elem-1U))!=0U||
+       bytes%NVX_GSP_MSGQ_ELEMENT_SIZE!=0U)
         return NVX_GSP_MSGQ_BAD_SIZE;
     off=NVX_GSP_MSGQ_HEADER_PAGE_SIZE;
     count=(uint32_t)((bytes-off)/elem);

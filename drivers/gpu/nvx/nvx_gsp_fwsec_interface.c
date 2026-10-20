@@ -17,6 +17,7 @@
 #define FWSEC_INTERFACE_ENTRY_SIZE 8U
 #define FWSEC_INTERFACE_MIN_ENTRIES 2U
 #define FWSEC_INTERFACE_DMEM_MAPPER_ID 4U
+/* The declared V3 fields total 64 bytes: 8-byte prefix + 14 u32 fields. */
 #define FWSEC_DMEM_MAPPER_VERSION 3U
 #define FWSEC_DMEM_MAPPER_V3_SIZE 64U
 

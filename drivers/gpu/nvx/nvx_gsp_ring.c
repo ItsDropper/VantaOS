@@ -103,6 +103,84 @@ nvx_gsp_ring_status_t nvx_gsp_ring_send(nvx_gsp_ring_t *r,
     if(notify) notify(notify_context);
     return NVX_GSP_RING_OK;
 }
+nvx_gsp_ring_status_t nvx_gsp_ring_send_large(nvx_gsp_ring_t *r,
+    uint32_t version,uint32_t signature,uint32_t function,
+    uint32_t continuation_function,const void *payload,size_t payload_size,
+    void *scratch,size_t scratch_size,uint32_t *out_first_sequence)
+{
+    const size_t max_payload=NVX_GSP_MAX_MESSAGE_PAGES*(size_t)NVX_GSP_PAGE_SIZE-
+                             NVX_GSP_MSG_HEADER_SIZE-NVX_GSP_RPC_HEADER_SIZE;
+    size_t remaining,required_pages=0U;
+    uint32_t read,write,used,free_pages,first_sequence=0U;
+    uint8_t *msg=(uint8_t *)scratch;
+    nvx_gsp_ring_notify_t notify; void *notify_context;
+    if(out_first_sequence) __atomic_store_n(out_first_sequence,0U,__ATOMIC_RELAXED);
+    if(!r||!scratch||!out_first_sequence||(payload_size&&!payload))
+        return NVX_GSP_RING_INVALID_ARGUMENT;
+    if(!r->initialized) return NVX_GSP_RING_NOT_INITIALIZED;
+    if(payload_size>(size_t)r->capacity_pages*NVX_GSP_PAGE_SIZE)
+        return NVX_GSP_RING_MESSAGE_TOO_LARGE;
+    if(scratch_size<(size_t)NVX_GSP_MAX_MESSAGE_PAGES*NVX_GSP_PAGE_SIZE)
+        return NVX_GSP_RING_BUFFER_TOO_SMALL;
+    if(overlaps(scratch,(size_t)NVX_GSP_MAX_MESSAGE_PAGES*NVX_GSP_PAGE_SIZE,
+                r->storage,(size_t)r->capacity_pages*NVX_GSP_PAGE_SIZE)||
+       overlaps(scratch,(size_t)NVX_GSP_MAX_MESSAGE_PAGES*NVX_GSP_PAGE_SIZE,
+                payload,payload_size))
+        return NVX_GSP_RING_INVALID_ARGUMENT;
+    remaining=payload_size;
+    do {
+        size_t chunk=remaining>max_payload?max_payload:remaining;
+        size_t bytes=NVX_GSP_MSG_HEADER_SIZE+NVX_GSP_RPC_HEADER_SIZE+chunk;
+        size_t aligned=(bytes+NVX_GSP_PAGE_SIZE-1U)&~((size_t)NVX_GSP_PAGE_SIZE-1U);
+        required_pages+=aligned/NVX_GSP_PAGE_SIZE;
+        remaining-=chunk;
+    } while(remaining);
+    if(required_pages>=r->capacity_pages)
+        return NVX_GSP_RING_MESSAGE_TOO_LARGE;
+
+    spinlock_lock(&r->lock);
+    read=load_ptr(r->read_ptr); write=load_ptr(r->write_ptr);
+    if(read>=r->capacity_pages||write>=r->capacity_pages) {
+        spinlock_unlock(&r->lock); return NVX_GSP_RING_BAD_POINTER;
+    }
+    used=(write+r->capacity_pages-read)%r->capacity_pages;
+    free_pages=r->capacity_pages-used-1U;
+    if(required_pages>free_pages) {
+        spinlock_unlock(&r->lock); return NVX_GSP_RING_QUEUE_FULL;
+    }
+
+    remaining=payload_size;
+    int first=1;
+    do {
+        size_t chunk=remaining>max_payload?max_payload:remaining;
+        size_t rpc_len=NVX_GSP_RPC_HEADER_SIZE+chunk;
+        size_t bytes=NVX_GSP_MSG_HEADER_SIZE+rpc_len;
+        size_t aligned=(bytes+NVX_GSP_PAGE_SIZE-1U)&~((size_t)NVX_GSP_PAGE_SIZE-1U);
+        uint32_t pages=(uint32_t)(aligned/NVX_GSP_PAGE_SIZE);
+        uint32_t seq=r->next_sequence++;
+        if(r->next_sequence==0U) r->next_sequence=1U;
+        if(first) first_sequence=seq;
+        memset(msg,0,aligned);
+        put32(msg+48U,version); put32(msg+52U,signature);
+        put32(msg+56U,(uint32_t)rpc_len);
+        put32(msg+60U,first?function:continuation_function);
+        put32(msg+72U,seq);
+        if(chunk) memcpy(msg+80U,(const uint8_t *)payload+(payload_size-remaining),chunk);
+        put32(msg+36U,seq); put32(msg+40U,pages);
+        put32(msg+32U,checksum_fold(msg,aligned));
+        ring_copy_in(r,write,msg,aligned);
+        write=(write+pages)%r->capacity_pages;
+        remaining-=chunk; first=0;
+    } while(remaining);
+    __atomic_thread_fence(__ATOMIC_RELEASE);
+    __atomic_store_n(out_first_sequence,first_sequence,__ATOMIC_RELEASE);
+    store_ptr(r->write_ptr,write);
+    notify=r->notify; notify_context=r->notify_context;
+    spinlock_unlock(&r->lock);
+    if(notify) notify(notify_context);
+    return NVX_GSP_RING_OK;
+}
+
 nvx_gsp_ring_status_t nvx_gsp_ring_receive(nvx_gsp_ring_t *r,void *scratch,
     size_t scratch_size,nvx_gsp_rpc_view_t *out)
 {

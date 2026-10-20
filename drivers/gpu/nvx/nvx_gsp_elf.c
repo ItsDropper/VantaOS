@@ -20,6 +20,12 @@ static uint32_t le32(const uint8_t *p) { return (uint32_t)p[0]|((uint32_t)p[1]<<
 static uint64_t le64(const uint8_t *p) { return (uint64_t)le32(p)|((uint64_t)le32(p+4U)<<32U); }
 static int range_ok(size_t total,uint64_t off,uint64_t len) { return off<=total&&len<=(uint64_t)total-off; }
 static int power2(uint64_t v) { return v&&!(v&(v-1U)); }
+static int has_nul_terminator(const uint8_t *data, size_t size)
+{
+    for (size_t i=0U;i<size;i++)
+        if (data[i]==0U) return 1;
+    return 0;
+}
 static int string_matches(const uint8_t *tab,size_t size,uint32_t off,const char *expected) {
     size_t n=0U;
     if(off>=size) return 0;
@@ -65,7 +71,7 @@ nvx_gsp_elf_status_t nvx_gsp_elf_parse(const nvx_gsp_component_t *component,
         const uint8_t *sh=data+shoff+(uint64_t)i*shentsize;
         uint32_t name=le32(sh),stype=le32(sh+4U);
         uint64_t off=le64(sh+24U),bytes=le64(sh+32U),align=le64(sh+48U);
-        if(name>=str_size||!memchr(data+str_off+name,0,(size_t)(str_size-name)))
+        if(name>=str_size||!has_nul_terminator(data+str_off+name,(size_t)(str_size-name)))
             return NVX_GSP_ELF_STRING_TABLE_INVALID;
         if(align>1U&&!power2(align)) return NVX_GSP_ELF_SECTION_TABLE_INVALID;
         if(stype!=ELF_SHT_NOBITS&&!range_ok(size,off,bytes))

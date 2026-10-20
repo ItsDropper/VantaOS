@@ -166,7 +166,7 @@ Do not skip secure boot and jump straight to rendering. A GPU command submission
 | Unknown / risk | Evidence needed | Safe next experiment |
 | --- | --- | --- |
 | Exact SEC2 Booter Load mailbox 0/1 meanings across firmware versions | Matching NVIDIA call sites and firmware-version-specific result checks | Add named status decoding only after locating the exact contract; keep unknown values as errors |
-| VBIOS expansion-ROM chain selection | PCI ROM header/PCIR image-length and last-image semantics | Implement a separate bounded ROM-image locator and tests; do not pass an arbitrary offset to the FWSEC parser |
+| VBIOS expansion-ROM chain selection | PCI ROM header/PCIR image-length and last-image semantics | **Parser implemented:** `nvx_gsp_pci_rom_find_nvidia()` bounds the chain and returns the first NVIDIA-vendor image. Still validate against real GA106 VBIOS dumps and choose an explicit code-type preference before FWSEC execution |
 | FWSEC image encryption/compression behavior | Descriptor flags and exact GA10x firmware path | Fail closed for unsupported flags; never interpret encrypted bytes as a plain executable image |
 | FWSEC application-interface ABI | Public interface header/entry layout and DMEM mapper version | Parse with checked offsets and sizes; validate command input buffer offsets against DMEM, not just the whole firmware image |
 | FRTS/WPR layout inputs | Firmware commands, real FB size/workspace/lock state and hardware readback | Add read-only diagnostics and pure planners before writes |

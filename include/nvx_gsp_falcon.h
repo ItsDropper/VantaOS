@@ -39,6 +39,24 @@
 #define NVX_GSP_FALCON_BROM_RSA3K         1U
 #define NVX_GSP_FALCON_BROM_UCODE_COUNT   16U
 #define NVX_GSP_FALCON_BROM_REQUIRED_BYTES (NVX_GSP_FALCON_BROM_PARAM_ADDR + 4U)
+#define NVX_GA10X_FALCON_DMACTL(base)       ((base) + 0x10CU)
+#define NVX_GA10X_FALCON_DMATRFBASE(base)   ((base) + 0x110U)
+#define NVX_GA10X_FALCON_DMATRFMOFFS(base)  ((base) + 0x114U)
+#define NVX_GA10X_FALCON_DMATRFCMD(base)    ((base) + 0x118U)
+#define NVX_GA10X_FALCON_DMATRFFBOFFS(base) ((base) + 0x11CU)
+#define NVX_GA10X_FALCON_DMATRFBASE1(base)  ((base) + 0x128U)
+#define NVX_GA10X_FALCON_FBIF_TRANSCFG0(base) ((base) + 0x600U)
+#define NVX_GA10X_FALCON_FBIF_CTL(base)     ((base) + 0x624U)
+#define NVX_GA10X_FALCON_ENGINE(base)       ((base) + 0x3C0U)
+#define NVX_GA10X_FALCON_DMA_FULL           (1U << 0U)
+#define NVX_GA10X_FALCON_DMA_IDLE           (1U << 1U)
+#define NVX_GA10X_FALCON_DMA_IMEM           (1U << 4U)
+#define NVX_GA10X_FALCON_DMA_WRITE          (1U << 5U)
+#define NVX_GA10X_FALCON_DMA_SIZE_256B      (6U << 8U)
+#define NVX_GA10X_FALCON_DMA_SET_DMTAG      (1U << 16U)
+#define NVX_GA10X_FALCON_DMA_ALLOW_PHYS     (1U << 7U)
+#define NVX_GA10X_FALCON_DMA_COHERENT_PHYS  5U
+#define NVX_GA10X_FALCON_DMA_CHUNK_BYTES    256U
 #define NVX_GSP_FALCON_DIAGNOSTIC_BYTES  (NVX_GSP_RISCV_CPUCTL + 4U)
 
 #define NVX_GSP_HWCFG2_RESET_READY       (1U << 31)
@@ -59,7 +77,9 @@ typedef enum nvx_gsp_falcon_status {
     NVX_GSP_FALCON_RISCV_TIMEOUT,
     NVX_GSP_FALCON_BROM_INVALID_PARAMETERS,
     NVX_GSP_FALCON_NOT_HALTED,
-    NVX_GSP_FALCON_BOOT_VECTOR_INVALID
+    NVX_GSP_FALCON_BOOT_VECTOR_INVALID,
+    NVX_GSP_FALCON_DMA_INVALID_TRANSFER,
+    NVX_GSP_FALCON_DMA_TIMEOUT
 } nvx_gsp_falcon_status_t;
 
 typedef struct nvx_gsp_falcon_snapshot {
@@ -117,5 +137,22 @@ nvx_gsp_falcon_status_t nvx_ga10x_falcon_start(
 /* GSP-specific wrappers retained for current callers. */
 nvx_gsp_falcon_status_t nvx_gsp_ga10x_start_falcon(
     const nvx_mmio_region_t *bar0, uint32_t boot_vector);
+typedef enum nvx_ga10x_falcon_memory {
+    NVX_GA10X_FALCON_SECURE_IMEM = 0,
+    NVX_GA10X_FALCON_NONSECURE_IMEM,
+    NVX_GA10X_FALCON_DMEM
+} nvx_ga10x_falcon_memory_t;
+/*
+ * DMA a 256-byte-aligned SYSRAM span into Falcon IMEM/DMEM. Caller must have
+ * reset the engine and prepared a coherent, physically contiguous DMA buffer.
+ * Timeout/poll interval are milliseconds; delay callback must yield/sleep.
+ */
+nvx_gsp_falcon_status_t nvx_ga10x_falcon_dma_upload(
+    const nvx_mmio_region_t *bar0, uint32_t falcon_base,
+    uint64_t source_phys, uint32_t source_offset,
+    uint32_t destination_offset, uint32_t length,
+    nvx_ga10x_falcon_memory_t target, uint8_t set_dm_tag,
+    uint32_t timeout_ms, uint32_t poll_interval_ms,
+    nvx_gsp_delay_ms_fn delay_ms, void *context);
 
 #endif

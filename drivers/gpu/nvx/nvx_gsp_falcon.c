@@ -236,11 +236,20 @@ nvx_gsp_falcon_status_t nvx_ga10x_falcon_start(
         return NVX_GSP_FALCON_PRIVILEGED_WINDOW_LOCKED;
     if ((cpuctl & NVX_GSP_CPUCTL_HALTED) == 0U)
         return NVX_GSP_FALCON_NOT_HALTED;
+    if ((cpuctl & NVX_GSP_CPUCTL_ALIAS_EN) != 0U &&
+        bar0->length < (size_t)(NVX_GA10X_FALCON_CPUCTL_ALIAS(falcon_base) + 4U))
+        return NVX_GSP_FALCON_BAR_TOO_SMALL;
     if (nvx_mmio_write32(bar0, falcon_base + 0x104U,
-                         boot_vector) != NVX_MMIO_OK ||
-        nvx_mmio_write32(bar0, falcon_base + 0x100U,
-                         NVX_GSP_CPUCTL_START) != NVX_MMIO_OK)
+                         boot_vector) != NVX_MMIO_OK)
         return NVX_GSP_FALCON_MMIO_ERROR;
+    if ((cpuctl & NVX_GSP_CPUCTL_ALIAS_EN) != 0U) {
+        if (nvx_mmio_write32(bar0, NVX_GA10X_FALCON_CPUCTL_ALIAS(falcon_base),
+                             NVX_GSP_CPUCTL_START) != NVX_MMIO_OK)
+            return NVX_GSP_FALCON_MMIO_ERROR;
+    } else if (nvx_mmio_write32(bar0, falcon_base + 0x100U,
+                                NVX_GSP_CPUCTL_START) != NVX_MMIO_OK) {
+        return NVX_GSP_FALCON_MMIO_ERROR;
+    }
     return NVX_GSP_FALCON_OK;
 }
 

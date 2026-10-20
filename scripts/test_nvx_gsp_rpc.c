@@ -39,7 +39,7 @@ int main(void) {
  nvx_gsp_ring_t tx={0},rx={0}; nvx_gsp_rpc_manager_t m={0};
  nvx_gsp_rpc_handle_t h={0},handles[NVX_GSP_RPC_MAX_PENDING];
  nvx_gsp_rpc_result_t result; nvx_gsp_rpc_view_t unmatched;
- char response[128]={0}; uint32_t seq; const char req[]="request"; const char reply[]="reply-data";
+ char response[128]={0}; const char req[]="request"; const char reply[]="reply-data";
  assert(nvx_gsp_ring_init(&tx,tx_mem,PAGES,&tx_r,&tx_w,notify,&notified)==NVX_GSP_RING_OK);
  assert(nvx_gsp_ring_init(&rx,rx_mem,PAGES,&rx_r,&rx_w,0,0)==NVX_GSP_RING_OK);
  assert(nvx_gsp_rpc_init(&m,&tx,&rx)==NVX_GSP_RPC_OK);

@@ -37,5 +37,8 @@ typedef struct nvx_gsp_boot_memory {
 /* Zero-initialize before first use; on any error all allocations are released. */
 nvx_gsp_boot_memory_status_t nvx_gsp_boot_memory_acquire(
     const nvx_gsp_bundle_t *bundle, nvx_gsp_boot_memory_t *out_memory);
-void nvx_gsp_boot_memory_release(nvx_gsp_boot_memory_t *memory);\n/* Bind real allocated SYSRAM addresses into a caller-planned framebuffer/WPR layout. */\nnvx_gsp_boot_memory_status_t nvx_gsp_boot_memory_bind_wpr(\n    const nvx_gsp_boot_memory_t *memory, nvx_gsp_wpr_layout_t *layout);
+void nvx_gsp_boot_memory_release(nvx_gsp_boot_memory_t *memory);
+/* Bind real allocated SYSRAM addresses into a caller-planned framebuffer/WPR layout. */
+nvx_gsp_boot_memory_status_t nvx_gsp_boot_memory_bind_wpr(
+    const nvx_gsp_boot_memory_t *memory, nvx_gsp_wpr_layout_t *layout);
 #endif

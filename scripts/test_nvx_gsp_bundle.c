@@ -27,7 +27,7 @@ int main(void){
  for(unsigned i=0;i<5U;i++)assert(b.components[i].acquired&&b.components[i].kind==(nvx_gsp_component_kind_t)i);
  assert(nvx_gsp_bundle_acquire(&p,NVX_FAMILY_AMPERE,"ga106","535.113.01",&b)==NVX_GSP_BUNDLE_ALREADY_ACQUIRED);
  nvx_gsp_bundle_release(&b);assert(!b.acquired&&releases==5);
- reset();fail_request=3;assert(nvx_gsp_bundle_acquire(&p,NVX_FAMILY_AMPERE,"ga106","535.113.01",&b)==NVX_GSP_BUNDLE_COMPONENT_NOT_FOUND);assert(requests==4&&verifies==3&&releases==4&&!b.acquired);
+ reset();fail_request=1;assert(nvx_gsp_bundle_acquire(&p,NVX_FAMILY_AMPERE,"ga106","535.113.01",&b)==NVX_GSP_BUNDLE_COMPONENT_NOT_FOUND);assert(requests==2&&verifies==1&&releases==2&&!b.acquired);
  reset();fail_verify=2;assert(nvx_gsp_bundle_acquire(&p,NVX_FAMILY_AMPERE,"ga106","535.113.01",&b)==NVX_GSP_BUNDLE_VERIFICATION_FAILED);assert(requests==3&&verifies==3&&releases==3&&!b.acquired);
  reset();invalid_blob=4;assert(nvx_gsp_bundle_acquire(&p,NVX_FAMILY_AMPERE,"ga106","535.113.01",&b)==NVX_GSP_BUNDLE_INVALID_COMPONENT);assert(releases==5&&!b.acquired);
  reset();oversized=1;assert(nvx_gsp_bundle_acquire(&p,NVX_FAMILY_AMPERE,"ga106","535.113.01",&b)==NVX_GSP_BUNDLE_COMPONENT_TOO_LARGE);assert(releases==2&&!b.acquired);

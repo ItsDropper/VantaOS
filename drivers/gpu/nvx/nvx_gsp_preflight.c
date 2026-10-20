@@ -46,7 +46,7 @@ nvx_gsp_preflight_status_t nvx_gsp_preflight_validate(
        version.data[version.size-1U]!=0U)
         return NVX_GSP_PREFLIGHT_CONTAINER_INVALID;
     while(expected_len<sizeof(b->version)&&b->version[expected_len])++expected_len;
-    if(expected_len==sizeof(b->version)||version.size!=expected_len+1U||
+    if(expected_len==0U||expected_len==sizeof(b->version)||version.size!=expected_len+1U||
        memcmp(version.data,b->version,expected_len)!=0)
         return NVX_GSP_PREFLIGHT_VERSION_MISMATCH;
     out->runtime=info;

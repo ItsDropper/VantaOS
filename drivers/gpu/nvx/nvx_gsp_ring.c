@@ -176,7 +176,7 @@ nvx_gsp_ring_status_t nvx_gsp_ring_receive(nvx_gsp_ring_t *r,void *scratch,
         spinlock_unlock(&r->lock); return NVX_GSP_RING_BAD_MESSAGE;
     }
     pages=(message_len+NVX_GSP_PAGE_SIZE-1U)/NVX_GSP_PAGE_SIZE;
-    if(!pages||pages>NVX_GSP_MAX_MESSAGE_PAGES||pages>=r->capacity_pages||
+    if(!pages||pages>NVX_GSP_MAX_MESSAGE_PAGES||pages>r->capacity_pages||
        available<pages) {
         spinlock_unlock(&r->lock); return NVX_GSP_RING_BAD_MESSAGE;
     }

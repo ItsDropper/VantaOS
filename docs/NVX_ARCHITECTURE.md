@@ -126,8 +126,8 @@ builds to prevent same-CPU interrupt re-entry. Tests cover pending/completed
 requests, stale handles, unmatched messages, function mismatch, undersized
 response buffers, slot exhaustion, and device loss.
 
-The manager is not yet called by NVX initialization, and no real GSP RPC function
-schemas or boot-time queue memory setup exist. It provides the transaction
+The manager is not yet called by NVX initialization, and the large-request path now uses the continuation-ring sender, but no real
+GSP RPC function schemas or boot-time queue memory setup exist. It provides the transaction
 lifecycle needed by those later steps, not working firmware control by itself.
 
 ### GSP RPC ring transport

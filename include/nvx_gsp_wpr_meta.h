@@ -54,6 +54,21 @@ typedef struct nvx_gsp_wpr_layout {
     uint16_t paging_config;
 } nvx_gsp_wpr_layout_t;
 /* Exact V1 field order; do not pack or reorder this wire structure. */
+/*
+ * Platform inputs are explicit: framebuffer size, VBIOS workspace, MMU lock,
+ * WPR margin, FRTS size and firmware heap policy are hardware/firmware facts
+ * supplied by the probed device, never guessed by NVX.
+ */
+typedef struct nvx_gsp_wpr_plan_config {
+    uint64_t framebuffer_size;
+    uint64_t vga_workspace_offset;
+    uint64_t mmu_lock_low;
+    uint64_t wpr_end_margin;
+    uint64_t frts_size;
+    uint64_t nonwpr_heap_size;
+    uint64_t requested_wpr_heap_size;
+    uint8_t mmu_lock_valid;
+} nvx_gsp_wpr_plan_config_t;
 typedef struct nvx_gsp_wpr_meta_v1 {
     uint64_t magic,revision;
     uint64_t sysmem_addr_of_radix3_elf,size_of_radix3_elf;
@@ -80,6 +95,10 @@ typedef struct nvx_gsp_wpr_meta_v1 {
     uint32_t reserved3;
     uint64_t verified;
 } nvx_gsp_wpr_meta_v1_t;
+nvx_gsp_wpr_status_t nvx_gsp_wpr_layout_plan(
+    const nvx_gsp_wpr_layout_t *resources,
+    const nvx_gsp_wpr_plan_config_t *config,
+    nvx_gsp_wpr_layout_t *out_layout);
 nvx_gsp_wpr_status_t nvx_gsp_wpr_meta_build(
     const nvx_gsp_wpr_layout_t *,nvx_gsp_wpr_meta_v1_t *out);
 nvx_gsp_wpr_status_t nvx_gsp_wpr_meta_validate(const nvx_gsp_wpr_meta_v1_t *);

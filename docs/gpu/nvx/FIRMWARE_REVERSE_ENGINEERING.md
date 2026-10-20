@@ -7,6 +7,12 @@ This document is a durable engineering record of the format/sequence reconstruct
 
 ## 1. Evidence labels and method
 
+### Acquisition-time verification is not enough
+
+Bundle acquisition invokes the platform's firmware verification callback, but the bundle retains pointers to backing bytes. Preflight now calls that same trusted provider again for all five canonical component paths before parsing or staging. This makes the verified status a property of the bytes at the point of use, not merely of an earlier acquisition. A failed recheck aborts before parsing and leaves the report cleared. This is still only as strong as the platform provider's cryptographic policy; the current synthetic test provider is deliberately not a production verifier.
+
+
+
 Use these labels in code reviews and future documentation:
 
 - **Published contract** — a field, register, branch, or sequence is explicitly present in a public NVIDIA source file or public register definition. Record the exact source path.
@@ -93,7 +99,7 @@ The public TU102 FWSEC code defines an interface header as four one-byte fields:
 
 The new read-only NVX helper `nvx_gsp_fwsec_find_command_window()` resolves the descriptor's `InterfaceOffset` against the DMEM buffer and returns a checked command-input window. It validates the header version, minimum header/entry sizes, full declared entry array, mapper uniqueness, mapper version/size, and the complete command-input buffer range. It refuses ambiguous duplicate mapper entries rather than silently choosing one. It also rejects a command-input range that overlaps the mapper structure or the interface table, because later command patching must not destroy the metadata used to locate that command buffer. All returned offsets are DMEM-relative.
 
-A subtle boundary matters here: the mapper's `cmd_in_buffer_offset` is an offset from the start of DMEM, not an offset relative to the mapper structure or the interface table. Bounds checks must validate `cmd_in_buffer_offset + command_size` against the full DMEM extent and ensure `command_size <= cmd_in_buffer_size`. The planner does not write `init_cmd`, patch the interface, or transfer DMA ownership; those operations belong in a later transaction layer after the parser's result is validated.
+A subtle boundary matters here: the mapper's `cmd_in_buffer_offset` is an offset from the start of DMEM, not an offset relative to the mapper structure or the interface table. Bounds checks must validate `cmd_in_buffer_offset + command_size` against the full DMEM extent and ensure `command_size <= cmd_in_buffer_size`. The follow-on `nvx_gsp_fwsec_stage_command()` now performs the next host-side step: it builds the versioned SB/FRTS record, revalidates the interface window, copies the input record, and writes the mapper's `init_cmd` field last. Its operation is failure-atomic with respect to malformed inputs because every check completes before DMEM is changed. It still does not transfer DMA ownership, start SEC2, wait for firmware, or validate hardware result registers; those remain separate transaction steps.
 
 **Scope limitation:** NVX currently supports interface header version 1 and DMEM mapper version 3 only. The parser treats the mapper signature as opaque and does not infer a command's success semantics from the interface layout. SB/FRTS command construction, firmware result decoding, and physical SEC2 execution remain separate tasks.
 
@@ -116,6 +122,10 @@ NVX has two related but distinct parsers/paths:
 - The selected signature is patched into the booter payload at the descriptor's patch location. This is signature **selection and placement**, not host-side cryptographic verification.
 
 The formulas look different because the data formats encode supported versions differently. Do not “normalize” them into one selector unless the format is an explicit parameter and each mapping has separate test vectors.
+
+## Engine identity for GA10x Booter images
+
+Booter Load and Booter Unload execute on SEC2. Their `ENID` metadata must select the SEC2 engine mask (`0x0001`), not the GSP engine mask (`0x0400`). NVX's SEC2 execution planner deliberately rejects a mismatched engine. The synthetic booter parser/preflight fixtures now use `ENID=1`; the fuse-version register is selected from the same engine/ucode pair carried by each validated image descriptor.
 
 ## 5. SEC2 Booter Load: transaction reconstructed so far
 
@@ -209,6 +219,12 @@ NVX now builds these records as explicit little-endian byte sequences in `nvx_gs
 
 **Boundary:** the builder prepares command bytes only. It does not decode scratch-register error fields, prove the target firmware accepts this exact profile, execute SB/FRTS, or authenticate FWSEC. The command-status contract and firmware-generation binding still need to be researched before adding a transaction executor.
 
+
+## 3.6 Register-backed FWSEC result snapshots
+
+The new `nvx_gsp_fwsec_read_result_snapshot()` reads the published GA102/TU102 BAR0 locations for VBIOS scratch indices `0x0E` and `0x15`, WPR2 LO/HI, the GFW read-protection-level-0 register, and GFW boot progress. It extracts the FRTS error from scratch `0x0E[31:16]`, the SB error from scratch `0x15[15:0]`, the WPR2 address fields using the documented bits 31:4, PLM level-0 enable from bit 0, and completion from progress value `0xFF`. The resulting snapshot feeds the existing fail-closed result validator.
+
+This is real MMIO read logic with host tests against synthetic register values. It does not execute the command, write protected registers, or prove a real GPU's result state. A caller must still ensure the register aperture is mapped and accessible; an MMIO read failure clears the output and aborts validation.
 
 ## 3.5 SB/FRTS result validation reconstructed from the public execution path
 

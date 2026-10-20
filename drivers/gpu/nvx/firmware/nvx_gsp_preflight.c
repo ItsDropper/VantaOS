@@ -6,6 +6,62 @@
 #include "nvx_gsp_preflight.h"
 #include "nvx_gsp_ga10x.h"
 #include <string.h>
+
+static const char *const component_names[NVX_GSP_COMPONENT_COUNT] = {
+    "gsp", "ucodes", "booter_load", "booter_unload", "bootloader"
+};
+
+static int valid_version_token(const char *s)
+{
+    size_t n = 0U;
+    int previous_dot = 1;
+    if (!s || !s[0])
+        return 0;
+    while (n < NVX_GSP_VERSION_MAX + 1U && s[n] != '\0') {
+        char c = s[n];
+        if (c >= '0' && c <= '9')
+            previous_dot = 0;
+        else if (c == '.' && !previous_dot)
+            previous_dot = 1;
+        else
+            return 0;
+        ++n;
+    }
+    return n > 0U && n <= NVX_GSP_VERSION_MAX && !previous_dot && s[n] == '\0';
+}
+
+static int append_path_text(char *dst, size_t capacity, size_t *length,
+                            const char *src)
+{
+    size_t n = 0U;
+    while (src[n] != '\0')
+        ++n;
+    if (*length >= capacity || n >= capacity - *length)
+        return 0;
+    memcpy(dst + *length, src, n);
+    *length += n;
+    dst[*length] = '\0';
+    return 1;
+}
+
+static int verify_component_again(const nvx_gsp_bundle_t *b, size_t index)
+{
+    char path[128];
+    size_t length = 0U;
+    path[0] = '\0';
+    if (index >= NVX_GSP_COMPONENT_COUNT || !valid_version_token(b->version))
+        return 0;
+    if (!append_path_text(path, sizeof(path), &length, "nvidia/") ||
+        !append_path_text(path, sizeof(path), &length, b->chip) ||
+        !append_path_text(path, sizeof(path), &length, "/gsp/") ||
+        !append_path_text(path, sizeof(path), &length, component_names[index]) ||
+        !append_path_text(path, sizeof(path), &length, "-") ||
+        !append_path_text(path, sizeof(path), &length, b->version) ||
+        !append_path_text(path, sizeof(path), &length, ".bin"))
+        return 0;
+    return b->provider.verify(path, &b->components[index].blob,
+                              b->provider.context) != 0;
+}
 static int string_equals_literal(const char *a, const char *b)
 {
     size_t i = 0U;
@@ -63,6 +119,18 @@ nvx_gsp_preflight_status_t nvx_gsp_preflight_validate(
         if(!b->components[i].acquired||b->components[i].kind!=(nvx_gsp_component_kind_t)i||
            !b->components[i].blob.data||!b->components[i].blob.size)
             return NVX_GSP_PREFLIGHT_COMPONENT_INVALID;
+
+    /*
+     * Acquisition verifies each blob, but the bundle exposes its backing bytes
+     * to later parsing/staging. Revalidate at this trust boundary so a changed
+     * or substituted blob cannot inherit the acquisition-time verified claim.
+     */
+    if (!valid_version_token(b->version))
+        return NVX_GSP_PREFLIGHT_VERSION_MISMATCH;
+    for (size_t i = 0U; i < NVX_GSP_COMPONENT_COUNT; ++i)
+        if (!verify_component_again(b, i))
+            return NVX_GSP_PREFLIGHT_VERIFICATION_FAILED;
+
     es=nvx_gsp_elf_parse(runtime,NVX_GSP_GA10X_SIGNATURE_SECTION,&info);
     if(es!=NVX_GSP_ELF_OK)return NVX_GSP_PREFLIGHT_RUNTIME_INVALID;
     is=nvx_gsp_image_parse(&b->components[2],&booter_load);
@@ -137,10 +205,20 @@ nvx_gsp_preflight_status_t nvx_gsp_preflight_stage_booters(
     if (load_capacity < report.booter_load.data_size ||
         unload_capacity < report.booter_unload.data_size)
         return NVX_GSP_PREFLIGHT_STAGING_TOO_SMALL;
-    if ((report.booter_load.signature_count > 1U &&
-         load_fuse_version >= report.booter_load.signature_count) ||
-        (report.booter_unload.signature_count > 1U &&
-         unload_fuse_version >= report.booter_unload.signature_count))
+    /*
+     * FUSE in the booter descriptor is the firmware's signature baseline;
+     * the BAR0 value is the hardware fuse version. Zero is a special case
+     * meaning "use the final signature", as in the public GA102+ loader.
+     * Validate the relative index before either staging buffer is modified.
+     */
+    if ((load_fuse_version != 0U &&
+         (load_fuse_version > report.booter_load.fuse_version ||
+          report.booter_load.fuse_version - load_fuse_version >=
+              report.booter_load.signature_count)) ||
+        (unload_fuse_version != 0U &&
+         (unload_fuse_version > report.booter_unload.fuse_version ||
+          report.booter_unload.fuse_version - unload_fuse_version >=
+              report.booter_unload.signature_count)))
         return NVX_GSP_PREFLIGHT_FUSE_VERSION_UNSUPPORTED;
 
     image_status = nvx_gsp_image_prepare(&b->components[2], load_fuse_version,

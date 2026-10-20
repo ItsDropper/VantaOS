@@ -21,14 +21,39 @@ static void clear_memory(nvx_gsp_boot_memory_t *m)
     memset(m, 0, sizeof(*m));
 }
 
+/*
+ * sync_init stores a pointer to its nvx_dma_buffer_t. Acquisition builds a
+ * temporary struct and copies it to the caller, so rebind these internal
+ * pointers after the copy; otherwise they point into the expired stack frame.
+ */
+static void rebind_sync_buffer(nvx_dma_sync_t *sync, nvx_dma_buffer_t *buffer)
+{
+    if (sync->initialized)
+        sync->buffer = buffer;
+}
+
 void nvx_gsp_boot_memory_release(nvx_gsp_boot_memory_t *m)
 {
     if (!m)
         return;
-    if ((m->booter_load_sync.initialized && m->booter_load_sync.owner != NVX_DMA_OWNER_CPU) ||
+    /*
+     * Every DMA artifact can be referenced by a later hardware phase. Check
+     * ownership for all six before destroying any sync record or allocation;
+     * freeing even the ELF/signature while a Falcon may read it is unsafe.
+     */
+    if ((m->radix3_elf_sync.initialized && m->radix3_elf_sync.owner != NVX_DMA_OWNER_CPU) ||
+        (m->bootloader_payload_sync.initialized && m->bootloader_payload_sync.owner != NVX_DMA_OWNER_CPU) ||
+        (m->signature_sync.initialized && m->signature_sync.owner != NVX_DMA_OWNER_CPU) ||
+        (m->booter_load_sync.initialized && m->booter_load_sync.owner != NVX_DMA_OWNER_CPU) ||
         (m->booter_unload_sync.initialized && m->booter_unload_sync.owner != NVX_DMA_OWNER_CPU) ||
         (m->wpr_metadata_sync.initialized && m->wpr_metadata_sync.owner != NVX_DMA_OWNER_CPU))
         return; /* Never free DMA memory while the device may still own it. */
+    if (m->radix3_elf_sync.initialized &&
+        nvx_dma_sync_destroy(&m->radix3_elf_sync) != NVX_DMA_SYNC_OK) return;
+    if (m->bootloader_payload_sync.initialized &&
+        nvx_dma_sync_destroy(&m->bootloader_payload_sync) != NVX_DMA_SYNC_OK) return;
+    if (m->signature_sync.initialized &&
+        nvx_dma_sync_destroy(&m->signature_sync) != NVX_DMA_SYNC_OK) return;
     if (m->booter_load_sync.initialized &&
         nvx_dma_sync_destroy(&m->booter_load_sync) != NVX_DMA_SYNC_OK) return;
     if (m->booter_unload_sync.initialized &&
@@ -129,7 +154,10 @@ nvx_gsp_boot_memory_status_t nvx_gsp_boot_memory_acquire(
         return NVX_GSP_BOOT_MEMORY_ALLOCATION_FAILED;
     }
 
-    if (nvx_dma_sync_init(&memory.booter_load_sync, &memory.booter_load) != NVX_DMA_SYNC_OK ||
+    if (nvx_dma_sync_init(&memory.radix3_elf_sync, &memory.radix3_elf) != NVX_DMA_SYNC_OK ||
+        nvx_dma_sync_init(&memory.bootloader_payload_sync, &memory.bootloader_payload) != NVX_DMA_SYNC_OK ||
+        nvx_dma_sync_init(&memory.signature_sync, &memory.signature) != NVX_DMA_SYNC_OK ||
+        nvx_dma_sync_init(&memory.booter_load_sync, &memory.booter_load) != NVX_DMA_SYNC_OK ||
         nvx_dma_sync_init(&memory.booter_unload_sync, &memory.booter_unload) != NVX_DMA_SYNC_OK ||
         nvx_dma_sync_init(&memory.wpr_metadata_sync, &memory.wpr_metadata) != NVX_DMA_SYNC_OK) {
         nvx_gsp_boot_memory_release(&memory);
@@ -156,6 +184,14 @@ nvx_gsp_boot_memory_status_t nvx_gsp_boot_memory_acquire(
     memory.manifest_size = bootloader_info.manifest_size;
     memory.acquired = 1U;
     *out = memory;
+
+    /* The copied sync records must point at the caller-owned buffer fields. */
+    rebind_sync_buffer(&out->radix3_elf_sync, &out->radix3_elf);
+    rebind_sync_buffer(&out->bootloader_payload_sync, &out->bootloader_payload);
+    rebind_sync_buffer(&out->signature_sync, &out->signature);
+    rebind_sync_buffer(&out->booter_load_sync, &out->booter_load);
+    rebind_sync_buffer(&out->booter_unload_sync, &out->booter_unload);
+    rebind_sync_buffer(&out->wpr_metadata_sync, &out->wpr_metadata);
     return NVX_GSP_BOOT_MEMORY_OK;
 }
 

@@ -23,7 +23,8 @@ typedef enum nvx_gsp_preflight_status {
     NVX_GSP_PREFLIGHT_FUSE_VERSION_UNSUPPORTED,
     NVX_GSP_PREFLIGHT_STAGING_ALIAS,
     NVX_GSP_PREFLIGHT_FUSE_READ_FAILED,
-    NVX_GSP_PREFLIGHT_RUNTIME_LOAD_FAILED
+    NVX_GSP_PREFLIGHT_RUNTIME_LOAD_FAILED,
+    NVX_GSP_PREFLIGHT_VERIFICATION_FAILED
 } nvx_gsp_preflight_status_t;
 typedef struct nvx_gsp_preflight_report {
     nvx_gsp_elf_info_t runtime;

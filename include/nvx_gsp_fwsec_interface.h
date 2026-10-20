@@ -24,6 +24,7 @@ typedef enum nvx_gsp_fwsec_interface_status {
 typedef struct nvx_gsp_fwsec_command_window {
     uint32_t mapper_offset;
     uint32_t mapper_size;
+    uint32_t init_cmd_offset;
     uint32_t command_input_offset;
     uint32_t command_input_capacity;
     uint32_t command_id;

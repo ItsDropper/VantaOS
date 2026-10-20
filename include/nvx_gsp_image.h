@@ -22,7 +22,8 @@ typedef enum nvx_gsp_image_status {
 typedef struct nvx_gsp_image_info {
     uint32_t binary_magic, binary_version, binary_size;
     uint32_t data_offset, data_size;
-    uint32_t fuse_version, engine_id, ucode_id;
+    uint32_t fuse_version; /* Descriptor baseline; not the live hardware fuse value. */
+    uint32_t engine_id, ucode_id;
     uint32_t signature_count, signature_size, signature_offset;
     uint32_t patch_location, patch_signature;
     uint32_t load_header_offset, load_header_size;
@@ -32,8 +33,13 @@ typedef struct nvx_gsp_image_info {
 /* Read-only structural validation. This neither authenticates nor boots firmware. */
 nvx_gsp_image_status_t nvx_gsp_image_parse(
     const nvx_gsp_component_t *component, nvx_gsp_image_info_t *out_info);
-/* Copy the verified payload and patch the fuse-selected signature into private staging. */
+/*
+ * Copy the structurally validated payload and patch its signature into private
+ * staging. fuse_version is the engine-specific hardware fuse value: zero
+ * selects the final signature; nonzero values index from the firmware FUSE
+ * baseline. The provider must separately establish firmware authenticity.
+ */
 nvx_gsp_image_status_t nvx_gsp_image_prepare(
-    const nvx_gsp_component_t *component, uint32_t fuse_version,
+    const nvx_gsp_component_t *component, uint32_t hardware_fuse_version,
     uint8_t *staging, size_t staging_size);
 #endif

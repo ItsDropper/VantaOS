@@ -53,6 +53,24 @@ At a high level, NVX's helper follows this lifecycle:
 
 The command path is not yet a full DMA subsystem. It does not establish IOMMU mappings, allocate GPU-visible pages, validate every physical-page mapping, or prove cache-coherency semantics for all VantaOS platforms. Those are responsibilities of the future memory backend. Do not infer device-side completion from a successful MMIO write alone; the helper's final poll is a separate completion condition.
 
+## Signature selection: firmware baseline versus hardware fuse
+
+The booter descriptor's `FUSE` field is not interchangeable with the live
+hardware fuse version. The public Linux Nova GA102+ loader reads both: hardware
+fuse version zero selects the final packed signature; otherwise it selects the
+signature slot at `firmware_fuse_baseline - hardware_fuse_version`. The result
+must be in the packed signature array. NVX now applies this relative selection
+and rejects a hardware version newer than the firmware baseline or a computed
+slot outside the available signatures before touching staging memory. This
+replaces the earlier assumption that the hardware fuse value could always be
+used directly as `signature_count - 1 - fuse_version`.
+
+The synthetic preflight fixture now uses distinct load/unload firmware
+baselines and verifies that changing the descriptor baseline changes the
+selected signature. This is parser/selection evidence only: cryptographic
+verification and real GA106 fuse behavior still require the actual firmware
+provider and hardware.
+
 ## 4. Ownership is a safety boundary, not a bookkeeping detail
 
 NVX models CPU/device ownership with `nvx_dma_sync_t`. Before SEC2 consumes the staged booter or WPR metadata, the executor transfers ownership to the device. The CPU must not mutate or free that memory while device access may be outstanding. After the transfer/boot helper returns, NVX synchronizes ownership back to the CPU before reading results or releasing the allocation.

@@ -14,7 +14,9 @@ typedef enum nvx_gsp_image_status {
     NVX_GSP_IMAGE_TRUNCATED, NVX_GSP_IMAGE_BAD_MAGIC, NVX_GSP_IMAGE_RANGE_INVALID,
     NVX_GSP_IMAGE_HEADER_INVALID, NVX_GSP_IMAGE_SIGNATURE_INVALID,
     NVX_GSP_IMAGE_METADATA_INVALID, NVX_GSP_IMAGE_APP_INVALID,
-    NVX_GSP_IMAGE_UNSUPPORTED_LAYOUT
+    NVX_GSP_IMAGE_UNSUPPORTED_LAYOUT,
+    NVX_GSP_IMAGE_FUSE_VERSION_UNSUPPORTED,
+    NVX_GSP_IMAGE_STAGING_TOO_SMALL
 } nvx_gsp_image_status_t;
 typedef struct nvx_gsp_image_info {
     uint32_t binary_magic, binary_version, binary_size;
@@ -29,4 +31,8 @@ typedef struct nvx_gsp_image_info {
 /* Read-only structural validation. This neither authenticates nor boots firmware. */
 nvx_gsp_image_status_t nvx_gsp_image_parse(
     const nvx_gsp_component_t *component, nvx_gsp_image_info_t *out_info);
+/* Copy the verified payload and patch the fuse-selected signature into private staging. */
+nvx_gsp_image_status_t nvx_gsp_image_prepare(
+    const nvx_gsp_component_t *component, uint32_t fuse_version,
+    uint8_t *staging, size_t staging_size);
 #endif

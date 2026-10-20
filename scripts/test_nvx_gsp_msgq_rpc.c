@@ -12,6 +12,7 @@
 static uint8_t tx_store[BYTES] __attribute__((aligned(NVX_GSP_MSGQ_HEADER_PAGE_SIZE)));
 static uint8_t rx_store[BYTES] __attribute__((aligned(NVX_GSP_MSGQ_HEADER_PAGE_SIZE)));
 static uint8_t scratch[16U*NVX_GSP_PAGE_SIZE] __attribute__((aligned(NVX_GSP_PAGE_SIZE)));
+static uint8_t large_payload[5000U];
 typedef struct fake {uint32_t regs[8];} fake_t;
 static int rd(void *p,uint32_t r,uint32_t *o){fake_t*f=p;if(r/4U>=8U)return 0;*o=f->regs[r/4U];return 1;}
 static int wr(void *p,uint32_t r,uint32_t v){fake_t*f=p;if(r/4U>=8U)return 0;f->regs[r/4U]=v;return 1;}
@@ -23,6 +24,7 @@ int main(void){
  nvx_gsp_msgq_queue_t tx={0},rx={0};nvx_gsp_msgq_rpc_transport_t transport={0};
  nvx_gsp_msgq_layout_t fake_gsp={0};uint32_t seq=0U;nvx_gsp_rpc_view_t view;
  const char payload[]="NVIDIA-GSP-RPC-payload";
+ memset(large_payload,0x6BU,sizeof(large_payload));
  assert(nvx_gsp_msgq_queue_init_tx(&tx,tx_store,sizeof(tx_store),4096U,&io,0U,4U)==NVX_GSP_MSGQ_QUEUE_OK);
  assert(nvx_gsp_msgq_prepare_tx(rx_store,sizeof(rx_store),4096U,&fake_gsp)==NVX_GSP_MSGQ_OK);
  assert(nvx_gsp_msgq_queue_init_rx(&rx,rx_store,sizeof(rx_store),4096U,&io,8U,12U)==NVX_GSP_MSGQ_QUEUE_OK);
@@ -49,7 +51,7 @@ int main(void){
  assert(view.function==0x1235U&&view.sequence==77U&&view.payload_size==sizeof(payload));
  assert(memcmp(view.payload,payload,sizeof(payload))==0&&f.regs[3]==1U);
  assert(nvx_gsp_msgq_rpc_receive(&transport,scratch,sizeof(scratch),&view)==NVX_GSP_MSGQ_RPC_QUEUE_EMPTY);
- assert(nvx_gsp_msgq_rpc_send(&transport,0x999U,payload,5000U,scratch,sizeof(scratch),&seq)==NVX_GSP_MSGQ_RPC_OK);
+ assert(nvx_gsp_msgq_rpc_send(&transport,0x999U,large_payload,sizeof(large_payload),scratch,sizeof(scratch),&seq)==NVX_GSP_MSGQ_RPC_OK);
  assert(seq==3U&&f.regs[0]==4U);
  assert(nvx_gsp_msgq_rpc_send(&transport,0x999U,payload,
      NVX_GSP_MSGQ_RPC_MAX_ELEMENTS*NVX_GSP_PAGE_SIZE,scratch,sizeof(scratch),&seq)==NVX_GSP_MSGQ_RPC_BUFFER_TOO_SMALL);

@@ -75,7 +75,12 @@ The traced Booter Load entry point exposes:
 - `recovery_attempted` / `recovery_succeeded`: reset/reclaim outcome for paths that invoke recovery;
 - `sec2_quiescence_confirmed`: whether the reset/boot helper returned its success condition.
 
-A new synthetic fault-injection case holds the SEC2 DMA command busy until timeout. It expects the transaction to fail in `UPLOAD_IMEM`, preserves `TRANSFER_BOOTER_TO_DEVICE` as the last completed phase, records recovery, and verifies that the booter buffer returns to CPU ownership after successful reset/reclaim.
+Synthetic fault injection now covers three distinct outcomes:
+- an IMEM DMA timeout, where recovery succeeds and the last completed phase remains `TRANSFER_BOOTER_TO_DEVICE`;
+- a DMEM DMA timeout after the IMEM chunks complete, where the trace identifies `UPLOAD_DMEM`, keeps `UPLOAD_IMEM` as the last completed phase, and records successful recovery;
+- a DMA timeout followed by a reset that remains in the memory-scrubbing state, where recovery is reported as failed, quiescence is not claimed, and the booter buffer remains device-owned.
+
+The third case only restores the fake BAR and ownership state after assertions so the test process can clean up. That test-only cleanup must not be interpreted as the driver successfully recovering from a stalled reset.
 
 The test does **not** simulate a real SEC2, BROM, firmware signature check, or physical DMA engine. Its result demonstrates the error-handling code path under the fake BAR model only. The trace is software evidence, not cryptographic or hardware attestation.
 
@@ -95,8 +100,8 @@ The test does **not** simulate a real SEC2, BROM, firmware signature check, or p
 | Experiment | Pass condition | What it still would not prove |
 | --- | --- | --- |
 | Fault-injected IMEM DMA timeout | Trace identifies `UPLOAD_IMEM`; recovery outcome matches fake reset; ownership returns to CPU only after recovery | Real DMA behavior |
-| Fault-injected DMEM DMA timeout | Same guarantees for `UPLOAD_DMEM`; recovery fields are not omitted | Firmware acceptance |
-| Fault-injected SEC2 reset timeout | Recovery reports failure and does not claim quiescence or safe reclamation | Physical reset behavior until run on hardware |
+| Fault-injected DMEM DMA timeout | Trace identifies `UPLOAD_DMEM`; recovery result and ownership are asserted | Firmware acceptance |
+| Fault-injected SEC2 reset timeout | Recovery reports failure, does not claim quiescence, and leaves the buffer device-owned | Physical reset behavior until run on hardware |
 | Real read-only GA106 snapshot | BAR mapping, PCI identity, Falcon config/control/mailboxes captured without writes | Successful firmware execution |
 | Real SEC2 boot attempt | Hardware-derived trace plus raw registers, firmware identity, and documented success postconditions | Full GSP-RM or graphics support |
 | First GSP-RM RPC | Firmware responds through the matching ABI with validated result | Full GPU acceleration |

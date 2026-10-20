@@ -106,12 +106,15 @@ nvx_gsp_rpc_status_t nvx_gsp_rpc_pump(nvx_gsp_rpc_manager_t *m,void *scratch,
     slot->response_size=view.payload_size;
     if(view.function!=slot->response_function) {
         slot->state=NVX_GSP_RPC_FUNCTION_MISMATCH;
+    } else if(view.result==UINT32_MAX) {
+        /* A response still marked PENDING is not a completed transaction. */
+        slot->state=NVX_GSP_RPC_FAILED;
     } else if(view.payload_size>slot->response_capacity||
               (view.payload_size&&!slot->response_buffer)) {
         slot->state=NVX_GSP_RPC_RESPONSE_TOO_LARGE;
     } else {
         if(view.payload_size) memcpy(slot->response_buffer,view.payload,view.payload_size);
-        slot->state=NVX_GSP_RPC_COMPLETE;
+        slot->state=view.result==0U?NVX_GSP_RPC_COMPLETE:NVX_GSP_RPC_FAILED;
     }
     nvx_gsp_rpc_status_t result=slot->state;
     rpc_unlock(m,flags); return result;

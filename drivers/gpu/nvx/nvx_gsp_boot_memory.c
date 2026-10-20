@@ -7,7 +7,15 @@
 #include "nvx_gsp_elf.h"
 #include <string.h>
 
-static int ranges_overlap(const void *a, size_t an, const void *b, size_t bn)\n{\n    uintptr_t x = (uintptr_t)a, y = (uintptr_t)b;\n    if (!an || !bn) return 0;\n    if (x > UINTPTR_MAX - an || y > UINTPTR_MAX - bn) return 1;\n    return x < y + bn && y < x + an;\n}\n\nstatic void clear_memory(nvx_gsp_boot_memory_t *m)
+static int ranges_overlap(const void *a, size_t an, const void *b, size_t bn)
+{
+    uintptr_t x = (uintptr_t)a, y = (uintptr_t)b;
+    if (!an || !bn) return 0;
+    if (x > UINTPTR_MAX - an || y > UINTPTR_MAX - bn) return 1;
+    return x < y + bn && y < x + an;
+}
+
+static void clear_memory(nvx_gsp_boot_memory_t *m)
 {
     memset(m, 0, sizeof(*m));
 }

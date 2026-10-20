@@ -19,7 +19,7 @@ static uint8_t page_pool[TEST_PAGE_COUNT][NVX_GPUVM_PAGE_SIZE]
     __attribute__((aligned(NVX_GPUVM_PAGE_SIZE)));
 static unsigned next_page;
 static unsigned freed_pages;
-static uint32_t registers[3];
+static uint64_t published_root;
 static unsigned flush_writes;
 static int fail_flush;
 
@@ -58,10 +58,10 @@ static nvx_gpuvm_status_t test_publish_root(void *context,
 {
     (void)context;
     if (root_physical != 0U &&
-        ((root_physical & 0xFFFU) != 0U || root_physical > UINT32_MAX))
+        ((root_physical & 0xFFFU) != 0U ||
+         root_physical >= (1ULL << NVX_GPUVM_PA_BITS)))
         return NVX_GPUVM_ADDRESS_WIDTH;
-    registers[0] = (uint32_t)(root_physical >> 8U);
-    registers[1] = 0U;
+    published_root = root_physical;
     return NVX_GPUVM_OK;
 }
 
@@ -119,7 +119,7 @@ int main(void)
         .invalidate = test_invalidate
     };
     nvx_gpuvm_mapping_t mapping = {0}, second = {0}, invalid = {0};
-    uint64_t physical[2] = {0x30000000ULL, 0x30001000ULL};
+    uint64_t physical[2] = {0x30000000ULL, 0x120001000ULL};
     uint64_t free_bytes;
     size_t ranges, allocations;
 
@@ -171,9 +171,8 @@ int main(void)
     assert(entry != 0 && *entry == expected_pte);
 
     assert(nvx_gpuvm_activate(&vm) == NVX_GPUVM_OK);
-    assert(vm.root_published && registers[0] ==
-           (uint32_t)(vm.tables[vm.root_index].backing.physical_address >> 8U));
-    assert(registers[1] == 0U && registers[2] == 0U);
+    assert(vm.root_published && published_root ==
+           vm.tables[vm.root_index].backing.physical_address);
     assert(nvx_gpuvm_set_quiesced(&vm, 0) == NVX_GPUVM_OK);
     assert(nvx_gpuvm_reserve(&vm, 4096U, NVX_GPUVM_PAGE_SIZE, 0U,
                              &second) == NVX_GPUVM_OK);

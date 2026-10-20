@@ -80,11 +80,11 @@ nvx_gsp_image_status_t nvx_gsp_image_parse(
     sig_count_off=read_le32(data+hs_off+24U);
     load_off=read_le32(data+hs_off+28U);
     load_size=read_le32(data+hs_off+32U);
+    if(meta_size!=12U)return NVX_GSP_IMAGE_METADATA_INVALID;
     if(sig_prod_off!=hs_off+HS_HEADER_V2_SIZE||
        (uint64_t)patch_loc_off!=(uint64_t)sig_prod_off+sig_prod_size||
        (uint64_t)patch_sig_off!=(uint64_t)patch_loc_off+4U||
        (uint64_t)meta_off!=(uint64_t)patch_sig_off+4U||
-       meta_size!=12U||
        (uint64_t)sig_count_off!=(uint64_t)meta_off+meta_size||
        (uint64_t)load_off!=(uint64_t)sig_count_off+4U||
        load_size!=36U||

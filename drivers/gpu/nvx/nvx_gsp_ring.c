@@ -74,6 +74,24 @@ nvx_gsp_ring_status_t nvx_gsp_ring_send(nvx_gsp_ring_t *r,
        overlaps(r,sizeof(*r),out_sequence,sizeof(*out_sequence)))
         return NVX_GSP_RING_INVALID_ARGUMENT;
     if(!r->initialized) return NVX_GSP_RING_NOT_INITIALIZED;
+    if(overlaps(scratch,scratch_size,r->storage,
+                (size_t)r->capacity_pages*NVX_GSP_PAGE_SIZE)||
+       overlaps(scratch,scratch_size,payload,payload_size)||
+       overlaps(scratch,scratch_size,(const void *)r->read_ptr,sizeof(*r->read_ptr))||
+       overlaps(scratch,scratch_size,(const void *)r->write_ptr,sizeof(*r->write_ptr))||
+       overlaps(out_sequence,sizeof(*out_sequence),scratch,scratch_size)||
+       overlaps(out_sequence,sizeof(*out_sequence),r->storage,
+                (size_t)r->capacity_pages*NVX_GSP_PAGE_SIZE)||
+       overlaps(out_sequence,sizeof(*out_sequence),payload,payload_size)||
+       overlaps(out_sequence,sizeof(*out_sequence),(const void *)r->read_ptr,sizeof(*r->read_ptr))||
+       overlaps(out_sequence,sizeof(*out_sequence),(const void *)r->write_ptr,sizeof(*r->write_ptr))||
+       overlaps(payload,payload_size,r,sizeof(*r))||
+       overlaps(payload,payload_size,r->storage,
+                (size_t)r->capacity_pages*NVX_GSP_PAGE_SIZE)||
+       overlaps(payload,payload_size,(const void *)r->read_ptr,sizeof(*r->read_ptr))||
+       overlaps(payload,payload_size,(const void *)r->write_ptr,sizeof(*r->write_ptr)))
+        return NVX_GSP_RING_INVALID_ARGUMENT;
+    __atomic_store_n(out_sequence,0U,__ATOMIC_RELAXED);
     if(version!=NVX_GSP_RPC_HEADER_VERSION_R535||signature!=NVX_GSP_RPC_SIGNATURE_R535)
         return NVX_GSP_RING_BAD_MESSAGE;
     if(payload_size>NVX_GSP_MAX_RPC_PAYLOAD||
@@ -86,19 +104,6 @@ nvx_gsp_ring_status_t nvx_gsp_ring_send(nvx_gsp_ring_t *r,
     total_len=(message_len+NVX_GSP_PAGE_SIZE-1U)&~((size_t)NVX_GSP_PAGE_SIZE-1U);
     pages=total_len/NVX_GSP_PAGE_SIZE;
     if(scratch_size<total_len) return NVX_GSP_RING_BUFFER_TOO_SMALL;
-    if(overlaps(scratch,total_len,r->storage,(size_t)r->capacity_pages*NVX_GSP_PAGE_SIZE)||
-       overlaps(scratch,total_len,payload,payload_size)||
-       overlaps(scratch,total_len,(const void *)r->read_ptr,sizeof(*r->read_ptr))||
-       overlaps(scratch,total_len,(const void *)r->write_ptr,sizeof(*r->write_ptr))||
-       overlaps(out_sequence,sizeof(*out_sequence),scratch,total_len)||
-       overlaps(out_sequence,sizeof(*out_sequence),r->storage,
-                (size_t)r->capacity_pages*NVX_GSP_PAGE_SIZE)||
-       overlaps(out_sequence,sizeof(*out_sequence),payload,payload_size)||
-       overlaps(payload,payload_size,r,sizeof(*r))||
-       overlaps(payload,payload_size,r->storage,
-                (size_t)r->capacity_pages*NVX_GSP_PAGE_SIZE))
-        return NVX_GSP_RING_INVALID_ARGUMENT;
-    __atomic_store_n(out_sequence,0U,__ATOMIC_RELAXED);
     memset(msg,0,total_len);
     put32(msg+0U,NVX_GSP_MCTP_MAGIC);
     put32(msg+4U,(uint32_t)message_len);

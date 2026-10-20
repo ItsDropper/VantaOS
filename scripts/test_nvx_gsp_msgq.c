@@ -9,6 +9,7 @@
 #include <string.h>
 static uint8_t store[64U*NVX_GSP_MSGQ_ELEMENT_SIZE] __attribute__((aligned(NVX_GSP_MSGQ_HEADER_PAGE_SIZE)));
 static uint8_t small[2U*NVX_GSP_MSGQ_ELEMENT_SIZE] __attribute__((aligned(NVX_GSP_MSGQ_HEADER_PAGE_SIZE)));
+static uint8_t large[384U*NVX_GSP_MSGQ_ELEMENT_SIZE] __attribute__((aligned(NVX_GSP_MSGQ_HEADER_PAGE_SIZE)));
 static void put16(uint8_t *p,uint16_t v) { p[0]=(uint8_t)v; p[1]=(uint8_t)(v>>8U); }
 static void put32(uint8_t *p,uint32_t v) {
  p[0]=(uint8_t)v;p[1]=(uint8_t)(v>>8U);p[2]=(uint8_t)(v>>16U);p[3]=(uint8_t)(v>>24U);
@@ -21,6 +22,10 @@ int main(void) {
  assert(store[0]==2U&&store[1]==0U&&store[2]==0U&&store[3]==0U);
  assert(nvx_gsp_msgq_validate_rx(store,sizeof(store),4096U,&rx)==NVX_GSP_MSGQ_OK);
  assert(rx.entries==tx.entries&&rx.element_count==63U);
+ assert(nvx_gsp_msgq_prepare_tx(large,sizeof(large),4096U,&tx)==NVX_GSP_MSGQ_OK);
+ assert(tx.element_count==383U&&tx.backing_store_size==sizeof(large));
+ assert(nvx_gsp_msgq_validate_rx(large,sizeof(large),4096U,&rx)==NVX_GSP_MSGQ_OK);
+ assert(rx.element_count==383U);
  assert(nvx_gsp_msgq_prepare_tx(small,sizeof(small),4096U,&tx)==NVX_GSP_MSGQ_OK);
  assert(tx.element_count==1U);
  assert(nvx_gsp_msgq_validate_rx(small,sizeof(small),4096U,&rx)==NVX_GSP_MSGQ_OK);

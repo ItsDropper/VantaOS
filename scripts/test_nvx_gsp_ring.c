@@ -34,9 +34,15 @@ int main(void) {
  for(unsigned i=0;i<3U;i++) assert(nvx_gsp_ring_send(&ring,2U,3U,100U+i,payload,32U,scratch,sizeof(scratch),&seq)==NVX_GSP_RING_OK);
  assert(nvx_gsp_ring_send(&ring,2U,3U,104U,payload,32U,scratch,sizeof(scratch),&seq)==NVX_GSP_RING_QUEUE_FULL);
  assert(nvx_gsp_ring_receive(&ring,scratch,sizeof(scratch),&view)==NVX_GSP_RING_OK&&view.function==100U);
- assert(nvx_gsp_ring_send(&ring,2U,3U,200U,payload,5000U,scratch,sizeof(scratch),&seq)==NVX_GSP_RING_OK);
  assert(nvx_gsp_ring_receive(&ring,scratch,sizeof(scratch),&view)==NVX_GSP_RING_OK&&view.function==101U);
  assert(nvx_gsp_ring_receive(&ring,scratch,sizeof(scratch),&view)==NVX_GSP_RING_OK&&view.function==102U);
+ assert(nvx_gsp_ring_send(&ring,2U,3U,201U,payload,32U,scratch,sizeof(scratch),&seq)==NVX_GSP_RING_OK);
+ assert(nvx_gsp_ring_receive(&ring,scratch,sizeof(scratch),&view)==NVX_GSP_RING_OK&&view.function==201U);
+ assert(nvx_gsp_ring_send(&ring,2U,3U,202U,payload,32U,scratch,sizeof(scratch),&seq)==NVX_GSP_RING_OK);
+ assert(nvx_gsp_ring_receive(&ring,scratch,sizeof(scratch),&view)==NVX_GSP_RING_OK&&view.function==202U);
+ assert(read_index==3U&&write_index==3U);
+ assert(nvx_gsp_ring_send(&ring,2U,3U,200U,payload,5000U,scratch,sizeof(scratch),&seq)==NVX_GSP_RING_OK);
+ assert(write_index==1U);
  assert(nvx_gsp_ring_receive(&ring,scratch,sizeof(scratch),&view)==NVX_GSP_RING_OK&&view.function==200U);
  assert(read_index==write_index);
  /* Corrupt data is rejected without consuming the entry. */

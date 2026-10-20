@@ -17,7 +17,7 @@ static int valid_version_token(const char *s)
     int previous_dot = 1;
     if (!s || !s[0])
         return 0;
-    while (n < NVX_GSP_VERSION_MAX + 1U && s[n] != '\\0') {
+    while (n < NVX_GSP_VERSION_MAX + 1U && s[n] != '\0') {
         char c = s[n];
         if (c >= '0' && c <= '9')
             previous_dot = 0;
@@ -27,20 +27,20 @@ static int valid_version_token(const char *s)
             return 0;
         ++n;
     }
-    return n > 0U && n <= NVX_GSP_VERSION_MAX && !previous_dot && s[n] == '\\0';
+    return n > 0U && n <= NVX_GSP_VERSION_MAX && !previous_dot && s[n] == '\0';
 }
 
 static int append_path_text(char *dst, size_t capacity, size_t *length,
                             const char *src)
 {
     size_t n = 0U;
-    while (src[n] != '\\0')
+    while (src[n] != '\0')
         ++n;
     if (*length >= capacity || n >= capacity - *length)
         return 0;
     memcpy(dst + *length, src, n);
     *length += n;
-    dst[*length] = '\\0';
+    dst[*length] = '\0';
     return 1;
 }
 
@@ -48,7 +48,7 @@ static int verify_component_again(const nvx_gsp_bundle_t *b, size_t index)
 {
     char path[128];
     size_t length = 0U;
-    path[0] = '\\0';
+    path[0] = '\0';
     if (index >= NVX_GSP_COMPONENT_COUNT || !valid_version_token(b->version))
         return 0;
     if (!append_path_text(path, sizeof(path), &length, "nvidia/") ||

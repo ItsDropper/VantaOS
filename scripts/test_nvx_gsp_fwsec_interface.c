@@ -52,7 +52,7 @@ static void make_dmem(uint8_t dmem[DMEM_SIZE])
     mapper = dmem + MAPPER_OFFSET;
     put32(mapper, 0x33504D44U); /* Opaque signature: preserved, not trusted. */
     put16(mapper + 4U, 3U);
-    put16(mapper + 6U, 68U);
+    put16(mapper + 6U, 64U);
     put32(mapper + 8U, INPUT_OFFSET);
     put32(mapper + 12U, 64U);
 }
@@ -71,7 +71,7 @@ int main(void)
         dmem, sizeof(dmem), IFACE_OFFSET, 0x15U, 32U, &window);
     assert(status == NVX_GSP_FWSEC_INTERFACE_OK);
     assert(window.mapper_offset == MAPPER_OFFSET);
-    assert(window.mapper_size == 68U);
+    assert(window.mapper_size == 64U);
     assert(window.command_input_offset == INPUT_OFFSET);
     assert(window.command_input_capacity == 64U);
     assert(window.command_id == 0x15U);

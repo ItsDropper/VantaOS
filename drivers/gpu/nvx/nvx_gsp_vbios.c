@@ -326,3 +326,54 @@ nvx_gsp_vbios_status_t nvx_gsp_vbios_find_ga10x_fwsec(
     }
     return NVX_GSP_VBIOS_NOT_FOUND;
 }
+
+static unsigned int popcount16(uint16_t value)
+{
+    unsigned int count = 0U;
+    while (value != 0U) {
+        count += (unsigned int)(value & 1U);
+        value = (uint16_t)(value >> 1U);
+    }
+    return count;
+}
+
+nvx_gsp_vbios_status_t nvx_gsp_vbios_fwsec_signature_offset(
+    const nvx_gsp_vbios_fwsec_info_t *info, uint32_t fuse_version,
+    uint32_t *out_offset)
+{
+    uint32_t fuse_bit;
+    uint16_t lower_mask;
+    unsigned int signature_index;
+    uint64_t offset;
+
+    if (!info || !out_offset ||
+        ranges_overlap(info, sizeof(*info), out_offset, sizeof(*out_offset)))
+        return NVX_GSP_VBIOS_INVALID_ARGUMENT;
+    *out_offset = 0U;
+
+    if (fuse_version >= 16U)
+        return NVX_GSP_VBIOS_FUSE_VERSION_UNSUPPORTED;
+    if (info->signature_count == 0U ||
+        info->signature_count > NVX_GSP_VBIOS_FWSEC_MAX_SIGNATURES ||
+        info->signatures_size !=
+            (uint32_t)info->signature_count * NVX_GSP_VBIOS_RSA3K_SIGNATURE_SIZE ||
+        popcount16(info->signature_versions) != info->signature_count)
+        return NVX_GSP_VBIOS_MALFORMED_DESCRIPTOR;
+
+    fuse_bit = UINT32_C(1) << fuse_version;
+    if (((uint32_t)info->signature_versions & fuse_bit) == 0U)
+        return NVX_GSP_VBIOS_FUSE_VERSION_UNSUPPORTED;
+
+    lower_mask = fuse_version == 0U ? 0U :
+        (uint16_t)((UINT32_C(1) << fuse_version) - 1U);
+    signature_index = popcount16((uint16_t)(info->signature_versions & lower_mask));
+    offset = (uint64_t)info->signatures_offset +
+             (uint64_t)signature_index * NVX_GSP_VBIOS_RSA3K_SIGNATURE_SIZE;
+    if (offset > UINT32_MAX ||
+        offset + NVX_GSP_VBIOS_RSA3K_SIGNATURE_SIZE >
+            (uint64_t)info->signatures_offset + info->signatures_size)
+        return NVX_GSP_VBIOS_RANGE_ERROR;
+
+    *out_offset = (uint32_t)offset;
+    return NVX_GSP_VBIOS_OK;
+}

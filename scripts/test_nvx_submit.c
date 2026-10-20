@@ -13,7 +13,6 @@
 static nvx_gpuvm_t gpuvm;
 static uint8_t table_pages[64][NVX_GPUVM_PAGE_SIZE] __attribute__((aligned(NVX_GPUVM_PAGE_SIZE)));
 static unsigned next_table_page;
-static uint8_t fake_mmio;
 static nvx_memory_manager_t manager;
 static uint8_t dma_memory[1024U * 1024U]
     __attribute__((aligned(NVX_DMA_PAGE_SIZE)));
@@ -39,23 +38,21 @@ void dma_free_page(dma_page_t *page)
     page->size = 0;
 }
 
-nvx_mmio_status_t nvx_gpuvm_test_mmio_write32(
-    const nvx_mmio_region_t *region, size_t offset, uint32_t value)
+static nvx_gpuvm_status_t test_publish_root(void *context,
+                                                    uint64_t root_physical)
 {
-    (void)value;
-    assert(region != 0 && region->base == &fake_mmio);
-    assert(offset == 0xB830A0U || offset == 0xB830A4U || offset == 0xB830B0U);
-    return NVX_MMIO_OK;
+    (void)context;
+    if (root_physical != 0U &&
+        ((root_physical & 0xFFFU) != 0U ||
+         root_physical >= (1ULL << NVX_GPUVM_PA_BITS)))
+        return NVX_GPUVM_ADDRESS_WIDTH;
+    return NVX_GPUVM_OK;
 }
 
-nvx_mmio_status_t nvx_gpuvm_test_mmio_read32(
-    const nvx_mmio_region_t *region, size_t offset, uint32_t *out)
+static nvx_gpuvm_status_t test_invalidate(void *context)
 {
-    assert(region != 0 && region->base == &fake_mmio && out != 0);
-    if (offset != 0xB830B0U)
-        return NVX_MMIO_OUT_OF_RANGE;
-    *out = 1U;
-    return NVX_MMIO_OK;
+    (void)context;
+    return NVX_GPUVM_OK;
 }
 
 int dma_alloc_contiguous(dma_page_t *pages, size_t count)
@@ -97,11 +94,15 @@ int main(void)
     nvx_relocation_t relocations[2] = {{0}};
     nvx_submit_report_t report;
 
-    nvx_mmio_region_t bar0 = {.base = &fake_mmio, .length = 0xB830B4U};
+    nvx_gpuvm_hw_ops_t hw = {
+        .context = 0,
+        .publish_root = test_publish_root,
+        .invalidate = test_invalidate
+    };
     memset(&gpuvm, 0, sizeof(gpuvm));
     memset(&manager, 0, sizeof(manager));
     assert(nvx_gpuvm_init(&gpuvm, 0x10000000ULL,
-                          64ULL * 1024ULL * 1024ULL, &bar0) == NVX_GPUVM_OK);
+                          64ULL * 1024ULL * 1024ULL, &hw) == NVX_GPUVM_OK);
     assert(nvx_memory_init(&manager, &gpuvm, 64U) == NVX_MEMORY_OK);
     assert(nvx_memory_alloc(&manager, 4096U, NVX_MEMORY_COMMAND_STORAGE,
                             &command) == NVX_MEMORY_OK);

@@ -76,7 +76,7 @@ nvx_gsp_elf_load_status_t nvx_gsp_elf_load_segments(
     for (uint32_t i = 0U; i < info.load_segment_count; ++i) {
         const nvx_gsp_elf_segment_t *seg = &info.load_segments[i];
         if (seg->memory_size == 0U || seg->memory_size > SIZE_MAX ||
-            seg->file_size > SIZE_MAX ||
+            seg->file_size > SIZE_MAX || seg->file_size > seg->memory_size ||
             seg->file_offset > image_size ||
             seg->file_size > image_size - (size_t)seg->file_offset ||
             seg->physical_address > UINT64_MAX - seg->memory_size)

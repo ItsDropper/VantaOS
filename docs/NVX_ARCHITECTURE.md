@@ -157,10 +157,12 @@ paths in `message_queue_cpu.c` and `kernel_gsp.c` from
 This is transport framing only. It is not wired to a booted GSP, does not yet
 implement the payload schema for NVIDIA's CONTINUATION_RECORD RPC function for
 messages exceeding 16 pages, and does not implement RPC function schemas or
-hardware doorbell register programming. The new MSGQ layout helper creates the CPU-owned 2.0 header (4096-byte entry
-offset, fixed power-of-two elements from 16 bytes through 64 KiB, monotonic
-counters, and the slot count permitted by the backing-store size) or validates
-the GSP-owned response header without modifying it. The ring caller must still
+hardware doorbell register programming. The MSGQ 2.0 layer now has both a wire-layout helper and a register-driven
+single-producer/single-consumer queue. It creates or validates the 32-byte
+NVIDIA header, calculates fixed-size slots, reads peer counters through supplied
+MMIO callbacks, enforces monotonic head/tail capacity rules, wraps slot addressing,
+and publishes counter updates only after the configured memory-ordering callback.
+Register offsets remain platform inputs and are not guessed. The ring caller must still
 supply software counter adapters backed by verified queue-head/tail registers
 and the notification callback.
 

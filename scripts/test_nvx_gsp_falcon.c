@@ -134,8 +134,10 @@ int main(void)
     assert(nvx_gsp_ga10x_inspect_falcon(&short_region, &snapshot) ==
            NVX_GSP_FALCON_BAR_TOO_SMALL);
     assert(snapshot.snapshot_valid == 0U);
-    assert(nvx_gsp_ga10x_program_brom(&short_region, 0x0400U, 1U, 0x100U) ==
-           NVX_GSP_FALCON_BAR_TOO_SMALL);
+    nvx_mmio_region_t brom_short_region = {bar,
+        NVX_GSP_FALCON_BROM_REQUIRED_BYTES - 1U};
+    assert(nvx_gsp_ga10x_program_brom(&brom_short_region, 0x0400U, 1U,
+           0x100U) == NVX_GSP_FALCON_BAR_TOO_SMALL);
     assert(nvx_gsp_ga10x_inspect_falcon(0, &snapshot) ==
            NVX_GSP_FALCON_INVALID_ARGUMENT);
     assert(nvx_gsp_ga10x_inspect_falcon(&region, 0) ==

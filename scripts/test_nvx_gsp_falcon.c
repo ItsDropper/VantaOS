@@ -315,6 +315,17 @@ int main(void)
            NVX_GSP_FALCON_BOOT_TIMEOUT);
     assert(boot_state.delays == 2U);
     assert(mailbox0_out == 0U && mailbox1_out == 0U);
+    put32(NVX_GSP_FALCON_HWCFG2, NVX_GSP_HWCFG2_RESET_READY);
+    put32(NVX_GSP_FALCON_CPUCTL,
+          NVX_GSP_CPUCTL_HALTED | NVX_GSP_CPUCTL_ALIAS_EN);
+    put32(NVX_GSP_FALCON_MAILBOX0, 0xDEADU);
+    nvx_mmio_region_t alias_short_region = {bar,
+        NVX_GA10X_FALCON_CPUCTL_ALIAS(NVX_GSP_FALCON_BASE) + 3U};
+    assert(nvx_ga10x_falcon_boot(&alias_short_region, NVX_GSP_FALCON_BASE,
+           0x200U, 1U, 0x1234U, 0U, 0U, &mailbox0_out, &mailbox1_out,
+           10U, 1U, fake_boot_delay, &boot_state) ==
+           NVX_GSP_FALCON_BAR_TOO_SMALL);
+    assert(get32(NVX_GSP_FALCON_MAILBOX0) == 0xDEADU);
     put32(NVX_GSP_FALCON_HWCFG2, 0xBADF41A5U);
     memset(&snapshot, 0xA5, sizeof(snapshot));
     assert(nvx_gsp_ga10x_inspect_falcon(&region, &snapshot) ==

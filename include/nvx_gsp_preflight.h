@@ -8,6 +8,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "nvx_gsp_elf.h"
+#include "nvx_gsp_bootloader.h"
 #include "nvx_gsp_image.h"
 #define NVX_GSP_GA10X_SIGNATURE_SECTION ".fwsignature_ga10x"
 typedef enum nvx_gsp_preflight_status {
@@ -23,6 +24,7 @@ typedef enum nvx_gsp_preflight_status {
 typedef struct nvx_gsp_preflight_report {
     nvx_gsp_elf_info_t runtime;
     nvx_gsp_image_info_t booter_load,booter_unload;
+    nvx_gsp_bootloader_info_t gsp_bootloader;
     nvx_gsp_elf_section_t firmware_image,firmware_version;
     char version[64];
     uint64_t runtime_bytes,ucode_archive_bytes,booter_load_bytes;

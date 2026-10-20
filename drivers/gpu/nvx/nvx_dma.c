@@ -5,13 +5,16 @@
  * See the LICENSE file in the project root for the full license text.
  */
 #include "nvx_dma.h"
+#include "heap.h"
 
 #include <limits.h>
+#include <string.h>
 
 static uint64_t nvx_dma_allocation_counter;
 
 static void nvx_dma_clear(nvx_dma_buffer_t *buffer)
 {
+    buffer->pages = 0;
     buffer->cpu_address = 0;
     buffer->gpu_address = 0;
     buffer->size = 0;
@@ -29,7 +32,8 @@ nvx_dma_status_t nvx_dma_alloc(size_t size, unsigned address_bits,
 
     if (out_buffer == 0)
         return NVX_DMA_INVALID_ARGUMENT;
-    if (out_buffer->acquired || out_buffer->page_count != 0U)
+    if (out_buffer->acquired || out_buffer->page_count != 0U ||
+        out_buffer->pages != 0)
         return NVX_DMA_INVALID_ARGUMENT;
 
     nvx_dma_clear(out_buffer);
@@ -43,10 +47,19 @@ nvx_dma_status_t nvx_dma_alloc(size_t size, unsigned address_bits,
     page_count = (size + NVX_DMA_PAGE_SIZE - 1U) / NVX_DMA_PAGE_SIZE;
     allocated_size = page_count * NVX_DMA_PAGE_SIZE;
     if (page_count == 0U || page_count > NVX_DMA_MAX_PAGES ||
-        allocated_size < size)
+        allocated_size < size || page_count > SIZE_MAX / sizeof(dma_page_t))
         return NVX_DMA_TOO_LARGE;
+    if (!heap_is_initialized())
+        return NVX_DMA_ALLOCATION_FAILED;
 
+    out_buffer->pages = kmalloc(page_count * sizeof(dma_page_t));
+    if (out_buffer->pages == 0) {
+        nvx_dma_clear(out_buffer);
+        return NVX_DMA_ALLOCATION_FAILED;
+    }
+    memset(out_buffer->pages, 0, page_count * sizeof(dma_page_t));
     if (!dma_alloc_contiguous(out_buffer->pages, page_count)) {
+        kfree(out_buffer->pages);
         nvx_dma_clear(out_buffer);
         return NVX_DMA_ALLOCATION_FAILED;
     }
@@ -55,6 +68,7 @@ nvx_dma_status_t nvx_dma_alloc(size_t size, unsigned address_bits,
         const dma_page_t *page = &out_buffer->pages[i];
         if (!dma_page_is_valid(page)) {
             dma_free_contiguous(out_buffer->pages, page_count);
+            kfree(out_buffer->pages);
             nvx_dma_clear(out_buffer);
             return NVX_DMA_INVALID_PAGE;
         }
@@ -84,6 +98,7 @@ nvx_dma_status_t nvx_dma_alloc(size_t size, unsigned address_bits,
           (uint64_t)allocated_size - 1U >
               UINT32_MAX - out_buffer->gpu_address))) {
         dma_free_contiguous(out_buffer->pages, page_count);
+        kfree(out_buffer->pages);
         nvx_dma_clear(out_buffer);
         return NVX_DMA_ADDRESS_RANGE_INVALID;
     }
@@ -106,10 +121,6 @@ void nvx_dma_release(nvx_dma_buffer_t *buffer)
         return;
 
     dma_free_contiguous(buffer->pages, buffer->page_count);
-    for (size_t i = 0; i < NVX_DMA_MAX_PAGES; ++i) {
-        buffer->pages[i].virtual_address = 0;
-        buffer->pages[i].physical_address = 0;
-        buffer->pages[i].size = 0;
-    }
+    kfree(buffer->pages);
     nvx_dma_clear(buffer);
 }

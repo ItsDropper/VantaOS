@@ -163,6 +163,19 @@ int main(void)
     assert(nvx_memory_validate(&manager) == NVX_MEMORY_OK);
     assert(alloc_calls == 2U && free_calls == 2U);
 
+    /* A 1 MiB object exercises hundreds of DMA pages without a kernel-stack array. */
+    nvx_memory_handle_t large = {0};
+    assert(nvx_memory_alloc(&manager, 1024U * 1024U,
+                            NVX_MEMORY_FIRMWARE_IMAGE, &large) ==
+           NVX_MEMORY_OK);
+    assert(large.size == 1024U * 1024U);
+    assert(nvx_memory_get_info(&manager, &large, &info) == NVX_MEMORY_OK);
+    assert(info.size == 1024U * 1024U &&
+           info.kind == NVX_MEMORY_FIRMWARE_IMAGE);
+    assert(nvx_memory_release(&manager, &large) == NVX_MEMORY_OK);
+    assert(nvx_memory_validate(&manager) == NVX_MEMORY_OK);
+    assert(alloc_calls == 3U && free_calls == 3U);
+
     assert(nvx_gpuvm_destroy(&gpuvm) == NVX_GPUVM_OK);
     memset(&manager, 0, sizeof(manager));
     init_gpuvm();

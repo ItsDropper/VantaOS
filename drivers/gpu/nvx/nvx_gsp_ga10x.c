@@ -87,3 +87,26 @@ nvx_gsp_ga10x_status_t nvx_gsp_ga10x_init_rpc(nvx_gsp_ga10x_t *g)
         return NVX_GSP_GA10X_QUEUE_ERROR;
     g->rpc_ready=1U;return NVX_GSP_GA10X_OK;
 }
+
+/*
+ * NV_PGC6_AON_SECURE_SCRATCH_GROUP_42 is documented by Linux Nova as the
+ * usable framebuffer size in MiB. Do not infer VRAM size from PCI BAR length.
+ */
+nvx_gsp_ga10x_status_t nvx_gsp_ga10x_read_usable_fb_size(
+    const nvx_mmio_region_t *bar0, uint64_t *out_bytes)
+{
+    uint32_t size_mib = 0U;
+    if (!bar0 || !bar0->base || !out_bytes)
+        return NVX_GSP_GA10X_INVALID_ARGUMENT;
+    *out_bytes = 0U;
+    if (bar0->length < (size_t)NVX_GSP_GA10X_USABLE_FB_SIZE_MB + 4U)
+        return NVX_GSP_GA10X_BAD_BAR;
+    if (nvx_mmio_read32(bar0, NVX_GSP_GA10X_USABLE_FB_SIZE_MB,
+                        &size_mib) != NVX_MMIO_OK)
+        return NVX_GSP_GA10X_MMIO_ERROR;
+    if (size_mib == 0U ||
+        (uint64_t)size_mib > UINT64_MAX / (1024ULL * 1024ULL))
+        return NVX_GSP_GA10X_FB_SIZE_INVALID;
+    *out_bytes = (uint64_t)size_mib * 1024ULL * 1024ULL;
+    return NVX_GSP_GA10X_OK;
+}

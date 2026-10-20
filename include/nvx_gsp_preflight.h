@@ -10,6 +10,7 @@
 #include "nvx_gsp_elf.h"
 #include "nvx_gsp_bootloader.h"
 #include "nvx_gsp_image.h"
+#include "nvx_mmio.h"
 #define NVX_GSP_GA10X_SIGNATURE_SECTION ".fwsignature_ga10x"
 typedef enum nvx_gsp_preflight_status {
     NVX_GSP_PREFLIGHT_OK=0,NVX_GSP_PREFLIGHT_INVALID_ARGUMENT,
@@ -41,6 +42,15 @@ nvx_gsp_preflight_status_t nvx_gsp_preflight_stage_booters(
     const nvx_gsp_bundle_t *bundle,
     uint32_t load_fuse_version, uint8_t *load_staging, size_t load_capacity,
     uint32_t unload_fuse_version, uint8_t *unload_staging, size_t unload_capacity,
+    nvx_gsp_image_info_t *out_load_info, nvx_gsp_image_info_t *out_unload_info);
+/*
+ * Read each booter's engine/ucode-specific fuse version from mapped GA10x
+ * BAR0, then stage both images. No caller-supplied fuse value is trusted.
+ */
+nvx_gsp_preflight_status_t nvx_gsp_preflight_stage_booters_from_bar0(
+    const nvx_gsp_bundle_t *bundle, const nvx_mmio_region_t *bar0,
+    uint8_t *load_staging, size_t load_capacity,
+    uint8_t *unload_staging, size_t unload_capacity,
     nvx_gsp_image_info_t *out_load_info, nvx_gsp_image_info_t *out_unload_info);
 /* Validate the full bundle and stage the GA10x GSP RISC-V bootloader payload. */
 nvx_gsp_preflight_status_t nvx_gsp_preflight_stage_gsp_bootloader(

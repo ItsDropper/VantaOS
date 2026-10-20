@@ -202,7 +202,7 @@ int main(void)
     assert(freed_pages - freed_before_destroy == tables_before_destroy && !vm.initialized);
 
     /* A failed hardware flush faults the VM and deliberately retains tables. */
-    assert(nvx_gpuvm_init(&vm, TEST_VA_START, TEST_VA_SIZE, &bar0) ==
+    assert(nvx_gpuvm_init(&vm, TEST_VA_START, TEST_VA_SIZE, &hw_ops) ==
            NVX_GPUVM_OK);
     assert(nvx_gpuvm_activate(&vm) == NVX_GPUVM_OK);
     unsigned freed_before_fault = freed_pages;

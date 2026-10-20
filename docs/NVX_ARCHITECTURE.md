@@ -667,3 +667,15 @@ prove physical NVIDIA support.
 
 Each phase is a gate, not a promise. Only tested capabilities may be reported as
 supported.
+
+
+## NVX MSGQ producer serialization
+
+The GSP RM MSGQ command queue is a single-producer queue. The transport now
+serializes each send transaction across CPUs, covering sequence allocation,
+all page copies, and publication of the hardware-visible head counter. This
+prevents concurrent RPC callers from interleaving a multi-page message or
+reusing a correlation sequence. The response queue remains single-consumer;
+callers must route response pumping through one execution context. This is a
+software concurrency guarantee, not evidence that the GSP firmware has booted
+or that an RPC has succeeded on physical hardware.

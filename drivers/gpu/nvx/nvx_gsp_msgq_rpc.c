@@ -35,10 +35,10 @@ nvx_gsp_msgq_rpc_status_t nvx_gsp_msgq_rpc_init(nvx_gsp_msgq_rpc_transport_t *t,
        overlaps(tx->backing_store,tx->layout.backing_store_size,
                 rx->backing_store,rx->layout.backing_store_size))
         return NVX_GSP_MSGQ_RPC_INVALID_ARGUMENT;
-    t->command_queue=tx;t->response_queue=rx;t->next_sequence=1U;t->initialized=1U;
+    t->command_queue=tx;t->response_queue=rx;spinlock_init(&t->tx_lock);t->next_sequence=1U;t->initialized=1U;
     return NVX_GSP_MSGQ_RPC_OK;
 }
-nvx_gsp_msgq_rpc_status_t nvx_gsp_msgq_rpc_send(nvx_gsp_msgq_rpc_transport_t *t,
+static nvx_gsp_msgq_rpc_status_t nvx_gsp_msgq_rpc_send_locked(nvx_gsp_msgq_rpc_transport_t *t,
     uint32_t function,const void *payload,size_t payload_size,void *scratch,
     size_t scratch_size,uint32_t *out_sequence)
 {
@@ -101,6 +101,26 @@ nvx_gsp_msgq_rpc_status_t nvx_gsp_msgq_rpc_send(nvx_gsp_msgq_rpc_transport_t *t,
     }
     t->next_sequence=sequence+1U;if(!t->next_sequence)t->next_sequence=1U;
     return NVX_GSP_MSGQ_RPC_OK;
+}
+nvx_gsp_msgq_rpc_status_t nvx_gsp_msgq_rpc_send(nvx_gsp_msgq_rpc_transport_t *t,
+    uint32_t function,const void *payload,size_t payload_size,void *scratch,
+    size_t scratch_size,uint32_t *out_sequence)
+{
+    nvx_gsp_msgq_rpc_status_t status;
+    if(!t)return NVX_GSP_MSGQ_RPC_INVALID_ARGUMENT;
+    if(!t->initialized)return NVX_GSP_MSGQ_RPC_NOT_INITIALIZED;
+
+    /*
+     * MSGQ queues have a single producer. Serialize the whole transaction,
+     * including sequence allocation, slot copies, and head publication, so
+     * concurrent RPC callers cannot interleave multi-page messages or reuse
+     * a sequence number. The lock is released on every status path.
+     */
+    spinlock_lock(&t->tx_lock);
+    status=nvx_gsp_msgq_rpc_send_locked(t,function,payload,payload_size,
+                                        scratch,scratch_size,out_sequence);
+    spinlock_unlock(&t->tx_lock);
+    return status;
 }
 nvx_gsp_msgq_rpc_status_t nvx_gsp_msgq_rpc_receive(nvx_gsp_msgq_rpc_transport_t *t,
     void *scratch,size_t scratch_size,nvx_gsp_rpc_view_t *out)

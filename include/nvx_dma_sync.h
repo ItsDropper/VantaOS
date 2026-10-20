@@ -16,7 +16,10 @@ typedef enum nvx_dma_sync_status {
 } nvx_dma_sync_status_t;
 typedef struct nvx_dma_sync {
     nvx_dma_buffer_t *buffer;
-    uint64_t generation;
+    uintptr_t cpu_address;
+    uint64_t gpu_address;
+    size_t size;
+    size_t page_count;
     nvx_dma_owner_t owner;
     uint8_t initialized;
 } nvx_dma_sync_t;

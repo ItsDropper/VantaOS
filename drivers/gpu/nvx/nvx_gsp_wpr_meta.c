@@ -11,7 +11,9 @@ _Static_assert(offsetof(nvx_gsp_wpr_meta_v1_t,gsp_fw_wpr_start)==112U,"WPR V1 WP
 _Static_assert(offsetof(nvx_gsp_wpr_meta_v1_t,verified)==248U,"WPR V1 verified offset");
 static int add_ok(uint64_t a,uint64_t b,uint64_t *end)
 {
-    if(a>UINT64_MAX-b)return 0;*end=a+b;return 1;
+    if(a>UINT64_MAX-b)return 0;
+    *end=a+b;
+    return 1;
 }
 static int range_ok(uint64_t start,uint64_t size,uint64_t limit)
 {

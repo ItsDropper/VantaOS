@@ -36,6 +36,8 @@ int pci_write_config32(const struct pci_device *device, uint8_t offset, uint32_t
 int pci_find_capability(const struct pci_device *device, uint8_t capability_id,
                         uint8_t *out_offset);
 
+/* Assign an implemented but unassigned BAR from a validated PCI MMIO hole. */
+int pci_allocate_unassigned_bar(const struct pci_device* device, uint8_t index);
 int pci_get_bar(const struct pci_device* device, uint8_t index,
                 uint64_t* address, int* is_io, int* is_64bit);
 /* Size a BAR only when I/O decode, memory decode, and bus mastering are disabled. */

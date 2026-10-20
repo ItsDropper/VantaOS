@@ -59,14 +59,18 @@ typedef struct nvx_gsp_wpr_layout {
  * WPR margin, FRTS size and firmware heap policy are hardware/firmware facts
  * supplied by the probed device, never guessed by NVX.
  */
-typedef int (*nvx_gsp_wpr_heap_size_fn)(void *context, uint64_t pre_heap_size,\n    uint64_t post_heap_size, uint64_t *out_heap_size);\ntypedef struct nvx_gsp_wpr_plan_config {
+typedef int (*nvx_gsp_wpr_heap_size_fn)(
+    void *context, uint64_t pre_heap_size, uint64_t post_heap_size,
+    uint64_t *out_heap_size);
+typedef struct nvx_gsp_wpr_plan_config {
     uint64_t framebuffer_size;
     uint64_t vga_workspace_offset;
     uint64_t mmu_lock_low;
     uint64_t wpr_end_margin;
     uint64_t frts_size;
     uint64_t nonwpr_heap_size;
-    uint64_t requested_wpr_heap_size;
+    nvx_gsp_wpr_heap_size_fn compute_wpr_heap_size;
+    void *heap_policy_context;
     uint8_t mmu_lock_valid;
 } nvx_gsp_wpr_plan_config_t;
 typedef struct nvx_gsp_wpr_meta_v1 {

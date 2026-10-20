@@ -58,7 +58,7 @@ int main(void){
  uint8_t bootloader_stage[128],bootloader_backup[128];
  nvx_gsp_bootloader_info_t bootloader_info;
  assert(nvx_gsp_bootloader_prepare(&b.components[4],bootloader_stage,sizeof(bootloader_stage),&bootloader_info)==NVX_GSP_BOOTLOADER_OK);
- assert(bootloader_info.descriptor_size==84U&&bootloader_info.descriptor[0]==1U);
+ assert(bootloader_info.descriptor_size==84U&&b.components[4].blob.data[bootloader_info.descriptor_offset]==1U);
  assert(bootloader_stage[0]==0x80U&&bootloader_stage[127]==0xFFU);
  memset(bootloader_stage,0xA5U,sizeof(bootloader_stage));memcpy(bootloader_backup,bootloader_stage,sizeof(bootloader_stage));
  assert(nvx_gsp_bootloader_prepare(&b.components[4],bootloader_stage,sizeof(bootloader_stage)-1U,&bootloader_info)==NVX_GSP_BOOTLOADER_BUFFER_TOO_SMALL);

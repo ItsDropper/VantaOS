@@ -40,6 +40,7 @@ When a document conflicts with actual code or CI, treat the implementation and r
 - [NVX GA10x bring-up](gpu/nvx/GA10X_BRINGUP.md) — SEC2/GSP state, implemented primitives, and hardware blockers.
 - [NVX firmware reverse-engineering notebook](gpu/nvx/FIRMWARE_REVERSE_ENGINEERING.md) — public-source findings and independent parser contracts.
 - [VBIOS FWSEC metadata research](gpu/nvx/VBIOS_FWSEC_RESEARCH.md) — parser constraints and pointer-chain reconstruction.
+- [FWSEC command result contract](gpu/nvx/FIRMWARE_REVERSE_ENGINEERING.md#35-sbfrts-result-validation-reconstructed-from-the-public-execution-path) — published postconditions and implementation boundary.
 - [GPU framework and bring-up plan](gpu/FRAMEWORK.md) — shared lifecycle and vendor-backend maturity.
 
 

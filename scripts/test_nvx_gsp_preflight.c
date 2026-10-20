@@ -43,6 +43,7 @@ int main(void)
  b.components[1].acquired=1U;elf[0]=0U;
  assert(nvx_gsp_preflight_validate(&b,&report)==NVX_GSP_PREFLIGHT_RUNTIME_INVALID);
  assert(nvx_gsp_preflight_validate(0,&report)==NVX_GSP_PREFLIGHT_INVALID_ARGUMENT);
+ assert(nvx_gsp_preflight_validate(&b,(nvx_gsp_preflight_report_t *)(void *)&b)==NVX_GSP_PREFLIGHT_INVALID_ARGUMENT);
  assert(nvx_gsp_preflight_validate(&b,0)==NVX_GSP_PREFLIGHT_INVALID_ARGUMENT);
  b.acquired=0U;
  assert(nvx_gsp_preflight_validate(&b,&report)==NVX_GSP_PREFLIGHT_BUNDLE_NOT_READY);

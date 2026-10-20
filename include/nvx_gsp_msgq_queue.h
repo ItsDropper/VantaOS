@@ -8,9 +8,13 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "nvx_gsp_msgq.h"
+#include "nvx_mmio.h"
 typedef int (*nvx_gsp_msgq_read32_fn)(void *context,uint32_t reg,uint32_t *out);
 typedef int (*nvx_gsp_msgq_write32_fn)(void *context,uint32_t reg,uint32_t value);
 typedef void (*nvx_gsp_msgq_barrier_fn)(void *context);
+typedef struct nvx_gsp_msgq_mmio_context {
+    const nvx_mmio_region_t *region;
+} nvx_gsp_msgq_mmio_context_t;
 typedef struct nvx_gsp_msgq_io {
     nvx_gsp_msgq_read32_fn read32;
     nvx_gsp_msgq_write32_fn write32;
@@ -18,6 +22,10 @@ typedef struct nvx_gsp_msgq_io {
     nvx_gsp_msgq_barrier_fn after_device;
     void *context;
 } nvx_gsp_msgq_io_t;
+/* Builds checked BAR-backed register callbacks. Region/context must outlive the queue. */
+nvx_gsp_msgq_queue_status_t nvx_gsp_msgq_io_init_mmio(
+    nvx_gsp_msgq_io_t *out_io,nvx_gsp_msgq_mmio_context_t *context,
+    const nvx_mmio_region_t *region);
 typedef enum nvx_gsp_msgq_queue_status {
     NVX_GSP_MSGQ_QUEUE_OK=0,
     NVX_GSP_MSGQ_QUEUE_INVALID_ARGUMENT,

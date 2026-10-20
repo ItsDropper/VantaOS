@@ -249,3 +249,129 @@ nvx_gsp_falcon_status_t nvx_gsp_ga10x_start_falcon(
 {
     return nvx_ga10x_falcon_start(bar0, NVX_GSP_FALCON_BASE, boot_vector);
 }
+
+static int nvx_ga10x_falcon_base_valid(uint32_t base)
+{
+    return base == NVX_GSP_FALCON_BASE || base == NVX_SEC2_FALCON_BASE;
+}
+
+static nvx_gsp_falcon_status_t nvx_ga10x_falcon_dma_wait(
+    const nvx_mmio_region_t *bar0, uint32_t command_register,
+    uint32_t mask, uint32_t expected, uint32_t timeout_ms,
+    uint32_t poll_interval_ms, nvx_gsp_delay_ms_fn delay_ms, void *context)
+{
+    uint32_t elapsed_ms = 0U;
+    for (;;) {
+        uint32_t command = 0U;
+        if (nvx_mmio_read32(bar0, command_register, &command) != NVX_MMIO_OK)
+            return NVX_GSP_FALCON_MMIO_ERROR;
+        if ((command & mask) == expected)
+            return NVX_GSP_FALCON_OK;
+        if (elapsed_ms >= timeout_ms)
+            return NVX_GSP_FALCON_DMA_TIMEOUT;
+        uint32_t remaining = timeout_ms - elapsed_ms;
+        uint32_t sleep_ms = poll_interval_ms < remaining ?
+                            poll_interval_ms : remaining;
+        delay_ms(sleep_ms, context);
+        elapsed_ms += sleep_ms;
+    }
+}
+
+nvx_gsp_falcon_status_t nvx_ga10x_falcon_dma_upload(
+    const nvx_mmio_region_t *bar0, uint32_t falcon_base,
+    uint64_t source_phys, uint32_t source_offset,
+    uint32_t destination_offset, uint32_t length,
+    nvx_ga10x_falcon_memory_t target, uint8_t set_dm_tag,
+    uint32_t timeout_ms, uint32_t poll_interval_ms,
+    nvx_gsp_delay_ms_fn delay_ms, void *context)
+{
+    uint32_t hwcfg2 = 0U;
+    uint32_t cpuctl = 0U;
+    uint32_t command_register;
+    uint32_t command;
+    uint64_t source_end;
+    uint64_t destination_end;
+    uint32_t target_bits;
+
+    if (!bar0 || !bar0->base || !delay_ms || timeout_ms == 0U ||
+        poll_interval_ms == 0U)
+        return NVX_GSP_FALCON_INVALID_ARGUMENT;
+    if (!nvx_ga10x_falcon_base_valid(falcon_base))
+        return NVX_GSP_FALCON_DMA_INVALID_TRANSFER;
+    if (bar0->length < (size_t)(falcon_base + 0x628U))
+        return NVX_GSP_FALCON_BAR_TOO_SMALL;
+    if (source_phys == 0U || (source_phys & 0xFFU) != 0U ||
+        (source_phys >> 49U) != 0U || length == 0U ||
+        (source_offset & 0xFFU) != 0U ||
+        (destination_offset & 0xFFU) != 0U ||
+        (length % NVX_GA10X_FALCON_DMA_CHUNK_BYTES) != 0U ||
+        source_offset > UINT32_MAX - length ||
+        destination_offset > 0x01000000U - length ||
+        (target != NVX_GA10X_FALCON_SECURE_IMEM &&
+         target != NVX_GA10X_FALCON_NONSECURE_IMEM &&
+         target != NVX_GA10X_FALCON_DMEM) ||
+        (set_dm_tag != 0U && target != NVX_GA10X_FALCON_DMEM))
+        return NVX_GSP_FALCON_DMA_INVALID_TRANSFER;
+    source_end = source_phys + (uint64_t)source_offset + length;
+    destination_end = (uint64_t)destination_offset + length;
+    if (source_end < source_phys || destination_end > 0x01000000ULL)
+        return NVX_GSP_FALCON_DMA_INVALID_TRANSFER;
+
+    command_register = NVX_GA10X_FALCON_DMATRFCMD(falcon_base);
+    nvx_gsp_falcon_status_t status = nvx_ga10x_falcon_dma_wait(
+        bar0, command_register, NVX_GA10X_FALCON_DMA_FULL, 0U,
+        timeout_ms, poll_interval_ms, delay_ms, context);
+    if (status != NVX_GSP_FALCON_OK)
+        return status;
+
+    if (nvx_mmio_read32(bar0, falcon_base + 0x0F4U, &hwcfg2) != NVX_MMIO_OK ||
+        nvx_mmio_read32(bar0, falcon_base + 0x100U, &cpuctl) != NVX_MMIO_OK)
+        return NVX_GSP_FALCON_MMIO_ERROR;
+    if ((hwcfg2 & NVX_GSP_PRIV_LOCKED_MASK) == NVX_GSP_PRIV_LOCKED_PATTERN)
+        return NVX_GSP_FALCON_PRIVILEGED_WINDOW_LOCKED;
+    if ((cpuctl & NVX_GSP_CPUCTL_HALTED) == 0U)
+        return NVX_GSP_FALCON_NOT_HALTED;
+
+    if (nvx_mmio_write32(bar0, NVX_GA10X_FALCON_FBIF_CTL(falcon_base),
+                         NVX_GA10X_FALCON_DMA_ALLOW_PHYS) != NVX_MMIO_OK ||
+        nvx_mmio_write32(bar0, NVX_GA10X_FALCON_FBIF_TRANSCFG0(falcon_base),
+                         NVX_GA10X_FALCON_DMA_COHERENT_PHYS) != NVX_MMIO_OK ||
+        nvx_mmio_write32(bar0, NVX_GA10X_FALCON_DMACTL(falcon_base), 0U) !=
+                         NVX_MMIO_OK ||
+        nvx_mmio_write32(bar0, NVX_GA10X_FALCON_DMATRFBASE(falcon_base),
+                         (uint32_t)(source_phys >> 8U)) != NVX_MMIO_OK ||
+        nvx_mmio_write32(bar0, NVX_GA10X_FALCON_DMATRFBASE1(falcon_base),
+                         (uint32_t)((source_phys >> 40U) & 0x1FFU)) !=
+                         NVX_MMIO_OK)
+        return NVX_GSP_FALCON_MMIO_ERROR;
+
+    target_bits = target == NVX_GA10X_FALCON_DMEM ? 0U :
+                  NVX_GA10X_FALCON_DMA_IMEM;
+    if (target == NVX_GA10X_FALCON_SECURE_IMEM)
+        target_bits |= (1U << 2U);
+    if (set_dm_tag)
+        target_bits |= NVX_GA10X_FALCON_DMA_SET_DMTAG;
+    command = NVX_GA10X_FALCON_DMA_SIZE_256B | target_bits;
+
+    for (uint32_t done = 0U; done < length;
+         done += NVX_GA10X_FALCON_DMA_CHUNK_BYTES) {
+        status = nvx_ga10x_falcon_dma_wait(
+            bar0, command_register, NVX_GA10X_FALCON_DMA_FULL, 0U,
+            timeout_ms, poll_interval_ms, delay_ms, context);
+        if (status != NVX_GSP_FALCON_OK)
+            return status;
+        if (nvx_mmio_write32(bar0,
+                NVX_GA10X_FALCON_DMATRFMOFFS(falcon_base),
+                destination_offset + done) != NVX_MMIO_OK ||
+            nvx_mmio_write32(bar0,
+                NVX_GA10X_FALCON_DMATRFFBOFFS(falcon_base),
+                source_offset + done) != NVX_MMIO_OK ||
+            nvx_mmio_write32(bar0, command_register, command) != NVX_MMIO_OK)
+            return NVX_GSP_FALCON_MMIO_ERROR;
+    }
+
+    return nvx_ga10x_falcon_dma_wait(
+        bar0, command_register, NVX_GA10X_FALCON_DMA_IDLE,
+        NVX_GA10X_FALCON_DMA_IDLE, timeout_ms, poll_interval_ms,
+        delay_ms, context);
+}

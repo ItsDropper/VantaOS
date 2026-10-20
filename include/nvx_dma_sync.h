@@ -23,7 +23,7 @@ typedef struct nvx_dma_sync {
     nvx_dma_owner_t owner;
     uint8_t initialized;
 } nvx_dma_sync_t;
-/* Tracks exclusive CPU/device ownership for coherent DMA memory. */
+/* Zero-initialize before init. Tracks exclusive CPU/device ownership. */
 nvx_dma_sync_status_t nvx_dma_sync_init(nvx_dma_sync_t *, nvx_dma_buffer_t *);
 nvx_dma_sync_status_t nvx_dma_sync_for_device(nvx_dma_sync_t *, size_t offset, size_t length);
 nvx_dma_sync_status_t nvx_dma_sync_for_cpu(nvx_dma_sync_t *, size_t offset, size_t length);

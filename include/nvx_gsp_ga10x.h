@@ -20,6 +20,8 @@
 #define NVX_GSP_GA10X_RM_QUEUE_INDEX 0U
 #define NVX_GSP_GA10X_MSGQ_REQUIRED_BAR_BYTES (NVX_GSP_GA10X_MSGQ_TAIL(0U)+4U)
 #define NVX_GSP_GA10X_REQUIRED_BAR_BYTES NVX_GSP_FALCON_DIAGNOSTIC_BYTES
+/* GA102 scratch group 42: usable framebuffer size in MiB (Linux Nova). */
+#define NVX_GSP_GA10X_USABLE_FB_SIZE_MB 0x001183A4U
 
 /*
  * GA102+ FPF ucode-version fuse arrays (BAR0-relative), independently
@@ -44,7 +46,8 @@ typedef enum nvx_gsp_ga10x_status {
     NVX_GSP_GA10X_MMIO_ERROR,
     NVX_GSP_GA10X_FUSE_UNSUPPORTED_ENGINE,
     NVX_GSP_GA10X_FUSE_INVALID_UCODE_ID,
-    NVX_GSP_GA10X_FUSE_RESERVED_BITS
+    NVX_GSP_GA10X_FUSE_RESERVED_BITS,
+    NVX_GSP_GA10X_FB_SIZE_INVALID
 } nvx_gsp_ga10x_status_t;
 typedef struct nvx_gsp_ga10x {
     nvx_gsp_msgq_mmio_context_t mmio_context;
@@ -64,6 +67,9 @@ typedef struct nvx_gsp_ga10x {
  * NVIDIA's GA102 selection logic. It never guesses when the engine/ID is
  * unknown and requires the whole selected register to be inside the mapping.
  */
+/* Read actual GA102 usable framebuffer size from the documented scratch register. */
+nvx_gsp_ga10x_status_t nvx_gsp_ga10x_read_usable_fb_size(
+    const nvx_mmio_region_t *bar0, uint64_t *out_bytes);
 nvx_gsp_ga10x_status_t nvx_gsp_ga10x_read_ucode_fuse_version(
     const nvx_mmio_region_t *bar0, uint32_t engine_id_mask,
     uint32_t ucode_id, uint32_t *out_version);

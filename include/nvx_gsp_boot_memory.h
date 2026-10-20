@@ -29,6 +29,8 @@ typedef struct nvx_gsp_boot_memory {
     nvx_dma_buffer_t radix3_elf;
     nvx_dma_buffer_t bootloader_payload;
     nvx_dma_buffer_t signature;
+    uint32_t monitor_code_offset, monitor_data_offset, manifest_offset;
+    uint32_t monitor_code_size, monitor_data_size, manifest_size;
     uint8_t acquired;
 } nvx_gsp_boot_memory_t;
 

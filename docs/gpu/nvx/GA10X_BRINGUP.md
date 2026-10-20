@@ -309,3 +309,8 @@ For the detailed evidence trail and field-by-field contracts covering VBIOS poin
 ## FWSEC command result contract
 
 NVX now has a pure SB/FRTS result validator that checks the documented scratch error fields, GFW security/progress postconditions, and FRTS WPR2 address match. It accepts decoded fields from a platform reader and does no MMIO; it does not constitute command execution. See [the firmware reverse-engineering notebook](FIRMWARE_REVERSE_ENGINEERING.md).
+
+
+## SEC2 transaction evidence trace
+
+The traced Booter Load API exposes the current phase, last completed phase, failure phase, result, and recovery/quiescence outcome. This improves diagnosis without changing the transaction contract. See [SEC2 transaction trace](SEC2_TRANSACTION_TRACE.md). A completed synthetic trace is not proof of physical firmware authentication or boot.

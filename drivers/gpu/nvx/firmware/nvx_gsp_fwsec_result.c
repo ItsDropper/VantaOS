@@ -8,6 +8,34 @@
  */
 #include "nvx_gsp_fwsec_result.h"
 
+#define NVX_GSP_WPR2_VALUE_MASK 0x0FFFFFFFU
+#define NVX_GSP_WPR2_ALIGNMENT_SHIFT 12U
+
+nvx_gsp_fwsec_result_status_t nvx_gsp_fwsec_decode_wpr2_registers(
+    uint32_t raw_address_lo, uint32_t raw_address_hi,
+    uint64_t requested_frts_offset,
+    nvx_gsp_fwsec_wpr2_fields_t *out_fields)
+{
+    nvx_gsp_fwsec_wpr2_fields_t fields;
+
+    if (!out_fields ||
+        (requested_frts_offset & ((UINT64_C(1) <<
+                                   NVX_GSP_WPR2_ALIGNMENT_SHIFT) - 1U)) != 0U ||
+        (requested_frts_offset >> NVX_GSP_WPR2_ALIGNMENT_SHIFT) >
+            NVX_GSP_WPR2_VALUE_MASK)
+        return NVX_GSP_FWSEC_RESULT_INVALID_ARGUMENT;
+
+    fields.address_lo_units =
+        (raw_address_lo >> 4U) & NVX_GSP_WPR2_VALUE_MASK;
+    fields.address_hi_units =
+        (raw_address_hi >> 4U) & NVX_GSP_WPR2_VALUE_MASK;
+    fields.expected_address_lo_units =
+        (uint32_t)(requested_frts_offset >> NVX_GSP_WPR2_ALIGNMENT_SHIFT);
+    *out_fields = fields;
+    return NVX_GSP_FWSEC_RESULT_OK;
+}
+
+
 nvx_gsp_fwsec_result_status_t nvx_gsp_fwsec_validate_result(
     uint32_t command_id, const nvx_gsp_fwsec_result_snapshot_t *snapshot)
 {

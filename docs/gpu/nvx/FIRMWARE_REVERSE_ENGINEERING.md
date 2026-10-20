@@ -166,7 +166,7 @@ Do not skip secure boot and jump straight to rendering. A GPU command submission
 | Unknown / risk | Evidence needed | Safe next experiment |
 | --- | --- | --- |
 | Exact SEC2 Booter Load mailbox 0/1 meanings across firmware versions | Matching NVIDIA call sites and firmware-version-specific result checks | Add named status decoding only after locating the exact contract; keep unknown values as errors |
-| VBIOS expansion-ROM chain selection | PCI ROM header/PCIR image-length and last-image semantics | Implement a separate bounded ROM-image locator and tests; do not pass an arbitrary offset to the FWSEC parser |
+| VBIOS expansion-ROM chain selection | PCI ROM header/PCIR image-length and last-image semantics | **Parser implemented:** `nvx_gsp_pci_rom_find_nvidia()` bounds the chain and returns the first NVIDIA-vendor image. Still validate against real GA106 VBIOS dumps and choose an explicit code-type preference before FWSEC execution |
 | FWSEC image encryption/compression behavior | Descriptor flags and exact GA10x firmware path | Fail closed for unsupported flags; never interpret encrypted bytes as a plain executable image |
 | FWSEC application-interface ABI | Public interface header/entry layout and DMEM mapper version | Parse with checked offsets and sizes; validate command input buffer offsets against DMEM, not just the whole firmware image |
 | FRTS/WPR layout inputs | Firmware commands, real FB size/workspace/lock state and hardware readback | Add read-only diagnostics and pure planners before writes |
@@ -176,9 +176,9 @@ Do not skip secure boot and jump straight to rendering. A GPU command submission
 ## 8. Driver work order
 
 1. Keep PR #159 buildable and make the host tests pass before extending the SEC2 path.
-2. Add a standalone bounded expansion-ROM/PCIR locator; keep it separate from the BIT/FWSEC parser.
-3. Add a pure FWSEC command-interface parser for the public interface table/entry/DMEM mapper, with malformed-offset, overflow, overlapping-range, and no-write-on-failure tests.
-4. Add a versioned FWSEC command builder for the documented SB/FRTS structures only after validating exact sizes, field widths, and status semantics.
+2. **Implemented on the current NVX branch:** add a standalone bounded expansion-ROM/PCIR locator, kept separate from the BIT/FWSEC parser. It validates each chained image boundary and returns the first NVIDIA-vendor image; code-type preference and real-ROM validation remain open.
+3. **Implemented:** add the pure FWSEC application-interface/DMEM-mapper parser with malformed-offset, overflow, duplicate-entry, overlapping-range, and no-write-on-failure tests.
+4. **Implemented for the documented v1 profile:** add SB/FRTS command serialization and result validation; the WPR2 register decoder now applies the published bits-31:4 field extraction and 12-bit alignment rule. Physical command execution remains open.
 5. Add explicit runtime firmware identity and cached-init ABI profile selection.
 6. Integrate real hardware reads/writes only after the pure parsers and planners have exhaustive synthetic tests.
 7. Do not report hardware boot or acceleration until a physical target completes the transaction and a real GSP-RM RPC.
@@ -217,6 +217,8 @@ The published TU102+ result path provides explicit postconditions rather than tr
 - **FRTS (`0x15`):** the error code is the upper 16 bits of VBIOS scratch index `0x0E` and must be zero; WPR2 high-address field must be nonzero; the decoded WPR2 low-address field must equal the requested FRTS framebuffer offset transformed by the hardware-defined `NV_PFB_PRI_MMU_WPR2_ADDR_LO_ALIGNMENT` shift.
 - **SB (`0x19`):** the secure-scratch PLM state must report GFW read-protection level 0 enabled; GFW progress must report completed; the low 16 bits of VBIOS scratch index `0x15` must be zero.
 
-The independent `nvx_gsp_fwsec_validate_result()` helper implements those decision branches in the same fail-fast order, but accepts an already-decoded snapshot. It intentionally does not guess the WPR2 alignment shift, read registers, clear scratch fields, or execute firmware. The platform must decode the register fields from the matching GA10x definitions and supply a coherent snapshot. Synthetic tests cover every failure branch and success.
+The independent `nvx_gsp_fwsec_validate_result()` helper implements those decision branches in the same fail-fast order, but accepts an already-decoded snapshot. The new pure `nvx_gsp_fwsec_decode_wpr2_registers()` helper decodes raw WPR2 low/high register values using the published `dev_fb.h` contract: the value is bits 31:4, and the FRTS byte offset is shifted right by the defined 12-bit alignment before comparison. It rejects unaligned offsets and offsets that cannot fit the decoded field. It still performs no MMIO, does not clear scratch fields, and does not execute firmware. Synthetic tests cover field extraction, alignment/range rejection, and every result-validator branch.
+
+Register source: [NVIDIA published TU102 `dev_fb.h`](https://github.com/NVIDIA/open-gpu-kernel-modules/blob/main/src/common/inc/swref/published/turing/tu102/dev_fb.h), where `NV_PFB_PRI_MMU_WPR2_ADDR_LO_VAL` is bits 31:4 and `NV_PFB_PRI_MMU_WPR2_ADDR_LO_ALIGNMENT` is `0xC` (12 bits). This is a published TU102+ contract cross-check, not a claim that every generation uses identical registers.
 
 This closes the **result interpretation** layer only. A correct decoded snapshot from fake BAR memory remains a test fixture, not evidence that SEC2 ran. Real execution still needs a firmware-generation-bound transaction, real VBIOS/FWSEC image, DMA-coherent staging, physical WPR memory, and actual hardware readback.

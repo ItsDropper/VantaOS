@@ -117,16 +117,21 @@ static nvx_gsp_falcon_status_t reset_and_reclaim(
     return NVX_GSP_FALCON_OK;
 }
 
-nvx_gsp_falcon_status_t nvx_gsp_ga10x_execute_booter_load(
+static void trace_recovery_result(nvx_gsp_boot_trace_t *trace,
+                                  nvx_gsp_falcon_status_t trigger_status,
+                                  nvx_gsp_falcon_status_t recovery_status);
+
+static nvx_gsp_falcon_status_t execute_booter_load_internal(
     nvx_gsp_boot_memory_t *memory, const nvx_mmio_region_t *bar0,
     uint32_t timeout_ms, uint32_t poll_interval_ms,
     nvx_gsp_delay_ms_fn delay_ms, void *context,
-    uint32_t *out_mailbox1)
+    uint32_t *out_mailbox1, nvx_gsp_boot_trace_t *trace)
 {
     nvx_gsp_secure_transfer_plan_t plan;
     nvx_gsp_falcon_status_t status;
     uint32_t mailbox0 = 0U, mailbox1 = 0U;
 
+    if (trace) trace->current_phase = NVX_GSP_BOOT_PHASE_PRECHECK;
     if (!memory || !bar0 || !bar0->base || !delay_ms || !out_mailbox1 ||
         timeout_ms == 0U || poll_interval_ms == 0U ||
         ranges_overlap(memory, sizeof(*memory), bar0, sizeof(*bar0)) ||
@@ -165,15 +170,20 @@ nvx_gsp_falcon_status_t nvx_gsp_ga10x_execute_booter_load(
     if (plan.engine_id_mask != 0x0001U)
         return NVX_GSP_FALCON_BROM_INVALID_PARAMETERS;
 
+    if (trace) trace->current_phase = NVX_GSP_BOOT_PHASE_RESET_SEC2;
     status = nvx_ga10x_falcon_reset(bar0, NVX_SEC2_FALCON_BASE,
         timeout_ms, poll_interval_ms, delay_ms, context);
     if (status != NVX_GSP_FALCON_OK)
         return status;
+    if (trace) { trace->last_completed_phase = NVX_GSP_BOOT_PHASE_RESET_SEC2; trace->sec2_quiescence_confirmed = 1U; }
 
+    if (trace) trace->current_phase = NVX_GSP_BOOT_PHASE_TRANSFER_BOOTER_TO_DEVICE;
     if (nvx_dma_sync_for_device(&memory->booter_load_sync, 0U,
                                 memory->booter_load.size) != NVX_DMA_SYNC_OK)
         return NVX_GSP_FALCON_DMA_OWNERSHIP_ERROR;
+    if (trace) trace->last_completed_phase = NVX_GSP_BOOT_PHASE_TRANSFER_BOOTER_TO_DEVICE;
 
+    if (trace) trace->current_phase = NVX_GSP_BOOT_PHASE_UPLOAD_IMEM;
     status = nvx_ga10x_falcon_dma_upload(
         bar0, NVX_SEC2_FALCON_BASE, plan.source_phys,
         plan.imem_source_offset, plan.imem_destination_offset,
@@ -182,9 +192,12 @@ nvx_gsp_falcon_status_t nvx_gsp_ga10x_execute_booter_load(
     if (status != NVX_GSP_FALCON_OK) {
         nvx_gsp_falcon_status_t reclaim = reset_and_reclaim(
             memory, bar0, timeout_ms, poll_interval_ms, delay_ms, context, 1U, 0U);
+        trace_recovery_result(trace, status, reclaim);
         return reclaim == NVX_GSP_FALCON_OK ? status : reclaim;
     }
 
+    if (trace) trace->last_completed_phase = NVX_GSP_BOOT_PHASE_UPLOAD_IMEM;
+    if (trace) trace->current_phase = NVX_GSP_BOOT_PHASE_UPLOAD_DMEM;
     status = nvx_ga10x_falcon_dma_upload(
         bar0, NVX_SEC2_FALCON_BASE, plan.source_phys,
         plan.dmem_source_offset, plan.dmem_destination_offset,
@@ -193,26 +206,37 @@ nvx_gsp_falcon_status_t nvx_gsp_ga10x_execute_booter_load(
     if (status != NVX_GSP_FALCON_OK) {
         nvx_gsp_falcon_status_t reclaim = reset_and_reclaim(
             memory, bar0, timeout_ms, poll_interval_ms, delay_ms, context, 1U, 0U);
+        trace_recovery_result(trace, status, reclaim);
         return reclaim == NVX_GSP_FALCON_OK ? status : reclaim;
     }
 
+    if (trace) trace->last_completed_phase = NVX_GSP_BOOT_PHASE_UPLOAD_DMEM;
+    if (trace) trace->current_phase = NVX_GSP_BOOT_PHASE_RECLAIM_BOOTER;
     if (nvx_dma_sync_for_cpu(&memory->booter_load_sync, 0U,
                              memory->booter_load.size) != NVX_DMA_SYNC_OK) {
-        (void)reset_and_reclaim(memory, bar0, timeout_ms, poll_interval_ms,
-                                delay_ms, context, 1U, 0U);
+        nvx_gsp_falcon_status_t reclaim = reset_and_reclaim(
+            memory, bar0, timeout_ms, poll_interval_ms, delay_ms, context, 1U, 0U);
+        trace_recovery_result(trace, NVX_GSP_FALCON_DMA_OWNERSHIP_ERROR,
+                              reclaim);
         return NVX_GSP_FALCON_DMA_OWNERSHIP_ERROR;
     }
 
+    if (trace) trace->last_completed_phase = NVX_GSP_BOOT_PHASE_RECLAIM_BOOTER;
+    if (trace) trace->current_phase = NVX_GSP_BOOT_PHASE_PROGRAM_BROM;
     status = nvx_ga10x_falcon_program_brom(
         bar0, NVX_SEC2_FALCON_BASE, NVX_SEC2_FALCON2_BASE,
         plan.engine_id_mask, plan.ucode_id, plan.signature_dmem_offset);
     if (status != NVX_GSP_FALCON_OK)
         return status;
 
+    if (trace) trace->last_completed_phase = NVX_GSP_BOOT_PHASE_PROGRAM_BROM;
+    if (trace) trace->current_phase = NVX_GSP_BOOT_PHASE_TRANSFER_WPR_TO_DEVICE;
     if (nvx_dma_sync_for_device(&memory->wpr_metadata_sync, 0U,
                                 memory->wpr_metadata.size) != NVX_DMA_SYNC_OK)
         return NVX_GSP_FALCON_DMA_OWNERSHIP_ERROR;
+    if (trace) trace->last_completed_phase = NVX_GSP_BOOT_PHASE_TRANSFER_WPR_TO_DEVICE;
 
+    if (trace) { trace->current_phase = NVX_GSP_BOOT_PHASE_START_SEC2; trace->sec2_quiescence_confirmed = 0U; }
     status = nvx_ga10x_falcon_boot(
         bar0, NVX_SEC2_FALCON_BASE, plan.boot_vector,
         1U, (uint32_t)memory->wpr_metadata.gpu_address,
@@ -221,15 +245,86 @@ nvx_gsp_falcon_status_t nvx_gsp_ga10x_execute_booter_load(
     if (status != NVX_GSP_FALCON_OK) {
         nvx_gsp_falcon_status_t reclaim = reset_and_reclaim(
             memory, bar0, timeout_ms, poll_interval_ms, delay_ms, context, 0U, 1U);
+        trace_recovery_result(trace, status, reclaim);
         return reclaim == NVX_GSP_FALCON_OK ? status : reclaim;
     }
 
+    if (trace) { trace->last_completed_phase = NVX_GSP_BOOT_PHASE_START_SEC2; trace->sec2_quiescence_confirmed = 1U; }
+    if (trace) trace->current_phase = NVX_GSP_BOOT_PHASE_RECLAIM_WPR;
     if (nvx_dma_sync_for_cpu(&memory->wpr_metadata_sync, 0U,
                              memory->wpr_metadata.size) != NVX_DMA_SYNC_OK)
         return NVX_GSP_FALCON_DMA_OWNERSHIP_ERROR;
+    if (trace) { trace->last_completed_phase = NVX_GSP_BOOT_PHASE_RECLAIM_WPR; trace->current_phase = NVX_GSP_BOOT_PHASE_VALIDATE_RESULT; }
     if (mailbox0 != 0U)
         return NVX_GSP_FALCON_BOOTER_REPORTED_ERROR;
 
     *out_mailbox1 = mailbox1;
     return NVX_GSP_FALCON_OK;
+}
+
+static void trace_recovery_result(nvx_gsp_boot_trace_t *trace,
+                                  nvx_gsp_falcon_status_t trigger_status,
+                                  nvx_gsp_falcon_status_t recovery_status)
+{
+    if (!trace) return;
+    trace->recovery_trigger_status = trigger_status;
+    trace->recovery_result = recovery_status;
+    trace->recovery_attempted = 1U;
+    trace->recovery_succeeded = recovery_status == NVX_GSP_FALCON_OK;
+    trace->sec2_quiescence_confirmed = recovery_status == NVX_GSP_FALCON_OK;
+}
+
+nvx_gsp_falcon_status_t nvx_gsp_ga10x_execute_booter_load_traced(
+    nvx_gsp_boot_memory_t *memory, const nvx_mmio_region_t *bar0,
+    uint32_t timeout_ms, uint32_t poll_interval_ms,
+    nvx_gsp_delay_ms_fn delay_ms, void *context,
+    uint32_t *out_mailbox1, nvx_gsp_boot_trace_t *out_trace)
+{
+    nvx_gsp_falcon_status_t status;
+    if (out_trace) {
+        if (ranges_overlap(out_trace, sizeof(*out_trace), memory, sizeof(*memory)) ||
+            ranges_overlap(out_trace, sizeof(*out_trace), bar0, sizeof(*bar0)) ||
+            ranges_overlap(out_trace, sizeof(*out_trace), out_mailbox1,
+                           out_mailbox1 ? sizeof(*out_mailbox1) : 0U) ||
+            (bar0 && bar0->base &&
+             ranges_overlap(out_trace, sizeof(*out_trace),
+                            (const void *)bar0->base, bar0->length)) ||
+            (memory &&
+             (ranges_overlap(out_trace, sizeof(*out_trace),
+                             memory->booter_load.cpu_address,
+                             memory->booter_load.allocated_size) ||
+              ranges_overlap(out_trace, sizeof(*out_trace),
+                             memory->wpr_metadata.cpu_address,
+                             memory->wpr_metadata.allocated_size))))
+            return NVX_GSP_FALCON_INVALID_ARGUMENT;
+        memset(out_trace, 0, sizeof(*out_trace));
+        out_trace->current_phase = NVX_GSP_BOOT_PHASE_PRECHECK;
+        out_trace->failed_phase = NVX_GSP_BOOT_PHASE_PRECHECK;
+        out_trace->result = NVX_GSP_FALCON_INVALID_ARGUMENT;
+    }
+
+    status = execute_booter_load_internal(memory, bar0, timeout_ms,
+        poll_interval_ms, delay_ms, context, out_mailbox1, out_trace);
+    if (out_trace) {
+        out_trace->result = status;
+        if (status == NVX_GSP_FALCON_OK) {
+            out_trace->current_phase = NVX_GSP_BOOT_PHASE_COMPLETE;
+            out_trace->last_completed_phase = NVX_GSP_BOOT_PHASE_COMPLETE;
+            out_trace->failed_phase = NVX_GSP_BOOT_PHASE_NONE;
+        } else {
+            out_trace->failed_phase = out_trace->current_phase;
+        }
+    }
+    return status;
+}
+
+nvx_gsp_falcon_status_t nvx_gsp_ga10x_execute_booter_load(
+    nvx_gsp_boot_memory_t *memory, const nvx_mmio_region_t *bar0,
+    uint32_t timeout_ms, uint32_t poll_interval_ms,
+    nvx_gsp_delay_ms_fn delay_ms, void *context,
+    uint32_t *out_mailbox1)
+{
+    return nvx_gsp_ga10x_execute_booter_load_traced(
+        memory, bar0, timeout_ms, poll_interval_ms, delay_ms, context,
+        out_mailbox1, NULL);
 }

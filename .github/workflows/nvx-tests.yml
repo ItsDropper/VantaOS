@@ -6,12 +6,14 @@ on:
       - "drivers/gpu/nvx/**"
       - "include/nvx_gsp_boot_memory.h"
       - "include/nvx_gsp_secure_boot.h"
+      - "include/nvx_gsp_pci_rom.h"
       - "include/nvx_gsp_fwsec_interface.h"
       - "include/nvx_gsp_fwsec_command.h"
       - "include/nvx_gsp_fwsec_result.h"
       - "scripts/test_nvx_gsp_boot_memory.c"
       - "scripts/test_nvx_gsp_secure_boot.c"
       - "scripts/test_nvx_gsp_vbios.c"
+      - "scripts/test_nvx_gsp_pci_rom.c"
       - "scripts/test_nvx_gsp_fwsec_interface.c"
       - "scripts/test_nvx_gsp_fwsec_command.c"
       - "scripts/test_nvx_gsp_fwsec_result.c"
@@ -47,7 +49,7 @@ on:
       - "include/nvx_gsp_init_args.h"
       - "include/nvx_gsp_ga10x.h"
       - "include/nvx_gsp_falcon.h"
-      - "drivers/gpu/nvx/nvx_gsp_falcon.c"
+      - "drivers/gpu/nvx/gsp/nvx_gsp_falcon.c"
       - "scripts/test_nvx_gsp_falcon.c"
       - "include/nvx_gsp_bootloader.h"
       - "include/nvx_gsp_rpc.h"
@@ -91,7 +93,7 @@ on:
       - "scripts/test_nvx_gsp_msgq_rpc_concurrency.c"
       - "scripts/test_nvx_gsp_ga10x.c"
       - "scripts/test_nvx_gsp_falcon.c"
-      - "drivers/gpu/nvx/nvx_gsp_bootloader.c"
+      - "drivers/gpu/nvx/firmware/nvx_gsp_bootloader.c"
       - "scripts/test_nvx_gsp_rpc.c"
       - "scripts/test_nvx_gsp_rpc_msgq.c"
       - "scripts/test_nvx_gsp_elf.c"
@@ -161,7 +163,7 @@ jobs:
       - name: Compile NVX identity tests with strict warnings
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
-            scripts/test_nvx_device.c drivers/gpu/nvx/nvx_device.c \
+            scripts/test_nvx_device.c drivers/gpu/nvx/core/nvx_device.c \
             -o /tmp/vantaos-nvx-device-test
 
       - name: Test NVIDIA PCI matching and descriptor invariants
@@ -170,8 +172,8 @@ jobs:
       - name: Compile NVX PCI inventory tests with strict warnings
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
-            scripts/test_nvx_pci.c drivers/gpu/nvx/nvx_device.c \
-            drivers/gpu/nvx/nvx_pci.c -o /tmp/vantaos-nvx-pci-test
+            scripts/test_nvx_pci.c drivers/gpu/nvx/core/nvx_device.c \
+            drivers/gpu/nvx/core/nvx_pci.c -o /tmp/vantaos-nvx-pci-test
 
       - name: Test PCI inventory diagnostics and auxiliary-function filtering
         run: /tmp/vantaos-nvx-pci-test
@@ -179,7 +181,7 @@ jobs:
       - name: Compile NVX BAR resource tests with strict warnings
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
-            scripts/test_nvx_resource.c drivers/gpu/nvx/nvx_resource.c \
+            scripts/test_nvx_resource.c drivers/gpu/nvx/core/nvx_resource.c \
             -o /tmp/vantaos-nvx-resource-test
 
       - name: Test BAR validation, mapping refusal, mapping and cleanup
@@ -188,8 +190,8 @@ jobs:
       - name: Compile NVIDIA BAR0 register probe tests with strict warnings
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
-            scripts/test_nvx_probe.c drivers/gpu/nvx/nvx_probe.c \
-            drivers/gpu/nvx/nvx_mmio.c drivers/gpu/nvx/nvx_device.c \
+            scripts/test_nvx_probe.c drivers/gpu/nvx/core/nvx_probe.c \
+            drivers/gpu/nvx/core/nvx_mmio.c drivers/gpu/nvx/core/nvx_device.c \
             -o /tmp/vantaos-nvx-probe-test
 
       - name: Test conservative NVIDIA PMC register probing
@@ -198,7 +200,7 @@ jobs:
       - name: Compile NVX MMIO access tests with strict warnings
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
-            scripts/test_nvx_mmio.c drivers/gpu/nvx/nvx_mmio.c \
+            scripts/test_nvx_mmio.c drivers/gpu/nvx/core/nvx_mmio.c \
             -o /tmp/vantaos-nvx-mmio-test
 
       - name: Test MMIO bounds, alignment, reads and writes
@@ -207,10 +209,10 @@ jobs:
       - name: Compile NVX attach transaction tests with strict warnings
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
-            scripts/test_nvx_attach.c drivers/gpu/nvx/nvx_attach.c \
-            drivers/gpu/nvx/nvx_resource.c drivers/gpu/nvx/nvx_probe.c \
-            drivers/gpu/nvx/nvx_mmio.c drivers/gpu/nvx/nvx_device.c \
-            drivers/gpu/nvx/nvx_lifecycle.c -o /tmp/vantaos-nvx-attach-test
+            scripts/test_nvx_attach.c drivers/gpu/nvx/core/nvx_attach.c \
+            drivers/gpu/nvx/core/nvx_resource.c drivers/gpu/nvx/core/nvx_probe.c \
+            drivers/gpu/nvx/core/nvx_mmio.c drivers/gpu/nvx/core/nvx_device.c \
+            drivers/gpu/nvx/core/nvx_lifecycle.c -o /tmp/vantaos-nvx-attach-test
 
       - name: Test NVX attach, register probe, rollback and teardown
         run: /tmp/vantaos-nvx-attach-test
@@ -218,7 +220,7 @@ jobs:
       - name: Compile NVX firmware verification tests with strict warnings
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
-            scripts/test_nvx_firmware.c drivers/gpu/nvx/nvx_firmware.c \
+            scripts/test_nvx_firmware.c drivers/gpu/nvx/firmware/nvx_firmware.c \
             -o /tmp/vantaos-nvx-firmware-test
 
       - name: Test bounded GSP firmware acquisition and verification
@@ -227,7 +229,7 @@ jobs:
       - name: Compile NVX GSP firmware bundle tests with strict warnings
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
-            scripts/test_nvx_gsp_bundle.c drivers/gpu/nvx/nvx_gsp_bundle.c \
+            scripts/test_nvx_gsp_bundle.c drivers/gpu/nvx/firmware/nvx_gsp_bundle.c \
             -o /tmp/vantaos-nvx-gsp-bundle-test
 
       - name: Test GSP component paths, verification and transactional cleanup
@@ -236,7 +238,7 @@ jobs:
       - name: Compile bounded GSP booter-image parser tests
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
-            scripts/test_nvx_gsp_image.c drivers/gpu/nvx/nvx_gsp_image.c \
+            scripts/test_nvx_gsp_image.c drivers/gpu/nvx/firmware/nvx_gsp_image.c \
             -o /tmp/vantaos-nvx-gsp-image-test
 
       - name: Test GSP image offsets, signature ranges and app metadata
@@ -245,7 +247,7 @@ jobs:
       - name: Compile NVX DMA buffer tests with strict warnings
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
-            scripts/test_nvx_dma.c drivers/gpu/nvx/nvx_dma.c \
+            scripts/test_nvx_dma.c drivers/gpu/nvx/memory/nvx_dma.c \
             -o /tmp/vantaos-nvx-dma-test
 
       - name: Test contiguous DMA allocation bounds, validation and cleanup
@@ -254,7 +256,7 @@ jobs:
       - name: Compile WPR metadata layout tests
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
-            scripts/test_nvx_gsp_wpr_meta.c drivers/gpu/nvx/nvx_gsp_wpr_meta.c \
+            scripts/test_nvx_gsp_wpr_meta.c drivers/gpu/nvx/firmware/nvx_gsp_wpr_meta.c \
             -o /tmp/vantaos-nvx-wpr-meta-test
 
       - name: Test exact 256-byte WPR V1 layout and range validation
@@ -263,8 +265,8 @@ jobs:
       - name: Compile GA10x boot-memory ownership tests
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
-            scripts/test_nvx_gsp_boot_memory.c drivers/gpu/nvx/nvx_gsp_boot_memory.c \
-            drivers/gpu/nvx/nvx_gsp_wpr_meta.c drivers/gpu/nvx/nvx_dma_sync.c -o /tmp/vantaos-nvx-gsp-boot-memory-test
+            scripts/test_nvx_gsp_boot_memory.c drivers/gpu/nvx/gsp/nvx_gsp_boot_memory.c \
+            drivers/gpu/nvx/firmware/nvx_gsp_wpr_meta.c drivers/gpu/nvx/memory/nvx_dma_sync.c -o /tmp/vantaos-nvx-gsp-boot-memory-test
 
       - name: Test DMA artifact acquisition, WPR metadata handoff and rollback
         run: /tmp/vantaos-nvx-gsp-boot-memory-test
@@ -272,9 +274,9 @@ jobs:
       - name: Compile GA10x SEC2 secure-booter execution tests
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
-            scripts/test_nvx_gsp_secure_boot.c drivers/gpu/nvx/nvx_gsp_secure_boot.c \
-            drivers/gpu/nvx/nvx_gsp_falcon.c drivers/gpu/nvx/nvx_mmio.c \
-            drivers/gpu/nvx/nvx_dma_sync.c -o /tmp/vantaos-nvx-secure-boot-test
+            scripts/test_nvx_gsp_secure_boot.c drivers/gpu/nvx/firmware/nvx_gsp_secure_boot.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_falcon.c drivers/gpu/nvx/core/nvx_mmio.c \
+            drivers/gpu/nvx/memory/nvx_dma_sync.c -o /tmp/vantaos-nvx-secure-boot-test
 
       - name: Test SEC2 transfer planning, BROM setup and Booter Load handoff
         run: /tmp/vantaos-nvx-secure-boot-test
@@ -282,7 +284,7 @@ jobs:
       - name: Compile GSP ELF section lookup tests
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
-            scripts/test_nvx_gsp_elf_sections.c drivers/gpu/nvx/nvx_gsp_elf.c \
+            scripts/test_nvx_gsp_elf_sections.c drivers/gpu/nvx/gsp/nvx_gsp_elf.c \
             -o /tmp/vantaos-nvx-gsp-elf-sections-test
 
       - name: Test bounded firmware section lookup
@@ -291,10 +293,10 @@ jobs:
       - name: Compile GSP firmware preflight tests
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
-            scripts/test_nvx_gsp_preflight.c drivers/gpu/nvx/nvx_gsp_preflight.c \
-            drivers/gpu/nvx/nvx_gsp_fuse.c drivers/gpu/nvx/nvx_mmio.c \
-            drivers/gpu/nvx/nvx_gsp_elf.c drivers/gpu/nvx/nvx_gsp_elf_load.c \
-            drivers/gpu/nvx/nvx_gsp_image.c drivers/gpu/nvx/nvx_gsp_bootloader.c \
+            scripts/test_nvx_gsp_preflight.c drivers/gpu/nvx/firmware/nvx_gsp_preflight.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_fuse.c drivers/gpu/nvx/core/nvx_mmio.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_elf.c drivers/gpu/nvx/gsp/nvx_gsp_elf_load.c \
+            drivers/gpu/nvx/firmware/nvx_gsp_image.c drivers/gpu/nvx/firmware/nvx_gsp_bootloader.c \
             -o /tmp/vantaos-nvx-gsp-preflight-test
 
       - name: Test verified firmware bundle preflight
@@ -303,7 +305,7 @@ jobs:
       - name: Compile NVIDIA MSGQ header tests
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
-            scripts/test_nvx_gsp_msgq.c drivers/gpu/nvx/nvx_gsp_msgq.c \
+            scripts/test_nvx_gsp_msgq.c drivers/gpu/nvx/gsp/nvx_gsp_msgq.c \
             -o /tmp/vantaos-nvx-msgq-test
 
       - name: Test NVIDIA MSGQ backing-store ABI
@@ -312,8 +314,8 @@ jobs:
       - name: Compile NVIDIA MSGQ queue engine tests
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
-            scripts/test_nvx_gsp_msgq_queue.c drivers/gpu/nvx/nvx_gsp_msgq_queue.c \
-            drivers/gpu/nvx/nvx_gsp_msgq.c drivers/gpu/nvx/nvx_mmio.c \
+            scripts/test_nvx_gsp_msgq_queue.c drivers/gpu/nvx/gsp/nvx_gsp_msgq_queue.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_msgq.c drivers/gpu/nvx/core/nvx_mmio.c \
             -o /tmp/vantaos-nvx-msgq-queue-test
 
       - name: Test NVIDIA MSGQ register and slot semantics
@@ -322,9 +324,9 @@ jobs:
       - name: Compile NVIDIA MSGQ RPC transport tests
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
-            scripts/test_nvx_gsp_msgq_rpc.c drivers/gpu/nvx/nvx_gsp_msgq_rpc.c \
-            drivers/gpu/nvx/nvx_gsp_msgq_queue.c drivers/gpu/nvx/nvx_gsp_msgq.c \
-            drivers/gpu/nvx/nvx_mmio.c -o /tmp/vantaos-nvx-msgq-rpc-test
+            scripts/test_nvx_gsp_msgq_rpc.c drivers/gpu/nvx/gsp/nvx_gsp_msgq_rpc.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_msgq_queue.c drivers/gpu/nvx/gsp/nvx_gsp_msgq.c \
+            drivers/gpu/nvx/core/nvx_mmio.c -o /tmp/vantaos-nvx-msgq-rpc-test
 
       - name: Test NVIDIA MSGQ RPC transport framing and slot consumption
         run: /tmp/vantaos-nvx-msgq-rpc-test
@@ -333,9 +335,9 @@ jobs:
         run: |
           gcc -pthread -std=c11 -Wall -Wextra -Werror -Iinclude \
             scripts/test_nvx_gsp_msgq_rpc_concurrency.c \
-            drivers/gpu/nvx/nvx_gsp_msgq_rpc.c \
-            drivers/gpu/nvx/nvx_gsp_msgq_queue.c \
-            drivers/gpu/nvx/nvx_gsp_msgq.c drivers/gpu/nvx/nvx_mmio.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_msgq_rpc.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_msgq_queue.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_msgq.c drivers/gpu/nvx/core/nvx_mmio.c \
             -o /tmp/vantaos-nvx-msgq-rpc-concurrency-test
 
       - name: Test concurrent NVX MSGQ sends do not interleave multi-page RPCs
@@ -344,7 +346,7 @@ jobs:
       - name: Compile GSP cached-init-arguments ABI tests
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
-            scripts/test_nvx_gsp_init_args.c drivers/gpu/nvx/nvx_gsp_init_args.c \
+            scripts/test_nvx_gsp_init_args.c drivers/gpu/nvx/gsp/nvx_gsp_init_args.c \
             -o /tmp/vantaos-nvx-gsp-init-args-test
 
       - name: Test GSP init ABI offsets and shared queue layout planning
@@ -353,10 +355,10 @@ jobs:
       - name: Compile GA10x GSP register-map integration tests
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
-            scripts/test_nvx_gsp_ga10x.c drivers/gpu/nvx/nvx_gsp_ga10x.c \
-            drivers/gpu/nvx/nvx_gsp_fuse.c drivers/gpu/nvx/nvx_gsp_falcon.c drivers/gpu/nvx/nvx_gsp_msgq_rpc.c \
-            drivers/gpu/nvx/nvx_gsp_msgq_queue.c drivers/gpu/nvx/nvx_gsp_msgq.c \
-            drivers/gpu/nvx/nvx_mmio.c -o /tmp/vantaos-nvx-ga10x-queues-test
+            scripts/test_nvx_gsp_ga10x.c drivers/gpu/nvx/gsp/nvx_gsp_ga10x.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_fuse.c drivers/gpu/nvx/gsp/nvx_gsp_falcon.c drivers/gpu/nvx/gsp/nvx_gsp_msgq_rpc.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_msgq_queue.c drivers/gpu/nvx/gsp/nvx_gsp_msgq.c \
+            drivers/gpu/nvx/core/nvx_mmio.c -o /tmp/vantaos-nvx-ga10x-queues-test
 
       - name: Test NVIDIA GA10x queue register map and post-boot response linking
         run: /tmp/vantaos-nvx-ga10x-queues-test
@@ -364,8 +366,8 @@ jobs:
       - name: Compile GA10x Falcon register inspection tests
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
-            scripts/test_nvx_gsp_falcon.c drivers/gpu/nvx/nvx_gsp_falcon.c \
-            drivers/gpu/nvx/nvx_mmio.c -o /tmp/vantaos-nvx-ga10x-falcon-test
+            scripts/test_nvx_gsp_falcon.c drivers/gpu/nvx/gsp/nvx_gsp_falcon.c \
+            drivers/gpu/nvx/core/nvx_mmio.c -o /tmp/vantaos-nvx-ga10x-falcon-test
 
       - name: Test GA10x Falcon diagnostics, BROM programming and lock guards
         run: /tmp/vantaos-nvx-ga10x-falcon-test
@@ -373,7 +375,7 @@ jobs:
       - name: Compile GSP RPC ring tests
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
-            scripts/test_nvx_gsp_ring.c drivers/gpu/nvx/nvx_gsp_ring.c \
+            scripts/test_nvx_gsp_ring.c drivers/gpu/nvx/gsp/nvx_gsp_ring.c \
             -o /tmp/vantaos-nvx-gsp-ring-test
 
       - name: Test NVIDIA GSP MCTP/NVDM framing, wraparound and malformed-envelope rejection
@@ -382,7 +384,7 @@ jobs:
       - name: Compile GSP runtime ELF parser tests
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
-            scripts/test_nvx_gsp_elf.c drivers/gpu/nvx/nvx_gsp_elf.c \
+            scripts/test_nvx_gsp_elf.c drivers/gpu/nvx/gsp/nvx_gsp_elf.c \
             -o /tmp/vantaos-nvx-gsp-elf-test
 
       - name: Test ELF bounds, load segments and signature section
@@ -391,8 +393,8 @@ jobs:
       - name: Compile GSP ELF segment materialization tests
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
-            scripts/test_nvx_gsp_elf_load.c drivers/gpu/nvx/nvx_gsp_elf_load.c \
-            drivers/gpu/nvx/nvx_gsp_elf.c -o /tmp/vantaos-nvx-gsp-elf-load-test
+            scripts/test_nvx_gsp_elf_load.c drivers/gpu/nvx/gsp/nvx_gsp_elf_load.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_elf.c -o /tmp/vantaos-nvx-gsp-elf-load-test
 
       - name: Test GSP ELF copy, BSS zeroing, mapping validation and atomic failure
         run: /tmp/vantaos-nvx-gsp-elf-load-test
@@ -400,10 +402,10 @@ jobs:
       - name: Compile GSP RPC transaction tests
         run: |
           gcc -DNVX_GSP_RPC_TEST -std=c11 -Wall -Wextra -Werror -Iinclude \
-            scripts/test_nvx_gsp_rpc.c drivers/gpu/nvx/nvx_gsp_rpc.c \
-            drivers/gpu/nvx/nvx_gsp_ring.c drivers/gpu/nvx/nvx_gsp_msgq_rpc.c \
-            drivers/gpu/nvx/nvx_gsp_msgq_queue.c drivers/gpu/nvx/nvx_gsp_msgq.c \
-            drivers/gpu/nvx/nvx_mmio.c -o /tmp/vantaos-nvx-gsp-rpc-test
+            scripts/test_nvx_gsp_rpc.c drivers/gpu/nvx/gsp/nvx_gsp_rpc.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_ring.c drivers/gpu/nvx/gsp/nvx_gsp_msgq_rpc.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_msgq_queue.c drivers/gpu/nvx/gsp/nvx_gsp_msgq.c \
+            drivers/gpu/nvx/core/nvx_mmio.c -o /tmp/vantaos-nvx-gsp-rpc-test
 
       - name: Test GSP RPC correlation, response buffers and device-loss handling
         run: /tmp/vantaos-nvx-gsp-rpc-test
@@ -411,10 +413,10 @@ jobs:
       - name: Compile RPC manager over NVIDIA MSGQ tests
         run: |
           gcc -DNVX_GSP_RPC_TEST -std=c11 -Wall -Wextra -Werror -Iinclude \
-            scripts/test_nvx_gsp_rpc_msgq.c drivers/gpu/nvx/nvx_gsp_rpc.c \
-            drivers/gpu/nvx/nvx_gsp_ring.c drivers/gpu/nvx/nvx_gsp_msgq_rpc.c \
-            drivers/gpu/nvx/nvx_gsp_msgq_queue.c \
-            drivers/gpu/nvx/nvx_gsp_msgq.c drivers/gpu/nvx/nvx_mmio.c \
+            scripts/test_nvx_gsp_rpc_msgq.c drivers/gpu/nvx/gsp/nvx_gsp_rpc.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_ring.c drivers/gpu/nvx/gsp/nvx_gsp_msgq_rpc.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_msgq_queue.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_msgq.c drivers/gpu/nvx/core/nvx_mmio.c \
             -o /tmp/vantaos-nvx-gsp-rpc-msgq-test
 
       - name: Test RPC correlation, failures and device loss over MSGQ
@@ -423,7 +425,7 @@ jobs:
       - name: Compile NVX DMA ownership and ordering tests
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
-            scripts/test_nvx_dma_sync.c drivers/gpu/nvx/nvx_dma_sync.c \
+            scripts/test_nvx_dma_sync.c drivers/gpu/nvx/memory/nvx_dma_sync.c \
             -o /tmp/vantaos-nvx-dma-sync-test
 
       - name: Test DMA ownership, barriers, stale handles and bounds
@@ -432,7 +434,7 @@ jobs:
       - name: Compile NVX GPU virtual-address allocator tests with strict warnings
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
-            scripts/test_nvx_gpuva.c drivers/gpu/nvx/nvx_gpuva.c \
+            scripts/test_nvx_gpuva.c drivers/gpu/nvx/memory/nvx_gpuva.c \
             -o /tmp/vantaos-nvx-gpuva-test
 
       - name: Test GPU VA split/merge, guards, handles, and randomized invariants
@@ -441,9 +443,9 @@ jobs:
       - name: Compile NVX memory object tests with strict warnings
         run: |
           gcc -DNVX_GPUVM_TEST -std=c11 -Wall -Wextra -Werror -Iinclude \
-            scripts/test_nvx_object_memory.c drivers/gpu/nvx/nvx_object_memory.c \
-            drivers/gpu/nvx/nvx_gpuvm.c drivers/gpu/nvx/nvx_gpuva.c \
-            drivers/gpu/nvx/nvx_dma.c \
+            scripts/test_nvx_object_memory.c drivers/gpu/nvx/memory/nvx_object_memory.c \
+            drivers/gpu/nvx/memory/nvx_gpuvm.c drivers/gpu/nvx/memory/nvx_gpuva.c \
+            drivers/gpu/nvx/memory/nvx_dma.c \
             -o /tmp/vantaos-nvx-memory-test
 
       - name: Test NVX memory object ownership, rollback and stale handles
@@ -452,7 +454,7 @@ jobs:
       - name: Compile NVX software fence timeline tests with strict warnings
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
-            scripts/test_nvx_sync.c drivers/gpu/nvx/nvx_sync.c \
+            scripts/test_nvx_sync.c drivers/gpu/nvx/execution/nvx_sync.c \
             -o /tmp/vantaos-nvx-sync-test
 
       - name: Test NVX monotonic fences, invalid signals and device loss
@@ -461,9 +463,9 @@ jobs:
       - name: Compile NVX batch validation tests with strict warnings
         run: |
           gcc -DNVX_GPUVM_TEST -std=c11 -Wall -Wextra -Werror -Iinclude \
-            scripts/test_nvx_submit.c drivers/gpu/nvx/nvx_submit.c drivers/gpu/nvx/nvx_gpuvm.c \
-            drivers/gpu/nvx/nvx_object_memory.c drivers/gpu/nvx/nvx_gpuva.c \
-            drivers/gpu/nvx/nvx_dma.c -o /tmp/vantaos-nvx-submit-test
+            scripts/test_nvx_submit.c drivers/gpu/nvx/execution/nvx_submit.c drivers/gpu/nvx/memory/nvx_gpuvm.c \
+            drivers/gpu/nvx/memory/nvx_object_memory.c drivers/gpu/nvx/memory/nvx_gpuva.c \
+            drivers/gpu/nvx/memory/nvx_dma.c -o /tmp/vantaos-nvx-submit-test
 
       - name: Test command bounds, relocation overlap and target ranges
         run: /tmp/vantaos-nvx-submit-test
@@ -471,7 +473,7 @@ jobs:
       - name: Compile NVX MSI/MSI-X capability tests with strict warnings
         run: |
           gcc -DPCI_TEST -std=c11 -Wall -Wextra -Werror -Iinclude \
-            scripts/test_nvx_irq_caps.c drivers/gpu/nvx/nvx_irq_caps.c \
+            scripts/test_nvx_irq_caps.c drivers/gpu/nvx/interrupts/nvx_irq_caps.c \
             drivers/pci/pci.c -o /tmp/vantaos-nvx-irq-caps-test
 
       - name: Test read-only MSI/MSI-X metadata and BAR range validation
@@ -489,8 +491,8 @@ jobs:
       - name: Compile NVX interrupt route transaction tests with strict warnings
         run: |
           gcc -DDEVICE_IRQ_TEST -DPCI_TEST -std=c11 -Wall -Wextra -Werror -Iinclude \
-            scripts/test_nvx_irq_route.c drivers/gpu/nvx/nvx_irq_route.c \
-            drivers/gpu/nvx/nvx_irq_caps.c arch/x86_64/device_irq.c \
+            scripts/test_nvx_irq_route.c drivers/gpu/nvx/interrupts/nvx_irq_route.c \
+            drivers/gpu/nvx/interrupts/nvx_irq_caps.c arch/x86_64/device_irq.c \
             drivers/pci/pci.c -o /tmp/vantaos-nvx-irq-route-test
 
       - name: Test NVX interrupt route preparation and rollback
@@ -499,8 +501,8 @@ jobs:
       - name: Compile NVX GPU page-table tests with strict warnings
         run: |
           gcc -DNVX_GPUVM_TEST -std=c11 -Wall -Wextra -Werror -Iinclude \
-            scripts/test_nvx_gpuvm.c drivers/gpu/nvx/nvx_gpuvm.c \
-            drivers/gpu/nvx/nvx_gpuva.c -o /tmp/vantaos-nvx-gpuvm-test
+            scripts/test_nvx_gpuvm.c drivers/gpu/nvx/memory/nvx_gpuvm.c \
+            drivers/gpu/nvx/memory/nvx_gpuva.c -o /tmp/vantaos-nvx-gpuvm-test
 
       - name: Test Ampere V2 page tables and MMU flush failure handling
         run: /tmp/vantaos-nvx-gpuvm-test
@@ -508,7 +510,7 @@ jobs:
       - name: Compile NVX lifecycle tests with strict warnings
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
-            scripts/test_nvx_lifecycle.c drivers/gpu/nvx/nvx_lifecycle.c \
+            scripts/test_nvx_lifecycle.c drivers/gpu/nvx/core/nvx_lifecycle.c \
             -o /tmp/vantaos-nvx-lifecycle-test
 
       - name: Test lifecycle gates, capabilities, shutdown, and failure
@@ -517,17 +519,27 @@ jobs:
       - name: Compile GA10x VBIOS FWSEC parser tests with strict warnings
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
-            scripts/test_nvx_gsp_vbios.c drivers/gpu/nvx/nvx_gsp_vbios.c \
+            scripts/test_nvx_gsp_vbios.c drivers/gpu/nvx/firmware/nvx_gsp_vbios.c \
             -o /tmp/vantaos-nvx-gsp-vbios-test
 
       - name: Test VBIOS BIT traversal, FWSEC V3 metadata and malformed ranges
         run: /tmp/vantaos-nvx-gsp-vbios-test
 
+      - name: Compile bounded PCI expansion-ROM chain tests with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_pci_rom.c drivers/gpu/nvx/firmware/nvx_gsp_pci_rom.c \
+            -o /tmp/vantaos-nvx-pci-rom-test
+
+      - name: Test PCI ROM chain boundaries, vendor matching and malformed images
+        run: /tmp/vantaos-nvx-pci-rom-test
+
+
       - name: Compile FWSEC interface parser tests with strict warnings
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
             scripts/test_nvx_gsp_fwsec_interface.c \
-            drivers/gpu/nvx/nvx_gsp_fwsec_interface.c \
+            drivers/gpu/nvx/firmware/nvx_gsp_fwsec_interface.c \
             -o /tmp/vantaos-nvx-fwsec-interface-test
 
       - name: Test bounded FWSEC DMEM mapper and command window parsing
@@ -537,7 +549,7 @@ jobs:
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
             scripts/test_nvx_gsp_fwsec_command.c \
-            drivers/gpu/nvx/nvx_gsp_fwsec_command.c \
+            drivers/gpu/nvx/firmware/nvx_gsp_fwsec_command.c \
             -o /tmp/vantaos-nvx-fwsec-command-test
 
       - name: Test versioned FWSEC SB/FRTS command layouts
@@ -547,7 +559,7 @@ jobs:
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
             scripts/test_nvx_gsp_fwsec_result.c \
-            drivers/gpu/nvx/nvx_gsp_fwsec_result.c \
+            drivers/gpu/nvx/firmware/nvx_gsp_fwsec_result.c \
             -o /tmp/vantaos-nvx-fwsec-result-test
 
       - name: Test fail-closed SB/FRTS result validation

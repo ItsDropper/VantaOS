@@ -224,3 +224,10 @@ The caller must still parse the signed firmware descriptor into exact IMEM/DMEM 
 Added `nvx_ga10x_falcon_reset()` for SEC2 and GSP. It checks the PRIV lock, asserts the documented engine-reset bit, waits 1 ms (conservatively longer than the 10 µs hardware reset pulse used by OpenRM/Nova), deasserts reset, then polls HWCFG2's memory-scrubbing bit with a bounded timeout. The implementation does not treat RESET_READY as mandatory because NVIDIA's GA102 reset path documents it as advisory. Host tests verify reset deassertion, scrub completion, and timeout behavior.
 
 This is now the reset primitive needed before the DMA uploader. It still needs a verified platform transaction that orders SEC2 FWSEC loading, WPR/FRTS preparation, GSP booter load, RISC-V launch, and RPC initialization.
+
+
+## Falcon boot completion and mailbox handshake
+
+Added `nvx_ga10x_falcon_boot()`: it validates engine/BAR/output ranges, checks the privilege lock and halted state, writes optional input mailboxes, programs BOOTVEC and STARTCPU, polls CPUCTL.HALTED with a timeout, then returns both firmware mailboxes. Output values are cleared before the transaction and remain zero on failure. Host tests exercise input mailbox writes, a successful firmware-completion mailbox response, and a stuck-running timeout.
+
+This follows the GA102 Falcon boot contract documented by Linux Nova/OpenRM. A returned mailbox pair is only a firmware-specific result; callers must decode the correct status for each SEC2/FWSEC or booter image. This still depends on correct firmware parsing, DMA upload, WPR setup, and the overall boot order.

@@ -50,7 +50,7 @@ int main(void) {
  c.kind=NVX_GSP_BOOTER_LOAD; c.blob.size=8U; assert(nvx_gsp_image_parse(&c,&info)==NVX_GSP_IMAGE_TRUNCATED);
  make_image(&c); put32(12,UINT32_MAX); assert(nvx_gsp_image_parse(&c,&info)==NVX_GSP_IMAGE_HEADER_INVALID);
  make_image(&c); put32(20,UINT32_MAX); assert(nvx_gsp_image_parse(&c,&info)==NVX_GSP_IMAGE_RANGE_INVALID);
- make_image(&c); put32(68,1U); assert(nvx_gsp_image_parse(&c,&info)==NVX_GSP_IMAGE_SIGNATURE_INVALID);
+ make_image(&c); put32(128,1U); assert(nvx_gsp_image_parse(&c,&info)==NVX_GSP_IMAGE_SIGNATURE_INVALID);
  make_image(&c); put32(144,0U); assert(nvx_gsp_image_parse(&c,&info)==NVX_GSP_IMAGE_SIGNATURE_INVALID);
  make_image(&c); put32(144,3U); assert(nvx_gsp_image_parse(&c,&info)==NVX_GSP_IMAGE_SIGNATURE_INVALID);
  make_image(&c); put32(44,8U); assert(nvx_gsp_image_parse(&c,&info)==NVX_GSP_IMAGE_METADATA_INVALID);

@@ -57,13 +57,13 @@ int main(void){
  assert(report.gsp_bootloader.descriptor_size==84U&&report.gsp_bootloader.payload_offset==108U&&report.gsp_bootloader.payload_size==128U);
  uint8_t bootloader_stage[128],bootloader_backup[128];
  nvx_gsp_bootloader_info_t bootloader_info;
- assert(nvx_gsp_bootloader_prepare(&b.components[4],bootloader_stage,sizeof(bootloader_stage),&bootloader_info)==NVX_GSP_BOOTLOADER_OK);
+ assert(nvx_gsp_preflight_stage_gsp_bootloader(&b,bootloader_stage,sizeof(bootloader_stage),&bootloader_info)==NVX_GSP_PREFLIGHT_OK);
  assert(bootloader_info.descriptor_size==84U&&b.components[4].blob.data[bootloader_info.descriptor_offset]==1U);
  assert(bootloader_stage[0]==0x80U&&bootloader_stage[127]==0xFFU);
  memset(bootloader_stage,0xA5U,sizeof(bootloader_stage));memcpy(bootloader_backup,bootloader_stage,sizeof(bootloader_stage));
- assert(nvx_gsp_bootloader_prepare(&b.components[4],bootloader_stage,sizeof(bootloader_stage)-1U,&bootloader_info)==NVX_GSP_BOOTLOADER_BUFFER_TOO_SMALL);
+ assert(nvx_gsp_preflight_stage_gsp_bootloader(&b,bootloader_stage,sizeof(bootloader_stage)-1U,&bootloader_info)==NVX_GSP_PREFLIGHT_STAGING_TOO_SMALL);
  assert(memcmp(bootloader_stage,bootloader_backup,sizeof(bootloader_stage))==0);
- assert(nvx_gsp_bootloader_prepare(&b.components[4],boot_assets[2]+108U,128U,&bootloader_info)==NVX_GSP_BOOTLOADER_INVALID_ARGUMENT);
+ assert(nvx_gsp_preflight_stage_gsp_bootloader(&b,boot_assets[2]+108U,128U,&bootloader_info)==NVX_GSP_PREFLIGHT_STAGING_ALIAS);
  assert(report.booter_load.engine_id==0x400U&&report.booter_unload.ucode_id==1U);
  assert(report.firmware_image.offset==512U&&report.firmware_image.size==64U);
  assert(report.firmware_version.offset==576U&&strcmp(report.version,"535.113.01")==0);

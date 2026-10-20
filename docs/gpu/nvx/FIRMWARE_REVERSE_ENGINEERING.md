@@ -7,6 +7,12 @@ This document is a durable engineering record of the format/sequence reconstruct
 
 ## 1. Evidence labels and method
 
+### Acquisition-time verification is not enough
+
+Bundle acquisition invokes the platform's firmware verification callback, but the bundle retains pointers to backing bytes. Preflight now calls that same trusted provider again for all five canonical component paths before parsing or staging. This makes the verified status a property of the bytes at the point of use, not merely of an earlier acquisition. A failed recheck aborts before parsing and leaves the report cleared. This is still only as strong as the platform provider's cryptographic policy; the current synthetic test provider is deliberately not a production verifier.
+
+
+
 Use these labels in code reviews and future documentation:
 
 - **Published contract** — a field, register, branch, or sequence is explicitly present in a public NVIDIA source file or public register definition. Record the exact source path.

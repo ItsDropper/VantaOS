@@ -217,3 +217,10 @@ Register definition was cross-checked against [Linux Nova's GA102 register defin
 Added `nvx_ga10x_falcon_dma_upload()` for GA102 SEC2/GSP Falcon engines. It validates physical-address width and 256-byte alignment, validates IMEM/DMEM destination bounds, requires the engine halted and the PRIV window accessible, configures physical coherent SYSRAM FBIF access, programs the split DMA base registers, submits bounded 256-byte transfers, and polls queue-full/engine-idle status with explicit timeouts. Secure IMEM selects the secure transfer field; DMEM tag behavior is an explicit argument rather than assumed. Tests assert register programming for a two-chunk upload, reject malformed ranges, and force a stuck-queue timeout.
 
 The caller must still parse the signed firmware descriptor into exact IMEM/DMEM source and destination ranges, reserve DMA memory, perform the correct SEC2/FWSEC/GSP boot ordering, and validate mailbox/status completion. This helper is hardware-facing transfer logic, not proof that firmware was authenticated or executed.
+
+
+## Falcon reset and memory-scrub sequencing
+
+Added `nvx_ga10x_falcon_reset()` for SEC2 and GSP. It checks the PRIV lock, asserts the documented engine-reset bit, waits 1 ms (conservatively longer than the 10 µs hardware reset pulse used by OpenRM/Nova), deasserts reset, then polls HWCFG2's memory-scrubbing bit with a bounded timeout. The implementation does not treat RESET_READY as mandatory because NVIDIA's GA102 reset path documents it as advisory. Host tests verify reset deassertion, scrub completion, and timeout behavior.
+
+This is now the reset primitive needed before the DMA uploader. It still needs a verified platform transaction that orders SEC2 FWSEC loading, WPR/FRTS preparation, GSP booter load, RISC-V launch, and RPC initialization.

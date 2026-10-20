@@ -258,29 +258,39 @@ static nvx_gpuvm_status_t nvx_gpuvm_leaf_for_va(nvx_gpuvm_t *vm,
 static nvx_gpuvm_status_t nvx_gpuvm_prune_empty_path(nvx_gpuvm_t *vm,
                                                         uint64_t va)
 {
-    uint16_t current;
-    nvx_gpuvm_status_t status=nvx_gpuvm_leaf_for_va(vm,va,0,&current);
-    if(status==NVX_GPUVM_NOT_MAPPED) return NVX_GPUVM_OK;
-    if(status!=NVX_GPUVM_OK) return status;
-    while(current!=vm->root_index) {
-        nvx_gpuvm_table_t *table=&vm->tables[current];
-        uint16_t parent_index,slot,limit;
-        nvx_gpuvm_table_t *parent;
+    uint16_t path[5];
+    size_t depth=1U;
+    uint16_t current=vm->root_index;
+    path[0]=current;
+    for(uint8_t level=4U;level>0U;--level) {
+        uint16_t slot=nvx_gpuvm_index_for_level(va,level);
+        size_t child;
+        if(slot==UINT16_MAX) return NVX_GPUVM_INVALID_RANGE;
+        child=nvx_gpuvm_find_child(vm,current,slot);
+        if(child==NVX_GPUVM_MAX_TABLES) break;
+        if(depth>=5U||!vm->tables[child].active)
+            return NVX_GPUVM_CORRUPT_STATE;
+        path[depth++]=(uint16_t)child;
+        current=(uint16_t)child;
+    }
+    while(depth>1U) {
+        uint16_t child_index=path[depth-1U];
+        uint16_t parent_index=path[depth-2U];
+        nvx_gpuvm_table_t *table=&vm->tables[child_index];
+        nvx_gpuvm_table_t *parent=&vm->tables[parent_index];
+        uint16_t limit;
         uint64_t *entry;
-        if(!table->active) return NVX_GPUVM_CORRUPT_STATE;
         if(table->entry_count!=0U) break;
         for(size_t i=0;i<NVX_GPUVM_MAX_TABLES;i++)
-            if(vm->tables[i].active&&vm->tables[i].parent_index==current)
+            if(vm->tables[i].active&&vm->tables[i].parent_index==child_index)
                 return NVX_GPUVM_CORRUPT_STATE;
-        parent_index=table->parent_index; slot=table->parent_slot;
-        if(parent_index>=NVX_GPUVM_MAX_TABLES) return NVX_GPUVM_CORRUPT_STATE;
-        parent=&vm->tables[parent_index];
-        if(!parent->active||parent->level!=table->level+1U)
+        if(!table->active||table->parent_index!=parent_index||
+           !parent->active||parent->level!=table->level+1U)
             return NVX_GPUVM_CORRUPT_STATE;
         limit=parent->level==4U?4U:(parent->level==1U?256U:512U);
-        if(slot>=limit||parent->entry_count==0U)
+        if(table->parent_slot>=limit||parent->entry_count==0U)
             return NVX_GPUVM_CORRUPT_STATE;
-        entry=nvx_gpuvm_parent_entry(vm,parent_index,slot);
+        entry=nvx_gpuvm_parent_entry(vm,parent_index,table->parent_slot);
         if(!entry||entry[0]!=nvx_gpuvm_pde_value(table->backing.physical_address))
             return NVX_GPUVM_CORRUPT_STATE;
         if(parent->level==1U&&entry[1]!=0U)
@@ -294,7 +304,7 @@ static nvx_gpuvm_status_t nvx_gpuvm_prune_empty_path(nvx_gpuvm_t *vm,
         table->entry_count=0U;
         if(vm->table_count==0U) return NVX_GPUVM_CORRUPT_STATE;
         --vm->table_count;
-        current=parent_index;
+        --depth;
     }
     return NVX_GPUVM_OK;
 }

@@ -169,6 +169,9 @@ int main(void)
                                   (1ULL << 2U) | (1ULL << 32U) |
                                   (2ULL << 33U);
     assert(entry != 0 && *entry == expected_pte);
+    const uint64_t expected_high_pte = (physical[1] >> 8U) | 1ULL |
+        (1ULL << 1U) | (1ULL << 2U) | (1ULL << 32U) | (2ULL << 33U);
+    assert(entry[1] == expected_high_pte);
 
     assert(nvx_gpuvm_activate(&vm) == NVX_GPUVM_OK);
     assert(vm.root_published && published_root ==

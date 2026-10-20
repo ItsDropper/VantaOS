@@ -17,7 +17,6 @@ static uint8_t dma_memory[NVX_DMA_MAX_BYTES * NVX_MEMORY_MAX_OBJECTS]
     __attribute__((aligned(NVX_DMA_PAGE_SIZE)));
 static uint8_t table_memory[TABLE_PAGE_COUNT][NVX_GPUVM_PAGE_SIZE]
     __attribute__((aligned(NVX_GPUVM_PAGE_SIZE)));
-static uint8_t fake_mmio;
 static size_t next_dma_byte;
 static unsigned next_table_page;
 static unsigned alloc_calls;
@@ -25,7 +24,6 @@ static unsigned free_calls;
 static unsigned table_free_calls;
 static int fail_alloc;
 static uint64_t physical_base = 0x10000000ULL;
-static uint32_t flush_busy_reads;
 static int fail_flush;
 
 int dma_alloc_contiguous(dma_page_t *pages, size_t count)
@@ -85,39 +83,32 @@ void dma_free_contiguous(dma_page_t *pages, size_t count)
     }
 }
 
-nvx_mmio_status_t nvx_gpuvm_test_mmio_write32(
-    const nvx_mmio_region_t *region, size_t offset, uint32_t value)
+static nvx_gpuvm_status_t test_publish_root(void *context,
+                                                    uint64_t root_physical)
 {
-    assert(region != 0 && region->base == &fake_mmio);
-    assert(offset == 0xB830A0U || offset == 0xB830A4U ||
-           offset == 0xB830B0U);
-    (void)value;
-    if (offset == 0xB830B0U)
-        flush_busy_reads = 1U;
-    return NVX_MMIO_OK;
+    (void)context;
+    if (root_physical != 0U &&
+        ((root_physical & 0xFFFU) != 0U || root_physical > UINT32_MAX))
+        return NVX_GPUVM_ADDRESS_WIDTH;
+    return NVX_GPUVM_OK;
 }
 
-nvx_mmio_status_t nvx_gpuvm_test_mmio_read32(
-    const nvx_mmio_region_t *region, size_t offset, uint32_t *out)
+static nvx_gpuvm_status_t test_invalidate(void *context)
 {
-    assert(region != 0 && region->base == &fake_mmio && out != 0);
-    if (offset != 0xB830B0U || fail_flush)
-        return NVX_MMIO_OUT_OF_RANGE;
-    if (flush_busy_reads != 0U) {
-        --flush_busy_reads;
-        *out = 0x80000001U;
-    } else {
-        *out = 1U;
-    }
-    return NVX_MMIO_OK;
+    (void)context;
+    return fail_flush ? NVX_GPUVM_FLUSH_TIMEOUT : NVX_GPUVM_OK;
 }
 
 static void init_gpuvm(void)
 {
-    nvx_mmio_region_t bar0 = {.base = &fake_mmio, .length = 0xB830B4U};
+    nvx_gpuvm_hw_ops_t hw = {
+        .context = 0,
+        .publish_root = test_publish_root,
+        .invalidate = test_invalidate
+    };
     memset(&gpuvm, 0, sizeof(gpuvm));
     assert(nvx_gpuvm_init(&gpuvm, 0x100000000ULL,
-                          16ULL * 1024ULL * 1024ULL, &bar0) == NVX_GPUVM_OK);
+                          16ULL * 1024ULL * 1024ULL, &hw) == NVX_GPUVM_OK);
 }
 
 int main(void)

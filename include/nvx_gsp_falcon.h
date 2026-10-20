@@ -19,6 +19,13 @@
  */
 #define NVX_GSP_FALCON_BASE             0x00110000U
 #define NVX_GSP_FALCON2_BASE            0x00111000U
+#define NVX_SEC2_FALCON_BASE            0x00840000U
+#define NVX_SEC2_FALCON2_BASE           0x00841000U
+#define NVX_GA10X_FALCON_BROM_MOD_SEL(base2)     ((base2) + 0x180U)
+#define NVX_GA10X_FALCON_BROM_UCODE_ID(base2)    ((base2) + 0x198U)
+#define NVX_GA10X_FALCON_BROM_ENGINE_MASK(base2) ((base2) + 0x19CU)
+#define NVX_GA10X_FALCON_BROM_PARAM_ADDR(base2)  ((base2) + 0x210U)
+#define NVX_GA10X_BAR0_REQUIRED_BYTES (NVX_GA10X_FALCON_BROM_PARAM_ADDR(NVX_SEC2_FALCON2_BASE) + 4U)
 #define NVX_GSP_FALCON_MAILBOX0          (NVX_GSP_FALCON_BASE + 0x040U)
 #define NVX_GSP_FALCON_MAILBOX1          (NVX_GSP_FALCON_BASE + 0x044U)
 #define NVX_GSP_FALCON_HWCFG2            (NVX_GSP_FALCON_BASE + 0x0F4U)
@@ -96,7 +103,18 @@ nvx_gsp_falcon_status_t nvx_gsp_ga10x_wait_riscv_active(
 nvx_gsp_falcon_status_t nvx_gsp_ga10x_program_brom(
     const nvx_mmio_region_t *bar0, uint32_t engine_id_mask,
     uint32_t ucode_id, uint32_t pkc_data_offset);
-/* Set BOOTVEC and issue STARTCPU for an already loaded/verified Falcon image. */
+/*
+ * Engine-aware forms cover GA102 GSP and SEC2. Pass the matching documented
+ * engine/base pair; all addresses are BAR0-relative.
+ */
+nvx_gsp_falcon_status_t nvx_ga10x_falcon_program_brom(
+    const nvx_mmio_region_t *bar0, uint32_t falcon_base,
+    uint32_t falcon2_base, uint32_t engine_id_mask,
+    uint32_t ucode_id, uint32_t pkc_data_offset);
+nvx_gsp_falcon_status_t nvx_ga10x_falcon_start(
+    const nvx_mmio_region_t *bar0, uint32_t falcon_base,
+    uint32_t boot_vector);
+/* GSP-specific wrappers retained for current callers. */
 nvx_gsp_falcon_status_t nvx_gsp_ga10x_start_falcon(
     const nvx_mmio_region_t *bar0, uint32_t boot_vector);
 

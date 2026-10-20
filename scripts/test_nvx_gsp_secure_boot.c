@@ -119,7 +119,7 @@ int main(void)
         fake_delay, &bar0, &mailbox1, &trace) == NVX_GSP_FALCON_WPR_METADATA_NOT_READY);
     assert(trace.result == NVX_GSP_FALCON_WPR_METADATA_NOT_READY);
     assert(trace.failed_phase == NVX_GSP_BOOT_PHASE_PRECHECK);
-    assert(trace.last_completed_phase == NVX_GSP_BOOT_PHASE_PRECHECK);
+    assert(trace.last_completed_phase == NVX_GSP_BOOT_PHASE_NONE);
     assert(trace.recovery_attempted == 0U);
     memory.wpr_metadata_prepared = 1U;
 

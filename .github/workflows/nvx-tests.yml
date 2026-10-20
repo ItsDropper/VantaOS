@@ -17,6 +17,7 @@ on:
       - "include/nvx_attach.h"
       - "include/nvx_firmware.h"
       - "include/nvx_gsp_bundle.h"
+      - "include/nvx_gsp_image.h"
       - "include/nvx_dma.h"
       - "include/nvx_gpuva.h"
       - "include/nvx_gpuvm.h"
@@ -37,6 +38,7 @@ on:
       - "scripts/test_nvx_attach.c"
       - "scripts/test_nvx_firmware.c"
       - "scripts/test_nvx_gsp_bundle.c"
+      - "scripts/test_nvx_gsp_image.c"
       - "scripts/test_nvx_dma.c"
       - "scripts/test_nvx_gpuva.c"
       - "scripts/test_nvx_gpuvm.c"
@@ -142,6 +144,15 @@ jobs:
 
       - name: Test GSP component paths, verification and transactional cleanup
         run: /tmp/vantaos-nvx-gsp-bundle-test
+
+      - name: Compile bounded GSP booter-image parser tests
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_image.c drivers/gpu/nvx/nvx_gsp_image.c \
+            -o /tmp/vantaos-nvx-gsp-image-test
+
+      - name: Test GSP image offsets, signature ranges and app metadata
+        run: /tmp/vantaos-nvx-gsp-image-test
 
       - name: Compile NVX DMA buffer tests with strict warnings
         run: |

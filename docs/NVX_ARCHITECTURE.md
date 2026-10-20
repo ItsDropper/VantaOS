@@ -84,6 +84,23 @@ interrupt status/acknowledgement handler or engine-specific interrupt decoding
 is implemented. This is a tested generic route primitive, not working GPU
 interrupt support or proof that the GPU generates valid interrupts.
 
+### Versioned GSP firmware bundle acquisition
+
+A new bundle API acquires the four independently versioned R535-style components:
+booter-load, booter-unload, bootloader, and GSP runtime firmware. The caller
+supplies the chip directory and exact version rather than having NVX guess a
+firmware release. Every component is individually size-bounded and passed
+through the platform verification callback before ownership is accepted; the
+aggregate bundle is capped at 128 MiB. Missing, malformed, oversized, or
+unverified components trigger rollback and release all previously acquired
+components. Host tests cover paths, partial failure, verification failure,
+size limits, and path traversal rejection.
+
+This addresses the single-blob helper's limitation: modern GSP boot consumes a
+coordinated set of version-matched files. This is still acquisition/verification
+plumbing, not firmware-container parsing, signature patching, Falcon loading,
+GSP boot, or RPC queue initialization.
+
 ## Design goals
 
 - Keep generic GPU lifecycle and display contracts independent of NVIDIA details.

@@ -131,8 +131,12 @@ nvx_gsp_bundle_status_t nvx_gsp_bundle_acquire(
         }
         status=acquire_one(out,i,path);
         if(status!=NVX_GSP_BUNDLE_OK) {
-            /* NVIDIA's own RM treats the GSP log ELF as optional/non-fatal. */
-            if(i==2U) { status=NVX_GSP_BUNDLE_OK; continue; }
+            /* Only absence is optional: invalid, oversized or unverified log
+             * data must fail closed just like the required firmware images. */
+            if(i==2U && status==NVX_GSP_BUNDLE_COMPONENT_NOT_FOUND) {
+                status=NVX_GSP_BUNDLE_OK;
+                continue;
+            }
             break;
         }
         if(out->components[i].acquired) out->components[i].kind=kinds[i];

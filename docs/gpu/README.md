@@ -9,6 +9,7 @@ This directory documents the vendor-neutral GPU framework and vendor-specific br
 - [SEC2 transaction trace](nvx/SEC2_TRANSACTION_TRACE.md) — phase-level execution evidence and recovery diagnostics.
 - [SEC2 DMA and recovery contract](nvx/SEC2_DMA_AND_RECOVERY.md) — address domains, DMA lifecycle, ownership invariants, fault injection, and hardware-validation gates.
 - [VBIOS FWSEC metadata research](nvx/VBIOS_FWSEC_RESEARCH.md) — parser-specific constraints and VBIOS pointer chain.
+- [VBIOS expansion-ROM chain research](nvx/VBIOS_ROM_CHAIN_RESEARCH.md) — bounded PCIR image traversal and expansion-ROM base selection.
 - [GPU framework and bring-up plan](FRAMEWORK.md) — generic GPU lifecycle and Intel/AMD/NVX maturity.
 
 ## Vendor-neutral framework

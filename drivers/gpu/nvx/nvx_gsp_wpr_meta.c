@@ -162,3 +162,109 @@ nvx_gsp_wpr_status_t nvx_gsp_wpr_meta_validate(const nvx_gsp_wpr_meta_v1_t *m)
     if(m->verified!=0U&&m->verified!=NVX_GSP_WPR_META_V1_VERIFIED)return NVX_GSP_WPR_BAD_RESERVED;
     return validate_layout(&l);
 }
+
+static int align_up_u64(uint64_t value, uint64_t alignment, uint64_t *out)
+{
+    uint64_t rem;
+    if (!out || !alignment)
+        return 0;
+    rem = value % alignment;
+    if (!rem) { *out = value; return 1; }
+    return add_ok(value, alignment - rem, out);
+}
+static uint64_t align_down_u64(uint64_t value, uint64_t alignment)
+{
+    return value - value % alignment;
+}
+
+nvx_gsp_wpr_status_t nvx_gsp_wpr_layout_plan(
+    const nvx_gsp_wpr_layout_t *resources,
+    const nvx_gsp_wpr_plan_config_t *config,
+    nvx_gsp_wpr_layout_t *out_layout)
+{
+    nvx_gsp_wpr_layout_t plan;
+    uint64_t vga_end, reserved_end, meta_size, nonwpr_size;
+    uint64_t pre_heap, post_heap, fw_heap_offset, actual_fw_heap;
+    uint64_t fw_offset, boot_offset, frts_offset, wpr_end, wpr_start;
+    uint64_t nonwpr_offset, minimum;
+    const uint64_t mb = UINT64_C(1024) * 1024U;
+
+    if (!resources || !config || !out_layout ||
+        overlaps_ptr(resources, sizeof(*resources), out_layout, sizeof(*out_layout)) ||
+        overlaps_ptr(config, sizeof(*config), out_layout, sizeof(*out_layout)) ||
+        overlaps_ptr(resources, sizeof(*resources), config, sizeof(*config)))
+        return NVX_GSP_WPR_INVALID_ARGUMENT;
+    if (!config->framebuffer_size ||
+        !aligned(config->framebuffer_size, NVX_GSP_FB_ALIGN) ||
+        config->vga_workspace_offset >= config->framebuffer_size ||
+        !range_ok(config->vga_workspace_offset,
+                  config->framebuffer_size - config->vga_workspace_offset,
+                  config->framebuffer_size) ||
+        (config->mmu_lock_valid && config->mmu_lock_low >= config->framebuffer_size) ||
+        !resources->radix3_size || !resources->bootloader_size ||
+        !resources->signature_size || !config->requested_wpr_heap_size ||
+        !config->nonwpr_heap_size ||
+        config->frts_size > config->framebuffer_size)
+        return NVX_GSP_WPR_BAD_RANGE;
+
+    vga_end = config->framebuffer_size;
+    reserved_end = config->vga_workspace_offset;
+    if (config->mmu_lock_valid && config->mmu_lock_low < reserved_end)
+        reserved_end = config->mmu_lock_low;
+    if (config->wpr_end_margin > reserved_end)
+        return NVX_GSP_WPR_BAD_RANGE;
+    wpr_end = align_down_u64(reserved_end - config->wpr_end_margin,
+                             NVX_GSP_WPR_ALIGN);
+    if (config->frts_size > wpr_end)
+        return NVX_GSP_WPR_BAD_RANGE;
+    frts_offset = wpr_end - config->frts_size;
+    if (resources->bootloader_size > frts_offset)
+        return NVX_GSP_WPR_BAD_RANGE;
+    boot_offset = align_down_u64(frts_offset - resources->bootloader_size,
+                                 NVX_GSP_FB_ALIGN / 256U);
+    if (resources->radix3_size > boot_offset)
+        return NVX_GSP_WPR_BAD_RANGE;
+    fw_offset = align_down_u64(boot_offset - resources->radix3_size, 65536U);
+
+    if (!align_up_u64(config->nonwpr_heap_size, mb, &nonwpr_size) ||
+        !align_up_u64(NVX_GSP_WPR_META_V1_SIZE, mb, &meta_size) ||
+        !add_ok(meta_size, nonwpr_size, &pre_heap) ||
+        !align_up_u64(config->framebuffer_size - fw_offset, mb, &post_heap))
+        return NVX_GSP_WPR_BAD_RANGE;
+    (void)pre_heap;
+    (void)post_heap; /* Inputs to the platform's firmware heap policy. */
+    if (config->requested_wpr_heap_size > fw_offset)
+        return NVX_GSP_WPR_BAD_RANGE;
+    fw_heap_offset = align_down_u64(fw_offset - config->requested_wpr_heap_size, mb);
+    actual_fw_heap = align_down_u64(fw_offset - fw_heap_offset, mb);
+    if (!actual_fw_heap || fw_heap_offset < meta_size)
+        return NVX_GSP_WPR_BAD_RANGE;
+    wpr_start = fw_heap_offset - meta_size;
+    if (nonwpr_size > wpr_start)
+        return NVX_GSP_WPR_BAD_RANGE;
+    nonwpr_offset = wpr_start - nonwpr_size;
+
+    plan = *resources;
+    plan.framebuffer_size = config->framebuffer_size;
+    plan.vga_workspace_offset = config->vga_workspace_offset;
+    plan.vga_workspace_size = vga_end - config->vga_workspace_offset;
+    plan.wpr_end = wpr_end;
+    plan.frts_offset = frts_offset;
+    plan.frts_size = config->frts_size;
+    plan.boot_bin_offset = boot_offset;
+    plan.firmware_offset = fw_offset;
+    plan.wpr_start = wpr_start;
+    plan.wpr_heap_offset = fw_heap_offset;
+    plan.wpr_heap_size = actual_fw_heap;
+    plan.nonwpr_heap_offset = nonwpr_offset;
+    plan.nonwpr_heap_size = nonwpr_size;
+    plan.reserved_start = nonwpr_offset;
+
+    /* Validate every range/overlap before exposing a partially planned layout. */
+    nvx_gsp_wpr_status_t status = validate_layout(&plan);
+    if (status != NVX_GSP_WPR_OK)
+        return status;
+    *out_layout = plan;
+    (void)minimum;
+    return NVX_GSP_WPR_OK;
+}

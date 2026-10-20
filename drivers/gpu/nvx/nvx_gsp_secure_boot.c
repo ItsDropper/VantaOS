@@ -205,6 +205,7 @@ static nvx_gsp_falcon_status_t execute_booter_load_internal(
     if (status != NVX_GSP_FALCON_OK) {
         nvx_gsp_falcon_status_t reclaim = reset_and_reclaim(
             memory, bar0, timeout_ms, poll_interval_ms, delay_ms, context, 1U, 0U);
+        trace_recovery_result(trace, reclaim);
         return reclaim == NVX_GSP_FALCON_OK ? status : reclaim;
     }
 
@@ -304,7 +305,7 @@ nvx_gsp_falcon_status_t nvx_gsp_ga10x_execute_booter_load_traced(
         if (status == NVX_GSP_FALCON_OK) {
             out_trace->current_phase = NVX_GSP_BOOT_PHASE_COMPLETE;
             out_trace->last_completed_phase = NVX_GSP_BOOT_PHASE_COMPLETE;
-            out_trace->failed_phase = NVX_GSP_BOOT_PHASE_COMPLETE;
+            out_trace->failed_phase = NVX_GSP_BOOT_PHASE_NONE;
         } else {
             out_trace->failed_phase = out_trace->current_phase;
         }

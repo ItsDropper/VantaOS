@@ -5,6 +5,7 @@
  * See the LICENSE file in the project root for the full license text.
  */
 #include "pci.h"
+#include "vanta_boot_info.h"
 
 #include <assert.h>
 #include <stdint.h>
@@ -12,6 +13,12 @@
 #define TEST_CONFIG_ADDRESS 0xCF8U
 #define TEST_CONFIG_DATA    0xCFCU
 #define TEST_BAR0_INDEX     4U
+
+static vanta_boot_info_t test_boot_info;
+const vanta_boot_info_t* kernel_get_boot_info(void)
+{
+    return &test_boot_info;
+}
 
 static uint32_t config_space[64];
 static uint32_t bar_masks[6];

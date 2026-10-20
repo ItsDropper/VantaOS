@@ -63,9 +63,11 @@ int main(void) {
     reset(); oversized=1;
     assert(nvx_gsp_bundle_acquire(&p,NVX_FAMILY_AMPERE,"ga102","535.113.01",&b)==NVX_GSP_BUNDLE_COMPONENT_TOO_LARGE);
     assert(releases==2);
-    reset(); reported_size=70U*1024U*1024U;
-    assert(nvx_gsp_bundle_acquire(&p,NVX_FAMILY_AMPERE,"ga102","535.113.01",&b)==NVX_GSP_BUNDLE_TOTAL_TOO_LARGE);
-    assert(requests==2&&releases==2);
+    reset(); reported_size=50U*1024U*1024U;
+    assert(nvx_gsp_bundle_acquire(&p,NVX_FAMILY_AMPERE,"ga102","535.113.01",&b)==NVX_GSP_BUNDLE_OK);
+    assert(b.acquired&&!b.components[2].acquired&&b.total_bytes==100U*1024U*1024U);
+    assert(requests==3&&verifies==2&&releases==1);
+    nvx_gsp_bundle_release(&b);assert(releases==3);
     reset();
     assert(nvx_gsp_bundle_acquire(&p,NVX_FAMILY_ADA,"ad102","535.113.01",&b)==NVX_GSP_BUNDLE_UNSUPPORTED_FAMILY);
     assert(nvx_gsp_bundle_acquire(&p,NVX_FAMILY_AMPERE,"../ga102","535.113.01",&b)==NVX_GSP_BUNDLE_INVALID_ARGUMENT);

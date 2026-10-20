@@ -104,15 +104,12 @@ low-level reset/scrub, 256-byte Falcon DMA upload, BROM-parameter, BOOTVEC/START
 and mailbox-completion primitives for SEC2/GSP. They are independently bounded
 and host-tested, but they are not yet wired into one secure-boot transaction.
 NVX still does not authenticate NVIDIA's signed firmware cryptographically,
-extract FWSEC from a physical VBIOS image, prepare and execute FWSEC-FRTS,
+extract FWSEC from a physical VBIOS image or execute the prepared FWSEC-FRTS commands,
 allocate/write the actual WPR in VRAM, validate firmware-specific mailbox status,
 activate the GSP RISC-V runtime, or complete a genuine GSP-RM initialization RPC.
 The queue and DMA tests use fake BAR memory; they cannot prove physical GPU support.
 
-The next implementation step is the **GA10x-specific SEC2/FWSEC and GSP boot
-sequence**, with verified register definitions, firmware-specific signing and
-patch rules, a physically DMA-visible working set, WPR metadata, and bounded
-polling of real hardware status. Do not substitute guessed register writes or
+The FWSEC interface parser and pure SB/FRTS command-record builder are now implemented and host-tested. The next implementation step is to bind that profile to a verified firmware identity, reconstruct command-result/scratch-register semantics, then connect the records to a fail-closed SEC2 transaction with verified signing rules, DMA ownership, WPR metadata, and bounded hardware polling. Do not substitute guessed register writes or
 a fake "boot succeeded" flag for these requirements. NVIDIA's open kernel
 module and Linux Nova are research references. Their relevant files have MIT
 or GPL licensing depending on the source; verify each file's license before
@@ -302,3 +299,8 @@ queue ranges do not overlap. Callers must build arguments from a validated
 queue layout rather than hand-editing the wire structure. Strict-warning host
 tests cover zero, equal, and reversed offsets. This remains synthetic validation,
 not evidence of a particular firmware branch accepting the ABI.
+
+
+## Reverse-engineering notebook
+
+For the detailed evidence trail and field-by-field contracts covering VBIOS pointer domains, FWSEC V3 descriptors, SB/FRTS command records, signature selection, SEC2 Booter Load ordering, DMA ownership, and unresolved physical-hardware requirements, see [NVX GA10x Firmware Reverse-Engineering Notebook](FIRMWARE_REVERSE_ENGINEERING.md).

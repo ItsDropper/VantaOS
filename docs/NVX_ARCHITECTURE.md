@@ -152,6 +152,21 @@ doorbell register programming. The caller must supply the correct firmware-share
 pointer locations and notification callback after a real GSP queue has been
 initialized.
 
+### Bounded GSP runtime ELF parser
+
+The runtime-firmware path now has a separate ELF64 little-endian RISC-V parser.
+It validates the ELF header, program-header table, section-header table, string
+table, every file-backed section range, load-segment sizes/alignment, and an
+executable load segment covering the entry point. It locates exactly one
+caller-selected signature section (for example, the Ampere `.fwsignature_ga10x`
+section) and returns its bounded file range plus validated load-segment
+metadata. Tests cover malformed headers/tables, out-of-range segments, bad
+entry points, missing signatures, and broken string tables.
+
+The parser only locates and bounds the signature data; it does not authenticate
+the cryptographic signature, apply firmware-specific relocation, or execute the
+image.
+
 ### Bounded GSP booter-image parser
 
 A read-only parser validates the version-2 signed booter-load container before

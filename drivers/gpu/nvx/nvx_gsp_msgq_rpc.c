@@ -38,12 +38,13 @@ nvx_gsp_msgq_rpc_status_t nvx_gsp_msgq_rpc_send(nvx_gsp_msgq_rpc_transport_t *t,
 {
     size_t rpc_len,message_len,slots,total;uint32_t sequence;
     uint8_t *msg=(uint8_t *)scratch;nvx_gsp_msgq_queue_status_t qs;
-    if(out_sequence)*out_sequence=0U;
     if(!t||!scratch||!out_sequence||(payload_size&&!payload))
         return NVX_GSP_MSGQ_RPC_INVALID_ARGUMENT;
     if(!t->initialized)return NVX_GSP_MSGQ_RPC_NOT_INITIALIZED;
     if(overlaps(t,sizeof(*t),scratch,scratch_size)||
        overlaps(t,sizeof(*t),out_sequence,sizeof(*out_sequence))||
+       overlaps(t,sizeof(*t),payload,payload_size)||
+       overlaps(out_sequence,sizeof(*out_sequence),payload,payload_size)||
        overlaps(scratch,scratch_size,payload,payload_size)||
        overlaps(scratch,scratch_size,t->command_queue->backing_store,
                 t->command_queue->layout.backing_store_size)||
@@ -51,6 +52,7 @@ nvx_gsp_msgq_rpc_status_t nvx_gsp_msgq_rpc_send(nvx_gsp_msgq_rpc_transport_t *t,
        overlaps(out_sequence,sizeof(*out_sequence),t->command_queue->backing_store,
                 t->command_queue->layout.backing_store_size))
         return NVX_GSP_MSGQ_RPC_INVALID_ARGUMENT;
+    *out_sequence=0U;
     if(payload_size>SIZE_MAX-NVX_GSP_MSG_HEADER_SIZE-NVX_GSP_RPC_HEADER_SIZE)
         return NVX_GSP_MSGQ_RPC_BUFFER_TOO_SMALL;
     rpc_len=NVX_GSP_RPC_HEADER_SIZE+payload_size;
@@ -89,16 +91,17 @@ nvx_gsp_msgq_rpc_status_t nvx_gsp_msgq_rpc_receive(nvx_gsp_msgq_rpc_transport_t 
     const uint8_t *first=0;uint8_t *msg=(uint8_t *)scratch;
     uint32_t message_len,rpc_len,mctp,nvdm,slots;size_t total;
     nvx_gsp_msgq_queue_status_t qs;
-    if(out)memset(out,0,sizeof(*out));
     if(!t||!scratch||!out)return NVX_GSP_MSGQ_RPC_INVALID_ARGUMENT;
     if(!t->initialized)return NVX_GSP_MSGQ_RPC_NOT_INITIALIZED;
     if(overlaps(t,sizeof(*t),scratch,scratch_size)||
+       overlaps(out,sizeof(*out),t,sizeof(*t))||
        overlaps(out,sizeof(*out),scratch,scratch_size)||
        overlaps(out,sizeof(*out),t->response_queue->backing_store,
                 t->response_queue->layout.backing_store_size)||
        overlaps(scratch,scratch_size,t->response_queue->backing_store,
                 t->response_queue->layout.backing_store_size))
         return NVX_GSP_MSGQ_RPC_INVALID_ARGUMENT;
+    memset(out,0,sizeof(*out));
     qs=nvx_gsp_msgq_rx_get(t->response_queue,0U,&first);
     if(qs==NVX_GSP_MSGQ_QUEUE_EMPTY)return NVX_GSP_MSGQ_RPC_QUEUE_EMPTY;
     if(qs!=NVX_GSP_MSGQ_QUEUE_OK)return NVX_GSP_MSGQ_RPC_QUEUE_ERROR;

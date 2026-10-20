@@ -23,7 +23,7 @@ static void build_booter(uint8_t *dest,uint32_t fuse_version){
  asset32(dest,36U,128U);asset32(dest,40U,132U);asset32(dest,44U,12U);
  asset32(dest,48U,144U);asset32(dest,52U,148U);asset32(dest,56U,36U);
  asset32(dest,124U,40U);asset32(dest,128U,0U);asset32(dest,132U,fuse_version);
- asset32(dest,136U,0x400U);asset32(dest,140U,1U);asset32(dest,144U,2U);
+ asset32(dest,136U,1U);asset32(dest,140U,1U);asset32(dest,144U,2U);
  asset32(dest,148U,0U);asset32(dest,152U,32U);asset32(dest,156U,32U);
  asset32(dest,160U,64U);asset32(dest,164U,1U);asset32(dest,168U,32U);
  asset32(dest,172U,32U);asset32(dest,176U,32U);asset32(dest,180U,16U);
@@ -67,7 +67,7 @@ int main(void){
  assert(nvx_gsp_preflight_stage_gsp_bootloader(&b,bootloader_stage,sizeof(bootloader_stage)-1U,&bootloader_info)==NVX_GSP_PREFLIGHT_STAGING_TOO_SMALL);
  assert(memcmp(bootloader_stage,bootloader_backup,sizeof(bootloader_stage))==0);
  assert(nvx_gsp_preflight_stage_gsp_bootloader(&b,boot_assets[2]+108U,128U,&bootloader_info)==NVX_GSP_PREFLIGHT_STAGING_ALIAS);
- assert(report.booter_load.engine_id==0x400U&&report.booter_unload.ucode_id==1U);
+ assert(report.booter_load.engine_id==1U&&report.booter_unload.ucode_id==1U);
  assert(report.firmware_image.offset==512U&&report.firmware_image.size==64U);
  assert(report.firmware_version.offset==576U&&strcmp(report.version,"535.113.01")==0);
  strcpy(b.chip,"ga100");assert(nvx_gsp_preflight_validate(&b,&report)==NVX_GSP_PREFLIGHT_UNSUPPORTED_CHIP);

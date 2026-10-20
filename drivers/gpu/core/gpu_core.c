@@ -35,10 +35,16 @@ int gpu_device_construct(gpu_device_t *device,
                          const struct pci_device *pci_device,
                          const gpu_pci_match_t *match)
 {
+    gpu_pci_match_t verified_match;
+
     if (device == NULL || pci_device == NULL || match == NULL ||
+        !gpu_classify_pci_function(pci_device, &verified_match) ||
         !match->is_display_function ||
-        match->vendor_id != pci_device->vendor_id ||
-        match->device_id != pci_device->device_id)
+        match->vendor != verified_match.vendor ||
+        match->architecture != verified_match.architecture ||
+        match->vendor_id != verified_match.vendor_id ||
+        match->device_id != verified_match.device_id ||
+        match->is_known_device_id != verified_match.is_known_device_id)
         return 0;
 
     memset(device, 0, sizeof(*device));

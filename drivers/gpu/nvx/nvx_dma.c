@@ -80,6 +80,7 @@ nvx_dma_status_t nvx_dma_alloc(size_t size, unsigned address_bits,
                  (uintptr_t)out_buffer->pages[i - 1U].virtual_address +
                      NVX_DMA_PAGE_SIZE)) {
             dma_free_contiguous(out_buffer->pages, page_count);
+            kfree(out_buffer->pages);
             nvx_dma_clear(out_buffer);
             return NVX_DMA_NONCONTIGUOUS;
         }
@@ -108,6 +109,7 @@ nvx_dma_status_t nvx_dma_alloc(size_t size, unsigned address_bits,
     if (out_buffer->allocation_id == 0U) {
         __atomic_store_n(&nvx_dma_allocation_counter, UINT64_MAX, __ATOMIC_RELAXED);
         dma_free_contiguous(out_buffer->pages, page_count);
+        kfree(out_buffer->pages);
         nvx_dma_clear(out_buffer);
         return NVX_DMA_ALLOCATION_FAILED;
     }

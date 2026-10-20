@@ -45,6 +45,31 @@ https://github.com/torvalds/linux/blob/master/drivers/gpu/nova-core/falcon/gsp.r
 - Host tests cover decoded bitfields, the locked-window signature, short BARs,
   null arguments, and alias rejection.
 
+## Hardware-derived firmware fuse selection
+
+NVX now reads the GA102+ FPF ucode-version arrays through the bounded BAR0
+MMIO accessor. Register offsets are `0x824100` (NVDEC), `0x824140` (SEC2), and
+`0x8241C0` (GSP); each array contains 16 32-bit slots, with the fuse bitmap in
+bits 15:0. The returned version is the bitmap's bit length (highest set bit
+plus one), matching the GA102 HAL/Nova logic; it is not the raw register value.
+Engine masks must match one supported value exactly and ucode IDs must be in
+the documented 1..16 range. Short mappings, unknown engine masks, invalid IDs,
+and nonzero reserved bits fail closed.
+
+`nvx_gsp_preflight_stage_booters_from_bar0()` connects this hardware read to the
+actual booter staging path: it validates the bundle first, takes each booter's
+engine mask and ucode ID from parsed firmware metadata, reads the matching
+fuse version, then stages both payloads. The older explicit-version staging API
+remains available for offline tests and tooling; it should not be used as the
+physical-hardware path.
+
+Register definitions and the bit-length conversion were cross-checked against
+the [Linux Nova GA102 Falcon HAL](https://kernel.googlesource.com/pub/scm/linux/kernel/git/next/linux-next/+/2f03a3fe84216541ed29f9b7bc014acb5f1b676b/drivers/gpu/nova-core/falcon/hal/ga102.rs),
+the [Nova fuse register definitions](https://lists.openwall.net/linux-kernel/2026/08/17/1877),
+and [NVIDIA's GA102 GSP HAL](https://github.com/NVIDIA/open-gpu-kernel-modules/blob/main/src/nvidia/src/kernel/gpu/gsp/arch/ampere/kernel_gsp_ga102.c).
+The host tests exercise register bounds, engine/ucode rejection, bit-length
+conversion, reserved-bit rejection, and no-staging-on-fuse-read-failure. These
+tests use synthetic memory; they do not validate physical GPU fuse values.
 ## Booter payload staging
 
 The public NVIDIA firmware extraction script documents the signed booter container

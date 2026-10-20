@@ -5,6 +5,7 @@
  * See the LICENSE file in the project root for the full license text.
  */
 #include "nvx_object_memory.h"
+#include "heap.h"
 
 static void clear_handle(nvx_memory_handle_t *h)
 {
@@ -75,7 +76,7 @@ nvx_memory_status_t nvx_memory_alloc(nvx_memory_manager_t *m, size_t size,
     uint64_t token;
     nvx_gpuvm_mapping_t mapping = {0};
     nvx_dma_buffer_t dma = {0};
-    uint64_t physical[NVX_DMA_MAX_PAGES] = {0};
+    uint64_t *physical = 0;
     nvx_gpuvm_status_t vs;
     if (!m || !out) return NVX_MEMORY_INVALID_ARGUMENT;
     clear_handle(out);
@@ -118,11 +119,26 @@ nvx_memory_status_t nvx_memory_alloc(nvx_memory_manager_t *m, size_t size,
         release_slot_reservation(m, index);
         return NVX_MEMORY_ALLOCATION_FAILED;
     }
+    if (dma.page_count > SIZE_MAX / sizeof(*physical)) {
+        nvx_dma_release(&dma);
+        (void)nvx_gpuvm_release(m->gpuvm, &mapping);
+        release_slot_reservation(m, index);
+        return NVX_MEMORY_ALLOCATION_FAILED;
+    }
+    physical = kmalloc(dma.page_count * sizeof(*physical));
+    if (!physical) {
+        nvx_dma_release(&dma);
+        (void)nvx_gpuvm_release(m->gpuvm, &mapping);
+        release_slot_reservation(m, index);
+        return NVX_MEMORY_ALLOCATION_FAILED;
+    }
     for (size_t i = 0; i < dma.page_count; ++i)
         physical[i] = dma.pages[i].physical_address;
 
     vs = nvx_gpuvm_map_pages(m->gpuvm, &mapping, physical, dma.page_count,
                              NVX_GPUVM_ACCESS_READ | NVX_GPUVM_ACCESS_WRITE);
+    kfree(physical);
+    physical = 0;
     if (vs != NVX_GPUVM_OK) {
         if (mapping.mapped || m->gpuvm->faulted) {
             /* A failed TLB flush may retain stale translations: never free RAM. */

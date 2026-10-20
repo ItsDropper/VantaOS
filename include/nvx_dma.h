@@ -12,7 +12,7 @@
 #include "dma.h"
 
 #define NVX_DMA_PAGE_SIZE 4096U
-#define NVX_DMA_MAX_PAGES 64U
+#define NVX_DMA_MAX_PAGES DMA_MAX_CONTIGUOUS_PAGES
 #define NVX_DMA_MAX_BYTES ((size_t)NVX_DMA_PAGE_SIZE * NVX_DMA_MAX_PAGES)
 
 typedef enum nvx_dma_status {
@@ -32,7 +32,7 @@ typedef enum nvx_dma_status {
  * bus-visible physical address. Allocation never enables PCI bus mastering.
  */
 typedef struct nvx_dma_buffer {
-    dma_page_t pages[NVX_DMA_MAX_PAGES];
+    dma_page_t *pages;
     void *cpu_address;
     uint64_t gpu_address;
     size_t size;

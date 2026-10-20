@@ -18,7 +18,7 @@ static void make_image(nvx_gsp_component_t *c) {
  put32(40,132U); put32(44,12U); put32(48,144U); put32(52,148U); put32(56,36U);
  /* Packed signature array followed by patch location, patch_sig, metadata,
   * signature count, 36-byte one-application descriptor, then payload. */
- put32(124,40U); put32(128,0U); put32(132,0x1234U);
+ put32(124,40U); put32(128,0U); put32(132,1U);
  put32(136,0x400U); put32(140,1U); put32(144,2U);
  put32(148,0U); put32(152,32U); put32(156,32U); put32(160,64U);
  put32(164,1U); put32(168,32U); put32(172,32U);
@@ -29,7 +29,7 @@ int main(void) {
  nvx_gsp_component_t c={0}; nvx_gsp_image_info_t info; make_image(&c);
  assert(nvx_gsp_image_parse(&c,&info)==NVX_GSP_IMAGE_OK);
  assert(info.binary_magic==0x10DEU&&info.binary_size==512U&&info.data_offset==184U&&info.data_size==128U);
- assert(info.fuse_version==0x1234U&&info.engine_id==0x400U&&info.ucode_id==1U);
+ assert(info.fuse_version==1U&&info.engine_id==0x400U&&info.ucode_id==1U);
  assert(info.signature_count==2U&&info.signature_size==32U&&info.signature_offset==60U&&info.patch_location==40U);
  assert(info.app_count==1U&&info.app0_size==32U&&info.app0_data_size==16U);
  uint8_t staged[128],backup[128];
@@ -63,7 +63,7 @@ int main(void) {
  for(size_t i=0U;i<64U;i++)bytes[60U+i]=(uint8_t)(0x30U+i);
  for(size_t i=0U;i<128U;i++)bytes[184U+i]=(uint8_t)i;
  assert(nvx_gsp_image_parse(&c,&info)==NVX_GSP_IMAGE_OK&&info.signature_size==64U);
- assert(nvx_gsp_image_prepare(&c,UINT32_MAX,staged,sizeof(staged))==NVX_GSP_IMAGE_OK);
+ assert(nvx_gsp_image_prepare(&c,1U,staged,sizeof(staged))==NVX_GSP_IMAGE_OK);
  assert(staged[40]==0x30U&&staged[103]==0x6FU);
  make_image(&c);put32(4U,2U);assert(nvx_gsp_image_parse(&c,&info)==NVX_GSP_IMAGE_UNSUPPORTED_VERSION);
  make_image(&c);put32(0U,0U);assert(nvx_gsp_image_parse(&c,&info)==NVX_GSP_IMAGE_BAD_MAGIC);

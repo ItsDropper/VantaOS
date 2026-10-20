@@ -37,6 +37,7 @@ int main(void){
  build(&c);p16(54,32);assert(nvx_gsp_elf_parse(&c,".fwsignature_ga10x",&info)==NVX_GSP_ELF_HEADER_INVALID);
  build(&c);p64(96,80);assert(nvx_gsp_elf_parse(&c,".fwsignature_ga10x",&info)==NVX_GSP_ELF_LOAD_SEGMENT_INVALID);
  build(&c);p64(72,UINT64_MAX);assert(nvx_gsp_elf_parse(&c,".fwsignature_ga10x",&info)==NVX_GSP_ELF_LOAD_SEGMENT_INVALID);
+ build(&c);p64(88,UINT64_MAX-31U);assert(nvx_gsp_elf_parse(&c,".fwsignature_ga10x",&info)==NVX_GSP_ELF_LOAD_SEGMENT_INVALID);
  build(&c);p64(24,0x2000);assert(nvx_gsp_elf_parse(&c,".fwsignature_ga10x",&info)==NVX_GSP_ELF_ENTRY_INVALID);
  build(&c);p16(62,5);assert(nvx_gsp_elf_parse(&c,".fwsignature_ga10x",&info)==NVX_GSP_ELF_SECTION_TABLE_INVALID);
  build(&c);p32(196,1);assert(nvx_gsp_elf_parse(&c,".fwsignature_ga10x",&info)==NVX_GSP_ELF_STRING_TABLE_INVALID);
@@ -44,5 +45,9 @@ int main(void){
  build(&c);memset(bytes+320,'A',40);assert(nvx_gsp_elf_parse(&c,".fwsignature_ga10x",&info)==NVX_GSP_ELF_STRING_TABLE_INVALID);
  assert(nvx_gsp_elf_parse(0,".fwsignature_ga10x",&info)==NVX_GSP_ELF_INVALID_ARGUMENT);
  assert(nvx_gsp_elf_parse(&c,0,&info)==NVX_GSP_ELF_INVALID_ARGUMENT);
+ build(&c);
+ assert(nvx_gsp_elf_parse(&c,".fwsignature_ga10x",
+        (nvx_gsp_elf_info_t *)(void *)bytes)==NVX_GSP_ELF_INVALID_ARGUMENT);
+ assert(bytes[0]==0x7FU&&bytes[1]=='E'&&bytes[2]=='L'&&bytes[3]=='F');
  return 0;
 }

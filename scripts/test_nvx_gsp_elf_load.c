@@ -12,6 +12,7 @@ static uint8_t image[512];
 static uint8_t target[128];
 static int map_fails;
 static int map_alias;
+static unsigned map_calls;
 
 static void p16(size_t o, uint16_t v)
 { image[o]=(uint8_t)v; image[o+1U]=(uint8_t)(v>>8U); }
@@ -42,6 +43,7 @@ static nvx_gsp_component_t build(void)
 static int map_destination(void *context,uint64_t address,size_t length,uint8_t **out)
 {
     (void)context;
+    ++map_calls;
     if(map_fails||address!=0x1000U||length!=64U)return 0;
     *out=map_alias?image:target;
     return 1;
@@ -52,22 +54,37 @@ int main(void)
     nvx_gsp_component_t c=build();
     uint64_t entry=0U;
     memset(target,0xCC,sizeof(target));
-    map_fails=0;map_alias=0;
+    map_fails=0;map_alias=0;map_calls=0U;
     assert(nvx_gsp_elf_load_segments(&c,map_destination,0,&entry)==NVX_GSP_ELF_LOAD_OK);
     assert(entry==0x1000U);
     for(unsigned i=0U;i<32U;i++)assert(target[i]==(uint8_t)(i+1U));
     for(unsigned i=32U;i<64U;i++)assert(target[i]==0U);
 
-    memset(target,0xCC,sizeof(target));entry=99U;map_fails=1;
+    /* An entry outside every PT_LOAD range is rejected before mapping/writes. */
+    c=build();p64(24U,0x2000U);
+    memset(target,0xCC,sizeof(target));entry=99U;map_calls=0U;
+    assert(nvx_gsp_elf_load_segments(&c,map_destination,0,&entry)==NVX_GSP_ELF_LOAD_ENTRY_INVALID);
+    assert(entry==0U && map_calls==0U);
+    for(unsigned i=0U;i<64U;i++)assert(target[i]==0xCCU);
+
+    /* A mapped but non-executable PT_LOAD segment cannot contain e_entry. */
+    c=build();p32(68U,4U);
+    memset(target,0xCC,sizeof(target));entry=99U;map_calls=0U;
+    assert(nvx_gsp_elf_load_segments(&c,map_destination,0,&entry)==NVX_GSP_ELF_LOAD_ENTRY_INVALID);
+    assert(entry==0U && map_calls==0U);
+    for(unsigned i=0U;i<64U;i++)assert(target[i]==0xCCU);
+
+    c=build();memset(target,0xCC,sizeof(target));entry=99U;map_calls=0U;
+    map_fails=1;
     assert(nvx_gsp_elf_load_segments(&c,map_destination,0,&entry)==NVX_GSP_ELF_LOAD_DESTINATION_UNAVAILABLE);
     assert(entry==0U);
     for(unsigned i=0U;i<64U;i++)assert(target[i]==0xCCU);
 
-    map_fails=0;map_alias=1;
+    map_fails=0;map_alias=1;c=build();map_calls=0U;
     assert(nvx_gsp_elf_load_segments(&c,map_destination,0,&entry)==NVX_GSP_ELF_LOAD_DESTINATION_OVERLAP);
     assert(image[384U]==1U);
 
-    map_alias=0;p16(16U,3U);entry=1U;
+    map_alias=0;c=build();p16(16U,3U);entry=1U;
     assert(nvx_gsp_elf_load_segments(&c,map_destination,0,&entry)==NVX_GSP_ELF_LOAD_UNSUPPORTED_RELOCATION);
     assert(entry==0U);
 

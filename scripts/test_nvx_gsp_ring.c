@@ -57,12 +57,12 @@ int main(void) {
  assert(nvx_gsp_ring_receive(&ring,scratch,sizeof(scratch),&view)==NVX_GSP_RING_OK&&view.function==202U);
  assert(read_index==3U&&write_index==3U);
  assert(nvx_gsp_ring_send(&ring,NVX_GSP_RPC_HEADER_VERSION_R535,NVX_GSP_RPC_SIGNATURE_R535,200U,payload,5000U,scratch,sizeof(scratch),&seq)==NVX_GSP_RING_OK);
- assert(write_index==1U);
+ assert(write_index==10U);
  assert(nvx_gsp_ring_receive(&ring,scratch,sizeof(scratch),&view)==NVX_GSP_RING_OK&&view.function==200U);
  assert(read_index==write_index);
  /* Corrupt data is rejected without consuming the entry. */
  assert(nvx_gsp_ring_send(&ring,NVX_GSP_RPC_HEADER_VERSION_R535,NVX_GSP_RPC_SIGNATURE_R535,300U,payload,8U,scratch,sizeof(scratch),&seq)==NVX_GSP_RING_OK);
- ring_mem[(size_t)read_index*NVX_GSP_PAGE_SIZE+28U]^=1U;
+ ring_mem[(size_t)(read_index%4U)*NVX_GSP_PAGE_SIZE+28U]^=1U;
  assert(nvx_gsp_ring_receive(&ring,scratch,sizeof(scratch),&view)==NVX_GSP_RING_BAD_MESSAGE);
  ring_mem[(size_t)read_index*NVX_GSP_PAGE_SIZE+28U]^=1U;
  assert(nvx_gsp_ring_receive(&ring,scratch,sizeof(scratch),&view)==NVX_GSP_RING_OK&&view.function==300U);

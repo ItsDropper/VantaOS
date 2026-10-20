@@ -220,6 +220,12 @@ NVX now builds these records as explicit little-endian byte sequences in `nvx_gs
 **Boundary:** the builder prepares command bytes only. It does not decode scratch-register error fields, prove the target firmware accepts this exact profile, execute SB/FRTS, or authenticate FWSEC. The command-status contract and firmware-generation binding still need to be researched before adding a transaction executor.
 
 
+## 3.6 Register-backed FWSEC result snapshots
+
+The new `nvx_gsp_fwsec_read_result_snapshot()` reads the published GA102/TU102 BAR0 locations for VBIOS scratch indices `0x0E` and `0x15`, WPR2 LO/HI, the GFW read-protection-level-0 register, and GFW boot progress. It extracts the FRTS error from scratch `0x0E[31:16]`, the SB error from scratch `0x15[15:0]`, the WPR2 address fields using the documented bits 31:4, PLM level-0 enable from bit 0, and completion from progress value `0xFF`. The resulting snapshot feeds the existing fail-closed result validator.
+
+This is real MMIO read logic with host tests against synthetic register values. It does not execute the command, write protected registers, or prove a real GPU's result state. A caller must still ensure the register aperture is mapped and accessible; an MMIO read failure clears the output and aborts validation.
+
 ## 3.5 SB/FRTS result validation reconstructed from the public execution path
 
 The published TU102+ result path provides explicit postconditions rather than treating Falcon halt as success:

@@ -8,21 +8,21 @@
 
 #include <string.h>
 
-_Static_assert(sizeof(nvx_gsp_message_queue_init_args_t) == 64U,
+_Static_assert(sizeof(nvx_gsp_modern_message_queue_init_args_t) == 64U,
                "GSP message queue init ABI size changed");
 _Static_assert(sizeof(nvx_gsp_sr_init_args_t) == 16U,
                "GSP SR init ABI size changed");
-_Static_assert(offsetof(nvx_gsp_arguments_cached_t, flags) == 8U,
+_Static_assert(offsetof(nvx_gsp_arguments_cached_modern_t, flags) == 8U,
                "GSP arguments flags offset changed");
-_Static_assert(offsetof(nvx_gsp_arguments_cached_t, message_queue) == 16U,
+_Static_assert(offsetof(nvx_gsp_arguments_cached_modern_t, message_queue) == 16U,
                "GSP message queue arguments offset changed");
-_Static_assert(offsetof(nvx_gsp_arguments_cached_t, sr) == 80U,
+_Static_assert(offsetof(nvx_gsp_arguments_cached_modern_t, sr) == 80U,
                "GSP SR arguments offset changed");
-_Static_assert(offsetof(nvx_gsp_arguments_cached_t, gpu_instance) == 100U,
+_Static_assert(offsetof(nvx_gsp_arguments_cached_modern_t, gpu_instance) == 100U,
                "GSP GPU instance offset changed");
-_Static_assert(sizeof(nvx_gsp_arguments_cached_t) == 184U,
+_Static_assert(sizeof(nvx_gsp_arguments_cached_modern_t) == 184U,
                "GSP cached arguments ABI size changed");
-_Static_assert(sizeof(nvx_gsp_arguments_cached_t) <= NVX_GSP_INIT_ARGS_PAGE_SIZE,
+_Static_assert(sizeof(nvx_gsp_arguments_cached_modern_t) <= NVX_GSP_INIT_ARGS_PAGE_SIZE,
                "GSP arguments must fit in one page");
 
 static int add_overflow_u64(uint64_t a, uint64_t b, uint64_t *out)
@@ -82,7 +82,7 @@ static int queue_profile_valid(uint32_t header_size, uint32_t min_size,
            element_alignment == NVX_GSP_QUEUE_ELEMENT_ALIGNMENT;
 }
 
-nvx_gsp_init_args_status_t nvx_gsp_shared_queue_required_size(
+nvx_gsp_init_args_status_t nvx_gsp_modern_shared_queue_required_size(
     uint64_t command_size, uint64_t status_size, uint64_t *out_required,
     uint64_t *out_page_table_size, uint32_t *out_pte_count)
 {
@@ -138,11 +138,11 @@ nvx_gsp_init_args_status_t nvx_gsp_shared_queue_required_size(
     return NVX_GSP_INIT_ARGS_OK;
 }
 
-nvx_gsp_init_args_status_t nvx_gsp_shared_queue_plan(
-    const nvx_gsp_shared_queue_config_t *config,
-    nvx_gsp_shared_queue_layout_t *out)
+nvx_gsp_init_args_status_t nvx_gsp_modern_shared_queue_plan(
+    const nvx_gsp_modern_shared_queue_config_t *config,
+    nvx_gsp_modern_shared_queue_layout_t *out)
 {
-    nvx_gsp_shared_queue_layout_t layout = {0};
+    nvx_gsp_modern_shared_queue_layout_t layout = {0};
     nvx_gsp_init_args_status_t status;
     uint64_t status_offset, status_end;
 
@@ -161,7 +161,7 @@ nvx_gsp_init_args_status_t nvx_gsp_shared_queue_plan(
     if (config->shared_mem_phys_addr > UINT64_MAX - config->allocation_size)
         return NVX_GSP_INIT_ARGS_SIZE_OVERFLOW;
 
-    status = nvx_gsp_shared_queue_required_size(config->command_queue_size,
+    status = nvx_gsp_modern_shared_queue_required_size(config->command_queue_size,
         config->status_queue_size, &layout.required_size,
         &layout.page_table_size, &layout.page_table_entry_count);
     if (status != NVX_GSP_INIT_ARGS_OK)
@@ -204,11 +204,11 @@ nvx_gsp_init_args_status_t nvx_gsp_shared_queue_plan(
     return NVX_GSP_INIT_ARGS_OK;
 }
 
-nvx_gsp_init_args_status_t nvx_gsp_shared_queue_validate(
-    const nvx_gsp_shared_queue_layout_t *layout)
+nvx_gsp_init_args_status_t nvx_gsp_modern_shared_queue_validate(
+    const nvx_gsp_modern_shared_queue_layout_t *layout)
 {
-    nvx_gsp_shared_queue_config_t config;
-    nvx_gsp_shared_queue_layout_t expected;
+    nvx_gsp_modern_shared_queue_config_t config;
+    nvx_gsp_modern_shared_queue_layout_t expected;
     nvx_gsp_init_args_status_t status;
 
     if (!layout)
@@ -223,7 +223,7 @@ nvx_gsp_init_args_status_t nvx_gsp_shared_queue_validate(
     config.queue_header_alignment = layout->queue_header_alignment;
     config.queue_element_alignment = layout->queue_element_alignment;
 
-    status = nvx_gsp_shared_queue_plan(&config, &expected);
+    status = nvx_gsp_modern_shared_queue_plan(&config, &expected);
     if (status != NVX_GSP_INIT_ARGS_OK)
         return status;
     if (layout->required_size != expected.required_size ||
@@ -235,8 +235,8 @@ nvx_gsp_init_args_status_t nvx_gsp_shared_queue_validate(
     return NVX_GSP_INIT_ARGS_OK;
 }
 
-nvx_gsp_init_args_status_t nvx_gsp_shared_queue_build_pte_table(
-    const nvx_gsp_shared_queue_layout_t *layout, void *shared_mem_cpu,
+nvx_gsp_init_args_status_t nvx_gsp_modern_shared_queue_build_pte_table(
+    const nvx_gsp_modern_shared_queue_layout_t *layout, void *shared_mem_cpu,
     size_t capacity)
 {
     nvx_gsp_init_args_status_t status;
@@ -246,7 +246,7 @@ nvx_gsp_init_args_status_t nvx_gsp_shared_queue_build_pte_table(
         return NVX_GSP_INIT_ARGS_INVALID_ARGUMENT;
     if (ranges_overlap(layout, sizeof(*layout), shared_mem_cpu, capacity))
         return NVX_GSP_INIT_ARGS_INVALID_ARGUMENT;
-    status = nvx_gsp_shared_queue_validate(layout);
+    status = nvx_gsp_modern_shared_queue_validate(layout);
     if (status != NVX_GSP_INIT_ARGS_OK)
         return status;
     if (capacity < layout->allocation_size)
@@ -271,11 +271,11 @@ nvx_gsp_init_args_status_t nvx_gsp_shared_queue_build_pte_table(
     return NVX_GSP_INIT_ARGS_OK;
 }
 
-nvx_gsp_init_args_status_t nvx_gsp_arguments_cached_build(
-    const nvx_gsp_shared_queue_layout_t *layout, uint32_t gpu_instance,
-    uint64_t flags, nvx_gsp_arguments_cached_t *out)
+nvx_gsp_init_args_status_t nvx_gsp_arguments_cached_modern_build(
+    const nvx_gsp_modern_shared_queue_layout_t *layout, uint32_t gpu_instance,
+    uint64_t flags, nvx_gsp_arguments_cached_modern_t *out)
 {
-    nvx_gsp_arguments_cached_t args = {0};
+    nvx_gsp_arguments_cached_modern_t args = {0};
     nvx_gsp_init_args_status_t status;
 
     if (!out || !layout)
@@ -285,7 +285,7 @@ nvx_gsp_init_args_status_t nvx_gsp_arguments_cached_build(
     memset(out, 0, sizeof(*out));
     if ((flags & ~NVX_GSP_INIT_ARGS_FLAG_STACK_IN_DMEM) != 0U)
         return NVX_GSP_INIT_ARGS_UNSUPPORTED_CONFIGURATION;
-    status = nvx_gsp_shared_queue_validate(layout);
+    status = nvx_gsp_modern_shared_queue_validate(layout);
     if (status != NVX_GSP_INIT_ARGS_OK)
         return status;
 
@@ -307,8 +307,8 @@ nvx_gsp_init_args_status_t nvx_gsp_arguments_cached_build(
     return NVX_GSP_INIT_ARGS_OK;
 }
 
-nvx_gsp_init_args_status_t nvx_gsp_arguments_cached_materialize(
-    const nvx_gsp_arguments_cached_t *args, void *page, size_t capacity)
+nvx_gsp_init_args_status_t nvx_gsp_arguments_cached_modern_materialize(
+    const nvx_gsp_arguments_cached_modern_t *args, void *page, size_t capacity)
 {
     if (!args || !page)
         return NVX_GSP_INIT_ARGS_INVALID_ARGUMENT;

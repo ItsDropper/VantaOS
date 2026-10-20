@@ -208,3 +208,15 @@ The read-VBIOS descriptor is five fields in its declared order: 32-bit version (
 NVX now builds these records as explicit little-endian byte sequences in `nvx_gsp_fwsec_build_command()`. The builder is pure: it neither modifies FWSEC DMEM nor copies the selected signature, changes DMA ownership, writes registers, or starts SEC2. It validates command IDs, output capacity, offset alignment/range, and output/size aliasing before publishing bytes. Strict-warning tests check exact field offsets and that failure leaves the destination untouched.
 
 **Boundary:** the builder prepares command bytes only. It does not decode scratch-register error fields, prove the target firmware accepts this exact profile, execute SB/FRTS, or authenticate FWSEC. The command-status contract and firmware-generation binding still need to be researched before adding a transaction executor.
+
+
+## 3.5 SB/FRTS result validation reconstructed from the public execution path
+
+The published TU102+ result path provides explicit postconditions rather than treating Falcon halt as success:
+
+- **FRTS (`0x15`):** the error code is the upper 16 bits of VBIOS scratch index `0x0E` and must be zero; WPR2 high-address field must be nonzero; the decoded WPR2 low-address field must equal the requested FRTS framebuffer offset transformed by the hardware-defined `NV_PFB_PRI_MMU_WPR2_ADDR_LO_ALIGNMENT` shift.
+- **SB (`0x19`):** the secure-scratch PLM state must report GFW read-protection level 0 enabled; GFW progress must report completed; the low 16 bits of VBIOS scratch index `0x15` must be zero.
+
+The independent `nvx_gsp_fwsec_validate_result()` helper implements those decision branches in the same fail-fast order, but accepts an already-decoded snapshot. It intentionally does not guess the WPR2 alignment shift, read registers, clear scratch fields, or execute firmware. The platform must decode the register fields from the matching GA10x definitions and supply a coherent snapshot. Synthetic tests cover every failure branch and success.
+
+This closes the **result interpretation** layer only. A correct decoded snapshot from fake BAR memory remains a test fixture, not evidence that SEC2 ran. Real execution still needs a firmware-generation-bound transaction, real VBIOS/FWSEC image, DMA-coherent staging, physical WPR memory, and actual hardware readback.

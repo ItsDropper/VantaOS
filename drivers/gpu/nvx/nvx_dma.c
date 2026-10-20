@@ -8,6 +8,8 @@
 
 #include <limits.h>
 
+static uint64_t nvx_dma_allocation_counter;
+
 static void nvx_dma_clear(nvx_dma_buffer_t *buffer)
 {
     buffer->cpu_address = 0;
@@ -15,6 +17,7 @@ static void nvx_dma_clear(nvx_dma_buffer_t *buffer)
     buffer->size = 0;
     buffer->allocated_size = 0;
     buffer->page_count = 0;
+    buffer->allocation_id = 0U;
     buffer->acquired = 0;
 }
 
@@ -85,6 +88,14 @@ nvx_dma_status_t nvx_dma_alloc(size_t size, unsigned address_bits,
         return NVX_DMA_ADDRESS_RANGE_INVALID;
     }
 
+    out_buffer->allocation_id = __atomic_add_fetch(
+        &nvx_dma_allocation_counter, 1U, __ATOMIC_RELAXED);
+    if (out_buffer->allocation_id == 0U) {
+        __atomic_store_n(&nvx_dma_allocation_counter, UINT64_MAX, __ATOMIC_RELAXED);
+        dma_free_contiguous(out_buffer->pages, page_count);
+        nvx_dma_clear(out_buffer);
+        return NVX_DMA_ALLOCATION_FAILED;
+    }
     out_buffer->acquired = 1U;
     return NVX_DMA_OK;
 }

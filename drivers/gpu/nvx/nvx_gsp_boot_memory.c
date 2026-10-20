@@ -105,3 +105,36 @@ nvx_gsp_boot_memory_status_t nvx_gsp_boot_memory_acquire(
     *out = memory;
     return NVX_GSP_BOOT_MEMORY_OK;
 }
+
+nvx_gsp_boot_memory_status_t nvx_gsp_boot_memory_bind_wpr(
+    const nvx_gsp_boot_memory_t *memory, nvx_gsp_wpr_layout_t *layout)
+{
+    if (!memory || !layout || !memory->acquired ||
+        !memory->radix3_elf.acquired ||
+        !memory->bootloader_payload.acquired || !memory->signature.acquired)
+        return NVX_GSP_BOOT_MEMORY_INVALID_ARGUMENT;
+    if (ranges_overlap(memory, sizeof(*memory), layout, sizeof(*layout)) ||
+        ranges_overlap(memory->radix3_elf.cpu_address,
+                       memory->radix3_elf.allocated_size, layout, sizeof(*layout)) ||
+        ranges_overlap(memory->bootloader_payload.cpu_address,
+                       memory->bootloader_payload.allocated_size, layout, sizeof(*layout)) ||
+        ranges_overlap(memory->signature.cpu_address,
+                       memory->signature.allocated_size, layout, sizeof(*layout)))
+        return NVX_GSP_BOOT_MEMORY_INVALID_ARGUMENT;
+    if ((memory->radix3_elf.gpu_address & 15U) != 0U ||
+        (memory->bootloader_payload.gpu_address & 15U) != 0U ||
+        (memory->signature.gpu_address & 15U) != 0U ||
+        memory->radix3_elf.size == 0U ||
+        memory->bootloader_payload.size == 0U ||
+        memory->signature.size == 0U)
+        return NVX_GSP_BOOT_MEMORY_COPY_FAILED;
+
+    /* Preserve framebuffer offsets supplied by the platform planner. */
+    layout->sysmem_radix3_addr = memory->radix3_elf.gpu_address;
+    layout->radix3_size = memory->radix3_elf.size;
+    layout->sysmem_bootloader_addr = memory->bootloader_payload.gpu_address;
+    layout->bootloader_size = memory->bootloader_payload.size;
+    layout->sysmem_signature_addr = memory->signature.gpu_address;
+    layout->signature_size = memory->signature.size;
+    return NVX_GSP_BOOT_MEMORY_OK;
+}

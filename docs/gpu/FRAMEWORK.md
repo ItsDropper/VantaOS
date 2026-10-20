@@ -31,4 +31,4 @@ The current NVX pass adds a read-only FWSEC interface parser and a pure SB/FRTS 
 `scripts/test_gpu_vendor_framework.c` is host-only and compiled with `-std=c11 -Wall -Wextra -Werror`. It checks Intel/AMD/NVIDIA classification, unsupported IDs, auxiliary-function rejection, forged descriptor rejection, capacity-safe inventory, lifecycle transitions, and capability guards. Passing these tests does not demonstrate a physical GPU driver.
 
 
-Detailed NVX engineering records are grouped under [GPU documentation](gpu/README.md).
+Detailed NVX engineering records are grouped under [GPU documentation](README.md).

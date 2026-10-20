@@ -52,8 +52,6 @@ typedef struct nvx_gsp_wpr_layout {
     uint32_t crash_report_queue_size;
     uint8_t vf_partition_count,flags;
     uint16_t paging_config;
-    uint32_t pmu_reserved_size;
-    uint32_t ls_ucode_version;
 } nvx_gsp_wpr_layout_t;
 /* Exact V1 field order; do not pack or reorder this wire structure. */
 typedef struct nvx_gsp_wpr_meta_v1 {

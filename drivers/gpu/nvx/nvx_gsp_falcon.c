@@ -142,3 +142,51 @@ nvx_gsp_falcon_status_t nvx_gsp_ga10x_wait_riscv_active(
         elapsed_ms += sleep_ms;
     }
 }
+
+/*
+ * GA102+ BROM programming order cross-checked against Linux Nova's
+ * ga102 Falcon HAL and NVIDIA's published dev_falcon_v4.h:
+ * parameter address, engine mask, ucode ID, then RSA-3K selector.
+ */
+nvx_gsp_falcon_status_t nvx_gsp_ga10x_program_brom(
+    const nvx_mmio_region_t *bar0, uint32_t engine_id_mask,
+    uint32_t ucode_id, uint32_t pkc_data_offset)
+{
+    uint32_t hwcfg2 = 0U;
+    uint32_t cpuctl = 0U;
+
+    if (bar0 == 0 || bar0->base == 0)
+        return NVX_GSP_FALCON_INVALID_ARGUMENT;
+    if (bar0->length < NVX_GSP_FALCON_BROM_REQUIRED_BYTES)
+        return NVX_GSP_FALCON_BAR_TOO_SMALL;
+    if ((engine_id_mask != 0x0001U && engine_id_mask != 0x0004U &&
+         engine_id_mask != 0x0400U) ||
+        ucode_id == 0U || ucode_id > NVX_GSP_FALCON_BROM_UCODE_COUNT ||
+        (pkc_data_offset & 3U) != 0U)
+        return NVX_GSP_FALCON_BROM_INVALID_PARAMETERS;
+
+    if (nvx_mmio_read32(bar0, NVX_GSP_FALCON_HWCFG2, &hwcfg2) != NVX_MMIO_OK ||
+        nvx_mmio_read32(bar0, NVX_GSP_FALCON_CPUCTL, &cpuctl) != NVX_MMIO_OK)
+        return NVX_GSP_FALCON_MMIO_ERROR;
+    if ((hwcfg2 & NVX_GSP_PRIV_LOCKED_MASK) == NVX_GSP_PRIV_LOCKED_PATTERN)
+        return NVX_GSP_FALCON_PRIVILEGED_WINDOW_LOCKED;
+    if ((cpuctl & NVX_GSP_CPUCTL_HALTED) == 0U)
+        return NVX_GSP_FALCON_NOT_HALTED;
+
+    /*
+     * All target registers are range-checked above before the first write.
+     * A hardware bus fault cannot be rolled back; callers must treat any
+     * write error as a failed boot transaction and reset/recover the engine.
+     */
+    if (nvx_mmio_write32(bar0, NVX_GSP_FALCON_BROM_PARAM_ADDR,
+                         pkc_data_offset) != NVX_MMIO_OK ||
+        nvx_mmio_write32(bar0, NVX_GSP_FALCON_BROM_ENGINE_MASK,
+                         engine_id_mask) != NVX_MMIO_OK ||
+        nvx_mmio_write32(bar0, NVX_GSP_FALCON_BROM_UCODE_ID,
+                         ucode_id) != NVX_MMIO_OK ||
+        nvx_mmio_write32(bar0, NVX_GSP_FALCON_BROM_MOD_SEL,
+                         NVX_GSP_FALCON_BROM_RSA3K) != NVX_MMIO_OK)
+        return NVX_GSP_FALCON_MMIO_ERROR;
+
+    return NVX_GSP_FALCON_OK;
+}

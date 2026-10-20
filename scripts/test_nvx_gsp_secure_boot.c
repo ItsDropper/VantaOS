@@ -154,7 +154,7 @@ int main(void)
     assert(trace.result == NVX_GSP_FALCON_OK);
     assert(trace.current_phase == NVX_GSP_BOOT_PHASE_COMPLETE);
     assert(trace.last_completed_phase == NVX_GSP_BOOT_PHASE_COMPLETE);
-    assert(trace.failed_phase == NVX_GSP_BOOT_PHASE_COMPLETE);
+    assert(trace.failed_phase == NVX_GSP_BOOT_PHASE_NONE);
     assert(trace.sec2_quiescence_confirmed == 1U);
     assert(trace.recovery_attempted == 0U);
     assert(mailbox1 == 0xB007U);

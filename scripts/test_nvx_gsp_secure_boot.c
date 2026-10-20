@@ -65,6 +65,7 @@ int main(void)
     };
     nvx_gsp_secure_transfer_plan_t plan;
     uint32_t mailbox1 = 0U;
+    nvx_gsp_boot_trace_t trace;
 
     assert(bar_bytes && load_bytes && metadata_bytes);
     bar0.base = (volatile uint8_t *)bar_bytes;
@@ -114,12 +115,22 @@ int main(void)
     assert(nvx_gsp_ga10x_execute_booter_load(&memory, &bar0, 20U, 1U,
         fake_delay, &bar0, &mailbox1) == NVX_GSP_FALCON_BOOTER_NOT_STAGED);
     memory.booters_staged = 1U;
-    assert(nvx_gsp_ga10x_execute_booter_load(&memory, &bar0, 20U, 1U,
-        fake_delay, &bar0, &mailbox1) == NVX_GSP_FALCON_WPR_METADATA_NOT_READY);
+    assert(nvx_gsp_ga10x_execute_booter_load_traced(&memory, &bar0, 20U, 1U,
+        fake_delay, &bar0, &mailbox1, &trace) == NVX_GSP_FALCON_WPR_METADATA_NOT_READY);
+    assert(trace.result == NVX_GSP_FALCON_WPR_METADATA_NOT_READY);
+    assert(trace.failed_phase == NVX_GSP_BOOT_PHASE_PRECHECK);
+    assert(trace.last_completed_phase == NVX_GSP_BOOT_PHASE_PRECHECK);
+    assert(trace.recovery_attempted == 0U);
     memory.wpr_metadata_prepared = 1U;
 
-    assert(nvx_gsp_ga10x_execute_booter_load(&memory, &bar0, 20U, 1U,
-        fake_delay, &bar0, &mailbox1) == NVX_GSP_FALCON_OK);
+    assert(nvx_gsp_ga10x_execute_booter_load_traced(&memory, &bar0, 20U, 1U,
+        fake_delay, &bar0, &mailbox1, &trace) == NVX_GSP_FALCON_OK);
+    assert(trace.result == NVX_GSP_FALCON_OK);
+    assert(trace.current_phase == NVX_GSP_BOOT_PHASE_COMPLETE);
+    assert(trace.last_completed_phase == NVX_GSP_BOOT_PHASE_COMPLETE);
+    assert(trace.failed_phase == NVX_GSP_BOOT_PHASE_COMPLETE);
+    assert(trace.sec2_quiescence_confirmed == 1U);
+    assert(trace.recovery_attempted == 0U);
     assert(mailbox1 == 0xB007U);
     assert(memory.booter_load_sync.owner == NVX_DMA_OWNER_CPU);
     assert(memory.wpr_metadata_sync.owner == NVX_DMA_OWNER_CPU);

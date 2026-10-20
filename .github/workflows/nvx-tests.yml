@@ -247,9 +247,9 @@ jobs:
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
             scripts/test_nvx_gsp_ga10x.c drivers/gpu/nvx/nvx_gsp_ga10x.c \
-            drivers/gpu/nvx/nvx_gsp_msgq_rpc.c drivers/gpu/nvx/nvx_gsp_msgq_queue.c \
-            drivers/gpu/nvx/nvx_gsp_msgq.c drivers/gpu/nvx/nvx_mmio.c \
-            -o /tmp/vantaos-nvx-ga10x-queues-test
+            drivers/gpu/nvx/nvx_gsp_falcon.c drivers/gpu/nvx/nvx_gsp_msgq_rpc.c \
+            drivers/gpu/nvx/nvx_gsp_msgq_queue.c drivers/gpu/nvx/nvx_gsp_msgq.c \
+            drivers/gpu/nvx/nvx_mmio.c -o /tmp/vantaos-nvx-ga10x-queues-test
 
       - name: Test NVIDIA GA10x queue register map and post-boot response linking
         run: /tmp/vantaos-nvx-ga10x-queues-test

@@ -25,6 +25,38 @@ int pci_get_device_count(void)
     return (int)(sizeof(inventory) / sizeof(inventory[0]));
 }
 
+/* The framework test intentionally models GPUs with unassigned BARs. */
+uint8_t pci_read_config8(const struct pci_device *device, uint8_t offset)
+{
+    (void)device;
+    return offset == 0x0EU ? 0U : 0U;
+}
+
+uint16_t pci_read_config16(const struct pci_device *device, uint8_t offset)
+{
+    (void)device;
+    (void)offset;
+    return 0U;
+}
+
+uint32_t pci_read_config32(const struct pci_device *device, uint8_t offset)
+{
+    (void)device;
+    (void)offset;
+    return 0U;
+}
+
+int pci_get_bar(const struct pci_device *device, uint8_t index,
+                uint64_t *address, int *is_io, int *is_64bit)
+{
+    (void)device;
+    (void)index;
+    if (address != 0) *address = 0U;
+    if (is_io != 0) *is_io = 0;
+    if (is_64bit != 0) *is_64bit = 0;
+    return 0;
+}
+
 const struct pci_device *pci_get_device(int index)
 {
     if (index < 0 || index >= pci_get_device_count())
@@ -67,6 +99,8 @@ int main(void)
     assert(intel_gpu_describe(&intel, &intel_desc));
     assert(intel_desc.firmware_required == 1U);
     assert(intel_desc.acceleration_ready == 0U);
+    assert(intel_desc.resources.count == 0U);
+    assert(intel_desc.mmio_aperture_enabled == 0U);
     assert(gpu_driver_matches(intel_gpu_driver(), &intel));
     assert(!gpu_driver_matches(intel_gpu_driver(), &amd));
 
@@ -77,6 +111,8 @@ int main(void)
     assert(amd_gpu_describe(&amd, &amd_desc));
     assert(amd_desc.firmware_required == 1U);
     assert(amd_desc.acceleration_ready == 0U);
+    assert(amd_desc.resources.count == 0U);
+    assert(amd_desc.mmio_aperture_enabled == 0U);
     assert(gpu_driver_matches(amd_gpu_driver(), &amd));
     assert(!gpu_driver_matches(amd_gpu_driver(), &intel));
 

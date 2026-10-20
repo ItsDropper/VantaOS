@@ -8,6 +8,7 @@
 #define VANTA_AMD_GPU_H
 
 #include "gpu_core.h"
+#include "gpu_pci_resources.h"
 
 #define AMD_GPU_PCI_VENDOR_ID GPU_PCI_VENDOR_AMD
 
@@ -15,9 +16,13 @@ typedef struct amd_gpu_descriptor {
     gpu_pci_match_t pci;
     uint8_t firmware_required;
     uint8_t acceleration_ready;
+    uint8_t memory_space_enabled;
+    uint8_t mmio_aperture_enabled;
+    uint16_t pci_command;
+    gpu_pci_resource_inventory_t resources;
 } amd_gpu_descriptor_t;
 
-/* Safe initial backend: identity and family detection only. */
+/* Read-only PCI identity and assigned BAR inventory; no decode/DMA changes. */
 int amd_gpu_match(const struct pci_device *device);
 int amd_gpu_describe(const struct pci_device *device,
                      amd_gpu_descriptor_t *out_descriptor);

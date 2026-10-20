@@ -28,7 +28,7 @@ static int append_text(char *dst, size_t capacity, size_t *length,
         return 0;
     memcpy(dst + *length, text, n);
     *length += n;
-    dst[*length] = '\\0';
+    dst[*length] = '\0';
     return 1;
 }
 static void clear_component(nvx_gsp_component_t *c)
@@ -103,7 +103,7 @@ nvx_gsp_bundle_status_t nvx_gsp_bundle_acquire(
     memcpy(out->version,version,strlen(version)+1U);
     for(size_t i=0;i<NVX_GSP_COMPONENT_COUNT;i++) {
         size_t length=0U;
-        path[0]='\\0';
+        path[0]='\0';
         if(!append_text(path,sizeof(path),&length,"nvidia/") ||
            !append_text(path,sizeof(path),&length,out->chip) ||
            !append_text(path,sizeof(path),&length,"/gsp/") ||

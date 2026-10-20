@@ -114,3 +114,27 @@ a fake "boot succeeded" flag for these requirements. NVIDIA's open kernel
 module implementation and the independent Nova driver are research references;
 their GPL-covered implementation code must not be copied into NVX without a
 compatible licensing decision.
+
+
+## Runtime ELF materialization (host-verified, not hardware boot)
+
+The new `nvx_gsp_elf_load_segments()` path reparses the acquired runtime ELF,
+rejects ET_DYN until a relocation policy exists, resolves every PT_LOAD target
+through a platform-supplied mapping callback, rejects overlapping physical and
+CPU mappings, and validates every mapping before it writes anything. It copies
+file-backed bytes and zeroes each segment's BSS tail. The callback contract
+requires the caller to map only memory reserved and addressable by the GSP; the
+loader does not allocate memory, alter PCI bus mastering, or start the engine.
+
+`nvx_gsp_preflight_load_runtime()` joins this operation to full GA10x firmware
+bundle preflight. This makes segment materialization callable only after the
+bundle and its firmware assets have passed the existing preflight checks. Host
+tests cover data copy, BSS clearing, destination alias rejection, unsupported
+ET_DYN, and no-write behavior when mapping fails.
+
+This still is **not a complete boot path**. No GA10x secure-boot/SEC2 FWSEC
+transaction, firmware-authenticated WPR placement, VRAM-resident WPR allocation,
+Falcon DMA transfer, reset/boot register sequence, or GSP-RM init RPC is wired
+to physical hardware. The loader's map callback must not be mistaken for a
+real BAR1/VRAM mapping implementation. Do not mark the device initialized or
+enable acceleration based on these host tests.

@@ -40,7 +40,8 @@ typedef enum nvx_gsp_falcon_status {
     NVX_GSP_FALCON_INVALID_ARGUMENT,
     NVX_GSP_FALCON_BAR_TOO_SMALL,
     NVX_GSP_FALCON_MMIO_ERROR,
-    NVX_GSP_FALCON_PRIVILEGED_WINDOW_LOCKED
+    NVX_GSP_FALCON_PRIVILEGED_WINDOW_LOCKED,
+    NVX_GSP_FALCON_RISCV_TIMEOUT
 } nvx_gsp_falcon_status_t;
 
 typedef struct nvx_gsp_falcon_snapshot {
@@ -64,5 +65,15 @@ typedef struct nvx_gsp_falcon_snapshot {
 nvx_gsp_falcon_status_t nvx_gsp_ga10x_inspect_falcon(
     const nvx_mmio_region_t *bar0,
     nvx_gsp_falcon_snapshot_t *out_snapshot);
+
+/*
+ * Wait for the GA102+ RISC-V active bit using a caller-supplied scheduler delay.
+ * Both timeout and polling interval are in milliseconds; no busy-spin is used.
+ * The callback must sleep/yield for at least the requested interval.
+ */
+typedef void (*nvx_gsp_delay_ms_fn)(uint32_t milliseconds, void *context);
+nvx_gsp_falcon_status_t nvx_gsp_ga10x_wait_riscv_active(
+    const nvx_mmio_region_t *bar0, uint32_t timeout_ms,
+    uint32_t poll_interval_ms, nvx_gsp_delay_ms_fn delay_ms, void *context);
 
 #endif

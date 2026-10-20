@@ -7,6 +7,7 @@
 #include <assert.h>
 #include <stdint.h>
 #include <string.h>
+#define PAGES NVX_GSP_MAX_QUEUE_PAGES
 static uint8_t ring_mem[4U*NVX_GSP_PAGE_SIZE] __attribute__((aligned(NVX_GSP_PAGE_SIZE)));
 static uint8_t scratch[16U*NVX_GSP_PAGE_SIZE] __attribute__((aligned(NVX_GSP_PAGE_SIZE)));
 static uint8_t large_payload[100000U];

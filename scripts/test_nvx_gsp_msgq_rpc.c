@@ -53,7 +53,7 @@ int main(void){
  assert(nvx_gsp_msgq_rpc_send(&transport,0x1235U,payload,sizeof(payload),scratch,sizeof(scratch),&seq)==NVX_GSP_MSGQ_RPC_OK);
  assert(seq==2U&&f.regs[0]==2U);
  /* Simulate a one-element GSP reply in the RX backing store. */
- uint8_t *reply=rx_store+2U*NVX_GSP_PAGE_SIZE;
+ uint8_t *reply=rx_store+NVX_GSP_PAGE_SIZE;
  make_reply(reply,NVX_GSP_PAGE_SIZE,0x1235U,77U,payload,sizeof(payload),NVX_GSP_NVDM_HEADER_RM_RPC);
  f.regs[2]=1U;
  assert(nvx_gsp_msgq_rpc_receive(&transport,scratch,sizeof(scratch),&view)==NVX_GSP_MSGQ_RPC_OK);

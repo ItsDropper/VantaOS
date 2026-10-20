@@ -9,8 +9,10 @@
 #include <string.h>
 #define PAGES NVX_GSP_MAX_QUEUE_PAGES
 static uint8_t ring_mem[4U*NVX_GSP_PAGE_SIZE] __attribute__((aligned(NVX_GSP_PAGE_SIZE)));
+static uint8_t wrap_mem[2U*NVX_GSP_PAGE_SIZE] __attribute__((aligned(NVX_GSP_PAGE_SIZE)));
 static uint8_t scratch[16U*NVX_GSP_PAGE_SIZE] __attribute__((aligned(NVX_GSP_PAGE_SIZE)));
-static uint32_t read_index,write_index; static unsigned notifications;
+static uint32_t read_index,write_index; static uint32_t wrap_read,wrap_write;
+static unsigned notifications;
 static uint32_t read32(const uint8_t *p) {
  return (uint32_t)p[0]|((uint32_t)p[1]<<8U)|((uint32_t)p[2]<<16U)|((uint32_t)p[3]<<24U);
 }
@@ -71,5 +73,16 @@ int main(void) {
  ring.initialized=0U;
  assert(nvx_gsp_ring_send(&ring,NVX_GSP_RPC_HEADER_VERSION_R535,NVX_GSP_RPC_SIGNATURE_R535,1U,payload,1U,scratch,sizeof(scratch),&seq)==NVX_GSP_RING_NOT_INITIALIZED);
  assert(nvx_gsp_ring_receive(&ring,scratch,sizeof(scratch),&view)==NVX_GSP_RING_NOT_INITIALIZED);
+
+ /* Monotonic MSGQ counters wrap naturally at 32 bits. */
+ nvx_gsp_ring_t wrap_ring={0};
+ wrap_read=UINT32_MAX-1U; wrap_write=UINT32_MAX-1U;
+ assert(nvx_gsp_ring_init(&wrap_ring,wrap_mem,2U,&wrap_read,&wrap_write,0,0)==NVX_GSP_RING_OK);
+ assert(nvx_gsp_ring_send(&wrap_ring,NVX_GSP_RPC_HEADER_VERSION_R535,
+     NVX_GSP_RPC_SIGNATURE_R535,400U,payload,5000U,scratch,sizeof(scratch),&seq)==NVX_GSP_RING_OK);
+ assert(wrap_write==0U&&wrap_read==UINT32_MAX-1U);
+ assert(nvx_gsp_ring_receive(&wrap_ring,scratch,sizeof(scratch),&view)==NVX_GSP_RING_OK);
+ assert(view.function==400U&&view.element_pages==2U);
+ assert(wrap_read==0U&&wrap_write==0U);
  return 0;
 }

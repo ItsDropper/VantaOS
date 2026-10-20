@@ -42,4 +42,8 @@ nvx_gsp_preflight_status_t nvx_gsp_preflight_stage_booters(
     uint32_t load_fuse_version, uint8_t *load_staging, size_t load_capacity,
     uint32_t unload_fuse_version, uint8_t *unload_staging, size_t unload_capacity,
     nvx_gsp_image_info_t *out_load_info, nvx_gsp_image_info_t *out_unload_info);
+/* Validate the full bundle and stage the GA10x GSP RISC-V bootloader payload. */
+nvx_gsp_preflight_status_t nvx_gsp_preflight_stage_gsp_bootloader(
+    const nvx_gsp_bundle_t *bundle, uint8_t *staging, size_t staging_capacity,
+    nvx_gsp_bootloader_info_t *out_info);
 #endif

@@ -35,6 +35,7 @@ int main(void)
 {
     nvx_mmio_region_t region = {bar, sizeof(bar)};
     nvx_gsp_falcon_snapshot_t snapshot;
+    uint32_t register_value = 0U;
 
     memset(bar, 0, sizeof(bar));
     memset(&snapshot, 0xA5, sizeof(snapshot));
@@ -115,7 +116,6 @@ int main(void)
     assert(nvx_mmio_read32(&region, NVX_SEC2_FALCON_BASE + 0x104U,
            &register_value) == NVX_MMIO_OK);
     assert(register_value == 0x400U);
-    uint32_t register_value = 0U;
     assert(nvx_mmio_read32(&region, NVX_GSP_FALCON_BROM_PARAM_ADDR,
                            &register_value) == NVX_MMIO_OK);
     assert(register_value == 0x100U);

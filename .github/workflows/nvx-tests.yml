@@ -19,6 +19,7 @@ on:
       - "include/nvx_gsp_bundle.h"
       - "include/nvx_gsp_image.h"
       - "include/nvx_gsp_ring.h"
+      - "include/nvx_gsp_msgq.h"
       - "include/nvx_gsp_rpc.h"
       - "include/nvx_gsp_elf.h"
       - "include/nvx_dma.h"
@@ -44,6 +45,7 @@ on:
       - "scripts/test_nvx_gsp_bundle.c"
       - "scripts/test_nvx_gsp_image.c"
       - "scripts/test_nvx_gsp_ring.c"
+      - "scripts/test_nvx_gsp_msgq.c"
       - "scripts/test_nvx_gsp_rpc.c"
       - "scripts/test_nvx_gsp_elf.c"
       - "scripts/test_nvx_dma.c"
@@ -170,6 +172,15 @@ jobs:
 
       - name: Test contiguous DMA allocation bounds, validation and cleanup
         run: /tmp/vantaos-nvx-dma-test
+
+      - name: Compile NVIDIA MSGQ header tests
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_msgq.c drivers/gpu/nvx/nvx_gsp_msgq.c \
+            -o /tmp/vantaos-nvx-msgq-test
+
+      - name: Test NVIDIA MSGQ backing-store ABI
+        run: /tmp/vantaos-nvx-msgq-test
 
       - name: Compile GSP RPC ring tests
         run: |

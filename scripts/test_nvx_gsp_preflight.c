@@ -8,7 +8,8 @@
 #include <stdint.h>
 #include <string.h>
 static uint8_t elf[768],ucodes[256],boot_assets[3][512];
-static int verify_fail; static unsigned verify_calls;\nstatic int verify_stub(const char *p,const nvx_firmware_blob_t *b,void *c){(void)p;(void)b;(void)c;++verify_calls;return !verify_fail;}
+static int verify_fail; static unsigned verify_calls;
+static int verify_stub(const char *p,const nvx_firmware_blob_t *b,void *c){(void)p;(void)b;(void)c;++verify_calls;return !verify_fail;}
 static void p16(size_t o,uint16_t v){elf[o]=(uint8_t)v;elf[o+1]=(uint8_t)(v>>8U);}
 static void p32(size_t o,uint32_t v){for(unsigned i=0;i<4U;i++)elf[o+i]=(uint8_t)(v>>(i*8U));}
 static void p64(size_t o,uint64_t v){for(unsigned i=0;i<8U;i++)elf[o+i]=(uint8_t)(v>>(i*8U));}

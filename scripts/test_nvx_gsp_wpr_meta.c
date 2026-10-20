@@ -45,6 +45,8 @@ int main(void)
   .frts_size=0x10000U,.nonwpr_heap_size=0x1000000U,
   .compute_wpr_heap_size=test_heap_policy,.heap_policy_context=&policy_calls};
  nvx_gsp_wpr_layout_t planned={0};
+ _Alignas(8) uint8_t metadata_page[4096U];
+ nvx_gsp_wpr_meta_v1_t *materialized=(nvx_gsp_wpr_meta_v1_t *)(void *)metadata_page;
  assert(sizeof(m)==256U&&offsetof(nvx_gsp_wpr_meta_v1_t,verified)==248U);
  assert(nvx_gsp_wpr_layout_plan(&l,&cfg,&planned)==NVX_GSP_WPR_OK);
  assert(policy_calls==1U&&planned.framebuffer_size==cfg.framebuffer_size);
@@ -53,6 +55,13 @@ int main(void)
  assert(planned.boot_bin_offset%4096U==0U);
  assert(nvx_gsp_wpr_meta_build(&planned,&m)==NVX_GSP_WPR_OK);
  assert(nvx_gsp_wpr_meta_validate(&m)==NVX_GSP_WPR_OK);
+ memset(metadata_page, 0xA5, sizeof(metadata_page));
+ assert(nvx_gsp_wpr_meta_materialize(&planned, metadata_page, sizeof(metadata_page), 0x800000U)==NVX_GSP_WPR_OK);
+ assert(nvx_gsp_wpr_meta_validate(materialized)==NVX_GSP_WPR_OK);
+ assert(materialized->sysmem_addr_of_radix3_elf==planned.sysmem_radix3_addr);
+ assert(metadata_page[sizeof(*materialized)]==0xA5U);
+ assert(nvx_gsp_wpr_meta_materialize(&planned, metadata_page, sizeof(*materialized)-1U, 0x800000U)==NVX_GSP_WPR_INVALID_ARGUMENT);
+ assert(nvx_gsp_wpr_meta_materialize(&planned, metadata_page, sizeof(metadata_page), 0x800001U)==NVX_GSP_WPR_INVALID_ARGUMENT);
  cfg.mmu_lock_valid=1U;cfg.mmu_lock_low=0xFFE00000ULL;
  assert(nvx_gsp_wpr_layout_plan(&l,&cfg,&planned)==NVX_GSP_WPR_OK);
  assert(planned.wpr_end<=cfg.mmu_lock_low);

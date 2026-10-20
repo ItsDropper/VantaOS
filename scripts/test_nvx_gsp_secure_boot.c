@@ -1,0 +1,139 @@
+/*
+ * Copyright (c) 2026 ItsDropper
+ *
+ * This file is part of VantaOS and is licensed under the MIT License.
+ * See the LICENSE file in the project root for the full license text.
+ */
+#include "nvx_gsp_secure_boot.h"
+
+#include <assert.h>
+#include <stdlib.h>
+#include <string.h>
+
+static void fake_delay(uint32_t milliseconds, void *context)
+{
+    nvx_mmio_region_t *bar0 = (nvx_mmio_region_t *)context;
+    (void)milliseconds;
+    assert(nvx_mmio_write32(bar0,
+        NVX_GA10X_FALCON_DMATRFCMD(NVX_SEC2_FALCON_BASE),
+        NVX_GA10X_FALCON_DMA_IDLE) == NVX_MMIO_OK);
+    assert(nvx_mmio_write32(bar0, NVX_SEC2_FALCON_BASE + 0x100U,
+        NVX_GSP_CPUCTL_HALTED) == NVX_MMIO_OK);
+    assert(nvx_mmio_write32(bar0, NVX_SEC2_FALCON_BASE + 0x040U,
+        0U) == NVX_MMIO_OK);
+    assert(nvx_mmio_write32(bar0, NVX_SEC2_FALCON_BASE + 0x044U,
+        0xB007U) == NVX_MMIO_OK);
+}
+
+static uint32_t read_reg(const nvx_mmio_region_t *bar0, uint32_t offset)
+{
+    uint32_t value = UINT32_MAX;
+    assert(nvx_mmio_read32(bar0, offset, &value) == NVX_MMIO_OK);
+    return value;
+}
+
+int main(void)
+{
+    uint8_t *bar_bytes = calloc(1U, NVX_GA10X_BAR0_REQUIRED_BYTES);
+    uint8_t *load_bytes = calloc(1U, 0x4000U);
+    uint8_t *metadata_bytes = calloc(1U, NVX_DMA_PAGE_SIZE);
+    nvx_mmio_region_t bar0;
+    nvx_dma_buffer_t load_buffer = {
+        .cpu_address = load_bytes, .gpu_address = 0x10000000ULL,
+        .size = 0x4000U, .allocated_size = 0x4000U, .page_count = 4U,
+        .allocation_id = 11U, .acquired = 1U
+    };
+    nvx_dma_buffer_t metadata_buffer = {
+        .cpu_address = metadata_bytes, .gpu_address = 0x20000000ULL,
+        .size = NVX_DMA_PAGE_SIZE, .allocated_size = NVX_DMA_PAGE_SIZE,
+        .page_count = 1U, .allocation_id = 12U, .acquired = 1U
+    };
+    nvx_gsp_boot_memory_t memory = {0};
+    nvx_gsp_image_info_t info = {
+        .data_size = 0x4000U,
+        .engine_id = 0x0001U,
+        .ucode_id = 2U,
+        .signature_count = 1U,
+        .signature_size = 0x100U,
+        .patch_location = 0x2100U,
+        .os_code_size = 0x1000U,
+        .os_data_offset = 0x2000U,
+        .os_data_size = 0x1000U,
+        .app_count = 1U,
+        .app0_offset = 0x1000U,
+        .app0_size = 0x1000U
+    };
+    nvx_gsp_secure_transfer_plan_t plan;
+    uint32_t mailbox1 = 0U;
+
+    assert(bar_bytes && load_bytes && metadata_bytes);
+    bar0.base = (volatile uint8_t *)bar_bytes;
+    bar0.length = NVX_GA10X_BAR0_REQUIRED_BYTES;
+    assert(nvx_mmio_write32(&bar0, NVX_SEC2_FALCON_BASE + 0x0F4U, 0U) == NVX_MMIO_OK);
+    assert(nvx_mmio_write32(&bar0, NVX_SEC2_FALCON_BASE + 0x100U,
+                            NVX_GSP_CPUCTL_HALTED) == NVX_MMIO_OK);
+    assert(nvx_mmio_write32(&bar0,
+        NVX_GA10X_FALCON_DMATRFCMD(NVX_SEC2_FALCON_BASE),
+        NVX_GA10X_FALCON_DMA_IDLE) == NVX_MMIO_OK);
+
+    assert(nvx_gsp_ga10x_secure_image_plan(&load_buffer, &info, &plan) ==
+           NVX_GSP_FALCON_OK);
+    assert(plan.source_phys == load_buffer.gpu_address);
+    assert(plan.imem_source_offset == 0x1000U);
+    assert(plan.imem_destination_offset == 0U);
+    assert(plan.imem_size == 0x1000U);
+    assert(plan.dmem_source_offset == 0x2000U);
+    assert(plan.dmem_destination_offset == 0U);
+    assert(plan.dmem_size == 0x1000U);
+    assert(plan.boot_vector == 0x1000U);
+    assert(plan.signature_dmem_offset == 0x100U);
+    assert(plan.engine_id_mask == 1U && plan.ucode_id == 2U);
+
+    info.app0_offset++;
+    assert(nvx_gsp_ga10x_secure_image_plan(&load_buffer, &info, &plan) ==
+           NVX_GSP_FALCON_IMAGE_INVALID);
+    info.app0_offset = 0x1000U;
+    info.engine_id = 0x0002U;
+    assert(nvx_gsp_ga10x_secure_image_plan(&load_buffer, &info, &plan) ==
+           NVX_GSP_FALCON_BROM_INVALID_PARAMETERS);
+    info.engine_id = 0x0001U;
+    info.patch_location = 0x3F80U;
+    assert(nvx_gsp_ga10x_secure_image_plan(&load_buffer, &info, &plan) ==
+           NVX_GSP_FALCON_IMAGE_INVALID);
+    info.patch_location = 0x2100U;
+
+    memory.acquired = 1U;
+    memory.booter_load = load_buffer;
+    memory.wpr_metadata = metadata_buffer;
+    memory.booter_load_info = info;
+    memory.wpr_metadata_prepared = 0U;
+    assert(nvx_dma_sync_init(&memory.booter_load_sync,
+                             &memory.booter_load) == NVX_DMA_SYNC_OK);
+    assert(nvx_dma_sync_init(&memory.wpr_metadata_sync,
+                             &memory.wpr_metadata) == NVX_DMA_SYNC_OK);
+    assert(nvx_gsp_ga10x_execute_booter_load(&memory, &bar0, 20U, 1U,
+        fake_delay, &bar0, &mailbox1) == NVX_GSP_FALCON_BOOTER_NOT_STAGED);
+    memory.booters_staged = 1U;
+    assert(nvx_gsp_ga10x_execute_booter_load(&memory, &bar0, 20U, 1U,
+        fake_delay, &bar0, &mailbox1) == NVX_GSP_FALCON_WPR_METADATA_NOT_READY);
+    memory.wpr_metadata_prepared = 1U;
+
+    assert(nvx_gsp_ga10x_execute_booter_load(&memory, &bar0, 20U, 1U,
+        fake_delay, &bar0, &mailbox1) == NVX_GSP_FALCON_OK);
+    assert(mailbox1 == 0xB007U);
+    assert(memory.booter_load_sync.owner == NVX_DMA_OWNER_CPU);
+    assert(memory.wpr_metadata_sync.owner == NVX_DMA_OWNER_CPU);
+    assert(read_reg(&bar0, NVX_GA10X_FALCON_BROM_PARAM_ADDR(NVX_SEC2_FALCON2_BASE)) == 0x100U);
+    assert(read_reg(&bar0, NVX_GA10X_FALCON_BROM_ENGINE_MASK(NVX_SEC2_FALCON2_BASE)) == 1U);
+    assert(read_reg(&bar0, NVX_GA10X_FALCON_BROM_UCODE_ID(NVX_SEC2_FALCON2_BASE)) == 2U);
+    assert(read_reg(&bar0, NVX_GA10X_FALCON_BROM_MOD_SEL(NVX_SEC2_FALCON2_BASE)) ==
+           NVX_GSP_FALCON_BROM_RSA3K);
+    assert(read_reg(&bar0, NVX_SEC2_FALCON_BASE + 0x104U) == 0x1000U);
+
+    assert(nvx_dma_sync_destroy(&memory.booter_load_sync) == NVX_DMA_SYNC_OK);
+    assert(nvx_dma_sync_destroy(&memory.wpr_metadata_sync) == NVX_DMA_SYNC_OK);
+    free(metadata_bytes);
+    free(load_bytes);
+    free(bar_bytes);
+    return 0;
+}

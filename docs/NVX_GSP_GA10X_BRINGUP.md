@@ -239,3 +239,30 @@ This follows the GA102 Falcon boot contract documented by Linux Nova/OpenRM. A r
 ## CPUCTL alias handling
 
 The Falcon launch path now follows the documented GA102 `CPUCTL.ALIAS_EN` bit: when enabled, STARTCPU is issued through `CPUCTL_ALIAS` at engine-base + `0x130`; otherwise it uses CPUCTL directly. The alias-window bounds are checked before BOOTVEC is written; the full boot helper checks them before it writes either input mailbox, so a truncated mapping cannot leave partial boot arguments behind. Host tests cover direct and alias starts plus no-write failure behavior. This avoids assuming that the non-alias CPUCTL write is valid for every Falcon configuration.
+
+
+## WPR metadata in DMA-visible SYSRAM
+
+The boot-memory owner now allocates a fourth, dedicated 4 KiB contiguous DMA page for the 256-byte WPR metadata object. `nvx_gsp_boot_memory_prepare_wpr_metadata()` copies the platform-planned framebuffer layout, binds the actual physical SYSRAM addresses and bootloader descriptor offsets from the acquired artifacts, validates the resulting layout, serializes the exact V1 metadata structure into the DMA page, and returns that page's physical address for the Booter Load argument.
+
+The serializer rejects a zero or non-page-aligned physical address, a short destination, pointer aliasing with the layout, and invalid/overlapping framebuffer layouts. It uses a release fence after copying. The DMA subsystem/platform remains responsible for any cache-maintenance operation required by its memory-coherency contract. The new allocation participates in rollback and pairwise physical-overlap checks with the runtime ELF, bootloader payload, and signature page.
+
+This closes the **SYSRAM metadata allocation/materialization** step only. It does not program VRAM, execute Booter Load, authenticate FWSEC, or start the GSP. The physical framebuffer mapping and actual platform WPR inputs are still required.
+
+
+## Fuse-selected Booter Load/Unload staging
+
+The boot-memory owner now reserves separate, physically non-overlapping DMA buffers for both signed booter images in addition to the runtime ELF, GSP bootloader payload, signature section and WPR metadata page. Buffer sizes come from the fully preflighted image descriptors, not hard-coded constants.
+
+`nvx_gsp_boot_memory_stage_booters_from_bar0()` delegates to the existing GA10x BAR0 fuse-read/preflight path to choose the correct signed booter payloads. On any failure it zeroes both staging allocations and clears both image descriptors; the staged flag is set only after both payloads succeed. This is the host-side handoff point immediately before SEC2/FWSEC execution, but it does not itself upload either image to Falcon IMEM/DMEM or run the signed firmware.
+
+The strict-warning boot-memory test now exercises the whole ownership transaction with synthetic inputs: all six independent DMA artifacts, successful fuse-selected staging, injected staging failure/zeroization, WPR metadata preparation, and allocation failure on the final page with full rollback.
+
+
+## Executable SEC2 Booter Load path
+
+A new high-secure transfer planner translates the parsed GA10x booter descriptor into explicit Falcon operations. The offsets follow the published GA102 path: secure application code is DMAed from the payload's app-code offset into SEC2 IMEM at offset zero, OS data is DMAed from its payload offset into DMEM at offset zero, and the signature's DMEM-relative offset plus engine/ucode IDs are passed to BROM. The SEC2 boot vector remains the app-code offset.
+
+`nvx_gsp_ga10x_execute_booter_load()` now sequences: SEC2 reset; explicit CPU-to-device ownership handoff for the signed booter; secure IMEM DMA; DMEM DMA; return ownership after transfer completion; BROM parameter programming; WPR metadata DMA ownership handoff; SEC2 start with the 64-bit WPR metadata SYSRAM address in mailboxes 0/1; wait for SEC2 halt; validate mailbox 0; and reclaim metadata ownership after the handoff completes. On transfer/boot failure it attempts a reset before reclaiming device-owned buffers. If reset cannot prove the engine quiescent, ownership is retained and boot-memory release refuses to free those buffers.
+
+The strict-warning SEC2 test drives the actual MMIO helpers against a synthetic BAR0 register bank. It checks the transfer plan, reset/DMA/BROM/BOOTVEC/mailbox ordering and ownership transitions. This proves software sequencing only: synthetic MMIO cannot authenticate real firmware or establish that a physical GA102 GPU boots.

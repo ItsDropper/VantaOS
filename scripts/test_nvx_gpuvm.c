@@ -97,11 +97,18 @@ static size_t test_find_child(uint16_t parent, uint16_t slot)
 static void test_invalid_init(void)
 {
     nvx_gpuvm_t empty = {0};
-    nvx_mmio_region_t bad = {0};
-    assert(nvx_gpuvm_init(0, TEST_VA_START, TEST_VA_SIZE, &bad) ==
+    nvx_gpuvm_hw_ops_t hw = {
+        .context = 0,
+        .publish_root = test_publish_root,
+        .invalidate = test_invalidate
+    };
+    assert(nvx_gpuvm_init(0, TEST_VA_START, TEST_VA_SIZE, &hw) ==
            NVX_GPUVM_INVALID_ARGUMENT);
-    assert(nvx_gpuvm_init(&empty, 0U, TEST_VA_SIZE, &bad) ==
+    assert(nvx_gpuvm_init(&empty, 0U, TEST_VA_SIZE, 0) ==
            NVX_GPUVM_INVALID_ARGUMENT);
+    assert(nvx_gpuvm_init(&empty, TEST_VA_START, TEST_VA_SIZE, &hw) ==
+           NVX_GPUVM_OK);
+    assert(nvx_gpuvm_destroy(&empty) == NVX_GPUVM_OK);
 }
 
 int main(void)

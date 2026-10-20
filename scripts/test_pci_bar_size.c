@@ -113,6 +113,17 @@ int main(void)
     assert(!pci_get_bar_size(&gpu, 1U, &size));
     assert(size == 0U);
 
+    /* An unassigned 64-bit BAR can still be safely sized with decode disabled. */
+    reset_config();
+    config_space[TEST_BAR0_INDEX] = 0x00000004U;
+    config_space[TEST_BAR0_INDEX + 1U] = 0U;
+    bar_masks[0] = 0xFFE00004U; /* 2 MiB 64-bit memory BAR */
+    bar_masks[1] = 0xFFFFFFFFU;
+    assert(pci_get_bar_size(&gpu, 0U, &size));
+    assert(size == 0x00200000ULL);
+    assert(config_space[TEST_BAR0_INDEX] == 0x00000004U);
+    assert(config_space[TEST_BAR0_INDEX + 1U] == 0U);
+
     /* Malformed masks are rejected after the original BAR is restored. */
     reset_config();
     config_space[TEST_BAR0_INDEX] = 0x80000000U;

@@ -246,6 +246,8 @@ nvx_gsp_init_args_status_t nvx_gsp_modern_shared_queue_build_pte_table(
         return NVX_GSP_INIT_ARGS_INVALID_ARGUMENT;
     if (ranges_overlap(layout, sizeof(*layout), shared_mem_cpu, capacity))
         return NVX_GSP_INIT_ARGS_INVALID_ARGUMENT;
+    if (((uintptr_t)shared_mem_cpu & (NVX_GSP_PAGE_SIZE - 1U)) != 0U)
+        return NVX_GSP_INIT_ARGS_BAD_ALIGNMENT;
     status = nvx_gsp_modern_shared_queue_validate(layout);
     if (status != NVX_GSP_INIT_ARGS_OK)
         return status;

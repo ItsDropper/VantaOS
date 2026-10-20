@@ -167,12 +167,22 @@ nvx_gsp_image_status_t nvx_gsp_image_prepare(
                  component->blob.size))
         return NVX_GSP_IMAGE_INVALID_ARGUMENT;
 
-    if (info.signature_count > 1U) {
-        if (fuse_version >= info.signature_count)
-            return NVX_GSP_IMAGE_FUSE_VERSION_UNSUPPORTED;
-        signature_index = info.signature_count - 1U - fuse_version;
+    /*
+     * GA102+ firmware carries a FUSE baseline in its metadata. Nova's public
+     * implementation uses the final signature when the hardware fuse version
+     * is zero; otherwise the signature slot is baseline - hardware version.
+     * The slot is an index into the packed signature array (not a raw fuse
+     * version). Reject a fuse newer than the firmware baseline and any index
+     * outside the signed container instead of silently choosing another key.
+     */
+    if (fuse_version == 0U) {
+        signature_index = info.signature_count - 1U;
     } else {
-        signature_index = 0U;
+        if (info.fuse_version < fuse_version)
+            return NVX_GSP_IMAGE_FUSE_VERSION_UNSUPPORTED;
+        signature_index = info.fuse_version - fuse_version;
+        if (signature_index >= info.signature_count)
+            return NVX_GSP_IMAGE_FUSE_VERSION_UNSUPPORTED;
     }
 
     signature_source = (uint64_t)info.signature_offset +

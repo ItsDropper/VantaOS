@@ -55,6 +55,10 @@ int main(void)
  assert(nvx_gsp_wpr_meta_build(&l,&m)==NVX_GSP_WPR_BAD_RANGE);
  l=valid_layout();l.flags=0x80U;
  assert(nvx_gsp_wpr_meta_build(&l,&m)==NVX_GSP_WPR_BAD_FLAGS);
+ l=valid_layout();l.sysmem_signature_addr=l.sysmem_radix3_addr+0x1000U;
+ assert(nvx_gsp_wpr_meta_build(&l,&m)==NVX_GSP_WPR_OVERLAP);
+ l=valid_layout();
+ assert(nvx_gsp_wpr_meta_build(&l,(nvx_gsp_wpr_meta_v1_t *)(void *)&l)==NVX_GSP_WPR_INVALID_ARGUMENT);
  l=valid_layout();l.bootloader_manifest_offset=l.bootloader_size;
  assert(nvx_gsp_wpr_meta_build(&l,&m)==NVX_GSP_WPR_BAD_RANGE);
  l=valid_layout();l.framebuffer_size+=1U;

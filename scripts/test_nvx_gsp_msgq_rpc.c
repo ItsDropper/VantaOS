@@ -13,9 +13,14 @@ static uint8_t tx_store[BYTES] __attribute__((aligned(NVX_GSP_MSGQ_HEADER_PAGE_S
 static uint8_t rx_store[BYTES] __attribute__((aligned(NVX_GSP_MSGQ_HEADER_PAGE_SIZE)));
 static uint8_t scratch[16U*NVX_GSP_PAGE_SIZE] __attribute__((aligned(NVX_GSP_PAGE_SIZE)));
 static uint8_t large_payload[5000U];
-typedef struct fake {uint32_t regs[8];} fake_t;
+typedef struct fake {uint32_t regs[8];uint32_t *sequence_observed;uint32_t expected_sequence;int enforce_sequence;} fake_t;
 static int rd(void *p,uint32_t r,uint32_t *o){fake_t*f=p;if(r/4U>=8U)return 0;*o=f->regs[r/4U];return 1;}
-static int wr(void *p,uint32_t r,uint32_t v){fake_t*f=p;if(r/4U>=8U)return 0;f->regs[r/4U]=v;return 1;}
+static int wr(void *p,uint32_t r,uint32_t v){
+ fake_t*f=p;if(r/4U>=8U)return 0;
+ if(r==0U&&v!=0U&&f->enforce_sequence)
+   assert(__atomic_load_n(f->sequence_observed,__ATOMIC_ACQUIRE)==f->expected_sequence);
+ f->regs[r/4U]=v;return 1;
+}
 static void barrier(void *p){(void)p;__atomic_thread_fence(__ATOMIC_SEQ_CST);}
 static uint32_t get32(const uint8_t*p){return (uint32_t)p[0]|((uint32_t)p[1]<<8U)|((uint32_t)p[2]<<16U)|((uint32_t)p[3]<<24U);}
 static void put32(uint8_t*p,uint32_t v){p[0]=(uint8_t)v;p[1]=(uint8_t)(v>>8U);p[2]=(uint8_t)(v>>16U);p[3]=(uint8_t)(v>>24U);}
@@ -45,7 +50,9 @@ int main(void){
  assert(nvx_gsp_msgq_prepare_tx(rx_store,sizeof(rx_store),4096U,&fake_gsp)==NVX_GSP_MSGQ_OK);
  assert(nvx_gsp_msgq_queue_init_rx(&rx,rx_store,sizeof(rx_store),4096U,&io,8U,12U)==NVX_GSP_MSGQ_QUEUE_OK);
  assert(nvx_gsp_msgq_rpc_init(&transport,&tx,&rx)==NVX_GSP_MSGQ_RPC_OK);
+ f.sequence_observed=&seq;f.expected_sequence=1U;f.enforce_sequence=1;
  assert(nvx_gsp_msgq_rpc_send(&transport,0x1234U,payload,sizeof(payload),scratch,sizeof(scratch),&seq)==NVX_GSP_MSGQ_RPC_OK);
+ f.enforce_sequence=0;
  assert(seq==1U&&f.regs[0]==1U);
  assert(get32(tx_store+4096U)==NVX_GSP_MCTP_MAGIC);
  assert(get32(tx_store+4096U+4U)==NVX_GSP_MSG_HEADER_SIZE+NVX_GSP_RPC_HEADER_SIZE+sizeof(payload));

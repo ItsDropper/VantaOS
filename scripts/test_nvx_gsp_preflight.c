@@ -32,7 +32,10 @@ static void build_gsp_bootloader(uint8_t *dest){
  memset(dest,0,512U);
  asset32(dest,0U,0x10DEU);asset32(dest,4U,1U);asset32(dest,8U,256U);
  asset32(dest,12U,24U);asset32(dest,16U,108U);asset32(dest,20U,128U);
- for(size_t i=0U;i<84U;i++)dest[24U+i]=(uint8_t)(i+1U);
+ asset32(dest,24U,4U); /* RM_RISCV_UCODE_DESC version */
+ asset32(dest,24U+8U*4U,16U); asset32(dest,24U+9U*4U,16U);
+ asset32(dest,24U+10U*4U,32U); asset32(dest,24U+11U*4U,16U);
+ asset32(dest,24U+12U*4U,64U); asset32(dest,24U+13U*4U,32U);
  for(size_t i=0U;i<128U;i++)dest[108U+i]=(uint8_t)(0x80U+i);
 }
 static void build_elf(void){
@@ -58,7 +61,7 @@ int main(void){
  uint8_t bootloader_stage[128],bootloader_backup[128];
  nvx_gsp_bootloader_info_t bootloader_info;
  assert(nvx_gsp_preflight_stage_gsp_bootloader(&b,bootloader_stage,sizeof(bootloader_stage),&bootloader_info)==NVX_GSP_PREFLIGHT_OK);
- assert(bootloader_info.descriptor_size==84U&&b.components[4].blob.data[bootloader_info.descriptor_offset]==1U);
+ assert(bootloader_info.descriptor_size==84U&&b.components[4].blob.data[bootloader_info.descriptor_offset]==4U);
  assert(bootloader_stage[0]==0x80U&&bootloader_stage[127]==0xFFU);
  memset(bootloader_stage,0xA5U,sizeof(bootloader_stage));memcpy(bootloader_backup,bootloader_stage,sizeof(bootloader_stage));
  assert(nvx_gsp_preflight_stage_gsp_bootloader(&b,bootloader_stage,sizeof(bootloader_stage)-1U,&bootloader_info)==NVX_GSP_PREFLIGHT_STAGING_TOO_SMALL);

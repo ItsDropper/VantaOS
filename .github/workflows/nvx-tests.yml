@@ -18,6 +18,7 @@ on:
       - "include/nvx_firmware.h"
       - "include/nvx_gsp_bundle.h"
       - "include/nvx_gsp_image.h"
+      - "include/nvx_gsp_ring.h"
       - "include/nvx_dma.h"
       - "include/nvx_dma_sync.h"
       - "include/nvx_gpuva.h"
@@ -40,6 +41,7 @@ on:
       - "scripts/test_nvx_firmware.c"
       - "scripts/test_nvx_gsp_bundle.c"
       - "scripts/test_nvx_gsp_image.c"
+      - "scripts/test_nvx_gsp_ring.c"
       - "scripts/test_nvx_dma.c"
       - "scripts/test_nvx_dma_sync.c"
       - "scripts/test_nvx_gpuva.c"
@@ -164,6 +166,15 @@ jobs:
 
       - name: Test contiguous DMA allocation bounds, validation and cleanup
         run: /tmp/vantaos-nvx-dma-test
+
+      - name: Compile GSP RPC ring tests
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_ring.c drivers/gpu/nvx/nvx_gsp_ring.c \
+            -o /tmp/vantaos-nvx-gsp-ring-test
+
+      - name: Test GSP RPC ring framing, wraparound and checksum rejection
+        run: /tmp/vantaos-nvx-gsp-ring-test
 
       - name: Compile NVX DMA ownership and ordering tests
         run: |

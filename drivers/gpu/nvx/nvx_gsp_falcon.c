@@ -428,3 +428,85 @@ nvx_gsp_falcon_status_t nvx_ga10x_falcon_reset(
         elapsed_ms += sleep_ms;
     }
 }
+
+/*
+ * Mirrors the GA102 Falcon boot contract: optional input mailboxes, start the
+ * loaded image, wait for CPUCTL.HALTED, and return both firmware mailboxes.
+ * Firmware authentication/loading remains the caller's responsibility.
+ */
+nvx_gsp_falcon_status_t nvx_ga10x_falcon_boot(
+    const nvx_mmio_region_t *bar0, uint32_t falcon_base,
+    uint32_t boot_vector, uint8_t write_mailbox0, uint32_t mailbox0_in,
+    uint8_t write_mailbox1, uint32_t mailbox1_in,
+    uint32_t *mailbox0_out, uint32_t *mailbox1_out,
+    uint32_t timeout_ms, uint32_t poll_interval_ms,
+    nvx_gsp_delay_ms_fn delay_ms, void *context)
+{
+    uint32_t hwcfg2 = 0U;
+    uint32_t cpuctl = 0U;
+    uint32_t elapsed_ms = 0U;
+
+    if (!bar0 || !bar0->base || !mailbox0_out || !mailbox1_out ||
+        !delay_ms || timeout_ms == 0U || poll_interval_ms == 0U ||
+        write_mailbox0 > 1U || write_mailbox1 > 1U)
+        return NVX_GSP_FALCON_INVALID_ARGUMENT;
+    if (nvx_gsp_ranges_overlap(mailbox0_out, sizeof(*mailbox0_out),
+                              mailbox1_out, sizeof(*mailbox1_out)) ||
+        nvx_gsp_ranges_overlap(mailbox0_out, sizeof(*mailbox0_out),
+                              bar0, sizeof(*bar0)) ||
+        nvx_gsp_ranges_overlap(mailbox1_out, sizeof(*mailbox1_out),
+                              bar0, sizeof(*bar0)) ||
+        nvx_gsp_ranges_overlap(mailbox0_out, sizeof(*mailbox0_out),
+                              (const void *)bar0->base, bar0->length) ||
+        nvx_gsp_ranges_overlap(mailbox1_out, sizeof(*mailbox1_out),
+                              (const void *)bar0->base, bar0->length))
+        return NVX_GSP_FALCON_INVALID_ARGUMENT;
+    if (!nvx_ga10x_falcon_base_valid(falcon_base))
+        return NVX_GSP_FALCON_BROM_INVALID_PARAMETERS;
+    if (bar0->length < (size_t)(falcon_base + 0x108U))
+        return NVX_GSP_FALCON_BAR_TOO_SMALL;
+    if ((boot_vector & 3U) != 0U)
+        return NVX_GSP_FALCON_BOOT_VECTOR_INVALID;
+
+    if (nvx_mmio_read32(bar0, falcon_base + 0x0F4U, &hwcfg2) != NVX_MMIO_OK ||
+        nvx_mmio_read32(bar0, falcon_base + 0x100U, &cpuctl) != NVX_MMIO_OK)
+        return NVX_GSP_FALCON_MMIO_ERROR;
+    if ((hwcfg2 & NVX_GSP_PRIV_LOCKED_MASK) == NVX_GSP_PRIV_LOCKED_PATTERN)
+        return NVX_GSP_FALCON_PRIVILEGED_WINDOW_LOCKED;
+    if ((cpuctl & NVX_GSP_CPUCTL_HALTED) == 0U)
+        return NVX_GSP_FALCON_NOT_HALTED;
+
+    if ((write_mailbox0 &&
+         nvx_mmio_write32(bar0, falcon_base + 0x040U, mailbox0_in) != NVX_MMIO_OK) ||
+        (write_mailbox1 &&
+         nvx_mmio_write32(bar0, falcon_base + 0x044U, mailbox1_in) != NVX_MMIO_OK))
+        return NVX_GSP_FALCON_MMIO_ERROR;
+
+    nvx_gsp_falcon_status_t status =
+        nvx_ga10x_falcon_start(bar0, falcon_base, boot_vector);
+    if (status != NVX_GSP_FALCON_OK)
+        return status;
+
+    for (;;) {
+        if (nvx_mmio_read32(bar0, falcon_base + 0x0F4U, &hwcfg2) != NVX_MMIO_OK ||
+            nvx_mmio_read32(bar0, falcon_base + 0x100U, &cpuctl) != NVX_MMIO_OK)
+            return NVX_GSP_FALCON_MMIO_ERROR;
+        if ((hwcfg2 & NVX_GSP_PRIV_LOCKED_MASK) == NVX_GSP_PRIV_LOCKED_PATTERN)
+            return NVX_GSP_FALCON_PRIVILEGED_WINDOW_LOCKED;
+        if ((cpuctl & NVX_GSP_CPUCTL_HALTED) != 0U) {
+            if (nvx_mmio_read32(bar0, falcon_base + 0x040U,
+                                mailbox0_out) != NVX_MMIO_OK ||
+                nvx_mmio_read32(bar0, falcon_base + 0x044U,
+                                mailbox1_out) != NVX_MMIO_OK)
+                return NVX_GSP_FALCON_MMIO_ERROR;
+            return NVX_GSP_FALCON_OK;
+        }
+        if (elapsed_ms >= timeout_ms)
+            return NVX_GSP_FALCON_BOOT_TIMEOUT;
+        uint32_t remaining = timeout_ms - elapsed_ms;
+        uint32_t sleep_ms = poll_interval_ms < remaining ?
+                            poll_interval_ms : remaining;
+        delay_ms(sleep_ms, context);
+        elapsed_ms += sleep_ms;
+    }
+}

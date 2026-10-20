@@ -16,7 +16,7 @@ typedef enum nvx_gsp_rpc_status {
     NVX_GSP_RPC_PENDING, NVX_GSP_RPC_COMPLETE, NVX_GSP_RPC_FAILED,
     NVX_GSP_RPC_UNMATCHED_MESSAGE, NVX_GSP_RPC_DEVICE_LOST,
     NVX_GSP_RPC_FUNCTION_MISMATCH, NVX_GSP_RPC_RESPONSE_TOO_LARGE,
-    NVX_GSP_RPC_BUSY
+    NVX_GSP_RPC_BUSY, NVX_GSP_RPC_TRANSPORT_ERROR
 } nvx_gsp_rpc_status_t;
 typedef struct nvx_gsp_rpc_result {
     uint32_t sequence, function, firmware_result, firmware_result_private;
@@ -33,12 +33,13 @@ typedef struct nvx_gsp_rpc_slot {
 } nvx_gsp_rpc_slot_t;
 typedef struct nvx_gsp_rpc_manager {
     spinlock_t lock;
-    nvx_gsp_ring_t *ring;
+    nvx_gsp_ring_t *command_ring;
+    nvx_gsp_ring_t *response_ring;
     nvx_gsp_rpc_slot_t slots[NVX_GSP_RPC_MAX_PENDING];
     uint8_t initialized, device_lost;
 } nvx_gsp_rpc_manager_t;
 /* Zero-initialize manager. Response storage must remain valid until handle release. */
-nvx_gsp_rpc_status_t nvx_gsp_rpc_init(nvx_gsp_rpc_manager_t *, nvx_gsp_ring_t *);
+nvx_gsp_rpc_status_t nvx_gsp_rpc_init(nvx_gsp_rpc_manager_t *, nvx_gsp_ring_t *command_ring, nvx_gsp_ring_t *response_ring);
 nvx_gsp_rpc_status_t nvx_gsp_rpc_submit(nvx_gsp_rpc_manager_t *,
     uint32_t header_version, uint32_t signature, uint32_t request_function,
     uint32_t response_function, const void *payload, size_t payload_size,

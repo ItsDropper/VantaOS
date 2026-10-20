@@ -37,8 +37,9 @@ typedef struct nvx_gsp_msgq_queue {
     uint8_t transmit,initialized;
 } nvx_gsp_msgq_queue_t;
 /*
- * One producer owns TX and one consumer owns RX, matching NVIDIA MSGQ.
- * head/tail register offsets must come from the verified GPU register map.
+ * Zero-initialize the queue before init. One producer owns TX and one consumer
+ * owns RX, matching NVIDIA MSGQ. head/tail offsets come from the verified GPU
+ * register map; do not guess register offsets or share a queue between producers.
  * Call tx_get for each slot, fill exactly element_size bytes, then tx_submit.
  * RX mirrors this with rx_get/rx_consume. The callback layer owns MMIO ordering.
  */

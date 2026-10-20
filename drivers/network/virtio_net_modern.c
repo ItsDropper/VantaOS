@@ -363,16 +363,22 @@ static void cleanup(void)
 
 static net_pci_probe_result_t vnet_modern_probe(const struct pci_device *pci)
 {
-    
+    const char *failure = "entry";
     if (!pci || state.ready || state.pci) return NET_PCI_PROBE_NOT_MINE;
-    if (!pci_enable_memory_space(pci)) return NET_PCI_PROBE_FAILED;
+    if (!pci_enable_memory_space(pci)) {
+        serial_write("VANTAOS_VIRTIO_NET_MODERN_FAIL_MEMORY_SPACE\\n");
+        return NET_PCI_PROBE_FAILED;
+    }
     state.pci = pci;
+    failure = "capabilities";
     if (!discover_capabilities(pci)) goto fail;
+    failure = "status-reset";
     wr8(state.common, 20U, 0U);
     for (uint32_t i = 0; i < 100000U && rd8(state.common, 20U) != 0U; ++i)
         __asm__ volatile ("pause");
     wr8(state.common, 20U, VNET_STATUS_ACK);
     wr8(state.common, 20U, VNET_STATUS_ACK | VNET_STATUS_DRIVER);
+    failure = "features";
     wr32(state.common, 0U, 0U);
     uint64_t features = rd32(state.common, 4U);
     wr32(state.common, 0U, 1U);
@@ -385,14 +391,20 @@ static net_pci_probe_result_t vnet_modern_probe(const struct pci_device *pci)
           (state.mergeable_rx ? VNET_F_MRG_RXBUF : 0U)));
     wr32(state.common, 8U, 1U);
     wr32(state.common, 12U, 1U);
+    failure = "driver-ok";
     wr8(state.common, 20U, VNET_STATUS_ACK | VNET_STATUS_DRIVER | VNET_STATUS_FEATURES_OK);
+    failure = "features-accepted";
     if (!(rd8(state.common, 20U) & VNET_STATUS_FEATURES_OK)) goto fail;
+    failure = "queue-count-or-device-config";
     if (rd16(state.common, 18U) < 2U || state.device_config_length < 6U ||
         (state.has_status && state.device_config_length < 8U)) goto fail;
+    failure = "bus-mastering";
     if (!pci_enable_bus_mastering(pci)) goto fail;
+    failure = "queue-allocation";
     if (!allocate_queue(&state.rx, 0U) || !allocate_queue(&state.tx, 1U)) goto fail;
     uint8_t mac[6], any = 0U;
     for (uint32_t i = 0; i < 6U; ++i) { mac[i] = rd8(state.device_config, i); any |= mac[i]; }
+    failure = "mac-address";
     if (!any || (mac[0] & 1U)) goto fail;
     for (uint16_t i = 0; i < state.rx.size; ++i) {
         state.rx.desc[i].address = state.rx.buffers[i].physical_address;
@@ -413,6 +425,7 @@ static net_pci_probe_result_t vnet_modern_probe(const struct pci_device *pci)
     state.netdev.ops = &vnet_modern_ops;
     state.netdev.driver_data = &state;
     spinlock_init(&state.tx_lock);
+    failure = "net-register";
     if (!net_device_register(&state.netdev)) goto fail;
     state.registered = 1U;
 #ifdef VANTAOS_SELF_TEST
@@ -439,6 +452,9 @@ static net_pci_probe_result_t vnet_modern_probe(const struct pci_device *pci)
     serial_write("VANTAOS_VIRTIO_NET_MODERN_INITIALIZED\n");
     return NET_PCI_PROBE_BOUND;
 fail:
+    serial_write("VANTAOS_VIRTIO_NET_MODERN_FAIL_");
+    serial_write(failure);
+    serial_write("\\n");
     cleanup();
     return NET_PCI_PROBE_FAILED;
 }

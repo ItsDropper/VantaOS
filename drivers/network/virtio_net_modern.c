@@ -130,26 +130,62 @@ static volatile uint8_t *map_cap(const struct pci_device *pci, uint8_t bar,
     uint64_t base = 0;
     int io = 0;
     if (bar >= 6U || !length || offset >= 0x100000U ||
-        length > 0x100000U - offset ||
-        !pci_get_bar(pci, bar, &base, &io, 0) || io || !base ||
-        base > UINT64_MAX - offset)
+        length > 0x100000U - offset) {
+        serial_write("VANTAOS_VIRTIO_NET_MODERN_MAP_BAD_RANGE\n");
         return 0;
-    return (volatile uint8_t *)mmio_map_region(base + offset, length);
+    }
+    int is_64bit = 0;
+    if (!pci_get_bar(pci, bar, &base, &io, &is_64bit)) {
+        /*
+         * Firmware can leave an implemented 64-bit modern BAR unassigned.
+         * The PCI core may assign it only after validating its size and the
+         * platform memory map; the driver never guesses an MMIO address.
+         */
+        if (!pci_allocate_unassigned_bar(pci, bar) ||
+            !pci_get_bar(pci, bar, &base, &io, &is_64bit)) {
+            serial_write("VANTAOS_VIRTIO_NET_MODERN_MAP_BAR_UNAVAILABLE\n");
+            return 0;
+        }
+    }
+    if (io || !base) {
+        serial_write("VANTAOS_VIRTIO_NET_MODERN_MAP_BAR_NOT_MMIO\n");
+        return 0;
+    }
+    if (base > UINT64_MAX - offset) {
+        serial_write("VANTAOS_VIRTIO_NET_MODERN_MAP_BAR_OVERFLOW\n");
+        return 0;
+    }
+    volatile uint8_t *mapped =
+        (volatile uint8_t *)mmio_map_region(base + offset, length);
+    if (!mapped) {
+        serial_write("VANTAOS_VIRTIO_NET_MODERN_MAP_MMIO_FAIL\n");
+        return 0;
+    }
+    return mapped;
 }
 
 static int discover_capabilities(const struct pci_device *pci)
 {
-    if (!(pci_read_config16(pci, 0x06U) & 0x10U)) return 0;
+    if (!(pci_read_config16(pci, 0x06U) & 0x10U)) {
+        serial_write("VANTAOS_VIRTIO_NET_MODERN_CAP_NO_LIST\n");
+        return 0;
+    }
     uint8_t at = pci_read_config8(pci, 0x34U);
     uint8_t seen[256] = {0};
     while (at) {
-        if (at < 0x40U || (at & 3U) || seen[at]) return 0;
+        if (at < 0x40U || (at & 3U) || seen[at]) {
+            serial_write("VANTAOS_VIRTIO_NET_MODERN_CAP_BAD_LINK\n");
+            return 0;
+        }
         seen[at] = 1U;
         uint8_t id = pci_read_config8(pci, at);
         uint8_t next = pci_read_config8(pci, (uint8_t)(at + 1U));
         if (id == VNET_CAP_ID) {
             uint8_t length = pci_read_config8(pci, (uint8_t)(at + 2U));
-            if (length < 16U || (uint16_t)at + length > 256U) return 0;
+            if (length < 16U || (uint16_t)at + length > 256U) {
+                serial_write("VANTAOS_VIRTIO_NET_MODERN_CAP_BAD_LENGTH\n");
+                return 0;
+            }
             uint8_t type = pci_read_config8(pci, (uint8_t)(at + 3U));
             /* PCI_CFG and ISR capabilities do not describe MMIO windows. */
             if (type != VNET_CAP_COMMON && type != VNET_CAP_NOTIFY &&
@@ -161,27 +197,55 @@ static int discover_capabilities(const struct pci_device *pci)
             uint32_t offset = pci_read_config32(pci, (uint8_t)(at + 8U));
             uint32_t region_length = pci_read_config32(pci, (uint8_t)(at + 12U));
             if (!region_length || offset >= 0x100000U ||
-                region_length > 0x100000U - offset) return 0;
+                region_length > 0x100000U - offset) {
+                serial_write("VANTAOS_VIRTIO_NET_MODERN_CAP_BAD_REGION\n");
+                return 0;
+            }
             if (type == VNET_CAP_COMMON) {
-                if (state.common || region_length < 56U) return 0;
+                if (state.common || region_length < 56U) {
+                    serial_write("VANTAOS_VIRTIO_NET_MODERN_CAP_COMMON_INVALID\n");
+                    return 0;
+                }
                 state.common = map_cap(pci, bar, offset, region_length);
                 state.common_length = region_length;
-                if (!state.common) return 0;
+                if (!state.common) {
+                    serial_write("VANTAOS_VIRTIO_NET_MODERN_CAP_COMMON_MAP_FAIL\n");
+                    return 0;
+                }
             } else if (type == VNET_CAP_NOTIFY) {
-                if (state.notify_region || length < 20U) return 0;
+                if (state.notify_region || length < 20U) {
+                    serial_write("VANTAOS_VIRTIO_NET_MODERN_CAP_NOTIFY_INVALID\n");
+                    return 0;
+                }
                 state.notify_multiplier = pci_read_config32(pci, (uint8_t)(at + 16U));
                 state.notify_region = map_cap(pci, bar, offset, region_length);
                 state.notify_length = region_length;
-                if (!state.notify_region || !state.notify_multiplier) return 0;
+                if (!state.notify_region) {
+                    serial_write("VANTAOS_VIRTIO_NET_MODERN_CAP_NOTIFY_MAP_FAIL\n");
+                    return 0;
+                }
+                if (!state.notify_multiplier) {
+                    serial_write("VANTAOS_VIRTIO_NET_MODERN_CAP_NOTIFY_MULTIPLIER_ZERO\n");
+                    return 0;
+                }
             } else if (type == VNET_CAP_DEVICE) {
-                if (state.device_config || region_length < 6U) return 0;
+                if (state.device_config || region_length < 6U) {
+                    serial_write("VANTAOS_VIRTIO_NET_MODERN_CAP_DEVICE_INVALID\n");
+                    return 0;
+                }
                 state.device_config = map_cap(pci, bar, offset, region_length);
                 state.device_config_length = region_length;
-                if (!state.device_config) return 0;
+                if (!state.device_config) {
+                    serial_write("VANTAOS_VIRTIO_NET_MODERN_CAP_DEVICE_MAP_FAIL\n");
+                    return 0;
+                }
             }
         }
         at = next;
     }
+    if (!state.common) serial_write("VANTAOS_VIRTIO_NET_MODERN_CAP_COMMON_MISSING\n");
+    if (!state.notify_region) serial_write("VANTAOS_VIRTIO_NET_MODERN_CAP_NOTIFY_MISSING\n");
+    if (!state.device_config) serial_write("VANTAOS_VIRTIO_NET_MODERN_CAP_DEVICE_MISSING\n");
     return state.common && state.notify_region && state.device_config;
 }
 
@@ -363,16 +427,22 @@ static void cleanup(void)
 
 static net_pci_probe_result_t vnet_modern_probe(const struct pci_device *pci)
 {
-    
+    const char *failure = "entry";
     if (!pci || state.ready || state.pci) return NET_PCI_PROBE_NOT_MINE;
-    if (!pci_enable_memory_space(pci)) return NET_PCI_PROBE_FAILED;
+    if (!pci_enable_memory_space(pci)) {
+        serial_write("VANTAOS_VIRTIO_NET_MODERN_FAIL_MEMORY_SPACE\\n");
+        return NET_PCI_PROBE_FAILED;
+    }
     state.pci = pci;
+    failure = "capabilities";
     if (!discover_capabilities(pci)) goto fail;
+    failure = "status-reset";
     wr8(state.common, 20U, 0U);
     for (uint32_t i = 0; i < 100000U && rd8(state.common, 20U) != 0U; ++i)
         __asm__ volatile ("pause");
     wr8(state.common, 20U, VNET_STATUS_ACK);
     wr8(state.common, 20U, VNET_STATUS_ACK | VNET_STATUS_DRIVER);
+    failure = "features";
     wr32(state.common, 0U, 0U);
     uint64_t features = rd32(state.common, 4U);
     wr32(state.common, 0U, 1U);
@@ -385,14 +455,20 @@ static net_pci_probe_result_t vnet_modern_probe(const struct pci_device *pci)
           (state.mergeable_rx ? VNET_F_MRG_RXBUF : 0U)));
     wr32(state.common, 8U, 1U);
     wr32(state.common, 12U, 1U);
+    failure = "driver-ok";
     wr8(state.common, 20U, VNET_STATUS_ACK | VNET_STATUS_DRIVER | VNET_STATUS_FEATURES_OK);
+    failure = "features-accepted";
     if (!(rd8(state.common, 20U) & VNET_STATUS_FEATURES_OK)) goto fail;
+    failure = "queue-count-or-device-config";
     if (rd16(state.common, 18U) < 2U || state.device_config_length < 6U ||
         (state.has_status && state.device_config_length < 8U)) goto fail;
+    failure = "bus-mastering";
     if (!pci_enable_bus_mastering(pci)) goto fail;
+    failure = "queue-allocation";
     if (!allocate_queue(&state.rx, 0U) || !allocate_queue(&state.tx, 1U)) goto fail;
     uint8_t mac[6], any = 0U;
     for (uint32_t i = 0; i < 6U; ++i) { mac[i] = rd8(state.device_config, i); any |= mac[i]; }
+    failure = "mac-address";
     if (!any || (mac[0] & 1U)) goto fail;
     for (uint16_t i = 0; i < state.rx.size; ++i) {
         state.rx.desc[i].address = state.rx.buffers[i].physical_address;
@@ -413,6 +489,7 @@ static net_pci_probe_result_t vnet_modern_probe(const struct pci_device *pci)
     state.netdev.ops = &vnet_modern_ops;
     state.netdev.driver_data = &state;
     spinlock_init(&state.tx_lock);
+    failure = "net-register";
     if (!net_device_register(&state.netdev)) goto fail;
     state.registered = 1U;
 #ifdef VANTAOS_SELF_TEST
@@ -439,6 +516,9 @@ static net_pci_probe_result_t vnet_modern_probe(const struct pci_device *pci)
     serial_write("VANTAOS_VIRTIO_NET_MODERN_INITIALIZED\n");
     return NET_PCI_PROBE_BOUND;
 fail:
+    serial_write("VANTAOS_VIRTIO_NET_MODERN_FAIL_");
+    serial_write(failure);
+    serial_write("\\n");
     cleanup();
     return NET_PCI_PROBE_FAILED;
 }

@@ -6,6 +6,7 @@
  */
 
 #include "interrupts.h"
+#include "device_irq.h"
 #include "idt.h"
 #include "pic.h"
 #include "timer.h"
@@ -76,6 +77,8 @@ void interrupts_initialize(void)
     idt_set_gate(0xF3, (uint64_t)(uintptr_t)reschedule_ipi_stub, 0x08, 0x8E);
     idt_set_gate(0xF4, (uint64_t)(uintptr_t)tlb_shootdown_ipi_stub, 0x08, 0x8E);
     idt_set_gate(0x80, (uint64_t)(uintptr_t)user_mode_syscall_stub, 0x08, 0xEE);
+
+    (void)device_irq_initialize();
 
     pic_remap();
     timer_initialize(100);

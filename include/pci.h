@@ -29,9 +29,20 @@ void pci_initialize(void);
 uint8_t pci_read_config8(const struct pci_device *device, uint8_t offset);
 uint16_t pci_read_config16(const struct pci_device *device, uint8_t offset);
 uint32_t pci_read_config32(const struct pci_device *device, uint8_t offset);
+/* Exact-width writes for capability fields; readback is verified. */
+int pci_write_config16(const struct pci_device *device, uint8_t offset, uint16_t value);
+int pci_write_config32(const struct pci_device *device, uint8_t offset, uint32_t value);
+/* Find a conventional capability (for example MSI 0x05 or MSI-X 0x11). */
+int pci_find_capability(const struct pci_device *device, uint8_t capability_id,
+                        uint8_t *out_offset);
 
+/* Assign an implemented but unassigned BAR from a validated PCI MMIO hole. */
+int pci_allocate_unassigned_bar(const struct pci_device* device, uint8_t index);
 int pci_get_bar(const struct pci_device* device, uint8_t index,
                 uint64_t* address, int* is_io, int* is_64bit);
+/* Size a BAR only when I/O decode, memory decode, and bus mastering are disabled. */
+int pci_get_bar_size(const struct pci_device* device, uint8_t index,
+                     uint64_t* size);
 int pci_enable_memory_space(const struct pci_device* device);
 int pci_enable_io_space(const struct pci_device* device);
 /* Enable bus mastering only after DMA buffers and device state are ready. */

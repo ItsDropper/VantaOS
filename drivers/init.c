@@ -8,6 +8,7 @@
 #include "drivers_init.h"
 
 #include "net.h"
+#include "nvx_device.h"
 #include "storage_init.h"
 #include "usb_init.h"
 
@@ -21,4 +22,7 @@ void drivers_initialize(void)
     net_stack_initialize();
     usb_host_controller_initialize();
     storage_initialize();
+
+    /* Read-only inventory; never makes boot depend on NVIDIA hardware. */
+    (void)nvx_pci_discover();
 }

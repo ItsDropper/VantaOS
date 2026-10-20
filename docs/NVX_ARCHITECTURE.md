@@ -116,9 +116,10 @@ GSP boot, or RPC queue initialization.
 ### GSP RPC transaction tracking
 
 A transaction manager now sits above separate command and response rings. It
-reserves bounded pending slots before queue publication, publishes sequence IDs
-before the doorbell callback can expose a request, correlates replies by
-sequence and expected function, bounds response copies, reports raw firmware
+reserves bounded result slots before queue publication, publishes queue sequence IDs
+before the doorbell callback can expose a request, uses a single in-flight reply-bearing RPC because the R535 wire protocol does
+not provide a verified request/response sequence-correlation guarantee, matches
+the response function, bounds response copies, reports raw firmware
 result fields, rejects stale handles, and transitions outstanding requests to
 device-lost on fatal failure. Its lock disables local interrupts in kernel
 builds to prevent same-CPU interrupt re-entry. Tests cover pending/completed

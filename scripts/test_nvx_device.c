@@ -78,6 +78,8 @@ int main(void)
     assert(family == NVX_FAMILY_ADA);
     assert(nvx_identify_architecture(0x1AU, &family));
     assert(family == NVX_FAMILY_BLACKWELL);
+    assert(nvx_identify_architecture(0x1BU, &family));
+    assert(family == NVX_FAMILY_BLACKWELL);
     assert(nvx_identify_architecture(0x1CU, &family));
     assert(family == NVX_FAMILY_RUBIN);
     assert(!nvx_identify_architecture(0x3FU, &family));

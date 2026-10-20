@@ -210,3 +210,10 @@ The engine-aware API rejects mismatched base pairs and engine masks instead of a
 Added `nvx_gsp_ga10x_read_usable_fb_size()`, which reads BAR0 scratch register `0x1183A4` (NV_PGC6_AON_SECURE_SCRATCH_GROUP_42) and converts the documented MiB value into bytes. It does not use PCI BAR aperture size as a proxy for installed/usable VRAM. Zero/unavailable values and short BAR mappings fail closed. Strict host tests cover conversion, zero rejection, and mapping bounds.
 
 Register definition was cross-checked against [Linux Nova's GA102 register definitions](https://github.com/torvalds/linux/blob/master/drivers/gpu/nova-core/regs.rs). This supplies one real input to WPR planning; VBIOS workspace, MMU-lock lower bound, FRTS sizing, heap policy, and framebuffer allocation/writes remain platform blockers.
+
+
+## Falcon DMA firmware upload primitive
+
+Added `nvx_ga10x_falcon_dma_upload()` for GA102 SEC2/GSP Falcon engines. It validates physical-address width and 256-byte alignment, validates IMEM/DMEM destination bounds, requires the engine halted and the PRIV window accessible, configures physical coherent SYSRAM FBIF access, programs the split DMA base registers, submits bounded 256-byte transfers, and polls queue-full/engine-idle status with explicit timeouts. Secure IMEM selects the secure transfer field; DMEM tag behavior is an explicit argument rather than assumed. Tests assert register programming for a two-chunk upload, reject malformed ranges, and force a stuck-queue timeout.
+
+The caller must still parse the signed firmware descriptor into exact IMEM/DMEM source and destination ranges, reserve DMA memory, perform the correct SEC2/FWSEC/GSP boot ordering, and validate mailbox/status completion. This helper is hardware-facing transfer logic, not proof that firmware was authenticated or executed.

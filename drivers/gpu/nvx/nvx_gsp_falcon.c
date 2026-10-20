@@ -486,6 +486,9 @@ nvx_gsp_falcon_status_t nvx_ga10x_falcon_boot(
         return NVX_GSP_FALCON_PRIVILEGED_WINDOW_LOCKED;
     if ((cpuctl & NVX_GSP_CPUCTL_HALTED) == 0U)
         return NVX_GSP_FALCON_NOT_HALTED;
+    if ((cpuctl & NVX_GSP_CPUCTL_ALIAS_EN) != 0U &&
+        bar0->length < (size_t)(NVX_GA10X_FALCON_CPUCTL_ALIAS(falcon_base) + 4U))
+        return NVX_GSP_FALCON_BAR_TOO_SMALL;
 
     if ((write_mailbox0 &&
          nvx_mmio_write32(bar0, falcon_base + 0x040U, mailbox0_in) != NVX_MMIO_OK) ||

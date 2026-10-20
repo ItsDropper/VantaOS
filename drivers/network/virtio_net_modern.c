@@ -193,8 +193,12 @@ static int discover_capabilities(const struct pci_device *pci)
                 state.notify_multiplier = pci_read_config32(pci, (uint8_t)(at + 16U));
                 state.notify_region = map_cap(pci, bar, offset, region_length);
                 state.notify_length = region_length;
-                if (!state.notify_region || !state.notify_multiplier) {
+                if (!state.notify_region) {
                     serial_write("VANTAOS_VIRTIO_NET_MODERN_CAP_NOTIFY_MAP_FAIL\n");
+                    return 0;
+                }
+                if (!state.notify_multiplier) {
+                    serial_write("VANTAOS_VIRTIO_NET_MODERN_CAP_NOTIFY_MULTIPLIER_ZERO\n");
                     return 0;
                 }
             } else if (type == VNET_CAP_DEVICE) {

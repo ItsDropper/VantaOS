@@ -18,6 +18,19 @@ static void put32(size_t offset, uint32_t value)
     memcpy(bar + offset, &value, sizeof(value));
 }
 
+static unsigned delay_calls;
+static unsigned activate_after;
+
+static void fake_delay(uint32_t milliseconds, void *context)
+{
+    uint32_t *elapsed = (uint32_t *)context;
+    assert(milliseconds != 0U);
+    *elapsed += milliseconds;
+    ++delay_calls;
+    if (delay_calls >= activate_after)
+        put32(NVX_GSP_RISCV_CPUCTL, NVX_GSP_RISCV_ACTIVE);
+}
+
 int main(void)
 {
     nvx_mmio_region_t region = {bar, sizeof(bar)};
@@ -55,6 +68,25 @@ int main(void)
     assert(snapshot.memory_scrubbing && snapshot.falcon_halted);
     assert(snapshot.riscv_halted && !snapshot.riscv_active);
 
+    uint32_t elapsed_ms = 0U;
+    delay_calls = 0U;
+    activate_after = 2U;
+    put32(NVX_GSP_FALCON_HWCFG2, NVX_GSP_HWCFG2_RESET_READY);
+    put32(NVX_GSP_RISCV_CPUCTL, 0U);
+    assert(nvx_gsp_ga10x_wait_riscv_active(&region, 50U, 10U,
+           fake_delay, &elapsed_ms) == NVX_GSP_FALCON_OK);
+    assert(delay_calls == 2U && elapsed_ms == 20U);
+
+    elapsed_ms = 0U;
+    delay_calls = 0U;
+    activate_after = 99U;
+    put32(NVX_GSP_RISCV_CPUCTL, 0U);
+    assert(nvx_gsp_ga10x_wait_riscv_active(&region, 25U, 10U,
+           fake_delay, &elapsed_ms) == NVX_GSP_FALCON_RISCV_TIMEOUT);
+    assert(delay_calls == 3U && elapsed_ms == 25U);
+
+    assert(nvx_gsp_ga10x_wait_riscv_active(&region, 0U, 10U,
+           fake_delay, &elapsed_ms) == NVX_GSP_FALCON_INVALID_ARGUMENT);
     put32(NVX_GSP_FALCON_HWCFG2, 0xBADF41A5U);
     memset(&snapshot, 0xA5, sizeof(snapshot));
     assert(nvx_gsp_ga10x_inspect_falcon(&region, &snapshot) ==

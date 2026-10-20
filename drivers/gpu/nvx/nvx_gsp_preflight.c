@@ -5,13 +5,25 @@
  */
 #include "nvx_gsp_preflight.h"
 #include <string.h>
+static int overlaps(const void *a,size_t an,const void *b,size_t bn)
+{
+    uintptr_t x=(uintptr_t)a,y=(uintptr_t)b;
+    if(!an||!bn)return 0;
+    if(x>UINTPTR_MAX-an||y>UINTPTR_MAX-bn)return 1;
+    return x<y+bn&&y<x+an;
+}
 nvx_gsp_preflight_status_t nvx_gsp_preflight_validate(
     const nvx_gsp_bundle_t *b,nvx_gsp_preflight_report_t *out)
 {
     nvx_gsp_elf_info_t info;
     nvx_gsp_elf_status_t es;
-    if(out)memset(out,0,sizeof(*out));
     if(!b||!out)return NVX_GSP_PREFLIGHT_INVALID_ARGUMENT;
+    if(overlaps(out,sizeof(*out),b,sizeof(*b)))return NVX_GSP_PREFLIGHT_INVALID_ARGUMENT;
+    for(size_t i=0;i<NVX_GSP_COMPONENT_COUNT;i++)
+        if(b->components[i].blob.data&&
+           overlaps(out,sizeof(*out),b->components[i].blob.data,b->components[i].blob.size))
+            return NVX_GSP_PREFLIGHT_INVALID_ARGUMENT;
+    memset(out,0,sizeof(*out));
     if(!b->acquired||b->family!=NVX_FAMILY_AMPERE||
        !b->provider.verify)
         return NVX_GSP_PREFLIGHT_BUNDLE_NOT_READY;

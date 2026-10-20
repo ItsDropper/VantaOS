@@ -157,7 +157,9 @@ int main(void)
         NVX_GSP_FALCON_BROM_REQUIRED_BYTES - 1U};
     assert(nvx_gsp_ga10x_program_brom(&brom_short_region, 0x0400U, 1U,
            0x100U) == NVX_GSP_FALCON_BAR_TOO_SMALL);
-    assert(nvx_gsp_ga10x_start_falcon(&brom_short_region, 0x200U) ==
+    nvx_mmio_region_t launch_short_region = {bar,
+        NVX_GSP_FALCON_BOOTVEC + 3U};
+    assert(nvx_gsp_ga10x_start_falcon(&launch_short_region, 0x200U) ==
            NVX_GSP_FALCON_BAR_TOO_SMALL);
     assert(nvx_gsp_ga10x_inspect_falcon(0, &snapshot) ==
            NVX_GSP_FALCON_INVALID_ARGUMENT);

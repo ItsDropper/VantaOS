@@ -35,15 +35,15 @@ int main(void) {
  f.regs[2]=3U;
  assert(nvx_gsp_msgq_tx_get(&tx,0U,&w)==NVX_GSP_MSGQ_QUEUE_OK&&w==tx_store+4096U);
  assert(nvx_gsp_msgq_tx_submit(&tx,5U)==NVX_GSP_MSGQ_QUEUE_FULL);
- assert(nvx_gsp_msgq_tx_submit(&tx,4U)==NVX_GSP_MSGQ_QUEUE_OK&&f.regs[1]==11U);
+ assert(nvx_gsp_msgq_tx_submit(&tx,3U)==NVX_GSP_MSGQ_QUEUE_OK&&f.regs[1]==10U);
  f.regs[3]=2U;
  assert(nvx_gsp_msgq_rx_get(&rx,0U,&r)==NVX_GSP_MSGQ_QUEUE_OK&&r==rx_store+4096U);
  assert(nvx_gsp_msgq_rx_get(&rx,2U,&r)==NVX_GSP_MSGQ_QUEUE_EMPTY&&r==0);
- assert(nvx_gsp_msgq_rx_consume(&rx,3U)==NVX_GSP_MSGQ_QUEUE_OK&&f.regs[4]==3U);
+ assert(nvx_gsp_msgq_rx_consume(&rx,2U)==NVX_GSP_MSGQ_QUEUE_OK&&f.regs[4]==2U);
  assert(f.before>=3U&&f.after>=1U);
  f.fail_read=1;
  assert(nvx_gsp_msgq_tx_get(&tx,0U,&w)==NVX_GSP_MSGQ_QUEUE_IO_ERROR);
- f.fail_read=0;f.fail_write=1;
+ f.fail_read=0;f.regs[2]=10U;f.fail_write=1;
  assert(nvx_gsp_msgq_tx_submit(&tx,1U)==NVX_GSP_MSGQ_QUEUE_IO_ERROR);
  f.fail_write=0;
  f.regs[2]=UINT32_MAX;

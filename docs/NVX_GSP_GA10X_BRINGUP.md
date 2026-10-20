@@ -158,3 +158,10 @@ GA10x descriptor, plan non-overlapping framebuffer regions against real FB
 size, build and validate the 256-byte WPR metadata, perform the vendor-defined
 SEC2/FWSEC secure boot flow, launch the GSP, and complete the first real GSP-RM
 RPC. The allocator never enables PCI bus mastering or writes a boot register.
+
+
+## WPR layout planning
+
+Added `nvx_gsp_wpr_layout_plan()`, which applies the GA10x/Turing-derived WPR placement arithmetic with explicit device/platform inputs: usable framebuffer size, VBIOS workspace offset, optional MMU-lock lower bound, WPR end margin, FRTS size, and non-WPR heap requirement. It aligns the WPR end to 128 KiB, the boot image to 4 KiB, the runtime ELF to 64 KiB, and heap/meta regions to 1 MiB; it validates the completed layout before publishing it. WPR heap sizing is delegated to a required platform policy callback because that sizing depends on VantaOS memory-manager policy and firmware requirements.
+
+This avoids inventing VRAM offsets. It does **not** discover the VBIOS workspace, read the MMU lock, determine usable framebuffer size, implement the platform heap policy, parse the bootloader's monitor-code/data/manifest offsets, or write metadata into actual VRAM. Those inputs must come from real hardware/platform integration before secure boot is safe.

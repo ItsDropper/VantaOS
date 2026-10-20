@@ -8,11 +8,13 @@ on:
       - "include/nvx_gsp_secure_boot.h"
       - "include/nvx_gsp_fwsec_interface.h"
       - "include/nvx_gsp_fwsec_command.h"
+      - "include/nvx_gsp_fwsec_result.h"
       - "scripts/test_nvx_gsp_boot_memory.c"
       - "scripts/test_nvx_gsp_secure_boot.c"
       - "scripts/test_nvx_gsp_vbios.c"
       - "scripts/test_nvx_gsp_fwsec_interface.c"
       - "scripts/test_nvx_gsp_fwsec_command.c"
+      - "scripts/test_nvx_gsp_fwsec_result.c"
       - "drivers/gpu/core/**"
       - "include/gpu_pci_resources.h"
       - "scripts/test_gpu_pci_resources.c"
@@ -540,3 +542,13 @@ jobs:
 
       - name: Test versioned FWSEC SB/FRTS command layouts
         run: /tmp/vantaos-nvx-fwsec-command-test
+
+      - name: Compile FWSEC result validation tests with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_fwsec_result.c \
+            drivers/gpu/nvx/nvx_gsp_fwsec_result.c \
+            -o /tmp/vantaos-nvx-fwsec-result-test
+
+      - name: Test fail-closed SB/FRTS result validation
+        run: /tmp/vantaos-nvx-fwsec-result-test

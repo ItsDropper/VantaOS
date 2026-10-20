@@ -203,3 +203,10 @@ The BROM and Falcon launch helpers now support both documented GA102 engine wind
 - SEC2 Falcon: `0x840000`, second Falcon window `0x841000`, SEC2 engine mask `0x0001`.
 
 The engine-aware API rejects mismatched base pairs and engine masks instead of allowing a SEC2 descriptor to be programmed into GSP registers (or vice versa). Host tests exercise both sets of real BAR0 offsets. This enables the SEC2/FWSEC stage to use the correct register window, but it still does not implement SEC2 firmware parsing/loading, the FWSEC handshake, WPR writes, or a verified GSP boot.
+
+
+## Usable framebuffer size input
+
+Added `nvx_gsp_ga10x_read_usable_fb_size()`, which reads BAR0 scratch register `0x1183A4` (NV_PGC6_AON_SECURE_SCRATCH_GROUP_42) and converts the documented MiB value into bytes. It does not use PCI BAR aperture size as a proxy for installed/usable VRAM. Zero/unavailable values and short BAR mappings fail closed. Strict host tests cover conversion, zero rejection, and mapping bounds.
+
+Register definition was cross-checked against [Linux Nova's GA102 register definitions](https://github.com/torvalds/linux/blob/master/drivers/gpu/nova-core/regs.rs). This supplies one real input to WPR planning; VBIOS workspace, MMU-lock lower bound, FRTS sizing, heap policy, and framebuffer allocation/writes remain platform blockers.

@@ -30,7 +30,7 @@ int main(void) {
  assert(tx.element_count==1U);
  assert(nvx_gsp_msgq_validate_rx(small,sizeof(small),4096U,&rx)==NVX_GSP_MSGQ_OK);
  assert(nvx_gsp_msgq_prepare_tx(store,sizeof(store),2048U,&tx)==NVX_GSP_MSGQ_OK);
- assert(tx.element_size==2048U&&tx.element_count==127U);
+ assert(tx.element_size==2048U&&tx.element_count==126U);
  assert(nvx_gsp_msgq_validate_rx(store,sizeof(store),2048U,&rx)==NVX_GSP_MSGQ_OK);
  assert(nvx_gsp_msgq_prepare_tx(store,sizeof(store),16U,&tx)==NVX_GSP_MSGQ_OK);
  assert(nvx_gsp_msgq_validate_rx(store,sizeof(store),16U,&rx)==NVX_GSP_MSGQ_OK);

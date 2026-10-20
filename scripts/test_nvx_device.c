@@ -35,33 +35,24 @@ uint16_t pci_read_config16(const struct pci_device *device, uint8_t offset)
 int main(void)
 {
     struct pci_device device = {
-        .bus = 1,
-        .slot = 2,
-        .function = 0,
-        .vendor_id = NVX_PCI_VENDOR_NVIDIA,
-        .device_id = 0x1234,
-        .class_code = 0x03,
-        .subclass = 0x02,
-        .prog_if = 0,
-        .revision = 7
+        .bus = 1, .slot = 2, .function = 0,
+        .vendor_id = NVX_PCI_VENDOR_NVIDIA, .device_id = 0x1234,
+        .class_code = 0x03, .subclass = 0x02, .prog_if = 0, .revision = 7
     };
     nvx_device_descriptor_t descriptor;
     nvx_generation_family_t family;
     nvx_device_profile_t profile;
 
     assert(!nvx_match_pci_device(0));
-
     device.vendor_id = 0x8086;
     assert(!nvx_match_pci_device(&device));
-
     device.vendor_id = NVX_PCI_VENDOR_NVIDIA;
-    device.class_code = 0x04; /* NVIDIA audio function, not a display candidate. */
+    device.class_code = 0x04;
     assert(!nvx_match_pci_device(&device));
     assert(!nvx_describe_pci_device(&device, &descriptor));
     assert(!nvx_describe_pci_device(0, &descriptor));
     assert(!nvx_describe_pci_device(&device, 0));
 
-    /* Only explicitly listed PCI IDs receive a family/profile classification. */
     assert(nvx_identify_pci_device(0x2503U, &family, &profile));
     assert(family == NVX_FAMILY_AMPERE);
     assert(profile == NVX_PROFILE_GEFORCE_RTX_3060);
@@ -77,13 +68,28 @@ int main(void)
     assert(!nvx_identify_pci_device(0x2503U, 0, &profile));
     assert(!nvx_identify_pci_device(0x2503U, &family, 0));
 
+    assert(nvx_identify_architecture(0x16U, &family));
+    assert(family == NVX_FAMILY_TURING);
+    assert(nvx_identify_architecture(0x17U, &family));
+    assert(family == NVX_FAMILY_AMPERE);
+    assert(nvx_identify_architecture(0x18U, &family));
+    assert(family == NVX_FAMILY_HOPPER);
+    assert(nvx_identify_architecture(0x19U, &family));
+    assert(family == NVX_FAMILY_ADA);
+    assert(nvx_identify_architecture(0x1AU, &family));
+    assert(family == NVX_FAMILY_BLACKWELL);
+    assert(nvx_identify_architecture(0x1CU, &family));
+    assert(family == NVX_FAMILY_BLACKWELL);
+    assert(!nvx_identify_architecture(0x3FU, &family));
+    assert(family == NVX_FAMILY_UNKNOWN);
+    assert(!nvx_identify_architecture(0x17U, 0));
+
     device.class_code = 0x03;
-    device.subclass = 0x80; /* Do not overfit matching to one display subclass. */
+    device.subclass = 0x80;
     test_header_type = 0;
     test_subsystem_vendor = 0x1043;
     test_subsystem_device = 0x88A1;
     assert(nvx_describe_pci_device(&device, &descriptor));
-
     assert(descriptor.identity.vendor_id == NVX_PCI_VENDOR_NVIDIA);
     assert(descriptor.identity.device_id == 0x1234);
     assert(descriptor.identity.subsystem_vendor_id == 0x1043);
@@ -107,11 +113,9 @@ int main(void)
     assert(descriptor.profile == NVX_PROFILE_GEFORCE_RTX_3060);
     assert(descriptor.architecture_id == 0);
     assert(descriptor.implementation_id == 0);
-
     test_header_type = 1;
     assert(nvx_describe_pci_device(&device, &descriptor));
     assert(descriptor.identity.subsystem_vendor_id == 0);
     assert(descriptor.identity.subsystem_device_id == 0);
-
     return 0;
 }

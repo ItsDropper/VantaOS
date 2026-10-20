@@ -89,7 +89,7 @@ The descriptor's `InterfaceOffset` is separate from the signature destination. I
 
 ## 3.3 FWSEC application interface and command input buffer
 
-The public TU102 FWSEC code defines an interface header as four one-byte fields: version, header size, entry size, and entry count. Each interface entry begins with two 32-bit fields: entry ID and DMEM offset. Entry ID `0x4` identifies the DMEM mapper. The mapper's V3 fixed prefix is 68 bytes; its leading fields are a 32-bit signature, 16-bit version, 16-bit structure size, then 32-bit command-input offset and capacity.
+The public TU102 FWSEC code defines an interface header as four one-byte fields: version, header size, entry size, and entry count. Each interface entry begins with two 32-bit fields: entry ID and DMEM offset. Entry ID `0x4` identifies the DMEM mapper. The mapper's V3 fixed prefix is 64 bytes; its leading fields are a 32-bit signature, 16-bit version, 16-bit structure size, then 32-bit command-input offset and capacity.
 
 The new read-only NVX helper `nvx_gsp_fwsec_find_command_window()` resolves the descriptor's `InterfaceOffset` against the DMEM buffer and returns a checked command-input window. It validates the header version, minimum header/entry sizes, full declared entry array, mapper uniqueness, mapper version/size, and the complete command-input buffer range. It refuses ambiguous duplicate mapper entries rather than silently choosing one. It also rejects a command-input range that overlaps the mapper structure or the interface table, because later command patching must not destroy the metadata used to locate that command buffer. All returned offsets are DMEM-relative.
 
@@ -192,3 +192,19 @@ Do not skip secure boot and jump straight to rendering. A GPU command submission
 - [Linux Nova Falcon/GSP register definitions](https://github.com/torvalds/linux/tree/master/drivers/gpu/nova-core)
 
 This notebook should evolve alongside the code. Every new register, structure, or status code should include: source evidence, address/offset domain, range and alignment constraints, firmware-generation scope, synthetic tests, and an explicit hardware-validation status.
+
+
+## 3.4 Version-1 SB and FRTS command serialization
+
+Cross-checking the actual structure declarations and preparation path in NVIDIA's MIT-licensed `kernel_gsp_frts_tu102.c` established the command IDs and exact record sizes used by the supported profile:
+
+| Command | ID | Input record | Size |
+| --- | ---: | --- | ---: |
+| Secure boot (SB) | `0x19` | `FWSECLIC_READ_VBIOS_DESC` | 24 bytes |
+| FRTS setup | `0x15` | `FWSECLIC_FRTS_CMD` containing the read-VBIOS and FRTS region descriptors | 44 bytes |
+
+The read-VBIOS descriptor is five fields in its declared order: 32-bit version (1), 32-bit size (24), 64-bit GFW image offset (0), 32-bit image size (0), and 32-bit flags (2). The FRTS region descriptor is five 32-bit fields: version (1), size (20), framebuffer offset in 4 KiB units, region size (0x100 units, i.e. 1 MiB), and media type (2 = framebuffer). The FRTS input offset must be nonzero; NVX additionally requires 4 KiB alignment and verifies the shifted offset fits in the wire field.
+
+NVX now builds these records as explicit little-endian byte sequences in `nvx_gsp_fwsec_build_command()`. The builder is pure: it neither modifies FWSEC DMEM nor copies the selected signature, changes DMA ownership, writes registers, or starts SEC2. It validates command IDs, output capacity, offset alignment/range, and output/size aliasing before publishing bytes. Strict-warning tests check exact field offsets and that failure leaves the destination untouched.
+
+**Boundary:** the builder prepares command bytes only. It does not decode scratch-register error fields, prove the target firmware accepts this exact profile, execute SB/FRTS, or authenticate FWSEC. The command-status contract and firmware-generation binding still need to be researched before adding a transaction executor.

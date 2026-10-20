@@ -11,7 +11,7 @@ static uint8_t memory[4096] __attribute__((aligned(4096)));
 int main(void) {
  nvx_dma_buffer_t b={0}; nvx_dma_sync_t s={0};
  b.cpu_address=memory; b.gpu_address=0x100000U; b.size=3000U;
- b.allocated_size=4096U; b.page_count=1U; b.acquired=1U;
+ b.allocated_size=4096U; b.page_count=1U; b.allocation_id=7U; b.acquired=1U;
  assert(nvx_dma_sync_init(0,&b)==NVX_DMA_SYNC_INVALID_ARGUMENT);
  assert(nvx_dma_sync_init(&s,0)==NVX_DMA_SYNC_INVALID_ARGUMENT);
  assert(nvx_dma_sync_init(&s,&b)==NVX_DMA_SYNC_OK);

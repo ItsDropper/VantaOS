@@ -23,6 +23,7 @@ int main(void) {
  assert(info.fuse_version==0x1234U&&info.engine_id==0x400U&&info.ucode_id==1U);
  assert(info.signature_count==2U&&info.signature_size==32U&&info.signature_offset==160U&&info.patch_location==40U);
  assert(info.app_count==1U&&info.app0_size==32U&&info.app0_data_size==16U);
+ c.kind=NVX_GSP_BOOTER_UNLOAD; assert(nvx_gsp_image_parse(&c,&info)==NVX_GSP_IMAGE_OK);
  c.kind=NVX_GSP_RUNTIME; assert(nvx_gsp_image_parse(&c,&info)==NVX_GSP_IMAGE_UNSUPPORTED_LAYOUT);
  c.kind=NVX_GSP_BOOTER_LOAD; c.blob.size=8U; assert(nvx_gsp_image_parse(&c,&info)==NVX_GSP_IMAGE_TRUNCATED);
  make_image(&c); put32(12,UINT32_MAX); assert(nvx_gsp_image_parse(&c,&info)==NVX_GSP_IMAGE_HEADER_INVALID);

@@ -25,10 +25,24 @@ void nvx_gsp_boot_memory_release(nvx_gsp_boot_memory_t *m)
 {
     if (!m)
         return;
-    if ((m->booter_load_sync.initialized && m->booter_load_sync.owner != NVX_DMA_OWNER_CPU) ||
+    /*
+     * Every DMA artifact can be referenced by a later hardware phase. Check
+     * ownership for all six before destroying any sync record or allocation;
+     * freeing even the ELF/signature while a Falcon may read it is unsafe.
+     */
+    if ((m->radix3_elf_sync.initialized && m->radix3_elf_sync.owner != NVX_DMA_OWNER_CPU) ||
+        (m->bootloader_payload_sync.initialized && m->bootloader_payload_sync.owner != NVX_DMA_OWNER_CPU) ||
+        (m->signature_sync.initialized && m->signature_sync.owner != NVX_DMA_OWNER_CPU) ||
+        (m->booter_load_sync.initialized && m->booter_load_sync.owner != NVX_DMA_OWNER_CPU) ||
         (m->booter_unload_sync.initialized && m->booter_unload_sync.owner != NVX_DMA_OWNER_CPU) ||
         (m->wpr_metadata_sync.initialized && m->wpr_metadata_sync.owner != NVX_DMA_OWNER_CPU))
         return; /* Never free DMA memory while the device may still own it. */
+    if (m->radix3_elf_sync.initialized &&
+        nvx_dma_sync_destroy(&m->radix3_elf_sync) != NVX_DMA_SYNC_OK) return;
+    if (m->bootloader_payload_sync.initialized &&
+        nvx_dma_sync_destroy(&m->bootloader_payload_sync) != NVX_DMA_SYNC_OK) return;
+    if (m->signature_sync.initialized &&
+        nvx_dma_sync_destroy(&m->signature_sync) != NVX_DMA_SYNC_OK) return;
     if (m->booter_load_sync.initialized &&
         nvx_dma_sync_destroy(&m->booter_load_sync) != NVX_DMA_SYNC_OK) return;
     if (m->booter_unload_sync.initialized &&
@@ -129,7 +143,10 @@ nvx_gsp_boot_memory_status_t nvx_gsp_boot_memory_acquire(
         return NVX_GSP_BOOT_MEMORY_ALLOCATION_FAILED;
     }
 
-    if (nvx_dma_sync_init(&memory.booter_load_sync, &memory.booter_load) != NVX_DMA_SYNC_OK ||
+    if (nvx_dma_sync_init(&memory.radix3_elf_sync, &memory.radix3_elf) != NVX_DMA_SYNC_OK ||
+        nvx_dma_sync_init(&memory.bootloader_payload_sync, &memory.bootloader_payload) != NVX_DMA_SYNC_OK ||
+        nvx_dma_sync_init(&memory.signature_sync, &memory.signature) != NVX_DMA_SYNC_OK ||
+        nvx_dma_sync_init(&memory.booter_load_sync, &memory.booter_load) != NVX_DMA_SYNC_OK ||
         nvx_dma_sync_init(&memory.booter_unload_sync, &memory.booter_unload) != NVX_DMA_SYNC_OK ||
         nvx_dma_sync_init(&memory.wpr_metadata_sync, &memory.wpr_metadata) != NVX_DMA_SYNC_OK) {
         nvx_gsp_boot_memory_release(&memory);

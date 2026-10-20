@@ -21,6 +21,17 @@ static void clear_memory(nvx_gsp_boot_memory_t *m)
     memset(m, 0, sizeof(*m));
 }
 
+/*
+ * sync_init stores a pointer to its nvx_dma_buffer_t. Acquisition builds a
+ * temporary struct and copies it to the caller, so rebind these internal
+ * pointers after the copy; otherwise they point into the expired stack frame.
+ */
+static void rebind_sync_buffer(nvx_dma_sync_t *sync, nvx_dma_buffer_t *buffer)
+{
+    if (sync->initialized)
+        sync->buffer = buffer;
+}
+
 void nvx_gsp_boot_memory_release(nvx_gsp_boot_memory_t *m)
 {
     if (!m)
@@ -173,6 +184,14 @@ nvx_gsp_boot_memory_status_t nvx_gsp_boot_memory_acquire(
     memory.manifest_size = bootloader_info.manifest_size;
     memory.acquired = 1U;
     *out = memory;
+
+    /* The copied sync records must point at the caller-owned buffer fields. */
+    rebind_sync_buffer(&out->radix3_elf_sync, &out->radix3_elf);
+    rebind_sync_buffer(&out->bootloader_payload_sync, &out->bootloader_payload);
+    rebind_sync_buffer(&out->signature_sync, &out->signature);
+    rebind_sync_buffer(&out->booter_load_sync, &out->booter_load);
+    rebind_sync_buffer(&out->booter_unload_sync, &out->booter_unload);
+    rebind_sync_buffer(&out->wpr_metadata_sync, &out->wpr_metadata);
     return NVX_GSP_BOOT_MEMORY_OK;
 }
 

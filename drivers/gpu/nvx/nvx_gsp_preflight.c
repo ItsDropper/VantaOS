@@ -5,6 +5,19 @@
  */
 #include "nvx_gsp_preflight.h"
 #include <string.h>
+static int string_equals_literal(const char *a, const char *b)
+{
+    size_t i = 0U;
+    if (!a || !b)
+        return 0;
+    while (b[i] != '\0') {
+        if (a[i] != b[i])
+            return 0;
+        ++i;
+    }
+    return a[i] == '\0';
+}
+
 static int supported_ga10x_chip(const char *chip)
 {
     static const char *const chips[] = {
@@ -13,7 +26,7 @@ static int supported_ga10x_chip(const char *chip)
     if (!chip)
         return 0;
     for (size_t i = 0U; i < sizeof(chips) / sizeof(chips[0]); ++i)
-        if (strcmp(chip, chips[i]) == 0)
+        if (string_equals_literal(chip, chips[i]))
             return 1;
     return 0;
 }

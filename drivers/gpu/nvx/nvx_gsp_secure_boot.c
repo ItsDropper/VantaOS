@@ -43,7 +43,7 @@ nvx_gsp_falcon_status_t nvx_gsp_ga10x_secure_image_plan(
         ranges_overlap(image, sizeof(*image), out_plan, sizeof(*out_plan)) ||
         (staged_image->cpu_address &&
          ranges_overlap(staged_image->cpu_address, staged_image->allocated_size,
-                        out_plan, sizeof(*out_plan)))
+                        out_plan, sizeof(*out_plan))))
         return NVX_GSP_FALCON_INVALID_ARGUMENT;
     memset(out_plan, 0, sizeof(*out_plan));
 

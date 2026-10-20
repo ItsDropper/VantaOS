@@ -269,6 +269,14 @@ int main(void)
     assert(nvx_mmio_read32(&region, NVX_GSP_FALCON_CPUCTL,
                            &register_value) == NVX_MMIO_OK);
     assert(register_value == NVX_GSP_CPUCTL_START);
+    put32(NVX_GSP_FALCON_CPUCTL,
+          NVX_GSP_CPUCTL_HALTED | NVX_GSP_CPUCTL_ALIAS_EN);
+    assert(nvx_gsp_ga10x_start_falcon(&region, 0x200U) ==
+           NVX_GSP_FALCON_OK);
+    assert(nvx_mmio_read32(&region,
+           NVX_GA10X_FALCON_CPUCTL_ALIAS(NVX_GSP_FALCON_BASE),
+           &register_value) == NVX_MMIO_OK);
+    assert(register_value == NVX_GSP_CPUCTL_START);
     put32(NVX_GSP_FALCON_CPUCTL, NVX_GSP_CPUCTL_HALTED);
     assert(nvx_gsp_ga10x_start_falcon(&region, 3U) ==
            NVX_GSP_FALCON_BOOT_VECTOR_INVALID);

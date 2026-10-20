@@ -8,12 +8,52 @@
 #include <stdint.h>
 #include <string.h>
 static uint8_t bar[NVX_GSP_GA10X_REQUIRED_BAR_BYTES] __attribute__((aligned(4)));
+static uint8_t fuse_bar[NVX_GSP_GA10X_FUSE_GSP_UCODE1_VERSION +
+                        NVX_GSP_GA10X_FUSE_UCODE_COUNT * sizeof(uint32_t)]
+    __attribute__((aligned(4)));
 static uint8_t command_store[8U*NVX_GSP_PAGE_SIZE] __attribute__((aligned(NVX_GSP_PAGE_SIZE)));
 static uint8_t response_store[8U*NVX_GSP_PAGE_SIZE] __attribute__((aligned(NVX_GSP_PAGE_SIZE)));
 int main(void)
 {
  nvx_gsp_ga10x_t g={0};nvx_mmio_region_t region={bar,sizeof(bar)};
+ nvx_mmio_region_t fuse_region={fuse_bar,sizeof(fuse_bar)};
+ uint32_t fuse_version=UINT32_MAX;
  nvx_gsp_msgq_layout_t response_header={0};uint8_t *slot=0;uint32_t reg_value=UINT32_MAX;const char request[]="GSP queue 0";
+ /* Fuse versions are the highest set bit + 1, not the raw register value. */
+ assert(nvx_gsp_ga10x_read_ucode_fuse_version(&fuse_region,
+     NVX_GSP_GA10X_ENGINE_MASK_GSP,1U,&fuse_version)==NVX_GSP_GA10X_OK);
+ assert(fuse_version==0U);
+ assert(nvx_mmio_write32(&fuse_region,NVX_GSP_GA10X_FUSE_GSP_UCODE1_VERSION,
+     0x00000008U)==NVX_MMIO_OK);
+ assert(nvx_gsp_ga10x_read_ucode_fuse_version(&fuse_region,
+     NVX_GSP_GA10X_ENGINE_MASK_GSP,1U,&fuse_version)==NVX_GSP_GA10X_OK);
+ assert(fuse_version==4U);
+ assert(nvx_mmio_write32(&fuse_region,NVX_GSP_GA10X_FUSE_SEC2_UCODE1_VERSION+4U,
+     0x00000002U)==NVX_MMIO_OK);
+ assert(nvx_gsp_ga10x_read_ucode_fuse_version(&fuse_region,
+     NVX_GSP_GA10X_ENGINE_MASK_SEC2,2U,&fuse_version)==NVX_GSP_GA10X_OK);
+ assert(fuse_version==2U);
+ assert(nvx_mmio_write32(&fuse_region,NVX_GSP_GA10X_FUSE_NVDEC_UCODE1_VERSION+60U,
+     0x00008000U)==NVX_MMIO_OK);
+ assert(nvx_gsp_ga10x_read_ucode_fuse_version(&fuse_region,
+     NVX_GSP_GA10X_ENGINE_MASK_NVDEC,16U,&fuse_version)==NVX_GSP_GA10X_OK);
+ assert(fuse_version==16U);
+ assert(nvx_gsp_ga10x_read_ucode_fuse_version(&fuse_region,0x0005U,1U,
+     &fuse_version)==NVX_GSP_GA10X_FUSE_UNSUPPORTED_ENGINE);
+ assert(nvx_gsp_ga10x_read_ucode_fuse_version(&fuse_region,
+     NVX_GSP_GA10X_ENGINE_MASK_GSP,0U,&fuse_version)==NVX_GSP_GA10X_FUSE_INVALID_UCODE_ID);
+ assert(nvx_gsp_ga10x_read_ucode_fuse_version(&fuse_region,
+     NVX_GSP_GA10X_ENGINE_MASK_GSP,17U,&fuse_version)==NVX_GSP_GA10X_FUSE_INVALID_UCODE_ID);
+ nvx_mmio_region_t short_fuse_region={fuse_bar,
+     NVX_GSP_GA10X_FUSE_GSP_UCODE1_VERSION+4U-1U};
+ assert(nvx_gsp_ga10x_read_ucode_fuse_version(&short_fuse_region,
+     NVX_GSP_GA10X_ENGINE_MASK_GSP,1U,&fuse_version)==NVX_GSP_GA10X_BAD_BAR);
+ assert(fuse_version==0U);
+ assert(nvx_mmio_write32(&fuse_region,NVX_GSP_GA10X_FUSE_GSP_UCODE1_VERSION,
+     0x00010001U)==NVX_MMIO_OK);
+ assert(nvx_gsp_ga10x_read_ucode_fuse_version(&fuse_region,
+     NVX_GSP_GA10X_ENGINE_MASK_GSP,1U,&fuse_version)==NVX_GSP_GA10X_FUSE_RESERVED_BITS);
+ assert(fuse_version==0U);
  assert(NVX_GSP_GA10X_QUEUE_HEAD(0U)==0x110C00U);
  assert(NVX_GSP_GA10X_QUEUE_TAIL(0U)==0x110C04U);
  assert(NVX_GSP_GA10X_MSGQ_HEAD(0U)==0x110C80U);

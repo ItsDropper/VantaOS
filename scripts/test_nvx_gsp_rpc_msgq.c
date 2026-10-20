@@ -37,7 +37,7 @@ int main(void)
  nvx_gsp_rpc_manager_t manager={0};nvx_gsp_msgq_layout_t header={0};
  nvx_gsp_rpc_handle_t a={0},b={0},c={0},d={0},e={0},lost={0};
  nvx_gsp_rpc_result_t result;nvx_gsp_rpc_view_t unmatched;
- char response_a[16]={0},response_b[16]={0},response_c[4]={0},small[4]={0};
+ char response_a[16]={0},response_b[16]={0},small[4]={0};
  const char req[]="req",a_data[]="A",b_data[]="B",fail_data[]="failed",large_data[]="12345678";
  assert(nvx_gsp_msgq_queue_init_tx(&tx,tx_store,sizeof(tx_store),4096U,&io,0U,4U)==NVX_GSP_MSGQ_QUEUE_OK);
  assert(nvx_gsp_msgq_prepare_tx(rx_store,sizeof(rx_store),4096U,&header)==NVX_GSP_MSGQ_OK);
@@ -64,14 +64,14 @@ int main(void)
  assert(nvx_gsp_rpc_release(&manager,&a)==NVX_GSP_RPC_OK);
  assert(nvx_gsp_rpc_release(&manager,&b)==NVX_GSP_RPC_OK);
  assert(nvx_gsp_rpc_submit(&manager,NVX_GSP_RPC_HEADER_VERSION_R535,NVX_GSP_RPC_SIGNATURE_R535,
-     12U,22U,req,sizeof(req),scratch,sizeof(scratch),response_c,sizeof(response_c),&c)==NVX_GSP_RPC_OK);
+     12U,22U,req,sizeof(req),scratch,sizeof(scratch),response_a,sizeof(response_a),&c)==NVX_GSP_RPC_OK);
  reply(rx_store+3U*NVX_GSP_PAGE_SIZE,22U,3U,0x1234U,fail_data,sizeof(fail_data));
  f.regs[2]=3U;
  assert(nvx_gsp_rpc_pump(&manager,scratch,sizeof(scratch),&unmatched)==NVX_GSP_RPC_FAILED);
  assert(nvx_gsp_rpc_query(&manager,&c,&result)==NVX_GSP_RPC_FAILED&&result.firmware_result==0x1234U);
  assert(nvx_gsp_rpc_release(&manager,&c)==NVX_GSP_RPC_OK);
  assert(nvx_gsp_rpc_submit(&manager,NVX_GSP_RPC_HEADER_VERSION_R535,NVX_GSP_RPC_SIGNATURE_R535,
-     13U,23U,req,sizeof(req),scratch,sizeof(scratch),response_c,sizeof(response_c),&d)==NVX_GSP_RPC_OK);
+     13U,23U,req,sizeof(req),scratch,sizeof(scratch),response_a,sizeof(response_a),&d)==NVX_GSP_RPC_OK);
  reply(rx_store+4U*NVX_GSP_PAGE_SIZE,999U,4U,0U,a_data,sizeof(a_data));
  f.regs[2]=4U;
  assert(nvx_gsp_rpc_pump(&manager,scratch,sizeof(scratch),&unmatched)==NVX_GSP_RPC_FUNCTION_MISMATCH);

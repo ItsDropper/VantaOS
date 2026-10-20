@@ -87,6 +87,16 @@ NVIDIA's FWSEC descriptor handling sets the data region offset to `IMEMLoadSize`
 
 The descriptor's `InterfaceOffset` is separate from the signature destination. It is needed later to find the FWSEC application interface used to prepare firmware commands; parsing it does not mean the interface has been validated or executed.
 
+## 3.3 FWSEC application interface and command input buffer
+
+The public TU102 FWSEC code defines an interface header as four one-byte fields: version, header size, entry size, and entry count. Each interface entry begins with two 32-bit fields: entry ID and DMEM offset. Entry ID `0x4` identifies the DMEM mapper. The mapper's V3 fixed prefix is 68 bytes; its leading fields are a 32-bit signature, 16-bit version, 16-bit structure size, then 32-bit command-input offset and capacity.
+
+The new read-only NVX helper `nvx_gsp_fwsec_find_command_window()` resolves the descriptor's `InterfaceOffset` against the DMEM buffer and returns a checked command-input window. It validates the header version, minimum header/entry sizes, full declared entry array, mapper uniqueness, mapper version/size, and the complete command-input buffer range. It refuses ambiguous duplicate mapper entries rather than silently choosing one. All returned offsets are DMEM-relative.
+
+A subtle boundary matters here: the mapper's `cmd_in_buffer_offset` is an offset from the start of DMEM, not an offset relative to the mapper structure or the interface table. Bounds checks must validate `cmd_in_buffer_offset + command_size` against the full DMEM extent and ensure `command_size <= cmd_in_buffer_size`. The planner does not write `init_cmd`, patch the interface, or transfer DMA ownership; those operations belong in a later transaction layer after the parser's result is validated.
+
+**Scope limitation:** NVX currently supports interface header version 1 and DMEM mapper version 3 only. The parser treats the mapper signature as opaque and does not infer a command's success semantics from the interface layout. SB/FRTS command construction, firmware result decoding, and physical SEC2 execution remain separate tasks.
+
 ## 4. Do not conflate the two signed firmware formats
 
 NVX has two related but distinct parsers/paths:

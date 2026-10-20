@@ -676,11 +676,18 @@ nvx_gpuvm_status_t nvx_gpuvm_set_quiesced(nvx_gpuvm_t *vm, int quiesced)
         return NVX_GPUVM_INVALID_ARGUMENT;
     if (!vm->initialized)
         return NVX_GPUVM_NOT_INITIALIZED;
-    if (vm->faulted)
+
+    spinlock_lock(&vm->lock);
+    if (vm->faulted) {
+        spinlock_unlock(&vm->lock);
         return NVX_GPUVM_DEVICE_FAULTED;
-    if (!quiesced && !vm->root_published)
+    }
+    if (!quiesced && !vm->root_published) {
+        spinlock_unlock(&vm->lock);
         return NVX_GPUVM_BUSY;
+    }
     __atomic_store_n(&vm->quiesced, quiesced ? 1U : 0U, __ATOMIC_RELEASE);
+    spinlock_unlock(&vm->lock);
     return NVX_GPUVM_OK;
 }
 

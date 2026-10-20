@@ -553,6 +553,14 @@ int pci_enable_io_space(const struct pci_device* device)
     return (pci_read_config(device->bus, device->slot, device->function, 0x04) & 1U) != 0;
 }
 
+#ifdef PCI_TEST
+int pci_allocate_unassigned_bar(const struct pci_device* device, uint8_t index)
+{
+    (void)device;
+    (void)index;
+    return 0;
+}
+#else
 static int pci_memory_map_allows_bar(const vanta_boot_info_t* boot,
                                      uint64_t base, uint64_t size)
 {
@@ -725,6 +733,8 @@ restore_command:
         return 0;
     return success;
 }
+
+#endif
 
 int pci_enable_memory_space(const struct pci_device* device)
 {

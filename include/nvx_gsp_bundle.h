@@ -7,13 +7,18 @@
 #define VANTA_NVX_GSP_BUNDLE_H
 #include <stdint.h>
 #include "nvx_firmware.h"
-#define NVX_GSP_COMPONENT_COUNT 4U
+#define NVX_GSP_COMPONENT_COUNT 3U
 #define NVX_GSP_VERSION_MAX 31U
 #define NVX_GSP_CHIP_MAX 15U
 #define NVX_GSP_BUNDLE_MAX_BYTES (128U * 1024U * 1024U)
 typedef enum nvx_gsp_component_kind {
-    NVX_GSP_BOOTER_LOAD = 0, NVX_GSP_BOOTER_UNLOAD,
-    NVX_GSP_BOOTLOADER, NVX_GSP_RUNTIME
+    NVX_GSP_RUNTIME = 0,
+    NVX_GSP_UCODE_ARCHIVE,
+    NVX_GSP_LOG,
+    /* Parsed only after extracting an entry from NVIDIA's ucodes archive. */
+    NVX_GSP_BOOTER_LOAD,
+    NVX_GSP_BOOTER_UNLOAD,
+    NVX_GSP_BOOTLOADER
 } nvx_gsp_component_kind_t;
 typedef struct nvx_gsp_component {
     nvx_firmware_blob_t blob;
@@ -36,8 +41,10 @@ typedef struct nvx_gsp_bundle {
     nvx_generation_family_t family;
     uint8_t acquired;
 } nvx_gsp_bundle_t;
-/* Caller supplies exact chip directory and version. Zero-init before first use.
- * Acquires/verifies four version-matched files; does not parse or boot firmware. */
+/* NVIDIA's Linux RM requests gsp_ga10x.bin and ucodes_ga10x.bin for Ampere;
+ * gsp_log_ga10x.bin is optional. Files live at nvidia/<version>/<name>.bin.
+ * chip is retained for PCI-family reporting, not used as a firmware path segment.
+ * Zero-init before first use. Acquires/verifies; does not boot firmware. */
 nvx_gsp_bundle_status_t nvx_gsp_bundle_acquire(
     const nvx_firmware_provider_t *, nvx_generation_family_t,
     const char *chip, const char *version, nvx_gsp_bundle_t *out_bundle);

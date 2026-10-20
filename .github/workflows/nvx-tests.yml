@@ -263,7 +263,9 @@ jobs:
         run: |
           gcc -DNVX_GSP_RPC_TEST -std=c11 -Wall -Wextra -Werror -Iinclude \
             scripts/test_nvx_gsp_rpc.c drivers/gpu/nvx/nvx_gsp_rpc.c \
-            drivers/gpu/nvx/nvx_gsp_ring.c -o /tmp/vantaos-nvx-gsp-rpc-test
+            drivers/gpu/nvx/nvx_gsp_ring.c drivers/gpu/nvx/nvx_gsp_msgq_rpc.c \
+            drivers/gpu/nvx/nvx_gsp_msgq_queue.c drivers/gpu/nvx/nvx_gsp_msgq.c \
+            drivers/gpu/nvx/nvx_mmio.c -o /tmp/vantaos-nvx-gsp-rpc-test
 
       - name: Test GSP RPC correlation, response buffers and device-loss handling
         run: /tmp/vantaos-nvx-gsp-rpc-test

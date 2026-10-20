@@ -148,14 +148,16 @@ static volatile uint8_t *map_cap(const struct pci_device *pci, uint8_t bar,
         uint32_t raw = pci_read_config32(pci, (uint8_t)(0x10U + bar * 4U));
         serial_write("VANTAOS_VIRTIO_NET_MODERN_BAR_INDEX=");
         vnet_log_hex32(bar);
+        serial_write(" HEADER=");
+        vnet_log_hex32(pci_read_config8(pci, 0x0EU));
+        serial_write(" BAR0-5=");
+        for (uint8_t diagnostic_bar = 0U; diagnostic_bar < 6U; ++diagnostic_bar) {
+            vnet_log_hex32(pci_read_config32(
+                pci, (uint8_t)(0x10U + diagnostic_bar * 4U)));
+            serial_write(diagnostic_bar == 5U ? "\n" : ",");
+        }
         serial_write(" RAW=");
         vnet_log_hex32(raw);
-        if (bar > 0U) {
-            uint32_t previous = pci_read_config32(
-                pci, (uint8_t)(0x10U + (bar - 1U) * 4U));
-            serial_write(" PREV=");
-            vnet_log_hex32(previous);
-        }
         serial_write("\n");
         /*
          * Firmware can leave an implemented 64-bit modern BAR unassigned.

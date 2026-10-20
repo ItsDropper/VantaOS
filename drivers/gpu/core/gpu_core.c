@@ -8,6 +8,7 @@
 
 #include <stddef.h>
 #include <string.h>
+#include "pci.h"
 
 static int gpu_transition_allowed(gpu_device_state_t current,
                                  gpu_device_state_t next)
@@ -90,4 +91,43 @@ int gpu_driver_matches(const gpu_driver_descriptor_t *driver,
         device->vendor_id != driver->vendor_id)
         return 0;
     return driver->match(device) != 0;
+}
+
+int gpu_discover_pci(gpu_device_t *out_devices, size_t capacity,
+                     size_t *out_count)
+{
+    size_t required = 0;
+    int inventory_count;
+
+    if (out_count == NULL || (capacity != 0U && out_devices == NULL))
+        return 0;
+    *out_count = 0U;
+
+    inventory_count = pci_get_device_count();
+    if (inventory_count < 0)
+        return 0;
+
+    for (int i = 0; i < inventory_count; ++i) {
+        const struct pci_device *pci = pci_get_device(i);
+        gpu_pci_match_t match;
+        if (pci != NULL && gpu_classify_pci_function(pci, &match))
+            ++required;
+    }
+
+    if (required > capacity)
+        return 0;
+
+    size_t written = 0U;
+    for (int i = 0; i < inventory_count; ++i) {
+        const struct pci_device *pci = pci_get_device(i);
+        gpu_pci_match_t match;
+        if (pci == NULL || !gpu_classify_pci_function(pci, &match))
+            continue;
+        if (!gpu_device_construct(&out_devices[written], pci, &match))
+            return 0;
+        ++written;
+    }
+
+    *out_count = written;
+    return 1;
 }

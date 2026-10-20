@@ -107,6 +107,12 @@ int main(void)
         dmem, sizeof(dmem), IFACE_OFFSET, 0x15U, 1U, &window) ==
         NVX_GSP_FWSEC_INTERFACE_RANGE_ERROR);
 
+    make_dmem(dmem);
+    put32(dmem + MAPPER_OFFSET + 8U, MAPPER_OFFSET + 8U);
+    assert(nvx_gsp_fwsec_find_command_window(
+        dmem, sizeof(dmem), IFACE_OFFSET, 0x15U, 1U, &window) ==
+        NVX_GSP_FWSEC_INTERFACE_BAD_MAPPER);
+
     assert(nvx_gsp_fwsec_find_command_window(
         NULL, sizeof(dmem), IFACE_OFFSET, 0x15U, 1U, &window) ==
         NVX_GSP_FWSEC_INTERFACE_INVALID_ARGUMENT);

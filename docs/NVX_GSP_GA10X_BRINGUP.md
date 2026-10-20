@@ -187,3 +187,10 @@ NVX now has `nvx_gsp_ga10x_program_brom()` for the GA102+ Falcon BROM parameter 
 The write order matches Nova's GA102 HAL: parameter address, engine mask, ucode ID, RSA-3K selector. NVX validates the complete register window before writing, checks the PRIV-lock pattern, and refuses to program a Falcon unless CPUCTL reports it halted. Strict-warning host tests assert the exact written values and reject invalid engine masks, ucode IDs, alignment, active-engine state, locked PRIV access, and truncated BAR mappings.
 
 This is a **real register-programming primitive**, not a completed secure-boot transaction. It does not upload FWSEC or GSP firmware, authenticate the image, select/reset the correct SEC2 versus GSP Falcon, program WPR/VRAM, set the boot vector, trigger the secure boot ROM, or establish that the firmware is executing. The higher-level boot path must call it only with parameters extracted from the matching validated firmware image and after the platform has completed the preceding load steps. No physical GA10x device was available to validate these writes.
+
+
+## Guarded Falcon launch primitive
+
+`nvx_gsp_ga10x_start_falcon()` now performs the GA102 Falcon launch register sequence for an image that the caller has already loaded and authenticated: it validates a complete BOOTVEC/CPUCTL mapping, checks the PRIV-lock signature and halted state, writes BOOTVEC, then issues STARTCPU. Host tests verify register order/results and reject misaligned entry points, running Falcon state, locked access, and truncated mappings.
+
+This primitive does **not** load or authenticate FWSEC, configure SEC2, select the RISC-V core, create the framebuffer WPR, or prove a boot succeeded. It must only be called after the correct engine-specific secure firmware path is complete. The current API uses the GSP Falcon register window; SEC2/FWSEC still needs its own engine-base-aware path.

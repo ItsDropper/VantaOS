@@ -118,11 +118,7 @@ nvx_attach_status_t nvx_device_detach(nvx_attached_device_t *device)
 
     nvx_bar_mmio_unmap(&device->bar0, device->bar0_mapping);
     device->bar0_mapping = 0;
-    device->attached = 0;
-    device->pci_device = 0;
-    memset(&device->registers, 0, sizeof(device->registers));
-    device->registers.identified_family = NVX_FAMILY_UNKNOWN;
-    device->registers.identified_profile = NVX_PROFILE_UNKNOWN;
+    nvx_attach_clear(device);
 
     if (!nvx_lifecycle_transition(&device->lifecycle, NVX_STATE_STOPPED))
         return NVX_ATTACH_LIFECYCLE_ERROR;

@@ -99,6 +99,8 @@ nvx_gsp_preflight_status_t nvx_gsp_preflight_stage_booters(
                  out_unload_info, sizeof(*out_unload_info)) ||
         overlaps(out_load_info, sizeof(*out_load_info), b, sizeof(*b)) ||
         overlaps(out_unload_info, sizeof(*out_unload_info), b, sizeof(*b)) ||
+        overlaps(load_staging, load_capacity, b, sizeof(*b)) ||
+        overlaps(unload_staging, unload_capacity, b, sizeof(*b)) ||
         overlaps(load_staging, load_capacity, unload_staging, unload_capacity) ||
         overlaps(load_staging, load_capacity, out_load_info, sizeof(*out_load_info)) ||
         overlaps(load_staging, load_capacity, out_unload_info, sizeof(*out_unload_info)) ||

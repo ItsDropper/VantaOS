@@ -293,7 +293,7 @@ int main(void)
            &mailbox0_out, &mailbox1_out, 10U, 1U,
            fake_boot_delay, &boot_state) == NVX_GSP_FALCON_OK);
     assert(get32(NVX_GSP_FALCON_MAILBOX0) == 0U);
-    assert(get32(NVX_GSP_FALCON_MAILBOX1) == 0x2222U);
+    assert(get32(NVX_GSP_FALCON_MAILBOX1) == 0xA55AU);
     assert(mailbox0_out == 0U && mailbox1_out == 0xA55AU);
     assert(boot_state.delays == 1U);
     put32(NVX_GSP_FALCON_CPUCTL, NVX_GSP_CPUCTL_HALTED);

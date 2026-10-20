@@ -7,7 +7,7 @@
 #include <assert.h>
 #include <stdint.h>
 #include <string.h>
-static uint8_t bar[0x111000U] __attribute__((aligned(4)));
+static uint8_t bar[NVX_GSP_GA10X_REQUIRED_BAR_BYTES] __attribute__((aligned(4)));
 static uint8_t command_store[8U*NVX_GSP_PAGE_SIZE] __attribute__((aligned(NVX_GSP_PAGE_SIZE)));
 static uint8_t response_store[8U*NVX_GSP_PAGE_SIZE] __attribute__((aligned(NVX_GSP_PAGE_SIZE)));
 int main(void)
@@ -21,6 +21,11 @@ int main(void)
  assert(nvx_gsp_ga10x_create_command_queue(&g,command_store,sizeof(command_store))==NVX_GSP_GA10X_QUEUE_NOT_READY);
  nvx_mmio_region_t short_region={bar,NVX_GSP_GA10X_MSGQ_REQUIRED_BAR_BYTES-1U};
  assert(nvx_gsp_ga10x_setup(&g,&short_region)==NVX_GSP_GA10X_BAD_BAR);
+ nvx_mmio_region_t locked_region={bar,sizeof(bar)};
+ assert(nvx_mmio_write32(&locked_region,NVX_GSP_FALCON_HWCFG2,0xBADF41A5U)==NVX_MMIO_OK);
+ assert(nvx_gsp_ga10x_setup(&g,&region)==NVX_GSP_GA10X_PRIVILEGED_WINDOW_LOCKED);
+ assert(!g.mmio_ready&&!g.command_ready&&!g.response_ready&&!g.rpc_ready);
+ assert(nvx_mmio_write32(&locked_region,NVX_GSP_FALCON_HWCFG2,0U)==NVX_MMIO_OK);
  assert(nvx_gsp_ga10x_setup(&g,&region)==NVX_GSP_GA10X_OK);
  assert(nvx_gsp_ga10x_setup(&g,&region)==NVX_GSP_GA10X_ALREADY_INITIALIZED);
  assert(nvx_gsp_ga10x_link_response_queue(&g,response_store,sizeof(response_store))==NVX_GSP_GA10X_QUEUE_NOT_READY);

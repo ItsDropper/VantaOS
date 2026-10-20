@@ -52,6 +52,32 @@ int main(void){
  assert(report.firmware_version.offset==576U&&strcmp(report.version,"535.113.01")==0);
  strcpy(b.chip,"ga100");assert(nvx_gsp_preflight_validate(&b,&report)==NVX_GSP_PREFLIGHT_UNSUPPORTED_CHIP);
  strcpy(b.chip,"ga106");assert(nvx_gsp_preflight_validate(&b,&report)==NVX_GSP_PREFLIGHT_OK);
+ uint8_t load_stage[128],unload_stage[128],backup_load[128],backup_unload[128],overlap_stage[256];
+ nvx_gsp_image_info_t load_info,unload_info;
+ for(size_t i=0U;i<128U;i++){boot_assets[0][184U+i]=(uint8_t)i;boot_assets[1][184U+i]=(uint8_t)(0x80U+i);}
+ for(size_t i=0U;i<32U;i++){
+  boot_assets[0][60U+i]=(uint8_t)(0x10U+i);boot_assets[0][92U+i]=(uint8_t)(0x30U+i);
+  boot_assets[1][60U+i]=(uint8_t)(0x50U+i);boot_assets[1][92U+i]=(uint8_t)(0x70U+i);
+ }
+ assert(nvx_gsp_preflight_stage_booters(&b,0U,load_stage,sizeof(load_stage),
+        1U,unload_stage,sizeof(unload_stage),&load_info,&unload_info)==NVX_GSP_PREFLIGHT_OK);
+ assert(load_info.data_size==128U&&unload_info.data_size==128U);
+ assert(load_stage[0]==0U&&load_stage[40]==0x30U&&load_stage[71]==0x4FU);
+ assert(unload_stage[0]==0x80U&&unload_stage[40]==0x50U&&unload_stage[71]==0x6FU);
+ memset(load_stage,0xA5U,sizeof(load_stage));memset(unload_stage,0x5AU,sizeof(unload_stage));
+ memcpy(backup_load,load_stage,sizeof(load_stage));memcpy(backup_unload,unload_stage,sizeof(unload_stage));
+ assert(nvx_gsp_preflight_stage_booters(&b,2U,load_stage,sizeof(load_stage),
+        0U,unload_stage,sizeof(unload_stage),&load_info,&unload_info)==NVX_GSP_PREFLIGHT_FUSE_VERSION_UNSUPPORTED);
+ assert(memcmp(load_stage,backup_load,sizeof(load_stage))==0&&memcmp(unload_stage,backup_unload,sizeof(unload_stage))==0);
+ assert(nvx_gsp_preflight_stage_booters(&b,0U,load_stage,sizeof(load_stage)-1U,
+        0U,unload_stage,sizeof(unload_stage),&load_info,&unload_info)==NVX_GSP_PREFLIGHT_STAGING_TOO_SMALL);
+ assert(memcmp(load_stage,backup_load,sizeof(load_stage))==0&&memcmp(unload_stage,backup_unload,sizeof(unload_stage))==0);
+ assert(nvx_gsp_preflight_stage_booters(&b,0U,overlap_stage,128U,
+        0U,overlap_stage+64U,128U,&load_info,&unload_info)==NVX_GSP_PREFLIGHT_STAGING_ALIAS);
+ assert(nvx_gsp_preflight_stage_booters(&b,0U,load_stage,sizeof(load_stage),
+        0U,unload_stage,sizeof(unload_stage),&load_info,&load_info)==NVX_GSP_PREFLIGHT_STAGING_ALIAS);
+ assert(nvx_gsp_preflight_stage_booters(&b,0U,boot_assets[0]+184U,128U,
+        0U,unload_stage,sizeof(unload_stage),&load_info,&unload_info)==NVX_GSP_PREFLIGHT_STAGING_ALIAS);
  boot_assets[0][0]=0U;assert(nvx_gsp_preflight_validate(&b,&report)==NVX_GSP_PREFLIGHT_CONTAINER_INVALID);assert(report.runtime_bytes==0U);boot_assets[0][0]=0xDEU;
  boot_assets[1][0]=0U;assert(nvx_gsp_preflight_validate(&b,&report)==NVX_GSP_PREFLIGHT_CONTAINER_INVALID);boot_assets[1][0]=0xDEU;
  assert(nvx_gsp_preflight_validate(&b,&report)==NVX_GSP_PREFLIGHT_OK);

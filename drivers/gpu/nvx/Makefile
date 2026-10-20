@@ -1,4 +1,42 @@
-# Keep NVIDIA-specific logic in NVX; generic resource contracts belong in core.
-# ELF parsing and section lookup share nvx_gsp_elf.c; there is no separate
-# nvx_gsp_elf_sections.c translation unit.
-VANTAOS_NVX_C := drivers/gpu/nvx/nvx_device.c drivers/gpu/nvx/nvx_pci.c drivers/gpu/nvx/nvx_lifecycle.c drivers/gpu/nvx/nvx_resource.c drivers/gpu/nvx/nvx_mmio.c drivers/gpu/nvx/nvx_probe.c drivers/gpu/nvx/nvx_attach.c drivers/gpu/nvx/nvx_firmware.c drivers/gpu/nvx/nvx_gsp_bundle.c drivers/gpu/nvx/nvx_gsp_image.c drivers/gpu/nvx/nvx_gsp_ring.c drivers/gpu/nvx/nvx_gsp_msgq.c drivers/gpu/nvx/nvx_gsp_msgq_queue.c drivers/gpu/nvx/nvx_gsp_msgq_rpc.c drivers/gpu/nvx/nvx_gsp_init_args.c drivers/gpu/nvx/nvx_gsp_ga10x.c drivers/gpu/nvx/nvx_gsp_fuse.c drivers/gpu/nvx/nvx_gsp_falcon.c drivers/gpu/nvx/nvx_gsp_bootloader.c drivers/gpu/nvx/nvx_gsp_rpc.c drivers/gpu/nvx/nvx_gsp_elf.c drivers/gpu/nvx/nvx_gsp_elf_load.c drivers/gpu/nvx/nvx_gsp_preflight.c drivers/gpu/nvx/nvx_gsp_boot_memory.c drivers/gpu/nvx/nvx_gsp_secure_boot.c drivers/gpu/nvx/nvx_gsp_vbios.c drivers/gpu/nvx/nvx_gsp_pci_rom.c drivers/gpu/nvx/nvx_gsp_fwsec_interface.c drivers/gpu/nvx/nvx_gsp_fwsec_command.c drivers/gpu/nvx/nvx_gsp_fwsec_result.c drivers/gpu/nvx/nvx_gsp_wpr_meta.c drivers/gpu/nvx/nvx_dma.c drivers/gpu/nvx/nvx_dma_sync.c drivers/gpu/nvx/nvx_gpuva.c drivers/gpu/nvx/nvx_gpuvm.c drivers/gpu/nvx/nvx_object_memory.c drivers/gpu/nvx/nvx_sync.c drivers/gpu/nvx/nvx_submit.c drivers/gpu/nvx/nvx_irq_caps.c drivers/gpu/nvx/nvx_irq_route.c
+# NVX sources are grouped by subsystem; public interfaces remain in include/.
+VANTAOS_NVX_C := \
+    drivers/gpu/nvx/core/nvx_device.c \
+    drivers/gpu/nvx/core/nvx_pci.c \
+    drivers/gpu/nvx/core/nvx_lifecycle.c \
+    drivers/gpu/nvx/core/nvx_resource.c \
+    drivers/gpu/nvx/core/nvx_mmio.c \
+    drivers/gpu/nvx/core/nvx_probe.c \
+    drivers/gpu/nvx/core/nvx_attach.c \
+    drivers/gpu/nvx/firmware/nvx_firmware.c \
+    drivers/gpu/nvx/firmware/nvx_gsp_bundle.c \
+    drivers/gpu/nvx/firmware/nvx_gsp_image.c \
+    drivers/gpu/nvx/firmware/nvx_gsp_preflight.c \
+    drivers/gpu/nvx/firmware/nvx_gsp_bootloader.c \
+    drivers/gpu/nvx/firmware/nvx_gsp_secure_boot.c \
+    drivers/gpu/nvx/firmware/nvx_gsp_vbios.c \
+    drivers/gpu/nvx/firmware/nvx_gsp_pci_rom.c \
+    drivers/gpu/nvx/firmware/nvx_gsp_fwsec_interface.c \
+    drivers/gpu/nvx/firmware/nvx_gsp_fwsec_command.c \
+    drivers/gpu/nvx/firmware/nvx_gsp_fwsec_result.c \
+    drivers/gpu/nvx/firmware/nvx_gsp_wpr_meta.c \
+    drivers/gpu/nvx/gsp/nvx_gsp_ring.c \
+    drivers/gpu/nvx/gsp/nvx_gsp_msgq.c \
+    drivers/gpu/nvx/gsp/nvx_gsp_msgq_queue.c \
+    drivers/gpu/nvx/gsp/nvx_gsp_msgq_rpc.c \
+    drivers/gpu/nvx/gsp/nvx_gsp_init_args.c \
+    drivers/gpu/nvx/gsp/nvx_gsp_ga10x.c \
+    drivers/gpu/nvx/gsp/nvx_gsp_fuse.c \
+    drivers/gpu/nvx/gsp/nvx_gsp_falcon.c \
+    drivers/gpu/nvx/gsp/nvx_gsp_rpc.c \
+    drivers/gpu/nvx/gsp/nvx_gsp_elf.c \
+    drivers/gpu/nvx/gsp/nvx_gsp_elf_load.c \
+    drivers/gpu/nvx/gsp/nvx_gsp_boot_memory.c \
+    drivers/gpu/nvx/memory/nvx_dma.c \
+    drivers/gpu/nvx/memory/nvx_dma_sync.c \
+    drivers/gpu/nvx/memory/nvx_gpuva.c \
+    drivers/gpu/nvx/memory/nvx_gpuvm.c \
+    drivers/gpu/nvx/memory/nvx_object_memory.c \
+    drivers/gpu/nvx/execution/nvx_sync.c \
+    drivers/gpu/nvx/execution/nvx_submit.c \
+    drivers/gpu/nvx/interrupts/nvx_irq_caps.c \
+    drivers/gpu/nvx/interrupts/nvx_irq_route.c

@@ -1,6 +1,6 @@
-# NVX GA10x bring-up notes (compatibility copy)
+# NVX GA10x bring-up notes (compatibility path)
 
-The maintained, organized version is [docs/gpu/nvx/GA10X_BRINGUP.md](gpu/nvx/GA10X_BRINGUP.md). This older path is retained temporarily for links from existing branches and historical notes.
+The organized, maintained guide is [docs/gpu/nvx/GA10X_BRINGUP.md](gpu/nvx/GA10X_BRINGUP.md). This copy retains historical links and the notes from merged queue-validation work.
 
 # NVX GA10x GSP Falcon bring-up notes
 

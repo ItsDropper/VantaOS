@@ -308,14 +308,18 @@ int pci_get_bar(const struct pci_device* device, uint8_t index,
     uint32_t high = 0;
     int wide = 0;
 
-    /* Require all outputs so callers never consume partially initialized data. */
+    /*
+     * Address and I/O-vs-memory are required to safely use a BAR.
+     * Width is optional metadata; existing drivers intentionally pass NULL
+     * when they do not need to distinguish 32-bit from 64-bit BARs.
+     */
     if (address)
         *address = 0;
     if (is_io)
         *is_io = 0;
     if (is_64bit)
         *is_64bit = 0;
-    if (!device || !address || !is_io || !is_64bit)
+    if (!device || !address || !is_io)
         return 0;
 
     header_type = (uint8_t)(pci_read_config8(device, 0x0EU) & 0x7FU);

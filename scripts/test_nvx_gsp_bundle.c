@@ -9,6 +9,7 @@
 #include <string.h>
 static const uint8_t bytes[16]={0x47,0x53,0x50};
 static unsigned requests,verifies,releases;
+static char requested_paths[4][96];
 static int fail_request=-1,fail_verify=-1,invalid_blob=-1,oversized=-1;
 static size_t reported_size=sizeof(bytes);
 static int component(const char *p) {
@@ -18,6 +19,8 @@ static int component(const char *p) {
 }
 static int request(const char *n,nvx_firmware_blob_t *b,void *ctx) {
     (void)ctx; int i=component(n); assert(i>=0); requests++;
+    if(requests<=4U) { strncpy(requested_paths[requests-1U],n,95U);
+        requested_paths[requests-1U][95]='\\0'; }
     b->data=i==invalid_blob?0:bytes;
     b->size=i==oversized?(size_t)NVX_FIRMWARE_MAX_BYTES+1U:reported_size;
     b->release_context=(void *)bytes; return i!=fail_request;
@@ -37,7 +40,10 @@ int main(void) {
     nvx_gsp_bundle_t b={0};
     assert(nvx_gsp_bundle_acquire(&p,NVX_FAMILY_AMPERE,"ga102","535.113.01",&b)==NVX_GSP_BUNDLE_OK);
     assert(b.acquired&&b.total_bytes==sizeof(bytes)*4U);
-    assert(strcmp(b.components[0].blob.data?"nvidia/ga102/gsp/booter_load-535.113.01.bin":"", "nvidia/ga102/gsp/booter_load-535.113.01.bin")==0);
+    assert(strcmp(requested_paths[0],"nvidia/ga102/gsp/booter_load-535.113.01.bin")==0);
+    assert(strcmp(requested_paths[1],"nvidia/ga102/gsp/booter_unload-535.113.01.bin")==0);
+    assert(strcmp(requested_paths[2],"nvidia/ga102/gsp/bootloader-535.113.01.bin")==0);
+    assert(strcmp(requested_paths[3],"nvidia/ga102/gsp/gsp-535.113.01.bin")==0);
     assert(requests==4&&verifies==4&&releases==0);
     assert(nvx_gsp_bundle_acquire(&p,NVX_FAMILY_AMPERE,"ga102","535.113.01",&b)==NVX_GSP_BUNDLE_ALREADY_ACQUIRED);
     nvx_gsp_bundle_release(&b); assert(!b.acquired&&releases==4);

@@ -19,7 +19,7 @@ static nvx_gsp_wpr_layout_t valid_layout(void)
   .wpr_start=0x30000000U,.wpr_heap_offset=0x30001000U,.wpr_heap_size=0x100000U,
   .firmware_offset=0x30101000U,.boot_bin_offset=0x30301000U,
   .frts_offset=0x30311000U,.frts_size=0x10000U,.wpr_end=0x38000000U,
-  .framebuffer_size=0x100000000ULL,.vga_workspace_offset=0xFFF00000ULL,.vga_workspace_size=0x1000000U,
+  .framebuffer_size=0x100000000ULL,.vga_workspace_offset=0xFFF00000ULL,.vga_workspace_size=0x100000U,
   .boot_count=7U,.crash_report_queue_addr=0x600000U,.crash_report_queue_size=0x10000U,
   .vf_partition_count=1U,.flags=NVX_GSP_FW_FLAG_CLOCK_BOOST|NVX_GSP_FW_FLAG_PPCIE_ENABLED,
   .paging_config=0x1234U

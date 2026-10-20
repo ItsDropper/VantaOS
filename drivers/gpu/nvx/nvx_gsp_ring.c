@@ -125,7 +125,9 @@ nvx_gsp_ring_status_t nvx_gsp_ring_send_large(nvx_gsp_ring_t *r,
     if(overlaps(scratch,(size_t)NVX_GSP_MAX_MESSAGE_PAGES*NVX_GSP_PAGE_SIZE,
                 r->storage,(size_t)r->capacity_pages*NVX_GSP_PAGE_SIZE)||
        overlaps(scratch,(size_t)NVX_GSP_MAX_MESSAGE_PAGES*NVX_GSP_PAGE_SIZE,
-                payload,payload_size))
+                payload,payload_size)||
+       overlaps(payload,payload_size,r->storage,
+                (size_t)r->capacity_pages*NVX_GSP_PAGE_SIZE))
         return NVX_GSP_RING_INVALID_ARGUMENT;
     remaining=payload_size;
     do {

@@ -32,7 +32,7 @@ static nvx_gsp_msgq_status_t decode(const void *store,size_t bytes,size_t elem,
     if(get16(p)!=NVX_GSP_MSGQ_VERSION_MAJOR) return NVX_GSP_MSGQ_BAD_VERSION;
     total=get32(p+4U); msg_size=get32(p+8U); count=get32(p+12U); off=get32(p+16U);
     if(total!=bytes||msg_size!=elem||off<NVX_GSP_MSGQ_HEADER_PAGE_SIZE||
-       off%elem!=0U||off>total||total-off<msg_size||
+       off%NVX_GSP_MSGQ_HEADER_PAGE_SIZE!=0U||off>total||total-off<msg_size||
        count!=(total-off)/msg_size||count<1U||count>NVX_GSP_MSGQ_MAX_ELEMENTS)
         return NVX_GSP_MSGQ_BAD_LAYOUT;
     if(check_reserved&&(get32(p+20U)!=0U||get32(p+24U)!=0U||get32(p+28U)!=0U))

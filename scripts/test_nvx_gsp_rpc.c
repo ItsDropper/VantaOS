@@ -11,6 +11,7 @@
 static uint8_t tx_mem[PAGES*NVX_GSP_PAGE_SIZE] __attribute__((aligned(NVX_GSP_PAGE_SIZE)));
 static uint8_t rx_mem[PAGES*NVX_GSP_PAGE_SIZE] __attribute__((aligned(NVX_GSP_PAGE_SIZE)));
 static uint8_t scratch[16U*NVX_GSP_PAGE_SIZE] __attribute__((aligned(NVX_GSP_PAGE_SIZE)));
+static uint8_t large_request[100000U];
 static volatile uint32_t tx_r,tx_w,rx_r,rx_w; static unsigned notified;
 static void notify(void *p) { assert(p==&notified); notified++; }
 int main(void) {
@@ -53,6 +54,17 @@ int main(void) {
  assert(seq==3U);
  assert(nvx_gsp_rpc_pump(&m,scratch,sizeof(scratch),&unmatched)==NVX_GSP_RPC_RESPONSE_TOO_LARGE);
  assert(nvx_gsp_rpc_query(&m,&h,&result)==NVX_GSP_RPC_RESPONSE_TOO_LARGE&&result.response_size==sizeof(reply));
+ assert(nvx_gsp_rpc_release(&m,&h)==NVX_GSP_RPC_OK);
+
+ memset(large_request,0xA5,sizeof(large_request));
+ assert(nvx_gsp_rpc_submit_large(&m,NVX_GSP_RPC_HEADER_VERSION_R535,
+     NVX_GSP_RPC_SIGNATURE_R535,35U,35U,0xFFFFFFFEU,large_request,
+     sizeof(large_request),scratch,sizeof(scratch),response,sizeof(response),&h)==NVX_GSP_RPC_OK);
+ assert(nvx_gsp_ring_send(&rx,NVX_GSP_RPC_HEADER_VERSION_R535,
+     NVX_GSP_RPC_SIGNATURE_R535,35U,reply,sizeof(reply),scratch,sizeof(scratch),&seq)==NVX_GSP_RING_OK);
+ assert(nvx_gsp_rpc_pump(&m,scratch,sizeof(scratch),&unmatched)==NVX_GSP_RPC_COMPLETE);
+ assert(nvx_gsp_rpc_query(&m,&h,&result)==NVX_GSP_RPC_COMPLETE);
+ assert(result.response_size==sizeof(reply)&&memcmp(response,reply,sizeof(reply))==0);
  assert(nvx_gsp_rpc_release(&m,&h)==NVX_GSP_RPC_OK);
 
  assert(nvx_gsp_rpc_submit(&m,1U,2U,40U,40U,req,sizeof(req),scratch,sizeof(scratch),response,sizeof(response),&h)==NVX_GSP_RPC_OK);

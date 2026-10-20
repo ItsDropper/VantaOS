@@ -176,7 +176,7 @@ Do not skip secure boot and jump straight to rendering. A GPU command submission
 ## 8. Driver work order
 
 1. Keep PR #159 buildable and make the host tests pass before extending the SEC2 path.
-2. Add a standalone bounded expansion-ROM/PCIR locator; keep it separate from the BIT/FWSEC parser.
+2. **Implemented on the current NVX branch:** add a standalone bounded expansion-ROM/PCIR locator, kept separate from the BIT/FWSEC parser. It validates each chained image boundary and returns the first NVIDIA-vendor image; code-type preference and real-ROM validation remain open.
 3. Add a pure FWSEC command-interface parser for the public interface table/entry/DMEM mapper, with malformed-offset, overflow, overlapping-range, and no-write-on-failure tests.
 4. Add a versioned FWSEC command builder for the documented SB/FRTS structures only after validating exact sizes, field widths, and status semantics.
 5. Add explicit runtime firmware identity and cached-init ABI profile selection.

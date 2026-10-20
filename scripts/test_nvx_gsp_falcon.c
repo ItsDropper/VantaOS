@@ -18,6 +18,31 @@ static void put32(size_t offset, uint32_t value)
     memcpy(bar + offset, &value, sizeof(value));
 }
 
+static uint32_t get32(size_t offset)
+{
+    uint32_t value = 0U;
+    memcpy(&value, bar + offset, sizeof(value));
+    return value;
+}
+
+typedef struct dma_test_context {
+    uint32_t base;
+    uint32_t delays;
+    uint32_t last_command;
+    uint8_t stuck_full;
+} dma_test_context_t;
+
+static void fake_dma_delay(uint32_t milliseconds, void *context)
+{
+    dma_test_context_t *state = (dma_test_context_t *)context;
+    assert(milliseconds != 0U);
+    state->last_command = get32(NVX_GA10X_FALCON_DMATRFCMD(state->base));
+    ++state->delays;
+    put32(NVX_GA10X_FALCON_DMATRFCMD(state->base),
+          state->stuck_full ? NVX_GA10X_FALCON_DMA_FULL :
+                              NVX_GA10X_FALCON_DMA_IDLE);
+}
+
 static unsigned delay_calls;
 static unsigned activate_after;
 
@@ -128,6 +153,39 @@ int main(void)
     assert(nvx_mmio_read32(&region, NVX_GSP_FALCON_BROM_MOD_SEL,
                            &register_value) == NVX_MMIO_OK);
     assert(register_value == NVX_GSP_FALCON_BROM_RSA3K);
+    /* Two 256-byte Falcon DMA chunks, followed by a bounded idle wait. */
+    dma_test_context_t dma_state = {NVX_GSP_FALCON_BASE, 0U, 0U, 0U};
+    assert(nvx_ga10x_falcon_dma_upload(&region, NVX_GSP_FALCON_BASE,
+           0x10000000000ULL, 0U, 0x200U, 512U,
+           NVX_GA10X_FALCON_SECURE_IMEM, 0U, 10U, 1U,
+           fake_dma_delay, &dma_state) == NVX_GSP_FALCON_OK);
+    assert(dma_state.delays == 1U);
+    assert(dma_state.last_command ==
+           (NVX_GA10X_FALCON_DMA_SIZE_256B |
+            NVX_GA10X_FALCON_DMA_IMEM | (1U << 2U)));
+    assert(get32(NVX_GA10X_FALCON_FBIF_CTL(NVX_GSP_FALCON_BASE)) ==
+           NVX_GA10X_FALCON_DMA_ALLOW_PHYS);
+    assert(get32(NVX_GA10X_FALCON_FBIF_TRANSCFG0(NVX_GSP_FALCON_BASE)) ==
+           NVX_GA10X_FALCON_DMA_COHERENT_PHYS);
+    assert(get32(NVX_GA10X_FALCON_DMATRFBASE(NVX_GSP_FALCON_BASE)) == 0U);
+    assert(get32(NVX_GA10X_FALCON_DMATRFBASE1(NVX_GSP_FALCON_BASE)) == 1U);
+    assert(get32(NVX_GA10X_FALCON_DMATRFFBOFFS(NVX_GSP_FALCON_BASE)) == 256U);
+    assert(get32(NVX_GA10X_FALCON_DMATRFMOFFS(NVX_GSP_FALCON_BASE)) == 0x300U);
+    assert(nvx_ga10x_falcon_dma_upload(&region, NVX_GSP_FALCON_BASE,
+           0x100000ULL, 0U, 0x200U, 255U,
+           NVX_GA10X_FALCON_SECURE_IMEM, 0U, 10U, 1U,
+           fake_dma_delay, &dma_state) ==
+           NVX_GSP_FALCON_DMA_INVALID_TRANSFER);
+    put32(NVX_GA10X_FALCON_DMATRFCMD(NVX_GSP_FALCON_BASE),
+          NVX_GA10X_FALCON_DMA_FULL);
+    dma_state.delays = 0U;
+    dma_state.stuck_full = 1U;
+    assert(nvx_ga10x_falcon_dma_upload(&region, NVX_GSP_FALCON_BASE,
+           0x100000ULL, 0U, 0x200U, 256U,
+           NVX_GA10X_FALCON_SECURE_IMEM, 0U, 2U, 1U,
+           fake_dma_delay, &dma_state) == NVX_GSP_FALCON_DMA_TIMEOUT);
+    assert(dma_state.delays == 2U);
+    dma_state.stuck_full = 0U;
     assert(nvx_gsp_ga10x_program_brom(&region, 0x0002U, 1U, 0x100U) ==
            NVX_GSP_FALCON_BROM_INVALID_PARAMETERS);
     assert(nvx_gsp_ga10x_program_brom(&region, 0x0400U, 0U, 0x100U) ==

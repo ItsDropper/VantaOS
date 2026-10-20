@@ -157,6 +157,8 @@ int main(void)
     assert(trace.failed_phase == NVX_GSP_BOOT_PHASE_UPLOAD_IMEM);
     assert(trace.last_completed_phase == NVX_GSP_BOOT_PHASE_TRANSFER_BOOTER_TO_DEVICE);
     assert(trace.recovery_attempted == 1U);
+    assert(trace.recovery_trigger_status == NVX_GSP_FALCON_DMA_TIMEOUT);
+    assert(trace.recovery_result == NVX_GSP_FALCON_OK);
     assert(trace.recovery_succeeded == 1U);
     assert(trace.sec2_quiescence_confirmed == 1U);
     assert(memory.booter_load_sync.owner == NVX_DMA_OWNER_CPU);
@@ -190,6 +192,8 @@ int main(void)
     assert(trace.result == NVX_GSP_FALCON_DMA_OWNERSHIP_ERROR);
     assert(trace.failed_phase == NVX_GSP_BOOT_PHASE_UPLOAD_IMEM);
     assert(trace.recovery_attempted == 1U);
+    assert(trace.recovery_trigger_status == NVX_GSP_FALCON_DMA_TIMEOUT);
+    assert(trace.recovery_result == NVX_GSP_FALCON_DMA_OWNERSHIP_ERROR);
     assert(trace.recovery_succeeded == 0U);
     assert(trace.sec2_quiescence_confirmed == 0U);
     assert(memory.booter_load_sync.owner == NVX_DMA_OWNER_DEVICE);

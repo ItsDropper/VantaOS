@@ -105,5 +105,9 @@ nvx_gsp_wpr_status_t nvx_gsp_wpr_layout_plan(
     nvx_gsp_wpr_layout_t *out_layout);
 nvx_gsp_wpr_status_t nvx_gsp_wpr_meta_build(
     const nvx_gsp_wpr_layout_t *,nvx_gsp_wpr_meta_v1_t *out);
+/* Serialize validated WPR metadata into caller-owned DMA-visible SYSRAM. */
+nvx_gsp_wpr_status_t nvx_gsp_wpr_meta_materialize(
+    const nvx_gsp_wpr_layout_t *layout, void *sysmem_cpu,
+    size_t capacity, uint64_t sysmem_phys);
 nvx_gsp_wpr_status_t nvx_gsp_wpr_meta_validate(const nvx_gsp_wpr_meta_v1_t *);
 #endif

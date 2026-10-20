@@ -25,12 +25,14 @@ static nvx_gsp_msgq_status_t decode(const void *store,size_t bytes,size_t elem,
     if(!aligned_uintptr(store,NVX_GSP_MSGQ_HEADER_PAGE_SIZE))
         return NVX_GSP_MSGQ_BAD_ALIGNMENT;
     if(bytes>UINT32_MAX||bytes<2U*NVX_GSP_MSGQ_HEADER_PAGE_SIZE||
-       bytes%NVX_GSP_MSGQ_ELEMENT_SIZE!=0U||elem!=NVX_GSP_MSGQ_ELEMENT_SIZE)
+       elem<NVX_GSP_MSGQ_MIN_ELEMENT_SIZE||
+       elem>NVX_GSP_MSGQ_MAX_ELEMENT_SIZE||(elem&(elem-1U))!=0U||
+       bytes%NVX_GSP_MSGQ_ELEMENT_SIZE!=0U)
         return NVX_GSP_MSGQ_BAD_SIZE;
     if(get16(p)!=NVX_GSP_MSGQ_VERSION_MAJOR) return NVX_GSP_MSGQ_BAD_VERSION;
     total=get32(p+4U); msg_size=get32(p+8U); count=get32(p+12U); off=get32(p+16U);
     if(total!=bytes||msg_size!=elem||off<NVX_GSP_MSGQ_HEADER_PAGE_SIZE||
-       off%elem!=0U||off>total||total-off<elem||
+       off%elem!=0U||off>total||total-off<msg_size||
        count!=(total-off)/msg_size||count<1U||count>NVX_GSP_MSGQ_MAX_ELEMENTS)
         return NVX_GSP_MSGQ_BAD_LAYOUT;
     if(check_reserved&&(get32(p+20U)!=0U||get32(p+24U)!=0U||get32(p+28U)!=0U))

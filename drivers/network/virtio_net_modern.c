@@ -156,7 +156,7 @@ static volatile uint8_t *map_cap(const struct pci_device *pci, uint8_t bar,
             serial_write(" PREV=");
             vnet_log_hex32(previous);
         }
-        serial_write("\\n");
+        serial_write("\n");
         /*
          * Firmware can leave an implemented 64-bit modern BAR unassigned.
          * The PCI core may assign it only after validating its size and the

@@ -84,6 +84,11 @@ int main(void){
  assert(load_info.data_size==128U&&unload_info.data_size==128U);
  assert(load_stage[0]==0U&&load_stage[40]==0x30U&&load_stage[71]==0x4FU);
  assert(unload_stage[0]==0x80U&&unload_stage[40]==0x70U&&unload_stage[71]==0x8FU);
+ /* The metadata baseline, not signature_count, bounds the relative index:
+    hardware fuse 2 with baseline 2 selects packed slot zero. */
+ assert(nvx_gsp_preflight_stage_booters(&b,2U,load_stage,sizeof(load_stage),
+        0U,unload_stage,sizeof(unload_stage),&load_info,&unload_info)==NVX_GSP_PREFLIGHT_OK);
+ assert(load_stage[40]==0x10U&&unload_stage[40]==0x70U);
  /* A BAR mapping too short for the fuse array must fail closed without staging. */
  uint8_t short_bar_bytes[4]={0U,0U,0U,0U};
  nvx_mmio_region_t short_bar_region={short_bar_bytes,sizeof(short_bar_bytes)};
@@ -96,7 +101,7 @@ int main(void){
         memcmp(unload_stage,backup_unload,sizeof(unload_stage))==0);
  memset(load_stage,0xA5U,sizeof(load_stage));memset(unload_stage,0x5AU,sizeof(unload_stage));
  memcpy(backup_load,load_stage,sizeof(load_stage));memcpy(backup_unload,unload_stage,sizeof(unload_stage));
- assert(nvx_gsp_preflight_stage_booters(&b,2U,load_stage,sizeof(load_stage),
+ assert(nvx_gsp_preflight_stage_booters(&b,3U,load_stage,sizeof(load_stage),
         0U,unload_stage,sizeof(unload_stage),&load_info,&unload_info)==NVX_GSP_PREFLIGHT_FUSE_VERSION_UNSUPPORTED);
  assert(memcmp(load_stage,backup_load,sizeof(load_stage))==0&&memcmp(unload_stage,backup_unload,sizeof(unload_stage))==0);
  assert(nvx_gsp_preflight_stage_booters(&b,0U,load_stage,sizeof(load_stage)-1U,

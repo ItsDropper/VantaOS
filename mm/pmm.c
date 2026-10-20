@@ -434,17 +434,29 @@ void pmm_free_block(void* ptr)
 
 uint32_t pmm_get_total_blocks(void)
 {
-    return total_blocks;
+    uint32_t result;
+    spinlock_lock(&pmm_lock);
+    result = total_blocks;
+    spinlock_unlock(&pmm_lock);
+    return result;
 }
 
 uint32_t pmm_get_used_blocks(void)
 {
-    return total_blocks - free_blocks;
+    uint32_t result;
+    spinlock_lock(&pmm_lock);
+    result = total_blocks - free_blocks;
+    spinlock_unlock(&pmm_lock);
+    return result;
 }
 
 uint32_t pmm_get_free_blocks(void)
 {
-    return free_blocks;
+    uint32_t result;
+    spinlock_lock(&pmm_lock);
+    result = free_blocks;
+    spinlock_unlock(&pmm_lock);
+    return result;
 }
 
 int pmm_is_initialized(void)

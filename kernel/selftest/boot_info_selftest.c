@@ -142,6 +142,33 @@ static void pmm_boot_info_probe(const vanta_boot_info_t* normalized)
     pmm_free_block(second);
     ok = pmm_get_free_blocks() == 2U && ok;
 
+    /*
+     * The free pages are fragmented around a reserved frame. A 2-page
+     * contiguous request must fail without consuming either free frame.
+     */
+    void* contiguous = (void*)(uintptr_t)0x1ULL;
+    ok = !pmm_alloc_contiguous_blocks(2U, &contiguous) &&
+        contiguous == NULL && pmm_get_free_blocks() == 2U && ok;
+
+    /* Remove synthetic boot-info reservations from the small test window. */
+    synthetic.legacy_info_address = 0x200000ULL;
+    synthetic.legacy_mmap_address = 0x201000ULL;
+    synthetic.memory_regions[1].base = 0x106000ULL;
+    synthetic.memory_regions[1].length = 0x1000ULL;
+    pmm_initialize(&synthetic);
+    ok = pmm_is_initialized() && pmm_get_free_blocks() == 4U && ok;
+    contiguous = NULL;
+    ok = pmm_alloc_contiguous_blocks(3U, &contiguous) &&
+        contiguous == (void*)(uintptr_t)0x103000ULL &&
+        pmm_get_free_blocks() == 1U && ok;
+    void* missing_run = (void*)(uintptr_t)0x1ULL;
+    ok = !pmm_alloc_contiguous_blocks(2U, &missing_run) &&
+        missing_run == NULL && pmm_get_free_blocks() == 1U && ok;
+    pmm_free_block(contiguous);
+    pmm_free_block((void*)((uintptr_t)contiguous + PAGE_SIZE));
+    pmm_free_block((void*)((uintptr_t)contiguous + 2U * PAGE_SIZE));
+    ok = pmm_get_free_blocks() == 4U && ok;
+
     synthetic.memory_regions[0].base = UINT64_MAX - 7U;
     synthetic.memory_regions[0].length = 16U;
     pmm_initialize(&synthetic);

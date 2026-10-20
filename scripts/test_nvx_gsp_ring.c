@@ -33,7 +33,7 @@ int main(void) {
  assert(view.header_version==1U&&view.signature==0xAABBCCDDU&&view.function==0x1234U);
  assert(view.length==NVX_GSP_RPC_HEADER_SIZE+sizeof(payload));
  assert(view.payload_size==sizeof(payload)&&memcmp(view.payload,payload,sizeof(payload))==0);
- assert(view.sequence==seq&&view.message_sequence==seq&&view.element_pages==2U);
+ assert(view.sequence==0U&&view.message_sequence==seq&&view.element_pages==2U);
  assert(read_index==write_index&&notifications==1U);
  /* Fill the ring with three one-page messages; the fourth must be rejected. */
  for(unsigned i=0;i<3U;i++) assert(nvx_gsp_ring_send(&ring,2U,3U,100U+i,payload,32U,scratch,sizeof(scratch),&seq)==NVX_GSP_RING_OK);

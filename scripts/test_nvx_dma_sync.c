@@ -29,6 +29,9 @@ int main(void) {
  assert(nvx_dma_sync_for_cpu(&s,0U,3000U)==NVX_DMA_SYNC_OK);
  assert(s.owner==NVX_DMA_OWNER_CPU);
  assert(nvx_dma_sync_for_cpu(&s,0U,1U)==NVX_DMA_SYNC_WRONG_OWNER);
+ uint64_t saved_id=b.allocation_id; b.allocation_id++;
+ assert(nvx_dma_sync_for_device(&s,0U,1U)==NVX_DMA_SYNC_BUFFER_INVALID);
+ b.allocation_id=saved_id;
  assert(nvx_dma_sync_destroy(&s)==NVX_DMA_SYNC_OK);
  assert(!s.initialized&&s.buffer==0);
  assert(nvx_dma_sync_destroy(&s)==NVX_DMA_SYNC_NOT_INITIALIZED);

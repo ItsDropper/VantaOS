@@ -23,7 +23,7 @@ static void build_elf(void)
  p32(256,11);p32(260,1);p64(280,512);p64(288,64);p64(304,16);
  p32(320,20);p32(324,1);p64(344,576);p64(352,11);p64(368,1);
  p32(384,31);p32(388,1);p64(408,592);p64(416,32);p64(432,16);
- memcpy(elf+448,"\\0.shstrtab\\0.fwimage\\0.fwversion\\0.fwsignature_ga10x\\0",50U);
+ memcpy(elf+448,"\0.shstrtab\0.fwimage\0.fwversion\0.fwsignature_ga10x\0",50U);
  memcpy(elf+576,"535.113.01",11U);
 }
 int main(void)

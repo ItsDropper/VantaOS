@@ -19,7 +19,8 @@ nvx_gsp_ga10x_status_t nvx_gsp_ga10x_setup(nvx_gsp_ga10x_t *g,
     if(g->mmio_ready||g->command_ready||g->response_ready||g->rpc_ready)
         return NVX_GSP_GA10X_ALREADY_INITIALIZED;
     if(bar0->length<NVX_GSP_GA10X_MSGQ_REQUIRED_BAR_BYTES||
-       overlaps(g,sizeof(*g),bar0,sizeof(*bar0)))
+       overlaps(g,sizeof(*g),bar0,sizeof(*bar0))||
+       overlaps(g,sizeof(*g),bar0->base,bar0->length))
         return NVX_GSP_GA10X_BAD_BAR;
     memset(g,0,sizeof(*g));
     if(nvx_gsp_msgq_io_init_mmio(&g->io,&g->mmio_context,bar0)!=NVX_GSP_MSGQ_QUEUE_OK) {
@@ -35,7 +36,9 @@ nvx_gsp_ga10x_status_t nvx_gsp_ga10x_create_command_queue(
     if(!g||!store)return NVX_GSP_GA10X_INVALID_ARGUMENT;
     if(!g->mmio_ready)return NVX_GSP_GA10X_QUEUE_NOT_READY;
     if(g->command_ready)return NVX_GSP_GA10X_ALREADY_INITIALIZED;
-    if(overlaps(g,sizeof(*g),store,bytes))return NVX_GSP_GA10X_INVALID_ARGUMENT;
+    if(overlaps(g,sizeof(*g),store,bytes)||
+       overlaps(g->mmio_context.region->base,g->mmio_context.region->length,store,bytes))
+        return NVX_GSP_GA10X_INVALID_ARGUMENT;
     s=nvx_gsp_msgq_queue_init_tx(&g->command_queue,store,bytes,
         NVX_GSP_PAGE_SIZE,&g->io,NVX_GSP_GA10X_QUEUE_HEAD(NVX_GSP_GA10X_RM_QUEUE_INDEX),
         NVX_GSP_GA10X_QUEUE_TAIL(NVX_GSP_GA10X_RM_QUEUE_INDEX));
@@ -50,6 +53,7 @@ nvx_gsp_ga10x_status_t nvx_gsp_ga10x_link_response_queue(
     if(!g->command_ready)return NVX_GSP_GA10X_QUEUE_NOT_READY;
     if(g->response_ready)return NVX_GSP_GA10X_ALREADY_INITIALIZED;
     if(overlaps(g,sizeof(*g),store,bytes)||
+       overlaps(g->mmio_context.region->base,g->mmio_context.region->length,store,bytes)||
        overlaps(g->command_queue.backing_store,g->command_queue.layout.backing_store_size,store,bytes))
         return NVX_GSP_GA10X_INVALID_ARGUMENT;
     s=nvx_gsp_msgq_queue_init_rx(&g->response_queue,store,bytes,

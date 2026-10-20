@@ -19,6 +19,9 @@ typedef struct gpu_id_entry {
  * a supported vendor remain vendor-classified but architecture-unknown.
  */
 static const gpu_id_entry_t known_ids[] = {
+    { GPU_PCI_VENDOR_NVIDIA, 0x1E84U, GPU_ARCH_NVIDIA_TURING },
+    { GPU_PCI_VENDOR_NVIDIA, 0x2503U, GPU_ARCH_NVIDIA_AMPERE },
+    { GPU_PCI_VENDOR_NVIDIA, 0x2684U, GPU_ARCH_NVIDIA_ADA },
     { GPU_PCI_VENDOR_INTEL, 0x1912U, GPU_ARCH_INTEL_GEN9 },
     { GPU_PCI_VENDOR_INTEL, 0x9A49U, GPU_ARCH_INTEL_GEN11 },
     { GPU_PCI_VENDOR_INTEL, 0x9A40U, GPU_ARCH_INTEL_GEN11 },

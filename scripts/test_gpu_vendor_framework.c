@@ -87,6 +87,15 @@ int main(void)
     assert(!gpu_classify_pci_function(&intel_audio, &match));
     assert(!gpu_classify_pci_function(&unknown_vendor, &match));
     assert(!gpu_classify_pci_function(0, &match));
+    {
+        gpu_pci_match_t forged = {0};
+        assert(gpu_classify_pci_function(&intel, &forged));
+        forged.vendor = GPU_VENDOR_AMD;
+        assert(!gpu_device_construct(&device, &intel, &forged));
+        assert(gpu_classify_pci_function(&intel, &forged));
+        forged.architecture = GPU_ARCH_AMD_RDNA3;
+        assert(!gpu_device_construct(&device, &intel, &forged));
+    }
     assert(!gpu_classify_pci_function(&intel, 0));
 
     assert(gpu_device_construct(&device, &amd, &match) == 0);

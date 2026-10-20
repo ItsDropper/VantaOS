@@ -89,11 +89,18 @@ nvx_gsp_msgq_rpc_status_t nvx_gsp_msgq_rpc_send(nvx_gsp_msgq_rpc_transport_t *t,
             return qs==NVX_GSP_MSGQ_QUEUE_FULL?NVX_GSP_MSGQ_RPC_QUEUE_FULL:NVX_GSP_MSGQ_RPC_QUEUE_ERROR;
         memcpy(element,msg+i*NVX_GSP_PAGE_SIZE,NVX_GSP_PAGE_SIZE);
     }
+    /*
+     * Publish the correlation ID before advancing the hardware-visible head.
+     * An immediate GSP reply must never race a still-zero manager slot sequence.
+     */
+    __atomic_store_n(out_sequence,sequence,__ATOMIC_RELEASE);
     qs=nvx_gsp_msgq_tx_submit(t->command_queue,(uint32_t)slots);
-    if(qs!=NVX_GSP_MSGQ_QUEUE_OK)
+    if(qs!=NVX_GSP_MSGQ_QUEUE_OK) {
+        __atomic_store_n(out_sequence,0U,__ATOMIC_RELEASE);
         return qs==NVX_GSP_MSGQ_QUEUE_FULL?NVX_GSP_MSGQ_RPC_QUEUE_FULL:NVX_GSP_MSGQ_RPC_QUEUE_ERROR;
+    }
     t->next_sequence=sequence+1U;if(!t->next_sequence)t->next_sequence=1U;
-    *out_sequence=sequence;return NVX_GSP_MSGQ_RPC_OK;
+    return NVX_GSP_MSGQ_RPC_OK;
 }
 nvx_gsp_msgq_rpc_status_t nvx_gsp_msgq_rpc_receive(nvx_gsp_msgq_rpc_transport_t *t,
     void *scratch,size_t scratch_size,nvx_gsp_rpc_view_t *out)

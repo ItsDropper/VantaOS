@@ -645,7 +645,9 @@ int pci_allocate_unassigned_bar(const struct pci_device* device, uint8_t index)
         boot->version != VANTA_BOOT_INFO_VERSION ||
         boot->struct_size < sizeof(*boot) ||
         (boot->flags & VANTA_BOOT_FLAG_MEMORY_MAP_VALID) == 0U ||
-        (boot->flags & VANTA_BOOT_FLAG_MEMORY_MAP_TRUNCATED) != 0U)
+        (boot->flags & VANTA_BOOT_FLAG_MEMORY_MAP_TRUNCATED) != 0U ||
+        boot->memory_region_count == 0U ||
+        boot->memory_region_count > VANTA_BOOT_INFO_MAX_MEMORY_REGIONS)
         return 0;
 
     offset = (uint8_t)(0x10U + index * 4U);

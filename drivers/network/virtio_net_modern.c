@@ -124,16 +124,6 @@ static size_t virtio_header_size(void)
     return state.mergeable_rx ? VNET_HEADER_MRG_SIZE : VNET_HEADER_BASE_SIZE;
 }
 
-static void vnet_log_hex32(uint32_t value)
-{
-    static const char digits[] = "0123456789ABCDEF";
-    char text[9];
-    for (unsigned i = 0; i < 8U; ++i)
-        text[i] = digits[(value >> ((7U - i) * 4U)) & 0x0FU];
-    text[8] = '\0';
-    serial_write(text);
-}
-
 static volatile uint8_t *map_cap(const struct pci_device *pci, uint8_t bar,
                                  uint32_t offset, uint32_t length)
 {
@@ -144,28 +134,15 @@ static volatile uint8_t *map_cap(const struct pci_device *pci, uint8_t bar,
         serial_write("VANTAOS_VIRTIO_NET_MODERN_MAP_BAD_RANGE\n");
         return 0;
     }
-    if (!pci_get_bar(pci, bar, &base, &io, 0)) {
-        uint32_t raw = pci_read_config32(pci, (uint8_t)(0x10U + bar * 4U));
-        serial_write("VANTAOS_VIRTIO_NET_MODERN_BAR_INDEX=");
-        vnet_log_hex32(bar);
-        serial_write(" HEADER=");
-        vnet_log_hex32(pci_read_config8(pci, 0x0EU));
-        serial_write(" BAR0-5=");
-        for (uint8_t diagnostic_bar = 0U; diagnostic_bar < 6U; ++diagnostic_bar) {
-            vnet_log_hex32(pci_read_config32(
-                pci, (uint8_t)(0x10U + diagnostic_bar * 4U)));
-            serial_write(diagnostic_bar == 5U ? "\n" : ",");
-        }
-        serial_write(" RAW=");
-        vnet_log_hex32(raw);
-        serial_write("\n");
+    int is_64bit = 0;
+    if (!pci_get_bar(pci, bar, &base, &io, &is_64bit)) {
         /*
          * Firmware can leave an implemented 64-bit modern BAR unassigned.
          * The PCI core may assign it only after validating its size and the
          * platform memory map; the driver never guesses an MMIO address.
          */
         if (!pci_allocate_unassigned_bar(pci, bar) ||
-            !pci_get_bar(pci, bar, &base, &io, 0)) {
+            !pci_get_bar(pci, bar, &base, &io, &is_64bit)) {
             serial_write("VANTAOS_VIRTIO_NET_MODERN_MAP_BAR_UNAVAILABLE\n");
             return 0;
         }

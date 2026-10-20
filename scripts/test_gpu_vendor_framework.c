@@ -98,7 +98,9 @@ int main(void)
     assert(intel_gpu_match(&intel));
     assert(intel_gpu_describe(&intel, &intel_desc));
     assert(intel_desc.firmware_required == 1U);
-    assert(intel_desc.acceleration_ready == 0U);\n    assert(intel_desc.resources.count == 0U);\n    assert(intel_desc.mmio_resources_ready == 0U);
+    assert(intel_desc.acceleration_ready == 0U);
+    assert(intel_desc.resources.count == 0U);
+    assert(intel_desc.mmio_resources_ready == 0U);
     assert(gpu_driver_matches(intel_gpu_driver(), &intel));
     assert(!gpu_driver_matches(intel_gpu_driver(), &amd));
 
@@ -108,7 +110,9 @@ int main(void)
     assert(amd_gpu_match(&amd));
     assert(amd_gpu_describe(&amd, &amd_desc));
     assert(amd_desc.firmware_required == 1U);
-    assert(amd_desc.acceleration_ready == 0U);\n    assert(amd_desc.resources.count == 0U);\n    assert(amd_desc.mmio_resources_ready == 0U);
+    assert(amd_desc.acceleration_ready == 0U);
+    assert(amd_desc.resources.count == 0U);
+    assert(amd_desc.mmio_resources_ready == 0U);
     assert(gpu_driver_matches(amd_gpu_driver(), &amd));
     assert(!gpu_driver_matches(amd_gpu_driver(), &intel));
 

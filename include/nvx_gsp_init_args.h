@@ -43,7 +43,7 @@ typedef enum nvx_gsp_init_args_status {
  * NVX_GSP_RPC_HEADER_VERSION_R535 constant describes the RPC header, not this
  * startup structure. Keep this a wire-format structure without native pointers.
  */
-typedef struct nvx_gsp_message_queue_init_args {
+typedef struct nvx_gsp_modern_message_queue_init_args {
     uint64_t flags;
     uint64_t shared_mem_phys_addr;
     uint64_t command_queue_offset;
@@ -73,7 +73,7 @@ typedef struct nvx_gsp_bindata_range {
     uint64_t size;
 } nvx_gsp_bindata_range_t;
 
-typedef struct nvx_gsp_arguments_cached {
+typedef struct nvx_gsp_arguments_cached_modern {
     uint32_t magic;
     uint16_t size;
     uint8_t reserved[2];
@@ -89,7 +89,7 @@ typedef struct nvx_gsp_arguments_cached {
     nvx_gsp_phys_range_t vbios_override_args;
 } nvx_gsp_arguments_cached_modern_t;
 
-typedef struct nvx_gsp_shared_queue_config {
+typedef struct nvx_gsp_modern_shared_queue_config {
     uint64_t shared_mem_phys_addr;
     uint64_t allocation_size;
     uint64_t command_queue_size;
@@ -101,7 +101,7 @@ typedef struct nvx_gsp_shared_queue_config {
     uint32_t queue_element_alignment;
 } nvx_gsp_modern_shared_queue_config_t;
 
-typedef struct nvx_gsp_shared_queue_layout {
+typedef struct nvx_gsp_modern_shared_queue_layout {
     uint64_t shared_mem_phys_addr;
     uint64_t allocation_size;
     uint64_t required_size;

@@ -304,3 +304,8 @@ not evidence of a particular firmware branch accepting the ABI.
 ## Reverse-engineering notebook
 
 For the detailed evidence trail and field-by-field contracts covering VBIOS pointer domains, FWSEC V3 descriptors, SB/FRTS command records, signature selection, SEC2 Booter Load ordering, DMA ownership, and unresolved physical-hardware requirements, see [NVX GA10x Firmware Reverse-Engineering Notebook](FIRMWARE_REVERSE_ENGINEERING.md).
+
+
+## FWSEC command result contract
+
+NVX now has a pure SB/FRTS result validator that checks the documented scratch error fields, GFW security/progress postconditions, and FRTS WPR2 address match. It accepts decoded fields from a platform reader and does no MMIO; it does not constitute command execution. See [the firmware reverse-engineering notebook](FIRMWARE_REVERSE_ENGINEERING.md).

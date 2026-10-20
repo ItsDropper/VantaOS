@@ -8,6 +8,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "nvx_gsp_elf.h"
+#include "nvx_gsp_elf_load.h"
 #include "nvx_gsp_bootloader.h"
 #include "nvx_gsp_image.h"
 #include "nvx_mmio.h"
@@ -21,7 +22,8 @@ typedef enum nvx_gsp_preflight_status {
     NVX_GSP_PREFLIGHT_STAGING_TOO_SMALL,
     NVX_GSP_PREFLIGHT_FUSE_VERSION_UNSUPPORTED,
     NVX_GSP_PREFLIGHT_STAGING_ALIAS,
-    NVX_GSP_PREFLIGHT_FUSE_READ_FAILED
+    NVX_GSP_PREFLIGHT_FUSE_READ_FAILED,
+    NVX_GSP_PREFLIGHT_RUNTIME_LOAD_FAILED
 } nvx_gsp_preflight_status_t;
 typedef struct nvx_gsp_preflight_report {
     nvx_gsp_elf_info_t runtime;
@@ -53,6 +55,10 @@ nvx_gsp_preflight_status_t nvx_gsp_preflight_stage_booters_from_bar0(
     uint8_t *load_staging, size_t load_capacity,
     uint8_t *unload_staging, size_t unload_capacity,
     nvx_gsp_image_info_t *out_load_info, nvx_gsp_image_info_t *out_unload_info);
+/* Validate the full bundle, then materialize runtime PT_LOAD segments into reserved GSP-addressable memory. */
+nvx_gsp_preflight_status_t nvx_gsp_preflight_load_runtime(
+    const nvx_gsp_bundle_t *bundle, nvx_gsp_elf_map_fn map,
+    void *map_context, uint64_t *out_entry);
 /* Validate the full bundle and stage the GA10x GSP RISC-V bootloader payload. */
 nvx_gsp_preflight_status_t nvx_gsp_preflight_stage_gsp_bootloader(
     const nvx_gsp_bundle_t *bundle, uint8_t *staging, size_t staging_capacity,

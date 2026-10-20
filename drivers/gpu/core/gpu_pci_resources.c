@@ -30,6 +30,7 @@ static int gpu_pci_header_bar_count(const struct pci_device *device,
 int gpu_pci_resources_scan(const struct pci_device *device,
                            gpu_pci_resource_inventory_t *out_inventory)
 {
+    gpu_pci_resource_inventory_t inventory;
     uint8_t bar_count;
     uint8_t consumed_upper = 0U;
 
@@ -37,6 +38,8 @@ int gpu_pci_resources_scan(const struct pci_device *device,
         return 0;
     memset(out_inventory, 0, sizeof(*out_inventory));
     out_inventory->primary_mmio_index = GPU_PCI_BAR_NONE;
+    memset(&inventory, 0, sizeof(inventory));
+    inventory.primary_mmio_index = GPU_PCI_BAR_NONE;
 
     if (device == NULL ||
         !gpu_pci_header_bar_count(device, &bar_count))
@@ -45,6 +48,7 @@ int gpu_pci_resources_scan(const struct pci_device *device,
     for (uint8_t index = 0U; index < bar_count; ++index) {
         uint8_t offset = (uint8_t)(0x10U + index * 4U);
         uint32_t raw;
+        uint32_t address_mask;
         uint64_t base = 0U;
         int is_io = 0;
         int is_64bit = 0;
@@ -59,38 +63,48 @@ int gpu_pci_resources_scan(const struct pci_device *device,
         if (raw == 0xFFFFFFFFU)
             return 0;
 
-        if ((raw & 1U) == 0U) {
+        is_io = (raw & 1U) != 0U;
+        if (!is_io) {
             uint32_t memory_type = (raw >> 1) & 0x03U;
             if (memory_type == 0x03U)
                 return 0;
-            if (memory_type == 0x02U) {
+            is_64bit = memory_type == 0x02U;
+            if (is_64bit) {
+                uint32_t high;
                 if ((uint8_t)(index + 1U) >= bar_count)
                     return 0;
+                high = pci_read_config32(device, (uint8_t)(offset + 4U));
+                if (high == 0xFFFFFFFFU)
+                    return 0;
                 consumed_upper = 1U;
+                if ((raw & ~0x0FU) == 0U && high == 0U)
+                    continue;
+            } else if ((raw & ~0x0FU) == 0U) {
+                continue;
             }
+            address_mask = ~0x0FU;
+        } else {
+            if ((raw & ~0x03U) == 0U)
+                continue;
+            address_mask = ~0x03U;
         }
-
-        /* A zero address is unassigned; a 64-bit BAR still consumes its pair. */
-        if ((raw & ((raw & 1U) != 0U ? ~3U : ~15U)) == 0U)
-            continue;
 
         if (!pci_get_bar(device, index, &base, &is_io, &is_64bit))
             return 0;
         if ((is_io != 0 && is_io != 1) ||
-            (is_64bit != 0 && is_64bit != 1))
+            (is_64bit != 0 && is_64bit != 1) ||
+            (is_io != 0 && is_64bit != 0))
             return 0;
         if (base == 0U)
-            continue;
-        if (is_io) {
-            if ((base & 0x03U) != 0U)
-                return 0;
-        } else if ((base & 0x0FU) != 0U) {
             return 0;
-        }
+        if ((base & (is_io ? 0x03U : 0x0FU)) != 0U)
+            return 0;
+        if ((raw & address_mask) == 0U && is_64bit == 0)
+            return 0;
 
-        if (out_inventory->count >= GPU_PCI_BAR_COUNT)
+        if (inventory.count >= GPU_PCI_BAR_COUNT)
             return 0;
-        resource = &out_inventory->bars[out_inventory->count++];
+        resource = &inventory.bars[inventory.count++];
         resource->base = base;
         resource->index = index;
         resource->is_io = (uint8_t)is_io;
@@ -98,10 +112,11 @@ int gpu_pci_resources_scan(const struct pci_device *device,
         resource->prefetchable =
             (uint8_t)(!is_io && ((raw & 0x08U) != 0U));
 
-        if (!is_io && out_inventory->primary_mmio_index == GPU_PCI_BAR_NONE)
-            out_inventory->primary_mmio_index = index;
+        if (!is_io && inventory.primary_mmio_index == GPU_PCI_BAR_NONE)
+            inventory.primary_mmio_index = index;
     }
 
+    *out_inventory = inventory;
     return 1;
 }
 

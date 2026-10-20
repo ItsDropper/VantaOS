@@ -84,6 +84,18 @@ interrupt status/acknowledgement handler or engine-specific interrupt decoding
 is implemented. This is a tested generic route primitive, not working GPU
 interrupt support or proof that the GPU generates valid interrupts.
 
+### Coherent DMA ownership handoff
+
+A DMA visibility API now tracks exclusive CPU/device ownership for a validated
+contiguous NVX DMA allocation. It snapshots allocation identity to reject stale
+handles, checks every requested byte range, prevents duplicate handoffs, and
+uses conservative x86 memory fences at CPU-to-device and device-to-CPU
+transitions. Destruction is refused while the device owns the allocation.
+Tests cover invalid ranges, double transitions, stale allocation state, and
+ownership-safe teardown. This is ordering/ownership infrastructure; callers
+must still stop the GPU before reclaiming buffers, and no GPU command engine
+currently consumes these buffers.
+
 ### Versioned GSP firmware bundle acquisition
 
 A new bundle API acquires the four independently versioned R535-style components:

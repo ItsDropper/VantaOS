@@ -130,11 +130,29 @@ static volatile uint8_t *map_cap(const struct pci_device *pci, uint8_t bar,
     uint64_t base = 0;
     int io = 0;
     if (bar >= 6U || !length || offset >= 0x100000U ||
-        length > 0x100000U - offset ||
-        !pci_get_bar(pci, bar, &base, &io, 0) || io || !base ||
-        base > UINT64_MAX - offset)
+        length > 0x100000U - offset) {
+        serial_write("VANTAOS_VIRTIO_NET_MODERN_MAP_BAD_RANGE\n");
         return 0;
-    return (volatile uint8_t *)mmio_map_region(base + offset, length);
+    }
+    if (!pci_get_bar(pci, bar, &base, &io, 0)) {
+        serial_write("VANTAOS_VIRTIO_NET_MODERN_MAP_BAR_READ_FAIL\n");
+        return 0;
+    }
+    if (io || !base) {
+        serial_write("VANTAOS_VIRTIO_NET_MODERN_MAP_BAR_NOT_MMIO\n");
+        return 0;
+    }
+    if (base > UINT64_MAX - offset) {
+        serial_write("VANTAOS_VIRTIO_NET_MODERN_MAP_BAR_OVERFLOW\n");
+        return 0;
+    }
+    volatile uint8_t *mapped =
+        (volatile uint8_t *)mmio_map_region(base + offset, length);
+    if (!mapped) {
+        serial_write("VANTAOS_VIRTIO_NET_MODERN_MAP_MMIO_FAIL\n");
+        return 0;
+    }
+    return mapped;
 }
 
 static int discover_capabilities(const struct pci_device *pci)

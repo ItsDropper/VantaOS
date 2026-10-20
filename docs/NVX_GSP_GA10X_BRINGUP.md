@@ -56,7 +56,10 @@ exist) and rejects a nonzero `patch_sig` for this format.
 
 NVX now implements that data path in `nvx_gsp_image_prepare()`: it copies only the
 firmware payload into private staging, selects the fuse-indexed signature, and
-patches it at the payload-relative location. It rejects unsupported fuse
+patches it at the payload-relative location. The integrated
+`nvx_gsp_preflight_stage_booters()` path validates the whole bundle, prechecks
+both fuse versions/capacities/aliasing, and stages load plus unload images as a
+single fail-closed operation. It rejects unsupported fuse
 versions, truncated staging buffers, input/output aliasing, and signatures that
 would extend outside the payload's DMEM range. Host tests cover both signature
 orders and ensure failure leaves the staging buffer untouched.

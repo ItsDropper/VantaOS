@@ -190,3 +190,38 @@ nvx_gsp_falcon_status_t nvx_gsp_ga10x_program_brom(
 
     return NVX_GSP_FALCON_OK;
 }
+
+/*
+ * Launch the already-loaded Falcon image. The caller must have completed the
+ * appropriate firmware authentication and loading sequence before invoking
+ * this function; this primitive deliberately does not claim to authenticate.
+ */
+nvx_gsp_falcon_status_t nvx_gsp_ga10x_start_falcon(
+    const nvx_mmio_region_t *bar0, uint32_t boot_vector)
+{
+    uint32_t hwcfg2 = 0U;
+    uint32_t cpuctl = 0U;
+
+    if (bar0 == 0 || bar0->base == 0)
+        return NVX_GSP_FALCON_INVALID_ARGUMENT;
+    if (bar0->length < NVX_GSP_FALCON_BOOTVEC + 4U)
+        return NVX_GSP_FALCON_BAR_TOO_SMALL;
+    if ((boot_vector & 3U) != 0U)
+        return NVX_GSP_FALCON_BOOT_VECTOR_INVALID;
+
+    if (nvx_mmio_read32(bar0, NVX_GSP_FALCON_HWCFG2, &hwcfg2) != NVX_MMIO_OK ||
+        nvx_mmio_read32(bar0, NVX_GSP_FALCON_CPUCTL, &cpuctl) != NVX_MMIO_OK)
+        return NVX_GSP_FALCON_MMIO_ERROR;
+    if ((hwcfg2 & NVX_GSP_PRIV_LOCKED_MASK) == NVX_GSP_PRIV_LOCKED_PATTERN)
+        return NVX_GSP_FALCON_PRIVILEGED_WINDOW_LOCKED;
+    if ((cpuctl & NVX_GSP_CPUCTL_HALTED) == 0U)
+        return NVX_GSP_FALCON_NOT_HALTED;
+
+    if (nvx_mmio_write32(bar0, NVX_GSP_FALCON_BOOTVEC,
+                         boot_vector) != NVX_MMIO_OK)
+        return NVX_GSP_FALCON_MMIO_ERROR;
+    if (nvx_mmio_write32(bar0, NVX_GSP_FALCON_CPUCTL,
+                         NVX_GSP_CPUCTL_START) != NVX_MMIO_OK)
+        return NVX_GSP_FALCON_MMIO_ERROR;
+    return NVX_GSP_FALCON_OK;
+}

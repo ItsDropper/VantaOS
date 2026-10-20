@@ -306,7 +306,7 @@ nvx_gsp_falcon_status_t nvx_ga10x_falcon_dma_upload(
         (destination_offset & 0xFFU) != 0U ||
         (length % NVX_GA10X_FALCON_DMA_CHUNK_BYTES) != 0U ||
         source_offset > UINT32_MAX - length ||
-        destination_offset > 0x01000000U - length ||
+        (uint64_t)destination_offset + length > 0x01000000ULL ||
         (target != NVX_GA10X_FALCON_SECURE_IMEM &&
          target != NVX_GA10X_FALCON_NONSECURE_IMEM &&
          target != NVX_GA10X_FALCON_DMEM) ||

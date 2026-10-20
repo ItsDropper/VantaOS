@@ -238,6 +238,25 @@ int main(void)
         NVX_GSP_WPR_OK);
     assert(((const nvx_gsp_wpr_meta_v1_t *)memory.wpr_metadata.cpu_address)
                ->sysmem_addr_of_radix3_elf == memory.radix3_elf.gpu_address);
+    assert(memory.radix3_elf_sync.initialized &&
+           memory.bootloader_payload_sync.initialized &&
+           memory.signature_sync.initialized && memory.booter_load_sync.initialized &&
+           memory.booter_unload_sync.initialized && memory.wpr_metadata_sync.initialized);
+    /* Release must refuse while any one of the six hardware-visible buffers is owned by a device. */
+    assert(nvx_dma_sync_for_device(&memory.radix3_elf_sync, 0U, memory.radix3_elf.size) == NVX_DMA_SYNC_OK);
+    assert(nvx_dma_sync_for_device(&memory.bootloader_payload_sync, 0U, memory.bootloader_payload.size) == NVX_DMA_SYNC_OK);
+    assert(nvx_dma_sync_for_device(&memory.signature_sync, 0U, memory.signature.size) == NVX_DMA_SYNC_OK);
+    assert(nvx_dma_sync_for_device(&memory.booter_load_sync, 0U, memory.booter_load.size) == NVX_DMA_SYNC_OK);
+    assert(nvx_dma_sync_for_device(&memory.booter_unload_sync, 0U, memory.booter_unload.size) == NVX_DMA_SYNC_OK);
+    assert(nvx_dma_sync_for_device(&memory.wpr_metadata_sync, 0U, NVX_DMA_PAGE_SIZE) == NVX_DMA_SYNC_OK);
+    nvx_gsp_boot_memory_release(&memory);
+    assert(memory.acquired == 1U && release_calls == 0U);
+    assert(nvx_dma_sync_for_cpu(&memory.radix3_elf_sync, 0U, memory.radix3_elf.size) == NVX_DMA_SYNC_OK);
+    assert(nvx_dma_sync_for_cpu(&memory.bootloader_payload_sync, 0U, memory.bootloader_payload.size) == NVX_DMA_SYNC_OK);
+    assert(nvx_dma_sync_for_cpu(&memory.signature_sync, 0U, memory.signature.size) == NVX_DMA_SYNC_OK);
+    assert(nvx_dma_sync_for_cpu(&memory.booter_load_sync, 0U, memory.booter_load.size) == NVX_DMA_SYNC_OK);
+    assert(nvx_dma_sync_for_cpu(&memory.booter_unload_sync, 0U, memory.booter_unload.size) == NVX_DMA_SYNC_OK);
+    assert(nvx_dma_sync_for_cpu(&memory.wpr_metadata_sync, 0U, NVX_DMA_PAGE_SIZE) == NVX_DMA_SYNC_OK);
     nvx_gsp_boot_memory_release(&memory);
     assert(memory.acquired == 0U);
     assert(release_calls == 6U);

@@ -9,19 +9,14 @@
 #include "nvx_mmio.h"
 
 #include <stdint.h>
+#include <string.h>
 
 static void nvx_attach_clear(nvx_attached_device_t *device)
 {
     device->pci_device = 0;
-    device->bar0.base = 0;
-    device->bar0.size = 0;
-    device->bar0.is_io = 0;
-    device->bar0.is_64bit = 0;
-    device->bar0.size_known = 0;
+    memset(&device->bar0, 0, sizeof(device->bar0));
     device->bar0_mapping = 0;
-    device->registers.pmc_boot_0 = 0;
-    device->registers.pmc_boot_1 = 0;
-    device->registers.pci_device_id = 0;
+    memset(&device->registers, 0, sizeof(device->registers));
     device->registers.identified_family = NVX_FAMILY_UNKNOWN;
     device->registers.identified_profile = NVX_PROFILE_UNKNOWN;
     device->attached = 0;
@@ -125,9 +120,7 @@ nvx_attach_status_t nvx_device_detach(nvx_attached_device_t *device)
     device->bar0_mapping = 0;
     device->attached = 0;
     device->pci_device = 0;
-    device->registers.pmc_boot_0 = 0;
-    device->registers.pmc_boot_1 = 0;
-    device->registers.pci_device_id = 0;
+    memset(&device->registers, 0, sizeof(device->registers));
     device->registers.identified_family = NVX_FAMILY_UNKNOWN;
     device->registers.identified_profile = NVX_PROFILE_UNKNOWN;
 

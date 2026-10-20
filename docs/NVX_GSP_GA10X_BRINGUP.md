@@ -290,3 +290,8 @@ The platform must still allocate the contiguous DMA region, populate and flush
 its memory as required by the platform coherency contract, pass the argument
 page address through the actual GA10x boot path, and validate GSP launch and
 GSP-RM initialization on physical hardware.
+
+
+## Reverse-engineering notebook
+
+For the detailed evidence trail and field-by-field contracts covering VBIOS pointer domains, FWSEC V3 descriptors, signature selection, SEC2 Booter Load ordering, DMA ownership, the FWSEC command interface, and unresolved physical-hardware requirements, see [NVX GA10x Firmware Reverse-Engineering Notebook](NVX_GA10X_FIRMWARE_REVERSE_ENGINEERING.md).

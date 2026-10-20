@@ -11,7 +11,7 @@ static uint8_t bytes[512];
 static void put32(size_t o,uint32_t v) { bytes[o]=(uint8_t)v; bytes[o+1]=(uint8_t)(v>>8U); bytes[o+2]=(uint8_t)(v>>16U); bytes[o+3]=(uint8_t)(v>>24U); }
 static void make_image(nvx_gsp_component_t *c) {
  memset(bytes,0,sizeof(bytes)); put32(0,0x10DEU); put32(4,1U); put32(8,sizeof(bytes)); put32(12,24U); put32(16,256U); put32(20,128U);
- put32(24,128U); put32(28,64U); put32(32,64U); put32(36,68U); put32(40,80U); put32(44,12U); put32(48,72U); put32(52,96U); put32(56,36U);
+ put32(24,160U); put32(28,64U); put32(32,64U); put32(36,68U); put32(40,80U); put32(44,12U); put32(48,72U); put32(52,96U); put32(56,36U);
  put32(64,40U); put32(68,0U); put32(72,2U); put32(80,0x1234U); put32(84,0x400U); put32(88,1U);
  put32(96,0U); put32(100,32U); put32(104,32U); put32(108,32U); put32(112,1U); put32(116,0U); put32(120,32U); put32(124,32U); put32(128,16U);
  *c=(nvx_gsp_component_t){.blob={bytes,sizeof(bytes),0},.kind=NVX_GSP_BOOTER_LOAD,.acquired=1U};
@@ -21,7 +21,7 @@ int main(void) {
  assert(nvx_gsp_image_parse(&c,&info)==NVX_GSP_IMAGE_OK);
  assert(info.binary_magic==0x10DEU&&info.binary_size==512U&&info.data_offset==256U&&info.data_size==128U);
  assert(info.fuse_version==0x1234U&&info.engine_id==0x400U&&info.ucode_id==1U);
- assert(info.signature_count==2U&&info.signature_size==32U&&info.signature_offset==128U&&info.patch_location==40U);
+ assert(info.signature_count==2U&&info.signature_size==32U&&info.signature_offset==160U&&info.patch_location==40U);
  assert(info.app_count==1U&&info.app0_size==32U&&info.app0_data_size==16U);
  c.kind=NVX_GSP_RUNTIME; assert(nvx_gsp_image_parse(&c,&info)==NVX_GSP_IMAGE_UNSUPPORTED_LAYOUT);
  c.kind=NVX_GSP_BOOTER_LOAD; c.blob.size=8U; assert(nvx_gsp_image_parse(&c,&info)==NVX_GSP_IMAGE_TRUNCATED);
@@ -32,7 +32,7 @@ int main(void) {
  make_image(&c); put32(44,8U); assert(nvx_gsp_image_parse(&c,&info)==NVX_GSP_IMAGE_METADATA_INVALID);
  make_image(&c); put32(56,UINT32_MAX); assert(nvx_gsp_image_parse(&c,&info)==NVX_GSP_IMAGE_HEADER_INVALID);
  make_image(&c); put32(112,UINT32_MAX); assert(nvx_gsp_image_parse(&c,&info)==NVX_GSP_IMAGE_APP_INVALID);
- make_image(&c); put32(64,60U); assert(nvx_gsp_image_parse(&c,&info)==NVX_GSP_IMAGE_SIGNATURE_INVALID);
+ make_image(&c); put32(64,61U); assert(nvx_gsp_image_parse(&c,&info)==NVX_GSP_IMAGE_SIGNATURE_INVALID);
  assert(nvx_gsp_image_parse(0,&info)==NVX_GSP_IMAGE_INVALID_ARGUMENT); assert(nvx_gsp_image_parse(&c,0)==NVX_GSP_IMAGE_INVALID_ARGUMENT);
  return 0;
 }

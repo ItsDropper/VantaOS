@@ -122,9 +122,6 @@ nvx_gsp_ring_status_t nvx_gsp_ring_send(nvx_gsp_ring_t *r,
     if(payload_size) memcpy(msg+NVX_GSP_MSG_HEADER_SIZE+NVX_GSP_RPC_HEADER_SIZE,payload,payload_size);
     spinlock_lock(&r->lock);
     read=load_ptr(r->read_ptr); write=load_ptr(r->write_ptr);
-    if(read>=r->capacity_pages||write>=r->capacity_pages) {
-        spinlock_unlock(&r->lock); return NVX_GSP_RING_BAD_POINTER;
-    }
     used=(uint32_t)(write-read);
     if(used>r->capacity_pages) {
         spinlock_unlock(&r->lock); return NVX_GSP_RING_BAD_POINTER;

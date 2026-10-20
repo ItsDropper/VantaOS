@@ -125,5 +125,25 @@ int main(void)
     bad_args.message_queue.shared_mem_phys_addr = 0U;
     assert(nvx_gsp_arguments_cached_modern_materialize(&bad_args, args_page,
         sizeof(args_page)) == NVX_GSP_INIT_ARGS_BAD_ARGUMENTS);
+
+    /* Materialization must reject a queue layout with no status queue or
+     * one that aliases/reverses the command queue's starting offset. */
+    status = nvx_gsp_arguments_cached_modern_build(&layout, 0U, 0U, &bad_args);
+    assert(status == NVX_GSP_INIT_ARGS_OK);
+    bad_args.message_queue.status_queue_offset = 0U;
+    assert(nvx_gsp_arguments_cached_modern_materialize(&bad_args, args_page,
+        sizeof(args_page)) == NVX_GSP_INIT_ARGS_BAD_ARGUMENTS);
+    status = nvx_gsp_arguments_cached_modern_build(&layout, 0U, 0U, &bad_args);
+    assert(status == NVX_GSP_INIT_ARGS_OK);
+    bad_args.message_queue.status_queue_offset =
+        bad_args.message_queue.command_queue_offset;
+    assert(nvx_gsp_arguments_cached_modern_materialize(&bad_args, args_page,
+        sizeof(args_page)) == NVX_GSP_INIT_ARGS_BAD_ARGUMENTS);
+    status = nvx_gsp_arguments_cached_modern_build(&layout, 0U, 0U, &bad_args);
+    assert(status == NVX_GSP_INIT_ARGS_OK);
+    bad_args.message_queue.status_queue_offset =
+        bad_args.message_queue.command_queue_offset - NVX_GSP_PAGE_SIZE;
+    assert(nvx_gsp_arguments_cached_modern_materialize(&bad_args, args_page,
+        sizeof(args_page)) == NVX_GSP_INIT_ARGS_BAD_ARGUMENTS);
     return 0;
 }

@@ -8,6 +8,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "nvx_gsp_msgq_rpc.h"
+#include "nvx_gsp_falcon.h"
 /* Offsets follow NVIDIA's published TU102/GA102 GSP register definitions. */
 #define NVX_GSP_GA10X_MAILBOX(i) (0x110804U+((uint32_t)(i)*4U))
 #define NVX_GSP_GA10X_MAILBOX_COUNT 4U
@@ -18,13 +19,16 @@
 #define NVX_GSP_GA10X_QUEUE_COUNT 8U
 #define NVX_GSP_GA10X_RM_QUEUE_INDEX 0U
 #define NVX_GSP_GA10X_MSGQ_REQUIRED_BAR_BYTES (NVX_GSP_GA10X_MSGQ_TAIL(0U)+4U)
+#define NVX_GSP_GA10X_REQUIRED_BAR_BYTES NVX_GSP_FALCON_DIAGNOSTIC_BYTES
 typedef enum nvx_gsp_ga10x_status {
     NVX_GSP_GA10X_OK=0,
     NVX_GSP_GA10X_INVALID_ARGUMENT,
     NVX_GSP_GA10X_BAD_BAR,
     NVX_GSP_GA10X_ALREADY_INITIALIZED,
     NVX_GSP_GA10X_QUEUE_NOT_READY,
-    NVX_GSP_GA10X_QUEUE_ERROR
+    NVX_GSP_GA10X_QUEUE_ERROR,
+    NVX_GSP_GA10X_PRIVILEGED_WINDOW_LOCKED,
+    NVX_GSP_GA10X_MMIO_ERROR
 } nvx_gsp_ga10x_status_t;
 typedef struct nvx_gsp_ga10x {
     nvx_gsp_msgq_mmio_context_t mmio_context;
@@ -32,12 +36,13 @@ typedef struct nvx_gsp_ga10x {
     nvx_gsp_msgq_queue_t command_queue;
     nvx_gsp_msgq_queue_t response_queue;
     nvx_gsp_msgq_rpc_transport_t rpc;
+    nvx_gsp_falcon_snapshot_t falcon;
     uint8_t mmio_ready;
     uint8_t command_ready;
     uint8_t response_ready;
     uint8_t rpc_ready;
 } nvx_gsp_ga10x_t;
-/* Setup validates BAR coverage but performs no register writes. Zero-init out. */
+/* Setup inspects GA10x Falcon readiness read-only and performs no register writes. Zero-init out. */
 nvx_gsp_ga10x_status_t nvx_gsp_ga10x_setup(
     nvx_gsp_ga10x_t *,const nvx_mmio_region_t *bar0);
 /* Call before boot, with DMA-visible, page-aligned command backing memory. */

@@ -283,8 +283,8 @@ header constant elsewhere in NVX does **not** identify the cached-init-argument
 ABI. NVIDIA's R535-era `GSP_ARGUMENTS_CACHED` structure differs from the modern
 structure implemented here, so the exact firmware branch must be selected
 before wiring this helper into boot. The first profile supports only the
-non-encrypted queue ABI; NVIDIA documents queue encryption as unstable. Queue
-layouts requiring a multi-page PTE table are rejected rather than guessed.
+non-encrypted queue ABI; queue layouts requiring a multi-page PTE table are
+rejected rather than guessed.
 
 The platform must still allocate the contiguous DMA region, populate and flush
 its memory as required by the platform coherency contract, pass the argument

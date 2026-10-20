@@ -37,6 +37,23 @@ typedef struct nvx_gsp_fwsec_result_snapshot {
     uint8_t gfw_progress_completed;
 } nvx_gsp_fwsec_result_snapshot_t;
 
+typedef struct nvx_gsp_fwsec_wpr2_fields {
+    uint32_t address_hi_units;
+    uint32_t address_lo_units;
+    uint32_t expected_address_lo_units;
+} nvx_gsp_fwsec_wpr2_fields_t;
+
+/*
+ * Decode the public WPR2 address register fields for the TU102+/GA10x
+ * FRTS result contract. Public dev_fb.h defines bits 31:4 as the value and
+ * a 0xC (12-bit) address alignment shift. This is pure decoding, not MMIO.
+ */
+nvx_gsp_fwsec_result_status_t nvx_gsp_fwsec_decode_wpr2_registers(
+    uint32_t raw_address_lo, uint32_t raw_address_hi,
+    uint64_t requested_frts_offset,
+    nvx_gsp_fwsec_wpr2_fields_t *out_fields);
+
+
 /* Validate post-execution evidence in the same fail-fast order as the public
  * GA10x/TU102 result path. This does not execute a command or imply hardware
  * success unless the supplied snapshot came from actual hardware. */

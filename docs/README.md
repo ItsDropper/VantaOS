@@ -1,29 +1,33 @@
 # VantaOS documentation
 
-The documentation is grouped by purpose: top-level subsystem guides stay here, architecture decisions live under `decisions/`, and hardware/vendor-specific GPU work lives under `gpu/`.
+The documentation is grouped by purpose: the index stays here, OS interface guides live under `architecture/`, validation docs under `build/`, planning/status under `project/`, decisions under `decisions/`, and GPU vendor work under `gpu/`.
 
 Use this index to find the document that answers a specific engineering question. Feature availability is described conservatively: source presence is not the same as validated behavior.
 
 ## System architecture and interfaces
 
-- [Desktop UI system](DESKTOP_UI.md) — shared visual rules, rendering/input ownership, and the current GUI process-model limitation.
+- [Architecture docs folder](architecture/ARCHITECTURE.md) — core OS architecture and subsystem boundaries.
+- [Build and validation docs folder](build/BUILD_SYSTEM.md) — build targets and CI evidence.
+- [Project status and plans folder](project/DEVELOPMENT_PLAN.md) — roadmap, bootloader plans, and hardware support.
 
-- [Architecture overview](ARCHITECTURE.md) — boot sequence, subsystem responsibilities, kernel processes, early ring-3 execution, memory, VFS, and diagnostics.
-- [User-mode programs](user-mode-programs.md) — current static ELF64 loader, initial stack, syscall interface, and explicit limitations.
-- [Engineering model](ENGINEERING_MODEL.md) — evidence levels, subsystem contracts, concurrency review, and test layers.
-- [Hardware support](HARDWARE_SUPPORT.md) — current hardware and emulator limitations.
-- [Bootloader plan](BOOTLOADER_PLAN.md) — planned work toward an independent boot path; not a description of a completed bootloader.
+- [Desktop UI system](architecture/DESKTOP_UI.md) — shared visual rules, rendering/input ownership, and the current GUI process-model limitation.
 
-- [Terminal shell](SHELL.md) — file operations, process commands, force-flag behavior, and current network CLI limits.
+- [Architecture overview](architecture/ARCHITECTURE.md) — boot sequence, subsystem responsibilities, kernel processes, early ring-3 execution, memory, VFS, and diagnostics.
+- [User-mode programs](architecture/user-mode-programs.md) — current static ELF64 loader, initial stack, syscall interface, and explicit limitations.
+- [Engineering model](architecture/ENGINEERING_MODEL.md) — evidence levels, subsystem contracts, concurrency review, and test layers.
+- [Hardware support](project/HARDWARE_SUPPORT.md) — current hardware and emulator limitations.
+- [Bootloader plan](project/BOOTLOADER_PLAN.md) — planned work toward an independent boot path; not a description of a completed bootloader.
+
+- [Terminal shell](architecture/SHELL.md) — file operations, process commands, force-flag behavior, and current network CLI limits.
 
 ## Build and verification
 
-- [Build system](BUILD_SYSTEM.md) — build targets, generated artifacts, and source manifests.
-- [Testing](TESTING.md) — automated checks, regression markers, and what CI does and does not prove.
+- [Build system](build/BUILD_SYSTEM.md) — build targets, generated artifacts, and source manifests.
+- [Testing](build/TESTING.md) — automated checks, regression markers, and what CI does and does not prove.
 
 ## Roadmap and decisions
 
-- [Development plan](DEVELOPMENT_PLAN.md) — current project priorities and staged goals.
+- [Development plan](project/DEVELOPMENT_PLAN.md) — current project priorities and staged goals.
 - [Decision records](decisions/README.md) — rationale for changes that affect long-term architecture.
 
 ## Contribution and security

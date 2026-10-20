@@ -24,6 +24,13 @@
 #define NVX_GSP_FALCON_HWCFG2            (NVX_GSP_FALCON_BASE + 0x0F4U)
 #define NVX_GSP_FALCON_CPUCTL            (NVX_GSP_FALCON_BASE + 0x100U)
 #define NVX_GSP_RISCV_CPUCTL             (NVX_GSP_FALCON2_BASE + 0x388U)
+#define NVX_GSP_FALCON_BROM_MOD_SEL       (NVX_GSP_FALCON2_BASE + 0x180U)
+#define NVX_GSP_FALCON_BROM_UCODE_ID      (NVX_GSP_FALCON2_BASE + 0x198U)
+#define NVX_GSP_FALCON_BROM_ENGINE_MASK   (NVX_GSP_FALCON2_BASE + 0x19CU)
+#define NVX_GSP_FALCON_BROM_PARAM_ADDR    (NVX_GSP_FALCON2_BASE + 0x210U)
+#define NVX_GSP_FALCON_BROM_RSA3K         1U
+#define NVX_GSP_FALCON_BROM_UCODE_COUNT   16U
+#define NVX_GSP_FALCON_BROM_REQUIRED_BYTES (NVX_GSP_FALCON_BROM_PARAM_ADDR + 4U)
 #define NVX_GSP_FALCON_DIAGNOSTIC_BYTES  (NVX_GSP_RISCV_CPUCTL + 4U)
 
 #define NVX_GSP_HWCFG2_RESET_READY       (1U << 31)
@@ -41,7 +48,9 @@ typedef enum nvx_gsp_falcon_status {
     NVX_GSP_FALCON_BAR_TOO_SMALL,
     NVX_GSP_FALCON_MMIO_ERROR,
     NVX_GSP_FALCON_PRIVILEGED_WINDOW_LOCKED,
-    NVX_GSP_FALCON_RISCV_TIMEOUT
+    NVX_GSP_FALCON_RISCV_TIMEOUT,
+    NVX_GSP_FALCON_BROM_INVALID_PARAMETERS,
+    NVX_GSP_FALCON_NOT_HALTED
 } nvx_gsp_falcon_status_t;
 
 typedef struct nvx_gsp_falcon_snapshot {
@@ -75,5 +84,15 @@ typedef void (*nvx_gsp_delay_ms_fn)(uint32_t milliseconds, void *context);
 nvx_gsp_falcon_status_t nvx_gsp_ga10x_wait_riscv_active(
     const nvx_mmio_region_t *bar0, uint32_t timeout_ms,
     uint32_t poll_interval_ms, nvx_gsp_delay_ms_fn delay_ms, void *context);
+
+/*
+ * Program GA102+ Falcon Boot ROM verification parameters for a validated
+ * firmware descriptor. This does not load firmware or start SEC2/FWSEC/GSP.
+ * The Falcon must be halted and its PRIV window accessible. engine_id_mask
+ * must identify exactly one documented engine; ucode_id is 1-based.
+ */
+nvx_gsp_falcon_status_t nvx_gsp_ga10x_program_brom(
+    const nvx_mmio_region_t *bar0, uint32_t engine_id_mask,
+    uint32_t ucode_id, uint32_t pkc_data_offset);
 
 #endif

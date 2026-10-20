@@ -302,6 +302,15 @@ jobs:
       - name: Test ELF bounds, load segments and signature section
         run: /tmp/vantaos-nvx-gsp-elf-test
 
+      - name: Compile GSP ELF segment materialization tests
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_elf_load.c drivers/gpu/nvx/nvx_gsp_elf_load.c \
+            drivers/gpu/nvx/nvx_gsp_elf.c -o /tmp/vantaos-nvx-gsp-elf-load-test
+
+      - name: Test GSP ELF copy, BSS zeroing, mapping validation and atomic failure
+        run: /tmp/vantaos-nvx-gsp-elf-load-test
+
       - name: Compile GSP RPC transaction tests
         run: |
           gcc -DNVX_GSP_RPC_TEST -std=c11 -Wall -Wextra -Werror -Iinclude \

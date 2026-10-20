@@ -25,9 +25,17 @@ typedef enum nvx_probe_status {
 typedef struct nvx_register_snapshot {
     uint32_t pmc_boot_0;
     uint32_t pmc_boot_1;
+    uint32_t pmc_boot_42;
     uint16_t pci_device_id;
     nvx_generation_family_t identified_family;
     nvx_device_profile_t identified_profile;
+    uint8_t architecture;
+    uint8_t implementation;
+    uint8_t major_revision;
+    uint8_t minor_revision;
+    uint8_t extended_architecture;
+    uint8_t extended_implementation;
+    uint8_t extended_revision_valid;
 } nvx_register_snapshot_t;
 
 /*
@@ -35,8 +43,10 @@ typedef struct nvx_register_snapshot {
  * extent and map it with the kernel MMIO API first. This routine does not
  * enable PCI decode, size BARs, or map arbitrary physical addresses.
  *
- * Reads only PMC_BOOT_0/PMC_BOOT_1 through the bounds-checked MMIO layer.
- * Raw values are preserved; this is not engine initialization.
+ * PMC_BOOT_0 uses split architecture bits (28:24 and bit 8), implementation
+ * bits 23:20, and revision nibbles 7:0. PMC_BOOT_42 at 0xA00 is an optional
+ * extended identity source on newer devices. Values are decoded only according
+ * to public NVIDIA OpenRM register definitions; no engine is initialized.
  */
 nvx_probe_status_t nvx_probe_mapped_bar0(
     const struct pci_device *device,

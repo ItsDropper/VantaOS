@@ -84,15 +84,17 @@ nvx_gsp_image_status_t nvx_gsp_image_parse(
        !read_u32(data,info.binary_size,patch_sig_off,&sig)||
        !read_u32(data,info.binary_size,sig_count_off,&count))
         return NVX_GSP_IMAGE_HEADER_INVALID;
-    if(!count||count>NVX_GSP_IMAGE_MAX_SIGNATURES||!sig_prod_size||
-       sig_prod_size%count||!range_ok(info.binary_size,sig_prod_off,sig_prod_size)||
-       sig>sig_prod_size||sig_prod_size/count>sig_prod_size-sig)
-        return NVX_GSP_IMAGE_SIGNATURE_INVALID;
-    if((uint64_t)sig_prod_off+sig>UINT32_MAX)
+    /*
+     * The published GA10x booter format requires patch_sig == 0. Signatures
+     * are a packed array and the selected signature is indexed by fuse version;
+     * patch_sig is not an offset into that array.
+     */
+    if(sig!=0U||!count||count>NVX_GSP_IMAGE_MAX_SIGNATURES||!sig_prod_size||
+       sig_prod_size%count||!range_ok(info.binary_size,sig_prod_off,sig_prod_size))
         return NVX_GSP_IMAGE_SIGNATURE_INVALID;
     info.signature_count=count;
     info.signature_size=sig_prod_size/count;
-    info.signature_offset=sig_prod_off+sig;
+    info.signature_offset=sig_prod_off;
     info.patch_location=loc; info.patch_signature=sig;
     info.fuse_version=read_le32(data+meta_off);
     info.engine_id=read_le32(data+meta_off+4U);
@@ -124,7 +126,8 @@ nvx_gsp_image_status_t nvx_gsp_image_parse(
             info.app0_data_offset=doff; info.app0_data_size=ds; }
     }
     if(loc<info.os_data_offset||
-       !image_range_ok(info.os_data_size,loc-info.os_data_offset,4U))
+       !image_range_ok(info.os_data_size,loc-info.os_data_offset,info.signature_size)||
+       !image_range_ok(info.data_size,loc,info.signature_size))
         return NVX_GSP_IMAGE_SIGNATURE_INVALID;
     *out=info; return NVX_GSP_IMAGE_OK;
 }

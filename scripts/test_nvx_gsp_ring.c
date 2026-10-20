@@ -45,7 +45,7 @@ int main(void) {
          view.signature==NVX_GSP_RPC_SIGNATURE_R535&&view.function==0x1234U);
  assert(view.length==NVX_GSP_RPC_HEADER_SIZE+sizeof(payload));
  assert(view.payload_size==sizeof(payload)&&memcmp(view.payload,payload,sizeof(payload))==0);
- assert(view.sequence==seq&&view.message_sequence==0U&&view.element_pages==2U);
+ assert(view.sequence==1U&&view.message_sequence==0U&&view.element_pages==2U);
  assert(read_index==write_index&&notifications==1U);
  /* NVIDIA MSGQ uses monotonic counters; all four queue slots are usable. */
  for(unsigned i=0;i<4U;i++)

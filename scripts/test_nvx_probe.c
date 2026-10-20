@@ -33,7 +33,7 @@ int main(void)
     volatile uint32_t registers[0xA04U / sizeof(uint32_t)] = { 0U };
     nvx_register_snapshot_t snapshot;
 
-    /* GA10x / Ampere architecture code 0x17 from the public register map. */
+    /* Ampere architecture code 0x17, as defined in NVIDIA's public register map. */
     registers[0] = 0x17000000U;
     registers[1] = 0x00000001U;
     registers[0xA00U / sizeof(uint32_t)] = 0x17000000U;
@@ -48,14 +48,39 @@ int main(void)
     assert(snapshot.architecture == 0x17U);
     assert(snapshot.implementation == 0U);
     assert(snapshot.extended_architecture == 0x17U);
+    assert(snapshot.extended_chip_id == 0x170U);
     assert(snapshot.extended_implementation == 0U);
+    assert(snapshot.extended_major_revision == 0U);
+    assert(snapshot.extended_minor_revision == 0U);
+    assert(snapshot.extended_minor_revision_extra == 0U);
     assert(snapshot.extended_revision_valid == 1U);
+    assert(snapshot.identity_mismatch == 0U);
+
+    /* Decode the full extended revision tuple, not just architecture/impl. */
+    registers[0xA00U / sizeof(uint32_t)] = 0x1732A500U;
+    assert(nvx_probe_mapped_bar0(&gpu, registers, sizeof(registers), &snapshot)
+           == NVX_PROBE_OK);
+    assert(snapshot.extended_architecture == 0x17U);
+    assert(snapshot.extended_chip_id == 0x173U);
+    assert(snapshot.extended_implementation == 3U);
+    assert(snapshot.extended_major_revision == 2U);
+    assert(snapshot.extended_minor_revision == 10U);
+    assert(snapshot.extended_minor_revision_extra == 5U);
 
     /* BOOT_42 is optional when the caller has mapped only the first 8 bytes. */
     assert(nvx_probe_mapped_bar0(&gpu, registers, 8U, &snapshot) == NVX_PROBE_OK);
     assert(snapshot.pmc_boot_42 == 0U);
     assert(snapshot.extended_revision_valid == 0U);
+    assert(snapshot.extended_chip_id == 0U);
 
+    /* A disagreeing extended architecture is reported, not silently trusted. */
+    registers[0xA00U / sizeof(uint32_t)] = 0x19000000U;
+    assert(nvx_probe_mapped_bar0(&gpu, registers, sizeof(registers), &snapshot)
+           == NVX_PROBE_OK);
+    assert(snapshot.identity_mismatch == 1U);
+    assert(snapshot.identified_family == NVX_FAMILY_AMPERE);
+
+    registers[0xA00U / sizeof(uint32_t)] = 0xFFFFFFFFU;
     registers[0] = 0xFFFFFFFFU;
     registers[1] = 0xFFFFFFFFU;
     assert(nvx_probe_mapped_bar0(&gpu, registers, sizeof(registers), &snapshot)

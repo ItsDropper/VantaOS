@@ -130,8 +130,8 @@ nvx_gsp_fwsec_interface_status_t nvx_gsp_fwsec_find_command_window(
         const uint8_t *mapper = bytes + mapper_offset;
         uint16_t mapper_version = read_le16(mapper + 4U);
         uint16_t mapper_size = read_le16(mapper + 6U);
-        uint32_t input_offset = read_le32(mapper + 12U);
-        uint32_t input_capacity = read_le32(mapper + 16U);
+        uint32_t input_offset = read_le32(mapper + 8U);
+        uint32_t input_capacity = read_le32(mapper + 12U);
 
         if (mapper_version != FWSEC_DMEM_MAPPER_VERSION ||
             mapper_size < FWSEC_DMEM_MAPPER_V3_SIZE ||

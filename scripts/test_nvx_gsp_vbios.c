@@ -91,6 +91,7 @@ int main(void)
     uint8_t image[IMAGE_BYTES];
     nvx_gsp_vbios_fwsec_info_t info;
     nvx_gsp_vbios_status_t status;
+    uint32_t signature_offset = UINT32_MAX;
 
     make_image(image);
     memset(&info, 0xA5, sizeof(info));
@@ -113,6 +114,33 @@ int main(void)
     assert(info.signatures_size == NVX_GSP_VBIOS_RSA3K_SIGNATURE_SIZE);
     assert(info.descriptor_version == NVX_GSP_VBIOS_FWSEC_DESC_V3);
     assert(info.encrypted == 0U);
+    assert(nvx_gsp_vbios_fwsec_signature_offset(
+        &info, 0U, &signature_offset) == NVX_GSP_VBIOS_OK);
+    assert(signature_offset == DESC_OFFSET + 44U);
+    assert(nvx_gsp_vbios_fwsec_signature_offset(
+        &info, 1U, &signature_offset) ==
+        NVX_GSP_VBIOS_FUSE_VERSION_UNSUPPORTED);
+    assert(signature_offset == 0U);
+
+    /* The VBIOS bitmap packs signatures in ascending supported fuse version.
+     * Bits 0, 2 and 5 mean fuse version 5 uses slot 2. */
+    make_image(image);
+    put32(image + DESC_OFFSET,
+          ((44U + 3U * NVX_GSP_VBIOS_RSA3K_SIGNATURE_SIZE) << 16U) |
+          (3U << 8U) | 1U);
+    put16(image + DESC_OFFSET + 40U, 0x0025U);
+    image[DESC_OFFSET + 39U] = 3U;
+    assert(nvx_gsp_vbios_find_ga10x_fwsec(
+        image, sizeof(image), EXPANSION_OFFSET, &info) == NVX_GSP_VBIOS_OK);
+    assert(info.signature_count == 3U);
+    assert(info.signature_versions == 0x0025U);
+    assert(nvx_gsp_vbios_fwsec_signature_offset(
+        &info, 5U, &signature_offset) == NVX_GSP_VBIOS_OK);
+    assert(signature_offset == DESC_OFFSET + 44U +
+           2U * NVX_GSP_VBIOS_RSA3K_SIGNATURE_SIZE);
+    assert(nvx_gsp_vbios_fwsec_signature_offset(
+        &info, 3U, &signature_offset) ==
+        NVX_GSP_VBIOS_FUSE_VERSION_UNSUPPORTED);
 
     image[BIT_OFFSET + 11U] ^= 1U;
     memset(&info, 0xA5, sizeof(info));

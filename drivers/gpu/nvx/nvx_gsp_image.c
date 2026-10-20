@@ -27,6 +27,13 @@ static int image_range_ok(uint32_t total,uint32_t off,uint32_t len)
 {
     return off<=total && len<=total-off;
 }
+static int overlaps(const void *a,size_t an,const void *b,size_t bn)
+{
+    uintptr_t x=(uintptr_t)a,y=(uintptr_t)b;
+    if(!an||!bn)return 0;
+    if(x>UINTPTR_MAX-an||y>UINTPTR_MAX-bn)return 1;
+    return x<y+bn&&y<x+an;
+}
 nvx_gsp_image_status_t nvx_gsp_image_parse(
     const nvx_gsp_component_t *component,nvx_gsp_image_info_t *out)
 {
@@ -35,8 +42,14 @@ nvx_gsp_image_status_t nvx_gsp_image_parse(
     uint32_t sig_count_off,load_off,load_size,sig_prod_off,sig_prod_size;
     uint32_t loc,sig,apps,count;
     nvx_gsp_image_info_t info={0};
-    if(out) memset(out,0,sizeof(*out));
-    if(!component||!out||!component->acquired||!component->blob.data)
+    if(!component||!out)
+        return NVX_GSP_IMAGE_INVALID_ARGUMENT;
+    if(overlaps(out,sizeof(*out),component,sizeof(*component)) ||
+       (component->blob.data &&
+        overlaps(out,sizeof(*out),component->blob.data,component->blob.size)))
+        return NVX_GSP_IMAGE_INVALID_ARGUMENT;
+    memset(out,0,sizeof(*out));
+    if(!component->acquired||!component->blob.data)
         return NVX_GSP_IMAGE_INVALID_ARGUMENT;
     if(component->kind!=NVX_GSP_BOOTER_LOAD &&
        component->kind!=NVX_GSP_BOOTER_UNLOAD)
@@ -44,6 +57,7 @@ nvx_gsp_image_status_t nvx_gsp_image_parse(
     data=component->blob.data; size=component->blob.size;
     if(size<BIN_HEADER_SIZE) return NVX_GSP_IMAGE_TRUNCATED;
     info.binary_magic=read_le32(data);
+    if(info.binary_magic!=0x10DEU)return NVX_GSP_IMAGE_BAD_MAGIC;
     info.binary_version=read_le32(data+4U);
     info.binary_size=read_le32(data+8U);
     hs_off=read_le32(data+12U);

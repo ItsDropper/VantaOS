@@ -4,7 +4,6 @@
  * See the LICENSE file in the project root for the full license text.
  */
 #include "nvx_gsp_bundle.h"
-#include <stdio.h>
 #include <string.h>
 static const char *const names[NVX_GSP_COMPONENT_COUNT] = {
     "booter_load", "booter_unload", "bootloader", "gsp"
@@ -20,6 +19,17 @@ static int valid_token(const char *s, size_t max, int dots)
         ++n;
     }
     return !dots || (s[0]!='.' && s[n-1]!='.');
+}
+static int append_text(char *dst, size_t capacity, size_t *length,
+                       const char *text)
+{
+    size_t n = strlen(text);
+    if (*length >= capacity || n >= capacity - *length)
+        return 0;
+    memcpy(dst + *length, text, n);
+    *length += n;
+    dst[*length] = '\\0';
+    return 1;
 }
 static void clear_component(nvx_gsp_component_t *c)
 {
@@ -92,9 +102,15 @@ nvx_gsp_bundle_status_t nvx_gsp_bundle_acquire(
     memcpy(out->chip,chip,strlen(chip)+1U);
     memcpy(out->version,version,strlen(version)+1U);
     for(size_t i=0;i<NVX_GSP_COMPONENT_COUNT;i++) {
-        int n=snprintf(path,sizeof(path),"nvidia/%s/gsp/%s-%s.bin",
-                       out->chip,names[i],out->version);
-        if(n<0||(size_t)n>=sizeof(path)) {
+        size_t length=0U;
+        path[0]='\\0';
+        if(!append_text(path,sizeof(path),&length,"nvidia/") ||
+           !append_text(path,sizeof(path),&length,out->chip) ||
+           !append_text(path,sizeof(path),&length,"/gsp/") ||
+           !append_text(path,sizeof(path),&length,names[i]) ||
+           !append_text(path,sizeof(path),&length,"-") ||
+           !append_text(path,sizeof(path),&length,out->version) ||
+           !append_text(path,sizeof(path),&length,".bin")) {
             status=NVX_GSP_BUNDLE_INVALID_ARGUMENT;
             break;
         }

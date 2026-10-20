@@ -106,12 +106,8 @@ int main(void) {
  for(size_t i=0;i<NVX_GSP_RPC_MAX_PENDING;i++) {
    assert(nvx_gsp_rpc_submit(&m,NVX_GSP_RPC_HEADER_VERSION_R535,NVX_GSP_RPC_SIGNATURE_R535,100U+(uint32_t)i,100U+(uint32_t)i,
        req,sizeof(req),scratch,sizeof(scratch),0,0,&handles[i])==NVX_GSP_RPC_OK);
-   assert(nvx_gsp_ring_send(&rx,NVX_GSP_RPC_HEADER_VERSION_R535,NVX_GSP_RPC_SIGNATURE_R535,100U+(uint32_t)i,0,0,
-       scratch,sizeof(scratch),&seq)==NVX_GSP_RING_OK);
-   rx_mem[(size_t)rx_r*NVX_GSP_PAGE_SIZE+48U]=(uint8_t)seq;
-   rx_mem[(size_t)rx_r*NVX_GSP_PAGE_SIZE+49U]=(uint8_t)(seq>>8U);
-   rx_mem[(size_t)rx_r*NVX_GSP_PAGE_SIZE+50U]=(uint8_t)(seq>>16U);
-   rx_mem[(size_t)rx_r*NVX_GSP_PAGE_SIZE+51U]=(uint8_t)(seq>>24U);
+   assert(nvx_gsp_rpc_query(&m,&handles[i],&result)==NVX_GSP_RPC_PENDING);
+   send_reply(&rx,rx_mem,&rx_w,100U+(uint32_t)i,(uint32_t)result.sequence,0,0);
    assert(nvx_gsp_rpc_pump(&m,scratch,sizeof(scratch),&unmatched)==NVX_GSP_RPC_COMPLETE);
  }
  assert(nvx_gsp_rpc_submit(&m,NVX_GSP_RPC_HEADER_VERSION_R535,NVX_GSP_RPC_SIGNATURE_R535,999U,999U,req,sizeof(req),scratch,sizeof(scratch),0,0,&h)==NVX_GSP_RPC_NO_SLOTS);

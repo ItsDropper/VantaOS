@@ -228,8 +228,8 @@ jobs:
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
             scripts/test_nvx_gsp_preflight.c drivers/gpu/nvx/nvx_gsp_preflight.c \
             drivers/gpu/nvx/nvx_gsp_fuse.c drivers/gpu/nvx/nvx_mmio.c \
-            drivers/gpu/nvx/nvx_gsp_elf.c drivers/gpu/nvx/nvx_gsp_image.c \
-            drivers/gpu/nvx/nvx_gsp_bootloader.c \
+            drivers/gpu/nvx/nvx_gsp_elf.c drivers/gpu/nvx/nvx_gsp_elf_load.c \
+            drivers/gpu/nvx/nvx_gsp_image.c drivers/gpu/nvx/nvx_gsp_bootloader.c \
             -o /tmp/vantaos-nvx-gsp-preflight-test
 
       - name: Test verified firmware bundle preflight

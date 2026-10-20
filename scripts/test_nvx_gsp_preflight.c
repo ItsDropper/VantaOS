@@ -25,7 +25,7 @@ static void build_booter(uint8_t *dest){
  asset32(dest,64U,40U);asset32(dest,68U,0U);asset32(dest,72U,2U);
  asset32(dest,80U,0x1234U);asset32(dest,84U,0x400U);asset32(dest,88U,1U);
  asset32(dest,96U,0U);asset32(dest,100U,32U);asset32(dest,104U,32U);
- asset32(dest,108U,32U);asset32(dest,112U,1U);asset32(dest,116U,0U);
+ asset32(dest,108U,64U);asset32(dest,112U,1U);asset32(dest,116U,0U);
  asset32(dest,120U,32U);asset32(dest,124U,32U);asset32(dest,128U,16U);
 }
 static void build_elf(void){

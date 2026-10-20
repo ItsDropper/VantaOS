@@ -7,18 +7,28 @@
 #include <assert.h>
 #include <stdint.h>
 #include <string.h>
-static uint8_t bar[NVX_GSP_GA10X_REQUIRED_BAR_BYTES] __attribute__((aligned(4)));
+static uint8_t bar[(NVX_GSP_GA10X_USABLE_FB_SIZE_MB + 4U > NVX_GSP_GA10X_REQUIRED_BAR_BYTES) ? (NVX_GSP_GA10X_USABLE_FB_SIZE_MB + 4U) : NVX_GSP_GA10X_REQUIRED_BAR_BYTES] __attribute__((aligned(4)));
 static uint8_t fuse_bar[NVX_GSP_GA10X_FUSE_GSP_UCODE1_VERSION +
                         NVX_GSP_GA10X_FUSE_UCODE_COUNT * sizeof(uint32_t)]
     __attribute__((aligned(4)));
 static uint8_t command_store[8U*NVX_GSP_PAGE_SIZE] __attribute__((aligned(NVX_GSP_PAGE_SIZE)));
 static uint8_t response_store[8U*NVX_GSP_PAGE_SIZE] __attribute__((aligned(NVX_GSP_PAGE_SIZE)));
+static void put32(size_t offset,uint32_t value){memcpy(bar+offset,&value,sizeof(value));}
 int main(void)
 {
  nvx_gsp_ga10x_t g={0};nvx_mmio_region_t region={bar,sizeof(bar)};
  nvx_mmio_region_t fuse_region={fuse_bar,sizeof(fuse_bar)};
- uint32_t fuse_version=UINT32_MAX;
+ uint32_t fuse_version=UINT32_MAX;uint64_t usable_fb_size=UINT64_MAX;
  nvx_gsp_msgq_layout_t response_header={0};uint8_t *slot=0;uint32_t reg_value=UINT32_MAX;const char request[]="GSP queue 0";
+ /* Usable FB size comes from the hardware scratch register, not BAR aperture. */
+ put32(NVX_GSP_GA10X_USABLE_FB_SIZE_MB, 12288U);
+ assert(nvx_gsp_ga10x_read_usable_fb_size(&region,&usable_fb_size)==NVX_GSP_GA10X_OK);
+ assert(usable_fb_size==12288ULL*1024ULL*1024ULL);
+ put32(NVX_GSP_GA10X_USABLE_FB_SIZE_MB, 0U);
+ assert(nvx_gsp_ga10x_read_usable_fb_size(&region,&usable_fb_size)==NVX_GSP_GA10X_FB_SIZE_INVALID);
+ assert(usable_fb_size==0U);
+ nvx_mmio_region_t short_fb_region={bar,NVX_GSP_GA10X_USABLE_FB_SIZE_MB+3U};
+ assert(nvx_gsp_ga10x_read_usable_fb_size(&short_fb_region,&usable_fb_size)==NVX_GSP_GA10X_BAD_BAR);
  /* Fuse versions are the highest set bit + 1, not the raw register value. */
  assert(nvx_gsp_ga10x_read_ucode_fuse_version(&fuse_region,
      NVX_GSP_GA10X_ENGINE_MASK_GSP,1U,&fuse_version)==NVX_GSP_GA10X_OK);

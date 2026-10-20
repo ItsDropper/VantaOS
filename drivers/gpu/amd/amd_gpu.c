@@ -74,7 +74,7 @@ int amd_gpu_describe(const struct pci_device *device,
     out_descriptor->pci_command = command;
     out_descriptor->memory_space_enabled =
         (uint8_t)((command & 0x0002U) != 0U);
-    out_descriptor->mmio_aperture_assigned =
+    out_descriptor->mmio_aperture_enabled =
         (uint8_t)(out_descriptor->memory_space_enabled &&
                   out_descriptor->resources.primary_mmio_index !=
                       GPU_PCI_BAR_NONE);

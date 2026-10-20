@@ -23,6 +23,20 @@ static int valid_token(const char *s, size_t max, int dots)
     }
     return !dots || (s[0]!='.' && s[n-1]!='.');
 }
+static int valid_version(const char *s,size_t max)
+{
+    size_t n=0U;int previous_dot=1;
+    if(!s||!s[0])return 0;
+    while(s[n]) {
+        char ch=s[n];
+        if(n>=max)return 0;
+        if(ch>='0'&&ch<='9')previous_dot=0;
+        else if(ch=='.'&&!previous_dot)previous_dot=1;
+        else return 0;
+        ++n;
+    }
+    return !previous_dot;
+}
 static int append_text(char *dst, size_t capacity, size_t *length,
                        const char *text)
 {
@@ -97,7 +111,7 @@ nvx_gsp_bundle_status_t nvx_gsp_bundle_acquire(
         return NVX_GSP_BUNDLE_PROVIDER_INCOMPLETE;
     if(family!=NVX_FAMILY_AMPERE) return NVX_GSP_BUNDLE_UNSUPPORTED_FAMILY;
     if(!valid_token(chip,NVX_GSP_CHIP_MAX,0)||
-       !valid_token(version,NVX_GSP_VERSION_MAX,1))
+       !valid_version(version,NVX_GSP_VERSION_MAX))
         return NVX_GSP_BUNDLE_INVALID_ARGUMENT;
     memset(out,0,sizeof(*out));
     out->provider=*p;

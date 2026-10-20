@@ -5,7 +5,7 @@ The SEC2 Booter Load entry point now has a traced variant,
 path as the compatibility entry point and reports software-observed milestones:
 
 - current phase and last phase whose operation returned success;
-- the phase associated with the returned error;
+- the phase associated with the returned error (`NONE` when the transaction succeeds);
 - the returned status;
 - whether reset-based recovery was attempted and whether reset/reclamation
   reported success;
@@ -28,3 +28,12 @@ success for the supplied inputs; with synthetic MMIO it is not evidence that
 the real SEC2 BROM authenticated a booter, that FWSEC established WPR, or that
 the GSP runtime launched. Hardware diagnostics must record the source of the
 BAR mapping and firmware identity separately.
+
+
+## Fault-injection coverage
+
+The synthetic executor test now deliberately leaves the SEC2 DMA command busy until the configured timeout. The expected result is a DMA timeout attributed to `UPLOAD_IMEM`; the previous completed phase remains the booter DMA ownership handoff. The test then checks that reset/reclaim was attempted, that the synthetic reset succeeded, and that ownership returns to the CPU only after recovery.
+
+The DMEM-upload failure branch also records its reset/reclaim result. A successful transaction reports `failed_phase = NONE`, rather than mislabeling the `COMPLETE` phase as a failure.
+
+These tests exercise NVX's software response to a modeled fault. They do not simulate SEC2 hardware or prove that real DMA commands time out or reset exactly this way.

@@ -80,6 +80,8 @@ nvx_gsp_ring_status_t nvx_gsp_ring_send(nvx_gsp_ring_t *r,
     put32(msg+NVX_GSP_MSG_HEADER_SIZE+4U,signature);
     put32(msg+NVX_GSP_MSG_HEADER_SIZE+8U,(uint32_t)rpc_len);
     put32(msg+NVX_GSP_MSG_HEADER_SIZE+12U,function);
+    put32(msg+NVX_GSP_MSG_HEADER_SIZE+16U,UINT32_MAX);
+    put32(msg+NVX_GSP_MSG_HEADER_SIZE+20U,UINT32_MAX);
     if(payload_size) memcpy(msg+NVX_GSP_MSG_HEADER_SIZE+NVX_GSP_RPC_HEADER_SIZE,payload,payload_size);
     spinlock_lock(&r->lock);
     read=load_ptr(r->read_ptr); write=load_ptr(r->write_ptr);
@@ -93,7 +95,7 @@ nvx_gsp_ring_status_t nvx_gsp_ring_send(nvx_gsp_ring_t *r,
     if(r->next_sequence==0U) r->next_sequence=1U;
     __atomic_store_n(out_sequence,sequence,__ATOMIC_RELEASE);
     put32(msg+36U,sequence); put32(msg+40U,(uint32_t)pages);
-    put32(msg+NVX_GSP_MSG_HEADER_SIZE+24U,sequence);
+    put32(msg+NVX_GSP_MSG_HEADER_SIZE+24U,0U);
     put32(msg+32U,checksum_fold(msg,total_len));
     ring_copy_in(r,write,msg,total_len);
     __atomic_thread_fence(__ATOMIC_RELEASE);
@@ -166,7 +168,8 @@ nvx_gsp_ring_status_t nvx_gsp_ring_send_large(nvx_gsp_ring_t *r,
         put32(msg+48U,version); put32(msg+52U,signature);
         put32(msg+56U,(uint32_t)rpc_len);
         put32(msg+60U,first?function:continuation_function);
-        put32(msg+72U,seq);
+        put32(msg+64U,UINT32_MAX); put32(msg+68U,UINT32_MAX);
+        put32(msg+72U,0U);
         if(chunk) memcpy(msg+80U,(const uint8_t *)payload+(payload_size-remaining),chunk);
         put32(msg+36U,seq); put32(msg+40U,pages);
         put32(msg+32U,checksum_fold(msg,aligned));

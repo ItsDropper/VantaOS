@@ -99,21 +99,24 @@ DMA upload/boot sequence are still missing.
 
 ## What this does not mean
 
-A readable Falcon register window does not mean the GSP is running. These
-checks do not upload firmware, authenticate NVIDIA's signed payloads, configure
-the secure boot chain, allocate and map the GSP's firmware working set, build
-the real firmware WPR layout, start the RISC-V core, or receive a genuine GSP
-RPC. The queue integration test uses host memory and a fake BAR; it cannot prove
-physical GPU support.
+A readable Falcon register window does not mean the GSP is running. NVX now has
+low-level reset/scrub, 256-byte Falcon DMA upload, BROM-parameter, BOOTVEC/STARTCPU,
+and mailbox-completion primitives for SEC2/GSP. They are independently bounded
+and host-tested, but they are not yet wired into one secure-boot transaction.
+NVX still does not authenticate NVIDIA's signed firmware cryptographically,
+extract FWSEC from a physical VBIOS image, prepare and execute FWSEC-FRTS,
+allocate/write the actual WPR in VRAM, validate firmware-specific mailbox status,
+activate the GSP RISC-V runtime, or complete a genuine GSP-RM initialization RPC.
+The queue and DMA tests use fake BAR memory; they cannot prove physical GPU support.
 
 The next implementation step is the **GA10x-specific SEC2/FWSEC and GSP boot
 sequence**, with verified register definitions, firmware-specific signing and
 patch rules, a physically DMA-visible working set, WPR metadata, and bounded
 polling of real hardware status. Do not substitute guessed register writes or
 a fake "boot succeeded" flag for these requirements. NVIDIA's open kernel
-module implementation and the independent Nova driver are research references;
-their GPL-covered implementation code must not be copied into NVX without a
-compatible licensing decision.
+module and Linux Nova are research references. Their relevant files have MIT
+or GPL licensing depending on the source; verify each file's license before
+adapting any implementation rather than assuming all reference code is GPL.
 
 
 ## Runtime ELF materialization (host-verified, not hardware boot)
@@ -193,7 +196,7 @@ This is a **real register-programming primitive**, not a completed secure-boot t
 
 `nvx_gsp_ga10x_start_falcon()` now performs the GA102 Falcon launch register sequence for an image that the caller has already loaded and authenticated: it validates a complete BOOTVEC/CPUCTL mapping, checks the PRIV-lock signature and halted state, writes BOOTVEC, then issues STARTCPU. Host tests verify register order/results and reject misaligned entry points, running Falcon state, locked access, and truncated mappings.
 
-This primitive does **not** load or authenticate FWSEC, configure SEC2, select the RISC-V core, create the framebuffer WPR, or prove a boot succeeded. It must only be called after the correct engine-specific secure firmware path is complete. The current API uses the GSP Falcon register window; SEC2/FWSEC still needs its own engine-base-aware path.
+This primitive does **not** load or authenticate FWSEC, configure SEC2, select the RISC-V core, create the framebuffer WPR, or prove a boot succeeded. The engine-aware `nvx_ga10x_falcon_start()` and `nvx_ga10x_falcon_boot()` APIs now support both SEC2 and GSP register windows; the GSP-named start API remains a wrapper. The full secure firmware path is still not connected.
 
 
 ## SEC2 and GSP engine-specific boot register paths

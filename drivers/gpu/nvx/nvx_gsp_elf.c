@@ -20,6 +20,13 @@ static uint32_t le32(const uint8_t *p) { return (uint32_t)p[0]|((uint32_t)p[1]<<
 static uint64_t le64(const uint8_t *p) { return (uint64_t)le32(p)|((uint64_t)le32(p+4U)<<32U); }
 static int range_ok(size_t total,uint64_t off,uint64_t len) { return off<=total&&len<=(uint64_t)total-off; }
 static int power2(uint64_t v) { return v&&!(v&(v-1U)); }
+static int overlaps(const void *a,size_t an,const void *b,size_t bn)
+{
+    uintptr_t x=(uintptr_t)a,y=(uintptr_t)b;
+    if(!an||!bn)return 0;
+    if(x>UINTPTR_MAX-an||y>UINTPTR_MAX-bn)return 1;
+    return x<y+bn&&y<x+an;
+}
 static int has_nul_terminator(const uint8_t *data, size_t size)
 {
     for (size_t i=0U;i<size;i++)
@@ -114,7 +121,7 @@ nvx_gsp_elf_status_t nvx_gsp_elf_find_section(const nvx_gsp_component_t *compone
     const char *expected,nvx_gsp_elf_section_t *out)
 {
     const uint8_t *data,*strtab;size_t size;uint64_t shoff,str_off,str_size;
-    uint16_t shentsize,shnum,shstrndx;uint32_t matches=0U;
+    uint16_t shentsize,shnum,shstrndx;uint32_t matches=0U;int no_data=0;
     nvx_gsp_elf_section_t found={0};
     if(!component||!out||!expected||!component->acquired||!component->blob.data)
         return NVX_GSP_ELF_INVALID_ARGUMENT;
@@ -150,10 +157,11 @@ nvx_gsp_elf_status_t nvx_gsp_elf_find_section(const nvx_gsp_component_t *compone
             return NVX_GSP_ELF_SECTION_TABLE_INVALID;
         if(!string_matches(strtab,(size_t)str_size,name,expected))continue;
         if(++matches>1U)return NVX_GSP_ELF_SECTION_AMBIGUOUS;
-        if(type==ELF_SHT_NOBITS)return NVX_GSP_ELF_SECTION_NO_DATA;
-        found.data=data+off;found.offset=off;found.size=bytes;
+        no_data=(type==ELF_SHT_NOBITS);
+        found.data=no_data?0:data+off;found.offset=off;found.size=bytes;
         found.alignment=align;found.type=type;found.flags=flags;found.index=i;
     }
     if(!matches)return NVX_GSP_ELF_SECTION_NOT_FOUND;
+    if(no_data)return NVX_GSP_ELF_SECTION_NO_DATA;
     *out=found;return NVX_GSP_ELF_OK;
 }

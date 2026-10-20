@@ -171,3 +171,19 @@ The GA10x bootloader parser also now extracts the 84-byte descriptor's monitor-c
 monitor-data and manifest ranges, and bounds-checks non-empty sections against the
 extracted payload. Boot-memory ownership retains those offsets and binds them into
 the WPR metadata plan instead of requiring callers to hard-code them.
+
+
+## Falcon Boot ROM verification setup
+
+NVX now has `nvx_gsp_ga10x_program_brom()` for the GA102+ Falcon BROM parameter registers. The BAR0 offsets are derived from NVIDIA's published GA102 register header and independently cross-checked against Linux Nova's GA102 Falcon HAL:
+
+| Register | BAR0 offset | Value |
+| --- | ---: | --- |
+| BROM parameter address | `0x111210` | validated, 4-byte-aligned signature/PKC parameter offset |
+| BROM engine mask | `0x11119C` | exact supported engine mask from validated firmware metadata |
+| BROM ucode ID | `0x111198` | 1-based ID in the documented 1..16 range |
+| BROM algorithm selector | `0x111180` | RSA-3K (`1`) |
+
+The write order matches Nova's GA102 HAL: parameter address, engine mask, ucode ID, RSA-3K selector. NVX validates the complete register window before writing, checks the PRIV-lock pattern, and refuses to program a Falcon unless CPUCTL reports it halted. Strict-warning host tests assert the exact written values and reject invalid engine masks, ucode IDs, alignment, active-engine state, locked PRIV access, and truncated BAR mappings.
+
+This is a **real register-programming primitive**, not a completed secure-boot transaction. It does not upload FWSEC or GSP firmware, authenticate the image, select/reset the correct SEC2 versus GSP Falcon, program WPR/VRAM, set the boot vector, trigger the secure boot ROM, or establish that the firmware is executing. The higher-level boot path must call it only with parameters extracted from the matching validated firmware image and after the platform has completed the preceding load steps. No physical GA10x device was available to validate these writes.

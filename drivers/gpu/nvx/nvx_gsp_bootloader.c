@@ -86,7 +86,6 @@ nvx_gsp_bootloader_status_t nvx_gsp_bootloader_parse(
     if (rounded_end != info.binary_size)
         return NVX_GSP_BOOTLOADER_BAD_LAYOUT;
 
-    info.descriptor = data + info.descriptor_offset;
     *out_info = info;
     return NVX_GSP_BOOTLOADER_OK;
 }

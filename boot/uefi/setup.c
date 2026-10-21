@@ -619,6 +619,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
     uefi_call_wrapper(BS->FreePool, 1, fat_workspace);
     if (efi_status != VANTA_INSTALLER_FAT32_OK ||
         system_status != VANTA_INSTALLER_FAT32_OK) {
+        serial_write("VANTAOS_SETUP_FORMAT_FAIL\n");
         Print(L"ERROR: FAT32 formatting or read-back verification failed.\r\n");
         uefi_call_wrapper(source_root->Close, 1, source_root);
         return EFI_DEVICE_ERROR;
@@ -656,9 +657,9 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
         return EFI_DEVICE_ERROR;
     }
     if (!create_directories(efi_root, 1) || !create_directories(system_root, 0)) {
+        serial_write("VANTAOS_SETUP_FILES_FAIL\n");
         Print(L"ERROR: cannot create the required installation directories.\r\n");
-        serial_write("VANTAOS_SETUP_FILES_OK\n");
-    uefi_call_wrapper(system_root->Close, 1, system_root);
+        uefi_call_wrapper(system_root->Close, 1, system_root);
         uefi_call_wrapper(efi_root->Close, 1, efi_root);
         uefi_call_wrapper(source_root->Close, 1, source_root);
         return EFI_DEVICE_ERROR;
@@ -697,10 +698,12 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
     uefi_call_wrapper(efi_root->Close, 1, efi_root);
     uefi_call_wrapper(source_root->Close, 1, source_root);
     if (EFI_ERROR(status)) {
+        serial_write("VANTAOS_SETUP_FILES_FAIL\n");
         Print(L"ERROR: file deployment failed after partitioning. Status: %r\r\n", status);
         return status;
     }
 
+    serial_write("VANTAOS_SETUP_FILES_OK\n");
     serial_write("VANTAOS_SETUP_COMPLETE\n");
     Print(L"\r\nVantaOS installation completed.\r\n");
     Print(L"Remove the installer media, then reboot and choose the installed disk.\r\n");

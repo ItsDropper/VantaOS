@@ -49,7 +49,6 @@ int main(void)
     uint16_t chars[13];
     char decoded[256];
 
-    /* A one-entry LFN must terminate at NUL and decode exactly. */
     ascii_chars(chars, "VantaOS", 0);
     make_entry(entry, 0x41U, checksum, chars);
     fat32_lfn_reset(&state);
@@ -58,7 +57,6 @@ int main(void)
     assert(fat32_lfn_decode(&state, decoded) == 1);
     assert(strcmp(decoded, "VantaOS") == 0);
 
-    /* FAT stores multi-entry names highest ordinal first. */
     const char *long_name = "VantaOS-Long-Name.txt";
     uint16_t high[13], low[13];
     ascii_chars(high, long_name, 13);
@@ -72,7 +70,6 @@ int main(void)
     assert(fat32_lfn_decode(&state, decoded) == 1);
     assert(strcmp(decoded, long_name) == 0);
 
-    /* Orphan, duplicate, out-of-range, and checksum-mismatched entries fail closed. */
     fat32_lfn_reset(&state);
     make_entry(entry, 0x01U, checksum, low);
     assert(fat32_lfn_consume(entry, &state) == 0);
@@ -90,18 +87,22 @@ int main(void)
     make_entry(entry, 0x55U, checksum, high); /* ordinal 21 */
     assert(fat32_lfn_consume(entry, &state) == 0);
 
+    /* Reserved sequence bits 5 and 7 must be rejected. */
+    fat32_lfn_reset(&state);
+    make_entry(entry, 0x61U, checksum, chars);
+    assert(fat32_lfn_consume(entry, &state) == 0);
+    make_entry(entry, 0xC1U, checksum, chars);
+    assert(fat32_lfn_consume(entry, &state) == 0);
+
     fat32_lfn_reset(&state);
     make_entry(entry, 0x41U, (uint8_t)(checksum ^ 0x80U), chars);
     assert(fat32_lfn_consume(entry, &state) == 1);
     assert(fat32_lfn_decode(&state, decoded) == 1);
     assert(strcmp(decoded, "VantaOS") == 0);
-    /* The short-entry checksum is checked by the caller; a different checksum
-       must not complete the same sequence. */
     make_entry(entry, 0x01U, checksum, chars);
     assert(fat32_lfn_consume(entry, &state) == 0);
     assert(!fat32_lfn_is_complete(&state));
 
-    /* Invalid UTF-16 surrogate sequences must not be emitted as UTF-8. */
     fat32_lfn_reset(&state);
     state.active = 1;
     state.total = 1;

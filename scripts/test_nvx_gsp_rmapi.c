@@ -15,6 +15,31 @@ static uint8_t captured[4096];
 static size_t captured_size;
 static unsigned submissions;
 
+nvx_gsp_rpc_status_t nvx_gsp_rpc_pump(
+    nvx_gsp_rpc_manager_t *manager,void *scratch,size_t scratch_size,
+    nvx_gsp_rpc_view_t *unmatched)
+{
+    (void)manager;(void)scratch;(void)scratch_size;
+    if(unmatched)memset(unmatched,0,sizeof(*unmatched));
+    return NVX_GSP_RPC_PENDING;
+}
+
+nvx_gsp_rpc_status_t nvx_gsp_rpc_query(
+    nvx_gsp_rpc_manager_t *manager,const nvx_gsp_rpc_handle_t *handle,
+    nvx_gsp_rpc_result_t *result)
+{
+    (void)manager;(void)handle;
+    if(result){memset(result,0,sizeof(*result));result->status=NVX_GSP_RPC_PENDING;}
+    return NVX_GSP_RPC_PENDING;
+}
+
+nvx_gsp_rpc_status_t nvx_gsp_rpc_release(
+    nvx_gsp_rpc_manager_t *manager,nvx_gsp_rpc_handle_t *handle)
+{
+    (void)manager;(void)handle;
+    return NVX_GSP_RPC_BUSY;
+}
+
 static uint32_t le32(const uint8_t *p)
 {
     return (uint32_t)p[0]|((uint32_t)p[1]<<8U)|

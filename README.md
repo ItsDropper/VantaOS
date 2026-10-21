@@ -23,6 +23,7 @@ The project focuses on learning and validating operating-system fundamentals: bo
 - [Architecture decision records](docs/decisions/README.md) — durable rationale for long-lived design choices.
 - [Build system](docs/build/BUILD_SYSTEM.md) — build targets and generated artifacts.
 - [Testing and verification](docs/build/TESTING.md) — CI checks and their limits.
+- [Recovery environment](docs/build/RECOVERY_SETUP.md) — optional GRUB entry, diagnostics, screenshot capture, and limitations.
 - [Hardware support](docs/project/HARDWARE_SUPPORT.md) — known constraints and unverified areas.
 - [GPU driver documentation](docs/gpu/README.md) — vendor-neutral framework and NVX NVIDIA bring-up/research notes.
 - [Development plan](docs/project/DEVELOPMENT_PLAN.md) — staged project priorities.

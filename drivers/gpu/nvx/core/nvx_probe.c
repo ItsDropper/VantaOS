@@ -71,6 +71,9 @@ nvx_probe_status_t nvx_probe_mapped_bar0(
         return NVX_PROBE_INVALID_ARGUMENT;
     if (!nvx_match_pci_device(device))
         return NVX_PROBE_NOT_NVIDIA_DISPLAY;
+    generation = nvx_generation_for_pci(device->device_id);
+    if (!generation)
+        return NVX_PROBE_UNSUPPORTED_GENERATION;
     if ((pci_read_config16(device, 0x04U) &
          NVX_PCI_COMMAND_MEMORY_SPACE) == 0U)
         return NVX_PROBE_MEMORY_DECODE_DISABLED;

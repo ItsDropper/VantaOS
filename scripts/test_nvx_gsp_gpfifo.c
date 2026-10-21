@@ -4,6 +4,7 @@
  * See the LICENSE file in the project root for the full license text.
  */
 #include "nvx_gsp_gpfifo.h"
+#include "nvx_gsp_ce.h"
 
 #include <assert.h>
 #include <stdint.h>
@@ -96,5 +97,26 @@ int main(void)
         &doorbell,1U,4U)==NVX_GSP_GPFIFO_BAD_RING);
     assert(nvx_gsp_gpfifo_channel_init(&channel,entries,sizeof(entries),
         &gp_get,&gp_put,&doorbell,1U,3U)==NVX_GSP_GPFIFO_INVALID_ARGUMENT);
+
+    /* Build and queue an Ampere CE copy with a GPU-written completion semaphore. */
+    {
+        volatile uint32_t ce_command[NVX_GSP_CE_COPY_COMMAND_DWORDS]={0};
+        size_t ce_bytes=0U;
+        simulated_completion_t sim;
+        gp_get=0U;gp_put=0U;doorbell=0U;completion=0U;
+        assert(nvx_gsp_ce_build_copy(ce_command,sizeof(ce_command),0x77U,2U,
+            UINT64_C(0x20000000),UINT64_C(0x20001000),UINT64_C(0x20002000),
+            4096U,0xCAFE1234U,&ce_bytes)==NVX_GSP_CE_OK);
+        assert(ce_bytes==NVX_GSP_CE_COPY_COMMAND_BYTES);
+        assert(nvx_gsp_gpfifo_channel_init(&channel,entries,sizeof(entries),
+            &gp_get,&gp_put,&doorbell,0xBEEFU,4U)==NVX_GSP_GPFIFO_OK);
+        sim=(simulated_completion_t){&gp_get,&completion,1U,0xCAFE1234U};
+        assert(nvx_gsp_gpfifo_submit_and_wait(&channel,UINT64_C(0x10000000),
+            ce_bytes,&completion,0xCAFE1234U,5U,1U,complete_after_poll,
+            &sim,&put)==NVX_GSP_GPFIFO_OK);
+        assert(put==1U&&gp_put==1U&&doorbell==0xBEEFU);
+        assert(ce_command[15]==NVX_GSP_CE_LAUNCH_DMA_FLAGS);
+        assert(completion==0xCAFE1234U);
+    }
     return 0;
 }

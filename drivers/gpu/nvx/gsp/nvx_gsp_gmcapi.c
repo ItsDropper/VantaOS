@@ -42,10 +42,6 @@ static size_t pages_for(size_t bytes)
     return bytes / NVX_GSP_PAGE_SIZE +
            (bytes % NVX_GSP_PAGE_SIZE != 0U ? 1U : 0U);
 }
-static uint64_t load_le64(const uint8_t *p)
-{
-    return (uint64_t)get32(p) | ((uint64_t)get32(p + 4U) << 32U);
-}
 
 static int add_size(size_t a, size_t b, size_t *out)
 {

@@ -23,7 +23,8 @@ typedef enum nvx_gsp_rmapi_status {
     NVX_GSP_RMAPI_RPC_ERROR,
     NVX_GSP_RMAPI_RESPONSE_TOO_SMALL,
     NVX_GSP_RMAPI_MALFORMED_RESPONSE,
-    NVX_GSP_RMAPI_REMOTE_ERROR
+    NVX_GSP_RMAPI_REMOTE_ERROR,
+    NVX_GSP_RMAPI_TIMEOUT
 } nvx_gsp_rmapi_status_t;
 
 /*
@@ -85,6 +86,18 @@ nvx_gsp_rmapi_status_t nvx_gsp_rm_free_submit(
     nvx_gsp_rpc_manager_t *manager, uint32_t root, uint32_t parent,
     uint32_t object, void *scratch, size_t scratch_size,
     void *response, size_t response_capacity, nvx_gsp_rmapi_result_t *out);
+
+typedef void (*nvx_gsp_rmapi_delay_fn)(uint32_t ms, void *context);
+
+/*
+ * Pump and wait for a submitted operation. Timeout does not cancel an in-flight
+ * firmware RPC; retain the operation handle and recover/quiesce before reuse.
+ */
+nvx_gsp_rmapi_status_t nvx_gsp_rmapi_wait(
+    nvx_gsp_rpc_manager_t *manager, nvx_gsp_rmapi_result_t *operation,
+    void *scratch, size_t scratch_size, void *response, size_t response_size,
+    uint32_t timeout_ms, uint32_t poll_interval_ms,
+    nvx_gsp_rmapi_delay_fn delay_ms, void *delay_context);
 
 /* Validate and extract the RM-side status from a completed response payload. */
 nvx_gsp_rmapi_status_t nvx_gsp_rmapi_decode_status(

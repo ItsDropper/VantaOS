@@ -93,7 +93,8 @@ nvx_gsp_bundle_status_t nvx_gsp_bundle_acquire(
     memcpy(out->chip,chip,strlen(chip)+1U);memcpy(out->version,version,strlen(version)+1U);
     for(size_t i=0;i<NVX_GSP_COMPONENT_COUNT;i++) {
         size_t n=0U;path[0]='\0';
-        if(!append_text(path,sizeof(path),&n,generation->firmware_directory)||\n           !append_text(path,sizeof(path),&n,"/")||
+        if(!append_text(path,sizeof(path),&n,generation->firmware_directory)||
+           !append_text(path,sizeof(path),&n,"/")||
            !append_text(path,sizeof(path),&n,out->chip)||
            !append_text(path,sizeof(path),&n,"/gsp/")||
            !append_text(path,sizeof(path),&n,generation->firmware_components[i])||

@@ -255,7 +255,7 @@ jobs:
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
             scripts/test_nvx_device.c drivers/gpu/nvx/core/nvx_device.c \
-            -o /tmp/vantaos-nvx-device-test
+            drivers/gpu/nvx/core/nvx_generation.c -o /tmp/vantaos-nvx-device-test
 
       - name: Test NVIDIA PCI matching and descriptor invariants
         run: /tmp/vantaos-nvx-device-test
@@ -264,7 +264,8 @@ jobs:
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
             scripts/test_nvx_pci.c drivers/gpu/nvx/core/nvx_device.c \
-            drivers/gpu/nvx/core/nvx_pci.c -o /tmp/vantaos-nvx-pci-test
+            drivers/gpu/nvx/core/nvx_generation.c drivers/gpu/nvx/core/nvx_pci.c \
+            -o /tmp/vantaos-nvx-pci-test
 
       - name: Test PCI inventory diagnostics and auxiliary-function filtering
         run: /tmp/vantaos-nvx-pci-test

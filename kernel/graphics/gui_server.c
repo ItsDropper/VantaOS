@@ -595,6 +595,20 @@ static void gui_restore_locked(gui_window_t* window)
     redraw_pending = 1;
 }
 
+static void gui_emit_resize_locked(gui_window_t* window)
+{
+    if (!window)
+        return;
+    vanta_gui_event_t event = {
+        VANTA_GUI_EVENT_RESIZE,
+        (int32_t)window->width,
+        (int32_t)window->height,
+        0U,
+        0U
+    };
+    gui_queue_event_locked(window, &event);
+}
+
 static void gui_toggle_maximized_locked(gui_window_t* window)
 {
     if (!window || !window->used)
@@ -633,6 +647,7 @@ static void gui_toggle_maximized_locked(gui_window_t* window)
         if (window->x > max_x) window->x = max_x;
         if (window->y > max_y) window->y = max_y;
     }
+    gui_emit_resize_locked(window);
     redraw_pending = 1;
 }
 
@@ -768,6 +783,7 @@ void gui_server_mouse_move(int x, int y)
             {
                 window->width = (uint32_t)new_width;
                 window->height = (uint32_t)new_height;
+                gui_emit_resize_locked(window);
                 redraw_pending = 1;
             }
             spinlock_unlock_irqrestore(&gui_lock, flags);

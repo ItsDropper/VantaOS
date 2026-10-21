@@ -415,7 +415,8 @@ static int create_directories(EFI_FILE_PROTOCOL *root, int is_efi)
         L"EFI", L"EFI\\BOOT", L"EFI\\VANTA"
     };
     static const CHAR16 *const system_dirs[] = {
-        L"SYSTEM", L"HOME", L"HOME\\USER"
+        L"SYSTEM", L"SYSTEM\\DRIVERS", L"SYSTEM\\DEVICES",
+        L"ETC", L"HOME", L"HOME\\USER"
     };
     const CHAR16 *const *dirs = is_efi ? efi_dirs : system_dirs;
     UINTN count = is_efi
@@ -689,6 +690,37 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
         status = copy_file(source_root, L"\\SYSTEM\\EXPLORER.ELF",
                            system_root, L"\\EXPLORER.ELF",
                            SETUP_MAX_FILE_BYTES);
+
+    if (!EFI_ERROR(status))
+        status = copy_file(source_root, L"\\SYSTEM\\TERMINAL.VX",
+                           system_root, L"\\SYSTEM\\TERMINAL.VX", 4096U);
+    if (!EFI_ERROR(status))
+        status = copy_file(source_root, L"\\SYSTEM\\DRIVERS\\ATA.SYS",
+                           system_root, L"\\SYSTEM\\DRIVERS\\ATA.SYS", 4096U);
+    if (!EFI_ERROR(status))
+        status = copy_file(source_root, L"\\SYSTEM\\DRIVERS\\KEYBOARD.SYS",
+                           system_root, L"\\SYSTEM\\DRIVERS\\KEYBOARD.SYS", 4096U);
+    if (!EFI_ERROR(status))
+        status = copy_file(source_root, L"\\SYSTEM\\DRIVERS\\MOUSE.SYS",
+                           system_root, L"\\SYSTEM\\DRIVERS\\MOUSE.SYS", 4096U);
+    if (!EFI_ERROR(status))
+        status = copy_file(source_root, L"\\SYSTEM\\DRIVERS\\PCI.SYS",
+                           system_root, L"\\SYSTEM\\DRIVERS\\PCI.SYS", 4096U);
+    if (!EFI_ERROR(status))
+        status = copy_file(source_root, L"\\SYSTEM\\DRIVERS\\FAT32.SYS",
+                           system_root, L"\\SYSTEM\\DRIVERS\\FAT32.SYS", 4096U);
+    if (!EFI_ERROR(status))
+        status = copy_file(source_root, L"\\SYSTEM\\DEVICES\\DISK0.DEV",
+                           system_root, L"\\SYSTEM\\DEVICES\\DISK0.DEV", 4096U);
+    if (!EFI_ERROR(status))
+        status = copy_file(source_root, L"\\SYSTEM\\DEVICES\\KEYBOARD0.DEV",
+                           system_root, L"\\SYSTEM\\DEVICES\\KEYBOARD0.DEV", 4096U);
+    if (!EFI_ERROR(status))
+        status = copy_file(source_root, L"\\SYSTEM\\DEVICES\\MOUSE0.DEV",
+                           system_root, L"\\SYSTEM\\DEVICES\\MOUSE0.DEV", 4096U);
+    if (!EFI_ERROR(status))
+        status = copy_file(source_root, L"\\ETC\\SYSTEM.CONF",
+                           system_root, L"\\ETC\\SYSTEM.CONF", 4096U);
 
     char encoded[VANTA_SETUP_CONFIG_MAX_BYTES];
     size_t encoded_length = 0U;

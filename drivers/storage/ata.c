@@ -228,7 +228,7 @@ static const block_device_ops_t ata_block_ops = {
 
 void ata_initialize(void)
 {
-    if (available && block_device_find("ata0"))
+    if (available && ata_block.online)
         return;
 
     static const ata_channel_t channels[] =
@@ -268,7 +268,7 @@ void ata_initialize(void)
                 ata_block.flags = 0U;
                 ata_block.ops = &ata_block_ops;
                 ata_block.driver_data = 0;
-                (void)block_device_register(&ata_block);
+                (void)block_device_register_disk(&ata_block);
                 return;
             }
         }

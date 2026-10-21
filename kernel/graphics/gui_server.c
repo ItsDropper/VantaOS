@@ -62,6 +62,7 @@ static int redraw_pending;
 typedef struct
 {
     int visible;
+    int focused;
     int32_t x;
     int32_t y;
     uint32_t width;
@@ -436,6 +437,8 @@ void gui_server_draw_windows(void)
         gui_window_t* source = &windows[i];
         gui_render_snapshot_t* target = &render_snapshot[i];
         target->visible = source->used && source->visible;
+        target->focused = target->visible &&
+                          source->id == focused_window_id;
         if (!target->visible)
         {
             target->command_count = 0U;
@@ -478,6 +481,10 @@ void gui_server_draw_windows(void)
         uint32_t height = window->height;
         graphics_draw_window_frame(x, y, (int)width, (int)height,
                                    window->title, 0);
+        if (window->focused)
+            graphics_fill_rect(x + 16, y + GUI_TITLEBAR_HEIGHT - 2,
+                               48, 2,
+                               desktop_theme_color(VANTA_UI_ROLE_ACCENT));
         graphics_fill_rounded_rect(x + 2, y + GUI_TITLEBAR_HEIGHT,
                                    (int)width - 4,
                                    (int)height - GUI_TITLEBAR_HEIGHT - 2,

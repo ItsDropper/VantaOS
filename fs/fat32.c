@@ -9,6 +9,7 @@
 #include "fat32_lfn.h"
 #include "block_device.h"
 #include "partition_device.h"
+#include "partition_scan.h"
 #include "serial.h"
 #ifdef VANTAOS_SELF_TEST
 #define FAT32_RENAME_DIAG(message) serial_write(message "\n")

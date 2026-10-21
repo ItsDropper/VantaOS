@@ -7,6 +7,7 @@
 
 #include <stddef.h>
 #include "graphics_internal.h"
+#include "graphics_damage.h"
 #include "pmm.h"
 #include "paging.h"
 
@@ -96,43 +97,30 @@ static uint8_t graphics_damage_bitmap[GRAPHICS_DAMAGE_BITMAP_BYTES];
 
 void graphics_mark_damage(int x, int y, int width, int height)
 {
-    if (!graphics_frame_active || width <= 0 || height <= 0)
+    if (!graphics_frame_active)
         return;
 
-    int x0 = x < 0 ? 0 : x;
-    int y0 = y < 0 ? 0 : y;
-    int64_t right = (int64_t)x + width;
-    int64_t bottom = (int64_t)y + height;
-    int x1 = right > (int64_t)framebuffer_width ?
-        (int)framebuffer_width : (int)right;
-    int y1 = bottom > (int64_t)framebuffer_height ?
-        (int)framebuffer_height : (int)bottom;
-    if (x0 >= x1 || y0 >= y1)
+    graphics_damage_tiles_t damage;
+    if (!graphics_damage_compute_tiles(
+            x, y, width, height, framebuffer_width, framebuffer_height,
+            GRAPHICS_DAMAGE_TILE_SIZE, &damage))
         return;
 
     uint32_t tiles_x =
         (framebuffer_width + GRAPHICS_DAMAGE_TILE_SIZE - 1U) /
         GRAPHICS_DAMAGE_TILE_SIZE;
-    uint32_t tx0 = (uint32_t)x0 / GRAPHICS_DAMAGE_TILE_SIZE;
-    uint32_t ty0 = (uint32_t)y0 / GRAPHICS_DAMAGE_TILE_SIZE;
-    uint32_t tx1 = ((uint32_t)x1 - 1U) / GRAPHICS_DAMAGE_TILE_SIZE;
-    uint32_t ty1 = ((uint32_t)y1 - 1U) / GRAPHICS_DAMAGE_TILE_SIZE;
 
-    for (uint32_t ty = ty0; ty <= ty1; ty++)
+    for (uint32_t ty = damage.first_y;
+         ty < damage.first_y + damage.count_y; ty++)
     {
-        for (uint32_t tx = tx0; tx <= tx1; tx++)
+        for (uint32_t tx = damage.first_x;
+             tx < damage.first_x + damage.count_x; tx++)
         {
             uint32_t index = ty * tiles_x + tx;
             graphics_damage_bitmap[index >> 3] |=
                 (uint8_t)(1U << (index & 7U));
         }
     }
-}
-
-static int graphics_damage_test(uint32_t index)
-{
-    return (graphics_damage_bitmap[index >> 3] &
-            (uint8_t)(1U << (index & 7U))) != 0U;
 }
 
 static void graphics_damage_clear(void)
@@ -144,6 +132,13 @@ static void graphics_damage_clear(void)
 void graphics_invalidate_scene(void)
 {
     graphics_scene_invalidated = 1;
+}
+
+void graphics_reset_backbuffer(void)
+{
+    graphics_backbuffer_valid = 0;
+    graphics_scene_invalidated = 1;
+    cursor_saved_valid = 0;
 }
 
 /* Consume the scene invalidation once. Clock/taskbar updates can then redraw
@@ -246,54 +241,25 @@ void graphics_end_frame(void)
     if (!graphics_frame_active)
         return;
 
-    uint32_t tiles_x =
-        (framebuffer_width + GRAPHICS_DAMAGE_TILE_SIZE - 1U) /
-        GRAPHICS_DAMAGE_TILE_SIZE;
-    uint32_t tiles_y =
-        (framebuffer_height + GRAPHICS_DAMAGE_TILE_SIZE - 1U) /
-        GRAPHICS_DAMAGE_TILE_SIZE;
     uint32_t row_bytes = framebuffer_width * 4U;
     uint8_t* backbuffer = (uint8_t*)(uintptr_t)GRAPHICS_BACKBUFFER_BASE;
 
-    /* Commit only damaged 16x16 tiles. The front buffer is never cleared or
-     * rebuilt in place, so unchanged pixels remain stable while the shadow
-     * surface is rendered. This is the framebuffer equivalent of compositor
-     * damage tracking; actual page-flip/vblank synchronization needs a KMS
-     * display driver, which UEFI GOP/Bochs framebuffer mode does not expose. */
-    for (uint32_t ty = 0; ty < tiles_y; ty++)
-    {
-        uint32_t y0 = ty * GRAPHICS_DAMAGE_TILE_SIZE;
-        uint32_t y1 = y0 + GRAPHICS_DAMAGE_TILE_SIZE;
-        if (y1 > framebuffer_height)
-            y1 = framebuffer_height;
-        for (uint32_t tx = 0; tx < tiles_x; tx++)
-        {
-            uint32_t index = ty * tiles_x + tx;
-            if (!graphics_damage_test(index))
-                continue;
-            uint32_t x0 = tx * GRAPHICS_DAMAGE_TILE_SIZE;
-            uint32_t x1 = x0 + GRAPHICS_DAMAGE_TILE_SIZE;
-            if (x1 > framebuffer_width)
-                x1 = framebuffer_width;
-            for (uint32_t y = y0; y < y1; y++)
-            {
-                volatile uint32_t* target =
-                    (volatile uint32_t*)(graphics_display_framebuffer +
-                                         (size_t)y * graphics_display_pitch);
-                const uint32_t* source =
-                    (const uint32_t*)(backbuffer + (size_t)y * row_bytes);
-                for (uint32_t x = x0; x < x1; x++)
-                    target[x] = source[x];
-            }
-        }
-    }
+    /*
+     * The display backend uses damage tiles for a normal framebuffer copy,
+     * or a VBlank-gated page flip when the Bochs VBE backend proves support.
+     * Unknown/GOP framebuffers never receive page-flip or GPU assumptions.
+     */
+    (void)graphics_display_present_damage(
+        &graphics_display_framebuffer, graphics_display_pitch,
+        backbuffer, framebuffer_width, framebuffer_height, row_bytes,
+        graphics_damage_bitmap, sizeof(graphics_damage_bitmap),
+        GRAPHICS_DAMAGE_TILE_SIZE);
 
     framebuffer = graphics_display_framebuffer;
     framebuffer_pitch = graphics_display_pitch;
     graphics_frame_active = 0;
     graphics_damage_clear();
 }
-
 
 /*
  * Cursor-only updates use a tiny damage footprint but still pass through the

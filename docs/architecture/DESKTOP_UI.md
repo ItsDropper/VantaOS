@@ -29,7 +29,7 @@ The desktop, Terminal, and Files currently have kernel process-table entries. Th
 
 ## Desktop composition refresh
 
-The desktop layout is composed by `kernel/graphics/graphics_ui_detail.c` into the compositor's shadow surface. This is a native framebuffer layout layer, not a userspace toolkit. The renderer uses opaque fills and integer geometry; blur, alpha transparency, GPU acceleration, and atomic page flips are not available and must not be implied by the UI.
+The desktop layout is composed by `kernel/graphics/graphics_ui_detail.c` into the compositor's shadow surface. This is a native framebuffer layout layer, not a userspace toolkit. The renderer uses opaque fills and integer geometry; blur, alpha transparency, and GPU acceleration are not available. VBlank-gated page flips are attempted only on a supported Bochs VBE path and are not guaranteed on GOP or physical hardware.
 
 ### Visual hierarchy
 

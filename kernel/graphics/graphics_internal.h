@@ -8,6 +8,7 @@
 #ifndef GRAPHICS_INTERNAL_H
 #define GRAPHICS_INTERNAL_H
 
+#include <stddef.h>
 #include <stdint.h>
 #include "graphics.h"
 
@@ -54,8 +55,14 @@ extern int cursor_saved_height;
 extern int cursor_saved_valid;
 
 uint32_t graphics_pack_color(uint32_t color);
+int graphics_display_present_damage(
+    uint8_t** display_framebuffer, uint32_t display_pitch,
+    const uint8_t* backbuffer, uint32_t width, uint32_t height,
+    uint32_t backbuffer_pitch, const uint8_t* damage_bitmap,
+    size_t damage_bitmap_bytes, uint32_t tile_size);
 void graphics_mark_damage(int x, int y, int width, int height);
 void graphics_invalidate_scene(void);
+void graphics_reset_backbuffer(void);
 int graphics_take_scene_invalidation(void);
 void graphics_cursor_restore(void);
 int graphics_files_window_x(void);

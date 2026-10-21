@@ -2,7 +2,7 @@
 
 ## Current implementation
 
-VantaOS already has a kernel-owned software composition path. Applications submit bounded retained rectangle/text commands through the GUI syscall server; they do not receive a pointer to the scanout framebuffer. The kernel draws the desktop and visible windows into a persistent shadow buffer, tracks damage in 16x16-pixel tiles, then copies only damaged tiles to the boot-provided framebuffer.
+VantaOS has a kernel-owned software composition path. Applications submit bounded retained rectangle/text commands through the GUI syscall server; they do not receive a pointer to the scanout framebuffer. The kernel draws the desktop and visible windows into a persistent shadow buffer and tracks damage in 16×16-pixel tiles. Presentation copies changed tiles to the scanout framebuffer, or uses a guarded Bochs VBE double-page flip when VRAM, mapping bounds, and retrace polling permit it.
 
 The compositor frame contract is:
 
@@ -11,7 +11,9 @@ The compositor frame contract is:
 3. `graphics_end_frame()` copies damaged tiles to the scanout surface and restores the public framebuffer pointer.
 4. Cursor-only movement and terminal text updates use the same shadow surface; they must not write save-under pixels or window content directly to scanout.
 
-This avoids clearing/repainting the visible framebuffer in multiple drawing steps. It is **not an atomic page flip**: the current Multiboot/UEFI GOP/Bochs framebuffer contract does not provide a VBlank wait or display-page-flip operation, so copying damaged tiles can still tear on physical displays. Do not describe the current path as VSync-complete.
+This avoids clearing/repainting the visible framebuffer in multiple drawing steps. If the shadow surface cannot be provisioned, desktop composition now fails closed and retains the last complete frame instead of silently reverting to direct scanout drawing. The damage-rectangle clipping math is shared with a host regression test for negative origins, edge clipping, tile boundaries, empty rectangles, and large coordinates.
+
+The Bochs VBE backend now attempts a double-page presentation path when reported VRAM and the kernel's framebuffer mapping window can hold two pages. It polls the VGA retrace status, copies damaged tiles into the hidden page, changes VBE Y offset during retrace, then synchronizes the old page while it is hidden. If retrace polling times out, it disables flipping and falls back to damage copies. The UEFI GOP/Multiboot framebuffer fallback remains copy-only. This path still needs the QEMU boot/screenshot regression to prove it works in the project's actual emulator; do not claim physical-display or universal VSync support.
 
 ## NVX feasibility
 
@@ -30,7 +32,7 @@ A CE copy is not a general compositor: it does not perform alpha blending, windo
 ## Next display milestones
 
 1. Keep every rendering path on the shadow surface and damage tracker.
-2. Add deterministic tests for damage clipping, tile boundaries, and cursor old/new footprints; retain QEMU screenshot and boot regressions.
+2. Damage clipping and tile-boundary geometry now have deterministic host tests; retain QEMU screenshot and boot regressions and add direct old/new cursor-footprint assertions when the damage bitmap is separated into a host-testable unit.
 3. Introduce a display-present interface with explicit capabilities: software copy, VBlank wait, and page flip. Report only capabilities implemented by a real display backend.
 4. Add a real display driver/presentation mechanism before promising tear-free VSync.
 5. Add NVX acceleration only behind a capability-gated backend after real hardware initialization and output verification. Keep the software compositor as the mandatory fallback.
@@ -38,5 +40,5 @@ A CE copy is not a general compositor: it does not perform alpha blending, windo
 ## Limits
 
 - Current app draw lists are retained rectangle/text commands, not shared GPU surfaces.
-- Damage tracking reduces copied pixels but does not guarantee that a copy is synchronized with scanout.
-- There is no verified hardware cursor plane, display interrupt/VBlank source, GPU page flip, alpha blending, or NVX-accelerated desktop composition yet.
+- Damage tracking reduces copied pixels. Only the Bochs VBE path attempts retrace-synchronized page flips; GOP fallback and a timed-out Bochs retrace path can still tear.
+- There is no hardware cursor plane, display VBlank interrupt, alpha blending, shared per-window pixel surface, or NVX-accelerated desktop composition yet.

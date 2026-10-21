@@ -49,6 +49,10 @@ typedef struct
     vanta_gui_event_t events[GUI_EVENT_QUEUE_CAPACITY];
     uint32_t event_head;
     uint32_t event_count;
+    int builtin;
+    gui_builtin_draw_fn builtin_draw;
+    gui_builtin_click_fn builtin_click;
+    gui_builtin_close_fn builtin_close;
 } gui_window_t;
 
 static gui_window_t windows[VANTA_GUI_MAX_WINDOWS];
@@ -84,11 +88,113 @@ typedef struct
     char title[VANTA_GUI_TITLE_MAX + 1U];
     vanta_gui_draw_command_t commands[VANTA_GUI_MAX_COMMANDS];
     uint32_t command_count;
+    gui_builtin_draw_fn builtin_draw;
 } gui_render_snapshot_t;
 
 static gui_render_snapshot_t render_snapshot[VANTA_GUI_MAX_WINDOWS];
 
 static gui_window_t* gui_topmost_visible_locked(uint32_t exclude_id);
+static int gui_title_equal(const char* a, const char* b)
+{
+    if (!a || !b) return 0;
+    while (*a && *b)
+    {
+        if (*a++ != *b++) return 0;
+    }
+    return *a == *b;
+}
+
+int gui_server_register_builtin(const char* title, int x, int y,
+                                int width, int height,
+                                gui_builtin_draw_fn draw,
+                                gui_builtin_click_fn click,
+                                gui_builtin_close_fn close)
+{
+    if (!title || !draw || !graphics_is_initialized() ||
+        width < (int)GUI_WINDOW_MIN_WIDTH ||
+        height < (int)GUI_WINDOW_MIN_HEIGHT)
+        return -22;
+
+    size_t length = 0U;
+    while (length <= VANTA_GUI_TITLE_MAX && title[length]) length++;
+    if (length == 0U || length > VANTA_GUI_TITLE_MAX ||
+        length > (size_t)(width - 100) / 8U)
+        return -22;
+
+    uint64_t flags = spinlock_lock_irqsave(&gui_lock);
+    gui_window_t* slot = 0;
+    for (unsigned int i = 0; i < VANTA_GUI_MAX_WINDOWS; i++)
+    {
+        if (windows[i].used && windows[i].builtin &&
+            gui_title_equal(windows[i].title, title))
+        {
+            slot = &windows[i];
+            break;
+        }
+        if (!slot && !windows[i].used)
+            slot = &windows[i];
+    }
+    if (!slot)
+    {
+        spinlock_unlock_irqrestore(&gui_lock, flags);
+        return -12;
+    }
+
+    if (!slot->used)
+    {
+        for (size_t i = 0; i < sizeof(*slot); i++)
+            ((uint8_t*)slot)[i] = 0U;
+        slot->used = 1;
+        slot->builtin = 1;
+        slot->id = next_window_id++;
+        if (slot->id == 0U) slot->id = next_window_id++;
+        slot->owner_pid = 0U;
+        slot->owner_visible = 0;
+        slot->visible = 0;
+        slot->width = (uint32_t)width;
+        slot->height = (uint32_t)height;
+        slot->x = x;
+        slot->y = y;
+        for (size_t i = 0; i <= length; i++) slot->title[i] = title[i];
+    }
+
+    slot->builtin_draw = draw;
+    slot->builtin_click = click;
+    slot->builtin_close = close;
+    spinlock_unlock_irqrestore(&gui_lock, flags);
+    return (int)slot->id;
+}
+
+int gui_server_set_builtin_visible(const char* title, int visible)
+{
+    if (!title) return -22;
+    uint64_t flags = spinlock_lock_irqsave(&gui_lock);
+    gui_window_t* target = 0;
+    for (unsigned int i = 0; i < VANTA_GUI_MAX_WINDOWS; i++)
+        if (windows[i].used && windows[i].builtin &&
+            gui_title_equal(windows[i].title, title))
+        {
+            target = &windows[i];
+            break;
+        }
+    if (!target)
+    {
+        spinlock_unlock_irqrestore(&gui_lock, flags);
+        return -2;
+    }
+
+    target->owner_visible = visible != 0;
+    target->visible = visible != 0;
+    target->minimized = 0;
+    if (visible)
+        gui_focus_locked(target);
+    else if (focused_window_id == target->id)
+        gui_focus_locked(gui_topmost_visible_locked(target->id));
+    redraw_pending = 1;
+    spinlock_unlock_irqrestore(&gui_lock, flags);
+    return 0;
+}
+
 
 
 static gui_window_t* gui_find_window_locked(uint32_t pid, uint32_t id)

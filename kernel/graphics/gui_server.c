@@ -336,7 +336,8 @@ int gui_server_set_owner_visible(uint32_t pid, int visible)
             changed = 1;
         if (window->id == focused_window_id)
             focused_owned = 1;
-        if (!newest_owned || window->z_order > newest_owned->z_order)
+        if (window->visible &&
+            (!newest_owned || window->z_order > newest_owned->z_order))
             newest_owned = window;
     }
 
@@ -362,17 +363,8 @@ int gui_server_set_owner_visible(uint32_t pid, int visible)
 
     if (visible && newest_owned)
         gui_focus_locked(newest_owned);
-    else if (!visible && focused_window_id == 0U)
-    {
-        gui_window_t* newest_visible = 0;
-        for (unsigned int i = 0; i < VANTA_GUI_MAX_WINDOWS; i++)
-            if (windows[i].used && windows[i].visible &&
-                (!newest_visible ||
-                 windows[i].z_order > newest_visible->z_order))
-                newest_visible = &windows[i];
-        if (newest_visible)
-            gui_focus_locked(newest_visible);
-    }
+    else if (focused_window_id == 0U)
+        gui_focus_locked(gui_topmost_visible_locked(0U));
 
     redraw_pending = 1;
     spinlock_unlock_irqrestore(&gui_lock, flags);
@@ -745,14 +737,22 @@ void gui_server_mouse_move(int x, int y)
             resizing_window_id = 0U;
         else
         {
-            int32_t min_width = (int32_t)GUI_WINDOW_MIN_WIDTH;
-            int32_t min_height = (int32_t)GUI_WINDOW_MIN_HEIGHT;
             int32_t max_width = (int32_t)graphics_get_width() - window->x;
-            int32_t max_height = (int32_t)graphics_get_height() - window->y;
-            if (max_height > (int32_t)graphics_get_height() - 64)
-                max_height = (int32_t)graphics_get_height() - 64;
+            int32_t work_bottom = (int32_t)graphics_get_height() - 64;
+            int32_t max_height = work_bottom - window->y;
+            int32_t title_length = 0;
+            while (title_length <= (int32_t)VANTA_GUI_TITLE_MAX &&
+                   window->title[title_length])
+                title_length++;
+            int32_t min_width = (int32_t)GUI_WINDOW_MIN_WIDTH;
+            int32_t title_min_width = title_length * 8 + 180;
+            if (title_min_width > min_width)
+                min_width = title_min_width;
+            int32_t min_height = (int32_t)GUI_WINDOW_MIN_HEIGHT;
             if (max_width < min_width) min_width = max_width;
             if (max_height < min_height) min_height = max_height;
+            if (max_width < 1) max_width = 1;
+            if (max_height < 1) max_height = 1;
             int32_t new_width = (int32_t)resize_start_width + x - resize_start_x;
             int32_t new_height = (int32_t)resize_start_height + y - resize_start_y;
             if (new_width < min_width) new_width = min_width;
@@ -846,38 +846,57 @@ void gui_server_draw_taskbar_items(int taskbar_y, int start_x, int end_x)
 {
     if (!graphics_is_initialized() || end_x <= start_x)
         return;
+
+    typedef struct
+    {
+        int focused;
+        int minimized;
+        char title[VANTA_GUI_TITLE_MAX + 1U];
+    } taskbar_item_t;
+    taskbar_item_t items[VANTA_GUI_MAX_WINDOWS];
+    unsigned int count = 0U;
+
     uint64_t flags = spinlock_lock_irqsave(&gui_lock);
-    int slot_x = start_x;
     for (unsigned int i = 0; i < VANTA_GUI_MAX_WINDOWS; i++)
     {
         gui_window_t* window = &windows[i];
         if (!window->used || !window->owner_visible)
             continue;
+        items[count].focused = window->id == focused_window_id && window->visible;
+        items[count].minimized = window->minimized;
+        for (size_t n = 0; n < sizeof(items[count].title); n++)
+            items[count].title[n] = window->title[n];
+        count++;
+    }
+    spinlock_unlock_irqrestore(&gui_lock, flags);
+
+    int slot_x = start_x;
+    for (unsigned int i = 0; i < count; i++)
+    {
         if (slot_x + 120 > end_x)
             break;
-        int focused = window->id == focused_window_id && window->visible;
+        int focused = items[i].focused;
         uint32_t fill = focused ? 0x00253648U
-                      : window->minimized ? 0x00131D29U : 0x00192533U;
+                      : items[i].minimized ? 0x00131D29U : 0x00192533U;
         graphics_fill_rounded_rect(slot_x, taskbar_y, 114, 42, 8, fill);
         graphics_fill_rect(slot_x + 1, taskbar_y + 1, 112, 1,
                            focused ? 0x005DA9FFU : 0x00334455U);
         graphics_draw_vanta_logo(slot_x + 8, taskbar_y + 12, 18);
         char label[13];
         size_t n = 0U;
-        while (n < 12U && window->title[n])
+        while (n < 12U && items[i].title[n])
         {
-            label[n] = window->title[n];
+            label[n] = items[i].title[n];
             n++;
         }
         label[n] = '\0';
         graphics_draw_text(slot_x + 32, taskbar_y + 17, label,
-                           window->minimized ? 0x009AAABD : 0x00F3F6FA, 1);
+                           items[i].minimized ? 0x009AAABD : 0x00F3F6FA, 1);
         if (focused)
             graphics_fill_rounded_rect(slot_x + 46, taskbar_y + 38, 24, 2,
                                        1, 0x005DA9FFU);
         slot_x += 120;
     }
-    spinlock_unlock_irqrestore(&gui_lock, flags);
 }
 
 int gui_server_taskbar_click(int x, int y, int taskbar_y,

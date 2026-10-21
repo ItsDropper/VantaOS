@@ -275,12 +275,12 @@ nvx_gsp_gmcapi_status_t nvx_gsp_gmcapi_call(
                  t->status_queue->layout.backing_store_size))
         return NVX_GSP_GMCAPI_INVALID_ARGUMENT;
 
-    if (__atomic_test_and_set(&t->busy, __ATOMIC_ACQUIRE))
+    if (__atomic_exchange_n(&t->busy, 1U, __ATOMIC_ACQUIRE))
         return NVX_GSP_GMCAPI_BUSY;
     status=send_request(t,command_id,request,request_size,response_capacity,
                         (uint8_t *)scratch,scratch_size,&sequence);
     if (status!=NVX_GSP_GMCAPI_OK) {
-        __atomic_clear(&t->busy, __ATOMIC_RELEASE);
+        __atomic_store_n(&t->busy, 0U, __ATOMIC_RELEASE);
         return status;
     }
     do {

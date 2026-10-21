@@ -67,6 +67,7 @@ void shell_show_history(void);
 void shell_add_history(void);
 void shell_fault(void);
 void shell_reboot(void);
+void shell_storage(void);
 void shell_print_decimal(unsigned int value);
 void shell_print_hex64(unsigned long long value);
 int shell_string_equals(const char* a, const char* b);

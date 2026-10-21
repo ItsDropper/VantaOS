@@ -24,6 +24,7 @@ int gui_server_register_builtin(const char* title, int x, int y,
                                 gui_builtin_close_fn close);
 int gui_server_set_builtin_visible(const char* title, int visible);
 void gui_server_reflow_windows(void);
+void gui_server_sync_active_panel(void);
 
 int gui_server_create_window(uint32_t pid,
                              const vanta_gui_window_request_t* request);

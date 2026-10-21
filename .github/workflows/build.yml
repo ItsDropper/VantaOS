@@ -1187,10 +1187,10 @@ jobs:
           done
           test "$requested" -eq 1
 
-          # Keep the HMP connection open briefly after sending the command; closing
-          # the socket immediately can disconnect before QEMU flushes the screendump.
-          { printf 'screendump /tmp/vantaos-recovery.ppm\n'; sleep 2; } |
-            timeout 8s socat -T 5 - UNIX-CONNECT:/tmp/vantaos-recovery-monitor.sock || true
+          # HMP is a terminal-style monitor: terminate the command with carriage return
+          # so QEMU executes it rather than merely echoing the typed characters.
+          { printf 'screendump /tmp/vantaos-recovery.ppm\r'; sleep 1; } |
+            timeout 5s socat -T 2 - UNIX-CONNECT:/tmp/vantaos-recovery-monitor.sock || true
           for attempt in $(seq 1 10); do
             test -s /tmp/vantaos-recovery.ppm && break
             sleep 1

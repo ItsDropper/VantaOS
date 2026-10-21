@@ -50,6 +50,8 @@ on:
       - "include/nvx_gsp_msgq_queue.h"
       - "include/nvx_gsp_msgq_ga10x.h"
       - "include/nvx_gsp_gmcapi.h"
+      - "scripts/test_nvx_gsp_nvkv.c"
+      - "include/nvx_gsp_nvkv.h"
       - "include/nvx_gsp_startup.h"
       - "include/nvx_gsp_msgq_rpc.h"
       - "include/nvx_gsp_init_args.h"
@@ -169,6 +171,15 @@ jobs:
 
       - name: Test PCI BAR size masks, restoration, and active-device refusal
         run: /tmp/vantaos-pci-bar-size-test
+
+      - name: Compile bounded NVKV encoder tests with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_nvkv.c drivers/gpu/nvx/gsp/nvx_gsp_nvkv.c \
+            -o /tmp/vantaos-nvx-gsp-nvkv-test
+
+      - name: Test NVKV instruction encoding, arrays, bounds, and malformed streams
+        run: /tmp/vantaos-nvx-gsp-nvkv-test
 
       - name: Compile GSP startup orchestration with strict warnings
         run: |

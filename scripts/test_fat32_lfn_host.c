@@ -5,6 +5,7 @@
  */
 #include "fat32_lfn.h"
 #include <assert.h>
+#include <stdio.h>
 #include <string.h>
 
 static const unsigned offsets[13] = {
@@ -28,9 +29,11 @@ static void make_entry(uint8_t entry[32], uint8_t sequence,
 
 static void ascii_chars(uint16_t out[13], const char *text, unsigned start)
 {
+    const size_t length = strlen(text);
     for (unsigned i = 0; i < 13; ++i) {
-        unsigned index = start + i;
-        out[i] = text[index] ? (uint8_t)text[index] : (index == strlen(text) ? 0 : 0xFFFFU);
+        size_t index = (size_t)start + i;
+        out[i] = index < length ? (uint8_t)text[index] :
+                 (index == length ? 0U : 0xFFFFU);
     }
 }
 
@@ -77,6 +80,8 @@ int main(void)
 
     fat32_lfn_reset(&state);
     make_entry(entry, 0x42U, checksum, high);
+    assert(fat32_lfn_consume(entry, &state) == 1);
+    make_entry(entry, 0x01U, checksum, low);
     assert(fat32_lfn_consume(entry, &state) == 1);
     assert(fat32_lfn_consume(entry, &state) == 0);
     assert(!fat32_lfn_is_complete(&state));

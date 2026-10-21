@@ -494,6 +494,23 @@ void graphics_draw_start_menu_detail(int width, int height)
         filesystem_is_initialized() ? "Filesystem ready" : "Filesystem unavailable",
         UI_MUTED, 1);
     graphics_draw_text(mx + mw - 118, my + mh - 44, "SUPER TO OPEN", UI_QUIET, 1);
+
+    /* Real power actions are grouped behind a dedicated Start-menu control. */
+    ui_surface(mx + mw - 54, my + mh - 54, 32, 32, 9,
+               power_menu_open ? UI_BLUE_DARK : UI_SURFACE_2, UI_EDGE);
+    graphics_draw_text(mx + mw - 46, my + mh - 42, "PWR", UI_WHITE, 1);
+
+    if (power_menu_open)
+    {
+        int px = mx + mw - 194;
+        int py = my + mh - 166;
+        ui_surface(px, py, 176, 112, 10, UI_SURFACE_1, UI_EDGE);
+        graphics_draw_text(px + 14, py + 12, "POWER", UI_QUIET, 1);
+        ui_surface(px + 8, py + 32, 160, 30, 7, UI_SURFACE_2, UI_EDGE_SOFT);
+        graphics_draw_text(px + 20, py + 43, "Restart", UI_WHITE, 1);
+        ui_surface(px + 8, py + 68, 160, 30, 7, UI_SURFACE_2, UI_EDGE_SOFT);
+        graphics_draw_text(px + 20, py + 79, "Shut down", UI_WHITE, 1);
+    }
 }
 
 /* Shared Explorer parts. These are presentation-only; the Explorer remains

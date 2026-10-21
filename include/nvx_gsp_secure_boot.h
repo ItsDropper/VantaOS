@@ -10,6 +10,8 @@
 #include "nvx_gsp_boot_memory.h"
 #include "nvx_gsp_falcon.h"
 #include "nvx_gsp_fwsec_result.h"
+#include "nvx_gsp_vbios.h"
+#include "nvx_gsp_fwsec_result.h"
 
 typedef struct nvx_gsp_secure_transfer_plan {
     uint64_t source_phys;
@@ -67,6 +69,21 @@ typedef struct nvx_gsp_boot_trace {
     uint8_t recovery_succeeded;
     uint8_t sec2_quiescence_confirmed;
 } nvx_gsp_boot_trace_t;
+
+/*
+ * Execute FWSEC-FRTS on the GA10x GSP Falcon using a DMA-staged VBIOS image.
+ * The VBIOS descriptor/signature slot must already be structurally validated.
+ * This routine patches the signed FWSEC DMEM image, uploads secure IMEM/DMEM,
+ * programs BROM verification parameters, waits for halt, then validates actual
+ * FWSEC result registers before returning success.
+ */
+nvx_gsp_falcon_status_t nvx_gsp_ga10x_execute_fwsec_frts(
+    nvx_dma_buffer_t *staged_vbios, nvx_dma_sync_t *staged_vbios_sync,
+    const nvx_gsp_vbios_fwsec_info_t *info, uint32_t fuse_version,
+    const nvx_mmio_region_t *bar0, uint64_t frts_framebuffer_offset,
+    uint32_t timeout_ms, uint32_t poll_interval_ms,
+    nvx_gsp_delay_ms_fn delay_ms, void *context,
+    nvx_gsp_fwsec_result_snapshot_t *out_result);
 
 /*
  * Boot the GA10x GSP only after the caller has executed FWSEC-FRTS and read

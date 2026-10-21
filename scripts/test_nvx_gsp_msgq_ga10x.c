@@ -5,6 +5,7 @@
  */
 #include "nvx_gsp_msgq_ga10x.h"
 #include "nvx_gsp_msgq.h"
+#include "nvx_gsp_gmcapi.h"
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,10 +14,61 @@
 #define TEST_SHARED_BYTES (NVX_GSP_PAGE_SIZE + 2U * TEST_QUEUE_BYTES)
 #define TEST_BAR_BYTES 0x120000U
 
-static void no_delay(void *context, uint32_t ms)
+typedef struct fake_gsp {
+    nvx_gsp_msgq_ga10x_t *runtime;
+    const nvx_mmio_region_t *bar;
+    uint32_t elapsed;
+    uint8_t responded;
+} fake_gsp_t;
+
+static uint32_t get32(const uint8_t *p)
 {
-    uint32_t *elapsed = (uint32_t *)context;
-    *elapsed += ms;
+    return (uint32_t)p[0] | ((uint32_t)p[1] << 8U) |
+           ((uint32_t)p[2] << 16U) | ((uint32_t)p[3] << 24U);
+}
+static uint64_t get64(const uint8_t *p)
+{
+    return (uint64_t)get32(p) | ((uint64_t)get32(p + 4U) << 32U);
+}
+static void put32(uint8_t *p, uint32_t v)
+{
+    p[0]=(uint8_t)v; p[1]=(uint8_t)(v>>8U);
+    p[2]=(uint8_t)(v>>16U); p[3]=(uint8_t)(v>>24U);
+}
+static void put64(uint8_t *p, uint64_t v)
+{
+    put32(p, (uint32_t)v); put32(p + 4U, (uint32_t)(v >> 32U));
+}
+static void fake_gsp_reply(void *context, uint32_t ms)
+{
+    fake_gsp_t *fake = (fake_gsp_t *)context;
+    fake->elapsed += ms;
+    if (fake->responded) return;
+
+    const uint8_t *request = fake->runtime->command_queue.layout.entries;
+    uint8_t *reply = fake->runtime->status_queue.layout.entries;
+    const uint64_t sequence = get64(request + 32U);
+    const uint32_t command = get32(request + 24U);
+    const uint64_t static_info = UINT64_C(0x1122334455667788);
+    const uint32_t payload_size = (uint32_t)sizeof(static_info);
+    const uint32_t gmc_size = NVX_GSP_GMCAPI_HEADER_SIZE + payload_size;
+    const uint32_t wire_size = 24U + gmc_size;
+
+    memset(reply, 0, NVX_GSP_PAGE_SIZE);
+    put32(reply, NVX_GSP_MCTP_MAGIC);
+    put32(reply + 4U, wire_size);
+    put32(reply + 8U, NVX_GSP_MCTP_HEADER_SINGLE);
+    put32(reply + 12U, NVX_GSP_GMCAPI_NVDM_HEADER);
+    put32(reply + 16U, gmc_size);
+    put32(reply + 20U, 0U);
+    put32(reply + 24U, command | NVX_GSP_GMCAPI_COMMAND_FLAG_RESPONSE);
+    put32(reply + 28U, payload_size);
+    put64(reply + 32U, sequence);
+    put32(reply + 40U, 0U);
+    memcpy(reply + 64U, &static_info, sizeof(static_info));
+    assert(nvx_mmio_write32(fake->bar, NVX_GSP_GA10X_MSGQ_HEAD(0U),
+        fake->runtime->status_queue.local_counter + 1U) == NVX_MMIO_OK);
+    fake->responded = 1U;
 }
 
 static uint32_t read_reg(const nvx_mmio_region_t *bar, uint32_t offset)
@@ -45,9 +97,16 @@ int main(void)
     nvx_gsp_modern_shared_queue_config_t config = {0};
     nvx_gsp_modern_shared_queue_layout_t layout = {0};
     nvx_gsp_msgq_ga10x_t runtime = {0};
-    uint32_t elapsed = 0U;
+    fake_gsp_t fake = {0};
+    nvx_gsp_gmcapi_transport_t gmcapi = {0};
+    uint8_t request[8] = {1U,2U,3U,4U,5U,6U,7U,8U};
+    uint8_t response[64] = {0};
+    uint8_t *scratch = aligned_alloc(NVX_GSP_PAGE_SIZE, NVX_GSP_PAGE_SIZE);
+    size_t response_size = 0U;
+    uint32_t remote_status = UINT32_MAX;
 
-    assert(bar_bytes && shared_bytes);
+    assert(bar_bytes && shared_bytes && scratch);
+    memset(scratch, 0, NVX_GSP_PAGE_SIZE);
     memset(shared_bytes, 0, (size_t)TEST_SHARED_BYTES);
     config.shared_mem_phys_addr = shared.gpu_address;
     config.allocation_size = shared.size;
@@ -81,16 +140,37 @@ int main(void)
 
     assert(nvx_gsp_msgq_ga10x_link_status(
         &runtime, &shared, &sync, &layout, 20U, 2U,
-        no_delay, &elapsed) == NVX_GSP_MSGQ_GA10X_OK);
+        fake_gsp_reply, &(fake_gsp_t){0}) == NVX_GSP_MSGQ_GA10X_OK);
     assert(runtime.status_linked == 1U);
     assert(runtime.status_queue.initialized == 1U);
     assert(runtime.status_queue.transmit == 0U);
     assert(read_reg(&bar, NVX_GSP_GA10X_MSGQ_TAIL(0U)) == 0U);
-    assert(elapsed == 0U);
+    fake.runtime = &runtime;
+    fake.bar = &bar;
+    assert(nvx_gsp_gmcapi_init(&gmcapi, &runtime.command_queue,
+                              &runtime.status_queue) == NVX_GSP_GMCAPI_OK);
+    assert(nvx_gsp_gmcapi_gsp_init(
+        &gmcapi, request, sizeof(request), response, sizeof(response),
+        &response_size, &remote_status, scratch, NVX_GSP_PAGE_SIZE,
+        20U, 1U, fake_gsp_reply, &fake) == NVX_GSP_GMCAPI_OK);
+    assert(fake.responded == 1U);
+    assert(fake.elapsed == 1U);
+    assert(response_size == sizeof(uint64_t));
+    assert(remote_status == 0U);
+    assert(get64(response) == UINT64_C(0x1122334455667788));
+    assert(get32(runtime.command_queue.layout.entries + 24U) ==
+           NVX_GSP_GMCAPI_CMD_GSP_INIT);
+    assert(get32(runtime.command_queue.layout.entries + 12U) ==
+           NVX_GSP_GMCAPI_NVDM_HEADER);
+    assert(get32(runtime.command_queue.layout.entries + 28U) ==
+           sizeof(request));
+    assert(get32(runtime.command_queue.layout.entries + 40U) ==
+           sizeof(response));
 
     /* Shared ownership is returned only after the caller quiesces GSP. */
     assert(nvx_dma_sync_for_cpu(&sync, 0U, shared.size) == NVX_DMA_SYNC_OK);
     assert(nvx_dma_sync_destroy(&sync) == NVX_DMA_SYNC_OK);
+    free(scratch);
     free(shared_bytes);
     free(bar_bytes);
     return 0;

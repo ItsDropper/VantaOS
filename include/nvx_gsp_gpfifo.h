@@ -61,6 +61,17 @@ nvx_gsp_gpfifo_status_t nvx_gsp_gpfifo_submit(
     nvx_gsp_gpfifo_channel_t *channel, uint64_t command_gpu_va,
     size_t command_bytes, uint32_t *out_put_index);
 
+/*
+ * Submit one prebuilt command buffer, wait for fetcher consumption, then wait
+ * for its engine-specific completion word. A timeout is not a cancellation.
+ */
+nvx_gsp_gpfifo_status_t nvx_gsp_gpfifo_submit_and_wait(
+    nvx_gsp_gpfifo_channel_t *channel, uint64_t command_gpu_va,
+    size_t command_bytes, const volatile uint32_t *completion_word,
+    uint32_t expected_completion, uint32_t timeout_ms,
+    uint32_t poll_interval_ms, nvx_gsp_gpfifo_delay_fn delay_ms,
+    void *context, uint32_t *out_put_index);
+
 /* Wait until USERD GP_GET consumes the submitted GPFIFO entry. */
 nvx_gsp_gpfifo_status_t nvx_gsp_gpfifo_wait_get(
     nvx_gsp_gpfifo_channel_t *channel, uint32_t expected_get_index,

@@ -41,6 +41,49 @@ static size_t pages_for(size_t bytes)
     return bytes / NVX_GSP_PAGE_SIZE +
            (bytes % NVX_GSP_PAGE_SIZE != 0U ? 1U : 0U);
 }
+static uint64_t load_le64(const uint8_t *p)
+{
+    return (uint64_t)get32(p) | ((uint64_t)get32(p + 4U) << 32U);
+}
+
+/* Validate NVKV framing and bounds without assuming which keys this firmware supports. */
+static int nvkv_wire_valid(const void *data, size_t bytes)
+{
+    const uint8_t *p = (const uint8_t *)data;
+    size_t words, index = 0U;
+    if (!data || bytes == 0U || (bytes % sizeof(uint64_t)) != 0U)
+        return 0;
+    words = bytes / sizeof(uint64_t);
+    while (index < words) {
+        uint64_t instruction = load_le64(p + index * sizeof(uint64_t));
+        uint32_t opcode = (uint32_t)((instruction >> 28U) & 0xFU);
+        uint64_t count = instruction >> 32U;
+        uint64_t payload_words = 0U;
+        ++index;
+        switch (opcode) {
+        case 0U: /* IMM32: immediate value is in the instruction itself. */
+            continue;
+        case 1U: /* SEQ32 */
+        case 4U: /* ARRAY32 */
+            payload_words = (count + 1U) / 2U;
+            break;
+        case 2U: /* SEQ64 */
+        case 5U: /* ARRAY64 */
+            payload_words = count;
+            break;
+        case 3U: /* ARRAY8 */
+            payload_words = (count + 7U) / 8U;
+            break;
+        default:
+            return 0;
+        }
+        if (payload_words > (uint64_t)(words - index))
+            return 0;
+        index += (size_t)payload_words;
+    }
+    return index == words;
+}
+
 static int add_size(size_t a, size_t b, size_t *out)
 {
     if (a > SIZE_MAX-b) return 0;
@@ -256,8 +299,20 @@ nvx_gsp_gmcapi_status_t nvx_gsp_gmcapi_gsp_init(
     uint32_t timeout_ms, uint32_t poll_interval_ms,
     nvx_gsp_gmcapi_delay_fn delay_ms, void *context)
 {
-    return nvx_gsp_gmcapi_call(transport,NVX_GSP_GMCAPI_CMD_GSP_INIT,
+    nvx_gsp_gmcapi_status_t status;
+    if (!encoded_system_info || !static_info || !out_static_info_size ||
+        !nvkv_wire_valid(encoded_system_info, encoded_system_info_size))
+        return NVX_GSP_GMCAPI_BAD_MESSAGE;
+
+    status = nvx_gsp_gmcapi_call(transport,NVX_GSP_GMCAPI_CMD_GSP_INIT,
         encoded_system_info,encoded_system_info_size,static_info,
         static_info_capacity,out_static_info_size,out_remote_status,
         scratch,scratch_size,timeout_ms,poll_interval_ms,delay_ms,context);
+    if (status != NVX_GSP_GMCAPI_OK)
+        return status;
+    if (!nvkv_wire_valid(static_info, *out_static_info_size)) {
+        *out_static_info_size = 0U;
+        return NVX_GSP_GMCAPI_BAD_MESSAGE;
+    }
+    return NVX_GSP_GMCAPI_OK;
 }

@@ -47,6 +47,10 @@ nvx_gsp_ce_status_t nvx_gsp_ce_build_copy(
        src_end>NVX_GSP_CE_GPUVA_LIMIT||dst_end>NVX_GSP_CE_GPUVA_LIMIT||
        completion_end>NVX_GSP_CE_GPUVA_LIMIT)
         return NVX_GSP_CE_BAD_GPU_ADDRESS;
+    if((src<dst_end&&dst<src_end)||
+       (completion<src_end&&src<completion_end)||
+       (completion<dst_end&&dst<completion_end))
+        return NVX_GSP_CE_BAD_GPU_ADDRESS;
     if(overlaps(buffer,NVX_GSP_CE_COPY_COMMAND_BYTES,out_bytes,sizeof(*out_bytes)))
         return NVX_GSP_CE_INVALID_ARGUMENT;
 

@@ -127,7 +127,7 @@ static void recovery_header(const char* subtitle)
     graphics_draw_text(margin + (compact ? 48 : 70), top + (compact ? 18 : 34),
                        "RECOVERY ENVIRONMENT", RECOVERY_BLUE, 1);
     graphics_draw_text(margin + 16, top + (compact ? 42 : 66), subtitle, RECOVERY_MUTED, 1);
-    graphics_fill_rect(margin + 16, top + (compact ? 60 : 86),
+    graphics_fill_rect(margin + 16, top + (compact ? 54 : 86),
                        panel_width - 32, 1, RECOVERY_LINE);
 }
 
@@ -137,8 +137,8 @@ static void recovery_draw_menu(int selected, int menu_count, int screenshot_avai
     uint32_t height = graphics_get_height();
     int margin = width >= 900 ? 56 : 18;
     int top = height >= 600 ? 34 : 14;
-    int row_height = height >= 600 ? 38 : (height < 400 ? 20 : 28);
-    int first_y = top + (height < 400 ? 70 : 104);
+    int row_height = height >= 600 ? 38 : (height < 400 ? 18 : 28);
+    int first_y = top + (height < 400 ? 60 : 104);
     int panel_width = (int)width - margin * 2;
 
     recovery_header("Choose a recovery action. Normal boot remains the default.");
@@ -157,7 +157,7 @@ static void recovery_draw_menu(int selected, int menu_count, int screenshot_avai
     graphics_fill_rect(margin + 22, footer_y - 10, panel_width - 44, 1, RECOVERY_LINE);
     graphics_draw_text(margin + 24, footer_y, "UP/DOWN or W/S  Navigate     ENTER  Select",
                        RECOVERY_MUTED, 1);
-    if (status)
+    if (status && height >= 400)
         graphics_draw_text(margin + 24, footer_y + 16, status, RECOVERY_BLUE, 1);
     graphics_present();
 }

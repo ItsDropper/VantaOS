@@ -78,7 +78,7 @@ nvx_dma_sync_status_t nvx_dma_sync_for_cpu(nvx_dma_sync_t *s,
     if(!s->initialized) return NVX_DMA_SYNC_NOT_INITIALIZED;
     if(!valid_buffer(s)) return NVX_DMA_SYNC_BUFFER_INVALID;
     if(!valid_range(s,offset,length)) return NVX_DMA_SYNC_INVALID_RANGE;
-    if(s->owner!=NVX_DMA_OWNER_DEVICE) return NVX_DMA_SYNC_WRONG_OWNER;
+    if(s->owner!=NVX_DMA_OWNER_DEVICE && s->owner!=NVX_DMA_OWNER_SHARED) return NVX_DMA_SYNC_WRONG_OWNER;
     device_read_barrier(); s->owner=NVX_DMA_OWNER_CPU;
     return NVX_DMA_SYNC_OK;
 }

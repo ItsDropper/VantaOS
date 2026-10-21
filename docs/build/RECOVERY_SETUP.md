@@ -2,7 +2,7 @@
 
 ## BIOS/GRUB boot
 
-The GRUB menu keeps **VantaOS** as the default entry. Choose **VantaOS Recovery Environment** before the five-second timeout to enter the keyboard-driven recovery UI. If no choice is made, GRUB starts the normal VantaOS entry.
+The GRUB menu keeps **VantaOS** as the default entry. Choose **VantaOS Recovery Environment** before the five-second timeout to enter the keyboard-driven recovery UI. Holding **Shift while the BIOS/GRUB menu starts** selects the recovery entry as the default for that boot; with Shift released, normal VantaOS remains the default. This shortcut is BIOS/GRUB-only. If no choice is made, GRUB boots the currently selected default.
 
 The recovery entry passes the Multiboot command-line token `recovery=1`. The kernel checks that token after graphics, keyboard, filesystem, and VFS initialization and before process/scheduler/desktop startup. Choosing **Continue to VantaOS** returns to the ordinary startup sequence. Recovery is not entered by default, and the fatal panic handler never enters the recovery UI.
 
@@ -15,6 +15,8 @@ The recovery entry passes the Multiboot command-line token `recovery=1`. The ker
 - **Restart computer** — attempts the legacy keyboard-controller reset and halts if the controller does not reset.
 - **Shut down computer** — attempts the QEMU/Bochs ACPI shutdown ports and halts if unsupported.
 
+The desktop Start menu now has a **Power** control with Restart and Shut down actions, using the same shared low-level routines. Sleep is deliberately not offered yet: ACPI S3 suspend/resume and reliable wake-up support are not implemented, and an ordinary `hlt` loop is not a valid substitute.
+
 Use **Up/Down** or **W/S** to move and **Enter** to select. The menu is designed to use the existing framebuffer and keyboard input path; it does not require a mouse.
 
 ## Scope and limitations
@@ -22,7 +24,7 @@ Use **Up/Down** or **W/S** to move and **Enter** to select. The menu is designed
 - The current recovery selection is implemented for the **BIOS/GRUB Multiboot path only**. The separate UEFI loader loads the kernel directly and does not yet carry a recovery request through the normalized boot contract. UEFI recovery selection must not be assumed to work.
 - Screenshot capture currently depends on a host QEMU monitor. VantaOS does not yet write screenshots to persistent storage.
 - Safe mode is intentionally not listed: optional-component boot policy is not implemented.
-- The installer is intentionally not listed: a safe partitioning and bootloader installation pipeline has not been proven end-to-end against a disposable virtual disk.
+- The installer is intentionally not listed yet. The kernel has partition-table discovery and block writes, but does not yet provide a verified partition-table writer, FAT32 formatter, or complete bootloader installation pipeline. An installer UI must not offer a destructive Install button before those operations work end-to-end on disposable QEMU disks.
 - Recovery is for a running kernel that has reached the explicit recovery entry. It is not a way to resume after a fatal kernel panic or repair arbitrary kernel-memory corruption.
 - Restart/shutdown are best-effort legacy/emulator operations; behavior on physical hardware varies and is not claimed as verified.
 

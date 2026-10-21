@@ -162,6 +162,72 @@ nvx_gsp_rmapi_status_t nvx_gsp_rmapi_wait(
     }
 }
 
+static nvx_gsp_rmapi_status_t finish_sync(
+    nvx_gsp_rpc_manager_t *manager,nvx_gsp_rmapi_result_t *out,
+    void *scratch,size_t scratch_size,void *response,size_t response_capacity,
+    uint32_t timeout_ms,uint32_t poll_interval_ms,
+    nvx_gsp_rmapi_delay_fn delay_ms,void *delay_context)
+{
+    nvx_gsp_rmapi_status_t status=nvx_gsp_rmapi_wait(manager,out,scratch,
+        scratch_size,response,response_capacity,timeout_ms,poll_interval_ms,
+        delay_ms,delay_context);
+    nvx_gsp_rpc_result_t query={0};
+    if(status!=NVX_GSP_RMAPI_TIMEOUT&&out->handle.valid&&
+       nvx_gsp_rpc_query(manager,&out->handle,&query)==NVX_GSP_RPC_OK) {
+        if(query.status!=NVX_GSP_RPC_PENDING) {
+            (void)nvx_gsp_rpc_release(manager,&out->handle);
+        }
+    }
+    return status;
+}
+
+nvx_gsp_rmapi_status_t nvx_gsp_rm_alloc_sync(
+    nvx_gsp_rpc_manager_t *manager,uint32_t client,uint32_t parent,
+    uint32_t object,uint32_t class_id,uint32_t flags,const void *params,
+    size_t params_size,void *scratch,size_t scratch_size,void *response,
+    size_t response_capacity,uint32_t timeout_ms,uint32_t poll_interval_ms,
+    nvx_gsp_rmapi_delay_fn delay_ms,void *delay_context,
+    nvx_gsp_rmapi_result_t *out)
+{
+    nvx_gsp_rmapi_status_t s=nvx_gsp_rm_alloc_submit(manager,client,parent,
+        object,class_id,flags,params,params_size,scratch,scratch_size,
+        response,response_capacity,out);
+    return s==NVX_GSP_RMAPI_OK?finish_sync(manager,out,scratch,scratch_size,
+        response,response_capacity,timeout_ms,poll_interval_ms,delay_ms,
+        delay_context):s;
+}
+
+nvx_gsp_rmapi_status_t nvx_gsp_rm_control_sync(
+    nvx_gsp_rpc_manager_t *manager,uint32_t client,uint32_t object,
+    uint32_t command,uint32_t rpc_flags,uint32_t ctrl_flags,
+    uint32_t access_right,const void *params,size_t params_size,
+    void *scratch,size_t scratch_size,void *response,size_t response_capacity,
+    uint32_t timeout_ms,uint32_t poll_interval_ms,
+    nvx_gsp_rmapi_delay_fn delay_ms,void *delay_context,
+    nvx_gsp_rmapi_result_t *out)
+{
+    nvx_gsp_rmapi_status_t s=nvx_gsp_rm_control_submit(manager,client,object,
+        command,rpc_flags,ctrl_flags,access_right,params,params_size,scratch,
+        scratch_size,response,response_capacity,out);
+    return s==NVX_GSP_RMAPI_OK?finish_sync(manager,out,scratch,scratch_size,
+        response,response_capacity,timeout_ms,poll_interval_ms,delay_ms,
+        delay_context):s;
+}
+
+nvx_gsp_rmapi_status_t nvx_gsp_rm_free_sync(
+    nvx_gsp_rpc_manager_t *manager,uint32_t root,uint32_t parent,
+    uint32_t object,void *scratch,size_t scratch_size,void *response,
+    size_t response_capacity,uint32_t timeout_ms,uint32_t poll_interval_ms,
+    nvx_gsp_rmapi_delay_fn delay_ms,void *delay_context,
+    nvx_gsp_rmapi_result_t *out)
+{
+    nvx_gsp_rmapi_status_t s=nvx_gsp_rm_free_submit(manager,root,parent,
+        object,scratch,scratch_size,response,response_capacity,out);
+    return s==NVX_GSP_RMAPI_OK?finish_sync(manager,out,scratch,scratch_size,
+        response,response_capacity,timeout_ms,poll_interval_ms,delay_ms,
+        delay_context):s;
+}
+
 nvx_gsp_rmapi_status_t nvx_gsp_rmapi_decode_status(
     const nvx_gsp_rmapi_result_t *op,const void *response,size_t response_size,
     uint32_t *out_status)

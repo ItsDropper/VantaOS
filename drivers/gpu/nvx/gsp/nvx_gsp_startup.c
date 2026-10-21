@@ -74,7 +74,7 @@ nvx_gsp_startup_status_t nvx_gsp_ga10x_start_and_init_rm(
     boot_status = nvx_gsp_ga10x_bootstrap_traced(
         staged_vbios, staged_vbios_sync, fwsec_info, fuse_version,
         boot_memory, init_args, init_args_sync, shared_queue, shared_queue_sync,
-        bar0, frts_framebuffer_offset, timeout_ms, poll_interval_ms,
+        queue_layout, bar0, frts_framebuffer_offset, timeout_ms, poll_interval_ms,
         delay_ms, context, &result.frts_result, &result.booter_mailbox1,
         &result.boot_trace);
     result.bootstrap_status = boot_status;

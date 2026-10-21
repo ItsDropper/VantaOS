@@ -30,7 +30,7 @@ typedef enum nvx_gsp_msgq_ga10x_status {
     NVX_GSP_MSGQ_GA10X_IO_ERROR
 } nvx_gsp_msgq_ga10x_status_t;
 
-typedef void (*nvx_gsp_msgq_ga10x_delay_fn)(void *context, uint32_t ms);
+typedef void (*nvx_gsp_msgq_ga10x_delay_fn)(uint32_t ms, void *context);
 
 typedef struct nvx_gsp_msgq_ga10x {
     nvx_gsp_msgq_mmio_context_t mmio_context;

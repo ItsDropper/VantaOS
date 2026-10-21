@@ -179,7 +179,19 @@ int main(void)
     assert(nvx_submit_validate_batch(&manager, &command, 64U, relocations,
                                      2U, &report) ==
            NVX_SUBMIT_TARGET_INVALID);
+
+    /*
+     * Reject uint32_t offset/span wraparound before computing a GPU address.
+     * Without the widened addition, UINT32_MAX + 2 wraps to 1 and can pass
+     * the target-size check for a small allocation.
+     */
+    relocations[1].target_offset = UINT32_MAX;
+    relocations[1].target_span = 2U;
+    assert(nvx_submit_validate_batch(&manager, &command, 64U, relocations,
+                                     2U, &report) ==
+           NVX_SUBMIT_TARGET_INVALID);
     relocations[1].target_offset = 4096U;
+    relocations[1].target_span = 32U;
     assert(nvx_submit_validate_batch(&manager, &command, 3U, relocations,
                                      2U, &report) ==
            NVX_SUBMIT_INVALID_COMMAND_RANGE);

@@ -1201,11 +1201,25 @@ jobs:
           test "$image_format" = "PNG"
           test "$image_width" = "1024"
           test "$image_height" = "768"
-          tesseract media/recovery.png stdout 2>/dev/null | tee /tmp/recovery-ocr.txt
-          grep -qi 'RECOVERY' /tmp/recovery-ocr.txt
-          grep -qi 'Continue to VantaOS' /tmp/recovery-ocr.txt
-          grep -qi 'System diagnostics' /tmp/recovery-ocr.txt
-          grep -qi 'Request QEMU screenshot' /tmp/recovery-ocr.txt
+          # The kernel font is intentionally small. Upscale for OCR without
+          # altering the captured artifact that developers inspect.
+          convert media/recovery.png -resize 300% -colorspace Gray -sharpen 0x1 /tmp/recovery-ocr-input.png
+          tesseract /tmp/recovery-ocr-input.png stdout --psm 11 2>/dev/null | tee /tmp/recovery-ocr.txt
+          if ! grep -qi 'RECOVERY' /tmp/recovery-ocr.txt ||
+             ! grep -qi 'Continue to VantaOS' /tmp/recovery-ocr.txt ||
+             ! grep -qi 'System diagnostics' /tmp/recovery-ocr.txt ||
+             ! grep -qi 'Request QEMU screenshot' /tmp/recovery-ocr.txt; then
+            echo "Recovery screenshot OCR did not find the expected menu labels."
+            echo "--- Recovery serial log ---"
+            cat recovery-boot.log 2>/dev/null || true
+            echo "--- Recovery QEMU log ---"
+            cat /tmp/vantaos-recovery-qemu.log 2>/dev/null || true
+            echo "--- OCR output ---"
+            cat /tmp/recovery-ocr.txt 2>/dev/null || true
+            echo "--- Screenshot metadata ---"
+            identify media/recovery.png
+            exit 1
+          fi
           test "$(convert media/recovery.png -format '%k' info:)" -gt 8
 
       - name: Upload recovery screenshot artifact

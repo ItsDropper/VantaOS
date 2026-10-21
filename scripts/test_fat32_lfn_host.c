@@ -42,7 +42,7 @@ int main(void)
     uint8_t short_entry[32] = {0};
     memcpy(short_entry, "VANTAOS TXT", 11);
     const uint8_t checksum = fat32_lfn_checksum(short_entry);
-    assert(checksum == fat32_lfn_checksum(short_entry));
+    assert(checksum == 234U);
 
     fat32_lfn_state_t state;
     uint8_t entry[32];

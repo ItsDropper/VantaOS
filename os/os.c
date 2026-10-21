@@ -90,8 +90,12 @@ void os_initialize(multiboot_info_t* mbd)
      * scheduler, and desktop startup. Fatal kernel faults never enter here.
      * The custom UEFI loader currently has no recovery-selection contract.
      */
-    if (recovery_environment_requested(mbd) && graphics_ready)
+    if (recovery_environment_requested(mbd) && graphics_ready) {
+        /* Recovery needs keyboard IRQs before the scheduler is initialized. */
+        __asm__ volatile ("sti" ::: "memory");
         recovery_environment_run(mbd);
+        __asm__ volatile ("cli" ::: "memory");
+    }
 
     process_initialize();
     if (!process_is_initialized())

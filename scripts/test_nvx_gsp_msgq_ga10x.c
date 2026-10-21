@@ -39,6 +39,12 @@ static void put64(uint8_t *p, uint64_t v)
 {
     put32(p, (uint32_t)v); put32(p + 4U, (uint32_t)(v >> 32U));
 }
+static void no_delay(void *context, uint32_t ms)
+{
+    (void)context;
+    (void)ms;
+}
+
 static void fake_gsp_reply(void *context, uint32_t ms)
 {
     fake_gsp_t *fake = (fake_gsp_t *)context;
@@ -140,7 +146,7 @@ int main(void)
 
     assert(nvx_gsp_msgq_ga10x_link_status(
         &runtime, &shared, &sync, &layout, 20U, 2U,
-        fake_gsp_reply, &(fake_gsp_t){0}) == NVX_GSP_MSGQ_GA10X_OK);
+        no_delay, NULL) == NVX_GSP_MSGQ_GA10X_OK);
     assert(runtime.status_linked == 1U);
     assert(runtime.status_queue.initialized == 1U);
     assert(runtime.status_queue.transmit == 0U);

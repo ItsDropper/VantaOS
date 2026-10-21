@@ -94,6 +94,18 @@ nvx_gsp_rmapi_status_t nvx_gsp_rm_unmap_memory_dma_submit(
     nvx_gsp_rpc_manager_t *manager, const nvx_gsp_unmap_memory_dma_t *mapping,
     void *scratch, size_t scratch_size, void *response,
     size_t response_capacity, nvx_gsp_rmapi_result_t *out);
+nvx_gsp_rmapi_status_t nvx_gsp_rm_map_memory_dma_sync(
+    nvx_gsp_rpc_manager_t *manager, const nvx_gsp_map_memory_dma_t *mapping,
+    void *scratch, size_t scratch_size, void *response,
+    size_t response_capacity, uint32_t timeout_ms, uint32_t poll_interval_ms,
+    nvx_gsp_rmapi_delay_fn delay_ms, void *delay_context,
+    uint64_t *out_dma_offset, nvx_gsp_rmapi_result_t *out_operation);
+nvx_gsp_rmapi_status_t nvx_gsp_rm_unmap_memory_dma_sync(
+    nvx_gsp_rpc_manager_t *manager, const nvx_gsp_unmap_memory_dma_t *mapping,
+    void *scratch, size_t scratch_size, void *response,
+    size_t response_capacity, uint32_t timeout_ms, uint32_t poll_interval_ms,
+    nvx_gsp_rmapi_delay_fn delay_ms, void *delay_context,
+    nvx_gsp_rmapi_result_t *out_operation);
 nvx_gsp_rmapi_status_t nvx_gsp_rm_map_memory_dma_result(
     const nvx_gsp_rmapi_result_t *operation, const void *response,
     size_t response_size, uint64_t *out_dma_offset);

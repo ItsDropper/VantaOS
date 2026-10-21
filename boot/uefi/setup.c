@@ -565,6 +565,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
 
     if (!vanta_setup_config_valid(&config)) {
         Print(L"ERROR: setup preferences failed validation.\r\n");
+        uefi_call_wrapper(source_root->Close, 1, source_root);
         return EFI_INVALID_PARAMETER;
     }
 
@@ -612,12 +613,23 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
     }
     serial_write("VANTAOS_SETUP_DISK_PROMPT\n");
     print_localized(&config, L"Select target disk number, or Q to cancel: ", L"Valitse kohdelevyn numero tai Q peruuttaaksesi: ");
-    if (!read_line(line, sizeof(line))) return EFI_ABORTED;
     uint32_t selected = 0U;
-    if (!parse_number(line, &selected) || selected == 0U || selected > disk_count) {
-        Print(L"Invalid disk selection. No disks changed.\r\n");
-        uefi_call_wrapper(source_root->Close, 1, source_root);
-        return EFI_INVALID_PARAMETER;
+    for (;;) {
+        if (!read_line(line, sizeof(line))) {
+            uefi_call_wrapper(source_root->Close, 1, source_root);
+            return EFI_ABORTED;
+        }
+        if ((line[0] == 'q' || line[0] == 'Q') && line[1] == '\0') {
+            print_localized(&config, L"Setup cancelled. No disks changed.\r\n",
+                            L"Asennus peruutettu. Levyihin ei tehty muutoksia.\r\n");
+            uefi_call_wrapper(source_root->Close, 1, source_root);
+            return EFI_ABORTED;
+        }
+        if (parse_number(line, &selected) && selected > 0U &&
+            selected <= disk_count)
+            break;
+        print_localized(&config, L"Invalid disk selection; try again or Q to cancel: ",
+                        L"Virheellinen levyn numero; yrita uudelleen tai Q peruuttaaksesi: ");
     }
     setup_disk_t *target = &disks[selected - 1U];
     CHAR16 *selected_path = DevicePathToStr(DevicePathFromHandle(target->handle));

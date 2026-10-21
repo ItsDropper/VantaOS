@@ -105,7 +105,7 @@ jobs:
           fi
 
       - name: Install build dependencies
-        run: sudo apt-get update && sudo apt-get install --yes build-essential nasm grub-pc-bin xorriso mtools dosfstools qemu-system-x86 gnu-efi ovmf gdisk xvfb socat imagemagick
+        run: sudo apt-get update && sudo apt-get install --yes build-essential nasm grub-pc-bin xorriso mtools dosfstools qemu-system-x86 gnu-efi ovmf gdisk xvfb socat imagemagick tesseract-ocr
 
       - name: Verify modular source manifests
         run: |
@@ -1136,8 +1136,6 @@ jobs:
           }
           trap cleanup EXIT
 
-          # GRUB's second entry is recovery. Select it before the 5-second
-          # default timeout and verify the kernel acknowledged the request.
           sleep 1
           printf 'sendkey down\nsendkey ret\n' |
             timeout 4s socat -T 1 - UNIX-CONNECT:/tmp/vantaos-recovery-monitor.sock || true
@@ -1156,8 +1154,6 @@ jobs:
           done
           test "$entered" -eq 1
 
-          # Select the screenshot request, which emits a serial marker. The
-          # host harness then captures the current framebuffer via QEMU monitor.
           printf 'sendkey down\nsendkey down\nsendkey down\nsendkey ret\n' |
             timeout 4s socat -T 1 - UNIX-CONNECT:/tmp/vantaos-recovery-monitor.sock || true
           requested=0
@@ -1180,8 +1176,27 @@ jobs:
           mkdir -p media
           convert /tmp/vantaos-recovery.ppm -strip media/recovery.png
           test -s media/recovery.png
-          identify -format '%m %wx%h\n' media/recovery.png | tee /tmp/recovery-image-info.txt
-          grep -Eq '^PNG [1-9][0-9]*x[1-9][0-9]*
+          read -r image_format image_width image_height < <(identify -format '%m %w %h' media/recovery.png)
+          test "$image_format" = "PNG"
+          test "$image_width" = "1024"
+          test "$image_height" = "768"
+          tesseract media/recovery.png stdout 2>/dev/null | tee /tmp/recovery-ocr.txt
+          grep -qi 'RECOVERY' /tmp/recovery-ocr.txt
+          grep -qi 'Continue to VantaOS' /tmp/recovery-ocr.txt
+          grep -qi 'System diagnostics' /tmp/recovery-ocr.txt
+          grep -qi 'Request QEMU screenshot' /tmp/recovery-ocr.txt
+          test "$(convert media/recovery.png -format '%k' info:)" -gt 8
+
+      - name: Upload recovery screenshot artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vantaos-recovery-screenshot
+          path: media/recovery.png
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload boot screenshot artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:

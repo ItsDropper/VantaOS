@@ -931,8 +931,11 @@ int gui_server_mouse_click(int x, int y, int button)
     }
     redraw_pending = 1;
     spinlock_unlock_irqrestore(&gui_lock, flags);
-    if (close_builtin && builtin_close)
-        builtin_close();
+    if (close_builtin)
+    {
+        if (builtin_close)
+            builtin_close();
+    }
     else if (builtin_click)
         (void)builtin_click(builtin_x, builtin_y, builtin_w, builtin_h,
                             x, y, button);

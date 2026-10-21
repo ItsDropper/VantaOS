@@ -12,6 +12,7 @@
 #include "graphics.h"
 #include "keyboard.h"
 #include "pmm.h"
+#include "power.h"
 #include "pci.h"
 #include "serial.h"
 #include "serial_log.h"
@@ -268,30 +269,6 @@ static void recovery_draw_logs(void)
     if (keyboard_has_event()) (void)keyboard_get_event();
 }
 
-static __attribute__((noreturn)) void recovery_restart(void)
-{
-    __asm__ volatile ("cli" ::: "memory");
-    for (unsigned int i = 0; i < 100000U; i++) {
-        uint8_t status;
-        __asm__ volatile ("inb $0x64, %0" : "=a"(status));
-        if ((status & 0x02U) == 0) {
-            uint8_t reset = 0xFE;
-            __asm__ volatile ("outb %0, $0x64" : : "a"(reset));
-            break;
-        }
-    }
-    for (;;) __asm__ volatile ("hlt");
-}
-
-static __attribute__((noreturn)) void recovery_shutdown(void)
-{
-    __asm__ volatile ("cli" ::: "memory");
-    /* QEMU/Bochs ACPI power-off port; unsupported hardware may ignore it. */
-    __asm__ volatile ("outw %0, %1" : : "a"((uint16_t)0x2000), "Nd"((uint16_t)0x604));
-    __asm__ volatile ("outw %0, %1" : : "a"((uint16_t)0x2000), "Nd"((uint16_t)0xB004));
-    for (;;) __asm__ volatile ("hlt");
-}
-
 int recovery_environment_requested(const multiboot_info_t* mbd)
 {
     if (!mbd || (mbd->flags & (1U << 2)) == 0 || mbd->cmdline == 0)
@@ -360,7 +337,7 @@ void recovery_environment_run(multiboot_info_t* mbd)
             continue;
         }
         if (selected == (screenshot_available ? 4 : 3))
-            recovery_restart();
-        recovery_shutdown();
+            power_restart();
+        power_shutdown();
     }
 }

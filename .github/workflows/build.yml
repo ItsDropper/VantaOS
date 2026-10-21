@@ -250,6 +250,19 @@ jobs:
       - name: Verify build artifacts
         run: test -s kernel.bin && test -s VantaOS.iso && test -s vantaos.img && test -s VantaOS-Setup.img
 
+      - name: Upload bootable OS and setup images
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vantaos-install-media
+          path: |
+            VantaOS-Setup.img
+            VantaOS.iso
+            kernel.bin
+            vantaos.img
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Compile the public freestanding userspace ABI
         run: |
           gcc -m64 -march=x86-64 -ffreestanding -fno-pie -fno-stack-protector -mno-red-zone -nostdlib -Wall -Wextra -Werror -Iuserspace/include -Iinclude -c tests/user/abi_compile.c -o /tmp/vantaos-user-abi.o

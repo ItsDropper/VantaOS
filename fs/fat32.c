@@ -8,6 +8,7 @@
 #include "fat32.h"
 #include "fat32_lfn.h"
 #include "block_device.h"
+#include "partition_device.h"
 #include "serial.h"
 #ifdef VANTAOS_SELF_TEST
 #define FAT32_RENAME_DIAG(message) serial_write(message "\n")
@@ -15,7 +16,6 @@
 #define FAT32_RENAME_DIAG(message) ((void)0)
 #endif
 
-#define FAT32_PARTITION_OFFSET 446
 #define FAT32_MAX_CLUSTER 0x0FFFFFF7U
 #define FAT32_EOC_MIN 0x0FFFFFF8U
 #define FAT32_BAD_CLUSTER 0xFFFFFFFEU
@@ -150,40 +150,6 @@ static int mount_partition(uint32_t lba, uint32_t partition_sectors)
     return 1;
 }
 
-static int find_partition(void)
-{
-    if (!active_device || active_device->sector_size != 512U ||
-        active_device->sector_count == 0 || !read_sector(0, sector_buffer))
-        return 0;
-
-    if (sector_buffer[510] != 0x55 ||
-        sector_buffer[511] != 0xAA)
-        return 0;
-
-    for (unsigned int i = 0; i < 4; i++)
-    {
-        unsigned int offset =
-            FAT32_PARTITION_OFFSET + i * 16;
-
-        uint8_t type = sector_buffer[offset + 4];
-
-        if (type != 0x0B && type != 0x0C)
-            continue;
-
-        uint32_t start =
-            fat32(&sector_buffer[offset + 8]);
-        uint32_t length =
-            fat32(&sector_buffer[offset + 12]);
-
-        if (length == 0U || (uint64_t)start >= active_device->sector_count ||
-            (uint64_t)length > active_device->sector_count - start)
-            continue;
-        if (mount_partition(start, length))
-            return 1;
-    }
-
-    return 0;
-}
 
 static uint32_t cluster_lba(uint32_t cluster)
 {
@@ -433,15 +399,13 @@ void fat32_initialize(void)
             (candidate->flags & BLOCK_DEVICE_READ_ONLY) != 0U)
             continue;
 
+        if ((candidate->flags & BLOCK_DEVICE_PARTITION) == 0U &&
+            partition_device_has_table(candidate))
+            continue;
+
         active_device = candidate;
         mounted = 0;
-        int found = find_partition();
-        if (!found)
-        {
-            mounted = 0;
-            found = mount_partition(0U, 0U);
-        }
-        if (!found)
+        if (!mount_partition(0U, 0U))
             continue;
 
         if (selected)
@@ -464,7 +428,7 @@ void fat32_initialize(void)
 
     active_device = selected;
     mounted = 0;
-    if (!find_partition() && !mount_partition(0U, 0U))
+    if (!mount_partition(0U, 0U))
     {
         mounted = 0;
         active_device = 0;

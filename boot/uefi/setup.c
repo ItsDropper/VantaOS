@@ -668,11 +668,17 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
 
     serial_write("VANTAOS_SETUP_REVIEW\n");
     print_localized(&config, L"\r\nSETUP REVIEW\r\n", L"\r\nASENNUKSEN YHTEENVETO\r\n");
-    Print(L"  Preferred language: %s\r\n",
-          config.language[0] == 'f' ? L"Finnish" : L"English");
-    Print(L"  Keyboard preference: %s\r\n",
-          config.keyboard[0] == 'f' ? L"Finnish" : L"US");
-    Print(L"  Time zone: %a\r\n", config.timezone);
+    if (config.language[0] == 'f') {
+        Print(L"  Kayttokieli: Suomi\r\n");
+        Print(L"  Nappaimistoasetus: %s\r\n",
+              config.keyboard[0] == 'f' ? L"Finnish" : L"US");
+        Print(L"  Aikavyohyke: %a\r\n", config.timezone);
+    } else {
+        Print(L"  Preferred language: English\r\n");
+        Print(L"  Keyboard preference: %s\r\n",
+              config.keyboard[0] == 'f' ? L"Finnish" : L"US");
+        Print(L"  Time zone: %a\r\n", config.timezone);
+    }
     print_localized(&config, L"  Partition scheme: GPT (UEFI)\r\n", L"  Osiointitapa: GPT (UEFI)\r\n");
     print_localized(&config, L"  Filesystems: FAT32 EFI System Partition + FAT32 system partition\r\n", L"  Tiedostojarjestelmat: FAT32 EFI-osio ja FAT32 jarjestelmaosio\r\n");
     print_localized(&config, L"  Setup preferences will be saved to \\SYSTEM\\SETUP.CFG.\r\n", L"  Asetukset tallennetaan tiedostoon \\SYSTEM\\SETUP.CFG.\r\n");

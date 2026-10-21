@@ -1093,6 +1093,9 @@ jobs:
             fi
             sleep 1
           done
+          # The ordinary boot path must never enter the optional recovery UI.
+          ! grep -q "^VANTAOS_RECOVERY_ENTER" desktop-boot.log
+
           if [ "$booted" -ne 1 ]; then
             echo "QEMU did not reach VANTAOS_BOOT_OK for the desktop screenshot."
             cat desktop-boot.log 2>/dev/null || true

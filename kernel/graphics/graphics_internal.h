@@ -62,6 +62,7 @@ int graphics_display_present_damage(
     size_t damage_bitmap_bytes, uint32_t tile_size);
 void graphics_mark_damage(int x, int y, int width, int height);
 void graphics_invalidate_scene(void);
+void graphics_reset_backbuffer(void);
 int graphics_take_scene_invalidation(void);
 void graphics_cursor_restore(void);
 int graphics_files_window_x(void);

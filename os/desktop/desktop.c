@@ -150,9 +150,15 @@ static void desktop_register_builtin_windows(void)
     (void)gui_server_register_builtin("System",
         (screen_w - app_w) / 2, (work_h - app_h) / 2,
         app_w, app_h, desktop_draw_system, 0, 0);
+    int settings_x = (screen_w - app_w) / 2 + 24;
+    int settings_y = (work_h - app_h) / 2 + 18;
+    if (settings_x + app_w > screen_w) settings_x = screen_w - app_w;
+    if (settings_y + app_h > work_h) settings_y = work_h - app_h;
+    if (settings_x < 0) settings_x = 0;
+    if (settings_y < 0) settings_y = 0;
     (void)gui_server_register_builtin("Settings",
-        (screen_w - app_w) / 2 + 24, (work_h - app_h) / 2 + 18,
-        app_w, app_h, desktop_draw_settings, desktop_settings_click, 0);
+        settings_x, settings_y, app_w, app_h,
+        desktop_draw_settings, desktop_settings_click, 0);
 }
 
 static void desktop_gui_present(void)

@@ -155,13 +155,12 @@ jobs:
                   time.sleep(0.25)
 
               wait_marker("VANTAOS_SETUP_START")
-              for marker in (
-                  "VANTAOS_SETUP_LANGUAGE_PROMPT",
-                  "VANTAOS_SETUP_KEYBOARD_PROMPT",
-              ):
-                  wait_marker(marker)
-                  key("ret")
-
+              wait_marker("VANTAOS_SETUP_LANGUAGE_PROMPT")
+              key("2")
+              key("ret")
+              wait_marker("VANTAOS_SETUP_KEYBOARD_PROMPT")
+              key("2")
+              key("ret")
               wait_marker("VANTAOS_SETUP_TIMEZONE_PROMPT")
               key("3")
               key("6")
@@ -210,6 +209,8 @@ jobs:
           test -s /tmp/installed-bootx64.efi
           mcopy -i install-target.img@@537919488 ::/SYSTEM/SETUP.CFG /tmp/installed-setup.cfg
           grep -q '^version=1$' /tmp/installed-setup.cfg
+          grep -q '^language=fi$' /tmp/installed-setup.cfg
+          grep -q '^keyboard=fi$' /tmp/installed-setup.cfg
           grep -q '^timezone=Europe/London$' /tmp/installed-setup.cfg
           mcopy -i install-target.img@@537919488 ::/TERMINAL.ELF /tmp/installed-terminal.elf
           mcopy -i install-target.img@@537919488 ::/SYSTEM/SETTINGS.ELF /tmp/installed-settings.elf

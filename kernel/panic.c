@@ -90,7 +90,7 @@ void kernel_panic(
     if (!graphics_is_initialized())
     {
         terminal_reset();
-        terminal_write("\nVANTAOS KERNEL PANIC\n\n");
+        terminal_write("\nVANTAOS ENCOUNTERED A FATAL ERROR\n\n");
         terminal_write("The kernel stopped because a fatal error was detected.\n");
         terminal_write("Reason: ");
         terminal_write(reason ? reason : "Unknown kernel failure");
@@ -128,14 +128,14 @@ void kernel_panic(
     int width = (int)graphics_get_width();
     int height = (int)graphics_get_height();
 
-    graphics_clear(0x00000000);
+    graphics_clear(0x008A1018);
 
     int x = width >= 900 ? 64 : 28;
     int y = height >= 600 ? 42 : 24;
 
     graphics_draw_text(
         x, y,
-        "VANTAOS KERNEL PANIC",
+        "VANTAOS ENCOUNTERED A FATAL ERROR",
         0x00F2F5F8, 2
     );
 
@@ -177,17 +177,24 @@ void kernel_panic(
     graphics_draw_text(
         x,
         height - 54,
-        "SYSTEM HALTED",
+        "THE SYSTEM CANNOT SAFELY CONTINUE",
         0x00F2F5F8, 1
     );
 
     graphics_draw_text(
         x,
         height - 38,
-        "The system cannot safely continue. Restart VantaOS.",
+        "Restart VantaOS. Diagnostic output is also available on serial.",
         0x008E9AA5, 1
     );
 
+    serial_write("VANTAOS_KERNEL_PANIC_BEGIN\\n");
+    serial_write("VANTAOS ENCOUNTERED A FATAL ERROR\\nReason: ");
+    serial_write(reason ? reason : "Unknown kernel failure");
+    serial_write("\\n");
+    if (frame) { serial_write("RIP="); serial_write_hex(frame->rip); serial_write(" RSP="); serial_write_hex(frame->rsp); serial_write(" RBP="); serial_write_hex(frame->rbp); serial_write(" ERROR="); serial_write_hex(frame->error_code); serial_write(" RAX="); serial_write_hex(frame->rax); serial_write(" RBX="); serial_write_hex(frame->rbx); serial_write(" RCX="); serial_write_hex(frame->rcx); serial_write(" RDX="); serial_write_hex(frame->rdx); serial_write("\\n"); }
+    if (has_fault_address) { serial_write("FAULT_ADDRESS="); serial_write_hex(fault_address); serial_write("\\n"); }
+    serial_write("VANTAOS_KERNEL_PANIC_END\\n");
     panic_broadcast_stop_peers();
     panic_halt();
 }

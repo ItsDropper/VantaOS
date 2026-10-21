@@ -43,6 +43,18 @@ nvx_attach_status_t nvx_device_attach(
         !nvx_match_pci_device(pci_device))
         return NVX_ATTACH_INVALID_ARGUMENT;
 
+    /*
+     * PCI vendor/class matching identifies a candidate, not a supported GPU.
+     * This implementation has an audited profile for RTX 3060 IDs only.
+     * Never map an unknown NVIDIA device until its profile is implemented.
+     */
+    nvx_generation_family_t family;
+    nvx_device_profile_t profile;
+    if (!nvx_identify_pci_device(pci_device->device_id, &family, &profile) ||
+        family != NVX_FAMILY_AMPERE ||
+        profile != NVX_PROFILE_GEFORCE_RTX_3060)
+        return NVX_ATTACH_INVALID_ARGUMENT;
+
     if (!nvx_lifecycle_transition(&out_device->lifecycle, NVX_STATE_PROBING))
         return NVX_ATTACH_LIFECYCLE_ERROR;
 

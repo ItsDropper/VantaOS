@@ -184,8 +184,10 @@ void partition_device_initialize(void)
                 part->block.partition_type_guid[j] = found[i].type_guid[j];
             copy_string(part->block.partition_label,
                         sizeof(part->block.partition_label), found[i].name);
-            if (block_device_register(&part->block) == BLOCK_STATUS_OK)
+            if (block_device_register(&part->block) == BLOCK_STATUS_OK) {
                 ++partition_count;
+                serial_write("VANTAOS_PARTITION_OK\n");
+            }
         }
     }
     serial_write("VANTAOS_PARTITION_SCAN_DONE\n");

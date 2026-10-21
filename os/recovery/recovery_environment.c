@@ -7,6 +7,7 @@
 
 #include "recovery_environment.h"
 
+#include "block_device.h"
 #include "filesystem.h"
 #include "graphics.h"
 #include "keyboard.h"
@@ -138,41 +139,72 @@ static void recovery_draw_menu(int selected, const char* status)
     graphics_present();
 }
 
+static void recovery_cpu_vendor(char output[13])
+{
+    uint32_t eax = 0, ebx = 0, ecx = 0, edx = 0;
+    __asm__ volatile ("cpuid" : "+a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx));
+    const uint32_t words[3] = { ebx, edx, ecx };
+    for (size_t w = 0; w < 3; w++)
+        for (size_t b = 0; b < 4; b++)
+            output[w * 4 + b] = (char)(words[w] >> (b * 8));
+    output[12] = 0;
+}
+
 static void recovery_draw_diagnostics(void)
 {
     const vanta_boot_info_t* info = kernel_get_boot_info();
     uint32_t width = graphics_get_width();
     uint32_t height = graphics_get_height();
     int margin = width >= 900 ? 56 : 18;
-    int y = height >= 600 ? 142 : 92;
+    int y = height >= 600 ? 132 : 82;
     char number[24];
+    char vendor[13];
 
-    recovery_header("Live values from initialized kernel facilities.");
-    graphics_draw_text(margin + 24, y, "FRAMEBUFFER", RECOVERY_BLUE, 1);
-    graphics_draw_text(margin + 24, y + 20, "Width:", RECOVERY_MUTED, 1);
+    recovery_header("Live values read from CPU, memory, PCI, storage, and graphics facilities.");
+    recovery_cpu_vendor(vendor);
+    graphics_draw_text(margin + 24, y, "CPU", RECOVERY_BLUE, 1);
+    graphics_draw_text(margin + 24, y + 18, "CPUID vendor:", RECOVERY_MUTED, 1);
+    graphics_draw_text(margin + 140, y + 18, vendor, RECOVERY_TEXT, 1);
+
+    graphics_draw_text(margin + 24, y + 42, "FRAMEBUFFER", RECOVERY_BLUE, 1);
+    graphics_draw_text(margin + 24, y + 60, "Resolution:", RECOVERY_MUTED, 1);
     recovery_decimal(info ? info->framebuffer.width : width, number, sizeof(number));
-    graphics_draw_text(margin + 100, y + 20, number, RECOVERY_TEXT, 1);
-    graphics_draw_text(margin + 24, y + 40, "Height:", RECOVERY_MUTED, 1);
-    recovery_decimal(info ? info->framebuffer.height : height, number, sizeof(number));
-    graphics_draw_text(margin + 100, y + 40, number, RECOVERY_TEXT, 1);
-    graphics_draw_text(margin + 24, y + 60, "Bits per pixel:", RECOVERY_MUTED, 1);
-    recovery_decimal(info ? info->framebuffer.bits_per_pixel : 0, number, sizeof(number));
     graphics_draw_text(margin + 140, y + 60, number, RECOVERY_TEXT, 1);
+    graphics_draw_text(margin + 188, y + 60, "x", RECOVERY_MUTED, 1);
+    recovery_decimal(info ? info->framebuffer.height : height, number, sizeof(number));
+    graphics_draw_text(margin + 204, y + 60, number, RECOVERY_TEXT, 1);
+    graphics_draw_text(margin + 24, y + 78, "Bits per pixel:", RECOVERY_MUTED, 1);
+    recovery_decimal(info ? info->framebuffer.bits_per_pixel : 0, number, sizeof(number));
+    graphics_draw_text(margin + 140, y + 78, number, RECOVERY_TEXT, 1);
 
-    graphics_draw_text(margin + 24, y + 92, "MEMORY", RECOVERY_BLUE, 1);
-    graphics_draw_text(margin + 24, y + 112, "Physical blocks (total/free):", RECOVERY_MUTED, 1);
+    graphics_draw_text(margin + 24, y + 102, "MEMORY", RECOVERY_BLUE, 1);
+    graphics_draw_text(margin + 24, y + 120, "Physical blocks (total/free):", RECOVERY_MUTED, 1);
     recovery_decimal(pmm_get_total_blocks(), number, sizeof(number));
-    graphics_draw_text(margin + 220, y + 112, number, RECOVERY_TEXT, 1);
-    graphics_draw_text(margin + 280, y + 112, "/", RECOVERY_MUTED, 1);
+    graphics_draw_text(margin + 220, y + 120, number, RECOVERY_TEXT, 1);
+    graphics_draw_text(margin + 280, y + 120, "/", RECOVERY_MUTED, 1);
     recovery_decimal(pmm_get_free_blocks(), number, sizeof(number));
-    graphics_draw_text(margin + 296, y + 112, number, RECOVERY_TEXT, 1);
+    graphics_draw_text(margin + 296, y + 120, number, RECOVERY_TEXT, 1);
 
-    graphics_draw_text(margin + 24, y + 144, "DEVICES", RECOVERY_BLUE, 1);
-    graphics_draw_text(margin + 24, y + 164, "Enumerated PCI functions:", RECOVERY_MUTED, 1);
+    graphics_draw_text(margin + 24, y + 144, "DRIVERS / STORAGE", RECOVERY_BLUE, 1);
+    graphics_draw_text(margin + 24, y + 162, "Enumerated PCI functions:", RECOVERY_MUTED, 1);
     recovery_decimal((uint64_t)pci_get_device_count(), number, sizeof(number));
-    graphics_draw_text(margin + 220, y + 164, number, RECOVERY_TEXT, 1);
-    graphics_draw_text(margin + 24, y + 184, "FAT32 filesystem:", RECOVERY_MUTED, 1);
-    graphics_draw_text(margin + 160, y + 184,
+    graphics_draw_text(margin + 220, y + 162, number, RECOVERY_TEXT, 1);
+    graphics_draw_text(margin + 24, y + 180, "Registered block devices:", RECOVERY_MUTED, 1);
+    recovery_decimal(block_device_count(), number, sizeof(number));
+    graphics_draw_text(margin + 220, y + 180, number, RECOVERY_TEXT, 1);
+
+    for (uint32_t i = 0; i < block_device_count() && i < 2; i++) {
+        block_device_t* device = block_device_get(i);
+        if (!device) continue;
+        int row_y = y + 198 + (int)i * 18;
+        graphics_draw_text(margin + 24, row_y, device->name, RECOVERY_TEXT, 1);
+        recovery_decimal(device->sector_count, number, sizeof(number));
+        graphics_draw_text(margin + 150, row_y, number, RECOVERY_MUTED, 1);
+        graphics_draw_text(margin + 300, row_y, "sectors", RECOVERY_MUTED, 1);
+    }
+
+    graphics_draw_text(margin + 24, y + 242, "FAT32 filesystem:", RECOVERY_MUTED, 1);
+    graphics_draw_text(margin + 160, y + 242,
                        filesystem_is_initialized() ? "initialized" : "unavailable",
                        RECOVERY_TEXT, 1);
     graphics_draw_text(margin + 24, (int)height - 38, "Press any key to return.", RECOVERY_MUTED, 1);

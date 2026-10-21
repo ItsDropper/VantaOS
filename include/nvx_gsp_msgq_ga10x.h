@@ -42,6 +42,7 @@ typedef struct nvx_gsp_msgq_ga10x {
 } nvx_gsp_msgq_ga10x_t;
 
 /*
+ * Zero-initialize runtime before first use.
  * Call before transferring shared memory to GSP. Initializes the CPU-producer
  * command queue and its documented hardware head/tail registers.
  */

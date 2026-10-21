@@ -558,6 +558,18 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
         return EFI_INVALID_PARAMETER;
     }
 
+    serial_write("VANTAOS_SETUP_REVIEW\n");
+    Print(L"\r\nSETUP REVIEW\r\n");
+    Print(L"  Preferred language: %s\r\n",
+          config.language[0] == 'f' ? L"Finnish" : L"English");
+    Print(L"  Keyboard preference: %s\r\n",
+          config.keyboard[0] == 'f' ? L"Finnish" : L"US");
+    Print(L"  Time zone: %a\r\n", config.timezone);
+    Print(L"  Partition scheme: GPT (UEFI)\r\n");
+    Print(L"  Filesystems: FAT32 EFI System Partition + FAT32 system partition\r\n");
+    Print(L"  Setup preferences will be saved to \\SYSTEM\\SETUP.CFG.\r\n");
+    Print(L"  Language and keyboard preferences are saved metadata; runtime localization/keymap integration is not yet implemented.\r\n\r\n");
+
     setup_disk_t disks[SETUP_MAX_DISKS];
     UINTN disk_count = 0U;
     int source_seen = 0;

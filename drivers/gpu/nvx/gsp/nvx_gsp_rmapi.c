@@ -427,7 +427,7 @@ nvx_gsp_rmapi_status_t nvx_gsp_rmapi_alloc_ampere_channel_sync(
     nvx_gsp_rmapi_result_t *out)
 {
     nvx_gsp_channel_alloc_params_t wire={0};
-    uint64_t ring_bytes,ring_end;
+    uint64_t ring_bytes;
     if(!params||!client||!device||!channel_handle||
        !params->h_object_error||!params->h_vaspace||
        params->gpfifo_entries<2U||
@@ -437,8 +437,6 @@ nvx_gsp_rmapi_status_t nvx_gsp_rmapi_alloc_ampere_channel_sync(
     ring_bytes=(uint64_t)params->gpfifo_entries*8U;
     if(params->gpfifo_offset>UINT64_MAX-ring_bytes)
         return NVX_GSP_RMAPI_INVALID_ARGUMENT;
-    ring_end=params->gpfifo_offset+ring_bytes;
-    (void)ring_end;
 
     /*
      * Copy fields individually so C struct padding is zeroed before the

@@ -157,7 +157,10 @@ void graphics_mouse_click(int button)
 
         if (!(cursor_x >= menu_x && cursor_x < menu_x + menu_w &&
               cursor_y >= menu_y && cursor_y < height - 8))
+        {
             start_menu_open = 0;
+            power_menu_open = 0;
+        }
 
         return;
     }

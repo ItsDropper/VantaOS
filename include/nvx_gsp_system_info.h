@@ -22,6 +22,14 @@
 #define NVX_GSP_SI_ATOMICS_CONSOLE_VA    (UINT32_C(1) << 7)
 #define NVX_GSP_SI_TIMER_OFFSET          (UINT32_C(1) << 8)
 #define NVX_GSP_SI_FHB_BUSINFO           (UINT32_C(1) << 9)
+#define NVX_GSP_SI_NV_DOMAIN_BDF         (UINT32_C(1) << 10)
+#define NVX_GSP_SI_SIM_ACCESS_ADDRESS    (UINT32_C(1) << 11)
+#define NVX_GSP_SI_NOTIFY_SURFACE        (UINT32_C(1) << 12)
+#define NVX_GSP_SI_PCIE_ATOMICS_MASK     (UINT32_C(1) << 13)
+#define NVX_GSP_SI_CONSOLE_MEMORY_SIZE   (UINT32_C(1) << 14)
+#define NVX_GSP_SI_MAX_USER_VA           (UINT32_C(1) << 15)
+#define NVX_GSP_SI_FHB_BUSINFO_ONLY      (UINT32_C(1) << 16)
+#define NVX_GSP_SI_CHIPSET_BUSINFO_ONLY  (UINT32_C(1) << 17)
 
 typedef struct nvx_gsp_system_info {
     uint32_t present;

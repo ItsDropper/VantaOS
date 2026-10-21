@@ -10,6 +10,7 @@
 #include "pci.h"
 #include "mouse.h"
 #include "file_explorer.h"
+#include <stddef.h>
 #include <stdint.h>
 
 #define BOCHS_VBE_INDEX 0x01CE
@@ -22,10 +23,22 @@
 #define BOCHS_VBE_INDEX_ENABLE    0x04
 #define BOCHS_VBE_INDEX_VIRT_WIDTH  0x06
 #define BOCHS_VBE_INDEX_VIRT_HEIGHT 0x07
+#define BOCHS_VBE_INDEX_Y_OFFSET 0x09
+#define BOCHS_VBE_INDEX_VIDEO_MEMORY_64K 0x0A
 #define BOCHS_VBE_INDEX_LFB       0x0D
 
 #define BOCHS_VBE_ID 0xB0C5
 #define BOCHS_VBE_ENABLE_LFB 0x0041
+#define GRAPHICS_BACKBUFFER_BASE 0xD0800000U
+#define GRAPHICS_SCANOUT_WINDOW_BYTES ((uintptr_t)GRAPHICS_BACKBUFFER_BASE - (uintptr_t)GRAPHICS_VIRTUAL_BASE)
+#define GRAPHICS_VBLANK_POLL_LIMIT 1000000U
+
+static uint8_t* graphics_scanout_base;
+static uint64_t graphics_scanout_page_bytes;
+static uint32_t graphics_scanout_page_index;
+static int graphics_bochs_mode;
+static int graphics_pageflip_enabled;
+static int graphics_pageflip_seeded
 
 void bochs_vbe_write(uint16_t index, uint16_t value)
 {

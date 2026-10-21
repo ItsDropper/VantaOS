@@ -1131,12 +1131,18 @@ jobs:
         run: |
           set -euo pipefail
           rm -f /tmp/vantaos-recovery-monitor.sock /tmp/vantaos-recovery.ppm recovery-boot.log recovery-regression.img
-          # Never share the desktop screenshot test's writable disk: its QEMU wrapper
-          # can outlive the shell cleanup briefly and hold a lock on the shared image.
+          # Assert the shipped menu contains the Shift shortcut, then create a
+          # test-only ISO with recovery selected by default. This avoids flaky
+          # timing-sensitive BIOS key injection while still booting through GRUB.
+          grep -q 'keystatus --shift' isodir/boot/grub/grub.cfg
+          cp -a isodir /tmp/vantaos-recovery-isodir
+          sed -i '/^insmod keystatus$/,/^fi$/c\set default=1' /tmp/vantaos-recovery-isodir/boot/grub/grub.cfg
+          grub-mkrescue -o /tmp/VantaOS-recovery.iso /tmp/vantaos-recovery-isodir
+          # Give recovery its own disposable writable disk to avoid QEMU lock races.
           cp nvme-fat32-template.img recovery-regression.img
           xvfb-run -a qemu-system-x86_64 \
             -machine pc -m 512M -smp 2 -vga std \
-            -drive file=VantaOS.iso,media=cdrom,format=raw \
+            -drive file=/tmp/VantaOS-recovery.iso,media=cdrom,format=raw \
             -drive file=recovery-regression.img,if=ide,format=raw \
             -boot order=d -display sdl \
             -serial file:recovery-boot.log \
@@ -1149,13 +1155,8 @@ jobs:
           }
           trap cleanup EXIT
 
-          # Let firmware and GRUB finish presenting the menu before injecting keys.
-          # The timeout remains five seconds, so keep this delay bounded.
-          sleep 2
-          printf 'sendkey down\nsendkey ret\n' |
-            timeout 4s socat -T 1 - UNIX-CONNECT:/tmp/vantaos-recovery-monitor.sock || true
           entered=0
-          for attempt in $(seq 1 30); do
+          for attempt in $(seq 1 40); do
             if grep -q '^VANTAOS_RECOVERY_ENTER' recovery-boot.log 2>/dev/null; then
               entered=1
               break
@@ -1167,7 +1168,12 @@ jobs:
             fi
             sleep 1
           done
-          test "$entered" -eq 1
+          if [ "$entered" -ne 1 ]; then
+            echo "Recovery environment did not start from the test-only recovery ISO."
+            cat /tmp/vantaos-recovery-qemu.log
+            cat recovery-boot.log 2>/dev/null || true
+            exit 1
+          fi
 
           printf 'sendkey down\nsendkey down\nsendkey down\nsendkey ret\n' |
             timeout 4s socat -T 1 - UNIX-CONNECT:/tmp/vantaos-recovery-monitor.sock || true

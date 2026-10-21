@@ -67,12 +67,12 @@ int main(void)
     assert(ga106->family == NVX_FAMILY_AMPERE);
     assert(ga106->profile == NVX_PROFILE_GEFORCE_RTX_3060);
     assert(ga106->firmware_directory != 0);
-    assert(ga106->firmware_directory[0] != '\\0');
+    assert(ga106->firmware_directory[0] != '\0');
     assert(ga106->firmware_component_count == NVX_GENERATION_FIRMWARE_COMPONENTS);
     assert(ga106->firmware_components != 0);
     for (size_t i = 0U; i < ga106->firmware_component_count; ++i)
         assert(ga106->firmware_components[i] != 0 &&
-               ga106->firmware_components[i][0] != '\\0');
+               ga106->firmware_components[i][0] != '\0');
     assert(nvx_generation_for_firmware_chip("gb202") == 0);
     assert(nvx_generation_for_firmware_chip(0) == 0);
     assert(nvx_generation_for_firmware_chip("") == 0);

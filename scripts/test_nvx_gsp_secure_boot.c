@@ -197,7 +197,6 @@ int main(void)
         .wpr2_addr_lo_units = 0x1000U,
         .expected_wpr2_addr_lo_units = 0x1000U
     };
-    uint32_t gsp_mailbox0 = 0U, gsp_mailbox1 = 0U;
 
     assert(bar_bytes && load_bytes && metadata_bytes && radix_bytes && vbios_bytes &&
            init_args_bytes && shared_queue_bytes);

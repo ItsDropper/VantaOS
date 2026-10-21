@@ -331,6 +331,18 @@ int main(void)
     assert(shared_queue_sync.owner == NVX_DMA_OWNER_CPU);
     frts_result.frts_error_code = 0U;
 
+    /* A tampered queue PTE must be rejected before any DMA ownership handoff. */
+    shared_queue_bytes[0] ^= 1U;
+    assert(nvx_gsp_ga10x_prepare_riscv_after_frts(
+        &memory, &init_args_buffer, &init_args_sync,
+        &shared_queue_buffer, &shared_queue_sync, &queue_layout, &bar0,
+        0x01000000ULL, &frts_result, 20U, 1U, fake_delay, &hardware) ==
+        NVX_GSP_FALCON_IMAGE_INVALID);
+    shared_queue_bytes[0] ^= 1U;
+    assert(memory.radix3_elf_sync.owner == NVX_DMA_OWNER_CPU);
+    assert(init_args_sync.owner == NVX_DMA_OWNER_CPU);
+    assert(shared_queue_sync.owner == NVX_DMA_OWNER_CPU);
+
     assert(nvx_gsp_ga10x_execute_booter_load(&memory, &bar0, 20U, 1U,
         fake_delay, &hardware, &mailbox1) == NVX_GSP_FALCON_BOOTER_NOT_STAGED);
     memory.booters_staged = 1U;

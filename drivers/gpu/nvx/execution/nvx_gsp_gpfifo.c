@@ -36,7 +36,7 @@ nvx_gsp_gpfifo_status_t nvx_gsp_gpfifo_channel_init(
     if(!c||!entries||!gp_get||!gp_put||!doorbell||
        ((uintptr_t)entries&3U)!=0U||((uintptr_t)gp_get&3U)!=0U||
        ((uintptr_t)gp_put&3U)!=0U||((uintptr_t)doorbell&3U)!=0U||
-       !power_of_two(count)||count>SIZE_MAX/(NVX_GSP_GPFIFO_ENTRY_DWORDS*4U))
+       !power_of_two(count))
         return NVX_GSP_GPFIFO_INVALID_ARGUMENT;
     needed=(size_t)count*NVX_GSP_GPFIFO_ENTRY_DWORDS*4U;
     if(mapped_bytes<needed)return NVX_GSP_GPFIFO_BAD_RING;

@@ -69,6 +69,16 @@ void os_initialize(multiboot_info_t* mbd)
     int graphics_ready =
         graphics_initialize(mbd);
 
+#ifdef VANTAOS_PANIC_QEMU_TEST
+    /*
+     * Stop at the earliest point where the real panic renderer is available.
+     * Later filesystem/process/desktop initialization can stall independently
+     * and is outside this screen-capture regression's scope.
+     */
+    kernel_panic("VANTAOS_QEMU_CONTROLLED_PANIC_TEST", 0xFFFFFFFFU,
+                 (struct exception_frame*)0, 0U, 0);
+#endif
+
     terminal_write("Graphics diagnostics:\n");
     terminal_write("  Multiboot flags: ");
     terminal_write_hex(mbd ? mbd->flags : 0);
@@ -132,11 +142,6 @@ void os_initialize(multiboot_info_t* mbd)
     desktop_initialize(mbd);
     (void)serial_boot_log_flush();
 
-#ifdef VANTAOS_PANIC_QEMU_TEST
-    /* Enabled only in a dedicated test build; never present in normal images. */
-    kernel_panic("VANTAOS_QEMU_CONTROLLED_PANIC_TEST", 0xFFFFFFFFU,
-                 (struct exception_frame*)0, 0U, 0);
-#endif
 
 #ifdef VANTAOS_SELF_TEST
     os_selftest_initialize();

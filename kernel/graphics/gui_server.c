@@ -855,6 +855,23 @@ void gui_server_mouse_release(int button)
     if (button != 1)
         return;
     uint64_t flags = spinlock_lock_irqsave(&gui_lock);
+
+    /* Dragging a titlebar to the top edge is the conventional maximize gesture. */
+    if (dragging_window_id != 0U)
+    {
+        for (unsigned int i = 0; i < VANTA_GUI_MAX_WINDOWS; i++)
+        {
+            gui_window_t* window = &windows[i];
+            if (window->used && window->visible &&
+                window->id == dragging_window_id)
+            {
+                if (!window->maximized && window->y == 0)
+                    gui_toggle_maximized_locked(window);
+                break;
+            }
+        }
+    }
+
     dragging_window_id = 0U;
     resizing_window_id = 0U;
     spinlock_unlock_irqrestore(&gui_lock, flags);

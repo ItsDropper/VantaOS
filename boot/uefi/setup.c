@@ -514,24 +514,45 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
     }
 
     serial_write("VANTAOS_SETUP_TIMEZONE_PROMPT\n");
-    Print(L"Time zone: 1) Europe/Helsinki  2) Etc/UTC  3) Europe/Stockholm\r\n");
-    Print(L"           4) Europe/London    5) America/New_York [1]: ");
+    static const char *const zones[] = {
+        "Europe/Helsinki", "Etc/UTC", "Europe/Stockholm", "Europe/Oslo",
+        "Europe/Copenhagen", "Europe/Berlin", "Europe/Paris", "Europe/Madrid",
+        "Europe/Rome", "Europe/Amsterdam", "Europe/Brussels", "Europe/Zurich",
+        "Europe/Vienna", "Europe/Warsaw", "Europe/Prague", "Europe/Budapest",
+        "Europe/Athens", "Europe/Istanbul", "Europe/Lisbon", "Europe/Dublin",
+        "Europe/Kyiv", "America/New_York", "America/Chicago", "America/Denver",
+        "America/Los_Angeles", "America/Toronto", "America/Vancouver",
+        "America/Sao_Paulo", "Asia/Tokyo", "Asia/Seoul", "Asia/Shanghai",
+        "Asia/Kolkata", "Asia/Singapore", "Australia/Sydney", "Pacific/Auckland"
+    };
+    Print(L"Time zone (enter number; default 1):\r\n");
+    Print(L" 1 Helsinki       2 UTC             3 Stockholm       4 Oslo\r\n");
+    Print(L" 5 Copenhagen     6 Berlin          7 Paris           8 Madrid\r\n");
+    Print(L" 9 Rome          10 Amsterdam      11 Brussels       12 Zurich\r\n");
+    Print(L"13 Vienna        14 Warsaw         15 Prague         16 Budapest\r\n");
+    Print(L"17 Athens        18 Istanbul       19 Lisbon         20 Dublin\r\n");
+    Print(L"21 Kyiv          22 New York       23 Chicago        24 Denver\r\n");
+    Print(L"25 Los Angeles   26 Toronto        27 Vancouver      28 Sao Paulo\r\n");
+    Print(L"29 Tokyo         30 Seoul          31 Shanghai       32 Kolkata\r\n");
+    Print(L"33 Singapore     34 Sydney         35 Auckland [1]: ");
     if (!read_line(line, sizeof(line))) return EFI_ABORTED;
-    const char *zone = "Europe/Helsinki";
-    if (line[0] == '2' && line[1] == '\0') zone = "Etc/UTC";
-    else if (line[0] == '3' && line[1] == '\0') zone = "Europe/Stockholm";
-    else if (line[0] == '4' && line[1] == '\0') zone = "Europe/London";
-    else if (line[0] == '5' && line[1] == '\0') zone = "America/New_York";
-    else if (line[0] != '\0' && !(line[0] == '1' && line[1] == '\0')) {
-        Print(L"Invalid choice.\r\n");
+    uint32_t zone_choice = 1U;
+    if (line[0] != '\0' &&
+        (!parse_number(line, &zone_choice) ||
+         zone_choice == 0U ||
+         zone_choice > sizeof(zones) / sizeof(zones[0]))) {
+        Print(L"Invalid time-zone choice. No disks changed.\r\n");
+        uefi_call_wrapper(source_root->Close, 1, source_root);
         return EFI_INVALID_PARAMETER;
     }
+    const char *zone = zones[zone_choice - 1U];
     size_t zone_length = 0U;
     while (zone[zone_length] && zone_length + 1U < sizeof(config.timezone)) {
         config.timezone[zone_length] = zone[zone_length];
         ++zone_length;
     }
     config.timezone[zone_length] = '\0';
+
     if (!vanta_setup_config_valid(&config)) {
         Print(L"ERROR: setup preferences failed validation.\r\n");
         return EFI_INVALID_PARAMETER;

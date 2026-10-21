@@ -168,11 +168,19 @@ jobs:
               print("VANTAOS_SETUP_E2E_INSTALL_COMPLETE")
           PY
 
-          grep -q '^VANTAOS_SETUP_GPT_OK' setup-install.log
-          grep -q '^VANTAOS_SETUP_FORMAT_OK' setup-install.log
-          grep -q '^VANTAOS_SETUP_FILES_OK' setup-install.log
-          grep -q '^VANTAOS_SETUP_COMPLETE' setup-install.log
-          sgdisk --verify install-target.img
+          for marker in VANTAOS_SETUP_GPT_OK VANTAOS_SETUP_FORMAT_OK VANTAOS_SETUP_FILES_OK VANTAOS_SETUP_COMPLETE; do
+            if ! grep -q "$marker" setup-install.log; then
+              echo "Missing installer serial marker: $marker"
+              cat setup-install.log
+              cat /tmp/vantaos-installer-qemu.log
+              exit 1
+            fi
+          done
+          sgdisk --verify install-target.img || {
+            sgdisk --print install-target.img || true
+            cat setup-install.log
+            exit 1
+          }
 
           # Verify the fallback EFI loader on the ESP and the stored setup choices
           # on the separate Basic Data volume before attempting the installed boot.

@@ -188,13 +188,6 @@ void kernel_panic(
         0x008E9AA5, 1
     );
 
-    serial_write("VANTAOS_KERNEL_PANIC_BEGIN\\n");
-    serial_write("VANTAOS ENCOUNTERED A FATAL ERROR\\nReason: ");
-    serial_write(reason ? reason : "Unknown kernel failure");
-    serial_write("\\n");
-    if (frame) { serial_write("RIP="); serial_write_hex(frame->rip); serial_write(" RSP="); serial_write_hex(frame->rsp); serial_write(" RBP="); serial_write_hex(frame->rbp); serial_write(" ERROR="); serial_write_hex(frame->error_code); serial_write(" RAX="); serial_write_hex(frame->rax); serial_write(" RBX="); serial_write_hex(frame->rbx); serial_write(" RCX="); serial_write_hex(frame->rcx); serial_write(" RDX="); serial_write_hex(frame->rdx); serial_write("\\n"); }
-    if (has_fault_address) { serial_write("FAULT_ADDRESS="); serial_write_hex(fault_address); serial_write("\\n"); }
-    serial_write("VANTAOS_KERNEL_PANIC_END\\n");
     panic_broadcast_stop_peers();
     panic_halt();
 }

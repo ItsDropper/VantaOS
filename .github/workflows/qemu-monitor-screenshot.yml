@@ -73,7 +73,7 @@ jobs:
               if "return" not in capabilities:
                   raise SystemExit(f"QMP capabilities failed: {capabilities}")
               request = {"execute":"screendump","arguments":{"filename":"/tmp/vantaos-hmp.ppm"}}
-              stream.write((json.dumps(request) + "\\r\\n").encode())
+              stream.write((json.dumps(request) + "\r\n").encode())
               response = json.loads(stream.readline())
               if "return" not in response:
                   raise SystemExit(f"QMP screendump failed: {response}")

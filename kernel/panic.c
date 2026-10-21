@@ -6,6 +6,7 @@
  */
 
 #include "panic.h"
+#include "panic_format.h"
 
 #include "graphics.h"
 #include "interrupts.h"
@@ -39,22 +40,9 @@ static void panic_broadcast_stop_peers(void)
         (void)apic_send_nmi_all();
 }
 
-static const char* exception_names[] =
-{
-    "Divide Error","Debug","Non-Maskable Interrupt","Breakpoint",
-    "Overflow","BOUND Range Exceeded","Invalid Opcode","Device Not Available",
-    "Double Fault","Coprocessor Segment Overrun","Invalid TSS",
-    "Segment Not Present","Stack-Segment Fault","General Protection Fault",
-    "Page Fault","Reserved","x87 Floating-Point Exception","Alignment Check",
-    "Machine Check","SIMD Floating-Point Exception","Virtualization Exception",
-    "Control Protection Exception","Reserved","Reserved","Reserved","Reserved",
-    "Reserved","Hypervisor Injection Exception","VMM Communication Exception",
-    "Security Exception","Reserved","Unknown"
-};
-
 static const char* panic_exception_name(unsigned int number)
 {
-    return number < 31 ? exception_names[number] : exception_names[31];
+    return panic_format_exception_name(number);
 }
 
 static __attribute__((noreturn)) void panic_halt(void)
@@ -236,7 +224,7 @@ void exception_handler(
 
     kernel_panic(
         exception_number < 31 ?
-            exception_names[exception_number] :
+            panic_format_exception_name(exception_number) :
             "Unknown CPU exception",
         exception_number,
         frame,

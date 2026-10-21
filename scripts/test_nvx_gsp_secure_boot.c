@@ -430,7 +430,7 @@ int main(void)
     assert(nvx_gsp_ga10x_bootstrap_traced(
         &vbios_buffer, &vbios_sync, &fwsec_info, 0U, &memory,
         &init_args_buffer, &init_args_sync, &shared_queue_buffer,
-        &shared_queue_sync, &bar0, 0x01000000ULL, 20U, 1U,
+        &shared_queue_sync, &queue_layout, &bar0, 0x01000000ULL, 20U, 1U,
         fake_delay, &hardware, &bootstrap_frts, &mailbox1, &trace) ==
         NVX_GSP_FALCON_OK);
     assert(bootstrap_frts.frts_error_code == 0U);

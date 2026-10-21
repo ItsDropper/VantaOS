@@ -1,0 +1,176 @@
+name: VantaOS panic screen QEMU regression
+
+on:
+  pull_request:
+  push:
+    branches: [master, 'work/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  panic-screen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install build and QEMU tools
+        run: sudo apt-get update && sudo apt-get install --yes build-essential nasm grub-pc-bin xorriso mtools dosfstools qemu-system-x86 imagemagick python3-pil
+
+      - name: Build dedicated panic-injection ISO
+        run: |
+          set -euo pipefail
+          chmod +x build.sh
+          VANTAOS_PANIC_QEMU_TEST=1 ./build.sh
+          test -s VantaOS.iso
+
+      - name: Trigger controlled panic and capture screen
+        shell: bash
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          rm -f panic-screen.log panic-screen.ppm panic-screen.png /tmp/vantaos-panic-qmp.sock
+          qemu-system-x86_64 \
+            -machine pc -m 256M -smp 2 -vga std \
+            -drive file=VantaOS.iso,media=cdrom,format=raw \
+            -boot order=d -display vnc=127.0.0.1:1 \
+            -serial file:panic-screen.log \
+            -qmp unix:/tmp/vantaos-panic-qmp.sock,server=on,wait=off \
+            -no-reboot >/tmp/vantaos-panic-qemu-stderr.log 2>&1 &
+          qemu_pid=$!
+          cleanup() {
+            kill "$qemu_pid" 2>/dev/null || true
+            wait "$qemu_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          panic_seen=0
+          for attempt in $(seq 1 1200); do
+            if grep -q 'VANTAOS_KERNEL_PANIC_BEGIN' panic-screen.log 2>/dev/null; then
+              panic_seen=1
+              break
+            fi
+            if ! kill -0 "$qemu_pid" 2>/dev/null; then
+              echo "QEMU exited before reporting the controlled panic." >&2
+              cat panic-screen.log /tmp/vantaos-panic-qemu-stderr.log 2>/dev/null || true
+              exit 1
+            fi
+            sleep 0.1
+          done
+
+          if [ "$panic_seen" -ne 1 ]; then
+            echo "Timed out waiting for the controlled panic marker after 120 seconds." >&2
+            cat panic-screen.log /tmp/vantaos-panic-qemu-stderr.log 2>/dev/null || true
+            exit 1
+          fi
+
+          grep -q 'VANTAOS ENCOUNTERED A FATAL ERROR' panic-screen.log
+          grep -q 'Reason: VANTAOS_QEMU_CONTROLLED_PANIC_TEST' panic-screen.log
+          grep -q 'VANTAOS_KERNEL_PANIC_END' panic-screen.log
+
+          python3 - <<'PY'
+          import json
+          import os
+          import socket
+          import time
+
+          socket_path = "/tmp/vantaos-panic-qmp.sock"
+          deadline = time.monotonic() + 10
+          connection = None
+          while time.monotonic() < deadline:
+              candidate = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+              candidate.settimeout(5)
+              try:
+                  candidate.connect(socket_path)
+                  connection = candidate
+                  break
+              except (FileNotFoundError, ConnectionRefusedError):
+                  candidate.close()
+                  time.sleep(0.1)
+          if connection is None:
+              raise RuntimeError("QEMU QMP socket did not become available")
+
+          receive_buffer = bytearray()
+
+          def receive_message():
+              while b"\n" not in receive_buffer:
+                  chunk = connection.recv(65536)
+                  if not chunk:
+                      raise RuntimeError("QEMU closed QMP connection")
+                  receive_buffer.extend(chunk)
+              line, _, remainder = receive_buffer.partition(b"\n")
+              receive_buffer[:] = remainder
+              return json.loads(line)
+
+          def command(name, **arguments):
+              request = {"execute": name}
+              if arguments:
+                  request["arguments"] = arguments
+              connection.sendall((json.dumps(request) + "\r\n").encode())
+              while True:
+                  response = receive_message()
+                  if "event" in response:
+                      continue
+                  if "error" in response:
+                      raise RuntimeError(f"QMP {name} failed: {response['error']}")
+                  if "return" in response:
+                      return response["return"]
+
+          greeting = receive_message()
+          if "QMP" not in greeting:
+              raise RuntimeError(f"Unexpected QMP greeting: {greeting!r}")
+          print("QMP_GREETING_OK", flush=True)
+          command("qmp_capabilities")
+          print("QMP_CAPABILITIES_OK", flush=True)
+          output_path = os.path.abspath("panic-screen.ppm")
+          command("screendump", filename=output_path)
+          print(f"QMP_SCREENDUMP_OK path={output_path}", flush=True)
+          connection.close()
+          PY
+
+          test -s panic-screen.ppm
+          identify panic-screen.ppm
+          # QEMU screendump writes PPM data regardless of the filename extension.
+          # Convert it explicitly so artifact viewers receive a genuine PNG.
+          convert panic-screen.ppm PNG24:panic-screen.png
+          test -s panic-screen.png
+          identify panic-screen.png
+          python3 - <<'PY'
+          from PIL import Image
+
+          image = Image.open("panic-screen.png")
+          assert image.format == "PNG", image.format
+          image = image.convert("RGB")
+          assert image.width >= 640 and image.height >= 400, image.size
+          pixels = image.load()
+          red_dominant = sum(
+              1
+              for y in range(0, image.height, 8)
+              for x in range(0, image.width, 8)
+              if pixels[x, y][0] > pixels[x, y][1] * 1.35
+              and pixels[x, y][0] > pixels[x, y][2] * 1.15
+          )
+          samples = ((image.width + 7) // 8) * ((image.height + 7) // 8)
+          assert red_dominant / samples > 0.35, (red_dominant, samples)
+          # The title is drawn at (64, 42) on the normal 1024x768 test mode.
+          # Require bright foreground pixels in that title band, not just a red fill.
+          title_band = [pixels[x, y] for y in range(30, 65) for x in range(48, min(900, image.width))]
+          bright_title_pixels = sum(1 for r, g, b in title_band if r > 180 and g > 180 and b > 180)
+          assert bright_title_pixels >= 80, f"panic title not visible: {bright_title_pixels} bright pixels"
+          print(f"panic screenshot verified: real PNG {image.width}x{image.height}, red samples={red_dominant}/{samples}, title pixels={bright_title_pixels}")
+          PY
+
+      - name: Upload panic screen and serial log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vantaos-panic-screen
+          path: |
+            panic-screen.png
+            panic-screen.log
+            /tmp/vantaos-panic-qemu-stderr.log
+          if-no-files-found: warn
+          retention-days: 14

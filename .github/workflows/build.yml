@@ -140,6 +140,13 @@ jobs:
             scripts/test_panic_format.c -o /tmp/vantaos-panic-format-test
           /tmp/vantaos-panic-format-test
 
+      - name: Compile strict FAT32 long-filename host tests
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude -Ifs \
+            scripts/test_fat32_lfn_host.c fs/fat32_lfn.c \
+            -o /tmp/vantaos-fat32-lfn-test
+          /tmp/vantaos-fat32-lfn-test
+
       - name: Compile strict serial log ring tests
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \

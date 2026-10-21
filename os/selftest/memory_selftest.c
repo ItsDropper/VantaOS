@@ -154,7 +154,7 @@ static void heap_allocator_probe(void)
     ok = (used_after_free == used_before) && ok;
     ok = (heap_get_used_size() == used_before) && ok;
     ok = (heap_get_total_size() == total_before) && ok;
-    ok = (heap_get_free_size() >= free_before) && ok;
+    ok = (heap_get_free_size() == free_before) && ok;
 
     serial_write(ok ?
         "VANTAOS_HEAP_ALLOCATOR_OK\n" :

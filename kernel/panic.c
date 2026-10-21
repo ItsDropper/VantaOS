@@ -249,6 +249,12 @@ void exception_handler(
     struct exception_frame* frame
 )
 {
+    /* Panic-broadcast NMIs must halt immediately, including when the peer was
+       running CPL3. Do this before test recovery or user-process termination. */
+    if (exception_number == 2U &&
+        __atomic_load_n(&panic_broadcast_active, __ATOMIC_ACQUIRE) != 0U)
+        panic_halt();
+
     if (user_mode_selftest_handle_exception(exception_number, frame))
         return;
 
@@ -260,19 +266,15 @@ void exception_handler(
     if (frame && (frame->cs & 3U) == 3U)
     {
         process_t process;
-        if (process_snapshot(process_current_pid(), &process) &&
+        if (process_snapshot_try(process_current_pid(), &process) &&
             process.is_user &&
-            process.address_space == paging_get_current_address_space())
+            process.address_space == paging_get_current_address_space() &&
+            process_terminate_current_try_with_status(-1))
         {
             serial_write("VANTAOS_USER_PROCESS_FAULT\n");
-            process_terminate_current();
             return;
         }
     }
-
-    if (exception_number == 2U &&
-        __atomic_load_n(&panic_broadcast_active, __ATOMIC_ACQUIRE) != 0U)
-        panic_halt();
 
     uintptr_t fault_address = 0;
     int has_fault_address = 0;

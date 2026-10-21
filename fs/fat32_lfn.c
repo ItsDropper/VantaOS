@@ -42,7 +42,12 @@ int fat32_lfn_consume(const uint8_t* entry, fat32_lfn_state_t* state)
     uint8_t ordinal = sequence & 0x1FU;
     int is_last = (sequence & 0x40U) != 0;
 
-    if (ordinal == 0 || ordinal > FAT32_LFN_MAX_ENTRIES ||
+    /*
+     * FAT LFN sequence bits 5 and 7 are reserved. Accepting them could let
+     * malformed directory metadata masquerade as a valid sequence number.
+     */
+    if ((sequence & 0xA0U) != 0U ||
+        ordinal == 0 || ordinal > FAT32_LFN_MAX_ENTRIES ||
         entry[11] != 0x0FU || entry[12] != 0 ||
         lfn_read_u16(&entry[26]) != 0)
     {

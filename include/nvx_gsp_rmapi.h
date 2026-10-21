@@ -13,6 +13,8 @@
 /* Function numbers from NVIDIA's public rpc_global_enums.h (R535 ABI). */
 #define NVX_GSP_RPC_FN_FREE          10U
 #define NVX_GSP_RPC_FN_RM_CONTROL    76U
+#define NVX_GSP_RPC_FN_MAP_MEMORY_DMA 14U
+#define NVX_GSP_RPC_FN_UNMAP_MEMORY_DMA 15U
 #define NVX_GSP_RPC_FN_RM_ALLOC      103U
 #define NVX_GSP_RMAPI_MAX_PARAMS     2048U
 
@@ -64,11 +66,37 @@ typedef struct nvx_gsp_rm_free_request {
     int32_t status;
 } nvx_gsp_rm_free_request_t;
 
+typedef struct nvx_gsp_map_memory_dma {
+    uint32_t client, device, dma, memory;
+    uint64_t offset, length;
+    uint32_t flags, flags2, kind_override;
+    uint64_t dma_offset;
+} nvx_gsp_map_memory_dma_t;
+
+typedef struct nvx_gsp_unmap_memory_dma {
+    uint32_t client, device, dma, memory;
+    uint32_t flags;
+    uint64_t dma_offset, size;
+} nvx_gsp_unmap_memory_dma_t;
+
 typedef struct nvx_gsp_rmapi_result {
     nvx_gsp_rpc_handle_t handle;
     uint32_t function;
     size_t response_size;
 } nvx_gsp_rmapi_result_t;
+
+/* NVOS46/NVOS47-compatible memory mapping RPCs (function IDs 14/15). */
+nvx_gsp_rmapi_status_t nvx_gsp_rm_map_memory_dma_submit(
+    nvx_gsp_rpc_manager_t *manager, const nvx_gsp_map_memory_dma_t *mapping,
+    void *scratch, size_t scratch_size, void *response,
+    size_t response_capacity, nvx_gsp_rmapi_result_t *out);
+nvx_gsp_rmapi_status_t nvx_gsp_rm_unmap_memory_dma_submit(
+    nvx_gsp_rpc_manager_t *manager, const nvx_gsp_unmap_memory_dma_t *mapping,
+    void *scratch, size_t scratch_size, void *response,
+    size_t response_capacity, nvx_gsp_rmapi_result_t *out);
+nvx_gsp_rmapi_status_t nvx_gsp_rm_map_memory_dma_result(
+    const nvx_gsp_rmapi_result_t *operation, const void *response,
+    size_t response_size, uint64_t *out_dma_offset);
 
 /* Submit asynchronous operations. Keep response storage alive until queried. */
 nvx_gsp_rmapi_status_t nvx_gsp_rm_alloc_submit(

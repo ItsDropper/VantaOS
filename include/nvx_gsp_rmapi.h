@@ -122,6 +122,35 @@ nvx_gsp_rmapi_status_t nvx_gsp_rm_free_sync(
     uint32_t poll_interval_ms, nvx_gsp_rmapi_delay_fn delay_ms,
     void *delay_context, nvx_gsp_rmapi_result_t *out);
 
+/* Public NVIDIA class IDs for the root, device and virtual-address-space objects. */
+#define NVX_GSP_RM_CLASS_ROOT             0x00000000U
+#define NVX_GSP_RM_CLASS_DEVICE_0         0x00000080U
+#define NVX_GSP_RM_CLASS_MEMORY_VIRTUAL   0x00000070U
+
+typedef struct nvx_gsp_rm_core_objects {
+    uint32_t client_handle;
+    uint32_t device_handle;
+    uint32_t vaspace_handle;
+    uint8_t client_created;
+    uint8_t device_created;
+    uint8_t vaspace_created;
+} nvx_gsp_rm_core_objects_t;
+
+/*
+ * Allocate RM root/client, device, and NV01_MEMORY_VIRTUAL objects in order.
+ * The caller supplies stable, unique RM handles and an explicit device VA
+ * size/limit. On failure, completed allocations are freed in reverse order;
+ * a timeout is returned without freeing potentially in-flight objects.
+ */
+nvx_gsp_rmapi_status_t nvx_gsp_rm_create_core_objects(
+    nvx_gsp_rpc_manager_t *manager, uint32_t client_handle,
+    uint32_t device_handle, uint32_t vaspace_handle,
+    uint32_t device_flags, uint64_t device_va_space_size,
+    uint64_t vaspace_limit, void *scratch, size_t scratch_size,
+    void *response, size_t response_capacity, uint32_t timeout_ms,
+    uint32_t poll_interval_ms, nvx_gsp_rmapi_delay_fn delay_ms,
+    void *delay_context, nvx_gsp_rm_core_objects_t *out_objects);
+
 /* Validate and extract the RM-side status from a completed response payload. */
 nvx_gsp_rmapi_status_t nvx_gsp_rmapi_decode_status(
     const nvx_gsp_rmapi_result_t *operation,

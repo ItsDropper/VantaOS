@@ -38,7 +38,7 @@ static uint64_t graphics_scanout_page_bytes;
 static uint32_t graphics_scanout_page_index;
 static int graphics_bochs_mode;
 static int graphics_pageflip_enabled;
-static int graphics_pageflip_seeded
+static int graphics_pageflip_seeded;
 
 void bochs_vbe_write(uint16_t index, uint16_t value)
 {

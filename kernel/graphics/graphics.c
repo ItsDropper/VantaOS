@@ -122,11 +122,6 @@ void graphics_mark_damage(int x, int y, int width, int height)
         }
     }
 }
-static int graphics_damage_test(uint32_t index)
-{
-    return (graphics_damage_bitmap[index >> 3] &
-            (uint8_t)(1U << (index & 7U))) != 0U;
-}
 
 static void graphics_damage_clear(void)
 {
@@ -239,54 +234,25 @@ void graphics_end_frame(void)
     if (!graphics_frame_active)
         return;
 
-    uint32_t tiles_x =
-        (framebuffer_width + GRAPHICS_DAMAGE_TILE_SIZE - 1U) /
-        GRAPHICS_DAMAGE_TILE_SIZE;
-    uint32_t tiles_y =
-        (framebuffer_height + GRAPHICS_DAMAGE_TILE_SIZE - 1U) /
-        GRAPHICS_DAMAGE_TILE_SIZE;
     uint32_t row_bytes = framebuffer_width * 4U;
     uint8_t* backbuffer = (uint8_t*)(uintptr_t)GRAPHICS_BACKBUFFER_BASE;
 
-    /* Commit only damaged 16x16 tiles. The front buffer is never cleared or
-     * rebuilt in place, so unchanged pixels remain stable while the shadow
-     * surface is rendered. This is the framebuffer equivalent of compositor
-     * damage tracking; actual page-flip/vblank synchronization needs a KMS
-     * display driver, which UEFI GOP/Bochs framebuffer mode does not expose. */
-    for (uint32_t ty = 0; ty < tiles_y; ty++)
-    {
-        uint32_t y0 = ty * GRAPHICS_DAMAGE_TILE_SIZE;
-        uint32_t y1 = y0 + GRAPHICS_DAMAGE_TILE_SIZE;
-        if (y1 > framebuffer_height)
-            y1 = framebuffer_height;
-        for (uint32_t tx = 0; tx < tiles_x; tx++)
-        {
-            uint32_t index = ty * tiles_x + tx;
-            if (!graphics_damage_test(index))
-                continue;
-            uint32_t x0 = tx * GRAPHICS_DAMAGE_TILE_SIZE;
-            uint32_t x1 = x0 + GRAPHICS_DAMAGE_TILE_SIZE;
-            if (x1 > framebuffer_width)
-                x1 = framebuffer_width;
-            for (uint32_t y = y0; y < y1; y++)
-            {
-                volatile uint32_t* target =
-                    (volatile uint32_t*)(graphics_display_framebuffer +
-                                         (size_t)y * graphics_display_pitch);
-                const uint32_t* source =
-                    (const uint32_t*)(backbuffer + (size_t)y * row_bytes);
-                for (uint32_t x = x0; x < x1; x++)
-                    target[x] = source[x];
-            }
-        }
-    }
+    /*
+     * The display backend uses damage tiles for a normal framebuffer copy,
+     * or a VBlank-gated page flip when the Bochs VBE backend proves support.
+     * Unknown/GOP framebuffers never receive page-flip or GPU assumptions.
+     */
+    (void)graphics_display_present_damage(
+        &graphics_display_framebuffer, graphics_display_pitch,
+        backbuffer, framebuffer_width, framebuffer_height, row_bytes,
+        graphics_damage_bitmap, sizeof(graphics_damage_bitmap),
+        GRAPHICS_DAMAGE_TILE_SIZE);
 
     framebuffer = graphics_display_framebuffer;
     framebuffer_pitch = graphics_display_pitch;
     graphics_frame_active = 0;
     graphics_damage_clear();
 }
-
 
 /*
  * Cursor-only updates use a tiny damage footprint but still pass through the

@@ -97,8 +97,9 @@ static int desktop_settings_click(int x, int y, int width, int height,
         if (pointer_x >= bx && pointer_x < bx + bw)
         {
             settings_resolution_index = i;
-            (void)graphics_set_resolution(settings_widths[i],
-                                          settings_heights[i]);
+            if (graphics_set_resolution(settings_widths[i],
+                                         settings_heights[i]))
+                gui_server_reflow_windows();
             return 1;
         }
     }

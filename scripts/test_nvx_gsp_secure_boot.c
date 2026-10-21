@@ -243,6 +243,8 @@ int main(void)
     nvx_gsp_boot_trace_t trace;
     nvx_gsp_msgq_ga10x_t queue_runtime = {0};
     nvx_gsp_gmcapi_transport_t gmcapi = {0};
+    nvx_gsp_msgq_rpc_transport_t rpc_transport = {0};
+    nvx_gsp_rpc_manager_t rpc_manager = {0};
     nvx_gsp_startup_result_t startup_result = {0};
     const uint64_t system_info_kv = (UINT64_C(42) << 32U) | UINT64_C(1);
     uint8_t static_info[64] = {0};
@@ -509,9 +511,14 @@ int main(void)
         &system_info_kv, sizeof(system_info_kv), static_info,
         sizeof(static_info), &static_info_size, gmcapi_scratch,
         NVX_GSP_MAX_MESSAGE_PAGES * NVX_GSP_PAGE_SIZE, 20U, 1U,
-        fake_delay, &hardware, &queue_runtime, &gmcapi, &startup_result) ==
+        fake_delay, &hardware, &queue_runtime, &gmcapi, &rpc_transport,
+        &rpc_manager, &startup_result) ==
         NVX_GSP_STARTUP_OK);
     assert(startup_result.gsp_rm_initialized == 1U);
+    assert(startup_result.rpc_initialized == 1U);
+    assert(rpc_transport.initialized == 1U);
+    assert(rpc_manager.initialized == 1U);
+    assert(rpc_manager.transport_kind == NVX_GSP_RPC_TRANSPORT_MSGQ);
     assert(startup_result.bootstrap_status == NVX_GSP_FALCON_OK);
     assert(startup_result.boot_trace.riscv_active == 1U);
     assert(startup_result.gsp_init_remote_status == 0U);

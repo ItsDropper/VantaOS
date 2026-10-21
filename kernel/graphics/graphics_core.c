@@ -567,6 +567,7 @@ int graphics_set_resolution(uint32_t width, uint32_t height)
     framebuffer_pitch = width * 4U;
     framebuffer_width = width;
     framebuffer_height = height;
+    graphics_reset_backbuffer();
 
     mouse_set_resolution_scale(width, height);
 

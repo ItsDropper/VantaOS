@@ -118,6 +118,10 @@ jobs:
           def wait_marker(marker):
               while time.monotonic() < deadline:
                   content = log_text()
+                  failures = [line.strip() for line in content.splitlines()
+                              if "VANTAOS_SETUP_" in line and line.strip().endswith("_FAIL")]
+                  if failures:
+                      raise RuntimeError(f"installer reported {failures[-1]}; serial log:\n{content}")
                   if marker in content:
                       return
                   time.sleep(0.1)
@@ -164,7 +168,13 @@ jobs:
               for letter in "INSTALL":
                   key("shift-" + letter.lower())
               key("ret")
-              wait_marker("VANTAOS_SETUP_COMPLETE")
+              for marker in (
+                  "VANTAOS_SETUP_GPT_OK",
+                  "VANTAOS_SETUP_FORMAT_OK",
+                  "VANTAOS_SETUP_FILES_OK",
+                  "VANTAOS_SETUP_COMPLETE",
+              ):
+                  wait_marker(marker)
               print("VANTAOS_SETUP_E2E_INSTALL_COMPLETE")
           PY
 

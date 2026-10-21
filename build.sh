@@ -48,9 +48,6 @@ test -s /tmp/vantaos-settings.elf
 test -s /tmp/vantaos-explorer.elf
 test -s /tmp/vantaos-explorer-e2e.elf
 
-echo "==> Building the bootable UEFI VantaOS setup image..."
-make setup
-
 echo "==> Preparing ISO..."
 rm -rf isodir/boot/kernel.bin
 cp kernel.bin isodir/boot/kernel.bin
@@ -209,3 +206,7 @@ else
     echo "    mkfs.fat not found; disk image was not created."
     echo "    Install dosfstools to create the persistent FAT32 image."
 fi
+
+# The installer must carry the same required system metadata as the persistent image.
+echo "==> Building the bootable UEFI VantaOS setup image..."
+make setup

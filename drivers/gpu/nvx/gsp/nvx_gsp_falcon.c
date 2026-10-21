@@ -156,9 +156,14 @@ static int nvx_ga10x_falcon_pair_valid(uint32_t falcon_base,
                                        uint32_t falcon2_base,
                                        uint32_t engine_id_mask)
 {
+    /*
+     * BROM authenticates the signed descriptor's engine mask. FWSEC V3 is
+     * executed on GSP but its VBIOS descriptor may carry SEC2 mask 0x0001;
+     * do not equate the executing Falcon with that signed field.
+     */
     return (falcon_base == NVX_GSP_FALCON_BASE &&
             falcon2_base == NVX_GSP_FALCON2_BASE &&
-            engine_id_mask == 0x0400U) ||
+            (engine_id_mask == 0x0400U || engine_id_mask == 0x0001U)) ||
            (falcon_base == NVX_SEC2_FALCON_BASE &&
             falcon2_base == NVX_SEC2_FALCON2_BASE &&
             engine_id_mask == 0x0001U);

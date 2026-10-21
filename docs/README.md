@@ -24,6 +24,7 @@ Use this index to find the document that answers a specific engineering question
 
 - [Build system](build/BUILD_SYSTEM.md) — build targets, generated artifacts, and source manifests.
 - [Testing](build/TESTING.md) — automated checks, regression markers, and what CI does and does not prove.
+- [Recovery environment](build/RECOVERY_SETUP.md) — optional GRUB entry, diagnostics, screenshot capture, and current limitations.
 
 ## Roadmap and decisions
 

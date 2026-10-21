@@ -52,6 +52,8 @@ on:
       - "include/nvx_gsp_gmcapi.h"
       - "scripts/test_nvx_gsp_static_info.c"
       - "scripts/test_nvx_gsp_gpfifo.c"
+      - "scripts/test_nvx_gsp_ce.c"
+      - "include/nvx_gsp_ce.h"
       - "include/nvx_gsp_gpfifo.h"
       - "scripts/test_nvx_gsp_rmapi.c"
       - "include/nvx_gsp_static_info.h"
@@ -229,6 +231,15 @@ jobs:
 
       - name: Test GPFIFO address encoding, ring bounds, and completion polling
         run: /tmp/vantaos-nvx-gsp-gpfifo-test
+
+      - name: Compile Ampere CE command-builder tests with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_ce.c drivers/gpu/nvx/execution/nvx_gsp_ce.c \
+            -o /tmp/vantaos-nvx-gsp-ce-test
+
+      - name: Test copy-engine methods, semaphore release, and GPUVA bounds
+        run: /tmp/vantaos-nvx-gsp-ce-test
 
       - name: Compile GSP startup orchestration with strict warnings
         run: |

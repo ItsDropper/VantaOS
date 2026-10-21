@@ -9,6 +9,7 @@
 
 #include "nvx_gsp_boot_memory.h"
 #include "nvx_gsp_falcon.h"
+#include "nvx_gsp_fwsec_result.h"
 
 typedef struct nvx_gsp_secure_transfer_plan {
     uint64_t source_phys;
@@ -66,6 +67,21 @@ typedef struct nvx_gsp_boot_trace {
     uint8_t recovery_succeeded;
     uint8_t sec2_quiescence_confirmed;
 } nvx_gsp_boot_trace_t;
+
+/*
+ * Boot the GA10x GSP only after the caller has executed FWSEC-FRTS and read
+ * the result registers from hardware. On success the radix3 ELF DMA buffer
+ * remains device-owned because GSP may continue reading it. On ambiguous
+ * failure it also remains device-owned; callers must prove quiescence before
+ * reclaiming or freeing it.
+ */
+nvx_gsp_falcon_status_t nvx_gsp_ga10x_boot_after_frts(
+    nvx_gsp_boot_memory_t *memory, const nvx_mmio_region_t *bar0,
+    uint64_t frts_framebuffer_offset,
+    const nvx_gsp_fwsec_result_snapshot_t *frts_result,
+    uint32_t timeout_ms, uint32_t poll_interval_ms,
+    nvx_gsp_delay_ms_fn delay_ms, void *context,
+    uint32_t *out_mailbox0, uint32_t *out_mailbox1);
 
 /*
  * Execute the signed GA10x Booter Load image on SEC2:

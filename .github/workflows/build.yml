@@ -1187,7 +1187,9 @@ jobs:
           done
           test "$requested" -eq 1
 
-          printf 'screendump /tmp/vantaos-recovery.ppm\n' |
+          # Keep the HMP connection open briefly after sending the command; closing
+          # the socket immediately can disconnect before QEMU flushes the screendump.
+          { printf 'screendump /tmp/vantaos-recovery.ppm\n'; sleep 1; } |
             timeout 5s socat -T 1 - UNIX-CONNECT:/tmp/vantaos-recovery-monitor.sock || true
           for attempt in $(seq 1 10); do
             test -s /tmp/vantaos-recovery.ppm && break

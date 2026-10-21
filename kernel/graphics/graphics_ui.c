@@ -207,7 +207,7 @@ void graphics_draw_taskbar(int taskbar_y, int width)
         clock_x = center + 116;
 
     /* Retained GUI windows get real taskbar entries, including minimized ones. */
-    gui_server_draw_taskbar_items(taskbar_y + 10, center + 116, clock_x - 8);
+    gui_server_draw_taskbar_items(taskbar_y + 10, width);
 
     graphics_fill_rounded_rect(clock_x, taskbar_y + 6, width - clock_x - 8,
                                 52, 8, VANTA_UI_SURFACE);

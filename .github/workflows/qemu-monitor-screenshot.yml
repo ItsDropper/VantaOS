@@ -1,0 +1,91 @@
+name: QEMU monitor screenshot regression
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/qemu-monitor-screenshot.yml"
+      - ".github/workflows/build.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  hmp-screendump:
+    name: Isolate QEMU HMP screendump
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Install QEMU and monitor tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-x86 socat xvfb imagemagick
+
+      - name: Start a minimal graphical QEMU guest
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f /tmp/vantaos-hmp.sock /tmp/vantaos-hmp.ppm
+          xvfb-run -a qemu-system-x86_64 \
+            -machine q35 -m 128M -boot menu=off \
+            -display sdl -monitor unix:/tmp/vantaos-hmp.sock,server,nowait \
+            -no-reboot -no-shutdown \
+            >/tmp/vantaos-hmp-qemu.log 2>&1 &
+          echo $! >/tmp/vantaos-hmp-qemu.pid
+          for attempt in $(seq 1 50); do
+            test -S /tmp/vantaos-hmp.sock && break
+            if ! kill -0 "$(cat /tmp/vantaos-hmp-qemu.pid)" 2>/dev/null; then
+              cat /tmp/vantaos-hmp-qemu.log
+              exit 1
+            fi
+            sleep 0.2
+          done
+          test -S /tmp/vantaos-hmp.sock
+
+      - name: Execute screendump and verify the output
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Match the newline-terminated HMP command used by the existing
+          # desktop screenshot capture. Preserve the monitor transcript on failure.
+          printf 'screendump /tmp/vantaos-hmp.ppm\n' |
+            timeout 5s socat -T 2 - UNIX-CONNECT:/tmp/vantaos-hmp.sock \
+            >/tmp/vantaos-hmp-monitor.log 2>&1 || true
+
+          for attempt in $(seq 1 25); do
+            test -s /tmp/vantaos-hmp.ppm && break
+            sleep 0.2
+          done
+
+          if ! test -s /tmp/vantaos-hmp.ppm; then
+            echo "QEMU HMP did not create the screendump file."
+            echo "--- monitor transcript ---"
+            cat /tmp/vantaos-hmp-monitor.log || true
+            echo "--- QEMU log ---"
+            cat /tmp/vantaos-hmp-qemu.log || true
+            exit 1
+          fi
+
+          identify /tmp/vantaos-hmp.ppm
+          test "$(identify -format '%m' /tmp/vantaos-hmp.ppm)" = "PPM"
+          test "$(identify -format '%w' /tmp/vantaos-hmp.ppm)" -gt 0
+          test "$(identify -format '%h' /tmp/vantaos-hmp.ppm)" -gt 0
+
+      - name: Upload monitor diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qemu-hmp-screendump-diagnostics
+          path: |
+            /tmp/vantaos-hmp.ppm
+            /tmp/vantaos-hmp-monitor.log
+            /tmp/vantaos-hmp-qemu.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Stop QEMU
+        if: always()
+        run: |
+          if test -f /tmp/vantaos-hmp.pid; then
+            kill "$(cat /tmp/vantaos-hmp.pid)" 2>/dev/null || true
+          fi

@@ -58,8 +58,10 @@ static void pmm_allocator_probe(void)
 
     if (!first || !second)
     {
-        if (first) pmm_free_block(first);
-        if (second) pmm_free_block(second);
+        if (first)
+            pmm_free_block(first);
+        if (second)
+            pmm_free_block(second);
         serial_write("VANTAOS_PMM_ALLOCATOR_FAIL\n");
         return;
     }
@@ -116,8 +118,10 @@ static void heap_allocator_probe(void)
 
     if (!first || !second)
     {
-        if (first) kfree(first);
-        if (second) kfree(second);
+        if (first)
+            kfree(first);
+        if (second)
+            kfree(second);
         serial_write("VANTAOS_HEAP_ALLOCATOR_FAIL\n");
         return;
     }
@@ -128,10 +132,13 @@ static void heap_allocator_probe(void)
 
     for (size_t i = 0; i < 64U; i++)
         first[i] = (unsigned char)(i ^ 0x5AU);
+
     for (size_t i = 0; i < 257U; i++)
         second[i] = (unsigned char)(i ^ 0xA5U);
+
     for (size_t i = 0; i < 64U; i++)
         ok = (first[i] == (unsigned char)(i ^ 0x5AU)) && ok;
+
     for (size_t i = 0; i < 257U; i++)
         ok = (second[i] == (unsigned char)(i ^ 0xA5U)) && ok;
 
@@ -146,13 +153,15 @@ static void heap_allocator_probe(void)
 
     ok = (used_after_free == used_before) && ok;
     ok = (heap_get_used_size() == used_before) && ok;
-    ok = (heap_get_free_size() == free_before) && ok;
     ok = (heap_get_total_size() == total_before) && ok;
+    ok = (heap_get_free_size() == free_before) && ok;
 
     serial_write(ok ?
         "VANTAOS_HEAP_ALLOCATOR_OK\n" :
         "VANTAOS_HEAP_ALLOCATOR_FAIL\n");
 }
+
+
 
 void memory_selftest_initialize(void)
 {

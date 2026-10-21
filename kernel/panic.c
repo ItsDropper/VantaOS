@@ -170,18 +170,40 @@ void kernel_panic(
     }
 
     graphics_clear(0x008A1018);
+
     int x = width >= 900 ? 64 : 28;
     int y = height >= 600 ? 42 : 24;
 
-    graphics_draw_text(x, y, "VANTAOS ENCOUNTERED A FATAL ERROR",
-                       0x00F2F5F8, 2);
-    graphics_draw_text(x, y + 28,
+    graphics_draw_text(
+        x, y,
+        "VANTAOS ENCOUNTERED A FATAL ERROR",
+        0x00F2F5F8, 2
+    );
+
+    graphics_draw_text(
+        x, y + 28,
         "The kernel stopped because a fatal error was detected.",
-        0x00C7CFD7, 1);
-    graphics_fill_rect(x, y + 48, width - x * 2, 1, 0x00384048);
-    graphics_draw_text(x, y + 68, "WHAT HAPPENED", 0x00F2F5F8, 1);
-    graphics_draw_text(x, y + 84,
-        reason ? reason : "Unknown kernel failure", 0x00C7CFD7, 1);
+        0x00C7CFD7, 1
+    );
+
+    graphics_fill_rect(
+        x, y + 48,
+        width - x * 2,
+        1,
+        0x00384048
+    );
+
+    graphics_draw_text(
+        x, y + 68,
+        "WHAT HAPPENED",
+        0x00F2F5F8, 1
+    );
+
+    graphics_draw_text(
+        x, y + 84,
+        reason ? reason : "Unknown kernel failure",
+        0x00C7CFD7, 1
+    );
 
     graphics_draw_text(x, y + 100, "CPU / APIC ID", 0x00FFB4A2, 1);
     const cpu_local_t* panic_cpu = cpu_local_current();
@@ -194,25 +216,41 @@ void kernel_panic(
     else
         graphics_draw_text(x + 104, y + 100, "unavailable", 0x00FFFFFF, 1);
 
-    fault_trace_draw(x, y + 120, width - x * 2, exception_number,
-                     frame, fault_address, has_fault_address);
-    graphics_draw_text(x, height - 54,
-        "THE SYSTEM CANNOT SAFELY CONTINUE", 0x00F2F5F8, 1);
-    graphics_draw_text(x, height - 38,
+    fault_trace_draw(
+        x,
+        y + 120,
+        width - x * 2,
+        exception_number,
+        frame,
+        fault_address,
+        has_fault_address
+    );
+
+    graphics_draw_text(
+        x,
+        height - 54,
+        "THE SYSTEM CANNOT SAFELY CONTINUE",
+        0x00F2F5F8, 1
+    );
+
+    graphics_draw_text(
+        x,
+        height - 38,
         "Restart VantaOS. Diagnostic output is also available on serial.",
-        0x008E9AA5, 1);
+        0x008E9AA5, 1
+    );
 
     panic_broadcast_stop_peers();
     panic_halt();
 }
 
-void exception_handler(unsigned int exception_number,
-                       struct exception_frame* frame)
+void exception_handler(
+    unsigned int exception_number,
+    struct exception_frame* frame
+)
 {
-    /*
-     * Panic-broadcast NMIs must halt immediately, including when the peer was
-     * running CPL3. Do this before test recovery or user-process termination.
-     */
+    /* Panic-broadcast NMIs must halt immediately, including when the peer was
+       running CPL3. Do this before test recovery or user-process termination. */
     if (exception_number == 2U &&
         __atomic_load_n(&panic_broadcast_active, __ATOMIC_ACQUIRE) != 0U)
         panic_halt();
@@ -221,10 +259,9 @@ void exception_handler(unsigned int exception_number,
         return;
 
     /*
-     * A fault in CPL3 belongs to the process, not the kernel. Use only
-     * non-blocking process-table operations here: if a CPU has wedged while
-     * holding that lock, fail closed to the kernel panic path rather than
-     * deadlocking forever inside exception handling.
+     * A fault in CPL3 belongs to the process, not the kernel. The assembly
+     * return path detects the user CS, schedules away, and reclaims this
+     * address space only after switching CR3 and RSP.
      */
     if (frame && (frame->cs & 3U) == 3U)
     {
@@ -241,9 +278,13 @@ void exception_handler(unsigned int exception_number,
 
     uintptr_t fault_address = 0;
     int has_fault_address = 0;
+
     if (exception_number == 14)
     {
-        __asm__ volatile ("mov %%cr2, %0" : "=r"(fault_address));
+        __asm__ volatile (
+            "mov %%cr2, %0"
+            : "=r"(fault_address)
+        );
         has_fault_address = 1;
     }
 
@@ -251,7 +292,11 @@ void exception_handler(unsigned int exception_number,
         exception_number < 31 ?
             panic_format_exception_name(exception_number) :
             "Unknown CPU exception",
-        exception_number, frame, fault_address, has_fault_address);
+        exception_number,
+        frame,
+        fault_address,
+        has_fault_address
+    );
 
     __builtin_unreachable();
 }

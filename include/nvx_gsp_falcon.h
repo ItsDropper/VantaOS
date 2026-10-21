@@ -88,7 +88,8 @@ typedef enum nvx_gsp_falcon_status {
     NVX_GSP_FALCON_BOOTER_NOT_STAGED,
     NVX_GSP_FALCON_WPR_METADATA_NOT_READY,
     NVX_GSP_FALCON_DMA_OWNERSHIP_ERROR,
-    NVX_GSP_FALCON_BOOTER_REPORTED_ERROR
+    NVX_GSP_FALCON_BOOTER_REPORTED_ERROR,
+    NVX_GSP_FALCON_FWSEC_NOT_VERIFIED
 } nvx_gsp_falcon_status_t;
 
 typedef struct nvx_gsp_falcon_snapshot {

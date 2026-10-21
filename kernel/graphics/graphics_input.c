@@ -143,12 +143,6 @@ void graphics_mouse_click(int button)
      * Explorer has one input owner. Its hit-testing, title-bar controls,
      * sidebar, toolbar and file list all use the same geometry as drawing.
      */
-    if (active_panel == 3)
-    {
-        /* The retained manager owns Terminal focus, movement and controls. */
-        return;
-    }
-
     if (cursor_x >= 24 && cursor_x < 112 &&
         cursor_y >= 58 && cursor_y < 130)
     {

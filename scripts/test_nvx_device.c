@@ -34,6 +34,13 @@ uint16_t pci_read_config16(const struct pci_device *device, uint8_t offset)
 
 int main(void)
 {
+    static const uint16_t supported_ids[] = {
+        0x2503U, 0x2504U, 0x2507U, 0x2508U,
+        0x2509U, 0x2544U, 0x2548U
+    };
+    static const uint16_t unsupported_ids[] = {
+        0x1234U, 0x2C02U, 0x2C05U, 0x2C07U, 0xFFFFU
+    };
     struct pci_device device = {
         .bus = 1, .slot = 2, .function = 0,
         .vendor_id = NVX_PCI_VENDOR_NVIDIA, .device_id = 0x1234,
@@ -53,18 +60,16 @@ int main(void)
     assert(!nvx_describe_pci_device(0, &descriptor));
     assert(!nvx_describe_pci_device(&device, 0));
 
-    assert(nvx_identify_pci_device(0x2503U, &family, &profile));
-    assert(family == NVX_FAMILY_AMPERE);
-    assert(profile == NVX_PROFILE_GEFORCE_RTX_3060);
-    assert(nvx_identify_pci_device(0x2504U, &family, &profile));
-    assert(family == NVX_FAMILY_AMPERE);
-    assert(profile == NVX_PROFILE_GEFORCE_RTX_3060);
-    assert(nvx_identify_pci_device(0x2548U, &family, &profile));
-    assert(family == NVX_FAMILY_AMPERE);
-    assert(profile == NVX_PROFILE_GEFORCE_RTX_3060);
-    assert(!nvx_identify_pci_device(0x1234U, &family, &profile));
-    assert(family == NVX_FAMILY_UNKNOWN);
-    assert(profile == NVX_PROFILE_UNKNOWN);
+    for (unsigned i = 0; i < sizeof(supported_ids) / sizeof(supported_ids[0]); ++i) {
+        assert(nvx_identify_pci_device(supported_ids[i], &family, &profile));
+        assert(family == NVX_FAMILY_AMPERE);
+        assert(profile == NVX_PROFILE_GEFORCE_RTX_3060);
+    }
+    for (unsigned i = 0; i < sizeof(unsupported_ids) / sizeof(unsupported_ids[0]); ++i) {
+        assert(!nvx_identify_pci_device(unsupported_ids[i], &family, &profile));
+        assert(family == NVX_FAMILY_UNKNOWN);
+        assert(profile == NVX_PROFILE_UNKNOWN);
+    }
     assert(!nvx_identify_pci_device(0x2503U, 0, &profile));
     assert(!nvx_identify_pci_device(0x2503U, &family, 0));
 

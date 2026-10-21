@@ -24,7 +24,7 @@ The current implementation is a software compositor, not a GPU compositor or wid
 
 ## Process model status
 
-The desktop, Terminal, and Files currently have kernel process-table entries. That is not the same as running each app as a protected ring-3 user process: the GUI is still rendered and hit-tested by kernel-side code, and the Files process is currently a persistent kernel-side lifecycle placeholder. The user-mode ELF loader and syscall ABI exist, but a proper user-space GUI application model still needs a window-server/event IPC contract before moving these apps out of the kernel. Do not describe these GUI apps as isolated user-mode programs until that work is implemented and tested.
+The shared window manager now owns the geometry, chrome, focus, stacking, and input dispatch for built-in Terminal, Files, System, and Settings windows as well as ring-3 GUI clients. Built-in content callbacks still execute in kernel context, and the Terminal shell's process/input model is separate from its window surface. This removes the split legacy window-chrome path; it does not make every built-in application a protected ring-3 process. Moving Files/System/Settings content into isolated user processes still requires a defined userspace GUI client library and window-event IPC contract, plus tests for process exit and resource cleanup. Do not describe kernel callbacks as isolated userspace applications.
 
 
 ## Desktop composition refresh

@@ -57,6 +57,7 @@ nvx_gsp_gpfifo_status_t nvx_gsp_gpfifo_channel_init(
     c->entries=entries;c->entries_mapping_bytes=mapped_bytes;
     c->gp_get=gp_get;c->gp_put=gp_put;c->doorbell=doorbell;
     c->doorbell_token=token;c->entry_count=count;c->put_index=put;
+    spinlock_init(&c->submit_lock);
     c->initialized=1U;
     return NVX_GSP_GPFIFO_OK;
 }
@@ -79,11 +80,22 @@ nvx_gsp_gpfifo_status_t nvx_gsp_gpfifo_submit(
        !add_u64(command_va,(uint64_t)command_bytes,&end)||
        end>NVX_GSP_GPFIFO_ADDRESS_LIMIT)
         return NVX_GSP_GPFIFO_BAD_COMMAND_RANGE;
+    /*
+     * A channel can be shared by independent kernel threads. Serialize the
+     * producer critical section so two submitters cannot overwrite one slot
+     * or publish GP_PUT/doorbells out of order.
+     */
+    spinlock_lock(&c->submit_lock);
     get=__atomic_load_n(c->gp_get,__ATOMIC_ACQUIRE);
-    if(get>=c->entry_count||c->put_index>=c->entry_count)
+    if(get>=c->entry_count||c->put_index>=c->entry_count) {
+        spinlock_unlock(&c->submit_lock);
         return NVX_GSP_GPFIFO_BAD_REGISTER_STATE;
+    }
     next=(c->put_index+1U)&(c->entry_count-1U);
-    if(next==get)return NVX_GSP_GPFIFO_QUEUE_FULL;
+    if(next==get) {
+        spinlock_unlock(&c->submit_lock);
+        return NVX_GSP_GPFIFO_QUEUE_FULL;
+    }
 
     dwords=(uint32_t)(command_bytes/4U);
     /* Public NVC56F GP_ENTRY0/1 fields: address>>2, high address, length>>2. */
@@ -99,6 +111,7 @@ nvx_gsp_gpfifo_status_t nvx_gsp_gpfifo_submit(
     __atomic_store_n(c->doorbell,c->doorbell_token,__ATOMIC_RELEASE);
     c->put_index=next;
     *out_put=next;
+    spinlock_unlock(&c->submit_lock);
     return NVX_GSP_GPFIFO_OK;
 }
 

@@ -201,10 +201,17 @@ jobs:
           grep -q '^timezone=Europe/Helsinki$' /tmp/installed-setup.cfg
           mcopy -i install-target.img@@537919488 ::/TERMINAL.ELF /tmp/installed-terminal.elf
           mcopy -i install-target.img@@537919488 ::/SYSTEM/SETTINGS.ELF /tmp/installed-settings.elf
-          mcopy -i install-target.img@@537919488 ::/EXPLORER.ELF /tmp/installed-explorer.elf
+          mcopy -i install-target.img@@537919488 ::/SYSTEM/DRIVERS/ATA.SYS /tmp/installed-ata.sys
+          mcopy -i install-target.img@@537919488 ::/SYSTEM/DEVICES/KEYBOARD0.DEV /tmp/installed-keyboard0.dev
+          mcopy -i install-target.img@@537919488 ::/ETC/SYSTEM.CONF /tmp/installed-system.conf
+          mcopy -i install-target.img@@537919488 ::/SYSTEM/TERMINAL.VX /tmp/installed-terminal.vx
           test -s /tmp/installed-terminal.elf
           test -s /tmp/installed-settings.elf
           test -s /tmp/installed-explorer.elf
+          test -s /tmp/installed-ata.sys
+          test -s /tmp/installed-keyboard0.dev
+          test -s /tmp/installed-system.conf
+          test -s /tmp/installed-terminal.vx
 
       - name: Boot the installed disk under OVMF
         shell: bash

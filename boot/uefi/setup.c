@@ -280,7 +280,7 @@ static void serial_write_char(CHAR16 character)
     if (character > 0x7FU)
         return;
     bytes[0] = (char)character;
-    bytes[1] = '\\0';
+    bytes[1] = '\0';
     serial_write(bytes);
 }
 
@@ -289,7 +289,7 @@ static void serial_write_path(const CHAR16 *path)
     while (*path) {
         serial_write_char(*path++);
     }
-    serial_write("\\n");
+    serial_write("\n");
 }
 
 static EFI_STATUS copy_file(
@@ -310,21 +310,21 @@ static EFI_STATUS copy_file(
         source_root->Open, 5, source_root, &source, source_path,
         EFI_FILE_MODE_READ, 0U);
     if (EFI_ERROR(status) || !source)
-        serial_write("VANTAOS_SETUP_COPY_FAIL\\n");
+        serial_write("VANTAOS_SETUP_COPY_FAIL\n");
         return EFI_NOT_FOUND;
 
     status = uefi_call_wrapper(
         source->GetInfo, 4, source, &gEfiFileInfoGuid, &info_size, NULL);
     if (status != EFI_BUFFER_TOO_SMALL || info_size < sizeof(EFI_FILE_INFO)) {
         uefi_call_wrapper(source->Close, 1, source);
-        serial_write("VANTAOS_SETUP_COPY_FAIL\\n");
+        serial_write("VANTAOS_SETUP_COPY_FAIL\n");
         return EFI_LOAD_ERROR;
     }
     status = uefi_call_wrapper(
         BS->AllocatePool, 3, EfiLoaderData, info_size, (void **)&info);
     if (EFI_ERROR(status) || !info) {
         uefi_call_wrapper(source->Close, 1, source);
-        serial_write("VANTAOS_SETUP_COPY_FAIL\\n");
+        serial_write("VANTAOS_SETUP_COPY_FAIL\n");
         return EFI_OUT_OF_RESOURCES;
     }
     status = uefi_call_wrapper(
@@ -333,7 +333,7 @@ static EFI_STATUS copy_file(
         info->FileSize > maximum_size || info->FileSize > (UINT64)(~(UINTN)0)) {
         uefi_call_wrapper(BS->FreePool, 1, info);
         uefi_call_wrapper(source->Close, 1, source);
-        serial_write("VANTAOS_SETUP_COPY_FAIL\\n");
+        serial_write("VANTAOS_SETUP_COPY_FAIL\n");
         return EFI_LOAD_ERROR;
     }
     UINTN file_size = (UINTN)info->FileSize;
@@ -342,7 +342,7 @@ static EFI_STATUS copy_file(
         BS->AllocatePool, 3, EfiLoaderData, file_size, (void **)&contents);
     if (EFI_ERROR(status) || !contents) {
         uefi_call_wrapper(source->Close, 1, source);
-        serial_write("VANTAOS_SETUP_COPY_FAIL\\n");
+        serial_write("VANTAOS_SETUP_COPY_FAIL\n");
         return EFI_OUT_OF_RESOURCES;
     }
     UINTN read_size = file_size;
@@ -350,7 +350,7 @@ static EFI_STATUS copy_file(
     uefi_call_wrapper(source->Close, 1, source);
     if (EFI_ERROR(status) || read_size != file_size) {
         uefi_call_wrapper(BS->FreePool, 1, contents);
-        serial_write("VANTAOS_SETUP_COPY_FAIL\\n");
+        serial_write("VANTAOS_SETUP_COPY_FAIL\n");
         return EFI_LOAD_ERROR;
     }
 
@@ -368,9 +368,9 @@ static EFI_STATUS copy_file(
     }
     uefi_call_wrapper(BS->FreePool, 1, contents);
     if (!EFI_ERROR(status))
-        serial_write("VANTAOS_SETUP_COPY_OK\\n");
+        serial_write("VANTAOS_SETUP_COPY_OK\n");
     else
-        serial_write("VANTAOS_SETUP_COPY_FAIL\\n");
+        serial_write("VANTAOS_SETUP_COPY_FAIL\n");
     return status;
 }
 

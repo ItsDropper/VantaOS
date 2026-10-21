@@ -438,7 +438,7 @@ int main(void)
     assert(trace.result == NVX_GSP_FALCON_OK);
     assert(memory.radix3_elf_sync.owner == NVX_DMA_OWNER_DEVICE);
     assert(init_args_sync.owner == NVX_DMA_OWNER_DEVICE);
-    assert(shared_queue_sync.owner == NVX_DMA_OWNER_DEVICE);
+    assert(shared_queue_sync.owner == NVX_DMA_OWNER_SHARED);
     assert(read_reg(&bar0, NVX_GSP_RISCV_BCR_CTRL) ==
            NVX_GSP_RISCV_BCR_CTRL_BOOT);
     /* The GSP may consume these buffers until reset proves quiescence. */

@@ -162,6 +162,92 @@ nvx_gsp_rmapi_status_t nvx_gsp_rmapi_wait(
     }
 }
 
+static void put64(uint8_t *p,uint64_t v)
+{
+    put32(p,(uint32_t)v);put32(p+4U,(uint32_t)(v>>32U));
+}
+
+static nvx_gsp_rmapi_status_t free_core_object(
+    nvx_gsp_rpc_manager_t *manager,uint32_t root,uint32_t parent,
+    uint32_t object,void *scratch,size_t scratch_size,void *response,
+    size_t response_capacity,uint32_t timeout_ms,uint32_t poll_interval_ms,
+    nvx_gsp_rmapi_delay_fn delay_ms,void *delay_context)
+{
+    nvx_gsp_rmapi_result_t operation={0};
+    return nvx_gsp_rm_free_sync(manager,root,parent,object,scratch,scratch_size,
+        response,response_capacity,timeout_ms,poll_interval_ms,delay_ms,
+        delay_context,&operation);
+}
+
+nvx_gsp_rmapi_status_t nvx_gsp_rm_create_core_objects(
+    nvx_gsp_rpc_manager_t *manager,uint32_t client,uint32_t device,
+    uint32_t vaspace,uint32_t device_flags,uint64_t device_va_size,
+    uint64_t vaspace_limit,void *scratch,size_t scratch_size,void *response,
+    size_t response_capacity,uint32_t timeout_ms,uint32_t poll_interval_ms,
+    nvx_gsp_rmapi_delay_fn delay_ms,void *delay_context,
+    nvx_gsp_rm_core_objects_t *out)
+{
+    nvx_gsp_rmapi_result_t operation={0};
+    nvx_gsp_rmapi_status_t s;
+    uint8_t params[16]={0};
+    if(out)*out=(nvx_gsp_rm_core_objects_t){0};
+    if(!manager||!client||!device||!vaspace||client==device||
+       client==vaspace||device==vaspace||!scratch||!response||
+       response_capacity<ALLOC_HEADER_BYTES||!timeout_ms||!poll_interval_ms||
+       !delay_ms||!out||
+       overlaps(out,sizeof(*out),scratch,scratch_size)||
+       overlaps(out,sizeof(*out),response,response_capacity))
+        return NVX_GSP_RMAPI_INVALID_ARGUMENT;
+    out->client_handle=client;out->device_handle=device;out->vaspace_handle=vaspace;
+
+    /* NV0000_ALLOC_PARAMETERS: the first member is the newly allocated client handle. */
+    put32(params,client);
+    s=nvx_gsp_rm_alloc_sync(manager,0U,0U,client,NVX_GSP_RM_CLASS_ROOT,0U,
+        params,4U,scratch,scratch_size,response,response_capacity,timeout_ms,
+        poll_interval_ms,delay_ms,delay_context,&operation);
+    if(s!=NVX_GSP_RMAPI_OK)return s;
+    out->client_created=1U;
+
+    /* NV0080_ALLOC_PARAMETERS: share handle, flags, and 64-bit VA-space size. */
+    memset(params,0,sizeof(params));
+    put32(params+0U,0U);put32(params+4U,device_flags);
+    put64(params+8U,device_va_size);
+    s=nvx_gsp_rm_alloc_sync(manager,client,client,device,
+        NVX_GSP_RM_CLASS_DEVICE_0,0U,params,sizeof(params),scratch,scratch_size,
+        response,response_capacity,timeout_ms,poll_interval_ms,delay_ms,
+        delay_context,&operation);
+    if(s!=NVX_GSP_RMAPI_OK) {
+        if(s!=NVX_GSP_RMAPI_TIMEOUT&&free_core_object(manager,client,0U,client,
+           scratch,scratch_size,response,response_capacity,timeout_ms,
+           poll_interval_ms,delay_ms,delay_context)==NVX_GSP_RMAPI_OK)
+            out->client_created=0U;
+        return s;
+    }
+    out->device_created=1U;
+
+    /* NV_MEMORY_VIRTUAL_ALLOCATION_PARAMS: caller's explicit limit, default parent VA space. */
+    memset(params,0,sizeof(params));
+    put64(params,vaspace_limit);
+    put32(params+8U,0U); /* NV01_NULL_OBJECT parent VA-space handle. */
+    s=nvx_gsp_rm_alloc_sync(manager,client,device,vaspace,
+        NVX_GSP_RM_CLASS_MEMORY_VIRTUAL,0U,params,sizeof(params),scratch,
+        scratch_size,response,response_capacity,timeout_ms,poll_interval_ms,
+        delay_ms,delay_context,&operation);
+    if(s!=NVX_GSP_RMAPI_OK) {
+        if(s!=NVX_GSP_RMAPI_TIMEOUT&&free_core_object(manager,client,client,
+           device,scratch,scratch_size,response,response_capacity,timeout_ms,
+           poll_interval_ms,delay_ms,delay_context)==NVX_GSP_RMAPI_OK)
+            out->device_created=0U;
+        if(s!=NVX_GSP_RMAPI_TIMEOUT&&free_core_object(manager,client,0U,client,
+           scratch,scratch_size,response,response_capacity,timeout_ms,
+           poll_interval_ms,delay_ms,delay_context)==NVX_GSP_RMAPI_OK)
+            out->client_created=0U;
+        return s;
+    }
+    out->vaspace_created=1U;
+    return NVX_GSP_RMAPI_OK;
+}
+
 static nvx_gsp_rmapi_status_t finish_sync(
     nvx_gsp_rpc_manager_t *manager,nvx_gsp_rmapi_result_t *out,
     void *scratch,size_t scratch_size,void *response,size_t response_capacity,

@@ -407,8 +407,8 @@ void graphics_cursor_restore(void)
     if (!initialized || !cursor_saved_valid)
         return;
 
-    /* Cursor save-under writes bypass the drawing primitives, so explicitly
-     * mark the old cursor footprint when restoring it into the shadow buffer. */
+    /* Cursor save-under writes bypass drawing primitives, so explicitly mark
+     * the old cursor footprint for the shadow-buffer damage commit. */
     graphics_mark_damage(cursor_saved_x, cursor_saved_y,
                          cursor_saved_width, cursor_saved_height);
     for (int y = 0; y < cursor_saved_height; y++)

@@ -12,7 +12,7 @@
 
 /* VantaOS-specific ring-3 GUI ABI. This is not a Win32/Wayland ABI. */
 #define VANTA_GUI_ABI_VERSION 1U
-#define VANTA_GUI_MAX_WINDOWS 8U
+#define VANTA_GUI_MAX_WINDOWS 16U
 #define VANTA_GUI_MAX_COMMANDS 128U
 #define VANTA_GUI_TITLE_MAX 31U
 #define VANTA_GUI_TEXT_MAX 63U
@@ -28,6 +28,7 @@
 #define VANTA_GUI_EVENT_FOCUS_GAINED  5U
 #define VANTA_GUI_EVENT_FOCUS_LOST    6U
 #define VANTA_GUI_EVENT_THEME_CHANGED  7U
+#define VANTA_GUI_EVENT_RESIZE         8U
 
 #define VANTA_GUI_MOD_CTRL 0x01U
 
@@ -43,7 +44,8 @@
 #define VANTA_GUI_KEY_DELETE    0x109U
 
 /* For KEY events, values 0-255 are character bytes; 0x100 + keyboard_event_t
- * represents a special key such as Page Up, arrows, Home, End, or Delete. */
+ * represents a special key such as Page Up, arrows, Home, End, or Delete.
+ * For RESIZE events, x and y contain the new outer window width and height. */
 
 typedef struct
 {

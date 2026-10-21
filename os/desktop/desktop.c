@@ -16,7 +16,8 @@
 #include "terminal_process.h"
 #include "shell.h"
 #include "terminal.h"
-#include "file_explorer_process.h"
+#include "file_explorer.h"
+#include "graphics_internal.h"
 #include "gui_server.h"
 #include "usb.h"
 
@@ -26,13 +27,145 @@
 static int terminal_window_open;
 static unsigned int terminal_last_blink_state;
 static unsigned int desktop_last_clock_refresh;
+static void terminal_close_window(void);
 
+static void desktop_draw_terminal_window(int x, int y, int width, int height)
+{
+    if (!terminal_window_open || width < 80 || height < 70)
+        return;
+    const size_t total = terminal_history_count();
+    size_t visible = (size_t)(height - 64) / 16U;
+    if (visible == 0U) return;
+    size_t first = total > visible ? total - visible : 0U;
+    size_t scroll = terminal_get_scroll_offset();
+    if (scroll > first) first = 0U;
+    else first -= scroll;
+    int max_chars = (width - 28) / 8;
+    if (max_chars > 80) max_chars = 80;
+    if (max_chars < 1) return;
+    char line[81];
+    graphics_fill_rect(x + 8, y + 50, width - 16, height - 58,
+                       0x000B111A);
+    for (size_t row = 0; row < visible && first + row < total; row++)
+    {
+        for (size_t i = 0; i < sizeof(line); i++) line[i] = '\0';
+        if (terminal_history_line(first + row, line, sizeof(line)) < 0)
+            continue;
+        line[max_chars] = '\0';
+        graphics_draw_text(x + 16, y + 56 + (int)row * 16,
+                           line, 0x00D8E2EDU, 1U);
+    }
+    graphics_fill_rect(x + 16, y + height - 18, 18, 2, 0x005DA9FFU);
+}
+
+static int desktop_files_click(int x, int y, int width, int height,
+                               int pointer_x, int pointer_y, int button)
+{
+    if (button != 1) return 0;
+    return file_explorer_click_managed(x, y, width, height,
+                                       pointer_x, pointer_y);
+}
+
+static void desktop_draw_files(int x, int y, int width, int height)
+{
+    file_explorer_initialize();
+    file_explorer_draw_managed(x, y, width, height);
+}
+
+static void desktop_draw_system(int x, int y, int width, int height)
+{
+    graphics_draw_system_page_detail(x, y, width, height);
+}
+
+static void desktop_draw_settings(int x, int y, int width, int height)
+{
+    graphics_draw_settings_page_detail(x, y, width, height);
+}
+
+static int desktop_settings_click(int x, int y, int width, int height,
+                                  int pointer_x, int pointer_y, int button)
+{
+    (void)height;
+    if (button != 1 || pointer_y < y + 156 || pointer_y >= y + 210)
+        return 0;
+    for (int i = 0; i < 3; i++)
+    {
+        int gap = 10;
+        int bw = (width - 56 - gap * 2) / 3;
+        int bx = x + 28 + i * (bw + gap);
+        if (pointer_x >= bx && pointer_x < bx + bw)
+        {
+            settings_resolution_index = i;
+            if (graphics_set_resolution(settings_widths[i],
+                                         settings_heights[i]))
+                gui_server_reflow_windows();
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static void desktop_close_terminal(void)
+{
+    if (terminal_window_open)
+    {
+        terminal_process_request_exit();
+        terminal_close_window();
+    }
+}
+
+static void desktop_register_builtin_windows(void)
+{
+    int screen_w = (int)graphics_get_width();
+    int screen_h = (int)graphics_get_height();
+    int work_h = screen_h - 64;
+    if (work_h < 160) work_h = screen_h;
+    int files_w = screen_w - 32;
+    int files_h = screen_h - 120;
+    if (files_w > 960) files_w = 960;
+    if (files_h > 560) files_h = 560;
+    if (files_w < 240) files_w = 240;
+    if (files_h < 160) files_h = 160;
+    int app_w = screen_w - 32;
+    int app_h = work_h - 48;
+    if (app_w > 760) app_w = 760;
+    if (app_h > 440) app_h = 440;
+    if (app_w < 240) app_w = 240;
+    if (app_h < 160) app_h = 160;
+    int term_w = screen_w - 32;
+    int term_h = work_h - 64;
+    if (term_w > 800) term_w = 800;
+    if (term_h > 480) term_h = 480;
+    if (term_w < 240) term_w = 240;
+    if (term_h < 160) term_h = 160;
+
+    (void)gui_server_register_builtin("Files",
+        (screen_w - files_w) / 2, (work_h - files_h) / 2,
+        files_w, files_h, desktop_draw_files, desktop_files_click, 0);
+    (void)gui_server_register_builtin("Terminal",
+        (screen_w - term_w) / 2, (work_h - term_h) / 2,
+        term_w, term_h, desktop_draw_terminal_window, 0,
+        desktop_close_terminal);
+    (void)gui_server_register_builtin("System",
+        (screen_w - app_w) / 2, (work_h - app_h) / 2,
+        app_w, app_h, desktop_draw_system, 0, 0);
+    int settings_x = (screen_w - app_w) / 2 + 24;
+    int settings_y = (work_h - app_h) / 2 + 18;
+    if (settings_x + app_w > screen_w) settings_x = screen_w - app_w;
+    if (settings_y + app_h > work_h) settings_y = work_h - app_h;
+    if (settings_x < 0) settings_x = 0;
+    if (settings_y < 0) settings_y = 0;
+    (void)gui_server_register_builtin("Settings",
+        settings_x, settings_y, app_w, app_h,
+        desktop_draw_settings, desktop_settings_click, 0);
+}
 
 static void desktop_gui_present(void)
 {
     if (!graphics_is_initialized())
         return;
 
+    gui_server_sync_active_panel();
     graphics_begin_frame();
     if (!graphics_frame_is_active())
     {
@@ -59,6 +192,7 @@ static void desktop_gui_present(void)
  */
 static void desktop_gui_present_terminal_fast(void)
 {
+    gui_server_sync_active_panel();
     if (!graphics_can_redraw_windows_incrementally())
     {
         desktop_gui_present();
@@ -81,7 +215,12 @@ static void desktop_gui_present_terminal_fast(void)
 int desktop_launch_terminal(void)
 {
     if (terminal_window_open)
+    {
+        (void)gui_server_set_builtin_visible("Terminal", 1);
+        graphics_select_panel(3);
+        desktop_gui_present();
         return 1;
+    }
 
     int pid = terminal_process_start(process_current_pid());
 
@@ -94,6 +233,7 @@ int desktop_launch_terminal(void)
 
     graphics_set_terminal_running(1);
     graphics_select_panel(3);
+    (void)gui_server_set_builtin_visible("Terminal", 1);
     desktop_gui_present();
 
     return 1;
@@ -109,6 +249,7 @@ static void terminal_close_window(void)
     shell_initialize();
 
     graphics_select_panel(0);
+    (void)gui_server_set_builtin_visible("Terminal", 0);
     desktop_gui_present();
 }
 
@@ -119,6 +260,7 @@ void desktop_initialize(multiboot_info_t* mbd)
     terminal_last_blink_state = 0;
     desktop_last_clock_refresh = 0;
     (void)desktop_theme_reload();
+    desktop_register_builtin_windows();
 }
 
 void desktop_present(void)
@@ -130,6 +272,7 @@ void desktop_update(void)
 {
     /* USB polling is owned by desktop_process_main after frame/input work. */
     gui_server_cleanup_dead_windows();
+    gui_server_sync_active_panel();
 
     /* The physical Super/GUI key is a desktop shortcut, not text input. */
     if (keyboard_take_super_event())
@@ -137,20 +280,6 @@ void desktop_update(void)
         graphics_toggle_start_menu();
         desktop_gui_present();
     }
-
-    uint32_t explorer_pid = file_explorer_process_pid();
-    if (graphics_get_active_panel() == 2)
-    {
-        if (explorer_pid == 0U)
-        {
-            if (file_explorer_process_start(process_current_pid()) < 0)
-                graphics_select_panel(0);
-        }
-        else
-            (void)gui_server_set_owner_visible(explorer_pid, 1);
-    }
-    else if (explorer_pid != 0U)
-        (void)gui_server_set_owner_visible(explorer_pid, 0);
 
     /* Keep the RTC clock/date current even when the user is not moving the mouse. */
     if (graphics_get_active_panel() != 3)

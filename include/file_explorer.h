@@ -16,7 +16,10 @@ int file_explorer_is_dragging(void);
 void file_explorer_minimize(void);
 void file_explorer_restore(void);
 void file_explorer_draw(int width, int height);
+void file_explorer_draw_managed(int x, int y, int width, int height);
 void file_explorer_window_geometry(int width, int height, int* x, int* y, int* w, int* h);
 int file_explorer_click(int x, int y, int width, int height);
+int file_explorer_click_managed(int x, int y, int width, int height,
+                                int pointer_x, int pointer_y);
 
 #endif

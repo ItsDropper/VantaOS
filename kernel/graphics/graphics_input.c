@@ -60,10 +60,9 @@ void graphics_mouse_click(int button)
 
         if (cursor_x >= center + 18 && cursor_x < center + 60)
         {
-            if (active_panel == 2)
-                file_explorer_minimize();
-            else
-                file_explorer_restore();
+            file_explorer_initialize();
+            (void)gui_server_set_builtin_visible("Files", 1);
+            active_panel = 2;
             return;
         }
 
@@ -74,6 +73,9 @@ void graphics_mouse_click(int button)
             graphics_request_terminal_open();
             return;
         }
+
+        if (gui_server_taskbar_click(cursor_x, cursor_y, taskbar_y, width))
+            return;
     }
 
     if (start_menu_open)
@@ -103,6 +105,7 @@ void graphics_mouse_click(int button)
         {
             active_panel = 2;
             file_explorer_initialize();
+            (void)gui_server_set_builtin_visible("Files", 1);
             start_menu_open = 0;
             return;
         }
@@ -111,6 +114,7 @@ void graphics_mouse_click(int button)
             cursor_y >= menu_y + 218 && cursor_y < menu_y + 272)
         {
             active_panel = 1;
+            (void)gui_server_set_builtin_visible("System", 1);
             start_menu_open = 0;
             return;
         }
@@ -118,15 +122,9 @@ void graphics_mouse_click(int button)
         if (cursor_x >= menu_x + 24 && cursor_x < menu_x + 436 &&
             cursor_y >= menu_y + 272 && cursor_y < menu_y + 326)
         {
-            const char* settings_argv[] = { "/SYSTEM/SETTINGS.ELF" };
-            int settings_pid = process_spawn_user_elf_file(
-                "/SYSTEM/SETTINGS.ELF", process_current_pid(), 1U, settings_argv);
+            active_panel = 4;
+            (void)gui_server_set_builtin_visible("Settings", 1);
             start_menu_open = 0;
-            if (settings_pid < 0)
-            {
-                /* Keep the legacy settings panel available if disk launch fails. */
-                active_panel = 4;
-            }
             return;
         }
 
@@ -145,146 +143,11 @@ void graphics_mouse_click(int button)
      * Explorer has one input owner. Its hit-testing, title-bar controls,
      * sidebar, toolbar and file list all use the same geometry as drawing.
      */
-    if (active_panel == 2)
-    {
-        file_explorer_click(cursor_x, cursor_y, width, height);
-        return;
-    }
-
-    if (active_panel == 3)
-    {
-        int terminal_w = (int)graphics_get_terminal_width();
-        int terminal_h = (int)graphics_get_terminal_height();
-        int terminal_x_current = terminal_maximized ? 0 : terminal_x;
-        int terminal_y_current = terminal_maximized ? 0 : terminal_y;
-
-        if (!terminal_maximized && terminal_w > width - 20)
-        {
-            terminal_w = width - 20;
-            terminal_x_current = 10;
-        }
-
-        if (!terminal_maximized && terminal_h > height - 20)
-        {
-            terminal_h = height - 20;
-            terminal_y_current = 10;
-        }
-
-        if (cursor_x >= terminal_x_current + terminal_w - 140 &&
-            cursor_x < terminal_x_current + terminal_w - 96 &&
-            cursor_y >= terminal_y_current + 4 &&
-            cursor_y < terminal_y_current + 42)
-        {
-            active_panel = 0;
-            terminal_dragging = 0;
-            return;
-        }
-
-        if (cursor_x >= terminal_x_current + terminal_w - 96 &&
-            cursor_x < terminal_x_current + terminal_w - 48 &&
-            cursor_y >= terminal_y_current + 4 &&
-            cursor_y < terminal_y_current + 42)
-        {
-            graphics_terminal_toggle_maximized();
-            return;
-        }
-
-        if (cursor_x >= terminal_x_current + terminal_w - 48 &&
-            cursor_x < terminal_x_current + terminal_w &&
-            cursor_y >= terminal_y_current + 4 &&
-            cursor_y < terminal_y_current + 42)
-        {
-            terminal_close_requested = 1;
-            terminal_running = 0;
-            active_panel = 0;
-            terminal_dragging = 0;
-            return;
-        }
-
-        if (!terminal_maximized &&
-            cursor_x >= terminal_x_current + 8 &&
-            cursor_x < terminal_x_current + terminal_w - 140 &&
-            cursor_y >= terminal_y_current + 4 &&
-            cursor_y < terminal_y_current + 42)
-        {
-            terminal_dragging = 1;
-            terminal_drag_offset_x = cursor_x - terminal_x;
-            terminal_drag_offset_y = cursor_y - terminal_y;
-            return;
-        }
-
-        return;
-    }
-
-    if (active_panel == 1)
-    {
-        int window_w = 760;
-        int window_h = 480;
-        int window_x = width / 2 - window_w / 2;
-        int window_y = height / 2 - window_h / 2;
-
-        if (cursor_x >= window_x + window_w - 52 &&
-            cursor_x < window_x + window_w &&
-            cursor_y >= window_y &&
-            cursor_y < window_y + 46)
-        {
-            active_panel = 0;
-            return;
-        }
-
-        return;
-    }
-
-    if (active_panel == 4)
-    {
-        int window_w = width - 32;
-        int window_h = height - 96;
-
-        if (window_w > 760)
-            window_w = 760;
-        if (window_h > 480)
-            window_h = 480;
-
-        int window_x = width / 2 - window_w / 2;
-        int window_y = height / 2 - window_h / 2;
-
-        if (cursor_x >= window_x + window_w - 52 &&
-            cursor_x < window_x + window_w &&
-            cursor_y >= window_y &&
-            cursor_y < window_y + 46)
-        {
-            active_panel = 0;
-            return;
-        }
-
-        if (cursor_y >= window_y + 156 &&
-            cursor_y < window_y + 210)
-        {
-            for (int i = 0; i < 3; i++)
-            {
-                int gap = 10;
-                int bw = (window_w - 56 - gap * 2) / 3;
-                int bx = window_x + 28 + i * (bw + gap);
-
-                if (cursor_x >= bx && cursor_x < bx + bw)
-                {
-                    settings_resolution_index = i;
-                    graphics_set_resolution(
-                        settings_widths[i],
-                        settings_heights[i]
-                    );
-                    return;
-                }
-            }
-        }
-
-        return;
-    }
-
     if (cursor_x >= 24 && cursor_x < 112 &&
         cursor_y >= 58 && cursor_y < 130)
     {
         active_panel = 1;
+        (void)gui_server_set_builtin_visible("System", 1);
         return;
     }
 
@@ -293,6 +156,7 @@ void graphics_mouse_click(int button)
     {
         active_panel = 2;
         file_explorer_initialize();
+        (void)gui_server_set_builtin_visible("Files", 1);
         return;
     }
 
@@ -393,7 +257,6 @@ void graphics_mouse_move(int dx, int dy)
             terminal_y = 0;
     }
 
-    gui_server_mouse_move(cursor_x, cursor_y);
 }
 
 void graphics_mouse_release(int button)

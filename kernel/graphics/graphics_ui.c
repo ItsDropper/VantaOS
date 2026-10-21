@@ -6,6 +6,7 @@
  */
 
 #include "graphics_internal.h"
+#include "gui_server.h"
 #include "desktop_theme.h"
 #include "filesystem.h"
 #include "file_explorer.h"
@@ -66,8 +67,21 @@ void graphics_draw_window_frame(int x, int y, int w, int h, const char* title, i
 
     graphics_fill_rounded_rect(x + 14, y + 10, 24, 24, 6, 0x00253648);
     graphics_draw_vanta_logo(x + 21, y + 14, 15);
-    graphics_draw_text(x + 48, y + 18, title ? title : "Window",
-                       VANTA_UI_TEXT, 1);
+    /* Keep long titles clear of the control hitboxes on narrow windows. */
+    char visible_title[32];
+    int title_limit = (w - (show_window_controls ? 188 : 100)) / 8;
+    if (title_limit < 0) title_limit = 0;
+    if (title_limit > 31) title_limit = 31;
+    int title_length = 0;
+    const char* source_title = title ? title : "Window";
+    while (title_length < title_limit && source_title[title_length])
+    {
+        visible_title[title_length] = source_title[title_length];
+        title_length++;
+    }
+    visible_title[title_length] = '\0';
+    if (title_length > 0)
+        graphics_draw_text(x + 48, y + 18, visible_title, VANTA_UI_TEXT, 1);
 
     if (show_window_controls)
     {
@@ -77,9 +91,23 @@ void graphics_draw_window_frame(int x, int y, int w, int h, const char* title, i
             int bx = controls_x + i * 46;
             graphics_fill_rect(bx, y + 1, 1, 44, VANTA_UI_BORDER);
         }
-        graphics_draw_text(controls_x + 20, y + 19, "_", 0x00AAB8C8, 1);
-        graphics_draw_text(controls_x + 60, y + 17, "[]", 0x00AAB8C8, 1);
-        graphics_draw_text(controls_x + 110, y + 18, "X", 0x00DCE4EC, 1);
+        /* Draw crisp native-size control glyphs instead of font approximations. */
+        uint32_t control_ink = 0x00AAB8C8U;
+        graphics_fill_rect(controls_x + 17, y + 25, 12, 2, control_ink);
+
+        int maximize_x = controls_x + 46 + 17;
+        graphics_fill_rect(maximize_x, y + 14, 12, 2, control_ink);
+        graphics_fill_rect(maximize_x, y + 24, 12, 2, control_ink);
+        graphics_fill_rect(maximize_x, y + 14, 2, 12, control_ink);
+        graphics_fill_rect(maximize_x + 10, y + 14, 2, 12, control_ink);
+
+        int close_x = controls_x + 2 * 46 + 23;
+        uint32_t close_ink = 0x00DCE4ECU;
+        for (int i = 0; i < 8; i++)
+        {
+            graphics_fill_rect(close_x - 3 + i, y + 15 + i, 2, 2, close_ink);
+            graphics_fill_rect(close_x + 3 - i, y + 15 + i, 2, 2, close_ink);
+        }
     }
     else
     {
@@ -204,6 +232,10 @@ void graphics_draw_taskbar(int taskbar_y, int width)
     int clock_x = width - 116;
     if (clock_x < center + 116)
         clock_x = center + 116;
+
+    /* Retained GUI windows get taskbar entries, including minimized windows. */
+    gui_server_draw_taskbar_items(taskbar_y + 10, width);
+
     graphics_fill_rounded_rect(clock_x, taskbar_y + 6, width - clock_x - 8,
                                 52, 8, VANTA_UI_SURFACE);
     graphics_fill_rect(clock_x + 7, taskbar_y + 8, 1, 48, VANTA_UI_BORDER);
@@ -229,36 +261,8 @@ void graphics_present(void)
     int taskbar_y = h - 64;
 
     if (graphics_take_scene_invalidation())
-    {
         graphics_draw_desktop_backdrop(w, h);
-        if (active_panel == 0)
-            graphics_draw_desktop_dashboard(w, h);
-    }
 
-    if (active_panel == 4)
-    {
-        int ww = w - 32;
-        if (ww > 760) ww = 760;
-        int wh = h - 96;
-        if (wh > 480) wh = 480;
-        int wx = w / 2 - ww / 2, wy = h / 2 - wh / 2;
-        graphics_draw_window_frame(wx, wy, ww, wh, "Settings", 0);
-        graphics_draw_settings_page_detail(wx, wy, ww, wh);
-    }
-
-    if (active_panel == 1)
-    {
-        int ww = 760, wh = 480;
-        int wx = w / 2 - ww / 2, wy = h / 2 - wh / 2;
-
-        graphics_draw_window_frame(wx, wy, ww, wh, "System", 0);
-
-        graphics_draw_system_page_detail(wx, wy, ww, wh);
-    }
-
+    /* Every application window is framed and composed by gui_server. */
     graphics_draw_taskbar(taskbar_y, w);
-
-    if (active_panel == 3)
-        return;
-
 }

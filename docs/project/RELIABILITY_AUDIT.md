@@ -27,7 +27,7 @@ Remaining gaps:
 
 ## SMP and panic behavior
 
-Existing QEMU regression coverage includes 1-, 2-, and 4-vCPU boots, AP startup/topology markers, scheduler stress, cross-CPU wakeup/reschedule IPI behavior, process migration, and ticket-lock contention. The panic path serializes first-entry ownership, emits a serial report before stopping peers, and uses an NMI broadcast when APIC is enabled.
+Existing QEMU regression coverage includes 1-, 2-, and 4-vCPU boots, AP startup/topology markers, scheduler stress, cross-CPU wakeup/reschedule IPI behavior, process migration, and ticket-lock contention. The panic path serializes first-entry ownership, emits a serial report before stopping peers, and uses an NMI broadcast when APIC is enabled. Panic-broadcast NMIs are now handled before CPL3 fault recovery, and CPL3 process-fault handling uses non-blocking process-table operations; lock contention fails closed to the panic path.
 
 The new controlled panic workflow separately tests the real panic renderer after graphics initialization, validates the serial report, captures a screenshot, and checks that the captured frame is red-dominant.
 
@@ -40,7 +40,7 @@ Remaining gaps:
 
 ## Ring-3 exception containment
 
-The existing user-mode self-test enters CPL3, verifies the test syscall, attempts a supervisor-only kernel-memory read, checks user GS-base isolation, and recovers to a known kernel continuation. The process fault path separately marks user-originated exceptions and terminates the current user process when its process/address-space ownership checks pass.
+The existing user-mode self-test enters CPL3, verifies the test syscall, attempts a supervisor-only kernel-memory read, checks user GS-base isolation, and recovers to a known kernel continuation. The process fault path separately marks user-originated exceptions and terminates the current user process with a non-blocking process-table operation when its process/address-space ownership checks pass.
 
 Remaining gaps:
 

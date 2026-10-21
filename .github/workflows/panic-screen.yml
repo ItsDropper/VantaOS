@@ -46,16 +46,216 @@ jobs:
           }
           trap cleanup EXIT
 
-          for attempt in $(seq 1 300); do
-            if grep -q '^VANTAOS_KERNEL_PANIC_BEGIN$' panic-screen.log 2>/dev/null; then break; fi
+          panic_seen=0
+          for attempt in $(seq 1 1200); do
+            if grep -q '^VANTAOS_KERNEL_PANIC_BEGIN          grep -q '^VANTAOS ENCOUNTERED A FATAL ERROR$' panic-screen.log
+          grep -q '^Reason: VANTAOS_QEMU_CONTROLLED_PANIC_TEST$' panic-screen.log
+          grep -q '^VANTAOS_KERNEL_PANIC_END$' panic-screen.log
+
+          # Speak QMP directly over the socket. Keep a persistent receive buffer
+          # so coalesced QMP messages cannot be lost, and fail fast on a stalled reply.
+          python3 - <<'PY'
+          import json
+          import os
+          import socket
+          import time
+
+          socket_path = "/tmp/vantaos-panic-qmp.sock"
+          deadline = time.monotonic() + 5
+          connection = None
+          while time.monotonic() < deadline:
+              try:
+                  candidate = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                  candidate.settimeout(3)
+                  candidate.connect(socket_path)
+                  connection = candidate
+                  break
+              except (FileNotFoundError, ConnectionRefusedError):
+                  candidate.close()
+                  time.sleep(0.1)
+          if connection is None:
+              raise RuntimeError("QEMU QMP socket did not become available within 5 seconds")
+
+          receive_buffer = bytearray()
+
+          def receive_message():
+              while b"\n" not in receive_buffer:
+                  chunk = connection.recv(65536)
+                  if not chunk:
+                      raise RuntimeError("QEMU closed the QMP connection before replying")
+                  receive_buffer.extend(chunk)
+              line, _, remainder = receive_buffer.partition(b"\n")
+              receive_buffer[:] = remainder
+              return json.loads(line)
+
+          def command(name, **arguments):
+              request = {"execute": name}
+              if arguments:
+                  request["arguments"] = arguments
+              connection.sendall((json.dumps(request) + "\r\n").encode())
+              while True:
+                  response = receive_message()
+                  if "event" in response:
+                      continue
+                  if "error" in response:
+                      raise RuntimeError(f"QMP command {name!r} failed: {response['error']}")
+                  if "return" in response:
+                      return response["return"]
+
+          greeting = receive_message()
+          if "QMP" not in greeting:
+              raise RuntimeError(f"Unexpected QMP greeting: {greeting!r}")
+          print("QMP_GREETING_OK", flush=True)
+          command("qmp_capabilities")
+          print("QMP_CAPABILITIES_OK", flush=True)
+          output_path = os.path.abspath("panic-screen.png")
+          command("screendump", filename=output_path)
+          print(f"QMP_SCREENDUMP_OK path={output_path}", flush=True)
+          connection.close()
+          PY
+
+          test -s panic-screen.png
+          identify panic-screen.png
+          python3 - <<'PY'
+          from PIL import Image
+          image = Image.open("panic-screen.png").convert("RGB")
+          assert image.width >= 640 and image.height >= 400, image.size
+          pixels = image.load()
+          red_dominant = sum(
+              1 for y in range(0, image.height, 8)
+              for x in range(0, image.width, 8)
+              if pixels[x, y][0] > pixels[x, y][1] * 1.35
+              and pixels[x, y][0] > pixels[x, y][2] * 1.15
+          )
+          samples = ((image.width + 7) // 8) * ((image.height + 7) // 8)
+          assert red_dominant / samples > 0.35, (red_dominant, samples)
+          print(f"panic screenshot verified: {image.width}x{image.height}, red samples={red_dominant}/{samples}")
+          PY
+
+      - name: Upload panic screen and serial log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vantaos-panic-screen
+          path: |
+            panic-screen.png
+            panic-screen.log
+            /tmp/vantaos-panic-qemu-stderr.log
+          if-no-files-found: warn
+          retention-days: 14
+ panic-screen.log 2>/dev/null; then
+              panic_seen=1
+              break
+            fi
             if ! kill -0 "$qemu_pid" 2>/dev/null; then
+              echo "QEMU exited before reporting the controlled panic." >&2
               cat panic-screen.log /tmp/vantaos-panic-qemu-stderr.log 2>/dev/null || true
               exit 1
             fi
             sleep 0.1
           done
 
-          grep -q '^VANTAOS_KERNEL_PANIC_BEGIN$' panic-screen.log
+          if [ "$panic_seen" -ne 1 ]; then
+            echo "Timed out waiting for the controlled panic marker after 120 seconds." >&2
+            cat panic-screen.log /tmp/vantaos-panic-qemu-stderr.log 2>/dev/null || true
+            exit 1
+          fi
+          grep -q '^VANTAOS_KERNEL_PANIC_BEGIN          grep -q '^VANTAOS ENCOUNTERED A FATAL ERROR$' panic-screen.log
+          grep -q '^Reason: VANTAOS_QEMU_CONTROLLED_PANIC_TEST$' panic-screen.log
+          grep -q '^VANTAOS_KERNEL_PANIC_END$' panic-screen.log
+
+          # Speak QMP directly over the socket. Keep a persistent receive buffer
+          # so coalesced QMP messages cannot be lost, and fail fast on a stalled reply.
+          python3 - <<'PY'
+          import json
+          import os
+          import socket
+          import time
+
+          socket_path = "/tmp/vantaos-panic-qmp.sock"
+          deadline = time.monotonic() + 5
+          connection = None
+          while time.monotonic() < deadline:
+              try:
+                  candidate = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                  candidate.settimeout(3)
+                  candidate.connect(socket_path)
+                  connection = candidate
+                  break
+              except (FileNotFoundError, ConnectionRefusedError):
+                  candidate.close()
+                  time.sleep(0.1)
+          if connection is None:
+              raise RuntimeError("QEMU QMP socket did not become available within 5 seconds")
+
+          receive_buffer = bytearray()
+
+          def receive_message():
+              while b"\n" not in receive_buffer:
+                  chunk = connection.recv(65536)
+                  if not chunk:
+                      raise RuntimeError("QEMU closed the QMP connection before replying")
+                  receive_buffer.extend(chunk)
+              line, _, remainder = receive_buffer.partition(b"\n")
+              receive_buffer[:] = remainder
+              return json.loads(line)
+
+          def command(name, **arguments):
+              request = {"execute": name}
+              if arguments:
+                  request["arguments"] = arguments
+              connection.sendall((json.dumps(request) + "\r\n").encode())
+              while True:
+                  response = receive_message()
+                  if "event" in response:
+                      continue
+                  if "error" in response:
+                      raise RuntimeError(f"QMP command {name!r} failed: {response['error']}")
+                  if "return" in response:
+                      return response["return"]
+
+          greeting = receive_message()
+          if "QMP" not in greeting:
+              raise RuntimeError(f"Unexpected QMP greeting: {greeting!r}")
+          print("QMP_GREETING_OK", flush=True)
+          command("qmp_capabilities")
+          print("QMP_CAPABILITIES_OK", flush=True)
+          output_path = os.path.abspath("panic-screen.png")
+          command("screendump", filename=output_path)
+          print(f"QMP_SCREENDUMP_OK path={output_path}", flush=True)
+          connection.close()
+          PY
+
+          test -s panic-screen.png
+          identify panic-screen.png
+          python3 - <<'PY'
+          from PIL import Image
+          image = Image.open("panic-screen.png").convert("RGB")
+          assert image.width >= 640 and image.height >= 400, image.size
+          pixels = image.load()
+          red_dominant = sum(
+              1 for y in range(0, image.height, 8)
+              for x in range(0, image.width, 8)
+              if pixels[x, y][0] > pixels[x, y][1] * 1.35
+              and pixels[x, y][0] > pixels[x, y][2] * 1.15
+          )
+          samples = ((image.width + 7) // 8) * ((image.height + 7) // 8)
+          assert red_dominant / samples > 0.35, (red_dominant, samples)
+          print(f"panic screenshot verified: {image.width}x{image.height}, red samples={red_dominant}/{samples}")
+          PY
+
+      - name: Upload panic screen and serial log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vantaos-panic-screen
+          path: |
+            panic-screen.png
+            panic-screen.log
+            /tmp/vantaos-panic-qemu-stderr.log
+          if-no-files-found: warn
+          retention-days: 14
+ panic-screen.log
           grep -q '^VANTAOS ENCOUNTERED A FATAL ERROR$' panic-screen.log
           grep -q '^Reason: VANTAOS_QEMU_CONTROLLED_PANIC_TEST$' panic-screen.log
           grep -q '^VANTAOS_KERNEL_PANIC_END$' panic-screen.log

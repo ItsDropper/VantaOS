@@ -736,12 +736,21 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
     }
     setup_disk_t *target = &disks[selected - 1U];
     CHAR16 *selected_path = DevicePathToStr(DevicePathFromHandle(target->handle));
-    Print(L"\r\nSelected target: %u GiB, %u sectors, %s media\r\n",
-          (UINT32)(target->sector_count / 2097152U),
-          (UINT32)target->sector_count,
-          target->block->Media->RemovableMedia ? L"removable" : L"fixed");
-    Print(L"Device path: %s\r\n",
-          selected_path ? selected_path : L"(unavailable)");
+    if (config.language[0] == 'f') {
+        Print(L"\r\nValittu kohde: %u GiB, %u sektoria, %s media\r\n",
+              (UINT32)(target->sector_count / 2097152U),
+              (UINT32)target->sector_count,
+              target->block->Media->RemovableMedia ? L"irrotettava" : L"kiintea");
+        Print(L"Laitteen polku: %s\r\n",
+              selected_path ? selected_path : L"(ei saatavilla)");
+    } else {
+        Print(L"\r\nSelected target: %u GiB, %u sectors, %s media\r\n",
+              (UINT32)(target->sector_count / 2097152U),
+              (UINT32)target->sector_count,
+              target->block->Media->RemovableMedia ? L"removable" : L"fixed");
+        Print(L"Device path: %s\r\n",
+              selected_path ? selected_path : L"(unavailable)");
+    }
     vanta_installer_layout_t layout;
     if (vanta_installer_plan_gpt(target->sector_count,
             VANTA_INSTALLER_SECTOR_SIZE, &layout) != VANTA_INSTALLER_LAYOUT_OK) {
@@ -751,12 +760,17 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
         uefi_call_wrapper(source_root->Close, 1, source_root);
         return EFI_UNSUPPORTED;
     }
-    Print(L"\r\nPlanned partition layout (preview; no writes yet):\r\n");
-    Print(L"  GPT, 1 MiB alignment\r\n");
-    Print(L"  EFI System Partition: %u MiB, FAT32\r\n",
-          (UINT32)(layout.efi.sector_count / 2048U));
-    Print(L"  VantaOS system partition: %u MiB, FAT32\r\n",
-          (UINT32)(layout.system.sector_count / 2048U));
+    print_localized(&config,
+        L"\r\nPlanned partition layout (preview; no writes yet):\r\n",
+        L"\r\nOsiointisuunnitelma (esikatselu; ei kirjoituksia viela):\r\n");
+    print_localized(&config, L"  GPT, 1 MiB alignment\r\n",
+                    L"  GPT, 1 MiB kohdistus\r\n");
+    print_localized(&config, L"  EFI System Partition: ",
+                    L"  EFI-jarjestelmaosio: ");
+    Print(L"%u MiB, FAT32\r\n", (UINT32)(layout.efi.sector_count / 2048U));
+    print_localized(&config, L"  VantaOS system partition: ",
+                    L"  VantaOS-jarjestelmaosio: ");
+    Print(L"%u MiB, FAT32\r\n", (UINT32)(layout.system.sector_count / 2048U));
     print_localized(&config, L"WARNING: continuing will erase the entire selected disk.\r\n", L"VAROITUS: jatkaminen tyhjentaa koko valitun levyn.\r\n");
     Print(L"Target device: %s\r\n", selected_path ? selected_path : L"(unavailable)");
     Print(L"Target capacity: %u GiB\r\n", (UINT32)(target->sector_count / 2097152U));

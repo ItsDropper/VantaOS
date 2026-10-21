@@ -129,7 +129,10 @@ nvx_gsp_falcon_status_t nvx_gsp_ga10x_wait_riscv_active(
                                  &riscv_cpuctl);
         if (status != NVX_MMIO_OK)
             return NVX_GSP_FALCON_MMIO_ERROR;
-        if ((riscv_cpuctl & NVX_GSP_RISCV_ACTIVE) != 0U)
+        if ((hwcfg2 & NVX_GSP_HWCFG2_RISCV_PRESENT) == 0U)
+            return NVX_GSP_FALCON_IMAGE_INVALID;
+        if ((riscv_cpuctl & NVX_GSP_RISCV_ACTIVE) != 0U &&
+            (riscv_cpuctl & NVX_GSP_RISCV_HALTED) == 0U)
             return NVX_GSP_FALCON_OK;
 
         if (elapsed_ms >= timeout_ms)

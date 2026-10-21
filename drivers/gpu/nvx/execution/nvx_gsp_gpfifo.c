@@ -102,6 +102,27 @@ nvx_gsp_gpfifo_status_t nvx_gsp_gpfifo_submit(
     return NVX_GSP_GPFIFO_OK;
 }
 
+nvx_gsp_gpfifo_status_t nvx_gsp_gpfifo_submit_and_wait(
+    nvx_gsp_gpfifo_channel_t *c,uint64_t command_va,size_t command_bytes,
+    const volatile uint32_t *completion_word,uint32_t expected_completion,
+    uint32_t timeout_ms,uint32_t interval_ms,
+    nvx_gsp_gpfifo_delay_fn delay_ms,void *context,uint32_t *out_put)
+{
+    nvx_gsp_gpfifo_status_t s;
+    uint32_t expected_get=0U;
+    if(out_put)*out_put=0U;
+    if(!c||!completion_word||!out_put||!timeout_ms||!interval_ms||!delay_ms)
+        return NVX_GSP_GPFIFO_INVALID_ARGUMENT;
+    s=nvx_gsp_gpfifo_submit(c,command_va,command_bytes,&expected_get);
+    if(s!=NVX_GSP_GPFIFO_OK)return s;
+    *out_put=expected_get;
+    s=nvx_gsp_gpfifo_wait_get(c,expected_get,timeout_ms,interval_ms,
+                              delay_ms,context);
+    if(s!=NVX_GSP_GPFIFO_OK)return s;
+    return nvx_gsp_gpfifo_wait_completion(completion_word,
+        expected_completion,timeout_ms,interval_ms,delay_ms,context);
+}
+
 nvx_gsp_gpfifo_status_t nvx_gsp_gpfifo_wait_get(
     nvx_gsp_gpfifo_channel_t *c,uint32_t expected,uint32_t timeout_ms,
     uint32_t interval_ms,nvx_gsp_gpfifo_delay_fn delay_ms,void *context)

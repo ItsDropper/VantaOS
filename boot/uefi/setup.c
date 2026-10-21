@@ -588,6 +588,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
         VANTA_INSTALLER_GPT_WORKSPACE_SIZE);
     uefi_call_wrapper(BS->FreePool, 1, workspace);
     if (gpt_status != VANTA_INSTALLER_GPT_OK) {
+        serial_write("VANTAOS_SETUP_GPT_FAIL\n");
         Print(L"ERROR: GPT write/verification failed. Do not reboot; inspect the target disk.\r\n");
         uefi_call_wrapper(source_root->Close, 1, source_root);
         return EFI_DEVICE_ERROR;
@@ -598,6 +599,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
     status = uefi_call_wrapper(BS->AllocatePool, 3, EfiLoaderData,
         VANTA_INSTALLER_FAT32_WORKSPACE_SIZE, (void **)&fat_workspace);
     if (EFI_ERROR(status) || !fat_workspace) {
+        serial_write("VANTAOS_SETUP_FORMAT_FAIL\n");
         Print(L"ERROR: partition table is written but FAT32 workspace allocation failed.\r\n");
         uefi_call_wrapper(source_root->Close, 1, source_root);
         return EFI_OUT_OF_RESOURCES;
@@ -636,6 +638,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
     EFI_HANDLE efi_partition = find_partition_handle(target->handle, 1U);
     EFI_HANDLE system_partition = find_partition_handle(target->handle, 2U);
     if (!efi_partition || !system_partition) {
+        serial_write("VANTAOS_SETUP_PARTITION_DISCOVERY_FAIL\n");
         Print(L"ERROR: firmware did not expose the new partitions as filesystems. GPT and FAT32 are written, but file deployment did not complete.\r\n");
         uefi_call_wrapper(source_root->Close, 1, source_root);
         return EFI_NOT_FOUND;
@@ -645,12 +648,14 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
     EFI_FILE_PROTOCOL *system_root = NULL;
     status = open_root(efi_partition, &efi_root);
     if (EFI_ERROR(status) || !efi_root) {
+        serial_write("VANTAOS_SETUP_FILES_FAIL\n");
         Print(L"ERROR: cannot open the new EFI partition.\r\n");
         uefi_call_wrapper(source_root->Close, 1, source_root);
         return EFI_DEVICE_ERROR;
     }
     status = open_root(system_partition, &system_root);
     if (EFI_ERROR(status) || !system_root) {
+        serial_write("VANTAOS_SETUP_FILES_FAIL\n");
         Print(L"ERROR: cannot open the new system partition.\r\n");
         uefi_call_wrapper(efi_root->Close, 1, efi_root);
         uefi_call_wrapper(source_root->Close, 1, source_root);

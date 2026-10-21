@@ -373,6 +373,7 @@ jobs:
             scripts/test_nvx_gsp_msgq_ga10x.c \
             drivers/gpu/nvx/gsp/nvx_gsp_msgq_ga10x.c \
             drivers/gpu/nvx/gsp/nvx_gsp_gmcapi.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_nvkv.c \
             drivers/gpu/nvx/gsp/nvx_gsp_msgq_queue.c \
             drivers/gpu/nvx/gsp/nvx_gsp_msgq.c \
             drivers/gpu/nvx/gsp/nvx_gsp_init_args.c \

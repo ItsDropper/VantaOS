@@ -22,7 +22,6 @@ static int layout_matches_buffer(const nvx_dma_buffer_t *buffer,
         buffer->allocated_size < buffer->size ||
         layout->shared_mem_phys_addr != buffer->gpu_address ||
         layout->allocation_size > buffer->size ||
-        layout->allocation_size > SIZE_MAX ||
         nvx_gsp_modern_shared_queue_validate(layout) != NVX_GSP_INIT_ARGS_OK)
         return 0;
     return 1;
@@ -79,7 +78,6 @@ nvx_gsp_msgq_ga10x_status_t nvx_gsp_msgq_ga10x_link_status(
         timeout_ms == 0U || poll_interval_ms == 0U ||
         !layout_matches_buffer(shared_memory, layout) ||
         !shared_sync->initialized || shared_sync->buffer != shared_memory ||
-        shared_sync->owner != NVX_DMA_OWNER_SHARED ||
         overlaps(runtime, sizeof(*runtime), shared_sync, sizeof(*shared_sync)))
         return NVX_GSP_MSGQ_GA10X_INVALID_ARGUMENT;
     if (shared_sync->owner != NVX_DMA_OWNER_SHARED)

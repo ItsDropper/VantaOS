@@ -136,61 +136,73 @@ static void record_scan(block_device_t *disk, int has_table)
     ++scan_state_count;
 }
 
+int partition_device_scan_disk(block_device_t *disk)
+{
+    if (!disk || (disk->flags & BLOCK_DEVICE_PARTITION) ||
+        disk->sector_size != 512U || !disk->sector_count)
+        return 0;
+
+    for (size_t i = 0U; i < scan_state_count; ++i)
+        if (scan_state[i].disk == disk)
+            return 1;
+
+    if (scan_state_count >= BLOCK_DEVICE_MAX)
+        return 0;
+
+    uint8_t first_sector[512];
+    int has_table = read_disk(disk, 0U, 1U, first_sector) &&
+                    has_partition_entry(first_sector, disk->sector_count);
+    record_scan(disk, has_table);
+
+    partition_scan_entry_t found[PARTITION_SCAN_MAX];
+    size_t found_count = 0U;
+    partition_scan_status_t status = partition_scan(read_disk, disk,
+        disk->sector_count, found, PARTITION_SCAN_MAX, &found_count);
+    if (status != PARTITION_SCAN_OK) {
+        if (has_table)
+            serial_write("VANTAOS_PARTITION_FAIL\n");
+        return 0;
+    }
+
+    int all_registered = 1;
+    for (size_t i = 0U; i < found_count &&
+         partition_count < PARTITION_DEVICE_MAX; ++i) {
+        partition_context_t *part = &partitions[partition_count];
+        *part = (partition_context_t){0};
+        part->parent = disk;
+        part->start_lba = found[i].start_lba;
+        part->length = found[i].sector_count;
+        partition_name(part->block.name, sizeof(part->block.name),
+                       disk->name, i + 1U);
+        part->block.sector_count = found[i].sector_count;
+        part->block.sector_size = disk->sector_size;
+        part->block.flags = (disk->flags & (BLOCK_DEVICE_READ_ONLY | BLOCK_DEVICE_REMOVABLE |
+                            BLOCK_DEVICE_TRANSPORT_ATA |
+                            BLOCK_DEVICE_TRANSPORT_NVME)) |
+                            BLOCK_DEVICE_PARTITION;
+        part->block.ops = &partition_ops;
+        part->block.driver_data = part;
+        part->block.partition_scheme = found[i].scheme;
+        part->block.partition_type = found[i].mbr_type;
+        for (size_t j = 0U; j < 16U; ++j)
+            part->block.partition_type_guid[j] = found[i].type_guid[j];
+        copy_string(part->block.partition_label,
+                    sizeof(part->block.partition_label), found[i].name);
+        if (block_device_register(&part->block) == BLOCK_STATUS_OK) {
+            ++partition_count;
+            serial_write("VANTAOS_PARTITION_OK\n");
+        } else {
+            all_registered = 0;
+            serial_write("VANTAOS_PARTITION_FAIL\n");
+        }
+    }
+    return all_registered;
+}
+
 void partition_device_initialize(void)
 {
     size_t disks_to_scan = block_device_count();
-    for (size_t index = 0U; index < disks_to_scan; ++index) {
-        block_device_t *disk = block_device_get((uint32_t)index);
-        if (!disk || (disk->flags & BLOCK_DEVICE_PARTITION) ||
-            disk->sector_size != 512U || !disk->sector_count)
-            continue;
-
-        uint8_t first_sector[512];
-        int has_table = read_disk(disk, 0U, 1U, first_sector) &&
-                        has_partition_entry(first_sector, disk->sector_count);
-        record_scan(disk, has_table);
-
-        partition_scan_entry_t found[PARTITION_SCAN_MAX];
-        size_t found_count = 0U;
-        partition_scan_status_t status = partition_scan(read_disk, disk,
-            disk->sector_count, found, PARTITION_SCAN_MAX, &found_count);
-        if (status != PARTITION_SCAN_OK) {
-            if (has_table)
-                serial_write("VANTAOS_PARTITION_FAIL\n");
-            continue;
-        }
-
-        size_t registered_before = partition_count;
-        for (size_t i = 0U; i < found_count &&
-             partition_count < PARTITION_DEVICE_MAX; ++i) {
-            partition_context_t *part = &partitions[partition_count];
-            *part = (partition_context_t){0};
-            part->parent = disk;
-            part->start_lba = found[i].start_lba;
-            part->length = found[i].sector_count;
-            partition_name(part->block.name, sizeof(part->block.name),
-                           disk->name, i + 1U);
-            part->block.sector_count = found[i].sector_count;
-            part->block.sector_size = disk->sector_size;
-            part->block.flags = (disk->flags & (BLOCK_DEVICE_READ_ONLY | BLOCK_DEVICE_REMOVABLE |
-                                BLOCK_DEVICE_TRANSPORT_ATA |
-                                BLOCK_DEVICE_TRANSPORT_NVME)) |
-                                BLOCK_DEVICE_PARTITION;
-            part->block.ops = &partition_ops;
-            part->block.driver_data = part;
-            part->block.partition_scheme = found[i].scheme;
-            part->block.partition_type = found[i].mbr_type;
-            for (size_t j = 0U; j < 16U; ++j)
-                part->block.partition_type_guid[j] = found[i].type_guid[j];
-            copy_string(part->block.partition_label,
-                        sizeof(part->block.partition_label), found[i].name);
-            if (block_device_register(&part->block) == BLOCK_STATUS_OK) {
-                ++partition_count;
-                serial_write("VANTAOS_PARTITION_OK\n");
-            } else {
-                serial_write("VANTAOS_PARTITION_FAIL\n");
-            }
-        }
-    }
+    for (size_t index = 0U; index < disks_to_scan; ++index)
+        (void)partition_device_scan_disk(block_device_get((uint32_t)index));
     serial_write("VANTAOS_PARTITION_SCAN_DONE\n");
 }

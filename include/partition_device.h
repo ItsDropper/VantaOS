@@ -7,5 +7,7 @@
 #define VANTA_PARTITION_DEVICE_H
 #include "block_device.h"
 void partition_device_initialize(void);
+/* Scan a newly registered disk once, including disks added after boot. */
+int partition_device_scan_disk(block_device_t *disk);
 int partition_device_has_table(const block_device_t *disk);
 #endif

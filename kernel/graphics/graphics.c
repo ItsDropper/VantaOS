@@ -7,6 +7,7 @@
 
 #include <stddef.h>
 #include "graphics_internal.h"
+#include "graphics_damage.h"
 #include "pmm.h"
 #include "paging.h"
 
@@ -96,31 +97,24 @@ static uint8_t graphics_damage_bitmap[GRAPHICS_DAMAGE_BITMAP_BYTES];
 
 void graphics_mark_damage(int x, int y, int width, int height)
 {
-    if (!graphics_frame_active || width <= 0 || height <= 0)
+    if (!graphics_frame_active)
         return;
 
-    int x0 = x < 0 ? 0 : x;
-    int y0 = y < 0 ? 0 : y;
-    int64_t right = (int64_t)x + width;
-    int64_t bottom = (int64_t)y + height;
-    int x1 = right > (int64_t)framebuffer_width ?
-        (int)framebuffer_width : (int)right;
-    int y1 = bottom > (int64_t)framebuffer_height ?
-        (int)framebuffer_height : (int)bottom;
-    if (x0 >= x1 || y0 >= y1)
+    graphics_damage_tiles_t damage;
+    if (!graphics_damage_compute_tiles(
+            x, y, width, height, framebuffer_width, framebuffer_height,
+            GRAPHICS_DAMAGE_TILE_SIZE, &damage))
         return;
 
     uint32_t tiles_x =
         (framebuffer_width + GRAPHICS_DAMAGE_TILE_SIZE - 1U) /
         GRAPHICS_DAMAGE_TILE_SIZE;
-    uint32_t tx0 = (uint32_t)x0 / GRAPHICS_DAMAGE_TILE_SIZE;
-    uint32_t ty0 = (uint32_t)y0 / GRAPHICS_DAMAGE_TILE_SIZE;
-    uint32_t tx1 = ((uint32_t)x1 - 1U) / GRAPHICS_DAMAGE_TILE_SIZE;
-    uint32_t ty1 = ((uint32_t)y1 - 1U) / GRAPHICS_DAMAGE_TILE_SIZE;
 
-    for (uint32_t ty = ty0; ty <= ty1; ty++)
+    for (uint32_t ty = damage.first_y;
+         ty < damage.first_y + damage.count_y; ty++)
     {
-        for (uint32_t tx = tx0; tx <= tx1; tx++)
+        for (uint32_t tx = damage.first_x;
+             tx < damage.first_x + damage.count_x; tx++)
         {
             uint32_t index = ty * tiles_x + tx;
             graphics_damage_bitmap[index >> 3] |=
@@ -128,7 +122,6 @@ void graphics_mark_damage(int x, int y, int width, int height)
         }
     }
 }
-
 static int graphics_damage_test(uint32_t index)
 {
     return (graphics_damage_bitmap[index >> 3] &

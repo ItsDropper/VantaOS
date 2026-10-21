@@ -1,0 +1,99 @@
+name: VantaOS panic screen QEMU regression
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  panic-screen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install build and QEMU tools
+        run: sudo apt-get update && sudo apt-get install --yes build-essential nasm grub-pc-bin xorriso mtools dosfstools qemu-system-x86 socat imagemagick
+
+      - name: Build dedicated panic-injection ISO
+        run: |
+          set -euo pipefail
+          chmod +x build.sh
+          VANTAOS_PANIC_QEMU_TEST=1 ./build.sh
+          test -s VantaOS.iso
+
+      - name: Trigger controlled kernel panic and capture screen
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f panic-screen.log panic-screen.png /tmp/vantaos-panic-monitor.sock
+          qemu-system-x86_64 \
+            -machine pc -m 256M -smp 2 -vga std \
+            -drive file=VantaOS.iso,media=cdrom,format=raw \
+            -boot order=d -display none \
+            -serial file:panic-screen.log -monitor unix:/tmp/vantaos-panic-monitor.sock,server,nowait \
+            -no-reboot >/tmp/vantaos-panic-qemu-stderr.log 2>&1 &
+          qemu_pid=$!
+          cleanup() {
+            kill "$qemu_pid" 2>/dev/null || true
+            wait "$qemu_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          for attempt in $(seq 1 300); do
+            if grep -q '^VANTAOS_KERNEL_PANIC_BEGIN$' panic-screen.log 2>/dev/null; then break; fi
+            if ! kill -0 "$qemu_pid" 2>/dev/null; then
+              cat panic-screen.log /tmp/vantaos-panic-qemu-stderr.log 2>/dev/null || true
+              exit 1
+            fi
+            sleep 0.1
+          done
+
+          grep -q '^VANTAOS_KERNEL_PANIC_BEGIN$' panic-screen.log
+          grep -q '^VANTAOS ENCOUNTERED A FATAL ERROR$' panic-screen.log
+          grep -q '^Reason: VANTAOS_QEMU_CONTROLLED_PANIC_TEST$' panic-screen.log
+          grep -q '^VANTAOS_KERNEL_PANIC_END$' panic-screen.log
+
+          for attempt in $(seq 1 50); do
+            [ -S /tmp/vantaos-panic-monitor.sock ] && break
+            sleep 0.1
+          done
+          printf 'screendump panic-screen.png\n' | socat - UNIX-CONNECT:/tmp/vantaos-panic-monitor.sock
+          for attempt in $(seq 1 30); do
+            [ -s panic-screen.png ] && break
+            sleep 0.1
+          done
+          test -s panic-screen.png
+          identify panic-screen.png
+          python3 - <<'PY'
+          from PIL import Image
+          image = Image.open("panic-screen.png").convert("RGB")
+          assert image.width >= 640 and image.height >= 400, image.size
+          pixels = image.load()
+          red_dominant = sum(
+              1 for y in range(0, image.height, 8)
+              for x in range(0, image.width, 8)
+              if pixels[x, y][0] > pixels[x, y][1] * 1.35
+              and pixels[x, y][0] > pixels[x, y][2] * 1.15
+          )
+          samples = ((image.width + 7) // 8) * ((image.height + 7) // 8)
+          assert red_dominant / samples > 0.35, (red_dominant, samples)
+          print(f"panic screenshot verified: {image.width}x{image.height}, red samples={red_dominant}/{samples}")
+          PY
+
+      - name: Upload panic screen and serial log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vantaos-panic-screen
+          path: |
+            panic-screen.png
+            panic-screen.log
+            /tmp/vantaos-panic-qemu-stderr.log
+          if-no-files-found: warn
+          retention-days: 14

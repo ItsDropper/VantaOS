@@ -121,6 +121,47 @@ nvx_gsp_rmapi_status_t nvx_gsp_rm_free_submit(
         scratch_size,response,response_capacity,FREE_HEADER_BYTES,out);
 }
 
+nvx_gsp_rmapi_status_t nvx_gsp_rmapi_wait(
+    nvx_gsp_rpc_manager_t *manager,nvx_gsp_rmapi_result_t *operation,
+    void *scratch,size_t scratch_size,void *response,size_t response_capacity,
+    uint32_t timeout_ms,uint32_t poll_interval_ms,
+    nvx_gsp_rmapi_delay_fn delay_ms,void *delay_context)
+{
+    uint32_t elapsed=0U;
+    if(!manager||!operation||!operation->handle.valid||!scratch||!response||
+       !timeout_ms||!poll_interval_ms||!delay_ms||
+       overlaps(scratch,scratch_size,response,response_capacity))
+        return NVX_GSP_RMAPI_INVALID_ARGUMENT;
+    for(;;) {
+        nvx_gsp_rpc_view_t unmatched={0};
+        nvx_gsp_rpc_result_t result={0};
+        nvx_gsp_rpc_status_t pumped=nvx_gsp_rpc_pump(
+            manager,scratch,scratch_size,&unmatched);
+        nvx_gsp_rpc_status_t queried=nvx_gsp_rpc_query(
+            manager,&operation->handle,&result);
+        if(queried==NVX_GSP_RPC_COMPLETE) {
+            uint32_t remote_status=UINT32_MAX;
+            operation->response_size=result.response_size;
+            return nvx_gsp_rmapi_decode_status(operation,response,
+                result.response_size,&remote_status);
+        }
+        if(queried==NVX_GSP_RPC_FAILED||queried==NVX_GSP_RPC_DEVICE_LOST)
+            return NVX_GSP_RMAPI_RPC_ERROR;
+        if(queried==NVX_GSP_RPC_FUNCTION_MISMATCH||
+           queried==NVX_GSP_RPC_RESPONSE_TOO_LARGE||
+           queried==NVX_GSP_RPC_STALE_HANDLE)
+            return NVX_GSP_RMAPI_MALFORMED_RESPONSE;
+        if(pumped==NVX_GSP_RPC_TRANSPORT_ERROR||
+           pumped==NVX_GSP_RPC_NOT_INITIALIZED)
+            return NVX_GSP_RMAPI_RPC_ERROR;
+        if(elapsed>=timeout_ms)return NVX_GSP_RMAPI_TIMEOUT;
+        uint32_t wait=poll_interval_ms;
+        if(wait>timeout_ms-elapsed)wait=timeout_ms-elapsed;
+        delay_ms(wait,delay_context);
+        elapsed+=wait;
+    }
+}
+
 nvx_gsp_rmapi_status_t nvx_gsp_rmapi_decode_status(
     const nvx_gsp_rmapi_result_t *op,const void *response,size_t response_size,
     uint32_t *out_status)

@@ -120,8 +120,8 @@ int main(void)
     uint8_t *metadata_bytes = calloc(1U, NVX_DMA_PAGE_SIZE);
     uint8_t *radix_bytes = calloc(1U, 0x4000U);
     uint8_t *vbios_bytes = calloc(1U, 0x4000U);
-    uint8_t *init_args_bytes = calloc(1U, NVX_GSP_INIT_ARGS_PAGE_SIZE);
-    uint8_t *shared_queue_bytes = calloc(1U, (size_t)TEST_SHARED_SIZE);
+    uint8_t *init_args_bytes = aligned_alloc(NVX_GSP_INIT_ARGS_PAGE_SIZE, NVX_GSP_INIT_ARGS_PAGE_SIZE);
+    uint8_t *shared_queue_bytes = aligned_alloc(NVX_GSP_PAGE_SIZE, (size_t)TEST_SHARED_SIZE);
     nvx_mmio_region_t bar0;
     fake_hardware_t hardware = {0};
     nvx_dma_buffer_t load_buffer = {

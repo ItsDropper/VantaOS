@@ -16,7 +16,6 @@
 #include "terminal_process.h"
 #include "shell.h"
 #include "terminal.h"
-#include "file_explorer_process.h"
 #include "file_explorer.h"
 #include "graphics_internal.h"
 #include "gui_server.h"

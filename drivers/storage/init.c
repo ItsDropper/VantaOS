@@ -9,10 +9,12 @@
 
 #include "ata.h"
 #include "nvme.h"
+#include "partition_device.h"
 
 /* Keep storage-device startup and registration order inside the storage layer. */
 void storage_initialize(void)
 {
     ata_initialize();
     nvme_initialize();
+    partition_device_initialize();
 }

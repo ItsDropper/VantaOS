@@ -122,6 +122,16 @@ nvx_gsp_falcon_status_t nvx_gsp_ga10x_boot_after_frts(
                        sizeof(*memory)) ||
         ranges_overlap(out_mailbox1, sizeof(*out_mailbox1), memory,
                        sizeof(*memory)) ||
+        ranges_overlap(out_mailbox0, sizeof(*out_mailbox0), frts_result,
+                       sizeof(*frts_result)) ||
+        ranges_overlap(out_mailbox1, sizeof(*out_mailbox1), frts_result,
+                       sizeof(*frts_result)) ||
+        ranges_overlap(out_mailbox0, sizeof(*out_mailbox0),
+                       memory->radix3_elf.cpu_address,
+                       memory->radix3_elf.allocated_size) ||
+        ranges_overlap(out_mailbox1, sizeof(*out_mailbox1),
+                       memory->radix3_elf.cpu_address,
+                       memory->radix3_elf.allocated_size) ||
         ranges_overlap(out_mailbox0, sizeof(*out_mailbox0), bar0,
                        sizeof(*bar0)) ||
         ranges_overlap(out_mailbox1, sizeof(*out_mailbox1), bar0,
@@ -136,7 +146,8 @@ nvx_gsp_falcon_status_t nvx_gsp_ga10x_boot_after_frts(
     *out_mailbox1 = 0U;
 
     /* Never start GSP based on an unverified or mismatched FWSEC snapshot. */
-    if (nvx_gsp_fwsec_validate_result(NVX_GSP_FWSEC_CMD_FRTS, frts_result) !=
+    if ((frts_framebuffer_offset >> 12U) > 0x0FFFFFFFU ||
+        nvx_gsp_fwsec_validate_result(NVX_GSP_FWSEC_CMD_FRTS, frts_result) !=
             NVX_GSP_FWSEC_RESULT_OK ||
         frts_result->expected_wpr2_addr_lo_units !=
             (uint32_t)(frts_framebuffer_offset >> 12U) ||
@@ -146,6 +157,7 @@ nvx_gsp_falcon_status_t nvx_gsp_ga10x_boot_after_frts(
 
     if (!memory->acquired || !memory->radix3_elf.acquired ||
         !memory->radix3_elf.cpu_address || !memory->radix3_elf.size ||
+        memory->radix3_elf.allocated_size < memory->radix3_elf.size ||
         !memory->radix3_elf_sync.initialized ||
         memory->radix3_elf_sync.owner != NVX_DMA_OWNER_CPU)
         return NVX_GSP_FALCON_DMA_OWNERSHIP_ERROR;

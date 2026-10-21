@@ -35,7 +35,7 @@ typedef struct nvx_gsp_gmcapi_transport {
     uint8_t initialized;
 } nvx_gsp_gmcapi_transport_t;
 
-/* Queue objects must already be linked to the GA10x hardware registers. */
+/* Zero-initialize transport before init; queues must already be hardware-linked. */
 nvx_gsp_gmcapi_status_t nvx_gsp_gmcapi_init(
     nvx_gsp_gmcapi_transport_t *transport,
     nvx_gsp_msgq_queue_t *command_queue,

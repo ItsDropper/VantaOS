@@ -547,6 +547,7 @@ nvx_gsp_falcon_status_t nvx_gsp_ga10x_bootstrap_traced(
     nvx_dma_sync_t *libos_init_args_sync,
     nvx_dma_buffer_t *shared_queue_mem,
     nvx_dma_sync_t *shared_queue_sync,
+    const nvx_gsp_modern_shared_queue_layout_t *queue_layout,
     const nvx_mmio_region_t *bar0, uint64_t frts_framebuffer_offset,
     uint32_t timeout_ms, uint32_t poll_interval_ms,
     nvx_gsp_delay_ms_fn delay_ms, void *context,
@@ -560,7 +561,7 @@ nvx_gsp_falcon_status_t nvx_gsp_ga10x_bootstrap_traced(
 
     if (!staged_vbios || !staged_vbios_sync || !fwsec_info || !memory ||
         !libos_init_args || !libos_init_args_sync || !shared_queue_mem ||
-        !shared_queue_sync || !bar0 || !bar0->base || !out_frts_result ||
+        !shared_queue_sync || !queue_layout || !bar0 || !bar0->base || !out_frts_result ||
         !out_booter_mailbox1 || !out_trace || !delay_ms ||
         timeout_ms == 0U || poll_interval_ms == 0U ||
         ranges_overlap(out_frts_result, sizeof(*out_frts_result),

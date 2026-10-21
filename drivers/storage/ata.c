@@ -265,7 +265,7 @@ void ata_initialize(void)
                 ata_block.name[2] = 'a'; ata_block.name[3] = '0';
                 ata_block.sector_count = available_sectors;
                 ata_block.sector_size = 512U;
-                ata_block.flags = 0U;
+                ata_block.flags = BLOCK_DEVICE_TRANSPORT_ATA;
                 ata_block.ops = &ata_block_ops;
                 ata_block.driver_data = 0;
                 (void)block_device_register_disk(&ata_block);

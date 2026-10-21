@@ -176,7 +176,7 @@ int main(void)
         &gsp_mailbox0, &gsp_mailbox1) == NVX_GSP_FALCON_FWSEC_NOT_VERIFIED);
     assert(memory.radix3_elf_sync.owner == NVX_DMA_OWNER_CPU);
     frts_result.frts_error_code = 0U;
-    assert(nvx_mmio_write32(&bar0, NVX_GSP_FALCON_HWCFG2, 0U) == NVX_MMIO_OK);
+    assert(nvx_mmio_write32(&bar0, NVX_GSP_FALCON_HWCFG2, NVX_GSP_HWCFG2_RISCV_PRESENT) == NVX_MMIO_OK);
     assert(nvx_mmio_write32(&bar0, NVX_GSP_FALCON_CPUCTL,
                             NVX_GSP_CPUCTL_HALTED) == NVX_MMIO_OK);
     hardware.activate_gsp_on_start = 1U;

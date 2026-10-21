@@ -8,6 +8,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include "spinlock.h"
 
 #define NVX_GSP_GPFIFO_ENTRY_DWORDS 2U
 #define NVX_GSP_GPFIFO_MAX_LENGTH_DWORDS 0x001FFFFFU
@@ -42,6 +43,7 @@ typedef struct nvx_gsp_gpfifo_channel {
     uint32_t doorbell_token;
     uint32_t entry_count;
     uint32_t put_index;
+    spinlock_t submit_lock;
     uint8_t initialized;
 } nvx_gsp_gpfifo_channel_t;
 

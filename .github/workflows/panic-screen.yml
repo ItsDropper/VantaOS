@@ -87,12 +87,12 @@ jobs:
           receive_buffer = bytearray()
 
           def receive_message():
-              while b"\\n" not in receive_buffer:
+              while b"\n" not in receive_buffer:
                   chunk = connection.recv(65536)
                   if not chunk:
                       raise RuntimeError("QEMU closed the QMP connection before replying")
                   receive_buffer.extend(chunk)
-              line, _, remainder = receive_buffer.partition(b"\\n")
+              line, _, remainder = receive_buffer.partition(b"\n")
               receive_buffer[:] = remainder
               return json.loads(line)
 
@@ -100,7 +100,7 @@ jobs:
               request = {"execute": name}
               if arguments:
                   request["arguments"] = arguments
-              connection.sendall((json.dumps(request) + "\\r\\n").encode())
+              connection.sendall((json.dumps(request) + "\r\n").encode())
               while True:
                   response = receive_message()
                   if "event" in response:

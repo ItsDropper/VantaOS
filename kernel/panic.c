@@ -7,6 +7,7 @@
 
 #include "panic.h"
 #include "panic_format.h"
+#include "cpu_local.h"
 
 #include "graphics.h"
 #include "interrupts.h"
@@ -151,6 +152,17 @@ void kernel_panic(
         reason ? reason : "Unknown kernel failure",
         0x00C7CFD7, 1
     );
+
+    graphics_draw_text(x, y + 100, "CPU / APIC ID", 0x00FFB4A2, 1);
+    const cpu_local_t* panic_cpu = cpu_local_current();
+    if (panic_cpu && panic_cpu->self == panic_cpu)
+    {
+        char cpu_text[19];
+        panic_format_hex64(cpu_text, panic_cpu->apic_id);
+        graphics_draw_text(x + 104, y + 100, cpu_text, 0x00FFFFFF, 1);
+    }
+    else
+        graphics_draw_text(x + 104, y + 100, "unavailable", 0x00FFFFFF, 1);
 
     fault_trace_draw(
         x,

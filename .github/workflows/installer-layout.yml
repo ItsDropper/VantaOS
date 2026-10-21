@@ -36,6 +36,7 @@ jobs:
           cc $flags -Iinclude installer/layout.c scripts/test_installer_layout.c -o /tmp/vantaos-installer-layout-test
           cc $flags -Iinclude installer/layout.c installer/gpt_writer.c scripts/test_installer_gpt.c -o /tmp/vantaos-installer-gpt-test
           cc $flags -Iinclude installer/setup_config.c scripts/test_setup_config.c -o /tmp/vantaos-setup-config-test
+          cc $flags -Iinclude installer/fat32_format.c scripts/test_installer_fat32.c -o /tmp/vantaos-installer-fat32-test
       - name: Verify layout arithmetic
         run: |
           set -euo pipefail
@@ -51,3 +52,8 @@ jobs:
           set -euo pipefail
           /tmp/vantaos-installer-gpt-test | tee /tmp/installer-gpt-test.log
           grep -qx "VANTAOS_INSTALLER_GPT_OK" /tmp/installer-gpt-test.log
+      - name: Verify FAT32 formatter against bounded sparse fake disk
+        run: |
+          set -euo pipefail
+          /tmp/vantaos-installer-fat32-test | tee /tmp/installer-fat32-test.log
+          grep -qx "VANTAOS_INSTALLER_FAT32_OK" /tmp/installer-fat32-test.log

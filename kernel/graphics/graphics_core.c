@@ -76,6 +76,14 @@ static inline uint16_t bochs_vbe_read(uint16_t index)
     return value;
 }
 
+static void bochs_vbe_disable_pageflip(uint16_t height)
+{
+    bochs_vbe_write(BOCHS_VBE_INDEX_ENABLE, 0U);
+    bochs_vbe_write(BOCHS_VBE_INDEX_VIRT_HEIGHT, height);
+    bochs_vbe_write(BOCHS_VBE_INDEX_Y_OFFSET, 0U);
+    bochs_vbe_write(BOCHS_VBE_INDEX_ENABLE, BOCHS_VBE_ENABLE_LFB);
+}
+
 static inline uint8_t bochs_vbe_read_status(void)
 {
     uint8_t status;
@@ -232,8 +240,7 @@ int graphics_display_present_damage(
         if (graphics_scanout_page_index != 0U)
             graphics_copy_bytes(graphics_scanout_base, front,
                                 (size_t)graphics_scanout_page_bytes);
-        bochs_vbe_write(BOCHS_VBE_INDEX_Y_OFFSET, 0U);
-        bochs_vbe_write(BOCHS_VBE_INDEX_VIRT_HEIGHT, (uint16_t)height);
+        bochs_vbe_disable_pageflip((uint16_t)height);
         graphics_scanout_page_index = 0U;
         graphics_pageflip_seeded = 0;
         *display_framebuffer = graphics_scanout_base;
@@ -307,7 +314,7 @@ int graphics_initialize_bochs(void)
         !bochs_vbe_can_pageflip(1024U, 768U, offset, vram_bytes))
     {
         pageflip = 0;
-        bochs_vbe_write(BOCHS_VBE_INDEX_VIRT_HEIGHT, 768U);
+        bochs_vbe_disable_pageflip(768U);
     }
     uint64_t mapped_bytes = bytes * (pageflip ? 2U : 1U);
 

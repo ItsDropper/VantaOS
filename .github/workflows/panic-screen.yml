@@ -63,7 +63,7 @@ jobs:
             [ -S /tmp/vantaos-panic-monitor.sock ] && break
             sleep 0.1
           done
-          printf 'screendump panic-screen.png\n' | timeout 3s socat -T 1 - UNIX-CONNECT:/tmp/vantaos-panic-monitor.sock
+          printf 'screendump panic-screen.png\n' | timeout -s KILL 2s socat -T 1 - UNIX-CONNECT:/tmp/vantaos-panic-monitor.sock || true
           for attempt in $(seq 1 30); do
             [ -s panic-screen.png ] && break
             sleep 0.1

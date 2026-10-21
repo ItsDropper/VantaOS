@@ -77,7 +77,7 @@ static void make_image(uint8_t image[IMAGE_BYTES])
     put32(desc + 24U, 0x200U);
     put32(desc + 28U, 0x300U);
     put32(desc + 32U, 0x200U);
-    put16(desc + 36U, 0x0001U);
+    put16(desc + 36U, 0x0400U);
     desc[38U] = 2U;
     desc[39U] = 1U;
     put16(desc + 40U, 1U);
@@ -107,7 +107,7 @@ int main(void)
     assert(info.imem_load_size == 0x100U);
     assert(info.dmem_load_size == 0x200U);
     assert(info.pkc_data_offset == 0x20U);
-    assert(info.engine_id_mask == NVX_GSP_VBIOS_FWSEC_ENGINE_MASK_GSP);
+    assert(info.engine_id_mask == NVX_GSP_VBIOS_FWSEC_ENGINE_MASK);
     assert(info.ucode_id == 2U);
     assert(info.signature_count == 1U);
     assert(info.signatures_offset == DESC_OFFSET + 44U);

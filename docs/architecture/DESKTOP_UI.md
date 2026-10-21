@@ -54,3 +54,10 @@ When a layout is rendered at multiple framebuffer sizes, content must be clipped
 - [ ] Inspect the real QEMU boot screenshot; never substitute a mockup.
 - [ ] Confirm the desktop shows no fake activity indicators or unsupported controls.
 - [ ] Run the complete QEMU and UEFI regression matrix before merging.
+
+
+## Retained GUI window manager
+
+The kernel GUI server owns the retained ring-3 window registry, z-order, focus events, bounded per-window event queues, visibility, and titlebar dragging. Rendering snapshots are copied under the GUI lock and painted after releasing it, so framebuffer work does not block GUI syscalls while the lock is held. A left-click on a window raises it; a titlebar drag moves it while clamping the full titlebar to the visible display area; the close control sends a close-request event to the owning client. Pointer release clears drag state. Unsupported GPU profiles are not allowed to affect this path: the software compositor remains the display backend until NVX has verified execution and presentation.
+
+Known limitation: this is not yet a complete desktop window manager. Per-window maximize/minimize/resize controls, client-decorated windows, robust modal/transient relationships, and a userspace window server remain future work. Do not describe the existing kernel GUI service as a complete Wayland/X11 replacement.

@@ -142,9 +142,13 @@ void partition_device_initialize(void)
         size_t found_count = 0U;
         partition_scan_status_t status = partition_scan(read_disk, disk,
             disk->sector_count, found, PARTITION_SCAN_MAX, &found_count);
-        if (status != PARTITION_SCAN_OK)
+        if (status != PARTITION_SCAN_OK) {
+            if (has_table)
+                serial_write("VANTAOS_PARTITION_FAIL\\n");
             continue;
+        }
 
+        size_t registered_before = partition_count;
         for (size_t i = 0U; i < found_count &&
              partition_count < PARTITION_DEVICE_MAX; ++i) {
             partition_context_t *part = &partitions[partition_count];

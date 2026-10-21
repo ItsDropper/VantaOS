@@ -159,9 +159,9 @@ static void test_writer_and_readback(void)
     assert(get64(sector + 32U) == layout.efi.first_lba);
     assert(get64(sector + 40U) ==
            layout.efi.first_lba + layout.efi.sector_count - 1U);
-    assert(fake_read(&disk, 3U, 1U, sector));
-    assert(get64(sector + 32U) == layout.system.first_lba);
-    assert(get64(sector + 40U) ==
+    /* Both 128-byte GPT entries occupy the first 512-byte entry-array sector. */
+    assert(get64(sector + 128U + 32U) == layout.system.first_lba);
+    assert(get64(sector + 128U + 40U) ==
            layout.system.first_lba + layout.system.sector_count - 1U);
     assert(fake_read(&disk, disk_size - 1U, 1U, sector));
     assert(has_signature(sector));

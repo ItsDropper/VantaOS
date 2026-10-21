@@ -28,14 +28,34 @@
 #define RECOVERY_LINE     0x00303C4DU
 #define RECOVERY_MENU_COUNT 6
 
-static const char* const recovery_menu[] = {
-    "Continue to VantaOS",
-    "System diagnostics",
-    "View boot and kernel logs",
-    "Request QEMU screenshot",
-    "Restart computer",
-    "Shut down computer"
-};
+static const char* recovery_menu_item(int index, int screenshot_available)
+{
+    static const char* const common[] = {
+        "Continue to VantaOS",
+        "System diagnostics",
+        "View boot and kernel logs"
+    };
+    if (index < 3) return common[index];
+    if (screenshot_available) {
+        if (index == 3) return "Request QEMU screenshot";
+        if (index == 4) return "Restart computer";
+        return "Shut down computer";
+    }
+    return index == 3 ? "Restart computer" : "Shut down computer";
+}
+
+static int recovery_qemu_screenshot_available(void)
+{
+    /* QEMU's standard VGA device is 1234:1111; don't offer a host-only action
+       on machines where the matching QEMU monitor path is not established. */
+    for (int i = 0; i < pci_get_device_count(); i++) {
+        const struct pci_device* device = pci_get_device(i);
+        if (device && device->vendor_id == 0x1234U &&
+            device->device_id == 0x1111U)
+            return 1;
+    }
+    return 0;
+}
 
 static void recovery_decimal(uint64_t value, char* output, size_t capacity)
 {
@@ -58,18 +78,18 @@ static void recovery_wait_for_key(void)
         __asm__ volatile ("pause");
 }
 
-static int recovery_read_choice(int* selected)
+static int recovery_read_choice(int* selected, int menu_count)
 {
     recovery_wait_for_key();
 
     if (keyboard_has_event()) {
         keyboard_event_t event = keyboard_get_event();
         if (event == KEY_EVENT_UP) {
-            *selected = (*selected + RECOVERY_MENU_COUNT - 1) % RECOVERY_MENU_COUNT;
+            *selected = (*selected + menu_count - 1) % menu_count;
             return 0;
         }
         if (event == KEY_EVENT_DOWN) {
-            *selected = (*selected + 1) % RECOVERY_MENU_COUNT;
+            *selected = (*selected + 1) % menu_count;
             return 0;
         }
     }
@@ -108,7 +128,7 @@ static void recovery_header(const char* subtitle)
     graphics_fill_rect(margin + 22, top + 86, panel_width - 44, 1, RECOVERY_LINE);
 }
 
-static void recovery_draw_menu(int selected, const char* status)
+static void recovery_draw_menu(int selected, int menu_count, int screenshot_available, const char* status)
 {
     uint32_t width = graphics_get_width();
     uint32_t height = graphics_get_height();
@@ -119,14 +139,14 @@ static void recovery_draw_menu(int selected, const char* status)
     int panel_width = (int)width - margin * 2;
 
     recovery_header("Choose a recovery action. Normal boot remains the default.");
-    for (int i = 0; i < RECOVERY_MENU_COUNT; i++) {
+    for (int i = 0; i < menu_count; i++) {
         int y = first_y + i * row_height;
         if (i == selected)
             graphics_fill_rounded_rect(margin + 18, y - 5, panel_width - 36,
                                        row_height - 2, 5, RECOVERY_SELECTED);
         graphics_draw_text(margin + 30, y + 3, i == selected ? ">" : " ",
                            i == selected ? RECOVERY_BLUE : RECOVERY_MUTED, 1);
-        graphics_draw_text(margin + 52, y + 3, recovery_menu[i],
+        graphics_draw_text(margin + 52, y + 3, recovery_menu_item(i, screenshot_available),
                            i == selected ? RECOVERY_TEXT : RECOVERY_MUTED, 1);
     }
 
@@ -290,34 +310,39 @@ int recovery_environment_requested(const multiboot_info_t* mbd)
 void recovery_environment_run(multiboot_info_t* mbd)
 {
     (void)mbd;
+    int screenshot_available = recovery_qemu_screenshot_available();
+    int menu_count = screenshot_available ? 6 : 5;
     int selected = 0;
-    char status[80];
     int screenshot_pending = 0;
+    char status[80];
     status[0] = 0;
 
     serial_write("VANTAOS_RECOVERY_ENTER\n");
     for (;;) {
-        recovery_draw_menu(selected, status[0] ? status : NULL);
+        recovery_draw_menu(selected, menu_count, screenshot_available,
+                           status[0] ? status : NULL);
         if (screenshot_pending) {
             /* Signal only after the requested status has reached scanout. */
             serial_write("VANTAOS_RECOVERY_SCREENSHOT_REQUEST\n");
             screenshot_pending = 0;
         }
         status[0] = 0;
-        if (!recovery_read_choice(&selected))
+        if (!recovery_read_choice(&selected, menu_count))
             continue;
 
-        switch (selected) {
-        case 0:
+        if (selected == 0) {
             serial_write("VANTAOS_RECOVERY_CONTINUE_NORMAL\n");
             return;
-        case 1:
+        }
+        if (selected == 1) {
             recovery_draw_diagnostics();
-            break;
-        case 2:
+            continue;
+        }
+        if (selected == 2) {
             recovery_draw_logs();
-            break;
-        case 3:
+            continue;
+        }
+        if (screenshot_available && selected == 3) {
             /* CI/QEMU harnesses react after the requested frame is presented. */
             screenshot_pending = 1;
             {
@@ -329,13 +354,10 @@ void recovery_environment_run(multiboot_info_t* mbd)
                 }
                 status[i] = 0;
             }
-            break;
-        case 4:
-            recovery_restart();
-        case 5:
-            recovery_shutdown();
-        default:
-            break;
+            continue;
         }
+        if (selected == (screenshot_available ? 4 : 3))
+            recovery_restart();
+        recovery_shutdown();
     }
 }

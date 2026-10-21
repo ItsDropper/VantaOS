@@ -13,7 +13,7 @@ The compositor frame contract is:
 
 This avoids clearing/repainting the visible framebuffer in multiple drawing steps. If the shadow surface cannot be provisioned, desktop composition now fails closed and retains the last complete frame instead of silently reverting to direct scanout drawing. The damage-rectangle clipping math is shared with a host regression test for negative origins, edge clipping, tile boundaries, empty rectangles, and large coordinates.
 
-It is **not an atomic page flip**: the current Multiboot/UEFI GOP/Bochs framebuffer contract does not expose a validated VBlank wait or display-page-flip operation, so copying damaged tiles can still tear. Do not describe the current path as VSync-complete.
+The Bochs VBE backend now attempts a double-page presentation path when reported VRAM and the kernel's framebuffer mapping window can hold two pages. It polls the VGA retrace status, copies damaged tiles into the hidden page, changes VBE Y offset during retrace, then synchronizes the old page while it is hidden. If retrace polling times out, it disables flipping and falls back to damage copies. The UEFI GOP/Multiboot framebuffer fallback remains copy-only. This path still needs the QEMU boot/screenshot regression to prove it works in the project's actual emulator; do not claim physical-display or universal VSync support.
 
 ## NVX feasibility
 
@@ -40,5 +40,5 @@ A CE copy is not a general compositor: it does not perform alpha blending, windo
 ## Limits
 
 - Current app draw lists are retained rectangle/text commands, not shared GPU surfaces.
-- Damage tracking reduces copied pixels but does not guarantee that a copy is synchronized with scanout.
-- There is no verified hardware cursor plane, display interrupt/VBlank source, GPU page flip, alpha blending, or NVX-accelerated desktop composition yet.
+- Damage tracking reduces copied pixels. Only the Bochs VBE path attempts retrace-synchronized page flips; GOP fallback and a timed-out Bochs retrace path can still tear.
+- There is no hardware cursor plane, display VBlank interrupt, alpha blending, shared per-window pixel surface, or NVX-accelerated desktop composition yet.

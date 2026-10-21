@@ -49,6 +49,8 @@ int main(void)
     assert(nvx_gsp_gpfifo_submit(&channel,command_va,command_bytes,&put)==NVX_GSP_GPFIFO_OK);
     assert(put==1U&&gp_put==1U&&doorbell==0xBEEFU);
     assert(entries[0]==expected0&&entries[1]==expected1);
+    assert(channel.submit_lock.owner_ticket ==
+           channel.submit_lock.next_ticket);
 
     gp_get=1U;
     assert(nvx_gsp_gpfifo_wait_get(&channel,1U,5U,1U,no_delay,NULL)==NVX_GSP_GPFIFO_OK);
@@ -63,6 +65,9 @@ int main(void)
     assert(nvx_gsp_gpfifo_submit(&channel,command_va,command_bytes,&put)==
            NVX_GSP_GPFIFO_QUEUE_FULL);
     assert(gp_put==1U);
+    /* Queue-full failure must release the per-channel producer lock. */
+    assert(channel.submit_lock.owner_ticket ==
+           channel.submit_lock.next_ticket);
 
     {
         volatile uint32_t nop_command=UINT32_C(0xFFFFFFFF);

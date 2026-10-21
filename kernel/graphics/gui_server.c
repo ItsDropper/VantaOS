@@ -88,6 +88,8 @@ typedef struct
 
 static gui_render_snapshot_t render_snapshot[VANTA_GUI_MAX_WINDOWS];
 
+static gui_window_t* gui_topmost_visible_locked(uint32_t exclude_id);
+
 
 static gui_window_t* gui_find_window_locked(uint32_t pid, uint32_t id)
 {

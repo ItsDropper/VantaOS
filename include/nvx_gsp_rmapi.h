@@ -134,6 +134,7 @@ typedef struct nvx_gsp_rm_core_objects {
     uint8_t client_created;
     uint8_t device_created;
     uint8_t vaspace_created;
+    uint8_t in_flight_stage; /* 1=root, 2=device, 3=VA space; nonzero means outcome uncertain. */
 } nvx_gsp_rm_core_objects_t;
 
 /*

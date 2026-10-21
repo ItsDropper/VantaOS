@@ -323,7 +323,7 @@ int main(void)
     frts_result.frts_error_code = 1U;
     assert(nvx_gsp_ga10x_prepare_riscv_after_frts(
         &memory, &init_args_buffer, &init_args_sync,
-        &shared_queue_buffer, &shared_queue_sync, &bar0, 0x01000000ULL,
+        &shared_queue_buffer, &shared_queue_sync, &queue_layout, &bar0, 0x01000000ULL,
         &frts_result, 20U, 1U, fake_delay, &hardware) ==
         NVX_GSP_FALCON_FWSEC_NOT_VERIFIED);
     assert(memory.radix3_elf_sync.owner == NVX_DMA_OWNER_CPU);

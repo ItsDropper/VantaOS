@@ -14,7 +14,9 @@ on:
     paths:
       - "installer/**"
       - "include/vanta_installer_*.h"
+      - "include/vanta_setup_config.h"
       - "scripts/test_installer_*.c"
+      - "scripts/test_setup_config.c"
       - ".github/workflows/installer-layout.yml"
   workflow_dispatch:
 

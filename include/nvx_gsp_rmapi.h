@@ -150,6 +150,15 @@ nvx_gsp_rmapi_status_t nvx_gsp_rm_free_sync(
     uint32_t poll_interval_ms, nvx_gsp_rmapi_delay_fn delay_ms,
     void *delay_context, nvx_gsp_rmapi_result_t *out);
 
+/* Public NVA06F GPFIFO channel schedule control command (R535 SDK ABI). */
+#define NVX_GSP_RM_CTRL_GPFIFO_SCHEDULE UINT32_C(0xA06F0103)
+nvx_gsp_rmapi_status_t nvx_gsp_rmapi_schedule_channel_sync(
+    nvx_gsp_rpc_manager_t *manager, uint32_t client, uint32_t channel,
+    int enable, void *scratch, size_t scratch_size, void *response,
+    size_t response_capacity, uint32_t timeout_ms, uint32_t poll_interval_ms,
+    nvx_gsp_rmapi_delay_fn delay_ms, void *delay_context,
+    nvx_gsp_rmapi_result_t *out);
+
 /* Public NVIDIA class IDs for the root, device and virtual-address-space objects. */
 #define NVX_GSP_RM_CLASS_ROOT             0x00000000U
 #define NVX_GSP_RM_CLASS_DEVICE_0         0x00000080U

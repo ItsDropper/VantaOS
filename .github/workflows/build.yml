@@ -248,7 +248,7 @@ jobs:
         run: chmod +x build.sh && VANTAOS_SELF_TEST=1 ./build.sh
 
       - name: Verify build artifacts
-        run: test -s kernel.bin && test -s VantaOS.iso && test -s vantaos.img
+        run: test -s kernel.bin && test -s VantaOS.iso && test -s vantaos.img && test -s VantaOS-Setup.img
 
       - name: Compile the public freestanding userspace ABI
         run: |

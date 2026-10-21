@@ -323,7 +323,7 @@ jobs:
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
             scripts/test_nvx_gsp_bundle.c drivers/gpu/nvx/firmware/nvx_gsp_bundle.c \
-            -o /tmp/vantaos-nvx-gsp-bundle-test
+            drivers/gpu/nvx/core/nvx_generation.c -o /tmp/vantaos-nvx-gsp-bundle-test
 
       - name: Test GSP component paths, verification and transactional cleanup
         run: /tmp/vantaos-nvx-gsp-bundle-test

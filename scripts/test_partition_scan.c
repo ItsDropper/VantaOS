@@ -65,7 +65,13 @@ int main(void)
     gpt_image(&d);
     assert(partition_scan(memread,&d,d.sectors,out,PARTITION_SCAN_MAX,&n)==PARTITION_SCAN_OK);
     assert(n==2U&&out[0].start_lba==40U&&out[1].start_lba==100U&&out[0].scheme==PARTITION_SCHEME_GPT);
+    out[0].start_lba = 0x12345678U;
     d.data[SS+16U]^=1U;
+    assert(partition_scan(memread,&d,d.sectors,out,PARTITION_SCAN_MAX,&n)==PARTITION_SCAN_BAD_TABLE);
+    assert(out[0].start_lba == 0x12345678U && n == 0U);
+    wipe(&d);gpt_image(&d);d.data[ARRAY_LBA*SS+5U]^=1U;
+    assert(partition_scan(memread,&d,d.sectors,out,PARTITION_SCAN_MAX,&n)==PARTITION_SCAN_BAD_TABLE);
+    wipe(&d);gpt_image(&d);d.data[BACKUP_HEADER*SS+16U]^=1U;
     assert(partition_scan(memread,&d,d.sectors,out,PARTITION_SCAN_MAX,&n)==PARTITION_SCAN_BAD_TABLE);
     wipe(&d);gpt_image(&d);wr32(d.data+SS+80U,0xFFFFFFFFU);refresh_crc(d.data+SS);
     assert(partition_scan(memread,&d,d.sectors,out,PARTITION_SCAN_MAX,&n)==PARTITION_SCAN_BAD_TABLE);

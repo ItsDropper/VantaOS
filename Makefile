@@ -100,11 +100,16 @@ VANTASETUP.EFI: $(UEFI_OBJDIR)/setup.o $(UEFI_OBJDIR)/installer-layout.o $(UEFI_
 	$(OBJCOPY) -j .text -j .sdata -j .data -j .dynamic -j .dynsym \
 		-j .rel -j .rela -j .reloc --target=efi-app-x86_64 $(UEFI_OBJDIR)/setup.so $@
 
-VantaOS-Setup.img: VANTASETUP.EFI BOOTX64.EFI kernel-uefi.elf
+VantaOS-Setup.img: VANTASETUP.EFI BOOTX64.EFI kernel-uefi.elf vantaos.img
 	@command -v mkfs.fat >/dev/null && command -v mmd >/dev/null && command -v mcopy >/dev/null && command -v sgdisk >/dev/null || \
 		(echo "dosfstools, mtools, and gdisk are required to build the setup image."; exit 1)
 	@test -s /tmp/vantaos-terminal.elf -a -s /tmp/vantaos-settings.elf -a -s /tmp/vantaos-explorer.elf || \
 		(echo "Run build.sh first so the ring-3 application ELFs are available."; exit 1)
+	rm -rf /tmp/vantaos-setup-staging
+	mkdir -p /tmp/vantaos-setup-staging/system/drivers /tmp/vantaos-setup-staging/system/devices /tmp/vantaos-setup-staging/etc
+	for file in system/terminal.vx system/drivers/ata.sys system/drivers/keyboard.sys system/drivers/mouse.sys system/drivers/pci.sys system/drivers/fat32.sys system/devices/disk0.dev system/devices/keyboard0.dev system/devices/mouse0.dev etc/system.conf; do \
+		mcopy -i vantaos.img "::/$file" "/tmp/vantaos-setup-staging/$file" >/dev/null; \
+	done
 	rm -f $@
 	truncate -s 1024M $@
 	sgdisk --clear --new=1:2048:0 --typecode=1:EF00 --change-name=1:VANTA_SETUP_MEDIA $@
@@ -113,12 +118,27 @@ VantaOS-Setup.img: VANTASETUP.EFI BOOTX64.EFI kernel-uefi.elf
 	mmd -i $@@@1048576 ::/EFI/BOOT
 	mmd -i $@@@1048576 ::/EFI/VANTA
 	mmd -i $@@@1048576 ::/SYSTEM
+	mmd -i $@@@1048576 ::/SYSTEM/DRIVERS
+	mmd -i $@@@1048576 ::/SYSTEM/DEVICES
+	mmd -i $@@@1048576 ::/ETC
+	mmd -i $@@@1048576 ::/HOME
+	mmd -i $@@@1048576 ::/HOME/USER
 	mcopy -i $@@@1048576 VANTASETUP.EFI ::/EFI/BOOT/BOOTX64.EFI
 	mcopy -i $@@@1048576 BOOTX64.EFI ::/EFI/VANTA/VANTAOS.EFI
 	mcopy -i $@@@1048576 kernel-uefi.elf ::/EFI/VANTA/KERNEL.ELF
-	mcopy -i $@@@1048576 /tmp/vantaos-terminal.elf ::/SYSTEM/TERMINAL.ELF
+	mcopy -i $@@@1048576 /tmp/vantaos-terminal.elf ::/TERMINAL.ELF
 	mcopy -i $@@@1048576 /tmp/vantaos-settings.elf ::/SYSTEM/SETTINGS.ELF
-	mcopy -i $@@@1048576 /tmp/vantaos-explorer.elf ::/SYSTEM/EXPLORER.ELF
+	mcopy -i $@@@1048576 /tmp/vantaos-explorer.elf ::/EXPLORER.ELF
+	mcopy -i $@@@1048576 /tmp/vantaos-setup-staging/system/terminal.vx ::/SYSTEM/TERMINAL.VX
+	mcopy -i $@@@1048576 /tmp/vantaos-setup-staging/system/drivers/ata.sys ::/SYSTEM/DRIVERS/ATA.SYS
+	mcopy -i $@@@1048576 /tmp/vantaos-setup-staging/system/drivers/keyboard.sys ::/SYSTEM/DRIVERS/KEYBOARD.SYS
+	mcopy -i $@@@1048576 /tmp/vantaos-setup-staging/system/drivers/mouse.sys ::/SYSTEM/DRIVERS/MOUSE.SYS
+	mcopy -i $@@@1048576 /tmp/vantaos-setup-staging/system/drivers/pci.sys ::/SYSTEM/DRIVERS/PCI.SYS
+	mcopy -i $@@@1048576 /tmp/vantaos-setup-staging/system/drivers/fat32.sys ::/SYSTEM/DRIVERS/FAT32.SYS
+	mcopy -i $@@@1048576 /tmp/vantaos-setup-staging/system/devices/disk0.dev ::/SYSTEM/DEVICES/DISK0.DEV
+	mcopy -i $@@@1048576 /tmp/vantaos-setup-staging/system/devices/keyboard0.dev ::/SYSTEM/DEVICES/KEYBOARD0.DEV
+	mcopy -i $@@@1048576 /tmp/vantaos-setup-staging/system/devices/mouse0.dev ::/SYSTEM/DEVICES/MOUSE0.DEV
+	mcopy -i $@@@1048576 /tmp/vantaos-setup-staging/etc/system.conf ::/ETC/SYSTEM.CONF
 
 VantaOS-UEFI.img: BOOTX64.EFI kernel-uefi.elf
 	@command -v mkfs.fat >/dev/null && command -v mmd >/dev/null && command -v mcopy >/dev/null && command -v sgdisk >/dev/null || \

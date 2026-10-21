@@ -243,7 +243,7 @@ static nvx_gsp_vbios_status_t parse_fwsec_from_bit(
             if (reserved != 0U || stored_size == 0U || imem_size == 0U ||
                 dmem_size == 0U || imem_size > stored_size ||
                 dmem_size > stored_size - imem_size ||
-                engine_mask != 0x0001U || ucode_id == 0U ||
+                engine_mask != NVX_GSP_VBIOS_FWSEC_ENGINE_MASK || ucode_id == 0U ||
                 signature_count == 0U ||
                 signature_count > NVX_GSP_VBIOS_FWSEC_MAX_SIGNATURES)
                 return NVX_GSP_VBIOS_MALFORMED_DESCRIPTOR;

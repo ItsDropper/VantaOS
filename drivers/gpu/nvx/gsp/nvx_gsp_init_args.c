@@ -273,6 +273,53 @@ nvx_gsp_init_args_status_t nvx_gsp_modern_shared_queue_build_pte_table(
     return NVX_GSP_INIT_ARGS_OK;
 }
 
+nvx_gsp_init_args_status_t nvx_gsp_modern_shared_queue_validate_pte_table(
+    const nvx_gsp_modern_shared_queue_layout_t *layout,
+    const void *shared_mem_cpu, size_t capacity)
+{
+    const uint8_t *table = (const uint8_t *)shared_mem_cpu;
+    nvx_gsp_init_args_status_t status;
+
+    if (!layout || !shared_mem_cpu)
+        return NVX_GSP_INIT_ARGS_INVALID_ARGUMENT;
+    if (ranges_overlap(layout, sizeof(*layout), shared_mem_cpu, capacity))
+        return NVX_GSP_INIT_ARGS_INVALID_ARGUMENT;
+    if (((uintptr_t)shared_mem_cpu & (NVX_GSP_PAGE_SIZE - 1U)) != 0U)
+        return NVX_GSP_INIT_ARGS_BAD_ALIGNMENT;
+    status = nvx_gsp_modern_shared_queue_validate(layout);
+    if (status != NVX_GSP_INIT_ARGS_OK)
+        return status;
+    if (capacity < layout->allocation_size)
+        return NVX_GSP_INIT_ARGS_INSUFFICIENT_MEMORY;
+    if (layout->page_table_size != NVX_GSP_PAGE_SIZE ||
+        layout->page_table_entry_count == 0U ||
+        layout->page_table_entry_count >
+            NVX_GSP_PAGE_SIZE / sizeof(uint64_t) ||
+        layout->page_table_entry_count !=
+            layout->required_size / NVX_GSP_PAGE_SIZE)
+        return NVX_GSP_INIT_ARGS_UNSUPPORTED_CONFIGURATION;
+
+    for (uint32_t i = 0U; i < layout->page_table_entry_count; ++i) {
+        uint64_t expected;
+        if (add_overflow_u64(layout->shared_mem_phys_addr,
+                (uint64_t)i * NVX_GSP_PAGE_SIZE, &expected))
+            return NVX_GSP_INIT_ARGS_SIZE_OVERFLOW;
+        uint64_t actual = 0U;
+        for (unsigned b = 0U; b < 8U; ++b)
+            actual |= (uint64_t)table[(size_t)i * sizeof(uint64_t) + b]
+                      << (b * 8U);
+        if (actual != expected)
+            return NVX_GSP_INIT_ARGS_BAD_LAYOUT;
+    }
+
+    if (!bytes_are_zero(table +
+            (size_t)layout->page_table_entry_count * sizeof(uint64_t),
+            (size_t)layout->page_table_size -
+            (size_t)layout->page_table_entry_count * sizeof(uint64_t)))
+        return NVX_GSP_INIT_ARGS_BAD_LAYOUT;
+    return NVX_GSP_INIT_ARGS_OK;
+}
+
 nvx_gsp_init_args_status_t nvx_gsp_arguments_cached_modern_build(
     const nvx_gsp_modern_shared_queue_layout_t *layout, uint32_t gpu_instance,
     uint64_t flags, nvx_gsp_arguments_cached_modern_t *out)

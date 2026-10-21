@@ -9,6 +9,9 @@
  * open-gpu-kernel-modules and Linux Nova GA102 Falcon HAL.
  */
 #include "nvx_gsp_secure_boot.h"
+#include "nvx_gsp_fwsec_result.h"
+#include "nvx_gsp_fwsec_mmio.h"
+#include "nvx_gsp_fwsec_stage.h"
 
 #include <string.h>
 
@@ -91,6 +94,594 @@ nvx_gsp_falcon_status_t nvx_gsp_ga10x_secure_image_plan(
     return NVX_GSP_FALCON_OK;
 }
 
+
+
+
+static nvx_gsp_falcon_status_t reset_gsp_and_reclaim_vbios(
+    const nvx_mmio_region_t *bar0, nvx_dma_buffer_t *buffer,
+    nvx_dma_sync_t *sync, uint32_t timeout_ms, uint32_t poll_interval_ms,
+    nvx_gsp_delay_ms_fn delay_ms, void *context)
+{
+    nvx_gsp_falcon_status_t status = nvx_ga10x_falcon_reset(
+        bar0, NVX_GSP_FALCON_BASE, timeout_ms, poll_interval_ms,
+        delay_ms, context);
+    if (status != NVX_GSP_FALCON_OK)
+        return NVX_GSP_FALCON_DMA_OWNERSHIP_ERROR;
+    if (sync->owner == NVX_DMA_OWNER_DEVICE &&
+        nvx_dma_sync_for_cpu(sync, 0U, buffer->size) != NVX_DMA_SYNC_OK)
+        return NVX_GSP_FALCON_DMA_OWNERSHIP_ERROR;
+    if (sync->owner != NVX_DMA_OWNER_CPU)
+        return NVX_GSP_FALCON_DMA_OWNERSHIP_ERROR;
+    return NVX_GSP_FALCON_OK;
+}
+
+nvx_gsp_falcon_status_t nvx_gsp_ga10x_execute_fwsec_frts(
+    nvx_dma_buffer_t *staged_vbios, nvx_dma_sync_t *staged_vbios_sync,
+    const nvx_gsp_vbios_fwsec_info_t *info, uint32_t fuse_version,
+    const nvx_mmio_region_t *bar0, uint64_t frts_framebuffer_offset,
+    uint32_t timeout_ms, uint32_t poll_interval_ms,
+    nvx_gsp_delay_ms_fn delay_ms, void *context,
+    nvx_gsp_fwsec_result_snapshot_t *out_result)
+{
+    nvx_gsp_falcon_status_t status;
+    nvx_gsp_fwsec_result_snapshot_t result = {0};
+    nvx_gsp_fwsec_command_window_t window = {0};
+    nvx_gsp_vbios_status_t vbios_status;
+    nvx_gsp_fwsec_interface_status_t interface_status;
+    uint8_t *dmem;
+    uint64_t image_end, dmem_source_offset, dmem_source_phys;
+    uint64_t imem_source_phys, signature_end, signatures_end;
+    uint32_t signature_offset = 0U;
+    uint32_t mailbox0 = 0U, mailbox1 = 0U;
+    size_t interface_span;
+    const size_t signature_size = NVX_GSP_VBIOS_RSA3K_SIGNATURE_SIZE;
+
+    if (!staged_vbios || !staged_vbios_sync || !info || !bar0 ||
+        !bar0->base || !out_result || !delay_ms ||
+        timeout_ms == 0U || poll_interval_ms == 0U ||
+        frts_framebuffer_offset == 0U ||
+        (frts_framebuffer_offset & 0xFFFU) != 0U ||
+        (frts_framebuffer_offset >> 12U) > 0x0FFFFFFFU ||
+        ranges_overlap(out_result, sizeof(*out_result), staged_vbios,
+                       sizeof(*staged_vbios)) ||
+        ranges_overlap(out_result, sizeof(*out_result), staged_vbios_sync,
+                       sizeof(*staged_vbios_sync)) ||
+        ranges_overlap(out_result, sizeof(*out_result), info, sizeof(*info)) ||
+        ranges_overlap(out_result, sizeof(*out_result), bar0, sizeof(*bar0)) ||
+        ranges_overlap(out_result, sizeof(*out_result),
+                       (const void *)bar0->base, bar0->length) ||
+        ranges_overlap(out_result, sizeof(*out_result),
+                       staged_vbios->cpu_address,
+                       staged_vbios->allocated_size))
+        return NVX_GSP_FALCON_INVALID_ARGUMENT;
+
+    memset(out_result, 0, sizeof(*out_result));
+    if (bar0->length < NVX_GSP_FWSEC_MMIO_REQUIRED_BAR_BYTES)
+        return NVX_GSP_FALCON_BAR_TOO_SMALL;
+
+    if (!staged_vbios->acquired || !staged_vbios->cpu_address ||
+        staged_vbios->size == 0U ||
+        staged_vbios->allocated_size < staged_vbios->size ||
+        staged_vbios->gpu_address == 0U ||
+        !staged_vbios_sync->initialized ||
+        staged_vbios_sync->owner != NVX_DMA_OWNER_CPU ||
+        staged_vbios_sync->buffer != staged_vbios ||
+        staged_vbios_sync->size != staged_vbios->size ||
+        staged_vbios_sync->gpu_address != staged_vbios->gpu_address)
+        return NVX_GSP_FALCON_DMA_OWNERSHIP_ERROR;
+
+    if (info->descriptor_version != NVX_GSP_VBIOS_FWSEC_DESC_V3 ||
+        info->encrypted != 0U ||
+        info->engine_id_mask != NVX_GSP_VBIOS_FWSEC_ENGINE_MASK ||
+        info->ucode_id == 0U ||
+        info->ucode_id > NVX_GSP_FALCON_BROM_UCODE_COUNT ||
+        info->image_size == 0U || info->imem_load_size == 0U ||
+        info->dmem_load_size == 0U ||
+        (info->imem_load_size & (NVX_GA10X_FALCON_DMA_CHUNK_BYTES - 1U)) != 0U ||
+        (info->dmem_load_size & (NVX_GA10X_FALCON_DMA_CHUNK_BYTES - 1U)) != 0U ||
+        (info->imem_virtual_base & (NVX_GA10X_FALCON_DMA_CHUNK_BYTES - 1U)) != 0U ||
+        (info->imem_physical_base & (NVX_GA10X_FALCON_DMA_CHUNK_BYTES - 1U)) != 0U ||
+        (info->dmem_physical_base & (NVX_GA10X_FALCON_DMA_CHUNK_BYTES - 1U)) != 0U ||
+        info->image_offset < info->imem_virtual_base ||
+        info->imem_load_size > info->image_size ||
+        info->dmem_load_size > info->image_size - info->imem_load_size)
+        return NVX_GSP_FALCON_IMAGE_INVALID;
+
+    image_end = (uint64_t)info->image_offset + info->image_size;
+    dmem_source_offset = (uint64_t)info->image_offset + info->imem_load_size;
+    if (image_end > staged_vbios->size ||
+        dmem_source_offset > image_end ||
+        info->dmem_load_size > image_end - dmem_source_offset ||
+        dmem_source_offset > SIZE_MAX ||
+        (uint64_t)info->image_offset + info->imem_load_size > SIZE_MAX)
+        return NVX_GSP_FALCON_IMAGE_INVALID;
+
+    if (staged_vbios->gpu_address >
+            UINT64_MAX - ((uint64_t)info->image_offset - info->imem_virtual_base) ||
+        staged_vbios->gpu_address >
+            UINT64_MAX - dmem_source_offset)
+        return NVX_GSP_FALCON_DMA_INVALID_TRANSFER;
+    imem_source_phys = staged_vbios->gpu_address +
+                       info->image_offset - info->imem_virtual_base;
+    dmem_source_phys = staged_vbios->gpu_address + dmem_source_offset;
+    if ((imem_source_phys & 0xFFU) != 0U ||
+        (dmem_source_phys & 0xFFU) != 0U)
+        return NVX_GSP_FALCON_DMA_INVALID_TRANSFER;
+
+    vbios_status = nvx_gsp_vbios_fwsec_signature_offset(
+        info, fuse_version, &signature_offset);
+    signatures_end = (uint64_t)info->signatures_offset + info->signatures_size;
+    signature_end = (uint64_t)signature_offset + signature_size;
+    if (vbios_status != NVX_GSP_VBIOS_OK ||
+        signature_offset < info->signatures_offset ||
+        signature_end > signatures_end ||
+        signature_end > staged_vbios->size ||
+        (uint64_t)info->pkc_data_offset + signature_size > info->dmem_load_size)
+        return NVX_GSP_FALCON_IMAGE_INVALID;
+
+    dmem = (uint8_t *)staged_vbios->cpu_address + (size_t)dmem_source_offset;
+    interface_status = nvx_gsp_fwsec_find_command_window(
+        dmem, info->dmem_load_size, info->interface_offset,
+        NVX_GSP_FWSEC_CMD_FRTS, NVX_GSP_FWSEC_FRTS_COMMAND_SIZE, &window);
+    if (interface_status != NVX_GSP_FWSEC_INTERFACE_OK)
+        return NVX_GSP_FALCON_IMAGE_INVALID;
+
+    interface_span = (size_t)dmem[info->interface_offset + 1U] +
+        (size_t)dmem[info->interface_offset + 2U] *
+        (size_t)dmem[info->interface_offset + 3U];
+    if (ranges_overlap(dmem + info->pkc_data_offset, signature_size,
+                       dmem + window.mapper_offset, window.mapper_size) ||
+        ranges_overlap(dmem + info->pkc_data_offset, signature_size,
+                       dmem + window.init_cmd_offset, sizeof(uint32_t)) ||
+        ranges_overlap(dmem + info->pkc_data_offset, signature_size,
+                       dmem + window.command_input_offset,
+                       window.command_input_capacity) ||
+        ranges_overlap(dmem + info->pkc_data_offset, signature_size,
+                       dmem + info->interface_offset, interface_span))
+        return NVX_GSP_FALCON_IMAGE_INVALID;
+
+    if (nvx_gsp_fwsec_stage_command(
+            dmem, info->dmem_load_size, info->interface_offset,
+            NVX_GSP_FWSEC_CMD_FRTS, frts_framebuffer_offset, &window) !=
+            NVX_GSP_FWSEC_STAGE_OK)
+        return NVX_GSP_FALCON_IMAGE_INVALID;
+
+    /* The selected RSA-3K signature is patched into the FWSEC DMEM image. */
+    memcpy(dmem + info->pkc_data_offset,
+           (const uint8_t *)staged_vbios->cpu_address + signature_offset,
+           signature_size);
+
+    status = nvx_ga10x_falcon_reset(
+        bar0, NVX_GSP_FALCON_BASE, timeout_ms, poll_interval_ms,
+        delay_ms, context);
+    if (status != NVX_GSP_FALCON_OK)
+        return status;
+
+    if (nvx_dma_sync_for_device(staged_vbios_sync, 0U,
+                                staged_vbios->size) != NVX_DMA_SYNC_OK)
+        return NVX_GSP_FALCON_DMA_OWNERSHIP_ERROR;
+
+    status = nvx_ga10x_falcon_dma_upload(
+        bar0, NVX_GSP_FALCON_BASE, imem_source_phys,
+        info->imem_virtual_base, info->imem_physical_base,
+        info->imem_load_size, NVX_GA10X_FALCON_SECURE_IMEM, 0U,
+        timeout_ms, poll_interval_ms, delay_ms, context);
+    if (status != NVX_GSP_FALCON_OK)
+        goto recover;
+
+    status = nvx_ga10x_falcon_dma_upload(
+        bar0, NVX_GSP_FALCON_BASE, dmem_source_phys, 0U,
+        info->dmem_physical_base, info->dmem_load_size,
+        NVX_GA10X_FALCON_DMEM, 0U,
+        timeout_ms, poll_interval_ms, delay_ms, context);
+    if (status != NVX_GSP_FALCON_OK)
+        goto recover;
+
+    status = nvx_ga10x_falcon_program_brom(
+        bar0, NVX_GSP_FALCON_BASE, NVX_GSP_FALCON2_BASE,
+        info->engine_id_mask, info->ucode_id, info->pkc_data_offset);
+    if (status != NVX_GSP_FALCON_OK)
+        goto recover;
+
+    status = nvx_ga10x_falcon_boot(
+        bar0, NVX_GSP_FALCON_BASE, info->imem_virtual_base,
+        0U, 0U, 0U, 0U, &mailbox0, &mailbox1,
+        timeout_ms, poll_interval_ms, delay_ms, context);
+    if (status != NVX_GSP_FALCON_OK)
+        goto recover;
+
+    /* Boot helper returned only after the Falcon halted: CPU may reclaim DMA. */
+    if (nvx_dma_sync_for_cpu(staged_vbios_sync, 0U,
+                             staged_vbios->size) != NVX_DMA_SYNC_OK)
+        return NVX_GSP_FALCON_DMA_OWNERSHIP_ERROR;
+
+    if (nvx_gsp_fwsec_read_result_snapshot(
+            bar0, frts_framebuffer_offset, &result) != NVX_GSP_FWSEC_MMIO_OK ||
+        nvx_gsp_fwsec_validate_result(NVX_GSP_FWSEC_CMD_FRTS, &result) !=
+            NVX_GSP_FWSEC_RESULT_OK)
+        return NVX_GSP_FALCON_FWSEC_NOT_VERIFIED;
+
+    *out_result = result;
+    return NVX_GSP_FALCON_OK;
+
+recover:
+    if (reset_gsp_and_reclaim_vbios(
+            bar0, staged_vbios, staged_vbios_sync, timeout_ms,
+            poll_interval_ms, delay_ms, context) != NVX_GSP_FALCON_OK)
+        return NVX_GSP_FALCON_DMA_OWNERSHIP_ERROR;
+    return status;
+}
+
+/*
+ * GA10x/TU102 sequence: FWSEC-FRTS establishes WPR2 first; then GSP is reset
+ * and started with the SYSRAM radix3 ELF address in its two boot mailboxes.
+ * SEC2 Booter Load is a later step and intentionally remains a separate call.
+ */
+
+
+static nvx_gsp_falcon_status_t reset_gsp_and_reclaim_boot_buffers(
+    nvx_gsp_boot_memory_t *memory, nvx_dma_buffer_t *libos_init_args,
+    nvx_dma_sync_t *libos_init_args_sync, nvx_dma_buffer_t *shared_queue_mem,
+    nvx_dma_sync_t *shared_queue_sync, const nvx_mmio_region_t *bar0,
+    uint32_t timeout_ms, uint32_t poll_interval_ms,
+    nvx_gsp_delay_ms_fn delay_ms, void *context)
+{
+    nvx_gsp_falcon_status_t status = nvx_ga10x_falcon_reset(
+        bar0, NVX_GSP_FALCON_BASE, timeout_ms, poll_interval_ms,
+        delay_ms, context);
+    if (status != NVX_GSP_FALCON_OK)
+        return NVX_GSP_FALCON_DMA_OWNERSHIP_ERROR;
+
+    if (memory->radix3_elf_sync.owner == NVX_DMA_OWNER_DEVICE &&
+        nvx_dma_sync_for_cpu(&memory->radix3_elf_sync, 0U,
+                             memory->radix3_elf.size) != NVX_DMA_SYNC_OK)
+        return NVX_GSP_FALCON_DMA_OWNERSHIP_ERROR;
+    if (libos_init_args_sync->owner == NVX_DMA_OWNER_DEVICE &&
+        nvx_dma_sync_for_cpu(libos_init_args_sync, 0U,
+                             libos_init_args->size) != NVX_DMA_SYNC_OK)
+        return NVX_GSP_FALCON_DMA_OWNERSHIP_ERROR;
+    if (shared_queue_sync->owner != NVX_DMA_OWNER_CPU &&
+        nvx_dma_sync_for_cpu(shared_queue_sync, 0U,
+                             shared_queue_mem->size) != NVX_DMA_SYNC_OK)
+        return NVX_GSP_FALCON_DMA_OWNERSHIP_ERROR;
+    if (memory->radix3_elf_sync.owner != NVX_DMA_OWNER_CPU ||
+        libos_init_args_sync->owner != NVX_DMA_OWNER_CPU ||
+        shared_queue_sync->owner != NVX_DMA_OWNER_CPU)
+        return NVX_GSP_FALCON_DMA_OWNERSHIP_ERROR;
+    return NVX_GSP_FALCON_OK;
+}
+
+nvx_gsp_falcon_status_t nvx_gsp_ga10x_prepare_riscv_after_frts(
+    nvx_gsp_boot_memory_t *memory,
+    nvx_dma_buffer_t *libos_init_args,
+    nvx_dma_sync_t *libos_init_args_sync,
+    nvx_dma_buffer_t *shared_queue_mem,
+    nvx_dma_sync_t *shared_queue_sync,
+    const nvx_gsp_modern_shared_queue_layout_t *queue_layout,
+    const nvx_mmio_region_t *bar0, uint64_t frts_framebuffer_offset,
+    const nvx_gsp_fwsec_result_snapshot_t *frts_result,
+    uint32_t timeout_ms, uint32_t poll_interval_ms,
+    nvx_gsp_delay_ms_fn delay_ms, void *context)
+{
+    nvx_gsp_falcon_status_t status;
+    const nvx_gsp_arguments_cached_modern_t *arguments;
+
+    if (!memory || !libos_init_args || !libos_init_args_sync ||
+        !shared_queue_mem || !shared_queue_sync || !queue_layout ||
+        !bar0 || !bar0->base || !frts_result || !delay_ms || timeout_ms == 0U ||
+        poll_interval_ms == 0U || frts_framebuffer_offset == 0U ||
+        (frts_framebuffer_offset & 0xFFFU) != 0U ||
+        (frts_framebuffer_offset >> 12U) > 0x0FFFFFFFU ||
+        ranges_overlap(memory, sizeof(*memory), libos_init_args,
+                       sizeof(*libos_init_args)) ||
+        ranges_overlap(memory, sizeof(*memory), libos_init_args_sync,
+                       sizeof(*libos_init_args_sync)) ||
+        ranges_overlap(memory, sizeof(*memory), shared_queue_mem,
+                       sizeof(*shared_queue_mem)) ||
+        ranges_overlap(memory, sizeof(*memory), shared_queue_sync,
+                       sizeof(*shared_queue_sync)) ||
+        ranges_overlap(memory, sizeof(*memory), bar0, sizeof(*bar0)) ||
+        ranges_overlap(memory, sizeof(*memory), (const void *)bar0->base,
+                       bar0->length) ||
+        ranges_overlap(libos_init_args, sizeof(*libos_init_args),
+                       shared_queue_mem, sizeof(*shared_queue_mem)) ||
+        ranges_overlap(libos_init_args_sync, sizeof(*libos_init_args_sync),
+                       shared_queue_sync, sizeof(*shared_queue_sync)) ||
+        ranges_overlap(libos_init_args, sizeof(*libos_init_args), bar0,
+                       sizeof(*bar0)) ||
+        ranges_overlap(shared_queue_mem, sizeof(*shared_queue_mem), bar0,
+                       sizeof(*bar0)) ||
+        ranges_overlap(libos_init_args, sizeof(*libos_init_args),
+                       (const void *)bar0->base, bar0->length) ||
+        ranges_overlap(shared_queue_mem, sizeof(*shared_queue_mem),
+                       (const void *)bar0->base, bar0->length) ||
+        ranges_overlap(libos_init_args->cpu_address,
+                       libos_init_args->allocated_size,
+                       memory->radix3_elf.cpu_address,
+                       memory->radix3_elf.allocated_size) ||
+        ranges_overlap(libos_init_args->cpu_address,
+                       libos_init_args->allocated_size,
+                       memory->booter_load.cpu_address,
+                       memory->booter_load.allocated_size) ||
+        ranges_overlap(libos_init_args->cpu_address,
+                       libos_init_args->allocated_size,
+                       memory->wpr_metadata.cpu_address,
+                       memory->wpr_metadata.allocated_size) ||
+        ranges_overlap(shared_queue_mem->cpu_address,
+                       shared_queue_mem->allocated_size,
+                       memory->radix3_elf.cpu_address,
+                       memory->radix3_elf.allocated_size) ||
+        ranges_overlap(shared_queue_mem->cpu_address,
+                       shared_queue_mem->allocated_size,
+                       memory->booter_load.cpu_address,
+                       memory->booter_load.allocated_size) ||
+        ranges_overlap(shared_queue_mem->cpu_address,
+                       shared_queue_mem->allocated_size,
+                       memory->wpr_metadata.cpu_address,
+                       memory->wpr_metadata.allocated_size) ||
+        ranges_overlap(shared_queue_mem->cpu_address,
+                       shared_queue_mem->allocated_size,
+                       libos_init_args->cpu_address,
+                       libos_init_args->allocated_size))
+        return NVX_GSP_FALCON_INVALID_ARGUMENT;
+
+    if (nvx_gsp_fwsec_validate_result(NVX_GSP_FWSEC_CMD_FRTS, frts_result) !=
+            NVX_GSP_FWSEC_RESULT_OK ||
+        frts_result->expected_wpr2_addr_lo_units !=
+            (uint32_t)(frts_framebuffer_offset >> 12U) ||
+        frts_result->wpr2_addr_lo_units !=
+            (uint32_t)(frts_framebuffer_offset >> 12U))
+        return NVX_GSP_FALCON_FWSEC_NOT_VERIFIED;
+
+    if (!memory->acquired || !memory->radix3_elf.acquired ||
+        !memory->radix3_elf.cpu_address || memory->radix3_elf.size == 0U ||
+        memory->radix3_elf.allocated_size < memory->radix3_elf.size ||
+        memory->radix3_elf.gpu_address == 0U ||
+        (memory->radix3_elf.gpu_address & (NVX_DMA_PAGE_SIZE - 1U)) != 0U ||
+        memory->radix3_elf.gpu_address >= (UINT64_C(1) << 49U) ||
+        !memory->radix3_elf_sync.initialized ||
+        memory->radix3_elf_sync.owner != NVX_DMA_OWNER_CPU ||
+        memory->radix3_elf_sync.buffer != &memory->radix3_elf ||
+        !libos_init_args->acquired || !libos_init_args->cpu_address ||
+        libos_init_args->size < NVX_GSP_INIT_ARGS_PAGE_SIZE ||
+        libos_init_args->allocated_size < libos_init_args->size ||
+        libos_init_args->gpu_address == 0U ||
+        (libos_init_args->gpu_address & (NVX_GSP_INIT_ARGS_PAGE_SIZE - 1U)) != 0U ||
+        libos_init_args->gpu_address >= (UINT64_C(1) << 49U) ||
+        !libos_init_args_sync->initialized ||
+        libos_init_args_sync->owner != NVX_DMA_OWNER_CPU ||
+        libos_init_args_sync->buffer != libos_init_args ||
+        libos_init_args_sync->size != libos_init_args->size ||
+        libos_init_args_sync->gpu_address != libos_init_args->gpu_address ||
+        !shared_queue_mem->acquired || !shared_queue_mem->cpu_address ||
+        shared_queue_mem->size == 0U ||
+        queue_layout->shared_mem_phys_addr != shared_queue_mem->gpu_address ||
+        queue_layout->allocation_size > shared_queue_mem->size ||
+        shared_queue_mem->allocated_size < shared_queue_mem->size ||
+        shared_queue_mem->gpu_address == 0U ||
+        (shared_queue_mem->gpu_address & (NVX_GSP_INIT_ARGS_PAGE_SIZE - 1U)) != 0U ||
+        shared_queue_mem->gpu_address >= (UINT64_C(1) << 49U) ||
+        !shared_queue_sync->initialized ||
+        shared_queue_sync->owner != NVX_DMA_OWNER_CPU ||
+        shared_queue_sync->buffer != shared_queue_mem ||
+        shared_queue_sync->size != shared_queue_mem->size ||
+        shared_queue_sync->gpu_address != shared_queue_mem->gpu_address)
+        return NVX_GSP_FALCON_DMA_OWNERSHIP_ERROR;
+
+    arguments = (const nvx_gsp_arguments_cached_modern_t *)
+        libos_init_args->cpu_address;
+    if (arguments->magic != NVX_GSP_INIT_ARGS_MAGIC ||
+        arguments->size != sizeof(*arguments) ||
+        arguments->message_queue.shared_mem_phys_addr !=
+            shared_queue_mem->gpu_address ||
+        arguments->message_queue.command_queue_offset !=
+            queue_layout->command_queue_offset ||
+        arguments->message_queue.status_queue_offset !=
+            queue_layout->status_queue_offset ||
+        arguments->message_queue.page_table_entry_count !=
+            queue_layout->page_table_entry_count ||
+        nvx_gsp_modern_shared_queue_validate_pte_table(
+            queue_layout, shared_queue_mem->cpu_address,
+            shared_queue_mem->size) != NVX_GSP_INIT_ARGS_OK ||
+        arguments->message_queue.page_table_entry_count == 0U ||
+        arguments->message_queue.page_table_entry_count >
+            NVX_GSP_INIT_ARGS_PAGE_SIZE / sizeof(uint64_t) ||
+        arguments->message_queue.command_queue_offset >= shared_queue_mem->size ||
+        arguments->message_queue.status_queue_offset >= shared_queue_mem->size ||
+        (arguments->message_queue.command_queue_offset &
+         (NVX_GSP_INIT_ARGS_PAGE_SIZE - 1U)) != 0U ||
+        (arguments->message_queue.status_queue_offset &
+         (NVX_GSP_INIT_ARGS_PAGE_SIZE - 1U)) != 0U)
+        return NVX_GSP_FALCON_IMAGE_INVALID;
+
+    if (nvx_dma_sync_for_device(&memory->radix3_elf_sync, 0U,
+                                memory->radix3_elf.size) != NVX_DMA_SYNC_OK)
+        return NVX_GSP_FALCON_DMA_OWNERSHIP_ERROR;
+    if (nvx_dma_sync_for_device(libos_init_args_sync, 0U,
+                                libos_init_args->size) != NVX_DMA_SYNC_OK) {
+        (void)reset_gsp_and_reclaim_boot_buffers(
+            memory, libos_init_args, libos_init_args_sync, shared_queue_mem,
+            shared_queue_sync, bar0, timeout_ms, poll_interval_ms,
+            delay_ms, context);
+        return NVX_GSP_FALCON_DMA_OWNERSHIP_ERROR;
+    }
+    if (nvx_dma_sync_for_shared(shared_queue_sync, 0U,
+                                shared_queue_mem->size) != NVX_DMA_SYNC_OK) {
+        (void)reset_gsp_and_reclaim_boot_buffers(
+            memory, libos_init_args, libos_init_args_sync, shared_queue_mem,
+            shared_queue_sync, bar0, timeout_ms, poll_interval_ms,
+            delay_ms, context);
+        return NVX_GSP_FALCON_DMA_OWNERSHIP_ERROR;
+    }
+
+    status = nvx_gsp_ga10x_reset_into_riscv(
+        bar0, timeout_ms, poll_interval_ms, delay_ms, context);
+    if (status != NVX_GSP_FALCON_OK) {
+        nvx_gsp_falcon_status_t recovery = reset_gsp_and_reclaim_boot_buffers(
+            memory, libos_init_args, libos_init_args_sync, shared_queue_mem,
+            shared_queue_sync, bar0, timeout_ms, poll_interval_ms,
+            delay_ms, context);
+        return recovery == NVX_GSP_FALCON_OK ? status : recovery;
+    }
+
+    if (nvx_mmio_write32(bar0, NVX_GSP_FALCON_MAILBOX0,
+                         (uint32_t)libos_init_args->gpu_address) != NVX_MMIO_OK ||
+        nvx_mmio_write32(bar0, NVX_GSP_FALCON_MAILBOX1,
+                         (uint32_t)(libos_init_args->gpu_address >> 32U)) !=
+                         NVX_MMIO_OK) {
+        nvx_gsp_falcon_status_t recovery = reset_gsp_and_reclaim_boot_buffers(
+            memory, libos_init_args, libos_init_args_sync, shared_queue_mem,
+            shared_queue_sync, bar0, timeout_ms, poll_interval_ms,
+            delay_ms, context);
+        return recovery == NVX_GSP_FALCON_OK
+            ? NVX_GSP_FALCON_MMIO_ERROR : recovery;
+    }
+    return NVX_GSP_FALCON_OK;
+}
+
+nvx_gsp_falcon_status_t nvx_gsp_ga10x_bootstrap_traced(
+    nvx_dma_buffer_t *staged_vbios, nvx_dma_sync_t *staged_vbios_sync,
+    const nvx_gsp_vbios_fwsec_info_t *fwsec_info, uint32_t fuse_version,
+    nvx_gsp_boot_memory_t *memory,
+    nvx_dma_buffer_t *libos_init_args,
+    nvx_dma_sync_t *libos_init_args_sync,
+    nvx_dma_buffer_t *shared_queue_mem,
+    nvx_dma_sync_t *shared_queue_sync,
+    const nvx_gsp_modern_shared_queue_layout_t *queue_layout,
+    const nvx_mmio_region_t *bar0, uint64_t frts_framebuffer_offset,
+    uint32_t timeout_ms, uint32_t poll_interval_ms,
+    nvx_gsp_delay_ms_fn delay_ms, void *context,
+    nvx_gsp_fwsec_result_snapshot_t *out_frts_result,
+    uint32_t *out_booter_mailbox1, nvx_gsp_boot_trace_t *out_trace)
+{
+    nvx_gsp_fwsec_result_snapshot_t frts_result = {0};
+    nvx_gsp_boot_trace_t trace = {0};
+    nvx_gsp_falcon_status_t status;
+    uint32_t mailbox1 = 0U;
+
+    if (!staged_vbios || !staged_vbios_sync || !fwsec_info || !memory ||
+        !libos_init_args || !libos_init_args_sync || !shared_queue_mem ||
+        !shared_queue_sync || !queue_layout || !bar0 || !bar0->base || !out_frts_result ||
+        !out_booter_mailbox1 || !out_trace || !delay_ms ||
+        timeout_ms == 0U || poll_interval_ms == 0U ||
+        ranges_overlap(out_frts_result, sizeof(*out_frts_result),
+                       out_booter_mailbox1, sizeof(*out_booter_mailbox1)) ||
+        ranges_overlap(out_frts_result, sizeof(*out_frts_result),
+                       out_trace, sizeof(*out_trace)) ||
+        ranges_overlap(out_booter_mailbox1, sizeof(*out_booter_mailbox1),
+                       out_trace, sizeof(*out_trace)) ||
+        ranges_overlap(out_trace, sizeof(*out_trace), memory, sizeof(*memory)) ||
+        ranges_overlap(out_trace, sizeof(*out_trace), libos_init_args,
+                       sizeof(*libos_init_args)) ||
+        ranges_overlap(out_trace, sizeof(*out_trace), libos_init_args_sync,
+                       sizeof(*libos_init_args_sync)) ||
+        ranges_overlap(out_trace, sizeof(*out_trace), shared_queue_mem,
+                       sizeof(*shared_queue_mem)) ||
+        ranges_overlap(out_trace, sizeof(*out_trace), shared_queue_sync,
+                       sizeof(*shared_queue_sync)) ||
+        ranges_overlap(out_trace, sizeof(*out_trace), bar0, sizeof(*bar0)) ||
+        ranges_overlap(out_trace, sizeof(*out_trace),
+                       (const void *)bar0->base, bar0->length) ||
+        ranges_overlap(out_frts_result, sizeof(*out_frts_result),
+                       (const void *)staged_vbios->cpu_address,
+                       staged_vbios->allocated_size) ||
+        ranges_overlap(out_trace, sizeof(*out_trace),
+                       (const void *)staged_vbios->cpu_address,
+                       staged_vbios->allocated_size) ||
+        ranges_overlap(out_booter_mailbox1, sizeof(*out_booter_mailbox1),
+                       (const void *)staged_vbios->cpu_address,
+                       staged_vbios->allocated_size) ||
+        ranges_overlap(out_frts_result, sizeof(*out_frts_result),
+                       libos_init_args->cpu_address,
+                       libos_init_args->allocated_size) ||
+        ranges_overlap(out_trace, sizeof(*out_trace),
+                       libos_init_args->cpu_address,
+                       libos_init_args->allocated_size) ||
+        ranges_overlap(out_booter_mailbox1, sizeof(*out_booter_mailbox1),
+                       libos_init_args->cpu_address,
+                       libos_init_args->allocated_size) ||
+        ranges_overlap(out_frts_result, sizeof(*out_frts_result),
+                       shared_queue_mem->cpu_address,
+                       shared_queue_mem->allocated_size) ||
+        ranges_overlap(out_trace, sizeof(*out_trace),
+                       shared_queue_mem->cpu_address,
+                       shared_queue_mem->allocated_size) ||
+        ranges_overlap(out_booter_mailbox1, sizeof(*out_booter_mailbox1),
+                       shared_queue_mem->cpu_address,
+                       shared_queue_mem->allocated_size))
+        return NVX_GSP_FALCON_INVALID_ARGUMENT;
+
+    memset(out_frts_result, 0, sizeof(*out_frts_result));
+    *out_booter_mailbox1 = 0U;
+    memset(out_trace, 0, sizeof(*out_trace));
+    trace.current_phase = NVX_GSP_BOOT_PHASE_PRECHECK;
+
+    if (!memory->acquired || !memory->booters_staged ||
+        !memory->wpr_metadata_prepared ||
+        !memory->booter_load_sync.initialized ||
+        memory->booter_load_sync.owner != NVX_DMA_OWNER_CPU ||
+        !memory->wpr_metadata_sync.initialized ||
+        memory->wpr_metadata_sync.owner != NVX_DMA_OWNER_CPU) {
+        trace.result = NVX_GSP_FALCON_WPR_METADATA_NOT_READY;
+        trace.failed_phase = NVX_GSP_BOOT_PHASE_PRECHECK;
+        *out_trace = trace;
+        return trace.result;
+    }
+
+    status = nvx_gsp_ga10x_execute_fwsec_frts(
+        staged_vbios, staged_vbios_sync, fwsec_info, fuse_version, bar0,
+        frts_framebuffer_offset, timeout_ms, poll_interval_ms,
+        delay_ms, context, &frts_result);
+    if (status != NVX_GSP_FALCON_OK) {
+        trace.result = status;
+        trace.failed_phase = NVX_GSP_BOOT_PHASE_PRECHECK;
+        *out_trace = trace;
+        return status;
+    }
+    *out_frts_result = frts_result;
+
+    trace.current_phase = NVX_GSP_BOOT_PHASE_PREPARE_RISCV;
+    status = nvx_gsp_ga10x_prepare_riscv_after_frts(
+        memory, libos_init_args, libos_init_args_sync, shared_queue_mem,
+        shared_queue_sync, queue_layout, bar0, frts_framebuffer_offset, &frts_result,
+        timeout_ms, poll_interval_ms, delay_ms, context);
+    if (status != NVX_GSP_FALCON_OK) {
+        trace.result = status;
+        trace.failed_phase = NVX_GSP_BOOT_PHASE_PREPARE_RISCV;
+        *out_trace = trace;
+        return status;
+    }
+    trace.last_completed_phase = NVX_GSP_BOOT_PHASE_PREPARE_RISCV;
+
+    status = nvx_gsp_ga10x_execute_booter_load_traced(
+        memory, bar0, timeout_ms, poll_interval_ms, delay_ms, context,
+        &mailbox1, &trace);
+    if (status != NVX_GSP_FALCON_OK) {
+        *out_booter_mailbox1 = mailbox1;
+        *out_trace = trace;
+        return status;
+    }
+    *out_booter_mailbox1 = mailbox1;
+
+    trace.current_phase = NVX_GSP_BOOT_PHASE_WAIT_RISCV_ACTIVE;
+    status = nvx_gsp_ga10x_wait_riscv_active(
+        bar0, timeout_ms, poll_interval_ms, delay_ms, context);
+    if (status != NVX_GSP_FALCON_OK) {
+        trace.result = status;
+        trace.failed_phase = NVX_GSP_BOOT_PHASE_WAIT_RISCV_ACTIVE;
+        trace.riscv_active = 0U;
+        *out_trace = trace;
+        return status;
+    }
+
+    trace.result = NVX_GSP_FALCON_OK;
+    trace.current_phase = NVX_GSP_BOOT_PHASE_COMPLETE;
+    trace.last_completed_phase = NVX_GSP_BOOT_PHASE_COMPLETE;
+    trace.failed_phase = NVX_GSP_BOOT_PHASE_NONE;
+    trace.riscv_active = 1U;
+    *out_trace = trace;
+    return NVX_GSP_FALCON_OK;
+}
 
 static nvx_gsp_falcon_status_t reset_and_reclaim(
     nvx_gsp_boot_memory_t *memory, const nvx_mmio_region_t *bar0,

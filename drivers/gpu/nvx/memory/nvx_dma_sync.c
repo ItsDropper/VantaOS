@@ -54,6 +54,23 @@ nvx_dma_sync_status_t nvx_dma_sync_for_device(nvx_dma_sync_t *s,
     device_write_barrier(); s->owner=NVX_DMA_OWNER_DEVICE;
     return NVX_DMA_SYNC_OK;
 }
+nvx_dma_sync_status_t nvx_dma_sync_for_shared(nvx_dma_sync_t *s,
+                                                size_t offset,size_t length)
+{
+    if(!s) return NVX_DMA_SYNC_INVALID_ARGUMENT;
+    if(!s->initialized) return NVX_DMA_SYNC_NOT_INITIALIZED;
+    if(!valid_buffer(s)) return NVX_DMA_SYNC_BUFFER_INVALID;
+    if(!valid_range(s,offset,length)) return NVX_DMA_SYNC_INVALID_RANGE;
+    if(s->owner!=NVX_DMA_OWNER_CPU) return NVX_DMA_SYNC_WRONG_OWNER;
+    /*
+     * NVX currently targets x86 coherent DMA. Shared queues are deliberately
+     * not exclusive: the CPU produces commands/consumes replies while GSP
+     * consumes commands/produces replies. Queue/MMIO code supplies ordering.
+     */
+    device_write_barrier();
+    s->owner=NVX_DMA_OWNER_SHARED;
+    return NVX_DMA_SYNC_OK;
+}
 nvx_dma_sync_status_t nvx_dma_sync_for_cpu(nvx_dma_sync_t *s,
                                             size_t offset,size_t length)
 {
@@ -61,7 +78,7 @@ nvx_dma_sync_status_t nvx_dma_sync_for_cpu(nvx_dma_sync_t *s,
     if(!s->initialized) return NVX_DMA_SYNC_NOT_INITIALIZED;
     if(!valid_buffer(s)) return NVX_DMA_SYNC_BUFFER_INVALID;
     if(!valid_range(s,offset,length)) return NVX_DMA_SYNC_INVALID_RANGE;
-    if(s->owner!=NVX_DMA_OWNER_DEVICE) return NVX_DMA_SYNC_WRONG_OWNER;
+    if(s->owner!=NVX_DMA_OWNER_DEVICE && s->owner!=NVX_DMA_OWNER_SHARED) return NVX_DMA_SYNC_WRONG_OWNER;
     device_read_barrier(); s->owner=NVX_DMA_OWNER_CPU;
     return NVX_DMA_SYNC_OK;
 }

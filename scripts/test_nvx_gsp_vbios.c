@@ -107,7 +107,7 @@ int main(void)
     assert(info.imem_load_size == 0x100U);
     assert(info.dmem_load_size == 0x200U);
     assert(info.pkc_data_offset == 0x20U);
-    assert(info.engine_id_mask == 0x0001U);
+    assert(info.engine_id_mask == NVX_GSP_VBIOS_FWSEC_ENGINE_MASK);
     assert(info.ucode_id == 2U);
     assert(info.signature_count == 1U);
     assert(info.signatures_offset == DESC_OFFSET + 44U);

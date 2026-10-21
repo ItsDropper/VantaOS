@@ -57,6 +57,12 @@ int main(void)
     assert(nvx_gsp_modern_shared_queue_validate(&layout) == NVX_GSP_INIT_ARGS_OK);
     assert(nvx_gsp_modern_shared_queue_build_pte_table(&layout, shared_memory,
         sizeof(shared_memory)) == NVX_GSP_INIT_ARGS_OK);
+    assert(nvx_gsp_modern_shared_queue_validate_pte_table(&layout,
+        shared_memory, sizeof(shared_memory)) == NVX_GSP_INIT_ARGS_OK);
+    shared_memory[0] ^= 1U;
+    assert(nvx_gsp_modern_shared_queue_validate_pte_table(&layout,
+        shared_memory, sizeof(shared_memory)) == NVX_GSP_INIT_ARGS_BAD_LAYOUT);
+    shared_memory[0] ^= 1U;
     for (uint32_t i = 0U; i < pte_count; ++i) {
         uint64_t entry;
         memcpy(&entry, shared_memory + (size_t)i * sizeof(entry), sizeof(entry));

@@ -48,11 +48,21 @@ on:
       - "include/nvx_gsp_ring.h"
       - "include/nvx_gsp_msgq.h"
       - "include/nvx_gsp_msgq_queue.h"
+      - "include/nvx_gsp_msgq_ga10x.h"
+      - "include/nvx_gsp_gmcapi.h"
+      - "scripts/test_nvx_gsp_system_info.c"
+      - "include/nvx_gsp_system_info.h"
+      - "scripts/test_nvx_gsp_nvkv.c"
+      - "include/nvx_gsp_nvkv.h"
+      - "include/nvx_gsp_startup.h"
       - "include/nvx_gsp_msgq_rpc.h"
       - "include/nvx_gsp_init_args.h"
       - "include/nvx_gsp_ga10x.h"
       - "include/nvx_gsp_falcon.h"
       - "drivers/gpu/nvx/gsp/nvx_gsp_falcon.c"
+      - "drivers/gpu/nvx/gsp/nvx_gsp_msgq_ga10x.c"
+      - "drivers/gpu/nvx/gsp/nvx_gsp_gmcapi.c"
+      - "drivers/gpu/nvx/gsp/nvx_gsp_startup.c"
       - "scripts/test_nvx_gsp_falcon.c"
       - "include/nvx_gsp_bootloader.h"
       - "include/nvx_gsp_rpc.h"
@@ -91,6 +101,7 @@ on:
       - "scripts/test_nvx_gsp_ring.c"
       - "scripts/test_nvx_gsp_msgq.c"
       - "scripts/test_nvx_gsp_msgq_queue.c"
+      - "scripts/test_nvx_gsp_msgq_ga10x.c"
       - "scripts/test_nvx_gsp_msgq_rpc.c"
       - "scripts/test_nvx_gsp_init_args.c"
       - "scripts/test_nvx_gsp_msgq_rpc_concurrency.c"
@@ -162,6 +173,22 @@ jobs:
 
       - name: Test PCI BAR size masks, restoration, and active-device refusal
         run: /tmp/vantaos-pci-bar-size-test
+
+      - name: Compile bounded NVKV encoder tests with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_nvkv.c drivers/gpu/nvx/gsp/nvx_gsp_nvkv.c \
+            -o /tmp/vantaos-nvx-gsp-nvkv-test
+
+      - name: Test NVKV instruction encoding, arrays, bounds, and malformed streams
+        run: /tmp/vantaos-nvx-gsp-nvkv-test
+
+      - name: Compile GSP startup orchestration with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude -c \
+            drivers/gpu/nvx/gsp/nvx_gsp_startup.c -o /tmp/vantaos-nvx-gsp-startup.o
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude -c \
+            drivers/gpu/nvx/gsp/nvx_gsp_gmcapi.c -o /tmp/vantaos-nvx-gsp-gmcapi.o
 
       - name: Compile NVX identity tests with strict warnings
         run: |
@@ -276,10 +303,26 @@ jobs:
 
       - name: Compile GA10x SEC2 secure-booter execution tests
         run: |
-          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+          gcc -std=c11 -Wall -Wextra -Werror -DNVX_GSP_RPC_TEST -Iinclude \
             scripts/test_nvx_gsp_secure_boot.c drivers/gpu/nvx/firmware/nvx_gsp_secure_boot.c \
             drivers/gpu/nvx/gsp/nvx_gsp_falcon.c drivers/gpu/nvx/core/nvx_mmio.c \
-            drivers/gpu/nvx/memory/nvx_dma_sync.c -o /tmp/vantaos-nvx-secure-boot-test
+            drivers/gpu/nvx/memory/nvx_dma_sync.c \
+            drivers/gpu/nvx/firmware/nvx_gsp_fwsec_result.c \
+            drivers/gpu/nvx/firmware/nvx_gsp_fwsec_mmio.c \
+            drivers/gpu/nvx/firmware/nvx_gsp_fwsec_interface.c \
+            drivers/gpu/nvx/firmware/nvx_gsp_fwsec_command.c \
+            drivers/gpu/nvx/firmware/nvx_gsp_fwsec_stage.c \
+            drivers/gpu/nvx/firmware/nvx_gsp_vbios.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_init_args.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_msgq.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_msgq_queue.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_msgq_ga10x.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_gmcapi.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_nvkv.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_startup.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_ring.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_msgq_rpc.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_rpc.c -o /tmp/vantaos-nvx-secure-boot-test
 
       - name: Test SEC2 transfer planning, BROM setup and Booter Load handoff
         run: /tmp/vantaos-nvx-secure-boot-test
@@ -323,6 +366,23 @@ jobs:
 
       - name: Test NVIDIA MSGQ register and slot semantics
         run: /tmp/vantaos-nvx-msgq-queue-test
+
+      - name: Compile GA10x hardware message-queue binding tests
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_msgq_ga10x.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_msgq_ga10x.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_gmcapi.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_nvkv.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_msgq_queue.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_msgq.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_init_args.c \
+            drivers/gpu/nvx/core/nvx_mmio.c \
+            drivers/gpu/nvx/memory/nvx_dma_sync.c \
+            -o /tmp/vantaos-nvx-gsp-msgq-ga10x-test
+
+      - name: Test GA10x queue register binding and shared DMA lifecycle
+        run: /tmp/vantaos-nvx-gsp-msgq-ga10x-test
 
       - name: Compile NVIDIA MSGQ RPC transport tests
         run: |

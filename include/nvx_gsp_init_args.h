@@ -137,6 +137,10 @@ nvx_gsp_init_args_status_t nvx_gsp_modern_shared_queue_validate(
 nvx_gsp_init_args_status_t nvx_gsp_modern_shared_queue_build_pte_table(
     const nvx_gsp_modern_shared_queue_layout_t *layout, void *shared_mem_cpu,
     size_t capacity);
+/* Verify every PTE and require unused entries in the PTE page to remain zero. */
+nvx_gsp_init_args_status_t nvx_gsp_modern_shared_queue_validate_pte_table(
+    const nvx_gsp_modern_shared_queue_layout_t *layout,
+    const void *shared_mem_cpu, size_t capacity);
 
 /* Builds normal-boot arguments; only the explicit DMEM-stack flag is supported. */
 nvx_gsp_init_args_status_t nvx_gsp_arguments_cached_modern_build(

@@ -187,6 +187,12 @@ jobs:
               exit 1
             fi
           done
+          copy_count="$(grep -c 'VANTAOS_SETUP_COPY_OK' setup-install.log)"
+          test "$copy_count" -eq 15 || {
+            echo "Expected 15 copied system files, found $copy_count"
+            cat setup-install.log
+            exit 1
+          }
           sgdisk --verify install-target.img || {
             sgdisk --print install-target.img || true
             cat setup-install.log

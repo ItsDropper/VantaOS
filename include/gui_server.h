@@ -12,6 +12,18 @@
 
 #include <stdint.h>
 
+typedef void (*gui_builtin_draw_fn)(int x, int y, int width, int height);
+typedef int (*gui_builtin_click_fn)(int x, int y, int width, int height,
+                                    int pointer_x, int pointer_y, int button);
+typedef void (*gui_builtin_close_fn)(void);
+
+int gui_server_register_builtin(const char* title, int x, int y,
+                                int width, int height,
+                                gui_builtin_draw_fn draw,
+                                gui_builtin_click_fn click,
+                                gui_builtin_close_fn close);
+int gui_server_set_builtin_visible(const char* title, int visible);
+
 int gui_server_create_window(uint32_t pid,
                              const vanta_gui_window_request_t* request);
 int gui_server_close_window(uint32_t pid, uint32_t id);

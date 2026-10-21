@@ -532,3 +532,49 @@ nvx_gsp_falcon_status_t nvx_ga10x_falcon_boot(
         elapsed_ms += sleep_ms;
     }
 }
+
+
+/*
+ * GA102 reset-into-RISC-V sequence reconstructed from NVIDIA's public
+ * kernel_falcon_ga102.c: reset/scrub, then set BCR_CTRL CORE_SELECT=RISCV,
+ * VALID=TRUE and BRFETCH=TRUE. This prepares the core; it does not prove that
+ * GSP-RM is running. Booter Load must complete before readiness is checked.
+ */
+nvx_gsp_falcon_status_t nvx_gsp_ga10x_reset_into_riscv(
+    const nvx_mmio_region_t *bar0, uint32_t timeout_ms,
+    uint32_t poll_interval_ms, nvx_gsp_delay_ms_fn delay_ms, void *context)
+{
+    nvx_gsp_falcon_status_t status;
+    uint32_t hwcfg2 = 0U;
+    uint32_t bcr = 0U;
+
+    if (!bar0 || !bar0->base || !delay_ms || timeout_ms == 0U ||
+        poll_interval_ms == 0U)
+        return NVX_GSP_FALCON_INVALID_ARGUMENT;
+    if (bar0->length < (size_t)NVX_GSP_RISCV_BCR_CTRL + 4U)
+        return NVX_GSP_FALCON_BAR_TOO_SMALL;
+    if (nvx_mmio_read32(bar0, NVX_GSP_FALCON_HWCFG2, &hwcfg2) != NVX_MMIO_OK)
+        return NVX_GSP_FALCON_MMIO_ERROR;
+    if ((hwcfg2 & NVX_GSP_PRIV_LOCKED_MASK) == NVX_GSP_PRIV_LOCKED_PATTERN)
+        return NVX_GSP_FALCON_PRIVILEGED_WINDOW_LOCKED;
+    if ((hwcfg2 & NVX_GSP_HWCFG2_RISCV_PRESENT) == 0U)
+        return NVX_GSP_FALCON_IMAGE_INVALID;
+
+    status = nvx_ga10x_falcon_reset(bar0, NVX_GSP_FALCON_BASE,
+        timeout_ms, poll_interval_ms, delay_ms, context);
+    if (status != NVX_GSP_FALCON_OK)
+        return status;
+
+    if (nvx_mmio_write32(bar0, NVX_GSP_RISCV_BCR_CTRL,
+                         NVX_GSP_RISCV_BCR_CTRL_BOOT) != NVX_MMIO_OK ||
+        nvx_mmio_read32(bar0, NVX_GSP_RISCV_BCR_CTRL, &bcr) != NVX_MMIO_OK)
+        return NVX_GSP_FALCON_MMIO_ERROR;
+    if ((bcr & NVX_GSP_PRIV_LOCKED_MASK) == NVX_GSP_PRIV_LOCKED_PATTERN)
+        return NVX_GSP_FALCON_PRIVILEGED_WINDOW_LOCKED;
+    if ((bcr & (NVX_GSP_RISCV_BCR_CTRL_VALID |
+                NVX_GSP_RISCV_BCR_CTRL_CORE_RISCV)) !=
+        (NVX_GSP_RISCV_BCR_CTRL_VALID |
+         NVX_GSP_RISCV_BCR_CTRL_CORE_RISCV))
+        return NVX_GSP_FALCON_MMIO_ERROR;
+    return NVX_GSP_FALCON_OK;
+}

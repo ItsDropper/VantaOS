@@ -18,7 +18,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install build and QEMU tools
-        run: sudo apt-get update && sudo apt-get install --yes build-essential nasm grub-pc-bin xorriso mtools dosfstools qemu-system-x86 socat imagemagick python3-pil
+        run: sudo apt-get update && sudo apt-get install --yes build-essential nasm grub-pc-bin xorriso mtools dosfstools qemu-system-x86 imagemagick python3-pil
 
       - name: Build dedicated panic-injection ISO
         run: |
@@ -31,12 +31,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rm -f panic-screen.log panic-screen.png /tmp/vantaos-panic-monitor.sock
+          rm -f panic-screen.log panic-screen.png /tmp/vantaos-panic-qmp.sock
           qemu-system-x86_64 \
             -machine pc -m 256M -smp 2 -vga std \
             -drive file=VantaOS.iso,media=cdrom,format=raw \
             -boot order=d -display vnc=127.0.0.1:1 \
-            -serial file:panic-screen.log -monitor unix:/tmp/vantaos-panic-monitor.sock,server,nowait \
+            -serial file:panic-screen.log -qmp unix:/tmp/vantaos-panic-qmp.sock,server=on,wait=off \
             -no-reboot >/tmp/vantaos-panic-qemu-stderr.log 2>&1 &
           qemu_pid=$!
           cleanup() {
@@ -59,15 +59,69 @@ jobs:
           grep -q '^Reason: VANTAOS_QEMU_CONTROLLED_PANIC_TEST$' panic-screen.log
           grep -q '^VANTAOS_KERNEL_PANIC_END$' panic-screen.log
 
-          for attempt in $(seq 1 50); do
-            [ -S /tmp/vantaos-panic-monitor.sock ] && break
-            sleep 0.1
-          done
-          printf 'screendump panic-screen.png\n' | timeout -s KILL 2s socat -T 1 - UNIX-CONNECT:/tmp/vantaos-panic-monitor.sock || true
-          for attempt in $(seq 1 30); do
-            [ -s panic-screen.png ] && break
-            sleep 0.1
-          done
+          # Use QMP's request/response protocol rather than the interactive HMP
+          # monitor. HMP leaves the connection open, which made socat hang and
+          # prevented a reliable screendump from being captured.
+          python3 - <<'PY'
+          import json
+          import os
+          import socket
+          import time
+
+          socket_path = "/tmp/vantaos-panic-qmp.sock"
+          deadline = time.monotonic() + 5
+          connection = None
+          while time.monotonic() < deadline:
+              try:
+                  connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                  connection.settimeout(2)
+                  connection.connect(socket_path)
+                  break
+              except (FileNotFoundError, ConnectionRefusedError):
+                  if connection:
+                      connection.close()
+                  connection = None
+                  time.sleep(0.1)
+          if connection is None:
+              raise RuntimeError("QEMU QMP socket did not become available")
+
+          def receive_message():
+              data = b""
+              while b"\n" not in data:
+                  chunk = connection.recv(65536)
+                  if not chunk:
+                      raise RuntimeError("QEMU closed the QMP connection")
+                  data += chunk
+              line, remainder = data.split(b"\n", 1)
+              # QMP sends one JSON object per line. Preserve any extra bytes
+              # by putting them back into the socket's receive buffer is not
+              # possible, so use a persistent buffered reader instead.
+              return json.loads(line)
+
+          reader = connection.makefile("rwb", buffering=0)
+          greeting = json.loads(reader.readline())
+          assert "QMP" in greeting, greeting
+
+          def command(name, **arguments):
+              request = {"execute": name}
+              if arguments:
+                  request["arguments"] = arguments
+              reader.write((json.dumps(request) + "\r\n").encode())
+              while True:
+                  response = json.loads(reader.readline())
+                  if "event" in response:
+                      continue
+                  if "error" in response:
+                      raise RuntimeError(f"QMP {name} failed: {response['error']}")
+                  if "return" in response:
+                      return response["return"]
+
+          command("qmp_capabilities")
+          command("screendump", filename=os.path.abspath("panic-screen.png"))
+          reader.close()
+          connection.close()
+          PY
+
           test -s panic-screen.png
           identify panic-screen.png
           python3 - <<'PY'

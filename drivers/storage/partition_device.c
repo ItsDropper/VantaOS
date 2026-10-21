@@ -95,13 +95,25 @@ static void partition_name(char *out, size_t capacity,
     out[pos] = '\0';
 }
 
-static int has_partition_entry(const uint8_t *mbr)
+static int has_partition_entry(const uint8_t *mbr, uint64_t disk_sectors)
 {
     if (mbr[510] != 0x55U || mbr[511] != 0xAAU)
         return 0;
     for (size_t i = 0U; i < 4U; ++i) {
         const uint8_t *entry = mbr + 446U + i * 16U;
-        if (entry[4U] != 0U)
+        uint8_t type = entry[4U];
+        uint64_t start = (uint64_t)entry[8U] |
+            ((uint64_t)entry[9U] << 8U) |
+            ((uint64_t)entry[10U] << 16U) |
+            ((uint64_t)entry[11U] << 24U);
+        uint64_t length = (uint64_t)entry[12U] |
+            ((uint64_t)entry[13U] << 8U) |
+            ((uint64_t)entry[14U] << 16U) |
+            ((uint64_t)entry[15U] << 24U);
+        if (type == 0xEEU && start == 1U && length != 0U)
+            return 1;
+        if (type != 0U && start < disk_sectors && length != 0U &&
+            length <= disk_sectors - start)
             return 1;
     }
     return 0;
@@ -135,7 +147,7 @@ void partition_device_initialize(void)
 
         uint8_t first_sector[512];
         int has_table = read_disk(disk, 0U, 1U, first_sector) &&
-                        has_partition_entry(first_sector);
+                        has_partition_entry(first_sector, disk->sector_count);
         record_scan(disk, has_table);
 
         partition_scan_entry_t found[PARTITION_SCAN_MAX];

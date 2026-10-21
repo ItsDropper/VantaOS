@@ -156,7 +156,7 @@ void partition_device_initialize(void)
             disk->sector_count, found, PARTITION_SCAN_MAX, &found_count);
         if (status != PARTITION_SCAN_OK) {
             if (has_table)
-                serial_write("VANTAOS_PARTITION_FAIL\\n");
+                serial_write("VANTAOS_PARTITION_FAIL\n");
             continue;
         }
 

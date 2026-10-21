@@ -285,7 +285,8 @@ jobs:
             drivers/gpu/nvx/firmware/nvx_gsp_fwsec_interface.c \
             drivers/gpu/nvx/firmware/nvx_gsp_fwsec_command.c \
             drivers/gpu/nvx/firmware/nvx_gsp_fwsec_stage.c \
-            drivers/gpu/nvx/firmware/nvx_gsp_vbios.c -o /tmp/vantaos-nvx-secure-boot-test
+            drivers/gpu/nvx/firmware/nvx_gsp_vbios.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_init_args.c -o /tmp/vantaos-nvx-secure-boot-test
 
       - name: Test SEC2 transfer planning, BROM setup and Booter Load handoff
         run: /tmp/vantaos-nvx-secure-boot-test

@@ -115,11 +115,6 @@ static void desktop_close_terminal(void)
     }
 }
 
-static void desktop_close_files(void)
-{
-    file_explorer_minimize();
-}
-
 static void desktop_register_builtin_windows(void)
 {
     int screen_w = (int)graphics_get_width();
@@ -147,8 +142,7 @@ static void desktop_register_builtin_windows(void)
 
     (void)gui_server_register_builtin("Files",
         (screen_w - files_w) / 2, (work_h - files_h) / 2,
-        files_w, files_h, desktop_draw_files, desktop_files_click,
-        desktop_close_files);
+        files_w, files_h, desktop_draw_files, desktop_files_click, 0);
     (void)gui_server_register_builtin("Terminal",
         (screen_w - term_w) / 2, (work_h - term_h) / 2,
         term_w, term_h, desktop_draw_terminal_window, 0,

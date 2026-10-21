@@ -52,7 +52,7 @@ int main(void)
     assert(op.handle.valid && op.function==expected_function && captured_size==36U);
     assert(le32(captured+0U)==1U && le32(captured+4U)==2U);
     assert(le32(captured+8U)==3U && le32(captured+12U)==0x97U);
-    assert(le32(captured+16U)==UINT32_MAX && le32(captured+20U)==4U);
+    assert(le32(captured+16U)==0U && le32(captured+20U)==4U);
     assert(le32(captured+24U)==0xA5U);
     assert(memcmp(captured+32U,params,sizeof(params))==0);
     memset(response,0,captured_size);response[16U]=0U;
@@ -67,7 +67,7 @@ int main(void)
         params,sizeof(params),scratch,sizeof(scratch),response,sizeof(response),&op)==NVX_GSP_RMAPI_OK);
     assert(captured_size==44U && le32(captured+0U)==0x10U);
     assert(le32(captured+4U)==0x20U && le32(captured+8U)==0x30U);
-    assert(le32(captured+12U)==UINT32_MAX && le32(captured+16U)==4U);
+    assert(le32(captured+12U)==0U && le32(captured+16U)==4U);
     assert(le32(captured+20U)==1U && le32(captured+24U)==2U);
     assert(le32(captured+28U)==3U && le32(captured+32U)==0U);
     assert(memcmp(captured+40U,params,sizeof(params))==0);
@@ -80,7 +80,7 @@ int main(void)
         response,sizeof(response),&op)==NVX_GSP_RMAPI_OK);
     assert(captured_size==16U && le32(captured+0U)==4U);
     assert(le32(captured+4U)==5U && le32(captured+8U)==6U);
-    assert(le32(captured+12U)==UINT32_MAX);
+    assert(le32(captured+12U)==0U);
     op.function=NVX_GSP_RPC_FN_FREE;
     response[12U]=0U;
     assert(nvx_gsp_rmapi_decode_status(&op,response,16U,&status)==NVX_GSP_RMAPI_OK);

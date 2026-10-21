@@ -2,7 +2,7 @@
 
 ## Current implementation
 
-VantaOS already has a kernel-owned software composition path. Applications submit bounded retained rectangle/text commands through the GUI syscall server; they do not receive a pointer to the scanout framebuffer. The kernel draws the desktop and visible windows into a persistent shadow buffer, tracks damage in 16x16-pixel tiles, then copies only damaged tiles to the boot-provided framebuffer.
+VantaOS has a kernel-owned software composition path. Applications submit bounded retained rectangle/text commands through the GUI syscall server; they do not receive a pointer to the scanout framebuffer. The kernel draws the desktop and visible windows into a persistent shadow buffer and tracks damage in 16×16-pixel tiles. Presentation copies changed tiles to the scanout framebuffer, or uses a guarded Bochs VBE double-page flip when VRAM, mapping bounds, and retrace polling permit it.
 
 The compositor frame contract is:
 

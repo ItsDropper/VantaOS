@@ -86,6 +86,6 @@ jobs:
       - name: Stop QEMU
         if: always()
         run: |
-          if test -f /tmp/vantaos-hmp.pid; then
-            kill "$(cat /tmp/vantaos-hmp.pid)" 2>/dev/null || true
+          if test -f /tmp/vantaos-hmp-qemu.pid; then
+            kill "$(cat /tmp/vantaos-hmp-qemu.pid)" 2>/dev/null || true
           fi

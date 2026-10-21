@@ -84,7 +84,7 @@ nvx_gsp_rmapi_status_t nvx_gsp_rm_control_submit(
 nvx_gsp_rmapi_status_t nvx_gsp_rm_free_submit(
     nvx_gsp_rpc_manager_t *manager, uint32_t root, uint32_t parent,
     uint32_t object, void *scratch, size_t scratch_size,
-    nvx_gsp_rmapi_result_t *out);
+    void *response, size_t response_capacity, nvx_gsp_rmapi_result_t *out);
 
 /* Validate and extract the RM-side status from a completed response payload. */
 nvx_gsp_rmapi_status_t nvx_gsp_rmapi_decode_status(

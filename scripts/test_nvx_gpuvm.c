@@ -28,7 +28,8 @@ int dma_alloc_page(dma_page_t *out)
     if (out == 0 || next_page >= TEST_PAGE_COUNT)
         return 0;
     out->virtual_address = page_pool[next_page];
-    out->physical_address = 0x10000000ULL +
+    /* Exercise valid GPU page-table backing above the 32-bit boundary. */
+    out->physical_address = 0x120000000ULL +
                             (uint64_t)next_page * NVX_GPUVM_PAGE_SIZE;
     out->size = NVX_GPUVM_PAGE_SIZE;
     ++next_page;

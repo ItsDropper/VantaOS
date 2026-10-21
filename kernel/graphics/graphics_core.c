@@ -497,52 +497,60 @@ void graphics_select_panel(int panel)
 int graphics_set_resolution(uint32_t width, uint32_t height)
 {
     if (!initialized ||
-        width < 640 || height < 480 ||
-        width > 1600 || height > 900)
-        return 0;
-
-    uint64_t bytes = (uint64_t)width * 4U * height;
-    uint32_t pages = (uint32_t)((bytes + 4095U) / 4096U);
-
-    if (pages == 0 || pages > GRAPHICS_MAX_PAGES)
+        width < 640U || height < 480U ||
+        width > 1600U || height > 900U)
         return 0;
 
     uint32_t physical = 0;
-
     for (int i = 0; i < pci_get_device_count(); i++)
     {
         const struct pci_device* device = pci_get_device(i);
-
-        if (!device ||
-            device->vendor_id != 0x1234 ||
-            device->device_id != 0x1111 ||
-            device->class_code != 0x03)
+        if (!device || device->vendor_id != 0x1234 ||
+            device->device_id != 0x1111 || device->class_code != 0x03)
             continue;
-
         if (pci_get_bar0(device, &physical))
             break;
     }
+    if (physical == 0U)
+        return 0;
 
-    if (physical == 0)
+    uint32_t offset = physical & 0xFFFU;
+    uint32_t first_page = physical & 0xFFFFF000U;
+    uint64_t bytes = (uint64_t)width * 4U * height;
+    uint64_t vram_bytes =
+        (uint64_t)bochs_vbe_read(BOCHS_VBE_INDEX_VIDEO_MEMORY_64K) * 65536U;
+    int pageflip = bochs_vbe_can_pageflip(width, height, offset, vram_bytes);
+    uint64_t mapped_bytes = bytes * (pageflip ? 2U : 1U);
+    uint32_t pages =
+        (uint32_t)((offset + mapped_bytes + 4095U) / 4096U);
+    if (pages == 0U || pages > GRAPHICS_MAX_PAGES)
         return 0;
 
     bochs_vbe_write(BOCHS_VBE_INDEX_ENABLE, 0);
     bochs_vbe_write(BOCHS_VBE_INDEX_XRES, (uint16_t)width);
     bochs_vbe_write(BOCHS_VBE_INDEX_YRES, (uint16_t)height);
-    bochs_vbe_write(BOCHS_VBE_INDEX_BPP, 32);
+    bochs_vbe_write(BOCHS_VBE_INDEX_BPP, 32U);
     bochs_vbe_write(BOCHS_VBE_INDEX_VIRT_WIDTH, (uint16_t)width);
-    bochs_vbe_write(BOCHS_VBE_INDEX_VIRT_HEIGHT, (uint16_t)height);
+    bochs_vbe_write(BOCHS_VBE_INDEX_VIRT_HEIGHT,
+                    (uint16_t)(height * (pageflip ? 2U : 1U)));
+    bochs_vbe_write(BOCHS_VBE_INDEX_Y_OFFSET, 0U);
     bochs_vbe_write(BOCHS_VBE_INDEX_ENABLE, BOCHS_VBE_ENABLE_LFB);
 
     for (uint32_t i = 0; i < pages; i++)
     {
         if (!paging_map_page(
                 GRAPHICS_VIRTUAL_BASE + i * 4096U,
-                (physical & 0xFFFFF000U) + i * 4096U))
+                first_page + i * 4096U))
             return 0;
     }
 
-    framebuffer = (uint8_t*)(GRAPHICS_VIRTUAL_BASE + (physical & 0xFFFU));
+    framebuffer = (uint8_t*)(GRAPHICS_VIRTUAL_BASE + offset);
+    graphics_scanout_base = framebuffer;
+    graphics_scanout_page_bytes = bytes;
+    graphics_scanout_page_index = 0U;
+    graphics_bochs_mode = 1;
+    graphics_pageflip_enabled = pageflip;
+    graphics_pageflip_seeded = 0;
     graphics_invalidate_scene();
     framebuffer_pitch = width * 4U;
     framebuffer_width = width;
@@ -560,7 +568,6 @@ int graphics_set_resolution(uint32_t width, uint32_t height)
     cursor_x = (int)width / 2;
     cursor_y = (int)height / 2;
     terminal_x = (int)width / 2 - 440;
-
     if (terminal_x < 10)
         terminal_x = 10;
 
@@ -571,7 +578,6 @@ int graphics_set_resolution(uint32_t width, uint32_t height)
     terminal_dragging = 0;
     cursor_saved_valid = 0;
     active_panel = 0;
-
     return 1;
 }
 

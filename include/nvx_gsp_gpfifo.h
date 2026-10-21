@@ -87,7 +87,7 @@ nvx_gsp_gpfifo_status_t nvx_gsp_gpfifo_submit_and_wait(
     uint32_t poll_interval_ms, nvx_gsp_gpfifo_delay_fn delay_ms,
     void *context, uint32_t *out_put_index);
 
-/* Wait until USERD GP_GET consumes the submitted GPFIFO entry. */
+/* Wait until USERD GP_GET reaches or passes the submitted ring index. */
 nvx_gsp_gpfifo_status_t nvx_gsp_gpfifo_wait_get(
     nvx_gsp_gpfifo_channel_t *channel, uint32_t expected_get_index,
     uint32_t timeout_ms, uint32_t poll_interval_ms,

@@ -48,11 +48,13 @@ on:
       - "include/nvx_gsp_ring.h"
       - "include/nvx_gsp_msgq.h"
       - "include/nvx_gsp_msgq_queue.h"
+      - "include/nvx_gsp_msgq_ga10x.h"
       - "include/nvx_gsp_msgq_rpc.h"
       - "include/nvx_gsp_init_args.h"
       - "include/nvx_gsp_ga10x.h"
       - "include/nvx_gsp_falcon.h"
       - "drivers/gpu/nvx/gsp/nvx_gsp_falcon.c"
+      - "drivers/gpu/nvx/gsp/nvx_gsp_msgq_ga10x.c"
       - "scripts/test_nvx_gsp_falcon.c"
       - "include/nvx_gsp_bootloader.h"
       - "include/nvx_gsp_rpc.h"
@@ -91,6 +93,7 @@ on:
       - "scripts/test_nvx_gsp_ring.c"
       - "scripts/test_nvx_gsp_msgq.c"
       - "scripts/test_nvx_gsp_msgq_queue.c"
+      - "scripts/test_nvx_gsp_msgq_ga10x.c"
       - "scripts/test_nvx_gsp_msgq_rpc.c"
       - "scripts/test_nvx_gsp_init_args.c"
       - "scripts/test_nvx_gsp_msgq_rpc_concurrency.c"
@@ -330,6 +333,21 @@ jobs:
 
       - name: Test NVIDIA MSGQ register and slot semantics
         run: /tmp/vantaos-nvx-msgq-queue-test
+
+      - name: Compile GA10x hardware message-queue binding tests
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_msgq_ga10x.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_msgq_ga10x.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_msgq_queue.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_msgq.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_init_args.c \
+            drivers/gpu/nvx/core/nvx_mmio.c \
+            drivers/gpu/nvx/memory/nvx_dma_sync.c \
+            -o /tmp/vantaos-nvx-gsp-msgq-ga10x-test
+
+      - name: Test GA10x queue register binding and shared DMA lifecycle
+        run: /tmp/vantaos-nvx-gsp-msgq-ga10x-test
 
       - name: Compile NVIDIA MSGQ RPC transport tests
         run: |

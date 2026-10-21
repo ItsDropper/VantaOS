@@ -187,6 +187,8 @@ void partition_device_initialize(void)
             if (block_device_register(&part->block) == BLOCK_STATUS_OK) {
                 ++partition_count;
                 serial_write("VANTAOS_PARTITION_OK\n");
+             else {
+                serial_write("VANTAOS_PARTITION_FAIL\n");
             }
         }
     }

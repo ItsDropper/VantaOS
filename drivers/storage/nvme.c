@@ -608,7 +608,7 @@ static int register_namespace(nvme_controller_t* c, uint32_t nsid)
     ns->block.name[name_length] = '\0';
     ns->block.sector_count = size;
     ns->block.sector_size = sector_size;
-    ns->block.flags = 0U;
+    ns->block.flags = BLOCK_DEVICE_TRANSPORT_NVME;
     ns->block.ops = &namespace_ops;
     ns->block.driver_data = ns;
     if (block_device_register_disk(&ns->block) != BLOCK_STATUS_OK) {

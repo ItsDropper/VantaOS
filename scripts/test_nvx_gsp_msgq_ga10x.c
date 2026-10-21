@@ -55,7 +55,7 @@ static void fake_gsp_reply(uint32_t ms, void *context)
     uint8_t *reply = fake->runtime->status_queue.layout.entries;
     const uint64_t sequence = get64(request + 32U);
     const uint32_t command = get32(request + 24U);
-    const uint64_t static_info = UINT64_C(0x1122334455667788);
+    const uint64_t static_info = (UINT64_C(0x55) << 32U) | UINT64_C(2);
     const uint32_t payload_size = (uint32_t)sizeof(static_info);
     const uint32_t gmc_size = NVX_GSP_GMCAPI_HEADER_SIZE + payload_size;
     const uint32_t wire_size = 24U + gmc_size;
@@ -105,7 +105,7 @@ int main(void)
     nvx_gsp_msgq_ga10x_t runtime = {0};
     fake_gsp_t fake = {0};
     nvx_gsp_gmcapi_transport_t gmcapi = {0};
-    uint8_t request[8] = {1U,2U,3U,4U,5U,6U,7U,8U};
+    const uint64_t request = (UINT64_C(42) << 32U) | UINT64_C(1);
     uint8_t response[64] = {0};
     uint8_t *scratch = aligned_alloc(NVX_GSP_PAGE_SIZE, NVX_GSP_PAGE_SIZE);
     size_t response_size = 0U;
@@ -156,14 +156,14 @@ int main(void)
     assert(nvx_gsp_gmcapi_init(&gmcapi, &runtime.command_queue,
                               &runtime.status_queue) == NVX_GSP_GMCAPI_OK);
     assert(nvx_gsp_gmcapi_gsp_init(
-        &gmcapi, request, sizeof(request), response, sizeof(response),
+        &gmcapi, &request, sizeof(request), response, sizeof(response),
         &response_size, &remote_status, scratch, NVX_GSP_PAGE_SIZE,
         20U, 1U, fake_gsp_reply, &fake) == NVX_GSP_GMCAPI_OK);
     assert(fake.responded == 1U);
     assert(fake.elapsed == 1U);
     assert(response_size == sizeof(uint64_t));
     assert(remote_status == 0U);
-    assert(get64(response) == UINT64_C(0x1122334455667788));
+    assert(get64(response) == ((UINT64_C(0x55) << 32U) | UINT64_C(2)));
     assert(get32(runtime.command_queue.layout.entries + 24U) ==
            NVX_GSP_GMCAPI_CMD_GSP_INIT);
     assert(get32(runtime.command_queue.layout.entries + 12U) ==

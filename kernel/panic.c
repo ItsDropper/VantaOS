@@ -64,6 +64,50 @@ _Noreturn void kernel_panic_halt_all(void)
     panic_halt();
 }
 
+static void panic_serial_hex(uint64_t value)
+{
+    char buffer[19];
+    panic_format_hex64(buffer, value);
+    serial_write(buffer);
+}
+
+static void panic_serial_report(const char* reason, unsigned int number,
+                                const struct exception_frame* frame,
+                                uintptr_t fault_address, int has_fault_address)
+{
+    serial_write("VANTAOS_KERNEL_PANIC_BEGIN\n");
+    serial_write("VANTAOS ENCOUNTERED A FATAL ERROR\nReason: ");
+    serial_write(reason ? reason : "Unknown kernel failure");
+    serial_write("\nCPU/APIC ID: ");
+    const cpu_local_t* cpu = cpu_local_current();
+    if (cpu && cpu->self == cpu) panic_serial_hex(cpu->apic_id);
+    else serial_write("unavailable");
+    serial_write("\nException: ");
+    serial_write(number == 0xFFFFFFFFU ? "Kernel panic" : panic_exception_name(number));
+    serial_write("\n");
+    if (frame)
+    {
+        serial_write("RIP="); panic_serial_hex(frame->rip);
+        serial_write(" RSP="); panic_serial_hex(frame->rsp);
+        serial_write(" RBP="); panic_serial_hex(frame->rbp);
+        serial_write(" ERROR="); panic_serial_hex(frame->error_code);
+        serial_write(" CS="); panic_serial_hex(frame->cs);
+        serial_write(" RFLAGS="); panic_serial_hex(frame->rflags);
+        serial_write("\nRAX="); panic_serial_hex(frame->rax);
+        serial_write(" RBX="); panic_serial_hex(frame->rbx);
+        serial_write(" RCX="); panic_serial_hex(frame->rcx);
+        serial_write(" RDX="); panic_serial_hex(frame->rdx);
+        serial_write("\n");
+    }
+    if (has_fault_address)
+    {
+        serial_write("FAULT_ADDRESS=");
+        panic_serial_hex(fault_address);
+        serial_write("\n");
+    }
+    serial_write("VANTAOS_KERNEL_PANIC_END\n");
+}
+
 void kernel_panic(
     const char* reason,
     unsigned int exception_number,
@@ -75,6 +119,8 @@ void kernel_panic(
     __asm__ volatile ("cli");
     if (!panic_broadcast_begin())
         panic_halt();
+
+    panic_serial_report(reason, exception_number, frame, fault_address, has_fault_address);
 
     if (!graphics_is_initialized())
     {
@@ -117,7 +163,13 @@ void kernel_panic(
     int width = (int)graphics_get_width();
     int height = (int)graphics_get_height();
 
-    if (!graphics_panic_prepare())\n    {\n        panic_broadcast_stop_peers();\n        panic_halt();\n    }\n\n    graphics_clear(0x008A1018);
+    if (!graphics_panic_prepare())
+    {
+        panic_broadcast_stop_peers();
+        panic_halt();
+    }
+
+    graphics_clear(0x008A1018);
 
     int x = width >= 900 ? 64 : 28;
     int y = height >= 600 ? 42 : 24;

@@ -255,7 +255,7 @@ jobs:
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
             scripts/test_nvx_device.c drivers/gpu/nvx/core/nvx_device.c \
-            -o /tmp/vantaos-nvx-device-test
+            drivers/gpu/nvx/core/nvx_generation.c -o /tmp/vantaos-nvx-device-test
 
       - name: Test NVIDIA PCI matching and descriptor invariants
         run: /tmp/vantaos-nvx-device-test
@@ -264,7 +264,8 @@ jobs:
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
             scripts/test_nvx_pci.c drivers/gpu/nvx/core/nvx_device.c \
-            drivers/gpu/nvx/core/nvx_pci.c -o /tmp/vantaos-nvx-pci-test
+            drivers/gpu/nvx/core/nvx_generation.c drivers/gpu/nvx/core/nvx_pci.c \
+            -o /tmp/vantaos-nvx-pci-test
 
       - name: Test PCI inventory diagnostics and auxiliary-function filtering
         run: /tmp/vantaos-nvx-pci-test
@@ -283,7 +284,7 @@ jobs:
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
             scripts/test_nvx_probe.c drivers/gpu/nvx/core/nvx_probe.c \
             drivers/gpu/nvx/core/nvx_mmio.c drivers/gpu/nvx/core/nvx_device.c \
-            -o /tmp/vantaos-nvx-probe-test
+            drivers/gpu/nvx/core/nvx_generation.c -o /tmp/vantaos-nvx-probe-test
 
       - name: Test conservative NVIDIA PMC register probing
         run: /tmp/vantaos-nvx-probe-test
@@ -303,7 +304,8 @@ jobs:
             scripts/test_nvx_attach.c drivers/gpu/nvx/core/nvx_attach.c \
             drivers/gpu/nvx/core/nvx_resource.c drivers/gpu/nvx/core/nvx_probe.c \
             drivers/gpu/nvx/core/nvx_mmio.c drivers/gpu/nvx/core/nvx_device.c \
-            drivers/gpu/nvx/core/nvx_lifecycle.c -o /tmp/vantaos-nvx-attach-test
+            drivers/gpu/nvx/core/nvx_generation.c drivers/gpu/nvx/core/nvx_lifecycle.c \
+            -o /tmp/vantaos-nvx-attach-test
 
       - name: Test NVX attach, register probe, rollback and teardown
         run: /tmp/vantaos-nvx-attach-test
@@ -321,7 +323,7 @@ jobs:
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
             scripts/test_nvx_gsp_bundle.c drivers/gpu/nvx/firmware/nvx_gsp_bundle.c \
-            -o /tmp/vantaos-nvx-gsp-bundle-test
+            drivers/gpu/nvx/core/nvx_generation.c -o /tmp/vantaos-nvx-gsp-bundle-test
 
       - name: Test GSP component paths, verification and transactional cleanup
         run: /tmp/vantaos-nvx-gsp-bundle-test

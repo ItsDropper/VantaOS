@@ -6,6 +6,7 @@
  */
 
 #include "nvx_device.h"
+#include "nvx_generation.h"
 
 #include <assert.h>
 #include <stdint.h>
@@ -42,6 +43,26 @@ int main(void)
     nvx_device_descriptor_t descriptor;
     nvx_generation_family_t family;
     nvx_device_profile_t profile;
+    static const uint16_t supported_ids[] = {
+        0x2503U, 0x2504U, 0x2507U, 0x2508U, 0x2509U, 0x2544U, 0x2548U
+    };
+    for (unsigned i = 0U; i < sizeof(supported_ids) / sizeof(supported_ids[0]); ++i) {
+        const nvx_generation_descriptor_t *generation =
+            nvx_generation_for_pci(supported_ids[i]);
+        assert(generation != 0);
+        assert(generation->family == NVX_FAMILY_AMPERE);
+        assert(generation->profile == NVX_PROFILE_GEFORCE_RTX_3060);
+        assert(generation->boot_sequence == NVX_BOOT_SEQUENCE_GA10X_SEC2_GSP);
+        assert(generation->pmc_boot_0_offset == 0U);
+        assert(generation->pmc_boot_1_offset == 4U);
+        assert(generation->firmware_component_count == 5U);
+    }
+    assert(nvx_generation_for_pci(0x1234U) == 0);
+    assert(nvx_generation_for_pci(0x2C02U) == 0);
+    assert(nvx_generation_for_pci(0x2C05U) == 0);
+    assert(nvx_generation_for_pci(0x2C07U) == 0);
+    assert(nvx_generation_for_firmware_chip("ga106") != 0);
+    assert(nvx_generation_for_firmware_chip("gb202") == 0);
 
     assert(!nvx_match_pci_device(0));
     device.vendor_id = 0x8086;

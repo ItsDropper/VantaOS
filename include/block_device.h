@@ -10,10 +10,16 @@
 #include <stdint.h>
 #include <stddef.h>
 #define BLOCK_DEVICE_NAME_MAX 32U
-#define BLOCK_DEVICE_MAX 16U
+#define BLOCK_DEVICE_MAX 64U
 #define BLOCK_DEVICE_READ_ONLY (1U << 0)
 #define BLOCK_DEVICE_REMOVABLE (1U << 1)
 #define BLOCK_DEVICE_BOOT_MEDIA (1U << 2)
+#define BLOCK_DEVICE_PARTITION (1U << 3)
+#define BLOCK_DEVICE_TRANSPORT_ATA (1U << 4)
+#define BLOCK_DEVICE_TRANSPORT_NVME (1U << 5)
+#define BLOCK_DEVICE_TRANSPORT_ATA (1U << 4)
+#define BLOCK_DEVICE_TRANSPORT_NVME (1U << 5)
+#define BLOCK_DEVICE_LABEL_MAX 37U
 typedef enum {
  BLOCK_STATUS_OK=0, BLOCK_STATUS_INVALID, BLOCK_STATUS_NOT_READY,
  BLOCK_STATUS_READ_ONLY, BLOCK_STATUS_OUT_OF_RANGE, BLOCK_STATUS_UNSUPPORTED,
@@ -35,8 +41,14 @@ struct block_device {
  volatile uint32_t active_operations;
  const block_device_ops_t* ops;
  void* driver_data;
+ uint8_t partition_scheme;
+ uint8_t partition_type;
+ uint8_t partition_type_guid[16];
+ char partition_label[BLOCK_DEVICE_LABEL_MAX];
 };
 block_status_t block_device_register(block_device_t*);
+/* Register a whole disk using the stable diskN naming convention. */
+block_status_t block_device_register_disk(block_device_t*);
 block_status_t block_device_unregister(block_device_t*);
 uint32_t block_device_count(void);
 block_device_t* block_device_get(uint32_t);

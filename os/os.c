@@ -98,6 +98,7 @@ void os_initialize(multiboot_info_t* mbd)
     );
 
     filesystem_initialize(mbd);
+    (void)serial_boot_log_flush();
     vfs_initialize();
 
     process_initialize();
@@ -129,6 +130,7 @@ void os_initialize(multiboot_info_t* mbd)
     boot_shell = read_tsc();
 
     desktop_initialize(mbd);
+    (void)serial_boot_log_flush();
 
 #ifdef VANTAOS_SELF_TEST
     os_selftest_initialize();

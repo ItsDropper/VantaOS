@@ -8,14 +8,10 @@
 
 #include "nvx_lifecycle.h"
 #include "nvx_mmio.h"
+#include "nvx_generation.h"
 
 #include <stdint.h>
 
-#define NVX_PMC_BOOT_0_OFFSET 0x0000U
-#define NVX_PMC_BOOT_1_OFFSET 0x0004U
-#define NVX_PMC_BOOT_42_OFFSET 0x0A00U
-#define NVX_PMC_BOOT_REQUIRED_LENGTH 0x0008U
-#define NVX_PMC_BOOT_42_REQUIRED_LENGTH (NVX_PMC_BOOT_42_OFFSET + sizeof(uint32_t))
 
 /* NVIDIA OpenRM nv_ref.h register fields. */
 #define NVX_PMC_BOOT_0_MINOR_MASK 0x0000000FU
@@ -59,6 +55,7 @@ nvx_probe_status_t nvx_probe_mapped_bar0(
     nvx_register_snapshot_t *out_snapshot)
 {
     nvx_mmio_region_t region;
+    const nvx_generation_descriptor_t *generation;
     uint32_t boot0;
     uint32_t boot1;
     uint32_t boot42 = 0U;
@@ -74,10 +71,13 @@ nvx_probe_status_t nvx_probe_mapped_bar0(
         return NVX_PROBE_INVALID_ARGUMENT;
     if (!nvx_match_pci_device(device))
         return NVX_PROBE_NOT_NVIDIA_DISPLAY;
+    generation = nvx_generation_for_pci(device->device_id);
+    if (!generation)
+        return NVX_PROBE_UNSUPPORTED_GENERATION;
     if ((pci_read_config16(device, 0x04U) &
          NVX_PCI_COMMAND_MEMORY_SPACE) == 0U)
         return NVX_PROBE_MEMORY_DECODE_DISABLED;
-    if (mapped_length < NVX_PMC_BOOT_REQUIRED_LENGTH)
+    if (mapped_length < generation->pmc_boot_1_offset + sizeof(uint32_t))
         return NVX_PROBE_BAR_TOO_SMALL;
     if (((uintptr_t)bar0 & (sizeof(uint32_t) - 1U)) != 0U)
         return NVX_PROBE_BAD_MAPPING_ALIGNMENT;
@@ -85,8 +85,8 @@ nvx_probe_status_t nvx_probe_mapped_bar0(
     region.base = (volatile uint8_t *)(void *)bar0;
     region.length = mapped_length;
 
-    if (nvx_mmio_read32(&region, NVX_PMC_BOOT_0_OFFSET, &boot0) != NVX_MMIO_OK ||
-        nvx_mmio_read32(&region, NVX_PMC_BOOT_1_OFFSET, &boot1) != NVX_MMIO_OK)
+    if (nvx_mmio_read32(&region, generation->pmc_boot_0_offset, &boot0) != NVX_MMIO_OK ||
+        nvx_mmio_read32(&region, generation->pmc_boot_1_offset, &boot1) != NVX_MMIO_OK)
         return NVX_PROBE_REGISTER_ACCESS_FAILED;
 
     if (boot0 == 0xFFFFFFFFU || boot1 == 0xFFFFFFFFU ||
@@ -110,8 +110,8 @@ nvx_probe_status_t nvx_probe_mapped_bar0(
      * extent is too short or the optional register reads as a reserved/all-ones
      * value on an older generation. Never write this register.
      */
-    if (mapped_length >= NVX_PMC_BOOT_42_REQUIRED_LENGTH &&
-        nvx_mmio_read32(&region, NVX_PMC_BOOT_42_OFFSET, &boot42) == NVX_MMIO_OK &&
+    if (mapped_length >= generation->pmc_boot_42_offset + sizeof(uint32_t) &&
+        nvx_mmio_read32(&region, generation->pmc_boot_42_offset, &boot42) == NVX_MMIO_OK &&
         boot42 != 0U && boot42 != 0xFFFFFFFFU) {
         out_snapshot->pmc_boot_42 = boot42;
         out_snapshot->extended_architecture =

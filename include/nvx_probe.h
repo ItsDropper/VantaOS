@@ -19,7 +19,8 @@ typedef enum nvx_probe_status {
     NVX_PROBE_BAR_TOO_SMALL,
     NVX_PROBE_BAD_MAPPING_ALIGNMENT,
     NVX_PROBE_REGISTER_ACCESS_FAILED,
-    NVX_PROBE_UNRESPONSIVE_REGISTERS
+    NVX_PROBE_UNRESPONSIVE_REGISTERS,
+    NVX_PROBE_UNSUPPORTED_GENERATION
 } nvx_probe_status_t;
 
 typedef struct nvx_register_snapshot {

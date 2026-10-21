@@ -127,6 +127,26 @@ jobs:
       - name: Enforce architecture boundaries
         run: python3 scripts/check_architecture.py
 
+      - name: Compile strict partition scanner host tests
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_partition_scan.c drivers/storage/partition_scan.c \
+            -o /tmp/vantaos-partition-scan-test
+          /tmp/vantaos-partition-scan-test
+
+      - name: Compile strict serial log ring tests
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_serial_log.c kernel/serial_log.c \
+            -o /tmp/vantaos-serial-log-test
+          /tmp/vantaos-serial-log-test
+
+      - name: Compile optional FAT32 boot-log path
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -m64 -march=x86-64 -ffreestanding \
+            -fno-pie -fno-stack-protector -mno-red-zone -mgeneral-regs-only \
+            -nostdlib -Iinclude -DVANTAOS_BOOT_LOG_TO_FAT32 \
+            -c kernel/serial.c -o /tmp/vantaos-serial-bootlog.o
       - name: Test compositor damage rectangle clipping
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_graphics_damage.c -o /tmp/vantaos-graphics-damage-test
@@ -237,6 +257,54 @@ jobs:
           mcopy -i vantaos.img /tmp/vantaos-user-file.txt ::/USERDATA.TXT
           # Keep a pristine template before QEMU regression steps mutate vantaos.img.
           cp vantaos.img nvme-fat32-template.img
+
+      - name: GPT two-partition discovery QEMU smoke test
+        if: steps.scope.outputs.full == '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          truncate -s 160M partition-qemu.img
+          sgdisk --clear \
+            --new=1:2048:133119 --typecode=1:0700 --change-name=1:BOOTVOL \
+            --new=2:135168:266239 --typecode=2:0700 --change-name=2:DATAVOL \
+            partition-qemu.img
+          truncate -s 64M partition-one.img
+          truncate -s 64M partition-two.img
+          mkfs.fat -F32 -n BOOTVOL partition-one.img
+          mkfs.fat -F32 -n DATAVOL partition-two.img
+          dd if=partition-one.img of=partition-qemu.img bs=512 seek=2048 conv=notrunc status=none
+          dd if=partition-two.img of=partition-qemu.img bs=512 seek=135168 conv=notrunc status=none
+
+          log=partition-qemu.log
+          rm -f "$log"
+          qemu-system-x86_64 \
+            -machine pc -m 256M -smp 2 -vga std \
+            -drive file=VantaOS.iso,media=cdrom,format=raw \
+            -drive file=partition-qemu.img,if=ide,format=raw \
+            -boot order=d -display none -serial "file:$log" -monitor none \
+            -no-reboot >/tmp/vantaos-partition-qemu.log 2>&1 &
+          qemu_pid=$!
+          cleanup() {
+            kill "$qemu_pid" 2>/dev/null || true
+            wait "$qemu_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+          for attempt in $(seq 1 200); do
+            count=$(grep -c '^VANTAOS_PARTITION_OK' "$log" 2>/dev/null || true)
+            if [ "$count" -ge 2 ]; then break; fi
+            if ! kill -0 "$qemu_pid" 2>/dev/null; then
+              cat "$log" /tmp/vantaos-partition-qemu.log 2>/dev/null || true
+              exit 1
+            fi
+            sleep 0.1
+          done
+          count=$(grep -c '^VANTAOS_PARTITION_OK' "$log" 2>/dev/null || true)
+          if [ "$count" -ne 2 ] || grep -q '^VANTAOS_PARTITION_FAIL' "$log"; then
+            echo "GPT partition discovery did not register exactly two partitions."
+            cat "$log" /tmp/vantaos-partition-qemu.log 2>/dev/null || true
+            exit 1
+          fi
+          echo "QEMU registered both GPT partition handles."
 
       - name: E1000 QEMU transmit end-to-end test
         if: steps.scope.outputs.full == '1' || steps.scope.outputs.e1000 == '1'

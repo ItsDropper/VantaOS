@@ -608,10 +608,10 @@ static int register_namespace(nvme_controller_t* c, uint32_t nsid)
     ns->block.name[name_length] = '\0';
     ns->block.sector_count = size;
     ns->block.sector_size = sector_size;
-    ns->block.flags = 0U;
+    ns->block.flags = BLOCK_DEVICE_TRANSPORT_NVME;
     ns->block.ops = &namespace_ops;
     ns->block.driver_data = ns;
-    if (block_device_register(&ns->block) != BLOCK_STATUS_OK) {
+    if (block_device_register_disk(&ns->block) != BLOCK_STATUS_OK) {
         ns->used = 0U;
         return 0;
     }
@@ -776,9 +776,10 @@ static int nvme_run_io_selftest(void)
     uint32_t count = block_device_count();
     for (uint32_t i = 0; i < count; ++i) {
         block_device_t* candidate = block_device_get(i);
-        if (candidate && candidate->name[0] == 'n' &&
-            candidate->name[1] == 'v' && candidate->name[2] == 'm' &&
-            candidate->name[3] == 'e') {
+        nvme_namespace_t* ns = candidate ?
+            (nvme_namespace_t*)candidate->driver_data : 0;
+        if (ns && ns->used && ns->controller &&
+            ns->controller->initialized && !ns->controller->failed) {
             device = candidate;
             break;
         }

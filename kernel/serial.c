@@ -6,6 +6,10 @@
  */
 
 #include "serial.h"
+#include "serial_log.h"
+#ifdef VANTAOS_BOOT_LOG_TO_FAT32
+#include "fat32.h"
+#endif
 
 #include <stdint.h>
 #include <stddef.h>
@@ -52,6 +56,11 @@ void serial_write(const char* text)
 {
     if (!text)
         return;
+#ifdef VANTAOS_BOOT_LOG_TO_FAT32
+    size_t log_length = 0U;
+    while (text[log_length]) ++log_length;
+    serial_log_append(text, log_length);
+#endif
 
     while (*text)
     {
@@ -67,6 +76,9 @@ void serial_write_bytes(const char* data, size_t length)
 {
     if (!data)
         return;
+#ifdef VANTAOS_BOOT_LOG_TO_FAT32
+    serial_log_append(data, length);
+#endif
 
     for (size_t i = 0; i < length; i++)
     {
@@ -74,4 +86,24 @@ void serial_write_bytes(const char* data, size_t length)
             serial_write_char('\r');
         serial_write_char(data[i]);
     }
+}
+
+int serial_boot_log_flush(void)
+{
+#ifdef VANTAOS_BOOT_LOG_TO_FAT32
+    static char snapshot[SERIAL_LOG_CAPACITY];
+    static int directory_attempted;
+    if (!fat32_is_mounted_removable())
+        return 0;
+    if (!directory_attempted) {
+        (void)fat32_create_directory("/LOGS");
+        directory_attempted = 1;
+    }
+    size_t length = serial_log_snapshot(snapshot, sizeof(snapshot));
+    if (length == 0U)
+        return 1;
+    return fat32_write_file("/LOGS/BOOT.TXT", snapshot, (uint32_t)length) == 0;
+#else
+    return 0;
+#endif
 }

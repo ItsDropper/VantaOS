@@ -31,6 +31,29 @@ block_status_t block_device_register(block_device_t* d) {
  d->active_operations=0; d->online=1; devices[device_count_value++]=d;
  spinlock_unlock_irqrestore(&registry_lock,f); return BLOCK_STATUS_OK;
 }
+static void make_disk_name(char *name, uint32_t number)
+{
+ char digits[10]; uint32_t count=0U;
+ name[0]='d'; name[1]='i'; name[2]='s'; name[3]='k';
+ do { digits[count++]=(char)('0'+number%10U); number/=10U; } while(number && count<sizeof(digits));
+ uint32_t pos=4U;
+ while(count) name[pos++]=digits[--count];
+ name[pos]='\\0';
+}
+block_status_t block_device_register_disk(block_device_t* d)
+{
+ if(!d) return BLOCK_STATUS_INVALID;
+ char candidate[BLOCK_DEVICE_NAME_MAX];
+ for(uint32_t i=0U;i<BLOCK_DEVICE_MAX;i++) {
+  make_disk_name(candidate,i);
+  if(!block_device_find(candidate)) {
+   uint32_t j=0U;
+   do { d->name[j]=candidate[j]; } while(candidate[j++] && j<BLOCK_DEVICE_NAME_MAX);
+   return block_device_register(d);
+  }
+ }
+ return BLOCK_STATUS_NO_MEMORY;
+}
 block_status_t block_device_unregister(block_device_t* d) {
  if(!d) return BLOCK_STATUS_INVALID;
  uint64_t f=spinlock_lock_irqsave(&registry_lock);

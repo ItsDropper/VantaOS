@@ -7,6 +7,7 @@
 
 #include "shell_internal.h"
 #include "terminal.h"
+#include "block_device.h"
 
 void shell_execute(void)
 {
@@ -174,6 +175,40 @@ void shell_execute(void)
                  "storage"))
     {
         shell_storage();
+    }
+    else if (shell_string_equals(shell_buffer, "parttool list"))
+    {
+        uint32_t count = block_device_count();
+        terminal_write("\\nBlock devices: ");
+        shell_print_decimal(count);
+        terminal_putchar('\\n');
+        for (uint32_t i = 0U; i < count; ++i)
+        {
+            block_device_t* device = block_device_get(i);
+            if (!device)
+                continue;
+            terminal_write(device->name);
+            if (device->flags & BLOCK_DEVICE_PARTITION)
+            {
+                terminal_write("  type=");
+                terminal_write(device->partition_scheme == 2U ? "GPT" : "MBR");
+                if (device->partition_scheme == 1U)
+                {
+                    terminal_write(" type-id=");
+                    shell_print_hex64(device->partition_type);
+                }
+                terminal_write("  label=");
+                terminal_write(device->partition_label[0] ?
+                               device->partition_label : "(unnamed)");
+            }
+            else
+                terminal_write("  type=disk");
+            terminal_write("  sectors=");
+            shell_print_hex64((unsigned long long)device->sector_count);
+            terminal_write("  sector-size=");
+            shell_print_decimal(device->sector_size);
+            terminal_putchar('\\n');
+        }
     }
     else if (shell_buffer[0] == 'm' &&
              shell_buffer[1] == 'k' &&

@@ -4,10 +4,8 @@
  * See the LICENSE file in the project root for the full license text.
  */
 #include "nvx_gsp_bundle.h"
+#include "nvx_generation.h"
 #include <string.h>
-static const char *const names[NVX_GSP_COMPONENT_COUNT] = {
-    "gsp", "ucodes", "booter_load", "booter_unload", "bootloader"
-};
 static const nvx_gsp_component_kind_t kinds[NVX_GSP_COMPONENT_COUNT] = {
     NVX_GSP_RUNTIME, NVX_GSP_UCODE_ARCHIVE, NVX_GSP_BOOTER_LOAD,
     NVX_GSP_BOOTER_UNLOAD, NVX_GSP_BOOTLOADER
@@ -23,31 +21,6 @@ static int valid_token(const char *s,size_t max,int dots)
         ++n;
     }
     return !dots||(s[0]!='.'&&s[n-1U]!='.');
-}
-static int string_equals_literal(const char *a, const char *b)
-{
-    size_t i = 0U;
-    if (!a || !b)
-        return 0;
-    while (b[i] != '\0') {
-        if (a[i] != b[i])
-            return 0;
-        ++i;
-    }
-    return a[i] == '\0';
-}
-
-static int supported_ga10x_chip(const char *chip)
-{
-    static const char *const chips[] = {
-        "ga102", "ga103", "ga104", "ga106", "ga107"
-    };
-    if (!chip)
-        return 0;
-    for (size_t i = 0U; i < sizeof(chips) / sizeof(chips[0]); ++i)
-        if (string_equals_literal(chip, chips[i]))
-            return 1;
-    return 0;
 }
 static int valid_version(const char *s,size_t max)
 {
@@ -104,6 +77,7 @@ nvx_gsp_bundle_status_t nvx_gsp_bundle_acquire(
     const char *chip,const char *version,nvx_gsp_bundle_t *out)
 {
     char path[128];nvx_gsp_bundle_status_t status=NVX_GSP_BUNDLE_OK;
+    const nvx_generation_descriptor_t *generation;
     if(!out)return NVX_GSP_BUNDLE_INVALID_ARGUMENT;
     if(out->acquired)return NVX_GSP_BUNDLE_ALREADY_ACQUIRED;
     if(!p||!p->request||!p->verify||!p->release)return NVX_GSP_BUNDLE_PROVIDER_INCOMPLETE;
@@ -111,15 +85,19 @@ nvx_gsp_bundle_status_t nvx_gsp_bundle_acquire(
     if(!valid_token(chip,NVX_GSP_CHIP_MAX,0)||!valid_version(version,NVX_GSP_VERSION_MAX))
         return NVX_GSP_BUNDLE_INVALID_ARGUMENT;
     /* GA100 uses the Turing-style boot path, not this GA10x bundle contract. */
-    if(!supported_ga10x_chip(chip))return NVX_GSP_BUNDLE_UNSUPPORTED_FAMILY;
+    generation = nvx_generation_for_firmware_chip(chip);
+    if(!generation || generation->family != family ||
+       generation->firmware_component_count != NVX_GSP_COMPONENT_COUNT)
+        return NVX_GSP_BUNDLE_UNSUPPORTED_FAMILY;
     memset(out,0,sizeof(*out));out->provider=*p;out->family=family;
     memcpy(out->chip,chip,strlen(chip)+1U);memcpy(out->version,version,strlen(version)+1U);
     for(size_t i=0;i<NVX_GSP_COMPONENT_COUNT;i++) {
         size_t n=0U;path[0]='\0';
-        if(!append_text(path,sizeof(path),&n,"nvidia/")||
+        if(!append_text(path,sizeof(path),&n,generation->firmware_directory)||
+           !append_text(path,sizeof(path),&n,"/")||
            !append_text(path,sizeof(path),&n,out->chip)||
            !append_text(path,sizeof(path),&n,"/gsp/")||
-           !append_text(path,sizeof(path),&n,names[i])||
+           !append_text(path,sizeof(path),&n,generation->firmware_components[i])||
            !append_text(path,sizeof(path),&n,"-")||
            !append_text(path,sizeof(path),&n,out->version)||
            !append_text(path,sizeof(path),&n,".bin")) {

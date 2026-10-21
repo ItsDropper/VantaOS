@@ -33,6 +33,7 @@ static vanta_boot_info_t normalized_boot_info;
 static void kernel_start_os(multiboot_info_t* mbd)
 {
     os_initialize(mbd);
+    (void)serial_boot_log_flush();
     os_run();
 }
 

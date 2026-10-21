@@ -6,15 +6,8 @@
  */
 
 #include "nvx_device.h"
+#include "nvx_generation.h"
 
-/*
- * Keep this table deliberately small and auditable. These device IDs are
- * already identified as RTX 3060 variants in VantaOS's PCI device-name table.
- * The result identifies a PCI candidate only; it does not imply initialization.
- */
-static const uint16_t nvx_ampere_rtx3060_ids[] = {
-    0x2503U, 0x2504U, 0x2507U, 0x2508U, 0x2509U, 0x2544U, 0x2548U
-};
 
 int nvx_match_pci_device(const struct pci_device *device)
 {
@@ -33,16 +26,13 @@ int nvx_identify_pci_device(uint16_t device_id,
     *out_family = NVX_FAMILY_UNKNOWN;
     *out_profile = NVX_PROFILE_UNKNOWN;
 
-    for (unsigned i = 0;
-         i < sizeof(nvx_ampere_rtx3060_ids) / sizeof(nvx_ampere_rtx3060_ids[0]);
-         ++i) {
-        if (nvx_ampere_rtx3060_ids[i] == device_id) {
-            *out_family = NVX_FAMILY_AMPERE;
-            *out_profile = NVX_PROFILE_GEFORCE_RTX_3060;
-            return 1;
-        }
-    }
-    return 0;
+    const nvx_generation_descriptor_t *generation =
+        nvx_generation_for_pci(device_id);
+    if (!generation)
+        return 0;
+    *out_family = generation->family;
+    *out_profile = generation->profile;
+    return 1;
 }
 
 /*

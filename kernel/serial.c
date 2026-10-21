@@ -93,7 +93,7 @@ int serial_boot_log_flush(void)
 #ifdef VANTAOS_BOOT_LOG_TO_FAT32
     static char snapshot[SERIAL_LOG_CAPACITY];
     static int directory_attempted;
-    if (!fat32_is_mounted())
+    if (!fat32_is_mounted_removable())
         return 0;
     if (!directory_attempted) {
         (void)fat32_create_directory("/LOGS");

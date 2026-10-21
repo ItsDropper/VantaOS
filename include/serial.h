@@ -13,5 +13,7 @@
 void serial_initialize(void);
 void serial_write(const char* text);
 void serial_write_bytes(const char* data, size_t length);
+/* Optional persistence checkpoint; a disabled or failed logger returns zero. */
+int serial_boot_log_flush(void);
 
 #endif

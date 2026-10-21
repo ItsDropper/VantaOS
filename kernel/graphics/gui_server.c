@@ -263,7 +263,20 @@ static void gui_focus_locked(gui_window_t* target)
     {
         target->z_order = next_z_order++;
         gui_emit_simple_event_locked(target, VANTA_GUI_EVENT_FOCUS_GAINED);
+        if (target->builtin)
+        {
+            if (gui_title_equal(target->title, "Files"))
+                graphics_select_panel(2);
+            else if (gui_title_equal(target->title, "Terminal"))
+                graphics_select_panel(3);
+            else if (gui_title_equal(target->title, "System"))
+                graphics_select_panel(1);
+            else if (gui_title_equal(target->title, "Settings"))
+                graphics_select_panel(4);
+        }
     }
+    else
+        graphics_select_panel(0);
     redraw_pending = 1;
 }
 
@@ -1181,8 +1194,20 @@ char gui_server_read_terminal_char(void)
     uint64_t flags = spinlock_lock_irqsave(&gui_lock);
     if (focused_window_id != 0U)
     {
-        spinlock_unlock_irqrestore(&gui_lock, flags);
-        return 0;
+        gui_window_t* focused = 0;
+        for (unsigned int i = 0; i < VANTA_GUI_MAX_WINDOWS; i++)
+            if (windows[i].used && windows[i].visible &&
+                windows[i].id == focused_window_id)
+            {
+                focused = &windows[i];
+                break;
+            }
+        if (!focused || !focused->builtin ||
+            !gui_title_equal(focused->title, "Terminal"))
+        {
+            spinlock_unlock_irqrestore(&gui_lock, flags);
+            return 0;
+        }
     }
 
     int input_enabled = terminal_process_input_enabled();

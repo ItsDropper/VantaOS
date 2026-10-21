@@ -102,6 +102,26 @@ nvx_gsp_gpfifo_status_t nvx_gsp_gpfifo_submit(
     return NVX_GSP_GPFIFO_OK;
 }
 
+nvx_gsp_gpfifo_status_t nvx_gsp_gpfifo_submit_nop_probe(
+    nvx_gsp_gpfifo_channel_t *c,volatile uint32_t *command_cpu,
+    size_t command_mapping_bytes,uint64_t command_va,uint32_t timeout_ms,
+    uint32_t interval_ms,nvx_gsp_gpfifo_delay_fn delay_ms,void *context,
+    uint32_t *out_put)
+{
+    nvx_gsp_gpfifo_status_t s;
+    if(out_put)*out_put=0U;
+    if(!c||!command_cpu||!out_put||command_mapping_bytes<sizeof(uint32_t)||
+       ((uintptr_t)command_cpu&3U)!=0U||!timeout_ms||!interval_ms||!delay_ms)
+        return NVX_GSP_GPFIFO_INVALID_ARGUMENT;
+    /* NVC56F_DMA_NOP is the public Ampere one-dword NOP method header: 0. */
+    __atomic_store_n(command_cpu,0U,__ATOMIC_RELAXED);
+    __atomic_thread_fence(__ATOMIC_SEQ_CST);
+    s=nvx_gsp_gpfifo_submit(c,command_va,sizeof(uint32_t),out_put);
+    if(s!=NVX_GSP_GPFIFO_OK)return s;
+    return nvx_gsp_gpfifo_wait_get(c,*out_put,timeout_ms,interval_ms,
+                                   delay_ms,context);
+}
+
 nvx_gsp_gpfifo_status_t nvx_gsp_gpfifo_submit_and_wait(
     nvx_gsp_gpfifo_channel_t *c,uint64_t command_va,size_t command_bytes,
     const volatile uint32_t *completion_word,uint32_t expected_completion,

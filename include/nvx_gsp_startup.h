@@ -34,6 +34,8 @@ typedef struct nvx_gsp_startup_result {
 } nvx_gsp_startup_result_t;
 
 /*
+ * Zero-initialize queue_runtime and gmcapi before first use.
+ *
  * End-to-end GA10x startup transaction:
  *   prepare CPU command queue -> FWSEC-FRTS -> RISC-V/SEC2 Booter Load ->
  *   wait for RISC-V active -> link GSP status queue -> GMCAPI GSP_INIT.

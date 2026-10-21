@@ -228,7 +228,10 @@ partition_scan_status_t partition_scan(partition_read_fn read, void *ctx,
         if (record[4U] != 0xEEU)
             continue;
         uint64_t start = rd32(record + 8U), length = rd32(record + 12U);
-        if (start != 1U || !length)
+        uint64_t expected_length = disk_sectors - 1U;
+        if (expected_length > UINT32_MAX)
+            expected_length = UINT32_MAX;
+        if (start != 1U || length != expected_length)
             return PARTITION_SCAN_BAD_TABLE;
         ++protective_count;
     }

@@ -163,6 +163,14 @@ nvx_gsp_rmapi_status_t nvx_gsp_rm_free_sync(
     uint32_t poll_interval_ms, nvx_gsp_rmapi_delay_fn delay_ms,
     void *delay_context, nvx_gsp_rmapi_result_t *out);
 
+nvx_gsp_rmapi_status_t nvx_gsp_rmapi_alloc_ampere_channel_sync(
+    nvx_gsp_rpc_manager_t *manager, uint32_t client, uint32_t device,
+    uint32_t channel_handle, const nvx_gsp_channel_alloc_params_t *params,
+    void *scratch, size_t scratch_size, void *response,
+    size_t response_capacity, uint32_t timeout_ms, uint32_t poll_interval_ms,
+    nvx_gsp_rmapi_delay_fn delay_ms, void *delay_context,
+    nvx_gsp_rmapi_result_t *out);
+
 /* Public NVA06F GPFIFO channel schedule control command (R535 SDK ABI). */
 #define NVX_GSP_RM_CTRL_GPFIFO_SCHEDULE UINT32_C(0xA06F0103)
 #define NVX_GSP_RM_CTRL_BIND_CHANNEL UINT32_C(0xA06F0104)
@@ -185,6 +193,49 @@ nvx_gsp_rmapi_status_t nvx_gsp_rmapi_schedule_channel_sync(
 #define NVX_GSP_RM_CLASS_MEMORY_VIRTUAL   0x00000070U
 #define NVX_GSP_RM_CLASS_TURING_CHANNEL_GPFIFO_A 0x0000C46FU
 #define NVX_GSP_RM_CLASS_AMPERE_CHANNEL_GPFIFO_A 0x0000C56FU
+
+#define NVX_GSP_RM_MAX_SUBDEVICES 8U
+#define NVX_GSP_RM_CHANNEL_IV_DWORDS 3U
+#define NVX_GSP_RM_CHANNEL_NONCE_DWORDS 8U
+
+typedef struct nvx_gsp_memory_desc_params {
+    uint64_t base;
+    uint64_t size;
+    uint32_t address_space;
+    uint32_t cache_attrib;
+} nvx_gsp_memory_desc_params_t;
+
+/* Public R535 NV_CHANNEL_ALLOC_PARAMS layout used by the Ampere GPFIFO class. */
+typedef struct nvx_gsp_channel_alloc_params {
+    uint32_t h_object_error;
+    uint32_t h_object_buffer;
+    uint64_t gpfifo_offset;
+    uint32_t gpfifo_entries;
+    uint32_t flags;
+    uint32_t h_context_share;
+    uint32_t h_vaspace;
+    uint32_t h_handle_vaspace;
+    uint32_t h_userd_memory[NVX_GSP_RM_MAX_SUBDEVICES];
+    uint64_t userd_offset[NVX_GSP_RM_MAX_SUBDEVICES];
+    uint32_t engine_type;
+    uint32_t cid;
+    uint32_t subdevice_id;
+    uint32_t h_object_ecc_error;
+    nvx_gsp_memory_desc_params_t instance_mem;
+    nvx_gsp_memory_desc_params_t userd_mem;
+    nvx_gsp_memory_desc_params_t ramfc_mem;
+    nvx_gsp_memory_desc_params_t mthdbuf_mem;
+    uint32_t h_phys_channel_group;
+    uint32_t internal_flags;
+    nvx_gsp_memory_desc_params_t error_notifier_mem;
+    nvx_gsp_memory_desc_params_t ecc_error_notifier_mem;
+    uint32_t process_id;
+    uint32_t sub_process_id;
+    uint32_t encrypt_iv[NVX_GSP_RM_CHANNEL_IV_DWORDS];
+    uint32_t decrypt_iv[NVX_GSP_RM_CHANNEL_IV_DWORDS];
+    uint32_t hmac_nonce[NVX_GSP_RM_CHANNEL_NONCE_DWORDS];
+    uint32_t tpc_config_id;
+} nvx_gsp_channel_alloc_params_t;
 
 typedef struct nvx_gsp_rm_core_objects {
     uint32_t client_handle;

@@ -227,6 +227,7 @@ jobs:
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
             scripts/test_nvx_gsp_gpfifo.c \
             drivers/gpu/nvx/execution/nvx_gsp_gpfifo.c \
+            drivers/gpu/nvx/execution/nvx_gsp_ce.c \
             -o /tmp/vantaos-nvx-gsp-gpfifo-test
 
       - name: Test GPFIFO address encoding, ring bounds, and completion polling

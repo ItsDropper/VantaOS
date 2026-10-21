@@ -137,7 +137,8 @@ int main(void)
     uint32_t elapsed_ms = 0U;
     delay_calls = 0U;
     activate_after = 2U;
-    put32(NVX_GSP_FALCON_HWCFG2, NVX_GSP_HWCFG2_RESET_READY);
+    put32(NVX_GSP_FALCON_HWCFG2, NVX_GSP_HWCFG2_RESET_READY |
+          NVX_GSP_HWCFG2_RISCV_PRESENT);
     put32(NVX_GSP_RISCV_CPUCTL, 0U);
     assert(nvx_gsp_ga10x_wait_riscv_active(&region, 50U, 10U,
            fake_delay, &elapsed_ms) == NVX_GSP_FALCON_OK);

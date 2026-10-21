@@ -50,6 +50,8 @@ on:
       - "include/nvx_gsp_msgq_queue.h"
       - "include/nvx_gsp_msgq_ga10x.h"
       - "include/nvx_gsp_gmcapi.h"
+      - "scripts/test_nvx_gsp_system_info.c"
+      - "include/nvx_gsp_system_info.h"
       - "scripts/test_nvx_gsp_nvkv.c"
       - "include/nvx_gsp_nvkv.h"
       - "include/nvx_gsp_startup.h"
@@ -180,6 +182,26 @@ jobs:
 
       - name: Test NVKV instruction encoding, arrays, bounds, and malformed streams
         run: /tmp/vantaos-nvx-gsp-nvkv-test
+
+      - name: Compile bounded NVKV encoder tests with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_nvkv.c drivers/gpu/nvx/gsp/nvx_gsp_nvkv.c \
+            -o /tmp/vantaos-nvx-gsp-nvkv-test
+
+      - name: Test NVKV instruction encoding, arrays, bounds, and malformed streams
+        run: /tmp/vantaos-nvx-gsp-nvkv-test
+
+      - name: Compile GSP system-info encoder tests with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_system_info.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_system_info.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_nvkv.c \
+            -o /tmp/vantaos-nvx-gsp-system-info-test
+
+      - name: Test explicit GSP system-info fields and fail-closed capacity handling
+        run: /tmp/vantaos-nvx-gsp-system-info-test
 
       - name: Compile GSP startup orchestration with strict warnings
         run: |

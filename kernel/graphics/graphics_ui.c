@@ -67,8 +67,21 @@ void graphics_draw_window_frame(int x, int y, int w, int h, const char* title, i
 
     graphics_fill_rounded_rect(x + 14, y + 10, 24, 24, 6, 0x00253648);
     graphics_draw_vanta_logo(x + 21, y + 14, 15);
-    graphics_draw_text(x + 48, y + 18, title ? title : "Window",
-                       VANTA_UI_TEXT, 1);
+    /* Keep long titles clear of the control hitboxes on narrow windows. */
+    char visible_title[32];
+    int title_limit = (w - (show_window_controls ? 188 : 100)) / 8;
+    if (title_limit < 0) title_limit = 0;
+    if (title_limit > 31) title_limit = 31;
+    int title_length = 0;
+    const char* source_title = title ? title : "Window";
+    while (title_length < title_limit && source_title[title_length])
+    {
+        visible_title[title_length] = source_title[title_length];
+        title_length++;
+    }
+    visible_title[title_length] = '\0';
+    if (title_length > 0)
+        graphics_draw_text(x + 48, y + 18, visible_title, VANTA_UI_TEXT, 1);
 
     if (show_window_controls)
     {

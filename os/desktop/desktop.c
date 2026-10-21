@@ -28,6 +28,7 @@
 static int terminal_window_open;
 static unsigned int terminal_last_blink_state;
 static unsigned int desktop_last_clock_refresh;
+static void terminal_close_window(void);
 
 static void desktop_draw_terminal_window(int x, int y, int width, int height)
 {
@@ -271,20 +272,6 @@ void desktop_update(void)
         graphics_toggle_start_menu();
         desktop_gui_present();
     }
-
-    uint32_t explorer_pid = file_explorer_process_pid();
-    if (graphics_get_active_panel() == 2)
-    {
-        if (explorer_pid == 0U)
-        {
-            if (file_explorer_process_start(process_current_pid()) < 0)
-                graphics_select_panel(0);
-        }
-        else
-            (void)gui_server_set_owner_visible(explorer_pid, 1);
-    }
-    else if (explorer_pid != 0U)
-        (void)gui_server_set_owner_visible(explorer_pid, 0);
 
     /* Keep the RTC clock/date current even when the user is not moving the mouse. */
     if (graphics_get_active_panel() != 3)

@@ -239,12 +239,12 @@ static __attribute__((noreturn)) void recovery_shutdown(void)
 
 int recovery_environment_requested(const multiboot_info_t* mbd)
 {
-    if (!mbd || mbd->cmdline == 0)
+    if (!mbd || (mbd->flags & (1U << 2)) == 0 || mbd->cmdline == 0)
         return 0;
 
     const char* command_line = (const char*)(uintptr_t)mbd->cmdline;
     static const char token[] = "recovery=1";
-    for (size_t i = 0; i < 4096 && command_line[i]; i++) {
+    for (size_t i = 0; i + sizeof(token) <= 4096 && command_line[i]; i++) {
         size_t j = 0;
         while (token[j] && command_line[i + j] == token[j]) j++;
         if (token[j] == 0 &&

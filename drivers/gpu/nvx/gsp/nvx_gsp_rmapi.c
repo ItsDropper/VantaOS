@@ -202,39 +202,46 @@ nvx_gsp_rmapi_status_t nvx_gsp_rm_create_core_objects(
 
     /* NV0000_ALLOC_PARAMETERS: the first member is the newly allocated client handle. */
     put32(params,client);
+    out->in_flight_stage=1U;
     s=nvx_gsp_rm_alloc_sync(manager,0U,0U,client,NVX_GSP_RM_CLASS_ROOT,0U,
         params,4U,scratch,scratch_size,response,response_capacity,timeout_ms,
         poll_interval_ms,delay_ms,delay_context,&operation);
-    if(s!=NVX_GSP_RMAPI_OK)return s;
-    out->client_created=1U;
+    if(s!=NVX_GSP_RMAPI_OK) { if(s!=NVX_GSP_RMAPI_TIMEOUT)out->in_flight_stage=0U; return s; }
+    out->client_created=1U;out->in_flight_stage=0U;
 
     /* NV0080_ALLOC_PARAMETERS: share handle, flags, and 64-bit VA-space size. */
     memset(params,0,sizeof(params));
     put32(params+0U,0U);put32(params+4U,device_flags);
     put64(params+8U,device_va_size);
+    out->in_flight_stage=2U;
     s=nvx_gsp_rm_alloc_sync(manager,client,client,device,
         NVX_GSP_RM_CLASS_DEVICE_0,0U,params,sizeof(params),scratch,scratch_size,
         response,response_capacity,timeout_ms,poll_interval_ms,delay_ms,
         delay_context,&operation);
     if(s!=NVX_GSP_RMAPI_OK) {
-        if(s!=NVX_GSP_RMAPI_TIMEOUT&&free_core_object(manager,client,0U,client,
+        if(s==NVX_GSP_RMAPI_TIMEOUT)return s;
+        out->in_flight_stage=0U;
+        if(free_core_object(manager,client,0U,client,
            scratch,scratch_size,response,response_capacity,timeout_ms,
            poll_interval_ms,delay_ms,delay_context)==NVX_GSP_RMAPI_OK)
             out->client_created=0U;
         return s;
     }
-    out->device_created=1U;
+    out->device_created=1U;out->in_flight_stage=0U;
 
     /* NV_MEMORY_VIRTUAL_ALLOCATION_PARAMS: caller's explicit limit, default parent VA space. */
     memset(params,0,sizeof(params));
     put64(params,vaspace_limit);
     put32(params+8U,0U); /* NV01_NULL_OBJECT parent VA-space handle. */
+    out->in_flight_stage=3U;
     s=nvx_gsp_rm_alloc_sync(manager,client,device,vaspace,
         NVX_GSP_RM_CLASS_MEMORY_VIRTUAL,0U,params,sizeof(params),scratch,
         scratch_size,response,response_capacity,timeout_ms,poll_interval_ms,
         delay_ms,delay_context,&operation);
     if(s!=NVX_GSP_RMAPI_OK) {
-        if(s!=NVX_GSP_RMAPI_TIMEOUT&&free_core_object(manager,client,client,
+        if(s==NVX_GSP_RMAPI_TIMEOUT)return s;
+        out->in_flight_stage=0U;
+        if(free_core_object(manager,client,client,
            device,scratch,scratch_size,response,response_capacity,timeout_ms,
            poll_interval_ms,delay_ms,delay_context)==NVX_GSP_RMAPI_OK)
             out->device_created=0U;
@@ -244,7 +251,7 @@ nvx_gsp_rmapi_status_t nvx_gsp_rm_create_core_objects(
             out->client_created=0U;
         return s;
     }
-    out->vaspace_created=1U;
+    out->vaspace_created=1U;out->in_flight_stage=0U;
     return NVX_GSP_RMAPI_OK;
 }
 

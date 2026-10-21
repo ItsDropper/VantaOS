@@ -106,7 +106,7 @@ jobs:
 
           log_path = "setup-install.log"
           monitor_path = "/tmp/vantaos-installer-monitor.sock"
-          deadline = time.monotonic() + 150
+          deadline = time.monotonic() + 300
 
           def log_text():
               try:

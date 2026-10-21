@@ -340,7 +340,7 @@ static nvx_gsp_falcon_status_t reset_gsp_and_reclaim_boot_buffers(
         nvx_dma_sync_for_cpu(libos_init_args_sync, 0U,
                              libos_init_args->size) != NVX_DMA_SYNC_OK)
         return NVX_GSP_FALCON_DMA_OWNERSHIP_ERROR;
-    if (shared_queue_sync->owner == NVX_DMA_OWNER_DEVICE &&
+    if (shared_queue_sync->owner != NVX_DMA_OWNER_CPU &&
         nvx_dma_sync_for_cpu(shared_queue_sync, 0U,
                              shared_queue_mem->size) != NVX_DMA_SYNC_OK)
         return NVX_GSP_FALCON_DMA_OWNERSHIP_ERROR;
@@ -493,7 +493,7 @@ nvx_gsp_falcon_status_t nvx_gsp_ga10x_prepare_riscv_after_frts(
             delay_ms, context);
         return NVX_GSP_FALCON_DMA_OWNERSHIP_ERROR;
     }
-    if (nvx_dma_sync_for_device(shared_queue_sync, 0U,
+    if (nvx_dma_sync_for_shared(shared_queue_sync, 0U,
                                 shared_queue_mem->size) != NVX_DMA_SYNC_OK) {
         (void)reset_gsp_and_reclaim_boot_buffers(
             memory, libos_init_args, libos_init_args_sync, shared_queue_mem,

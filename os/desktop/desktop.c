@@ -49,7 +49,7 @@ static void desktop_gui_present(void)
  */
 static void desktop_gui_present_terminal_fast(void)
 {
-    if (!graphics_can_redraw_windows_in_place())
+    if (!graphics_can_redraw_windows_incrementally())
     {
         desktop_gui_present();
         return;

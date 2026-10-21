@@ -620,7 +620,20 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
           selected_path ? selected_path : L"(unavailable)");
     if (selected_path)
         uefi_call_wrapper(BS->FreePool, 1, selected_path);
-    Print(L"WARNING: this entire disk will be erased.\r\n");
+    vanta_installer_layout_t layout;
+    if (vanta_installer_plan_gpt(target->sector_count,
+            VANTA_INSTALLER_SECTOR_SIZE, &layout) != VANTA_INSTALLER_LAYOUT_OK) {
+        Print(L"ERROR: disk layout is unsupported. No disks changed.\r\n");
+        uefi_call_wrapper(source_root->Close, 1, source_root);
+        return EFI_UNSUPPORTED;
+    }
+    Print(L"\r\nPlanned partition layout (preview; no writes yet):\r\n");
+    Print(L"  GPT, 1 MiB alignment\r\n");
+    Print(L"  EFI System Partition: %u MiB, FAT32\r\n",
+          (UINT32)(layout.efi.sector_count / 2048U));
+    Print(L"  VantaOS system partition: %u MiB, FAT32\r\n",
+          (UINT32)(layout.system.sector_count / 2048U));
+    Print(L"WARNING: continuing will erase the entire selected disk.\r\n");
     serial_write("VANTAOS_SETUP_CONFIRM_PROMPT\n");
     Print(L"Type INSTALL exactly to confirm, or anything else to cancel: ");
     if (!read_line(line, sizeof(line)) ||
@@ -633,13 +646,6 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
     }
 
     serial_write("VANTAOS_SETUP_CONFIRM_ACCEPTED\n");
-    vanta_installer_layout_t layout;
-    if (vanta_installer_plan_gpt(target->sector_count,
-            VANTA_INSTALLER_SECTOR_SIZE, &layout) != VANTA_INSTALLER_LAYOUT_OK) {
-        Print(L"ERROR: disk layout is unsupported. No disks changed.\r\n");
-        uefi_call_wrapper(source_root->Close, 1, source_root);
-        return EFI_UNSUPPORTED;
-    }
 
     EFI_TIME now;
     status = uefi_call_wrapper(RT->GetTime, 2, &now, NULL);

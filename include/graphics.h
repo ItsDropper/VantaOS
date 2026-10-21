@@ -13,6 +13,8 @@
 
 int graphics_initialize(multiboot_info_t* mbd);
 void graphics_clear(uint32_t color);
+/* Switch panic rendering to scanout, bypassing compositor/backbuffer state. */
+int graphics_panic_prepare(void);
 void graphics_present(void);
 /* Request a full scene redraw on the next compositor frame. */
 void graphics_invalidate_scene(void);

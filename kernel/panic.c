@@ -6,6 +6,8 @@
  */
 
 #include "panic.h"
+#include "panic_format.h"
+#include "cpu_local.h"
 
 #include "graphics.h"
 #include "interrupts.h"
@@ -39,22 +41,9 @@ static void panic_broadcast_stop_peers(void)
         (void)apic_send_nmi_all();
 }
 
-static const char* exception_names[] =
-{
-    "Divide Error","Debug","Non-Maskable Interrupt","Breakpoint",
-    "Overflow","BOUND Range Exceeded","Invalid Opcode","Device Not Available",
-    "Double Fault","Coprocessor Segment Overrun","Invalid TSS",
-    "Segment Not Present","Stack-Segment Fault","General Protection Fault",
-    "Page Fault","Reserved","x87 Floating-Point Exception","Alignment Check",
-    "Machine Check","SIMD Floating-Point Exception","Virtualization Exception",
-    "Control Protection Exception","Reserved","Reserved","Reserved","Reserved",
-    "Reserved","Hypervisor Injection Exception","VMM Communication Exception",
-    "Security Exception","Reserved","Unknown"
-};
-
 static const char* panic_exception_name(unsigned int number)
 {
-    return number < 31 ? exception_names[number] : exception_names[31];
+    return panic_format_exception_name(number);
 }
 
 static __attribute__((noreturn)) void panic_halt(void)
@@ -75,6 +64,50 @@ _Noreturn void kernel_panic_halt_all(void)
     panic_halt();
 }
 
+static void panic_serial_hex(uint64_t value)
+{
+    char buffer[19];
+    panic_format_hex64(buffer, value);
+    serial_write(buffer);
+}
+
+static void panic_serial_report(const char* reason, unsigned int number,
+                                const struct exception_frame* frame,
+                                uintptr_t fault_address, int has_fault_address)
+{
+    serial_write("VANTAOS_KERNEL_PANIC_BEGIN\n");
+    serial_write("VANTAOS ENCOUNTERED A FATAL ERROR\nReason: ");
+    serial_write(reason ? reason : "Unknown kernel failure");
+    serial_write("\nCPU/APIC ID: ");
+    const cpu_local_t* cpu = cpu_local_current();
+    if (cpu && cpu->self == cpu) panic_serial_hex(cpu->apic_id);
+    else serial_write("unavailable");
+    serial_write("\nException: ");
+    serial_write(number == 0xFFFFFFFFU ? "Kernel panic" : panic_exception_name(number));
+    serial_write("\n");
+    if (frame)
+    {
+        serial_write("RIP="); panic_serial_hex(frame->rip);
+        serial_write(" RSP="); panic_serial_hex(frame->rsp);
+        serial_write(" RBP="); panic_serial_hex(frame->rbp);
+        serial_write(" ERROR="); panic_serial_hex(frame->error_code);
+        serial_write(" CS="); panic_serial_hex(frame->cs);
+        serial_write(" RFLAGS="); panic_serial_hex(frame->rflags);
+        serial_write("\nRAX="); panic_serial_hex(frame->rax);
+        serial_write(" RBX="); panic_serial_hex(frame->rbx);
+        serial_write(" RCX="); panic_serial_hex(frame->rcx);
+        serial_write(" RDX="); panic_serial_hex(frame->rdx);
+        serial_write("\n");
+    }
+    if (has_fault_address)
+    {
+        serial_write("FAULT_ADDRESS=");
+        panic_serial_hex(fault_address);
+        serial_write("\n");
+    }
+    serial_write("VANTAOS_KERNEL_PANIC_END\n");
+}
+
 void kernel_panic(
     const char* reason,
     unsigned int exception_number,
@@ -87,10 +120,12 @@ void kernel_panic(
     if (!panic_broadcast_begin())
         panic_halt();
 
+    panic_serial_report(reason, exception_number, frame, fault_address, has_fault_address);
+
     if (!graphics_is_initialized())
     {
         terminal_reset();
-        terminal_write("\nVANTAOS KERNEL PANIC\n\n");
+        terminal_write("\nVANTAOS ENCOUNTERED A FATAL ERROR\n\n");
         terminal_write("The kernel stopped because a fatal error was detected.\n");
         terminal_write("Reason: ");
         terminal_write(reason ? reason : "Unknown kernel failure");
@@ -128,14 +163,20 @@ void kernel_panic(
     int width = (int)graphics_get_width();
     int height = (int)graphics_get_height();
 
-    graphics_clear(0x00000000);
+    if (!graphics_panic_prepare())
+    {
+        panic_broadcast_stop_peers();
+        panic_halt();
+    }
+
+    graphics_clear(0x008A1018);
 
     int x = width >= 900 ? 64 : 28;
     int y = height >= 600 ? 42 : 24;
 
     graphics_draw_text(
         x, y,
-        "VANTAOS KERNEL PANIC",
+        "VANTAOS ENCOUNTERED A FATAL ERROR",
         0x00F2F5F8, 2
     );
 
@@ -164,6 +205,17 @@ void kernel_panic(
         0x00C7CFD7, 1
     );
 
+    graphics_draw_text(x, y + 100, "CPU / APIC ID", 0x00FFB4A2, 1);
+    const cpu_local_t* panic_cpu = cpu_local_current();
+    if (panic_cpu && panic_cpu->self == panic_cpu)
+    {
+        char cpu_text[19];
+        panic_format_hex64(cpu_text, panic_cpu->apic_id);
+        graphics_draw_text(x + 104, y + 100, cpu_text, 0x00FFFFFF, 1);
+    }
+    else
+        graphics_draw_text(x + 104, y + 100, "unavailable", 0x00FFFFFF, 1);
+
     fault_trace_draw(
         x,
         y + 120,
@@ -177,14 +229,14 @@ void kernel_panic(
     graphics_draw_text(
         x,
         height - 54,
-        "SYSTEM HALTED",
+        "THE SYSTEM CANNOT SAFELY CONTINUE",
         0x00F2F5F8, 1
     );
 
     graphics_draw_text(
         x,
         height - 38,
-        "The system cannot safely continue. Restart VantaOS.",
+        "Restart VantaOS. Diagnostic output is also available on serial.",
         0x008E9AA5, 1
     );
 
@@ -236,7 +288,7 @@ void exception_handler(
 
     kernel_panic(
         exception_number < 31 ?
-            exception_names[exception_number] :
+            panic_format_exception_name(exception_number) :
             "Unknown CPU exception",
         exception_number,
         frame,

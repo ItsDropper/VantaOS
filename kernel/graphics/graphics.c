@@ -190,6 +190,24 @@ rollback:
     return 0;
 }
 
+int graphics_panic_prepare(void)
+{
+    if (!initialized || !framebuffer || framebuffer_width == 0U ||
+        framebuffer_height == 0U || framebuffer_pitch < framebuffer_width * 4U)
+        return 0;
+
+    /* If a compositor frame was interrupted, abandon it and target scanout. */
+    graphics_frame_active = 0;
+    if (graphics_display_framebuffer && graphics_display_pitch >= framebuffer_width * 4U)
+    {
+        framebuffer = graphics_display_framebuffer;
+        framebuffer_pitch = graphics_display_pitch;
+    }
+    cursor_saved_valid = 0;
+    graphics_scene_invalidated = 1;
+    return 1;
+}
+
 void graphics_begin_frame(void)
 {
     if (!initialized || graphics_frame_active)

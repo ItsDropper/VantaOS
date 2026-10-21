@@ -30,6 +30,8 @@ nvx_gsp_startup_status_t nvx_gsp_ga10x_start_and_init_rm(
     nvx_gsp_delay_ms_fn delay_ms, void *context,
     nvx_gsp_msgq_ga10x_t *queue_runtime,
     nvx_gsp_gmcapi_transport_t *gmcapi,
+    nvx_gsp_msgq_rpc_transport_t *rpc_transport,
+    nvx_gsp_rpc_manager_t *rpc_manager,
     nvx_gsp_startup_result_t *out_result)
 {
     nvx_gsp_startup_result_t result = {0};
@@ -41,7 +43,7 @@ nvx_gsp_startup_status_t nvx_gsp_ga10x_start_and_init_rm(
         !encoded_system_info_size || !static_info || !static_info_capacity ||
         !out_static_info_size || !scratch || !timeout_ms ||
         !poll_interval_ms || !delay_ms || !queue_runtime || !gmcapi ||
-        !out_result ||
+        !rpc_transport || !rpc_manager || !out_result ||
         startup_overlap(out_result,sizeof(*out_result),out_static_info_size,
                         sizeof(*out_static_info_size)) ||
         startup_overlap(out_result,sizeof(*out_result),static_info,
@@ -114,6 +116,16 @@ nvx_gsp_startup_status_t nvx_gsp_ga10x_start_and_init_rm(
     }
 
     result.gsp_rm_initialized = 1U;
+
+    if (nvx_gsp_msgq_rpc_init(rpc_transport, &queue_runtime->command_queue,
+                              &queue_runtime->status_queue) !=
+            NVX_GSP_MSGQ_RPC_OK ||
+        nvx_gsp_rpc_init_msgq(rpc_manager, rpc_transport) != NVX_GSP_RPC_OK) {
+        result.status = NVX_GSP_STARTUP_RPC_INIT_FAILED;
+        *out_result = result;
+        return result.status;
+    }
+    result.rpc_initialized = 1U;
     result.status = NVX_GSP_STARTUP_OK;
     *out_result = result;
     return NVX_GSP_STARTUP_OK;

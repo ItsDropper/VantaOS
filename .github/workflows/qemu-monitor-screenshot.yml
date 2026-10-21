@@ -25,10 +25,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rm -f /tmp/vantaos-hmp.sock /tmp/vantaos-hmp.ppm
+          rm -f /tmp/vantaos-hmp.sock /tmp/vantaos-qmp.sock /tmp/vantaos-hmp.ppm
           xvfb-run -a qemu-system-x86_64 \
-            -machine q35 -m 128M -boot menu=off \
+            -machine q35 -m 128M -boot menu=off -vga std \
             -display sdl -monitor unix:/tmp/vantaos-hmp.sock,server,nowait \
+            -qmp unix:/tmp/vantaos-qmp.sock,server=on,wait=off \
             -no-reboot -no-shutdown \
             >/tmp/vantaos-hmp-qemu.log 2>&1 &
           echo $! >/tmp/vantaos-hmp-qemu.pid
@@ -46,11 +47,38 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Match the newline-terminated HMP command used by the existing
-          # desktop screenshot capture. Preserve the monitor transcript on failure.
-          printf 'screendump /tmp/vantaos-hmp.ppm\n' |
-            timeout 5s socat -T 2 - UNIX-CONNECT:/tmp/vantaos-hmp.sock \
-            >/tmp/vantaos-hmp-monitor.log 2>&1 || true
+          # Capture through QMP rather than HMP. QMP has an explicit JSON
+          # request/response protocol and avoids terminal-style HMP input ambiguity.
+          python3 - <<'PY'
+          import json, socket, time
+          path = "/tmp/vantaos-qmp.sock"
+          deadline = time.monotonic() + 10
+          while time.monotonic() < deadline:
+              try:
+                  sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                  sock.connect(path)
+                  break
+              except OSError:
+                  try: sock.close()
+                  except Exception: pass
+                  time.sleep(0.1)
+          else:
+              raise SystemExit("QMP socket did not become available")
+          with sock, sock.makefile("rwb", buffering=0) as stream:
+              greeting = json.loads(stream.readline())
+              if "QMP" not in greeting:
+                  raise SystemExit(f"Unexpected QMP greeting: {greeting}")
+              stream.write(b'{"execute":"qmp_capabilities"}\r\n')
+              capabilities = json.loads(stream.readline())
+              if "return" not in capabilities:
+                  raise SystemExit(f"QMP capabilities failed: {capabilities}")
+              request = {"execute":"screendump","arguments":{"filename":"/tmp/vantaos-hmp.ppm"}}
+              stream.write((json.dumps(request) + "\\r\\n").encode())
+              response = json.loads(stream.readline())
+              if "return" not in response:
+                  raise SystemExit(f"QMP screendump failed: {response}")
+              print(json.dumps({"greeting":greeting,"screendump":response}))
+          PY
 
           for attempt in $(seq 1 25); do
             test -s /tmp/vantaos-hmp.ppm && break

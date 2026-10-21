@@ -296,18 +296,33 @@ void graphics_end_frame(void)
 
 
 /*
- * Mouse-only updates should not begin/end a full frame. When no frame is
- * active, framebuffer points at the visible display surface and the cursor's
- * save-under buffer can be restored and redrawn in place.
+ * Cursor-only updates use a tiny damage footprint but still pass through the
+ * shadow surface. Scanout is updated only by graphics_end_frame().
  */
 void graphics_update_cursor(void)
 {
     if (!initialized || graphics_frame_active)
         return;
+
+    /*
+     * Cursor motion uses the same shadow surface and damage commit as every
+     * other scene update. Writing save-under pixels straight to scanout races
+     * the display's readout and can tear even when only a few pixels change.
+     */
+    graphics_begin_frame();
+    if (!graphics_frame_active)
+        return;
+
     graphics_draw_cursor();
+    graphics_end_frame();
 }
 
-int graphics_can_redraw_windows_in_place(void)
+int graphics_frame_is_active(void)
+{
+    return graphics_frame_active;
+}
+
+int graphics_can_redraw_windows_incrementally(void)
 {
     return initialized && !graphics_frame_active && active_panel == 3 &&
            !start_menu_open && !terminal_dragging && !explorer_dragging;

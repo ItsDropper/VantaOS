@@ -43,14 +43,22 @@ static void desktop_gui_present(void)
 }
 
 /*
- * Terminal text changes do not alter the wallpaper, taskbar, or window
- * geometry. Redraw only the GUI windows directly on the display surface,
- * avoiding a full-screen copy/render/copy cycle for every typed character.
+ * Terminal text changes do not alter the wallpaper or taskbar. Redraw the
+ * retained windows on the compositor's shadow surface and commit only their
+ * damaged tiles. Never paint the terminal directly into the scanout buffer.
  */
 static void desktop_gui_present_terminal_fast(void)
 {
-    if (!graphics_can_redraw_windows_in_place())
+    if (!graphics_can_redraw_windows_incrementally())
     {
+        desktop_gui_present();
+        return;
+    }
+
+    graphics_begin_frame();
+    if (!graphics_frame_is_active())
+    {
+        /* Preserve functionality if the shadow buffer cannot be allocated. */
         desktop_gui_present();
         return;
     }
@@ -58,6 +66,7 @@ static void desktop_gui_present_terminal_fast(void)
     graphics_cursor_restore();
     gui_server_draw_windows();
     graphics_draw_cursor();
+    graphics_end_frame();
 }
 
 int desktop_launch_terminal(void)

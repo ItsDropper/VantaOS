@@ -33,6 +33,11 @@
 #define NVX_GSP_FALCON_BOOTVEC           (NVX_GSP_FALCON_BASE + 0x104U)
 #define NVX_GA10X_FALCON_CPUCTL_ALIAS(base) ((base) + 0x130U)
 #define NVX_GSP_RISCV_CPUCTL             (NVX_GSP_FALCON2_BASE + 0x388U)
+#define NVX_GSP_RISCV_BCR_CTRL            (NVX_GSP_FALCON2_BASE + 0x668U)
+#define NVX_GSP_RISCV_BCR_CTRL_VALID      (1U << 0U)
+#define NVX_GSP_RISCV_BCR_CTRL_CORE_RISCV (1U << 4U)
+#define NVX_GSP_RISCV_BCR_CTRL_BRFETCH    (1U << 8U)
+#define NVX_GSP_RISCV_BCR_CTRL_BOOT       (NVX_GSP_RISCV_BCR_CTRL_VALID | NVX_GSP_RISCV_BCR_CTRL_CORE_RISCV | NVX_GSP_RISCV_BCR_CTRL_BRFETCH)
 #define NVX_GSP_FALCON_BROM_MOD_SEL       (NVX_GSP_FALCON2_BASE + 0x180U)
 #define NVX_GSP_FALCON_BROM_UCODE_ID      (NVX_GSP_FALCON2_BASE + 0x198U)
 #define NVX_GSP_FALCON_BROM_ENGINE_MASK   (NVX_GSP_FALCON2_BASE + 0x19CU)
@@ -58,7 +63,7 @@
 #define NVX_GA10X_FALCON_DMA_ALLOW_PHYS     (1U << 7U)
 #define NVX_GA10X_FALCON_DMA_COHERENT_PHYS  5U
 #define NVX_GA10X_FALCON_DMA_CHUNK_BYTES    256U
-#define NVX_GSP_FALCON_DIAGNOSTIC_BYTES  (NVX_GSP_RISCV_CPUCTL + 4U)
+#define NVX_GSP_FALCON_DIAGNOSTIC_BYTES  (NVX_GSP_RISCV_BCR_CTRL + 4U)
 
 #define NVX_GSP_HWCFG2_RESET_READY       (1U << 31)
 #define NVX_GSP_HWCFG2_MEMORY_SCRUBBING  (1U << 12)
@@ -173,6 +178,10 @@ nvx_gsp_falcon_status_t nvx_ga10x_falcon_reset(
     const nvx_mmio_region_t *bar0, uint32_t falcon_base,
     uint32_t timeout_ms, uint32_t poll_interval_ms,
     nvx_gsp_delay_ms_fn delay_ms, void *context);
+/* GA102 GSP reset followed by BCR selection of RISC-V with BR_FETCH enabled. */
+nvx_gsp_falcon_status_t nvx_gsp_ga10x_reset_into_riscv(
+    const nvx_mmio_region_t *bar0, uint32_t timeout_ms,
+    uint32_t poll_interval_ms, nvx_gsp_delay_ms_fn delay_ms, void *context);
 nvx_gsp_falcon_status_t nvx_ga10x_falcon_dma_upload(
     const nvx_mmio_region_t *bar0, uint32_t falcon_base,
     uint64_t source_phys, uint32_t source_offset,

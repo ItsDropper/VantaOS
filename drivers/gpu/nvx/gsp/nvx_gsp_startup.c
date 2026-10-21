@@ -5,6 +5,15 @@
  */
 #include "nvx_gsp_startup.h"
 #include <string.h>
+#include <stdint.h>
+
+static int startup_overlap(const void *a, size_t an, const void *b, size_t bn)
+{
+    uintptr_t x=(uintptr_t)a, y=(uintptr_t)b;
+    if (!an || !bn) return 0;
+    if (!a || !b || x>UINTPTR_MAX-an || y>UINTPTR_MAX-bn) return 1;
+    return x<y+bn && y<x+an;
+}
 
 nvx_gsp_startup_status_t nvx_gsp_ga10x_start_and_init_rm(
     nvx_dma_buffer_t *staged_vbios, nvx_dma_sync_t *staged_vbios_sync,
@@ -32,8 +41,16 @@ nvx_gsp_startup_status_t nvx_gsp_ga10x_start_and_init_rm(
         !encoded_system_info_size || !static_info || !static_info_capacity ||
         !out_static_info_size || !scratch || !timeout_ms ||
         !poll_interval_ms || !delay_ms || !queue_runtime || !gmcapi ||
-        !out_result || queue_runtime == (nvx_gsp_msgq_ga10x_t *)shared_queue ||
-        gmcapi == (nvx_gsp_gmcapi_transport_t *)shared_queue)
+        !out_result ||
+        startup_overlap(out_result,sizeof(*out_result),out_static_info_size,
+                        sizeof(*out_static_info_size)) ||
+        startup_overlap(out_result,sizeof(*out_result),static_info,
+                        static_info_capacity) ||
+        startup_overlap(out_result,sizeof(*out_result),scratch,scratch_size) ||
+        startup_overlap(out_static_info_size,sizeof(*out_static_info_size),
+                        static_info,static_info_capacity) ||
+        startup_overlap(out_static_info_size,sizeof(*out_static_info_size),
+                        scratch,scratch_size))
         return NVX_GSP_STARTUP_INVALID_ARGUMENT;
 
     memset(out_result, 0, sizeof(*out_result));

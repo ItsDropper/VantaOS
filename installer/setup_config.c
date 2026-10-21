@@ -51,22 +51,22 @@ static int copy_text(char *destination, size_t capacity,
 
 int vanta_setup_timezone_supported(const char *timezone)
 {
-    return text_equal(timezone, "Etc/UTC") ||
-           text_equal(timezone, "Europe/Helsinki") ||
-           text_equal(timezone, "Europe/Stockholm") ||
-           text_equal(timezone, "Europe/London") ||
-           text_equal(timezone, "America/New_York");
+    return bounded_equal(timezone, VANTA_SETUP_TIMEZONE_MAX, "Etc/UTC") ||
+           bounded_equal(timezone, VANTA_SETUP_TIMEZONE_MAX, "Europe/Helsinki") ||
+           bounded_equal(timezone, VANTA_SETUP_TIMEZONE_MAX, "Europe/Stockholm") ||
+           bounded_equal(timezone, VANTA_SETUP_TIMEZONE_MAX, "Europe/London") ||
+           bounded_equal(timezone, VANTA_SETUP_TIMEZONE_MAX, "America/New_York");
 }
 
 int vanta_setup_config_valid(const vanta_setup_config_t *config)
 {
     if (!config)
         return 0;
-    if (!(text_equal(config->language, "en") ||
-          text_equal(config->language, "fi")))
+    if (!(bounded_equal(config->language, sizeof(config->language), "en") ||
+          bounded_equal(config->language, sizeof(config->language), "fi")))
         return 0;
-    if (!(text_equal(config->keyboard, "us") ||
-          text_equal(config->keyboard, "fi")))
+    if (!(bounded_equal(config->keyboard, sizeof(config->keyboard), "us") ||
+          bounded_equal(config->keyboard, sizeof(config->keyboard), "fi")))
         return 0;
     return vanta_setup_timezone_supported(config->timezone);
 }

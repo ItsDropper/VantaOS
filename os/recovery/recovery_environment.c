@@ -114,17 +114,21 @@ static void recovery_header(const char* subtitle)
     uint32_t width = graphics_get_width();
     uint32_t height = graphics_get_height();
     int margin = width >= 900 ? 56 : 18;
-    int top = height >= 600 ? 34 : 14;
+    int compact = height < 400;
+    int top = height >= 600 ? 34 : (compact ? 8 : 14);
     int panel_width = (int)width - margin * 2;
 
     graphics_clear(RECOVERY_BG);
     graphics_fill_rect(margin, top, 4, height > 120 ? (int)height - top * 2 : 80,
                        RECOVERY_BLUE);
-    graphics_draw_vanta_logo(margin + 22, top + 8, 34);
-    graphics_draw_text(margin + 70, top + 12, "VANTAOS", RECOVERY_TEXT, 2);
-    graphics_draw_text(margin + 70, top + 34, "RECOVERY ENVIRONMENT", RECOVERY_BLUE, 1);
-    graphics_draw_text(margin + 22, top + 66, subtitle, RECOVERY_MUTED, 1);
-    graphics_fill_rect(margin + 22, top + 86, panel_width - 44, 1, RECOVERY_LINE);
+    graphics_draw_vanta_logo(margin + 16, top + 4, compact ? 22 : 34);
+    graphics_draw_text(margin + (compact ? 48 : 70), top + (compact ? 4 : 12),
+                       "VANTAOS", RECOVERY_TEXT, compact ? 1 : 2);
+    graphics_draw_text(margin + (compact ? 48 : 70), top + (compact ? 18 : 34),
+                       "RECOVERY ENVIRONMENT", RECOVERY_BLUE, 1);
+    graphics_draw_text(margin + 16, top + (compact ? 42 : 66), subtitle, RECOVERY_MUTED, 1);
+    graphics_fill_rect(margin + 16, top + (compact ? 60 : 86),
+                       panel_width - 32, 1, RECOVERY_LINE);
 }
 
 static void recovery_draw_menu(int selected, int menu_count, int screenshot_available, const char* status)
@@ -133,8 +137,8 @@ static void recovery_draw_menu(int selected, int menu_count, int screenshot_avai
     uint32_t height = graphics_get_height();
     int margin = width >= 900 ? 56 : 18;
     int top = height >= 600 ? 34 : 14;
-    int row_height = height >= 600 ? 38 : 28;
-    int first_y = top + 104;
+    int row_height = height >= 600 ? 38 : (height < 400 ? 20 : 28);
+    int first_y = top + (height < 400 ? 70 : 104);
     int panel_width = (int)width - margin * 2;
 
     recovery_header("Choose a recovery action. Normal boot remains the default.");
@@ -149,7 +153,7 @@ static void recovery_draw_menu(int selected, int menu_count, int screenshot_avai
                            i == selected ? RECOVERY_TEXT : RECOVERY_MUTED, 1);
     }
 
-    int footer_y = (int)height - 48;
+    int footer_y = (int)height - (height < 400 ? 24 : 48);
     graphics_fill_rect(margin + 22, footer_y - 10, panel_width - 44, 1, RECOVERY_LINE);
     graphics_draw_text(margin + 24, footer_y, "UP/DOWN or W/S  Navigate     ENTER  Select",
                        RECOVERY_MUTED, 1);

@@ -49,6 +49,9 @@ static spinlock_t gui_lock = SPINLOCK_INITIALIZER;
 static uint32_t next_window_id = 1U;
 static uint64_t next_z_order = 1U;
 static uint32_t focused_window_id;
+static uint32_t dragging_window_id;
+static int32_t drag_offset_x;
+static int32_t drag_offset_y;
 static int redraw_pending;
 
 /*
@@ -523,10 +526,18 @@ int gui_server_mouse_click(int x, int y, int button)
     }
 
     gui_focus_locked(target);
-    if (x >= target->x + (int)target->width - 46 &&
-        y >= target->y && y < target->y + (int)GUI_TITLEBAR_HEIGHT)
+    if (y >= target->y && y < target->y + (int)GUI_TITLEBAR_HEIGHT &&
+        x >= target->x + (int)target->width - 46)
     {
         gui_emit_simple_event_locked(target, VANTA_GUI_EVENT_CLOSE_REQUEST);
+    }
+    else if (y >= target->y &&
+             y < target->y + (int)GUI_TITLEBAR_HEIGHT)
+    {
+        /* Titlebar drag belongs to the window manager, not the client. */
+        dragging_window_id = target->id;
+        drag_offset_x = x - target->x;
+        drag_offset_y = y - target->y;
     }
     else
     {
@@ -548,8 +559,46 @@ void gui_server_mouse_move(int x, int y)
 {
     uint64_t flags = spinlock_lock_irqsave(&gui_lock);
     gui_window_t* window = 0;
+
+    if (dragging_window_id != 0U)
+    {
+        for (unsigned int i = 0; i < VANTA_GUI_MAX_WINDOWS; i++)
+            if (windows[i].used && windows[i].visible &&
+                windows[i].id == dragging_window_id)
+            {
+                window = &windows[i];
+                break;
+            }
+        if (!window)
+            dragging_window_id = 0U;
+        else
+        {
+            int32_t max_x = (int32_t)graphics_get_width() -
+                            (int32_t)window->width;
+            int32_t max_y = (int32_t)graphics_get_height() -
+                            (int32_t)GUI_TITLEBAR_HEIGHT;
+            if (max_x < 0) max_x = 0;
+            if (max_y < 0) max_y = 0;
+            int32_t new_x = x - drag_offset_x;
+            int32_t new_y = y - drag_offset_y;
+            if (new_x < 0) new_x = 0;
+            if (new_y < 0) new_y = 0;
+            if (new_x > max_x) new_x = max_x;
+            if (new_y > max_y) new_y = max_y;
+            if (window->x != new_x || window->y != new_y)
+            {
+                window->x = new_x;
+                window->y = new_y;
+                redraw_pending = 1;
+            }
+            spinlock_unlock_irqrestore(&gui_lock, flags);
+            return;
+        }
+    }
+
     for (unsigned int i = 0; i < VANTA_GUI_MAX_WINDOWS; i++)
-        if (windows[i].used && windows[i].id == focused_window_id)
+        if (windows[i].used && windows[i].visible &&
+            windows[i].id == focused_window_id)
         {
             window = &windows[i];
             break;
@@ -567,6 +616,15 @@ void gui_server_mouse_move(int x, int y)
         };
         gui_queue_event_locked(window, &event);
     }
+    spinlock_unlock_irqrestore(&gui_lock, flags);
+}
+
+void gui_server_mouse_release(int button)
+{
+    if (button != 1)
+        return;
+    uint64_t flags = spinlock_lock_irqsave(&gui_lock);
+    dragging_window_id = 0U;
     spinlock_unlock_irqrestore(&gui_lock, flags);
 }
 

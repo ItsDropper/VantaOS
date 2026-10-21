@@ -544,8 +544,13 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
     InitializeLib(image_handle, system_table);
     serial_initialize();
     serial_write("VANTAOS_SETUP_START\n");
-    Print(L"\r\nVANTAOS SETUP\r\n");
-    Print(L"UEFI installer - all data on the selected target disk will be erased.\r\n\r\n");
+    Print(L"\r\nVANTAOS SETUP / VANTAOS-ASENNUS\r\n");
+    Print(L"UEFI-only installer. Requires a writable 512-byte-sector disk of at least 4 GiB.\r\n");
+    Print(L"Installs GPT with FAT32 EFI and system partitions. Legacy BIOS is not supported.\r\n");
+    Print(L"The installer media is excluded from targets. No target writes occur before typing INSTALL.\r\n");
+    Print(L"UEFI-asennus. Kohdelevyn on oltava kirjoitettava, vahintaan 4 GiB ja 512 tavun sektoreilla.\r\n");
+    Print(L"Asentaa GPT-osionnin ja FAT32 EFI- ja jarjestelmaosiot. Vanha BIOS ei ole tuettu.\r\n");
+    Print(L"Asennusmediaa ei voi valita kohteeksi. Levylle ei kirjoiteta ennen INSTALL-vahvistusta.\r\n\r\n");
 
     EFI_LOADED_IMAGE *loaded_image = NULL;
     EFI_STATUS status = uefi_call_wrapper(
@@ -948,9 +953,12 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
 
     serial_write("VANTAOS_SETUP_FILES_OK\n");
     serial_write("VANTAOS_SETUP_COMPLETE\n");
-    Print(L"\r\nVantaOS installation completed.\r\n");
-    Print(L"Remove the installer media, then reboot and choose the installed disk.\r\n");
-    Print(L"Press any key to restart...\r\n");
+    print_localized(&config, L"\r\nVantaOS installation completed.\r\n",
+                    L"\r\nVantaOS-asennus valmistui.\r\n");
+    print_localized(&config, L"Remove the installer media, then reboot and choose the installed disk.\r\n",
+                    L"Irrota asennusmedia, kaynnista uudelleen ja valitse asennettu levy.\r\n");
+    print_localized(&config, L"Press any key to restart...\r\n",
+                    L"Kaynnista uudelleen painamalla mita tahansa nappainta...\r\n");
     EFI_INPUT_KEY key;
     (void)uefi_call_wrapper(ST->ConIn->ReadKeyStroke, 2, ST->ConIn, &key);
     (void)uefi_call_wrapper(RT->ResetSystem, 4, EfiResetCold, EFI_SUCCESS, 0U, NULL);

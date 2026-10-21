@@ -1,0 +1,40 @@
+name: Installer layout safety
+
+on:
+  pull_request:
+    paths:
+      - "installer/**"
+      - "include/vanta_installer_layout.h"
+      - "scripts/test_installer_layout.c"
+      - ".github/workflows/installer-layout.yml"
+  push:
+    branches: [master]
+    paths:
+      - "installer/**"
+      - "include/vanta_installer_layout.h"
+      - "scripts/test_installer_layout.c"
+      - ".github/workflows/installer-layout.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pure-layout-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile strict host test
+        run: |
+          set -euo pipefail
+          cc -std=c11 -Wall -Wextra -Werror -Wconversion -Wsign-conversion \
+            -Wshadow -Wstrict-prototypes -pedantic \
+            -fsanitize=address,undefined -fno-omit-frame-pointer \
+            -Iinclude installer/layout.c scripts/test_installer_layout.c \
+            -o /tmp/vantaos-installer-layout-test
+      - name: Test layout invariants
+        run: |
+          set -euo pipefail
+          /tmp/vantaos-installer-layout-test | tee /tmp/installer-layout-test.log
+          grep -qx "VANTAOS_INSTALLER_LAYOUT_OK" /tmp/installer-layout-test.log

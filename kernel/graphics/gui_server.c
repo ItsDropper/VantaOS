@@ -43,7 +43,6 @@ typedef struct
     uint32_t width;
     uint32_t height;
     uint64_t z_order;
-    int maximized;
     char title[VANTA_GUI_TITLE_MAX + 1U];
     vanta_gui_draw_command_t commands[VANTA_GUI_MAX_COMMANDS];
     uint32_t command_count;
@@ -81,6 +80,7 @@ typedef struct
     uint32_t width;
     uint32_t height;
     uint64_t z_order;
+    int maximized;
     char title[VANTA_GUI_TITLE_MAX + 1U];
     vanta_gui_draw_command_t commands[VANTA_GUI_MAX_COMMANDS];
     uint32_t command_count;

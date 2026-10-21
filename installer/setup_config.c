@@ -27,6 +27,17 @@ static int text_equal(const char *a, const char *b)
     return a[i] == '\0' && b[i] == '\0';
 }
 
+static int bounded_equal(const char *value, size_t capacity, const char *expected)
+{
+    size_t length = text_length(expected);
+    if (!value || !expected || length >= capacity)
+        return 0;
+    for (size_t i = 0U; i < length; ++i)
+        if (value[i] != expected[i])
+            return 0;
+    return value[length] == '\0';
+}
+
 static int slice_equal(const char *slice, size_t length, const char *text)
 {
     size_t expected = text_length(text);

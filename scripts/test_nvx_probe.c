@@ -115,5 +115,9 @@ int main(void)
     mock_command = NVX_PCI_COMMAND_MEMORY_SPACE;
     assert(nvx_probe_mapped_bar0(&gpu, registers, sizeof(registers), 0)
            == NVX_PROBE_INVALID_ARGUMENT);
+    gpu.device_id = 0x2C02U;
+    assert(nvx_probe_mapped_bar0(&gpu, registers, sizeof(registers), &snapshot)
+           == NVX_PROBE_UNSUPPORTED_GENERATION);
+    assert(snapshot.pmc_boot_0 == 0U && snapshot.pmc_boot_1 == 0U);
     return 0;
 }

@@ -368,6 +368,25 @@ nvx_gsp_rmapi_status_t nvx_gsp_rm_control_sync(
         delay_context):s;
 }
 
+nvx_gsp_rmapi_status_t nvx_gsp_rmapi_schedule_channel_sync(
+    nvx_gsp_rpc_manager_t *manager,uint32_t client,uint32_t channel,int enable,
+    void *scratch,size_t scratch_size,void *response,size_t response_capacity,
+    uint32_t timeout_ms,uint32_t poll_interval_ms,
+    nvx_gsp_rmapi_delay_fn delay_ms,void *delay_context,
+    nvx_gsp_rmapi_result_t *out)
+{
+    uint8_t params[12]={0};
+    if(enable!=0&&enable!=1)return NVX_GSP_RMAPI_INVALID_ARGUMENT;
+    /* NVA06F_CTRL_GPFIFO_SCHEDULE_PARAMS: bEnable, bSkipSubmit, bSkipEnable. */
+    put32(params,enable?1U:0U);
+    put32(params+4U,0U);
+    put32(params+8U,0U);
+    return nvx_gsp_rm_control_sync(manager,client,channel,
+        NVX_GSP_RM_CTRL_GPFIFO_SCHEDULE,0U,0U,0U,params,sizeof(params),
+        scratch,scratch_size,response,response_capacity,timeout_ms,
+        poll_interval_ms,delay_ms,delay_context,out);
+}
+
 nvx_gsp_rmapi_status_t nvx_gsp_rm_free_sync(
     nvx_gsp_rpc_manager_t *manager,uint32_t root,uint32_t parent,
     uint32_t object,void *scratch,size_t scratch_size,void *response,

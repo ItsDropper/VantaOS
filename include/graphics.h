@@ -39,10 +39,10 @@ void graphics_mouse_move(int dx, int dy);
 void graphics_mouse_click(int button);
 void graphics_mouse_release(int button);
 void graphics_draw_cursor(void);
-/* Update only the cursor on the visible framebuffer, without a full frame copy. */
+/* Update the cursor through the shadow surface and damage tracker. */
 void graphics_update_cursor(void);
 void graphics_cursor_restore(void);
-int graphics_can_redraw_windows_in_place(void);
+int graphics_can_redraw_windows_incrementally(void);
 void graphics_fill_rounded_rect(int x,int y,int width,int height,int radius,uint32_t color);
 int graphics_set_resolution(uint32_t width,uint32_t height);
 

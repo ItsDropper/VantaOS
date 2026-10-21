@@ -9,6 +9,7 @@
  * open-gpu-kernel-modules and Linux Nova GA102 Falcon HAL.
  */
 #include "nvx_gsp_secure_boot.h"
+#include "nvx_gsp_fwsec_result.h"
 
 #include <string.h>
 
@@ -91,6 +92,106 @@ nvx_gsp_falcon_status_t nvx_gsp_ga10x_secure_image_plan(
     return NVX_GSP_FALCON_OK;
 }
 
+
+
+/*
+ * GA10x/TU102 sequence: FWSEC-FRTS establishes WPR2 first; then GSP is reset
+ * and started with the SYSRAM radix3 ELF address in its two boot mailboxes.
+ * SEC2 Booter Load is a later step and intentionally remains a separate call.
+ */
+nvx_gsp_falcon_status_t nvx_gsp_ga10x_boot_after_frts(
+    nvx_gsp_boot_memory_t *memory, const nvx_mmio_region_t *bar0,
+    uint64_t frts_framebuffer_offset,
+    const nvx_gsp_fwsec_result_snapshot_t *frts_result,
+    uint32_t timeout_ms, uint32_t poll_interval_ms,
+    nvx_gsp_delay_ms_fn delay_ms, void *context,
+    uint32_t *out_mailbox0, uint32_t *out_mailbox1)
+{
+    nvx_gsp_falcon_status_t status;
+    uint64_t libos_address;
+    uint32_t mailbox0 = 0U, mailbox1 = 0U;
+
+    if (!memory || !bar0 || !bar0->base || !frts_result ||
+        !out_mailbox0 || !out_mailbox1 || !delay_ms ||
+        timeout_ms == 0U || poll_interval_ms == 0U ||
+        frts_framebuffer_offset == 0U ||
+        (frts_framebuffer_offset & 0xFFFU) != 0U ||
+        ranges_overlap(out_mailbox0, sizeof(*out_mailbox0),
+                       out_mailbox1, sizeof(*out_mailbox1)) ||
+        ranges_overlap(out_mailbox0, sizeof(*out_mailbox0), memory,
+                       sizeof(*memory)) ||
+        ranges_overlap(out_mailbox1, sizeof(*out_mailbox1), memory,
+                       sizeof(*memory)) ||
+        ranges_overlap(out_mailbox0, sizeof(*out_mailbox0), bar0,
+                       sizeof(*bar0)) ||
+        ranges_overlap(out_mailbox1, sizeof(*out_mailbox1), bar0,
+                       sizeof(*bar0)) ||
+        ranges_overlap(out_mailbox0, sizeof(*out_mailbox0),
+                       (const void *)bar0->base, bar0->length) ||
+        ranges_overlap(out_mailbox1, sizeof(*out_mailbox1),
+                       (const void *)bar0->base, bar0->length))
+        return NVX_GSP_FALCON_INVALID_ARGUMENT;
+
+    *out_mailbox0 = 0U;
+    *out_mailbox1 = 0U;
+
+    /* Never start GSP based on an unverified or mismatched FWSEC snapshot. */
+    if (nvx_gsp_fwsec_validate_result(NVX_GSP_FWSEC_CMD_FRTS, frts_result) !=
+            NVX_GSP_FWSEC_RESULT_OK ||
+        frts_result->expected_wpr2_addr_lo_units !=
+            (uint32_t)(frts_framebuffer_offset >> 12U) ||
+        frts_result->wpr2_addr_lo_units !=
+            (uint32_t)(frts_framebuffer_offset >> 12U))
+        return NVX_GSP_FALCON_FWSEC_NOT_VERIFIED;
+
+    if (!memory->acquired || !memory->radix3_elf.acquired ||
+        !memory->radix3_elf.cpu_address || !memory->radix3_elf.size ||
+        !memory->radix3_elf_sync.initialized ||
+        memory->radix3_elf_sync.owner != NVX_DMA_OWNER_CPU)
+        return NVX_GSP_FALCON_DMA_OWNERSHIP_ERROR;
+
+    libos_address = memory->radix3_elf.gpu_address;
+    if (libos_address == 0U ||
+        (libos_address & (NVX_DMA_PAGE_SIZE - 1U)) != 0U ||
+        libos_address >= (UINT64_C(1) << 49U) ||
+        memory->radix3_elf.size > (UINT64_C(1) << 49U) - libos_address)
+        return NVX_GSP_FALCON_DMA_INVALID_TRANSFER;
+
+    status = nvx_ga10x_falcon_reset(bar0, NVX_GSP_FALCON_BASE,
+        timeout_ms, poll_interval_ms, delay_ms, context);
+    if (status != NVX_GSP_FALCON_OK)
+        return status;
+
+    if (nvx_dma_sync_for_device(&memory->radix3_elf_sync, 0U,
+                                memory->radix3_elf.size) != NVX_DMA_SYNC_OK)
+        return NVX_GSP_FALCON_DMA_OWNERSHIP_ERROR;
+
+    /*
+     * The GSP image/WPR must already have been established by the caller's
+     * successful FRTS path. This boots the staged RISC-V LibOS, not SEC2.
+     * Keep DMA ownership with the device on every post-handoff failure.
+     */
+    status = nvx_ga10x_falcon_boot(
+        bar0, NVX_GSP_FALCON_BASE, 0U,
+        1U, (uint32_t)libos_address,
+        1U, (uint32_t)(libos_address >> 32U),
+        &mailbox0, &mailbox1, timeout_ms, poll_interval_ms,
+        delay_ms, context);
+    if (status != NVX_GSP_FALCON_OK)
+        return status;
+
+    if (mailbox0 != 0U)
+        return NVX_GSP_FALCON_BOOTER_REPORTED_ERROR;
+
+    status = nvx_gsp_ga10x_wait_riscv_active(
+        bar0, timeout_ms, poll_interval_ms, delay_ms, context);
+    if (status != NVX_GSP_FALCON_OK)
+        return status;
+
+    *out_mailbox0 = mailbox0;
+    *out_mailbox1 = mailbox1;
+    return NVX_GSP_FALCON_OK;
+}
 
 static nvx_gsp_falcon_status_t reset_and_reclaim(
     nvx_gsp_boot_memory_t *memory, const nvx_mmio_region_t *bar0,

@@ -207,6 +207,17 @@ jobs:
       - name: Test decoded RM configuration, framebuffer regions and malformed indices
         run: /tmp/vantaos-nvx-gsp-static-info-test
 
+      - name: Compile PCI-backed GSP system-info tests with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_system_info.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_system_info.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_nvkv.c \
+            -o /tmp/vantaos-nvx-gsp-system-info-test
+
+      - name: Test PCI-derived identity and explicit platform facts
+        run: /tmp/vantaos-nvx-gsp-system-info-test
+
       - name: Compile GSP startup orchestration with strict warnings
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude -c \

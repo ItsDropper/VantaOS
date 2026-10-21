@@ -13,13 +13,14 @@
 
 ## Implementation sequence
 
-1. Add an explicit GRUB recovery boot entry while keeping the normal entry first/default. Pass a documented boot option to the kernel; do not display recovery during an ordinary boot.
+1. Add an explicit GRUB recovery boot entry while keeping the normal entry first/default. Pass a documented boot option to the kernel; do not display recovery during an ordinary boot. The BIOS/GRUB menu also checks whether Shift is held at menu startup and selects recovery for that boot only.
 2. Parse recovery selection at the shared kernel/OS boundary and enter recovery only after the existing keyboard and framebuffer are initialized, but before process/scheduler/desktop startup. Keep panic handling on the existing halt path.
 3. Implement a bounded, keyboard-only recovery UI using the current graphics and keyboard APIs. Expose only actions with real backing implementations. Diagnostics should use current boot information and existing serial-log interfaces.
 4. Add a screenshot action backed by a verified capture path. QEMU monitor screenshots must be format-checked and converted explicitly when the monitor output is not PNG. Do not claim guest-side persistent screenshot saving unless a supported writable destination is implemented.
 5. Add regression tests to GitHub Actions proving default boot does not enter recovery and explicit recovery renders a recognizable screen. Preserve normal BIOS and UEFI startup.
 6. Treat UEFI recovery selection as a separate integration item because the current UEFI loader bypasses GRUB and the normalized boot contract does not yet encode a recovery request.
-7. Implement installation only after a disposable QEMU disk, supported partition layout, safe writes, boot-mode-specific bootloader installation, and post-install reboot verification are covered by CI. Until then, do not expose a destructive or fake installer.
+7. Implement installation only after a disposable QEMU disk, supported partition layout, safe writes, boot-mode-specific bootloader installation, and post-install reboot verification are covered by CI. Current blockers are a validated partition-table writer, FAT32 formatter, and installation payload/bootloader deployment path. The existing read-only partition scanner and block-write API are not enough to claim a working installer. Until those parts pass destructive-write and reboot tests against disposable images, do not expose a destructive or fake installer.
+8. Add the Start-menu Power flyout using shared restart/shutdown routines. Keep Sleep hidden until ACPI S3 entry and wake restoration are implemented and tested; `hlt` is not suspend.
 
 ## Safety and scope boundaries
 

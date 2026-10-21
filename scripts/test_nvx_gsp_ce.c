@@ -43,6 +43,10 @@ int main(void)
         NVX_GSP_CE_GPUVA_LIMIT,dst,completion,4U,1U,&bytes)==NVX_GSP_CE_BAD_GPU_ADDRESS);
     assert(nvx_gsp_ce_build_copy(command,sizeof(command),0x77U,0U,src,dst,
         completion,0U,1U,&bytes)==NVX_GSP_CE_BAD_GPU_ADDRESS);
+    assert(nvx_gsp_ce_build_copy(command,sizeof(command),0x77U,0U,src,
+        src+2048U,completion,4096U,1U,&bytes)==NVX_GSP_CE_BAD_GPU_ADDRESS);
+    assert(nvx_gsp_ce_build_copy(command,sizeof(command),0x77U,0U,src,dst,
+        dst+4U,4096U,1U,&bytes)==NVX_GSP_CE_BAD_GPU_ADDRESS);
     assert(nvx_gsp_ce_build_copy(command,16U,0x77U,0U,src,dst,
         completion,4U,1U,&bytes)==NVX_GSP_CE_NO_SPACE);
     return 0;

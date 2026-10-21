@@ -23,8 +23,8 @@
 #define NVX_GSP_VBIOS_FWSEC_APP_PRODUCTION 0x85U
 #define NVX_GSP_VBIOS_FWSEC_APP_LICENSE   0x05U
 #define NVX_GSP_VBIOS_FWSEC_DESC_V3       3U
-/* FWSEC V3 is executed by the GA10x GSP Falcon, not SEC2. */
-#define NVX_GSP_VBIOS_FWSEC_ENGINE_MASK_GSP 0x0400U
+/* FWSEC V3 signed descriptor engine mask; distinct from executing Falcon. */
+#define NVX_GSP_VBIOS_FWSEC_ENGINE_MASK 0x0001U
 #define NVX_GSP_VBIOS_RSA3K_SIGNATURE_SIZE 384U
 #define NVX_GSP_VBIOS_FWSEC_MAX_SIGNATURES 16U
 

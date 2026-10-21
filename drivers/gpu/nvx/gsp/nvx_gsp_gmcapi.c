@@ -275,19 +275,28 @@ nvx_gsp_gmcapi_status_t nvx_gsp_gmcapi_call(
                  t->status_queue->layout.backing_store_size))
         return NVX_GSP_GMCAPI_INVALID_ARGUMENT;
 
+    if (__atomic_test_and_set(&t->busy, __ATOMIC_ACQUIRE))
+        return NVX_GSP_GMCAPI_BUSY;
     status=send_request(t,command_id,request,request_size,response_capacity,
                         (uint8_t *)scratch,scratch_size,&sequence);
-    if (status!=NVX_GSP_GMCAPI_OK) return status;
+    if (status!=NVX_GSP_GMCAPI_OK) {
+        __atomic_clear(&t->busy, __ATOMIC_RELEASE);
+        return status;
+    }
     do {
         status=receive_response(t,command_id,sequence,response,response_capacity,
                                 out_response_size,out_remote_status,
                                 (uint8_t *)scratch,scratch_size);
-        if (status!=NVX_GSP_GMCAPI_TIMEOUT) return status;
+        if (status!=NVX_GSP_GMCAPI_TIMEOUT) {
+            __atomic_clear(&t->busy, __ATOMIC_RELEASE);
+            return status;
+        }
         uint32_t delay=poll_interval_ms;
         if (delay>timeout_ms-elapsed) delay=timeout_ms-elapsed;
         delay_ms(delay,context);
         elapsed+=delay;
     } while (elapsed<timeout_ms);
+    __atomic_clear(&t->busy, __ATOMIC_RELEASE);
     return NVX_GSP_GMCAPI_TIMEOUT;
 }
 

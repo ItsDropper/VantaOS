@@ -151,6 +151,15 @@ static int parse_number(const char *text, uint32_t *value)
     return 1;
 }
 
+static void print_localized(const vanta_setup_config_t *config,
+                            const CHAR16 *english,
+                            const CHAR16 *finnish)
+{
+    const CHAR16 *message =
+        config && config->language[0] == 'f' ? finnish : english;
+    Print(L"%s", message);
+}
+
 static int disk_read(void *context, uint64_t lba, uint32_t count, void *buffer)
 {
     EFI_BLOCK_IO_PROTOCOL *block = (EFI_BLOCK_IO_PROTOCOL *)context;
@@ -494,7 +503,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
 
     char line[32];
     serial_write("VANTAOS_SETUP_LANGUAGE_PROMPT\n");
-    Print(L"Language: 1) English  2) Finnish [1]: ");
+    Print(L"Language / Kieli: 1) English  2) Suomi [1]: ");
     if (!read_line(line, sizeof(line))) return EFI_ABORTED;
     if (line[0] == '2' && line[1] == '\0') {
         config.language[0] = 'f'; config.language[1] = 'i';
@@ -504,7 +513,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
     }
 
     serial_write("VANTAOS_SETUP_KEYBOARD_PROMPT\n");
-    Print(L"Keyboard: 1) US  2) Finnish [1]: ");
+    Print(L"Keyboard / Nappaimisto: 1) US  2) Finnish [1]: ");
     if (!read_line(line, sizeof(line))) return EFI_ABORTED;
     if (line[0] == '2' && line[1] == '\0') {
         config.keyboard[0] = 'f'; config.keyboard[1] = 'i';
@@ -526,7 +535,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
         "Asia/Kolkata", "Asia/Singapore", "Australia/Sydney", "Pacific/Auckland",
         "Europe/London"
     };
-    Print(L"Time zone (enter number; default 1):\r\n");
+    print_localized(&config, L"Time zone (enter number; default 1):\r\n", L"Aikavyohyke (valitse numero; oletus 1):\r\n");
     Print(L" 1 Helsinki       2 UTC             3 Stockholm       4 Oslo\r\n");
     Print(L" 5 Copenhagen     6 Berlin          7 Paris           8 Madrid\r\n");
     Print(L" 9 Rome          10 Amsterdam      11 Brussels       12 Zurich\r\n");
@@ -560,16 +569,16 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
     }
 
     serial_write("VANTAOS_SETUP_REVIEW\n");
-    Print(L"\r\nSETUP REVIEW\r\n");
+    print_localized(&config, L"\r\nSETUP REVIEW\r\n", L"\r\nASENNUKSEN YHTEENVETO\r\n");
     Print(L"  Preferred language: %s\r\n",
           config.language[0] == 'f' ? L"Finnish" : L"English");
     Print(L"  Keyboard preference: %s\r\n",
           config.keyboard[0] == 'f' ? L"Finnish" : L"US");
     Print(L"  Time zone: %a\r\n", config.timezone);
-    Print(L"  Partition scheme: GPT (UEFI)\r\n");
-    Print(L"  Filesystems: FAT32 EFI System Partition + FAT32 system partition\r\n");
-    Print(L"  Setup preferences will be saved to \\SYSTEM\\SETUP.CFG.\r\n");
-    Print(L"  Language and keyboard preferences are saved metadata; runtime localization/keymap integration is not yet implemented.\r\n\r\n");
+    print_localized(&config, L"  Partition scheme: GPT (UEFI)\r\n", L"  Osiointitapa: GPT (UEFI)\r\n");
+    print_localized(&config, L"  Filesystems: FAT32 EFI System Partition + FAT32 system partition\r\n", L"  Tiedostojarjestelmat: FAT32 EFI-osio ja FAT32 jarjestelmaosio\r\n");
+    print_localized(&config, L"  Setup preferences will be saved to \\SYSTEM\\SETUP.CFG.\r\n", L"  Asetukset tallennetaan tiedostoon \\SYSTEM\\SETUP.CFG.\r\n");
+    print_localized(&config, L"  Language and keyboard preferences are saved metadata; runtime localization/keymap integration is not yet implemented.\r\n\r\n", L"  Kieli- ja nappaimistoasetukset tallennetaan, mutta kayttojarjestelman kieli- ja asettelutuki ei ole viela toteutettu.\r\n\r\n");
 
     setup_disk_t disks[SETUP_MAX_DISKS];
     UINTN disk_count = 0U;
@@ -587,7 +596,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
     }
 
     serial_write("VANTAOS_SETUP_DISKS_READY\n");
-    Print(L"\r\nTarget disks (installer media excluded):\r\n");
+    print_localized(&config, L"\r\nTarget disks (installer media excluded):\r\n", L"\r\nKohdelevyt (asennusmediaa ei nayteta):\r\n");
     for (UINTN i = 0U; i < disk_count; ++i) {
         UINT64 gib = disks[i].sector_count / 2097152U;
         CHAR16 *path_text = DevicePathToStr(
@@ -602,7 +611,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
             uefi_call_wrapper(BS->FreePool, 1, path_text);
     }
     serial_write("VANTAOS_SETUP_DISK_PROMPT\n");
-    Print(L"Select target disk number: ");
+    print_localized(&config, L"Select target disk number, or Q to cancel: ", L"Valitse kohdelevyn numero tai Q peruuttaaksesi: ");
     if (!read_line(line, sizeof(line))) return EFI_ABORTED;
     uint32_t selected = 0U;
     if (!parse_number(line, &selected) || selected == 0U || selected > disk_count) {
@@ -633,9 +642,9 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
           (UINT32)(layout.efi.sector_count / 2048U));
     Print(L"  VantaOS system partition: %u MiB, FAT32\r\n",
           (UINT32)(layout.system.sector_count / 2048U));
-    Print(L"WARNING: continuing will erase the entire selected disk.\r\n");
+    print_localized(&config, L"WARNING: continuing will erase the entire selected disk.\r\n", L"VAROITUS: jatkaminen tyhjentaa koko valitun levyn.\r\n");
     serial_write("VANTAOS_SETUP_CONFIRM_PROMPT\n");
-    Print(L"Type INSTALL exactly to confirm, or anything else to cancel: ");
+    print_localized(&config, L"Type INSTALL exactly to confirm, or anything else to cancel: ", L"Vahvista kirjoittamalla INSTALL, tai peruuta muulla tekstilla: ");
     if (!read_line(line, sizeof(line)) ||
         line[0] != 'I' || line[1] != 'N' || line[2] != 'S' ||
         line[3] != 'T' || line[4] != 'A' || line[5] != 'L' ||

@@ -1130,7 +1130,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rm -f /tmp/vantaos-recovery-monitor.sock /tmp/vantaos-recovery.ppm recovery-boot.log recovery-regression.img
+          rm -f /tmp/vantaos-recovery-monitor.sock /tmp/vantaos-recovery-qmp.sock /tmp/vantaos-recovery.ppm recovery-boot.log recovery-regression.img
           # Assert the shipped menu contains the Shift shortcut, then create a
           # test-only ISO with recovery selected by default. This avoids flaky
           # timing-sensitive BIOS key injection while still booting through GRUB.
@@ -1147,6 +1147,7 @@ jobs:
             -boot order=d -display sdl \
             -serial file:recovery-boot.log \
             -monitor unix:/tmp/vantaos-recovery-monitor.sock,server,nowait \
+            -qmp unix:/tmp/vantaos-recovery-qmp.sock,server=on,wait=off \
             -no-reboot >/tmp/vantaos-recovery-qemu.log 2>&1 &
           qemu_pid=$!
           cleanup() {
@@ -1187,10 +1188,39 @@ jobs:
           done
           test "$requested" -eq 1
 
-          # HMP is a terminal-style monitor: terminate the command with carriage return
-          # so QEMU executes it rather than merely echoing the typed characters.
-          { printf 'screendump /tmp/vantaos-recovery.ppm\r'; sleep 1; } |
-            timeout 5s socat -T 2 - UNIX-CONNECT:/tmp/vantaos-recovery-monitor.sock || true
+          # Use QMP's request/response protocol for screendump. Keep HMP only
+          # for key injection; terminal-style HMP input was intermittently echoed
+          # without executing the screenshot command.
+          python3 - <<'PY'
+          import json, socket, time
+          path = "/tmp/vantaos-recovery-qmp.sock"
+          deadline = time.monotonic() + 10
+          while time.monotonic() < deadline:
+              try:
+                  sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                  sock.connect(path)
+                  break
+              except OSError:
+                  try: sock.close()
+                  except Exception: pass
+                  time.sleep(0.1)
+          else:
+              raise SystemExit("QEMU QMP socket did not become available")
+          with sock, sock.makefile("rwb", buffering=0) as stream:
+              greeting = json.loads(stream.readline())
+              if "QMP" not in greeting:
+                  raise SystemExit(f"Unexpected QMP greeting: {greeting}")
+              stream.write(b'{"execute":"qmp_capabilities"}\\r\\n')
+              capabilities = json.loads(stream.readline())
+              if "return" not in capabilities:
+                  raise SystemExit(f"QMP capabilities failed: {capabilities}")
+              request = {"execute":"screendump","arguments":{"filename":"/tmp/vantaos-recovery.ppm"}}
+              stream.write((json.dumps(request) + "\\\\r\\\\n").encode())
+              response = json.loads(stream.readline())
+              if "return" not in response:
+                  raise SystemExit(f"QMP screendump failed: {response}")
+              print(json.dumps({"greeting":greeting,"screendump":response}))
+          PY
           for attempt in $(seq 1 10); do
             test -s /tmp/vantaos-recovery.ppm && break
             sleep 1

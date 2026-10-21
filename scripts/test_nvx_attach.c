@@ -106,6 +106,19 @@ int main(void)
     assert(nvx_device_attach(&unsupported_nvidia, &bar0, &device) ==
            NVX_ATTACH_INVALID_ARGUMENT);
     assert(map_calls == maps_before_unsupported);
+
+    /* A matching PCI ID is insufficient when live PMC architecture disagrees. */
+    fake_registers[0] = 0x16000000U; /* Turing architecture, not Ampere. */
+    fake_registers[1] = 1U;
+    unsigned maps_before_mismatch = map_calls;
+    unsigned unmaps_before_mismatch = unmap_calls;
+    assert(nvx_device_attach(&gpu, &bar0, &device) == NVX_ATTACH_PROBE_ERROR);
+    assert(map_calls == maps_before_mismatch + 1U);
+    assert(unmap_calls == unmaps_before_mismatch + 1U);
+    assert(device.bar0_mapping == 0 && device.attached == 0U);
+    fake_registers[0] = 0x17000000U;
+    fake_registers[1] = 1U;
+
     unknown.size_known = 0;
     assert(nvx_device_attach(&gpu, &unknown, &device) == NVX_ATTACH_RESOURCE_ERROR);
     assert(device.lifecycle.state == NVX_STATE_FAILED);

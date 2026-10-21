@@ -6,6 +6,7 @@
  */
 
 #include "graphics_internal.h"
+#include "gui_server.h"
 #include "desktop_theme.h"
 #include "filesystem.h"
 #include "file_explorer.h"
@@ -204,6 +205,10 @@ void graphics_draw_taskbar(int taskbar_y, int width)
     int clock_x = width - 116;
     if (clock_x < center + 116)
         clock_x = center + 116;
+
+    /* Retained GUI windows get real taskbar entries, including minimized ones. */
+    gui_server_draw_taskbar_items(taskbar_y + 10, center + 116, clock_x - 8);
+
     graphics_fill_rounded_rect(clock_x, taskbar_y + 6, width - clock_x - 8,
                                 52, 8, VANTA_UI_SURFACE);
     graphics_fill_rect(clock_x + 7, taskbar_y + 8, 1, 48, VANTA_UI_BORDER);

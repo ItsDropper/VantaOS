@@ -1,4 +1,3 @@
-#include <stdlib.h>
 /*
  * Copyright (c) 2026 ItsDropper
  * This file is part of VantaOS and is licensed under the MIT License.
@@ -8,6 +7,7 @@
 #include <assert.h>
 #include <stddef.h>
 #include <string.h>
+#include <stdlib.h>
 int main(void)
 {
     char out[32];

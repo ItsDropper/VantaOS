@@ -165,9 +165,31 @@ nvx_gsp_gpfifo_status_t nvx_gsp_gpfifo_wait_get(
        !timeout_ms||!interval_ms||!delay_ms)
         return NVX_GSP_GPFIFO_INVALID_ARGUMENT;
     for(;;) {
-        uint32_t get=__atomic_load_n(c->gp_get,__ATOMIC_ACQUIRE);
-        if(get>=c->entry_count)return NVX_GSP_GPFIFO_BAD_REGISTER_STATE;
-        if(get==expected)return NVX_GSP_GPFIFO_OK;
+        uint32_t get,put,pending_distance,target_distance;
+        /*
+         * Another producer may queue later work while this caller waits. GET
+         * can therefore pass the requested index before it is sampled. Treat
+         * an index behind GET (and outside the current GET..PUT window) as
+         * consumed instead of timing out on an equality-only comparison.
+         */
+        spinlock_lock(&c->submit_lock);
+        get=__atomic_load_n(c->gp_get,__ATOMIC_ACQUIRE);
+        put=c->put_index;
+        if(get>=c->entry_count||put>=c->entry_count) {
+            spinlock_unlock(&c->submit_lock);
+            return NVX_GSP_GPFIFO_BAD_REGISTER_STATE;
+        }
+        if(get==expected) {
+            spinlock_unlock(&c->submit_lock);
+            return NVX_GSP_GPFIFO_OK;
+        }
+        pending_distance=(put-get)&(c->entry_count-1U);
+        target_distance=(expected-get)&(c->entry_count-1U);
+        if(target_distance>pending_distance) {
+            spinlock_unlock(&c->submit_lock);
+            return NVX_GSP_GPFIFO_OK;
+        }
+        spinlock_unlock(&c->submit_lock);
         if(elapsed>=timeout_ms)return NVX_GSP_GPFIFO_TIMEOUT;
         uint32_t wait=interval_ms;
         if(wait>timeout_ms-elapsed)wait=timeout_ms-elapsed;

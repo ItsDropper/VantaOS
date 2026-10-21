@@ -54,6 +54,11 @@ extern int cursor_saved_width;
 extern int cursor_saved_height;
 extern int cursor_saved_valid;
 
+void graphics_draw_desktop_backdrop(int width, int height);
+void graphics_draw_desktop_dashboard(int width, int height);
+void graphics_draw_system_page_detail(int x, int y, int w, int h);
+void graphics_draw_settings_page_detail(int x, int y, int w, int h);
+
 uint32_t graphics_pack_color(uint32_t color);
 int graphics_display_present_damage(
     uint8_t** display_framebuffer, uint32_t display_pitch,

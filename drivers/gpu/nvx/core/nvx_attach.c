@@ -43,6 +43,18 @@ nvx_attach_status_t nvx_device_attach(
         !nvx_match_pci_device(pci_device))
         return NVX_ATTACH_INVALID_ARGUMENT;
 
+    /*
+     * PCI vendor/class matching identifies a candidate, not a supported GPU.
+     * This implementation has an audited profile for RTX 3060 IDs only.
+     * Never map an unknown NVIDIA device until its profile is implemented.
+     */
+    nvx_generation_family_t family;
+    nvx_device_profile_t profile;
+    if (!nvx_identify_pci_device(pci_device->device_id, &family, &profile) ||
+        family != NVX_FAMILY_AMPERE ||
+        profile != NVX_PROFILE_GEFORCE_RTX_3060)
+        return NVX_ATTACH_INVALID_ARGUMENT;
+
     if (!nvx_lifecycle_transition(&out_device->lifecycle, NVX_STATE_PROBING))
         return NVX_ATTACH_LIFECYCLE_ERROR;
 
@@ -77,6 +89,26 @@ nvx_attach_status_t nvx_device_attach(
         pci_device, (volatile uint32_t *)out_device->bar0_mapping,
         (size_t)trusted_bar0->size, &out_device->registers);
     if (probe_status != NVX_PROBE_OK) {
+        nvx_bar_mmio_unmap(trusted_bar0, out_device->bar0_mapping);
+        out_device->bar0_mapping = 0;
+        (void)nvx_lifecycle_fail(&out_device->lifecycle,
+                                 NVX_ERROR_INITIALIZATION);
+        out_device->pci_device = 0;
+        out_device->bar0 = *trusted_bar0;
+        out_device->attached = 0;
+        return NVX_ATTACH_PROBE_ERROR;
+    }
+
+    /*
+     * Treat the PCI ID as a candidate only. Require the live PMC architecture
+     * register to identify Ampere and reject any disagreement between PCI and
+     * register identity before returning a mapped device handle.
+     */
+    nvx_generation_family_t hardware_family = NVX_FAMILY_UNKNOWN;
+    if (!nvx_identify_architecture(out_device->registers.architecture,
+                                   &hardware_family) ||
+        hardware_family != NVX_FAMILY_AMPERE ||
+        out_device->registers.identity_mismatch) {
         nvx_bar_mmio_unmap(trusted_bar0, out_device->bar0_mapping);
         out_device->bar0_mapping = 0;
         (void)nvx_lifecycle_fail(&out_device->lifecycle,

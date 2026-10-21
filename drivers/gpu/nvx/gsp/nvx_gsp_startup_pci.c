@@ -4,6 +4,7 @@
  * See the LICENSE file in the project root for the full license text.
  */
 #include "nvx_gsp_startup.h"
+#include "nvx_device.h"
 
 #include <stdint.h>
 #include <string.h>
@@ -54,6 +55,8 @@ nvx_gsp_startup_status_t nvx_gsp_ga10x_start_and_init_rm_from_pci(
     nvx_gsp_system_info_t collected={0};
     size_t encoded_size=0U;
     nvx_gsp_nvkv_status_t si_status;
+    nvx_generation_family_t family = NVX_FAMILY_UNKNOWN;
+    nvx_device_profile_t profile = NVX_PROFILE_UNKNOWN;
 
     if(!platform||!platform->pci_device||!platform->trusted_gpu_facts||
        !platform->encoded_system_info_buffer||
@@ -63,6 +66,17 @@ nvx_gsp_startup_status_t nvx_gsp_ga10x_start_and_init_rm_from_pci(
        !bar0||!static_info||!static_info_capacity||!out_static_info_size||
        !scratch||!timeout_ms||!poll_interval_ms||!delay_ms||!queue_runtime||
        !gmcapi||!rpc_transport||!rpc_manager||!out_result)
+        return NVX_GSP_STARTUP_INVALID_ARGUMENT;
+
+    /*
+     * This transaction contains GA10x-specific firmware and register steps.
+     * Refuse unknown NVIDIA IDs before touching queues, DMA, firmware, or BAR0.
+     */
+    if (!nvx_match_pci_device(platform->pci_device) ||
+        !nvx_identify_pci_device(platform->pci_device->device_id,
+                                 &family, &profile) ||
+        family != NVX_FAMILY_AMPERE ||
+        profile != NVX_PROFILE_GEFORCE_RTX_3060)
         return NVX_GSP_STARTUP_INVALID_ARGUMENT;
 
     if(overlap(platform->encoded_system_info_buffer,

@@ -431,7 +431,7 @@ void shell_mem(void)
 {
     if (!pmm_initialized)
     {
-        pmm_initialize(multiboot_info);
+        pmm_initialize(kernel_get_boot_info());
         pmm_initialized = pmm_is_initialized();
     }
 

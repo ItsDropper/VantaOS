@@ -342,7 +342,7 @@ int graphics_initialize_bochs(void)
     if (paging_get_physical(GRAPHICS_VIRTUAL_BASE) != first_page)
         return 0;
 
-    framebuffer = (uint8_t*)(GRAPHICS_VIRTUAL_BASE + offset);
+    framebuffer = (uint8_t*)(uintptr_t)(GRAPHICS_VIRTUAL_BASE + offset);
     graphics_scanout_base = framebuffer;
     graphics_scanout_page_bytes = bytes;
     graphics_scanout_page_index = 0U;
@@ -426,7 +426,7 @@ int graphics_initialize(multiboot_info_t* mbd)
             if (paging_get_physical(GRAPHICS_VIRTUAL_BASE) != first_page)
                 return 0;
 
-            framebuffer = (uint8_t*)(GRAPHICS_VIRTUAL_BASE + offset);
+            framebuffer = (uint8_t*)(uintptr_t)(GRAPHICS_VIRTUAL_BASE + offset);
             graphics_scanout_base = framebuffer;
             graphics_scanout_page_bytes =
                 (uint64_t)mbd->framebuffer_pitch * mbd->framebuffer_height;
@@ -556,7 +556,7 @@ int graphics_set_resolution(uint32_t width, uint32_t height)
             return 0;
     }
 
-    framebuffer = (uint8_t*)(GRAPHICS_VIRTUAL_BASE + offset);
+    framebuffer = (uint8_t*)(uintptr_t)(GRAPHICS_VIRTUAL_BASE + offset);
     graphics_scanout_base = framebuffer;
     graphics_scanout_page_bytes = bytes;
     graphics_scanout_page_index = 0U;

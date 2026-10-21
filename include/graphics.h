@@ -14,6 +14,8 @@
 int graphics_initialize(multiboot_info_t* mbd);
 void graphics_clear(uint32_t color);
 void graphics_present(void);
+/* Request a full scene redraw on the next compositor frame. */
+void graphics_invalidate_scene(void);
 void graphics_begin_frame(void);
 void graphics_end_frame(void);
 int graphics_frame_is_active(void);

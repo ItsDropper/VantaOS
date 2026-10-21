@@ -6,6 +6,7 @@
  */
 
 #include "net.h"
+#include "serial.h"
 #include "net_arp.h"
 #include "spinlock.h"
 #include "timer.h"

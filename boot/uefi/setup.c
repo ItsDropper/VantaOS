@@ -325,7 +325,8 @@ static EFI_STATUS copy_file(
 
     status = uefi_call_wrapper(
         source->GetInfo, 4, source, &gEfiFileInfoGuid, &info_size, NULL);
-    if (status != EFI_BUFFER_TOO_SMALL || info_size < sizeof(EFI_FILE_INFO)) {
+    if (status != EFI_BUFFER_TOO_SMALL || info_size < sizeof(EFI_FILE_INFO) ||
+        info_size > 4096U) {
         uefi_call_wrapper(source->Close, 1, source);
         serial_write("VANTAOS_SETUP_COPY_FAIL\n");
         return EFI_LOAD_ERROR;

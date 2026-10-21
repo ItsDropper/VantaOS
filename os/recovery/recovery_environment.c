@@ -7,6 +7,7 @@
 
 #include "recovery_environment.h"
 
+#include "filesystem.h"
 #include "graphics.h"
 #include "keyboard.h"
 #include "pmm.h"
@@ -19,12 +20,11 @@
 #include <stdint.h>
 
 #define RECOVERY_BG       0x00111620U
-#define RECOVERY_PANEL    0x001B2432U
 #define RECOVERY_BLUE     0x003D8BFFU
 #define RECOVERY_TEXT     0x00F1F5F9U
 #define RECOVERY_MUTED    0x0097A6B7U
 #define RECOVERY_SELECTED 0x00263F62U
-#define RECOVERY_LINE     0x00303C4D
+#define RECOVERY_LINE     0x00303C4DU
 #define RECOVERY_MENU_COUNT 6
 
 static const char* const recovery_menu[] = {
@@ -35,6 +35,21 @@ static const char* const recovery_menu[] = {
     "Restart computer",
     "Shut down computer"
 };
+
+static void recovery_decimal(uint64_t value, char* output, size_t capacity)
+{
+    char reverse[24];
+    size_t count = 0;
+    if (!capacity) return;
+    do {
+        reverse[count++] = (char)('0' + value % 10U);
+        value /= 10U;
+    } while (value && count < sizeof(reverse));
+    size_t out = 0;
+    while (count && out + 1 < capacity)
+        output[out++] = reverse[--count];
+    output[out] = 0;
+}
 
 static void recovery_wait_for_key(void)
 {
@@ -71,7 +86,6 @@ static int recovery_read_choice(int* selected)
             return 0;
         }
     }
-
     return 0;
 }
 
@@ -103,7 +117,7 @@ static void recovery_draw_menu(int selected, const char* status)
     int first_y = top + 104;
     int panel_width = (int)width - margin * 2;
 
-    recovery_header("Choose a recovery action. Normal boot remains available.");
+    recovery_header("Choose a recovery action. Normal boot remains the default.");
     for (int i = 0; i < RECOVERY_MENU_COUNT; i++) {
         int y = first_y + i * row_height;
         if (i == selected)
@@ -124,30 +138,43 @@ static void recovery_draw_menu(int selected, const char* status)
     graphics_present();
 }
 
-static void recovery_draw_diagnostics(const multiboot_info_t* mbd)
+static void recovery_draw_diagnostics(void)
 {
     const vanta_boot_info_t* info = kernel_get_boot_info();
     uint32_t width = graphics_get_width();
     uint32_t height = graphics_get_height();
     int margin = width >= 900 ? 56 : 18;
-    int y = height >= 600 ? 150 : 100;
-    char line[96];
+    int y = height >= 600 ? 142 : 92;
+    char number[24];
 
-    recovery_header("Live values read from VantaOS boot and device facilities.");
+    recovery_header("Live values from initialized kernel facilities.");
     graphics_draw_text(margin + 24, y, "FRAMEBUFFER", RECOVERY_BLUE, 1);
-    line[0] = 0;
-    graphics_draw_text(margin + 24, y + 18, "Resolution and format are provided by the active graphics backend.",
-                       RECOVERY_TEXT, 1);
+    graphics_draw_text(margin + 24, y + 20, "Width:", RECOVERY_MUTED, 1);
+    recovery_decimal(info ? info->framebuffer.width : width, number, sizeof(number));
+    graphics_draw_text(margin + 100, y + 20, number, RECOVERY_TEXT, 1);
+    graphics_draw_text(margin + 24, y + 40, "Height:", RECOVERY_MUTED, 1);
+    recovery_decimal(info ? info->framebuffer.height : height, number, sizeof(number));
+    graphics_draw_text(margin + 100, y + 40, number, RECOVERY_TEXT, 1);
+    graphics_draw_text(margin + 24, y + 60, "Bits per pixel:", RECOVERY_MUTED, 1);
+    recovery_decimal(info ? info->framebuffer.bits_per_pixel : 0, number, sizeof(number));
+    graphics_draw_text(margin + 140, y + 60, number, RECOVERY_TEXT, 1);
 
-    /* Display numeric values without relying on a libc formatter. */
-    graphics_draw_text(margin + 24, y + 42, "Width:", RECOVERY_MUTED, 1);
-    graphics_draw_text(margin + 92, y + 42, "see serial diagnostics", RECOVERY_TEXT, 1);
-    graphics_draw_text(margin + 24, y + 62, "CPU / memory / PCI:", RECOVERY_MUTED, 1);
-    graphics_draw_text(margin + 24, y + 80, "device count and allocator counters are logged to serial at boot.", RECOVERY_TEXT, 1);
-    (void)snprintf;
-    (void)line;
-    (void)mbd;
-    (void)info;
+    graphics_draw_text(margin + 24, y + 92, "MEMORY", RECOVERY_BLUE, 1);
+    graphics_draw_text(margin + 24, y + 112, "Physical blocks (total/free):", RECOVERY_MUTED, 1);
+    recovery_decimal(pmm_get_total_blocks(), number, sizeof(number));
+    graphics_draw_text(margin + 220, y + 112, number, RECOVERY_TEXT, 1);
+    graphics_draw_text(margin + 280, y + 112, "/", RECOVERY_MUTED, 1);
+    recovery_decimal(pmm_get_free_blocks(), number, sizeof(number));
+    graphics_draw_text(margin + 296, y + 112, number, RECOVERY_TEXT, 1);
+
+    graphics_draw_text(margin + 24, y + 144, "DEVICES", RECOVERY_BLUE, 1);
+    graphics_draw_text(margin + 24, y + 164, "Enumerated PCI functions:", RECOVERY_MUTED, 1);
+    recovery_decimal((uint64_t)pci_get_device_count(), number, sizeof(number));
+    graphics_draw_text(margin + 220, y + 164, number, RECOVERY_TEXT, 1);
+    graphics_draw_text(margin + 24, y + 184, "FAT32 filesystem:", RECOVERY_MUTED, 1);
+    graphics_draw_text(margin + 160, y + 184,
+                       filesystem_is_initialized() ? "initialized" : "unavailable",
+                       RECOVERY_TEXT, 1);
     graphics_draw_text(margin + 24, (int)height - 38, "Press any key to return.", RECOVERY_MUTED, 1);
     graphics_present();
     recovery_wait_for_key();
@@ -171,9 +198,8 @@ static void recovery_draw_logs(void)
         size_t end = i;
         char text[96];
         size_t n = 0;
-        while (end < length && snapshot[end] != '\n' && n < sizeof(text) - 1) {
+        while (end < length && snapshot[end] != '\n' && n < sizeof(text) - 1)
             text[n++] = snapshot[end++];
-        }
         text[n] = 0;
         graphics_draw_text(margin + 24, y + line_count * 18, text, RECOVERY_TEXT, 1);
         while (end < length && snapshot[end] != '\n') end++;
@@ -207,7 +233,6 @@ static __attribute__((noreturn)) void recovery_shutdown(void)
     __asm__ volatile ("cli" ::: "memory");
     /* QEMU/Bochs ACPI power-off port; unsupported hardware may ignore it. */
     __asm__ volatile ("outw %0, %1" : : "a"((uint16_t)0x2000), "Nd"((uint16_t)0x604));
-    /* Legacy emulator fallback. */
     __asm__ volatile ("outw %0, %1" : : "a"((uint16_t)0x2000), "Nd"((uint16_t)0xB004));
     for (;;) __asm__ volatile ("hlt");
 }
@@ -232,6 +257,7 @@ int recovery_environment_requested(const multiboot_info_t* mbd)
 
 void recovery_environment_run(multiboot_info_t* mbd)
 {
+    (void)mbd;
     int selected = 0;
     char status[80];
     status[0] = 0;
@@ -248,27 +274,23 @@ void recovery_environment_run(multiboot_info_t* mbd)
             serial_write("VANTAOS_RECOVERY_CONTINUE_NORMAL\n");
             return;
         case 1:
-            recovery_draw_diagnostics(mbd);
+            recovery_draw_diagnostics();
             break;
         case 2:
             recovery_draw_logs();
             break;
         case 3:
-            /*
-             * QEMU test harnesses watch this marker and capture the live display
-             * through the QEMU monitor. No guest-side file save is claimed.
-             */
+            /* CI/QEMU harnesses can react to this marker using the monitor. */
             serial_write("VANTAOS_RECOVERY_SCREENSHOT_REQUEST\n");
-            status[0] = 'Q'; status[1] = 'E'; status[2] = 'M';
-            status[3] = 'U'; status[4] = ' '; status[5] = 'h';
-            status[6] = 'o'; status[7] = 's'; status[8] = 't';
-            status[9] = ' '; status[10] = 'c'; status[11] = 'a';
-            status[12] = 'p'; status[13] = 't'; status[14] = 'u';
-            status[15] = 'r'; status[16] = 'e'; status[17] = ' ';
-            status[18] = 'r'; status[19] = 'e'; status[20] = 'q';
-            status[21] = 'u'; status[22] = 'e'; status[23] = 's';
-            status[24] = 't'; status[25] = 'e'; status[26] = 'd';
-            status[27] = 0;
+            {
+                const char message[] = "QEMU host capture requested";
+                size_t i = 0;
+                while (message[i] && i + 1 < sizeof(status)) {
+                    status[i] = message[i];
+                    i++;
+                }
+                status[i] = 0;
+            }
             break;
         case 4:
             recovery_restart();

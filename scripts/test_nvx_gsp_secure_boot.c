@@ -8,6 +8,8 @@
 #include "nvx_gsp_fwsec_mmio.h"
 #include "nvx_gsp_vbios.h"
 #include "nvx_gsp_init_args.h"
+#include "nvx_gsp_startup.h"
+#include "nvx_gsp_msgq.h"
 
 #include <assert.h>
 #include <stdlib.h>
@@ -23,7 +25,25 @@ typedef struct fake_hardware {
     uint8_t hold_dmem_dma;
     uint8_t activate_gsp_on_start;
     uint8_t activate_gsp_after_sec2;
+    uint8_t gsp_init_response_sent;
+    nvx_gsp_msgq_ga10x_t *startup_queue;
 } fake_hardware_t;
+
+static void put_le32(uint8_t *p, uint32_t value);
+static uint32_t get_le32(const uint8_t *p)
+{
+    return (uint32_t)p[0] | ((uint32_t)p[1] << 8U) |
+           ((uint32_t)p[2] << 16U) | ((uint32_t)p[3] << 24U);
+}
+static uint64_t get_le64(const uint8_t *p)
+{
+    return (uint64_t)get_le32(p) | ((uint64_t)get_le32(p + 4U) << 32U);
+}
+static void put_le64(uint8_t *p, uint64_t value)
+{
+    put_le32(p, (uint32_t)value);
+    put_le32(p + 4U, (uint32_t)(value >> 32U));
+}
 
 static void fake_delay(uint32_t milliseconds, void *context)
 {
@@ -89,6 +109,35 @@ static void fake_delay(uint32_t milliseconds, void *context)
                                 0U) == NVX_MMIO_OK);
         assert(nvx_mmio_write32(bar0, NVX_GSP_FALCON_MAILBOX1,
                                 0xB007U) == NVX_MMIO_OK);
+    }
+
+    /* Synthetic firmware reply to the actual GMCAPI GSP_INIT transaction. */
+    if (hardware->startup_queue && !hardware->gsp_init_response_sent &&
+        hardware->startup_queue->command_queue.local_counter != 0U &&
+        hardware->startup_queue->status_linked) {
+        uint8_t *request = hardware->startup_queue->command_queue.layout.entries;
+        uint8_t *reply = hardware->startup_queue->status_queue.layout.entries;
+        uint32_t command = get_le32(request + 24U);
+        uint64_t sequence = get_le64(request + 32U);
+        uint64_t static_info_kv = (UINT64_C(0x55) << 32U) | UINT64_C(2);
+        uint32_t gmc_size = NVX_GSP_GMCAPI_HEADER_SIZE + sizeof(static_info_kv);
+        uint32_t wire_size = 24U + gmc_size;
+
+        memset(reply, 0, NVX_GSP_PAGE_SIZE);
+        put_le32(reply, NVX_GSP_MCTP_MAGIC);
+        put_le32(reply + 4U, wire_size);
+        put_le32(reply + 8U, NVX_GSP_MCTP_HEADER_SINGLE);
+        put_le32(reply + 12U, NVX_GSP_GMCAPI_NVDM_HEADER);
+        put_le32(reply + 16U, gmc_size);
+        put_le32(reply + 20U, 0U);
+        put_le32(reply + 24U, command | NVX_GSP_GMCAPI_COMMAND_FLAG_RESPONSE);
+        put_le32(reply + 28U, (uint32_t)sizeof(static_info_kv));
+        put_le64(reply + 32U, sequence);
+        put_le32(reply + 40U, 0U);
+        put_le64(reply + 64U, static_info_kv);
+        assert(nvx_mmio_write32(bar0, NVX_GSP_GA10X_MSGQ_HEAD(0U),
+            hardware->startup_queue->status_queue.local_counter + 1U) == NVX_MMIO_OK);
+        hardware->gsp_init_response_sent = 1U;
     }
 }
 
@@ -192,6 +241,14 @@ int main(void)
     nvx_gsp_secure_transfer_plan_t plan;
     uint32_t mailbox1 = 0U;
     nvx_gsp_boot_trace_t trace;
+    nvx_gsp_msgq_ga10x_t queue_runtime = {0};
+    nvx_gsp_gmcapi_transport_t gmcapi = {0};
+    nvx_gsp_startup_result_t startup_result = {0};
+    const uint64_t system_info_kv = (UINT64_C(42) << 32U) | UINT64_C(1);
+    uint8_t static_info[64] = {0};
+    uint8_t *gmcapi_scratch = aligned_alloc(NVX_GSP_PAGE_SIZE,
+        NVX_GSP_MAX_MESSAGE_PAGES * NVX_GSP_PAGE_SIZE);
+    size_t static_info_size = 0U;
     nvx_gsp_fwsec_result_snapshot_t frts_result = {
         .frts_error_code = 0U, .wpr2_addr_hi = 1U,
         .wpr2_addr_lo_units = 0x1000U,
@@ -199,7 +256,8 @@ int main(void)
     };
 
     assert(bar_bytes && load_bytes && metadata_bytes && radix_bytes && vbios_bytes &&
-           init_args_bytes && shared_queue_bytes);
+           init_args_bytes && shared_queue_bytes && gmcapi_scratch);
+    memset(gmcapi_scratch, 0, NVX_GSP_MAX_MESSAGE_PAGES * NVX_GSP_PAGE_SIZE);
     bar0.base = (volatile uint8_t *)bar_bytes;
     bar0.length = NVX_GA10X_BAR0_REQUIRED_BYTES;
     hardware.bar0 = &bar0;
@@ -435,19 +493,32 @@ int main(void)
            NVX_GSP_FALCON_BROM_RSA3K);
     assert(read_reg(&bar0, NVX_SEC2_FALCON_BASE + 0x104U) == 0x1000U);
 
-    /* End-to-end synthetic bootstrap: FRTS -> RISC-V setup -> SEC2 Booter Load -> active. */
+    /* Full synthetic startup: FWSEC -> RISC-V -> status queue -> GMCAPI GSP_INIT. */
     assert(nvx_mmio_write32(&bar0, NVX_GSP_RISCV_CPUCTL, 0U) == NVX_MMIO_OK);
     hardware.activate_gsp_after_sec2 = 1U;
-    nvx_gsp_fwsec_result_snapshot_t bootstrap_frts = {0};
-    assert(nvx_gsp_ga10x_bootstrap_traced(
+    hardware.startup_queue = &queue_runtime;
+    /* Model GSP-RM creating its status-queue header after RISC-V startup. */
+    assert(nvx_gsp_msgq_prepare_tx(
+        shared_queue_bytes + queue_layout.status_queue_offset,
+        (size_t)queue_layout.status_queue_size, NVX_GSP_PAGE_SIZE,
+        &(nvx_gsp_msgq_layout_t){0}) == NVX_GSP_MSGQ_OK);
+    assert(nvx_gsp_ga10x_start_and_init_rm(
         &vbios_buffer, &vbios_sync, &fwsec_info, 0U, &memory,
         &init_args_buffer, &init_args_sync, &shared_queue_buffer,
-        &shared_queue_sync, &queue_layout, &bar0, 0x01000000ULL, 20U, 1U,
-        fake_delay, &hardware, &bootstrap_frts, &mailbox1, &trace) ==
-        NVX_GSP_FALCON_OK);
-    assert(bootstrap_frts.frts_error_code == 0U);
-    assert(trace.riscv_active == 1U);
-    assert(trace.result == NVX_GSP_FALCON_OK);
+        &shared_queue_sync, &queue_layout, &bar0, 0x01000000ULL,
+        &system_info_kv, sizeof(system_info_kv), static_info,
+        sizeof(static_info), &static_info_size, gmcapi_scratch,
+        NVX_GSP_MAX_MESSAGE_PAGES * NVX_GSP_PAGE_SIZE, 20U, 1U,
+        fake_delay, &hardware, &queue_runtime, &gmcapi, &startup_result) ==
+        NVX_GSP_STARTUP_OK);
+    assert(startup_result.gsp_rm_initialized == 1U);
+    assert(startup_result.bootstrap_status == NVX_GSP_FALCON_OK);
+    assert(startup_result.boot_trace.riscv_active == 1U);
+    assert(startup_result.gsp_init_remote_status == 0U);
+    assert(static_info_size == sizeof(uint64_t));
+    assert(get_le64(static_info) == ((UINT64_C(0x55) << 32U) | UINT64_C(2)));
+    assert(hardware.gsp_init_response_sent == 1U);
+    assert(startup_result.boot_trace.result == NVX_GSP_FALCON_OK);
     assert(memory.radix3_elf_sync.owner == NVX_DMA_OWNER_DEVICE);
     assert(init_args_sync.owner == NVX_DMA_OWNER_DEVICE);
     assert(shared_queue_sync.owner == NVX_DMA_OWNER_SHARED);
@@ -463,6 +534,7 @@ int main(void)
     assert(nvx_dma_sync_for_cpu(&shared_queue_sync, 0U,
         shared_queue_buffer.size) == NVX_DMA_SYNC_OK);
     hardware.activate_gsp_after_sec2 = 0U;
+    hardware.startup_queue = NULL;
 
     assert(nvx_dma_sync_destroy(&vbios_sync) == NVX_DMA_SYNC_OK);
     assert(nvx_dma_sync_destroy(&init_args_sync) == NVX_DMA_SYNC_OK);
@@ -470,6 +542,10 @@ int main(void)
     assert(nvx_dma_sync_destroy(&memory.radix3_elf_sync) == NVX_DMA_SYNC_OK);
     assert(nvx_dma_sync_destroy(&memory.booter_load_sync) == NVX_DMA_SYNC_OK);
     assert(nvx_dma_sync_destroy(&memory.wpr_metadata_sync) == NVX_DMA_SYNC_OK);
+    free(gmcapi_scratch);
+    free(shared_queue_bytes);
+    free(init_args_bytes);
+    free(vbios_bytes);
     free(metadata_bytes);
     free(radix_bytes);
     free(load_bytes);

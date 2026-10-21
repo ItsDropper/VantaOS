@@ -188,12 +188,25 @@ void shell_execute(void)
             if (!device)
                 continue;
             terminal_write(device->name);
-            terminal_write("  type=disk  sectors=");
+            if (device->flags & BLOCK_DEVICE_PARTITION)
+            {
+                terminal_write("  type=");
+                terminal_write(device->partition_scheme == 2U ? "GPT" : "MBR");
+                if (device->partition_scheme == 1U)
+                {
+                    terminal_write(" type-id=");
+                    shell_print_hex64(device->partition_type);
+                }
+                terminal_write("  label=");
+                terminal_write(device->partition_label[0] ?
+                               device->partition_label : "(unnamed)");
+            }
+            else
+                terminal_write("  type=disk");
+            terminal_write("  sectors=");
             shell_print_hex64((unsigned long long)device->sector_count);
             terminal_write("  sector-size=");
             shell_print_decimal(device->sector_size);
-            terminal_write("  flags=");
-            shell_print_hex64(device->flags);
             terminal_putchar('\\n');
         }
     }

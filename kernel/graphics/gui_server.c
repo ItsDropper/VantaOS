@@ -95,6 +95,7 @@ static gui_render_snapshot_t render_snapshot[VANTA_GUI_MAX_WINDOWS];
 
 static gui_window_t* gui_topmost_visible_locked(uint32_t exclude_id);
 static void gui_focus_locked(gui_window_t* target);
+static void gui_emit_resize_locked(gui_window_t* window);
 static int gui_title_equal(const char* a, const char* b)
 {
     if (!a || !b) return 0;

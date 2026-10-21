@@ -236,6 +236,8 @@ jobs:
             drivers/gpu/nvx/gsp/nvx_gsp_startup.c -o /tmp/vantaos-nvx-gsp-startup.o
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude -c \
             drivers/gpu/nvx/gsp/nvx_gsp_gmcapi.c -o /tmp/vantaos-nvx-gsp-gmcapi.o
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude -c \
+            drivers/gpu/nvx/gsp/nvx_gsp_startup_pci.c -o /tmp/vantaos-nvx-gsp-startup-pci.o
 
       - name: Compile NVX identity tests with strict warnings
         run: |

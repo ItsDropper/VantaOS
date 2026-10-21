@@ -6,6 +6,7 @@
  */
 
 #include "graphics_internal.h"
+#include "power.h"
 #include "filesystem.h"
 #include "terminal.h"
 #include "process.h"
@@ -29,6 +30,7 @@ void graphics_toggle_start_menu(void)
         return;
 
     start_menu_open = !start_menu_open;
+    if (!start_menu_open) power_menu_open = 0;
     graphics_invalidate_scene();
     explorer_dragging = 0;
     terminal_dragging = 0;
@@ -90,6 +92,31 @@ void graphics_mouse_click(int button)
 
         int menu_x = width / 2 - menu_w / 2;
         int menu_y = height - menu_h - 8;
+
+        /* Power flyout geometry is shared with graphics_ui_detail.c. */
+        int power_button_x = menu_x + menu_w - 54;
+        int power_button_y = menu_y + menu_h - 54;
+        if (cursor_x >= power_button_x && cursor_x < power_button_x + 32 &&
+            cursor_y >= power_button_y && cursor_y < power_button_y + 32)
+        {
+            power_menu_open = !power_menu_open;
+            graphics_invalidate_scene();
+            return;
+        }
+
+        if (power_menu_open)
+        {
+            int power_x = menu_x + menu_w - 194;
+            int power_y = menu_y + menu_h - 166;
+            if (cursor_x >= power_x + 8 && cursor_x < power_x + 168 &&
+                cursor_y >= power_y + 32 && cursor_y < power_y + 62)
+                power_restart();
+            if (cursor_x >= power_x + 8 && cursor_x < power_x + 168 &&
+                cursor_y >= power_y + 68 && cursor_y < power_y + 98)
+                power_shutdown();
+            power_menu_open = 0;
+            graphics_invalidate_scene();
+        }
 
         if (cursor_x >= menu_x + 24 && cursor_x < menu_x + 436 &&
             cursor_y >= menu_y + 110 && cursor_y < menu_y + 164)

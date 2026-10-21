@@ -20,6 +20,7 @@ typedef struct
 
 void fat32_initialize(void);
 int fat32_is_mounted(void);
+int fat32_is_mounted_removable(void);
 
 uint32_t fat32_root_cluster(void);
 

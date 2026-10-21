@@ -472,6 +472,73 @@ static int create_directories(EFI_FILE_PROTOCOL *root, int is_efi)
     return 1;
 }
 
+static int source_file_valid(EFI_FILE_PROTOCOL *root,
+                             const CHAR16 *path,
+                             UINTN maximum_size)
+{
+    EFI_FILE_PROTOCOL *file = NULL;
+    EFI_FILE_INFO *info = NULL;
+    UINTN info_size = 0U;
+    EFI_STATUS status = uefi_call_wrapper(
+        root->Open, 5, root, &file, path, EFI_FILE_MODE_READ, 0U);
+    if (EFI_ERROR(status) || !file)
+        return 0;
+
+    status = uefi_call_wrapper(
+        file->GetInfo, 4, file, &gEfiFileInfoGuid, &info_size, NULL);
+    if (status != EFI_BUFFER_TOO_SMALL || info_size < sizeof(EFI_FILE_INFO)) {
+        uefi_call_wrapper(file->Close, 1, file);
+        return 0;
+    }
+    status = uefi_call_wrapper(
+        BS->AllocatePool, 3, EfiLoaderData, info_size, (void **)&info);
+    if (EFI_ERROR(status) || !info) {
+        uefi_call_wrapper(file->Close, 1, file);
+        return 0;
+    }
+    status = uefi_call_wrapper(
+        file->GetInfo, 4, file, &gEfiFileInfoGuid, &info_size, info);
+    int valid = !EFI_ERROR(status) && info->FileSize > 0U &&
+                info->FileSize <= maximum_size;
+    uefi_call_wrapper(BS->FreePool, 1, info);
+    uefi_call_wrapper(file->Close, 1, file);
+    return valid;
+}
+
+static int preflight_installer_payload(EFI_FILE_PROTOCOL *root,
+                                       const CHAR16 **missing_path)
+{
+    static const struct {
+        const CHAR16 *path;
+        UINTN maximum_size;
+    } required[] = {
+        { L"\\EFI\\VANTA\\VANTAOS.EFI", 4U * 1024U * 1024U },
+        { L"\\EFI\\VANTA\\KERNEL.ELF", SETUP_MAX_FILE_BYTES },
+        { L"\\SYSTEM\\TERMINAL.ELF", SETUP_MAX_FILE_BYTES },
+        { L"\\SYSTEM\\SETTINGS.ELF", SETUP_MAX_FILE_BYTES },
+        { L"\\SYSTEM\\EXPLORER.ELF", SETUP_MAX_FILE_BYTES },
+        { L"\\SYSTEM\\TERMINAL.VX", 4096U },
+        { L"\\SYSTEM\\DRIVERS\\ATA.SYS", 4096U },
+        { L"\\SYSTEM\\DRIVERS\\KEYBOARD.SYS", 4096U },
+        { L"\\SYSTEM\\DRIVERS\\MOUSE.SYS", 4096U },
+        { L"\\SYSTEM\\DRIVERS\\PCI.SYS", 4096U },
+        { L"\\SYSTEM\\DRIVERS\\FAT32.SYS", 4096U },
+        { L"\\SYSTEM\\DEVICES\\DISK0.DEV", 4096U },
+        { L"\\SYSTEM\\DEVICES\\KEYBOARD0.DEV", 4096U },
+        { L"\\SYSTEM\\DEVICES\\MOUSE0.DEV", 4096U },
+        { L"\\ETC\\SYSTEM.CONF", 4096U }
+    };
+    for (UINTN i = 0U; i < sizeof(required) / sizeof(required[0]); ++i) {
+        if (!source_file_valid(root, required[i].path,
+                               required[i].maximum_size)) {
+            if (missing_path)
+                *missing_path = required[i].path;
+            return 0;
+        }
+    }
+    return 1;
+}
+
 EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 {
     InitializeLib(image_handle, system_table);
@@ -502,6 +569,19 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
     config.timezone[0] = '\0';
 
     char line[32];
+    const CHAR16 *missing_payload = NULL;
+    Print(L"Checking installer files before any disk can be modified...\r\n");
+    if (!preflight_installer_payload(source_root, &missing_payload)) {
+        serial_write("VANTAOS_SETUP_PREFLIGHT_FAIL\n");
+        Print(L"ERROR: required installer payload is missing, empty, or too large: %s\r\n",
+              missing_payload ? missing_payload : L"(unknown)");
+        Print(L"No disks changed. Recreate or re-download the installer media.\r\n");
+        uefi_call_wrapper(source_root->Close, 1, source_root);
+        return EFI_NOT_FOUND;
+    }
+    serial_write("VANTAOS_SETUP_PREFLIGHT_OK\n");
+    Print(L"Installer payload check passed (15 required files).\r\n\r\n");
+
     serial_write("VANTAOS_SETUP_LANGUAGE_PROMPT\n");
     for (;;) {
         Print(L"Language / Kieli: 1) English  2) Suomi [1]: ");

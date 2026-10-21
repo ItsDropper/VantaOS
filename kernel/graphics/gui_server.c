@@ -553,6 +553,95 @@ void gui_server_draw_windows(void)
     }
 }
 
+static gui_window_t* gui_topmost_visible_locked(uint32_t exclude_id)
+{
+    gui_window_t* top = 0;
+    for (unsigned int i = 0; i < VANTA_GUI_MAX_WINDOWS; i++)
+    {
+        gui_window_t* candidate = &windows[i];
+        if (!candidate->used || !candidate->visible ||
+            candidate->id == exclude_id)
+            continue;
+        if (!top || candidate->z_order > top->z_order)
+            top = candidate;
+    }
+    return top;
+}
+
+static void gui_minimize_locked(gui_window_t* window)
+{
+    if (!window || !window->used || window->minimized)
+        return;
+    if (focused_window_id == window->id)
+    {
+        gui_focus_locked(0);
+        window->minimized = 1;
+        window->visible = 0;
+        gui_focus_locked(gui_topmost_visible_locked(window->id));
+    }
+    else
+    {
+        window->minimized = 1;
+        window->visible = 0;
+    }
+    if (dragging_window_id == window->id)
+        dragging_window_id = 0U;
+    if (resizing_window_id == window->id)
+        resizing_window_id = 0U;
+    redraw_pending = 1;
+}
+
+static void gui_restore_locked(gui_window_t* window)
+{
+    if (!window || !window->used || !window->owner_visible)
+        return;
+    window->minimized = 0;
+    window->visible = 1;
+    gui_focus_locked(window);
+    redraw_pending = 1;
+}
+
+static void gui_toggle_maximized_locked(gui_window_t* window)
+{
+    if (!window || !window->used)
+        return;
+    if (!window->maximized)
+    {
+        window->restore_x = window->x;
+        window->restore_y = window->y;
+        window->restore_width = window->width;
+        window->restore_height = window->height;
+        window->x = 0;
+        window->y = 0;
+        window->width = graphics_get_width();
+        window->height = graphics_get_height() > 64U
+                       ? graphics_get_height() - 64U
+                       : graphics_get_height();
+        window->maximized = 1;
+        dragging_window_id = 0U;
+        resizing_window_id = 0U;
+    }
+    else
+    {
+        window->x = window->restore_x;
+        window->y = window->restore_y;
+        window->width = window->restore_width;
+        window->height = window->restore_height;
+        window->maximized = 0;
+        int32_t max_x = (int32_t)graphics_get_width() -
+                        (int32_t)window->width;
+        int32_t max_y = (int32_t)graphics_get_height() -
+                        (int32_t)GUI_TITLEBAR_HEIGHT;
+        if (max_x < 0) max_x = 0;
+        if (max_y < 0) max_y = 0;
+        if (window->x < 0) window->x = 0;
+        if (window->y < 0) window->y = 0;
+        if (window->x > max_x) window->x = max_x;
+        if (window->y > max_y) window->y = max_y;
+    }
+    redraw_pending = 1;
+}
+
 int gui_server_mouse_click(int x, int y, int button)
 {
     if (button != 1 && button != 3)
@@ -580,15 +669,44 @@ int gui_server_mouse_click(int x, int y, int button)
     }
 
     gui_focus_locked(target);
-    if (y >= target->y && y < target->y + (int)GUI_TITLEBAR_HEIGHT &&
-        x >= target->x + (int)target->width - 46)
+    int titlebar = y >= target->y &&
+                   y < target->y + (int)GUI_TITLEBAR_HEIGHT;
+    if (button == 1 && titlebar &&
+        x >= target->x + (int)target->width - 138)
     {
-        gui_emit_simple_event_locked(target, VANTA_GUI_EVENT_CLOSE_REQUEST);
+        int control_x = x - (target->x + (int)target->width - 138);
+        if (control_x < 46)
+            gui_minimize_locked(target);
+        else if (control_x < 92)
+            gui_toggle_maximized_locked(target);
+        else
+            gui_emit_simple_event_locked(target, VANTA_GUI_EVENT_CLOSE_REQUEST);
     }
-    else if (y >= target->y &&
-             y < target->y + (int)GUI_TITLEBAR_HEIGHT)
+    else if (button == 1 && !target->maximized &&
+             x >= target->x + (int)target->width - 18 &&
+             y >= target->y + (int)target->height - 18)
     {
-        /* Titlebar drag belongs to the window manager, not the client. */
+        resizing_window_id = target->id;
+        resize_start_x = x;
+        resize_start_y = y;
+        resize_start_width = target->width;
+        resize_start_height = target->height;
+        dragging_window_id = 0U;
+    }
+    else if (button == 1 && titlebar)
+    {
+        /* Restore from maximized state before starting a conventional drag. */
+        if (target->maximized)
+        {
+            gui_toggle_maximized_locked(target);
+            target->x = x - (int32_t)(target->width / 2U);
+            target->y = 0;
+            if (target->x < 0) target->x = 0;
+            int32_t max_x = (int32_t)graphics_get_width() -
+                            (int32_t)target->width;
+            if (max_x < 0) max_x = 0;
+            if (target->x > max_x) target->x = max_x;
+        }
         dragging_window_id = target->id;
         drag_offset_x = x - target->x;
         drag_offset_y = y - target->y;
@@ -613,6 +731,47 @@ void gui_server_mouse_move(int x, int y)
 {
     uint64_t flags = spinlock_lock_irqsave(&gui_lock);
     gui_window_t* window = 0;
+
+    if (resizing_window_id != 0U)
+    {
+        for (unsigned int i = 0; i < VANTA_GUI_MAX_WINDOWS; i++)
+            if (windows[i].used && windows[i].visible &&
+                windows[i].id == resizing_window_id)
+            {
+                window = &windows[i];
+                break;
+            }
+        if (!window || window->maximized)
+            resizing_window_id = 0U;
+        else
+        {
+            int32_t min_width = (int32_t)GUI_WINDOW_MIN_WIDTH;
+            int32_t min_height = (int32_t)GUI_WINDOW_MIN_HEIGHT;
+            int32_t max_width = (int32_t)graphics_get_width() - window->x;
+            int32_t max_height = (int32_t)graphics_get_height() - window->y;
+            if (max_height > (int32_t)graphics_get_height() - 64)
+                max_height = (int32_t)graphics_get_height() - 64;
+            if (max_width < min_width) min_width = max_width;
+            if (max_height < min_height) min_height = max_height;
+            int32_t new_width = (int32_t)resize_start_width + x - resize_start_x;
+            int32_t new_height = (int32_t)resize_start_height + y - resize_start_y;
+            if (new_width < min_width) new_width = min_width;
+            if (new_height < min_height) new_height = min_height;
+            if (new_width > max_width) new_width = max_width;
+            if (new_height > max_height) new_height = max_height;
+            if (new_width < 1) new_width = 1;
+            if (new_height < 1) new_height = 1;
+            if (window->width != (uint32_t)new_width ||
+                window->height != (uint32_t)new_height)
+            {
+                window->width = (uint32_t)new_width;
+                window->height = (uint32_t)new_height;
+                redraw_pending = 1;
+            }
+            spinlock_unlock_irqrestore(&gui_lock, flags);
+            return;
+        }
+    }
 
     if (dragging_window_id != 0U)
     {
@@ -679,7 +838,75 @@ void gui_server_mouse_release(int button)
         return;
     uint64_t flags = spinlock_lock_irqsave(&gui_lock);
     dragging_window_id = 0U;
+    resizing_window_id = 0U;
     spinlock_unlock_irqrestore(&gui_lock, flags);
+}
+
+void gui_server_draw_taskbar_items(int taskbar_y, int start_x, int end_x)
+{
+    if (!graphics_is_initialized() || end_x <= start_x)
+        return;
+    uint64_t flags = spinlock_lock_irqsave(&gui_lock);
+    int slot_x = start_x;
+    for (unsigned int i = 0; i < VANTA_GUI_MAX_WINDOWS; i++)
+    {
+        gui_window_t* window = &windows[i];
+        if (!window->used || !window->owner_visible)
+            continue;
+        if (slot_x + 120 > end_x)
+            break;
+        int focused = window->id == focused_window_id && window->visible;
+        uint32_t fill = focused ? 0x00253648U
+                      : window->minimized ? 0x00131D29U : 0x00192533U;
+        graphics_fill_rounded_rect(slot_x, taskbar_y, 114, 42, 8, fill);
+        graphics_fill_rect(slot_x + 1, taskbar_y + 1, 112, 1,
+                           focused ? 0x005DA9FFU : 0x00334455U);
+        graphics_draw_vanta_logo(slot_x + 8, taskbar_y + 12, 18);
+        char label[13];
+        size_t n = 0U;
+        while (n < 12U && window->title[n])
+        {
+            label[n] = window->title[n];
+            n++;
+        }
+        label[n] = '\0';
+        graphics_draw_text(slot_x + 32, taskbar_y + 17, label,
+                           window->minimized ? 0x009AAABD : 0x00F3F6FA, 1);
+        if (focused)
+            graphics_fill_rounded_rect(slot_x + 46, taskbar_y + 38, 24, 2,
+                                       1, 0x005DA9FFU);
+        slot_x += 120;
+    }
+    spinlock_unlock_irqrestore(&gui_lock, flags);
+}
+
+int gui_server_taskbar_click(int x, int y, int taskbar_y,
+                             int start_x, int end_x)
+{
+    if (y < taskbar_y + 8 || y >= taskbar_y + 56 || x < start_x || x >= end_x)
+        return 0;
+    uint64_t flags = spinlock_lock_irqsave(&gui_lock);
+    int slot_x = start_x;
+    for (unsigned int i = 0; i < VANTA_GUI_MAX_WINDOWS; i++)
+    {
+        gui_window_t* window = &windows[i];
+        if (!window->used || !window->owner_visible)
+            continue;
+        if (slot_x + 120 > end_x)
+            break;
+        if (x >= slot_x && x < slot_x + 114)
+        {
+            if (window->visible && window->id == focused_window_id)
+                gui_minimize_locked(window);
+            else
+                gui_restore_locked(window);
+            spinlock_unlock_irqrestore(&gui_lock, flags);
+            return 1;
+        }
+        slot_x += 120;
+    }
+    spinlock_unlock_irqrestore(&gui_lock, flags);
+    return 0;
 }
 
 char gui_server_read_terminal_char(void)

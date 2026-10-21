@@ -34,6 +34,17 @@ static void desktop_gui_present(void)
         return;
 
     graphics_begin_frame();
+    if (!graphics_frame_is_active())
+    {
+        /*
+         * Fail closed if the shadow surface cannot be provisioned. Drawing
+         * directly into scanout would reintroduce the exact tearing/flicker
+         * this compositor is intended to prevent. Keep the last complete
+         * frame visible and retry on the next desktop update.
+         */
+        return;
+    }
+
     graphics_present();
 
     gui_server_draw_windows();
@@ -214,12 +225,10 @@ void desktop_update(void)
             else if (mouse_has_move_event())
             {
                 /*
-                 * Pointer-only motion must not redraw the entire desktop.
-                 * A full frame copies every framebuffer pixel twice and
-                 * repaints every window; doing that for every PS/2 packet
-                 * starves visible input feedback under QEMU's software VGA.
-                 * The backbuffer is inactive here, so restore/redraw only
-                 * the saved cursor rectangle directly on the display buffer.
+                 * Pointer-only motion uses the shadow surface and damage
+                 * tracker. The cursor restores its old save-under in the
+                 * shadow buffer, draws at the new position, and commits only
+                 * the affected tiles; scanout is never drawn into directly.
                  */
                 graphics_update_cursor();
             }

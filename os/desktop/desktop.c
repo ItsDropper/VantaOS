@@ -213,7 +213,12 @@ static void desktop_gui_present_terminal_fast(void)
 int desktop_launch_terminal(void)
 {
     if (terminal_window_open)
+    {
+        (void)gui_server_set_builtin_visible("Terminal", 1);
+        graphics_select_panel(3);
+        desktop_gui_present();
         return 1;
+    }
 
     int pid = terminal_process_start(process_current_pid());
 

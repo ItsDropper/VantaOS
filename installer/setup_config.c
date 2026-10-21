@@ -62,11 +62,27 @@ static int copy_text(char *destination, size_t capacity,
 
 int vanta_setup_timezone_supported(const char *timezone)
 {
-    return bounded_equal(timezone, VANTA_SETUP_TIMEZONE_MAX, "Etc/UTC") ||
-           bounded_equal(timezone, VANTA_SETUP_TIMEZONE_MAX, "Europe/Helsinki") ||
-           bounded_equal(timezone, VANTA_SETUP_TIMEZONE_MAX, "Europe/Stockholm") ||
-           bounded_equal(timezone, VANTA_SETUP_TIMEZONE_MAX, "Europe/London") ||
-           bounded_equal(timezone, VANTA_SETUP_TIMEZONE_MAX, "America/New_York");
+    static const char *const supported[] = {
+        "Etc/UTC",
+        "Europe/Helsinki", "Europe/Stockholm", "Europe/Oslo",
+        "Europe/Copenhagen", "Europe/Berlin", "Europe/Paris",
+        "Europe/Madrid", "Europe/Rome", "Europe/Amsterdam",
+        "Europe/Brussels", "Europe/Zurich", "Europe/Vienna",
+        "Europe/Warsaw", "Europe/Prague", "Europe/Budapest",
+        "Europe/Athens", "Europe/Istanbul", "Europe/Lisbon",
+        "Europe/Dublin", "Europe/Kyiv", "America/New_York",
+        "America/Chicago", "America/Denver", "America/Los_Angeles",
+        "America/Toronto", "America/Vancouver", "America/Sao_Paulo",
+        "Asia/Tokyo", "Asia/Seoul", "Asia/Shanghai",
+        "Asia/Kolkata", "Asia/Singapore", "Australia/Sydney",
+        "Pacific/Auckland"
+    };
+    if (!timezone)
+        return 0;
+    for (size_t i = 0U; i < sizeof(supported) / sizeof(supported[0]); ++i)
+        if (bounded_equal(timezone, VANTA_SETUP_TIMEZONE_MAX, supported[i]))
+            return 1;
+    return 0;
 }
 
 int vanta_setup_config_valid(const vanta_setup_config_t *config)

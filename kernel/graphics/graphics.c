@@ -304,7 +304,23 @@ void graphics_update_cursor(void)
 {
     if (!initialized || graphics_frame_active)
         return;
+
+    /*
+     * Cursor motion uses the same shadow surface and damage commit as every
+     * other scene update. Writing save-under pixels straight to scanout races
+     * the display's readout and can tear even when only a few pixels change.
+     */
+    graphics_begin_frame();
+    if (!graphics_frame_active)
+        return;
+
     graphics_draw_cursor();
+    graphics_end_frame();
+}
+
+int graphics_frame_is_active(void)
+{
+    return graphics_frame_active;
 }
 
 int graphics_can_redraw_windows_in_place(void)

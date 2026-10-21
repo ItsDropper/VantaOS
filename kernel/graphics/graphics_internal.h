@@ -31,6 +31,7 @@ extern int cursor_x;
 extern int cursor_y;
 extern int active_panel;
 extern int start_menu_open;
+extern int power_menu_open;
 extern uint32_t files_current_dir;
 extern int files_open_file;
 extern int terminal_close_requested;

@@ -27,6 +27,38 @@ typedef struct {
 #define block_io_guid BlockIoProtocol
 #define filesystem_guid FileSystemProtocol
 
+static void port_out8(uint16_t port, uint8_t value)
+{
+    __asm__ volatile ("outb %0, %1" : : "a"(value), "Nd"(port));
+}
+
+static uint8_t port_in8(uint16_t port)
+{
+    uint8_t value;
+    __asm__ volatile ("inb %1, %0" : "=a"(value) : "Nd"(port));
+    return value;
+}
+
+static void serial_initialize(void)
+{
+    port_out8(0x3F9U, 0x00U);
+    port_out8(0x3FBU, 0x80U);
+    port_out8(0x3F8U, 0x01U);
+    port_out8(0x3F9U, 0x00U);
+    port_out8(0x3FBU, 0x03U);
+    port_out8(0x3FAU, 0xC7U);
+    port_out8(0x3FCU, 0x0BU);
+}
+
+static void serial_write(const char *text)
+{
+    while (*text) {
+        while ((port_in8(0x3FDU) & 0x20U) == 0U)
+            ;
+        port_out8(0x3F8U, (uint8_t)*text++);
+    }
+}
+
 static int bytes_equal(const uint8_t *a, const uint8_t *b, size_t length)
 {
     for (size_t i = 0U; i < length; ++i)
@@ -402,6 +434,8 @@ static int create_directories(EFI_FILE_PROTOCOL *root, int is_efi)
 EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 {
     InitializeLib(image_handle, system_table);
+    serial_initialize();
+    serial_write("VANTAOS_SETUP_START\n");
     Print(L"\r\nVANTAOS SETUP\r\n");
     Print(L"UEFI installer - all data on the selected target disk will be erased.\r\n\r\n");
 
@@ -483,6 +517,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
         return EFI_NOT_FOUND;
     }
 
+    serial_write("VANTAOS_SETUP_DISKS_READY\n");
     Print(L"\r\nTarget disks (installer media excluded):\r\n");
     for (UINTN i = 0U; i < disk_count; ++i) {
         UINT64 gib = disks[i].sector_count / 2097152U;
@@ -510,6 +545,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
         return EFI_ABORTED;
     }
 
+    serial_write("VANTAOS_SETUP_CONFIRM_ACCEPTED\n");
     vanta_installer_layout_t layout;
     if (vanta_installer_plan_gpt(target->sector_count,
             VANTA_INSTALLER_SECTOR_SIZE, &layout) != VANTA_INSTALLER_LAYOUT_OK) {
@@ -552,6 +588,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
         return EFI_DEVICE_ERROR;
     }
 
+    serial_write("VANTAOS_SETUP_GPT_OK\n");
     UINT8 *fat_workspace = NULL;
     status = uefi_call_wrapper(BS->AllocatePool, 3, EfiLoaderData,
         VANTA_INSTALLER_FAT32_WORKSPACE_SIZE, (void **)&fat_workspace);
@@ -582,6 +619,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
         return EFI_DEVICE_ERROR;
     }
 
+    serial_write("VANTAOS_SETUP_FORMAT_OK\n");
     Print(L"Connecting firmware partition drivers...\r\n");
     status = uefi_call_wrapper(BS->ConnectController, 4,
         target->handle, NULL, NULL, TRUE);
@@ -614,7 +652,8 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
     }
     if (!create_directories(efi_root, 1) || !create_directories(system_root, 0)) {
         Print(L"ERROR: cannot create the required installation directories.\r\n");
-        uefi_call_wrapper(system_root->Close, 1, system_root);
+        serial_write("VANTAOS_SETUP_FILES_OK\n");
+    uefi_call_wrapper(system_root->Close, 1, system_root);
         uefi_call_wrapper(efi_root->Close, 1, efi_root);
         uefi_call_wrapper(source_root->Close, 1, source_root);
         return EFI_DEVICE_ERROR;
@@ -657,6 +696,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
         return status;
     }
 
+    serial_write("VANTAOS_SETUP_COMPLETE\n");
     Print(L"\r\nVantaOS installation completed.\r\n");
     Print(L"Remove the installer media, then reboot and choose the installed disk.\r\n");
     Print(L"Press any key to restart...\r\n");

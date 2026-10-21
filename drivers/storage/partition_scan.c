@@ -13,6 +13,7 @@
 #define GPT_ARRAY_MAX (GPT_MAX * GPT_ENTRY_MAX)
 
 static uint8_t entry_storage[GPT_ARRAY_MAX];
+static partition_scan_entry_t staging[PARTITION_SCAN_MAX];
 static uint8_t backup_storage[GPT_ARRAY_MAX];
 
 static uint16_t rd16(const uint8_t *p)
@@ -171,6 +172,13 @@ static partition_scan_status_t scan_mbr(partition_read_fn read, void *ctx,
         int added = append(out, cap, &count, start, length, type, PARTITION_SCHEME_MBR, 0, 0);
         if (added <= 0) return added < 0 ? PARTITION_SCAN_BAD_TABLE : PARTITION_SCAN_CAPACITY;
     }
+    if (ext_length) {
+        for (size_t i = 0U; i < count; ++i) {
+            uint64_t end = out[i].start_lba + out[i].sector_count;
+            if (out[i].start_lba < ext_base + ext_length && ext_base < end)
+                return PARTITION_SCAN_BAD_TABLE;
+        }
+    }
     uint64_t current = ext_base, visited[EBR_MAX]; size_t seen = 0U;
     while (ext_length && current) {
         if (seen >= EBR_MAX || current < ext_base || current >= ext_base + ext_length ||
@@ -194,7 +202,8 @@ static partition_scan_status_t scan_mbr(partition_read_fn read, void *ctx,
         uint64_t link_length = rd32(link + 12U);
         if (!link_type && !relative && !link_length) current = 0U;
         else {
-            if (!extended_type(link_type) || !link_length || relative >= ext_length)
+            if (!extended_type(link_type) || !link_length || relative >= ext_length ||
+                link_length > ext_length - relative)
                 return PARTITION_SCAN_BAD_TABLE;
             current = ext_base + relative;
         }
@@ -213,8 +222,26 @@ partition_scan_status_t partition_scan(partition_read_fn read, void *ctx,
     uint8_t mbr[SECTOR];
     if (!read_checked(read, ctx, disk_sectors, 0U, 1U, mbr)) return PARTITION_SCAN_IO_ERROR;
     if (mbr[510] != 0x55U || mbr[511] != 0xAAU) return PARTITION_SCAN_BAD_TABLE;
-    for (unsigned i = 0U; i < 4U; ++i)
-        if (mbr[MBR_OFF + i * 16U + 4U] == 0xEEU)
-            return scan_gpt(read, ctx, disk_sectors, entries, capacity, out_count);
-    return scan_mbr(read, ctx, disk_sectors, entries, capacity, out_count);
+    unsigned protective_count = 0U;
+    for (unsigned i = 0U; i < 4U; ++i) {
+        const uint8_t *record = mbr + MBR_OFF + i * 16U;
+        if (record[4U] != 0xEEU)
+            continue;
+        uint64_t start = rd32(record + 8U), length = rd32(record + 12U);
+        if (start != 1U || !length)
+            return PARTITION_SCAN_BAD_TABLE;
+        ++protective_count;
+    }
+    if (protective_count > 1U)
+        return PARTITION_SCAN_BAD_TABLE;
+    size_t staged_count = 0U;
+    partition_scan_status_t status = protective_count ?
+        scan_gpt(read, ctx, disk_sectors, staging, capacity, &staged_count) :
+        scan_mbr(read, ctx, disk_sectors, staging, capacity, &staged_count);
+    if (status != PARTITION_SCAN_OK)
+        return status;
+    for (size_t i = 0U; i < staged_count; ++i)
+        entries[i] = staging[i];
+    *out_count = staged_count;
+    return PARTITION_SCAN_OK;
 }

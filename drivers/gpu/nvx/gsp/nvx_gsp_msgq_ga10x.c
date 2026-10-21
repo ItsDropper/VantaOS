@@ -100,7 +100,7 @@ nvx_gsp_msgq_ga10x_status_t nvx_gsp_msgq_ga10x_link_status(
 
         uint32_t delay = poll_interval_ms;
         if (delay > timeout_ms - elapsed) delay = timeout_ms - elapsed;
-        delay_ms(context, delay);
+        delay_ms(delay, context);
         elapsed += delay;
     } while (elapsed < timeout_ms);
     return NVX_GSP_MSGQ_GA10X_TIMEOUT;

@@ -78,8 +78,7 @@ void graphics_mouse_click(int button)
         int clock_x = width - 116;
         if (clock_x < center + 116)
             clock_x = center + 116;
-        if (gui_server_taskbar_click(cursor_x, cursor_y, taskbar_y,
-                                     center + 116, clock_x - 8))
+        if (gui_server_taskbar_click(cursor_x, cursor_y, taskbar_y, width))
             return;
     }
 

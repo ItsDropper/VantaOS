@@ -171,13 +171,12 @@ static nvx_gsp_rmapi_status_t finish_sync(
     nvx_gsp_rmapi_status_t status=nvx_gsp_rmapi_wait(manager,out,scratch,
         scratch_size,response,response_capacity,timeout_ms,poll_interval_ms,
         delay_ms,delay_context);
-    nvx_gsp_rpc_result_t query={0};
-    if(status!=NVX_GSP_RMAPI_TIMEOUT&&out->handle.valid&&
-       nvx_gsp_rpc_query(manager,&out->handle,&query)==NVX_GSP_RPC_OK) {
-        if(query.status!=NVX_GSP_RPC_PENDING) {
-            (void)nvx_gsp_rpc_release(manager,&out->handle);
-        }
-    }
+    /*
+     * Release succeeds only after completion; on timeout it is deliberately
+     * not attempted because an in-flight reply can still arrive later.
+     */
+    if(status!=NVX_GSP_RMAPI_TIMEOUT&&out->handle.valid)
+        (void)nvx_gsp_rpc_release(manager,&out->handle);
     return status;
 }
 

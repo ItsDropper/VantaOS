@@ -160,6 +160,7 @@ static void desktop_gui_present(void)
     if (!graphics_is_initialized())
         return;
 
+    gui_server_sync_active_panel();
     graphics_begin_frame();
     if (!graphics_frame_is_active())
     {
@@ -186,6 +187,7 @@ static void desktop_gui_present(void)
  */
 static void desktop_gui_present_terminal_fast(void)
 {
+    gui_server_sync_active_panel();
     if (!graphics_can_redraw_windows_incrementally())
     {
         desktop_gui_present();
@@ -265,6 +267,7 @@ void desktop_update(void)
 {
     /* USB polling is owned by desktop_process_main after frame/input work. */
     gui_server_cleanup_dead_windows();
+    gui_server_sync_active_panel();
 
     /* The physical Super/GUI key is a desktop shortcut, not text input. */
     if (keyboard_take_super_event())

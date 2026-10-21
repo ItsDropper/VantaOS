@@ -372,6 +372,13 @@ int graphics_initialize(multiboot_info_t* mbd)
     if (graphics_initialize_bochs())
         return 1;
 
+    graphics_bochs_mode = 0;
+    graphics_pageflip_enabled = 0;
+    graphics_pageflip_seeded = 0;
+    graphics_scanout_page_index = 0U;
+    graphics_scanout_page_bytes = 0U;
+    graphics_scanout_base = 0;
+
     /*
      * GRUB framebuffer is a fallback for non-Bochs framebuffer boots.
      */
@@ -408,6 +415,13 @@ int graphics_initialize(multiboot_info_t* mbd)
                 return 0;
 
             framebuffer = (uint8_t*)(GRAPHICS_VIRTUAL_BASE + offset);
+            graphics_scanout_base = framebuffer;
+            graphics_scanout_page_bytes =
+                (uint64_t)mbd->framebuffer_pitch * mbd->framebuffer_height;
+            graphics_scanout_page_index = 0U;
+            graphics_bochs_mode = 0;
+            graphics_pageflip_enabled = 0;
+            graphics_pageflip_seeded = 0;
             framebuffer_pitch = mbd->framebuffer_pitch;
             framebuffer_width = mbd->framebuffer_width;
             framebuffer_height = mbd->framebuffer_height;

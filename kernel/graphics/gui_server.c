@@ -265,22 +265,7 @@ static void gui_focus_locked(gui_window_t* target)
     {
         target->z_order = next_z_order++;
         gui_emit_simple_event_locked(target, VANTA_GUI_EVENT_FOCUS_GAINED);
-        if (target->builtin)
-        {
-            if (gui_title_equal(target->title, "Files"))
-                graphics_select_panel(2);
-            else if (gui_title_equal(target->title, "Terminal"))
-                graphics_select_panel(3);
-            else if (gui_title_equal(target->title, "System"))
-                graphics_select_panel(1);
-            else if (gui_title_equal(target->title, "Settings"))
-                graphics_select_panel(4);
-        }
-        else
-            graphics_select_panel(0);
     }
-    else
-        graphics_select_panel(0);
     redraw_pending = 1;
 }
 
@@ -324,6 +309,26 @@ static int gui_command_valid(const vanta_gui_draw_command_t* command,
     }
 
     return 0;
+}
+
+void gui_server_sync_active_panel(void)
+{
+    int panel = 0;
+    uint64_t flags = spinlock_lock_irqsave(&gui_lock);
+    for (unsigned int i = 0; i < VANTA_GUI_MAX_WINDOWS; i++)
+    {
+        gui_window_t* window = &windows[i];
+        if (!window->used || !window->visible ||
+            window->id != focused_window_id || !window->builtin)
+            continue;
+        if (gui_title_equal(window->title, "Files")) panel = 2;
+        else if (gui_title_equal(window->title, "Terminal")) panel = 3;
+        else if (gui_title_equal(window->title, "System")) panel = 1;
+        else if (gui_title_equal(window->title, "Settings")) panel = 4;
+        break;
+    }
+    spinlock_unlock_irqrestore(&gui_lock, flags);
+    graphics_select_panel(panel);
 }
 
 void gui_server_reflow_windows(void)

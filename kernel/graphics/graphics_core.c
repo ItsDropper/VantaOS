@@ -127,8 +127,9 @@ static void graphics_copy_bytes(uint8_t* target, const uint8_t* source,
 
 static void graphics_copy_damage_tiles(
     uint8_t* target, const uint8_t* source,
-    uint32_t width, uint32_t height, uint32_t pitch,
-    const uint8_t* damage_bitmap, size_t damage_bitmap_bytes,
+    uint32_t width, uint32_t height, uint32_t target_pitch,
+    uint32_t source_pitch, const uint8_t* damage_bitmap,
+    size_t damage_bitmap_bytes,
     uint32_t tile_size, uint32_t tiles_x, uint32_t tiles_y)
 {
     for (uint32_t ty = 0; ty < tiles_y; ty++)
@@ -151,9 +152,9 @@ static void graphics_copy_damage_tiles(
             for (uint32_t y = y0; y < y1; y++)
             {
                 volatile uint32_t* dst =
-                    (volatile uint32_t*)(target + (size_t)y * pitch);
+                    (volatile uint32_t*)(target + (size_t)y * target_pitch);
                 const uint32_t* src =
-                    (const uint32_t*)(source + (size_t)y * pitch);
+                    (const uint32_t*)(source + (size_t)y * source_pitch);
                 for (uint32_t x = x0; x < x1; x++)
                     dst[x] = src[x];
             }
@@ -206,7 +207,8 @@ int graphics_display_present_damage(
                                 (size_t)graphics_scanout_page_bytes);
 
         graphics_copy_damage_tiles(hidden, backbuffer, width, height,
-                                   display_pitch, damage_bitmap,
+                                   display_pitch, backbuffer_pitch,
+                                   damage_bitmap,
                                    damage_bitmap_bytes, tile_size,
                                    tiles_x, tiles_y);
 
@@ -217,7 +219,8 @@ int graphics_display_present_damage(
             graphics_scanout_page_index = next_index;
             *display_framebuffer = hidden;
             graphics_copy_damage_tiles(front, backbuffer, width, height,
-                                       display_pitch, damage_bitmap,
+                                       display_pitch, backbuffer_pitch,
+                                       damage_bitmap,
                                        damage_bitmap_bytes, tile_size,
                                        tiles_x, tiles_y);
             graphics_pageflip_seeded = 1;
@@ -237,7 +240,8 @@ int graphics_display_present_damage(
     }
 
     graphics_copy_damage_tiles(*display_framebuffer, backbuffer, width,
-                               height, display_pitch, damage_bitmap,
+                               height, display_pitch, backbuffer_pitch,
+                               damage_bitmap,
                                damage_bitmap_bytes, tile_size, tiles_x,
                                tiles_y);
     return 1;

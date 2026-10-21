@@ -70,7 +70,6 @@ static void desktop_gui_present_terminal_fast(void)
     {
         /* Keep the last complete frame; never fall back to direct scanout. */
         return;
-        return;
     }
 
     graphics_cursor_restore();

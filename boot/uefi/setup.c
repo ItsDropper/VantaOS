@@ -554,13 +554,19 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
     Print(L"33 Singapore     34 Sydney         35 Auckland       36 London [1]: ");
     if (!read_line(line, sizeof(line))) return EFI_ABORTED;
     uint32_t zone_choice = 1U;
-    if (line[0] != '\0' &&
-        (!parse_number(line, &zone_choice) ||
-         zone_choice == 0U ||
-         zone_choice > sizeof(zones) / sizeof(zones[0]))) {
-        Print(L"Invalid time-zone choice. No disks changed.\r\n");
-        uefi_call_wrapper(source_root->Close, 1, source_root);
-        return EFI_INVALID_PARAMETER;
+    for (;;) {
+        if (!read_line(line, sizeof(line))) {
+            uefi_call_wrapper(source_root->Close, 1, source_root);
+            return EFI_ABORTED;
+        }
+        if (line[0] == '\0')
+            break;
+        if (parse_number(line, &zone_choice) && zone_choice > 0U &&
+            zone_choice <= sizeof(zones) / sizeof(zones[0]))
+            break;
+        print_localized(&config, L"Invalid time-zone choice; enter 1-36: ",
+                        L"Virheellinen aikavyohyke; anna numero 1-36: ");
+        zone_choice = 1U;
     }
     const char *zone = zones[zone_choice - 1U];
     size_t zone_length = 0U;

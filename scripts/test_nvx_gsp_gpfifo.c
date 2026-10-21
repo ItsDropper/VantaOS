@@ -9,6 +9,21 @@
 #include <stdint.h>
 #include <string.h>
 
+typedef struct simulated_completion {
+    volatile uint32_t *gp_get;
+    volatile uint32_t *completion;
+    uint32_t expected_get;
+    uint32_t expected_value;
+} simulated_completion_t;
+
+static void complete_after_poll(uint32_t ms,void *context)
+{
+    simulated_completion_t *s=(simulated_completion_t *)context;
+    (void)ms;
+    *s->gp_get=s->expected_get;
+    *s->completion=s->expected_value;
+}
+
 static void no_delay(uint32_t ms,void *context)
 {
     (void)ms;(void)context;
@@ -47,6 +62,19 @@ int main(void)
     assert(nvx_gsp_gpfifo_submit(&channel,command_va,command_bytes,&put)==
            NVX_GSP_GPFIFO_QUEUE_FULL);
     assert(gp_put==1U);
+
+    /* The combined path distinguishes GP_GET consumption from GPU completion. */
+    gp_get=0U;gp_put=0U;doorbell=0U;completion=0U;
+    assert(nvx_gsp_gpfifo_channel_init(&channel,entries,sizeof(entries),
+        &gp_get,&gp_put,&doorbell,0xBEEFU,4U)==NVX_GSP_GPFIFO_OK);
+    {
+        simulated_completion_t sim={&gp_get,&completion,1U,0x55AAU};
+        assert(nvx_gsp_gpfifo_submit_and_wait(&channel,command_va,command_bytes,
+            &completion,sim.expected_value,5U,1U,complete_after_poll,&sim,&put)==
+            NVX_GSP_GPFIFO_OK);
+        assert(put==1U&&gp_put==1U&&doorbell==0xBEEFU);
+        assert(completion==0x55AAU);
+    }
 
     assert(nvx_gsp_gpfifo_submit(&channel,NVX_GSP_GPFIFO_ADDRESS_LIMIT,
         command_bytes,&put)==NVX_GSP_GPFIFO_BAD_COMMAND_RANGE);

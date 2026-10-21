@@ -357,6 +357,7 @@ nvx_gsp_falcon_status_t nvx_gsp_ga10x_prepare_riscv_after_frts(
     nvx_dma_sync_t *libos_init_args_sync,
     nvx_dma_buffer_t *shared_queue_mem,
     nvx_dma_sync_t *shared_queue_sync,
+    const nvx_gsp_modern_shared_queue_layout_t *queue_layout,
     const nvx_mmio_region_t *bar0, uint64_t frts_framebuffer_offset,
     const nvx_gsp_fwsec_result_snapshot_t *frts_result,
     uint32_t timeout_ms, uint32_t poll_interval_ms,
@@ -366,8 +367,8 @@ nvx_gsp_falcon_status_t nvx_gsp_ga10x_prepare_riscv_after_frts(
     const nvx_gsp_arguments_cached_modern_t *arguments;
 
     if (!memory || !libos_init_args || !libos_init_args_sync ||
-        !shared_queue_mem || !shared_queue_sync || !bar0 || !bar0->base ||
-        !frts_result || !delay_ms || timeout_ms == 0U ||
+        !shared_queue_mem || !shared_queue_sync || !queue_layout ||
+        !bar0 || !bar0->base || !frts_result || !delay_ms || timeout_ms == 0U ||
         poll_interval_ms == 0U || frts_framebuffer_offset == 0U ||
         (frts_framebuffer_offset & 0xFFFU) != 0U ||
         (frts_framebuffer_offset >> 12U) > 0x0FFFFFFFU ||
@@ -454,6 +455,8 @@ nvx_gsp_falcon_status_t nvx_gsp_ga10x_prepare_riscv_after_frts(
         libos_init_args_sync->gpu_address != libos_init_args->gpu_address ||
         !shared_queue_mem->acquired || !shared_queue_mem->cpu_address ||
         shared_queue_mem->size == 0U ||
+        queue_layout->shared_mem_phys_addr != shared_queue_mem->gpu_address ||
+        queue_layout->allocation_size > shared_queue_mem->size ||
         shared_queue_mem->allocated_size < shared_queue_mem->size ||
         shared_queue_mem->gpu_address == 0U ||
         (shared_queue_mem->gpu_address & (NVX_GSP_INIT_ARGS_PAGE_SIZE - 1U)) != 0U ||
@@ -471,6 +474,15 @@ nvx_gsp_falcon_status_t nvx_gsp_ga10x_prepare_riscv_after_frts(
         arguments->size != sizeof(*arguments) ||
         arguments->message_queue.shared_mem_phys_addr !=
             shared_queue_mem->gpu_address ||
+        arguments->message_queue.command_queue_offset !=
+            queue_layout->command_queue_offset ||
+        arguments->message_queue.status_queue_offset !=
+            queue_layout->status_queue_offset ||
+        arguments->message_queue.page_table_entry_count !=
+            queue_layout->page_table_entry_count ||
+        nvx_gsp_modern_shared_queue_validate_pte_table(
+            queue_layout, shared_queue_mem->cpu_address,
+            shared_queue_mem->size) != NVX_GSP_INIT_ARGS_OK ||
         arguments->message_queue.page_table_entry_count == 0U ||
         arguments->message_queue.page_table_entry_count >
             NVX_GSP_INIT_ARGS_PAGE_SIZE / sizeof(uint64_t) ||
@@ -630,7 +642,7 @@ nvx_gsp_falcon_status_t nvx_gsp_ga10x_bootstrap_traced(
     trace.current_phase = NVX_GSP_BOOT_PHASE_PREPARE_RISCV;
     status = nvx_gsp_ga10x_prepare_riscv_after_frts(
         memory, libos_init_args, libos_init_args_sync, shared_queue_mem,
-        shared_queue_sync, bar0, frts_framebuffer_offset, &frts_result,
+        shared_queue_sync, queue_layout, bar0, frts_framebuffer_offset, &frts_result,
         timeout_ms, poll_interval_ms, delay_ms, context);
     if (status != NVX_GSP_FALCON_OK) {
         trace.result = status;

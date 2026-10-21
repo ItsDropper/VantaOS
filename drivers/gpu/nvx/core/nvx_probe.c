@@ -8,6 +8,7 @@
 
 #include "nvx_lifecycle.h"
 #include "nvx_mmio.h"
+#include "nvx_generation.h"
 
 #include <stdint.h>
 

@@ -148,3 +148,72 @@ static partition_scan_status_t scan_gpt(partition_read_fn read, void *ctx,
     if (!count) return PARTITION_SCAN_NO_PARTITIONS;
     *out_count = count; return PARTITION_SCAN_OK;
 }
+
+static int extended_type(uint8_t type)
+{ return type == 0x05U || type == 0x0FU || type == 0x85U; }
+static partition_scan_status_t scan_mbr(partition_read_fn read, void *ctx,
+    uint64_t disk, partition_scan_entry_t *out, size_t cap, size_t *out_count)
+{
+    uint8_t mbr[SECTOR];
+    if (!read_checked(read, ctx, disk, 0U, 1U, mbr)) return PARTITION_SCAN_IO_ERROR;
+    if (mbr[510] != 0x55U || mbr[511] != 0xAAU) return PARTITION_SCAN_BAD_TABLE;
+    size_t count = 0U; uint64_t ext_base = 0U, ext_length = 0U;
+    for (unsigned i = 0U; i < 4U; ++i) {
+        const uint8_t *r = mbr + MBR_OFF + i * 16U;
+        uint8_t type = r[4U]; uint64_t start = rd32(r + 8U), length = rd32(r + 12U);
+        if (!type && !length) continue;
+        if (!type || !range_ok(start, length, disk)) return PARTITION_SCAN_BAD_TABLE;
+        if (extended_type(type)) {
+            if (ext_length) return PARTITION_SCAN_BAD_TABLE;
+            ext_base = start; ext_length = length; continue;
+        }
+        int added = append(out, cap, &count, start, length, type, PARTITION_SCHEME_MBR, 0, 0);
+        if (added <= 0) return added < 0 ? PARTITION_SCAN_BAD_TABLE : PARTITION_SCAN_CAPACITY;
+    }
+    uint64_t current = ext_base, visited[EBR_MAX]; size_t seen = 0U;
+    while (ext_length && current) {
+        if (seen >= EBR_MAX || current < ext_base || current >= ext_base + ext_length ||
+            current >= disk) return PARTITION_SCAN_BAD_TABLE;
+        for (size_t i = 0U; i < seen; ++i)
+            if (visited[i] == current) return PARTITION_SCAN_BAD_TABLE;
+        visited[seen++] = current;
+        uint8_t ebr[SECTOR];
+        if (!read_checked(read, ctx, disk, current, 1U, ebr)) return PARTITION_SCAN_IO_ERROR;
+        if (ebr[510] != 0x55U || ebr[511] != 0xAAU) return PARTITION_SCAN_BAD_TABLE;
+        const uint8_t *logical = ebr + MBR_OFF;
+        uint8_t type = logical[4U];
+        uint64_t start = current + rd32(logical + 8U), length = rd32(logical + 12U);
+        if (!type || !length || start < ext_base ||
+            start + length > ext_base + ext_length || !range_ok(start, length, disk))
+            return PARTITION_SCAN_BAD_TABLE;
+        int added = append(out, cap, &count, start, length, type, PARTITION_SCHEME_MBR, 0, 0);
+        if (added <= 0) return added < 0 ? PARTITION_SCAN_BAD_TABLE : PARTITION_SCAN_CAPACITY;
+        const uint8_t *link = ebr + MBR_OFF + 16U;
+        uint8_t link_type = link[4U]; uint64_t relative = rd32(link + 8U);
+        uint64_t link_length = rd32(link + 12U);
+        if (!link_type && !relative && !link_length) current = 0U;
+        else {
+            if (!extended_type(link_type) || !link_length || relative >= ext_length)
+                return PARTITION_SCAN_BAD_TABLE;
+            current = ext_base + relative;
+        }
+    }
+    if (!count) return PARTITION_SCAN_NO_PARTITIONS;
+    *out_count = count; return PARTITION_SCAN_OK;
+}
+
+partition_scan_status_t partition_scan(partition_read_fn read, void *ctx,
+    uint64_t disk_sectors, partition_scan_entry_t *entries, size_t capacity,
+    size_t *out_count)
+{
+    if (!read || !entries || !out_count || disk_sectors < 2U || !capacity)
+        return PARTITION_SCAN_INVALID_ARGUMENT;
+    *out_count = 0U;
+    uint8_t mbr[SECTOR];
+    if (!read_checked(read, ctx, disk_sectors, 0U, 1U, mbr)) return PARTITION_SCAN_IO_ERROR;
+    if (mbr[510] != 0x55U || mbr[511] != 0xAAU) return PARTITION_SCAN_BAD_TABLE;
+    for (unsigned i = 0U; i < 4U; ++i)
+        if (mbr[MBR_OFF + i * 16U + 4U] == 0xEEU)
+            return scan_gpt(read, ctx, disk_sectors, entries, capacity, out_count);
+    return scan_mbr(read, ctx, disk_sectors, entries, capacity, out_count);
+}

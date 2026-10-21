@@ -570,6 +570,7 @@ void gui_server_draw_windows(void)
         target->height = source->height;
         target->z_order = source->z_order;
         target->maximized = source->maximized;
+        target->builtin_draw = source->builtin_draw;
         target->command_count = source->command_count;
         for (size_t j = 0; j < sizeof(target->title); j++)
             target->title[j] = source->title[j];
@@ -639,6 +640,9 @@ void gui_server_draw_windows(void)
                                    command->color & 0x00FFFFFFU,
                                    command->scale);
         }
+
+        if (window->builtin_draw)
+            window->builtin_draw(x, y, (int)width, (int)height);
 
         /* Subtle resize affordance; disabled for maximized windows. */
         if (!window->maximized)
@@ -762,6 +766,10 @@ int gui_server_mouse_click(int x, int y, int button)
     if (button != 1 && button != 3)
         return 0;
 
+    gui_builtin_click_fn builtin_click = 0;
+    gui_builtin_close_fn builtin_close = 0;
+    int close_builtin = 0;
+    int builtin_x = 0, builtin_y = 0, builtin_w = 0, builtin_h = 0;
     uint64_t flags = spinlock_lock_irqsave(&gui_lock);
     gui_window_t* target = 0;
     for (unsigned int i = 0; i < VANTA_GUI_MAX_WINDOWS; i++)
@@ -794,6 +802,16 @@ int gui_server_mouse_click(int x, int y, int button)
             gui_minimize_locked(target);
         else if (control_x < 92)
             gui_toggle_maximized_locked(target);
+        else if (target->builtin)
+        {
+            builtin_close = target->builtin_close;
+            close_builtin = 1;
+            target->visible = 0;
+            target->owner_visible = 0;
+            target->minimized = 0;
+            if (focused_window_id == target->id)
+                gui_focus_locked(gui_topmost_visible_locked(target->id));
+        }
         else
             gui_emit_simple_event_locked(target, VANTA_GUI_EVENT_CLOSE_REQUEST);
     }
@@ -826,6 +844,14 @@ int gui_server_mouse_click(int x, int y, int button)
         drag_offset_x = x - target->x;
         drag_offset_y = y - target->y;
     }
+    else if (target->builtin)
+    {
+        builtin_click = target->builtin_click;
+        builtin_x = target->x;
+        builtin_y = target->y;
+        builtin_w = (int)target->width;
+        builtin_h = (int)target->height;
+    }
     else
     {
         vanta_gui_event_t event = {
@@ -839,6 +865,11 @@ int gui_server_mouse_click(int x, int y, int button)
     }
     redraw_pending = 1;
     spinlock_unlock_irqrestore(&gui_lock, flags);
+    if (close_builtin && builtin_close)
+        builtin_close();
+    else if (builtin_click)
+        (void)builtin_click(builtin_x, builtin_y, builtin_w, builtin_h,
+                            x, y, button);
     return 1;
 }
 
@@ -1193,7 +1224,7 @@ void gui_server_cleanup_dead_windows(void)
     unsigned int count = 0U;
     uint64_t flags = spinlock_lock_irqsave(&gui_lock);
     for (unsigned int i = 0; i < VANTA_GUI_MAX_WINDOWS; i++)
-        if (windows[i].used)
+        if (windows[i].used && !windows[i].builtin)
         {
             ids[count] = windows[i].id;
             owners[count] = windows[i].owner_pid;

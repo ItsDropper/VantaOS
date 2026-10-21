@@ -38,5 +38,6 @@ typedef struct {
 
 /* Unknown IDs/chips return null; this lookup never maps MMIO or initializes hardware. */
 const nvx_generation_descriptor_t *nvx_generation_for_pci(uint16_t device_id);
+const nvx_generation_descriptor_t *nvx_generation_for_firmware_chip(const char *chip);
 int nvx_generation_supports_firmware_chip(const char *chip);
 #endif

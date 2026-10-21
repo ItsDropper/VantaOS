@@ -63,6 +63,18 @@ int main(void)
            NVX_GSP_GPFIFO_QUEUE_FULL);
     assert(gp_put==1U);
 
+    {
+        volatile uint32_t nop_command=UINT32_C(0xFFFFFFFF);
+        simulated_completion_t sim={&gp_get,&completion,1U,0U};
+        gp_get=0U;gp_put=0U;doorbell=0U;
+        assert(nvx_gsp_gpfifo_channel_init(&channel,entries,sizeof(entries),
+            &gp_get,&gp_put,&doorbell,0xBEEFU,4U)==NVX_GSP_GPFIFO_OK);
+        assert(nvx_gsp_gpfifo_submit_nop_probe(&channel,&nop_command,
+            sizeof(nop_command),command_va,5U,1U,complete_after_poll,&sim,&put)==
+            NVX_GSP_GPFIFO_OK);
+        assert(nop_command==0U&&put==1U&&gp_put==1U);
+    }
+
     /* The combined path distinguishes GP_GET consumption from GPU completion. */
     gp_get=0U;gp_put=0U;doorbell=0U;completion=0U;
     assert(nvx_gsp_gpfifo_channel_init(&channel,entries,sizeof(entries),

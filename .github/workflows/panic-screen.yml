@@ -32,7 +32,7 @@ jobs:
         timeout-minutes: 3
         run: |
           set -euo pipefail
-          rm -f panic-screen.log panic-screen.png /tmp/vantaos-panic-qmp.sock
+          rm -f panic-screen.log panic-screen.ppm panic-screen.png /tmp/vantaos-panic-qmp.sock
           qemu-system-x86_64 \
             -machine pc -m 256M -smp 2 -vga std \
             -drive file=VantaOS.iso,media=cdrom,format=raw \
@@ -125,18 +125,25 @@ jobs:
           print("QMP_GREETING_OK", flush=True)
           command("qmp_capabilities")
           print("QMP_CAPABILITIES_OK", flush=True)
-          output_path = os.path.abspath("panic-screen.png")
+          output_path = os.path.abspath("panic-screen.ppm")
           command("screendump", filename=output_path)
           print(f"QMP_SCREENDUMP_OK path={output_path}", flush=True)
           connection.close()
           PY
 
+          test -s panic-screen.ppm
+          identify panic-screen.ppm
+          # QEMU screendump writes PPM data regardless of the filename extension.
+          # Convert it explicitly so artifact viewers receive a genuine PNG.
+          convert panic-screen.ppm PNG24:panic-screen.png
           test -s panic-screen.png
           identify panic-screen.png
           python3 - <<'PY'
           from PIL import Image
 
-          image = Image.open("panic-screen.png").convert("RGB")
+          image = Image.open("panic-screen.png")
+          assert image.format == "PNG", image.format
+          image = image.convert("RGB")
           assert image.width >= 640 and image.height >= 400, image.size
           pixels = image.load()
           red_dominant = sum(
@@ -148,7 +155,12 @@ jobs:
           )
           samples = ((image.width + 7) // 8) * ((image.height + 7) // 8)
           assert red_dominant / samples > 0.35, (red_dominant, samples)
-          print(f"panic screenshot verified: {image.width}x{image.height}, red samples={red_dominant}/{samples}")
+          # The title is drawn at (64, 42) on the normal 1024x768 test mode.
+          # Require bright foreground pixels in that title band, not just a red fill.
+          title_band = [pixels[x, y] for y in range(30, 65) for x in range(48, min(900, image.width))]
+          bright_title_pixels = sum(1 for r, g, b in title_band if r > 180 and g > 180 and b > 180)
+          assert bright_title_pixels >= 80, f"panic title not visible: {bright_title_pixels} bright pixels"
+          print(f"panic screenshot verified: real PNG {image.width}x{image.height}, red samples={red_dominant}/{samples}, title pixels={bright_title_pixels}")
           PY
 
       - name: Upload panic screen and serial log

@@ -79,7 +79,7 @@ nvx_gsp_rmapi_status_t nvx_gsp_rm_alloc_submit(
     memset(request,0,bytes);
     put32(request+0U,client);put32(request+4U,parent);
     put32(request+8U,object);put32(request+12U,class_id);
-    put32(request+16U,UINT32_MAX);put32(request+20U,(uint32_t)params_size);
+    put32(request+16U,0U);put32(request+20U,(uint32_t)params_size);
     put32(request+24U,flags);
     if(params_size)memcpy(request+ALLOC_HEADER_BYTES,params,params_size);
     return submit(manager,NVX_GSP_RPC_FN_RM_ALLOC,request,bytes,scratch,
@@ -100,7 +100,7 @@ nvx_gsp_rmapi_status_t nvx_gsp_rm_control_submit(
         return NVX_GSP_RMAPI_INVALID_ARGUMENT;
     memset(request,0,bytes);
     put32(request+0U,client);put32(request+4U,object);
-    put32(request+8U,command);put32(request+12U,UINT32_MAX);
+    put32(request+8U,command);put32(request+12U,0U);
     put32(request+16U,(uint32_t)params_size);put32(request+20U,rpc_flags);
     put32(request+24U,ctrl_flags);put32(request+28U,access_right);
     /* bytes [32,40) are the ABI's 64-bit reserved field and stay zero. */
@@ -116,7 +116,7 @@ nvx_gsp_rmapi_status_t nvx_gsp_rm_free_submit(
 {
     uint8_t request[FREE_HEADER_BYTES]={0};
     put32(request+0U,root);put32(request+4U,parent);
-    put32(request+8U,object);put32(request+12U,UINT32_MAX);
+    put32(request+8U,object);put32(request+12U,0U);
     return submit(manager,NVX_GSP_RPC_FN_FREE,request,sizeof(request),scratch,
         scratch_size,response,response_capacity,FREE_HEADER_BYTES,out);
 }

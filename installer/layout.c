@@ -29,7 +29,6 @@ vanta_installer_layout_status_t vanta_installer_plan_gpt(
 {
     vanta_installer_layout_t layout;
     uint64_t efi_end_exclusive;
-    uint64_t minimum_sectors;
 
     if (!out_layout || disk_sector_count == 0U)
         return VANTA_INSTALLER_LAYOUT_INVALID_ARGUMENT;
@@ -37,12 +36,10 @@ vanta_installer_layout_status_t vanta_installer_plan_gpt(
     if (logical_sector_size != VANTA_INSTALLER_SECTOR_SIZE)
         return VANTA_INSTALLER_LAYOUT_UNSUPPORTED_SECTOR_SIZE;
 
-    minimum_sectors = VANTA_INSTALLER_MIN_DISK_SECTORS;
-    if (disk_sector_count < minimum_sectors)
+    if (disk_sector_count < VANTA_INSTALLER_MIN_DISK_SECTORS)
         return VANTA_INSTALLER_LAYOUT_DISK_TOO_SMALL;
 
-    if (disk_sector_count <= VANTA_INSTALLER_GPT_RESERVED_SECTORS ||
-        disk_sector_count > UINT64_MAX - VANTA_INSTALLER_ALIGNMENT_SECTORS)
+    if (disk_sector_count <= VANTA_INSTALLER_GPT_RESERVED_SECTORS)
         return VANTA_INSTALLER_LAYOUT_OVERFLOW;
 
     layout.disk_sector_count = disk_sector_count;

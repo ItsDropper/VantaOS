@@ -76,6 +76,173 @@ static inline uint16_t bochs_vbe_read(uint16_t index)
     return value;
 }
 
+static inline uint8_t bochs_vbe_read_status(void)
+{
+    uint8_t status;
+    __asm__ volatile (
+        "inb %1, %0"
+        : "=a"(status)
+        : "Nd"((uint16_t)0x03DA)
+    );
+    return status;
+}
+
+static int bochs_vbe_wait_vblank(void)
+{
+    uint32_t i;
+    for (i = 0; i < GRAPHICS_VBLANK_POLL_LIMIT; i++)
+        if ((bochs_vbe_read_status() & 0x08U) == 0U)
+            break;
+    if (i == GRAPHICS_VBLANK_POLL_LIMIT)
+        return 0;
+
+    for (i = 0; i < GRAPHICS_VBLANK_POLL_LIMIT; i++)
+        if (bochs_vbe_read_status() & 0x08U)
+            return 1;
+    return 0;
+}
+
+static int bochs_vbe_can_pageflip(uint32_t width, uint32_t height,
+                                  uint32_t offset, uint64_t vram_bytes)
+{
+    uint64_t page_bytes = (uint64_t)width * 4U * height;
+    uint64_t total_bytes = page_bytes * 2U;
+    return width != 0U && height != 0U &&
+           height <= UINT16_MAX / 2U &&
+           vram_bytes >= total_bytes + offset &&
+           total_bytes + offset <= GRAPHICS_SCANOUT_WINDOW_BYTES;
+}
+
+static void graphics_copy_bytes(uint8_t* target, const uint8_t* source,
+                                size_t bytes)
+{
+    volatile uint32_t* dst = (volatile uint32_t*)target;
+    const uint32_t* src = (const uint32_t*)source;
+    size_t words = bytes / sizeof(uint32_t);
+    for (size_t i = 0; i < words; i++)
+        dst[i] = src[i];
+    for (size_t i = words * sizeof(uint32_t); i < bytes; i++)
+        target[i] = source[i];
+}
+
+static void graphics_copy_damage_tiles(
+    uint8_t* target, const uint8_t* source,
+    uint32_t width, uint32_t height, uint32_t pitch,
+    const uint8_t* damage_bitmap, size_t damage_bitmap_bytes,
+    uint32_t tile_size, uint32_t tiles_x, uint32_t tiles_y)
+{
+    for (uint32_t ty = 0; ty < tiles_y; ty++)
+    {
+        uint32_t y0 = ty * tile_size;
+        uint32_t y1 = y0 + tile_size;
+        if (y1 > height) y1 = height;
+        for (uint32_t tx = 0; tx < tiles_x; tx++)
+        {
+            uint32_t index = ty * tiles_x + tx;
+            size_t byte_index = index >> 3;
+            if (byte_index >= damage_bitmap_bytes ||
+                (damage_bitmap[byte_index] &
+                 (uint8_t)(1U << (index & 7U))) == 0U)
+                continue;
+
+            uint32_t x0 = tx * tile_size;
+            uint32_t x1 = x0 + tile_size;
+            if (x1 > width) x1 = width;
+            for (uint32_t y = y0; y < y1; y++)
+            {
+                volatile uint32_t* dst =
+                    (volatile uint32_t*)(target + (size_t)y * pitch);
+                const uint32_t* src =
+                    (const uint32_t*)(source + (size_t)y * pitch);
+                for (uint32_t x = x0; x < x1; x++)
+                    dst[x] = src[x];
+            }
+        }
+    }
+}
+
+int graphics_display_present_damage(
+    uint8_t** display_framebuffer, uint32_t display_pitch,
+    const uint8_t* backbuffer, uint32_t width, uint32_t height,
+    uint32_t backbuffer_pitch, const uint8_t* damage_bitmap,
+    size_t damage_bitmap_bytes, uint32_t tile_size)
+{
+    if (!display_framebuffer || !*display_framebuffer || !backbuffer ||
+        !damage_bitmap || width == 0U || height == 0U || tile_size == 0U ||
+        display_pitch < width * 4U || backbuffer_pitch < width * 4U)
+        return 0;
+
+    uint32_t tiles_x = (width + tile_size - 1U) / tile_size;
+    uint32_t tiles_y = (height + tile_size - 1U) / tile_size;
+    uint64_t tile_count = (uint64_t)tiles_x * tiles_y;
+    if (tile_count > (uint64_t)damage_bitmap_bytes * 8U)
+        return 0;
+
+    int has_damage = 0;
+    for (uint64_t i = 0; i < tile_count; i++)
+        if (damage_bitmap[i >> 3] & (uint8_t)(1U << (i & 7U)))
+        {
+            has_damage = 1;
+            break;
+        }
+    if (!has_damage)
+        return 1;
+
+    if (graphics_pageflip_enabled && graphics_bochs_mode &&
+        graphics_scanout_base && display_pitch == width * 4U &&
+        backbuffer_pitch == width * 4U &&
+        graphics_scanout_page_bytes == (uint64_t)display_pitch * height)
+    {
+        uint32_t next_index = graphics_scanout_page_index ^ 1U;
+        uint8_t* front = graphics_scanout_base +
+                         (size_t)graphics_scanout_page_index *
+                         (size_t)graphics_scanout_page_bytes;
+        uint8_t* hidden = graphics_scanout_base +
+                          (size_t)next_index *
+                          (size_t)graphics_scanout_page_bytes;
+
+        if (!graphics_pageflip_seeded)
+            graphics_copy_bytes(hidden, front,
+                                (size_t)graphics_scanout_page_bytes);
+
+        graphics_copy_damage_tiles(hidden, backbuffer, width, height,
+                                   display_pitch, damage_bitmap,
+                                   damage_bitmap_bytes, tile_size,
+                                   tiles_x, tiles_y);
+
+        if (bochs_vbe_wait_vblank())
+        {
+            bochs_vbe_write(BOCHS_VBE_INDEX_Y_OFFSET,
+                            (uint16_t)(next_index * height));
+            graphics_scanout_page_index = next_index;
+            *display_framebuffer = hidden;
+            graphics_copy_damage_tiles(front, backbuffer, width, height,
+                                       display_pitch, damage_bitmap,
+                                       damage_bitmap_bytes, tile_size,
+                                       tiles_x, tiles_y);
+            graphics_pageflip_seeded = 1;
+            return 1;
+        }
+
+        /* Retrace unavailable: preserve the current image and disable flips. */
+        graphics_pageflip_enabled = 0;
+        if (graphics_scanout_page_index != 0U)
+            graphics_copy_bytes(graphics_scanout_base, front,
+                                (size_t)graphics_scanout_page_bytes);
+        bochs_vbe_write(BOCHS_VBE_INDEX_Y_OFFSET, 0U);
+        bochs_vbe_write(BOCHS_VBE_INDEX_VIRT_HEIGHT, (uint16_t)height);
+        graphics_scanout_page_index = 0U;
+        graphics_pageflip_seeded = 0;
+        *display_framebuffer = graphics_scanout_base;
+    }
+
+    graphics_copy_damage_tiles(*display_framebuffer, backbuffer, width,
+                               height, display_pitch, damage_bitmap,
+                               damage_bitmap_bytes, tile_size, tiles_x,
+                               tiles_y);
+    return 1;
+}
+
 uint32_t graphics_pack_color(uint32_t color)
 {
     uint32_t red=(color>>16)&0xFF, green=(color>>8)&0xFF, blue=color&0xFF;

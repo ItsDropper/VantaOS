@@ -28,6 +28,7 @@ int cursor_x;
 int cursor_y;
 int active_panel;
 int start_menu_open;
+int power_menu_open;
 uint32_t files_current_dir;
 int files_open_file = -1;
 int terminal_close_requested;

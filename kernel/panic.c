@@ -209,6 +209,14 @@ void kernel_panic(
 void exception_handler(unsigned int exception_number,
                        struct exception_frame* frame)
 {
+    /*
+     * Panic-broadcast NMIs must halt immediately, including when the peer was
+     * running CPL3. Do this before test recovery or user-process termination.
+     */
+    if (exception_number == 2U &&
+        __atomic_load_n(&panic_broadcast_active, __ATOMIC_ACQUIRE) != 0U)
+        panic_halt();
+
     if (user_mode_selftest_handle_exception(exception_number, frame))
         return;
 
@@ -230,10 +238,6 @@ void exception_handler(unsigned int exception_number,
             return;
         }
     }
-
-    if (exception_number == 2U &&
-        __atomic_load_n(&panic_broadcast_active, __ATOMIC_ACQUIRE) != 0U)
-        panic_halt();
 
     uintptr_t fault_address = 0;
     int has_fault_address = 0;

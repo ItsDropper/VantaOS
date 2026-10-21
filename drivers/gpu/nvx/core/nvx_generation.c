@@ -24,13 +24,17 @@ const nvx_generation_descriptor_t *nvx_generation_for_pci(uint16_t id)
   if(ga10x.pci_device_ids[i]==id)return &ga10x;
  return 0;
 }
-int nvx_generation_supports_firmware_chip(const char *chip)
+const nvx_generation_descriptor_t *nvx_generation_for_firmware_chip(const char *chip)
 {
  if(!chip||!chip[0])return 0;
  for(size_t i=0U;i<ga10x.firmware_chip_count;++i){
   size_t j=0U;
   while(chip[j]&&ga10x.firmware_chips[i][j]==chip[j])++j;
-  if(!chip[j]&&!ga10x.firmware_chips[i][j])return 1;
+  if(!chip[j]&&!ga10x.firmware_chips[i][j])return &ga10x;
  }
  return 0;
+}
+int nvx_generation_supports_firmware_chip(const char *chip)
+{
+ return nvx_generation_for_firmware_chip(chip) != 0;
 }

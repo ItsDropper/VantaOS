@@ -108,7 +108,7 @@ VantaOS-Setup.img: VANTASETUP.EFI BOOTX64.EFI kernel-uefi.elf vantaos.img
 	rm -rf /tmp/vantaos-setup-staging
 	mkdir -p /tmp/vantaos-setup-staging/system/drivers /tmp/vantaos-setup-staging/system/devices /tmp/vantaos-setup-staging/etc
 	for file in system/terminal.vx system/drivers/ata.sys system/drivers/keyboard.sys system/drivers/mouse.sys system/drivers/pci.sys system/drivers/fat32.sys system/devices/disk0.dev system/devices/keyboard0.dev system/devices/mouse0.dev etc/system.conf; do \
-		mcopy -i vantaos.img "::/$file" "/tmp/vantaos-setup-staging/$file" >/dev/null; \
+		mcopy -i vantaos.img "::/$${file}" "/tmp/vantaos-setup-staging/$${file}" >/dev/null || exit $$?; \
 	done
 	rm -f $@
 	truncate -s 1024M $@

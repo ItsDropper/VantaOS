@@ -26,7 +26,6 @@
 #define RECOVERY_MUTED    0x0097A6B7U
 #define RECOVERY_SELECTED 0x00263F62U
 #define RECOVERY_LINE     0x00303C4DU
-#define RECOVERY_MENU_COUNT 6
 
 static const char* recovery_menu_item(int index, int screenshot_available)
 {
@@ -99,11 +98,11 @@ static int recovery_read_choice(int* selected, int menu_count)
         if (key == '\n' || key == '\r')
             return 1;
         if (key == 'w' || key == 'W') {
-            *selected = (*selected + RECOVERY_MENU_COUNT - 1) % RECOVERY_MENU_COUNT;
+            *selected = (*selected + menu_count - 1) % menu_count;
             return 0;
         }
         if (key == 's' || key == 'S') {
-            *selected = (*selected + 1) % RECOVERY_MENU_COUNT;
+            *selected = (*selected + 1) % menu_count;
             return 0;
         }
     }

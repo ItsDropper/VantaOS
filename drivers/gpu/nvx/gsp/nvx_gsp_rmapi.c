@@ -111,22 +111,14 @@ nvx_gsp_rmapi_status_t nvx_gsp_rm_control_submit(
 
 nvx_gsp_rmapi_status_t nvx_gsp_rm_free_submit(
     nvx_gsp_rpc_manager_t *manager,uint32_t root,uint32_t parent,
-    uint32_t object,void *scratch,size_t scratch_size,
-    nvx_gsp_rmapi_result_t *out)
+    uint32_t object,void *scratch,size_t scratch_size,void *response,
+    size_t response_capacity,nvx_gsp_rmapi_result_t *out)
 {
     uint8_t request[FREE_HEADER_BYTES]={0};
     put32(request+0U,root);put32(request+4U,parent);
     put32(request+8U,object);put32(request+12U,UINT32_MAX);
-    /*
-     * FREE uses the public NVOS00 payload. Caller must supply a response
-     * buffer via the operation result? This operation uses a fixed local
-     * response and therefore intentionally reports that no async handle can
-     * be retained: see the fixed response buffer below.
-     */
-    static uint8_t response[FREE_HEADER_BYTES];
-    memset(response,0,sizeof(response));
     return submit(manager,NVX_GSP_RPC_FN_FREE,request,sizeof(request),scratch,
-        scratch_size,response,sizeof(response),FREE_HEADER_BYTES,out);
+        scratch_size,response,response_capacity,FREE_HEADER_BYTES,out);
 }
 
 nvx_gsp_rmapi_status_t nvx_gsp_rmapi_decode_status(

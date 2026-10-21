@@ -1149,7 +1149,9 @@ jobs:
           }
           trap cleanup EXIT
 
-          sleep 1
+          # Let firmware and GRUB finish presenting the menu before injecting keys.
+          # The timeout remains five seconds, so keep this delay bounded.
+          sleep 2
           printf 'sendkey down\nsendkey ret\n' |
             timeout 4s socat -T 1 - UNIX-CONNECT:/tmp/vantaos-recovery-monitor.sock || true
           entered=0

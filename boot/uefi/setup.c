@@ -461,6 +461,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
     config.timezone[0] = '\0';
 
     char line[32];
+    serial_write("VANTAOS_SETUP_LANGUAGE_PROMPT\n");
     Print(L"Language: 1) English  2) Finnish [1]: ");
     if (!read_line(line, sizeof(line))) return EFI_ABORTED;
     if (line[0] == '2' && line[1] == '\0') {
@@ -470,6 +471,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
         return EFI_INVALID_PARAMETER;
     }
 
+    serial_write("VANTAOS_SETUP_KEYBOARD_PROMPT\n");
     Print(L"Keyboard: 1) US  2) Finnish [1]: ");
     if (!read_line(line, sizeof(line))) return EFI_ABORTED;
     if (line[0] == '2' && line[1] == '\0') {
@@ -479,6 +481,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
         return EFI_INVALID_PARAMETER;
     }
 
+    serial_write("VANTAOS_SETUP_TIMEZONE_PROMPT\n");
     Print(L"Time zone: 1) Europe/Helsinki  2) Etc/UTC  3) Europe/Stockholm\r\n");
     Print(L"           4) Europe/London    5) America/New_York [1]: ");
     if (!read_line(line, sizeof(line))) return EFI_ABORTED;
@@ -524,6 +527,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
         Print(L"  %u) %u GiB, %u sectors\r\n",
               (UINT32)(i + 1U), (UINT32)gib, (UINT32)disks[i].sector_count);
     }
+    serial_write("VANTAOS_SETUP_DISK_PROMPT\n");
     Print(L"Select target disk number: ");
     if (!read_line(line, sizeof(line))) return EFI_ABORTED;
     uint32_t selected = 0U;
@@ -535,6 +539,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
     setup_disk_t *target = &disks[selected - 1U];
     Print(L"\r\nWARNING: disk %u will be erased completely.\r\n",
           (UINT32)selected);
+    serial_write("VANTAOS_SETUP_CONFIRM_PROMPT\n");
     Print(L"Type INSTALL exactly to confirm, or anything else to cancel: ");
     if (!read_line(line, sizeof(line)) ||
         line[0] != 'I' || line[1] != 'N' || line[2] != 'S' ||

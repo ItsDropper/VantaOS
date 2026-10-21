@@ -99,6 +99,29 @@ nvx_gsp_rmapi_status_t nvx_gsp_rmapi_wait(
     uint32_t timeout_ms, uint32_t poll_interval_ms,
     nvx_gsp_rmapi_delay_fn delay_ms, void *delay_context);
 
+/* Synchronous wrappers; timeout leaves the in-flight handle valid in out. */
+nvx_gsp_rmapi_status_t nvx_gsp_rm_alloc_sync(
+    nvx_gsp_rpc_manager_t *manager, uint32_t client, uint32_t parent,
+    uint32_t object, uint32_t class_id, uint32_t flags,
+    const void *params, size_t params_size, void *scratch, size_t scratch_size,
+    void *response, size_t response_capacity, uint32_t timeout_ms,
+    uint32_t poll_interval_ms, nvx_gsp_rmapi_delay_fn delay_ms,
+    void *delay_context, nvx_gsp_rmapi_result_t *out);
+nvx_gsp_rmapi_status_t nvx_gsp_rm_control_sync(
+    nvx_gsp_rpc_manager_t *manager, uint32_t client, uint32_t object,
+    uint32_t command, uint32_t rmapi_rpc_flags, uint32_t rmctrl_flags,
+    uint32_t access_right, const void *params, size_t params_size,
+    void *scratch, size_t scratch_size, void *response,
+    size_t response_capacity, uint32_t timeout_ms, uint32_t poll_interval_ms,
+    nvx_gsp_rmapi_delay_fn delay_ms, void *delay_context,
+    nvx_gsp_rmapi_result_t *out);
+nvx_gsp_rmapi_status_t nvx_gsp_rm_free_sync(
+    nvx_gsp_rpc_manager_t *manager, uint32_t root, uint32_t parent,
+    uint32_t object, void *scratch, size_t scratch_size,
+    void *response, size_t response_capacity, uint32_t timeout_ms,
+    uint32_t poll_interval_ms, nvx_gsp_rmapi_delay_fn delay_ms,
+    void *delay_context, nvx_gsp_rmapi_result_t *out);
+
 /* Validate and extract the RM-side status from a completed response payload. */
 nvx_gsp_rmapi_status_t nvx_gsp_rmapi_decode_status(
     const nvx_gsp_rmapi_result_t *operation,

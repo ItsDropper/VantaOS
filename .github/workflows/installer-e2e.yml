@@ -180,7 +180,7 @@ jobs:
               print("VANTAOS_SETUP_E2E_INSTALL_COMPLETE")
           PY
 
-          for marker in VANTAOS_SETUP_GPT_OK VANTAOS_SETUP_FORMAT_OK VANTAOS_SETUP_FILES_OK VANTAOS_SETUP_COMPLETE; do
+          for marker in VANTAOS_SETUP_PREFLIGHT_OK VANTAOS_SETUP_GPT_OK VANTAOS_SETUP_FORMAT_OK VANTAOS_SETUP_FILES_OK VANTAOS_SETUP_COMPLETE; do
             if ! grep -q "$marker" setup-install.log; then
               echo "Missing installer serial marker: $marker"
               cat setup-install.log

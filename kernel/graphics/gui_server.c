@@ -276,6 +276,8 @@ static void gui_focus_locked(gui_window_t* target)
             else if (gui_title_equal(target->title, "Settings"))
                 graphics_select_panel(4);
         }
+        else
+            graphics_select_panel(0);
     }
     else
         graphics_select_panel(0);
@@ -1238,22 +1240,19 @@ int gui_server_taskbar_click(int x, int y, int taskbar_y, int screen_width)
 char gui_server_read_terminal_char(void)
 {
     uint64_t flags = spinlock_lock_irqsave(&gui_lock);
-    if (focused_window_id != 0U)
-    {
-        gui_window_t* focused = 0;
-        for (unsigned int i = 0; i < VANTA_GUI_MAX_WINDOWS; i++)
-            if (windows[i].used && windows[i].visible &&
-                windows[i].id == focused_window_id)
-            {
-                focused = &windows[i];
-                break;
-            }
-        if (!focused || !focused->builtin ||
-            !gui_title_equal(focused->title, "Terminal"))
+    gui_window_t* focused = 0;
+    for (unsigned int i = 0; i < VANTA_GUI_MAX_WINDOWS; i++)
+        if (windows[i].used && windows[i].visible &&
+            windows[i].id == focused_window_id)
         {
-            spinlock_unlock_irqrestore(&gui_lock, flags);
-            return 0;
+            focused = &windows[i];
+            break;
         }
+    if (!focused || !focused->builtin ||
+        !gui_title_equal(focused->title, "Terminal"))
+    {
+        spinlock_unlock_irqrestore(&gui_lock, flags);
+        return 0;
     }
 
     int input_enabled = terminal_process_input_enabled();

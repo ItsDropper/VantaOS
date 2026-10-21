@@ -23,7 +23,8 @@ typedef enum nvx_gsp_gmcapi_status {
     NVX_GSP_GMCAPI_BAD_MESSAGE,
     NVX_GSP_GMCAPI_UNMATCHED_RESPONSE,
     NVX_GSP_GMCAPI_RESPONSE_TOO_LARGE,
-    NVX_GSP_GMCAPI_REMOTE_ERROR
+    NVX_GSP_GMCAPI_REMOTE_ERROR,
+    NVX_GSP_GMCAPI_BUSY
 } nvx_gsp_gmcapi_status_t;
 
 typedef void (*nvx_gsp_gmcapi_delay_fn)(uint32_t ms, void *context);
@@ -33,6 +34,7 @@ typedef struct nvx_gsp_gmcapi_transport {
     nvx_gsp_msgq_queue_t *status_queue;
     uint64_t next_sequence;
     uint8_t initialized;
+    uint8_t busy;
 } nvx_gsp_gmcapi_transport_t;
 
 /* Zero-initialize transport before init; queues must already be hardware-linked. */

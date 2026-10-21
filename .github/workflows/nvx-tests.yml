@@ -51,6 +51,8 @@ on:
       - "include/nvx_gsp_msgq_ga10x.h"
       - "include/nvx_gsp_gmcapi.h"
       - "scripts/test_nvx_gsp_static_info.c"
+      - "scripts/test_nvx_gsp_gpfifo.c"
+      - "include/nvx_gsp_gpfifo.h"
       - "scripts/test_nvx_gsp_rmapi.c"
       - "include/nvx_gsp_static_info.h"
       - "include/nvx_gsp_rmapi.h"
@@ -217,6 +219,16 @@ jobs:
 
       - name: Test PCI-derived identity and explicit platform facts
         run: /tmp/vantaos-nvx-gsp-system-info-test
+
+      - name: Compile GPFIFO submit tests with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_gpfifo.c \
+            drivers/gpu/nvx/execution/nvx_gsp_gpfifo.c \
+            -o /tmp/vantaos-nvx-gsp-gpfifo-test
+
+      - name: Test GPFIFO address encoding, ring bounds, and completion polling
+        run: /tmp/vantaos-nvx-gsp-gpfifo-test
 
       - name: Compile GSP startup orchestration with strict warnings
         run: |

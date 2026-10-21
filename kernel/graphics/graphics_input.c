@@ -74,6 +74,9 @@ void graphics_mouse_click(int button)
             graphics_request_terminal_open();
             return;
         }
+
+        if (gui_server_taskbar_click(cursor_x, cursor_y, taskbar_y, width))
+            return;
     }
 
     if (start_menu_open)
@@ -393,7 +396,6 @@ void graphics_mouse_move(int dx, int dy)
             terminal_y = 0;
     }
 
-    gui_server_mouse_move(cursor_x, cursor_y);
 }
 
 void graphics_mouse_release(int button)

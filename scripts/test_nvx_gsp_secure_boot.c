@@ -5,6 +5,8 @@
  * See the LICENSE file in the project root for the full license text.
  */
 #include "nvx_gsp_secure_boot.h"
+#include "nvx_gsp_fwsec_mmio.h"
+#include "nvx_gsp_vbios.h"
 
 #include <assert.h>
 #include <stdlib.h>
@@ -49,6 +51,13 @@ static void fake_delay(uint32_t milliseconds, void *context)
     assert(nvx_mmio_write32(bar0, NVX_SEC2_FALCON_BASE + 0x044U,
         0xB007U) == NVX_MMIO_OK);
 
+    uint32_t gsp_dma_command = NVX_GA10X_FALCON_DMA_IDLE;
+    assert(nvx_mmio_read32(bar0, NVX_GA10X_FALCON_DMATRFCMD(NVX_GSP_FALCON_BASE),
+                           &gsp_dma_command) == NVX_MMIO_OK);
+    if (gsp_dma_command != NVX_GA10X_FALCON_DMA_IDLE)
+        assert(nvx_mmio_write32(bar0, NVX_GA10X_FALCON_DMATRFCMD(NVX_GSP_FALCON_BASE),
+                                NVX_GA10X_FALCON_DMA_IDLE) == NVX_MMIO_OK);
+
     uint32_t gsp_cpuctl = 0U;
     assert(nvx_mmio_read32(bar0, NVX_GSP_FALCON_CPUCTL,
                            &gsp_cpuctl) == NVX_MMIO_OK);
@@ -65,7 +74,7 @@ static void fake_delay(uint32_t milliseconds, void *context)
     }
 }
 
-static uint32_t read_reg(const nvx_mmio_region_t *bar0, uint32_t offset)
+static void put_le16(uint8_t *p, uint16_t value)\n{\n    p[0] = (uint8_t)value;\n    p[1] = (uint8_t)(value >> 8U);\n}\n\nstatic void put_le32(uint8_t *p, uint32_t value)\n{\n    p[0] = (uint8_t)value;\n    p[1] = (uint8_t)(value >> 8U);\n    p[2] = (uint8_t)(value >> 16U);\n    p[3] = (uint8_t)(value >> 24U);\n}\n\nstatic uint32_t read_reg(const nvx_mmio_region_t *bar0, uint32_t offset)
 {
     uint32_t value = UINT32_MAX;
     assert(nvx_mmio_read32(bar0, offset, &value) == NVX_MMIO_OK);
@@ -77,7 +86,7 @@ int main(void)
     uint8_t *bar_bytes = calloc(1U, NVX_GA10X_BAR0_REQUIRED_BYTES);
     uint8_t *load_bytes = calloc(1U, 0x4000U);
     uint8_t *metadata_bytes = calloc(1U, NVX_DMA_PAGE_SIZE);
-    uint8_t *radix_bytes = calloc(1U, 0x4000U);
+    uint8_t *radix_bytes = calloc(1U, 0x4000U);\n    uint8_t *vbios_bytes = calloc(1U, 0x4000U);
     nvx_mmio_region_t bar0;
     fake_hardware_t hardware = {0};
     nvx_dma_buffer_t load_buffer = {
@@ -95,7 +104,7 @@ int main(void)
         .size = NVX_DMA_PAGE_SIZE, .allocated_size = NVX_DMA_PAGE_SIZE,
         .page_count = 1U, .allocation_id = 12U, .acquired = 1U
     };
-    nvx_gsp_boot_memory_t memory = {0};
+    nvx_dma_buffer_t vbios_buffer = {\n        .cpu_address = vbios_bytes, .gpu_address = 0x40000000ULL,\n        .size = 0x4000U, .allocated_size = 0x4000U, .page_count = 4U,\n        .allocation_id = 14U, .acquired = 1U\n    };\n    nvx_dma_sync_t vbios_sync = {0};\n    nvx_gsp_vbios_fwsec_info_t fwsec_info = {\n        .image_offset = 0x1000U, .image_size = 0x2000U,\n        .imem_physical_base = 0U, .imem_load_size = 0x1000U,\n        .imem_virtual_base = 0x1000U, .dmem_physical_base = 0U,\n        .dmem_load_size = 0x1000U, .interface_offset = 0x100U,\n        .pkc_data_offset = 0x700U, .signatures_offset = 0x200U,\n        .signatures_size = NVX_GSP_VBIOS_RSA3K_SIGNATURE_SIZE,\n        .engine_id_mask = NVX_GSP_VBIOS_FWSEC_ENGINE_MASK,\n        .signature_versions = 1U, .ucode_id = 2U, .signature_count = 1U,\n        .descriptor_version = NVX_GSP_VBIOS_FWSEC_DESC_V3, .encrypted = 0U\n    };\n    nvx_gsp_fwsec_result_snapshot_t executed_frts = {0};\n    nvx_gsp_boot_memory_t memory = {0};
     nvx_gsp_image_info_t info = {
         .data_size = 0x4000U,
         .engine_id = 0x0001U,
@@ -120,11 +129,11 @@ int main(void)
     };
     uint32_t gsp_mailbox0 = 0U, gsp_mailbox1 = 0U;
 
-    assert(bar_bytes && load_bytes && metadata_bytes && radix_bytes);
+    assert(bar_bytes && load_bytes && metadata_bytes && radix_bytes && vbios_bytes);
     bar0.base = (volatile uint8_t *)bar_bytes;
     bar0.length = NVX_GA10X_BAR0_REQUIRED_BYTES;
     hardware.bar0 = &bar0;
-    assert(nvx_mmio_write32(&bar0, NVX_SEC2_FALCON_BASE + 0x0F4U, 0U) == NVX_MMIO_OK);
+    assert(nvx_mmio_write32(&bar0, NVX_GSP_FALCON_HWCFG2,\n        NVX_GSP_HWCFG2_RESET_READY | NVX_GSP_HWCFG2_RISCV_PRESENT) == NVX_MMIO_OK);\n    assert(nvx_mmio_write32(&bar0, NVX_GSP_FALCON_CPUCTL,\n        NVX_GSP_CPUCTL_HALTED) == NVX_MMIO_OK);\n    assert(nvx_mmio_write32(&bar0, NVX_GA10X_FALCON_DMATRFCMD(NVX_GSP_FALCON_BASE),\n        NVX_GA10X_FALCON_DMA_IDLE) == NVX_MMIO_OK);\n    assert(nvx_mmio_write32(&bar0, NVX_GSP_FWSEC_VBIOS_SCRATCH(NVX_GSP_FWSEC_SCRATCH_FRTS_INDEX), 0U) == NVX_MMIO_OK);\n    assert(nvx_mmio_write32(&bar0, NVX_GSP_FWSEC_VBIOS_SCRATCH(NVX_GSP_FWSEC_SCRATCH_SB_INDEX), 0U) == NVX_MMIO_OK);\n    assert(nvx_mmio_write32(&bar0, NVX_GSP_FWSEC_WPR2_ADDR_LO, 0x10000U) == NVX_MMIO_OK);\n    assert(nvx_mmio_write32(&bar0, NVX_GSP_FWSEC_WPR2_ADDR_HI, 0x10U) == NVX_MMIO_OK);\n    assert(nvx_mmio_write32(&bar0, NVX_GSP_FWSEC_GFW_PLM, NVX_GSP_FWSEC_PLM_READ_LEVEL0_ENABLE) == NVX_MMIO_OK);\n    assert(nvx_mmio_write32(&bar0, NVX_GSP_FWSEC_GFW_PROGRESS, NVX_GSP_FWSEC_GFW_PROGRESS_COMPLETED) == NVX_MMIO_OK);\n    assert(nvx_mmio_write32(&bar0, NVX_SEC2_FALCON_BASE + 0x0F4U, 0U) == NVX_MMIO_OK);
     assert(nvx_mmio_write32(&bar0, NVX_SEC2_FALCON_BASE + 0x100U,
                             NVX_GSP_CPUCTL_HALTED) == NVX_MMIO_OK);
     assert(nvx_mmio_write32(&bar0,
@@ -169,6 +178,40 @@ int main(void)
                              &memory.booter_load) == NVX_DMA_SYNC_OK);
     assert(nvx_dma_sync_init(&memory.wpr_metadata_sync,
                              &memory.wpr_metadata) == NVX_DMA_SYNC_OK);
+    /* Synthetic FWSEC V3 DMEM interface and signed signature slot. */
+    {
+        uint8_t *dmem = vbios_bytes + 0x2000U;
+        memset(vbios_bytes + 0x200U, 0x5AU, NVX_GSP_VBIOS_RSA3K_SIGNATURE_SIZE);
+        dmem[0x100U] = 1U;
+        dmem[0x101U] = 4U;
+        dmem[0x102U] = 8U;
+        dmem[0x103U] = 2U;
+        put_le32(dmem + 0x104U, 4U);
+        put_le32(dmem + 0x108U, 0x200U);
+        put_le32(dmem + 0x10CU, 1U);
+        put_le32(dmem + 0x110U, 0U);
+        put_le16(dmem + 0x204U, 3U);
+        put_le16(dmem + 0x206U, 64U);
+        put_le32(dmem + 0x208U, 0x500U);
+        put_le32(dmem + 0x20CU, 0x100U);
+    }
+    assert(nvx_dma_sync_init(&vbios_sync, &vbios_buffer) == NVX_DMA_SYNC_OK);
+    hardware.activate_gsp_on_start = 1U;
+    assert(nvx_gsp_ga10x_execute_fwsec_frts(
+        &vbios_buffer, &vbios_sync, &fwsec_info, 0U, &bar0,
+        0x01000000ULL, 20U, 1U, fake_delay, &hardware,
+        &executed_frts) == NVX_GSP_FALCON_OK);
+    assert(executed_frts.frts_error_code == 0U);
+    assert(executed_frts.wpr2_addr_lo_units == 0x1000U);
+    assert(vbios_sync.owner == NVX_DMA_OWNER_CPU);
+    assert(read_reg(&bar0, NVX_GSP_FALCON_BROM_ENGINE_MASK) ==
+           NVX_GSP_VBIOS_FWSEC_ENGINE_MASK);
+    assert(read_reg(&bar0, NVX_GSP_FALCON_BROM_PARAM_ADDR) == 0x700U);
+    assert(read_reg(&bar0, NVX_GSP_FALCON_BASE + 0x100U) ==
+           NVX_GSP_CPUCTL_HALTED);
+    assert(vbios_bytes[0x2700U] == 0x5AU);
+    frts_result = executed_frts;
+
     /* GSP must not start unless hardware FWSEC-FRTS evidence validates. */
     frts_result.frts_error_code = 1U;
     assert(nvx_gsp_ga10x_boot_after_frts(&memory, &bar0, 0x01000000ULL,
@@ -285,7 +328,7 @@ int main(void)
            NVX_GSP_FALCON_BROM_RSA3K);
     assert(read_reg(&bar0, NVX_SEC2_FALCON_BASE + 0x104U) == 0x1000U);
 
-    assert(nvx_dma_sync_destroy(&memory.radix3_elf_sync) == NVX_DMA_SYNC_OK);
+    assert(nvx_dma_sync_destroy(&vbios_sync) == NVX_DMA_SYNC_OK);\n    assert(nvx_dma_sync_destroy(&memory.radix3_elf_sync) == NVX_DMA_SYNC_OK);
     assert(nvx_dma_sync_destroy(&memory.booter_load_sync) == NVX_DMA_SYNC_OK);
     assert(nvx_dma_sync_destroy(&memory.wpr_metadata_sync) == NVX_DMA_SYNC_OK);
     free(metadata_bytes);

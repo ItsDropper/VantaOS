@@ -1107,6 +1107,9 @@ jobs:
             exit 1
           fi
 
+          # The default boot path must not enter the optional recovery UI.
+          ! grep -q "^VANTAOS_RECOVERY_ENTER" desktop-boot.log
+
           # Give the desktop renderer a moment to draw its first complete frame.
           sleep 3
           # The QEMU monitor stays connected; bound the client lifetime after

@@ -134,6 +134,12 @@ jobs:
             -o /tmp/vantaos-partition-scan-test
           /tmp/vantaos-partition-scan-test
 
+      - name: Compile strict panic formatting host tests
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_panic_format.c -o /tmp/vantaos-panic-format-test
+          /tmp/vantaos-panic-format-test
+
       - name: Compile strict serial log ring tests
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \

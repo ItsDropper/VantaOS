@@ -71,6 +71,10 @@ int main(void)
     const struct pci_device other = {
         .vendor_id = 0x1234U, .device_id = 0x1111U, .class_code = 0x03U
     };
+    const struct pci_device unsupported_nvidia = {
+        .vendor_id = NVX_PCI_VENDOR_NVIDIA, .device_id = 0x1234U,
+        .class_code = 0x03U
+    };
     const nvx_bar_resource_t bar0 = {
         .base = 0x10000000ULL, .size = 0x1000ULL,
         .is_io = 0, .is_64bit = 1, .size_known = 1
@@ -98,6 +102,10 @@ int main(void)
     assert(unmap_calls == 1U);
 
     assert(nvx_device_attach(&other, &bar0, &device) == NVX_ATTACH_INVALID_ARGUMENT);
+    unsigned maps_before_unsupported = map_calls;
+    assert(nvx_device_attach(&unsupported_nvidia, &bar0, &device) ==
+           NVX_ATTACH_INVALID_ARGUMENT);
+    assert(map_calls == maps_before_unsupported);
     unknown.size_known = 0;
     assert(nvx_device_attach(&gpu, &unknown, &device) == NVX_ATTACH_RESOURCE_ERROR);
     assert(device.lifecycle.state == NVX_STATE_FAILED);

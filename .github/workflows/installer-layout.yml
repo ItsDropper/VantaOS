@@ -1,18 +1,18 @@
-name: Installer layout safety
+name: Installer storage safety
 
 on:
   pull_request:
     paths:
       - "installer/**"
-      - "include/vanta_installer_layout.h"
-      - "scripts/test_installer_layout.c"
+      - "include/vanta_installer_*.h"
+      - "scripts/test_installer_*.c"
       - ".github/workflows/installer-layout.yml"
   push:
     branches: [master]
     paths:
       - "installer/**"
-      - "include/vanta_installer_layout.h"
-      - "scripts/test_installer_layout.c"
+      - "include/vanta_installer_*.h"
+      - "scripts/test_installer_*.c"
       - ".github/workflows/installer-layout.yml"
   workflow_dispatch:
 
@@ -20,21 +20,24 @@ permissions:
   contents: read
 
 jobs:
-  pure-layout-tests:
+  pure-layout-and-gpt-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - name: Compile strict host test
+      - name: Compile strict host tests
         run: |
           set -euo pipefail
-          cc -std=c11 -Wall -Wextra -Werror -Wconversion -Wsign-conversion \
-            -Wshadow -Wstrict-prototypes -pedantic \
-            -fsanitize=address,undefined -fno-omit-frame-pointer \
-            -Iinclude installer/layout.c scripts/test_installer_layout.c \
-            -o /tmp/vantaos-installer-layout-test
-      - name: Test layout invariants
+          flags="-std=c11 -Wall -Wextra -Werror -Wconversion -Wsign-conversion -Wshadow -Wstrict-prototypes -pedantic -fsanitize=address,undefined -fno-omit-frame-pointer"
+          cc $flags -Iinclude installer/layout.c scripts/test_installer_layout.c -o /tmp/vantaos-installer-layout-test
+          cc $flags -Iinclude installer/layout.c installer/gpt_writer.c scripts/test_installer_gpt.c -o /tmp/vantaos-installer-gpt-test
+      - name: Verify layout arithmetic
         run: |
           set -euo pipefail
           /tmp/vantaos-installer-layout-test | tee /tmp/installer-layout-test.log
           grep -qx "VANTAOS_INSTALLER_LAYOUT_OK" /tmp/installer-layout-test.log
+      - name: Verify GPT writer against sparse disposable disk
+        run: |
+          set -euo pipefail
+          /tmp/vantaos-installer-gpt-test | tee /tmp/installer-gpt-test.log
+          grep -qx "VANTAOS_INSTALLER_GPT_OK" /tmp/installer-gpt-test.log

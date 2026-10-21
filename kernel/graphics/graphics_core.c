@@ -107,7 +107,7 @@ static int bochs_vbe_can_pageflip(uint32_t width, uint32_t height,
 {
     uint64_t page_bytes = (uint64_t)width * 4U * height;
     uint64_t total_bytes = page_bytes * 2U;
-    return width != 0U && height != 0U &&
+    return width != 0U && height != 0U && offset == 0U &&
            height <= UINT16_MAX / 2U &&
            vram_bytes >= total_bytes + offset &&
            total_bytes + offset <= GRAPHICS_SCANOUT_WINDOW_BYTES;

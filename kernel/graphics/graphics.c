@@ -322,7 +322,7 @@ int graphics_frame_is_active(void)
     return graphics_frame_active;
 }
 
-int graphics_can_redraw_windows_in_place(void)
+int graphics_can_redraw_windows_incrementally(void)
 {
     return initialized && !graphics_frame_active && active_panel == 3 &&
            !start_menu_open && !terminal_dragging && !explorer_dragging;

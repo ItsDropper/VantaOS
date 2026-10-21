@@ -141,6 +141,17 @@ jobs:
             -o /tmp/vantaos-serial-log-test
           /tmp/vantaos-serial-log-test
 
+      - name: Compile optional FAT32 boot-log path
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -m64 -march=x86-64 -ffreestanding \
+            -fno-pie -fno-stack-protector -mno-red-zone -mgeneral-regs-only \
+            -nostdlib -Iinclude -DVANTAOS_BOOT_LOG_TO_FAT32 \
+            -c kernel/serial.c -o /tmp/vantaos-serial-bootlog.o
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_serial_log.c kernel/serial_log.c \
+            -o /tmp/vantaos-serial-log-test
+          /tmp/vantaos-serial-log-test
+
       - name: Test compositor damage rectangle clipping
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_graphics_damage.c -o /tmp/vantaos-graphics-damage-test

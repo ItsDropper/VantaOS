@@ -21,7 +21,7 @@ nvx_gsp_nvkv_status_t nvx_gsp_system_info_collect_pci(
     const nvx_gsp_system_info_t *facts,
     nvx_gsp_system_info_t *out)
 {
-    const uint32_t known_mask=(UINT32_C(1)<<10U)-1U;
+    const uint32_t known_mask=(UINT32_C(1)<<18U)-1U;
     uint32_t id_dword,subsystem;
     nvx_gsp_system_info_t collected;
     if(!device||!facts||!out||
@@ -116,12 +116,32 @@ nvx_gsp_nvkv_status_t nvx_gsp_system_info_encode(
         domain_surfaces[1]=info->sim_access_buf_phys_addr;
         domain_surfaces[2]=info->notify_op_shared_surface_phys_addr;
         TRY(nvx_gsp_nvkv_put_seq64(&writer,0U,0x1020U,domain_surfaces,3U));
+    } else {
+        if (info->present & NVX_GSP_SI_NV_DOMAIN_BDF)
+            TRY(nvx_gsp_nvkv_put_seq64(&writer,0U,0x1020U,
+                                       &info->nv_domain_bus_device_func,1U));
+        if (info->present & NVX_GSP_SI_SIM_ACCESS_ADDRESS)
+            TRY(nvx_gsp_nvkv_put_seq64(&writer,0U,0x1021U,
+                                       &info->sim_access_buf_phys_addr,1U));
+        if (info->present & NVX_GSP_SI_NOTIFY_SURFACE)
+            TRY(nvx_gsp_nvkv_put_seq64(&writer,0U,0x1022U,
+                                       &info->notify_op_shared_surface_phys_addr,1U));
     }
     if (info->present & NVX_GSP_SI_ATOMICS_CONSOLE_VA) {
         atomics_console_va[0]=info->pcie_atomics_op_mask;
         atomics_console_va[1]=info->console_mem_size;
         atomics_console_va[2]=info->max_user_va;
         TRY(nvx_gsp_nvkv_put_seq64(&writer,0U,0x1030U,atomics_console_va,3U));
+    } else {
+        if (info->present & NVX_GSP_SI_PCIE_ATOMICS_MASK)
+            TRY(nvx_gsp_nvkv_put_seq64(&writer,0U,0x1030U,
+                                       &info->pcie_atomics_op_mask,1U));
+        if (info->present & NVX_GSP_SI_CONSOLE_MEMORY_SIZE)
+            TRY(nvx_gsp_nvkv_put_seq64(&writer,0U,0x1031U,
+                                       &info->console_mem_size,1U));
+        if (info->present & NVX_GSP_SI_MAX_USER_VA)
+            TRY(nvx_gsp_nvkv_put_seq64(&writer,0U,0x1032U,
+                                       &info->max_user_va,1U));
     }
     if (info->present & NVX_GSP_SI_TIMER_OFFSET) {
         TRY(nvx_gsp_nvkv_put_seq64(&writer,0U,0x1040U,
@@ -131,6 +151,11 @@ nvx_gsp_nvkv_status_t nvx_gsp_system_info_encode(
         businfo[0]=info->fhb_businfo;
         businfo[1]=info->chipset_businfo;
         TRY(nvx_gsp_nvkv_put_seq64(&writer,0U,0x1090U,businfo,2U));
+    } else {
+        if (info->present & NVX_GSP_SI_FHB_BUSINFO_ONLY)
+            TRY(nvx_gsp_nvkv_put_seq64(&writer,0U,0x1090U,&info->fhb_businfo,1U));
+        if (info->present & NVX_GSP_SI_CHIPSET_BUSINFO_ONLY)
+            TRY(nvx_gsp_nvkv_put_seq64(&writer,0U,0x1091U,&info->chipset_businfo,1U));
     }
 
     *out_size_bytes=nvx_gsp_nvkv_size_bytes(&writer);

@@ -92,7 +92,7 @@ typedef struct {
 
 static e1000_state_t state;
 static int e1000_poll_device(void);
-static int e1000_probe(const struct pci_device* pci);
+static net_pci_probe_result_t e1000_probe(const struct pci_device* pci);
 
 static const net_pci_id_t e1000_ids[] = {
     /* Legacy 8254x E1000 controllers share this register and descriptor model. */
@@ -256,7 +256,7 @@ static void e1000_rx_selftest_handler(net_device_t* device,const uint8_t* frame,
 }
 #endif
 
-static int e1000_probe(const struct pci_device* pci)
+static net_pci_probe_result_t e1000_probe(const struct pci_device* pci)
 {
     if(!pci||state.ready)return NET_PCI_PROBE_FAILED;
     uint64_t bar=0;int is_io=0,is_64=0;

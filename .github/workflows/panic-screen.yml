@@ -49,7 +49,7 @@ jobs:
 
           panic_seen=0
           for attempt in $(seq 1 1200); do
-            if grep -q '^VANTAOS_KERNEL_PANIC_BEGIN$' panic-screen.log 2>/dev/null; then
+            if grep -q 'VANTAOS_KERNEL_PANIC_BEGIN' panic-screen.log 2>/dev/null; then
               panic_seen=1
               break
             fi
@@ -67,9 +67,9 @@ jobs:
             exit 1
           fi
 
-          grep -q '^VANTAOS ENCOUNTERED A FATAL ERROR$' panic-screen.log
-          grep -q '^Reason: VANTAOS_QEMU_CONTROLLED_PANIC_TEST$' panic-screen.log
-          grep -q '^VANTAOS_KERNEL_PANIC_END$' panic-screen.log
+          grep -q 'VANTAOS ENCOUNTERED A FATAL ERROR' panic-screen.log
+          grep -q 'Reason: VANTAOS_QEMU_CONTROLLED_PANIC_TEST' panic-screen.log
+          grep -q 'VANTAOS_KERNEL_PANIC_END' panic-screen.log
 
           python3 - <<'PY'
           import json

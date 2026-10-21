@@ -16,6 +16,43 @@ static int overlaps(const void *a, size_t an, const void *b, size_t bn)
     return x<y+bn && y<x+an;
 }
 
+nvx_gsp_nvkv_status_t nvx_gsp_system_info_collect_pci(
+    const struct pci_device *device,
+    const nvx_gsp_system_info_t *facts,
+    nvx_gsp_system_info_t *out)
+{
+    const uint32_t known_mask=(UINT32_C(1)<<10U)-1U;
+    uint32_t id_dword,subsystem;
+    nvx_gsp_system_info_t collected;
+    if(!device||!facts||!out||
+       overlaps(device,sizeof(*device),out,sizeof(*out))||
+       overlaps(facts,sizeof(*facts),out,sizeof(*out))||
+       device->vendor_id!=UINT16_C(0x10DE)||
+       (facts->present&~known_mask)!=0U||
+       (facts->present&(NVX_GSP_SI_PCI_IDENTITY|NVX_GSP_SI_HOST_IDENTITY|
+                        NVX_GSP_SI_HOST_PAGE_SIZE))!=0U)
+        return NVX_GSP_NVKV_INVALID_ARGUMENT;
+#if !defined(__x86_64__)
+    return NVX_GSP_NVKV_INVALID_ARGUMENT;
+#else
+    id_dword=pci_read_config32(device,0x08U);
+    subsystem=pci_read_config32(device,0x2CU);
+    if(id_dword==UINT32_MAX||subsystem==UINT32_MAX)
+        return NVX_GSP_NVKV_INVALID_ARGUMENT;
+    collected=*facts;
+    collected.pci_device_id=device->device_id;
+    collected.pci_sub_device_id=(subsystem>>16U)&UINT32_C(0xFFFF);
+    collected.pci_revision_id=id_dword&UINT32_C(0xFF);
+    collected.present|=NVX_GSP_SI_PCI_IDENTITY;
+    collected.host_arch=1U;    /* NVGMC_SI_HOST_ARCH_X86_64 */
+    collected.host_os_type=0U; /* NVGMC_SI_HOST_OS_TYPE_OTHER: VantaOS */
+    collected.host_page_size=4096U;
+    collected.present|=NVX_GSP_SI_HOST_IDENTITY|NVX_GSP_SI_HOST_PAGE_SIZE;
+    *out=collected;
+    return NVX_GSP_NVKV_OK;
+#endif
+}
+
 #define TRY(call) do { status=(call); if(status!=NVX_GSP_NVKV_OK) return status; } while(0)
 
 nvx_gsp_nvkv_status_t nvx_gsp_system_info_encode(

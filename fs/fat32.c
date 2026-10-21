@@ -9,6 +9,7 @@
 #include "fat32_lfn.h"
 #include "block_device.h"
 #include "partition_device.h"
+#include "partition_scan.h"
 #include "serial.h"
 #ifdef VANTAOS_SELF_TEST
 #define FAT32_RENAME_DIAG(message) serial_write(message "\n")
@@ -380,6 +381,20 @@ static int fat32_make_short_name(const char* input, uint8_t out[11])
     return base != 0;
 }
 
+static int fat32_is_efi_system_partition(const block_device_t* device)
+{
+    static const uint8_t efi_system_type_guid[16] = {
+        0x28U, 0x73U, 0x2AU, 0xC1U, 0x1FU, 0xF8U, 0xD2U, 0x11U,
+        0xBAU, 0x4BU, 0x00U, 0xA0U, 0xC9U, 0x3EU, 0xC9U, 0x3BU
+    };
+    if (!device || device->partition_scheme != PARTITION_SCHEME_GPT)
+        return 0;
+    for (size_t i = 0U; i < sizeof(efi_system_type_guid); ++i)
+        if (device->partition_type_guid[i] != efi_system_type_guid[i])
+            return 0;
+    return 1;
+}
+
 void fat32_initialize(void)
 {
     mounted = 0;
@@ -396,7 +411,8 @@ void fat32_initialize(void)
         block_device_t* candidate = block_device_get(i);
         if (!candidate || candidate->sector_size != 512U ||
             candidate->sector_count == 0U ||
-            (candidate->flags & BLOCK_DEVICE_READ_ONLY) != 0U)
+            (candidate->flags & BLOCK_DEVICE_READ_ONLY) != 0U ||
+            fat32_is_efi_system_partition(candidate))
             continue;
 
         if ((candidate->flags & BLOCK_DEVICE_PARTITION) == 0U &&

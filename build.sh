@@ -206,3 +206,7 @@ else
     echo "    mkfs.fat not found; disk image was not created."
     echo "    Install dosfstools to create the persistent FAT32 image."
 fi
+
+# The installer must carry the same required system metadata as the persistent image.
+echo "==> Building the bootable UEFI VantaOS setup image..."
+make setup

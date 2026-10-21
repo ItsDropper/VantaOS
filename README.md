@@ -69,6 +69,10 @@ chmod +x build.sh run.sh
 
 The build creates `kernel.bin`, `VantaOS.iso`, and a 128 MiB `vantaos.img` if the image does not already exist. Treat that image as disposable development data; do not store important files in it.
 
+The build also creates `VantaOS-Setup.img`, a **UEFI-only installer medium**. Boot it in UEFI mode; setup offers English/Finnish, US/Finnish keyboard, a time-zone choice, and eligible target disks. It excludes the installer disk from the target list and requires typing `INSTALL` before writing the selected disk. The installer creates a GPT EFI System Partition and a separate FAT32 system partition, verifies filesystem metadata, and copies the loader, kernel, applications, driver/device metadata, and setup preferences. Successful CI builds publish the images as the `vantaos-install-media` artifact.
+
+**Treat the installer as experimental and use only a disposable disk or QEMU image until you have verified it on your own hardware.** The setup preferences are persisted in `/SYSTEM/SETUP.CFG`; applying the selected language, keyboard layout, and time zone to the running OS is not yet wired into the runtime. The installer currently supports UEFI boot, not legacy BIOS setup.
+
 Useful build commands:
 
 ```sh

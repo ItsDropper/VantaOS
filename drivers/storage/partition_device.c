@@ -172,7 +172,9 @@ void partition_device_initialize(void)
                            disk->name, i + 1U);
             part->block.sector_count = found[i].sector_count;
             part->block.sector_size = disk->sector_size;
-            part->block.flags = (disk->flags & BLOCK_DEVICE_READ_ONLY) |
+            part->block.flags = (disk->flags & (BLOCK_DEVICE_READ_ONLY |
+                                BLOCK_DEVICE_TRANSPORT_ATA |
+                                BLOCK_DEVICE_TRANSPORT_NVME)) |
                                 BLOCK_DEVICE_PARTITION;
             part->block.ops = &partition_ops;
             part->block.driver_data = part;

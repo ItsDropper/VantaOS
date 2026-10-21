@@ -28,9 +28,9 @@ int main(void)
     assert(command[3]==((completion>>32U)&UINT64_C(0x1FFFF)));
     assert(command[4]==(uint32_t)completion&&command[5]==0x00C0FFEEU);
     assert(command[6]==header(0x400U,4U,2U));
-    assert(command[7]==((src>>32U)&UINT64_C(0x1FFFF));
+    assert(command[7]==((src>>32U)&UINT64_C(0x1FFFF)));
     assert(command[8]==(uint32_t)src);
-    assert(command[9]==((dst>>32U)&UINT64_C(0x1FFFF));
+    assert(command[9]==((dst>>32U)&UINT64_C(0x1FFFF)));
     assert(command[10]==(uint32_t)dst);
     assert(command[11]==header(0x418U,2U,2U));
     assert(command[12]==4096U&&command[13]==1U);

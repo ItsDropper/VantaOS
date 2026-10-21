@@ -173,6 +173,16 @@ int main(void)
     assert(get32(runtime.command_queue.layout.entries + 40U) ==
            sizeof(response));
 
+    /* Malformed NVKV must fail before another command becomes visible to GSP. */
+    const uint64_t malformed_nvkv = (UINT64_C(0xF) << 28U) | UINT64_C(3);
+    assert(nvx_gsp_gmcapi_gsp_init(
+        &gmcapi, &malformed_nvkv, sizeof(malformed_nvkv), response,
+        sizeof(response), &response_size, &remote_status, scratch,
+        NVX_GSP_PAGE_SIZE, 20U, 1U, fake_gsp_reply, &fake) ==
+        NVX_GSP_GMCAPI_BAD_MESSAGE);
+    assert(response_size == 0U);
+    assert(read_reg(&bar, NVX_GSP_GA10X_QUEUE_HEAD(0U)) == 1U);
+
     /* Shared ownership is returned only after the caller quiesces GSP. */
     assert(nvx_dma_sync_for_cpu(&sync, 0U, shared.size) == NVX_DMA_SYNC_OK);
     assert(nvx_dma_sync_destroy(&sync) == NVX_DMA_SYNC_OK);

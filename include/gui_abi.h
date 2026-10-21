@@ -44,7 +44,8 @@
 #define VANTA_GUI_KEY_DELETE    0x109U
 
 /* For KEY events, values 0-255 are character bytes; 0x100 + keyboard_event_t
- * represents a special key such as Page Up, arrows, Home, End, or Delete. */
+ * represents a special key such as Page Up, arrows, Home, End, or Delete.
+ * For RESIZE events, x and y contain the new outer window width and height. */
 
 typedef struct
 {

@@ -1130,11 +1130,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rm -f /tmp/vantaos-recovery-monitor.sock /tmp/vantaos-recovery.ppm recovery-boot.log
+          rm -f /tmp/vantaos-recovery-monitor.sock /tmp/vantaos-recovery.ppm recovery-boot.log recovery-regression.img
+          # Never share the desktop screenshot test's writable disk: its QEMU wrapper
+          # can outlive the shell cleanup briefly and hold a lock on the shared image.
+          cp nvme-fat32-template.img recovery-regression.img
           xvfb-run -a qemu-system-x86_64 \
             -machine pc -m 512M -smp 2 -vga std \
             -drive file=VantaOS.iso,media=cdrom,format=raw \
-            -drive file=vantaos-regression.img,if=ide,format=raw \
+            -drive file=recovery-regression.img,if=ide,format=raw \
             -boot order=d -display sdl \
             -serial file:recovery-boot.log \
             -monitor unix:/tmp/vantaos-recovery-monitor.sock,server,nowait \

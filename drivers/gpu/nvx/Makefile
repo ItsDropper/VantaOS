@@ -1,6 +1,7 @@
 # NVX sources are grouped by subsystem; public interfaces remain in include/.
 VANTAOS_NVX_C := \
     drivers/gpu/nvx/core/nvx_device.c \
+    drivers/gpu/nvx/core/nvx_generation.c \
     drivers/gpu/nvx/core/nvx_pci.c \
     drivers/gpu/nvx/core/nvx_lifecycle.c \
     drivers/gpu/nvx/core/nvx_resource.c \

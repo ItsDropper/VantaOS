@@ -13,6 +13,7 @@
 #define GPT_ARRAY_MAX (GPT_MAX * GPT_ENTRY_MAX)
 
 static uint8_t entry_storage[GPT_ARRAY_MAX];
+static uint8_t backup_storage[GPT_ARRAY_MAX];
 
 static uint16_t rd16(const uint8_t *p)
 { return (uint16_t)p[0] | (uint16_t)((uint16_t)p[1] << 8); }
@@ -107,7 +108,7 @@ static int read_array(partition_read_fn read, void *ctx, uint64_t disk,
 static partition_scan_status_t scan_gpt(partition_read_fn read, void *ctx,
     uint64_t disk, partition_scan_entry_t *out, size_t cap, size_t *out_count)
 {
-    uint8_t primary[SECTOR], backup[SECTOR], backup_array[GPT_ARRAY_MAX];
+    uint8_t primary[SECTOR], backup[SECTOR];
     if (!read_checked(read, ctx, disk, 1U, 1U, primary)) return PARTITION_SCAN_IO_ERROR;
     if (!valid_gpt_header(primary, 1U, disk)) return PARTITION_SCAN_BAD_TABLE;
     uint64_t backup_lba = rd64(primary + 32U);
@@ -124,7 +125,7 @@ static partition_scan_status_t scan_gpt(partition_read_fn read, void *ctx,
     if (!read_array(read, ctx, disk, rd64(primary + 72U), n, size,
                     array_crc, entry_storage) ||
         !read_array(read, ctx, disk, rd64(backup + 72U), n, size,
-                    array_crc, backup_array))
+                    array_crc, backup_storage))
         return PARTITION_SCAN_BAD_TABLE;
     uint64_t first_usable = rd64(primary + 40U), last_usable = rd64(primary + 48U);
     size_t count = 0U;

@@ -9,6 +9,7 @@
 #include "nvx_gsp_gmcapi.h"
 #include "nvx_gsp_msgq_ga10x.h"
 #include "nvx_gsp_secure_boot.h"
+#include "nvx_gsp_rpc.h"
 
 typedef enum nvx_gsp_startup_status {
     NVX_GSP_STARTUP_OK = 0,
@@ -17,7 +18,8 @@ typedef enum nvx_gsp_startup_status {
     NVX_GSP_STARTUP_BOOTSTRAP_FAILED,
     NVX_GSP_STARTUP_STATUS_LINK_FAILED,
     NVX_GSP_STARTUP_GMCAPI_INIT_FAILED,
-    NVX_GSP_STARTUP_GSP_INIT_FAILED
+    NVX_GSP_STARTUP_GSP_INIT_FAILED,
+    NVX_GSP_STARTUP_RPC_INIT_FAILED
 } nvx_gsp_startup_status_t;
 
 typedef struct nvx_gsp_startup_result {
@@ -31,10 +33,11 @@ typedef struct nvx_gsp_startup_result {
     uint32_t gsp_init_remote_status;
     size_t static_info_size;
     uint8_t gsp_rm_initialized;
+    uint8_t rpc_initialized;
 } nvx_gsp_startup_result_t;
 
 /*
- * Zero-initialize queue_runtime and gmcapi before first use.
+ * Zero-initialize queue_runtime, gmcapi, rpc_transport and rpc_manager before first use.
  *
  * End-to-end GA10x startup transaction:
  *   prepare CPU command queue -> FWSEC-FRTS -> RISC-V/SEC2 Booter Load ->
@@ -60,6 +63,8 @@ nvx_gsp_startup_status_t nvx_gsp_ga10x_start_and_init_rm(
     nvx_gsp_delay_ms_fn delay_ms, void *context,
     nvx_gsp_msgq_ga10x_t *queue_runtime,
     nvx_gsp_gmcapi_transport_t *gmcapi,
+    nvx_gsp_msgq_rpc_transport_t *rpc_transport,
+    nvx_gsp_rpc_manager_t *rpc_manager,
     nvx_gsp_startup_result_t *out_result);
 
 #endif

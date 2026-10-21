@@ -29,6 +29,7 @@ jobs:
 
       - name: Trigger controlled kernel panic and capture screen
         shell: bash
+        timeout-minutes: 3
         run: |
           set -euo pipefail
           rm -f panic-screen.log panic-screen.png /tmp/vantaos-panic-qmp.sock
@@ -59,9 +60,8 @@ jobs:
           grep -q '^Reason: VANTAOS_QEMU_CONTROLLED_PANIC_TEST$' panic-screen.log
           grep -q '^VANTAOS_KERNEL_PANIC_END$' panic-screen.log
 
-          # Use QMP's request/response protocol rather than the interactive HMP
-          # monitor. HMP leaves the connection open, which made socat hang and
-          # prevented a reliable screendump from being captured.
+          # Speak QMP directly over the socket. Keep a persistent receive buffer
+          # so coalesced QMP messages cannot be lost, and fail fast on a stalled reply.
           python3 - <<'PY'
           import json
           import os
@@ -73,52 +73,52 @@ jobs:
           connection = None
           while time.monotonic() < deadline:
               try:
-                  connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-                  connection.settimeout(2)
-                  connection.connect(socket_path)
+                  candidate = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                  candidate.settimeout(3)
+                  candidate.connect(socket_path)
+                  connection = candidate
                   break
               except (FileNotFoundError, ConnectionRefusedError):
-                  if connection:
-                      connection.close()
-                  connection = None
+                  candidate.close()
                   time.sleep(0.1)
           if connection is None:
-              raise RuntimeError("QEMU QMP socket did not become available")
+              raise RuntimeError("QEMU QMP socket did not become available within 5 seconds")
+
+          receive_buffer = bytearray()
 
           def receive_message():
-              data = b""
-              while b"\n" not in data:
+              while b"\\n" not in receive_buffer:
                   chunk = connection.recv(65536)
                   if not chunk:
-                      raise RuntimeError("QEMU closed the QMP connection")
-                  data += chunk
-              line, remainder = data.split(b"\n", 1)
-              # QMP sends one JSON object per line. Preserve any extra bytes
-              # by putting them back into the socket's receive buffer is not
-              # possible, so use a persistent buffered reader instead.
+                      raise RuntimeError("QEMU closed the QMP connection before replying")
+                  receive_buffer.extend(chunk)
+              line, _, remainder = receive_buffer.partition(b"\\n")
+              receive_buffer[:] = remainder
               return json.loads(line)
-
-          reader = connection.makefile("rwb", buffering=0)
-          greeting = json.loads(reader.readline())
-          assert "QMP" in greeting, greeting
 
           def command(name, **arguments):
               request = {"execute": name}
               if arguments:
                   request["arguments"] = arguments
-              reader.write((json.dumps(request) + "\r\n").encode())
+              connection.sendall((json.dumps(request) + "\\r\\n").encode())
               while True:
-                  response = json.loads(reader.readline())
+                  response = receive_message()
                   if "event" in response:
                       continue
                   if "error" in response:
-                      raise RuntimeError(f"QMP {name} failed: {response['error']}")
+                      raise RuntimeError(f"QMP command {name!r} failed: {response['error']}")
                   if "return" in response:
                       return response["return"]
 
+          greeting = receive_message()
+          if "QMP" not in greeting:
+              raise RuntimeError(f"Unexpected QMP greeting: {greeting!r}")
+          print("QMP_GREETING_OK", flush=True)
           command("qmp_capabilities")
-          command("screendump", filename=os.path.abspath("panic-screen.png"))
-          reader.close()
+          print("QMP_CAPABILITIES_OK", flush=True)
+          output_path = os.path.abspath("panic-screen.png")
+          command("screendump", filename=output_path)
+          print(f"QMP_SCREENDUMP_OK path={output_path}", flush=True)
           connection.close()
           PY
 

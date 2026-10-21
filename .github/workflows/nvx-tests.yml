@@ -49,6 +49,7 @@ on:
       - "include/nvx_gsp_msgq.h"
       - "include/nvx_gsp_msgq_queue.h"
       - "include/nvx_gsp_msgq_ga10x.h"
+      - "include/nvx_gsp_gmcapi.h"
       - "include/nvx_gsp_msgq_rpc.h"
       - "include/nvx_gsp_init_args.h"
       - "include/nvx_gsp_ga10x.h"
@@ -339,6 +340,7 @@ jobs:
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
             scripts/test_nvx_gsp_msgq_ga10x.c \
             drivers/gpu/nvx/gsp/nvx_gsp_msgq_ga10x.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_gmcapi.c \
             drivers/gpu/nvx/gsp/nvx_gsp_msgq_queue.c \
             drivers/gpu/nvx/gsp/nvx_gsp_msgq.c \
             drivers/gpu/nvx/gsp/nvx_gsp_init_args.c \

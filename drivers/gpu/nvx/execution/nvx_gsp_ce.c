@@ -33,7 +33,7 @@ nvx_gsp_ce_status_t nvx_gsp_ce_build_copy(
 {
     uint64_t src_end,dst_end,completion_end;
     size_t n=0U;
-    const uint32_t launch_dma=UINT32_C(0x18E);
+    const uint32_t launch_dma=NVX_GSP_CE_LAUNCH_DMA_FLAGS;
     if(out_bytes)*out_bytes=0U;
     if(!buffer||!out_bytes||!object||subchannel>7U||
        ((uintptr_t)buffer&3U)!=0U)

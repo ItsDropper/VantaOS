@@ -240,7 +240,7 @@ nvx_gsp_rmapi_status_t nvx_gsp_rm_create_core_objects(
 {
     nvx_gsp_rmapi_result_t operation={0};
     nvx_gsp_rmapi_status_t s;
-    uint8_t params[16]={0};
+    uint8_t params[120]={0};
     if(out)*out=(nvx_gsp_rm_core_objects_t){0};
     if(!manager||!client||!device||!vaspace||client==device||
        client==vaspace||device==vaspace||!scratch||!response||
@@ -251,22 +251,30 @@ nvx_gsp_rmapi_status_t nvx_gsp_rm_create_core_objects(
         return NVX_GSP_RMAPI_INVALID_ARGUMENT;
     out->client_handle=client;out->device_handle=device;out->vaspace_handle=vaspace;
 
-    /* NV0000_ALLOC_PARAMETERS: the first member is the newly allocated client handle. */
+    /*
+     * NV0000_ALLOC_PARAMETERS from the public R535 SDK: hClient, processID,
+     * 100-byte processName, and aligned pOsPidInfo. The pointer stays NULL.
+     */
     put32(params,client);
+    memcpy(params+8U,"VantaOS",7U);
     out->in_flight_stage=1U;
     s=nvx_gsp_rm_alloc_sync(manager,0U,0U,client,NVX_GSP_RM_CLASS_ROOT,0U,
-        params,4U,scratch,scratch_size,response,response_capacity,timeout_ms,
+        params,120U,scratch,scratch_size,response,response_capacity,timeout_ms,
         poll_interval_ms,delay_ms,delay_context,&operation);
     if(s!=NVX_GSP_RMAPI_OK) { if(s!=NVX_GSP_RMAPI_TIMEOUT)out->in_flight_stage=0U; return s; }
     out->client_created=1U;out->in_flight_stage=0U;
 
-    /* NV0080_ALLOC_PARAMETERS: share handle, flags, and 64-bit VA-space size. */
+    /*
+     * NV0080_ALLOC_PARAMETERS is 56 bytes in the public R535 ABI:
+     * deviceId, hClientShare, hTargetClient, hTargetDevice, flags,
+     * vaSpaceSize, vaStartInternal, vaLimitInternal, vaMode.
+     */
     memset(params,0,sizeof(params));
-    put32(params+0U,0U);put32(params+4U,device_flags);
-    put64(params+8U,device_va_size);
+    put32(params+16U,device_flags);
+    put64(params+24U,device_va_size);
     out->in_flight_stage=2U;
     s=nvx_gsp_rm_alloc_sync(manager,client,client,device,
-        NVX_GSP_RM_CLASS_DEVICE_0,0U,params,sizeof(params),scratch,scratch_size,
+        NVX_GSP_RM_CLASS_DEVICE_0,0U,params,56U,scratch,scratch_size,
         response,response_capacity,timeout_ms,poll_interval_ms,delay_ms,
         delay_context,&operation);
     if(s!=NVX_GSP_RMAPI_OK) {
@@ -280,13 +288,16 @@ nvx_gsp_rmapi_status_t nvx_gsp_rm_create_core_objects(
     }
     out->device_created=1U;out->in_flight_stage=0U;
 
-    /* NV_MEMORY_VIRTUAL_ALLOCATION_PARAMS: caller's explicit limit, default parent VA space. */
+    /*
+     * NV_MEMORY_VIRTUAL_ALLOCATION_PARAMS is 24 bytes: offset, limit, hVASpace.
+     * Use offset 0 and NV01_NULL_OBJECT as the default parent address space.
+     */
     memset(params,0,sizeof(params));
-    put64(params,vaspace_limit);
-    put32(params+8U,0U); /* NV01_NULL_OBJECT parent VA-space handle. */
+    put64(params+8U,vaspace_limit);
+    put32(params+16U,0U);
     out->in_flight_stage=3U;
     s=nvx_gsp_rm_alloc_sync(manager,client,device,vaspace,
-        NVX_GSP_RM_CLASS_MEMORY_VIRTUAL,0U,params,sizeof(params),scratch,
+        NVX_GSP_RM_CLASS_MEMORY_VIRTUAL,0U,params,24U,scratch,
         scratch_size,response,response_capacity,timeout_ms,poll_interval_ms,
         delay_ms,delay_context,&operation);
     if(s!=NVX_GSP_RMAPI_OK) {

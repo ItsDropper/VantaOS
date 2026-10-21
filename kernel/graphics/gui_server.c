@@ -218,7 +218,7 @@ int gui_server_create_window(uint32_t pid,
     while (title_length <= VANTA_GUI_TITLE_MAX && request->title[title_length])
         title_length++;
     if (title_length == 0U || title_length > VANTA_GUI_TITLE_MAX ||
-        title_length > (request->width - 180U) / 8U)
+        title_length > (request->width - 188U) / 8U)
         return -22;
 
     uint64_t flags = spinlock_lock_irqsave(&gui_lock);
@@ -338,7 +338,7 @@ int gui_server_set_owner_visible(uint32_t pid, int visible)
             changed = 1;
         if (window->id == focused_window_id)
             focused_owned = 1;
-        if (window->visible &&
+        if (!window->minimized &&
             (!newest_owned || window->z_order > newest_owned->z_order))
             newest_owned = window;
     }
@@ -859,11 +859,26 @@ static void gui_taskbar_geometry(int screen_width, unsigned int count,
     *right_end = clock_x - 8;
     if (*left_end < *left_start) *left_end = *left_start;
     if (*right_end < *right_start) *right_end = *right_start;
-    int available = (*left_end - *left_start) +
-                    (*right_end - *right_start);
-    *slot_width = count ? available / (int)count : 0;
+    int left_width = *left_end - *left_start;
+    int right_width = *right_end - *right_start;
+    if (count == 0U)
+    {
+        *slot_width = 0;
+        return;
+    }
+    if (right_width > 0 && count > 1U)
+    {
+        int left_slots = ((int)count + 1) / 2;
+        int right_slots = (int)count / 2;
+        int left_slot_width = left_width / left_slots;
+        int right_slot_width = right_width / right_slots;
+        *slot_width = left_slot_width < right_slot_width
+                    ? left_slot_width : right_slot_width;
+    }
+    else
+        *slot_width = left_width / (int)count;
     if (*slot_width > 120) *slot_width = 120;
-    if (*slot_width < 20 && count != 0U) *slot_width = 20;
+    if (*slot_width < 16) *slot_width = 16;
 }
 
 void gui_server_draw_taskbar_items(int taskbar_y, int screen_width)
@@ -925,8 +940,10 @@ void gui_server_draw_taskbar_items(int taskbar_y, int screen_width)
         if (button_width >= 64)
         {
             char label[9];
+            size_t max_chars = (size_t)(button_width - 30) / 8U;
+            if (max_chars > 7U) max_chars = 7U;
             size_t n = 0U;
-            while (n < 7U && items[i].title[n])
+            while (n < max_chars && items[i].title[n])
             {
                 label[n] = items[i].title[n];
                 n++;

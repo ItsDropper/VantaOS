@@ -218,7 +218,7 @@ int gui_server_create_window(uint32_t pid,
     while (title_length <= VANTA_GUI_TITLE_MAX && request->title[title_length])
         title_length++;
     if (title_length == 0U || title_length > VANTA_GUI_TITLE_MAX ||
-        title_length > (request->width - 188U) / 8U)
+        title_length > (request->width - 100U) / 8U)
         return -22;
 
     uint64_t flags = spinlock_lock_irqsave(&gui_lock);

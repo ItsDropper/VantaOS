@@ -160,7 +160,7 @@ int partition_device_scan_disk(block_device_t *disk)
         disk->sector_count, found, PARTITION_SCAN_MAX, &found_count);
     if (status != PARTITION_SCAN_OK) {
         if (has_table)
-            serial_write("VANTAOS_PARTITION_FAIL\\n");
+            serial_write("VANTAOS_PARTITION_FAIL\n");
         return 0;
     }
 
@@ -190,10 +190,10 @@ int partition_device_scan_disk(block_device_t *disk)
                     sizeof(part->block.partition_label), found[i].name);
         if (block_device_register(&part->block) == BLOCK_STATUS_OK) {
             ++partition_count;
-            serial_write("VANTAOS_PARTITION_OK\\n");
+            serial_write("VANTAOS_PARTITION_OK\n");
         } else {
             all_registered = 0;
-            serial_write("VANTAOS_PARTITION_FAIL\\n");
+            serial_write("VANTAOS_PARTITION_FAIL\n");
         }
     }
     return all_registered;
@@ -204,5 +204,5 @@ void partition_device_initialize(void)
     size_t disks_to_scan = block_device_count();
     for (size_t index = 0U; index < disks_to_scan; ++index)
         (void)partition_device_scan_disk(block_device_get((uint32_t)index));
-    serial_write("VANTAOS_PARTITION_SCAN_DONE\\n");
+    serial_write("VANTAOS_PARTITION_SCAN_DONE\n");
 }

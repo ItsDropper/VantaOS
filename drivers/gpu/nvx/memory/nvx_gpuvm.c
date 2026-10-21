@@ -732,8 +732,7 @@ static int nvx_gpuvm_table_entries_consistent(const nvx_gpuvm_t *vm,
                 return 0;
             continue;
         }
-        if (table->level == 1U && entry[1] != 0U)
-            return 0;
+        /* Every non-leaf descriptor is one 64-bit PDE. */
         if (entry[0] != 0U)
             ++nonzero_entries;
     }

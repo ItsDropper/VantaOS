@@ -6,6 +6,8 @@ on:
       - "installer/**"
       - "include/vanta_installer_*.h"
       - "scripts/test_installer_*.c"
+      - "scripts/test_setup_config.c"
+      - "include/vanta_setup_config.h"
       - ".github/workflows/installer-layout.yml"
   push:
     branches: [master]
@@ -31,11 +33,17 @@ jobs:
           flags="-std=c11 -Wall -Wextra -Werror -Wconversion -Wsign-conversion -Wshadow -Wstrict-prototypes -pedantic -fsanitize=address,undefined -fno-omit-frame-pointer"
           cc $flags -Iinclude installer/layout.c scripts/test_installer_layout.c -o /tmp/vantaos-installer-layout-test
           cc $flags -Iinclude installer/layout.c installer/gpt_writer.c scripts/test_installer_gpt.c -o /tmp/vantaos-installer-gpt-test
+          cc $flags -Iinclude installer/setup_config.c scripts/test_setup_config.c -o /tmp/vantaos-setup-config-test
       - name: Verify layout arithmetic
         run: |
           set -euo pipefail
           /tmp/vantaos-installer-layout-test | tee /tmp/installer-layout-test.log
           grep -qx "VANTAOS_INSTALLER_LAYOUT_OK" /tmp/installer-layout-test.log
+      - name: Verify bounded locale, keyboard, and time-zone config
+        run: |
+          set -euo pipefail
+          /tmp/vantaos-setup-config-test | tee /tmp/setup-config-test.log
+          grep -qx "VANTAOS_SETUP_CONFIG_OK" /tmp/setup-config-test.log
       - name: Verify GPT writer against sparse disposable disk
         run: |
           set -euo pipefail

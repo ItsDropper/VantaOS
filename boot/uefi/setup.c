@@ -24,8 +24,8 @@ typedef struct {
     uint64_t sector_count;
 } setup_disk_t;
 
-static EFI_GUID block_io_guid = BLOCK_IO_PROTOCOL;
-static EFI_GUID filesystem_guid = SIMPLE_FILE_SYSTEM_PROTOCOL;
+static EFI_GUID block_io_guid = BlockIoProtocol;
+static EFI_GUID filesystem_guid = FileSystemProtocol;
 
 static int bytes_equal(const uint8_t *a, const uint8_t *b, size_t length)
 {
@@ -332,6 +332,20 @@ static EFI_STATUS write_text_file(
     return status;
 }
 
+static UINT32 partition_number_from_path(EFI_DEVICE_PATH_PROTOCOL *path)
+{
+    while (path && !IsDevicePathEnd(path)) {
+        if (DevicePathType(path) == MEDIA_DEVICE_PATH &&
+            DevicePathSubType(path) == MEDIA_HARDDRIVE_DP) {
+            const uint8_t *bytes = (const uint8_t *)path;
+            return (uint32_t)bytes[4] | ((uint32_t)bytes[5] << 8U) |
+                   ((uint32_t)bytes[6] << 16U) | ((uint32_t)bytes[7] << 24U);
+        }
+        path = NextDevicePathNode(path);
+    }
+    return 0U;
+}
+
 static EFI_HANDLE find_partition_handle(
     EFI_HANDLE disk_handle,
     UINT32 partition_number)
@@ -351,7 +365,8 @@ static EFI_HANDLE find_partition_handle(
                                    &block_io_guid, (void **)&block);
         if (EFI_ERROR(status) || !block || !block->Media ||
             !block->Media->LogicalPartition ||
-            block->Media->PartitionNumber != partition_number)
+            partition_number_from_path(DevicePathFromHandle(handles[i])) !=
+                partition_number)
             continue;
         if (device_paths_share_disk(disk_path, DevicePathFromHandle(handles[i]))) {
             found = handles[i];
@@ -406,7 +421,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
         return EFI_LOAD_ERROR;
     }
 
-    vanta_setup_config_t config;
+    vanta_setup_config_t config = {{0}, {0}, {0}};
     config.language[0] = 'e'; config.language[1] = 'n'; config.language[2] = '\0';
     config.keyboard[0] = 'u'; config.keyboard[1] = 's'; config.keyboard[2] = '\0';
     config.timezone[0] = '\0';
@@ -442,8 +457,12 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
         Print(L"Invalid choice.\r\n");
         return EFI_INVALID_PARAMETER;
     }
-    for (size_t i = 0U; zone[i] && i + 1U < sizeof(config.timezone); ++i)
-        config.timezone[i] = zone[i];
+    size_t zone_length = 0U;
+    while (zone[zone_length] && zone_length + 1U < sizeof(config.timezone)) {
+        config.timezone[zone_length] = zone[zone_length];
+        ++zone_length;
+    }
+    config.timezone[zone_length] = '\0';
     if (!vanta_setup_config_valid(&config)) {
         Print(L"ERROR: setup preferences failed validation.\r\n");
         return EFI_INVALID_PARAMETER;

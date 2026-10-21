@@ -26,7 +26,7 @@ typedef enum nvx_gsp_gmcapi_status {
     NVX_GSP_GMCAPI_REMOTE_ERROR
 } nvx_gsp_gmcapi_status_t;
 
-typedef void (*nvx_gsp_gmcapi_delay_fn)(void *context, uint32_t ms);
+typedef void (*nvx_gsp_gmcapi_delay_fn)(uint32_t ms, void *context);
 
 typedef struct nvx_gsp_gmcapi_transport {
     nvx_gsp_msgq_queue_t *command_queue;

@@ -272,7 +272,7 @@ nvx_gsp_falcon_status_t nvx_gsp_ga10x_execute_fwsec_frts(
     status = nvx_ga10x_falcon_dma_upload(
         bar0, NVX_GSP_FALCON_BASE, dmem_source_phys, 0U,
         info->dmem_physical_base, info->dmem_load_size,
-        NVX_GA10X_FALCON_SECURE_DMEM, 0U,
+        NVX_GA10X_FALCON_DMEM, 0U,
         timeout_ms, poll_interval_ms, delay_ms, context);
     if (status != NVX_GSP_FALCON_OK)
         goto recover;

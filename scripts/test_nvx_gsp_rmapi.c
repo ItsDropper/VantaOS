@@ -197,13 +197,19 @@ int main(void)
         assert(le32(history[7]+40U)==0xFFFFFFFFU);
         assert(fake_response==response&&fake_response_capacity==sizeof(response));
         expected_function=NVX_GSP_RPC_FN_RM_CONTROL;
+        assert(nvx_gsp_rmapi_bind_channel_sync(&manager,0x10U,0x40U,0x17U,
+            scratch,sizeof(scratch),response,sizeof(response),20U,1U,
+            no_delay,NULL,&op)==NVX_GSP_RMAPI_OK);
+        assert(history_size[8]==44U);
+        assert(le32(history[8]+8U)==NVX_GSP_RM_CTRL_BIND_CHANNEL);
+        assert(le32(history[8]+40U)==0x17U);
         assert(nvx_gsp_rmapi_schedule_channel_sync(&manager,0x10U,0x40U,1,
             scratch,sizeof(scratch),response,sizeof(response),20U,1U,
             no_delay,NULL,&op)==NVX_GSP_RMAPI_OK);
-        assert(history_size[8]==52U);
-        assert(le32(history[8]+8U)==NVX_GSP_RM_CTRL_GPFIFO_SCHEDULE);
-        assert(le32(history[8]+40U)==1U);
-        assert(le32(history[8]+44U)==0U&&le32(history[8]+48U)==0U);
+        assert(history_size[9]==52U);
+        assert(le32(history[9]+8U)==NVX_GSP_RM_CTRL_GPFIFO_SCHEDULE);
+        assert(le32(history[9]+40U)==1U);
+        assert(le32(history[9]+44U)==0U&&le32(history[9]+48U)==0U);
         auto_complete=0;
     }
     return 0;

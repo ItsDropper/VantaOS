@@ -12,11 +12,6 @@
 
 #include <stdint.h>
 
-#define NVX_PMC_BOOT_0_OFFSET 0x0000U
-#define NVX_PMC_BOOT_1_OFFSET 0x0004U
-#define NVX_PMC_BOOT_42_OFFSET 0x0A00U
-#define NVX_PMC_BOOT_REQUIRED_LENGTH 0x0008U
-#define NVX_PMC_BOOT_42_REQUIRED_LENGTH (NVX_PMC_BOOT_42_OFFSET + sizeof(uint32_t))
 
 /* NVIDIA OpenRM nv_ref.h register fields. */
 #define NVX_PMC_BOOT_0_MINOR_MASK 0x0000000FU

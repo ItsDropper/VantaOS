@@ -29,6 +29,7 @@
 
 #define BOCHS_VBE_ID 0xB0C5
 #define BOCHS_VBE_ENABLE_LFB 0x0041
+#define BOCHS_VBE_ENABLE_LFB_NO_CLEAR 0x00C1
 #define GRAPHICS_BACKBUFFER_BASE 0xD0800000U
 #define GRAPHICS_SCANOUT_WINDOW_BYTES ((uintptr_t)GRAPHICS_BACKBUFFER_BASE - (uintptr_t)GRAPHICS_VIRTUAL_BASE)
 #define GRAPHICS_VBLANK_POLL_LIMIT 1000000U
@@ -81,7 +82,7 @@ static void bochs_vbe_disable_pageflip(uint16_t height)
     bochs_vbe_write(BOCHS_VBE_INDEX_ENABLE, 0U);
     bochs_vbe_write(BOCHS_VBE_INDEX_VIRT_HEIGHT, height);
     bochs_vbe_write(BOCHS_VBE_INDEX_Y_OFFSET, 0U);
-    bochs_vbe_write(BOCHS_VBE_INDEX_ENABLE, BOCHS_VBE_ENABLE_LFB);
+    bochs_vbe_write(BOCHS_VBE_INDEX_ENABLE, BOCHS_VBE_ENABLE_LFB_NO_CLEAR);
 }
 
 static inline uint8_t bochs_vbe_read_status(void)

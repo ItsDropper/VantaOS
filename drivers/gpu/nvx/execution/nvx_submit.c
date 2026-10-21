@@ -82,8 +82,8 @@ nvx_submit_status_t nvx_submit_validate_batch(
             return NVX_SUBMIT_RELOCATION_OVERLAP;
         previous_end = field_end;
 
-        if ((uint64_t)reloc->target_offset + reloc->target_span >
-            reloc->target.size)
+        if ((uint64_t)reloc->target_offset +
+                (uint64_t)reloc->target_span > reloc->target.size)
             return NVX_SUBMIT_TARGET_INVALID;
         if (nvx_submit_add_overflow(reloc->target.gpu_virtual_address,
                                     reloc->target_offset, &target_address) ||

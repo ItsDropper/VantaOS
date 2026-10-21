@@ -29,6 +29,13 @@ typedef struct
 {
     int used;
     int visible;
+    int owner_visible;
+    int minimized;
+    int maximized;
+    int32_t restore_x;
+    int32_t restore_y;
+    uint32_t restore_width;
+    uint32_t restore_height;
     uint32_t id;
     uint32_t owner_pid;
     int32_t x;
@@ -36,6 +43,7 @@ typedef struct
     uint32_t width;
     uint32_t height;
     uint64_t z_order;
+    int maximized;
     char title[VANTA_GUI_TITLE_MAX + 1U];
     vanta_gui_draw_command_t commands[VANTA_GUI_MAX_COMMANDS];
     uint32_t command_count;
@@ -52,6 +60,11 @@ static uint32_t focused_window_id;
 static uint32_t dragging_window_id;
 static int32_t drag_offset_x;
 static int32_t drag_offset_y;
+static uint32_t resizing_window_id;
+static int32_t resize_start_x;
+static int32_t resize_start_y;
+static uint32_t resize_start_width;
+static uint32_t resize_start_height;
 static int redraw_pending;
 
 /*
@@ -203,7 +216,7 @@ int gui_server_create_window(uint32_t pid,
     while (title_length <= VANTA_GUI_TITLE_MAX && request->title[title_length])
         title_length++;
     if (title_length == 0U || title_length > VANTA_GUI_TITLE_MAX ||
-        title_length > (request->width - 100U) / 8U)
+        title_length > (request->width - 180U) / 8U)
         return -22;
 
     uint64_t flags = spinlock_lock_irqsave(&gui_lock);
@@ -224,6 +237,9 @@ int gui_server_create_window(uint32_t pid,
         ((uint8_t*)slot)[i] = 0U;
     slot->used = 1;
     slot->visible = 1;
+    slot->owner_visible = 1;
+    slot->minimized = 0;
+    slot->maximized = 0;
     slot->id = next_window_id++;
     if (slot->id == 0U)
         slot->id = next_window_id++;
@@ -260,7 +276,7 @@ int gui_server_close_window(uint32_t pid, uint32_t id)
         focused_window_id = 0U;
         gui_window_t* newest = 0;
         for (unsigned int i = 0; i < VANTA_GUI_MAX_WINDOWS; i++)
-            if (windows[i].used &&
+            if (windows[i].used && windows[i].visible &&
                 (!newest || windows[i].z_order > newest->z_order))
                 newest = &windows[i];
         gui_focus_locked(newest);
@@ -316,7 +332,7 @@ int gui_server_set_owner_visible(uint32_t pid, int visible)
         if (!window->used || window->owner_pid != pid)
             continue;
         found = 1;
-        if (window->visible != visible)
+        if (window->owner_visible != visible)
             changed = 1;
         if (window->id == focused_window_id)
             focused_owned = 1;
@@ -338,7 +354,10 @@ int gui_server_set_owner_visible(uint32_t pid, int visible)
     {
         gui_window_t* window = &windows[i];
         if (window->used && window->owner_pid == pid)
-            window->visible = visible;
+        {
+            window->owner_visible = visible;
+            window->visible = visible && !window->minimized;
+        }
     }
 
     if (visible && newest_owned)
@@ -450,6 +469,7 @@ void gui_server_draw_windows(void)
         target->width = source->width;
         target->height = source->height;
         target->z_order = source->z_order;
+        target->maximized = source->maximized;
         target->command_count = source->command_count;
         for (size_t j = 0; j < sizeof(target->title); j++)
             target->title[j] = source->title[j];
@@ -480,7 +500,7 @@ void gui_server_draw_windows(void)
         uint32_t width = window->width;
         uint32_t height = window->height;
         graphics_draw_window_frame(x, y, (int)width, (int)height,
-                                   window->title, 0);
+                                   window->title, 1);
         if (window->focused)
             graphics_fill_rect(x + 16, y + GUI_TITLEBAR_HEIGHT - 2,
                                48, 2,
@@ -496,12 +516,39 @@ void gui_server_draw_windows(void)
             int cx = x + GUI_CLIENT_INSET_X + command->x;
             int cy = y + GUI_CLIENT_INSET_Y + command->y;
             if (command->type == VANTA_GUI_DRAW_FILL_RECT)
-                graphics_fill_rect(cx, cy, command->width, command->height,
-                                   command->color & 0x00FFFFFFU);
-            else if (command->type == VANTA_GUI_DRAW_TEXT)
+            {
+                int max_w = (int)width - 2 * GUI_CLIENT_INSET_X;
+                int max_h = (int)height - GUI_CLIENT_INSET_Y - 8;
+                int draw_w = command->width;
+                int draw_h = command->height;
+                if (command->x >= 0 && command->y >= 0 &&
+                    command->x < max_w && command->y < max_h)
+                {
+                    if (draw_w > max_w - command->x)
+                        draw_w = max_w - command->x;
+                    if (draw_h > max_h - command->y)
+                        draw_h = max_h - command->y;
+                    if (draw_w > 0 && draw_h > 0)
+                        graphics_fill_rect(cx, cy, draw_w, draw_h,
+                                           command->color & 0x00FFFFFFU);
+                }
+            }
+            else if (command->type == VANTA_GUI_DRAW_TEXT &&
+                     gui_command_valid(command, width, height))
                 graphics_draw_text(cx, cy, command->text,
                                    command->color & 0x00FFFFFFU,
                                    command->scale);
+        }
+
+        /* Subtle resize affordance; disabled for maximized windows. */
+        if (!window->maximized)
+        {
+            int gx = x + (int)width - 14;
+            int gy = y + (int)height - 14;
+            uint32_t grip = window->focused ? 0x005DA9FFU : 0x00334455U;
+            graphics_fill_rect(gx + 7, gy + 5, 2, 2, grip);
+            graphics_fill_rect(gx + 4, gy + 8, 5, 2, grip);
+            graphics_fill_rect(gx + 1, gy + 11, 8, 2, grip);
         }
     }
 }

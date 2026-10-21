@@ -94,6 +94,7 @@ typedef struct
 static gui_render_snapshot_t render_snapshot[VANTA_GUI_MAX_WINDOWS];
 
 static gui_window_t* gui_topmost_visible_locked(uint32_t exclude_id);
+static void gui_focus_locked(gui_window_t* target);
 static int gui_title_equal(const char* a, const char* b)
 {
     if (!a || !b) return 0;
@@ -320,6 +321,50 @@ static int gui_command_valid(const vanta_gui_draw_command_t* command,
     }
 
     return 0;
+}
+
+void gui_server_reflow_windows(void)
+{
+    if (!graphics_is_initialized())
+        return;
+    int32_t screen_w = (int32_t)graphics_get_width();
+    int32_t work_h = (int32_t)graphics_get_height() - 64;
+    if (work_h < 1) work_h = (int32_t)graphics_get_height();
+    uint64_t flags = spinlock_lock_irqsave(&gui_lock);
+    for (unsigned int i = 0; i < VANTA_GUI_MAX_WINDOWS; i++)
+    {
+        gui_window_t* window = &windows[i];
+        if (!window->used) continue;
+        uint32_t old_width = window->width;
+        uint32_t old_height = window->height;
+        if (window->maximized)
+        {
+            window->x = 0;
+            window->y = 0;
+            window->width = (uint32_t)screen_w;
+            window->height = (uint32_t)work_h;
+        }
+        else
+        {
+            uint32_t max_width = screen_w > 16 ? (uint32_t)(screen_w - 16) : 1U;
+            uint32_t max_height = work_h > 8 ? (uint32_t)(work_h - 8) : 1U;
+            if (window->width > max_width) window->width = max_width;
+            if (window->height > max_height) window->height = max_height;
+            int32_t max_x = screen_w - (int32_t)window->width;
+            int32_t max_y = work_h - (int32_t)window->height;
+            if (max_x < 0) max_x = 0;
+            if (max_y < 0) max_y = 0;
+            if (window->x < 0) window->x = 0;
+            if (window->y < 0) window->y = 0;
+            if (window->x > max_x) window->x = max_x;
+            if (window->y > max_y) window->y = max_y;
+        }
+        if (!window->builtin &&
+            (old_width != window->width || old_height != window->height))
+            gui_emit_resize_locked(window);
+    }
+    redraw_pending = 1;
+    spinlock_unlock_irqrestore(&gui_lock, flags);
 }
 
 int gui_server_create_window(uint32_t pid,

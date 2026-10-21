@@ -52,12 +52,6 @@ static void put64(uint8_t *p, uint64_t v)
         p[i] = (uint8_t)(v >> (i * 8U));
 }
 
-static uint32_t get32(const uint8_t *p)
-{
-    return (uint32_t)p[0] | ((uint32_t)p[1] << 8U) |
-           ((uint32_t)p[2] << 16U) | ((uint32_t)p[3] << 24U);
-}
-
 static uint32_t crc32(const uint8_t *p, size_t n)
 {
     uint32_t crc = 0xFFFFFFFFU;

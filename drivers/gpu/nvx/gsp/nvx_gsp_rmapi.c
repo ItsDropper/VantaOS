@@ -218,6 +218,47 @@ nvx_gsp_rmapi_status_t nvx_gsp_rm_map_memory_dma_result(
     return NVX_GSP_RMAPI_OK;
 }
 
+nvx_gsp_rmapi_status_t nvx_gsp_rm_map_memory_dma_sync(
+    nvx_gsp_rpc_manager_t *manager,const nvx_gsp_map_memory_dma_t *mapping,
+    void *scratch,size_t scratch_size,void *response,size_t response_capacity,
+    uint32_t timeout_ms,uint32_t poll_interval_ms,
+    nvx_gsp_rmapi_delay_fn delay_ms,void *delay_context,
+    uint64_t *out_dma_offset,nvx_gsp_rmapi_result_t *out)
+{
+    nvx_gsp_rmapi_status_t s;
+    if(out_dma_offset)*out_dma_offset=0U;
+    if(!out_dma_offset||!out)return NVX_GSP_RMAPI_INVALID_ARGUMENT;
+    s=nvx_gsp_rm_map_memory_dma_submit(manager,mapping,scratch,scratch_size,
+        response,response_capacity,out);
+    if(s!=NVX_GSP_RMAPI_OK)return s;
+    s=nvx_gsp_rmapi_wait(manager,out,scratch,scratch_size,response,
+        response_capacity,timeout_ms,poll_interval_ms,delay_ms,delay_context);
+    if(s==NVX_GSP_RMAPI_TIMEOUT)return s;
+    (void)nvx_gsp_rpc_release(manager,&out->handle);
+    if(s!=NVX_GSP_RMAPI_OK)return s;
+    return nvx_gsp_rm_map_memory_dma_result(out,response,out->response_size,
+                                             out_dma_offset);
+}
+
+nvx_gsp_rmapi_status_t nvx_gsp_rm_unmap_memory_dma_sync(
+    nvx_gsp_rpc_manager_t *manager,const nvx_gsp_unmap_memory_dma_t *mapping,
+    void *scratch,size_t scratch_size,void *response,size_t response_capacity,
+    uint32_t timeout_ms,uint32_t poll_interval_ms,
+    nvx_gsp_rmapi_delay_fn delay_ms,void *delay_context,
+    nvx_gsp_rmapi_result_t *out)
+{
+    nvx_gsp_rmapi_status_t s;
+    if(!out)return NVX_GSP_RMAPI_INVALID_ARGUMENT;
+    s=nvx_gsp_rm_unmap_memory_dma_submit(manager,mapping,scratch,scratch_size,
+        response,response_capacity,out);
+    if(s!=NVX_GSP_RMAPI_OK)return s;
+    s=nvx_gsp_rmapi_wait(manager,out,scratch,scratch_size,response,
+        response_capacity,timeout_ms,poll_interval_ms,delay_ms,delay_context);
+    if(s!=NVX_GSP_RMAPI_TIMEOUT)
+        (void)nvx_gsp_rpc_release(manager,&out->handle);
+    return s;
+}
+
 static nvx_gsp_rmapi_status_t free_core_object(
     nvx_gsp_rpc_manager_t *manager,uint32_t root,uint32_t parent,
     uint32_t object,void *scratch,size_t scratch_size,void *response,

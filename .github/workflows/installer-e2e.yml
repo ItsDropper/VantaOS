@@ -1,0 +1,245 @@
+name: VantaOS installer end-to-end
+
+on:
+  pull_request:
+    paths:
+      - "boot/uefi/setup.c"
+      - "installer/**"
+      - "include/vanta_installer_*.h"
+      - "include/vanta_setup_config.h"
+      - "fs/fat32.c"
+      - "Makefile"
+      - "build.sh"
+      - ".github/workflows/installer-e2e.yml"
+  push:
+    branches: [master]
+    paths:
+      - "boot/uefi/setup.c"
+      - "installer/**"
+      - "include/vanta_installer_*.h"
+      - "include/vanta_setup_config.h"
+      - "fs/fat32.c"
+      - "Makefile"
+      - "build.sh"
+      - ".github/workflows/installer-e2e.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vantaos-installer-e2e-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  install-and-boot-disposable-disk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install build and QEMU/OVMF dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            build-essential nasm grub-pc-bin xorriso mtools dosfstools \
+            qemu-system-x86 gnu-efi ovmf gdisk socat xvfb imagemagick \
+            tesseract-ocr python3
+
+      - name: Build the kernel, UEFI setup app, and disposable installer media
+        run: |
+          set -euo pipefail
+          chmod +x build.sh run.sh
+          VANTAOS_SELF_TEST=1 ./build.sh
+          test -s VantaOS-Setup.img
+          test -s VANTASETUP.EFI
+          test -s BOOTX64.EFI
+          test -s kernel-uefi.elf
+
+      - name: Install onto a disposable QEMU disk and verify deployed files
+        shell: bash
+        run: |
+          set -euo pipefail
+          code_firmware=""
+          vars_template=""
+          for suffix in "" "_4M"; do
+            code_candidate="/usr/share/OVMF/OVMF_CODE${suffix}.fd"
+            vars_candidate="/usr/share/OVMF/OVMF_VARS${suffix}.fd"
+            if [ -s "$code_candidate" ] && [ -s "$vars_candidate" ]; then
+              code_firmware="$code_candidate"
+              vars_template="$vars_candidate"
+              break
+            fi
+          done
+          if [ -z "$code_firmware" ]; then
+            code_firmware="$(find /usr/share -maxdepth 4 -name 'OVMF_CODE*.fd' -print -quit)"
+            vars_template="${code_firmware/OVMF_CODE/OVMF_VARS}"
+          fi
+          test -n "$code_firmware" && test -s "$code_firmware"
+          test -n "$vars_template" && test -s "$vars_template"
+
+          # This is a new sparse file in the hosted CI workspace, never a host disk.
+          truncate -s 8G install-target.img
+          cp "$vars_template" OVMF_INSTALL_VARS.fd
+          rm -f /tmp/vantaos-installer-monitor.sock setup-install.log
+          qemu-system-x86_64 \
+            -machine pc -m 512M -smp 2 \
+            -drive if=pflash,format=raw,readonly=on,file="$code_firmware" \
+            -drive if=pflash,format=raw,file=OVMF_INSTALL_VARS.fd \
+            -drive file=VantaOS-Setup.img,format=raw,if=ide,index=0 \
+            -drive file=install-target.img,format=raw,if=ide,index=1 \
+            -display none -serial file:setup-install.log \
+            -monitor unix:/tmp/vantaos-installer-monitor.sock,server,nowait \
+            -no-reboot >/tmp/vantaos-installer-qemu.log 2>&1 &
+          qemu_pid=$!
+          cleanup() {
+            kill "$qemu_pid" 2>/dev/null || true
+            wait "$qemu_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          python3 - <<'PY'
+          import os
+          import socket
+          import time
+
+          log_path = "setup-install.log"
+          monitor_path = "/tmp/vantaos-installer-monitor.sock"
+          deadline = time.monotonic() + 150
+
+          def log_text():
+              try:
+                  with open(log_path, "r", encoding="utf-8", errors="replace") as f:
+                      return f.read()
+              except FileNotFoundError:
+                  return ""
+
+          def wait_marker(marker):
+              while time.monotonic() < deadline:
+                  content = log_text()
+                  if marker in content:
+                      return
+                  time.sleep(0.1)
+              raise RuntimeError(f"timed out waiting for {marker}; serial log:\n{log_text()}")
+
+          while time.monotonic() < deadline:
+              try:
+                  monitor = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                  monitor.connect(monitor_path)
+                  break
+              except OSError:
+                  try:
+                      monitor.close()
+                  except Exception:
+                      pass
+                  time.sleep(0.1)
+          else:
+              raise SystemExit("QEMU monitor socket did not become available")
+
+          with monitor:
+              monitor.settimeout(0.2)
+              try:
+                  monitor.recv(4096)
+              except OSError:
+                  pass
+
+              def key(name):
+                  monitor.sendall(("sendkey " + name + "\n").encode("ascii"))
+                  time.sleep(0.25)
+
+              wait_marker("VANTAOS_SETUP_START")
+              for marker in (
+                  "VANTAOS_SETUP_LANGUAGE_PROMPT",
+                  "VANTAOS_SETUP_KEYBOARD_PROMPT",
+                  "VANTAOS_SETUP_TIMEZONE_PROMPT",
+              ):
+                  wait_marker(marker)
+                  key("ret")
+
+              wait_marker("VANTAOS_SETUP_DISK_PROMPT")
+              key("1")
+              key("ret")
+              wait_marker("VANTAOS_SETUP_CONFIRM_PROMPT")
+              for letter in "INSTALL":
+                  key("shift-" + letter.lower())
+              key("ret")
+              wait_marker("VANTAOS_SETUP_COMPLETE")
+              print("VANTAOS_SETUP_E2E_INSTALL_COMPLETE")
+          PY
+
+          grep -q '^VANTAOS_SETUP_GPT_OK' setup-install.log
+          grep -q '^VANTAOS_SETUP_FORMAT_OK' setup-install.log
+          grep -q '^VANTAOS_SETUP_FILES_OK' setup-install.log
+          grep -q '^VANTAOS_SETUP_COMPLETE' setup-install.log
+          sgdisk --verify install-target.img
+
+          # Verify the fallback EFI loader on the ESP and the stored setup choices
+          # on the separate Basic Data volume before attempting the installed boot.
+          mcopy -i install-target.img@@1048576 ::/EFI/BOOT/BOOTX64.EFI /tmp/installed-bootx64.efi
+          test -s /tmp/installed-bootx64.efi
+          mcopy -i install-target.img@@537919488 ::/SYSTEM/SETUP.CFG /tmp/installed-setup.cfg
+          grep -q '^version=1$' /tmp/installed-setup.cfg
+          grep -q '^timezone=Europe/Helsinki$' /tmp/installed-setup.cfg
+          mcopy -i install-target.img@@537919488 ::/TERMINAL.ELF /tmp/installed-terminal.elf
+          mcopy -i install-target.img@@537919488 ::/SYSTEM/SETTINGS.ELF /tmp/installed-settings.elf
+          mcopy -i install-target.img@@537919488 ::/EXPLORER.ELF /tmp/installed-explorer.elf
+          test -s /tmp/installed-terminal.elf
+          test -s /tmp/installed-settings.elf
+          test -s /tmp/installed-explorer.elf
+
+      - name: Boot the installed disk under OVMF
+        shell: bash
+        run: |
+          set -euo pipefail
+          code_firmware=""
+          vars_template=""
+          for suffix in "" "_4M"; do
+            code_candidate="/usr/share/OVMF/OVMF_CODE${suffix}.fd"
+            vars_candidate="/usr/share/OVMF/OVMF_VARS${suffix}.fd"
+            if [ -s "$code_candidate" ] && [ -s "$vars_candidate" ]; then
+              code_firmware="$code_candidate"
+              vars_template="$vars_candidate"
+              break
+            fi
+          done
+          if [ -z "$code_firmware" ]; then
+            code_firmware="$(find /usr/share -maxdepth 4 -name 'OVMF_CODE*.fd' -print -quit)"
+            vars_template="${code_firmware/OVMF_CODE/OVMF_VARS}"
+          fi
+          cp "$vars_template" OVMF_BOOT_VARS.fd
+          log=installed-boot.log
+          set +e
+          timeout 25s qemu-system-x86_64 \
+            -machine pc -m 512M -smp 2 \
+            -drive if=pflash,format=raw,readonly=on,file="$code_firmware" \
+            -drive if=pflash,format=raw,file=OVMF_BOOT_VARS.fd \
+            -drive file=install-target.img,format=raw,if=ide,index=0 \
+            -display none -serial "file:$log" -monitor none -no-reboot
+          result=$?
+          set -e
+          if [ "$result" -ne 124 ]; then
+            echo "Installed-disk QEMU exited before the smoke-test timeout (exit code $result)."
+            cat "$log" 2>/dev/null || true
+            exit 1
+          fi
+          sleep 1
+          for marker in \
+            VANTAOS_UEFI_LOADER_START \
+            VANTAOS_UEFI_ELF_LOADED \
+            VANTAOS_UEFI_EXIT_BOOT_SERVICES_OK \
+            VANTAOS_UEFI_KERNEL_HANDOFF \
+            VANTAOS_BOOT_OK \
+            VANTAOS_FAT32_BACKEND_ATA_OK \
+            VANTAOS_FILESYSTEM_NAMESPACE_OK; do
+            if ! grep -q "$marker" "$log"; then
+              echo "Missing installed-boot marker $marker"
+              cat "$log"
+              exit 1
+            fi
+          done
+          if grep -Eq '^VANTAOS_[A-Z0-9_]*_FAIL' "$log"; then
+            cat "$log"
+            exit 1
+          fi
+          echo "VANTAOS_INSTALLED_DISK_BOOT_OK"

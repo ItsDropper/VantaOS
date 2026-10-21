@@ -300,7 +300,10 @@ nvx_gsp_gmcapi_status_t nvx_gsp_gmcapi_gsp_init(
     nvx_gsp_gmcapi_delay_fn delay_ms, void *context)
 {
     nvx_gsp_gmcapi_status_t status;
+    if (out_static_info_size) *out_static_info_size = 0U;
+    if (out_remote_status) *out_remote_status = UINT32_MAX;
     if (!encoded_system_info || !static_info || !out_static_info_size ||
+        !out_remote_status ||
         !nvkv_wire_valid(encoded_system_info, encoded_system_info_size))
         return NVX_GSP_GMCAPI_BAD_MESSAGE;
 

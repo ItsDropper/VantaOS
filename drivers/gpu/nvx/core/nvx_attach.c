@@ -100,6 +100,26 @@ nvx_attach_status_t nvx_device_attach(
     }
 
     /*
+     * Treat the PCI ID as a candidate only. Require the live PMC architecture
+     * register to identify Ampere and reject any disagreement between PCI and
+     * register identity before returning a mapped device handle.
+     */
+    nvx_generation_family_t hardware_family = NVX_FAMILY_UNKNOWN;
+    if (!nvx_identify_architecture(out_device->registers.architecture,
+                                   &hardware_family) ||
+        hardware_family != NVX_FAMILY_AMPERE ||
+        out_device->registers.identity_mismatch) {
+        nvx_bar_mmio_unmap(trusted_bar0, out_device->bar0_mapping);
+        out_device->bar0_mapping = 0;
+        (void)nvx_lifecycle_fail(&out_device->lifecycle,
+                                 NVX_ERROR_INITIALIZATION);
+        out_device->pci_device = 0;
+        out_device->bar0 = *trusted_bar0;
+        out_device->attached = 0;
+        return NVX_ATTACH_PROBE_ERROR;
+    }
+
+    /*
      * Do not mark INITIALIZED: this only proves a responsive PMC register
      * aperture. The next stage may begin GSP/engine initialization; memory
      * management, display and acceleration still need separate verification.

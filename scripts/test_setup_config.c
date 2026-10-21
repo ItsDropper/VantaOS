@@ -28,7 +28,7 @@ static void test_round_trip(void)
     assert(output.language[0] == 'f' && output.language[1] == 'i');
     assert(output.keyboard[0] == 'f' && output.keyboard[1] == 'i');
     assert(output.timezone[0] == 'E');
-    assert(output.timezone[16] == 'i');
+    assert(output.timezone[14] == 'i');
 }
 
 static void test_supported_timezones(void)

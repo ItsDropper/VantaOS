@@ -731,12 +731,12 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
           target->block->Media->RemovableMedia ? L"removable" : L"fixed");
     Print(L"Device path: %s\r\n",
           selected_path ? selected_path : L"(unavailable)");
-    if (selected_path)
-        uefi_call_wrapper(BS->FreePool, 1, selected_path);
     vanta_installer_layout_t layout;
     if (vanta_installer_plan_gpt(target->sector_count,
             VANTA_INSTALLER_SECTOR_SIZE, &layout) != VANTA_INSTALLER_LAYOUT_OK) {
         Print(L"ERROR: disk layout is unsupported. No disks changed.\r\n");
+        if (selected_path)
+            uefi_call_wrapper(BS->FreePool, 1, selected_path);
         uefi_call_wrapper(source_root->Close, 1, source_root);
         return EFI_UNSUPPORTED;
     }
@@ -747,6 +747,8 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
     Print(L"  VantaOS system partition: %u MiB, FAT32\r\n",
           (UINT32)(layout.system.sector_count / 2048U));
     print_localized(&config, L"WARNING: continuing will erase the entire selected disk.\r\n", L"VAROITUS: jatkaminen tyhjentaa koko valitun levyn.\r\n");
+    Print(L"Target device: %s\r\n", selected_path ? selected_path : L"(unavailable)");
+    Print(L"Target capacity: %u GiB\r\n", (UINT32)(target->sector_count / 2097152U));
     serial_write("VANTAOS_SETUP_CONFIRM_PROMPT\n");
     print_localized(&config, L"Type INSTALL exactly to confirm, or anything else to cancel: ", L"Vahvista kirjoittamalla INSTALL, tai peruuta muulla tekstilla: ");
     if (!read_line(line, sizeof(line)) ||
@@ -754,11 +756,15 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
         line[3] != 'T' || line[4] != 'A' || line[5] != 'L' ||
         line[6] != 'L' || line[7] != '\0') {
         Print(L"Cancelled. No disks changed.\r\n");
+        if (selected_path)
+            uefi_call_wrapper(BS->FreePool, 1, selected_path);
         uefi_call_wrapper(source_root->Close, 1, source_root);
         return EFI_ABORTED;
     }
 
     serial_write("VANTAOS_SETUP_CONFIRM_ACCEPTED\n");
+    if (selected_path)
+        uefi_call_wrapper(BS->FreePool, 1, selected_path);
 
     EFI_TIME now;
     status = uefi_call_wrapper(RT->GetTime, 2, &now, NULL);

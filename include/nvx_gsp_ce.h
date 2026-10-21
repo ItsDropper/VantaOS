@@ -28,8 +28,9 @@ typedef enum nvx_gsp_ce_status {
  * asks the CE to write completion_value to completion_gpu_va after the copy.
  *
  * The caller must allocate/bind the NVC5B5 object, map all three addresses in
- * the channel's GPU VA space, make the destination/completion CPU-readable,
- * and submit this pushbuffer through a valid Ampere GPFIFO channel.
+ * the channel's GPU VA space, make the destination/completion CPU-readable and
+ * DMA-coherent (or perform platform cache maintenance), and submit this pushbuffer
+ * through a valid Ampere GPFIFO channel.
  */
 nvx_gsp_ce_status_t nvx_gsp_ce_build_copy(
     volatile uint32_t *command_buffer, size_t command_capacity_bytes,

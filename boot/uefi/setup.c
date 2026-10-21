@@ -552,7 +552,6 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
     Print(L"25 Los Angeles   26 Toronto        27 Vancouver      28 Sao Paulo\r\n");
     Print(L"29 Tokyo         30 Seoul          31 Shanghai       32 Kolkata\r\n");
     Print(L"33 Singapore     34 Sydney         35 Auckland       36 London [1]: ");
-    if (!read_line(line, sizeof(line))) return EFI_ABORTED;
     uint32_t zone_choice = 1U;
     for (;;) {
         if (!read_line(line, sizeof(line))) {

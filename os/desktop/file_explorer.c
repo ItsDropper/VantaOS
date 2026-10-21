@@ -376,9 +376,9 @@ static void explorer_toolbar(int x, int y, int w)
         w - EXPLORER_SIDEBAR - 104, explorer_location_name());
 }
 
-void file_explorer_draw(int width, int height)
+static void explorer_draw_at(int wx, int wy, int ww, int wh,
+                             int draw_frame)
 {
-    int ww, wh, wx, wy;
     int sidebar_y;
     int content_x;
     int content_w;
@@ -390,10 +390,8 @@ void file_explorer_draw(int width, int height)
     if (!explorer_initialized)
         file_explorer_initialize();
 
-    file_explorer_window_geometry(
-        width, height, &wx, &wy, &ww, &wh);
-
-    explorer_title(wx, wy, ww, wh);
+    if (draw_frame)
+        explorer_title(wx, wy, ww, wh);
 
     sidebar_y = wy + EXPLORER_TITLE;
 
@@ -552,9 +550,21 @@ void file_explorer_draw(int width, int height)
     }
 }
 
-int file_explorer_click(int x, int y, int width, int height)
+void file_explorer_draw(int width, int height)
 {
     int ww, wh, wx, wy;
+    file_explorer_window_geometry(width, height, &wx, &wy, &ww, &wh);
+    explorer_draw_at(wx, wy, ww, wh, 1);
+}
+
+void file_explorer_draw_managed(int x, int y, int width, int height)
+{
+    explorer_draw_at(x, y, width, height, 0);
+}
+
+static int explorer_click_at(int x, int y, int wx, int wy, int ww, int wh,
+                             int manage_chrome)
+{
     int sidebar_y;
     int content_x;
     int list_y;
@@ -562,33 +572,25 @@ int file_explorer_click(int x, int y, int width, int height)
     if (!explorer_initialized)
         file_explorer_initialize();
 
-    file_explorer_window_geometry(
-        width, height, &wx, &wy, &ww, &wh);
-
     if (x < wx || x >= wx + ww || y < wy || y >= wy + wh)
         return 0;
 
     if (y < wy + EXPLORER_TITLE)
     {
+        if (manage_chrome)
+            return 1;
         int close_x = wx + ww - EXPLORER_BUTTON;
         int max_x = close_x - EXPLORER_BUTTON;
         int min_x = max_x - EXPLORER_BUTTON;
-
-        /*
-         * Window chrome is handled here, not in graphics_input.c.
-         * This gives drawing and hit-testing one owner and one geometry.
-         */
         if (x >= close_x)
         {
             explorer_dragging = 0;
             active_panel = 0;
             return 1;
         }
-
         if (x >= max_x)
         {
             explorer_dragging = 0;
-
             if (!explorer_maximized)
             {
                 explorer_restore_x = wx;
@@ -601,95 +603,76 @@ int file_explorer_click(int x, int y, int width, int height)
                 explorer_x = explorer_restore_x;
                 explorer_y = explorer_restore_y;
             }
-
             return 1;
         }
-
         if (x >= min_x)
         {
-            /*
-             * Minimize is strictly a window-state operation. It never
-             * touches the Explorer process or filesystem state.
-             */
             explorer_dragging = 0;
             active_panel = 0;
             return 1;
         }
-
         if (!explorer_maximized)
         {
             explorer_dragging = 1;
             explorer_drag_offset_x = x - wx;
             explorer_drag_offset_y = y - wy;
         }
-
         return 1;
     }
 
     sidebar_y = wy + EXPLORER_TITLE;
-
     {
         int sidebar_item = explorer_sidebar_hit(x, y, wx, wy);
-
         if (sidebar_item >= 0)
         {
             explorer_sidebar_select(sidebar_item);
             return 1;
         }
     }
-
     content_x = wx + EXPLORER_SIDEBAR;
     list_y = sidebar_y + EXPLORER_TOOLBAR;
-
-    if (x >= content_x + 10 &&
-        x < content_x + 42 &&
-        y >= sidebar_y + 6 &&
-        y < sidebar_y + 36)
+    if (x >= content_x + 10 && x < content_x + 42 &&
+        y >= sidebar_y + 6 && y < sidebar_y + 36)
     {
         explorer_go_back();
-        return 0;
+        return 1;
     }
-
-    if (x >= content_x + 48 &&
-        x < content_x + 80 &&
-        y >= sidebar_y + 6 &&
-        y < sidebar_y + 36)
+    if (x >= content_x + 48 && x < content_x + 80 &&
+        y >= sidebar_y + 6 && y < sidebar_y + 36)
     {
         explorer_go_up();
-        return 0;
+        return 1;
     }
-
-    if (x < content_x ||
-        y < list_y + 32)
+    if (x < content_x || y < list_y + 32)
         return 0;
 
     {
         int row = (y - list_y - 32) / EXPLORER_ROW;
         uint32_t ids[FS_MAX_NODES];
-        int count;
-
-        if (row < 0 || row >= EXPLORER_MAX_ROWS)
+        int count = filesystem_list(explorer_directory, ids, FS_MAX_NODES);
+        if (row < 0 || row >= EXPLORER_MAX_ROWS || count < 0 || row >= count)
             return 0;
-
-        count = filesystem_list(
-            explorer_directory, ids, FS_MAX_NODES);
-
-        if (count < 0 || row >= count)
+        const fs_node_t* node = filesystem_get_node(ids[row]);
+        if (!node)
             return 0;
-
-        {
-            const fs_node_t* node =
-                filesystem_get_node(ids[row]);
-
-            if (!node)
-                return 0;
-
-            if (node->type == FS_NODE_DIRECTORY)
-                explorer_set_directory(node->id, 1);
-            else
-                explorer_file = (int)node->id;
-        }
+        if (node->type == FS_NODE_DIRECTORY)
+            explorer_set_directory(node->id, 1);
+        else
+            explorer_file = (int)node->id;
     }
-
-    return 0;
+    return 1;
 }
+
+int file_explorer_click(int x, int y, int width, int height)
+{
+    int ww, wh, wx, wy;
+    file_explorer_window_geometry(width, height, &wx, &wy, &ww, &wh);
+    return explorer_click_at(x, y, wx, wy, ww, wh, 0);
+}
+
+int file_explorer_click_managed(int x, int y, int width, int height,
+                                int pointer_x, int pointer_y)
+{
+    return explorer_click_at(pointer_x, pointer_y, x, y, width, height, 1);
+}
+

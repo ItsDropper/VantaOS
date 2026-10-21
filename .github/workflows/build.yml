@@ -1108,7 +1108,7 @@ jobs:
           fi
 
           # The default boot path must not enter the optional recovery UI.
-          ! grep -q "^VANTAOS_RECOVERY_ENTER" desktop-boot.log
+          ! grep -q "VANTAOS_RECOVERY_ENTER" desktop-boot.log
 
           # Give the desktop renderer a moment to draw its first complete frame.
           sleep 3
@@ -1157,7 +1157,7 @@ jobs:
 
           entered=0
           for attempt in $(seq 1 40); do
-            if grep -q '^VANTAOS_RECOVERY_ENTER' recovery-boot.log 2>/dev/null; then
+            if grep -q 'VANTAOS_RECOVERY_ENTER' recovery-boot.log 2>/dev/null; then
               entered=1
               break
             fi
@@ -1179,7 +1179,7 @@ jobs:
             timeout 4s socat -T 1 - UNIX-CONNECT:/tmp/vantaos-recovery-monitor.sock || true
           requested=0
           for attempt in $(seq 1 15); do
-            if grep -q '^VANTAOS_RECOVERY_SCREENSHOT_REQUEST' recovery-boot.log 2>/dev/null; then
+            if grep -q 'VANTAOS_RECOVERY_SCREENSHOT_REQUEST' recovery-boot.log 2>/dev/null; then
               requested=1
               break
             fi

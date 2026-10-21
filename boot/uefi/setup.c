@@ -556,8 +556,16 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
     Print(L"\r\nTarget disks (installer media excluded):\r\n");
     for (UINTN i = 0U; i < disk_count; ++i) {
         UINT64 gib = disks[i].sector_count / 2097152U;
-        Print(L"  %u) %u GiB, %u sectors\r\n",
-              (UINT32)(i + 1U), (UINT32)gib, (UINT32)disks[i].sector_count);
+        CHAR16 *path_text = DevicePathToStr(
+            DevicePathFromHandle(disks[i].handle));
+        Print(L"  %u) %u GiB, %u sectors, %s media\r\n",
+              (UINT32)(i + 1U), (UINT32)gib,
+              (UINT32)disks[i].sector_count,
+              disks[i].block->Media->RemovableMedia ? L"removable" : L"fixed");
+        Print(L"     Device path: %s\r\n",
+              path_text ? path_text : L"(unavailable)");
+        if (path_text)
+            uefi_call_wrapper(BS->FreePool, 1, path_text);
     }
     serial_write("VANTAOS_SETUP_DISK_PROMPT\n");
     Print(L"Select target disk number: ");
@@ -569,8 +577,16 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
         return EFI_INVALID_PARAMETER;
     }
     setup_disk_t *target = &disks[selected - 1U];
-    Print(L"\r\nWARNING: disk %u will be erased completely.\r\n",
-          (UINT32)selected);
+    CHAR16 *selected_path = DevicePathToStr(DevicePathFromHandle(target->handle));
+    Print(L"\r\nSelected target: %u GiB, %u sectors, %s media\r\n",
+          (UINT32)(target->sector_count / 2097152U),
+          (UINT32)target->sector_count,
+          target->block->Media->RemovableMedia ? L"removable" : L"fixed");
+    Print(L"Device path: %s\r\n",
+          selected_path ? selected_path : L"(unavailable)");
+    if (selected_path)
+        uefi_call_wrapper(BS->FreePool, 1, selected_path);
+    Print(L"WARNING: this entire disk will be erased.\r\n");
     serial_write("VANTAOS_SETUP_CONFIRM_PROMPT\n");
     Print(L"Type INSTALL exactly to confirm, or anything else to cancel: ");
     if (!read_line(line, sizeof(line)) ||

@@ -108,6 +108,8 @@ int process_terminate(uint32_t pid);
 void process_block_current(void);
 void process_terminate_current(void);
 void process_terminate_current_with_status(int32_t exit_status);
+/* Non-blocking termination for exception paths; failure must fail closed. */
+int process_terminate_current_try_with_status(int32_t exit_status);
 /* Returns child PID when reaped, 0 when the parent was put to sleep, -1 if not a child. */
 int process_wait_child(uint32_t parent_pid, uint32_t child_pid,
                        int32_t* exit_status_out);

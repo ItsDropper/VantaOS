@@ -127,6 +127,11 @@ jobs:
       - name: Enforce architecture boundaries
         run: python3 scripts/check_architecture.py
 
+      - name: Test compositor damage rectangle clipping
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_graphics_damage.c -o /tmp/vantaos-graphics-damage-test
+          /tmp/vantaos-graphics-damage-test
+
       - name: Test RTL8139 transmit status semantics
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_rtl8139_status.c -o /tmp/vantaos-rtl8139-status-test

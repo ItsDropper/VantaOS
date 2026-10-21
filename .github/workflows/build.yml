@@ -127,6 +127,13 @@ jobs:
       - name: Enforce architecture boundaries
         run: python3 scripts/check_architecture.py
 
+      - name: Compile strict partition scanner host tests
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_partition_scan.c drivers/storage/partition_scan.c \
+            -o /tmp/vantaos-partition-scan-test
+          /tmp/vantaos-partition-scan-test
+
       - name: Test compositor damage rectangle clipping
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_graphics_damage.c -o /tmp/vantaos-graphics-damage-test

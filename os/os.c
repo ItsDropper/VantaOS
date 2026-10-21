@@ -17,6 +17,7 @@
 #include "process.h"
 #include "smp.h"
 #include "panic.h"
+#include "recovery_environment.h"
 #include "serial.h"
 #include "scheduler.h"
 #include "shell.h"
@@ -110,6 +111,17 @@ void os_initialize(multiboot_info_t* mbd)
     filesystem_initialize(mbd);
     (void)serial_boot_log_flush();
     vfs_initialize();
+
+    /*
+     * Recovery is selected explicitly by the BIOS/GRUB Multiboot command
+     * line. Run before process/scheduler/desktop startup, and never from the
+     * fatal panic path. The custom UEFI loader has no selection handoff yet.
+     */
+    if (recovery_environment_requested(mbd) && graphics_ready) {
+        __asm__ volatile ("sti" ::: "memory");
+        recovery_environment_run(mbd);
+        __asm__ volatile ("cli" ::: "memory");
+    }
 
     process_initialize();
     if (!process_is_initialized())

@@ -134,6 +134,13 @@ jobs:
             -o /tmp/vantaos-partition-scan-test
           /tmp/vantaos-partition-scan-test
 
+      - name: Compile strict serial log ring tests
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_serial_log.c kernel/serial_log.c \
+            -o /tmp/vantaos-serial-log-test
+          /tmp/vantaos-serial-log-test
+
       - name: Test compositor damage rectangle clipping
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_graphics_damage.c -o /tmp/vantaos-graphics-damage-test

@@ -4,6 +4,7 @@ This directory documents the vendor-neutral GPU framework and vendor-specific br
 
 ## NVX — NVIDIA GA10x
 
+- [RTX 3060 readiness gates](nvx/RTX3060_READINESS.md) — evidence vocabulary, subsystem status, hardware copy-engine validation procedure, stop conditions, and dependency-aware next steps.
 - [GA10x GSP bring-up and implementation status](nvx/GA10X_BRINGUP.md) — current hardware-facing primitives, staged boot path, and blockers.
 - [GA10x firmware reverse-engineering notebook](nvx/FIRMWARE_REVERSE_ENGINEERING.md) — field layouts, address domains, signature-selection rules, source evidence, and next research tasks.
 - [SEC2 transaction trace](nvx/SEC2_TRANSACTION_TRACE.md) — phase-level execution evidence and recovery diagnostics.

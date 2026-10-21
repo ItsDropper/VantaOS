@@ -62,6 +62,18 @@ nvx_gsp_gpfifo_status_t nvx_gsp_gpfifo_submit(
     size_t command_bytes, uint32_t *out_put_index);
 
 /*
+ * Build the public NVC56F_DMA_NOP method header (zero) in a caller-mapped
+ * command buffer, queue it, and wait for GP_GET to consume it. This is a FIFO
+ * bring-up probe only; it does not prove an engine operation completed.
+ */
+nvx_gsp_gpfifo_status_t nvx_gsp_gpfifo_submit_nop_probe(
+    nvx_gsp_gpfifo_channel_t *channel, volatile uint32_t *command_cpu_mapping,
+    size_t command_mapping_bytes, uint64_t command_gpu_va,
+    uint32_t timeout_ms, uint32_t poll_interval_ms,
+    nvx_gsp_gpfifo_delay_fn delay_ms, void *context,
+    uint32_t *out_put_index);
+
+/*
  * Submit one prebuilt command buffer, wait for fetcher consumption, then wait
  * for its engine-specific completion word. A timeout is not a cancellation.
  */

@@ -10,8 +10,8 @@
 #include "nvx_gsp_boot_memory.h"
 #include "nvx_gsp_falcon.h"
 #include "nvx_gsp_fwsec_result.h"
+#include "nvx_gsp_init_args.h"
 #include "nvx_gsp_vbios.h"
-#include "nvx_gsp_fwsec_result.h"
 
 typedef struct nvx_gsp_secure_transfer_plan {
     uint64_t source_phys;
@@ -50,6 +50,8 @@ typedef enum nvx_gsp_boot_phase {
     NVX_GSP_BOOT_PHASE_START_SEC2,
     NVX_GSP_BOOT_PHASE_RECLAIM_WPR,
     NVX_GSP_BOOT_PHASE_VALIDATE_RESULT,
+    NVX_GSP_BOOT_PHASE_PREPARE_RISCV,
+    NVX_GSP_BOOT_PHASE_WAIT_RISCV_ACTIVE,
     NVX_GSP_BOOT_PHASE_COMPLETE
 } nvx_gsp_boot_phase_t;
 
@@ -68,6 +70,7 @@ typedef struct nvx_gsp_boot_trace {
     uint8_t recovery_attempted;
     uint8_t recovery_succeeded;
     uint8_t sec2_quiescence_confirmed;
+    uint8_t riscv_active;
 } nvx_gsp_boot_trace_t;
 
 /*
@@ -86,19 +89,39 @@ nvx_gsp_falcon_status_t nvx_gsp_ga10x_execute_fwsec_frts(
     nvx_gsp_fwsec_result_snapshot_t *out_result);
 
 /*
- * Boot the GA10x GSP only after the caller has executed FWSEC-FRTS and read
- * the result registers from hardware. On success the radix3 ELF DMA buffer
- * remains device-owned because GSP may continue reading it. On ambiguous
- * failure it also remains device-owned; callers must prove quiescence before
- * reclaiming or freeing it.
+ * Prepare the GA102 GSP core after successful FRTS: transfer the radix3 ELF
+ * and materialized GSP_ARGUMENTS_CACHED buffer to device ownership, reset into
+ * RISC-V mode with BR_FETCH, and program the init-arguments SYSRAM address in
+ * the GSP mailboxes. This does not claim GSP-RM is active; SEC2 Booter Load
+ * must run before nvx_gsp_ga10x_wait_riscv_active() can establish readiness.
  */
-nvx_gsp_falcon_status_t nvx_gsp_ga10x_boot_after_frts(
-    nvx_gsp_boot_memory_t *memory, const nvx_mmio_region_t *bar0,
-    uint64_t frts_framebuffer_offset,
+nvx_gsp_falcon_status_t nvx_gsp_ga10x_prepare_riscv_after_frts(
+    nvx_gsp_boot_memory_t *memory,
+    nvx_dma_buffer_t *libos_init_args,
+    nvx_dma_sync_t *libos_init_args_sync,
+    const nvx_mmio_region_t *bar0, uint64_t frts_framebuffer_offset,
     const nvx_gsp_fwsec_result_snapshot_t *frts_result,
     uint32_t timeout_ms, uint32_t poll_interval_ms,
+    nvx_gsp_delay_ms_fn delay_ms, void *context);
+
+/*
+ * Run the normal GA10x bootstrap sequence in hardware order:
+ * FWSEC-FRTS -> reset GSP into RISC-V and publish init-args address ->
+ * SEC2 Booter Load -> bounded RISC-V active check.
+ * A successful return proves the RISC-V active bit was observed, not that
+ * GSP-RM RPC initialization or hardware acceleration has completed.
+ */
+nvx_gsp_falcon_status_t nvx_gsp_ga10x_bootstrap_traced(
+    nvx_dma_buffer_t *staged_vbios, nvx_dma_sync_t *staged_vbios_sync,
+    const nvx_gsp_vbios_fwsec_info_t *fwsec_info, uint32_t fuse_version,
+    nvx_gsp_boot_memory_t *memory,
+    nvx_dma_buffer_t *libos_init_args,
+    nvx_dma_sync_t *libos_init_args_sync,
+    const nvx_mmio_region_t *bar0, uint64_t frts_framebuffer_offset,
+    uint32_t timeout_ms, uint32_t poll_interval_ms,
     nvx_gsp_delay_ms_fn delay_ms, void *context,
-    uint32_t *out_mailbox0, uint32_t *out_mailbox1);
+    nvx_gsp_fwsec_result_snapshot_t *out_frts_result,
+    uint32_t *out_booter_mailbox1, nvx_gsp_boot_trace_t *out_trace);
 
 /*
  * Execute the signed GA10x Booter Load image on SEC2:

@@ -409,6 +409,22 @@ nvx_gsp_rmapi_status_t nvx_gsp_rm_control_sync(
         delay_context):s;
 }
 
+nvx_gsp_rmapi_status_t nvx_gsp_rmapi_bind_channel_sync(
+    nvx_gsp_rpc_manager_t *manager,uint32_t client,uint32_t channel,
+    uint32_t engine_type,void *scratch,size_t scratch_size,void *response,
+    size_t response_capacity,uint32_t timeout_ms,uint32_t poll_interval_ms,
+    nvx_gsp_rmapi_delay_fn delay_ms,void *delay_context,
+    nvx_gsp_rmapi_result_t *out)
+{
+    uint8_t params[4];
+    /* NVA06F_CTRL_BIND_PARAMS from NVIDIA's public SDK. */
+    put32(params,engine_type);
+    return nvx_gsp_rm_control_sync(manager,client,channel,
+        NVX_GSP_RM_CTRL_BIND_CHANNEL,0U,0U,0U,params,sizeof(params),
+        scratch,scratch_size,response,response_capacity,timeout_ms,
+        poll_interval_ms,delay_ms,delay_context,out);
+}
+
 nvx_gsp_rmapi_status_t nvx_gsp_rmapi_schedule_channel_sync(
     nvx_gsp_rpc_manager_t *manager,uint32_t client,uint32_t channel,int enable,
     void *scratch,size_t scratch_size,void *response,size_t response_capacity,

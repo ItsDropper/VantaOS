@@ -45,7 +45,7 @@ static void no_delay(uint32_t ms, void *context)
     (void)ms;
 }
 
-static void fake_gsp_reply(void *context, uint32_t ms)
+static void fake_gsp_reply(uint32_t ms, void *context)
 {
     fake_gsp_t *fake = (fake_gsp_t *)context;
     fake->elapsed += ms;

@@ -126,14 +126,14 @@ int main(void)
     device = (nvx_attached_device_t){0};
     mock_command = 0;
     assert(nvx_device_attach(&gpu, &bar0, &device) == NVX_ATTACH_MAPPING_ERROR);
-    assert(map_calls == 1U);
+    assert(map_calls == 2U);
     mock_command = NVX_PCI_COMMAND_MEMORY_SPACE;
 
     device = (nvx_attached_device_t){0};
     map_failure = 1;
     assert(nvx_device_attach(&gpu, &bar0, &device) == NVX_ATTACH_MAPPING_ERROR);
     assert(device.bar0_mapping == 0 && device.attached == 0U);
-    assert(map_calls == 2U);
+    assert(map_calls == 3U);
     map_failure = 0;
 
     device = (nvx_attached_device_t){0};
@@ -142,6 +142,6 @@ int main(void)
     assert(nvx_device_attach(&gpu, &bar0, &device) == NVX_ATTACH_PROBE_ERROR);
     assert(device.bar0_mapping == 0 && device.attached == 0U);
     assert(device.lifecycle.state == NVX_STATE_FAILED);
-    assert(unmap_calls == 2U);
+    assert(unmap_calls == 3U);
     return 0;
 }

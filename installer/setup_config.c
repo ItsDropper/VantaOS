@@ -75,7 +75,7 @@ int vanta_setup_timezone_supported(const char *timezone)
         "America/Toronto", "America/Vancouver", "America/Sao_Paulo",
         "Asia/Tokyo", "Asia/Seoul", "Asia/Shanghai",
         "Asia/Kolkata", "Asia/Singapore", "Australia/Sydney",
-        "Pacific/Auckland"
+        "Pacific/Auckland", "Europe/London"
     };
     if (!timezone)
         return 0;

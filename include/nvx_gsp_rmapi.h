@@ -85,6 +85,8 @@ typedef struct nvx_gsp_rmapi_result {
     size_t response_size;
 } nvx_gsp_rmapi_result_t;
 
+typedef void (*nvx_gsp_rmapi_delay_fn)(uint32_t ms, void *context);
+
 /* NVOS46/NVOS47-compatible memory mapping RPCs (function IDs 14/15). */
 nvx_gsp_rmapi_status_t nvx_gsp_rm_map_memory_dma_submit(
     nvx_gsp_rpc_manager_t *manager, const nvx_gsp_map_memory_dma_t *mapping,
@@ -127,7 +129,6 @@ nvx_gsp_rmapi_status_t nvx_gsp_rm_free_submit(
     uint32_t object, void *scratch, size_t scratch_size,
     void *response, size_t response_capacity, nvx_gsp_rmapi_result_t *out);
 
-typedef void (*nvx_gsp_rmapi_delay_fn)(uint32_t ms, void *context);
 
 /*
  * Pump and wait for a submitted operation. Timeout does not cancel an in-flight

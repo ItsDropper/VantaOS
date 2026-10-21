@@ -844,9 +844,31 @@ void gui_server_mouse_release(int button)
     spinlock_unlock_irqrestore(&gui_lock, flags);
 }
 
-void gui_server_draw_taskbar_items(int taskbar_y, int start_x, int end_x)
+static void gui_taskbar_geometry(int screen_width, unsigned int count,
+                                int* left_start, int* left_end,
+                                int* right_start, int* right_end,
+                                int* slot_width)
 {
-    if (!graphics_is_initialized() || end_x <= start_x)
+    int center = screen_width / 2;
+    int clock_x = screen_width - 116;
+    if (clock_x < center + 116)
+        clock_x = center + 116;
+    *left_start = 8;
+    *left_end = center - 116;
+    *right_start = center + 116;
+    *right_end = clock_x - 8;
+    if (*left_end < *left_start) *left_end = *left_start;
+    if (*right_end < *right_start) *right_end = *right_start;
+    int available = (*left_end - *left_start) +
+                    (*right_end - *right_start);
+    *slot_width = count ? available / (int)count : 0;
+    if (*slot_width > 120) *slot_width = 120;
+    if (*slot_width < 20 && count != 0U) *slot_width = 20;
+}
+
+void gui_server_draw_taskbar_items(int taskbar_y, int screen_width)
+{
+    if (!graphics_is_initialized() || screen_width <= 0)
         return;
 
     typedef struct
@@ -871,51 +893,86 @@ void gui_server_draw_taskbar_items(int taskbar_y, int start_x, int end_x)
         count++;
     }
     spinlock_unlock_irqrestore(&gui_lock, flags);
+    if (count == 0U)
+        return;
 
-    int slot_x = start_x;
+    int left_start, left_end, right_start, right_end, slot_width;
+    gui_taskbar_geometry(screen_width, count, &left_start, &left_end,
+                         &right_start, &right_end, &slot_width);
+    int slot_x = left_start;
+    int in_right = 0;
     for (unsigned int i = 0; i < count; i++)
     {
-        if (slot_x + 120 > end_x)
+        if (!in_right && slot_x + slot_width > left_end)
+        {
+            slot_x = right_start;
+            in_right = 1;
+        }
+        int region_end = in_right ? right_end : left_end;
+        if (slot_x + slot_width > region_end)
             break;
+        int button_width = slot_width - 4;
+        if (button_width < 16) button_width = 16;
         int focused = items[i].focused;
         uint32_t fill = focused ? 0x00253648U
                       : items[i].minimized ? 0x00131D29U : 0x00192533U;
-        graphics_fill_rounded_rect(slot_x, taskbar_y, 114, 42, 8, fill);
-        graphics_fill_rect(slot_x + 1, taskbar_y + 1, 112, 1,
+        graphics_fill_rounded_rect(slot_x, taskbar_y, button_width, 42, 7, fill);
+        graphics_fill_rect(slot_x + 1, taskbar_y + 1, button_width - 2, 1,
                            focused ? 0x005DA9FFU : 0x00334455U);
-        graphics_draw_vanta_logo(slot_x + 8, taskbar_y + 12, 18);
-        char label[13];
-        size_t n = 0U;
-        while (n < 12U && items[i].title[n])
+        int icon_size = button_width >= 48 ? 18 : 12;
+        graphics_draw_vanta_logo(slot_x + 4, taskbar_y + (42 - icon_size) / 2,
+                                 icon_size);
+        if (button_width >= 64)
         {
-            label[n] = items[i].title[n];
-            n++;
+            char label[9];
+            size_t n = 0U;
+            while (n < 7U && items[i].title[n])
+            {
+                label[n] = items[i].title[n];
+                n++;
+            }
+            label[n] = '\0';
+            graphics_draw_text(slot_x + 26, taskbar_y + 17, label,
+                               items[i].minimized ? 0x009AAABD : 0x00F3F6FA, 1);
         }
-        label[n] = '\0';
-        graphics_draw_text(slot_x + 32, taskbar_y + 17, label,
-                           items[i].minimized ? 0x009AAABD : 0x00F3F6FA, 1);
         if (focused)
-            graphics_fill_rounded_rect(slot_x + 46, taskbar_y + 38, 24, 2,
-                                       1, 0x005DA9FFU);
-        slot_x += 120;
+            graphics_fill_rounded_rect(slot_x + button_width / 2 - 12,
+                                       taskbar_y + 38, 24, 2, 1, 0x005DA9FFU);
+        slot_x += slot_width;
     }
 }
 
-int gui_server_taskbar_click(int x, int y, int taskbar_y,
-                             int start_x, int end_x)
+int gui_server_taskbar_click(int x, int y, int taskbar_y, int screen_width)
 {
-    if (y < taskbar_y + 8 || y >= taskbar_y + 56 || x < start_x || x >= end_x)
+    if (y < taskbar_y + 8 || y >= taskbar_y + 56 || screen_width <= 0)
         return 0;
     uint64_t flags = spinlock_lock_irqsave(&gui_lock);
-    int slot_x = start_x;
+    unsigned int count = 0U;
+    for (unsigned int i = 0; i < VANTA_GUI_MAX_WINDOWS; i++)
+        if (windows[i].used && windows[i].owner_visible)
+            count++;
+    int left_start, left_end, right_start, right_end, slot_width;
+    gui_taskbar_geometry(screen_width, count, &left_start, &left_end,
+                         &right_start, &right_end, &slot_width);
+    int slot_x = left_start;
+    int in_right = 0;
+    unsigned int item_index = 0U;
     for (unsigned int i = 0; i < VANTA_GUI_MAX_WINDOWS; i++)
     {
         gui_window_t* window = &windows[i];
         if (!window->used || !window->owner_visible)
             continue;
-        if (slot_x + 120 > end_x)
+        if (!in_right && slot_x + slot_width > left_end)
+        {
+            slot_x = right_start;
+            in_right = 1;
+        }
+        int region_end = in_right ? right_end : left_end;
+        if (slot_x + slot_width > region_end)
             break;
-        if (x >= slot_x && x < slot_x + 114)
+        int button_width = slot_width - 4;
+        if (button_width < 16) button_width = 16;
+        if (x >= slot_x && x < slot_x + button_width)
         {
             if (window->visible && window->id == focused_window_id)
                 gui_minimize_locked(window);
@@ -924,8 +981,10 @@ int gui_server_taskbar_click(int x, int y, int taskbar_y,
             spinlock_unlock_irqrestore(&gui_lock, flags);
             return 1;
         }
-        slot_x += 120;
+        slot_x += slot_width;
+        item_index++;
     }
+    (void)item_index;
     spinlock_unlock_irqrestore(&gui_lock, flags);
     return 0;
 }

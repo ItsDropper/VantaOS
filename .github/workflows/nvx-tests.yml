@@ -6,7 +6,6 @@ on:
       - "drivers/gpu/nvx/**"
       - "include/nvx_gsp_boot_memory.h"
       - "include/nvx_gsp_secure_boot.h"
-      - "include/nvx_gsp_fwsec_result.h"
       - "include/nvx_gsp_pci_rom.h"
       - "include/nvx_gsp_fwsec_interface.h"
       - "include/nvx_gsp_fwsec_stage.h"

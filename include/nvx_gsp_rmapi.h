@@ -163,9 +163,10 @@ nvx_gsp_rmapi_status_t nvx_gsp_rm_free_sync(
     uint32_t poll_interval_ms, nvx_gsp_rmapi_delay_fn delay_ms,
     void *delay_context, nvx_gsp_rmapi_result_t *out);
 
+struct nvx_gsp_channel_alloc_params;
 nvx_gsp_rmapi_status_t nvx_gsp_rmapi_alloc_ampere_channel_sync(
     nvx_gsp_rpc_manager_t *manager, uint32_t client, uint32_t device,
-    uint32_t channel_handle, const nvx_gsp_channel_alloc_params_t *params,
+    uint32_t channel_handle, const struct nvx_gsp_channel_alloc_params *params,
     void *scratch, size_t scratch_size, void *response,
     size_t response_capacity, uint32_t timeout_ms, uint32_t poll_interval_ms,
     nvx_gsp_rmapi_delay_fn delay_ms, void *delay_context,

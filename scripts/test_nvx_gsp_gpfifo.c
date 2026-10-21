@@ -69,6 +69,23 @@ int main(void)
     assert(channel.submit_lock.owner_ticket ==
            channel.submit_lock.next_ticket);
 
+    /*
+     * A later producer can queue work before an earlier waiter polls GET.
+     * Once GET has advanced past index 1 to index 2, waiting for index 1 must
+     * succeed instead of timing out on equality alone.
+     */
+    gp_get=0U;gp_put=0U;doorbell=0U;
+    assert(nvx_gsp_gpfifo_channel_init(&channel,entries,sizeof(entries),
+        &gp_get,&gp_put,&doorbell,0xBEEFU,4U)==NVX_GSP_GPFIFO_OK);
+    assert(nvx_gsp_gpfifo_submit(&channel,command_va,command_bytes,&put)==
+           NVX_GSP_GPFIFO_OK && put==1U);
+    gp_get=1U;
+    assert(nvx_gsp_gpfifo_submit(&channel,command_va,command_bytes,&put)==
+           NVX_GSP_GPFIFO_OK && put==2U);
+    gp_get=2U;
+    assert(nvx_gsp_gpfifo_wait_get(&channel,1U,5U,1U,no_delay,NULL)==
+           NVX_GSP_GPFIFO_OK);
+
     {
         volatile uint32_t nop_command=UINT32_C(0xFFFFFFFF);
         simulated_completion_t sim={&gp_get,&completion,1U,0U};

@@ -449,6 +449,12 @@ int fat32_is_mounted(void)
     return mounted;
 }
 
+int fat32_is_mounted_removable(void)
+{
+    return mounted && active_device &&
+           (active_device->flags & BLOCK_DEVICE_REMOVABLE) != 0U;
+}
+
 uint32_t fat32_root_cluster(void)
 {
     return mounted ? root_cluster : 0;

@@ -24,8 +24,8 @@ typedef struct {
     uint64_t sector_count;
 } setup_disk_t;
 
-static EFI_GUID block_io_guid = BlockIoProtocol;
-static EFI_GUID filesystem_guid = FileSystemProtocol;
+#define block_io_guid BlockIoProtocol
+#define filesystem_guid FileSystemProtocol
 
 static int bytes_equal(const uint8_t *a, const uint8_t *b, size_t length)
 {
@@ -629,7 +629,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
                            SETUP_MAX_FILE_BYTES);
     if (!EFI_ERROR(status))
         status = copy_file(source_root, L"\\SYSTEM\\TERMINAL.ELF",
-                           system_root, L"\\SYSTEM\\TERMINAL.ELF",
+                           system_root, L"\\TERMINAL.ELF",
                            SETUP_MAX_FILE_BYTES);
     if (!EFI_ERROR(status))
         status = copy_file(source_root, L"\\SYSTEM\\SETTINGS.ELF",
@@ -637,7 +637,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
                            SETUP_MAX_FILE_BYTES);
     if (!EFI_ERROR(status))
         status = copy_file(source_root, L"\\SYSTEM\\EXPLORER.ELF",
-                           system_root, L"\\SYSTEM\\EXPLORER.ELF",
+                           system_root, L"\\EXPLORER.ELF",
                            SETUP_MAX_FILE_BYTES);
 
     char encoded[VANTA_SETUP_CONFIG_MAX_BYTES];

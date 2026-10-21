@@ -14,6 +14,12 @@ static uint32_t expected_function;
 static uint8_t captured[4096];
 static size_t captured_size;
 static unsigned submissions;
+static int auto_complete;
+static nvx_gsp_rpc_status_t fake_state=NVX_GSP_RPC_PENDING;
+static void *fake_response;
+static size_t fake_response_capacity,fake_response_size;
+static size_t history_size[16];
+static uint8_t history[16][4096];
 
 nvx_gsp_rpc_status_t nvx_gsp_rpc_pump(
     nvx_gsp_rpc_manager_t *manager,void *scratch,size_t scratch_size,
@@ -21,7 +27,7 @@ nvx_gsp_rpc_status_t nvx_gsp_rpc_pump(
 {
     (void)manager;(void)scratch;(void)scratch_size;
     if(unmatched)memset(unmatched,0,sizeof(*unmatched));
-    return NVX_GSP_RPC_PENDING;
+    return auto_complete?NVX_GSP_RPC_COMPLETE:NVX_GSP_RPC_PENDING;
 }
 
 nvx_gsp_rpc_status_t nvx_gsp_rpc_query(
@@ -29,15 +35,18 @@ nvx_gsp_rpc_status_t nvx_gsp_rpc_query(
     nvx_gsp_rpc_result_t *result)
 {
     (void)manager;(void)handle;
-    if(result){memset(result,0,sizeof(*result));result->status=NVX_GSP_RPC_PENDING;}
-    return NVX_GSP_RPC_PENDING;
+    if(result){memset(result,0,sizeof(*result));result->status=fake_state;
+        result->response_size=fake_response_size;}
+    return fake_state;
 }
 
 nvx_gsp_rpc_status_t nvx_gsp_rpc_release(
     nvx_gsp_rpc_manager_t *manager,nvx_gsp_rpc_handle_t *handle)
 {
-    (void)manager;(void)handle;
-    return NVX_GSP_RPC_BUSY;
+    (void)manager;
+    if(fake_state==NVX_GSP_RPC_PENDING)return NVX_GSP_RPC_BUSY;
+    if(handle)*handle=(nvx_gsp_rpc_handle_t){0};
+    return NVX_GSP_RPC_OK;
 }
 
 static uint32_t le32(const uint8_t *p)
@@ -52,15 +61,27 @@ nvx_gsp_rpc_status_t nvx_gsp_rpc_submit(
     const void *payload,size_t payload_size,void *scratch,size_t scratch_size,
     void *response,size_t response_capacity,nvx_gsp_rpc_handle_t *out_handle)
 {
-    (void)manager;(void)scratch;(void)scratch_size;(void)response;(void)response_capacity;
+    (void)manager;(void)scratch;(void)scratch_size;
     assert(version==NVX_GSP_RPC_HEADER_VERSION_R535);
     assert(signature==NVX_GSP_RPC_SIGNATURE_R535);
     assert(request_function==expected_function);
     assert(response_function==expected_function);
     assert(payload_size<=sizeof(captured));
-    memcpy(captured,payload,payload_size);captured_size=payload_size;submissions++;
+    memcpy(captured,payload,payload_size);captured_size=payload_size;
+    if(submissions<16U){history_size[submissions]=payload_size;
+        memcpy(history[submissions],payload,payload_size);}
+    submissions++;
+    fake_response=response;fake_response_capacity=response_capacity;
+    fake_response_size=payload_size;
+    if(auto_complete&&response&&response_capacity)memset(response,0,response_capacity);
+    fake_state=auto_complete?NVX_GSP_RPC_COMPLETE:NVX_GSP_RPC_PENDING;
     *out_handle=(nvx_gsp_rpc_handle_t){.generation=7U,.slot=2U,.valid=1U};
     return NVX_GSP_RPC_OK;
+}
+
+static void no_delay(uint32_t ms,void *context)
+{
+    (void)ms;(void)context;
 }
 
 int main(void)
@@ -147,5 +168,35 @@ int main(void)
         assert(nvx_gsp_rmapi_decode_status(&op,response,44U,&status)==NVX_GSP_RMAPI_OK);
     }
     assert(submissions==5U);
+
+    {
+        nvx_gsp_rm_core_objects_t objects;
+        auto_complete=1;
+        expected_function=NVX_GSP_RPC_FN_RM_ALLOC;
+        assert(nvx_gsp_rm_create_core_objects(&manager,0x10U,0x20U,0x30U,
+            0U,UINT64_C(1)<<40U,(UINT64_C(1)<<48U)-1U,scratch,sizeof(scratch),
+            response,sizeof(response),20U,1U,no_delay,NULL,&objects)==NVX_GSP_RMAPI_OK);
+        assert(objects.client_created&&objects.device_created&&objects.vaspace_created);
+        assert(objects.in_flight_stage==0U);
+        assert(history_size[5]==152U);
+        assert(le32(history[5]+0U)==0U && le32(history[5]+8U)==0x10U);
+        assert(le32(history[5]+12U)==NVX_GSP_RM_CLASS_ROOT);
+        assert(le32(history[5]+20U)==120U);
+        assert(le32(history[5]+32U)==0x10U);
+        assert(memcmp(history[5]+40U,"VantaOS",7U)==0);
+        assert(history_size[6]==88U);
+        assert(le32(history[6]+8U)==0x20U);
+        assert(le32(history[6]+12U)==NVX_GSP_RM_CLASS_DEVICE_0);
+        assert(le32(history[6]+20U)==56U);
+        assert(le32(history[6]+48U)==0U);
+        assert(le32(history[6]+56U)==0U);
+        assert(history_size[7]==56U);
+        assert(le32(history[7]+8U)==0x30U);
+        assert(le32(history[7]+12U)==NVX_GSP_RM_CLASS_MEMORY_VIRTUAL);
+        assert(le32(history[7]+20U)==24U);
+        assert(le32(history[7]+40U)==0xFFFFFFFFU);
+        assert(fake_response==response&&fake_response_capacity==sizeof(response));
+        auto_complete=0;
+    }
     return 0;
 }

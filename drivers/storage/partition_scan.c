@@ -79,8 +79,9 @@ static int valid_gpt_header(const uint8_t *h, uint64_t current, uint64_t disk)
         h[4]!='P'||h[5]!='A'||h[6]!='R'||h[7]!='T') return 0;
     uint32_t size = rd32(h + 12U);
     if (size < 92U || size > SECTOR || rd64(h + 24U) != current ||
-        rd64(h + 32U) >= disk || rd64(h + 40U) > rd64(h + 48U) ||
-        rd64(h + 48U) >= disk) return 0;
+        rd64(h + 32U) >= disk || rd64(h + 32U) == current ||
+        rd64(h + 40U) < 2U || rd64(h + 40U) > rd64(h + 48U) ||
+        rd64(h + 48U) >= disk - 1U) return 0;
     uint8_t copy[SECTOR];
     for (size_t i = 0U; i < SECTOR; ++i) copy[i] = h[i];
     uint32_t expected = rd32(copy + 16U);
@@ -123,12 +124,21 @@ static partition_scan_status_t scan_gpt(partition_read_fn read, void *ctx,
         if (backup[56U + i] != primary[56U + i]) return PARTITION_SCAN_BAD_TABLE;
     uint32_t n = rd32(primary + 80U), size = rd32(primary + 84U);
     uint32_t array_crc = rd32(primary + 88U);
-    if (!read_array(read, ctx, disk, rd64(primary + 72U), n, size,
+    uint64_t first_usable = rd64(primary + 40U), last_usable = rd64(primary + 48U);
+    uint64_t array_sectors = ((uint64_t)n * size + SECTOR - 1U) / SECTOR;
+    uint64_t primary_array_lba = rd64(primary + 72U);
+    uint64_t backup_array_lba = rd64(backup + 72U);
+    if (n == 0U || n > GPT_MAX || size < 128U || size > GPT_ENTRY_MAX ||
+        (size & 7U) != 0U ||
+        (primary_array_lba < last_usable + 1U &&
+         primary_array_lba + array_sectors > first_usable) ||
+        (backup_array_lba < last_usable + 1U &&
+         backup_array_lba + array_sectors > first_usable) ||
+        !read_array(read, ctx, disk, primary_array_lba, n, size,
                     array_crc, entry_storage) ||
-        !read_array(read, ctx, disk, rd64(backup + 72U), n, size,
+        !read_array(read, ctx, disk, backup_array_lba, n, size,
                     array_crc, backup_storage))
         return PARTITION_SCAN_BAD_TABLE;
-    uint64_t first_usable = rd64(primary + 40U), last_usable = rd64(primary + 48U);
     size_t count = 0U;
     for (uint32_t i = 0U; i < n; ++i) {
         const uint8_t *r = entry_storage + (size_t)i * size;
@@ -192,7 +202,7 @@ static partition_scan_status_t scan_mbr(partition_read_fn read, void *ctx,
         const uint8_t *logical = ebr + MBR_OFF;
         uint8_t type = logical[4U];
         uint64_t start = current + rd32(logical + 8U), length = rd32(logical + 12U);
-        if (!type || !length || start < ext_base ||
+        if (!type || !length || start <= current || start < ext_base ||
             start + length > ext_base + ext_length || !range_ok(start, length, disk))
             return PARTITION_SCAN_BAD_TABLE;
         int added = append(out, cap, &count, start, length, type, PARTITION_SCHEME_MBR, 0, 0);

@@ -78,9 +78,23 @@ void graphics_draw_window_frame(int x, int y, int w, int h, const char* title, i
             int bx = controls_x + i * 46;
             graphics_fill_rect(bx, y + 1, 1, 44, VANTA_UI_BORDER);
         }
-        graphics_draw_text(controls_x + 20, y + 19, "_", 0x00AAB8C8, 1);
-        graphics_draw_text(controls_x + 60, y + 17, "[]", 0x00AAB8C8, 1);
-        graphics_draw_text(controls_x + 110, y + 18, "X", 0x00DCE4EC, 1);
+        /* Draw crisp native-size control glyphs instead of font approximations. */
+        uint32_t control_ink = 0x00AAB8C8U;
+        graphics_fill_rect(controls_x + 17, y + 25, 12, 2, control_ink);
+
+        int maximize_x = controls_x + 46 + 17;
+        graphics_fill_rect(maximize_x, y + 14, 12, 2, control_ink);
+        graphics_fill_rect(maximize_x, y + 24, 12, 2, control_ink);
+        graphics_fill_rect(maximize_x, y + 14, 2, 12, control_ink);
+        graphics_fill_rect(maximize_x + 10, y + 14, 2, 12, control_ink);
+
+        int close_x = controls_x + 2 * 46 + 23;
+        uint32_t close_ink = 0x00DCE4ECU;
+        for (int i = 0; i < 8; i++)
+        {
+            graphics_fill_rect(close_x - 3 + i, y + 15 + i, 2, 2, close_ink);
+            graphics_fill_rect(close_x + 3 - i, y + 15 + i, 2, 2, close_ink);
+        }
     }
     else
     {

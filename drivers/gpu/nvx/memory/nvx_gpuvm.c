@@ -761,7 +761,6 @@ nvx_gpuvm_status_t nvx_gpuvm_validate(nvx_gpuvm_t *vm)
         ++active_tables;
         if (!dma_page_is_valid(&table->backing) ||
             !nvx_gpuvm_page_address_valid(table->backing.physical_address) ||
-            table->backing.physical_address > UINT32_MAX ||
             table->level > 4U ||
             (i == vm->root_index && table->level != 4U) ||
             (i != vm->root_index &&

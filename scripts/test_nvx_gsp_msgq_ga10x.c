@@ -39,7 +39,7 @@ static void put64(uint8_t *p, uint64_t v)
 {
     put32(p, (uint32_t)v); put32(p + 4U, (uint32_t)(v >> 32U));
 }
-static void no_delay(void *context, uint32_t ms)
+static void no_delay(uint32_t ms, void *context)
 {
     (void)context;
     (void)ms;

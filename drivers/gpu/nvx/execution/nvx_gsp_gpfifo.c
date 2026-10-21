@@ -18,7 +18,7 @@ static int power_of_two(uint32_t n)
 {
     return n>=2U&&(n&(n-1U))==0U;
 }
-static int overlaps(const void *a,size_t an,const void *b,size_t bn)
+static int overlaps(const volatile void *a,size_t an,const volatile void *b,size_t bn)
 {
     uintptr_t x=(uintptr_t)a,y=(uintptr_t)b;
     if(!an||!bn)return 0;

@@ -323,6 +323,9 @@ void graphics_mouse_move(int dx, int dy)
     if (cursor_y >= (int)framebuffer_height)
         cursor_y = (int)framebuffer_height - 1;
 
+    /* Ring-3 GUI windows have independent z-order and drag state. */
+    gui_server_mouse_move(cursor_x, cursor_y);
+
     if ((explorer_dragging && !explorer_maximized) ||
         (terminal_dragging && !terminal_maximized))
         graphics_invalidate_scene();
@@ -400,6 +403,7 @@ void graphics_mouse_release(int button)
 
     terminal_dragging = 0;
     explorer_dragging = 0;
+    gui_server_mouse_release(button);
 }
 
 void graphics_cursor_restore(void)

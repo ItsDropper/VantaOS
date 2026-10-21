@@ -128,7 +128,7 @@ void kernel_panic(
     int width = (int)graphics_get_width();
     int height = (int)graphics_get_height();
 
-    graphics_clear(0x008A1018);
+    if (!graphics_panic_prepare())\n    {\n        panic_broadcast_stop_peers();\n        panic_halt();\n    }\n\n    graphics_clear(0x008A1018);
 
     int x = width >= 900 ? 64 : 28;
     int y = height >= 600 ? 42 : 24;

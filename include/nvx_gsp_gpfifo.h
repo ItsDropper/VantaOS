@@ -55,7 +55,8 @@ nvx_gsp_gpfifo_status_t nvx_gsp_gpfifo_channel_init(
  * Queue one prebuilt engine command buffer. The GPUVA and dword length are
  * encoded using the public Turing/Ampere GPFIFO entry layout. This only queues
  * work; the caller must use valid engine-specific command packets and a
- * hardware-verified channel/context.
+ * hardware-verified channel/context. USERD and GPFIFO memory must be DMA-coherent
+ * (or synchronized by the platform before submission/polling).
  */
 nvx_gsp_gpfifo_status_t nvx_gsp_gpfifo_submit(
     nvx_gsp_gpfifo_channel_t *channel, uint64_t command_gpu_va,

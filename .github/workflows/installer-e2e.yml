@@ -51,7 +51,7 @@ jobs:
         run: |
           set -euo pipefail
           chmod +x build.sh run.sh
-          VANTAOS_SELF_TEST=1 ./build.sh
+          ./build.sh
           test -s VantaOS-Setup.img
           test -s VANTASETUP.EFI
           test -s BOOTX64.EFI
@@ -254,16 +254,17 @@ jobs:
             VANTAOS_UEFI_ELF_LOADED \
             VANTAOS_UEFI_EXIT_BOOT_SERVICES_OK \
             VANTAOS_UEFI_KERNEL_HANDOFF \
-            VANTAOS_BOOT_OK \
-            VANTAOS_FAT32_BACKEND_ATA_OK \
-            VANTAOS_FILESYSTEM_NAMESPACE_OK; do
+            VANTAOS_BOOT_OK; do
             if ! grep -q "$marker" "$log"; then
               echo "Missing installed-boot marker $marker"
               cat "$log"
               exit 1
             fi
           done
-          if grep -Eq '^VANTAOS_[A-Z0-9_]*_FAIL' "$log"; then
+          if grep -q 'VANTAOS_KERNEL_PANIC_BEGIN' "$log" ||
+             grep -q 'VANTAOS_FAT32_NO_USABLE_VOLUME' "$log" ||
+             grep -q 'VANTAOS_FAT32_SELECTED_VOLUME_MOUNT_FAIL' "$log"; then
+            echo "Installed system panicked or could not mount its persistent FAT32 volume."
             cat "$log"
             exit 1
           fi

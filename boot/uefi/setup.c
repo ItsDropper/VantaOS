@@ -503,23 +503,30 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
 
     char line[32];
     serial_write("VANTAOS_SETUP_LANGUAGE_PROMPT\n");
-    Print(L"Language / Kieli: 1) English  2) Suomi [1]: ");
-    if (!read_line(line, sizeof(line))) return EFI_ABORTED;
-    if (line[0] == '2' && line[1] == '\0') {
-        config.language[0] = 'f'; config.language[1] = 'i';
-    } else if (line[0] != '\0' && !(line[0] == '1' && line[1] == '\0')) {
-        Print(L"Invalid choice.\r\n");
-        return EFI_INVALID_PARAMETER;
+    for (;;) {
+        Print(L"Language / Kieli: 1) English  2) Suomi [1]: ");
+        if (!read_line(line, sizeof(line))) return EFI_ABORTED;
+        if (line[0] == '\0' || (line[0] == '1' && line[1] == '\0'))
+            break;
+        if (line[0] == '2' && line[1] == '\0') {
+            config.language[0] = 'f'; config.language[1] = 'i';
+            break;
+        }
+        Print(L"Choose 1 or 2. Valitse 1 tai 2.\r\n");
     }
 
     serial_write("VANTAOS_SETUP_KEYBOARD_PROMPT\n");
-    Print(L"Keyboard / Nappaimisto: 1) US  2) Finnish [1]: ");
-    if (!read_line(line, sizeof(line))) return EFI_ABORTED;
-    if (line[0] == '2' && line[1] == '\0') {
-        config.keyboard[0] = 'f'; config.keyboard[1] = 'i';
-    } else if (line[0] != '\0' && !(line[0] == '1' && line[1] == '\0')) {
-        Print(L"Invalid choice.\r\n");
-        return EFI_INVALID_PARAMETER;
+    for (;;) {
+        print_localized(&config, L"Keyboard: 1) US  2) Finnish [1]: ",
+                        L"Nappaimisto: 1) US  2) Finnish [1]: ");
+        if (!read_line(line, sizeof(line))) return EFI_ABORTED;
+        if (line[0] == '\0' || (line[0] == '1' && line[1] == '\0'))
+            break;
+        if (line[0] == '2' && line[1] == '\0') {
+            config.keyboard[0] = 'f'; config.keyboard[1] = 'i';
+            break;
+        }
+        print_localized(&config, L"Choose 1 or 2.\r\n", L"Valitse 1 tai 2.\r\n");
     }
 
     serial_write("VANTAOS_SETUP_TIMEZONE_PROMPT\n");

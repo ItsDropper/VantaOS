@@ -296,9 +296,8 @@ void graphics_end_frame(void)
 
 
 /*
- * Mouse-only updates should not begin/end a full frame. When no frame is
- * active, framebuffer points at the visible display surface and the cursor's
- * save-under buffer can be restored and redrawn in place.
+ * Cursor-only updates use a tiny damage footprint but still pass through the
+ * shadow surface. Scanout is updated only by graphics_end_frame().
  */
 void graphics_update_cursor(void)
 {

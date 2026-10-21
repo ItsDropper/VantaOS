@@ -134,6 +134,13 @@ void graphics_invalidate_scene(void)
     graphics_scene_invalidated = 1;
 }
 
+void graphics_reset_backbuffer(void)
+{
+    graphics_backbuffer_valid = 0;
+    graphics_scene_invalidated = 1;
+    cursor_saved_valid = 0;
+}
+
 /* Consume the scene invalidation once. Clock/taskbar updates can then redraw
  * just their changed pixels without repainting the static wallpaper. */
 int graphics_take_scene_invalidation(void)

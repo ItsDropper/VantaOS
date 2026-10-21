@@ -92,13 +92,16 @@ nvx_gsp_falcon_status_t nvx_gsp_ga10x_execute_fwsec_frts(
  * Prepare the GA102 GSP core after successful FRTS: transfer the radix3 ELF
  * and materialized GSP_ARGUMENTS_CACHED buffer to device ownership, reset into
  * RISC-V mode with BR_FETCH, and program the init-arguments SYSRAM address in
- * the GSP mailboxes. This does not claim GSP-RM is active; SEC2 Booter Load
- * must run before nvx_gsp_ga10x_wait_riscv_active() can establish readiness.
+ * the GSP mailboxes. The caller must have built the shared-queue PTE table in
+ * shared_queue_mem. This does not claim GSP-RM is active; SEC2 Booter Load must
+ * run before nvx_gsp_ga10x_wait_riscv_active() can establish readiness.
  */
 nvx_gsp_falcon_status_t nvx_gsp_ga10x_prepare_riscv_after_frts(
     nvx_gsp_boot_memory_t *memory,
     nvx_dma_buffer_t *libos_init_args,
     nvx_dma_sync_t *libos_init_args_sync,
+    nvx_dma_buffer_t *shared_queue_mem,
+    nvx_dma_sync_t *shared_queue_sync,
     const nvx_mmio_region_t *bar0, uint64_t frts_framebuffer_offset,
     const nvx_gsp_fwsec_result_snapshot_t *frts_result,
     uint32_t timeout_ms, uint32_t poll_interval_ms,
@@ -117,6 +120,8 @@ nvx_gsp_falcon_status_t nvx_gsp_ga10x_bootstrap_traced(
     nvx_gsp_boot_memory_t *memory,
     nvx_dma_buffer_t *libos_init_args,
     nvx_dma_sync_t *libos_init_args_sync,
+    nvx_dma_buffer_t *shared_queue_mem,
+    nvx_dma_sync_t *shared_queue_sync,
     const nvx_mmio_region_t *bar0, uint64_t frts_framebuffer_offset,
     uint32_t timeout_ms, uint32_t poll_interval_ms,
     nvx_gsp_delay_ms_fn delay_ms, void *context,

@@ -77,7 +77,7 @@ static void make_image(uint8_t image[IMAGE_BYTES])
     put32(desc + 24U, 0x200U);
     put32(desc + 28U, 0x300U);
     put32(desc + 32U, 0x200U);
-    put16(desc + 36U, 0x0400U);
+    put16(desc + 36U, 0x0001U);
     desc[38U] = 2U;
     desc[39U] = 1U;
     put16(desc + 40U, 1U);

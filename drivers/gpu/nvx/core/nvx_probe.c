@@ -60,6 +60,7 @@ nvx_probe_status_t nvx_probe_mapped_bar0(
     nvx_register_snapshot_t *out_snapshot)
 {
     nvx_mmio_region_t region;
+    const nvx_generation_descriptor_t *generation;
     uint32_t boot0;
     uint32_t boot1;
     uint32_t boot42 = 0U;

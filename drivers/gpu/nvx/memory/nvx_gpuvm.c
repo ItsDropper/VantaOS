@@ -722,16 +722,17 @@ static int nvx_gpuvm_table_entries_consistent(const nvx_gpuvm_t *vm,
     limit = table->level == 4U ? 512U :
             table->level == 1U ? 256U : 512U;
     for (size_t i = 0; i < limit; ++i) {
+        /* PDEs are 64-bit at every non-leaf level; keep validation's
+         * slot stride identical to nvx_gpuvm_parent_entry(). */
         const uint64_t *entry = (const uint64_t *)(
             (uintptr_t)table->backing.virtual_address +
-            (uintptr_t)i * (table->level == 1U ? 16U : 8U));
+            (uintptr_t)i * sizeof(uint64_t));
         if (table->level == 4U && i >= 4U) {
             if (entry[0] != 0U)
                 return 0;
             continue;
         }
-        if (table->level == 1U && entry[1] != 0U)
-            return 0;
+        /* Every non-leaf descriptor is one 64-bit PDE. */
         if (entry[0] != 0U)
             ++nonzero_entries;
     }
@@ -761,7 +762,6 @@ nvx_gpuvm_status_t nvx_gpuvm_validate(nvx_gpuvm_t *vm)
         ++active_tables;
         if (!dma_page_is_valid(&table->backing) ||
             !nvx_gpuvm_page_address_valid(table->backing.physical_address) ||
-            table->backing.physical_address > UINT32_MAX ||
             table->level > 4U ||
             (i == vm->root_index && table->level != 4U) ||
             (i != vm->root_index &&

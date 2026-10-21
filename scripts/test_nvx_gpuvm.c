@@ -28,7 +28,8 @@ int dma_alloc_page(dma_page_t *out)
     if (out == 0 || next_page >= TEST_PAGE_COUNT)
         return 0;
     out->virtual_address = page_pool[next_page];
-    out->physical_address = 0x10000000ULL +
+    /* Exercise valid GPU page-table backing above the 32-bit boundary. */
+    out->physical_address = 0x120000000ULL +
                             (uint64_t)next_page * NVX_GPUVM_PAGE_SIZE;
     out->size = NVX_GPUVM_PAGE_SIZE;
     ++next_page;
@@ -147,6 +148,28 @@ int main(void)
     assert(nvx_gpuvm_map_pages(&vm, &mapping, physical, 2U,
                                NVX_GPUVM_ACCESS_READ) ==
            NVX_GPUVM_ALREADY_MAPPED);
+    assert(nvx_gpuvm_validate(&vm) == NVX_GPUVM_OK);
+
+    /*
+     * Force PDE slots 0 and 1 in the same level-1 table to be populated.
+     * The validator must use the same 8-byte descriptor stride as the writer;
+     * a 16-byte stride incorrectly interprets the second PDE as slot 0's
+     * reserved upper word and rejects a valid page-table tree.
+     */
+    nvx_gpuvm_mapping_t gap = {0}, distant = {0};
+    assert(nvx_gpuvm_reserve(&vm, 2ULL * 1024ULL * 1024ULL,
+                             NVX_GPUVM_PAGE_SIZE, 0U, &gap) ==
+           NVX_GPUVM_OK);
+    assert(nvx_gpuvm_reserve(&vm, NVX_GPUVM_PAGE_SIZE,
+                             NVX_GPUVM_PAGE_SIZE, 0U, &distant) ==
+           NVX_GPUVM_OK);
+    assert(test_index_for_level(mapping.base, 1U) !=
+           test_index_for_level(distant.base, 1U));
+    assert(nvx_gpuvm_map_pages(&vm, &distant, physical, 1U,
+                               NVX_GPUVM_ACCESS_READ) == NVX_GPUVM_OK);
+    assert(nvx_gpuvm_validate(&vm) == NVX_GPUVM_OK);
+    assert(nvx_gpuvm_release(&vm, &distant) == NVX_GPUVM_OK);
+    assert(nvx_gpuvm_release(&vm, &gap) == NVX_GPUVM_OK);
     assert(nvx_gpuvm_validate(&vm) == NVX_GPUVM_OK);
 
     /* Walk to the leaf and verify the 4 KiB system-coherent PTE format. */

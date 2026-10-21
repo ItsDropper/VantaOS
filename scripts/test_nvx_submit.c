@@ -138,6 +138,31 @@ int main(void)
            report.write_relocation_count == 1U);
     assert(report.command_gpu_address == command.gpu_virtual_address);
 
+    /*
+     * A failed batch must not leak partial success counters to callers.
+     * This matters when callers use the report for diagnostics or recovery.
+     */
+    relocations[1].command_offset = 4U;
+    relocations[1].width = NVX_RELOC_ADDRESS32;
+    report.relocation_count = 99U;
+    report.command_gpu_address = UINT64_MAX;
+    assert(nvx_submit_validate_batch(&manager, &command, 64U, relocations,
+                                     2U, &report) ==
+           NVX_SUBMIT_RELOCATION_OVERLAP);
+    assert(report.relocation_count == 0U);
+    assert(report.command_gpu_address == 0U);
+    assert(report.command_bytes == 0U);
+
+    /* Handles are opaque: modifying their size must invalidate the handle. */
+    nvx_memory_handle_t forged_command = command;
+    forged_command.size += 4096U;
+    report.relocation_count = 99U;
+    assert(nvx_submit_validate_batch(&manager, &forged_command, 64U,
+                                     relocations, 2U, &report) ==
+           NVX_SUBMIT_MEMORY_ERROR);
+    assert(report.relocation_count == 0U);
+    assert(report.command_gpu_address == 0U);
+
     relocations[1].command_offset = 4U;
     relocations[1].width = NVX_RELOC_ADDRESS32;
     assert(nvx_submit_validate_batch(&manager, &command, 64U, relocations,

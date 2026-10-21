@@ -260,11 +260,17 @@ void recovery_environment_run(multiboot_info_t* mbd)
     (void)mbd;
     int selected = 0;
     char status[80];
+    int screenshot_pending = 0;
     status[0] = 0;
 
     serial_write("VANTAOS_RECOVERY_ENTER\n");
     for (;;) {
         recovery_draw_menu(selected, status[0] ? status : NULL);
+        if (screenshot_pending) {
+            /* Signal only after the requested status has reached scanout. */
+            serial_write("VANTAOS_RECOVERY_SCREENSHOT_REQUEST\n");
+            screenshot_pending = 0;
+        }
         status[0] = 0;
         if (!recovery_read_choice(&selected))
             continue;
@@ -280,8 +286,8 @@ void recovery_environment_run(multiboot_info_t* mbd)
             recovery_draw_logs();
             break;
         case 3:
-            /* CI/QEMU harnesses can react to this marker using the monitor. */
-            serial_write("VANTAOS_RECOVERY_SCREENSHOT_REQUEST\n");
+            /* CI/QEMU harnesses react after the requested frame is presented. */
+            screenshot_pending = 1;
             {
                 const char message[] = "QEMU host capture requested";
                 size_t i = 0;

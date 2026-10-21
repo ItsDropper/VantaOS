@@ -261,36 +261,8 @@ void graphics_present(void)
     int taskbar_y = h - 64;
 
     if (graphics_take_scene_invalidation())
-    {
         graphics_draw_desktop_backdrop(w, h);
-        if (active_panel == 0)
-            graphics_draw_desktop_dashboard(w, h);
-    }
 
-    if (active_panel == 4)
-    {
-        int ww = w - 32;
-        if (ww > 760) ww = 760;
-        int wh = h - 96;
-        if (wh > 480) wh = 480;
-        int wx = w / 2 - ww / 2, wy = h / 2 - wh / 2;
-        graphics_draw_window_frame(wx, wy, ww, wh, "Settings", 0);
-        graphics_draw_settings_page_detail(wx, wy, ww, wh);
-    }
-
-    if (active_panel == 1)
-    {
-        int ww = 760, wh = 480;
-        int wx = w / 2 - ww / 2, wy = h / 2 - wh / 2;
-
-        graphics_draw_window_frame(wx, wy, ww, wh, "System", 0);
-
-        graphics_draw_system_page_detail(wx, wy, ww, wh);
-    }
-
+    /* Every application window is framed and composed by gui_server. */
     graphics_draw_taskbar(taskbar_y, w);
-
-    if (active_panel == 3)
-        return;
-
 }

@@ -4,10 +4,16 @@ VantaOS Setup is a separate boot mode, not part of normal desktop startup or rec
 
 ## Setup experience
 
+## Current implemented behavior
+
+The current UEFI wizard is keyboard-driven and offers English/Finnish setup prompts, US/Finnish keyboard preferences, and 36 validated IANA time-zone IDs. Before disk selection it checks that all 15 required installer payload files exist, are non-empty, and stay within their configured size limits. It retries invalid language, keyboard, time-zone, and disk selections; Q cancels target-disk selection. The review screen summarizes the saved preferences and fixed GPT/FAT32 layout. The selected device path, capacity, and exact planned EFI/system partition sizes are displayed immediately before the destructive confirmation.
+
+The keyboard preference and time-zone choice are persisted to `/SYSTEM/SETUP.CFG`; they are not yet applied to the active kernel keyboard mapping or clock. Finnish language selection localizes the setup flow only, not the installed desktop. These are explicit limitations, not completed runtime integrations.
+
 1. **Welcome** — explain that installation modifies the selected target disk; offer Install and Exit.
 2. **Language** — choose the setup UI language. The initial build may offer English and Finnish only if both are actually translated; never show untranslated language choices.
 3. **Keyboard** — choose a supported keyboard map and test typing. Do not claim a layout changes OS input until the mapping is wired into the input path.
-4. **Time zone and clock** — choose one of the 35 validated IANA zone IDs shipped by the installer, covering Europe, the Americas, Asia, and Oceania. Persist the zone ID, not a numeric offset. The current setup prints a review summary but does not claim to change the kernel clock; runtime time-service integration remains future work.
+4. **Time zone and clock** — choose one of the 36 validated IANA zone IDs shipped by the installer, covering Europe, the Americas, Asia, and Oceania. Persist the zone ID, not a numeric offset. The current setup prints a review summary but does not claim to change the kernel clock; runtime time-service integration remains future work.
 5. **Hardware checks** — report detected memory, CPU architecture, boot mode, storage devices, and required files. Distinguish a passed check from an unavailable/unsupported capability.
 6. **Target disk** — show stable device name, capacity, transport, partition table, and whether it is the boot medium. Require an explicit disk selection and a second confirmation naming that disk. Never select a target implicitly.
 7. **Partition plan** — preview the exact GPT layout and sizes before any write. The initial UEFI plan uses a FAT32 EFI System Partition and a separate FAT32 VantaOS system partition. Align partitions to 1 MiB, validate all arithmetic and device bounds, and reject disks that are too small or have unsupported sector sizes.

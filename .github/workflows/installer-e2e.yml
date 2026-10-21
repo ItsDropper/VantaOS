@@ -52,7 +52,7 @@ jobs:
           set -euo pipefail
           chmod +x build.sh run.sh
           echo "Building release installer media (without VANTAOS_SELF_TEST)."
-          echo "Acceptance coverage: loader, kernel, applications, driver metadata, and saved setup preferences."
+          echo "Acceptance coverage: loader, kernel, applications, driver metadata, saved setup preferences, and disk identity display."
           ./build.sh
           test -s VantaOS-Setup.img
           test -s VANTASETUP.EFI

@@ -9,6 +9,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "nvx_gsp_nvkv.h"
+#include "pci.h"
 
 /* Presence bits describe facts actually collected by the caller. */
 #define NVX_GSP_SI_PCI_IDENTITY          (UINT32_C(1) << 0)
@@ -21,6 +22,14 @@
 #define NVX_GSP_SI_ATOMICS_CONSOLE_VA    (UINT32_C(1) << 7)
 #define NVX_GSP_SI_TIMER_OFFSET          (UINT32_C(1) << 8)
 #define NVX_GSP_SI_FHB_BUSINFO           (UINT32_C(1) << 9)
+#define NVX_GSP_SI_NV_DOMAIN_BDF         (UINT32_C(1) << 10)
+#define NVX_GSP_SI_SIM_ACCESS_ADDRESS    (UINT32_C(1) << 11)
+#define NVX_GSP_SI_NOTIFY_SURFACE        (UINT32_C(1) << 12)
+#define NVX_GSP_SI_PCIE_ATOMICS_MASK     (UINT32_C(1) << 13)
+#define NVX_GSP_SI_CONSOLE_MEMORY_SIZE   (UINT32_C(1) << 14)
+#define NVX_GSP_SI_MAX_USER_VA           (UINT32_C(1) << 15)
+#define NVX_GSP_SI_FHB_BUSINFO_ONLY      (UINT32_C(1) << 16)
+#define NVX_GSP_SI_CHIPSET_BUSINFO_ONLY  (UINT32_C(1) << 17)
 
 typedef struct nvx_gsp_system_info {
     uint32_t present;
@@ -63,6 +72,16 @@ typedef struct nvx_gsp_system_info {
  * guessed values. The caller must include every key required by its matching
  * GSP firmware branch and use the exact NVGMC_SI_* wire values.
  */
+/*
+ * Merge trusted GPU/platform facts with PCI identity read from the real PCI
+ * function and host architecture/page size from the VantaOS build. Facts may
+ * not override PCI or host fields; unknown GPU addresses/flags remain absent.
+ */
+nvx_gsp_nvkv_status_t nvx_gsp_system_info_collect_pci(
+    const struct pci_device *device,
+    const nvx_gsp_system_info_t *trusted_gpu_facts,
+    nvx_gsp_system_info_t *out_info);
+
 nvx_gsp_nvkv_status_t nvx_gsp_system_info_encode(
     const nvx_gsp_system_info_t *info, void *buffer, size_t capacity,
     size_t *out_size_bytes);

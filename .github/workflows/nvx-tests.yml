@@ -50,6 +50,14 @@ on:
       - "include/nvx_gsp_msgq_queue.h"
       - "include/nvx_gsp_msgq_ga10x.h"
       - "include/nvx_gsp_gmcapi.h"
+      - "scripts/test_nvx_gsp_static_info.c"
+      - "scripts/test_nvx_gsp_gpfifo.c"
+      - "scripts/test_nvx_gsp_ce.c"
+      - "include/nvx_gsp_ce.h"
+      - "include/nvx_gsp_gpfifo.h"
+      - "scripts/test_nvx_gsp_rmapi.c"
+      - "include/nvx_gsp_static_info.h"
+      - "include/nvx_gsp_rmapi.h"
       - "scripts/test_nvx_gsp_system_info.c"
       - "include/nvx_gsp_system_info.h"
       - "scripts/test_nvx_gsp_nvkv.c"
@@ -183,12 +191,65 @@ jobs:
       - name: Test NVKV instruction encoding, arrays, bounds, and malformed streams
         run: /tmp/vantaos-nvx-gsp-nvkv-test
 
+      - name: Compile GSP RMAPI request tests with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_rmapi.c drivers/gpu/nvx/gsp/nvx_gsp_rmapi.c \
+            -o /tmp/vantaos-nvx-gsp-rmapi-test
+
+      - name: Test GSP RM allocation, control, free payloads and status decoding
+        run: /tmp/vantaos-nvx-gsp-rmapi-test
+
+      - name: Compile GSP static-info decoder tests with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_static_info.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_static_info.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_nvkv.c \
+            -o /tmp/vantaos-nvx-gsp-static-info-test
+
+      - name: Test decoded RM configuration, framebuffer regions and malformed indices
+        run: /tmp/vantaos-nvx-gsp-static-info-test
+
+      - name: Compile PCI-backed GSP system-info tests with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_system_info.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_system_info.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_nvkv.c \
+            -o /tmp/vantaos-nvx-gsp-system-info-test
+
+      - name: Test PCI-derived identity and explicit platform facts
+        run: /tmp/vantaos-nvx-gsp-system-info-test
+
+      - name: Compile GPFIFO submit tests with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_gpfifo.c \
+            drivers/gpu/nvx/execution/nvx_gsp_gpfifo.c \
+            drivers/gpu/nvx/execution/nvx_gsp_ce.c \
+            -o /tmp/vantaos-nvx-gsp-gpfifo-test
+
+      - name: Test GPFIFO address encoding, ring bounds, and completion polling
+        run: /tmp/vantaos-nvx-gsp-gpfifo-test
+
+      - name: Compile Ampere CE command-builder tests with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_ce.c drivers/gpu/nvx/execution/nvx_gsp_ce.c \
+            -o /tmp/vantaos-nvx-gsp-ce-test
+
+      - name: Test copy-engine methods, semaphore release, and GPUVA bounds
+        run: /tmp/vantaos-nvx-gsp-ce-test
+
       - name: Compile GSP startup orchestration with strict warnings
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude -c \
             drivers/gpu/nvx/gsp/nvx_gsp_startup.c -o /tmp/vantaos-nvx-gsp-startup.o
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude -c \
             drivers/gpu/nvx/gsp/nvx_gsp_gmcapi.c -o /tmp/vantaos-nvx-gsp-gmcapi.o
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude -c \
+            drivers/gpu/nvx/gsp/nvx_gsp_startup_pci.c -o /tmp/vantaos-nvx-gsp-startup-pci.o
 
       - name: Compile NVX identity tests with strict warnings
         run: |

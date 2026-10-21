@@ -16,6 +16,43 @@ static int overlaps(const void *a, size_t an, const void *b, size_t bn)
     return x<y+bn && y<x+an;
 }
 
+nvx_gsp_nvkv_status_t nvx_gsp_system_info_collect_pci(
+    const struct pci_device *device,
+    const nvx_gsp_system_info_t *facts,
+    nvx_gsp_system_info_t *out)
+{
+    const uint32_t known_mask=(UINT32_C(1)<<18U)-1U;
+    uint32_t id_dword,subsystem;
+    nvx_gsp_system_info_t collected;
+    if(!device||!facts||!out||
+       overlaps(device,sizeof(*device),out,sizeof(*out))||
+       overlaps(facts,sizeof(*facts),out,sizeof(*out))||
+       device->vendor_id!=UINT16_C(0x10DE)||
+       (facts->present&~known_mask)!=0U||
+       (facts->present&(NVX_GSP_SI_PCI_IDENTITY|NVX_GSP_SI_HOST_IDENTITY|
+                        NVX_GSP_SI_HOST_PAGE_SIZE))!=0U)
+        return NVX_GSP_NVKV_INVALID_ARGUMENT;
+#if !defined(__x86_64__)
+    return NVX_GSP_NVKV_INVALID_ARGUMENT;
+#else
+    id_dword=pci_read_config32(device,0x08U);
+    subsystem=pci_read_config32(device,0x2CU);
+    if(id_dword==UINT32_MAX||subsystem==UINT32_MAX)
+        return NVX_GSP_NVKV_INVALID_ARGUMENT;
+    collected=*facts;
+    collected.pci_device_id=device->device_id;
+    collected.pci_sub_device_id=(subsystem>>16U)&UINT32_C(0xFFFF);
+    collected.pci_revision_id=id_dword&UINT32_C(0xFF);
+    collected.present|=NVX_GSP_SI_PCI_IDENTITY;
+    collected.host_arch=1U;    /* NVGMC_SI_HOST_ARCH_X86_64 */
+    collected.host_os_type=0U; /* NVGMC_SI_HOST_OS_TYPE_OTHER: VantaOS */
+    collected.host_page_size=4096U;
+    collected.present|=NVX_GSP_SI_HOST_IDENTITY|NVX_GSP_SI_HOST_PAGE_SIZE;
+    *out=collected;
+    return NVX_GSP_NVKV_OK;
+#endif
+}
+
 #define TRY(call) do { status=(call); if(status!=NVX_GSP_NVKV_OK) return status; } while(0)
 
 nvx_gsp_nvkv_status_t nvx_gsp_system_info_encode(
@@ -79,12 +116,32 @@ nvx_gsp_nvkv_status_t nvx_gsp_system_info_encode(
         domain_surfaces[1]=info->sim_access_buf_phys_addr;
         domain_surfaces[2]=info->notify_op_shared_surface_phys_addr;
         TRY(nvx_gsp_nvkv_put_seq64(&writer,0U,0x1020U,domain_surfaces,3U));
+    } else {
+        if (info->present & NVX_GSP_SI_NV_DOMAIN_BDF)
+            TRY(nvx_gsp_nvkv_put_seq64(&writer,0U,0x1020U,
+                                       &info->nv_domain_bus_device_func,1U));
+        if (info->present & NVX_GSP_SI_SIM_ACCESS_ADDRESS)
+            TRY(nvx_gsp_nvkv_put_seq64(&writer,0U,0x1021U,
+                                       &info->sim_access_buf_phys_addr,1U));
+        if (info->present & NVX_GSP_SI_NOTIFY_SURFACE)
+            TRY(nvx_gsp_nvkv_put_seq64(&writer,0U,0x1022U,
+                                       &info->notify_op_shared_surface_phys_addr,1U));
     }
     if (info->present & NVX_GSP_SI_ATOMICS_CONSOLE_VA) {
         atomics_console_va[0]=info->pcie_atomics_op_mask;
         atomics_console_va[1]=info->console_mem_size;
         atomics_console_va[2]=info->max_user_va;
         TRY(nvx_gsp_nvkv_put_seq64(&writer,0U,0x1030U,atomics_console_va,3U));
+    } else {
+        if (info->present & NVX_GSP_SI_PCIE_ATOMICS_MASK)
+            TRY(nvx_gsp_nvkv_put_seq64(&writer,0U,0x1030U,
+                                       &info->pcie_atomics_op_mask,1U));
+        if (info->present & NVX_GSP_SI_CONSOLE_MEMORY_SIZE)
+            TRY(nvx_gsp_nvkv_put_seq64(&writer,0U,0x1031U,
+                                       &info->console_mem_size,1U));
+        if (info->present & NVX_GSP_SI_MAX_USER_VA)
+            TRY(nvx_gsp_nvkv_put_seq64(&writer,0U,0x1032U,
+                                       &info->max_user_va,1U));
     }
     if (info->present & NVX_GSP_SI_TIMER_OFFSET) {
         TRY(nvx_gsp_nvkv_put_seq64(&writer,0U,0x1040U,
@@ -94,6 +151,11 @@ nvx_gsp_nvkv_status_t nvx_gsp_system_info_encode(
         businfo[0]=info->fhb_businfo;
         businfo[1]=info->chipset_businfo;
         TRY(nvx_gsp_nvkv_put_seq64(&writer,0U,0x1090U,businfo,2U));
+    } else {
+        if (info->present & NVX_GSP_SI_FHB_BUSINFO_ONLY)
+            TRY(nvx_gsp_nvkv_put_seq64(&writer,0U,0x1090U,&info->fhb_businfo,1U));
+        if (info->present & NVX_GSP_SI_CHIPSET_BUSINFO_ONLY)
+            TRY(nvx_gsp_nvkv_put_seq64(&writer,0U,0x1091U,&info->chipset_businfo,1U));
     }
 
     *out_size_bytes=nvx_gsp_nvkv_size_bytes(&writer);

@@ -28,7 +28,12 @@ VANTAOS_NVX_C := \
     drivers/gpu/nvx/gsp/nvx_gsp_gmcapi.c \
     drivers/gpu/nvx/gsp/nvx_gsp_nvkv.c \
     drivers/gpu/nvx/gsp/nvx_gsp_system_info.c \
+    drivers/gpu/nvx/gsp/nvx_gsp_rmapi.c \
+    drivers/gpu/nvx/execution/nvx_gsp_gpfifo.c \
+    drivers/gpu/nvx/execution/nvx_gsp_ce.c \
+    drivers/gpu/nvx/gsp/nvx_gsp_static_info.c \
     drivers/gpu/nvx/gsp/nvx_gsp_startup.c \
+    drivers/gpu/nvx/gsp/nvx_gsp_startup_pci.c \
     drivers/gpu/nvx/gsp/nvx_gsp_msgq_rpc.c \
     drivers/gpu/nvx/gsp/nvx_gsp_init_args.c \
     drivers/gpu/nvx/gsp/nvx_gsp_ga10x.c \

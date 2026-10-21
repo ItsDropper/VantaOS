@@ -10,6 +10,7 @@
 #include "nvx_gsp_msgq_ga10x.h"
 #include "nvx_gsp_secure_boot.h"
 #include "nvx_gsp_rpc.h"
+#include "nvx_gsp_system_info.h"
 
 typedef enum nvx_gsp_startup_status {
     NVX_GSP_STARTUP_OK = 0,
@@ -35,6 +36,38 @@ typedef struct nvx_gsp_startup_result {
     uint8_t gsp_rm_initialized;
     uint8_t rpc_initialized;
 } nvx_gsp_startup_result_t;
+
+typedef struct nvx_gsp_startup_platform_info {
+    const struct pci_device *pci_device;
+    const nvx_gsp_system_info_t *trusted_gpu_facts;
+    void *encoded_system_info_buffer;
+    size_t encoded_system_info_capacity;
+} nvx_gsp_startup_platform_info_t;
+
+/*
+ * PCI-backed entry point. It collects actual PCI identity/host facts, merges
+ * only explicitly supplied GPU/platform facts, encodes NVKV into caller-owned
+ * storage, then invokes the standard GA10x startup transaction. All memory
+ * objects and DMA buffers must be disjoint from encoded_system_info_buffer.
+ */
+nvx_gsp_startup_status_t nvx_gsp_ga10x_start_and_init_rm_from_pci(
+    const nvx_gsp_startup_platform_info_t *platform,
+    nvx_dma_buffer_t *staged_vbios, nvx_dma_sync_t *staged_vbios_sync,
+    const nvx_gsp_vbios_fwsec_info_t *fwsec_info, uint32_t fuse_version,
+    nvx_gsp_boot_memory_t *boot_memory,
+    nvx_dma_buffer_t *init_args, nvx_dma_sync_t *init_args_sync,
+    nvx_dma_buffer_t *shared_queue, nvx_dma_sync_t *shared_queue_sync,
+    const nvx_gsp_modern_shared_queue_layout_t *queue_layout,
+    const nvx_mmio_region_t *bar0, uint64_t frts_framebuffer_offset,
+    void *static_info, size_t static_info_capacity, size_t *out_static_info_size,
+    void *scratch, size_t scratch_size,
+    uint32_t timeout_ms, uint32_t poll_interval_ms,
+    nvx_gsp_delay_ms_fn delay_ms, void *context,
+    nvx_gsp_msgq_ga10x_t *queue_runtime,
+    nvx_gsp_gmcapi_transport_t *gmcapi,
+    nvx_gsp_msgq_rpc_transport_t *rpc_transport,
+    nvx_gsp_rpc_manager_t *rpc_manager,
+    nvx_gsp_startup_result_t *out_result);
 
 /*
  * Zero-initialize queue_runtime, gmcapi, rpc_transport and rpc_manager before first use.

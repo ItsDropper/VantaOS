@@ -409,6 +409,72 @@ nvx_gsp_rmapi_status_t nvx_gsp_rm_control_sync(
         delay_context):s;
 }
 
+_Static_assert(sizeof(nvx_gsp_channel_alloc_params_t)==376U,
+               "NV_CHANNEL_ALLOC_PARAMS R535 ABI size changed");
+_Static_assert(offsetof(nvx_gsp_channel_alloc_params_t,gpfifo_offset)==8U,
+               "NV_CHANNEL_ALLOC_PARAMS GPFIFO offset mismatch");
+_Static_assert(offsetof(nvx_gsp_channel_alloc_params_t,userd_offset)==72U,
+               "NV_CHANNEL_ALLOC_PARAMS USERD offsets mismatch");
+_Static_assert(offsetof(nvx_gsp_channel_alloc_params_t,instance_mem)==152U,
+               "NV_CHANNEL_ALLOC_PARAMS memory descriptors mismatch");
+
+nvx_gsp_rmapi_status_t nvx_gsp_rmapi_alloc_ampere_channel_sync(
+    nvx_gsp_rpc_manager_t *manager,uint32_t client,uint32_t device,
+    uint32_t channel_handle,const nvx_gsp_channel_alloc_params_t *params,
+    void *scratch,size_t scratch_size,void *response,size_t response_capacity,
+    uint32_t timeout_ms,uint32_t poll_interval_ms,
+    nvx_gsp_rmapi_delay_fn delay_ms,void *delay_context,
+    nvx_gsp_rmapi_result_t *out)
+{
+    nvx_gsp_channel_alloc_params_t wire={0};
+    uint64_t ring_bytes,ring_end;
+    if(!params||!client||!device||!channel_handle||
+       !params->h_object_error||!params->h_vaspace||
+       params->gpfifo_entries<2U||
+       (params->gpfifo_entries&(params->gpfifo_entries-1U))!=0U||
+       (params->gpfifo_offset&7U)!=0U||
+       params->gpfifo_entries>UINT64_MAX/8U)
+        return NVX_GSP_RMAPI_INVALID_ARGUMENT;
+    ring_bytes=(uint64_t)params->gpfifo_entries*8U;
+    if(!add_size((size_t)params->gpfifo_offset,(size_t)ring_bytes,(size_t *)&ring_end))
+        return NVX_GSP_RMAPI_INVALID_ARGUMENT;
+    if(ring_end<params->gpfifo_offset)return NVX_GSP_RMAPI_INVALID_ARGUMENT;
+
+    /*
+     * Copy fields individually so C struct padding is zeroed before the
+     * versioned wire payload crosses the host/GSP boundary.
+     */
+#define COPY_FIELD(field) wire.field=params->field
+    COPY_FIELD(h_object_error);COPY_FIELD(h_object_buffer);
+    COPY_FIELD(gpfifo_offset);COPY_FIELD(gpfifo_entries);COPY_FIELD(flags);
+    COPY_FIELD(h_context_share);COPY_FIELD(h_vaspace);COPY_FIELD(h_handle_vaspace);
+    COPY_FIELD(engine_type);COPY_FIELD(cid);COPY_FIELD(subdevice_id);
+    COPY_FIELD(h_object_ecc_error);COPY_FIELD(h_phys_channel_group);
+    COPY_FIELD(internal_flags);COPY_FIELD(process_id);COPY_FIELD(sub_process_id);
+    COPY_FIELD(tpc_config_id);
+    wire.instance_mem=params->instance_mem;
+    wire.userd_mem=params->userd_mem;
+    wire.ramfc_mem=params->ramfc_mem;
+    wire.mthdbuf_mem=params->mthdbuf_mem;
+    wire.error_notifier_mem=params->error_notifier_mem;
+    wire.ecc_error_notifier_mem=params->ecc_error_notifier_mem;
+    for(size_t i=0U;i<NVX_GSP_RM_MAX_SUBDEVICES;i++) {
+        wire.h_userd_memory[i]=params->h_userd_memory[i];
+        wire.userd_offset[i]=params->userd_offset[i];
+    }
+    for(size_t i=0U;i<NVX_GSP_RM_CHANNEL_IV_DWORDS;i++) {
+        wire.encrypt_iv[i]=params->encrypt_iv[i];
+        wire.decrypt_iv[i]=params->decrypt_iv[i];
+    }
+    for(size_t i=0U;i<NVX_GSP_RM_CHANNEL_NONCE_DWORDS;i++)
+        wire.hmac_nonce[i]=params->hmac_nonce[i];
+#undef COPY_FIELD
+    return nvx_gsp_rm_alloc_sync(manager,client,device,channel_handle,
+        NVX_GSP_RM_CLASS_AMPERE_CHANNEL_GPFIFO_A,0U,&wire,sizeof(wire),
+        scratch,scratch_size,response,response_capacity,timeout_ms,
+        poll_interval_ms,delay_ms,delay_context,out);
+}
+
 nvx_gsp_rmapi_status_t nvx_gsp_rmapi_bind_channel_sync(
     nvx_gsp_rpc_manager_t *manager,uint32_t client,uint32_t channel,
     uint32_t engine_type,void *scratch,size_t scratch_size,void *response,

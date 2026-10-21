@@ -50,12 +50,15 @@ on:
       - "include/nvx_gsp_msgq_queue.h"
       - "include/nvx_gsp_msgq_ga10x.h"
       - "include/nvx_gsp_gmcapi.h"
+      - "include/nvx_gsp_startup.h"
       - "include/nvx_gsp_msgq_rpc.h"
       - "include/nvx_gsp_init_args.h"
       - "include/nvx_gsp_ga10x.h"
       - "include/nvx_gsp_falcon.h"
       - "drivers/gpu/nvx/gsp/nvx_gsp_falcon.c"
       - "drivers/gpu/nvx/gsp/nvx_gsp_msgq_ga10x.c"
+      - "drivers/gpu/nvx/gsp/nvx_gsp_gmcapi.c"
+      - "drivers/gpu/nvx/gsp/nvx_gsp_startup.c"
       - "scripts/test_nvx_gsp_falcon.c"
       - "include/nvx_gsp_bootloader.h"
       - "include/nvx_gsp_rpc.h"
@@ -166,6 +169,13 @@ jobs:
 
       - name: Test PCI BAR size masks, restoration, and active-device refusal
         run: /tmp/vantaos-pci-bar-size-test
+
+      - name: Compile GSP startup orchestration with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude -c \
+            drivers/gpu/nvx/gsp/nvx_gsp_startup.c -o /tmp/vantaos-nvx-gsp-startup.o
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude -c \
+            drivers/gpu/nvx/gsp/nvx_gsp_gmcapi.c -o /tmp/vantaos-nvx-gsp-gmcapi.o
 
       - name: Compile NVX identity tests with strict warnings
         run: |

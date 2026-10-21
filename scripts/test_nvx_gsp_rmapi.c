@@ -210,6 +210,27 @@ int main(void)
         assert(le32(history[9]+8U)==NVX_GSP_RM_CTRL_GPFIFO_SCHEDULE);
         assert(le32(history[9]+40U)==1U);
         assert(le32(history[9]+44U)==0U&&le32(history[9]+48U)==0U);
+        {
+            nvx_gsp_channel_alloc_params_t channel_params={0};
+            channel_params.h_object_error=0x11U;
+            channel_params.gpfifo_offset=UINT64_C(0x100000);
+            channel_params.gpfifo_entries=64U;
+            channel_params.h_vaspace=0x30U;
+            channel_params.engine_type=0x17U;
+            expected_function=NVX_GSP_RPC_FN_RM_ALLOC;
+            assert(nvx_gsp_rmapi_alloc_ampere_channel_sync(&manager,0x10U,0x20U,
+                0x41U,&channel_params,scratch,sizeof(scratch),response,
+                sizeof(response),20U,1U,no_delay,NULL,&op)==NVX_GSP_RMAPI_OK);
+            assert(history_size[10]==408U);
+            assert(le32(history[10]+8U)==0x41U);
+            assert(le32(history[10]+12U)==NVX_GSP_RM_CLASS_AMPERE_CHANNEL_GPFIFO_A);
+            assert(le32(history[10]+20U)==376U);
+            assert(le32(history[10]+32U)==0x11U);
+            assert(le32(history[10]+40U)==0x100000U);
+            assert(le32(history[10]+48U)==64U);
+            assert(le32(history[10]+60U)==0x30U);
+            assert(le32(history[10]+168U)==0x17U);
+        }
         auto_complete=0;
     }
     return 0;

@@ -88,6 +88,39 @@ int main(void)
     assert(nvx_gsp_rm_alloc_submit(&manager,1U,2U,3U,4U,0U,params,
         NVX_GSP_RMAPI_MAX_PARAMS+1U,scratch,sizeof(scratch),response,
         sizeof(response),&op)==NVX_GSP_RMAPI_INVALID_ARGUMENT);
-    assert(submissions==3U);
+    {
+        nvx_gsp_map_memory_dma_t map={0};
+        nvx_gsp_unmap_memory_dma_t unmap={0};
+        uint64_t mapped_offset=UINT64_MAX;
+        map.client=1U;map.device=2U;map.dma=3U;map.memory=4U;
+        map.offset=UINT64_C(0x1122334455667788);
+        map.length=UINT64_C(0x10000);map.flags=5U;map.flags2=6U;
+        map.kind_override=7U;map.dma_offset=UINT64_C(0xABCDEF00);
+        expected_function=NVX_GSP_RPC_FN_MAP_MEMORY_DMA;
+        assert(nvx_gsp_rm_map_memory_dma_submit(&manager,&map,scratch,sizeof(scratch),
+            response,sizeof(response),&op)==NVX_GSP_RMAPI_OK);
+        assert(captured_size==64U && le32(captured+0U)==1U && le32(captured+12U)==4U);
+        assert(le32(captured+16U)==0x55667788U && le32(captured+20U)==0x11223344U);
+        assert(le32(captured+24U)==0x10000U && le32(captured+32U)==5U);
+        assert(le32(captured+36U)==6U && le32(captured+40U)==7U);
+        assert(le32(captured+48U)==0xABCDEF00U);
+        memset(response,0,sizeof(response));
+        response[48U]=0x78U;response[49U]=0x56U;response[50U]=0x34U;response[51U]=0x12U;
+        op.function=NVX_GSP_RPC_FN_MAP_MEMORY_DMA;
+        assert(nvx_gsp_rm_map_memory_dma_result(&op,response,60U,&mapped_offset)==NVX_GSP_RMAPI_OK);
+        assert(mapped_offset==UINT64_C(0x12345678));
+
+        unmap.client=1U;unmap.device=2U;unmap.dma=3U;unmap.memory=4U;
+        unmap.flags=8U;unmap.dma_offset=UINT64_C(0x1000);unmap.size=UINT64_C(0x2000);
+        expected_function=NVX_GSP_RPC_FN_UNMAP_MEMORY_DMA;
+        assert(nvx_gsp_rm_unmap_memory_dma_submit(&manager,&unmap,scratch,sizeof(scratch),
+            response,sizeof(response),&op)==NVX_GSP_RMAPI_OK);
+        assert(captured_size==48U && le32(captured+0U)==1U && le32(captured+16U)==8U);
+        assert(le32(captured+24U)==0x1000U && le32(captured+32U)==0x2000U);
+        op.function=NVX_GSP_RPC_FN_UNMAP_MEMORY_DMA;
+        memset(response,0,sizeof(response));
+        assert(nvx_gsp_rmapi_decode_status(&op,response,44U,&status)==NVX_GSP_RMAPI_OK);
+    }
+    assert(submissions==5U);
     return 0;
 }

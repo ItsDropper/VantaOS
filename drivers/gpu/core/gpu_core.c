@@ -24,7 +24,9 @@ static int gpu_transition_allowed(gpu_device_state_t current,
         case GPU_DEVICE_RUNNING:
             return next == GPU_DEVICE_QUIESCING || next == GPU_DEVICE_FAILED;
         case GPU_DEVICE_QUIESCING:
-            return next == GPU_DEVICE_INITIALIZED || next == GPU_DEVICE_FAILED;
+            return next == GPU_DEVICE_STOPPED || next == GPU_DEVICE_FAILED;
+        case GPU_DEVICE_STOPPED:
+            return next == GPU_DEVICE_FAILED;
         case GPU_DEVICE_FAILED:
         default:
             return 0;
@@ -154,7 +156,7 @@ int gpu_driver_stop(gpu_device_t *device)
 
     gpu_device_clear_capabilities(device);
     device->ops->shutdown(device);
-    if (!gpu_device_transition(device, GPU_DEVICE_INITIALIZED)) {
+    if (!gpu_device_transition(device, GPU_DEVICE_STOPPED)) {
         device->ops = NULL;
         (void)gpu_device_transition(device, GPU_DEVICE_FAILED);
         return 0;

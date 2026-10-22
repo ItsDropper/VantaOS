@@ -194,6 +194,14 @@ gpu_vm_status_t gpu_vm_unmap(gpu_vm_t *vm, gpu_vm_handle_t *handle)
         return GPU_VM_NOT_INITIALIZED;
 
     flags = spinlock_lock_irqsave(&vm->lock);
+    if (handle->token == 0U) {
+        spinlock_unlock_irqrestore(&vm->lock, flags);
+        return GPU_VM_INVALID_HANDLE;
+    }
+    if (handle->generation != vm->generation) {
+        spinlock_unlock_irqrestore(&vm->lock, flags);
+        return GPU_VM_STALE_HANDLE;
+    }
     record = gpu_vm_find_record(vm, handle);
     if (record == NULL) {
         spinlock_unlock_irqrestore(&vm->lock, flags);

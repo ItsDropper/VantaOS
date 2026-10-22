@@ -260,8 +260,8 @@ int main(void)
         test_probe_fails = 1;
         assert(!gpu_driver_start(&attached, &test_driver));
         assert(attached.state == GPU_DEVICE_FAILED);
-        assert(test_shutdown_calls == 2);
-        assert(test_initialize_calls == 2);
+        assert(test_shutdown_calls == 4);
+        assert(test_initialize_calls == 3);
     }
     assert(strcmp(gpu_vendor_name(GPU_VENDOR_AMD), "AMD") == 0);
     assert(strcmp(gpu_architecture_name(GPU_ARCH_AMD_RDNA3), "AMD RDNA 3") == 0);

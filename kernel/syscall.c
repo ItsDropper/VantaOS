@@ -6,6 +6,7 @@
  */
 
 #include "syscall.h"
+#include "ipc.h"
 
 #include "paging.h"
 #include "process.h"
@@ -48,6 +49,8 @@
 #define USER_SYSCALL_CREATE_DIRECTORY 23U
 #define USER_SYSCALL_STAT_PATH 24U
 #define USER_SYSCALL_KERNEL_COMMAND 25U
+#define USER_SYSCALL_IPC_SEND 26U
+#define USER_SYSCALL_IPC_RECEIVE 27U
 #define USER_SYSCALL_KERNEL_COMMAND_MAX 2048U
 #define USER_SYSCALL_IO_MAX 4096U
 #define USER_SYSCALL_WRITE_MAX 4096U
@@ -839,6 +842,68 @@ static int syscall_gui_poll_event(struct exception_frame* frame,
             destination[i] = source[i];
     }
     frame->rax = (uint64_t)(int64_t)result;
+    return 0;
+}
+
+static int syscall_ipc_send(struct exception_frame* frame,
+                              const process_t* process)
+{
+    if (frame->rdi == 0U || frame->rdi >= PROCESS_MAX ||
+        frame->rdx > VANTA_IPC_PAYLOAD_MAX)
+    {
+        frame->rax = (uint64_t)(int64_t)-22;
+        return 0;
+    }
+
+    const size_t length = (size_t)frame->rdx;
+    const uintptr_t address = (uintptr_t)frame->rsi;
+    if (length != 0U &&
+        !paging_user_range_valid(process->address_space, address, length, 0))
+    {
+        frame->rax = (uint64_t)(int64_t)-14;
+        return 0;
+    }
+
+    uint8_t payload[VANTA_IPC_PAYLOAD_MAX];
+    const uint8_t *source = (const uint8_t *)address;
+    for (size_t i = 0U; i < length; ++i)
+        payload[i] = source[i];
+
+    int result = ipc_send(process->pid, (uint32_t)frame->rdi,
+                          payload, length);
+    frame->rax = (uint64_t)(int64_t)result;
+    return 0;
+}
+
+static int syscall_ipc_receive(struct exception_frame* frame,
+                               const process_t* process)
+{
+    if (frame->rdi >= PROCESS_MAX || frame->rsi == 0U || frame->rdx != 0U)
+    {
+        frame->rax = (uint64_t)(int64_t)-22;
+        return 0;
+    }
+
+    const uintptr_t address = (uintptr_t)frame->rsi;
+    if (!paging_user_range_valid(process->address_space, address,
+                                 sizeof(vanta_ipc_message_t), 1))
+    {
+        frame->rax = (uint64_t)(int64_t)-14;
+        return 0;
+    }
+
+    vanta_ipc_message_t message;
+    int result = ipc_receive(process->pid, (uint32_t)frame->rdi, &message);
+    if (result > 0)
+    {
+        uint8_t *destination = (uint8_t *)address;
+        const uint8_t *source = (const uint8_t *)&message;
+        for (size_t i = 0U; i < sizeof(message); ++i)
+            destination[i] = source[i];
+        frame->rax = 1U;
+    }
+    else
+        frame->rax = (uint64_t)(int64_t)(result < 0 ? result : 0);
     return 0;
 }
 

@@ -239,6 +239,11 @@ jobs:
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_tls_hostname.c -o /tmp/vantaos-tls-hostname-test
           /tmp/vantaos-tls-hostname-test
 
+      - name: Test bounded IPC queue, capability permissions, and owner cleanup
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Itests/ipc_host -Iinclude scripts/test_ipc.c -o /tmp/vantaos-ipc-test
+          /tmp/vantaos-ipc-test
+
       - name: Test hardware crypto entropy source
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_crypto_rng.c kernel/crypto_rng.c -o /tmp/vantaos-crypto-rng-test

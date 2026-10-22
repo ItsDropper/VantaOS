@@ -7,7 +7,7 @@
 
 #include "process_internal.h"
 #include "apic.h"
-#include "ipc.h"
+#include "../ipc.h"
 
 #include <stddef.h>
 #include <stdint.h>

@@ -9,9 +9,6 @@
 #include <stddef.h>
 #include <string.h>
 #include "pci.h"
-#include "intel_gpu.h"
-#include "amd_gpu.h"
-#include "serial.h"
 
 static int gpu_transition_allowed(gpu_device_state_t current,
                                  gpu_device_state_t next)
@@ -100,51 +97,6 @@ int gpu_driver_matches(const gpu_driver_descriptor_t *driver,
         device->vendor_id != driver->vendor_id)
         return 0;
     return driver->match(device) != 0;
-}
-
-void gpu_initialize(void)
-{
-    gpu_device_t devices[64];
-    size_t count = 0U;
-
-    if (!gpu_discover_pci(devices, sizeof(devices) / sizeof(devices[0]),
-                          &count)) {
-        serial_write("GPU: PCI display inventory unavailable or exceeds limit\n");
-        return;
-    }
-
-    for (size_t i = 0U; i < count; ++i) {
-        const gpu_device_identity_t *id = &devices[i].identity;
-        static const char digits[] = "0123456789ABCDEF";
-        char hex[4];
-
-        for (size_t j = 0U; j < sizeof(hex); ++j) {
-            unsigned shift = (unsigned)((sizeof(hex) - 1U - j) * 4U);
-            hex[j] = digits[(id->device_id >> shift) & 0xFU];
-        }
-        serial_write("GPU: discovered ");
-        serial_write(gpu_vendor_name(devices[i].vendor));
-        serial_write(" device 0x");
-        serial_write_bytes(hex, sizeof(hex));
-        serial_write(" architecture=");
-        serial_write(gpu_architecture_name(devices[i].architecture));
-        serial_write("\n");
-
-        /* No MMIO, reset, firmware, or DMA until an ASIC-specific backend is verified. */
-        if (devices[i].vendor == GPU_VENDOR_INTEL) {
-            intel_gpu_descriptor_t descriptor;
-            if (!intel_gpu_describe(devices[i].pci_device, &descriptor))
-                serial_write("GPU: Intel resource inventory rejected\n");
-            else if (!descriptor.mmio_aperture_enabled)
-                serial_write("GPU: Intel MMIO aperture not enabled/assigned\n");
-        } else if (devices[i].vendor == GPU_VENDOR_AMD) {
-            amd_gpu_descriptor_t descriptor;
-            if (!amd_gpu_describe(devices[i].pci_device, &descriptor))
-                serial_write("GPU: AMD resource inventory rejected\n");
-            else if (!descriptor.mmio_aperture_enabled)
-                serial_write("GPU: AMD MMIO aperture not enabled/assigned\n");
-        }
-    }
 }
 
 int gpu_discover_pci(gpu_device_t *out_devices, size_t capacity,

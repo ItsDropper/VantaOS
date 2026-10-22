@@ -73,7 +73,7 @@ int main(void)
 
     ctx = (test_context_t){ .fail_verify_at = 2U };
     assert(gpu_bringup_execute(stages, 3U, &ctx, &result)
-           == GPU_BRINGUP_STAGE_FAILED);
+           == GPU_BRINGUP_VERIFY_FAILED);
     assert(result.failed_stage == 2U);
     assert(result.completed_stages == 0U);
     assert(result.verified_capabilities == 0U);
@@ -83,7 +83,7 @@ int main(void)
     ctx = (test_context_t){ .fail_prepare_at = 1U };
     assert(gpu_bringup_execute(stages, 3U, &ctx, &result)
            == GPU_BRINGUP_STAGE_FAILED);
-    assert(ctx.rolled_back == 1U);
+    assert(ctx.rolled_back == 3U);
     assert(result.verified_capabilities == 0U);
 
     ctx = (test_context_t){ .fail_verify_at = 2U, .fail_rollback_at = 1U };

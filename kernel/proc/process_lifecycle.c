@@ -372,7 +372,9 @@ int process_reap(uint32_t pid)
     process->state = PROCESS_REAPING;
     process_table_lock_release(flags);
 
-    ipc_process_cleanup(pid);\n\n    if (!process_release_user_resources(&snapshot))
+    ipc_process_cleanup(pid);
+
+    if (!process_release_user_resources(&snapshot))
     {
         flags = process_table_lock_acquire();
         process = &process_table_records[pid];

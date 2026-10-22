@@ -22,15 +22,18 @@ static int align_up(uint64_t value, uint64_t alignment, uint64_t *out)
     return 1;
 }
 
-vanta_installer_layout_status_t vanta_installer_plan_gpt(
+vanta_installer_layout_status_t vanta_installer_plan_gpt_with_efi_size(
     uint64_t disk_sector_count,
     uint32_t logical_sector_size,
+    uint32_t efi_size_mib,
     vanta_installer_layout_t *out_layout)
 {
     vanta_installer_layout_t layout;
     uint64_t efi_end_exclusive;
+    uint64_t efi_sector_count;
 
-    if (!out_layout || disk_sector_count == 0U)
+    if (!out_layout || disk_sector_count == 0U ||
+        (efi_size_mib != 256U && efi_size_mib != 512U))
         return VANTA_INSTALLER_LAYOUT_INVALID_ARGUMENT;
 
     if (logical_sector_size != VANTA_INSTALLER_SECTOR_SIZE)
@@ -42,6 +45,7 @@ vanta_installer_layout_status_t vanta_installer_plan_gpt(
     if (disk_sector_count <= VANTA_INSTALLER_GPT_RESERVED_SECTORS)
         return VANTA_INSTALLER_LAYOUT_OVERFLOW;
 
+    efi_sector_count = (uint64_t)efi_size_mib * 2048ULL;
     layout.disk_sector_count = disk_sector_count;
     layout.first_usable_lba = 2U + 32U;
     layout.last_usable_lba =
@@ -55,8 +59,8 @@ vanta_installer_layout_status_t vanta_installer_plan_gpt(
     if (layout.efi.first_lba > UINT64_MAX - VANTA_INSTALLER_ESP_SECTORS)
         return VANTA_INSTALLER_LAYOUT_OVERFLOW;
     efi_end_exclusive =
-        layout.efi.first_lba + VANTA_INSTALLER_ESP_SECTORS;
-    layout.efi.sector_count = VANTA_INSTALLER_ESP_SECTORS;
+        layout.efi.first_lba + efi_sector_count;
+    layout.efi.sector_count = efi_sector_count;
 
     if (!align_up(efi_end_exclusive,
                   VANTA_INSTALLER_ALIGNMENT_SECTORS,
@@ -83,4 +87,14 @@ vanta_installer_layout_status_t vanta_installer_plan_gpt(
 
     *out_layout = layout;
     return VANTA_INSTALLER_LAYOUT_OK;
+}
+
+
+vanta_installer_layout_status_t vanta_installer_plan_gpt(
+    uint64_t disk_sector_count,
+    uint32_t logical_sector_size,
+    vanta_installer_layout_t *out_layout)
+{
+    return vanta_installer_plan_gpt_with_efi_size(
+        disk_sector_count, logical_sector_size, 512U, out_layout);
 }

@@ -46,6 +46,10 @@ int main(void)
                                      0xABCD1200U) == 0x12U);
     assert(gpu_register_field_encode((gpu_register_field_t){0x0000000FU, 0U},
                                      16U, &encoded) == GPU_REGISTER_INVALID);
+    assert(gpu_register_field_encode((gpu_register_field_t){0x00000005U, 0U},
+                                     1U, &encoded) == GPU_REGISTER_INVALID);
+    assert(gpu_register_field_encode((gpu_register_field_t){0x00000002U, 0U},
+                                     1U, &encoded) == GPU_REGISTER_INVALID);
     assert(gpu_register_apply_sequence(&mmio, seq, 2U, 2U, &failed)
            == GPU_REGISTER_OK);
     assert(failed == SIZE_MAX);

@@ -48,5 +48,8 @@ int gpu_discover_pci(gpu_device_t *out_devices, size_t capacity,
                      size_t *out_count);
 int gpu_driver_matches(const gpu_driver_descriptor_t *driver,
                        const struct pci_device *device);
+/* Run the backend probe/initialize state machine; failed backends fail closed. */
+int gpu_driver_start(gpu_device_t *device,
+                     const gpu_driver_descriptor_t *driver);
 
 #endif

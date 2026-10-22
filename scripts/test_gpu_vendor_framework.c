@@ -239,7 +239,7 @@ int main(void)
         assert(!gpu_driver_start(&attached, &test_driver));
         assert(attached.state == GPU_DEVICE_FAILED);
         assert(attached.verified_capabilities == 0U);
-        assert(test_shutdown_calls == 1);
+        assert(test_shutdown_calls == 2);
         assert(!gpu_driver_start(&attached, &test_driver));
         assert(test_initialize_calls == 2);
 

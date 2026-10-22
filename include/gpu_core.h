@@ -51,5 +51,7 @@ int gpu_driver_matches(const gpu_driver_descriptor_t *driver,
 /* Run the backend probe/initialize state machine; failed backends fail closed. */
 int gpu_driver_start(gpu_device_t *device,
                      const gpu_driver_descriptor_t *driver);
+/* Quiesce a running backend and release its owned resources. */
+int gpu_driver_stop(gpu_device_t *device);
 
 #endif

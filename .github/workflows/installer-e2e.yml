@@ -186,6 +186,9 @@ jobs:
                   "VANTAOS_SETUP_COMPLETE",
               ):
                   wait_marker(marker)
+              wait_marker("VANTAOS_SETUP_FINISH_ACTION_PROMPT")
+              key("r")
+              wait_marker("VANTAOS_SETUP_REBOOT_REQUESTED")
               print("VANTAOS_SETUP_E2E_INSTALL_COMPLETE")
           PY
 

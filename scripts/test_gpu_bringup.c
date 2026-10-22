@@ -21,7 +21,7 @@ typedef struct test_context {
 static int prepare(void *opaque, unsigned stage)
 {
     test_context_t *ctx = (test_context_t *)opaque;
-    if (ctx->fail_prepare_at == stage)
+    if (ctx->fail_prepare_at == stage + 1U)
         return 0;
     ctx->prepared |= 1U << stage;
     return 1;
@@ -29,13 +29,13 @@ static int prepare(void *opaque, unsigned stage)
 static int verify(void *opaque, unsigned stage)
 {
     test_context_t *ctx = (test_context_t *)opaque;
-    return ctx->fail_verify_at != stage &&
+    return ctx->fail_verify_at != stage + 1U &&
            (ctx->prepared & (1U << stage)) != 0U;
 }
 static int rollback(void *opaque, unsigned stage)
 {
     test_context_t *ctx = (test_context_t *)opaque;
-    if (ctx->fail_rollback_at == stage)
+    if (ctx->fail_rollback_at == stage + 1U)
         return 0;
     ctx->rolled_back |= 1U << stage;
     ctx->prepared &= ~(1U << stage);
@@ -71,7 +71,7 @@ int main(void)
     assert(result.verified_capabilities == 7U);
     assert(result.rollback_complete == 1U);
 
-    ctx = (test_context_t){ .fail_verify_at = 2U };
+    ctx = (test_context_t){ .fail_verify_at = 3U };
     assert(gpu_bringup_execute(stages, 3U, &ctx, &result)
            == GPU_BRINGUP_VERIFY_FAILED);
     assert(result.failed_stage == 2U);
@@ -80,13 +80,13 @@ int main(void)
     assert(result.rollback_complete == 1U);
     assert(ctx.rolled_back == 7U);
 
-    ctx = (test_context_t){ .fail_prepare_at = 1U };
+    ctx = (test_context_t){ .fail_prepare_at = 2U };
     assert(gpu_bringup_execute(stages, 3U, &ctx, &result)
            == GPU_BRINGUP_STAGE_FAILED);
     assert(ctx.rolled_back == 3U);
     assert(result.verified_capabilities == 0U);
 
-    ctx = (test_context_t){ .fail_verify_at = 2U, .fail_rollback_at = 1U };
+    ctx = (test_context_t){ .fail_verify_at = 3U, .fail_rollback_at = 2U };
     assert(gpu_bringup_execute(stages, 3U, &ctx, &result)
            == GPU_BRINGUP_ROLLBACK_FAILED);
     assert(result.rollback_complete == 0U);

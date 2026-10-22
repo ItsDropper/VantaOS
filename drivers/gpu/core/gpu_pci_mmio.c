@@ -111,6 +111,34 @@ gpu_pci_mmio_status_t gpu_pci_mmio_map(
     return GPU_PCI_MMIO_OK;
 }
 
+gpu_pci_mmio_status_t gpu_pci_mmio_map_sized(
+    const struct pci_device *device, uint8_t bar_index, size_t map_length,
+    gpu_pci_mmio_mapping_t *out_mapping)
+{
+    uint16_t command;
+    uint64_t bar_size = 0U;
+
+    if (device == NULL || out_mapping == NULL || map_length == 0U ||
+        bar_index >= GPU_PCI_BAR_COUNT || out_mapping->active != 0U ||
+        out_mapping->mapping != NULL)
+        return GPU_PCI_MMIO_INVALID_ARGUMENT;
+
+    command = pci_read_config16(device, 0x04U);
+    if (command == 0xFFFFU)
+        return GPU_PCI_MMIO_RESOURCE_INVALID;
+    if ((command & GPU_PCI_COMMAND_BUS_MASTER) != 0U)
+        return GPU_PCI_MMIO_BUS_MASTER_ACTIVE;
+    /* pci_get_bar_size writes the sizing mask; decode must already be off. */
+    if ((command & 0x0003U) != 0U)
+        return GPU_PCI_MMIO_RESOURCE_INVALID;
+    if (!pci_get_bar_size(device, bar_index, &bar_size) || bar_size == 0U ||
+        bar_size > (uint64_t)SIZE_MAX || (uint64_t)map_length > bar_size)
+        return GPU_PCI_MMIO_RESOURCE_INVALID;
+
+    return gpu_pci_mmio_map(device, bar_index, (size_t)bar_size,
+                            map_length, out_mapping);
+}
+
 gpu_pci_mmio_status_t gpu_pci_mmio_unmap(gpu_pci_mmio_mapping_t *mapping)
 {
     gpu_pci_mmio_mapping_t saved;

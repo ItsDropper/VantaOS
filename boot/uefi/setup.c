@@ -1132,27 +1132,38 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
     serial_write("VANTAOS_SETUP_FINISH_ACTION_PROMPT\n");
     for (;;) {
         print_localized(&config,
-            L"Finish: R) reboot  S) shut down  Enter) return to firmware [R]: ",
-            L"Valmis: R) kaynnista uudelleen  S) sammuta  Enter) palaa laiteohjelmistoon [R]: ");
+            L"Finish: R) reboot after removing installer media  S) shut down  Enter) return to firmware [Enter]: ",
+            L"Valmis: R) kaynnista uudelleen asennusmedian poistamisen jalkeen  S) sammuta  Enter) palaa laiteohjelmistoon [Enter]: ");
         if (!read_line(line, sizeof(line)))
             return EFI_ABORTED;
         if (line[0] == '\0' ||
-            ((line[0] == 'r' || line[0] == 'R') && line[1] == '\0')) {
-            serial_write("VANTAOS_SETUP_REBOOT_REQUESTED\n");
-            (void)uefi_call_wrapper(RT->ResetSystem, 4,
-                                    EfiResetCold, EFI_SUCCESS, 0U, NULL);
+            ((line[0] == 'e' || line[0] == 'E') && line[1] == '\0')) {
+            print_localized(&config, L"Returning to firmware. Remove the installer media and select VantaOS.\r\n",
+                            L"Palataan laiteohjelmistoon. Poista asennusmedia ja valitse VantaOS.\r\n");
+            serial_write("VANTAOS_SETUP_EXIT_REQUESTED\n");
             return EFI_SUCCESS;
+        }
+        if ((line[0] == 'r' || line[0] == 'R') && line[1] == '\0') {
+            print_localized(&config,
+                L"Remove the installer USB or detach the ISO now. Type YES to reboot, anything else cancels: ",
+                L"Poista asennus-USB tai irrota ISO nyt. Kirjoita YES kaynnistaaksesi uudelleen, muu peruuttaa: ");
+            serial_write("VANTAOS_SETUP_REBOOT_CONFIRM_PROMPT\n");
+            if (!read_line(line, sizeof(line)))
+                return EFI_ABORTED;
+            if (line[0] == 'Y' && line[1] == 'E' && line[2] == 'S' && line[3] == '\0') {
+                serial_write("VANTAOS_SETUP_REBOOT_REQUESTED\n");
+                (void)uefi_call_wrapper(RT->ResetSystem, 4,
+                                        EfiResetCold, EFI_SUCCESS, 0U, NULL);
+                return EFI_SUCCESS;
+            }
+            print_localized(&config, L"Reboot cancelled; installation remains complete.\r\n",
+                            L"Uudelleenkaynnistys peruutettu; asennus on valmis.\r\n");
+            continue;
         }
         if ((line[0] == 's' || line[0] == 'S') && line[1] == '\0') {
             serial_write("VANTAOS_SETUP_SHUTDOWN_REQUESTED\n");
             (void)uefi_call_wrapper(RT->ResetSystem, 4,
                                     EfiResetShutdown, EFI_SUCCESS, 0U, NULL);
-            return EFI_SUCCESS;
-        }
-        if ((line[0] == 'e' || line[0] == 'E') && line[1] == '\0') {
-            print_localized(&config, L"Returning to firmware.\r\n",
-                            L"Palataan laiteohjelmistoon.\r\n");
-            serial_write("VANTAOS_SETUP_EXIT_REQUESTED\n");
             return EFI_SUCCESS;
         }
         print_localized(&config, L"Choose R, S, or Enter.\r\n",

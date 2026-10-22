@@ -134,6 +134,35 @@ int gpu_driver_start(gpu_device_t *device,
     return 1;
 }
 
+int gpu_driver_stop(gpu_device_t *device)
+{
+    if (device == NULL || device->state != GPU_DEVICE_RUNNING ||
+        device->ops == NULL || device->ops->quiesce == NULL ||
+        device->ops->shutdown == NULL)
+        return 0;
+
+    if (!gpu_device_transition(device, GPU_DEVICE_QUIESCING))
+        return 0;
+
+    if (!device->ops->quiesce(device)) {
+        gpu_device_clear_capabilities(device);
+        device->ops->shutdown(device);
+        device->ops = NULL;
+        (void)gpu_device_transition(device, GPU_DEVICE_FAILED);
+        return 0;
+    }
+
+    gpu_device_clear_capabilities(device);
+    device->ops->shutdown(device);
+    if (!gpu_device_transition(device, GPU_DEVICE_INITIALIZED)) {
+        device->ops = NULL;
+        (void)gpu_device_transition(device, GPU_DEVICE_FAILED);
+        return 0;
+    }
+    device->ops = NULL;
+    return 1;
+}
+
 int gpu_discover_pci(gpu_device_t *out_devices, size_t capacity,
                      size_t *out_count)
 {

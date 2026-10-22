@@ -35,7 +35,8 @@ gpu_irq_status_t gpu_irq_queue_init(gpu_irq_queue_t *queue,
 {
     if (queue == NULL || storage == NULL ||
         !gpu_irq_is_power_of_two(capacity) ||
-        capacity > (size_t)(UINT64_MAX / 2U))
+        capacity > (size_t)(UINT64_MAX / 2U) ||
+        capacity > SIZE_MAX / sizeof(*storage))
         return GPU_IRQ_INVALID_ARGUMENT;
     memset(queue, 0, sizeof(*queue));
     memset(storage, 0, capacity * sizeof(*storage));

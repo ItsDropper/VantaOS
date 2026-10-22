@@ -56,6 +56,7 @@ static int gpu_vm_validate_inputs(const gpu_va_allocation_t *va,
 gpu_vm_status_t gpu_vm_init(gpu_vm_t *vm, gpu_va_space_t *va_space,
                             const gpu_vm_ops_t *ops)
 {
+    uint32_t next_generation;
     if (vm == NULL || va_space == NULL || ops == NULL ||
         vm->initialized != 0U)
         return GPU_VM_INVALID_ARGUMENT;
@@ -63,12 +64,16 @@ gpu_vm_status_t gpu_vm_init(gpu_vm_t *vm, gpu_va_space_t *va_space,
         ops->unmap_page == NULL || ops->flush == NULL)
         return GPU_VM_INVALID_ARGUMENT;
 
+    /* Preserve generation across destroy/re-init so old handles never revive. */
+    next_generation = vm->generation + 1U;
+    if (next_generation == 0U)
+        next_generation = 1U;
     memset(vm, 0, sizeof(*vm));
     spinlock_init(&vm->lock);
     vm->va_space = va_space;
     vm->ops = *ops;
     vm->next_token = 1U;
-    vm->generation = 1U;
+    vm->generation = next_generation;
     vm->initialized = 1U;
     return GPU_VM_OK;
 }

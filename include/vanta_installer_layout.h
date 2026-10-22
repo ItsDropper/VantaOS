@@ -42,6 +42,12 @@ typedef struct {
  * Pure planner only: this function performs no I/O and cannot modify a disk.
  * The first milestone deliberately supports 512-byte logical sectors only.
  */
+vanta_installer_layout_status_t vanta_installer_plan_gpt_with_efi_size(
+    uint64_t disk_sector_count,
+    uint32_t logical_sector_size,
+    uint32_t efi_size_mib,
+    vanta_installer_layout_t *out_layout);
+
 vanta_installer_layout_status_t vanta_installer_plan_gpt(
     uint64_t disk_sector_count,
     uint32_t logical_sector_size,

@@ -497,7 +497,7 @@ int main(int argc, char** argv)
         set_status("Loaded saved preferences", COLOR_SUCCESS);
     load_installed_device_name();
 
-    vanta_gui_window_request request = {
+    vanta_gui_window_request_t request = {
         .width = WINDOW_WIDTH, .height = WINDOW_HEIGHT, .title = "Settings"
     };
     long created = vanta_gui_create_window(&request);

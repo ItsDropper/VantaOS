@@ -776,7 +776,8 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
         line[0] != 'I' || line[1] != 'N' || line[2] != 'S' ||
         line[3] != 'T' || line[4] != 'A' || line[5] != 'L' ||
         line[6] != 'L' || line[7] != '\0') {
-        Print(L"Cancelled. No disks changed.\r\n");
+        print_localized(&config, L"Cancelled. No disks changed.\r\n",
+                        L"Asennus peruutettu. Levyihin ei tehty muutoksia.\r\n");
         if (selected_path)
             uefi_call_wrapper(BS->FreePool, 1, selected_path);
         uefi_call_wrapper(source_root->Close, 1, source_root);

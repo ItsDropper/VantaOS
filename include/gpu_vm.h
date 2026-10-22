@@ -13,6 +13,7 @@
 #include "gpu_va.h"
 #include "spinlock.h"
 
+#define GPU_VM_PAGE_SIZE GPU_VA_PAGE_SIZE
 #define GPU_VM_MAX_MAPPINGS 128U
 #define GPU_VM_ACCESS_READ  1U
 #define GPU_VM_ACCESS_WRITE 2U

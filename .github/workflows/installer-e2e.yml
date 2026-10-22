@@ -155,6 +155,9 @@ jobs:
                   time.sleep(0.25)
 
               wait_marker("VANTAOS_SETUP_START")
+              wait_marker("VANTAOS_SETUP_MODE_PROMPT")
+              key("2")
+              key("ret")
               wait_marker("VANTAOS_SETUP_LANGUAGE_PROMPT")
               key("2")
               key("ret")

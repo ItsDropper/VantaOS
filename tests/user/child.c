@@ -281,14 +281,15 @@ int main(int argc, char** argv)
     }
 
     char ipc_reply[8] = {0};
-    long ipc_reply_length;
-    do
+    long ipc_reply_length = -VANTA_EAGAIN;
+    for (unsigned int retries = 0U;
+         retries < 500U && ipc_reply_length == -VANTA_EAGAIN; ++retries)
     {
         ipc_reply_length = vanta_ipc_receive((uint64_t)child_endpoint,
                                              ipc_reply, sizeof(ipc_reply));
         if (ipc_reply_length == -VANTA_EAGAIN)
             (void)vanta_yield();
-    } while (ipc_reply_length == -VANTA_EAGAIN);
+    }
     if (ipc_reply_length != 3L || ipc_reply[0] != 'a' ||
         ipc_reply[1] != 'c' || ipc_reply[2] != 'k' ||
         vanta_ipc_close((uint64_t)child_endpoint) != 0)

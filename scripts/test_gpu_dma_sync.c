@@ -5,10 +5,16 @@
  * See the LICENSE file in the project root for the full license text.
  */
 #include "gpu_dma_sync.h"
+#include "heap.h"
 
 #include <assert.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
+
+int heap_is_initialized(void) { return 1; }
+void *kmalloc(size_t size) { return malloc(size); }
+void kfree(void *ptr) { free(ptr); }
 
 static uint8_t memory[4096] __attribute__((aligned(4096)));
 static dma_page_t page = { memory, 0x200000U, 4096U };

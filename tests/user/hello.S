@@ -377,12 +377,22 @@ open_until_full:
     mov $(spawn_message_end - spawn_message), %esi
     int $0x80
 
-    /* Receive the child's endpoint token and send a reply across ring 3 processes. */
+    /* Receive the child's endpoint token, yielding while it starts. */
+    mov $500, %r10d
+ipc_receive_retry:
     mov $28, %eax
     mov %r15, %rdi
     lea child_endpoint_token(%rip), %rsi
     mov $8, %edx
     int $0x80
+    cmp $-11, %rax
+    jne ipc_receive_done
+    mov $9, %eax
+    int $0x80
+    dec %r10d
+    jnz ipc_receive_retry
+    jmp file_fail
+ipc_receive_done:
     cmp $8, %rax
     jne file_fail
     mov child_endpoint_token(%rip), %rdi

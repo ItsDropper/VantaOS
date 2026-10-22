@@ -85,10 +85,16 @@ gpu_register_status_t gpu_register_field_encode(gpu_register_field_t field,
 
     if (encoded == NULL || field.mask == 0U || field.shift >= 32U)
         return GPU_REGISTER_INVALID;
-    if ((field.mask & ((1U << field.shift) - 1U)) != 0U)
+    if ((field.mask & ((1U << field.shift) - 1U)) != 0U ||
+        (field.mask & (1U << field.shift)) == 0U)
         return GPU_REGISTER_INVALID;
-    if (value > (field.mask >> field.shift))
-        return GPU_REGISTER_INVALID;
+    {
+        uint32_t normalized = field.mask >> field.shift;
+        if ((normalized & (normalized + 1U)) != 0U)
+            return GPU_REGISTER_INVALID;
+        if (value > normalized)
+            return GPU_REGISTER_INVALID;
+    }
     shifted = value << field.shift;
     if ((shifted & ~field.mask) != 0U)
         return GPU_REGISTER_INVALID;

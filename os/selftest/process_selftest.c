@@ -555,10 +555,10 @@ void os_selftest_initialize(void)
 {
     if (!ipc_selftest())
     {
-        serial_write("VANTAOS_IPC_QUEUE_SELFTEST_FAIL\\n");
+        serial_write("VANTAOS_IPC_QUEUE_SELFTEST_FAIL\n");
         return;
     }
-    serial_write("VANTAOS_IPC_QUEUE_SELFTEST_OK\\n");
+    serial_write("VANTAOS_IPC_QUEUE_SELFTEST_OK\n");
     if (!process_idle_lifecycle_probe())
         return;
     memory_selftest_initialize();

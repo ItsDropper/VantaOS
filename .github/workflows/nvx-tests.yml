@@ -28,6 +28,8 @@ on:
       - "scripts/test_gpu_registers.c"
       - "include/gpu_engine.h"
       - "scripts/test_gpu_engine.c"
+      - "include/gpu_bringup.h"
+      - "scripts/test_gpu_bringup.c"
       - "scripts/test_gpu_pci_resources.c"
       - "drivers/gpu/intel/**"
       - "drivers/gpu/amd/**"
@@ -178,6 +180,12 @@ jobs:
 
       - name: Test GPU ring reservation, atomic packet publication, wraparound and fences
         run: /tmp/vantaos-gpu-engine-test
+
+      - name: Compile staged GPU bring-up and rollback tests
+        run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_gpu_bringup.c drivers/gpu/core/gpu_bringup.c -o /tmp/vantaos-gpu-bringup-test
+
+      - name: Test verified stage gates, reverse rollback and capability revocation
+        run: /tmp/vantaos-gpu-bringup-test
 
       - name: Compile GPU PCI BAR inventory tests with strict warnings
         run: |

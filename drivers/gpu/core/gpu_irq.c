@@ -19,9 +19,14 @@ int gpu_irq_queue_invariant(const gpu_irq_queue_t *queue)
     if (queue == NULL || queue->initialized == 0U ||
         queue->events == NULL || !gpu_irq_is_power_of_two(queue->capacity))
         return 0;
-    queued = queue->producer_sequence - queue->consumer_sequence;
-    return queued <= queue->capacity &&
-           queue->producer_sequence >= queue->consumer_sequence;
+    {
+        uint64_t producer = __atomic_load_n(&queue->producer_sequence,
+                                            __ATOMIC_ACQUIRE);
+        uint64_t consumer = __atomic_load_n(&queue->consumer_sequence,
+                                            __ATOMIC_ACQUIRE);
+        queued = producer - consumer;
+        return producer >= consumer && queued <= queue->capacity;
+    }
 }
 
 gpu_irq_status_t gpu_irq_queue_init(gpu_irq_queue_t *queue,
@@ -44,16 +49,16 @@ gpu_irq_status_t gpu_irq_queue_enable(gpu_irq_queue_t *queue)
 {
     if (!gpu_irq_queue_invariant(queue))
         return GPU_IRQ_INVALID_ARGUMENT;
-    if (queue->device_lost != 0U)
+    if (__atomic_load_n(&queue->device_lost, __ATOMIC_ACQUIRE) != 0U)
         return GPU_IRQ_DEVICE_LOST;
-    queue->enabled = 1U;
+    __atomic_store_n(&queue->enabled, 1U, __ATOMIC_RELEASE);
     return GPU_IRQ_OK;
 }
 
 void gpu_irq_queue_disable(gpu_irq_queue_t *queue)
 {
     if (queue != NULL)
-        queue->enabled = 0U;
+        __atomic_store_n(&queue->enabled, 0U, __ATOMIC_RELEASE);
 }
 
 gpu_irq_status_t gpu_irq_push(gpu_irq_queue_t *queue,
@@ -66,38 +71,48 @@ gpu_irq_status_t gpu_irq_push(gpu_irq_queue_t *queue,
         return GPU_IRQ_INVALID_ARGUMENT;
     if (!gpu_irq_queue_invariant(queue))
         return GPU_IRQ_NOT_INITIALIZED;
-    if (queue->enabled == 0U)
+    if (__atomic_load_n(&queue->enabled, __ATOMIC_ACQUIRE) == 0U)
         return GPU_IRQ_NOT_READY;
-    if (queue->device_lost != 0U)
+    if (__atomic_load_n(&queue->device_lost, __ATOMIC_ACQUIRE) != 0U)
         return GPU_IRQ_DEVICE_LOST;
     if (event->type < GPU_IRQ_EVENT_COMPLETION ||
         event->type > GPU_IRQ_EVENT_DEVICE_LOST)
         return GPU_IRQ_INVALID_ARGUMENT;
-    if (queue->producer_sequence > UINT64_MAX - queue->capacity) {
-        queue->device_lost = 1U;
-        queue->enabled = 0U;
-        return GPU_IRQ_OVERFLOW;
+    {
+        uint64_t producer = __atomic_load_n(&queue->producer_sequence,
+                                            __ATOMIC_RELAXED);
+        uint64_t consumer = __atomic_load_n(&queue->consumer_sequence,
+                                            __ATOMIC_ACQUIRE);
+        if (producer > UINT64_MAX - queue->capacity) {
+            __atomic_store_n(&queue->device_lost, 1U, __ATOMIC_RELEASE);
+            __atomic_store_n(&queue->enabled, 0U, __ATOMIC_RELEASE);
+            return GPU_IRQ_OVERFLOW;
+        }
+        queued = producer - consumer;
     }
-
-    queued = queue->producer_sequence - queue->consumer_sequence;
     if (queued >= queue->capacity) {
-        ++queue->dropped_events;
+        (void)__atomic_add_fetch(&queue->dropped_events, 1U,
+                                 __ATOMIC_RELAXED);
         if (event->type == GPU_IRQ_EVENT_DEVICE_LOST) {
-            queue->device_lost = 1U;
-            queue->enabled = 0U;
+            __atomic_store_n(&queue->device_lost, 1U, __ATOMIC_RELEASE);
+            __atomic_store_n(&queue->enabled, 0U, __ATOMIC_RELEASE);
         }
         return GPU_IRQ_FULL;
     }
 
     copy = *event;
-    copy.sequence = queue->producer_sequence;
-    queue->events[(size_t)(queue->producer_sequence &
-                           (uint64_t)(queue->capacity - 1U))] = copy;
-    __atomic_thread_fence(__ATOMIC_RELEASE);
-    ++queue->producer_sequence;
+    {
+        uint64_t producer = __atomic_load_n(&queue->producer_sequence,
+                                            __ATOMIC_RELAXED);
+        copy.sequence = producer;
+        queue->events[(size_t)(producer &
+                               (uint64_t)(queue->capacity - 1U))] = copy;
+        __atomic_store_n(&queue->producer_sequence, producer + 1U,
+                         __ATOMIC_RELEASE);
+    }
     if (event->type == GPU_IRQ_EVENT_DEVICE_LOST) {
-        queue->device_lost = 1U;
-        queue->enabled = 0U;
+        __atomic_store_n(&queue->device_lost, 1U, __ATOMIC_RELEASE);
+        __atomic_store_n(&queue->enabled, 0U, __ATOMIC_RELEASE);
     }
     return GPU_IRQ_OK;
 }
@@ -110,13 +125,19 @@ gpu_irq_status_t gpu_irq_pop(gpu_irq_queue_t *queue,
         return GPU_IRQ_INVALID_ARGUMENT;
     if (!gpu_irq_queue_invariant(queue))
         return GPU_IRQ_NOT_INITIALIZED;
-    queued = queue->producer_sequence - queue->consumer_sequence;
-    if (queued == 0U)
-        return GPU_IRQ_EMPTY;
-    __atomic_thread_fence(__ATOMIC_ACQUIRE);
-    *event = queue->events[(size_t)(queue->consumer_sequence &
-                                    (uint64_t)(queue->capacity - 1U))];
-    ++queue->consumer_sequence;
+    {
+        uint64_t consumer = __atomic_load_n(&queue->consumer_sequence,
+                                            __ATOMIC_RELAXED);
+        uint64_t producer = __atomic_load_n(&queue->producer_sequence,
+                                            __ATOMIC_ACQUIRE);
+        queued = producer - consumer;
+        if (queued == 0U)
+            return GPU_IRQ_EMPTY;
+        *event = queue->events[(size_t)(consumer &
+                                        (uint64_t)(queue->capacity - 1U))];
+        __atomic_store_n(&queue->consumer_sequence, consumer + 1U,
+                         __ATOMIC_RELEASE);
+    }
     return GPU_IRQ_OK;
 }
 
@@ -140,8 +161,8 @@ gpu_irq_status_t gpu_irq_drain(gpu_irq_queue_t *queue, size_t max_events,
             return status;
         ++processed;
         if (!dispatch(context, &event)) {
-            queue->device_lost = 1U;
-            queue->enabled = 0U;
+            __atomic_store_n(&queue->device_lost, 1U, __ATOMIC_RELEASE);
+            __atomic_store_n(&queue->enabled, 0U, __ATOMIC_RELEASE);
             *out_processed = processed;
             return GPU_IRQ_DISPATCH_FAILED;
         }
@@ -154,8 +175,8 @@ gpu_irq_status_t gpu_irq_mark_device_lost(gpu_irq_queue_t *queue)
 {
     if (queue == NULL || !gpu_irq_queue_invariant(queue))
         return GPU_IRQ_INVALID_ARGUMENT;
-    queue->device_lost = 1U;
-    queue->enabled = 0U;
+    __atomic_store_n(&queue->device_lost, 1U, __ATOMIC_RELEASE);
+    __atomic_store_n(&queue->enabled, 0U, __ATOMIC_RELEASE);
     return GPU_IRQ_OK;
 }
 
@@ -163,12 +184,12 @@ gpu_irq_status_t gpu_irq_reset(gpu_irq_queue_t *queue)
 {
     if (queue == NULL || !gpu_irq_queue_invariant(queue))
         return GPU_IRQ_INVALID_ARGUMENT;
-    if (queue->enabled != 0U)
+    if (__atomic_load_n(&queue->enabled, __ATOMIC_ACQUIRE) != 0U)
         return GPU_IRQ_NOT_READY;
     memset(queue->events, 0, queue->capacity * sizeof(queue->events[0]));
-    queue->producer_sequence = 0U;
-    queue->consumer_sequence = 0U;
-    queue->dropped_events = 0U;
-    queue->device_lost = 0U;
+    __atomic_store_n(&queue->producer_sequence, 0U, __ATOMIC_RELAXED);
+    __atomic_store_n(&queue->consumer_sequence, 0U, __ATOMIC_RELAXED);
+    __atomic_store_n(&queue->dropped_events, 0U, __ATOMIC_RELAXED);
+    __atomic_store_n(&queue->device_lost, 0U, __ATOMIC_RELEASE);
     return GPU_IRQ_OK;
 }

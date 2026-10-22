@@ -61,6 +61,7 @@ typedef struct
 
 /* Negative return values currently emitted by the kernel ABI. */
 #define VANTA_EPERM       1
+#define VANTA_ESRCH       3
 #define VANTA_ENOENT      2
 #define VANTA_EIO         5
 #define VANTA_ENODEV     19
@@ -71,6 +72,20 @@ typedef struct
 #define VANTA_EMFILE     24
 #define VANTA_ENOMEM     12
 #define VANTA_ENOEXEC     8
+#define VANTA_EAGAIN     11
+#define VANTA_EMSGSIZE   90
+
+static inline long vanta_syscall3(
+    long number, uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
+{
+    long result = number;
+    __asm__ volatile (
+        "int $0x80"
+        : "+a"(result)
+        : "D"(arg1), "S"(arg2), "d"(arg3)
+        : "memory", "cc");
+    return result;
+}
 
 static inline long vanta_ipc_send(uint32_t target_pid,
                                   const void *payload, size_t length)
@@ -86,17 +101,6 @@ static inline long vanta_ipc_receive(uint32_t sender_filter,
                           (uintptr_t)message, 0U);
 }
 
-static inline long vanta_syscall3(
-    long number, uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
-{
-    long result = number;
-    __asm__ volatile (
-        "int $0x80"
-        : "+a"(result)
-        : "D"(arg1), "S"(arg2), "d"(arg3)
-        : "memory", "cc");
-    return result;
-}
 
 static inline long vanta_write(const void* buffer, size_t length)
 {

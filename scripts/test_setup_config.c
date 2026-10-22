@@ -9,6 +9,7 @@
 
 #include <assert.h>
 #include <stdio.h>
+#include <string.h>
 
 static void test_round_trip(void)
 {
@@ -36,6 +37,9 @@ static void test_supported_timezones(void)
     assert(vanta_setup_timezone_count() == 36U);
     assert(vanta_setup_timezone_at(0U) != NULL);
     assert(vanta_setup_timezone_at(36U) == NULL);
+    assert(strcmp(vanta_setup_timezone_at(0U), "Europe/Helsinki") == 0);
+    assert(strcmp(vanta_setup_timezone_at(1U), "Etc/UTC") == 0);
+    assert(strcmp(vanta_setup_timezone_at(35U), "Europe/London") == 0);
     assert(vanta_setup_timezone_supported(vanta_setup_timezone_at(0U)));
     assert(vanta_setup_timezone_supported(vanta_setup_timezone_at(35U)));
     assert(vanta_setup_timezone_supported("Europe/Helsinki"));

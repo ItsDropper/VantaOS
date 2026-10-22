@@ -104,10 +104,11 @@ int main(void)
     assert(gpu_engine_runtime_submit(&runtime, words, 2U, validate, publish,
                                      NULL) == GPU_ENGINE_RUNTIME_INVALID);
     fail_publish = 0;
-    /* Device failure means the backend must explicitly quiesce before freeing. */
+    /* Device failure means teardown must prove the backend has quiesced. */
     assert(gpu_engine_runtime_update_consumer(&runtime, 2U) ==
            GPU_ENGINE_RUNTIME_NOT_READY);
     assert(gpu_engine_runtime_destroy(&runtime, quiesce, NULL) ==
-           GPU_ENGINE_RUNTIME_NOT_READY);
+           GPU_ENGINE_RUNTIME_OK);
+    assert(!runtime.initialized && frees == 2U);
     return 0;
 }

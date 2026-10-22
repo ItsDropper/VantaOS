@@ -44,6 +44,10 @@ gpu_pci_mmio_status_t gpu_pci_mmio_map(
     const struct pci_device *device, uint8_t bar_index,
     size_t audited_bar_size, size_t map_length,
     gpu_pci_mmio_mapping_t *out_mapping);
+/* Sizes the BAR only when all PCI decode and bus-master bits are disabled. */
+gpu_pci_mmio_status_t gpu_pci_mmio_map_sized(
+    const struct pci_device *device, uint8_t bar_index, size_t map_length,
+    gpu_pci_mmio_mapping_t *out_mapping);
 /* Unmaps exactly the acquired range and clears only decode this call enabled. */
 gpu_pci_mmio_status_t gpu_pci_mmio_unmap(gpu_pci_mmio_mapping_t *mapping);
 

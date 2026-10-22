@@ -9,6 +9,20 @@
 #include <assert.h>
 #include <stdint.h>
 
+static int publish_ok(void *context, uint64_t sequence)
+{
+    uint64_t *observed = (uint64_t *)context;
+    *observed = sequence;
+    return 1;
+}
+
+static int publish_fail(void *context, uint64_t sequence)
+{
+    (void)context;
+    (void)sequence;
+    return 0;
+}
+
 int main(void)
 {
     uint32_t storage[8] = {0U};
@@ -16,7 +30,7 @@ int main(void)
     gpu_engine_transaction_t tx;
     gpu_engine_snapshot_t snap;
     size_t consumed = 0U;
-    uint64_t fence = 0U;
+    uint64_t fence = 0U, published_sequence = 0U;
 
     assert(gpu_engine_ring_init(NULL, storage, 8U) == GPU_ENGINE_INVALID);
     assert(gpu_engine_ring_init(&ring, storage, 3U) == GPU_ENGINE_INVALID);
@@ -48,6 +62,16 @@ int main(void)
     assert(storage[3] == 0x40000000U && storage[6] == 0x70000000U);
     assert(gpu_engine_issue_fence(&ring, &fence) == GPU_ENGINE_OK);
     assert(fence == 1U);
+    assert(gpu_engine_reserve(&ring, 1U, &tx) == GPU_ENGINE_OK);
+    assert(gpu_engine_emit(&tx, 0xABCDEF01U) == GPU_ENGINE_OK);
+    assert(gpu_engine_submit(&tx, publish_ok, &published_sequence) == GPU_ENGINE_OK);
+    assert(published_sequence == 8U);
+    assert(gpu_engine_reserve(&ring, 1U, &tx) == GPU_ENGINE_OK);
+    assert(gpu_engine_emit(&tx, 0xABCDEF02U) == GPU_ENGINE_OK);
+    assert(gpu_engine_submit(&tx, publish_fail, NULL) == GPU_ENGINE_DEVICE_ERROR);
+    assert(ring.submission_enabled == 0U);
+    assert(ring.write_sequence == 8U);
+    assert(gpu_engine_ring_enable(&ring) == GPU_ENGINE_OK);
     assert(gpu_engine_complete_fence(&ring, 2U) == GPU_ENGINE_STALE_FENCE);
     assert(gpu_engine_complete_fence(&ring, fence) == GPU_ENGINE_OK);
     assert(gpu_engine_complete_fence(&ring, fence - 1U) == GPU_ENGINE_INVALID);

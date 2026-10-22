@@ -150,6 +150,11 @@ int main(void)
     assert(intel_desc.mmio_aperture_enabled == 0U);
     assert(gpu_driver_matches(intel_gpu_driver(), &intel));
     assert(!gpu_driver_matches(intel_gpu_driver(), &amd));
+    assert(gpu_classify_pci_function(&intel, &match));
+    assert(gpu_device_construct(&device, &intel, &match));
+    assert(!gpu_driver_start(&device, intel_gpu_driver()));
+    assert(device.state == GPU_DEVICE_FAILED);
+    assert(device.verified_capabilities == 0U);
 
     assert(gpu_classify_pci_function(&amd, &match));
     assert(match.vendor == GPU_VENDOR_AMD);
@@ -162,6 +167,10 @@ int main(void)
     assert(amd_desc.mmio_aperture_enabled == 0U);
     assert(gpu_driver_matches(amd_gpu_driver(), &amd));
     assert(!gpu_driver_matches(amd_gpu_driver(), &intel));
+    assert(gpu_device_construct(&device, &amd, &match));
+    assert(!gpu_driver_start(&device, amd_gpu_driver()));
+    assert(device.state == GPU_DEVICE_FAILED);
+    assert(device.verified_capabilities == 0U);
 
     assert(gpu_classify_pci_function(&unknown_intel, &match));
     assert(match.vendor == GPU_VENDOR_INTEL);

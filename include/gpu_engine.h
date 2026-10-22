@@ -18,7 +18,8 @@ typedef enum gpu_engine_status {
     GPU_ENGINE_BAD_PACKET,
     GPU_ENGINE_NO_FENCE,
     GPU_ENGINE_STALE_FENCE,
-    GPU_ENGINE_DEVICE_ERROR
+    GPU_ENGINE_DEVICE_ERROR,
+    GPU_ENGINE_STALE_CONSUMER
 } gpu_engine_status_t;
 
 typedef struct gpu_engine_ring {
@@ -72,6 +73,9 @@ gpu_engine_status_t gpu_engine_submit(gpu_engine_transaction_t *transaction,
 void gpu_engine_abort(gpu_engine_transaction_t *transaction);
 gpu_engine_status_t gpu_engine_consume(gpu_engine_ring_t *ring,
                                        size_t max_words, size_t *consumed);
+/* Accepts an extended monotonic hardware read sequence, not a wrapped index. */
+gpu_engine_status_t gpu_engine_update_consumer(gpu_engine_ring_t *ring,
+                                               uint64_t read_sequence);
 gpu_engine_status_t gpu_engine_issue_fence(gpu_engine_ring_t *ring,
                                            uint64_t *fence);
 gpu_engine_status_t gpu_engine_complete_fence(gpu_engine_ring_t *ring,

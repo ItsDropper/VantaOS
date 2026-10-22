@@ -51,19 +51,17 @@ void gpu_initialize(void)
         serial_write(gpu_architecture_name(devices[i].architecture));
         serial_write("\n");
 
-        /* No MMIO, reset, firmware, or DMA until an ASIC-specific backend is verified. */
-        if (devices[i].vendor == GPU_VENDOR_INTEL) {
-            intel_gpu_descriptor_t descriptor;
-            if (!intel_gpu_describe(devices[i].pci_device, &descriptor))
-                serial_write("GPU: Intel resource inventory rejected\n");
-            else if (!descriptor.mmio_aperture_enabled)
-                serial_write("GPU: Intel MMIO aperture not enabled/assigned\n");
-        } else if (devices[i].vendor == GPU_VENDOR_AMD) {
-            amd_gpu_descriptor_t descriptor;
-            if (!amd_gpu_describe(devices[i].pci_device, &descriptor))
-                serial_write("GPU: AMD resource inventory rejected\n");
-            else if (!descriptor.mmio_aperture_enabled)
-                serial_write("GPU: AMD MMIO aperture not enabled/assigned\n");
+        /* Route known vendors through the common fail-closed lifecycle. */
+        const gpu_driver_descriptor_t *driver = NULL;
+        if (devices[i].vendor == GPU_VENDOR_INTEL)
+            driver = intel_gpu_driver();
+        else if (devices[i].vendor == GPU_VENDOR_AMD)
+            driver = amd_gpu_driver();
+        if (driver != NULL) {
+            if (!gpu_driver_start(&devices[i], driver))
+                serial_write("GPU: backend refused initialization; firmware/engine path unavailable\\n");
+            else
+                serial_write("GPU: backend running (verified capabilities only)\\n");
         }
     }
 }

@@ -24,6 +24,10 @@ on:
       - "include/gpu_pci_resources.h"
       - "include/gpu_mmio.h"
       - "scripts/test_gpu_mmio.c"
+      - "include/gpu_registers.h"
+      - "scripts/test_gpu_registers.c"
+      - "include/gpu_engine.h"
+      - "scripts/test_gpu_engine.c"
       - "scripts/test_gpu_pci_resources.c"
       - "drivers/gpu/intel/**"
       - "drivers/gpu/amd/**"
@@ -162,6 +166,18 @@ jobs:
 
       - name: Test shared GPU MMIO bounds, alignment, reads and writes
         run: /tmp/vantaos-gpu-mmio-test
+
+      - name: Compile bounded GPU register transaction tests
+        run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_gpu_registers.c drivers/gpu/core/gpu_registers.c drivers/gpu/core/gpu_mmio.c -o /tmp/vantaos-gpu-registers-test
+
+      - name: Test GPU register fields, polling and verified sequences
+        run: /tmp/vantaos-gpu-registers-test
+
+      - name: Compile generic GPU command ring and fence tests
+        run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_gpu_engine.c drivers/gpu/core/gpu_engine.c -o /tmp/vantaos-gpu-engine-test
+
+      - name: Test GPU ring reservation, atomic packet publication, wraparound and fences
+        run: /tmp/vantaos-gpu-engine-test
 
       - name: Compile GPU PCI BAR inventory tests with strict warnings
         run: |

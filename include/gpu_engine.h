@@ -17,7 +17,8 @@ typedef enum gpu_engine_status {
     GPU_ENGINE_FULL,
     GPU_ENGINE_BAD_PACKET,
     GPU_ENGINE_NO_FENCE,
-    GPU_ENGINE_STALE_FENCE
+    GPU_ENGINE_STALE_FENCE,
+    GPU_ENGINE_DEVICE_ERROR
 } gpu_engine_status_t;
 
 typedef struct gpu_engine_ring {
@@ -40,6 +41,8 @@ typedef struct gpu_engine_transaction {
     uint8_t active;
 } gpu_engine_transaction_t;
 
+typedef int (*gpu_engine_publish_fn)(void *context, uint64_t new_write_sequence);
+
 typedef struct gpu_engine_snapshot {
     size_t capacity_words;
     size_t queued_words;
@@ -60,6 +63,10 @@ gpu_engine_status_t gpu_engine_reserve(gpu_engine_ring_t *ring,
 gpu_engine_status_t gpu_engine_emit(gpu_engine_transaction_t *transaction,
                                     uint32_t word);
 gpu_engine_status_t gpu_engine_commit(gpu_engine_transaction_t *transaction);
+/* Backend callback performs platform ordering and writes the hardware tail/doorbell. */
+gpu_engine_status_t gpu_engine_submit(gpu_engine_transaction_t *transaction,
+                                      gpu_engine_publish_fn publish,
+                                      void *context);
 void gpu_engine_abort(gpu_engine_transaction_t *transaction);
 gpu_engine_status_t gpu_engine_consume(gpu_engine_ring_t *ring,
                                        size_t max_words, size_t *consumed);

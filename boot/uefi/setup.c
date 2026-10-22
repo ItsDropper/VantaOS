@@ -685,6 +685,26 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
     }
     config.timezone[zone_length] = '\0';
 
+    serial_write("VANTAOS_SETUP_PARTITION_SIZE_PROMPT\n");
+    print_localized(&config,
+        L"EFI partition size: 1) 512 MiB (recommended)  2) 256 MiB [1]: ",
+        L"EFI-osion koko: 1) 512 MiB (suositus)  2) 256 MiB [1]: ");
+    for (;;) {
+        if (!read_line(line, sizeof(line))) {
+            uefi_call_wrapper(source_root->Close, 1, source_root);
+            return EFI_ABORTED;
+        }
+        if (line[0] == '\0' || (line[0] == '1' && line[1] == '\0')) {
+            efi_size_mib = 512U;
+            break;
+        }
+        if (line[0] == '2' && line[1] == '\0') {
+            efi_size_mib = 256U;
+            break;
+        }
+        print_localized(&config, L"Choose 1 or 2.\r\n", L"Valitse 1 tai 2.\r\n");
+    }
+
     if (!vanta_setup_config_valid(&config)) {
         Print(L"ERROR: setup preferences failed validation.\r\n");
         uefi_call_wrapper(source_root->Close, 1, source_root);
@@ -707,29 +727,11 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
         Print(L"  Time zone: %a\r\n", config.timezone);
     }
     print_localized(&config, L"  Partition scheme: GPT (UEFI)\r\n", L"  Osiointitapa: GPT (UEFI)\r\n");
+    print_localized(&config, L"  EFI partition size: ", L"  EFI-osion koko: ");
+    Print(L"%u MiB\\r\\n", efi_size_mib);
     print_localized(&config, L"  Filesystems: FAT32 EFI System Partition + FAT32 system partition\r\n", L"  Tiedostojarjestelmat: FAT32 EFI-osio ja FAT32 jarjestelmaosio\r\n");
     print_localized(&config, L"  Setup preferences will be saved to \\SYSTEM\\SETUP.CFG.\r\n", L"  Asetukset tallennetaan tiedostoon \\SYSTEM\\SETUP.CFG.\r\n");
     print_localized(&config, L"  Device name is shown in Settings. Language and keyboard are saved preferences; runtime localization/keymap integration is not yet implemented. The selected time zone is saved but not applied to the active clock.\r\n\r\n", L"  Laitteen nimi naytetaan Asetuksissa. Kieli ja nappaimisto tallennetaan asetuksiksi, mutta niita ei viela sovelleta kayttojarjestelmassa. Aikavyohyke tallennetaan, mutta sita ei viela sovelleta kelloon.\r\n\r\n");
-
-    serial_write("VANTAOS_SETUP_PARTITION_SIZE_PROMPT\n");
-    print_localized(&config,
-        L"EFI partition size: 1) 512 MiB (recommended)  2) 256 MiB [1]: ",
-        L"EFI-osion koko: 1) 512 MiB (suositus)  2) 256 MiB [1]: ");
-    for (;;) {
-        if (!read_line(line, sizeof(line))) {
-            uefi_call_wrapper(source_root->Close, 1, source_root);
-            return EFI_ABORTED;
-        }
-        if (line[0] == '\\0' || (line[0] == '1' && line[1] == '\\0')) {
-            efi_size_mib = 512U;
-            break;
-        }
-        if (line[0] == '2' && line[1] == '\\0') {
-            efi_size_mib = 256U;
-            break;
-        }
-        print_localized(&config, L"Choose 1 or 2.\r\n", L"Valitse 1 tai 2.\r\n");
-    }
 
     setup_disk_t disks[SETUP_MAX_DISKS];
     UINTN disk_count = 0U;

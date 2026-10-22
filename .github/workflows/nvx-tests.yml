@@ -22,6 +22,8 @@ on:
       - "scripts/test_nvx_gsp_fwsec_result.c"
       - "drivers/gpu/core/**"
       - "include/gpu_pci_resources.h"
+      - "include/gpu_mmio.h"
+      - "scripts/test_gpu_mmio.c"
       - "scripts/test_gpu_pci_resources.c"
       - "drivers/gpu/intel/**"
       - "drivers/gpu/amd/**"
@@ -154,6 +156,15 @@ jobs:
 
       - name: Test GPU classification, lifecycle and fail-closed capabilities
         run: /tmp/vantaos-gpu-vendor-framework-test
+
+      - name: Compile shared GPU MMIO access tests with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \\
+            scripts/test_gpu_mmio.c drivers/gpu/core/gpu_mmio.c \\
+            -o /tmp/vantaos-gpu-mmio-test
+
+      - name: Test shared GPU MMIO bounds, alignment, reads and writes
+        run: /tmp/vantaos-gpu-mmio-test
 
       - name: Compile GPU PCI BAR inventory tests with strict warnings
         run: |

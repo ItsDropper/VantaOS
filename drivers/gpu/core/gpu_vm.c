@@ -35,12 +35,12 @@ static int gpu_vm_validate_inputs(const gpu_va_allocation_t *va,
                                   const gpu_dma_buffer_t *dma,
                                   unsigned access)
 {
-    if (va == NULL || dma == NULL || va->valid == 0U ||
-        va->base == 0U || va->size == 0U ||
+    if (va == NULL || va->valid == 0U || va->base == 0U ||
+        va->size == 0U ||
         (va->base & (GPU_VA_PAGE_SIZE - 1U)) != 0U ||
         (va->size & (GPU_VA_PAGE_SIZE - 1U)) != 0U)
         return 0;
-    if (!gpu_dma_buffer_is_valid(dma) ||
+    if (dma == NULL || !gpu_dma_buffer_is_valid(dma) ||
         dma->allocated_size == 0U ||
         dma->allocated_size > va->size ||
         dma->allocated_size != dma->page_count * GPU_DMA_PAGE_SIZE)
@@ -90,8 +90,15 @@ gpu_vm_status_t gpu_vm_map_dma(gpu_vm_t *vm,
     out_handle->generation = 0U;
     if (vm == NULL || vm->initialized == 0U)
         return GPU_VM_NOT_INITIALIZED;
-    if (!gpu_vm_validate_inputs(va, dma, access))
+    if (va == NULL || va->valid == 0U || va->base == 0U ||
+        va->size == 0U ||
+        (va->base & (GPU_VA_PAGE_SIZE - 1U)) != 0U ||
+        (va->size & (GPU_VA_PAGE_SIZE - 1U)) != 0U)
+        return GPU_VM_VA_INVALID;
+    if (dma == NULL || !gpu_dma_buffer_is_valid(dma))
         return GPU_VM_DMA_INVALID;
+    if (!gpu_vm_validate_inputs(va, dma, access))
+        return GPU_VM_INVALID_ARGUMENT;
 
     flags = spinlock_lock_irqsave(&vm->lock);
     if (vm->faulted != 0U) {

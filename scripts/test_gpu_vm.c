@@ -182,7 +182,7 @@ int main(void)
     assert(gpu_vm_map_dma(&vm, &va, &dma, GPU_VM_ACCESS_READ, &handle) ==
            GPU_VM_OK);
     assert(handle.generation != stale_handle.generation);
-    assert(gpu_vm_unmap(&vm, &stale_handle) == GPU_VM_INVALID_HANDLE);
+    assert(gpu_vm_unmap(&vm, &stale_handle) == GPU_VM_STALE_HANDLE);
     assert(gpu_vm_unmap(&vm, &handle) == GPU_VM_OK);
     assert(gpu_va_free(&va_space, &va) == GPU_VA_OK);
     gpu_dma_release(&dma);

@@ -14,7 +14,7 @@
 /*
  * Software GPU virtual-address reservation allocator.
  *
- * This manages address-space ownership only. It does not construct NVIDIA
+ * This manages address-space ownership only. It does not construct vendor-specific
  * page tables, map physical pages into the GPU, or make the device able to
  * access the returned addresses. Callers must establish page-table mappings
  * with a separately verified architecture-specific implementation.

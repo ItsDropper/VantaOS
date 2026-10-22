@@ -1032,10 +1032,33 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
                     L"\r\nVantaOS-asennus valmistui.\r\n");
     print_localized(&config, L"Remove the installer media, then reboot and choose the installed disk.\r\n",
                     L"Irrota asennusmedia, kaynnista uudelleen ja valitse asennettu levy.\r\n");
-    print_localized(&config, L"Press any key to restart...\r\n",
-                    L"Kaynnista uudelleen painamalla mita tahansa nappainta...\r\n");
-    EFI_INPUT_KEY key;
-    (void)uefi_call_wrapper(ST->ConIn->ReadKeyStroke, 2, ST->ConIn, &key);
-    (void)uefi_call_wrapper(RT->ResetSystem, 4, EfiResetCold, EFI_SUCCESS, 0U, NULL);
-    return EFI_SUCCESS;
+    serial_write("VANTAOS_SETUP_FINISH_ACTION_PROMPT\n");
+    for (;;) {
+        print_localized(&config,
+            L"Finish: R) reboot  S) shut down  Enter) return to firmware [R]: ",
+            L"Valmis: R) kaynnista uudelleen  S) sammuta  Enter) palaa laiteohjelmistoon [R]: ");
+        if (!read_line(line, sizeof(line)))
+            return EFI_ABORTED;
+        if (line[0] == '\0' ||
+            ((line[0] == 'r' || line[0] == 'R') && line[1] == '\0')) {
+            serial_write("VANTAOS_SETUP_REBOOT_REQUESTED\n");
+            (void)uefi_call_wrapper(RT->ResetSystem, 4,
+                                    EfiResetCold, EFI_SUCCESS, 0U, NULL);
+            return EFI_SUCCESS;
+        }
+        if ((line[0] == 's' || line[0] == 'S') && line[1] == '\0') {
+            serial_write("VANTAOS_SETUP_SHUTDOWN_REQUESTED\n");
+            (void)uefi_call_wrapper(RT->ResetSystem, 4,
+                                    EfiResetShutdown, EFI_SUCCESS, 0U, NULL);
+            return EFI_SUCCESS;
+        }
+        if ((line[0] == 'e' || line[0] == 'E') && line[1] == '\0') {
+            print_localized(&config, L"Returning to firmware.\r\n",
+                            L"Palataan laiteohjelmistoon.\r\n");
+            serial_write("VANTAOS_SETUP_EXIT_REQUESTED\n");
+            return EFI_SUCCESS;
+        }
+        print_localized(&config, L"Choose R, S, or Enter.\r\n",
+                        L"Valitse R, S tai Enter.\r\n");
+    }
 }

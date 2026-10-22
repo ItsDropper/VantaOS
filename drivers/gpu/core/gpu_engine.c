@@ -116,6 +116,7 @@ gpu_engine_status_t gpu_engine_commit(gpu_engine_transaction_t *transaction)
 }
 
 gpu_engine_status_t gpu_engine_submit(gpu_engine_transaction_t *transaction,
+                                      gpu_engine_validate_fn validate,
                                       gpu_engine_publish_fn publish,
                                       void *context)
 {
@@ -123,7 +124,7 @@ gpu_engine_status_t gpu_engine_submit(gpu_engine_transaction_t *transaction,
     uint64_t new_sequence;
 
     if (transaction == NULL || transaction->active == 0U ||
-        transaction->ring == NULL || publish == NULL)
+        transaction->ring == NULL || validate == NULL || publish == NULL)
         return GPU_ENGINE_INVALID;
     ring = transaction->ring;
     if (transaction->written_words != transaction->reserved_words ||
@@ -132,6 +133,10 @@ gpu_engine_status_t gpu_engine_submit(gpu_engine_transaction_t *transaction,
     if (ring->write_sequence > UINT64_MAX - transaction->written_words)
         return GPU_ENGINE_INVALID;
     new_sequence = ring->write_sequence + transaction->written_words;
+
+    /* Vendor-specific packet validation must pass before any hardware side effect. */
+    if (!validate(transaction))
+        return GPU_ENGINE_BAD_PACKET;
 
     /* The backend must order packet memory before publishing its hardware tail. */
     if (!publish(context, new_sequence)) {

@@ -60,27 +60,36 @@ static int copy_text(char *destination, size_t capacity,
     return 1;
 }
 
+static const char *const supported_timezones[] = {
+    "Europe/Helsinki", "Etc/UTC", "Europe/Stockholm", "Europe/Oslo",
+    "Europe/Copenhagen", "Europe/Berlin", "Europe/Paris", "Europe/Madrid",
+    "Europe/Rome", "Europe/Amsterdam", "Europe/Brussels", "Europe/Zurich",
+    "Europe/Vienna", "Europe/Warsaw", "Europe/Prague", "Europe/Budapest",
+    "Europe/Athens", "Europe/Istanbul", "Europe/Lisbon", "Europe/Dublin",
+    "Europe/Kyiv", "America/New_York", "America/Chicago", "America/Denver",
+    "America/Los_Angeles", "America/Toronto", "America/Vancouver",
+    "America/Sao_Paulo", "Asia/Tokyo", "Asia/Seoul", "Asia/Shanghai",
+    "Asia/Kolkata", "Asia/Singapore", "Australia/Sydney", "Pacific/Auckland",
+    "Europe/London"
+};
+
+size_t vanta_setup_timezone_count(void)
+{
+    return sizeof(supported_timezones) / sizeof(supported_timezones[0]);
+}
+
+const char *vanta_setup_timezone_at(size_t index)
+{
+    return index < vanta_setup_timezone_count() ? supported_timezones[index] : NULL;
+}
+
 int vanta_setup_timezone_supported(const char *timezone)
 {
-    static const char *const supported[] = {
-        "Etc/UTC",
-        "Europe/Helsinki", "Europe/Stockholm", "Europe/Oslo",
-        "Europe/Copenhagen", "Europe/Berlin", "Europe/Paris",
-        "Europe/Madrid", "Europe/Rome", "Europe/Amsterdam",
-        "Europe/Brussels", "Europe/Zurich", "Europe/Vienna",
-        "Europe/Warsaw", "Europe/Prague", "Europe/Budapest",
-        "Europe/Athens", "Europe/Istanbul", "Europe/Lisbon",
-        "Europe/Dublin", "Europe/Kyiv", "America/New_York",
-        "America/Chicago", "America/Denver", "America/Los_Angeles",
-        "America/Toronto", "America/Vancouver", "America/Sao_Paulo",
-        "Asia/Tokyo", "Asia/Seoul", "Asia/Shanghai",
-        "Asia/Kolkata", "Asia/Singapore", "Australia/Sydney",
-        "Pacific/Auckland", "Europe/London"
-    };
     if (!timezone)
         return 0;
-    for (size_t i = 0U; i < sizeof(supported) / sizeof(supported[0]); ++i)
-        if (bounded_equal(timezone, VANTA_SETUP_TIMEZONE_MAX, supported[i]))
+    for (size_t i = 0U; i < vanta_setup_timezone_count(); ++i)
+        if (bounded_equal(timezone, VANTA_SETUP_TIMEZONE_MAX,
+                          supported_timezones[i]))
             return 1;
     return 0;
 }

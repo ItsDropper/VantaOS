@@ -52,6 +52,7 @@ typedef struct gpu_irq_queue {
 typedef int (*gpu_irq_dispatch_fn)(void *context,
                                    const gpu_irq_event_t *event);
 
+/* Single producer (IRQ path), single consumer (deferred worker) queue. */
 gpu_irq_status_t gpu_irq_queue_init(gpu_irq_queue_t *queue,
                                     gpu_irq_event_t *storage,
                                     size_t capacity);
@@ -65,6 +66,7 @@ gpu_irq_status_t gpu_irq_drain(gpu_irq_queue_t *queue, size_t max_events,
                                gpu_irq_dispatch_fn dispatch, void *context,
                                size_t *out_processed);
 gpu_irq_status_t gpu_irq_mark_device_lost(gpu_irq_queue_t *queue);
+/* Call reset only after both producer and consumer are quiesced. */
 gpu_irq_status_t gpu_irq_reset(gpu_irq_queue_t *queue);
 int gpu_irq_queue_invariant(const gpu_irq_queue_t *queue);
 

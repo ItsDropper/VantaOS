@@ -72,10 +72,10 @@ gpu_irq_status_t gpu_irq_push(gpu_irq_queue_t *queue,
         return GPU_IRQ_INVALID_ARGUMENT;
     if (!gpu_irq_queue_invariant(queue))
         return GPU_IRQ_NOT_INITIALIZED;
-    if (__atomic_load_n(&queue->enabled, __ATOMIC_ACQUIRE) == 0U)
-        return GPU_IRQ_NOT_READY;
     if (__atomic_load_n(&queue->device_lost, __ATOMIC_ACQUIRE) != 0U)
         return GPU_IRQ_DEVICE_LOST;
+    if (__atomic_load_n(&queue->enabled, __ATOMIC_ACQUIRE) == 0U)
+        return GPU_IRQ_NOT_READY;
     if (event->type < GPU_IRQ_EVENT_COMPLETION ||
         event->type > GPU_IRQ_EVENT_DEVICE_LOST)
         return GPU_IRQ_INVALID_ARGUMENT;

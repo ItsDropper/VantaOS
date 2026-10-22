@@ -13,6 +13,7 @@
 
 
 static int test_probe_fails;
+static int test_quiesce_fails;
 static int test_initialize_fails;
 static int test_probe_calls;
 static int test_initialize_calls;
@@ -37,7 +38,7 @@ static int test_driver_initialize(gpu_device_t *device)
 
 static int test_driver_quiesce(gpu_device_t *device)
 {
-    return device != 0 && device->state == GPU_DEVICE_RUNNING;
+    return device != 0 && device->state == GPU_DEVICE_QUIESCING && !test_quiesce_fails;
 }
 
 static void test_driver_shutdown(gpu_device_t *device)
@@ -226,6 +227,12 @@ int main(void)
         assert(attached.ops == &test_ops);
         assert(test_probe_calls == 1 && test_initialize_calls == 1);
         assert(gpu_device_publish_capabilities(&attached, GPU_CAP_DISPLAY_SCANOUT));
+        assert(gpu_driver_stop(&attached));
+        assert(attached.state == GPU_DEVICE_INITIALIZED);
+        assert(attached.ops == 0);
+        assert(attached.verified_capabilities == 0U);
+        assert(test_shutdown_calls == 1);
+        assert(!gpu_driver_stop(&attached));
 
         assert(gpu_device_construct(&attached, &intel, &intel_match));
         test_initialize_fails = 1;
@@ -237,6 +244,19 @@ int main(void)
         assert(test_initialize_calls == 2);
 
         assert(gpu_device_construct(&attached, &intel, &intel_match));
+        test_initialize_fails = 0;
+        test_quiesce_fails = 0;
+        assert(gpu_driver_start(&attached, &test_driver));
+        assert(gpu_device_publish_capabilities(&attached, GPU_CAP_DISPLAY_SCANOUT));
+        test_quiesce_fails = 1;
+        assert(!gpu_driver_stop(&attached));
+        assert(attached.state == GPU_DEVICE_FAILED);
+        assert(attached.ops == 0);
+        assert(attached.verified_capabilities == 0U);
+        assert(test_shutdown_calls == 3);
+
+        assert(gpu_device_construct(&attached, &intel, &intel_match));
+        test_quiesce_fails = 0;
         test_probe_fails = 1;
         assert(!gpu_driver_start(&attached, &test_driver));
         assert(attached.state == GPU_DEVICE_FAILED);

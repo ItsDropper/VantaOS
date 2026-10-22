@@ -167,6 +167,17 @@ static void test_writer_and_readback(void)
     assert(has_signature(sector));
     assert(get64(sector + 24U) == disk_size - 1U);
     assert(get64(sector + 32U) == 1U);
+
+    /* The writer must also accept the smaller supported ESP layout. */
+    disk = (fake_disk_t){0};
+    disk.sector_count = disk_size;
+    assert(vanta_installer_plan_gpt_with_efi_size(
+        disk_size, VANTA_INSTALLER_SECTOR_SIZE, 256U, &layout) ==
+        VANTA_INSTALLER_LAYOUT_OK);
+    assert(layout.efi.sector_count == 256ULL * 2048ULL);
+    assert(vanta_installer_write_gpt(
+        &io, &layout, disk_guid, efi_guid, system_guid,
+        workspace, sizeof(workspace)) == VANTA_INSTALLER_GPT_OK);
 }
 
 static void test_rejects_duplicate_guids_and_short_workspace(void)

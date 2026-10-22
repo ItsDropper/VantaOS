@@ -728,7 +728,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
     }
     print_localized(&config, L"  Partition scheme: GPT (UEFI)\r\n", L"  Osiointitapa: GPT (UEFI)\r\n");
     print_localized(&config, L"  EFI partition size: ", L"  EFI-osion koko: ");
-    Print(L"%u MiB\\r\\n", efi_size_mib);
+    Print(L"%u MiB\r\n", efi_size_mib);
     print_localized(&config, L"  Filesystems: FAT32 EFI System Partition + FAT32 system partition\r\n", L"  Tiedostojarjestelmat: FAT32 EFI-osio ja FAT32 jarjestelmaosio\r\n");
     print_localized(&config, L"  Setup preferences will be saved to \\SYSTEM\\SETUP.CFG.\r\n", L"  Asetukset tallennetaan tiedostoon \\SYSTEM\\SETUP.CFG.\r\n");
     print_localized(&config, L"  Device name is shown in Settings. Language and keyboard are saved preferences; runtime localization/keymap integration is not yet implemented. The selected time zone is saved but not applied to the active clock.\r\n\r\n", L"  Laitteen nimi naytetaan Asetuksissa. Kieli ja nappaimisto tallennetaan asetuksiksi, mutta niita ei viela sovelleta kayttojarjestelmassa. Aikavyohyke tallennetaan, mutta sita ei viela sovelleta kelloon.\r\n\r\n");

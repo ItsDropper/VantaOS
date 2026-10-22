@@ -128,7 +128,8 @@ gpu_engine_runtime_status_t gpu_engine_runtime_issue_fence(
 gpu_engine_runtime_status_t gpu_engine_runtime_complete_fence(
     gpu_engine_runtime_t *runtime, uint64_t fence)
 {
-    if (runtime == NULL || runtime->initialized == 0U)
+    if (runtime == NULL || runtime->initialized == 0U ||
+        runtime->failed != 0U)
         return GPU_ENGINE_RUNTIME_NOT_READY;
     return gpu_engine_runtime_map_ring(
         gpu_engine_complete_fence(&runtime->ring, fence));

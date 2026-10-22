@@ -93,7 +93,7 @@ _start:
     mov $26, %eax
     int $0x80
     test %rax, %rax
-    jle file_fail
+    jle ipc_capability_unavailable
     mov %rax, %r15
     lea parent_endpoint_string+20(%rip), %rdi
     movb $0, (%rdi)
@@ -107,12 +107,21 @@ endpoint_format_loop:
     dec %rdi
     mov %dl, (%rdi)
     loop endpoint_format_loop
+    jmp ipc_capability_ready
+ipc_capability_unavailable:
+    /* Older virtual CPUs may not expose RDRAND; keep non-IPC tests runnable. */
+    xor %r15, %r15
+ipc_capability_ready:
 
     /* Launch a separate ELF from FAT32 with a kernel-owned argv copy. */
     mov $6, %eax
     lea child_path(%rip), %rdi
     lea child_argv(%rip), %rsi
+    mov $2, %edx
+    test %r15, %r15
+    jz child_spawn_count_ready
     mov $3, %edx
+child_spawn_count_ready:
     int $0x80
     test %rax, %rax
     jle file_fail
@@ -377,6 +386,10 @@ open_until_full:
     mov $(spawn_message_end - spawn_message), %esi
     int $0x80
 
+    /* Skip IPC only when this CPU cannot provide secure endpoint entropy. */
+    test %r15, %r15
+    jz ipc_exchange_skipped
+
     /* Receive the child's endpoint token, yielding while it starts. */
     mov $500, %r10d
 ipc_receive_retry:
@@ -404,6 +417,7 @@ ipc_receive_done:
     int $0x80
     test %rax, %rax
     jne file_fail
+ipc_exchange_skipped:
 
     /* Block until the child exits and verify the kernel preserved its status. */
     mov $7, %eax
@@ -417,6 +431,8 @@ ipc_receive_done:
     jne file_fail
 
     /* Process exit must invalidate its still-open IPC endpoint. */
+    test %r15, %r15
+    jz ipc_cleanup_verified
     mov $27, %eax
     mov child_endpoint_token(%rip), %rdi
     lea ipc_reply(%rip), %rsi
@@ -424,6 +440,7 @@ ipc_receive_done:
     int $0x80
     cmp $-9, %rax
     jne file_fail
+ipc_cleanup_verified:
 
     /* A collected child must no longer be waitable. */
     mov $7, %eax

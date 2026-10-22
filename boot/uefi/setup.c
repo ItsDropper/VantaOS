@@ -579,6 +579,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
         config.device_name[i] = default_device_name[i];
 
     char line[64];
+    uint32_t efi_size_mib = 512U;
     const CHAR16 *missing_payload = NULL;
     Print(L"Checking installer files before any disk can be modified...\r\n");
     if (!preflight_installer_payload(source_root, &missing_payload)) {
@@ -710,6 +711,26 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
     print_localized(&config, L"  Setup preferences will be saved to \\SYSTEM\\SETUP.CFG.\r\n", L"  Asetukset tallennetaan tiedostoon \\SYSTEM\\SETUP.CFG.\r\n");
     print_localized(&config, L"  Device name is shown in Settings. Language and keyboard are saved preferences; runtime localization/keymap integration is not yet implemented. The selected time zone is saved but not applied to the active clock.\r\n\r\n", L"  Laitteen nimi naytetaan Asetuksissa. Kieli ja nappaimisto tallennetaan asetuksiksi, mutta niita ei viela sovelleta kayttojarjestelmassa. Aikavyohyke tallennetaan, mutta sita ei viela sovelleta kelloon.\r\n\r\n");
 
+    serial_write("VANTAOS_SETUP_PARTITION_SIZE_PROMPT\\n");
+    print_localized(&config,
+        L"EFI partition size: 1) 512 MiB (recommended)  2) 256 MiB [1]: ",
+        L"EFI-osion koko: 1) 512 MiB (suositus)  2) 256 MiB [1]: ");
+    for (;;) {
+        if (!read_line(line, sizeof(line))) {
+            uefi_call_wrapper(source_root->Close, 1, source_root);
+            return EFI_ABORTED;
+        }
+        if (line[0] == '\\0' || (line[0] == '1' && line[1] == '\\0')) {
+            efi_size_mib = 512U;
+            break;
+        }
+        if (line[0] == '2' && line[1] == '\\0') {
+            efi_size_mib = 256U;
+            break;
+        }
+        print_localized(&config, L"Choose 1 or 2.\\r\\n", L"Valitse 1 tai 2.\\r\\n");
+    }
+
     setup_disk_t disks[SETUP_MAX_DISKS];
     UINTN disk_count = 0U;
     int source_seen = 0;
@@ -778,8 +799,8 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
               selected_path ? selected_path : L"(unavailable)");
     }
     vanta_installer_layout_t layout;
-    if (vanta_installer_plan_gpt(target->sector_count,
-            VANTA_INSTALLER_SECTOR_SIZE, &layout) != VANTA_INSTALLER_LAYOUT_OK) {
+    if (vanta_installer_plan_gpt_with_efi_size(target->sector_count,
+            VANTA_INSTALLER_SECTOR_SIZE, efi_size_mib, &layout) != VANTA_INSTALLER_LAYOUT_OK) {
         Print(L"ERROR: disk layout is unsupported. No disks changed.\r\n");
         if (selected_path)
             uefi_call_wrapper(BS->FreePool, 1, selected_path);
@@ -791,6 +812,9 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
         L"\r\nOsiointisuunnitelma (esikatselu; ei kirjoituksia viela):\r\n");
     print_localized(&config, L"  GPT, 1 MiB alignment\r\n",
                     L"  GPT, 1 MiB kohdistus\r\n");
+    print_localized(&config, L"  EFI partition size: ",
+                    L"  EFI-osion koko: ");
+    Print(L"%u MiB\r\n", efi_size_mib);
     print_localized(&config, L"  EFI System Partition: ",
                     L"  EFI-jarjestelmaosio: ");
     Print(L"%u MiB, FAT32\r\n", (UINT32)(layout.efi.sector_count / 2048U));

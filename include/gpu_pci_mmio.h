@@ -35,6 +35,7 @@ typedef struct gpu_pci_mmio_mapping {
 } gpu_pci_mmio_mapping_t;
 
 /*
+ * Caller must zero-initialize the output mapping before first use.
  * Maps only the requested prefix of an MMIO BAR. audited_bar_size must come
  * from a trusted, device-specific profile or safe resource manager; this API
  * never guesses BAR size or performs destructive BAR sizing.

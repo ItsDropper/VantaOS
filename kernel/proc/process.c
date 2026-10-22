@@ -6,6 +6,7 @@
  */
 
 #include "process_internal.h"
+#include "ipc.h"
 #include "cpu_local.h"
 #include "spinlock.h"
 
@@ -98,6 +99,7 @@ static void process_copy_name(char* destination, const char* source)
 
 void process_reset_record(process_t* process)
 {
+    ipc_process_reset(process->pid);
     process->parent_pid = 0;
     process->owner_cpu = PROCESS_CPU_UNOWNED;
     process->state = PROCESS_UNUSED;
@@ -262,6 +264,7 @@ static void process_prepare_stack(process_t* process, uintptr_t stack_top)
 
 void process_initialize(void)
 {
+    ipc_initialize();
     __atomic_store_n(&process_initialized_state, 0, __ATOMIC_RELAXED);
     process_legacy_current_pid = 0;
     cpu_local_t* local = process_local_state();

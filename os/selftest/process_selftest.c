@@ -15,6 +15,7 @@
 #include "heap.h"
 #include "graphics.h"
 #include "gui_server.h"
+#include "ipc.h"
 #include "keyboard.h"
 #include "mouse.h"
 #include "process.h"
@@ -552,6 +553,12 @@ static void gui_dead_owner_cleanup_probe(void)
 
 void os_selftest_initialize(void)
 {
+    if (!ipc_selftest())
+    {
+        serial_write("VANTAOS_IPC_QUEUE_SELFTEST_FAIL\n");
+        return;
+    }
+    serial_write("VANTAOS_IPC_QUEUE_SELFTEST_OK\n");
     if (!process_idle_lifecycle_probe())
         return;
     memory_selftest_initialize();

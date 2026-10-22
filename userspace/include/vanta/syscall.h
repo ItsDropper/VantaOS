@@ -18,7 +18,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define VANTA_USER_ABI_VERSION 6U
+#define VANTA_USER_ABI_VERSION 7U
 
 #define VANTA_SYS_EXIT          0U
 #define VANTA_SYS_WRITE         1U
@@ -42,6 +42,18 @@
 #define VANTA_SYS_CREATE_DIRECTORY     23U
 #define VANTA_SYS_STAT_PATH            24U
 #define VANTA_SYS_KERNEL_COMMAND       25U
+#define VANTA_SYS_IPC_SEND              26U
+#define VANTA_SYS_IPC_RECEIVE           27U
+
+#define VANTA_IPC_PAYLOAD_MAX 128U
+#define VANTA_IPC_ANY_SENDER 0U
+
+typedef struct
+{
+    uint32_t sender_pid;
+    uint32_t length;
+    uint8_t payload[VANTA_IPC_PAYLOAD_MAX];
+} vanta_ipc_message_t;
 
 #define VANTA_OPEN_READ      1
 #define VANTA_OPEN_WRITE     2
@@ -49,6 +61,7 @@
 
 /* Negative return values currently emitted by the kernel ABI. */
 #define VANTA_EPERM       1
+#define VANTA_ESRCH       3
 #define VANTA_ENOENT      2
 #define VANTA_EIO         5
 #define VANTA_ENODEV     19
@@ -59,6 +72,8 @@
 #define VANTA_EMFILE     24
 #define VANTA_ENOMEM     12
 #define VANTA_ENOEXEC     8
+#define VANTA_EAGAIN     11
+#define VANTA_EMSGSIZE   90
 
 static inline long vanta_syscall3(
     long number, uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
@@ -71,6 +86,21 @@ static inline long vanta_syscall3(
         : "memory", "cc");
     return result;
 }
+
+static inline long vanta_ipc_send(uint32_t target_pid,
+                                  const void *payload, size_t length)
+{
+    return vanta_syscall3(VANTA_SYS_IPC_SEND, (uintptr_t)target_pid,
+                          (uintptr_t)payload, (uintptr_t)length);
+}
+
+static inline long vanta_ipc_receive(uint32_t sender_filter,
+                                     vanta_ipc_message_t *message)
+{
+    return vanta_syscall3(VANTA_SYS_IPC_RECEIVE, (uintptr_t)sender_filter,
+                          (uintptr_t)message, 0U);
+}
+
 
 static inline long vanta_write(const void* buffer, size_t length)
 {

@@ -31,22 +31,36 @@ int gpu_dma_buffer_is_valid(const gpu_dma_buffer_t *buffer)
         buffer->page_count == 0U || buffer->page_count > GPU_DMA_MAX_PAGES ||
         buffer->size == 0U || buffer->size > buffer->allocated_size ||
         buffer->allocated_size != buffer->page_count * GPU_DMA_PAGE_SIZE ||
+        buffer->allocated_size == 0U ||
         buffer->gpu_address != buffer->pages[0].physical_address ||
         buffer->cpu_address != buffer->pages[0].virtual_address ||
-        buffer->allocation_id == 0U)
+        buffer->allocation_id == 0U ||
+        buffer->gpu_address > UINT64_MAX - (buffer->allocated_size - 1U) ||
+        (uintptr_t)buffer->cpu_address >
+            UINTPTR_MAX - (buffer->allocated_size - 1U))
         return 0;
 
     for (size_t i = 0U; i < buffer->page_count; ++i) {
         const dma_page_t *page = &buffer->pages[i];
-        if (!dma_page_is_valid(page))
+        uintptr_t virtual_address;
+        if (!dma_page_is_valid(page) ||
+            (page->physical_address & (GPU_DMA_PAGE_SIZE - 1U)) != 0U ||
+            ((uintptr_t)page->virtual_address &
+             (GPU_DMA_PAGE_SIZE - 1U)) != 0U)
             return 0;
-        if (i != 0U &&
-            (page->physical_address !=
-                 buffer->pages[i - 1U].physical_address + GPU_DMA_PAGE_SIZE ||
-             (uintptr_t)page->virtual_address !=
-                 (uintptr_t)buffer->pages[i - 1U].virtual_address +
-                     GPU_DMA_PAGE_SIZE))
-            return 0;
+        virtual_address = (uintptr_t)page->virtual_address;
+        if (i != 0U) {
+            const dma_page_t *previous = &buffer->pages[i - 1U];
+            if (previous->physical_address >
+                    UINT64_MAX - GPU_DMA_PAGE_SIZE ||
+                (uintptr_t)previous->virtual_address >
+                    UINTPTR_MAX - GPU_DMA_PAGE_SIZE ||
+                page->physical_address !=
+                    previous->physical_address + GPU_DMA_PAGE_SIZE ||
+                virtual_address !=
+                    (uintptr_t)previous->virtual_address + GPU_DMA_PAGE_SIZE)
+                return 0;
+        }
     }
     return 1;
 }

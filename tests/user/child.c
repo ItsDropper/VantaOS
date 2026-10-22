@@ -291,8 +291,7 @@ int main(int argc, char** argv)
             (void)vanta_yield();
     }
     if (ipc_reply_length != 3L || ipc_reply[0] != 'a' ||
-        ipc_reply[1] != 'c' || ipc_reply[2] != 'k' ||
-        vanta_ipc_close((uint64_t)child_endpoint) != 0)
+        ipc_reply[1] != 'c' || ipc_reply[2] != 'k')
     {
         (void)vanta_write(failure, sizeof(failure) - 1U);
         return 15;

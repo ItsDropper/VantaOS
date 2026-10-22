@@ -33,6 +33,9 @@ typedef struct gpu_driver_descriptor {
     GPU_CAP_2D_ACCELERATION | GPU_CAP_3D_ACCELERATION | GPU_CAP_VIDEO_DECODE | \
     GPU_CAP_VIDEO_ENCODE | GPU_CAP_HARDWARE_CURSOR | GPU_CAP_DMA))
 
+/* Enumerate and report supported display functions; no acceleration is implied. */
+void gpu_initialize(void);
+
 int gpu_device_construct(gpu_device_t *device,
                          const struct pci_device *pci_device,
                          const gpu_pci_match_t *match);

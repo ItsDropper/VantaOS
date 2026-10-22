@@ -102,7 +102,7 @@ int main(void)
     gpu_vm_t vm = {0};
     gpu_dma_buffer_t dma = {0};
     gpu_va_allocation_t va = {0};
-    gpu_vm_handle_t handle = {0};
+    gpu_vm_handle_t handle = {0}, stale_handle = {0};
     gpu_vm_ops_t ops = { .map_page = map_page, .unmap_page = unmap_page,
                          .flush = flush };
 
@@ -159,6 +159,7 @@ int main(void)
                         0U, &va) == GPU_VA_OK);
     assert(gpu_vm_map_dma(&vm, &va, &dma, GPU_VM_ACCESS_READ, &handle) ==
            GPU_VM_OK);
+    stale_handle = handle;
     fail_unmap_at = (int)va.base;
     assert(gpu_vm_unmap(&vm, &handle) == GPU_VM_UNMAP_FAILED);
     assert(vm.faulted && mapped_count == 1U);
@@ -172,6 +173,19 @@ int main(void)
     gpu_dma_release(&dma);
 
     assert(gpu_vm_validate(&vm) == GPU_VM_OK);
+    assert(gpu_vm_destroy(&vm) == GPU_VM_OK);
+
+    assert(gpu_vm_init(&vm, &va_space, &ops) == GPU_VM_OK);
+    assert(gpu_dma_alloc(4096U, 32U, &dma) == GPU_DMA_OK);
+    assert(gpu_va_alloc(&va_space, dma.allocated_size, GPU_VA_PAGE_SIZE,
+                        0U, &va) == GPU_VA_OK);
+    assert(gpu_vm_map_dma(&vm, &va, &dma, GPU_VM_ACCESS_READ, &handle) ==
+           GPU_VM_OK);
+    assert(handle.generation != stale_handle.generation);
+    assert(gpu_vm_unmap(&vm, &stale_handle) == GPU_VM_INVALID_HANDLE);
+    assert(gpu_vm_unmap(&vm, &handle) == GPU_VM_OK);
+    assert(gpu_va_free(&va_space, &va) == GPU_VA_OK);
+    gpu_dma_release(&dma);
     assert(gpu_vm_destroy(&vm) == GPU_VM_OK);
     return 0;
 }

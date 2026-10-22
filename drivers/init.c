@@ -59,9 +59,9 @@ void gpu_initialize(void)
             driver = amd_gpu_driver();
         if (driver != NULL) {
             if (!gpu_driver_start(&devices[i], driver))
-                serial_write("GPU: backend refused initialization; firmware/engine path unavailable\\n");
+                serial_write("GPU: backend refused initialization; firmware/engine path unavailable\n");
             else
-                serial_write("GPU: backend running (verified capabilities only)\\n");
+                serial_write("GPU: backend running (verified capabilities only)\n");
         }
     }
 }

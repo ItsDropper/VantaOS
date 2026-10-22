@@ -6,6 +6,7 @@
  */
 
 #include "drivers_init.h"
+#include "gpu_core.h"
 
 #include "net.h"
 #include "nvx_device.h"

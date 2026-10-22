@@ -24,7 +24,8 @@ static int gpu_transition_allowed(gpu_device_state_t current,
         case GPU_DEVICE_RUNNING:
             return next == GPU_DEVICE_QUIESCING || next == GPU_DEVICE_FAILED;
         case GPU_DEVICE_QUIESCING:
-            return next == GPU_DEVICE_STOPPED || next == GPU_DEVICE_FAILED;
+            return next == GPU_DEVICE_INITIALIZED || next == GPU_DEVICE_STOPPED ||
+                   next == GPU_DEVICE_FAILED;
         case GPU_DEVICE_STOPPED:
             return next == GPU_DEVICE_FAILED;
         case GPU_DEVICE_FAILED:

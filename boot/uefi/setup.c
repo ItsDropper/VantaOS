@@ -573,7 +573,9 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
     vanta_setup_config_t config = {{0}, {0}, {0}, {0}};
     config.language[0] = 'e'; config.language[1] = 'n'; config.language[2] = '\0';
     config.keyboard[0] = 'u'; config.keyboard[1] = 's'; config.keyboard[2] = '\0';
-    config.timezone[0] = '\0';
+    const char default_timezone[] = "Europe/Helsinki";
+    for (size_t i = 0U; i < sizeof(default_timezone); ++i)
+        config.timezone[i] = default_timezone[i];
     const char default_device_name[] = "VANTAOS-PC";
     for (size_t i = 0U; i < sizeof(default_device_name); ++i)
         config.device_name[i] = default_device_name[i];
@@ -598,165 +600,191 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
     serial_write("VANTAOS_SETUP_PREFLIGHT_OK\n");
     Print(L"Installer payload check passed (15 required files).\r\n\r\n");
 
-    serial_write("VANTAOS_SETUP_LANGUAGE_PROMPT\n");
-    for (;;) {
-        Print(L"Language / Kieli: 1) English  2) Suomi [1]: ");
-        if (!read_line(line, sizeof(line))) return EFI_ABORTED;
-        if (line[0] == '\0' || (line[0] == '1' && line[1] == '\0'))
-            break;
-        if (line[0] == '2' && line[1] == '\0') {
-            config.language[0] = 'f'; config.language[1] = 'i';
-            break;
-        }
-        Print(L"Choose 1 or 2. Valitse 1 tai 2.\r\n");
-    }
-
-    serial_write("VANTAOS_SETUP_DEVICE_NAME_PROMPT\n");
-    for (;;) {
-        print_localized(&config, L"Device name (letters, numbers, internal hyphens) [VANTAOS-PC]: ",
-                        L"Laitteen nimi (kirjaimet, numerot, valiviiva) [VANTAOS-PC]: ");
-        if (!read_line(line, sizeof(line))) {
-            uefi_call_wrapper(source_root->Close, 1, source_root);
-            return EFI_ABORTED;
-        }
-        if (line[0] == '\0')
-            break;
-        size_t name_length = 0U;
-        while (line[name_length] && name_length + 1U < sizeof(config.device_name)) {
-            config.device_name[name_length] = line[name_length];
-            ++name_length;
-        }
-        if (line[name_length] != '\0') {
-            print_localized(&config, L"Name is too long; use at most 32 characters.\r\n",
-                            L"Nimi on liian pitka; kayta enintaan 32 merkkia.\r\n");
-            continue;
-        }
-        config.device_name[name_length] = '\0';
-        if (vanta_setup_device_name_valid(config.device_name))
-            break;
-        print_localized(&config, L"Invalid name. Start and end with a letter or number; use only letters, numbers, and internal hyphens.\r\n",
-                        L"Virheellinen nimi. Aloita ja lopeta kirjaimella tai numerolla; kayta vain kirjaimia, numeroita ja valiviivoja keskella.\r\n");
-    }
-
-    serial_write("VANTAOS_SETUP_KEYBOARD_PROMPT\n");
-    for (;;) {
-        print_localized(&config, L"Keyboard: 1) US  2) Finnish [1]: ",
-                        L"Nappaimisto: 1) US  2) Finnish [1]: ");
-        if (!read_line(line, sizeof(line))) return EFI_ABORTED;
-        if (line[0] == '\0' || (line[0] == '1' && line[1] == '\0'))
-            break;
-        if (line[0] == '2' && line[1] == '\0') {
-            config.keyboard[0] = 'f'; config.keyboard[1] = 'i';
-            break;
-        }
-        print_localized(&config, L"Choose 1 or 2.\r\n", L"Valitse 1 tai 2.\r\n");
-    }
-
-    serial_write("VANTAOS_SETUP_TIMEZONE_PROMPT\n");
-    print_localized(&config, L"Time zone (enter number; default 1):\r\n", L"Aikavyohyke (valitse numero; oletus 1):\r\n");
-    Print(L" 1 Helsinki       2 UTC             3 Stockholm       4 Oslo\r\n");
-    Print(L" 5 Copenhagen     6 Berlin          7 Paris           8 Madrid\r\n");
-    Print(L" 9 Rome          10 Amsterdam      11 Brussels       12 Zurich\r\n");
-    Print(L"13 Vienna        14 Warsaw         15 Prague         16 Budapest\r\n");
-    Print(L"17 Athens        18 Istanbul       19 Lisbon         20 Dublin\r\n");
-    Print(L"21 Kyiv          22 New York       23 Chicago        24 Denver\r\n");
-    Print(L"25 Los Angeles   26 Toronto        27 Vancouver      28 Sao Paulo\r\n");
-    Print(L"29 Tokyo         30 Seoul          31 Shanghai       32 Kolkata\r\n");
-    Print(L"33 Singapore     34 Sydney         35 Auckland       36 London [1]: ");
-    uint32_t zone_choice = 1U;
-    for (;;) {
-        if (!read_line(line, sizeof(line))) {
-            uefi_call_wrapper(source_root->Close, 1, source_root);
-            return EFI_ABORTED;
-        }
-        if (line[0] == '\0')
-            break;
-        if (parse_number(line, &zone_choice) && zone_choice > 0U &&
-            zone_choice <= vanta_setup_timezone_count())
-            break;
-        print_localized(&config, L"Invalid time-zone choice; enter 1-36: ",
-                        L"Virheellinen aikavyohyke; anna numero 1-36: ");
-        zone_choice = 1U;
-    }
-    const char *zone = vanta_setup_timezone_at(zone_choice - 1U);
-    if (!zone) {
-        uefi_call_wrapper(source_root->Close, 1, source_root);
-        return EFI_INVALID_PARAMETER;
-    }
-    size_t zone_length = 0U;
-    while (zone[zone_length] && zone_length + 1U < sizeof(config.timezone)) {
-        config.timezone[zone_length] = zone[zone_length];
-        ++zone_length;
-    }
-    config.timezone[zone_length] = '\0';
-
-    serial_write("VANTAOS_SETUP_DESKTOP_THEME_PROMPT\n");
-    print_localized(&config, L"Desktop theme: 1) Dark [recommended]  2) Light: ",
-                    L"Tyopoydan teema: 1) Tumma [suositus]  2) Vaalea: ");
-    for (;;) {
-        if (!read_line(line, sizeof(line))) { uefi_call_wrapper(source_root->Close, 1, source_root); return EFI_ABORTED; }
-        if (line[0] == '\0' || (line[0] == '1' && line[1] == '\0')) { theme_choice = 1U; break; }
-        if (line[0] == '2' && line[1] == '\0') { theme_choice = 2U; break; }
-        print_localized(&config, L"Choose 1 or 2.\r\n", L"Valitse 1 tai 2.\r\n");
-    }
-
-    serial_write("VANTAOS_SETUP_ACCENT_PROMPT\n");
-    print_localized(&config, L"Desktop accent: 1) Blue [default]  2) Teal  3) Amber  4) Violet: ",
-                    L"Tehosteväri: 1) Sininen [oletus]  2) Turkoosi  3) Meripihka  4) Violetti: ");
-    for (;;) {
-        if (!read_line(line, sizeof(line))) { uefi_call_wrapper(source_root->Close, 1, source_root); return EFI_ABORTED; }
-        if (line[0] >= '1' && line[0] <= '4' && line[1] == '\0') { accent_choice = (uint32_t)(line[0] - '0'); break; }
-        print_localized(&config, L"Choose 1-4.\r\n", L"Valitse 1-4.\r\n");
-    }
-
-    serial_write("VANTAOS_SETUP_EXPLORER_DENSITY_PROMPT\n");
-    print_localized(&config, L"File Explorer rows: 1) Comfortable [default]  2) Compact: ",
-                    L"Tiedostoselaimen rivit: 1) Valja [oletus]  2) Tiivis: ");
-    for (;;) {
-        if (!read_line(line, sizeof(line))) { uefi_call_wrapper(source_root->Close, 1, source_root); return EFI_ABORTED; }
-        if (line[0] == '\0' || (line[0] == '1' && line[1] == '\0')) { density_choice = 1U; break; }
-        if (line[0] == '2' && line[1] == '\0') { density_choice = 2U; break; }
-        print_localized(&config, L"Choose 1 or 2.\r\n", L"Valitse 1 tai 2.\r\n");
-    }
-
-    serial_write("VANTAOS_SETUP_TEXT_SIZE_PROMPT\n");
-    print_localized(&config, L"Settings text size: 1) Normal [default]  2) Large: ",
-                    L"Asetusten tekstikoko: 1) Normaali [oletus]  2) Suuri: ");
-    for (;;) {
-        if (!read_line(line, sizeof(line))) { uefi_call_wrapper(source_root->Close, 1, source_root); return EFI_ABORTED; }
-        if (line[0] == '\0' || (line[0] == '1' && line[1] == '\0')) { text_size_choice = 1U; break; }
-        if (line[0] == '2' && line[1] == '\0') { text_size_choice = 2U; break; }
-        print_localized(&config, L"Choose 1 or 2.\r\n", L"Valitse 1 tai 2.\r\n");
-    }
-
-    serial_write("VANTAOS_SETUP_HIGH_CONTRAST_PROMPT\n");
-    print_localized(&config, L"High contrast in Settings: 1) Off [default]  2) On: ",
-                    L"Suuri kontrasti Asetuksissa: 1) Pois [oletus]  2) Paalla: ");
-    for (;;) {
-        if (!read_line(line, sizeof(line))) { uefi_call_wrapper(source_root->Close, 1, source_root); return EFI_ABORTED; }
-        if (line[0] == '\0' || (line[0] == '1' && line[1] == '\0')) { contrast_choice = 1U; break; }
-        if (line[0] == '2' && line[1] == '\0') { contrast_choice = 2U; break; }
-        print_localized(&config, L"Choose 1 or 2.\r\n", L"Valitse 1 tai 2.\r\n");
-    }
-
-    serial_write("VANTAOS_SETUP_PARTITION_SIZE_PROMPT\n");
+    serial_write("VANTAOS_SETUP_MODE_PROMPT\n");
     print_localized(&config,
-        L"EFI partition size: 1) 512 MiB (recommended)  2) 256 MiB [1]: ",
-        L"EFI-osion koko: 1) 512 MiB (suositus)  2) 256 MiB [1]: ");
+        L"Setup mode: 1) Recommended defaults  2) Customize settings [1]: ",
+        L"Asennustapa: 1) Suositusasetukset  2) Mukauta asetuksia [1]: ");
+    uint32_t setup_mode = 1U;
     for (;;) {
         if (!read_line(line, sizeof(line))) {
             uefi_call_wrapper(source_root->Close, 1, source_root);
             return EFI_ABORTED;
         }
-        if (line[0] == '\0' || (line[0] == '1' && line[1] == '\0')) {
-            efi_size_mib = 512U;
+        if (line[0] == '\0' || (line[0] == '1' && line[1] == '\0'))
             break;
-        }
         if (line[0] == '2' && line[1] == '\0') {
-            efi_size_mib = 256U;
+            setup_mode = 2U;
             break;
         }
-        print_localized(&config, L"Choose 1 or 2.\r\n", L"Valitse 1 tai 2.\r\n");
+        print_localized(&config, L"Choose 1 or 2.\\r\\n",
+                        L"Valitse 1 tai 2.\\r\\n");
+    }
+
+    if (setup_mode == 2U) {
+        serial_write("VANTAOS_SETUP_LANGUAGE_PROMPT\n");
+        for (;;) {
+            Print(L"Language / Kieli: 1) English  2) Suomi [1]: ");
+            if (!read_line(line, sizeof(line))) return EFI_ABORTED;
+            if (line[0] == '\0' || (line[0] == '1' && line[1] == '\0'))
+                break;
+            if (line[0] == '2' && line[1] == '\0') {
+                config.language[0] = 'f'; config.language[1] = 'i';
+                break;
+            }
+            Print(L"Choose 1 or 2. Valitse 1 tai 2.\r\n");
+        }
+    
+        serial_write("VANTAOS_SETUP_DEVICE_NAME_PROMPT\n");
+        for (;;) {
+            print_localized(&config, L"Device name (letters, numbers, internal hyphens) [VANTAOS-PC]: ",
+                            L"Laitteen nimi (kirjaimet, numerot, valiviiva) [VANTAOS-PC]: ");
+            if (!read_line(line, sizeof(line))) {
+                uefi_call_wrapper(source_root->Close, 1, source_root);
+                return EFI_ABORTED;
+            }
+            if (line[0] == '\0')
+                break;
+            size_t name_length = 0U;
+            while (line[name_length] && name_length + 1U < sizeof(config.device_name)) {
+                config.device_name[name_length] = line[name_length];
+                ++name_length;
+            }
+            if (line[name_length] != '\0') {
+                print_localized(&config, L"Name is too long; use at most 32 characters.\r\n",
+                                L"Nimi on liian pitka; kayta enintaan 32 merkkia.\r\n");
+                continue;
+            }
+            config.device_name[name_length] = '\0';
+            if (vanta_setup_device_name_valid(config.device_name))
+                break;
+            print_localized(&config, L"Invalid name. Start and end with a letter or number; use only letters, numbers, and internal hyphens.\r\n",
+                            L"Virheellinen nimi. Aloita ja lopeta kirjaimella tai numerolla; kayta vain kirjaimia, numeroita ja valiviivoja keskella.\r\n");
+        }
+    
+        serial_write("VANTAOS_SETUP_KEYBOARD_PROMPT\n");
+        for (;;) {
+            print_localized(&config, L"Keyboard: 1) US  2) Finnish [1]: ",
+                            L"Nappaimisto: 1) US  2) Finnish [1]: ");
+            if (!read_line(line, sizeof(line))) return EFI_ABORTED;
+            if (line[0] == '\0' || (line[0] == '1' && line[1] == '\0'))
+                break;
+            if (line[0] == '2' && line[1] == '\0') {
+                config.keyboard[0] = 'f'; config.keyboard[1] = 'i';
+                break;
+            }
+            print_localized(&config, L"Choose 1 or 2.\r\n", L"Valitse 1 tai 2.\r\n");
+        }
+    
+        serial_write("VANTAOS_SETUP_TIMEZONE_PROMPT\n");
+        print_localized(&config, L"Time zone (enter number; default 1):\r\n", L"Aikavyohyke (valitse numero; oletus 1):\r\n");
+        Print(L" 1 Helsinki       2 UTC             3 Stockholm       4 Oslo\r\n");
+        Print(L" 5 Copenhagen     6 Berlin          7 Paris           8 Madrid\r\n");
+        Print(L" 9 Rome          10 Amsterdam      11 Brussels       12 Zurich\r\n");
+        Print(L"13 Vienna        14 Warsaw         15 Prague         16 Budapest\r\n");
+        Print(L"17 Athens        18 Istanbul       19 Lisbon         20 Dublin\r\n");
+        Print(L"21 Kyiv          22 New York       23 Chicago        24 Denver\r\n");
+        Print(L"25 Los Angeles   26 Toronto        27 Vancouver      28 Sao Paulo\r\n");
+        Print(L"29 Tokyo         30 Seoul          31 Shanghai       32 Kolkata\r\n");
+        Print(L"33 Singapore     34 Sydney         35 Auckland       36 London [1]: ");
+        uint32_t zone_choice = 1U;
+        for (;;) {
+            if (!read_line(line, sizeof(line))) {
+                uefi_call_wrapper(source_root->Close, 1, source_root);
+                return EFI_ABORTED;
+            }
+            if (line[0] == '\0')
+                break;
+            if (parse_number(line, &zone_choice) && zone_choice > 0U &&
+                zone_choice <= vanta_setup_timezone_count())
+                break;
+            print_localized(&config, L"Invalid time-zone choice; enter 1-36: ",
+                            L"Virheellinen aikavyohyke; anna numero 1-36: ");
+            zone_choice = 1U;
+        }
+        const char *zone = vanta_setup_timezone_at(zone_choice - 1U);
+        if (!zone) {
+            uefi_call_wrapper(source_root->Close, 1, source_root);
+            return EFI_INVALID_PARAMETER;
+        }
+        size_t zone_length = 0U;
+        while (zone[zone_length] && zone_length + 1U < sizeof(config.timezone)) {
+            config.timezone[zone_length] = zone[zone_length];
+            ++zone_length;
+        }
+        config.timezone[zone_length] = '\0';
+    
+        serial_write("VANTAOS_SETUP_DESKTOP_THEME_PROMPT\n");
+        print_localized(&config, L"Desktop theme: 1) Dark [recommended]  2) Light: ",
+                        L"Tyopoydan teema: 1) Tumma [suositus]  2) Vaalea: ");
+        for (;;) {
+            if (!read_line(line, sizeof(line))) { uefi_call_wrapper(source_root->Close, 1, source_root); return EFI_ABORTED; }
+            if (line[0] == '\0' || (line[0] == '1' && line[1] == '\0')) { theme_choice = 1U; break; }
+            if (line[0] == '2' && line[1] == '\0') { theme_choice = 2U; break; }
+            print_localized(&config, L"Choose 1 or 2.\r\n", L"Valitse 1 tai 2.\r\n");
+        }
+    
+        serial_write("VANTAOS_SETUP_ACCENT_PROMPT\n");
+        print_localized(&config, L"Desktop accent: 1) Blue [default]  2) Teal  3) Amber  4) Violet: ",
+                        L"Tehosteväri: 1) Sininen [oletus]  2) Turkoosi  3) Meripihka  4) Violetti: ");
+        for (;;) {
+            if (!read_line(line, sizeof(line))) { uefi_call_wrapper(source_root->Close, 1, source_root); return EFI_ABORTED; }
+            if (line[0] >= '1' && line[0] <= '4' && line[1] == '\0') { accent_choice = (uint32_t)(line[0] - '0'); break; }
+            print_localized(&config, L"Choose 1-4.\r\n", L"Valitse 1-4.\r\n");
+        }
+    
+        serial_write("VANTAOS_SETUP_EXPLORER_DENSITY_PROMPT\n");
+        print_localized(&config, L"File Explorer rows: 1) Comfortable [default]  2) Compact: ",
+                        L"Tiedostoselaimen rivit: 1) Valja [oletus]  2) Tiivis: ");
+        for (;;) {
+            if (!read_line(line, sizeof(line))) { uefi_call_wrapper(source_root->Close, 1, source_root); return EFI_ABORTED; }
+            if (line[0] == '\0' || (line[0] == '1' && line[1] == '\0')) { density_choice = 1U; break; }
+            if (line[0] == '2' && line[1] == '\0') { density_choice = 2U; break; }
+            print_localized(&config, L"Choose 1 or 2.\r\n", L"Valitse 1 tai 2.\r\n");
+        }
+    
+        serial_write("VANTAOS_SETUP_TEXT_SIZE_PROMPT\n");
+        print_localized(&config, L"Settings text size: 1) Normal [default]  2) Large: ",
+                        L"Asetusten tekstikoko: 1) Normaali [oletus]  2) Suuri: ");
+        for (;;) {
+            if (!read_line(line, sizeof(line))) { uefi_call_wrapper(source_root->Close, 1, source_root); return EFI_ABORTED; }
+            if (line[0] == '\0' || (line[0] == '1' && line[1] == '\0')) { text_size_choice = 1U; break; }
+            if (line[0] == '2' && line[1] == '\0') { text_size_choice = 2U; break; }
+            print_localized(&config, L"Choose 1 or 2.\r\n", L"Valitse 1 tai 2.\r\n");
+        }
+    
+        serial_write("VANTAOS_SETUP_HIGH_CONTRAST_PROMPT\n");
+        print_localized(&config, L"High contrast in Settings: 1) Off [default]  2) On: ",
+                        L"Suuri kontrasti Asetuksissa: 1) Pois [oletus]  2) Paalla: ");
+        for (;;) {
+            if (!read_line(line, sizeof(line))) { uefi_call_wrapper(source_root->Close, 1, source_root); return EFI_ABORTED; }
+            if (line[0] == '\0' || (line[0] == '1' && line[1] == '\0')) { contrast_choice = 1U; break; }
+            if (line[0] == '2' && line[1] == '\0') { contrast_choice = 2U; break; }
+            print_localized(&config, L"Choose 1 or 2.\r\n", L"Valitse 1 tai 2.\r\n");
+        }
+    
+        serial_write("VANTAOS_SETUP_PARTITION_SIZE_PROMPT\n");
+        print_localized(&config,
+            L"EFI partition size: 1) 512 MiB (recommended)  2) 256 MiB [1]: ",
+            L"EFI-osion koko: 1) 512 MiB (suositus)  2) 256 MiB [1]: ");
+        for (;;) {
+            if (!read_line(line, sizeof(line))) {
+                uefi_call_wrapper(source_root->Close, 1, source_root);
+                return EFI_ABORTED;
+            }
+            if (line[0] == '\0' || (line[0] == '1' && line[1] == '\0')) {
+                efi_size_mib = 512U;
+                break;
+            }
+            if (line[0] == '2' && line[1] == '\0') {
+                efi_size_mib = 256U;
+                break;
+            }
+            print_localized(&config, L"Choose 1 or 2.\r\n", L"Valitse 1 tai 2.\r\n");
+        }
+    
+    
+    } else {
+        serial_write("VANTAOS_SETUP_RECOMMENDED_DEFAULTS\n");
     }
 
     if (!vanta_setup_config_valid(&config)) {

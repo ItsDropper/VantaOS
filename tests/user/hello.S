@@ -416,6 +416,15 @@ ipc_receive_done:
     cmp $23, %eax
     jne file_fail
 
+    /* Process exit must invalidate its still-open IPC endpoint. */
+    mov $27, %eax
+    mov child_endpoint_token(%rip), %rdi
+    lea ipc_reply(%rip), %rsi
+    mov $1, %edx
+    int $0x80
+    cmp $-9, %rax
+    jne file_fail
+
     /* A collected child must no longer be waitable. */
     mov $7, %eax
     mov %r14, %rdi

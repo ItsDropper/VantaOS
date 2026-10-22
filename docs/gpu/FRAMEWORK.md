@@ -14,7 +14,7 @@ The generic inventory is read-only. It does not map MMIO, alter PCI command bits
 
 ## Current Intel and AMD status
 
-Intel and AMD backend modules expose a match function, descriptor reporting, and the common lifecycle operation table. They deliberately report acceleration as unavailable and their initialization callbacks fail closed. This is a framework starting point, **not** a functioning Intel or AMD hardware driver.
+Intel and AMD backend modules expose a match function, descriptor reporting, and the common lifecycle operation table. The common driver initialization now enumerates PCI display functions and reports vendor, device ID, known architecture, and whether an assigned/enabled MMIO aperture is present. This path is read-only: it does not reset hardware, change PCI decode, map guessed register windows, load firmware, enable bus mastering, or advertise acceleration. Initialization callbacks still fail closed. This is a better-tested bring-up and diagnostics stage, **not** a functioning accelerated Intel or AMD hardware driver.
 
 Next Intel stages: device-specific generation tables; PCI BAR/resource ownership; GGTT and memory-region management; GuC firmware authentication/load and submission; engine reset and interrupt setup; fence/timeline handling; display-plane integration. Older Gen9 and Xe-class devices require distinct backend implementations rather than one generic register path.
 

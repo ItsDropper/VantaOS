@@ -26,6 +26,8 @@ on:
       - "scripts/test_gpu_mmio.c"
       - "include/gpu_pci_mmio.h"
       - "scripts/test_gpu_pci_mmio.c"
+      - "include/gpu_irq.h"
+      - "scripts/test_gpu_irq.c"
       - "include/gpu_registers.h"
       - "scripts/test_gpu_registers.c"
       - "include/gpu_engine.h"
@@ -409,6 +411,12 @@ jobs:
 
       - name: Test DMA-backed ring submission, fences, quiesce and teardown
         run: /tmp/vantaos-gpu-engine-runtime-test
+
+      - name: Compile GPU interrupt event queue tests
+        run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_gpu_irq.c drivers/gpu/core/gpu_irq.c -o /tmp/vantaos-gpu-irq-test
+
+      - name: Test IRQ queue back-pressure, ordering, device loss and deferred dispatch
+        run: /tmp/vantaos-gpu-irq-test
 
       - name: Compile WPR metadata layout tests
         run: |

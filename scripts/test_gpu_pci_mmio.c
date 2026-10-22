@@ -81,6 +81,7 @@ int mmio_unmap_region(void *address, size_t length)
 int main(void)
 {
     gpu_pci_mmio_mapping_t mapping = {0};
+    uint32_t readback = 0U;
 
     assert(gpu_pci_mmio_map(NULL, 0U, 4096U, 4096U, &mapping) ==
            GPU_PCI_MMIO_INVALID_ARGUMENT);
@@ -94,8 +95,9 @@ int main(void)
     assert(mapping.active && mapping.region.length == 4096U);
     assert((command & 0x0002U) != 0U && (command & 0x0004U) == 0U);
     assert(gpu_mmio_write32(&mapping.region, 0U, 0x12345678U) == GPU_MMIO_OK);
-    assert(gpu_mmio_read32(&mapping.region, 0U, (uint32_t *)&command) ==
+    assert(gpu_mmio_read32(&mapping.region, 0U, &readback) ==
            GPU_MMIO_OK);
+    assert(readback == 0x12345678U);
     assert(gpu_pci_mmio_unmap(&mapping) == GPU_PCI_MMIO_OK);
     assert(!mapping.active && command == 0U && maps == 1U && unmaps == 1U);
 

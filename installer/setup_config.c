@@ -94,6 +94,23 @@ int vanta_setup_timezone_supported(const char *timezone)
     return 0;
 }
 
+int vanta_setup_device_name_valid(const char *device_name)
+{
+    size_t length = text_length(device_name);
+    if (!device_name || length == 0U ||
+        length >= VANTA_SETUP_DEVICE_NAME_MAX)
+        return 0;
+    for (size_t i = 0U; i < length; ++i) {
+        char ch = device_name[i];
+        int alphanumeric = (ch >= 'a' && ch <= 'z') ||
+                           (ch >= 'A' && ch <= 'Z') ||
+                           (ch >= '0' && ch <= '9');
+        if (!alphanumeric && !(ch == '-' && i > 0U && i + 1U < length))
+            return 0;
+    }
+    return 1;
+}
+
 int vanta_setup_config_valid(const vanta_setup_config_t *config)
 {
     if (!config)
@@ -104,7 +121,8 @@ int vanta_setup_config_valid(const vanta_setup_config_t *config)
     if (!(bounded_equal(config->keyboard, sizeof(config->keyboard), "us") ||
           bounded_equal(config->keyboard, sizeof(config->keyboard), "fi")))
         return 0;
-    return vanta_setup_timezone_supported(config->timezone);
+    return vanta_setup_timezone_supported(config->timezone) &&
+           vanta_setup_device_name_valid(config->device_name);
 }
 
 static int append_text(char *output, size_t capacity, size_t *used,
@@ -128,13 +146,15 @@ int vanta_setup_config_encode(
     size_t used = 0U;
     if (!vanta_setup_config_valid(config) || !output || !output_length)
         return 0;
-    if (!append_text(output, output_capacity, &used, "version=1\n") ||
+    if (!append_text(output, output_capacity, &used, "version=2\n") ||
         !append_text(output, output_capacity, &used, "language=") ||
         !append_text(output, output_capacity, &used, config->language) ||
         !append_text(output, output_capacity, &used, "\nkeyboard=") ||
         !append_text(output, output_capacity, &used, config->keyboard) ||
         !append_text(output, output_capacity, &used, "\ntimezone=") ||
         !append_text(output, output_capacity, &used, config->timezone) ||
+        !append_text(output, output_capacity, &used, "\ndevice_name=") ||
+        !append_text(output, output_capacity, &used, config->device_name) ||
         !append_text(output, output_capacity, &used, "\n"))
         return 0;
     *output_length = used;
@@ -182,20 +202,22 @@ int vanta_setup_config_decode(
 {
     size_t position = 0U;
     char version[2];
-    vanta_setup_config_t parsed = {{0}, {0}, {0}};
+    vanta_setup_config_t parsed = {{0}, {0}, {0}, {0}};
 
     if (!input || !output || input_length == 0U ||
         input_length > VANTA_SETUP_CONFIG_MAX_BYTES)
         return 0;
     if (!parse_line(input, input_length, &position, "version",
                     version, sizeof(version)) ||
-        !text_equal(version, "1") ||
+        !text_equal(version, "2") ||
         !parse_line(input, input_length, &position, "language",
                     parsed.language, sizeof(parsed.language)) ||
         !parse_line(input, input_length, &position, "keyboard",
                     parsed.keyboard, sizeof(parsed.keyboard)) ||
         !parse_line(input, input_length, &position, "timezone",
                     parsed.timezone, sizeof(parsed.timezone)) ||
+        !parse_line(input, input_length, &position, "device_name",
+                    parsed.device_name, sizeof(parsed.device_name)) ||
         position != input_length || !vanta_setup_config_valid(&parsed))
         return 0;
     *output = parsed;

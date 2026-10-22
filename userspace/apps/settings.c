@@ -8,6 +8,7 @@
 #include <vanta/gui.h>
 
 #define SETTINGS_PATH "/SYSTEM/VANTASET.CFG"
+#define INSTALL_CONFIG_PATH "/SYSTEM/SETUP.CFG"
 #define CONFIG_CAPACITY 256U
 #define WINDOW_WIDTH 620U
 #define WINDOW_HEIGHT 470U
@@ -41,6 +42,7 @@ static uint32_t selected_setting;
 static uint32_t selected_page;
 static int running = 1;
 static char status_buffer[64] = "Defaults loaded; save to keep changes";
+static char installed_device_name[33] = "Not configured";
 static uint32_t status_color;
 
 static size_t text_length(const char* text)
@@ -171,6 +173,49 @@ static void reset_defaults(void)
     compact_rows = 0;
     text_scale = 1;
     high_contrast = 0;
+}
+
+static void load_installed_device_name(void)
+{
+    char buffer[192];
+    long descriptor = vanta_open(INSTALL_CONFIG_PATH, VANTA_OPEN_READ);
+    if (descriptor < 0)
+        return;
+    long count = vanta_read((int)descriptor, buffer, sizeof(buffer) - 1U);
+    (void)vanta_close((int)descriptor);
+    if (count <= 0 || (size_t)count >= sizeof(buffer))
+        return;
+    buffer[(size_t)count] = '\0';
+
+    const char key[] = "device_name=";
+    size_t key_length = sizeof(key) - 1U;
+    for (size_t i = 0U; i + key_length < (size_t)count; ++i) {
+        if (i != 0U && buffer[i - 1U] != '\n')
+            continue;
+        size_t j = 0U;
+        while (j < key_length && buffer[i + j] == key[j])
+            ++j;
+        if (j != key_length)
+            continue;
+        size_t start = i + key_length;
+        size_t end = start;
+        while (end < (size_t)count && buffer[end] != '\n')
+            ++end;
+        size_t length = end - start;
+        if (length == 0U || length >= sizeof(installed_device_name))
+            return;
+        for (size_t n = 0U; n < length; ++n) {
+            char ch = buffer[start + n];
+            int alphanumeric = (ch >= 'a' && ch <= 'z') ||
+                               (ch >= 'A' && ch <= 'Z') ||
+                               (ch >= '0' && ch <= '9');
+            if (!alphanumeric && !(ch == '-' && n > 0U && n + 1U < length))
+                return;
+            installed_device_name[n] = ch;
+        }
+        installed_device_name[length] = '\0';
+        return;
+    }
 }
 
 static int load_config(void)
@@ -387,11 +432,13 @@ static void render(void)
         add_text(190, 68, "About Settings", text);
         add_text(190, 98, "VantaOS Settings", accent_value);
         add_text(190, 124, "Standalone ring-3 application", text);
-        add_text(190, 150, "Preferences are stored in:", muted);
-        add_text(190, 172, "/SYSTEM/VANTASET.CFG", text);
-        add_text(190, 206, "Theme changes are applied when saved.", muted);
-        add_text(190, 230, "System time and timezone are not configurable yet.", muted);
-        add_text(190, 254, "This build does not claim unsupported features.", muted);
+        add_text(190, 150, "Device name:", muted);
+        add_text(300, 150, installed_device_name, text);
+        add_text(190, 174, "Preferences are stored in:", muted);
+        add_text(190, 196, "/SYSTEM/VANTASET.CFG", text);
+        add_text(190, 224, "Theme changes are applied when saved.", muted);
+        add_text(190, 248, "Time zone is saved by Setup but not applied to the clock.", muted);
+        add_text(190, 272, "Language and keyboard integration is not implemented yet.", muted);
     }
 
     add_rect(172, 365, 202, 38, accent_value);
@@ -448,6 +495,7 @@ int main(int argc, char** argv)
 
     if (load_config())
         set_status("Loaded saved preferences", COLOR_SUCCESS);
+    load_installed_device_name();
 
     vanta_gui_window_request_t request = {
         .width = WINDOW_WIDTH, .height = WINDOW_HEIGHT, .title = "Settings"

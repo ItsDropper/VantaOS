@@ -14,9 +14,9 @@
 static void test_round_trip(void)
 {
     const vanta_setup_config_t input = {
-        "fi", "fi", "Europe/Helsinki"
+        "fi", "fi", "Europe/Helsinki", "VANTA-TEST-PC"
     };
-    vanta_setup_config_t output = {{0}, {0}, {0}};
+    vanta_setup_config_t output = {{0}, {0}, {0}, {0}};
     char encoded[VANTA_SETUP_CONFIG_MAX_BYTES];
     size_t length = 0U;
 
@@ -30,6 +30,7 @@ static void test_round_trip(void)
     assert(output.keyboard[0] == 'f' && output.keyboard[1] == 'i');
     assert(output.timezone[0] == 'E');
     assert(output.timezone[14] == 'i');
+    assert(strcmp(output.device_name, "VANTA-TEST-PC") == 0);
 }
 
 static void test_supported_timezones(void)
@@ -85,27 +86,34 @@ static void test_supported_timezones(void)
     assert(vanta_setup_timezone_supported("Pacific/Auckland"));
     assert(!vanta_setup_timezone_supported("Europe/Imaginary"));
     assert(!vanta_setup_timezone_supported("../etc/passwd"));
+    assert(vanta_setup_device_name_valid("VANTA-PC"));
+    assert(vanta_setup_device_name_valid("desktop-01"));
+    assert(!vanta_setup_device_name_valid(""));
+    assert(!vanta_setup_device_name_valid("-VANTA"));
+    assert(!vanta_setup_device_name_valid("VANTA-"));
+    assert(!vanta_setup_device_name_valid("VANTA PC"));
+    assert(!vanta_setup_device_name_valid("../etc"));
 }
 
 static void test_rejects_invalid_or_injected_config(void)
 {
-    vanta_setup_config_t output = {{0}, {0}, {0}};
+    vanta_setup_config_t output = {{0}, {0}, {0}, {0}};
     const char unsupported[] =
-        "version=1\nlanguage=en\nkeyboard=us\ntimezone=Europe/Imaginary\n";
+        "version=2\nlanguage=en\nkeyboard=us\ntimezone=Europe/Imaginary\ndevice_name=VANTA-PC\n";
     const char injected[] =
-        "version=1\nlanguage=en\nkeyboard=us\ntimezone=Etc/UTC\nextra=1\n";
+        "version=2\nlanguage=en\nkeyboard=us\ntimezone=Etc/UTC\ndevice_name=VANTA-PC\nextra=1\n";
     const char wrong_version[] =
-        "version=2\nlanguage=en\nkeyboard=us\ntimezone=Etc/UTC\n";
+        "version=1\nlanguage=en\nkeyboard=us\ntimezone=Etc/UTC\ndevice_name=VANTA-PC\n";
     assert(!vanta_setup_config_decode(unsupported, sizeof(unsupported) - 1U, &output));
     assert(!vanta_setup_config_decode(injected, sizeof(injected) - 1U, &output));
     assert(!vanta_setup_config_decode(wrong_version, sizeof(wrong_version) - 1U, &output));
-    assert(!vanta_setup_config_decode("version=1\n", 10U, &output));
+    assert(!vanta_setup_config_decode("version=2\n", 10U, &output));
 }
 
 static void test_rejects_short_output_buffer(void)
 {
     const vanta_setup_config_t input = {
-        "en", "us", "Etc/UTC"
+        "en", "us", "Etc/UTC", "VANTA-PC"
     };
     char output[4];
     size_t length = 0U;

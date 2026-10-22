@@ -570,12 +570,21 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
         return EFI_LOAD_ERROR;
     }
 
-    vanta_setup_config_t config = {{0}, {0}, {0}};
+    vanta_setup_config_t config = {{0}, {0}, {0}, {0}};
     config.language[0] = 'e'; config.language[1] = 'n'; config.language[2] = '\0';
     config.keyboard[0] = 'u'; config.keyboard[1] = 's'; config.keyboard[2] = '\0';
     config.timezone[0] = '\0';
+    const char default_device_name[] = "VANTAOS-PC";
+    for (size_t i = 0U; i < sizeof(default_device_name); ++i)
+        config.device_name[i] = default_device_name[i];
 
-    char line[32];
+    char line[64];
+    uint32_t efi_size_mib = 512U;
+    uint32_t theme_choice = 1U;
+    uint32_t accent_choice = 1U;
+    uint32_t density_choice = 1U;
+    uint32_t text_size_choice = 1U;
+    uint32_t contrast_choice = 1U;
     const CHAR16 *missing_payload = NULL;
     Print(L"Checking installer files before any disk can be modified...\r\n");
     if (!preflight_installer_payload(source_root, &missing_payload)) {
@@ -600,6 +609,33 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
             break;
         }
         Print(L"Choose 1 or 2. Valitse 1 tai 2.\r\n");
+    }
+
+    serial_write("VANTAOS_SETUP_DEVICE_NAME_PROMPT\n");
+    for (;;) {
+        print_localized(&config, L"Device name (letters, numbers, internal hyphens) [VANTAOS-PC]: ",
+                        L"Laitteen nimi (kirjaimet, numerot, valiviiva) [VANTAOS-PC]: ");
+        if (!read_line(line, sizeof(line))) {
+            uefi_call_wrapper(source_root->Close, 1, source_root);
+            return EFI_ABORTED;
+        }
+        if (line[0] == '\0')
+            break;
+        size_t name_length = 0U;
+        while (line[name_length] && name_length + 1U < sizeof(config.device_name)) {
+            config.device_name[name_length] = line[name_length];
+            ++name_length;
+        }
+        if (line[name_length] != '\0') {
+            print_localized(&config, L"Name is too long; use at most 32 characters.\r\n",
+                            L"Nimi on liian pitka; kayta enintaan 32 merkkia.\r\n");
+            continue;
+        }
+        config.device_name[name_length] = '\0';
+        if (vanta_setup_device_name_valid(config.device_name))
+            break;
+        print_localized(&config, L"Invalid name. Start and end with a letter or number; use only letters, numbers, and internal hyphens.\r\n",
+                        L"Virheellinen nimi. Aloita ja lopeta kirjaimella tai numerolla; kayta vain kirjaimia, numeroita ja valiviivoja keskella.\r\n");
     }
 
     serial_write("VANTAOS_SETUP_KEYBOARD_PROMPT\n");
@@ -654,6 +690,75 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
     }
     config.timezone[zone_length] = '\0';
 
+    serial_write("VANTAOS_SETUP_DESKTOP_THEME_PROMPT\n");
+    print_localized(&config, L"Desktop theme: 1) Dark [recommended]  2) Light: ",
+                    L"Tyopoydan teema: 1) Tumma [suositus]  2) Vaalea: ");
+    for (;;) {
+        if (!read_line(line, sizeof(line))) { uefi_call_wrapper(source_root->Close, 1, source_root); return EFI_ABORTED; }
+        if (line[0] == '\0' || (line[0] == '1' && line[1] == '\0')) { theme_choice = 1U; break; }
+        if (line[0] == '2' && line[1] == '\0') { theme_choice = 2U; break; }
+        print_localized(&config, L"Choose 1 or 2.\r\n", L"Valitse 1 tai 2.\r\n");
+    }
+
+    serial_write("VANTAOS_SETUP_ACCENT_PROMPT\n");
+    print_localized(&config, L"Desktop accent: 1) Blue [default]  2) Teal  3) Amber  4) Violet: ",
+                    L"Tehosteväri: 1) Sininen [oletus]  2) Turkoosi  3) Meripihka  4) Violetti: ");
+    for (;;) {
+        if (!read_line(line, sizeof(line))) { uefi_call_wrapper(source_root->Close, 1, source_root); return EFI_ABORTED; }
+        if (line[0] >= '1' && line[0] <= '4' && line[1] == '\0') { accent_choice = (uint32_t)(line[0] - '0'); break; }
+        print_localized(&config, L"Choose 1-4.\r\n", L"Valitse 1-4.\r\n");
+    }
+
+    serial_write("VANTAOS_SETUP_EXPLORER_DENSITY_PROMPT\n");
+    print_localized(&config, L"File Explorer rows: 1) Comfortable [default]  2) Compact: ",
+                    L"Tiedostoselaimen rivit: 1) Valja [oletus]  2) Tiivis: ");
+    for (;;) {
+        if (!read_line(line, sizeof(line))) { uefi_call_wrapper(source_root->Close, 1, source_root); return EFI_ABORTED; }
+        if (line[0] == '\0' || (line[0] == '1' && line[1] == '\0')) { density_choice = 1U; break; }
+        if (line[0] == '2' && line[1] == '\0') { density_choice = 2U; break; }
+        print_localized(&config, L"Choose 1 or 2.\r\n", L"Valitse 1 tai 2.\r\n");
+    }
+
+    serial_write("VANTAOS_SETUP_TEXT_SIZE_PROMPT\n");
+    print_localized(&config, L"Settings text size: 1) Normal [default]  2) Large: ",
+                    L"Asetusten tekstikoko: 1) Normaali [oletus]  2) Suuri: ");
+    for (;;) {
+        if (!read_line(line, sizeof(line))) { uefi_call_wrapper(source_root->Close, 1, source_root); return EFI_ABORTED; }
+        if (line[0] == '\0' || (line[0] == '1' && line[1] == '\0')) { text_size_choice = 1U; break; }
+        if (line[0] == '2' && line[1] == '\0') { text_size_choice = 2U; break; }
+        print_localized(&config, L"Choose 1 or 2.\r\n", L"Valitse 1 tai 2.\r\n");
+    }
+
+    serial_write("VANTAOS_SETUP_HIGH_CONTRAST_PROMPT\n");
+    print_localized(&config, L"High contrast in Settings: 1) Off [default]  2) On: ",
+                    L"Suuri kontrasti Asetuksissa: 1) Pois [oletus]  2) Paalla: ");
+    for (;;) {
+        if (!read_line(line, sizeof(line))) { uefi_call_wrapper(source_root->Close, 1, source_root); return EFI_ABORTED; }
+        if (line[0] == '\0' || (line[0] == '1' && line[1] == '\0')) { contrast_choice = 1U; break; }
+        if (line[0] == '2' && line[1] == '\0') { contrast_choice = 2U; break; }
+        print_localized(&config, L"Choose 1 or 2.\r\n", L"Valitse 1 tai 2.\r\n");
+    }
+
+    serial_write("VANTAOS_SETUP_PARTITION_SIZE_PROMPT\n");
+    print_localized(&config,
+        L"EFI partition size: 1) 512 MiB (recommended)  2) 256 MiB [1]: ",
+        L"EFI-osion koko: 1) 512 MiB (suositus)  2) 256 MiB [1]: ");
+    for (;;) {
+        if (!read_line(line, sizeof(line))) {
+            uefi_call_wrapper(source_root->Close, 1, source_root);
+            return EFI_ABORTED;
+        }
+        if (line[0] == '\0' || (line[0] == '1' && line[1] == '\0')) {
+            efi_size_mib = 512U;
+            break;
+        }
+        if (line[0] == '2' && line[1] == '\0') {
+            efi_size_mib = 256U;
+            break;
+        }
+        print_localized(&config, L"Choose 1 or 2.\r\n", L"Valitse 1 tai 2.\r\n");
+    }
+
     if (!vanta_setup_config_valid(&config)) {
         Print(L"ERROR: setup preferences failed validation.\r\n");
         uefi_call_wrapper(source_root->Close, 1, source_root);
@@ -666,17 +771,37 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
         Print(L"  Kayttokieli: Suomi\r\n");
         Print(L"  Nappaimistoasetus: %s\r\n",
               config.keyboard[0] == 'f' ? L"Finnish" : L"US");
+        Print(L"  Laitteen nimi: %a\r\n", config.device_name);
         Print(L"  Aikavyohyke: %a\r\n", config.timezone);
     } else {
         Print(L"  Preferred language: English\r\n");
         Print(L"  Keyboard preference: %s\r\n",
               config.keyboard[0] == 'f' ? L"Finnish" : L"US");
+        Print(L"  Device name: %a\r\n", config.device_name);
         Print(L"  Time zone: %a\r\n", config.timezone);
     }
     print_localized(&config, L"  Partition scheme: GPT (UEFI)\r\n", L"  Osiointitapa: GPT (UEFI)\r\n");
+    print_localized(&config, L"  EFI partition size: ", L"  EFI-osion koko: ");
+    Print(L"%u MiB\r\n", efi_size_mib);
+    print_localized(&config, L"  Desktop theme: ", L"  Tyopoydan teema: ");
+    print_localized(&config, theme_choice == 1U ? L"Dark\r\n" : L"Light\r\n",
+                    theme_choice == 1U ? L"Tumma\r\n" : L"Vaalea\r\n");
+    print_localized(&config, L"  Desktop accent: ", L"  Tehosteväri: ");
+    static const CHAR16 *const accent_names_en[] = { L"Blue", L"Teal", L"Amber", L"Violet" };
+    static const CHAR16 *const accent_names_fi[] = { L"Sininen", L"Turkoosi", L"Meripihka", L"Violetti" };
+    Print(L"%s\r\n", config.language[0] == 'f' ? accent_names_fi[accent_choice - 1U] : accent_names_en[accent_choice - 1U]);
+    print_localized(&config, L"  Explorer rows: ", L"  Selaimen rivit: ");
+    print_localized(&config, density_choice == 1U ? L"Comfortable\r\n" : L"Compact\r\n",
+                    density_choice == 1U ? L"Valja\r\n" : L"Tiivis\r\n");
+    print_localized(&config, L"  Settings text size: ", L"  Asetusten tekstikoko: ");
+    print_localized(&config, text_size_choice == 1U ? L"Normal\r\n" : L"Large\r\n",
+                    text_size_choice == 1U ? L"Normaali\r\n" : L"Suuri\r\n");
+    print_localized(&config, L"  High contrast: ", L"  Suuri kontrasti: ");
+    print_localized(&config, contrast_choice == 1U ? L"Off\r\n" : L"On\r\n",
+                    contrast_choice == 1U ? L"Pois\r\n" : L"Paalla\r\n");
     print_localized(&config, L"  Filesystems: FAT32 EFI System Partition + FAT32 system partition\r\n", L"  Tiedostojarjestelmat: FAT32 EFI-osio ja FAT32 jarjestelmaosio\r\n");
     print_localized(&config, L"  Setup preferences will be saved to \\SYSTEM\\SETUP.CFG.\r\n", L"  Asetukset tallennetaan tiedostoon \\SYSTEM\\SETUP.CFG.\r\n");
-    print_localized(&config, L"  Language and keyboard preferences are saved metadata; runtime localization/keymap integration is not yet implemented.\r\n\r\n", L"  Kieli- ja nappaimistoasetukset tallennetaan, mutta kayttojarjestelman kieli- ja asettelutuki ei ole viela toteutettu.\r\n\r\n");
+    print_localized(&config, L"  Device name is shown in Settings. Language and keyboard are saved preferences; runtime localization/keymap integration is not yet implemented. The selected time zone is saved but not applied to the active clock.\r\n\r\n", L"  Laitteen nimi naytetaan Asetuksissa. Kieli ja nappaimisto tallennetaan asetuksiksi, mutta niita ei viela sovelleta kayttojarjestelmassa. Aikavyohyke tallennetaan, mutta sita ei viela sovelleta kelloon.\r\n\r\n");
 
     setup_disk_t disks[SETUP_MAX_DISKS];
     UINTN disk_count = 0U;
@@ -746,8 +871,8 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
               selected_path ? selected_path : L"(unavailable)");
     }
     vanta_installer_layout_t layout;
-    if (vanta_installer_plan_gpt(target->sector_count,
-            VANTA_INSTALLER_SECTOR_SIZE, &layout) != VANTA_INSTALLER_LAYOUT_OK) {
+    if (vanta_installer_plan_gpt_with_efi_size(target->sector_count,
+            VANTA_INSTALLER_SECTOR_SIZE, efi_size_mib, &layout) != VANTA_INSTALLER_LAYOUT_OK) {
         Print(L"ERROR: disk layout is unsupported. No disks changed.\r\n");
         if (selected_path)
             uefi_call_wrapper(BS->FreePool, 1, selected_path);
@@ -759,6 +884,9 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
         L"\r\nOsiointisuunnitelma (esikatselu; ei kirjoituksia viela):\r\n");
     print_localized(&config, L"  GPT, 1 MiB alignment\r\n",
                     L"  GPT, 1 MiB kohdistus\r\n");
+    print_localized(&config, L"  EFI partition size: ",
+                    L"  EFI-osion koko: ");
+    Print(L"%u MiB\r\n", efi_size_mib);
     print_localized(&config, L"  EFI System Partition: ",
                     L"  EFI-jarjestelmaosio: ");
     Print(L"%u MiB, FAT32\r\n", (UINT32)(layout.efi.sector_count / 2048U));
@@ -959,6 +1087,33 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
         status = write_text_file(system_root, L"\\SYSTEM\\SETUP.CFG",
                                  encoded, (UINTN)encoded_length);
 
+    char settings_config[128];
+    size_t settings_length = 0U;
+    const char *accent_name = accent_choice == 2U ? "teal" :
+        accent_choice == 3U ? "amber" : accent_choice == 4U ? "violet" : "blue";
+    const char *theme_name = theme_choice == 2U ? "light" : "dark";
+    const char *density_value = density_choice == 2U ? "1" : "0";
+    const char *text_size_value = text_size_choice == 2U ? "2" : "1";
+    const char *contrast_value = contrast_choice == 2U ? "1" : "0";
+    const char *settings_parts[] = {
+        "VANTA_SETTINGS=2\naccent=", accent_name,
+        "\ntheme=", theme_name,
+        "\ncompact=", density_value,
+        "\ntext_scale=", text_size_value,
+        "\ncontrast=", contrast_value, "\n"
+    };
+    for (size_t part = 0U; part < sizeof(settings_parts) / sizeof(settings_parts[0]); ++part) {
+        size_t length = 0U;
+        while (settings_parts[part][length]) ++length;
+        if (settings_length + length >= sizeof(settings_config)) { status = EFI_BAD_BUFFER_SIZE; break; }
+        for (size_t i = 0U; i < length; ++i) settings_config[settings_length++] = settings_parts[part][i];
+    }
+    if (!EFI_ERROR(status))
+        status = write_text_file(system_root, L"\\SYSTEM\\VANTASET.CFG",
+                                 settings_config, (UINTN)settings_length);
+    if (!EFI_ERROR(status))
+        serial_write("VANTAOS_SETUP_DESKTOP_DEFAULTS_OK\n");
+
     uefi_call_wrapper(system_root->Close, 1, system_root);
     uefi_call_wrapper(efi_root->Close, 1, efi_root);
     uefi_call_wrapper(source_root->Close, 1, source_root);
@@ -974,10 +1129,33 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
                     L"\r\nVantaOS-asennus valmistui.\r\n");
     print_localized(&config, L"Remove the installer media, then reboot and choose the installed disk.\r\n",
                     L"Irrota asennusmedia, kaynnista uudelleen ja valitse asennettu levy.\r\n");
-    print_localized(&config, L"Press any key to restart...\r\n",
-                    L"Kaynnista uudelleen painamalla mita tahansa nappainta...\r\n");
-    EFI_INPUT_KEY key;
-    (void)uefi_call_wrapper(ST->ConIn->ReadKeyStroke, 2, ST->ConIn, &key);
-    (void)uefi_call_wrapper(RT->ResetSystem, 4, EfiResetCold, EFI_SUCCESS, 0U, NULL);
-    return EFI_SUCCESS;
+    serial_write("VANTAOS_SETUP_FINISH_ACTION_PROMPT\n");
+    for (;;) {
+        print_localized(&config,
+            L"Finish: R) reboot  S) shut down  Enter) return to firmware [R]: ",
+            L"Valmis: R) kaynnista uudelleen  S) sammuta  Enter) palaa laiteohjelmistoon [R]: ");
+        if (!read_line(line, sizeof(line)))
+            return EFI_ABORTED;
+        if (line[0] == '\0' ||
+            ((line[0] == 'r' || line[0] == 'R') && line[1] == '\0')) {
+            serial_write("VANTAOS_SETUP_REBOOT_REQUESTED\n");
+            (void)uefi_call_wrapper(RT->ResetSystem, 4,
+                                    EfiResetCold, EFI_SUCCESS, 0U, NULL);
+            return EFI_SUCCESS;
+        }
+        if ((line[0] == 's' || line[0] == 'S') && line[1] == '\0') {
+            serial_write("VANTAOS_SETUP_SHUTDOWN_REQUESTED\n");
+            (void)uefi_call_wrapper(RT->ResetSystem, 4,
+                                    EfiResetShutdown, EFI_SUCCESS, 0U, NULL);
+            return EFI_SUCCESS;
+        }
+        if ((line[0] == 'e' || line[0] == 'E') && line[1] == '\0') {
+            print_localized(&config, L"Returning to firmware.\r\n",
+                            L"Palataan laiteohjelmistoon.\r\n");
+            serial_write("VANTAOS_SETUP_EXIT_REQUESTED\n");
+            return EFI_SUCCESS;
+        }
+        print_localized(&config, L"Choose R, S, or Enter.\r\n",
+                        L"Valitse R, S tai Enter.\r\n");
+    }
 }

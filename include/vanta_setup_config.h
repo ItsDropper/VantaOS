@@ -10,21 +10,24 @@
 
 #include <stddef.h>
 
-#define VANTA_SETUP_CONFIG_MAX_BYTES 160U
+#define VANTA_SETUP_CONFIG_MAX_BYTES 192U
 #define VANTA_SETUP_LANGUAGE_MAX 3U
 #define VANTA_SETUP_KEYBOARD_MAX 3U
 #define VANTA_SETUP_TIMEZONE_MAX 40U
+#define VANTA_SETUP_DEVICE_NAME_MAX 33U
 
 typedef struct {
     char language[VANTA_SETUP_LANGUAGE_MAX];
     char keyboard[VANTA_SETUP_KEYBOARD_MAX];
     char timezone[VANTA_SETUP_TIMEZONE_MAX];
+    char device_name[VANTA_SETUP_DEVICE_NAME_MAX];
 } vanta_setup_config_t;
 
 /* IDs are deliberately limited to the zone choices shipped by setup. */
 int vanta_setup_timezone_supported(const char *timezone);
 size_t vanta_setup_timezone_count(void);
 const char *vanta_setup_timezone_at(size_t index);
+int vanta_setup_device_name_valid(const char *device_name);
 int vanta_setup_config_valid(const vanta_setup_config_t *config);
 
 /* Versioned, bounded, newline-terminated UTF-8 text; no dynamic allocation. */

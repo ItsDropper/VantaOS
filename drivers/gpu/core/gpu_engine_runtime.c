@@ -143,8 +143,10 @@ gpu_engine_runtime_status_t gpu_engine_runtime_destroy(
 
     if (runtime == NULL || runtime->initialized == 0U || quiesce == NULL)
         return GPU_ENGINE_RUNTIME_INVALID;
-    if (runtime->ring.read_sequence != runtime->ring.write_sequence ||
-        runtime->ring.completed_fence < runtime->ring.submitted_fence)
+    /* Healthy runtimes drain first; failed devices must quiesce before freeing. */
+    if (runtime->failed == 0U &&
+        (runtime->ring.read_sequence != runtime->ring.write_sequence ||
+         runtime->ring.completed_fence < runtime->ring.submitted_fence))
         return GPU_ENGINE_RUNTIME_NOT_READY;
     if (!quiesce(context)) {
         runtime->failed = 1U;

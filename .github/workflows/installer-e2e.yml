@@ -158,6 +158,9 @@ jobs:
               wait_marker("VANTAOS_SETUP_LANGUAGE_PROMPT")
               key("2")
               key("ret")
+              wait_marker("VANTAOS_SETUP_DEVICE_NAME_PROMPT")
+              for key_name in ("v", "a", "n", "t", "a", "0", "1", "ret"):
+                  key(key_name)
               wait_marker("VANTAOS_SETUP_KEYBOARD_PROMPT")
               key("2")
               key("ret")
@@ -208,10 +211,11 @@ jobs:
           mcopy -i install-target.img@@1048576 ::/EFI/BOOT/BOOTX64.EFI /tmp/installed-bootx64.efi
           test -s /tmp/installed-bootx64.efi
           mcopy -i install-target.img@@537919488 ::/SYSTEM/SETUP.CFG /tmp/installed-setup.cfg
-          grep -q '^version=1$' /tmp/installed-setup.cfg
+          grep -q '^version=2$' /tmp/installed-setup.cfg
           grep -q '^language=fi$' /tmp/installed-setup.cfg
           grep -q '^keyboard=fi$' /tmp/installed-setup.cfg
           grep -q '^timezone=Europe/London$' /tmp/installed-setup.cfg
+          grep -q '^device_name=vanta01$' /tmp/installed-setup.cfg
           mcopy -i install-target.img@@537919488 ::/TERMINAL.ELF /tmp/installed-terminal.elf
           mcopy -i install-target.img@@537919488 ::/SYSTEM/SETTINGS.ELF /tmp/installed-settings.elf
           mcopy -i install-target.img@@537919488 ::/EXPLORER.ELF /tmp/installed-explorer.elf

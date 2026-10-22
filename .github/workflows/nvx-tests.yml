@@ -33,6 +33,8 @@ on:
       - "scripts/test_gpu_dma.c"
       - "include/gpu_dma_sync.h"
       - "scripts/test_gpu_dma_sync.c"
+      - "include/gpu_engine_runtime.h"
+      - "scripts/test_gpu_engine_runtime.c"
       - "scripts/test_gpu_bringup.c"
       - "scripts/test_gpu_pci_resources.c"
       - "drivers/gpu/intel/**"
@@ -393,6 +395,12 @@ jobs:
 
       - name: Test GPU DMA ownership transitions, range checks and stale handles
         run: /tmp/vantaos-gpu-dma-sync-test
+
+      - name: Compile integrated GPU DMA ring runtime tests
+        run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_gpu_engine_runtime.c drivers/gpu/core/gpu_engine_runtime.c drivers/gpu/core/gpu_engine.c drivers/gpu/core/gpu_dma_sync.c drivers/gpu/core/gpu_dma.c -o /tmp/vantaos-gpu-engine-runtime-test
+
+      - name: Test DMA-backed ring submission, fences, quiesce and teardown
+        run: /tmp/vantaos-gpu-engine-runtime-test
 
       - name: Compile WPR metadata layout tests
         run: |

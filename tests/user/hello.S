@@ -89,11 +89,30 @@ _start:
     cmp $-22, %rax
     jne file_fail
 
+    /* Create a parent endpoint and pass its capability as decimal argv. */
+    mov $26, %eax
+    int $0x80
+    test %rax, %rax
+    jle file_fail
+    mov %rax, %r15
+    lea parent_endpoint_string+20(%rip), %rdi
+    movb $0, (%rdi)
+    mov %r15, %rax
+    mov $10, %r8
+    mov $20, %rcx
+endpoint_format_loop:
+    xor %edx, %edx
+    div %r8
+    add $48, %dl
+    dec %rdi
+    mov %dl, (%rdi)
+    loop endpoint_format_loop
+
     /* Launch a separate ELF from FAT32 with a kernel-owned argv copy. */
     mov $6, %eax
     lea child_path(%rip), %rdi
     lea child_argv(%rip), %rsi
-    mov $2, %edx
+    mov $3, %edx
     int $0x80
     test %rax, %rax
     jle file_fail
@@ -358,6 +377,24 @@ open_until_full:
     mov $(spawn_message_end - spawn_message), %esi
     int $0x80
 
+    /* Receive the child's endpoint token and send a reply across ring 3 processes. */
+    mov $28, %eax
+    mov %r15, %rdi
+    lea child_endpoint_token(%rip), %rsi
+    mov $8, %edx
+    int $0x80
+    cmp $8, %rax
+    jne file_fail
+    mov child_endpoint_token(%rip), %rdi
+    test %rdi, %rdi
+    jle file_fail
+    mov $27, %eax
+    lea ipc_reply(%rip), %rsi
+    mov $(ipc_reply_end - ipc_reply), %edx
+    int $0x80
+    test %rax, %rax
+    jne file_fail
+
     /* Block until the child exits and verify the kernel preserved its status. */
     mov $7, %eax
     mov %r14, %rdi
@@ -416,6 +453,7 @@ child_path:
 child_argv:
     .quad child_path
     .quad child_argument
+    .quad parent_endpoint_string
 child_argument:
     .asciz "spawned-child"
 invalid_child_argv:
@@ -434,6 +472,9 @@ config_data:
 config_data_end:
 missing_path:
     .asciz "/NO-SUCH-FILE.TXT"
+ipc_reply:
+    .ascii "ack"
+ipc_reply_end:
 fixture:
     .ascii "VANTAOS_USER_FILE_FIXTURE\n"
 fixture_end:
@@ -451,6 +492,12 @@ file_failure_end:
 .align 16
 file_buffer:
     .skip config_data_end - config_data
+.align 8
+parent_endpoint_string:
+    .skip 21
+.align 8
+child_endpoint_token:
+    .skip 8
 .align 4
 child_status:
     .skip 4

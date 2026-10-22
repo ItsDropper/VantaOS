@@ -91,7 +91,15 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    if (!run_ipc_syscall_test())\n    {\n        (void)vanta_write(failure, sizeof(failure) - 1U);\n        return 13;\n    }\n    static const char ipc_success[] = "VANTAOS_IPC_RING3_SYSCALL_OK\\n";\n    (void)vanta_write(ipc_success, sizeof(ipc_success) - 1U);\n\n    char entries[1024];
+    if (!run_ipc_syscall_test())
+    {
+        (void)vanta_write(failure, sizeof(failure) - 1U);
+        return 13;
+    }
+    static const char ipc_success[] = "VANTAOS_IPC_RING3_SYSCALL_OK\n";
+    (void)vanta_write(ipc_success, sizeof(ipc_success) - 1U);
+
+    char entries[1024];
     long listed = vanta_listdir("/", entries, sizeof(entries));
     if (listed < 0 || !string_contains(entries, "CHILD.ELF") ||
         !string_contains(entries, "USERDATA.TXT"))

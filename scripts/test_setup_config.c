@@ -33,6 +33,13 @@ static void test_round_trip(void)
 
 static void test_supported_timezones(void)
 {
+    assert(vanta_setup_timezone_count() == 36U);
+    assert(vanta_setup_timezone_at(0U) != NULL);
+    assert(vanta_setup_timezone_at(36U) == NULL);
+    assert(vanta_setup_timezone_supported(vanta_setup_timezone_at(0U)));
+    assert(vanta_setup_timezone_supported(vanta_setup_timezone_at(35U)));
+    for (size_t i = 0U; i < vanta_setup_timezone_count(); ++i)
+        assert(vanta_setup_timezone_supported(vanta_setup_timezone_at(i)));
     assert(vanta_setup_timezone_supported("Etc/UTC"));
     assert(vanta_setup_timezone_supported("Europe/Helsinki"));
     assert(vanta_setup_timezone_supported("Europe/Stockholm"));

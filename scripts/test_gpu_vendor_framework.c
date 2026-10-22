@@ -12,6 +12,7 @@
 #include <stddef.h>
 
 
+static int test_probe_fails;
 static int test_initialize_fails;
 static int test_probe_calls;
 static int test_initialize_calls;
@@ -25,7 +26,7 @@ static int test_driver_match(const struct pci_device *device)
 static int test_driver_probe(gpu_device_t *device)
 {
     ++test_probe_calls;
-    return device != 0 && device->state == GPU_DEVICE_PROBING;
+    return device != 0 && device->state == GPU_DEVICE_PROBING && !test_probe_fails;
 }
 
 static int test_driver_initialize(gpu_device_t *device)
@@ -217,6 +218,7 @@ int main(void)
         gpu_pci_match_t intel_match;
         assert(gpu_classify_pci_function(&intel, &intel_match));
         assert(gpu_device_construct(&attached, &intel, &intel_match));
+        test_probe_fails = 0;
         test_initialize_fails = 0;
         test_probe_calls = test_initialize_calls = test_shutdown_calls = 0;
         assert(gpu_driver_start(&attached, &test_driver));
@@ -232,6 +234,13 @@ int main(void)
         assert(attached.verified_capabilities == 0U);
         assert(test_shutdown_calls == 1);
         assert(!gpu_driver_start(&attached, &test_driver));
+        assert(test_initialize_calls == 2);
+
+        assert(gpu_device_construct(&attached, &intel, &intel_match));
+        test_probe_fails = 1;
+        assert(!gpu_driver_start(&attached, &test_driver));
+        assert(attached.state == GPU_DEVICE_FAILED);
+        assert(test_shutdown_calls == 2);
         assert(test_initialize_calls == 2);
     }
     assert(strcmp(gpu_vendor_name(GPU_VENDOR_AMD), "AMD") == 0);

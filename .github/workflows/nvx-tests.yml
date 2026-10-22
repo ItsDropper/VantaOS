@@ -158,10 +158,7 @@ jobs:
         run: /tmp/vantaos-gpu-vendor-framework-test
 
       - name: Compile shared GPU MMIO access tests with strict warnings
-        run: |
-          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \\
-            scripts/test_gpu_mmio.c drivers/gpu/core/gpu_mmio.c \\
-            -o /tmp/vantaos-gpu-mmio-test
+        run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_gpu_mmio.c drivers/gpu/core/gpu_mmio.c -o /tmp/vantaos-gpu-mmio-test
 
       - name: Test shared GPU MMIO bounds, alignment, reads and writes
         run: /tmp/vantaos-gpu-mmio-test

@@ -99,6 +99,39 @@ int gpu_driver_matches(const gpu_driver_descriptor_t *driver,
     return driver->match(device) != 0;
 }
 
+int gpu_driver_start(gpu_device_t *device,
+                     const gpu_driver_descriptor_t *driver)
+{
+    if (device == NULL || device->pci_device == NULL ||
+        device->state != GPU_DEVICE_DISCOVERED ||
+        !gpu_driver_matches(driver, device->pci_device) ||
+        driver->ops->probe == NULL || driver->ops->initialize == NULL)
+        return 0;
+
+    device->ops = driver->ops;
+    if (!gpu_device_transition(device, GPU_DEVICE_PROBING))
+        return 0;
+    if (!device->ops->probe(device)) {
+        (void)gpu_device_transition(device, GPU_DEVICE_FAILED);
+        return 0;
+    }
+    if (!device->ops->initialize(device)) {
+        if (device->ops->shutdown != NULL)
+            device->ops->shutdown(device);
+        (void)gpu_device_transition(device, GPU_DEVICE_FAILED);
+        return 0;
+    }
+    if (!gpu_device_transition(device, GPU_DEVICE_INITIALIZED) ||
+        !gpu_device_transition(device, GPU_DEVICE_RUNNING)) {
+        if (device->ops->shutdown != NULL)
+            device->ops->shutdown(device);
+        if (device->state != GPU_DEVICE_FAILED)
+            (void)gpu_device_transition(device, GPU_DEVICE_FAILED);
+        return 0;
+    }
+    return 1;
+}
+
 int gpu_discover_pci(gpu_device_t *out_devices, size_t capacity,
                      size_t *out_count)
 {

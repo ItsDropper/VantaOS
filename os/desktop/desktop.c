@@ -25,38 +25,8 @@
 #include <stdint.h>
 
 static int terminal_window_open;
-static unsigned int terminal_last_blink_state;
 static unsigned int desktop_last_clock_refresh;
 static void terminal_close_window(void);
-
-static void desktop_draw_terminal_window(int x, int y, int width, int height)
-{
-    if (!terminal_window_open || width < 80 || height < 70)
-        return;
-    const size_t total = terminal_history_count();
-    size_t visible = (size_t)(height - 64) / 16U;
-    if (visible == 0U) return;
-    size_t first = total > visible ? total - visible : 0U;
-    size_t scroll = terminal_get_scroll_offset();
-    if (scroll > first) first = 0U;
-    else first -= scroll;
-    int max_chars = (width - 28) / 8;
-    if (max_chars > 80) max_chars = 80;
-    if (max_chars < 1) return;
-    char line[81];
-    graphics_fill_rect(x + 8, y + 50, width - 16, height - 58,
-                       0x000B111A);
-    for (size_t row = 0; row < visible && first + row < total; row++)
-    {
-        for (size_t i = 0; i < sizeof(line); i++) line[i] = '\0';
-        if (terminal_history_line(first + row, line, sizeof(line)) < 0)
-            continue;
-        line[max_chars] = '\0';
-        graphics_draw_text(x + 16, y + 56 + (int)row * 16,
-                           line, 0x00D8E2EDU, 1U);
-    }
-    graphics_fill_rect(x + 16, y + height - 18, 18, 2, 0x005DA9FFU);
-}
 
 static int desktop_files_click(int x, int y, int width, int height,
                                int pointer_x, int pointer_y, int button)
@@ -105,15 +75,6 @@ static int desktop_settings_click(int x, int y, int width, int height,
     return 0;
 }
 
-static void desktop_close_terminal(void)
-{
-    if (terminal_window_open)
-    {
-        terminal_process_request_exit();
-        terminal_close_window();
-    }
-}
-
 static void desktop_register_builtin_windows(void)
 {
     int screen_w = (int)graphics_get_width();
@@ -132,20 +93,10 @@ static void desktop_register_builtin_windows(void)
     if (app_h > 440) app_h = 440;
     if (app_w < 240) app_w = 240;
     if (app_h < 160) app_h = 160;
-    int term_w = screen_w - 32;
-    int term_h = work_h - 64;
-    if (term_w > 800) term_w = 800;
-    if (term_h > 480) term_h = 480;
-    if (term_w < 240) term_w = 240;
-    if (term_h < 160) term_h = 160;
-
     (void)gui_server_register_builtin("Files",
         (screen_w - files_w) / 2, (work_h - files_h) / 2,
         files_w, files_h, desktop_draw_files, desktop_files_click, 0);
-    (void)gui_server_register_builtin("Terminal",
-        (screen_w - term_w) / 2, (work_h - term_h) / 2,
-        term_w, term_h, desktop_draw_terminal_window, 0,
-        desktop_close_terminal);
+    /* Terminal is the ring-3 /TERMINAL.ELF window, not a second built-in. */
     (void)gui_server_register_builtin("System",
         (screen_w - app_w) / 2, (work_h - app_h) / 2,
         app_w, app_h, desktop_draw_system, 0, 0);
@@ -216,7 +167,6 @@ int desktop_launch_terminal(void)
 {
     if (terminal_window_open)
     {
-        (void)gui_server_set_builtin_visible("Terminal", 1);
         graphics_select_panel(3);
         desktop_gui_present();
         return 1;
@@ -229,11 +179,9 @@ int desktop_launch_terminal(void)
 
     terminal_window_open = 1;
     graphics_clear_terminal_close_requested();
-    terminal_last_blink_state = interrupts_get_ticks() / 50U;
 
     graphics_set_terminal_running(1);
     graphics_select_panel(3);
-    (void)gui_server_set_builtin_visible("Terminal", 1);
     desktop_gui_present();
 
     return 1;
@@ -249,7 +197,6 @@ static void terminal_close_window(void)
     shell_initialize();
 
     graphics_select_panel(0);
-    (void)gui_server_set_builtin_visible("Terminal", 0);
     desktop_gui_present();
 }
 
@@ -257,7 +204,6 @@ void desktop_initialize(multiboot_info_t* mbd)
 {
     (void)mbd;
     terminal_window_open = 0;
-    terminal_last_blink_state = 0;
     desktop_last_clock_refresh = 0;
     (void)desktop_theme_reload();
     desktop_register_builtin_windows();
@@ -318,15 +264,7 @@ void desktop_update(void)
             {
                 desktop_gui_present_terminal_fast();
             }
-            else
-            {
-                unsigned int blink_state = interrupts_get_ticks() / 50U;
-                if (blink_state != terminal_last_blink_state)
-                {
-                    terminal_last_blink_state = blink_state;
-                    desktop_gui_present_terminal_fast();
-                }
-            }
+            /* The ring-3 terminal owns its cursor and redraws on input/output. */
         }
         else
         {

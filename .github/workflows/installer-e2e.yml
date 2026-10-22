@@ -169,6 +169,8 @@ jobs:
               key("6")
               key("ret")
 
+              wait_marker("VANTAOS_SETUP_PARTITION_SIZE_PROMPT")
+              key("ret")
               wait_marker("VANTAOS_SETUP_DISK_PROMPT")
               key("1")
               key("ret")

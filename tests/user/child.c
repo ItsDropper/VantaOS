@@ -27,12 +27,12 @@ static int run_ipc_syscall_test(void)
                        VANTA_IPC_MESSAGE_MAX + 1U) != -VANTA_EINVAL)
         return 0;
 
-    if (vanta_ipc_send((uint64_t)endpoint, "a", 1U) != 0 ||
+    if (vanta_ipc_send((uint64_t)endpoint, "ab", 2U) != 0 ||
         vanta_ipc_send((uint64_t)endpoint, "b", 1U) != 0 ||
         vanta_ipc_receive((uint64_t)endpoint, buffer, 1U) !=
             -VANTA_EMSGSIZE ||
-        vanta_ipc_receive((uint64_t)endpoint, buffer, sizeof(buffer)) != 1L ||
-        buffer[0] != 'a' ||
+        vanta_ipc_receive((uint64_t)endpoint, buffer, sizeof(buffer)) != 2L ||
+        buffer[0] != 'a' || buffer[1] != 'b' ||
         vanta_ipc_receive((uint64_t)endpoint, buffer, sizeof(buffer)) != 1L ||
         buffer[0] != 'b')
         return 0;

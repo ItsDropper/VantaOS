@@ -935,6 +935,7 @@ jobs:
             set +e
             timeout 30s qemu-system-x86_64 \
               -machine pc \
+              -cpu max \
               -smp "${cpus}" \
               -m "${memory}M" \
               -drive file=VantaOS.iso,media=cdrom,format=raw \

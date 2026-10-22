@@ -9,6 +9,24 @@
 #include <assert.h>
 #include <stdint.h>
 
+static int validate_nonzero(const gpu_engine_transaction_t *tx)
+{
+    if (tx == NULL || tx->ring == NULL || tx->written_words == 0U)
+        return 0;
+    for (size_t i = 0U; i < tx->written_words; ++i) {
+        size_t index = (size_t)((tx->start_sequence + i) % tx->ring->capacity);
+        if (tx->ring->words[index] == 0U)
+            return 0;
+    }
+    return 1;
+}
+
+static int validate_reject(const gpu_engine_transaction_t *tx)
+{
+    (void)tx;
+    return 0;
+}
+
 static int publish_ok(void *context, uint64_t sequence)
 {
     uint64_t *observed = (uint64_t *)context;
@@ -75,12 +93,17 @@ int main(void)
     assert(gpu_engine_ring_enable(&ring) == GPU_ENGINE_OK);
     assert(gpu_engine_issue_fence(&ring, &fence) == GPU_ENGINE_OK);
     assert(gpu_engine_reserve(&ring, 1U, &tx) == GPU_ENGINE_OK);
+    assert(gpu_engine_emit(&tx, 0xABCDEF00U) == GPU_ENGINE_OK);
+    assert(gpu_engine_submit(&tx, validate_reject, publish_ok, &published_sequence) == GPU_ENGINE_BAD_PACKET);
+    assert(published_sequence == 0U && ring.write_sequence == 0U);
+    gpu_engine_abort(&tx);
+    assert(gpu_engine_reserve(&ring, 1U, &tx) == GPU_ENGINE_OK);
     assert(gpu_engine_emit(&tx, 0xABCDEF01U) == GPU_ENGINE_OK);
-    assert(gpu_engine_submit(&tx, publish_ok, &published_sequence) == GPU_ENGINE_OK);
+    assert(gpu_engine_submit(&tx, validate_nonzero, publish_ok, &published_sequence) == GPU_ENGINE_OK);
     assert(published_sequence == 1U);
     assert(gpu_engine_reserve(&ring, 1U, &tx) == GPU_ENGINE_OK);
     assert(gpu_engine_emit(&tx, 0xABCDEF02U) == GPU_ENGINE_OK);
-    assert(gpu_engine_submit(&tx, publish_fail, NULL) == GPU_ENGINE_DEVICE_ERROR);
+    assert(gpu_engine_submit(&tx, validate_nonzero, publish_fail, NULL) == GPU_ENGINE_DEVICE_ERROR);
     assert(ring.submission_enabled == 0U);
     assert(ring.write_sequence == 1U);
     return 0;

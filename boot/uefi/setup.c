@@ -616,8 +616,8 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
             setup_mode = 2U;
             break;
         }
-        print_localized(&config, L"Choose 1 or 2.\\r\\n",
-                        L"Valitse 1 tai 2.\\r\\n");
+        print_localized(&config, L"Choose 1 or 2.\r\n",
+                        L"Valitse 1 tai 2.\r\n");
     }
 
     if (setup_mode == 2U) {

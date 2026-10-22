@@ -29,6 +29,8 @@ on:
       - "include/gpu_engine.h"
       - "scripts/test_gpu_engine.c"
       - "include/gpu_bringup.h"
+      - "include/gpu_dma.h"
+      - "scripts/test_gpu_dma.c"
       - "scripts/test_gpu_bringup.c"
       - "scripts/test_gpu_pci_resources.c"
       - "drivers/gpu/intel/**"
@@ -373,10 +375,16 @@ jobs:
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
             scripts/test_nvx_dma.c drivers/gpu/nvx/memory/nvx_dma.c \
-            -o /tmp/vantaos-nvx-dma-test
+            drivers/gpu/core/gpu_dma.c -o /tmp/vantaos-nvx-dma-test
 
       - name: Test contiguous DMA allocation bounds, validation and cleanup
         run: /tmp/vantaos-nvx-dma-test
+
+      - name: Compile shared GPU DMA allocator tests
+        run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_gpu_dma.c drivers/gpu/core/gpu_dma.c -o /tmp/vantaos-gpu-dma-test
+
+      - name: Test shared GPU DMA allocation, contiguity, bounds and cleanup
+        run: /tmp/vantaos-gpu-dma-test
 
       - name: Compile WPR metadata layout tests
         run: |

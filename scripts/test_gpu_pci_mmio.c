@@ -13,6 +13,7 @@
 static uint16_t command;
 static int fail_enable, fail_map, fail_unmap;
 static unsigned maps, unmaps;
+static uint64_t fake_bar_size = 4096U;
 static uint8_t fake_regs[4096] __attribute__((aligned(4096)));
 static const struct pci_device gpu = {
     .bus = 1U, .slot = 0U, .function = 0U,
@@ -45,6 +46,15 @@ int pci_get_bar(const struct pci_device *device, uint8_t index,
     *address = 0xE0000000ULL;
     *is_io = 0;
     *is_64bit = 0;
+    return 1;
+}
+int pci_get_bar_size(const struct pci_device *device, uint8_t index,
+                     uint64_t *size)
+{
+    (void)device;
+    if (size == NULL || index != 0U || (command & 0x0007U) != 0U)
+        return 0;
+    *size = fake_bar_size;
     return 1;
 }
 int pci_enable_memory_space(const struct pci_device *device)
@@ -115,6 +125,20 @@ int main(void)
            GPU_PCI_MMIO_MAPPING_FAILED);
     assert(command == 0U);
     fail_map = 0;
+
+    command = 0U;
+    fake_bar_size = 4096U;
+    assert(gpu_pci_mmio_map_sized(&gpu, 0U, 4096U, &mapping) ==
+           GPU_PCI_MMIO_OK);
+    assert(gpu_pci_mmio_unmap(&mapping) == GPU_PCI_MMIO_OK);
+    command = 0x0002U;
+    assert(gpu_pci_mmio_map_sized(&gpu, 0U, 4096U, &mapping) ==
+           GPU_PCI_MMIO_RESOURCE_INVALID);
+    command = 0U;
+    fake_bar_size = 2048U;
+    assert(gpu_pci_mmio_map_sized(&gpu, 0U, 4096U, &mapping) ==
+           GPU_PCI_MMIO_RESOURCE_INVALID);
+    fake_bar_size = 4096U;
 
     command = 0x0002U;
     assert(gpu_pci_mmio_map(&gpu, 0U, 4096U, 2048U, &mapping) ==

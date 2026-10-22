@@ -8,7 +8,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-#include "../../kernel/ipc.c"
+#include "../kernel/ipc.c"
 
 static uint64_t rng_counter = 0x123456789ULL;
 int crypto_rng_fill(void *output, size_t length)

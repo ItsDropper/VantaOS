@@ -97,7 +97,7 @@ static void test_supported_timezones(void)
 
 static void test_rejects_invalid_or_injected_config(void)
 {
-    vanta_setup_config_t output = {{0}, {0}, {0}};
+    vanta_setup_config_t output = {{0}, {0}, {0}, {0}};
     const char unsupported[] =
         "version=2\nlanguage=en\nkeyboard=us\ntimezone=Europe/Imaginary\ndevice_name=VANTA-PC\n";
     const char injected[] =

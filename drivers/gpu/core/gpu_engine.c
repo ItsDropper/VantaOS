@@ -174,6 +174,20 @@ gpu_engine_status_t gpu_engine_consume(gpu_engine_ring_t *ring,
     return GPU_ENGINE_OK;
 }
 
+gpu_engine_status_t gpu_engine_update_consumer(gpu_engine_ring_t *ring,
+                                               uint64_t read_sequence)
+{
+    if (ring == NULL || ring->initialized == 0U)
+        return GPU_ENGINE_INVALID;
+    if (read_sequence < ring->read_sequence)
+        return GPU_ENGINE_STALE_CONSUMER;
+    if (read_sequence > ring->write_sequence ||
+        read_sequence - ring->read_sequence > ring->capacity)
+        return GPU_ENGINE_INVALID;
+    ring->read_sequence = read_sequence;
+    return GPU_ENGINE_OK;
+}
+
 gpu_engine_status_t gpu_engine_issue_fence(gpu_engine_ring_t *ring,
                                            uint64_t *fence)
 {

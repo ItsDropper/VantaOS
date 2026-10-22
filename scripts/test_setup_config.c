@@ -9,6 +9,7 @@
 
 #include <assert.h>
 #include <stdio.h>
+#include <string.h>
 
 static void test_round_trip(void)
 {
@@ -33,11 +34,55 @@ static void test_round_trip(void)
 
 static void test_supported_timezones(void)
 {
+    assert(vanta_setup_timezone_count() == 36U);
+    assert(vanta_setup_timezone_at(0U) != NULL);
+    assert(vanta_setup_timezone_at(36U) == NULL);
+    assert(strcmp(vanta_setup_timezone_at(0U), "Europe/Helsinki") == 0);
+    assert(strcmp(vanta_setup_timezone_at(1U), "Etc/UTC") == 0);
+    assert(strcmp(vanta_setup_timezone_at(35U), "Europe/London") == 0);
+    assert(vanta_setup_timezone_supported(vanta_setup_timezone_at(0U)));
+    assert(vanta_setup_timezone_supported(vanta_setup_timezone_at(35U)));
+    assert(vanta_setup_timezone_supported("Europe/Helsinki"));
+    assert(vanta_setup_timezone_supported("Etc/UTC"));
+    assert(vanta_setup_timezone_supported("Europe/London"));
+    for (size_t i = 0U; i < vanta_setup_timezone_count(); ++i)
+        assert(vanta_setup_timezone_supported(vanta_setup_timezone_at(i)));
     assert(vanta_setup_timezone_supported("Etc/UTC"));
     assert(vanta_setup_timezone_supported("Europe/Helsinki"));
     assert(vanta_setup_timezone_supported("Europe/Stockholm"));
     assert(vanta_setup_timezone_supported("Europe/London"));
     assert(vanta_setup_timezone_supported("America/New_York"));
+    assert(vanta_setup_timezone_supported("America/Chicago"));
+    assert(vanta_setup_timezone_supported("America/Denver"));
+    assert(vanta_setup_timezone_supported("America/Los_Angeles"));
+    assert(vanta_setup_timezone_supported("America/Toronto"));
+    assert(vanta_setup_timezone_supported("America/Vancouver"));
+    assert(vanta_setup_timezone_supported("America/Sao_Paulo"));
+    assert(vanta_setup_timezone_supported("Europe/Oslo"));
+    assert(vanta_setup_timezone_supported("Europe/Copenhagen"));
+    assert(vanta_setup_timezone_supported("Europe/Berlin"));
+    assert(vanta_setup_timezone_supported("Europe/Paris"));
+    assert(vanta_setup_timezone_supported("Europe/Madrid"));
+    assert(vanta_setup_timezone_supported("Europe/Rome"));
+    assert(vanta_setup_timezone_supported("Europe/Amsterdam"));
+    assert(vanta_setup_timezone_supported("Europe/Brussels"));
+    assert(vanta_setup_timezone_supported("Europe/Zurich"));
+    assert(vanta_setup_timezone_supported("Europe/Vienna"));
+    assert(vanta_setup_timezone_supported("Europe/Warsaw"));
+    assert(vanta_setup_timezone_supported("Europe/Prague"));
+    assert(vanta_setup_timezone_supported("Europe/Budapest"));
+    assert(vanta_setup_timezone_supported("Europe/Athens"));
+    assert(vanta_setup_timezone_supported("Europe/Istanbul"));
+    assert(vanta_setup_timezone_supported("Europe/Lisbon"));
+    assert(vanta_setup_timezone_supported("Europe/Dublin"));
+    assert(vanta_setup_timezone_supported("Europe/Kyiv"));
+    assert(vanta_setup_timezone_supported("Asia/Tokyo"));
+    assert(vanta_setup_timezone_supported("Asia/Seoul"));
+    assert(vanta_setup_timezone_supported("Asia/Shanghai"));
+    assert(vanta_setup_timezone_supported("Asia/Kolkata"));
+    assert(vanta_setup_timezone_supported("Asia/Singapore"));
+    assert(vanta_setup_timezone_supported("Australia/Sydney"));
+    assert(vanta_setup_timezone_supported("Pacific/Auckland"));
     assert(!vanta_setup_timezone_supported("Europe/Imaginary"));
     assert(!vanta_setup_timezone_supported("../etc/passwd"));
 }

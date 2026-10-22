@@ -151,6 +151,15 @@ static int parse_number(const char *text, uint32_t *value)
     return 1;
 }
 
+static void print_localized(const vanta_setup_config_t *config,
+                            const CHAR16 *english,
+                            const CHAR16 *finnish)
+{
+    const CHAR16 *message =
+        config && config->language[0] == 'f' ? finnish : english;
+    Print(L"%s", message);
+}
+
 static int disk_read(void *context, uint64_t lba, uint32_t count, void *buffer)
 {
     EFI_BLOCK_IO_PROTOCOL *block = (EFI_BLOCK_IO_PROTOCOL *)context;
@@ -316,7 +325,8 @@ static EFI_STATUS copy_file(
 
     status = uefi_call_wrapper(
         source->GetInfo, 4, source, &gEfiFileInfoGuid, &info_size, NULL);
-    if (status != EFI_BUFFER_TOO_SMALL || info_size < sizeof(EFI_FILE_INFO)) {
+    if (status != EFI_BUFFER_TOO_SMALL || info_size < sizeof(EFI_FILE_INFO) ||
+        info_size > 4096U) {
         uefi_call_wrapper(source->Close, 1, source);
         serial_write("VANTAOS_SETUP_COPY_FAIL\n");
         return EFI_LOAD_ERROR;
@@ -463,13 +473,86 @@ static int create_directories(EFI_FILE_PROTOCOL *root, int is_efi)
     return 1;
 }
 
+static int source_file_valid(EFI_FILE_PROTOCOL *root,
+                             const CHAR16 *path,
+                             UINTN maximum_size)
+{
+    EFI_FILE_PROTOCOL *file = NULL;
+    EFI_FILE_INFO *info = NULL;
+    UINTN info_size = 0U;
+    EFI_STATUS status = uefi_call_wrapper(
+        root->Open, 5, root, &file, path, EFI_FILE_MODE_READ, 0U);
+    if (EFI_ERROR(status) || !file)
+        return 0;
+
+    status = uefi_call_wrapper(
+        file->GetInfo, 4, file, &gEfiFileInfoGuid, &info_size, NULL);
+    if (status != EFI_BUFFER_TOO_SMALL || info_size < sizeof(EFI_FILE_INFO) ||
+        info_size > 4096U) {
+        uefi_call_wrapper(file->Close, 1, file);
+        return 0;
+    }
+    status = uefi_call_wrapper(
+        BS->AllocatePool, 3, EfiLoaderData, info_size, (void **)&info);
+    if (EFI_ERROR(status) || !info) {
+        uefi_call_wrapper(file->Close, 1, file);
+        return 0;
+    }
+    status = uefi_call_wrapper(
+        file->GetInfo, 4, file, &gEfiFileInfoGuid, &info_size, info);
+    int valid = !EFI_ERROR(status) && info->FileSize > 0U &&
+                info->FileSize <= maximum_size;
+    uefi_call_wrapper(BS->FreePool, 1, info);
+    uefi_call_wrapper(file->Close, 1, file);
+    return valid;
+}
+
+static int preflight_installer_payload(EFI_FILE_PROTOCOL *root,
+                                       const CHAR16 **missing_path)
+{
+    static const struct {
+        const CHAR16 *path;
+        UINTN maximum_size;
+    } required[] = {
+        { L"\\EFI\\VANTA\\VANTAOS.EFI", 4U * 1024U * 1024U },
+        { L"\\EFI\\VANTA\\KERNEL.ELF", SETUP_MAX_FILE_BYTES },
+        { L"\\SYSTEM\\TERMINAL.ELF", SETUP_MAX_FILE_BYTES },
+        { L"\\SYSTEM\\SETTINGS.ELF", SETUP_MAX_FILE_BYTES },
+        { L"\\SYSTEM\\EXPLORER.ELF", SETUP_MAX_FILE_BYTES },
+        { L"\\SYSTEM\\TERMINAL.VX", 4096U },
+        { L"\\SYSTEM\\DRIVERS\\ATA.SYS", 4096U },
+        { L"\\SYSTEM\\DRIVERS\\KEYBOARD.SYS", 4096U },
+        { L"\\SYSTEM\\DRIVERS\\MOUSE.SYS", 4096U },
+        { L"\\SYSTEM\\DRIVERS\\PCI.SYS", 4096U },
+        { L"\\SYSTEM\\DRIVERS\\FAT32.SYS", 4096U },
+        { L"\\SYSTEM\\DEVICES\\DISK0.DEV", 4096U },
+        { L"\\SYSTEM\\DEVICES\\KEYBOARD0.DEV", 4096U },
+        { L"\\SYSTEM\\DEVICES\\MOUSE0.DEV", 4096U },
+        { L"\\ETC\\SYSTEM.CONF", 4096U }
+    };
+    for (UINTN i = 0U; i < sizeof(required) / sizeof(required[0]); ++i) {
+        if (!source_file_valid(root, required[i].path,
+                               required[i].maximum_size)) {
+            if (missing_path)
+                *missing_path = required[i].path;
+            return 0;
+        }
+    }
+    return 1;
+}
+
 EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 {
     InitializeLib(image_handle, system_table);
     serial_initialize();
     serial_write("VANTAOS_SETUP_START\n");
-    Print(L"\r\nVANTAOS SETUP\r\n");
-    Print(L"UEFI installer - all data on the selected target disk will be erased.\r\n\r\n");
+    Print(L"\r\nVANTAOS SETUP / VANTAOS-ASENNUS\r\n");
+    Print(L"UEFI-only installer. Requires a writable 512-byte-sector disk of at least 4 GiB.\r\n");
+    Print(L"Installs GPT with FAT32 EFI and system partitions. Legacy BIOS is not supported.\r\n");
+    Print(L"The installer media is excluded from targets. No target writes occur before typing INSTALL.\r\n");
+    Print(L"UEFI-asennus. Kohdelevyn on oltava kirjoitettava, vahintaan 4 GiB ja 512 tavun sektoreilla.\r\n");
+    Print(L"Asentaa GPT-osionnin ja FAT32 EFI- ja jarjestelmaosiot. Vanha BIOS ei ole tuettu.\r\n");
+    Print(L"Asennusmediaa ei voi valita kohteeksi. Levylle ei kirjoiteta ennen INSTALL-vahvistusta.\r\n\r\n");
 
     EFI_LOADED_IMAGE *loaded_image = NULL;
     EFI_STATUS status = uefi_call_wrapper(
@@ -493,37 +576,75 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
     config.timezone[0] = '\0';
 
     char line[32];
+    const CHAR16 *missing_payload = NULL;
+    Print(L"Checking installer files before any disk can be modified...\r\n");
+    if (!preflight_installer_payload(source_root, &missing_payload)) {
+        serial_write("VANTAOS_SETUP_PREFLIGHT_FAIL\n");
+        Print(L"ERROR: required installer payload is missing, empty, or too large: %s\r\n",
+              missing_payload ? missing_payload : L"(unknown)");
+        Print(L"No disks changed. Recreate or re-download the installer media.\r\n");
+        uefi_call_wrapper(source_root->Close, 1, source_root);
+        return EFI_NOT_FOUND;
+    }
+    serial_write("VANTAOS_SETUP_PREFLIGHT_OK\n");
+    Print(L"Installer payload check passed (15 required files).\r\n\r\n");
+
     serial_write("VANTAOS_SETUP_LANGUAGE_PROMPT\n");
-    Print(L"Language: 1) English  2) Finnish [1]: ");
-    if (!read_line(line, sizeof(line))) return EFI_ABORTED;
-    if (line[0] == '2' && line[1] == '\0') {
-        config.language[0] = 'f'; config.language[1] = 'i';
-    } else if (line[0] != '\0' && !(line[0] == '1' && line[1] == '\0')) {
-        Print(L"Invalid choice.\r\n");
-        return EFI_INVALID_PARAMETER;
+    for (;;) {
+        Print(L"Language / Kieli: 1) English  2) Suomi [1]: ");
+        if (!read_line(line, sizeof(line))) return EFI_ABORTED;
+        if (line[0] == '\0' || (line[0] == '1' && line[1] == '\0'))
+            break;
+        if (line[0] == '2' && line[1] == '\0') {
+            config.language[0] = 'f'; config.language[1] = 'i';
+            break;
+        }
+        Print(L"Choose 1 or 2. Valitse 1 tai 2.\r\n");
     }
 
     serial_write("VANTAOS_SETUP_KEYBOARD_PROMPT\n");
-    Print(L"Keyboard: 1) US  2) Finnish [1]: ");
-    if (!read_line(line, sizeof(line))) return EFI_ABORTED;
-    if (line[0] == '2' && line[1] == '\0') {
-        config.keyboard[0] = 'f'; config.keyboard[1] = 'i';
-    } else if (line[0] != '\0' && !(line[0] == '1' && line[1] == '\0')) {
-        Print(L"Invalid choice.\r\n");
-        return EFI_INVALID_PARAMETER;
+    for (;;) {
+        print_localized(&config, L"Keyboard: 1) US  2) Finnish [1]: ",
+                        L"Nappaimisto: 1) US  2) Finnish [1]: ");
+        if (!read_line(line, sizeof(line))) return EFI_ABORTED;
+        if (line[0] == '\0' || (line[0] == '1' && line[1] == '\0'))
+            break;
+        if (line[0] == '2' && line[1] == '\0') {
+            config.keyboard[0] = 'f'; config.keyboard[1] = 'i';
+            break;
+        }
+        print_localized(&config, L"Choose 1 or 2.\r\n", L"Valitse 1 tai 2.\r\n");
     }
 
     serial_write("VANTAOS_SETUP_TIMEZONE_PROMPT\n");
-    Print(L"Time zone: 1) Europe/Helsinki  2) Etc/UTC  3) Europe/Stockholm\r\n");
-    Print(L"           4) Europe/London    5) America/New_York [1]: ");
-    if (!read_line(line, sizeof(line))) return EFI_ABORTED;
-    const char *zone = "Europe/Helsinki";
-    if (line[0] == '2' && line[1] == '\0') zone = "Etc/UTC";
-    else if (line[0] == '3' && line[1] == '\0') zone = "Europe/Stockholm";
-    else if (line[0] == '4' && line[1] == '\0') zone = "Europe/London";
-    else if (line[0] == '5' && line[1] == '\0') zone = "America/New_York";
-    else if (line[0] != '\0' && !(line[0] == '1' && line[1] == '\0')) {
-        Print(L"Invalid choice.\r\n");
+    print_localized(&config, L"Time zone (enter number; default 1):\r\n", L"Aikavyohyke (valitse numero; oletus 1):\r\n");
+    Print(L" 1 Helsinki       2 UTC             3 Stockholm       4 Oslo\r\n");
+    Print(L" 5 Copenhagen     6 Berlin          7 Paris           8 Madrid\r\n");
+    Print(L" 9 Rome          10 Amsterdam      11 Brussels       12 Zurich\r\n");
+    Print(L"13 Vienna        14 Warsaw         15 Prague         16 Budapest\r\n");
+    Print(L"17 Athens        18 Istanbul       19 Lisbon         20 Dublin\r\n");
+    Print(L"21 Kyiv          22 New York       23 Chicago        24 Denver\r\n");
+    Print(L"25 Los Angeles   26 Toronto        27 Vancouver      28 Sao Paulo\r\n");
+    Print(L"29 Tokyo         30 Seoul          31 Shanghai       32 Kolkata\r\n");
+    Print(L"33 Singapore     34 Sydney         35 Auckland       36 London [1]: ");
+    uint32_t zone_choice = 1U;
+    for (;;) {
+        if (!read_line(line, sizeof(line))) {
+            uefi_call_wrapper(source_root->Close, 1, source_root);
+            return EFI_ABORTED;
+        }
+        if (line[0] == '\0')
+            break;
+        if (parse_number(line, &zone_choice) && zone_choice > 0U &&
+            zone_choice <= vanta_setup_timezone_count())
+            break;
+        print_localized(&config, L"Invalid time-zone choice; enter 1-36: ",
+                        L"Virheellinen aikavyohyke; anna numero 1-36: ");
+        zone_choice = 1U;
+    }
+    const char *zone = vanta_setup_timezone_at(zone_choice - 1U);
+    if (!zone) {
+        uefi_call_wrapper(source_root->Close, 1, source_root);
         return EFI_INVALID_PARAMETER;
     }
     size_t zone_length = 0U;
@@ -532,10 +653,30 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
         ++zone_length;
     }
     config.timezone[zone_length] = '\0';
+
     if (!vanta_setup_config_valid(&config)) {
         Print(L"ERROR: setup preferences failed validation.\r\n");
+        uefi_call_wrapper(source_root->Close, 1, source_root);
         return EFI_INVALID_PARAMETER;
     }
+
+    serial_write("VANTAOS_SETUP_REVIEW\n");
+    print_localized(&config, L"\r\nSETUP REVIEW\r\n", L"\r\nASENNUKSEN YHTEENVETO\r\n");
+    if (config.language[0] == 'f') {
+        Print(L"  Kayttokieli: Suomi\r\n");
+        Print(L"  Nappaimistoasetus: %s\r\n",
+              config.keyboard[0] == 'f' ? L"Finnish" : L"US");
+        Print(L"  Aikavyohyke: %a\r\n", config.timezone);
+    } else {
+        Print(L"  Preferred language: English\r\n");
+        Print(L"  Keyboard preference: %s\r\n",
+              config.keyboard[0] == 'f' ? L"Finnish" : L"US");
+        Print(L"  Time zone: %a\r\n", config.timezone);
+    }
+    print_localized(&config, L"  Partition scheme: GPT (UEFI)\r\n", L"  Osiointitapa: GPT (UEFI)\r\n");
+    print_localized(&config, L"  Filesystems: FAT32 EFI System Partition + FAT32 system partition\r\n", L"  Tiedostojarjestelmat: FAT32 EFI-osio ja FAT32 jarjestelmaosio\r\n");
+    print_localized(&config, L"  Setup preferences will be saved to \\SYSTEM\\SETUP.CFG.\r\n", L"  Asetukset tallennetaan tiedostoon \\SYSTEM\\SETUP.CFG.\r\n");
+    print_localized(&config, L"  Language and keyboard preferences are saved metadata; runtime localization/keymap integration is not yet implemented.\r\n\r\n", L"  Kieli- ja nappaimistoasetukset tallennetaan, mutta kayttojarjestelman kieli- ja asettelutuki ei ole viela toteutettu.\r\n\r\n");
 
     setup_disk_t disks[SETUP_MAX_DISKS];
     UINTN disk_count = 0U;
@@ -553,7 +694,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
     }
 
     serial_write("VANTAOS_SETUP_DISKS_READY\n");
-    Print(L"\r\nTarget disks (installer media excluded):\r\n");
+    print_localized(&config, L"\r\nTarget disks (installer media excluded):\r\n", L"\r\nKohdelevyt (asennusmediaa ei nayteta):\r\n");
     for (UINTN i = 0U; i < disk_count; ++i) {
         UINT64 gib = disks[i].sector_count / 2097152U;
         CHAR16 *path_text = DevicePathToStr(
@@ -568,44 +709,84 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
             uefi_call_wrapper(BS->FreePool, 1, path_text);
     }
     serial_write("VANTAOS_SETUP_DISK_PROMPT\n");
-    Print(L"Select target disk number: ");
-    if (!read_line(line, sizeof(line))) return EFI_ABORTED;
+    print_localized(&config, L"Select target disk number, or Q to cancel: ", L"Valitse kohdelevyn numero tai Q peruuttaaksesi: ");
     uint32_t selected = 0U;
-    if (!parse_number(line, &selected) || selected == 0U || selected > disk_count) {
-        Print(L"Invalid disk selection. No disks changed.\r\n");
-        uefi_call_wrapper(source_root->Close, 1, source_root);
-        return EFI_INVALID_PARAMETER;
+    for (;;) {
+        if (!read_line(line, sizeof(line))) {
+            uefi_call_wrapper(source_root->Close, 1, source_root);
+            return EFI_ABORTED;
+        }
+        if ((line[0] == 'q' || line[0] == 'Q') && line[1] == '\0') {
+            print_localized(&config, L"Setup cancelled. No disks changed.\r\n",
+                            L"Asennus peruutettu. Levyihin ei tehty muutoksia.\r\n");
+            uefi_call_wrapper(source_root->Close, 1, source_root);
+            return EFI_ABORTED;
+        }
+        if (parse_number(line, &selected) && selected > 0U &&
+            selected <= disk_count)
+            break;
+        print_localized(&config, L"Invalid disk selection; try again or Q to cancel: ",
+                        L"Virheellinen levyn numero; yrita uudelleen tai Q peruuttaaksesi: ");
     }
     setup_disk_t *target = &disks[selected - 1U];
     CHAR16 *selected_path = DevicePathToStr(DevicePathFromHandle(target->handle));
-    Print(L"\r\nSelected target: %u GiB, %u sectors, %s media\r\n",
-          (UINT32)(target->sector_count / 2097152U),
-          (UINT32)target->sector_count,
-          target->block->Media->RemovableMedia ? L"removable" : L"fixed");
-    Print(L"Device path: %s\r\n",
-          selected_path ? selected_path : L"(unavailable)");
-    if (selected_path)
-        uefi_call_wrapper(BS->FreePool, 1, selected_path);
-    Print(L"WARNING: this entire disk will be erased.\r\n");
+    if (config.language[0] == 'f') {
+        Print(L"\r\nValittu kohde: %u GiB, %u sektoria, %s media\r\n",
+              (UINT32)(target->sector_count / 2097152U),
+              (UINT32)target->sector_count,
+              target->block->Media->RemovableMedia ? L"irrotettava" : L"kiintea");
+        Print(L"Laitteen polku: %s\r\n",
+              selected_path ? selected_path : L"(ei saatavilla)");
+    } else {
+        Print(L"\r\nSelected target: %u GiB, %u sectors, %s media\r\n",
+              (UINT32)(target->sector_count / 2097152U),
+              (UINT32)target->sector_count,
+              target->block->Media->RemovableMedia ? L"removable" : L"fixed");
+        Print(L"Device path: %s\r\n",
+              selected_path ? selected_path : L"(unavailable)");
+    }
+    vanta_installer_layout_t layout;
+    if (vanta_installer_plan_gpt(target->sector_count,
+            VANTA_INSTALLER_SECTOR_SIZE, &layout) != VANTA_INSTALLER_LAYOUT_OK) {
+        Print(L"ERROR: disk layout is unsupported. No disks changed.\r\n");
+        if (selected_path)
+            uefi_call_wrapper(BS->FreePool, 1, selected_path);
+        uefi_call_wrapper(source_root->Close, 1, source_root);
+        return EFI_UNSUPPORTED;
+    }
+    print_localized(&config,
+        L"\r\nPlanned partition layout (preview; no writes yet):\r\n",
+        L"\r\nOsiointisuunnitelma (esikatselu; ei kirjoituksia viela):\r\n");
+    print_localized(&config, L"  GPT, 1 MiB alignment\r\n",
+                    L"  GPT, 1 MiB kohdistus\r\n");
+    print_localized(&config, L"  EFI System Partition: ",
+                    L"  EFI-jarjestelmaosio: ");
+    Print(L"%u MiB, FAT32\r\n", (UINT32)(layout.efi.sector_count / 2048U));
+    print_localized(&config, L"  VantaOS system partition: ",
+                    L"  VantaOS-jarjestelmaosio: ");
+    Print(L"%u MiB, FAT32\r\n", (UINT32)(layout.system.sector_count / 2048U));
+    print_localized(&config, L"WARNING: continuing will erase the entire selected disk.\r\n", L"VAROITUS: jatkaminen tyhjentaa koko valitun levyn.\r\n");
+    print_localized(&config, L"Target device: ", L"Kohdelaite: ");
+    Print(L"%s\r\n", selected_path ? selected_path : L"(unavailable)");
+    print_localized(&config, L"Target capacity: ", L"Kohteen koko: ");
+    Print(L"%u GiB\r\n", (UINT32)(target->sector_count / 2097152U));
     serial_write("VANTAOS_SETUP_CONFIRM_PROMPT\n");
-    Print(L"Type INSTALL exactly to confirm, or anything else to cancel: ");
+    print_localized(&config, L"Type INSTALL exactly to confirm, or anything else to cancel: ", L"Vahvista kirjoittamalla INSTALL, tai peruuta muulla tekstilla: ");
     if (!read_line(line, sizeof(line)) ||
         line[0] != 'I' || line[1] != 'N' || line[2] != 'S' ||
         line[3] != 'T' || line[4] != 'A' || line[5] != 'L' ||
         line[6] != 'L' || line[7] != '\0') {
-        Print(L"Cancelled. No disks changed.\r\n");
+        print_localized(&config, L"Cancelled. No disks changed.\r\n",
+                        L"Asennus peruutettu. Levyihin ei tehty muutoksia.\r\n");
+        if (selected_path)
+            uefi_call_wrapper(BS->FreePool, 1, selected_path);
         uefi_call_wrapper(source_root->Close, 1, source_root);
         return EFI_ABORTED;
     }
 
     serial_write("VANTAOS_SETUP_CONFIRM_ACCEPTED\n");
-    vanta_installer_layout_t layout;
-    if (vanta_installer_plan_gpt(target->sector_count,
-            VANTA_INSTALLER_SECTOR_SIZE, &layout) != VANTA_INSTALLER_LAYOUT_OK) {
-        Print(L"ERROR: disk layout is unsupported. No disks changed.\r\n");
-        uefi_call_wrapper(source_root->Close, 1, source_root);
-        return EFI_UNSUPPORTED;
-    }
+    if (selected_path)
+        uefi_call_wrapper(BS->FreePool, 1, selected_path);
 
     EFI_TIME now;
     status = uefi_call_wrapper(RT->GetTime, 2, &now, NULL);
@@ -789,9 +970,12 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
 
     serial_write("VANTAOS_SETUP_FILES_OK\n");
     serial_write("VANTAOS_SETUP_COMPLETE\n");
-    Print(L"\r\nVantaOS installation completed.\r\n");
-    Print(L"Remove the installer media, then reboot and choose the installed disk.\r\n");
-    Print(L"Press any key to restart...\r\n");
+    print_localized(&config, L"\r\nVantaOS installation completed.\r\n",
+                    L"\r\nVantaOS-asennus valmistui.\r\n");
+    print_localized(&config, L"Remove the installer media, then reboot and choose the installed disk.\r\n",
+                    L"Irrota asennusmedia, kaynnista uudelleen ja valitse asennettu levy.\r\n");
+    print_localized(&config, L"Press any key to restart...\r\n",
+                    L"Kaynnista uudelleen painamalla mita tahansa nappainta...\r\n");
     EFI_INPUT_KEY key;
     (void)uefi_call_wrapper(ST->ConIn->ReadKeyStroke, 2, ST->ConIn, &key);
     (void)uefi_call_wrapper(RT->ResetSystem, 4, EfiResetCold, EFI_SUCCESS, 0U, NULL);

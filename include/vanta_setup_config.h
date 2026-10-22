@@ -23,6 +23,8 @@ typedef struct {
 
 /* IDs are deliberately limited to the zone choices shipped by setup. */
 int vanta_setup_timezone_supported(const char *timezone);
+size_t vanta_setup_timezone_count(void);
+const char *vanta_setup_timezone_at(size_t index);
 int vanta_setup_config_valid(const vanta_setup_config_t *config);
 
 /* Versioned, bounded, newline-terminated UTF-8 text; no dynamic allocation. */

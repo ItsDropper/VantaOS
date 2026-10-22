@@ -487,7 +487,8 @@ static int source_file_valid(EFI_FILE_PROTOCOL *root,
 
     status = uefi_call_wrapper(
         file->GetInfo, 4, file, &gEfiFileInfoGuid, &info_size, NULL);
-    if (status != EFI_BUFFER_TOO_SMALL || info_size < sizeof(EFI_FILE_INFO)) {
+    if (status != EFI_BUFFER_TOO_SMALL || info_size < sizeof(EFI_FILE_INFO) ||
+        info_size > 4096U) {
         uefi_call_wrapper(file->Close, 1, file);
         return 0;
     }
@@ -616,18 +617,6 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
     }
 
     serial_write("VANTAOS_SETUP_TIMEZONE_PROMPT\n");
-    static const char *const zones[] = {
-        "Europe/Helsinki", "Etc/UTC", "Europe/Stockholm", "Europe/Oslo",
-        "Europe/Copenhagen", "Europe/Berlin", "Europe/Paris", "Europe/Madrid",
-        "Europe/Rome", "Europe/Amsterdam", "Europe/Brussels", "Europe/Zurich",
-        "Europe/Vienna", "Europe/Warsaw", "Europe/Prague", "Europe/Budapest",
-        "Europe/Athens", "Europe/Istanbul", "Europe/Lisbon", "Europe/Dublin",
-        "Europe/Kyiv", "America/New_York", "America/Chicago", "America/Denver",
-        "America/Los_Angeles", "America/Toronto", "America/Vancouver",
-        "America/Sao_Paulo", "Asia/Tokyo", "Asia/Seoul", "Asia/Shanghai",
-        "Asia/Kolkata", "Asia/Singapore", "Australia/Sydney", "Pacific/Auckland",
-        "Europe/London"
-    };
     print_localized(&config, L"Time zone (enter number; default 1):\r\n", L"Aikavyohyke (valitse numero; oletus 1):\r\n");
     Print(L" 1 Helsinki       2 UTC             3 Stockholm       4 Oslo\r\n");
     Print(L" 5 Copenhagen     6 Berlin          7 Paris           8 Madrid\r\n");
@@ -647,13 +636,17 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
         if (line[0] == '\0')
             break;
         if (parse_number(line, &zone_choice) && zone_choice > 0U &&
-            zone_choice <= sizeof(zones) / sizeof(zones[0]))
+            zone_choice <= vanta_setup_timezone_count())
             break;
         print_localized(&config, L"Invalid time-zone choice; enter 1-36: ",
                         L"Virheellinen aikavyohyke; anna numero 1-36: ");
         zone_choice = 1U;
     }
-    const char *zone = zones[zone_choice - 1U];
+    const char *zone = vanta_setup_timezone_at(zone_choice - 1U);
+    if (!zone) {
+        uefi_call_wrapper(source_root->Close, 1, source_root);
+        return EFI_INVALID_PARAMETER;
+    }
     size_t zone_length = 0U;
     while (zone[zone_length] && zone_length + 1U < sizeof(config.timezone)) {
         config.timezone[zone_length] = zone[zone_length];
@@ -773,8 +766,10 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
                     L"  VantaOS-jarjestelmaosio: ");
     Print(L"%u MiB, FAT32\r\n", (UINT32)(layout.system.sector_count / 2048U));
     print_localized(&config, L"WARNING: continuing will erase the entire selected disk.\r\n", L"VAROITUS: jatkaminen tyhjentaa koko valitun levyn.\r\n");
-    Print(L"Target device: %s\r\n", selected_path ? selected_path : L"(unavailable)");
-    Print(L"Target capacity: %u GiB\r\n", (UINT32)(target->sector_count / 2097152U));
+    print_localized(&config, L"Target device: ", L"Kohdelaite: ");
+    Print(L"%s\r\n", selected_path ? selected_path : L"(unavailable)");
+    print_localized(&config, L"Target capacity: ", L"Kohteen koko: ");
+    Print(L"%u GiB\r\n", (UINT32)(target->sector_count / 2097152U));
     serial_write("VANTAOS_SETUP_CONFIRM_PROMPT\n");
     print_localized(&config, L"Type INSTALL exactly to confirm, or anything else to cancel: ", L"Vahvista kirjoittamalla INSTALL, tai peruuta muulla tekstilla: ");
     if (!read_line(line, sizeof(line)) ||

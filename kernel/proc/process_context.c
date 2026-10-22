@@ -7,6 +7,7 @@
 
 #include "process_internal.h"
 #include "serial.h"
+#include "ipc.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -199,7 +200,7 @@ int process_finish_context_switch(uint32_t outgoing_pid, uint32_t cpu_id)
     int outgoing_was_user = outgoing_snapshot.is_user != 0U;
     process_table_lock_release(flags);
 
-    if (!process_release_user_resources(&outgoing_snapshot))
+    ipc_process_cleanup(outgoing_pid);\n\n    if (!process_release_user_resources(&outgoing_snapshot))
         return 0;
 
     uint32_t wake_parent_pid = 0U;

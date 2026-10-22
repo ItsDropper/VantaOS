@@ -18,7 +18,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define VANTA_USER_ABI_VERSION 6U
+#define VANTA_USER_ABI_VERSION 7U
 
 #define VANTA_SYS_EXIT          0U
 #define VANTA_SYS_WRITE         1U
@@ -42,6 +42,10 @@
 #define VANTA_SYS_CREATE_DIRECTORY     23U
 #define VANTA_SYS_STAT_PATH            24U
 #define VANTA_SYS_KERNEL_COMMAND       25U
+#define VANTA_SYS_IPC_CREATE           26U
+#define VANTA_SYS_IPC_SEND              27U
+#define VANTA_SYS_IPC_RECEIVE           28U
+#define VANTA_SYS_IPC_CLOSE             29U
 
 #define VANTA_OPEN_READ      1
 #define VANTA_OPEN_WRITE     2
@@ -59,6 +63,8 @@
 #define VANTA_EMFILE     24
 #define VANTA_ENOMEM     12
 #define VANTA_ENOEXEC     8
+#define VANTA_EAGAIN     11
+#define VANTA_EMSGSIZE   90
 
 static inline long vanta_syscall3(
     long number, uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
@@ -83,6 +89,17 @@ static inline long vanta_console_write(const void* buffer, size_t length)
     return vanta_syscall3(VANTA_SYS_CONSOLE_WRITE,
                           (uintptr_t)buffer, (uintptr_t)length, 0U);
 }
+
+/* IPC endpoints are random 64-bit bearer capabilities; receive is non-blocking. */
+#define VANTA_IPC_MESSAGE_MAX 256U
+static inline long vanta_ipc_endpoint_create(void)
+{ return vanta_syscall3(VANTA_SYS_IPC_CREATE,0U,0U,0U); }
+static inline long vanta_ipc_send(uint64_t endpoint,const void *message,size_t length)
+{ return vanta_syscall3(VANTA_SYS_IPC_SEND,(uintptr_t)endpoint,(uintptr_t)message,(uintptr_t)length); }
+static inline long vanta_ipc_receive(uint64_t endpoint,void *message,size_t capacity)
+{ return vanta_syscall3(VANTA_SYS_IPC_RECEIVE,(uintptr_t)endpoint,(uintptr_t)message,(uintptr_t)capacity); }
+static inline long vanta_ipc_close(uint64_t endpoint)
+{ return vanta_syscall3(VANTA_SYS_IPC_CLOSE,(uintptr_t)endpoint,0U,0U); }
 
 static inline long vanta_read_char(void)
 {

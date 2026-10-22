@@ -6,3 +6,4 @@ include kernel/proc/Makefile
 include kernel/sched/Makefile
 include kernel/time/Makefile
 include kernel/graphics/Makefile
+include kernel/ipc/Makefile

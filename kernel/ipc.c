@@ -17,7 +17,9 @@ static spinlock_t ipc_lock = SPINLOCK_INITIALIZER;
 static int token_exists_locked(uint64_t token) { for(uint32_t i=0;i<IPC_ENDPOINTS_MAX;i++) if(endpoints[i].active && endpoints[i].token==token) return 1; return 0; }
 int64_t ipc_endpoint_create(uint32_t owner_pid) {
  if(!owner_pid) return -22; uint64_t token=0U;
- if(!crypto_rng_fill(&token,sizeof(token))) return -19;\n token &= 0x7FFFFFFFFFFFFFFFULL;\n if(!token) return -19;
+ if(!crypto_rng_fill(&token,sizeof(token))) return -19;
+ token &= 0x7FFFFFFFFFFFFFFFULL;
+ if(!token) return -19;
  uint64_t flags=spinlock_lock_irqsave(&ipc_lock); uint32_t slot=IPC_ENDPOINTS_MAX;
  for(uint32_t i=0;i<IPC_ENDPOINTS_MAX;i++) if(!endpoints[i].active){slot=i;break;}
  if(slot==IPC_ENDPOINTS_MAX || token_exists_locked(token)){spinlock_unlock_irqrestore(&ipc_lock,flags);return slot==IPC_ENDPOINTS_MAX?-12:-11;}

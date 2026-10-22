@@ -99,7 +99,8 @@ static int valid_inputs(
         layout->last_usable_lba != layout->disk_sector_count -
             VANTA_INSTALLER_GPT_RESERVED_SECTORS ||
         layout->efi.first_lba != VANTA_INSTALLER_ALIGNMENT_SECTORS ||
-        layout->efi.sector_count != VANTA_INSTALLER_ESP_SECTORS ||
+        (layout->efi.sector_count != 256ULL * 2048ULL &&
+         layout->efi.sector_count != 512ULL * 2048ULL) ||
         layout->system.first_lba % VANTA_INSTALLER_ALIGNMENT_SECTORS != 0U ||
         layout->system.sector_count == 0U ||
         layout->efi.first_lba + layout->efi.sector_count >

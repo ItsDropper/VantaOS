@@ -11,6 +11,27 @@
 #include <stdint.h>
 #include <stdio.h>
 
+static void test_custom_efi_sizes(void)
+{
+    vanta_installer_layout_t layout;
+    assert(vanta_installer_plan_gpt_with_efi_size(
+        VANTA_INSTALLER_MIN_DISK_SECTORS, VANTA_INSTALLER_SECTOR_SIZE,
+        256U, &layout) == VANTA_INSTALLER_LAYOUT_OK);
+    assert(layout.efi.sector_count == 256ULL * 2048ULL);
+    assert(layout.efi.first_lba % VANTA_INSTALLER_ALIGNMENT_SECTORS == 0U);
+    assert(layout.system.first_lba % VANTA_INSTALLER_ALIGNMENT_SECTORS == 0U);
+    assert(layout.efi.first_lba + layout.efi.sector_count <=
+           layout.system.first_lba);
+
+    assert(vanta_installer_plan_gpt_with_efi_size(
+        VANTA_INSTALLER_MIN_DISK_SECTORS, VANTA_INSTALLER_SECTOR_SIZE,
+        512U, &layout) == VANTA_INSTALLER_LAYOUT_OK);
+    assert(layout.efi.sector_count == 512ULL * 2048ULL);
+    assert(vanta_installer_plan_gpt_with_efi_size(
+        VANTA_INSTALLER_MIN_DISK_SECTORS, VANTA_INSTALLER_SECTOR_SIZE,
+        128U, &layout) == VANTA_INSTALLER_LAYOUT_INVALID_ARGUMENT);
+}
+
 static void test_minimum_disk_layout(void)
 {
     vanta_installer_layout_t layout;
@@ -91,6 +112,7 @@ static void test_large_capacity_arithmetic(void)
 
 int main(void)
 {
+    test_custom_efi_sizes();
     test_minimum_disk_layout();
     test_larger_disk_and_no_overlap();
     test_rejects_small_disk();

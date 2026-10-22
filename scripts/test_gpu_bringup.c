@@ -92,6 +92,16 @@ int main(void)
     assert(result.rollback_complete == 0U);
     assert(result.verified_capabilities == 0U);
 
+    {
+        const gpu_bringup_stage_t invalid_stages[] = {
+            { "valid", prepare0, verify0, rollback0, 1ULL },
+            { "missing-rollback", prepare1, verify1, NULL, 2ULL }
+        };
+        ctx = (test_context_t){0};
+        assert(gpu_bringup_execute(invalid_stages, 2U, &ctx, &result)
+               == GPU_BRINGUP_INVALID);
+        assert(ctx.prepared == 0U);
+    }
     assert(gpu_bringup_execute(NULL, 3U, &ctx, &result) == GPU_BRINGUP_INVALID);
     assert(gpu_bringup_execute(stages, GPU_BRINGUP_MAX_STAGES + 1U,
                                &ctx, &result) == GPU_BRINGUP_INVALID);

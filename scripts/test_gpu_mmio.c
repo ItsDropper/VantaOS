@@ -26,7 +26,7 @@ int main(void)
     assert(registers[1] == 0x55667788U);
 
     value = UINT32_MAX;
-    assert(gpu_mmio_read32(&region, 10U, &value) == GPU_MMIO_UNALIGNED);
+    assert(gpu_mmio_read32(&region, 2U, &value) == GPU_MMIO_UNALIGNED);
     assert(value == 0U);
     assert(gpu_mmio_read32(&region, 12U, &value) == GPU_MMIO_OUT_OF_RANGE);
     assert(gpu_mmio_write32(&region, 12U, 1U) == GPU_MMIO_OUT_OF_RANGE);

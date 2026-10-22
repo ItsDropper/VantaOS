@@ -109,7 +109,7 @@ int main(void)
     assert(gpu_va_init(&va_space, 0x10000000ULL, 0x1000000ULL) == GPU_VA_OK);
     assert(gpu_vm_init(&vm, &va_space, &ops) == GPU_VM_OK);
     assert(gpu_vm_map_dma(&vm, NULL, &dma, GPU_VM_ACCESS_READ, &handle) ==
-           GPU_VM_DMA_INVALID);
+           GPU_VM_VA_INVALID);
     assert(gpu_dma_alloc(8192U, 32U, &dma) == GPU_DMA_OK);
     assert(gpu_va_alloc(&va_space, dma.allocated_size, GPU_VA_PAGE_SIZE,
                         GPU_VA_GUARD_ONE_PAGE, &va) == GPU_VA_OK);

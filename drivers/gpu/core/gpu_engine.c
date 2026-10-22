@@ -115,6 +115,35 @@ gpu_engine_status_t gpu_engine_commit(gpu_engine_transaction_t *transaction)
     return GPU_ENGINE_OK;
 }
 
+gpu_engine_status_t gpu_engine_submit(gpu_engine_transaction_t *transaction,
+                                      gpu_engine_publish_fn publish,
+                                      void *context)
+{
+    gpu_engine_ring_t *ring;
+    uint64_t new_sequence;
+
+    if (transaction == NULL || transaction->active == 0U ||
+        transaction->ring == NULL || publish == NULL)
+        return GPU_ENGINE_INVALID;
+    ring = transaction->ring;
+    if (transaction->written_words != transaction->reserved_words ||
+        ring->write_sequence != transaction->start_sequence)
+        return GPU_ENGINE_BAD_PACKET;
+    if (ring->write_sequence > UINT64_MAX - transaction->written_words)
+        return GPU_ENGINE_INVALID;
+    new_sequence = ring->write_sequence + transaction->written_words;
+
+    /* The backend must order packet memory before publishing its hardware tail. */
+    if (!publish(context, new_sequence)) {
+        ring->submission_enabled = 0U;
+        transaction->active = 0U;
+        return GPU_ENGINE_DEVICE_ERROR;
+    }
+    ring->write_sequence = new_sequence;
+    transaction->active = 0U;
+    return GPU_ENGINE_OK;
+}
+
 void gpu_engine_abort(gpu_engine_transaction_t *transaction)
 {
     if (transaction != NULL)

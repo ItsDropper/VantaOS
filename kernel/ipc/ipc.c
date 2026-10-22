@@ -6,7 +6,7 @@
  */
 
 #include "ipc.h"
-#include "process_internal.h"
+#include "../proc/process_internal.h"
 #include "spinlock.h"
 
 #include <stddef.h>

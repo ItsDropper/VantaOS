@@ -6,7 +6,7 @@
  */
 
 #include "ipc.h"
-#include "process.h"
+#include "process_internal.h"
 #include "spinlock.h"
 
 #include <stddef.h>
@@ -125,14 +125,23 @@ void ipc_process_reset(uint32_t pid)
     spinlock_unlock_irqrestore(&ipc_lock, flags);
 }
 
+static int process_live_user_locked(uint32_t pid)
+{
+    if (pid == 0U || pid >= PROCESS_MAX)
+        return 0;
+    const process_t *process = &process_table_records[pid];
+    return process->is_user &&
+           process->state != PROCESS_UNUSED &&
+           process->state != PROCESS_TERMINATED &&
+           process->state != PROCESS_ZOMBIE &&
+           process->state != PROCESS_REAPING;
+}
+
 int ipc_send(uint32_t sender_pid, uint32_t target_pid,
              const void *payload, size_t length)
 {
     if (length > VANTA_IPC_PAYLOAD_MAX || (length != 0U && !payload))
         return -90;
-    if (!process_can_use_ipc(sender_pid) ||
-        !process_can_use_ipc(target_pid))
-        return -3;
 
     vanta_ipc_message_t message;
     message_clear(&message);
@@ -142,9 +151,24 @@ int ipc_send(uint32_t sender_pid, uint32_t target_pid,
     for (size_t i = 0U; i < length; ++i)
         message.payload[i] = source[i];
 
-    uint64_t flags = spinlock_lock_irqsave(&ipc_lock);
+    /*
+     * Hold process-table then IPC lock, matching process_reset_record's lock
+     * order. This closes the target-PID reuse window between validation and
+     * enqueue, without ever taking the process-table lock while holding IPC.
+     */
+    uint64_t process_flags = process_table_lock_acquire();
+    if (!process_initialized_state ||
+        !process_live_user_locked(sender_pid) ||
+        !process_live_user_locked(target_pid))
+    {
+        process_table_lock_release(process_flags);
+        return -3;
+    }
+
+    uint64_t ipc_flags = spinlock_lock_irqsave(&ipc_lock);
     int ok = queue_push(&mailboxes[target_pid], &message);
-    spinlock_unlock_irqrestore(&ipc_lock, flags);
+    spinlock_unlock_irqrestore(&ipc_lock, ipc_flags);
+    process_table_lock_release(process_flags);
     return ok ? (int)length : -11;
 }
 

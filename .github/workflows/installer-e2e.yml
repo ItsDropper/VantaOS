@@ -206,6 +206,10 @@ jobs:
               wait_marker("VANTAOS_SETUP_FINISH_ACTION_PROMPT")
               key("r")
               key("ret")
+              wait_marker("VANTAOS_SETUP_REBOOT_CONFIRM_PROMPT")
+              for letter in "YES":
+                  key("shift-" + letter.lower())
+              key("ret")
               wait_marker("VANTAOS_SETUP_REBOOT_REQUESTED")
               print("VANTAOS_SETUP_E2E_INSTALL_COMPLETE")
           PY

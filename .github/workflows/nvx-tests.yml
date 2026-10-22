@@ -31,6 +31,8 @@ on:
       - "include/gpu_bringup.h"
       - "include/gpu_dma.h"
       - "scripts/test_gpu_dma.c"
+      - "include/gpu_dma_sync.h"
+      - "scripts/test_gpu_dma_sync.c"
       - "scripts/test_gpu_bringup.c"
       - "scripts/test_gpu_pci_resources.c"
       - "drivers/gpu/intel/**"
@@ -385,6 +387,12 @@ jobs:
 
       - name: Test shared GPU DMA allocation, contiguity, bounds and cleanup
         run: /tmp/vantaos-gpu-dma-test
+
+      - name: Compile shared GPU DMA ownership and ordering tests
+        run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_gpu_dma_sync.c drivers/gpu/core/gpu_dma_sync.c drivers/gpu/core/gpu_dma.c -o /tmp/vantaos-gpu-dma-sync-test
+
+      - name: Test GPU DMA ownership transitions, range checks and stale handles
+        run: /tmp/vantaos-gpu-dma-sync-test
 
       - name: Compile WPR metadata layout tests
         run: |

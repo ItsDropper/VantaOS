@@ -41,6 +41,7 @@ typedef struct gpu_engine_transaction {
     uint8_t active;
 } gpu_engine_transaction_t;
 
+typedef int (*gpu_engine_validate_fn)(const gpu_engine_transaction_t *transaction);
 typedef int (*gpu_engine_publish_fn)(void *context, uint64_t new_write_sequence);
 
 typedef struct gpu_engine_snapshot {
@@ -65,6 +66,7 @@ gpu_engine_status_t gpu_engine_emit(gpu_engine_transaction_t *transaction,
 gpu_engine_status_t gpu_engine_commit(gpu_engine_transaction_t *transaction);
 /* Backend callback performs platform ordering and writes the hardware tail/doorbell. */
 gpu_engine_status_t gpu_engine_submit(gpu_engine_transaction_t *transaction,
+                                      gpu_engine_validate_fn validate,
                                       gpu_engine_publish_fn publish,
                                       void *context);
 void gpu_engine_abort(gpu_engine_transaction_t *transaction);

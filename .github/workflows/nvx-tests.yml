@@ -30,6 +30,8 @@ on:
       - "scripts/test_gpu_irq.c"
       - "include/gpu_va.h"
       - "scripts/test_gpu_va.c"
+      - "include/gpu_vm.h"
+      - "scripts/test_gpu_vm.c"
       - "include/gpu_registers.h"
       - "scripts/test_gpu_registers.c"
       - "include/gpu_engine.h"
@@ -645,6 +647,12 @@ jobs:
 
       - name: Test shared GPU VA splitting, coalescing, guards and stale handles
         run: /tmp/vantaos-gpu-va-test
+
+      - name: Compile transactional GPU page-table mapping tests
+        run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_gpu_vm.c drivers/gpu/core/gpu_vm.c drivers/gpu/core/gpu_va.c drivers/gpu/core/gpu_dma.c -o /tmp/vantaos-gpu-vm-test
+
+      - name: Test GPU PTE mapping rollback, invalidation retries and stale handles
+        run: /tmp/vantaos-gpu-vm-test
 
       - name: Compile NVX memory object tests with strict warnings
         run: |

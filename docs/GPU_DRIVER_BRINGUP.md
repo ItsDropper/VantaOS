@@ -20,7 +20,7 @@ accelerated drivers.
 ## Shared runtime logic added in this branch
 
 - Bounds-checked 32-bit register reads/writes, masked updates, bounded status polling, bitfield encoding/decoding, and ordered write/verify sequences.
-- Transactional command-ring reservations with atomic packet publication, wraparound accounting, back-pressure, monotonically increasing software fences, and a fail-closed hardware-tail callback contract. The platform callback must provide the required memory ordering and device-specific doorbell operation.
+- Transactional command-ring reservations with atomic packet publication, wraparound accounting, back-pressure, monotonically increasing software fences, vendor-validator gating before submission, and a fail-closed hardware-tail callback contract. The platform callback must provide the required memory ordering and device-specific doorbell operation.
 - A staged bring-up executor that only accumulates capabilities after verification, unwinds completed stages in reverse order on failure, and clears all published capabilities if rollback is incomplete.
 - Host tests exercise failure injection and teardown paths. These abstractions are not a substitute for vendor-specific command encodings, DMA-coherent allocations, real MMIO mappings, firmware validation, or physical-device testing.
 

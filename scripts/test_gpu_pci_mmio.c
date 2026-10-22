@@ -50,7 +50,7 @@ int pci_get_bar(const struct pci_device *device, uint8_t index,
 int pci_enable_memory_space(const struct pci_device *device)
 {
     (void)device;
-    if (fail_enable) return 0;
+    if (fail_enable) { command |= 0x0002U; return 0; }
     command |= 0x0002U;
     return 1;
 }
@@ -108,6 +108,7 @@ int main(void)
     fail_enable = 1;
     assert(gpu_pci_mmio_map(&gpu, 0U, 4096U, 4096U, &mapping) ==
            GPU_PCI_MMIO_DECODE_FAILED);
+    assert(command == 0U);
     fail_enable = 0;
     fail_map = 1;
     assert(gpu_pci_mmio_map(&gpu, 0U, 4096U, 4096U, &mapping) ==

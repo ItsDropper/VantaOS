@@ -570,12 +570,15 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
         return EFI_LOAD_ERROR;
     }
 
-    vanta_setup_config_t config = {{0}, {0}, {0}};
+    vanta_setup_config_t config = {{0}, {0}, {0}, {0}};
     config.language[0] = 'e'; config.language[1] = 'n'; config.language[2] = '\0';
     config.keyboard[0] = 'u'; config.keyboard[1] = 's'; config.keyboard[2] = '\0';
     config.timezone[0] = '\0';
+    const char default_device_name[] = "VANTAOS-PC";
+    for (size_t i = 0U; i < sizeof(default_device_name); ++i)
+        config.device_name[i] = default_device_name[i];
 
-    char line[32];
+    char line[64];
     const CHAR16 *missing_payload = NULL;
     Print(L"Checking installer files before any disk can be modified...\r\n");
     if (!preflight_installer_payload(source_root, &missing_payload)) {
@@ -600,6 +603,33 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
             break;
         }
         Print(L"Choose 1 or 2. Valitse 1 tai 2.\r\n");
+    }
+
+    serial_write("VANTAOS_SETUP_DEVICE_NAME_PROMPT\n");
+    for (;;) {
+        print_localized(&config, L"Device name (letters, numbers, internal hyphens) [VANTAOS-PC]: ",
+                        L"Laitteen nimi (kirjaimet, numerot, valiviiva) [VANTAOS-PC]: ");
+        if (!read_line(line, sizeof(line))) {
+            uefi_call_wrapper(source_root->Close, 1, source_root);
+            return EFI_ABORTED;
+        }
+        if (line[0] == '\0')
+            break;
+        size_t name_length = 0U;
+        while (line[name_length] && name_length + 1U < sizeof(config.device_name)) {
+            config.device_name[name_length] = line[name_length];
+            ++name_length;
+        }
+        if (line[name_length] != '\0') {
+            print_localized(&config, L"Name is too long; use at most 32 characters.\r\n",
+                            L"Nimi on liian pitka; kayta enintaan 32 merkkia.\r\n");
+            continue;
+        }
+        config.device_name[name_length] = '\0';
+        if (vanta_setup_device_name_valid(config.device_name))
+            break;
+        print_localized(&config, L"Invalid name. Start and end with a letter or number; use only letters, numbers, and internal hyphens.\r\n",
+                        L"Virheellinen nimi. Aloita ja lopeta kirjaimella tai numerolla; kayta vain kirjaimia, numeroita ja valiviivoja keskella.\r\n");
     }
 
     serial_write("VANTAOS_SETUP_KEYBOARD_PROMPT\n");
@@ -666,17 +696,19 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
         Print(L"  Kayttokieli: Suomi\r\n");
         Print(L"  Nappaimistoasetus: %s\r\n",
               config.keyboard[0] == 'f' ? L"Finnish" : L"US");
+        Print(L"  Laitteen nimi: %a\r\n", config.device_name);
         Print(L"  Aikavyohyke: %a\r\n", config.timezone);
     } else {
         Print(L"  Preferred language: English\r\n");
         Print(L"  Keyboard preference: %s\r\n",
               config.keyboard[0] == 'f' ? L"Finnish" : L"US");
+        Print(L"  Device name: %a\r\n", config.device_name);
         Print(L"  Time zone: %a\r\n", config.timezone);
     }
     print_localized(&config, L"  Partition scheme: GPT (UEFI)\r\n", L"  Osiointitapa: GPT (UEFI)\r\n");
     print_localized(&config, L"  Filesystems: FAT32 EFI System Partition + FAT32 system partition\r\n", L"  Tiedostojarjestelmat: FAT32 EFI-osio ja FAT32 jarjestelmaosio\r\n");
     print_localized(&config, L"  Setup preferences will be saved to \\SYSTEM\\SETUP.CFG.\r\n", L"  Asetukset tallennetaan tiedostoon \\SYSTEM\\SETUP.CFG.\r\n");
-    print_localized(&config, L"  Language and keyboard preferences are saved metadata; runtime localization/keymap integration is not yet implemented.\r\n\r\n", L"  Kieli- ja nappaimistoasetukset tallennetaan, mutta kayttojarjestelman kieli- ja asettelutuki ei ole viela toteutettu.\r\n\r\n");
+    print_localized(&config, L"  Device name is shown in Settings. Language and keyboard are saved preferences; runtime localization/keymap integration is not yet implemented. The selected time zone is saved but not applied to the active clock.\r\n\r\n", L"  Laitteen nimi naytetaan Asetuksissa. Kieli ja nappaimisto tallennetaan asetuksiksi, mutta niita ei viela sovelleta kayttojarjestelmassa. Aikavyohyke tallennetaan, mutta sita ei viela sovelleta kelloon.\r\n\r\n");
 
     setup_disk_t disks[SETUP_MAX_DISKS];
     UINTN disk_count = 0U;

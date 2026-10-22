@@ -50,7 +50,7 @@ int main(void)
     assert(fence == 1U);
     assert(gpu_engine_complete_fence(&ring, 2U) == GPU_ENGINE_STALE_FENCE);
     assert(gpu_engine_complete_fence(&ring, fence) == GPU_ENGINE_OK);
-    assert(gpu_engine_complete_fence(&ring, fence - 1U) == GPU_ENGINE_STALE_FENCE);
+    assert(gpu_engine_complete_fence(&ring, fence - 1U) == GPU_ENGINE_INVALID);
     gpu_engine_ring_disable(&ring);
     assert(gpu_engine_reset(&ring) == GPU_ENGINE_NOT_READY);
     assert(gpu_engine_consume(&ring, 99U, &consumed) == GPU_ENGINE_OK);

@@ -12,7 +12,7 @@
 int main(void)
 {
     volatile uint32_t regs[8] = {
-        0xA5A50000U, 0x00000001U, 0U, 0U, 0U, 0x00000004U, 0U, 0U
+        0xA5A50000U, 0x00001234U, 0U, 0U, 0U, 0x00000004U, 0U, 0U
     };
     gpu_mmio_region_t mmio = {
         .base = (volatile uint8_t *)(void *)regs,

@@ -228,7 +228,7 @@ int main(void)
         assert(test_probe_calls == 1 && test_initialize_calls == 1);
         assert(gpu_device_publish_capabilities(&attached, GPU_CAP_DISPLAY_SCANOUT));
         assert(gpu_driver_stop(&attached));
-        assert(attached.state == GPU_DEVICE_INITIALIZED);
+        assert(attached.state == GPU_DEVICE_STOPPED);
         assert(attached.ops == 0);
         assert(attached.verified_capabilities == 0U);
         assert(test_shutdown_calls == 1);

@@ -68,6 +68,11 @@ int main(void)
     assert(gpu_engine_reserve(&ring, 6U, &tx) == GPU_ENGINE_FULL);
     assert(gpu_engine_snapshot(&ring, &snap) == GPU_ENGINE_OK);
     assert(snap.queued_words == 3U && snap.free_words == 5U);
+    assert(gpu_engine_update_consumer(&ring, 1U) == GPU_ENGINE_OK);
+    assert(gpu_engine_update_consumer(&ring, 0U) == GPU_ENGINE_STALE_CONSUMER);
+    assert(gpu_engine_update_consumer(&ring, 9U) == GPU_ENGINE_INVALID);
+    assert(gpu_engine_update_consumer(&ring, 0U) == GPU_ENGINE_STALE_CONSUMER);
+    assert(gpu_engine_update_consumer(&ring, 0U) == GPU_ENGINE_STALE_CONSUMER);
     assert(storage[0] == 0x10000000U && storage[2] == 0x30000000U);
     assert(gpu_engine_consume(&ring, 2U, &consumed) == GPU_ENGINE_OK);
     assert(consumed == 2U);

@@ -89,11 +89,39 @@ _start:
     cmp $-22, %rax
     jne file_fail
 
+    /* Create a parent endpoint and pass its capability as decimal argv. */
+    mov $26, %eax
+    int $0x80
+    test %rax, %rax
+    jle ipc_capability_unavailable
+    mov %rax, %r15
+    lea parent_endpoint_string+20(%rip), %rdi
+    movb $0, (%rdi)
+    mov %r15, %rax
+    mov $10, %r8
+    mov $20, %rcx
+endpoint_format_loop:
+    xor %edx, %edx
+    div %r8
+    add $48, %dl
+    dec %rdi
+    mov %dl, (%rdi)
+    loop endpoint_format_loop
+    jmp ipc_capability_ready
+ipc_capability_unavailable:
+    /* Older virtual CPUs may not expose RDRAND; keep non-IPC tests runnable. */
+    xor %r15, %r15
+ipc_capability_ready:
+
     /* Launch a separate ELF from FAT32 with a kernel-owned argv copy. */
     mov $6, %eax
     lea child_path(%rip), %rdi
     lea child_argv(%rip), %rsi
     mov $2, %edx
+    test %r15, %r15
+    jz child_spawn_count_ready
+    mov $3, %edx
+child_spawn_count_ready:
     int $0x80
     test %rax, %rax
     jle file_fail
@@ -358,6 +386,39 @@ open_until_full:
     mov $(spawn_message_end - spawn_message), %esi
     int $0x80
 
+    /* Skip IPC only when this CPU cannot provide secure endpoint entropy. */
+    test %r15, %r15
+    jz ipc_exchange_skipped
+
+    /* Receive the child's endpoint token, yielding while it starts. */
+    mov $500, %r10d
+ipc_receive_retry:
+    mov $28, %eax
+    mov %r15, %rdi
+    lea child_endpoint_token(%rip), %rsi
+    mov $8, %edx
+    int $0x80
+    cmp $-11, %rax
+    jne ipc_receive_done
+    mov $9, %eax
+    int $0x80
+    dec %r10d
+    jnz ipc_receive_retry
+    jmp file_fail
+ipc_receive_done:
+    cmp $8, %rax
+    jne file_fail
+    mov child_endpoint_token(%rip), %rdi
+    test %rdi, %rdi
+    jle file_fail
+    mov $27, %eax
+    lea ipc_reply(%rip), %rsi
+    mov $(ipc_reply_end - ipc_reply), %edx
+    int $0x80
+    test %rax, %rax
+    jne file_fail
+ipc_exchange_skipped:
+
     /* Block until the child exits and verify the kernel preserved its status. */
     mov $7, %eax
     mov %r14, %rdi
@@ -368,6 +429,18 @@ open_until_full:
     mov child_status(%rip), %eax
     cmp $23, %eax
     jne file_fail
+
+    /* Process exit must invalidate its still-open IPC endpoint. */
+    test %r15, %r15
+    jz ipc_cleanup_verified
+    mov $27, %eax
+    mov child_endpoint_token(%rip), %rdi
+    lea ipc_reply(%rip), %rsi
+    mov $1, %edx
+    int $0x80
+    cmp $-9, %rax
+    jne file_fail
+ipc_cleanup_verified:
 
     /* A collected child must no longer be waitable. */
     mov $7, %eax
@@ -416,6 +489,7 @@ child_path:
 child_argv:
     .quad child_path
     .quad child_argument
+    .quad parent_endpoint_string
 child_argument:
     .asciz "spawned-child"
 invalid_child_argv:
@@ -434,6 +508,9 @@ config_data:
 config_data_end:
 missing_path:
     .asciz "/NO-SUCH-FILE.TXT"
+ipc_reply:
+    .ascii "ack"
+ipc_reply_end:
 fixture:
     .ascii "VANTAOS_USER_FILE_FIXTURE\n"
 fixture_end:
@@ -451,6 +528,12 @@ file_failure_end:
 .align 16
 file_buffer:
     .skip config_data_end - config_data
+.align 8
+parent_endpoint_string:
+    .skip 21
+.align 8
+child_endpoint_token:
+    .skip 8
 .align 4
 child_status:
     .skip 4

@@ -19,6 +19,7 @@
 #include "gui_server.h"
 #include "desktop_theme.h"
 #include "shell.h"
+#include "ipc.h"
 
 #include <stdint.h>
 
@@ -48,6 +49,10 @@
 #define USER_SYSCALL_CREATE_DIRECTORY 23U
 #define USER_SYSCALL_STAT_PATH 24U
 #define USER_SYSCALL_KERNEL_COMMAND 25U
+#define USER_SYSCALL_IPC_CREATE 26U
+#define USER_SYSCALL_IPC_SEND 27U
+#define USER_SYSCALL_IPC_RECEIVE 28U
+#define USER_SYSCALL_IPC_CLOSE 29U
 #define USER_SYSCALL_KERNEL_COMMAND_MAX 2048U
 #define USER_SYSCALL_IO_MAX 4096U
 #define USER_SYSCALL_WRITE_MAX 4096U
@@ -842,6 +847,39 @@ static int syscall_gui_poll_event(struct exception_frame* frame,
     return 0;
 }
 
+static int syscall_ipc_create(struct exception_frame* frame, const process_t* process)
+{
+    frame->rax = (uint64_t)ipc_endpoint_create(process->pid);
+    return 0;
+}
+
+static int syscall_ipc_send(struct exception_frame* frame, const process_t* process)
+{
+    uint64_t length = frame->rdx;
+    uintptr_t address = (uintptr_t)frame->rsi;
+    if (length == 0U || length > IPC_MESSAGE_MAX) { frame->rax = (uint64_t)(int64_t)-22; return 0; }
+    if (!paging_user_range_valid(process->address_space, address, (size_t)length, 0)) { frame->rax = (uint64_t)(int64_t)-14; return 0; }
+    uint8_t message[IPC_MESSAGE_MAX]; const uint8_t *source = (const uint8_t *)address;
+    for (size_t i=0;i<(size_t)length;i++) message[i]=source[i];
+    frame->rax = (uint64_t)(int64_t)ipc_message_send(frame->rdi,process->pid,message,(size_t)length);
+    return 0;
+}
+
+static int syscall_ipc_receive(struct exception_frame* frame, const process_t* process)
+{
+    uint64_t capacity=frame->rdx; uintptr_t address=(uintptr_t)frame->rsi;
+    if (capacity==0U || capacity>IPC_MESSAGE_MAX) { frame->rax=(uint64_t)(int64_t)-22; return 0; }
+    if (!paging_user_range_valid(process->address_space,address,(size_t)capacity,1)) { frame->rax=(uint64_t)(int64_t)-14; return 0; }
+    uint8_t message[IPC_MESSAGE_MAX]; int n=ipc_message_receive(frame->rdi,process->pid,message,(size_t)capacity);
+    if(n>0){uint8_t *dst=(uint8_t*)address;for(int i=0;i<n;i++)dst[i]=message[i];}
+    frame->rax=(uint64_t)(int64_t)n; return 0;
+}
+
+static int syscall_ipc_close(struct exception_frame* frame, const process_t* process)
+{
+    frame->rax=(uint64_t)(int64_t)ipc_endpoint_close(frame->rdi,process->pid); return 0;
+}
+
 static int syscall_dispatch(struct exception_frame* frame)
 {
     if (!frame || (frame->cs & 3U) != 3U)
@@ -903,6 +941,14 @@ static int syscall_dispatch(struct exception_frame* frame)
             return syscall_stat_path(frame, &process);
         case USER_SYSCALL_KERNEL_COMMAND:
             return syscall_kernel_command(frame, &process);
+        case USER_SYSCALL_IPC_CREATE:
+            return syscall_ipc_create(frame, &process);
+        case USER_SYSCALL_IPC_SEND:
+            return syscall_ipc_send(frame, &process);
+        case USER_SYSCALL_IPC_RECEIVE:
+            return syscall_ipc_receive(frame, &process);
+        case USER_SYSCALL_IPC_CLOSE:
+            return syscall_ipc_close(frame, &process);
         case USER_SYSCALL_GUI_CREATE_WINDOW:
             return syscall_gui_create_window(frame, &process);
         case USER_SYSCALL_GUI_CLOSE_WINDOW:

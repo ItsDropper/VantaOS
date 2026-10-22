@@ -12,6 +12,48 @@ static const char success[] = "VANTAOS_USER_CHILD_PROGRAM_OK\n";
 static const char list_success[] = "VANTAOS_USER_DIRECTORY_LIST_OK\n";
 static const char failure[] = "VANTAOS_USER_CHILD_PROGRAM_FAIL\n";
 
+static int run_ipc_syscall_test(void)
+{
+    long endpoint = vanta_ipc_endpoint_create();
+    if (endpoint <= 0)
+        return 0;
+    char buffer[VANTA_IPC_MESSAGE_MAX];
+    if (vanta_ipc_receive((uint64_t)endpoint, buffer, sizeof(buffer)) !=
+            -VANTA_EAGAIN ||
+        vanta_ipc_send((uint64_t)endpoint,
+                       (const void *)(uintptr_t)0x7ffffffff000ULL, 1U) !=
+            -VANTA_EFAULT ||
+        vanta_ipc_send((uint64_t)endpoint, "x",
+                       VANTA_IPC_MESSAGE_MAX + 1U) != -VANTA_EINVAL)
+        return 0;
+
+    if (vanta_ipc_send((uint64_t)endpoint, "ab", 2U) != 0 ||
+        vanta_ipc_send((uint64_t)endpoint, "b", 1U) != 0 ||
+        vanta_ipc_receive((uint64_t)endpoint, buffer, 1U) !=
+            -VANTA_EMSGSIZE ||
+        vanta_ipc_receive((uint64_t)endpoint, buffer, sizeof(buffer)) != 2L ||
+        buffer[0] != 'a' || buffer[1] != 'b' ||
+        vanta_ipc_receive((uint64_t)endpoint, buffer, sizeof(buffer)) != 1L ||
+        buffer[0] != 'b')
+        return 0;
+
+    for (unsigned int i = 0; i < 8U; ++i)
+        if (vanta_ipc_send((uint64_t)endpoint, "q", 1U) != 0)
+            return 0;
+    if (vanta_ipc_send((uint64_t)endpoint, "overflow", 8U) !=
+        -VANTA_EAGAIN)
+        return 0;
+    for (unsigned int i = 0; i < 8U; ++i)
+        if (vanta_ipc_receive((uint64_t)endpoint, buffer, sizeof(buffer)) != 1L ||
+            buffer[0] != 'q')
+            return 0;
+    if (vanta_ipc_close((uint64_t)endpoint) != 0 ||
+        vanta_ipc_send((uint64_t)endpoint, "stale", 5U) != -VANTA_EBADF ||
+        vanta_ipc_close((uint64_t)endpoint) != -VANTA_EBADF)
+        return 0;
+    return 1;
+}
+
 static int string_contains(const char* text, const char* needle)
 {
     if (!text || !needle || !needle[0])
@@ -41,12 +83,57 @@ static int string_equals(const char* left, const char* right)
     return *left == *right;
 }
 
+static int parse_endpoint(const char *text, uint64_t *out)
+{
+    uint64_t value = 0U;
+    if (!text || !text[0] || !out)
+        return 0;
+    for (size_t i = 0; text[i]; ++i)
+    {
+        if (text[i] < '0' || text[i] > '9')
+            return 0;
+        uint64_t digit = (uint64_t)(text[i] - '0');
+        if (value > (UINT64_MAX - digit) / 10U)
+            return 0;
+        value = value * 10U + digit;
+    }
+    if (!value || value > INT64_MAX)
+        return 0;
+    *out = value;
+    return 1;
+}
+
 int main(int argc, char** argv)
 {
-    if (argc != 2 || !string_equals(argv[1], "spawned-child"))
+    uint64_t parent_endpoint = 0U;
+    int ipc_enabled = argc == 3;
+    if ((argc != 2 && argc != 3) ||
+        !string_equals(argv[1], "spawned-child") ||
+        (ipc_enabled && !parse_endpoint(argv[2], &parent_endpoint)))
     {
         (void)vanta_write(failure, sizeof(failure) - 1U);
         return 1;
+    }
+
+    long child_endpoint = 0;
+    if (ipc_enabled)
+    {
+        if (!run_ipc_syscall_test())
+        {
+            (void)vanta_write(failure, sizeof(failure) - 1U);
+            return 13;
+        }
+        static const char ipc_success[] = "VANTAOS_IPC_RING3_SYSCALL_OK\n";
+        (void)vanta_write(ipc_success, sizeof(ipc_success) - 1U);
+
+        child_endpoint = vanta_ipc_endpoint_create();
+        if (child_endpoint <= 0 ||
+            vanta_ipc_send(parent_endpoint, &child_endpoint,
+                           sizeof(child_endpoint)) != 0)
+        {
+            (void)vanta_write(failure, sizeof(failure) - 1U);
+            return 14;
+        }
     }
 
     char entries[1024];
@@ -197,6 +284,30 @@ int main(int argc, char** argv)
     {
         (void)vanta_write(failure, sizeof(failure) - 1U);
         return 12;
+    }
+
+    if (ipc_enabled)
+    {
+        char ipc_reply[8] = {0};
+        long ipc_reply_length = -VANTA_EAGAIN;
+        for (unsigned int retries = 0U;
+             retries < 500U && ipc_reply_length == -VANTA_EAGAIN; ++retries)
+        {
+            ipc_reply_length = vanta_ipc_receive((uint64_t)child_endpoint,
+                                                 ipc_reply, sizeof(ipc_reply));
+            if (ipc_reply_length == -VANTA_EAGAIN)
+                (void)vanta_yield();
+        }
+        if (ipc_reply_length != 3L || ipc_reply[0] != 'a' ||
+            ipc_reply[1] != 'c' || ipc_reply[2] != 'k')
+        {
+            (void)vanta_write(failure, sizeof(failure) - 1U);
+            return 15;
+        }
+        static const char ipc_cross_success[] = "VANTAOS_IPC_CROSS_PROCESS_OK\n";
+        (void)vanta_write(ipc_cross_success, sizeof(ipc_cross_success) - 1U);
+    
+    
     }
 
     (void)vanta_write(list_success, sizeof(list_success) - 1U);

@@ -7,6 +7,7 @@
 
 #include "process_internal.h"
 #include "apic.h"
+#include "../ipc.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -370,6 +371,8 @@ int process_reap(uint32_t pid)
     snapshot = *process;
     process->state = PROCESS_REAPING;
     process_table_lock_release(flags);
+
+    ipc_process_cleanup(pid);
 
     if (!process_release_user_resources(&snapshot))
     {

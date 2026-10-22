@@ -239,6 +239,11 @@ jobs:
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_tls_hostname.c -o /tmp/vantaos-tls-hostname-test
           /tmp/vantaos-tls-hostname-test
 
+      - name: Test bounded IPC queue, capability permissions, and owner cleanup
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Itests/ipc_host -Iinclude scripts/test_ipc.c -o /tmp/vantaos-ipc-test
+          /tmp/vantaos-ipc-test
+
       - name: Test hardware crypto entropy source
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_crypto_rng.c kernel/crypto_rng.c -o /tmp/vantaos-crypto-rng-test
@@ -889,6 +894,8 @@ jobs:
             VANTAOS_USER_FILE_WRITE_OK
             VANTAOS_USER_SPAWN_OK
             VANTAOS_USER_CHILD_PROGRAM_OK
+            VANTAOS_IPC_RING3_SYSCALL_OK
+            VANTAOS_IPC_CROSS_PROCESS_OK
             VANTAOS_USER_FILE_RANGE_IO_OK
             VANTAOS_EXPLORER_E2E_OK
             VANTAOS_USER_GUI_SYSCALL_OK
@@ -928,6 +935,7 @@ jobs:
             set +e
             timeout 30s qemu-system-x86_64 \
               -machine pc \
+              -cpu max \
               -smp "${cpus}" \
               -m "${memory}M" \
               -drive file=VantaOS.iso,media=cdrom,format=raw \

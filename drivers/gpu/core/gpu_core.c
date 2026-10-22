@@ -112,6 +112,8 @@ int gpu_driver_start(gpu_device_t *device,
     if (!gpu_device_transition(device, GPU_DEVICE_PROBING))
         return 0;
     if (!device->ops->probe(device)) {
+        if (device->ops->shutdown != NULL)
+            device->ops->shutdown(device);
         (void)gpu_device_transition(device, GPU_DEVICE_FAILED);
         return 0;
     }

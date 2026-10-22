@@ -98,15 +98,23 @@ int main(void)
 
     assert(gpu_engine_runtime_init(&runtime, 4096U, 32U) ==
            GPU_ENGINE_RUNTIME_OK);
+    fail_publish = 0;
+    assert(gpu_engine_runtime_submit(&runtime, words, 2U, validate, publish,
+                                     NULL) == GPU_ENGINE_RUNTIME_OK);
+    assert(gpu_engine_runtime_issue_fence(&runtime, &fence) ==
+           GPU_ENGINE_RUNTIME_OK);
     fail_publish = 1;
     assert(gpu_engine_runtime_submit(&runtime, words, 2U, validate, publish,
                                      NULL) == GPU_ENGINE_RUNTIME_DEVICE_ERROR);
     assert(gpu_engine_runtime_submit(&runtime, words, 2U, validate, publish,
                                      NULL) == GPU_ENGINE_RUNTIME_INVALID);
     fail_publish = 0;
-    /* Device failure means teardown must prove the backend has quiesced. */
-    assert(gpu_engine_runtime_update_consumer(&runtime, 2U) ==
-           GPU_ENGINE_RUNTIME_NOT_READY);
+    /* Even with queued work/fences, only confirmed quiesce permits freeing. */
+    fail_quiesce = 1;
+    assert(gpu_engine_runtime_destroy(&runtime, quiesce, NULL) ==
+           GPU_ENGINE_RUNTIME_DEVICE_ERROR);
+    assert(runtime.initialized && runtime.dma.acquired && frees == 1U);
+    fail_quiesce = 0;
     assert(gpu_engine_runtime_destroy(&runtime, quiesce, NULL) ==
            GPU_ENGINE_RUNTIME_OK);
     assert(!runtime.initialized && frees == 2U);

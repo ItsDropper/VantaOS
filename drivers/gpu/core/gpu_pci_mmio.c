@@ -73,13 +73,21 @@ gpu_pci_mmio_status_t gpu_pci_mmio_map(
         return GPU_PCI_MMIO_BUS_MASTER_ACTIVE;
 
     if ((command & GPU_PCI_COMMAND_MEMORY_SPACE) == 0U) {
-        if (!pci_enable_memory_space(device))
+        if (!pci_enable_memory_space(device)) {
+            if (!gpu_pci_mmio_restore_decode(device, command, 1))
+                return GPU_PCI_MMIO_RESTORE_FAILED;
             return GPU_PCI_MMIO_DECODE_FAILED;
+        }
         enabled_by_us = 1;
-        if ((pci_read_config16(device, 0x04U) &
-             GPU_PCI_COMMAND_MEMORY_SPACE) == 0U) {
-            (void)gpu_pci_mmio_restore_decode(device, command, enabled_by_us);
-            return GPU_PCI_MMIO_DECODE_FAILED;
+        {
+            uint16_t observed = pci_read_config16(device, 0x04U);
+            if (observed == 0xFFFFU ||
+                (observed & GPU_PCI_COMMAND_MEMORY_SPACE) == 0U ||
+                (observed & GPU_PCI_COMMAND_BUS_MASTER) != 0U) {
+                if (!gpu_pci_mmio_restore_decode(device, command, enabled_by_us))
+                    return GPU_PCI_MMIO_RESTORE_FAILED;
+                return GPU_PCI_MMIO_DECODE_FAILED;
+            }
         }
     }
 

@@ -672,7 +672,8 @@ jobs:
           gcc -DNVX_GPUVM_TEST -std=c11 -Wall -Wextra -Werror -Iinclude \
             scripts/test_nvx_submit.c drivers/gpu/nvx/execution/nvx_submit.c drivers/gpu/nvx/memory/nvx_gpuvm.c \
             drivers/gpu/nvx/memory/nvx_object_memory.c drivers/gpu/nvx/memory/nvx_gpuva.c \
-            drivers/gpu/nvx/memory/nvx_dma.c -o /tmp/vantaos-nvx-submit-test
+            drivers/gpu/nvx/memory/nvx_dma.c drivers/gpu/core/gpu_dma.c \
+            drivers/gpu/core/gpu_va.c -o /tmp/vantaos-nvx-submit-test
 
       - name: Test command bounds, relocation overlap and target ranges
         run: /tmp/vantaos-nvx-submit-test
@@ -709,7 +710,8 @@ jobs:
         run: |
           gcc -DNVX_GPUVM_TEST -std=c11 -Wall -Wextra -Werror -Iinclude \
             scripts/test_nvx_gpuvm.c drivers/gpu/nvx/memory/nvx_gpuvm.c \
-            drivers/gpu/nvx/memory/nvx_gpuva.c -o /tmp/vantaos-nvx-gpuvm-test
+            drivers/gpu/nvx/memory/nvx_gpuva.c drivers/gpu/core/gpu_va.c \
+            -o /tmp/vantaos-nvx-gpuvm-test
 
       - name: Test Ampere V2 page tables and MMU flush failure handling
         run: /tmp/vantaos-nvx-gpuvm-test

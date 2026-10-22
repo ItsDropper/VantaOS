@@ -56,7 +56,7 @@ vanta_installer_layout_status_t vanta_installer_plan_gpt_with_efi_size(
                   &layout.efi.first_lba))
         return VANTA_INSTALLER_LAYOUT_OVERFLOW;
 
-    if (layout.efi.first_lba > UINT64_MAX - VANTA_INSTALLER_ESP_SECTORS)
+    if (layout.efi.first_lba > UINT64_MAX - efi_sector_count)
         return VANTA_INSTALLER_LAYOUT_OVERFLOW;
     efi_end_exclusive =
         layout.efi.first_lba + efi_sector_count;

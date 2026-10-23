@@ -175,7 +175,7 @@ jobs:
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
             scripts/test_gpu_vendor_framework.c drivers/gpu/core/gpu_vendor.c \
             drivers/gpu/core/gpu_core.c drivers/gpu/core/gpu_pci_resources.c \
-            drivers/gpu/intel/intel_gpu.c drivers/gpu/amd/amd_gpu.c -o /tmp/vantaos-gpu-vendor-framework-test
+            drivers/gpu/intel/intel_gpu.c drivers/gpu/intel/intel_gen9.c drivers/gpu/amd/amd_gpu.c drivers/gpu/amd/amd_polaris.c -o /tmp/vantaos-gpu-vendor-framework-test
 
       - name: Test GPU classification, lifecycle and fail-closed capabilities
         run: /tmp/vantaos-gpu-vendor-framework-test

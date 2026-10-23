@@ -376,6 +376,7 @@ int main(void)
         gpu_pci_match_t amd_match;
         amd_gpu_runtime_binding_t amd_binding = {0};
         intel_gpu_runtime_binding_t intel_binding = {0};
+        volatile uint32_t intel_fence = 0xA5A5U;
         gpu_device_t intel_device;
         gpu_pci_match_t intel_match;
         const struct pci_device gen9 = {
@@ -398,7 +399,7 @@ int main(void)
         assert(gpu_classify_pci_function(&gen9, &intel_match));
         assert(gpu_device_construct(&intel_device, &gen9, &intel_match));
         assert(intel_gpu_configure_runtime(&intel_device, &intel_binding,
-            0x1000U, 1U, 0x9U, 100U, 1, test_engine_quiesce, NULL));
+            0x1000U, 1U, 0x9U, &intel_fence, 0xA5A5U, 100U, 1, test_engine_quiesce, NULL));
         assert(intel_device.driver_private == &intel_binding);
         assert(intel_binding.configured && intel_binding.context_ready);
         assert(!intel_gpu_configure_runtime(&intel_device, &intel_binding,

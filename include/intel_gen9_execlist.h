@@ -80,6 +80,10 @@ intel_gen9_execlist_status_t intel_gen9_execlist_poll_csb(
 intel_gen9_execlist_status_t intel_gen9_execlist_complete(
     intel_gen9_execlist_t *execlist, uint32_t completed_context_id);
 
+/* Discard pending bookkeeping only after hardware quiescence is verified. */
+intel_gen9_execlist_status_t intel_gen9_execlist_abort_pending(
+    intel_gen9_execlist_t *execlist, int engine_quiesced);
+
 /* Stop accepting work; this does not free the LRCA, ring, or status buffer. */
 intel_gen9_execlist_status_t intel_gen9_execlist_shutdown(
     intel_gen9_execlist_t *execlist, int engine_quiesced);

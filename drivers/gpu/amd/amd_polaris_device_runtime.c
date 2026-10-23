@@ -28,11 +28,13 @@ amd_polaris_device_status_t amd_polaris_device_runtime_init(
     runtime->pci_device = device;
 
     /*
-     * Size BAR2 while bus mastering is disabled, then map only the audited
-     * register range used by the Polaris VM and GFX ring backends.
+     * GCN4/Polaris uses BAR5 for the 256 KiB non-prefetchable register
+     * aperture; BAR2 is a doorbell aperture and must not be used as MMIO.
+     * The map helper refuses active bus mastering and preserves decode state.
      */
-    map_status = gpu_pci_mmio_map_sized(device, AMD_POLARIS_MMIO_BAR,
-        AMD_POLARIS_DEVICE_MMIO_BYTES, &runtime->mapping);
+    map_status = gpu_pci_mmio_map(device, AMD_POLARIS_MMIO_BAR,
+        AMD_POLARIS_MMIO_BAR_SIZE, AMD_POLARIS_DEVICE_MMIO_BYTES,
+        &runtime->mapping);
     if (map_status != GPU_PCI_MMIO_OK) {
         memset(runtime, 0, sizeof(*runtime));
         return AMD_POLARIS_DEVICE_MMIO_FAILED;

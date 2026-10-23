@@ -70,6 +70,9 @@ static void test_amd_pte(void)
                AMD_POLARIS_PTE_ACCESS_READ, 1, 1, &pte) ==
            AMD_POLARIS_PTE_UNALIGNED_ADDRESS);
     assert(pte == 0U);
+    assert(amd_polaris_encode_pte(0x0000010000000000ULL,
+               AMD_POLARIS_PTE_ACCESS_READ, 1, 1, &pte) ==
+           AMD_POLARIS_PTE_ADDRESS_TOO_WIDE);
     assert(amd_polaris_encode_pte(0x0001000000000000ULL,
                AMD_POLARIS_PTE_ACCESS_READ, 1, 1, &pte) ==
            AMD_POLARIS_PTE_ADDRESS_TOO_WIDE);

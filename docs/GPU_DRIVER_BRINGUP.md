@@ -24,6 +24,14 @@ accelerated drivers.
 - A staged bring-up executor that only accumulates capabilities after verification, unwinds completed stages in reverse order on failure, and clears all published capabilities if rollback is incomplete.
 - Host tests exercise failure injection and teardown paths. These abstractions are not a substitute for vendor-specific command encodings, DMA-coherent allocations, real MMIO mappings, firmware validation, or physical-device testing.
 
+## First generation-scoped targets
+
+The follow-up implementation narrows the first targets to Intel Skylake Gen9 GT2 (PCI IDs `8086:1912` and `8086:1916`) and AMD Polaris 10/20 (PCI IDs `1002:67DF` and `1002:67C0`). The rationale is architectural maturity, deployment age, existing public documentation and a tractable first ASIC family rather than chasing the newest hardware. This is a scoped bring-up target, not a prevalence ranking: this repository does not contain reliable current installed-base statistics, so no claim is made that these are the most-used GPUs today.
+
+The new profile modules perform exact-ID matching and read-only BAR preflight. Intel requires an assigned, 64-bit, 64-KiB-aligned BAR0 candidate for GTTMMADR and marks GuC/HuC firmware as required. AMD requires an assigned, memory BAR5 candidate and records the PSP, SDMA and graphics firmware dependencies. Both profiles keep `acceleration_ready` false unconditionally. The host tests exercise accepted/rejected IDs, missing BARs, malformed alignment and argument errors; they do not emulate GPU execution.
+
+These profile checks intentionally stop before touching hardware. They do not yet implement Intel forcewake/reset/GGTT PTE programming/GuC authentication and engine submission, or AMD PSP firmware authentication/GMC page-table programming/SDMA or graphics ring execution. Do not advertise acceleration until those generation-specific stages and a hardware completion/fence test are implemented and verified.
+
 ## Current status by vendor
 
 ### NVIDIA / NVX
@@ -43,22 +51,14 @@ each relevant path is verified.
 PCI family classification and read-only BAR discovery are implemented.
 Hardware initialization remains deliberately disabled.
 
-Next gates: select a specific supported generation first; validate its
-GTTMMADR/register aperture and forcewake requirements; add generation-specific
-reset and GGTT setup; load and authenticate the correct GuC/HuC firmware where
-required; initialize one engine and verify completion before exposing 2D/3D
-capabilities. Do not generalize register offsets across Gen9 and Xe families.
+The first scoped profile is Skylake Gen9 GT2 (`8086:1912`, `8086:1916`). Exact-ID matching and read-only GTTMMADR preflight are implemented; hardware initialization remains deliberately disabled. Next gates: authoritative register definitions and forcewake/reset handling, GGTT PTE construction and invalidation, authenticated GuC/HuC loading, then engine submission and fence completion.
 
 ### AMD
 
 PCI family classification and read-only BAR discovery are implemented.
 Hardware initialization remains deliberately disabled.
 
-Next gates: start with one explicitly supported ASIC; validate its MMIO
-aperture and reset sequence; implement PSP firmware loading/authentication,
-GMC/VM setup, ring buffers and fences; initialize one graphics or DMA engine and
-verify completion before exposing capabilities. Do not treat all GCN/RDNA
-families as register-compatible.
+The first scoped profile is Polaris 10/20 (`1002:67DF`, `1002:67C0`). Exact-ID matching and read-only BAR5 preflight are implemented; hardware initialization remains deliberately disabled. Next gates: validated ASIC-specific register definitions, PSP firmware authentication/loading, GMC page-table format and invalidation, SDMA/graphics packet submission, interrupt/fence completion and recovery. Do not treat all GCN/RDNA families as register-compatible.
 
 ## Verification boundary
 

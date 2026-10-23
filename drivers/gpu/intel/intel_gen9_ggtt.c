@@ -81,6 +81,77 @@ intel_gen9_ggtt_status_t intel_gen9_ggtt_unmap_page(
                             INTEL_GEN9_GGTT_VERIFY_FAILED;
 }
 
+
+intel_gen9_ggtt_status_t intel_gen9_ggtt_map_contiguous(
+    const gpu_mmio_region_t *gttmmadr, uint64_t ggtt_address,
+    uint64_t physical_address, size_t size,
+    const intel_gen9_ggtt_forcewake_ops_t *forcewake)
+{
+    size_t pages, completed = 0U;
+    intel_gen9_ggtt_status_t status;
+
+    if (!valid_aperture(gttmmadr) || forcewake == 0 || size == 0U ||
+        (size & 0xFFFU) != 0U || (ggtt_address & 0xFFFU) != 0U ||
+        (physical_address & 0xFFFU) != 0U)
+        return INTEL_GEN9_GGTT_INVALID_ARGUMENT;
+    if (ggtt_address >= ((uint64_t)INTEL_GEN9_GGTT_PTE_COUNT << 12U) ||
+        (uint64_t)size >
+            ((uint64_t)INTEL_GEN9_GGTT_PTE_COUNT << 12U) - ggtt_address ||
+        physical_address > UINT64_MAX - ((uint64_t)size - 1U) ||
+        physical_address + (uint64_t)size - 1U >
+            INTEL_GEN9_PTE_ADDRESS_MASK + 0xFFFULL)
+        return INTEL_GEN9_GGTT_OUT_OF_RANGE;
+
+    pages = size / 4096U;
+    for (size_t i = 0U; i < pages; ++i) {
+        status = intel_gen9_ggtt_map_page(
+            gttmmadr, ggtt_address + (uint64_t)i * 4096U,
+            physical_address + (uint64_t)i * 4096U);
+        if (status != INTEL_GEN9_GGTT_OK) {
+            /* Include the failing slot: its write may have reached the device. */
+            for (size_t j = i + 1U; j > 0U; --j)
+                (void)intel_gen9_ggtt_unmap_page(
+                    gttmmadr, ggtt_address + (uint64_t)(j - 1U) * 4096U);
+            if (intel_gen9_ggtt_invalidate(gttmmadr, forcewake) !=
+                INTEL_GEN9_GGTT_OK)
+                return INTEL_GEN9_GGTT_STATE_UNCERTAIN;
+            return status;
+        }
+        ++completed;
+    }
+
+    status = intel_gen9_ggtt_invalidate(gttmmadr, forcewake);
+    if (status != INTEL_GEN9_GGTT_OK)
+        return INTEL_GEN9_GGTT_STATE_UNCERTAIN;
+    return completed == pages ? INTEL_GEN9_GGTT_OK :
+                                INTEL_GEN9_GGTT_VERIFY_FAILED;
+}
+
+intel_gen9_ggtt_status_t intel_gen9_ggtt_unmap_contiguous(
+    const gpu_mmio_region_t *gttmmadr, uint64_t ggtt_address,
+    size_t size, const intel_gen9_ggtt_forcewake_ops_t *forcewake)
+{
+    size_t pages;
+    if (!valid_aperture(gttmmadr) || forcewake == 0 || size == 0U ||
+        (size & 0xFFFU) != 0U || (ggtt_address & 0xFFFU) != 0U)
+        return INTEL_GEN9_GGTT_INVALID_ARGUMENT;
+    if (ggtt_address >= ((uint64_t)INTEL_GEN9_GGTT_PTE_COUNT << 12U) ||
+        (uint64_t)size >
+            ((uint64_t)INTEL_GEN9_GGTT_PTE_COUNT << 12U) - ggtt_address)
+        return INTEL_GEN9_GGTT_OUT_OF_RANGE;
+
+    pages = size / 4096U;
+    for (size_t i = 0U; i < pages; ++i) {
+        intel_gen9_ggtt_status_t status = intel_gen9_ggtt_unmap_page(
+            gttmmadr, ggtt_address + (uint64_t)i * 4096U);
+        if (status != INTEL_GEN9_GGTT_OK)
+            return INTEL_GEN9_GGTT_STATE_UNCERTAIN;
+    }
+    if (intel_gen9_ggtt_invalidate(gttmmadr, forcewake) != INTEL_GEN9_GGTT_OK)
+        return INTEL_GEN9_GGTT_STATE_UNCERTAIN;
+    return INTEL_GEN9_GGTT_OK;
+}
+
 intel_gen9_ggtt_status_t intel_gen9_ggtt_invalidate(
     const gpu_mmio_region_t *gttmmadr,
     const intel_gen9_ggtt_forcewake_ops_t *forcewake)

@@ -71,7 +71,7 @@ int main(void)
     resources.bars[0].base = 0U;
     assert(intel_gen9_inspect(0x8086U, 0x1912U, &resources, &intel) ==
            INTEL_GEN9_NO_ASSIGNED_GTTMMADR);
-    resources.bars[0].base = 0x90001000ULL;
+    resources.bars[0].base = 0x90000800ULL;
     assert(intel_gen9_inspect(0x8086U, 0x1912U, &resources, &intel) ==
            INTEL_GEN9_INVALID_GTTMMADR);
     assert(intel_gen9_inspect(0x8086U, 0xFFFFU, &resources, &intel) ==
@@ -95,7 +95,7 @@ int main(void)
     resources.bars[1].base = 0U;
     assert(amd_polaris_inspect(0x1002U, 0x67DFU, &resources, &amd) ==
            AMD_POLARIS_NO_ASSIGNED_MMIO);
-    resources.bars[1].base = 0xA0001000ULL;
+    resources.bars[1].base = 0xA0000800ULL;
     assert(amd_polaris_inspect(0x1002U, 0x67DFU, &resources, &amd) ==
            AMD_POLARIS_INVALID_MMIO);
     assert(amd_polaris_inspect(0x1002U, 0x744CU, &resources, &amd) ==

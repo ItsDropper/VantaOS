@@ -5,6 +5,7 @@
  * See the LICENSE file in the project root for the full license text.
  */
 #include "intel_gen9_ggtt.h"
+#include "intel_gen9_pte.h"
 
 #include <assert.h>
 #include <stdint.h>

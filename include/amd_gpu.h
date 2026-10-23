@@ -10,8 +10,26 @@
 #include "gpu_core.h"
 #include "gpu_pci_resources.h"
 #include "amd_polaris.h"
+#include "amd_polaris_device_runtime.h"
+
+#include <stddef.h>
 
 #define AMD_GPU_PCI_VENDOR_ID GPU_PCI_VENDOR_AMD
+
+/*
+ * Caller-owned binding for the real Polaris runtime. firmware_ready must only
+ * be set after platform firmware authentication/loading and CP-ready checks.
+ * The binding and embedded runtime must remain at stable addresses.
+ */
+typedef struct amd_gpu_runtime_binding {
+    amd_polaris_device_runtime_t runtime;
+    size_t ring_bytes;
+    unsigned fence_timeout_iterations;
+    uint8_t firmware_ready;
+    uint8_t configured;
+    uint8_t initialized;
+    uint8_t fence_verified;
+} amd_gpu_runtime_binding_t;
 
 typedef struct amd_gpu_descriptor {
     gpu_pci_match_t pci;
@@ -29,6 +47,12 @@ typedef struct amd_gpu_descriptor {
 int amd_gpu_match(const struct pci_device *device);
 int amd_gpu_describe(const struct pci_device *device,
                      amd_gpu_descriptor_t *out_descriptor);
+/* Configure before gpu_driver_start; binding storage remains caller-owned. */
+int amd_gpu_configure_runtime(gpu_device_t *device,
+                              amd_gpu_runtime_binding_t *binding,
+                              size_t ring_bytes,
+                              unsigned fence_timeout_iterations,
+                              int authenticated_firmware_ready);
 const gpu_driver_descriptor_t *amd_gpu_driver(void);
 
 #endif

@@ -32,7 +32,10 @@ on:
       - "scripts/test_gpu_va.c"
       - "include/gpu_vm.h"
       - "include/gpu_page_table.h"
+      - "include/gpu_page_table_vm.h"
+      - "drivers/gpu/core/gpu_page_table_vm.c"
       - "drivers/gpu/core/gpu_page_table.c"
+      - "drivers/gpu/core/gpu_page_table_vm.c"
       - "drivers/gpu/core/Makefile"
       - "drivers/gpu/intel/Makefile"
       - "drivers/gpu/amd/Makefile"
@@ -866,6 +869,7 @@ jobs:
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
             scripts/test_gpu_page_table.c \
             drivers/gpu/core/gpu_page_table.c \
+            drivers/gpu/core/gpu_page_table_vm.c \
             drivers/gpu/intel/intel_gen9_pte.c \
             drivers/gpu/intel/intel_gen9_vm.c \
             drivers/gpu/amd/amd_polaris_pte.c \

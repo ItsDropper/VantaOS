@@ -8,6 +8,8 @@
 #define VANTA_AMD_POLARIS_DEVICE_RUNTIME_H
 
 #include "amd_polaris_gfx_runtime.h"
+#include "amd_polaris_vm_runtime.h"
+#include "amd_polaris_memory.h"
 #include "gpu_pci_mmio.h"
 
 #define AMD_POLARIS_DEVICE_MMIO_BYTES 0xD000U
@@ -18,6 +20,8 @@ typedef enum amd_polaris_device_status {
     AMD_POLARIS_DEVICE_UNSUPPORTED,
     AMD_POLARIS_DEVICE_NOT_READY,
     AMD_POLARIS_DEVICE_MMIO_FAILED,
+    AMD_POLARIS_DEVICE_DMA_FAILED,
+    AMD_POLARIS_DEVICE_VM_FAILED,
     AMD_POLARIS_DEVICE_ENGINE_FAILED,
     AMD_POLARIS_DEVICE_SHUTDOWN_FAILED
 } amd_polaris_device_status_t;
@@ -30,7 +34,14 @@ typedef enum amd_polaris_device_status {
 typedef struct amd_polaris_device_runtime {
     const struct pci_device *pci_device;
     gpu_pci_mmio_mapping_t mapping;
+    gpu_dma_buffer_t fault_page;
+    amd_polaris_vm_runtime_t vm_runtime;
+    gpu_page_table_t page_table;
+    gpu_vm_ops_t vm_ops;
+    amd_polaris_memory_runtime_t memory;
     amd_polaris_gfx_runtime_t gfx;
+    uint8_t vm_initialized;
+    uint8_t memory_initialized;
     uint8_t initialized;
 } amd_polaris_device_runtime_t;
 
@@ -45,7 +56,14 @@ amd_polaris_device_status_t amd_polaris_device_wait_fence(
     amd_polaris_device_runtime_t *runtime, uint32_t fence,
     unsigned timeout_iterations);
 
-/* Quiesces the CP and disables owned bus mastering before unmapping BAR2. */
+/* Map/unmap GPU-visible buffers in the initialized Polaris VMID page table. */
+amd_polaris_device_status_t amd_polaris_device_memory_alloc(
+    amd_polaris_device_runtime_t *runtime, size_t size, uint64_t gpu_address,
+    amd_polaris_gpu_allocation_t *out_allocation);
+amd_polaris_device_status_t amd_polaris_device_memory_free(
+    amd_polaris_gpu_allocation_t *allocation);
+
+/* Quiesces the CP and disables owned bus mastering before unmapping BAR5. */
 amd_polaris_device_status_t amd_polaris_device_runtime_shutdown(
     amd_polaris_device_runtime_t *runtime, int device_quiesced);
 

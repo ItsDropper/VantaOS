@@ -144,12 +144,8 @@ gpu_page_table_status_t gpu_page_table_map(
     if (!table->ops.encode_leaf(table->ops.context, physical_address,
                                 access, &encoded))
         return GPU_PAGE_TABLE_ENCODE_FAILED;
+    /* Caller batches changes and explicitly flushes before device use. */
     leaf->entries[index] = encoded;
-    if (!table->ops.flush(table->ops.context, table->root_physical)) {
-        /* Translation state is uncertain; prevent further map/unmap operations. */
-        table->faulted = 1U;
-        return GPU_PAGE_TABLE_FLUSH_FAILED;
-    }
     return GPU_PAGE_TABLE_OK;
 }
 
@@ -173,10 +169,6 @@ gpu_page_table_status_t gpu_page_table_unmap(
         return GPU_PAGE_TABLE_NOT_MAPPED;
 
     leaf->entries[index] = 0U;
-    if (!table->ops.flush(table->ops.context, table->root_physical)) {
-        table->faulted = 1U;
-        return GPU_PAGE_TABLE_FLUSH_FAILED;
-    }
     return GPU_PAGE_TABLE_OK;
 }
 

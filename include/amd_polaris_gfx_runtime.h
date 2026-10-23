@@ -8,6 +8,7 @@
 #define VANTA_AMD_POLARIS_GFX_RUNTIME_H
 
 #include "amd_polaris_gfx_ring.h"
+#include "amd_polaris_memory.h"
 #include "gpu_dma.h"
 #include "pci.h"
 
@@ -35,6 +36,10 @@ typedef struct amd_polaris_gfx_runtime {
     gpu_dma_buffer_t ring_dma;
     gpu_dma_buffer_t rptr_dma;
     gpu_dma_buffer_t fence_dma;
+    amd_polaris_gpu_allocation_t ring_allocation;
+    amd_polaris_gpu_allocation_t rptr_allocation;
+    amd_polaris_gpu_allocation_t fence_allocation;
+    amd_polaris_memory_runtime_t *memory_runtime;
     amd_polaris_gfx_ring_t ring;
     uint16_t original_pci_command;
     uint32_t next_fence;
@@ -43,6 +48,7 @@ typedef struct amd_polaris_gfx_runtime {
     uint8_t faulted;
     uint8_t pending;
     uint8_t bus_master_enabled_by_us;
+    uint8_t uses_vm;
 } amd_polaris_gfx_runtime_t;
 
 /* Zero-initialize runtime. Allocates all DMA before enabling bus mastering. */
@@ -50,6 +56,12 @@ amd_polaris_gfx_runtime_status_t amd_polaris_gfx_runtime_init(
     amd_polaris_gfx_runtime_t *runtime, const struct pci_device *pci_device,
     const gpu_mmio_region_t *mmio, size_t ring_bytes,
     int firmware_ready, int device_quiesced);
+
+/* Initialize ring/fence buffers in an already active Polaris VMID-1 mapping. */
+amd_polaris_gfx_runtime_status_t amd_polaris_gfx_runtime_init_vm(
+    amd_polaris_gfx_runtime_t *runtime, const struct pci_device *pci_device,
+    const gpu_mmio_region_t *mmio, amd_polaris_memory_runtime_t *memory,
+    size_t ring_bytes, int firmware_ready, int device_quiesced);
 
 /* Single-flight fence submission; returned value must be passed to wait_fence. */
 amd_polaris_gfx_runtime_status_t amd_polaris_gfx_runtime_submit_fence(

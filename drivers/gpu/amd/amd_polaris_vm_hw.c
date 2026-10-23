@@ -44,6 +44,7 @@ amd_polaris_vm_hw_status_t amd_polaris_vm_invalidate(
         mmio->length < REG_VM_INVALIDATE_RESPONSE + sizeof(uint32_t))
         return AMD_POLARIS_VM_HW_INVALID_ARGUMENT;
 
+    __atomic_thread_fence(__ATOMIC_RELEASE);
     if (!write32(mmio, REG_VM_INVALIDATE_REQUEST, VM_CONTEXT1_INVALIDATE_BIT))
         return AMD_POLARIS_VM_HW_MMIO_ERROR;
 

@@ -157,7 +157,7 @@ static void test_fail_closed_on_flush_failure(void)
     memset(&mock, 0, sizeof(mock));
     memset(&table, 0, sizeof(table));
     ops.context = &mock;
-    ops.allocate_page = mock_alloc;
+    ops.allocate_table = mock_alloc;
     ops.free_page = mock_free;
     ops.encode_directory = mock_directory;
     ops.encode_leaf = mock_leaf;

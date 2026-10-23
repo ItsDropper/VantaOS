@@ -90,8 +90,10 @@ intel_gen9_ggtt_status_t intel_gen9_ggtt_map_contiguous(
     size_t pages, completed = 0U;
     intel_gen9_ggtt_status_t status;
 
-    if (!valid_aperture(gttmmadr) || forcewake == 0 || size == 0U ||
-        (size & 0xFFFU) != 0U || (ggtt_address & 0xFFFU) != 0U ||
+    if (!valid_aperture(gttmmadr) || forcewake == 0 ||
+        forcewake->acquire_render == 0 || forcewake->release_render == 0 ||
+        size == 0U || (size & 0xFFFU) != 0U ||
+        (ggtt_address & 0xFFFU) != 0U ||
         (physical_address & 0xFFFU) != 0U)
         return INTEL_GEN9_GGTT_INVALID_ARGUMENT;
     if (ggtt_address >= ((uint64_t)INTEL_GEN9_GGTT_PTE_COUNT << 12U) ||
@@ -138,8 +140,10 @@ intel_gen9_ggtt_status_t intel_gen9_ggtt_unmap_contiguous(
     size_t size, const intel_gen9_ggtt_forcewake_ops_t *forcewake)
 {
     size_t pages;
-    if (!valid_aperture(gttmmadr) || forcewake == 0 || size == 0U ||
-        (size & 0xFFFU) != 0U || (ggtt_address & 0xFFFU) != 0U)
+    if (!valid_aperture(gttmmadr) || forcewake == 0 ||
+        forcewake->acquire_render == 0 || forcewake->release_render == 0 ||
+        size == 0U || (size & 0xFFFU) != 0U ||
+        (ggtt_address & 0xFFFU) != 0U)
         return INTEL_GEN9_GGTT_INVALID_ARGUMENT;
     if (ggtt_address >= ((uint64_t)INTEL_GEN9_GGTT_PTE_COUNT << 12U) ||
         (uint64_t)size >
@@ -201,6 +205,17 @@ static int forcewake_change(const gpu_mmio_region_t *mmio,
             return 0;
         if (((value & FORCEWAKE_KERNEL) != 0U) == (acquire != 0))
             return 1;
+    }
+    if (acquire) {
+        /* A timed-out request must not be left asserted indefinitely. */
+        (void)gpu_mmio_write32(mmio, REG_FORCEWAKE_RENDER_GEN9, 0U);
+        for (unsigned i = 0U; i < timeout_iterations; ++i) {
+            if (gpu_mmio_read32(mmio, REG_FORCEWAKE_ACK_RENDER, &value) !=
+                GPU_MMIO_OK)
+                break;
+            if ((value & FORCEWAKE_KERNEL) == 0U)
+                break;
+        }
     }
     return 0;
 }

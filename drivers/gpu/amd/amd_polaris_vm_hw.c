@@ -50,8 +50,10 @@ amd_polaris_vm_hw_status_t amd_polaris_vm_invalidate(
     for (unsigned i = 0U; i < timeout_iterations; ++i) {
         if (!read32(mmio, REG_VM_INVALIDATE_RESPONSE, &response))
             return AMD_POLARIS_VM_HW_MMIO_ERROR;
-        if ((response & VM_CONTEXT1_INVALIDATE_BIT) != 0U)
+        if ((response & VM_CONTEXT1_INVALIDATE_BIT) != 0U) {
+            __atomic_thread_fence(__ATOMIC_ACQUIRE);
             return AMD_POLARIS_VM_HW_OK;
+        }
     }
     return AMD_POLARIS_VM_HW_INVALIDATE_TIMEOUT;
 }
@@ -108,6 +110,7 @@ amd_polaris_vm_hw_status_t amd_polaris_vm_install_root(
                  VM_CONTEXT_WAIT_IDLE_ON_INVALIDATE))
         return AMD_POLARIS_VM_HW_MMIO_ERROR;
 
+    __atomic_thread_fence(__ATOMIC_RELEASE);
     control = (control & ~VM_CONTEXT_PAGE_TABLE_DEPTH_MASK) |
               VM_CONTEXT_PAGE_TABLE_DEPTH_2_LEVEL |
               VM_CONTEXT_RANGE_FAULT_DEFAULT | VM_CONTEXT_ENABLE;

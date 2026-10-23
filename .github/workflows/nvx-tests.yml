@@ -48,11 +48,16 @@ on:
       - "drivers/gpu/intel/**"
       - "drivers/gpu/amd/**"
       - "include/intel_gen9.h"
+      - "include/intel_gen9_regs.h"
+      - "drivers/gpu/intel/intel_gen9_regs.c"
       - "include/intel_gen9_commands.h"
       - "include/amd_polaris.h"
+      - "include/amd_polaris_regs.h"
+      - "drivers/gpu/amd/amd_polaris_regs.c"
       - "include/amd_polaris_commands.h"
       - "scripts/test_gpu_gen_profiles.c"
       - "scripts/test_gpu_generation_commands.c"
+      - "scripts/test_gpu_generation_registers.c"
       - "include/gpu.h"
       - "include/gpu_core.h"
       - "include/gpu_vendor.h"
@@ -814,3 +819,16 @@ jobs:
       - name: Test FWSEC scratch, WPR2, PLM and GFW progress decoding
         run: /tmp/vantaos-nvx-fwsec-mmio-test
 
+
+
+      - name: Compile Intel Gen9 and AMD Polaris register snapshot tests
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_gpu_generation_registers.c \
+            drivers/gpu/core/gpu_mmio.c \
+            drivers/gpu/intel/intel_gen9_regs.c \
+            drivers/gpu/amd/amd_polaris_regs.c \
+            -o /tmp/vantaos-gpu-generation-registers-test
+
+      - name: Test bounded, read-only generation-specific register snapshots
+        run: /tmp/vantaos-gpu-generation-registers-test

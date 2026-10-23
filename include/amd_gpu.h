@@ -9,6 +9,7 @@
 
 #include "gpu_core.h"
 #include "gpu_pci_resources.h"
+#include "amd_polaris.h"
 
 #define AMD_GPU_PCI_VENDOR_ID GPU_PCI_VENDOR_AMD
 
@@ -20,6 +21,8 @@ typedef struct amd_gpu_descriptor {
     uint8_t mmio_aperture_enabled;
     uint16_t pci_command;
     gpu_pci_resource_inventory_t resources;
+    amd_polaris_status_t polaris_profile_status;
+    amd_polaris_profile_t polaris_profile;
 } amd_gpu_descriptor_t;
 
 /* Read-only PCI identity and assigned BAR inventory; no decode/DMA changes. */

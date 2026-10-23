@@ -14,7 +14,7 @@
 #define AMD_POLARIS_VENDOR_ID 0x1002U
 #define AMD_POLARIS_10_DEVICE_ID 0x67DFU
 #define AMD_POLARIS_10_ALT_DEVICE_ID 0x67C0U
-#define AMD_POLARIS_MMIO_BAR 5U
+#define AMD_POLARIS_MMIO_BAR 2U
 
 typedef enum amd_polaris_status {
     AMD_POLARIS_OK = 0,

@@ -47,6 +47,9 @@ on:
       - "scripts/test_gpu_pci_resources.c"
       - "drivers/gpu/intel/**"
       - "drivers/gpu/amd/**"
+      - "include/intel_gen9.h"
+      - "include/amd_polaris.h"
+      - "scripts/test_gpu_gen_profiles.c"
       - "include/gpu.h"
       - "include/gpu_core.h"
       - "include/gpu_vendor.h"
@@ -176,6 +179,12 @@ jobs:
 
       - name: Test GPU classification, lifecycle and fail-closed capabilities
         run: /tmp/vantaos-gpu-vendor-framework-test
+
+      - name: Compile generation-specific Intel Gen9 and AMD Polaris profile tests
+        run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_gpu_gen_profiles.c drivers/gpu/intel/intel_gen9.c drivers/gpu/amd/amd_polaris.c drivers/gpu/core/gpu_pci_resources.c -o /tmp/vantaos-gpu-gen-profiles-test
+
+      - name: Test exact PCI allowlists, BAR preflight and fail-closed capability state
+        run: /tmp/vantaos-gpu-gen-profiles-test
 
       - name: Compile shared GPU MMIO access tests with strict warnings
         run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_gpu_mmio.c drivers/gpu/core/gpu_mmio.c -o /tmp/vantaos-gpu-mmio-test

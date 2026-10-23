@@ -32,7 +32,27 @@ static int overlaps(uint64_t a, size_t a_size, uint64_t b, size_t b_size)
     return a < b_end && b < a_end;
 }
 
-static int address_available(const intel_gen9_memory_runtime_t *runtime,
+/* Return 1 for empty PTEs, 0 for occupied VA, -1 on MMIO failure. */
+static int ggtt_range_empty(intel_gen9_memory_runtime_t *runtime,
+                            uint64_t address, size_t size)
+{
+    size_t pages = size / GPU_DMA_PAGE_SIZE;
+    for (size_t i = 0U; i < pages; ++i) {
+        uint64_t pte = 0U;
+        size_t offset = INTEL_GEN9_GGTT_PTE_BASE +
+            (size_t)((address >> 12U) + i) * sizeof(uint64_t);
+        if (gpu_mmio_read64(&runtime->mapping.region, offset, &pte) !=
+            GPU_MMIO_OK) {
+            runtime->faulted = 1U;
+            return -1;
+        }
+        if (pte != 0U)
+            return 0;
+    }
+    return 1;
+}
+
+static int address_available(intel_gen9_memory_runtime_t *runtime,
                              uint64_t address, size_t size)
 {
     if (address < INTEL_GEN9_MEMORY_DEFAULT_GGTT_BASE ||
@@ -49,7 +69,7 @@ static int address_available(const intel_gen9_memory_runtime_t *runtime,
             overlaps(address, size, slot->address, slot->size))
             return 0;
     }
-    return 1;
+    return ggtt_range_empty(runtime, address, size) == 1;
 }
 
 static int find_slot(const intel_gen9_memory_runtime_t *runtime)
@@ -60,7 +80,7 @@ static int find_slot(const intel_gen9_memory_runtime_t *runtime)
     return -1;
 }
 
-static int find_address(const intel_gen9_memory_runtime_t *runtime,
+static int find_address(intel_gen9_memory_runtime_t *runtime,
                         size_t size, uint64_t *out_address)
 {
     uint64_t candidate = INTEL_GEN9_MEMORY_DEFAULT_GGTT_BASE;
@@ -81,8 +101,15 @@ static int find_address(const intel_gen9_memory_runtime_t *runtime,
             }
         }
         if (!collision) {
-            *out_address = candidate;
-            return 1;
+            int empty = ggtt_range_empty(runtime, candidate, size);
+            if (empty < 0)
+                return 0;
+            if (empty != 0) {
+                *out_address = candidate;
+                return 1;
+            }
+            candidate += GPU_DMA_PAGE_SIZE;
+            continue;
         }
         if (next <= candidate)
             return 0;
@@ -146,13 +173,15 @@ intel_gen9_memory_status_t intel_gen9_memory_alloc(
     if (address == 0U) {
         if (!find_address(runtime, allocation.dma.allocated_size, &address)) {
             gpu_dma_release(&allocation.dma);
-            return INTEL_GEN9_MEMORY_ADDRESS_BUSY;
+            return runtime->faulted != 0U ? INTEL_GEN9_MEMORY_MMIO_FAILED :
+                                            INTEL_GEN9_MEMORY_ADDRESS_BUSY;
         }
     } else if ((address & (GPU_DMA_PAGE_SIZE - 1U)) != 0U ||
                !address_available(runtime, address,
                                   allocation.dma.allocated_size)) {
         gpu_dma_release(&allocation.dma);
-        return INTEL_GEN9_MEMORY_ADDRESS_BUSY;
+        return runtime->faulted != 0U ? INTEL_GEN9_MEMORY_MMIO_FAILED :
+                                        INTEL_GEN9_MEMORY_ADDRESS_BUSY;
     }
 
     allocation.runtime = runtime;

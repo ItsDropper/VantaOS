@@ -108,12 +108,18 @@ intel_gen9_ggtt_status_t intel_gen9_ggtt_map_contiguous(
             gttmmadr, ggtt_address + (uint64_t)i * 4096U,
             physical_address + (uint64_t)i * 4096U);
         if (status != INTEL_GEN9_GGTT_OK) {
+            int rollback_ok = 1;
             /* Include the failing slot: its write may have reached the device. */
-            for (size_t j = i + 1U; j > 0U; --j)
-                (void)intel_gen9_ggtt_unmap_page(
-                    gttmmadr, ggtt_address + (uint64_t)(j - 1U) * 4096U);
-            if (intel_gen9_ggtt_invalidate(gttmmadr, forcewake) !=
-                INTEL_GEN9_GGTT_OK)
+            for (size_t j = i + 1U; j > 0U; --j) {
+                if (intel_gen9_ggtt_unmap_page(
+                        gttmmadr,
+                        ggtt_address + (uint64_t)(j - 1U) * 4096U) !=
+                    INTEL_GEN9_GGTT_OK)
+                    rollback_ok = 0;
+            }
+            if (!rollback_ok ||
+                intel_gen9_ggtt_invalidate(gttmmadr, forcewake) !=
+                    INTEL_GEN9_GGTT_OK)
                 return INTEL_GEN9_GGTT_STATE_UNCERTAIN;
             return status;
         }

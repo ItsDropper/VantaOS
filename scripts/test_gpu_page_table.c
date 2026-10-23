@@ -46,7 +46,8 @@ static int mock_alloc(void *context, size_t entry_count,
                            mock_large_table : mock->entries[i];
             out->physical_address = 0x100000ULL + i * 0x100000ULL;
             out->entry_count = entry_count;
-            out->allocation_size = entry_count * sizeof(uint64_t);
+            out->allocation_size = entry_count > GPU_PAGE_TABLE_ENTRIES ?
+                entry_count * sizeof(uint64_t) : GPU_PAGE_TABLE_PAGE_SIZE;
             out->cookie = (void *)(uintptr_t)(i + 1U);
             ++mock->allocations;
             return 1;

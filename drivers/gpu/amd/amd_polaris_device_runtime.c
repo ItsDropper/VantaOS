@@ -115,8 +115,9 @@ amd_polaris_device_status_t amd_polaris_device_runtime_init(
     }
     runtime->memory_initialized = 1U;
 
-    gfx_status = amd_polaris_gfx_runtime_init(&runtime->gfx, device,
-        &runtime->mapping.region, ring_bytes, firmware_ready, device_quiesced);
+    gfx_status = amd_polaris_gfx_runtime_init_vm(&runtime->gfx, device,
+        &runtime->mapping.region, &runtime->memory, ring_bytes,
+        firmware_ready, device_quiesced);
     if (gfx_status != AMD_POLARIS_GFX_RUNTIME_OK) {
         /*
          * Retain the VM, fault page and BAR mapping if the command processor

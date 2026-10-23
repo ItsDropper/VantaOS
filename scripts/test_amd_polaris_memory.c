@@ -152,7 +152,7 @@ int main(void)
     assert(c.gpu_address == AMD_POLARIS_MEMORY_VA_BASE);
 
     /* A partial map must roll back its mapped prefix before freeing DMA. */
-    fail_map_va = AMD_POLARIS_MEMORY_VA_BASE + 0x2000U;
+    fail_map_va = AMD_POLARIS_MEMORY_VA_BASE + 0x3000U;
     {
         amd_polaris_gpu_allocation_t failed = {0};
         assert(amd_polaris_memory_alloc(&runtime, 8192U, 0x100002000ULL,

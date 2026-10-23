@@ -33,6 +33,9 @@ on:
       - "include/gpu_vm.h"
       - "include/gpu_page_table.h"
       - "drivers/gpu/core/gpu_page_table.c"
+      - "drivers/gpu/core/Makefile"
+      - "drivers/gpu/intel/Makefile"
+      - "drivers/gpu/amd/Makefile"
       - "scripts/test_gpu_vm.c"
       - "include/gpu_registers.h"
       - "scripts/test_gpu_registers.c"
@@ -52,12 +55,16 @@ on:
       - "include/intel_gen9.h"
       - "include/intel_gen9_regs.h"
       - "include/intel_gen9_pte.h"
+      - "include/intel_gen9_vm.h"
+      - "drivers/gpu/intel/intel_gen9_vm.c"
       - "drivers/gpu/intel/intel_gen9_pte.c"
       - "drivers/gpu/intel/intel_gen9_regs.c"
       - "include/intel_gen9_commands.h"
       - "include/amd_polaris.h"
       - "include/amd_polaris_regs.h"
       - "include/amd_polaris_pte.h"
+      - "include/amd_polaris_vm.h"
+      - "drivers/gpu/amd/amd_polaris_vm.c"
       - "drivers/gpu/amd/amd_polaris_pte.c"
       - "drivers/gpu/amd/amd_polaris_regs.c"
       - "include/amd_polaris_commands.h"
@@ -860,6 +867,9 @@ jobs:
             scripts/test_gpu_page_table.c \
             drivers/gpu/core/gpu_page_table.c \
             drivers/gpu/intel/intel_gen9_pte.c \
+            drivers/gpu/intel/intel_gen9_vm.c \
+            drivers/gpu/amd/amd_polaris_pte.c \
+            drivers/gpu/amd/amd_polaris_vm.c \
             -o /tmp/vantaos-gpu-page-table-test
 
       - name: Test page-table map/unmap, bounds and failed invalidation

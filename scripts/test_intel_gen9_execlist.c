@@ -24,8 +24,18 @@ int main(void)
                                 INTEL_GEN9_CONTEXT_DESCRIPTOR_VALID |
                                 (1ULL << 3U);
     uint64_t invalid;
+    uint64_t built_descriptor = 0U;
 
     memset(registers, 0, sizeof(registers));
+    assert(intel_gen9_execlist_build_descriptor(0x1000U, 1U, 0x9U,
+        &built_descriptor) == INTEL_GEN9_EXECLIST_OK);
+    assert(built_descriptor == descriptor);
+    assert(intel_gen9_execlist_build_descriptor(0x1001U, 1U, 0x9U,
+        &built_descriptor) == INTEL_GEN9_EXECLIST_INVALID_DESCRIPTOR);
+    assert(intel_gen9_execlist_build_descriptor(0x1000U, 0U, 0x9U,
+        &built_descriptor) == INTEL_GEN9_EXECLIST_INVALID_DESCRIPTOR);
+    assert(intel_gen9_execlist_build_descriptor(0x1000U, 1U, 0x29U,
+        &built_descriptor) == INTEL_GEN9_EXECLIST_INVALID_DESCRIPTOR);
     assert(intel_gen9_execlist_init(&state, &mmio, 0, 1) ==
            INTEL_GEN9_EXECLIST_NOT_READY);
     assert(intel_gen9_execlist_init(&state, &mmio, 1, 1) ==

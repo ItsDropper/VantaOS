@@ -11,7 +11,16 @@ static int allocate_page(void *context, size_t entry_count,
                          gpu_page_table_page_t *out_page)
 {
     amd_polaris_vm_backend_t *backend = context;
-    return backend->allocate_table(backend->context, entry_count, out_page);
+    if (!backend->allocate_table(backend->context, entry_count, out_page))
+        return 0;
+    if ((out_page->physical_address & ~AMD_POLARIS_PTE_ADDR_MASK) != 0U ||
+        out_page->allocation_size == 0U ||
+        out_page->allocation_size - 1U >
+            AMD_POLARIS_PTE_ADDR_MASK - out_page->physical_address) {
+        backend->free_page(backend->context, out_page);
+        return 0;
+    }
+    return 1;
 }
 
 static void free_page(void *context, gpu_page_table_page_t *page)
@@ -25,7 +34,7 @@ static int encode_directory(void *context, uint64_t physical, uint64_t *out)
     (void)context;
     if (out == 0 || physical == 0U ||
         (physical & 0xFFFU) != 0U ||
-        (physical & ~GPU_PAGE_TABLE_ADDRESS_MASK) != 0U)
+        (physical & ~AMD_POLARIS_PTE_ADDR_MASK) != 0U)
         return 0;
     *out = physical | AMD_POLARIS_PTE_VALID |
            AMD_POLARIS_PTE_SYSTEM | AMD_POLARIS_PTE_SNOOPED;

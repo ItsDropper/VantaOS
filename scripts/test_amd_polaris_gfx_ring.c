@@ -43,18 +43,18 @@ static void test_prerequisites_and_setup(void)
 
     memset(registers, 0, sizeof(registers));
     assert(amd_polaris_gfx_ring_init(&ring, &mmio, ring_storage,
-        0x400000U, sizeof(ring_storage), 0x500000U, 0, 1) ==
+        0x400000U, sizeof(ring_storage), 0x500000U, 0U, 0, 1) ==
         AMD_POLARIS_GFX_RING_FIRMWARE_NOT_READY);
     assert(ring.initialized == 0U);
     assert(amd_polaris_gfx_ring_init(&ring, &mmio, ring_storage,
-        0x400000U, sizeof(ring_storage), 0x500000U, 1, 0) ==
+        0x400000U, sizeof(ring_storage), 0x500000U, 0U, 1, 0) ==
         AMD_POLARIS_GFX_RING_NOT_QUIESCED);
     assert(amd_polaris_gfx_ring_init(&ring, &mmio, ring_storage,
-        0x400001U, sizeof(ring_storage), 0x500000U, 1, 1) ==
+        0x400001U, sizeof(ring_storage), 0x500000U, 0U, 1, 1) ==
         AMD_POLARIS_GFX_RING_INVALID_ARGUMENT);
 
     assert(amd_polaris_gfx_ring_init(&ring, &mmio, ring_storage,
-        0x400000U, sizeof(ring_storage), 0x500000U, 1, 1) ==
+        0x400000U, sizeof(ring_storage), 0x500000U, 0U, 1, 1) ==
         AMD_POLARIS_GFX_RING_OK);
     assert(ring.initialized != 0U);
     assert(reg(REG_CP_RB0_BASE) == 0x4000U);
@@ -79,7 +79,7 @@ static void test_fence_submission_and_timeout(void)
     memset(registers, 0, sizeof(registers));
     memset(ring_storage, 0, sizeof(ring_storage));
     assert(amd_polaris_gfx_ring_init(&ring, &mmio, ring_storage,
-        0x400000U, sizeof(ring_storage), 0x500000U, 1, 1) ==
+        0x400000U, sizeof(ring_storage), 0x500000U, 0U, 1, 1) ==
         AMD_POLARIS_GFX_RING_OK);
     assert(amd_polaris_build_fence_packet(packet,
         AMD_POLARIS_PM4_FENCE_DWORDS, 0x600000U, 0x12345678U,
@@ -115,7 +115,7 @@ static void test_ring_full_and_wrap(void)
     memset(registers, 0, sizeof(registers));
     memset(ring_storage, 0, sizeof(ring_storage));
     assert(amd_polaris_gfx_ring_init(&ring, &mmio, ring_storage,
-        0x400000U, sizeof(ring_storage), 0x500000U, 1, 1) ==
+        0x400000U, sizeof(ring_storage), 0x500000U, 0U, 1, 1) ==
         AMD_POLARIS_GFX_RING_OK);
     assert(amd_polaris_build_fence_packet(packet, AMD_POLARIS_PM4_FENCE_DWORDS,
         0x600000U, 1U, &packet_count) == AMD_POLARIS_PM4_OK);

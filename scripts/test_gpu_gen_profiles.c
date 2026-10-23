@@ -40,7 +40,7 @@ int main(void)
     assert(intel_gen9_inspect(0x8086U, 0x1912U, &resources, &intel) ==
            INTEL_GEN9_OK);
     assert(intel.generation == 9U && intel.gttmmadr_base == 0x90000000ULL);
-    assert(intel.requires_guc_firmware && intel.requires_huc_firmware);
+    assert(intel.requires_guc_firmware && intel.huc_firmware_media_only);
     assert(!intel.acceleration_ready);
 
     resources.bars[0].base = 0U;

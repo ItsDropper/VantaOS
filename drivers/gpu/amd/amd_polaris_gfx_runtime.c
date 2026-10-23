@@ -106,7 +106,7 @@ static int enable_bus_master(amd_polaris_gfx_runtime_t *runtime)
         return 0;
     runtime->original_pci_command = command;
     if ((command & PCI_COMMAND_BUS_MASTER) != 0U)
-        return 1;
+        return 0;
 
     /* Own cleanup before writing: readback may fail after the bit reaches hardware. */
     runtime->bus_master_enabled_by_us = 1U;

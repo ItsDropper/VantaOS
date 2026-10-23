@@ -50,6 +50,9 @@ intel_gen9_ring_snapshot_status_t intel_gen9_read_ring_snapshot(
         (snapshot.ring_size_bytes & (snapshot.ring_size_bytes - 1U)) != 0U)
         return INTEL_GEN9_RING_SNAPSHOT_INVALID_RING_SIZE;
 
+    if ((snapshot.start & 0xFFFU) != 0U)
+        return INTEL_GEN9_RING_SNAPSHOT_INVALID_START;
+
     head_offset = snapshot.head & INTEL_GEN9_RING_HEAD_ADDR_MASK;
     tail_offset = snapshot.tail & INTEL_GEN9_RING_TAIL_ADDR_MASK;
     if ((head_offset & 3U) != 0U ||

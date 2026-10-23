@@ -5,6 +5,7 @@
  * See the LICENSE file in the project root for the full license text.
  */
 #include "amd_gpu.h"
+#include "amd_polaris.h"
 
 #include <string.h>
 #include "pci.h"
@@ -12,7 +13,9 @@
 static int amd_gpu_probe(gpu_device_t *device)
 {
     return device != 0 && device->vendor == GPU_VENDOR_AMD &&
-           device->state == GPU_DEVICE_PROBING;
+           device->state == GPU_DEVICE_PROBING &&
+           amd_polaris_match_id(device->identity.vendor_id,
+                                device->identity.device_id);
 }
 
 static int amd_gpu_initialize(gpu_device_t *device)

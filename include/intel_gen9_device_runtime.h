@@ -35,6 +35,7 @@ typedef struct intel_gen9_device_runtime {
     gpu_pci_mmio_mapping_t mapping;
     intel_gen9_execlist_t execlist;
     uint32_t context_id;
+    uint64_t context_descriptor;
     uint8_t initialized;
     uint8_t forcewake_held;
     uint8_t bus_master_enabled_by_us;

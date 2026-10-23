@@ -64,6 +64,8 @@ on:
       - "include/intel_gen9_ggtt.h"
       - "include/intel_gen9_execlist.h"
       - "include/intel_gen9_device_runtime.h"
+      - "include/intel_gen9_memory.h"
+      - "scripts/test_intel_gen9_memory.c"
       - "scripts/test_intel_gen9_device_runtime.c"
       - "drivers/gpu/intel/intel_gen9_ggtt.c"
       - "drivers/gpu/intel/intel_gen9_execlist.c"
@@ -984,3 +986,12 @@ jobs:
 
       - name: Test contiguous 32 MiB Polaris leaf-table allocation and release
         run: /tmp/vantaos-gpu-dma-page-table-test
+
+      - name: Compile Gen9 GPU-visible memory runtime tests with strict warnings
+        run: gcc -std=c11 -Wall -Wextra -Werror -ffunction-sections -fdata-sections -Iinclude scripts/test_intel_gen9_memory.c drivers/gpu/intel/intel_gen9_memory.c drivers/gpu/intel/intel_gen9_ggtt.c drivers/gpu/core/gpu_dma.c drivers/gpu/core/gpu_mmio.c -Wl,--gc-sections -o /tmp/vantaos-intel-gen9-memory-test
+
+      - name: Test Gen9 DMA allocation, GGTT mapping, overlap rejection and VA reuse
+        run: /tmp/vantaos-intel-gen9-memory-test
+
+      - name: Compile Gen9 GPU-visible memory runtime for the kernel
+        run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude -c drivers/gpu/intel/intel_gen9_memory.c -o /tmp/vantaos-intel-gen9-memory.o

@@ -10,6 +10,31 @@
 #include <assert.h>
 #include <string.h>
 
+uint8_t pci_read_config8(const struct pci_device *device, uint8_t offset)
+{
+    (void)device;
+    (void)offset;
+    return 0U;
+}
+
+uint32_t pci_read_config32(const struct pci_device *device, uint8_t offset)
+{
+    (void)device;
+    (void)offset;
+    return 0U;
+}
+
+int pci_get_bar(const struct pci_device *device, uint8_t index,
+                uint64_t *address, int *is_io, int *is_64bit)
+{
+    (void)device;
+    (void)index;
+    if (address != NULL) *address = 0U;
+    if (is_io != NULL) *is_io = 0;
+    if (is_64bit != NULL) *is_64bit = 0;
+    return 0;
+}
+
 static gpu_pci_resource_inventory_t resources_with_bars(void)
 {
     gpu_pci_resource_inventory_t resources;

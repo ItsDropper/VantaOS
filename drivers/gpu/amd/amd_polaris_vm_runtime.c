@@ -5,6 +5,7 @@
  * See the LICENSE file in the project root for the full license text.
  */
 #include "amd_polaris_vm_runtime.h"
+#include "gpu_dma_page_table.h"
 
 #include <string.h>
 
@@ -60,6 +61,15 @@ amd_polaris_vm_runtime_status_t amd_polaris_vm_runtime_configure(
     return AMD_POLARIS_VM_RUNTIME_OK;
 }
 
+amd_polaris_vm_runtime_status_t amd_polaris_vm_runtime_configure_dma(
+    amd_polaris_vm_runtime_t *runtime, const gpu_mmio_region_t *mmio,
+    uint64_t fault_page_physical, unsigned timeout_iterations)
+{
+    return amd_polaris_vm_runtime_configure(
+        runtime, 0, gpu_dma_page_table_allocate, gpu_dma_page_table_free,
+        mmio, fault_page_physical, timeout_iterations);
+}
+
 amd_polaris_vm_runtime_status_t amd_polaris_vm_runtime_init_table(
     amd_polaris_vm_runtime_t *runtime, gpu_page_table_t *table,
     int device_quiesced)
@@ -86,12 +96,9 @@ amd_polaris_vm_runtime_status_t amd_polaris_vm_runtime_init_table(
             runtime->fault_page_physical, runtime->timeout_iterations, 1) !=
         AMD_POLARIS_VM_HW_OK) {
         /*
-         * The hardware setup can fail after some context registers have
-         * changed. Never leave the newly allocated root/tree silently live:
-         * first attempt to disable VMID 1, then release the table only after
-         * the hardware confirms the context is disabled. If either operation
-         * fails, retain ownership in the caller-visible table/runtime so the
-         * caller can retry shutdown rather than freeing possibly-live DMA.
+         * Hardware setup can fail after some context registers have changed.
+         * Disable VMID 1 before releasing any table memory. If disable fails,
+         * retain ownership so the caller can retry shutdown.
          */
         if (amd_polaris_vm_disable_context1(runtime->mmio,
                 runtime->timeout_iterations, 1) == AMD_POLARIS_VM_HW_OK) {

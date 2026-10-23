@@ -15,6 +15,7 @@
 #define MMIO_BYTES 0xD000U
 #define REG_CP_RB0_RPTR (0x21C0U * 4U)
 #define REG_CP_RB0_WPTR (0x3045U * 4U)
+#define REG_CP_RB_VMID (0x3051U * 4U)
 #define PCI_COMMAND_BUS_MASTER 0x0004U
 
 static uint32_t registers[MMIO_BYTES / sizeof(uint32_t)];
@@ -22,6 +23,9 @@ static unsigned char dma_memory[GPU_DMA_MAX_BYTES]
     __attribute__((aligned(GPU_DMA_PAGE_SIZE)));
 static size_t dma_used;
 static uint16_t pci_command = 0x0002U;
+static unsigned vm_maps;
+static unsigned vm_unmaps;
+static unsigned vm_flushes;
 static int reject_bus_master_clear;
 static int fail_next_pci_write_after_effect;
 
@@ -86,6 +90,77 @@ void dma_free_contiguous(dma_page_t *pages, size_t count)
         pages[i].physical_address = 0U;
         pages[i].size = 0U;
     }
+}
+
+
+static int test_vm_map(void *context, uint64_t va, uint64_t pa, unsigned access)
+{
+    (void)context;
+    (void)va;
+    (void)pa;
+    if ((access & (GPU_VM_ACCESS_READ | GPU_VM_ACCESS_WRITE)) !=
+        (GPU_VM_ACCESS_READ | GPU_VM_ACCESS_WRITE))
+        return 0;
+    ++vm_maps;
+    return 1;
+}
+
+static int test_vm_unmap(void *context, uint64_t va)
+{
+    (void)context;
+    (void)va;
+    ++vm_unmaps;
+    return 1;
+}
+
+static int test_vm_flush(void *context)
+{
+    (void)context;
+    ++vm_flushes;
+    return 1;
+}
+
+static void test_vm_backed_ring(void)
+{
+    struct pci_device device = {0};
+    gpu_mmio_region_t mmio = {
+        .base = (volatile uint8_t *)registers,
+        .length = sizeof(registers)
+    };
+    amd_polaris_memory_runtime_t memory = {0};
+    amd_polaris_gfx_runtime_t runtime = {0};
+    gpu_vm_ops_t ops = {
+        .context = &memory,
+        .map_page = test_vm_map,
+        .unmap_page = test_vm_unmap,
+        .flush = test_vm_flush
+    };
+    uint32_t fence = 0U;
+
+    memset(registers, 0, sizeof(registers));
+    vm_maps = 0U;
+    vm_unmaps = 0U;
+    vm_flushes = 0U;
+    assert(amd_polaris_memory_init(&memory, &ops) == AMD_POLARIS_MEMORY_OK);
+    assert(amd_polaris_gfx_runtime_init_vm(&runtime, &device, &mmio, &memory,
+        AMD_POLARIS_GFX_RING_MIN_BYTES, 1, 1) ==
+        AMD_POLARIS_GFX_RUNTIME_OK);
+    assert(runtime.uses_vm != 0U);
+    assert(runtime.ring.vmid == 1U);
+    assert(registers[REG_CP_RB_VMID / 4U] == 1U);
+    assert(vm_maps == runtime.ring_allocation.page_count +
+        runtime.rptr_allocation.page_count + runtime.fence_allocation.page_count);
+    assert(amd_polaris_gfx_runtime_submit_fence(&runtime, &fence) ==
+        AMD_POLARIS_GFX_RUNTIME_OK);
+    assert(fence == 1U);
+    *(volatile uint32_t *)runtime.fence_allocation.dma.cpu_address = fence;
+    assert(amd_polaris_gfx_runtime_wait_fence(&runtime, fence, 2U) ==
+        AMD_POLARIS_GFX_RUNTIME_OK);
+    assert(amd_polaris_gfx_runtime_shutdown(&runtime, 1) ==
+        AMD_POLARIS_GFX_RUNTIME_OK);
+    assert(vm_unmaps == vm_maps);
+    assert(vm_flushes >= 4U);
+    assert(amd_polaris_memory_shutdown(&memory, 1) == AMD_POLARIS_MEMORY_OK);
 }
 
 int main(void)

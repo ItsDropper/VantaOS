@@ -35,6 +35,7 @@ typedef struct intel_gen9_ggtt_forcewake_ops {
 typedef struct intel_gen9_ggtt_vm_context {
     const gpu_mmio_region_t *gttmmadr;
     const intel_gen9_ggtt_forcewake_ops_t *forcewake;
+    uint8_t faulted;
 } intel_gen9_ggtt_vm_context_t;
 
 int intel_gen9_ggtt_make_vm_ops(intel_gen9_ggtt_vm_context_t *context,

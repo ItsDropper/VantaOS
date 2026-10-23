@@ -223,6 +223,8 @@ int main(void)
     assert((pci_command & PCI_COMMAND_BUS_MASTER) == 0U);
     assert((pci_command & 0x0002U) != 0U);
 
+    test_vm_backed_ring();
+
     /*
      * Simulate a bus-master write that takes effect but fails readback.
      * DMA must remain owned until a later config write verifies bus mastering

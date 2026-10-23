@@ -8,15 +8,62 @@
 
 #include <string.h>
 
-static const unsigned index_shifts[GPU_PAGE_TABLE_LEVELS] = {
-    39U, 30U, 21U, 12U
-};
-
-static int valid_page(const gpu_page_table_page_t *page)
+static int is_power_of_two(size_t value)
 {
-    return page != NULL && page->entries != NULL &&
+    return value != 0U && (value & (value - 1U)) == 0U;
+}
+
+static unsigned log2_size(size_t value)
+{
+    unsigned bits = 0U;
+    while (value > 1U) {
+        value >>= 1U;
+        ++bits;
+    }
+    return bits;
+}
+
+static int valid_config(const gpu_page_table_config_t *config)
+{
+    unsigned root_bits;
+    if (config == NULL || config->level_count < 2U ||
+        config->level_count > GPU_PAGE_TABLE_LEVELS ||
+        config->virtual_address_bits < 32U ||
+        config->virtual_address_bits > 48U ||
+        !is_power_of_two(config->root_entry_count))
+        return 0;
+
+    root_bits = log2_size(config->root_entry_count);
+    if (root_bits == 0U ||
+        12U + root_bits + 9U * (config->level_count - 1U) !=
+            config->virtual_address_bits)
+        return 0;
+    if (config->index_shifts[0] !=
+        (unsigned)config->virtual_address_bits - root_bits)
+        return 0;
+    for (unsigned i = 1U; i < config->level_count; ++i) {
+        if (config->index_shifts[i] !=
+            12U + 9U * (config->level_count - 1U - i))
+            return 0;
+    }
+    return 1;
+}
+
+static int valid_page(const gpu_page_table_page_t *page,
+                      size_t expected_entries)
+{
+    size_t required_size;
+    if (page == NULL || page->entries == NULL ||
+        page->entry_count != expected_entries ||
+        expected_entries > SIZE_MAX / sizeof(uint64_t))
+        return 0;
+    required_size = expected_entries * sizeof(uint64_t);
+    return page->allocation_size >= required_size &&
            (page->physical_address & (GPU_PAGE_TABLE_PAGE_SIZE - 1U)) == 0U &&
-           (page->physical_address & ~GPU_PAGE_TABLE_ADDRESS_MASK) == 0U;
+           (page->physical_address & ~GPU_PAGE_TABLE_ADDRESS_MASK) == 0U &&
+           page->physical_address <= UINT64_MAX - (required_size - 1U) &&
+           page->physical_address + required_size - 1U <=
+               GPU_PAGE_TABLE_ADDRESS_MASK + 0xFFFULL;
 }
 
 static gpu_page_table_page_t *find_page(gpu_page_table_t *table,
@@ -29,39 +76,48 @@ static gpu_page_table_page_t *find_page(gpu_page_table_t *table,
 }
 
 static gpu_page_table_status_t allocate_table_page(
-    gpu_page_table_t *table, gpu_page_table_page_t **out_page)
+    gpu_page_table_t *table, size_t entry_count,
+    gpu_page_table_page_t **out_page)
 {
     gpu_page_table_page_t page;
     if (table->page_count >= GPU_PAGE_TABLE_MAX_PAGES)
         return GPU_PAGE_TABLE_TABLE_FULL;
     memset(&page, 0, sizeof(page));
-    if (!table->ops.allocate_page(table->ops.context, &page))
+    if (!table->ops.allocate_table(table->ops.context, entry_count, &page))
         return GPU_PAGE_TABLE_ALLOCATION_FAILED;
-    if (!valid_page(&page)) {
+    if (!valid_page(&page, entry_count)) {
         if (page.entries != NULL)
             table->ops.free_page(table->ops.context, &page);
         return GPU_PAGE_TABLE_ADDRESS_INVALID;
     }
     for (size_t i = 0U; i < table->page_count; ++i) {
-        if (table->pages[i].physical_address == page.physical_address) {
+        const gpu_page_table_page_t *old = &table->pages[i];
+        uint64_t old_end = old->physical_address + old->allocation_size;
+        uint64_t new_end = page.physical_address + page.allocation_size;
+        if (page.physical_address < old_end &&
+            old->physical_address < new_end) {
             table->ops.free_page(table->ops.context, &page);
             return GPU_PAGE_TABLE_CORRUPT;
         }
     }
-    memset(page.entries, 0, GPU_PAGE_TABLE_PAGE_SIZE);
+    memset(page.entries, 0, entry_count * sizeof(uint64_t));
     table->pages[table->page_count] = page;
     *out_page = &table->pages[table->page_count++];
     return GPU_PAGE_TABLE_OK;
 }
 
 static gpu_page_table_status_t walk_to_leaf(
-    gpu_page_table_t *table, uint64_t gpu_address,
-    int create_missing, gpu_page_table_page_t **out_leaf,
-    size_t *out_leaf_index)
+    gpu_page_table_t *table, uint64_t gpu_address, int create_missing,
+    gpu_page_table_page_t **out_leaf, size_t *out_leaf_index)
 {
     gpu_page_table_page_t *page = &table->pages[0];
-    for (unsigned level = 0U; level < GPU_PAGE_TABLE_LEVELS - 1U; ++level) {
-        size_t index = (size_t)((gpu_address >> index_shifts[level]) & 0x1FFU);
+
+    for (unsigned level = 0U; level + 1U < table->config.level_count;
+         ++level) {
+        size_t mask = level == 0U ? table->config.root_entry_count - 1U :
+                                   GPU_PAGE_TABLE_ENTRIES - 1U;
+        size_t index = (size_t)((gpu_address >>
+            table->config.index_shifts[level]) & (uint64_t)mask);
         uint64_t entry = page->entries[index];
         gpu_page_table_page_t *child;
 
@@ -70,7 +126,7 @@ static gpu_page_table_status_t walk_to_leaf(
             gpu_page_table_status_t status;
             if (!create_missing)
                 return GPU_PAGE_TABLE_NOT_MAPPED;
-            status = allocate_table_page(table, &child);
+            status = allocate_table_page(table, GPU_PAGE_TABLE_ENTRIES, &child);
             if (status != GPU_PAGE_TABLE_OK)
                 return status;
             if (!table->ops.encode_directory(table->ops.context,
@@ -84,30 +140,35 @@ static gpu_page_table_status_t walk_to_leaf(
         } else {
             uint64_t child_physical = entry & GPU_PAGE_TABLE_ADDRESS_MASK;
             child = find_page(table, child_physical);
-            if (child == NULL)
+            if (child == NULL || child->entry_count != GPU_PAGE_TABLE_ENTRIES)
                 return GPU_PAGE_TABLE_CORRUPT;
         }
         page = child;
     }
+
     *out_leaf = page;
-    *out_leaf_index = (size_t)((gpu_address >> index_shifts[3]) & 0x1FFU);
+    *out_leaf_index = (size_t)((gpu_address >>
+        table->config.index_shifts[table->config.level_count - 1U]) & 0x1FFU);
     return GPU_PAGE_TABLE_OK;
 }
 
-gpu_page_table_status_t gpu_page_table_init(
-    gpu_page_table_t *table, const gpu_page_table_ops_t *ops)
+gpu_page_table_status_t gpu_page_table_init_config(
+    gpu_page_table_t *table, const gpu_page_table_ops_t *ops,
+    const gpu_page_table_config_t *config)
 {
     gpu_page_table_page_t *root;
     gpu_page_table_status_t status;
 
     if (table == NULL || ops == NULL || table->initialized != 0U ||
-        ops->allocate_page == NULL || ops->free_page == NULL ||
+        ops->allocate_table == NULL || ops->free_page == NULL ||
         ops->encode_directory == NULL || ops->encode_leaf == NULL ||
-        ops->flush == NULL)
+        ops->flush == NULL || !valid_config(config))
         return GPU_PAGE_TABLE_INVALID_ARGUMENT;
+
     memset(table, 0, sizeof(*table));
     table->ops = *ops;
-    status = allocate_table_page(table, &root);
+    table->config = *config;
+    status = allocate_table_page(table, config->root_entry_count, &root);
     if (status != GPU_PAGE_TABLE_OK) {
         memset(table, 0, sizeof(*table));
         return status;
@@ -115,6 +176,18 @@ gpu_page_table_status_t gpu_page_table_init(
     table->root_physical = root->physical_address;
     table->initialized = 1U;
     return GPU_PAGE_TABLE_OK;
+}
+
+gpu_page_table_status_t gpu_page_table_init(
+    gpu_page_table_t *table, const gpu_page_table_ops_t *ops)
+{
+    const gpu_page_table_config_t config = {
+        .level_count = 4U,
+        .virtual_address_bits = 48U,
+        .root_entry_count = GPU_PAGE_TABLE_ENTRIES,
+        .index_shifts = {39U, 30U, 21U, 12U}
+    };
+    return gpu_page_table_init_config(table, ops, &config);
 }
 
 gpu_page_table_status_t gpu_page_table_map(
@@ -132,7 +205,7 @@ gpu_page_table_status_t gpu_page_table_map(
         return GPU_PAGE_TABLE_FAULTED;
     if ((gpu_address & 0xFFFU) != 0U ||
         (physical_address & 0xFFFU) != 0U ||
-        gpu_address >= (1ULL << 48U) ||
+        (gpu_address >> table->config.virtual_address_bits) != 0U ||
         (physical_address & ~GPU_PAGE_TABLE_ADDRESS_MASK) != 0U)
         return GPU_PAGE_TABLE_ADDRESS_INVALID;
 
@@ -144,6 +217,7 @@ gpu_page_table_status_t gpu_page_table_map(
     if (!table->ops.encode_leaf(table->ops.context, physical_address,
                                 access, &encoded))
         return GPU_PAGE_TABLE_ENCODE_FAILED;
+
     /* Caller batches changes and explicitly flushes before device use. */
     leaf->entries[index] = encoded;
     return GPU_PAGE_TABLE_OK;
@@ -160,14 +234,14 @@ gpu_page_table_status_t gpu_page_table_unmap(
         return GPU_PAGE_TABLE_NOT_INITIALIZED;
     if (table->faulted != 0U)
         return GPU_PAGE_TABLE_FAULTED;
-    if ((gpu_address & 0xFFFU) != 0U || gpu_address >= (1ULL << 48U))
+    if ((gpu_address & 0xFFFU) != 0U ||
+        (gpu_address >> table->config.virtual_address_bits) != 0U)
         return GPU_PAGE_TABLE_ADDRESS_INVALID;
     status = walk_to_leaf(table, gpu_address, 0, &leaf, &index);
     if (status != GPU_PAGE_TABLE_OK)
         return status;
     if ((leaf->entries[index] & 1U) == 0U)
         return GPU_PAGE_TABLE_NOT_MAPPED;
-
     leaf->entries[index] = 0U;
     return GPU_PAGE_TABLE_OK;
 }

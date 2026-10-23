@@ -80,6 +80,11 @@ int main(void)
            INTEL_GEN9_INVALID_ARGUMENT);
 
     resources = resources_with_bars();
+    /* A BAR5-only device must not pass Polaris register-aperture discovery. */
+    resources.bars[1].index = 5U;
+    assert(amd_polaris_inspect(0x1002U, 0x67DFU, &resources, &amd) ==
+           AMD_POLARIS_NO_ASSIGNED_MMIO);
+    resources.bars[1].index = 2U;
     assert(amd_polaris_match_id(0x1002U, 0x67DFU));
     assert(amd_polaris_match_id(0x1002U, 0x67C0U));
     assert(!amd_polaris_match_id(0x1002U, 0x744CU));

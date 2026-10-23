@@ -55,6 +55,9 @@ int main(void)
     invalid = descriptor | (1ULL << 60U);
     assert(intel_gen9_execlist_submit(&state, invalid, 1) ==
            INTEL_GEN9_EXECLIST_INVALID_DESCRIPTOR);
+    invalid = descriptor | (1ULL << 1U);
+    assert(intel_gen9_execlist_submit(&state, invalid, 1) ==
+           INTEL_GEN9_EXECLIST_INVALID_DESCRIPTOR);
 
     assert(intel_gen9_execlist_submit(&state, descriptor, 1) ==
            INTEL_GEN9_EXECLIST_OK);

@@ -16,6 +16,7 @@
 #define INTEL_GEN9_CONTEXT_DESCRIPTOR_LRCA_MASK 0x00000000FFFFF000ULL
 #define INTEL_GEN9_CONTEXT_DESCRIPTOR_ID_MASK 0x001FFFFF00000000ULL
 #define INTEL_GEN9_CONTEXT_DESCRIPTOR_RESERVED_MASK 0xFFE0000000000000ULL
+#define INTEL_GEN9_CONTEXT_DESCRIPTOR_ALLOWED_FLAGS 0x0000000000000119ULL
 
 typedef enum intel_gen9_execlist_status {
     INTEL_GEN9_EXECLIST_OK = 0,
@@ -46,6 +47,11 @@ typedef struct intel_gen9_execlist {
 intel_gen9_execlist_status_t intel_gen9_execlist_init(
     intel_gen9_execlist_t *execlist, const gpu_mmio_region_t *mmio,
     int render_forcewake_held, int engine_quiesced);
+
+/* Build a descriptor for a 4 KiB-aligned LRCA in the 32-bit Gen9 GGTT. */
+intel_gen9_execlist_status_t intel_gen9_execlist_build_descriptor(
+    uint64_t lrca_ggtt_address, uint32_t context_id, uint16_t flags,
+    uint64_t *out_descriptor);
 
 /* Submit one valid Gen8/Gen9 LRCA descriptor through the ELSP port. */
 intel_gen9_execlist_status_t intel_gen9_execlist_submit(

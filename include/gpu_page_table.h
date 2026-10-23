@@ -28,6 +28,7 @@ typedef struct gpu_page_table_config {
     uint8_t level_count;
     uint8_t virtual_address_bits;
     size_t root_entry_count;
+    size_t leaf_entry_count;
     unsigned index_shifts[GPU_PAGE_TABLE_LEVELS];
 } gpu_page_table_config_t;
 
@@ -71,8 +72,8 @@ typedef struct gpu_page_table {
 
 /*
  * Configurable GPU page-table walker. Intel Gen9 uses a 4-level 48-bit
- * layout; Polaris GCN4 uses a 2-level layout with a larger contiguous root
- * directory for the configured 36-bit VA range. Vendor callbacks own entry
+ * layout; Polaris GCN4 uses a 2-level layout with a small root directory and
+ * a large contiguous leaf table sized for the configured 36-bit VA range. Vendor callbacks own entry
  * encoding, DMA-coherent allocation, root installation and TLB invalidation.
  * Caller must quiesce the GPU before destroy frees any table.
  */

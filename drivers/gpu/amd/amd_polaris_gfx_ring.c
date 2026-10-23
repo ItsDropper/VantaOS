@@ -113,6 +113,12 @@ amd_polaris_gfx_ring_status_t amd_polaris_gfx_ring_init(
     ring->ring_storage = ring_storage;
     ring->ring_bytes = ring_bytes;
     ring->ring_gpu_address = ring_gpu_address;
+    /*
+     * Publish a shutdown-capable handle before the first MMIO side effect.
+     * On a partial setup failure, retain caller-owned DMA until shutdown can
+     * verify that the CP is halted.
+     */
+    ring->initialized = 1U;
 
     if (!halt_cp(mmio))
         goto mmio_fail;

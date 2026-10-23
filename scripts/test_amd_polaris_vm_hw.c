@@ -125,6 +125,42 @@ static void test_invalidate_bounds_and_timeout(void)
 }
 
 
+static void test_runtime_failed_init_retains_live_dma_until_safe_shutdown(void)
+{
+    gpu_mmio_region_t mmio = region(MOCK_MMIO_BYTES);
+    runtime_allocator_t allocator;
+    amd_polaris_vm_runtime_t runtime;
+    gpu_page_table_t table;
+
+    memset(registers, 0, sizeof(registers));
+    memset(&allocator, 0, sizeof(allocator));
+    memset(&runtime, 0, sizeof(runtime));
+    memset(&table, 0, sizeof(table));
+
+    assert(amd_polaris_vm_runtime_configure(&runtime, &allocator,
+               runtime_allocate, runtime_free, &mmio, 0x300000U, 2U) ==
+           AMD_POLARIS_VM_RUNTIME_OK);
+
+    /* Root programming reaches the invalidate timeout; shutdown cannot yet
+       confirm invalidation, so table DMA must remain allocated and owned. */
+    assert(amd_polaris_vm_runtime_init_table(&runtime, &table, 1) ==
+           AMD_POLARIS_VM_RUNTIME_HARDWARE_INIT_FAILED);
+    assert(table.initialized != 0U);
+    assert(runtime.root_physical == table.root_physical);
+    assert(allocator.allocations == 1U && allocator.frees == 0U);
+    assert(amd_polaris_vm_runtime_shutdown(&runtime, &table, 1) ==
+           AMD_POLARIS_VM_RUNTIME_HARDWARE_SHUTDOWN_FAILED);
+    assert(allocator.frees == 0U);
+
+    /* Once hardware acknowledges invalidation, retry shutdown and release. */
+    registers[REG_INVALIDATE_RESPONSE / 4U] =
+        1U << AMD_POLARIS_VM_CONTEXT1_ID;
+    assert(amd_polaris_vm_runtime_shutdown(&runtime, &table, 1) ==
+           AMD_POLARIS_VM_RUNTIME_OK);
+    assert(allocator.allocations == 1U && allocator.frees == 1U);
+    assert(runtime.root_physical == 0U);
+}
+
 static void test_runtime_end_to_end_vm(void)
 {
     gpu_mmio_region_t mmio = region(MOCK_MMIO_BYTES);
@@ -174,5 +210,6 @@ int main(void)
     test_install_root();
     test_invalidate_bounds_and_timeout();
     test_runtime_end_to_end_vm();
+    test_runtime_failed_init_retains_live_dma_until_safe_shutdown();
     return 0;
 }

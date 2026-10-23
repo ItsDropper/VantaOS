@@ -78,6 +78,7 @@ on:
       - "include/amd_polaris_vm_runtime.h"
       - "include/amd_polaris_gfx_ring.h"
       - "include/amd_polaris_gfx_runtime.h"
+      - "include/amd_polaris_device_runtime.h"
       - "scripts/test_amd_polaris_gfx_runtime.c"
       - "drivers/gpu/amd/amd_polaris_vm_runtime.c"
       - "drivers/gpu/amd/amd_polaris_gfx_ring.c"
@@ -951,6 +952,9 @@ jobs:
 
       - name: Test DMA-backed Polaris submission, fence completion, timeout and teardown
         run: /tmp/vantaos-amd-polaris-gfx-runtime-test
+
+      - name: Compile PCI-bound Polaris device lifecycle
+        run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude -c drivers/gpu/amd/amd_polaris_device_runtime.c -o /tmp/vantaos-amd-polaris-device-runtime.o
 
 
       - name: Compile Intel Gen9 execlist submission tests with strict warnings

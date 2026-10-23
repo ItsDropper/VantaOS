@@ -58,9 +58,15 @@ static void test_intel_snapshot(void)
     store_register(INTEL_GEN9_RING_HEAD, 0x1000U);
     assert(intel_gen9_read_ring_snapshot(&region, &snapshot) ==
            INTEL_GEN9_RING_SNAPSHOT_INVALID_HEAD);
+    store_register(INTEL_GEN9_RING_HEAD, 0x101U);
+    assert(intel_gen9_read_ring_snapshot(&region, &snapshot) ==
+           INTEL_GEN9_RING_SNAPSHOT_INVALID_HEAD);
 
     store_register(INTEL_GEN9_RING_HEAD, 0x100U);
     store_register(INTEL_GEN9_RING_TAIL, 0x1000U);
+    assert(intel_gen9_read_ring_snapshot(&region, &snapshot) ==
+           INTEL_GEN9_RING_SNAPSHOT_INVALID_TAIL);
+    store_register(INTEL_GEN9_RING_TAIL, 0x109U);
     assert(intel_gen9_read_ring_snapshot(&region, &snapshot) ==
            INTEL_GEN9_RING_SNAPSHOT_INVALID_TAIL);
 

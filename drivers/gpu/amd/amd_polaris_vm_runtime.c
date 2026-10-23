@@ -84,8 +84,22 @@ amd_polaris_vm_runtime_status_t amd_polaris_vm_runtime_init_table(
     if (amd_polaris_vm_install_root(runtime->mmio, table->root_physical,
             0U, AMD_POLARIS_VM_DEFAULT_RANGE_SIZE,
             runtime->fault_page_physical, runtime->timeout_iterations, 1) !=
-        AMD_POLARIS_VM_HW_OK)
+        AMD_POLARIS_VM_HW_OK) {
+        /*
+         * The hardware setup can fail after some context registers have
+         * changed. Never leave the newly allocated root/tree silently live:
+         * first attempt to disable VMID 1, then release the table only after
+         * the hardware confirms the context is disabled. If either operation
+         * fails, retain ownership in the caller-visible table/runtime so the
+         * caller can retry shutdown rather than freeing possibly-live DMA.
+         */
+        if (amd_polaris_vm_disable_context1(runtime->mmio,
+                runtime->timeout_iterations, 1) == AMD_POLARIS_VM_HW_OK) {
+            if (gpu_page_table_destroy(table, 1) == GPU_PAGE_TABLE_OK)
+                runtime->root_physical = 0U;
+        }
         return AMD_POLARIS_VM_RUNTIME_HARDWARE_INIT_FAILED;
+    }
     return AMD_POLARIS_VM_RUNTIME_OK;
 }
 

@@ -36,7 +36,8 @@ static int runtime_allocate(void *context, size_t entries,
                                 runtime_large_leaf : runtime_small_tables[i];
             out_page->physical_address = 0x100000ULL + i * 0x100000ULL;
             out_page->entry_count = entries;
-            out_page->allocation_size = entries * sizeof(uint64_t);
+            out_page->allocation_size = entries > GPU_PAGE_TABLE_ENTRIES ?
+                entries * sizeof(uint64_t) : GPU_PAGE_TABLE_PAGE_SIZE;
             out_page->cookie = (void *)(uintptr_t)(i + 1U);
             ++allocator->allocations;
             return 1;

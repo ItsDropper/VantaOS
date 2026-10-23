@@ -74,6 +74,7 @@ int main(void)
     intel_gen9_gpu_allocation_t a = {0};
     intel_gen9_gpu_allocation_t b = {0};
     intel_gen9_gpu_allocation_t c = {0};
+    intel_gen9_gpu_allocation_t d = {0};
     uint64_t pte_a, pte_b;
 
     memset(aperture, 0, sizeof(aperture));
@@ -116,6 +117,25 @@ int main(void)
     assert(c.ggtt_address == INTEL_GEN9_MEMORY_DEFAULT_GGTT_BASE);
     assert(intel_gen9_memory_free(&b) == INTEL_GEN9_MEMORY_OK);
     assert(intel_gen9_memory_free(&c) == INTEL_GEN9_MEMORY_OK);
+
+    /* Never overwrite a pre-existing firmware/scanout GGTT mapping. */
+    {
+        const uint64_t reserved_va = INTEL_GEN9_MEMORY_DEFAULT_GGTT_BASE;
+        const size_t reserved_pte_offset = INTEL_GEN9_GGTT_PTE_BASE +
+            (size_t)(reserved_va >> 12U) * sizeof(uint64_t);
+        const uint64_t reserved_pte = 0x30000000ULL | INTEL_GEN9_PTE_PRESENT;
+        assert(gpu_mmio_write64(&runtime.mapping.region, reserved_pte_offset,
+            reserved_pte) == GPU_MMIO_OK);
+        assert(intel_gen9_memory_alloc(&runtime, 4096U, 0U, &d) ==
+            INTEL_GEN9_MEMORY_OK);
+        assert(d.ggtt_address == reserved_va + GPU_DMA_PAGE_SIZE);
+        assert(gpu_mmio_read64(&runtime.mapping.region, reserved_pte_offset,
+            &pte_a) == GPU_MMIO_OK);
+        assert(pte_a == reserved_pte);
+        assert(intel_gen9_memory_free(&d) == INTEL_GEN9_MEMORY_OK);
+        assert(gpu_mmio_write64(&runtime.mapping.region, reserved_pte_offset,
+            0U) == GPU_MMIO_OK);
+    }
     assert(runtime.faulted == 0U);
     return 0;
 }

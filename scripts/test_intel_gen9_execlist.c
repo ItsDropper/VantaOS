@@ -73,7 +73,7 @@ int main(void)
     assert(completed_context_id == 1U);
     assert(completion_status == INTEL_GEN9_CSB_STATUS_COMPLETE);
     assert(state.pending == 0U);
-    assert(registers[INTEL_GEN9_CSB_PTR_OFFSET / 4U] == 0x07000100U);
+    assert(registers[INTEL_GEN9_CSB_PTR_OFFSET / 4U] == 0x00070100U);
 
     assert(intel_gen9_execlist_shutdown(&state, 0) ==
            INTEL_GEN9_EXECLIST_NOT_READY);

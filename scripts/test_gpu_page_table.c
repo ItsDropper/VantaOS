@@ -9,6 +9,7 @@
 #include "intel_gen9_vm.h"
 #include "amd_polaris_pte.h"
 #include "amd_polaris_vm.h"
+#include "gpu_page_table_vm.h"
 
 #include <assert.h>
 #include <stdint.h>
@@ -190,6 +191,7 @@ static void test_vendor_vm_backends(void)
     mock_allocator_t mock;
     gpu_page_table_t table;
     gpu_page_table_ops_t ops;
+    gpu_vm_ops_t generic_vm_ops;
     intel_gen9_vm_backend_t intel_backend;
     amd_polaris_vm_backend_t amd_backend;
     const uint64_t va = 0x00001234567000ULL;
@@ -208,6 +210,12 @@ static void test_vendor_vm_backends(void)
     assert(mapped_leaf_entry(&table, va) ==
            (0x500000ULL | INTEL_GEN9_PTE_PRESENT |
             INTEL_GEN9_PTE_WRITABLE | INTEL_GEN9_PTE_PAT));
+    assert(gpu_page_table_make_vm_ops(&table, &generic_vm_ops));
+    assert(generic_vm_ops.map_page(generic_vm_ops.context, va + 0x1000U,
+                                   0x501000U, 1U));
+    assert(generic_vm_ops.flush(generic_vm_ops.context));
+    assert(generic_vm_ops.unmap_page(generic_vm_ops.context, va + 0x1000U));
+    assert(generic_vm_ops.flush(generic_vm_ops.context));
     assert(gpu_page_table_destroy(&table, 1) == GPU_PAGE_TABLE_OK);
     assert(mock.frees == mock.allocations);
 

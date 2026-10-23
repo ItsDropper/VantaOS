@@ -48,8 +48,11 @@ on:
       - "drivers/gpu/intel/**"
       - "drivers/gpu/amd/**"
       - "include/intel_gen9.h"
+      - "include/intel_gen9_commands.h"
       - "include/amd_polaris.h"
+      - "include/amd_polaris_commands.h"
       - "scripts/test_gpu_gen_profiles.c"
+      - "scripts/test_gpu_generation_commands.c"
       - "include/gpu.h"
       - "include/gpu_core.h"
       - "include/gpu_vendor.h"
@@ -185,6 +188,12 @@ jobs:
 
       - name: Test exact PCI allowlists, BAR preflight and fail-closed capability state
         run: /tmp/vantaos-gpu-gen-profiles-test
+
+      - name: Compile strict Intel Gen9 MI and AMD Polaris PM4 packet validators
+        run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_gpu_generation_commands.c drivers/gpu/intel/intel_gen9_commands.c drivers/gpu/amd/amd_polaris_commands.c -o /tmp/vantaos-gpu-generation-commands-test
+
+      - name: Test command allowlists, truncation, trailing data and unsafe packet rejection
+        run: /tmp/vantaos-gpu-generation-commands-test
 
       - name: Compile shared GPU MMIO access tests with strict warnings
         run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_gpu_mmio.c drivers/gpu/core/gpu_mmio.c -o /tmp/vantaos-gpu-mmio-test

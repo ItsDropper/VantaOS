@@ -100,6 +100,49 @@ static void test_invalidate_forcewake_contract(void)
     assert(state.acquires == 3U && state.releases == 2U);
 }
 
+
+static void test_contiguous_dma_mapping(void)
+{
+    gpu_mmio_region_t mmio = {
+        .base = (volatile uint8_t *)(void *)fake_aperture,
+        .length = sizeof(fake_aperture)
+    };
+    forcewake_test_context_t state = {
+        .acquires = 0U, .releases = 0U, .acquire_ok = 1, .release_ok = 1
+    };
+    intel_gen9_ggtt_forcewake_ops_t ops = {
+        .context = &state,
+        .acquire_render = acquire,
+        .release_render = release
+    };
+    uint64_t first = 0U, second = 0U;
+
+    memset(fake_aperture, 0, sizeof(fake_aperture));
+    assert(intel_gen9_ggtt_map_contiguous(&mmio, 0x2000U, 0x300000U,
+               8192U, &ops) == INTEL_GEN9_GGTT_OK);
+    assert(gpu_mmio_read64(&mmio, INTEL_GEN9_GGTT_PTE_BASE + 16U,
+                           &first) == GPU_MMIO_OK);
+    assert(gpu_mmio_read64(&mmio, INTEL_GEN9_GGTT_PTE_BASE + 24U,
+                           &second) == GPU_MMIO_OK);
+    assert(first == (0x300000ULL | INTEL_GEN9_PTE_PRESENT));
+    assert(second == (0x301000ULL | INTEL_GEN9_PTE_PRESENT));
+    assert(state.acquires == 1U && state.releases == 1U);
+
+    assert(intel_gen9_ggtt_unmap_contiguous(&mmio, 0x2000U, 8192U,
+                                             &ops) == INTEL_GEN9_GGTT_OK);
+    assert(gpu_mmio_read64(&mmio, INTEL_GEN9_GGTT_PTE_BASE + 16U,
+                           &first) == GPU_MMIO_OK);
+    assert(gpu_mmio_read64(&mmio, INTEL_GEN9_GGTT_PTE_BASE + 24U,
+                           &second) == GPU_MMIO_OK);
+    assert(first == 0U && second == 0U);
+
+    assert(intel_gen9_ggtt_map_contiguous(&mmio, 0x2000U, 0x300000U,
+               4097U, &ops) == INTEL_GEN9_GGTT_INVALID_ARGUMENT);
+    state.acquire_ok = 0;
+    assert(intel_gen9_ggtt_map_contiguous(&mmio, 0x4000U, 0x400000U,
+               4096U, &ops) == INTEL_GEN9_GGTT_STATE_UNCERTAIN);
+}
+
 static void test_forcewake_timeout(void)
 {
     gpu_mmio_region_t mmio = {
@@ -123,6 +166,7 @@ int main(void)
 {
     test_ggtt_map_unmap();
     test_invalidate_forcewake_contract();
+    test_contiguous_dma_mapping();
     test_forcewake_timeout();
     return 0;
 }

@@ -29,6 +29,8 @@ static int intel_gpu_initialize(gpu_device_t *device)
     binding = (intel_gpu_runtime_binding_t *)device->driver_private;
     if (binding->configured == 0U || binding->context_ready == 0U ||
         binding->completion_timeout_iterations == 0U ||
+        binding->fence_cpu_address == NULL ||
+        binding->expected_fence_value == 0U ||
         binding->quiesce_engine == NULL)
         return 0;
 
@@ -50,6 +52,11 @@ static int intel_gpu_initialize(gpu_device_t *device)
     if (status == INTEL_GEN9_DEVICE_OK)
         status = intel_gen9_device_wait(&binding->runtime,
             binding->completion_timeout_iterations);
+    if (status == INTEL_GEN9_DEVICE_OK) {
+        __atomic_thread_fence(__ATOMIC_ACQUIRE);
+        if (*binding->fence_cpu_address != binding->expected_fence_value)
+            status = INTEL_GEN9_DEVICE_SUBMISSION_FAILED;
+    }
     if (status != INTEL_GEN9_DEVICE_OK) {
         if (binding->quiesce_engine(binding->quiesce_context) &&
             intel_gen9_device_runtime_shutdown(&binding->runtime, 1) ==
@@ -165,6 +172,8 @@ int intel_gpu_configure_runtime(gpu_device_t *device,
                                 uint64_t lrca_ggtt_address,
                                 uint32_t context_id,
                                 uint16_t descriptor_flags,
+                                const volatile uint32_t *fence_cpu_address,
+                                uint32_t expected_fence_value,
                                 unsigned completion_timeout_iterations,
                                 int context_ready,
                                 int (*quiesce_engine)(void *context),
@@ -179,8 +188,9 @@ int intel_gpu_configure_runtime(gpu_device_t *device,
                              device->identity.device_id) ||
         binding->configured != 0U || binding->initialized != 0U ||
         binding->runtime.initialized != 0U ||
-        !context_ready || completion_timeout_iterations == 0U ||
-        quiesce_engine == NULL ||
+        !context_ready || fence_cpu_address == NULL ||
+        expected_fence_value == 0U ||
+        completion_timeout_iterations == 0U || quiesce_engine == NULL ||
         intel_gen9_execlist_build_descriptor(lrca_ggtt_address, context_id,
             descriptor_flags, &descriptor) != INTEL_GEN9_EXECLIST_OK)
         return 0;
@@ -189,6 +199,8 @@ int intel_gpu_configure_runtime(gpu_device_t *device,
     binding->lrca_ggtt_address = lrca_ggtt_address;
     binding->context_id = context_id;
     binding->descriptor_flags = descriptor_flags;
+    binding->fence_cpu_address = fence_cpu_address;
+    binding->expected_fence_value = expected_fence_value;
     binding->completion_timeout_iterations = completion_timeout_iterations;
     binding->quiesce_engine = quiesce_engine;
     binding->quiesce_context = quiesce_context;

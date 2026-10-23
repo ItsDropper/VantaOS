@@ -173,7 +173,8 @@ intel_gen9_execlist_status_t intel_gen9_execlist_poll_csb(
     state->csb_read_index = (uint8_t)next_index;
     *out_context_id = context_id;
     *out_status = status;
-    if ((status & INTEL_GEN9_CSB_STATUS_COMPLETE) == 0U)
+    if ((status & INTEL_GEN9_CSB_STATUS_MASK) !=
+        INTEL_GEN9_CSB_STATUS_COMPLETE)
         return INTEL_GEN9_EXECLIST_BUSY;
 
     return intel_gen9_execlist_complete(state, context_id);

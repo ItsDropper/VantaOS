@@ -12,7 +12,6 @@
 
 #define PCI_COMMAND_OFFSET 0x04U
 #define PCI_COMMAND_BUS_MASTER 0x0004U
-#define INTEL_GEN9_CONTEXT_ID_MAX 0x1FFFFFU
 
 static int enable_bus_master(intel_gen9_device_runtime_t *runtime)
 {
@@ -89,8 +88,9 @@ intel_gen9_device_status_t intel_gen9_device_runtime_init(
      * GTTMMADR is BAR0 on the supported Skylake Gen9 profile. BAR sizing and
      * mapping happen while PCI bus mastering is still disabled.
      */
-    if (gpu_pci_mmio_map_sized(device, INTEL_GEN9_GTTMMADR_BAR,
-            INTEL_GEN9_GTTMMADR_SIZE, &runtime->mapping) != GPU_PCI_MMIO_OK) {
+    if (gpu_pci_mmio_map(device, INTEL_GEN9_GTTMMADR_BAR,
+            INTEL_GEN9_GTTMMADR_SIZE, INTEL_GEN9_GTTMMADR_SIZE,
+            &runtime->mapping) != GPU_PCI_MMIO_OK) {
         memset(runtime, 0, sizeof(*runtime));
         return INTEL_GEN9_DEVICE_MMIO_FAILED;
     }

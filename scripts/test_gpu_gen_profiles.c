@@ -45,7 +45,7 @@ static gpu_pci_resource_inventory_t resources_with_bars(void)
         .is_64bit = 1U, .prefetchable = 0U
     };
     resources.bars[1] = (gpu_pci_bar_resource_t) {
-        .base = 0xA0000000ULL, .index = 2U, .is_io = 0U,
+        .base = 0xA0000000ULL, .index = 5U, .is_io = 0U,
         .is_64bit = 0U, .prefetchable = 0U
     };
     resources.count = 2U;
@@ -80,11 +80,11 @@ int main(void)
            INTEL_GEN9_INVALID_ARGUMENT);
 
     resources = resources_with_bars();
-    /* A BAR5-only device must not pass Polaris register-aperture discovery. */
-    resources.bars[1].index = 5U;
+    /* BAR2 is the doorbell aperture, not the Polaris register MMIO BAR. */
+    resources.bars[1].index = 2U;
     assert(amd_polaris_inspect(0x1002U, 0x67DFU, &resources, &amd) ==
            AMD_POLARIS_NO_ASSIGNED_MMIO);
-    resources.bars[1].index = 2U;
+    resources.bars[1].index = 5U;
     assert(amd_polaris_match_id(0x1002U, 0x67DFU));
     assert(amd_polaris_match_id(0x1002U, 0x67C0U));
     assert(!amd_polaris_match_id(0x1002U, 0x744CU));

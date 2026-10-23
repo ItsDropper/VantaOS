@@ -179,10 +179,12 @@ static void test_fail_closed_on_flush_failure(void)
 static uint64_t mapped_leaf_entry(const gpu_page_table_t *table,
                                   uint64_t gpu_address)
 {
-    static const unsigned shifts[] = {39U, 30U, 21U, 12U};
     const gpu_page_table_page_t *page = &table->pages[0];
-    for (size_t level = 0U; level < 3U; ++level) {
-        size_t index = (size_t)((gpu_address >> shifts[level]) & 0x1FFU);
+    for (unsigned level = 0U; level + 1U < table->config.level_count; ++level) {
+        size_t mask = level == 0U ? table->config.root_entry_count - 1U :
+                                   GPU_PAGE_TABLE_ENTRIES - 1U;
+        size_t index = (size_t)((gpu_address >>
+            table->config.index_shifts[level]) & (uint64_t)mask);
         uint64_t physical = page->entries[index] & GPU_PAGE_TABLE_ADDRESS_MASK;
         page = NULL;
         for (size_t i = 0U; i < table->page_count; ++i)
@@ -190,7 +192,8 @@ static uint64_t mapped_leaf_entry(const gpu_page_table_t *table,
                 page = &table->pages[i];
         assert(page != NULL);
     }
-    return page->entries[(gpu_address >> 12U) & 0x1FFU];
+    return page->entries[(gpu_address >>
+        table->config.index_shifts[table->config.level_count - 1U]) & 0x1FFU];
 }
 
 static void test_vendor_vm_backends(void)

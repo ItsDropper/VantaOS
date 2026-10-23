@@ -63,6 +63,7 @@ on:
       - "include/intel_gen9_vm.h"
       - "include/intel_gen9_ggtt.h"
       - "include/intel_gen9_execlist.h"
+      - "include/intel_gen9_device_runtime.h"
       - "drivers/gpu/intel/intel_gen9_ggtt.c"
       - "drivers/gpu/intel/intel_gen9_execlist.c"
       - "scripts/test_intel_gen9_execlist.c"
@@ -956,6 +957,9 @@ jobs:
       - name: Compile PCI-bound Polaris device lifecycle
         run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude -c drivers/gpu/amd/amd_polaris_device_runtime.c -o /tmp/vantaos-amd-polaris-device-runtime.o
 
+
+      - name: Compile PCI-bound Intel Gen9 device lifecycle
+        run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude -c drivers/gpu/intel/intel_gen9_device_runtime.c -o /tmp/vantaos-intel-gen9-device-runtime.o
 
       - name: Compile Intel Gen9 execlist submission tests with strict warnings
         run: |

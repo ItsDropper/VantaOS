@@ -162,7 +162,7 @@ int amd_gpu_configure_runtime(gpu_device_t *device,
 {
     if (device == NULL || binding == NULL ||
         device->state != GPU_DEVICE_DISCOVERED ||
-        device->pci_device == NULL ||
+        device->pci_device == NULL || device->driver_private != NULL ||
         !amd_polaris_match_id(device->identity.vendor_id,
                               device->identity.device_id) ||
         binding->configured != 0U || binding->initialized != 0U ||

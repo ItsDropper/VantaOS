@@ -124,6 +124,11 @@ amd_polaris_gfx_runtime_status_t amd_polaris_gfx_runtime_init(
         return AMD_POLARIS_GFX_RUNTIME_ALLOCATION_FAILED;
     }
 
+    memset(runtime->ring_dma.cpu_address, 0, ring_bytes);
+    memset(runtime->rptr_dma.cpu_address, 0, GPU_DMA_PAGE_SIZE);
+    memset(runtime->fence_dma.cpu_address, 0, GPU_DMA_PAGE_SIZE);
+    __atomic_thread_fence(__ATOMIC_RELEASE);
+
     if (!enable_bus_master(runtime)) {
         if (!cleanup_unstarted(runtime)) {
             runtime->initialized = 1U;

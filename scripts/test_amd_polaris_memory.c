@@ -155,7 +155,7 @@ int main(void)
     fail_map_va = AMD_POLARIS_MEMORY_VA_BASE + 0x3000U;
     {
         amd_polaris_gpu_allocation_t failed = {0};
-        assert(amd_polaris_memory_alloc(&runtime, 8192U, 0x100002000ULL,
+        assert(amd_polaris_memory_alloc(&runtime, 8192U, 0x100003000ULL,
             &failed) == AMD_POLARIS_MEMORY_MAP_FAILED);
         assert(failed.dma.acquired == 0U);
         assert(active_maps() == 3U);

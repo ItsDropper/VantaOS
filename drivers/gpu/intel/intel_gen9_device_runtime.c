@@ -82,6 +82,7 @@ intel_gen9_device_status_t intel_gen9_device_runtime_init(
     memset(runtime, 0, sizeof(*runtime));
     runtime->pci_device = device;
     runtime->context_id = context_id;
+    runtime->context_descriptor = descriptor;
 
     /*
      * GTTMMADR is BAR0 on the supported Skylake Gen9 profile. BAR sizing and
@@ -117,24 +118,30 @@ intel_gen9_device_status_t intel_gen9_device_runtime_init(
     }
 
     if (!enable_bus_master(runtime)) {
-        if (!release_forcewake(runtime) ||
-            gpu_pci_mmio_unmap(&runtime->mapping) != GPU_PCI_MMIO_OK) {
+        /*
+         * A failed readback may still mean the command bit reached hardware.
+         * Keep the mapping alive if clearing it cannot be verified.
+         */
+        if (!disable_bus_master(runtime) || !release_forcewake(runtime)) {
             runtime->initialized = 1U;
             return INTEL_GEN9_DEVICE_PCI_FAILED;
         }
         (void)intel_gen9_execlist_shutdown(&runtime->execlist, 1);
+        if (gpu_pci_mmio_unmap(&runtime->mapping) != GPU_PCI_MMIO_OK) {
+            runtime->initialized = 1U;
+            return INTEL_GEN9_DEVICE_PCI_FAILED;
+        }
         memset(runtime, 0, sizeof(*runtime));
         return INTEL_GEN9_DEVICE_PCI_FAILED;
     }
 
     runtime->initialized = 1U;
-    return AMD_POLARIS_DEVICE_OK;
+    return INTEL_GEN9_DEVICE_OK;
 }
 
 intel_gen9_device_status_t intel_gen9_device_submit(
     intel_gen9_device_runtime_t *runtime)
 {
-    uint64_t descriptor;
     intel_gen9_execlist_status_t status;
 
     if (runtime == NULL || runtime->initialized == 0U ||
@@ -143,17 +150,8 @@ intel_gen9_device_status_t intel_gen9_device_submit(
     if (runtime->faulted != 0U)
         return INTEL_GEN9_DEVICE_NOT_READY;
 
-    if (intel_gen9_execlist_build_descriptor(
-            runtime->context_id == 0U ? 0U :
-                (uint64_t)runtime->context_id, 0U, 0U, &descriptor) ==
-        INTEL_GEN9_EXECLIST_OK)
-        return INTEL_GEN9_DEVICE_INVALID_ARGUMENT;
-
-    /*
-     * Descriptor bits are retained by the caller's context setup in the
-     * runtime extension; this function is intentionally single-flight.
-     */
-    status = intel_gen9_execlist_submit(&runtime->execlist, descriptor, 1);
+    status = intel_gen9_execlist_submit(&runtime->execlist,
+        runtime->context_descriptor, 1);
     return status == INTEL_GEN9_EXECLIST_OK ? INTEL_GEN9_DEVICE_OK :
                                               INTEL_GEN9_DEVICE_SUBMISSION_FAILED;
 }

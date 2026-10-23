@@ -30,7 +30,7 @@ typedef enum amd_polaris_gfx_ring_status {
 } amd_polaris_gfx_ring_status_t;
 
 /*
- * Owns no memory: ring_storage and fence storage remain caller-owned DMA
+ * Zero-initialize the runtime before first use. Owns no memory: ring_storage and fence storage remain caller-owned DMA
  * allocations. All GPU addresses must be device-visible, DMA-coherent, and
  * mapped in the active VM. Keep this object and its buffers at stable addresses.
  */

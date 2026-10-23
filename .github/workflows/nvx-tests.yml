@@ -31,6 +31,8 @@ on:
       - "include/gpu_va.h"
       - "scripts/test_gpu_va.c"
       - "include/gpu_vm.h"
+      - "include/gpu_page_table.h"
+      - "drivers/gpu/core/gpu_page_table.c"
       - "scripts/test_gpu_vm.c"
       - "include/gpu_registers.h"
       - "scripts/test_gpu_registers.c"
@@ -63,6 +65,7 @@ on:
       - "scripts/test_gpu_generation_commands.c"
       - "scripts/test_gpu_generation_registers.c"
       - "scripts/test_gpu_generation_pte.c"
+      - "scripts/test_gpu_page_table.c"
       - "include/gpu.h"
       - "include/gpu_core.h"
       - "include/gpu_vendor.h"
@@ -849,3 +852,15 @@ jobs:
 
       - name: Test permission bits, cache policy and address validation
         run: /tmp/vantaos-gpu-generation-pte-test
+
+
+      - name: Compile four-level GPU page-table tests
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_gpu_page_table.c \
+            drivers/gpu/core/gpu_page_table.c \
+            drivers/gpu/intel/intel_gen9_pte.c \
+            -o /tmp/vantaos-gpu-page-table-test
+
+      - name: Test page-table map/unmap, bounds and failed invalidation
+        run: /tmp/vantaos-gpu-page-table-test

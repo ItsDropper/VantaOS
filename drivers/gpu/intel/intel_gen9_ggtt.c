@@ -190,6 +190,48 @@ intel_gen9_ggtt_status_t intel_gen9_ggtt_invalidate(
     return write_ok ? INTEL_GEN9_GGTT_OK : INTEL_GEN9_GGTT_VERIFY_FAILED;
 }
 
+
+static int ggtt_vm_map_page(void *context, uint64_t gpu_address,
+                            uint64_t physical_address, unsigned access)
+{
+    intel_gen9_ggtt_vm_context_t *vm = context;
+    if ((access & (GPU_VM_ACCESS_READ | GPU_VM_ACCESS_WRITE)) == 0U ||
+        (access & ~(GPU_VM_ACCESS_READ | GPU_VM_ACCESS_WRITE)) != 0U)
+        return 0;
+    return intel_gen9_ggtt_map_page(vm->gttmmadr, gpu_address,
+                                    physical_address) == INTEL_GEN9_GGTT_OK;
+}
+
+static int ggtt_vm_unmap_page(void *context, uint64_t gpu_address)
+{
+    intel_gen9_ggtt_vm_context_t *vm = context;
+    return intel_gen9_ggtt_unmap_page(vm->gttmmadr, gpu_address) ==
+           INTEL_GEN9_GGTT_OK;
+}
+
+static int ggtt_vm_flush(void *context)
+{
+    intel_gen9_ggtt_vm_context_t *vm = context;
+    return intel_gen9_ggtt_invalidate(vm->gttmmadr, vm->forcewake) ==
+           INTEL_GEN9_GGTT_OK;
+}
+
+int intel_gen9_ggtt_make_vm_ops(intel_gen9_ggtt_vm_context_t *context,
+                                gpu_vm_ops_t *out_ops)
+{
+    if (context == 0 || out_ops == 0 || context->gttmmadr == 0 ||
+        context->forcewake == 0 ||
+        context->forcewake->acquire_render == 0 ||
+        context->forcewake->release_render == 0 ||
+        !valid_aperture(context->gttmmadr))
+        return 0;
+    out_ops->context = context;
+    out_ops->map_page = ggtt_vm_map_page;
+    out_ops->unmap_page = ggtt_vm_unmap_page;
+    out_ops->flush = ggtt_vm_flush;
+    return 1;
+}
+
 static int forcewake_change(const gpu_mmio_region_t *mmio,
                             unsigned timeout_iterations, int acquire)
 {

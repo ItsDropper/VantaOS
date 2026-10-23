@@ -165,7 +165,7 @@ intel_gen9_execlist_status_t intel_gen9_execlist_poll_csb(
      * 16 bits select fields, lower 16 bits carry the replacement value.
      */
     if (gpu_mmio_write32(state->mmio, INTEL_GEN9_CSB_PTR_OFFSET,
-            (0x7U << 24U) | ((next_index & 0x7U) << 8U)) != GPU_MMIO_OK) {
+            (0x7U << 16U) | ((next_index & 0x7U) << 8U)) != GPU_MMIO_OK) {
         state->faulted = 1U;
         return INTEL_GEN9_EXECLIST_MMIO_ERROR;
     }

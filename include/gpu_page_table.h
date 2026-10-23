@@ -77,6 +77,7 @@ typedef struct gpu_page_table {
  * encoding, DMA-coherent allocation, root installation and TLB invalidation.
  * Caller must quiesce the GPU before destroy frees any table.
  */
+/* Zero-initialize table before init_config/init. Serialize all map/unmap/flush calls. */
 gpu_page_table_status_t gpu_page_table_init_config(
     gpu_page_table_t *table, const gpu_page_table_ops_t *ops,
     const gpu_page_table_config_t *config);

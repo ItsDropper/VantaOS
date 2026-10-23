@@ -49,8 +49,9 @@ static int flush(void *context, uint64_t root_physical)
 static const gpu_page_table_config_t amd_config = {
     .level_count = 2U,
     .virtual_address_bits = 36U,
-    .root_entry_count = 32768U,
-    .index_shifts = {21U, 12U, 0U, 0U}
+    .root_entry_count = 4U,
+    .leaf_entry_count = 1U << 22U,
+    .index_shifts = {34U, 12U, 0U, 0U}
 };
 
 const gpu_page_table_config_t *amd_polaris_vm_config(void)

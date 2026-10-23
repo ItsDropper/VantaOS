@@ -70,6 +70,8 @@ on:
       - "include/amd_polaris_pte.h"
       - "include/amd_polaris_vm.h"
       - "include/amd_polaris_vm_hw.h"
+      - "include/amd_polaris_vm_runtime.h"
+      - "drivers/gpu/amd/amd_polaris_vm_runtime.c"
       - "drivers/gpu/amd/amd_polaris_vm_hw.c"
       - "drivers/gpu/amd/amd_polaris_vm.c"
       - "drivers/gpu/amd/amd_polaris_pte.c"

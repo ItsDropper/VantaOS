@@ -58,6 +58,27 @@ amd_polaris_vm_hw_status_t amd_polaris_vm_invalidate(
     return AMD_POLARIS_VM_HW_INVALIDATE_TIMEOUT;
 }
 
+
+amd_polaris_vm_hw_status_t amd_polaris_vm_disable_context1(
+    const gpu_mmio_region_t *mmio, unsigned timeout_iterations,
+    int device_quiesced)
+{
+    uint32_t control, observed;
+    if (mmio == 0 || timeout_iterations == 0U ||
+        mmio->length < REG_VM_CONTEXT1_CNTL + sizeof(uint32_t))
+        return AMD_POLARIS_VM_HW_INVALID_ARGUMENT;
+    if (!device_quiesced)
+        return AMD_POLARIS_VM_HW_DEVICE_BUSY;
+    if (!read32(mmio, REG_VM_CONTEXT1_CNTL, &control))
+        return AMD_POLARIS_VM_HW_MMIO_ERROR;
+    control &= ~VM_CONTEXT_ENABLE;
+    if (!write32(mmio, REG_VM_CONTEXT1_CNTL, control) ||
+        !read32(mmio, REG_VM_CONTEXT1_CNTL, &observed) ||
+        (observed & VM_CONTEXT_ENABLE) != 0U)
+        return AMD_POLARIS_VM_HW_CONTEXT_DISABLE_FAILED;
+    return amd_polaris_vm_invalidate(mmio, timeout_iterations);
+}
+
 amd_polaris_vm_hw_status_t amd_polaris_vm_install_root(
     const gpu_mmio_region_t *mmio, uint64_t root_physical,
     uint64_t va_start, uint64_t va_size, uint64_t fault_page_physical,

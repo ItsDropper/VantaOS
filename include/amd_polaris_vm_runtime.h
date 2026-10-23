@@ -39,12 +39,22 @@ typedef struct amd_polaris_vm_runtime {
     unsigned timeout_iterations;
 } amd_polaris_vm_runtime_t;
 
+/* Caller-supplied allocator variant for platforms with their own DMA policy. */
 amd_polaris_vm_runtime_status_t amd_polaris_vm_runtime_configure(
     amd_polaris_vm_runtime_t *runtime, void *allocator_context,
     int (*allocate_table)(void *, size_t, gpu_page_table_page_t *),
     void (*free_page)(void *, gpu_page_table_page_t *),
     const gpu_mmio_region_t *mmio, uint64_t fault_page_physical,
     unsigned timeout_iterations);
+
+/*
+ * Native x86 path: uses the kernel's contiguous DMA allocator for root/child
+ * tables and the required 32 MiB Polaris leaf table. DMA remains below 4 GiB
+ * under the current PMM contract.
+ */
+amd_polaris_vm_runtime_status_t amd_polaris_vm_runtime_configure_dma(
+    amd_polaris_vm_runtime_t *runtime, const gpu_mmio_region_t *mmio,
+    uint64_t fault_page_physical, unsigned timeout_iterations);
 
 amd_polaris_vm_runtime_status_t amd_polaris_vm_runtime_init_table(
     amd_polaris_vm_runtime_t *runtime, gpu_page_table_t *table,

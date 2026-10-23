@@ -73,7 +73,7 @@ intel_gen9_execlist_status_t intel_gen9_execlist_submit(
 
     /*
      * Gen8/Gen9 ELSP receives high/low for slot 1, then high/low for slot 0.
-     * Slot 1 is empty here; CSB bookkeeping must serialize subsequent submits.
+     * Slot 1 is empty here; CSB bookkeeping serializes later submissions.
      */
     __atomic_thread_fence(__ATOMIC_RELEASE);
     if (gpu_mmio_write32(state->mmio, port, 0U) != GPU_MMIO_OK ||
@@ -104,6 +104,79 @@ intel_gen9_execlist_status_t intel_gen9_execlist_complete(
     state->pending = 0U;
     state->pending_context_id = 0U;
     return INTEL_GEN9_EXECLIST_OK;
+}
+
+intel_gen9_execlist_status_t intel_gen9_execlist_poll_csb(
+    intel_gen9_execlist_t *state, uint32_t *out_context_id,
+    uint32_t *out_status)
+{
+    uint32_t pointer, read_index, write_index, next_index;
+    uint32_t status, context_id;
+    size_t entry_offset;
+
+    if (state == NULL || state->initialized == 0U || state->mmio == NULL ||
+        out_context_id == NULL || out_status == NULL)
+        return INTEL_GEN9_EXECLIST_INVALID_ARGUMENT;
+    *out_context_id = 0U;
+    *out_status = 0U;
+    if (state->faulted != 0U)
+        return INTEL_GEN9_EXECLIST_NOT_READY;
+    if (state->mmio->length < INTEL_GEN9_CSB_MIN_MMIO_BYTES)
+        return INTEL_GEN9_EXECLIST_INVALID_ARGUMENT;
+
+    if (gpu_mmio_read32(state->mmio, INTEL_GEN9_CSB_PTR_OFFSET,
+                        &pointer) != GPU_MMIO_OK) {
+        state->faulted = 1U;
+        return INTEL_GEN9_EXECLIST_MMIO_ERROR;
+    }
+    write_index = pointer & 0x7U;
+    if (write_index >= INTEL_GEN9_CSB_ENTRIES) {
+        state->faulted = 1U;
+        return INTEL_GEN9_EXECLIST_VERIFY_FAILED;
+    }
+
+    if (state->csb_read_valid == 0U) {
+        read_index = (pointer >> 8U) & 0x7U;
+        if (read_index >= INTEL_GEN9_CSB_ENTRIES) {
+            state->faulted = 1U;
+            return INTEL_GEN9_EXECLIST_VERIFY_FAILED;
+        }
+        state->csb_read_index = (uint8_t)read_index;
+        state->csb_read_valid = 1U;
+    } else {
+        read_index = state->csb_read_index;
+    }
+
+    if (read_index == write_index)
+        return INTEL_GEN9_EXECLIST_BUSY;
+
+    next_index = (read_index + 1U) % INTEL_GEN9_CSB_ENTRIES;
+    entry_offset = INTEL_GEN9_CSB_BASE_OFFSET +
+                   (size_t)next_index * 2U * sizeof(uint32_t);
+    if (gpu_mmio_read32(state->mmio, entry_offset, &status) != GPU_MMIO_OK ||
+        gpu_mmio_read32(state->mmio, entry_offset + sizeof(uint32_t),
+                        &context_id) != GPU_MMIO_OK) {
+        state->faulted = 1U;
+        return INTEL_GEN9_EXECLIST_MMIO_ERROR;
+    }
+
+    /*
+     * CSB read-pointer writes use the Intel masked-write encoding: upper
+     * 16 bits select fields, lower 16 bits carry the replacement value.
+     */
+    if (gpu_mmio_write32(state->mmio, INTEL_GEN9_CSB_PTR_OFFSET,
+            (0x7U << 24U) | ((next_index & 0x7U) << 8U)) != GPU_MMIO_OK) {
+        state->faulted = 1U;
+        return INTEL_GEN9_EXECLIST_MMIO_ERROR;
+    }
+
+    state->csb_read_index = (uint8_t)next_index;
+    *out_context_id = context_id;
+    *out_status = status;
+    if ((status & INTEL_GEN9_CSB_STATUS_COMPLETE) == 0U)
+        return INTEL_GEN9_EXECLIST_BUSY;
+
+    return intel_gen9_execlist_complete(state, context_id);
 }
 
 intel_gen9_execlist_status_t intel_gen9_execlist_shutdown(

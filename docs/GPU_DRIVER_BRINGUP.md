@@ -54,7 +54,7 @@ each relevant path is verified.
 PCI family classification and read-only BAR discovery are implemented.
 Hardware initialization remains deliberately disabled.
 
-The first scoped profile is Skylake Gen9 GT2 (`8086:1912`, `8086:1916`). The GGTT memory runtime maps the audited 16 MiB GTTMMADR BAR0, allocates contiguous DMA, installs/verifies GGTT PTEs, invalidates the GTT cache, rejects overlapping GPU VAs and reclaims addresses only after successful unmap/invalidation. The separate execlist runtime consumes CSB completion events and validates fence writeback, but still requires a caller-prepared LRCA/context and command ring. GuC firmware loading, LRCA/context-image construction, command-batch generation, integration of memory allocations into a self-created render context, reset/recovery and physical-hardware validation remain unfinished.
+The first scoped profile is Skylake Gen9 GT2 (`8086:1912`, `8086:1916`). The GGTT memory runtime maps the audited 16 MiB GTTMMADR BAR0, allocates contiguous DMA, installs/verifies GGTT PTEs only into empty slots, preserves pre-existing firmware/scanout mappings, invalidates the GTT cache, rejects overlapping GPU VAs and reclaims addresses only after successful unmap/invalidation. The separate execlist runtime consumes CSB completion events and validates fence writeback, but still requires a caller-prepared LRCA/context and command ring. GuC firmware loading, LRCA/context-image construction, command-batch generation, integration of memory allocations into a self-created render context, reset/recovery and physical-hardware validation remain unfinished.
 
 ### AMD
 

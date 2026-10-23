@@ -59,22 +59,25 @@ static int enable_bus_master(amd_polaris_gfx_runtime_t *runtime)
     if (!pci_write_config16(runtime->pci_device, PCI_COMMAND_OFFSET,
             (uint16_t)(command | PCI_COMMAND_BUS_MASTER)))
         return 0;
+    /* From this point onward, preserve DMA until the bit is cleared again. */
+    runtime->bus_master_enabled_by_us = 1U;
     command = pci_read_config16(runtime->pci_device, PCI_COMMAND_OFFSET);
     if (command == 0xFFFFU ||
         (command & PCI_COMMAND_BUS_MASTER) == 0U) {
-        (void)pci_write_config16(runtime->pci_device, PCI_COMMAND_OFFSET,
-                                 runtime->original_pci_command);
+        (void)restore_bus_master(runtime);
         return 0;
     }
-    runtime->bus_master_enabled_by_us = 1U;
     return 1;
 }
 
-static void cleanup_unstarted(amd_polaris_gfx_runtime_t *runtime)
+static int cleanup_unstarted(amd_polaris_gfx_runtime_t *runtime)
 {
-    (void)restore_bus_master(runtime);
+    /* Never release DMA if the device may still have bus mastering enabled. */
+    if (!restore_bus_master(runtime))
+        return 0;
     release_dma(runtime);
     memset(runtime, 0, sizeof(*runtime));
+    return 1;
 }
 
 amd_polaris_gfx_runtime_status_t amd_polaris_gfx_runtime_init(
@@ -122,7 +125,10 @@ amd_polaris_gfx_runtime_status_t amd_polaris_gfx_runtime_init(
     }
 
     if (!enable_bus_master(runtime)) {
-        cleanup_unstarted(runtime);
+        if (!cleanup_unstarted(runtime)) {
+            runtime->initialized = 1U;
+            runtime->faulted = 1U;
+        }
         return AMD_POLARIS_GFX_RUNTIME_PCI_ERROR;
     }
 
@@ -140,7 +146,10 @@ amd_polaris_gfx_runtime_status_t amd_polaris_gfx_runtime_init(
                 AMD_POLARIS_GFX_RING_OK)
                 return AMD_POLARIS_GFX_RUNTIME_RING_ERROR;
         }
-        cleanup_unstarted(runtime);
+        if (!cleanup_unstarted(runtime)) {
+            runtime->initialized = 1U;
+            runtime->faulted = 1U;
+        }
         return AMD_POLARIS_GFX_RUNTIME_RING_ERROR;
     }
 

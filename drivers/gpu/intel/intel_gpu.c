@@ -72,6 +72,9 @@ int intel_gpu_describe(const struct pci_device *device,
     out_descriptor->pci = match;
     if (!gpu_pci_resources_scan(device, &out_descriptor->resources))
         return 0;
+    out_descriptor->gen9_profile_status = intel_gen9_inspect(
+        device->vendor_id, device->device_id, &out_descriptor->resources,
+        &out_descriptor->gen9_profile);
 
     command = pci_read_config16(device, 0x04U);
     out_descriptor->pci_command = command;

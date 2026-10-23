@@ -49,15 +49,20 @@ on:
       - "drivers/gpu/amd/**"
       - "include/intel_gen9.h"
       - "include/intel_gen9_regs.h"
+      - "include/intel_gen9_pte.h"
+      - "drivers/gpu/intel/intel_gen9_pte.c"
       - "drivers/gpu/intel/intel_gen9_regs.c"
       - "include/intel_gen9_commands.h"
       - "include/amd_polaris.h"
       - "include/amd_polaris_regs.h"
+      - "include/amd_polaris_pte.h"
+      - "drivers/gpu/amd/amd_polaris_pte.c"
       - "drivers/gpu/amd/amd_polaris_regs.c"
       - "include/amd_polaris_commands.h"
       - "scripts/test_gpu_gen_profiles.c"
       - "scripts/test_gpu_generation_commands.c"
       - "scripts/test_gpu_generation_registers.c"
+      - "scripts/test_gpu_generation_pte.c"
       - "include/gpu.h"
       - "include/gpu_core.h"
       - "include/gpu_vendor.h"
@@ -832,3 +837,15 @@ jobs:
 
       - name: Test bounded, read-only generation-specific register snapshots
         run: /tmp/vantaos-gpu-generation-registers-test
+
+
+      - name: Compile Intel Gen9 and Polaris PTE encoding tests
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_gpu_generation_pte.c \
+            drivers/gpu/intel/intel_gen9_pte.c \
+            drivers/gpu/amd/amd_polaris_pte.c \
+            -o /tmp/vantaos-gpu-generation-pte-test
+
+      - name: Test permission bits, cache policy and address validation
+        run: /tmp/vantaos-gpu-generation-pte-test

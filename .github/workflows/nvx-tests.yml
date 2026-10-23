@@ -950,11 +950,7 @@ jobs:
         run: /tmp/vantaos-intel-gen9-execlist-test
 
       - name: Compile DMA-backed page-table allocator tests with strict warnings
-        run: |
-          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \\
-            scripts/test_gpu_dma_page_table.c drivers/gpu/core/gpu_dma_page_table.c \\
-            drivers/gpu/core/gpu_dma.c \\
-            -o /tmp/vantaos-gpu-dma-page-table-test
+        run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_gpu_dma_page_table.c drivers/gpu/core/gpu_dma_page_table.c drivers/gpu/core/gpu_dma.c -o /tmp/vantaos-gpu-dma-page-table-test
 
       - name: Test contiguous 32 MiB Polaris leaf-table allocation and release
         run: /tmp/vantaos-gpu-dma-page-table-test

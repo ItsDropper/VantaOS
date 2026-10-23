@@ -80,7 +80,7 @@ static int halt_cp(const gpu_mmio_region_t *mmio)
 amd_polaris_gfx_ring_status_t amd_polaris_gfx_ring_init(
     amd_polaris_gfx_ring_t *ring, const gpu_mmio_region_t *mmio,
     volatile uint32_t *ring_storage, uint64_t ring_gpu_address,
-    size_t ring_bytes, uint64_t rptr_gpu_address,
+    size_t ring_bytes, uint64_t rptr_gpu_address, uint8_t vmid,
     int firmware_ready, int device_quiesced)
 {
     uint32_t control, observed;
@@ -92,7 +92,7 @@ amd_polaris_gfx_ring_status_t amd_polaris_gfx_ring_init(
         ring_bytes > AMD_POLARIS_GFX_RING_MAX_BYTES ||
         !is_power_of_two(ring_bytes) || (ring_bytes & 7U) != 0U ||
         (ring_gpu_address & 0xFFU) != 0U ||
-        (rptr_gpu_address & 3U) != 0U ||
+        (rptr_gpu_address & 3U) != 0U || vmid >= 16U ||
         ring_gpu_address > AMD_POLARIS_GPU_ADDRESS_MAX ||
         rptr_gpu_address > AMD_POLARIS_GPU_ADDRESS_MAX ||
         ring_gpu_address > AMD_POLARIS_GPU_ADDRESS_MAX - (ring_bytes - 1U) ||
@@ -113,6 +113,7 @@ amd_polaris_gfx_ring_status_t amd_polaris_gfx_ring_init(
     ring->ring_storage = ring_storage;
     ring->ring_bytes = ring_bytes;
     ring->ring_gpu_address = ring_gpu_address;
+    ring->vmid = vmid;
     /*
      * Publish a shutdown-capable handle before the first MMIO side effect.
      * On a partial setup failure, retain caller-owned DMA until shutdown can
@@ -133,7 +134,8 @@ amd_polaris_gfx_ring_status_t amd_polaris_gfx_ring_init(
                   control | CP_RB_RPTR_WRITE_ENABLE) ||
         !write32(mmio, REG_CP_RB0_WPTR, 0U) ||
         !write32(mmio, REG_CP_RB_WPTR_DELAY, 0U) ||
-        !write32(mmio, REG_CP_RB_VMID, 0U) ||
+        !write32(mmio, REG_CP_RB_VMID, (uint32_t)vmid) ||
+        !readback(mmio, REG_CP_RB_VMID, (uint32_t)vmid) ||
         !write32(mmio, REG_CP_RB0_RPTR_ADDR, (uint32_t)rptr_gpu_address) ||
         !write32(mmio, REG_CP_RB0_RPTR_ADDR_HI,
                  (uint32_t)(rptr_gpu_address >> 32U) & 0xFFFFU) ||

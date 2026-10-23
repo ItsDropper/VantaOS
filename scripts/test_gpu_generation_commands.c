@@ -99,10 +99,50 @@ static void test_amd_pm4_noop_stream(void)
            AMD_POLARIS_PM4_EMPTY);
 }
 
+
+static void test_amd_fence_packet(void)
+{
+    uint32_t words[AMD_POLARIS_PM4_FENCE_DWORDS];
+    size_t count = 77U;
+    const uint64_t target = 0x0000456789A000ULL;
+    const uint32_t value = 0xD00DFEEDU;
+
+    assert(amd_polaris_build_fence_packet(words, 5U, target, value, &count) ==
+           AMD_POLARIS_PM4_OK);
+    assert(count == AMD_POLARIS_PM4_FENCE_DWORDS);
+    assert(amd_polaris_validate_fence_packet(words, count, target, value) ==
+           AMD_POLARIS_PM4_OK);
+
+    words[2] ^= 4U;
+    assert(amd_polaris_validate_fence_packet(words, count, target, value) ==
+           AMD_POLARIS_PM4_UNSUPPORTED_PACKET);
+    words[2] ^= 4U;
+    words[4] ^= 1U;
+    assert(amd_polaris_validate_fence_packet(words, count, target, value) ==
+           AMD_POLARIS_PM4_UNSUPPORTED_PACKET);
+    words[4] ^= 1U;
+    words[1] ^= 1U;
+    assert(amd_polaris_validate_fence_packet(words, count, target, value) ==
+           AMD_POLARIS_PM4_UNSUPPORTED_PACKET);
+
+    assert(amd_polaris_build_fence_packet(words, 4U, target, value, &count) ==
+           AMD_POLARIS_PM4_TOO_LARGE);
+    assert(count == 0U);
+    assert(amd_polaris_build_fence_packet(words, 5U, target + 1U, value,
+                                           &count) ==
+           AMD_POLARIS_PM4_INVALID_ARGUMENT);
+    assert(amd_polaris_build_fence_packet(words, 5U, 1ULL << 48U, value,
+                                           &count) ==
+           AMD_POLARIS_PM4_INVALID_ARGUMENT);
+    assert(amd_polaris_build_fence_packet(words, 5U, target, value, NULL) ==
+           AMD_POLARIS_PM4_INVALID_ARGUMENT);
+}
+
 int main(void)
 {
     test_intel_batch();
     test_intel_fence_batch();
+    test_amd_fence_packet();
     test_amd_pm4_noop_stream();
     return 0;
 }

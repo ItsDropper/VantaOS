@@ -21,10 +21,11 @@ static int enable_bus_master(intel_gen9_device_runtime_t *runtime)
     if (command == 0xFFFFU ||
         (command & PCI_COMMAND_BUS_MASTER) != 0U)
         return 0;
+    /* Conservatively own cleanup even if config write readback fails. */
+    runtime->bus_master_enabled_by_us = 1U;
     if (!pci_write_config16(runtime->pci_device, PCI_COMMAND_OFFSET,
             (uint16_t)(command | PCI_COMMAND_BUS_MASTER)))
         return 0;
-    runtime->bus_master_enabled_by_us = 1U;
     command = pci_read_config16(runtime->pci_device, PCI_COMMAND_OFFSET);
     return command != 0xFFFFU &&
            (command & PCI_COMMAND_BUS_MASTER) != 0U;

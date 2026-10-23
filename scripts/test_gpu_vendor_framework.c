@@ -144,6 +144,7 @@ int main(void)
     assert(match.is_known_device_id == 1U);
     assert(intel_gpu_match(&intel));
     assert(intel_gpu_describe(&intel, &intel_desc));
+    assert(intel_desc.gen9_profile_status == INTEL_GEN9_UNSUPPORTED_DEVICE);
     assert(intel_desc.firmware_required == 1U);
     assert(intel_desc.acceleration_ready == 0U);
     assert(intel_desc.resources.count == 0U);
@@ -161,6 +162,7 @@ int main(void)
     assert(match.architecture == GPU_ARCH_AMD_RDNA3);
     assert(amd_gpu_match(&amd));
     assert(amd_gpu_describe(&amd, &amd_desc));
+    assert(amd_desc.polaris_profile_status == AMD_POLARIS_UNSUPPORTED_DEVICE);
     assert(amd_desc.firmware_required == 1U);
     assert(amd_desc.acceleration_ready == 0U);
     assert(amd_desc.resources.count == 0U);

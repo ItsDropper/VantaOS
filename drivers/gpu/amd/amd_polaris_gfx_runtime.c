@@ -143,7 +143,7 @@ amd_polaris_gfx_runtime_status_t amd_polaris_gfx_runtime_init(
     ring_status = amd_polaris_gfx_ring_init(
         &runtime->ring, mmio, (volatile uint32_t *)runtime->ring_dma.cpu_address,
         runtime->ring_dma.gpu_address, ring_bytes, runtime->rptr_dma.gpu_address,
-        firmware_ready, device_quiesced);
+        0U, firmware_ready, device_quiesced);
     if (ring_status != AMD_POLARIS_GFX_RING_OK) {
         if (runtime->ring.initialized != 0U) {
             runtime->initialized = 1U;

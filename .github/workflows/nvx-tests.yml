@@ -64,6 +64,7 @@ on:
       - "include/intel_gen9_ggtt.h"
       - "include/intel_gen9_execlist.h"
       - "include/intel_gen9_device_runtime.h"
+      - "scripts/test_intel_gen9_device_runtime.c"
       - "drivers/gpu/intel/intel_gen9_ggtt.c"
       - "drivers/gpu/intel/intel_gen9_execlist.c"
       - "scripts/test_intel_gen9_execlist.c"
@@ -960,6 +961,12 @@ jobs:
 
       - name: Compile PCI-bound Intel Gen9 device lifecycle
         run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude -c drivers/gpu/intel/intel_gen9_device_runtime.c -o /tmp/vantaos-intel-gen9-device-runtime.o
+
+      - name: Compile Gen9 device-runtime lifecycle tests
+        run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_intel_gen9_device_runtime.c drivers/gpu/intel/intel_gen9_device_runtime.c -o /tmp/vantaos-intel-gen9-device-runtime-test
+
+      - name: Test Gen9 submission, completion timeout and quiesce-gated teardown
+        run: /tmp/vantaos-intel-gen9-device-runtime-test
 
       - name: Compile Intel Gen9 execlist submission tests with strict warnings
         run: |

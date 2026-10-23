@@ -39,7 +39,7 @@ intel_gen9_status_t intel_gen9_inspect(
     if (bar == NULL || bar->base == 0U)
         return INTEL_GEN9_NO_ASSIGNED_GTTMMADR;
     if (bar->is_io != 0U || bar->is_64bit == 0U ||
-        (bar->base & 0xFFFFU) != 0U)
+        (bar->base & 0xFFFU) != 0U)
         return INTEL_GEN9_INVALID_GTTMMADR;
 
     out_profile->gttmmadr_base = bar->base;

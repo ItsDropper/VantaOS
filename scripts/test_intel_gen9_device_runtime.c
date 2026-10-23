@@ -6,6 +6,7 @@
  */
 #include "intel_gen9_device_runtime.h"
 #include "intel_gen9.h"
+#include "intel_gen9_ggtt.h"
 
 #include <assert.h>
 #include <stdint.h>

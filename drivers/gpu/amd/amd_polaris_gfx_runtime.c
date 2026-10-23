@@ -56,11 +56,14 @@ static int enable_bus_master(amd_polaris_gfx_runtime_t *runtime)
     if ((command & PCI_COMMAND_BUS_MASTER) != 0U)
         return 1;
 
+    /*
+     * Conservatively own cleanup before the write: config-space readback may
+     * fail after the bus-master bit has already reached the device.
+     */
+    runtime->bus_master_enabled_by_us = 1U;
     if (!pci_write_config16(runtime->pci_device, PCI_COMMAND_OFFSET,
             (uint16_t)(command | PCI_COMMAND_BUS_MASTER)))
         return 0;
-    /* From this point onward, preserve DMA until the bit is cleared again. */
-    runtime->bus_master_enabled_by_us = 1U;
     command = pci_read_config16(runtime->pci_device, PCI_COMMAND_OFFSET);
     if (command == 0xFFFFU ||
         (command & PCI_COMMAND_BUS_MASTER) == 0U) {

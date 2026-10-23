@@ -22,6 +22,7 @@ static unsigned char dma_memory[GPU_DMA_MAX_BYTES]
     __attribute__((aligned(GPU_DMA_PAGE_SIZE)));
 static size_t dma_used;
 static uint16_t pci_command = 0x0002U;
+static int reject_bus_master_clear;
 
 int heap_is_initialized(void) { return 1; }
 void *kmalloc(size_t size) { return malloc(size); }
@@ -38,6 +39,9 @@ int pci_write_config16(const struct pci_device *device, uint8_t offset,
 {
     (void)device;
     if (offset != 0x04U)
+        return 0;
+    if (reject_bus_master_clear &&
+        (value & PCI_COMMAND_BUS_MASTER) == 0U)
         return 0;
     pci_command = value;
     return 1;
@@ -126,6 +130,13 @@ int main(void)
 
     assert(amd_polaris_gfx_runtime_shutdown(&runtime, 0) ==
            AMD_POLARIS_GFX_RUNTIME_NOT_READY);
+    reject_bus_master_clear = 1;
+    assert(amd_polaris_gfx_runtime_shutdown(&runtime, 1) ==
+           AMD_POLARIS_GFX_RUNTIME_SHUTDOWN_FAILED);
+    assert(runtime.initialized != 0U);
+    assert(runtime.ring_dma.acquired && runtime.rptr_dma.acquired &&
+           runtime.fence_dma.acquired);
+    reject_bus_master_clear = 0;
     assert(amd_polaris_gfx_runtime_shutdown(&runtime, 1) ==
            AMD_POLARIS_GFX_RUNTIME_OK);
     assert(runtime.initialized == 0U);

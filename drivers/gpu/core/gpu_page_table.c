@@ -56,7 +56,8 @@ static gpu_page_table_status_t allocate_table_page(
 
 static gpu_page_table_status_t walk_to_leaf(
     gpu_page_table_t *table, uint64_t gpu_address,
-    gpu_page_table_page_t **out_leaf, size_t *out_leaf_index)
+    int create_missing, gpu_page_table_page_t **out_leaf,
+    size_t *out_leaf_index)
 {
     gpu_page_table_page_t *page = &table->pages[0];
     for (unsigned level = 0U; level < GPU_PAGE_TABLE_LEVELS - 1U; ++level) {
@@ -67,9 +68,8 @@ static gpu_page_table_status_t walk_to_leaf(
         if ((entry & 1U) == 0U) {
             uint64_t encoded;
             gpu_page_table_status_t status;
-            if (!table->ops.encode_directory(table->ops.context, 0U, &encoded))
-                return GPU_PAGE_TABLE_ENCODE_FAILED;
-            /* Allocate first; re-encode with the actual physical address. */
+            if (!create_missing)
+                return GPU_PAGE_TABLE_NOT_MAPPED;
             status = allocate_table_page(table, &child);
             if (status != GPU_PAGE_TABLE_OK)
                 return status;
@@ -136,7 +136,7 @@ gpu_page_table_status_t gpu_page_table_map(
         (physical_address & ~GPU_PAGE_TABLE_ADDRESS_MASK) != 0U)
         return GPU_PAGE_TABLE_ADDRESS_INVALID;
 
-    status = walk_to_leaf(table, gpu_address, &leaf, &index);
+    status = walk_to_leaf(table, gpu_address, 1, &leaf, &index);
     if (status != GPU_PAGE_TABLE_OK)
         return status;
     if ((leaf->entries[index] & 1U) != 0U)
@@ -166,7 +166,7 @@ gpu_page_table_status_t gpu_page_table_unmap(
         return GPU_PAGE_TABLE_FAULTED;
     if ((gpu_address & 0xFFFU) != 0U || gpu_address >= (1ULL << 48U))
         return GPU_PAGE_TABLE_ADDRESS_INVALID;
-    status = walk_to_leaf(table, gpu_address, &leaf, &index);
+    status = walk_to_leaf(table, gpu_address, 0, &leaf, &index);
     if (status != GPU_PAGE_TABLE_OK)
         return status;
     if ((leaf->entries[index] & 1U) == 0U)

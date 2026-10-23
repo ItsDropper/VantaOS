@@ -148,6 +148,47 @@ amd_polaris_device_status_t amd_polaris_device_runtime_shutdown(
     return AMD_POLARIS_DEVICE_NOT_READY;
 }
 
+intel_gen9_device_status_t intel_gen9_device_runtime_init(
+    intel_gen9_device_runtime_t *runtime, const struct pci_device *device,
+    uint64_t lrca_ggtt_address, uint32_t context_id,
+    uint16_t descriptor_flags, int context_ready, int device_quiesced)
+{
+    (void)runtime; (void)device; (void)lrca_ggtt_address;
+    (void)context_id; (void)descriptor_flags;
+    (void)context_ready; (void)device_quiesced;
+    return INTEL_GEN9_DEVICE_NOT_READY;
+}
+
+intel_gen9_device_status_t intel_gen9_device_submit(
+    intel_gen9_device_runtime_t *runtime)
+{
+    (void)runtime;
+    return INTEL_GEN9_DEVICE_NOT_READY;
+}
+
+intel_gen9_device_status_t intel_gen9_device_wait(
+    intel_gen9_device_runtime_t *runtime, unsigned timeout_iterations)
+{
+    (void)runtime; (void)timeout_iterations;
+    return INTEL_GEN9_DEVICE_NOT_READY;
+}
+
+intel_gen9_device_status_t intel_gen9_device_runtime_shutdown(
+    intel_gen9_device_runtime_t *runtime, int device_quiesced)
+{
+    (void)runtime; (void)device_quiesced;
+    return INTEL_GEN9_DEVICE_NOT_READY;
+}
+
+intel_gen9_execlist_status_t intel_gen9_execlist_build_descriptor(
+    uint64_t lrca_ggtt_address, uint32_t context_id, uint16_t flags,
+    uint64_t *out_descriptor)
+{
+    (void)lrca_ggtt_address; (void)context_id; (void)flags;
+    if (out_descriptor != NULL) *out_descriptor = 0U;
+    return INTEL_GEN9_EXECLIST_INVALID_DESCRIPTOR;
+}
+
 int main(void)
 {
     const struct pci_device intel = {

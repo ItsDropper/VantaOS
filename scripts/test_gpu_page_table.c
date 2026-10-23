@@ -16,10 +16,12 @@
 #include <string.h>
 
 #define MOCK_PAGES GPU_PAGE_TABLE_MAX_PAGES
+#define MOCK_LARGE_TABLE_ENTRIES (1U << 22U)
+
+static uint64_t mock_large_table[MOCK_LARGE_TABLE_ENTRIES];
 
 typedef struct mock_allocator {
     uint64_t entries[MOCK_PAGES][GPU_PAGE_TABLE_ENTRIES];
-    uint64_t large_root[32768U];
     uint8_t in_use[MOCK_PAGES];
     size_t allocations;
     size_t frees;
@@ -32,7 +34,7 @@ static int mock_alloc(void *context, size_t entry_count,
                       gpu_page_table_page_t *out)
 {
     mock_allocator_t *mock = context;
-    if (entry_count == 0U || entry_count > 32768U)
+    if (entry_count == 0U || entry_count > MOCK_LARGE_TABLE_ENTRIES)
         return 0;
     if (mock->fail_allocation)
         return 0;
@@ -41,7 +43,7 @@ static int mock_alloc(void *context, size_t entry_count,
             mock->in_use[i] = 1U;
             memset(mock->entries[i], 0, sizeof(mock->entries[i]));
             out->entries = entry_count > GPU_PAGE_TABLE_ENTRIES ?
-                           mock->large_root : mock->entries[i];
+                           mock_large_table : mock->entries[i];
             out->physical_address = 0x100000ULL + i * 0x100000ULL;
             out->entry_count = entry_count;
             out->allocation_size = entry_count * sizeof(uint64_t);
@@ -193,7 +195,8 @@ static uint64_t mapped_leaf_entry(const gpu_page_table_t *table,
         assert(page != NULL);
     }
     return page->entries[(gpu_address >>
-        table->config.index_shifts[table->config.level_count - 1U]) & 0x1FFU];
+        table->config.index_shifts[table->config.level_count - 1U]) &
+        (uint64_t)(table->config.leaf_entry_count - 1U)];
 }
 
 static void test_vendor_vm_backends(void)
@@ -239,7 +242,8 @@ static void test_vendor_vm_backends(void)
     assert(gpu_page_table_init_config(&table, &ops,
                amd_polaris_vm_config()) == GPU_PAGE_TABLE_OK);
     assert(table.config.level_count == 2U &&
-           table.config.root_entry_count == 32768U);
+           table.config.root_entry_count == 4U &&
+           table.config.leaf_entry_count == MOCK_LARGE_TABLE_ENTRIES);
     assert(gpu_page_table_map(&table, 0x12345000ULL, 0x600000ULL,
               AMD_POLARIS_PTE_ACCESS_READ |
               AMD_POLARIS_PTE_ACCESS_WRITE) == GPU_PAGE_TABLE_OK);

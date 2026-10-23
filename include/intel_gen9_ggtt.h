@@ -8,6 +8,7 @@
 #define VANTA_INTEL_GEN9_GGTT_H
 
 #include "gpu_mmio.h"
+#include "gpu_vm.h"
 
 #define INTEL_GEN9_GTTMMADR_SIZE 0x01000000U
 #define INTEL_GEN9_GGTT_PTE_BASE 0x00800000U
@@ -30,6 +31,14 @@ typedef struct intel_gen9_ggtt_forcewake_ops {
     int (*acquire_render)(void *context);
     int (*release_render)(void *context);
 } intel_gen9_ggtt_forcewake_ops_t;
+
+typedef struct intel_gen9_ggtt_vm_context {
+    const gpu_mmio_region_t *gttmmadr;
+    const intel_gen9_ggtt_forcewake_ops_t *forcewake;
+} intel_gen9_ggtt_vm_context_t;
+
+int intel_gen9_ggtt_make_vm_ops(intel_gen9_ggtt_vm_context_t *context,
+                                gpu_vm_ops_t *out_ops);
 
 /* GTTMMADR must be a mapped, uncached 16 MiB Gen8/Gen9 BAR0 aperture. */
 intel_gen9_ggtt_status_t intel_gen9_ggtt_map_page(

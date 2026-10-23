@@ -61,8 +61,8 @@ static int valid_page(const gpu_page_table_page_t *page,
     return page->allocation_size >= required_size &&
            (page->physical_address & (GPU_PAGE_TABLE_PAGE_SIZE - 1U)) == 0U &&
            (page->physical_address & ~GPU_PAGE_TABLE_ADDRESS_MASK) == 0U &&
-           page->physical_address <= UINT64_MAX - (required_size - 1U) &&
-           page->physical_address + required_size - 1U <=
+           page->allocation_size <= UINT64_MAX - page->physical_address &&
+           page->physical_address + page->allocation_size - 1U <=
                GPU_PAGE_TABLE_ADDRESS_MASK + 0xFFFULL;
 }
 

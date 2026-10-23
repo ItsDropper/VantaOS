@@ -67,6 +67,8 @@ on:
       - "include/amd_polaris_regs.h"
       - "include/amd_polaris_pte.h"
       - "include/amd_polaris_vm.h"
+      - "include/amd_polaris_vm_hw.h"
+      - "drivers/gpu/amd/amd_polaris_vm_hw.c"
       - "drivers/gpu/amd/amd_polaris_vm.c"
       - "drivers/gpu/amd/amd_polaris_pte.c"
       - "drivers/gpu/amd/amd_polaris_regs.c"
@@ -76,6 +78,7 @@ on:
       - "scripts/test_gpu_generation_registers.c"
       - "scripts/test_gpu_generation_pte.c"
       - "scripts/test_gpu_page_table.c"
+      - "scripts/test_amd_polaris_vm_hw.c"
       - "include/gpu.h"
       - "include/gpu_core.h"
       - "include/gpu_vendor.h"
@@ -878,3 +881,15 @@ jobs:
 
       - name: Test page-table map/unmap, bounds and failed invalidation
         run: /tmp/vantaos-gpu-page-table-test
+
+
+      - name: Compile Polaris VM root and invalidation tests
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_amd_polaris_vm_hw.c \
+            drivers/gpu/amd/amd_polaris_vm_hw.c \
+            drivers/gpu/core/gpu_mmio.c \
+            -o /tmp/vantaos-amd-polaris-vm-hw-test
+
+      - name: Test Polaris VMID-1 root setup and bounded invalidation
+        run: /tmp/vantaos-amd-polaris-vm-hw-test

@@ -54,6 +54,7 @@ static const gpu_page_table_config_t intel_config = {
     .level_count = 4U,
     .virtual_address_bits = 48U,
     .root_entry_count = GPU_PAGE_TABLE_ENTRIES,
+    .leaf_entry_count = GPU_PAGE_TABLE_ENTRIES,
     .index_shifts = {39U, 30U, 21U, 12U}
 };
 

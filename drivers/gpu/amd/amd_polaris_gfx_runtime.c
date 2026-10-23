@@ -203,6 +203,8 @@ static amd_polaris_gfx_runtime_status_t runtime_init_common(
         if (!restore_bus_master(runtime) || !release_buffers(runtime)) {
             runtime->initialized = 1U;
             runtime->faulted = 1U;
+        } else {
+            memset(runtime, 0, sizeof(*runtime));
         }
         return AMD_POLARIS_GFX_RUNTIME_PCI_ERROR;
     }
@@ -223,6 +225,8 @@ static amd_polaris_gfx_runtime_status_t runtime_init_common(
         if (!restore_bus_master(runtime) || !release_buffers(runtime)) {
             runtime->initialized = 1U;
             runtime->faulted = 1U;
+        } else {
+            memset(runtime, 0, sizeof(*runtime));
         }
         return AMD_POLARIS_GFX_RUNTIME_RING_ERROR;
     }

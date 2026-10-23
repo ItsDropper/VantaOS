@@ -179,6 +179,19 @@ intel_gen9_execlist_status_t intel_gen9_execlist_poll_csb(
     return intel_gen9_execlist_complete(state, context_id);
 }
 
+intel_gen9_execlist_status_t intel_gen9_execlist_abort_pending(
+    intel_gen9_execlist_t *state, int engine_quiesced)
+{
+    if (state == NULL || state->initialized == 0U)
+        return INTEL_GEN9_EXECLIST_INVALID_ARGUMENT;
+    if (!engine_quiesced)
+        return INTEL_GEN9_EXECLIST_NOT_READY;
+    state->pending = 0U;
+    state->pending_context_id = 0U;
+    state->faulted = 1U;
+    return INTEL_GEN9_EXECLIST_OK;
+}
+
 intel_gen9_execlist_status_t intel_gen9_execlist_shutdown(
     intel_gen9_execlist_t *state, int engine_quiesced)
 {

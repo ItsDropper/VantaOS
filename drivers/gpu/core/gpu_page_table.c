@@ -26,26 +26,31 @@ static unsigned log2_size(size_t value)
 static int valid_config(const gpu_page_table_config_t *config)
 {
     unsigned root_bits;
+    unsigned leaf_bits;
     if (config == NULL || config->level_count < 2U ||
         config->level_count > GPU_PAGE_TABLE_LEVELS ||
         config->virtual_address_bits < 32U ||
         config->virtual_address_bits > 48U ||
-        !is_power_of_two(config->root_entry_count))
+        !is_power_of_two(config->root_entry_count) ||
+        !is_power_of_two(config->leaf_entry_count))
         return 0;
 
     root_bits = log2_size(config->root_entry_count);
-    if (root_bits == 0U ||
-        12U + root_bits + 9U * (config->level_count - 1U) !=
+    leaf_bits = log2_size(config->leaf_entry_count);
+    if (root_bits == 0U || leaf_bits < 9U ||
+        12U + leaf_bits + 9U * (config->level_count - 2U) + root_bits !=
             config->virtual_address_bits)
         return 0;
     if (config->index_shifts[0] !=
         (unsigned)config->virtual_address_bits - root_bits)
         return 0;
-    for (unsigned i = 1U; i < config->level_count; ++i) {
+    for (unsigned i = 1U; i + 1U < config->level_count; ++i) {
         if (config->index_shifts[i] !=
-            12U + 9U * (config->level_count - 1U - i))
+            (unsigned)config->virtual_address_bits - root_bits - 9U * i)
             return 0;
     }
+    if (config->index_shifts[config->level_count - 1U] != 12U)
+        return 0;
     return 1;
 }
 
@@ -126,7 +131,9 @@ static gpu_page_table_status_t walk_to_leaf(
             gpu_page_table_status_t status;
             if (!create_missing)
                 return GPU_PAGE_TABLE_NOT_MAPPED;
-            status = allocate_table_page(table, GPU_PAGE_TABLE_ENTRIES, &child);
+            size_t child_entries = (level + 2U == table->config.level_count) ?
+                table->config.leaf_entry_count : GPU_PAGE_TABLE_ENTRIES;
+            status = allocate_table_page(table, child_entries, &child);
             if (status != GPU_PAGE_TABLE_OK)
                 return status;
             if (!table->ops.encode_directory(table->ops.context,
@@ -140,7 +147,9 @@ static gpu_page_table_status_t walk_to_leaf(
         } else {
             uint64_t child_physical = entry & GPU_PAGE_TABLE_ADDRESS_MASK;
             child = find_page(table, child_physical);
-            if (child == NULL || child->entry_count != GPU_PAGE_TABLE_ENTRIES)
+            size_t expected_entries = (level + 2U == table->config.level_count) ?
+                table->config.leaf_entry_count : GPU_PAGE_TABLE_ENTRIES;
+            if (child == NULL || child->entry_count != expected_entries)
                 return GPU_PAGE_TABLE_CORRUPT;
         }
         page = child;
@@ -148,7 +157,8 @@ static gpu_page_table_status_t walk_to_leaf(
 
     *out_leaf = page;
     *out_leaf_index = (size_t)((gpu_address >>
-        table->config.index_shifts[table->config.level_count - 1U]) & 0x1FFU);
+        table->config.index_shifts[table->config.level_count - 1U]) &
+        (uint64_t)(table->config.leaf_entry_count - 1U));
     return GPU_PAGE_TABLE_OK;
 }
 
@@ -185,6 +195,7 @@ gpu_page_table_status_t gpu_page_table_init(
         .level_count = 4U,
         .virtual_address_bits = 48U,
         .root_entry_count = GPU_PAGE_TABLE_ENTRIES,
+        .leaf_entry_count = GPU_PAGE_TABLE_ENTRIES,
         .index_shifts = {39U, 30U, 21U, 12U}
     };
     return gpu_page_table_init_config(table, ops, &config);

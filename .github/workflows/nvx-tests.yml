@@ -60,7 +60,10 @@ on:
       - "include/intel_gen9_pte.h"
       - "include/intel_gen9_vm.h"
       - "include/intel_gen9_ggtt.h"
+      - "include/intel_gen9_execlist.h"
       - "drivers/gpu/intel/intel_gen9_ggtt.c"
+      - "drivers/gpu/intel/intel_gen9_execlist.c"
+      - "scripts/test_intel_gen9_execlist.c"
       - "drivers/gpu/intel/intel_gen9_vm.c"
       - "drivers/gpu/intel/intel_gen9_pte.c"
       - "drivers/gpu/intel/intel_gen9_regs.c"
@@ -931,3 +934,15 @@ jobs:
 
       - name: Test Polaris CP ring setup, fenced submission, wrap and fail-closed timeout
         run: /tmp/vantaos-amd-polaris-gfx-ring-test
+
+
+      - name: Compile Intel Gen9 execlist submission tests with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_intel_gen9_execlist.c \
+            drivers/gpu/intel/intel_gen9_execlist.c \
+            drivers/gpu/core/gpu_mmio.c \
+            -o /tmp/vantaos-intel-gen9-execlist-test
+
+      - name: Test ELSP descriptor validation, submission serialization and completion
+        run: /tmp/vantaos-intel-gen9-execlist-test

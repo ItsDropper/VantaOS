@@ -27,6 +27,22 @@ typedef struct amd_polaris_pm4_summary {
     size_t type3_packet_count;
 } amd_polaris_pm4_summary_t;
 
+#define AMD_POLARIS_PM4_PACKET3_WRITE_DATA 0xC0033700U
+#define AMD_POLARIS_PM4_WRITE_DATA_MEMORY   ((5U << 8) | (1U << 20))
+#define AMD_POLARIS_PM4_FENCE_DWORDS        5U
+
+/*
+ * Builds/validates a single WRITE_DATA packet that writes exactly one dword
+ * to a caller-authorized mapped fence address. It does not authorize arbitrary
+ * memory writes or establish that a command processor ring is initialized.
+ */
+amd_polaris_pm4_status_t amd_polaris_build_fence_packet(
+    uint32_t *out_dwords, size_t capacity, uint64_t fence_gpu_address,
+    uint32_t fence_value, size_t *out_count);
+amd_polaris_pm4_status_t amd_polaris_validate_fence_packet(
+    const uint32_t *dwords, size_t count, uint64_t allowed_fence_gpu_address,
+    uint32_t expected_value);
+
 /*
  * Conservative GFX8 PM4 framing validator. Only type-2 NOP and type-3 NOP
  * packets are accepted. It deliberately rejects state changes and execution

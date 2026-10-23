@@ -105,7 +105,9 @@ static void test_mapping_lifecycle(void)
 
     assert(gpu_page_table_map(&table, 0x00001234567000ULL, 0x200000ULL,
                               3U) == GPU_PAGE_TABLE_OK);
-    assert(mock.allocations == 4U && mock.flushes == 1U);
+    assert(mock.allocations == 4U && mock.flushes == 0U);
+    assert(gpu_page_table_flush(&table) == GPU_PAGE_TABLE_OK);
+    assert(mock.flushes == 1U);
     assert(gpu_page_table_map(&table, 0x00001234567000ULL, 0x201000ULL,
                               3U) == GPU_PAGE_TABLE_ALREADY_MAPPED);
 
@@ -121,6 +123,8 @@ static void test_mapping_lifecycle(void)
            GPU_PAGE_TABLE_OK);
     assert(gpu_page_table_unmap(&table, 0x00001234567000ULL) ==
            GPU_PAGE_TABLE_NOT_MAPPED);
+    assert(gpu_page_table_flush(&table) == GPU_PAGE_TABLE_OK);
+    assert(gpu_page_table_flush(&table) == GPU_PAGE_TABLE_OK);
 
     assert(gpu_page_table_map(&table, 0x1000U, 0x200001U, 1U) ==
            GPU_PAGE_TABLE_ADDRESS_INVALID);
@@ -152,9 +156,10 @@ static void test_fail_closed_on_flush_failure(void)
     ops.flush = mock_flush;
 
     assert(gpu_page_table_init(&table, &ops) == GPU_PAGE_TABLE_OK);
-    mock.fail_flush = 1;
     assert(gpu_page_table_map(&table, 0x4000U, 0x300000U, 1U) ==
-           GPU_PAGE_TABLE_FLUSH_FAILED);
+           GPU_PAGE_TABLE_OK);
+    mock.fail_flush = 1;
+    assert(gpu_page_table_flush(&table) == GPU_PAGE_TABLE_FLUSH_FAILED);
     assert(table.faulted);
     assert(gpu_page_table_unmap(&table, 0x4000U) == GPU_PAGE_TABLE_FAULTED);
     assert(gpu_page_table_destroy(&table, 0) == GPU_PAGE_TABLE_FAULTED);
@@ -199,6 +204,7 @@ static void test_vendor_vm_backends(void)
     assert(gpu_page_table_init(&table, &ops) == GPU_PAGE_TABLE_OK);
     assert(gpu_page_table_map(&table, va, 0x500000ULL,
               INTEL_GEN9_VM_READ | INTEL_GEN9_VM_WRITE) == GPU_PAGE_TABLE_OK);
+    assert(gpu_page_table_flush(&table) == GPU_PAGE_TABLE_OK);
     assert(mapped_leaf_entry(&table, va) ==
            (0x500000ULL | INTEL_GEN9_PTE_PRESENT |
             INTEL_GEN9_PTE_WRITABLE | INTEL_GEN9_PTE_PAT));
@@ -216,6 +222,7 @@ static void test_vendor_vm_backends(void)
     assert(gpu_page_table_map(&table, va, 0x600000ULL,
               AMD_POLARIS_PTE_ACCESS_READ |
               AMD_POLARIS_PTE_ACCESS_WRITE) == GPU_PAGE_TABLE_OK);
+    assert(gpu_page_table_flush(&table) == GPU_PAGE_TABLE_OK);
     assert(mapped_leaf_entry(&table, va) ==
            (0x600000ULL | AMD_POLARIS_PTE_VALID |
             AMD_POLARIS_PTE_SYSTEM | AMD_POLARIS_PTE_SNOOPED |

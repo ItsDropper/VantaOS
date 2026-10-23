@@ -11,6 +11,7 @@
 #define REG_CP_ME_CNTL             (0x21B6U * 4U)
 #define REG_CP_RB0_RPTR            (0x21C0U * 4U)
 #define REG_CP_RB_WPTR_DELAY       (0x21C1U * 4U)
+#define REG_CP_RB_WPTR_POLL_CNTL   (0x21C2U * 4U)
 #define REG_CP_RB0_BASE            (0x3040U * 4U)
 #define REG_CP_RB0_BASE_HI         (0x30B1U * 4U)
 #define REG_CP_RB0_CNTL            (0x3041U * 4U)
@@ -131,10 +132,7 @@ amd_polaris_gfx_ring_status_t amd_polaris_gfx_ring_init(
         !write32(mmio, REG_CP_RB0_RPTR_ADDR, (uint32_t)rptr_gpu_address) ||
         !write32(mmio, REG_CP_RB0_RPTR_ADDR_HI,
                  (uint32_t)(rptr_gpu_address >> 32U) & 0xFFFFU) ||
-        !write32(mmio, REG_CP_RB_WPTR_POLL_ADDR_LO,
-                 (uint32_t)rptr_gpu_address) ||
-        !write32(mmio, REG_CP_RB_WPTR_POLL_ADDR_HI,
-                 (uint32_t)(rptr_gpu_address >> 32U)) ||
+        !write32(mmio, REG_CP_RB_WPTR_POLL_CNTL, 0U) ||
         !write32(mmio, REG_CP_RB0_BASE, (uint32_t)(ring_gpu_address >> 8U)) ||
         !write32(mmio, REG_CP_RB0_BASE_HI,
                  (uint32_t)(ring_gpu_address >> 40U)) ||

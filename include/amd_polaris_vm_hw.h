@@ -20,7 +20,8 @@ typedef enum amd_polaris_vm_hw_status {
     AMD_POLARIS_VM_HW_INVALID_ADDRESS,
     AMD_POLARIS_VM_HW_DEVICE_BUSY,
     AMD_POLARIS_VM_HW_VERIFY_FAILED,
-    AMD_POLARIS_VM_HW_INVALIDATE_TIMEOUT
+    AMD_POLARIS_VM_HW_INVALIDATE_TIMEOUT,
+    AMD_POLARIS_VM_HW_CONTEXT_DISABLE_FAILED
 } amd_polaris_vm_hw_status_t;
 
 /*
@@ -32,6 +33,11 @@ amd_polaris_vm_hw_status_t amd_polaris_vm_install_root(
     const gpu_mmio_region_t *mmio, uint64_t root_physical,
     uint64_t va_start, uint64_t va_size, uint64_t fault_page_physical,
     unsigned timeout_iterations, int device_quiesced);
+
+/* Disable VMID-1 before freeing any page-table pages. */
+amd_polaris_vm_hw_status_t amd_polaris_vm_disable_context1(
+    const gpu_mmio_region_t *mmio, unsigned timeout_iterations,
+    int device_quiesced);
 
 /* Request and boundedly wait for VMID-1 TLB invalidation. */
 amd_polaris_vm_hw_status_t amd_polaris_vm_invalidate(

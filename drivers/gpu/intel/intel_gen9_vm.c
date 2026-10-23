@@ -70,7 +70,7 @@ int intel_gen9_vm_make_ops(intel_gen9_vm_backend_t *backend,
         backend->invalidate_tlb == 0)
         return 0;
     out_ops->context = backend;
-    out_ops->allocate_page = allocate_page;
+    out_ops->allocate_table = allocate_page;
     out_ops->free_page = free_page;
     out_ops->encode_directory = encode_directory;
     out_ops->encode_leaf = encode_leaf;

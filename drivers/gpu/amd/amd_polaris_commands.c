@@ -15,6 +15,52 @@
 #define AMD_PM4_TYPE3_COUNT_MASK 0x3FFF0000U
 #define AMD_PM4_TYPE3_NOP 0x00001000U
 
+
+amd_polaris_pm4_status_t amd_polaris_build_fence_packet(
+    uint32_t *out_dwords, size_t capacity, uint64_t fence_gpu_address,
+    uint32_t fence_value, size_t *out_count)
+{
+    if (out_count == NULL)
+        return AMD_POLARIS_PM4_INVALID_ARGUMENT;
+    *out_count = 0U;
+    if (out_dwords == NULL)
+        return AMD_POLARIS_PM4_INVALID_ARGUMENT;
+    if (capacity < AMD_POLARIS_PM4_FENCE_DWORDS)
+        return AMD_POLARIS_PM4_TOO_LARGE;
+    if ((fence_gpu_address & 3U) != 0U ||
+        fence_gpu_address >= (1ULL << 48U))
+        return AMD_POLARIS_PM4_INVALID_ARGUMENT;
+
+    out_dwords[0] = AMD_POLARIS_PM4_PACKET3_WRITE_DATA;
+    out_dwords[1] = AMD_POLARIS_PM4_WRITE_DATA_MEMORY;
+    out_dwords[2] = (uint32_t)fence_gpu_address;
+    out_dwords[3] = (uint32_t)(fence_gpu_address >> 32U);
+    out_dwords[4] = fence_value;
+    *out_count = AMD_POLARIS_PM4_FENCE_DWORDS;
+    return AMD_POLARIS_PM4_OK;
+}
+
+amd_polaris_pm4_status_t amd_polaris_validate_fence_packet(
+    const uint32_t *dwords, size_t count, uint64_t allowed_fence_gpu_address,
+    uint32_t expected_value)
+{
+    uint64_t address;
+
+    if (dwords == NULL || count != AMD_POLARIS_PM4_FENCE_DWORDS)
+        return AMD_POLARIS_PM4_INVALID_ARGUMENT;
+    if ((allowed_fence_gpu_address & 3U) != 0U ||
+        allowed_fence_gpu_address >= (1ULL << 48U))
+        return AMD_POLARIS_PM4_INVALID_ARGUMENT;
+    if (dwords[0] != AMD_POLARIS_PM4_PACKET3_WRITE_DATA ||
+        dwords[1] != AMD_POLARIS_PM4_WRITE_DATA_MEMORY)
+        return AMD_POLARIS_PM4_UNSUPPORTED_PACKET;
+
+    address = (uint64_t)dwords[2] | ((uint64_t)dwords[3] << 32U);
+    if (address != allowed_fence_gpu_address || dwords[4] != expected_value)
+        return AMD_POLARIS_PM4_UNSUPPORTED_PACKET;
+    return AMD_POLARIS_PM4_OK;
+}
+
 amd_polaris_pm4_status_t amd_polaris_validate_pm4_noop_stream(
     const uint32_t *dwords, size_t count, size_t max_dwords,
     amd_polaris_pm4_summary_t *summary)

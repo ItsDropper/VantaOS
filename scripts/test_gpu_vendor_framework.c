@@ -41,6 +41,12 @@ static int test_driver_quiesce(gpu_device_t *device)
     return device != 0 && device->state == GPU_DEVICE_QUIESCING && !test_quiesce_fails;
 }
 
+static int test_engine_quiesce(void *context)
+{
+    (void)context;
+    return 1;
+}
+
 static void test_driver_shutdown(gpu_device_t *device)
 {
     ++test_shutdown_calls;
@@ -392,7 +398,7 @@ int main(void)
         assert(gpu_classify_pci_function(&gen9, &intel_match));
         assert(gpu_device_construct(&intel_device, &gen9, &intel_match));
         assert(intel_gpu_configure_runtime(&intel_device, &intel_binding,
-            0x1000U, 1U, 0x9U, 100U, 1, test_driver_quiesce, NULL));
+            0x1000U, 1U, 0x9U, 100U, 1, test_engine_quiesce, NULL));
         assert(intel_device.driver_private == &intel_binding);
         assert(intel_binding.configured && intel_binding.context_ready);
         assert(!intel_gpu_configure_runtime(&intel_device, &intel_binding,

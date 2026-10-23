@@ -17,6 +17,7 @@
 #define REG_CP_RB0_BASE (0x3040U * 4U)
 #define REG_CP_RB0_BASE_HI (0x30B1U * 4U)
 #define REG_CP_RB0_WPTR (0x3045U * 4U)
+#define REG_CP_RB_VMID (0x3051U * 4U)
 #define CP_ME_HALT_MASK (0x10000000U | 0x04000000U | 0x01000000U)
 
 static uint32_t registers[MMIO_BYTES / sizeof(uint32_t)];
@@ -52,6 +53,9 @@ static void test_prerequisites_and_setup(void)
     assert(amd_polaris_gfx_ring_init(&ring, &mmio, ring_storage,
         0x400001U, sizeof(ring_storage), 0x500000U, 0U, 1, 1) ==
         AMD_POLARIS_GFX_RING_INVALID_ARGUMENT);
+    assert(amd_polaris_gfx_ring_init(&ring, &mmio, ring_storage,
+        0x400000U, sizeof(ring_storage), 0x500000U, 16U, 1, 1) ==
+        AMD_POLARIS_GFX_RING_INVALID_ARGUMENT);
 
     assert(amd_polaris_gfx_ring_init(&ring, &mmio, ring_storage,
         0x400000U, sizeof(ring_storage), 0x500000U, 0U, 1, 1) ==
@@ -60,6 +64,7 @@ static void test_prerequisites_and_setup(void)
     assert(reg(REG_CP_RB0_BASE) == 0x4000U);
     assert(reg(REG_CP_RB0_BASE_HI) == 0U);
     assert(reg(REG_CP_RB0_WPTR) == 0U);
+    assert(reg(REG_CP_RB_VMID) == 0U);
     assert((reg(REG_CP_RB0_CNTL) & 0x80000000U) == 0U);
     assert((reg(REG_CP_ME_CNTL) & CP_ME_HALT_MASK) == 0U);
     assert(amd_polaris_gfx_ring_shutdown(&ring, 0) ==

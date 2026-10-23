@@ -81,7 +81,8 @@ amd_polaris_device_status_t amd_polaris_device_runtime_init(
      */
     if (gpu_dma_alloc(GPU_DMA_PAGE_SIZE, 32U, &runtime->fault_page) !=
         GPU_DMA_OK) {
-        (void)cleanup_mapping(runtime);
+        if (!cleanup_mapping(runtime))
+            runtime->initialized = 1U;
         return AMD_POLARIS_DEVICE_DMA_FAILED;
     }
     memset(runtime->fault_page.cpu_address, 0, GPU_DMA_PAGE_SIZE);
@@ -99,7 +100,8 @@ amd_polaris_device_status_t amd_polaris_device_runtime_init(
             runtime->initialized = 1U;
             return AMD_POLARIS_DEVICE_VM_FAILED;
         }
-        (void)cleanup_mapping(runtime);
+        if (!cleanup_mapping(runtime))
+            runtime->initialized = 1U;
         return AMD_POLARIS_DEVICE_VM_FAILED;
     }
     runtime->vm_initialized = 1U;

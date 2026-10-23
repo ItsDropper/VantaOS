@@ -136,7 +136,7 @@ gpu_vm_status_t gpu_vm_map_dma(gpu_vm_t *vm,
     slot = gpu_vm_find_free_record(vm);
     if (slot == GPU_VM_MAX_MAPPINGS || vm->next_token == 0U ||
         vm->next_token == UINT64_MAX) {
-        spinlock_unlock_irqrestore(&vm->lock, flags);
+        gpu_vm_unlock(&vm->lock, flags);
         return GPU_VM_TABLE_FULL;
     }
 
@@ -163,7 +163,7 @@ gpu_vm_status_t gpu_vm_map_dma(gpu_vm_t *vm,
     ++vm->mapping_count;
     out_handle->token = vm->mappings[slot].token;
     out_handle->generation = vm->mappings[slot].generation;
-    spinlock_unlock_irqrestore(&vm->lock, flags);
+    gpu_vm_unlock(&vm->lock, flags);
     return GPU_VM_OK;
 
 rollback:
@@ -199,10 +199,10 @@ rollback:
         vm->faulted = 1U;
         out_handle->token = failed_record.token;
         out_handle->generation = failed_record.generation;
-        spinlock_unlock_irqrestore(&vm->lock, flags);
+        gpu_vm_unlock(&vm->lock, flags);
         return GPU_VM_ROLLBACK_FAILED;
     }
-    spinlock_unlock_irqrestore(&vm->lock, flags);
+    gpu_vm_unlock(&vm->lock, flags);
     return pending_flush ? GPU_VM_FLUSH_FAILED : GPU_VM_MAP_FAILED;
 }
 
@@ -216,18 +216,18 @@ gpu_vm_status_t gpu_vm_unmap(gpu_vm_t *vm, gpu_vm_handle_t *handle)
     if (vm->initialized == 0U)
         return GPU_VM_NOT_INITIALIZED;
 
-    flags = spinlock_lock_irqsave(&vm->lock);
+    flags = gpu_vm_lock(&vm->lock);
     if (handle->token == 0U) {
-        spinlock_unlock_irqrestore(&vm->lock, flags);
+        gpu_vm_unlock(&vm->lock, flags);
         return GPU_VM_INVALID_HANDLE;
     }
     if (handle->generation != vm->generation) {
-        spinlock_unlock_irqrestore(&vm->lock, flags);
+        gpu_vm_unlock(&vm->lock, flags);
         return GPU_VM_STALE_HANDLE;
     }
     record = gpu_vm_find_record(vm, handle);
     if (record == NULL) {
-        spinlock_unlock_irqrestore(&vm->lock, flags);
+        gpu_vm_unlock(&vm->lock, flags);
         return GPU_VM_INVALID_HANDLE;
     }
 
@@ -237,7 +237,7 @@ gpu_vm_status_t gpu_vm_unmap(gpu_vm_t *vm, gpu_vm_handle_t *handle)
                                (uint64_t)index * GPU_VM_PAGE_SIZE;
         if (!vm->ops.unmap_page(vm->ops.context, gpu_address)) {
             vm->faulted = 1U;
-            spinlock_unlock_irqrestore(&vm->lock, flags);
+            gpu_vm_unlock(&vm->lock, flags);
             return GPU_VM_UNMAP_FAILED;
         }
         --record->mapped_pages;
@@ -247,7 +247,7 @@ gpu_vm_status_t gpu_vm_unmap(gpu_vm_t *vm, gpu_vm_handle_t *handle)
     if (record->pending_flush != 0U) {
         if (!vm->ops.flush(vm->ops.context)) {
             vm->faulted = 1U;
-            spinlock_unlock_irqrestore(&vm->lock, flags);
+            gpu_vm_unlock(&vm->lock, flags);
             return GPU_VM_FLUSH_FAILED;
         }
         record->pending_flush = 0U;
@@ -261,7 +261,7 @@ gpu_vm_status_t gpu_vm_unmap(gpu_vm_t *vm, gpu_vm_handle_t *handle)
 
     if (vm->mapping_count == 0U)
         vm->faulted = 0U;
-    spinlock_unlock_irqrestore(&vm->lock, flags);
+    gpu_vm_unlock(&vm->lock, flags);
     return GPU_VM_OK;
 }
 
@@ -272,7 +272,7 @@ gpu_vm_status_t gpu_vm_validate(gpu_vm_t *vm)
 
     if (vm == NULL || vm->initialized == 0U || vm->va_space == NULL)
         return GPU_VM_NOT_INITIALIZED;
-    flags = spinlock_lock_irqsave(&vm->lock);
+    flags = gpu_vm_lock(&vm->lock);
     for (size_t i = 0U; i < GPU_VM_MAX_MAPPINGS; ++i) {
         const gpu_vm_record_t *record = &vm->mappings[i];
         if (record->active == 0U)
@@ -284,15 +284,15 @@ gpu_vm_status_t gpu_vm_validate(gpu_vm_t *vm)
                                     GPU_VM_ACCESS_READ) ||
             record->mapped_pages > record->dma->page_count ||
             (record->mapped_pages == 0U && record->pending_flush == 0U)) {
-            spinlock_unlock_irqrestore(&vm->lock, flags);
+            gpu_vm_unlock(&vm->lock, flags);
             return GPU_VM_CORRUPT_STATE;
         }
     }
     if (active != vm->mapping_count) {
-        spinlock_unlock_irqrestore(&vm->lock, flags);
+        gpu_vm_unlock(&vm->lock, flags);
         return GPU_VM_CORRUPT_STATE;
     }
-    spinlock_unlock_irqrestore(&vm->lock, flags);
+    gpu_vm_unlock(&vm->lock, flags);
     return gpu_va_validate(vm->va_space) == GPU_VA_OK
                ? GPU_VM_OK : GPU_VM_CORRUPT_STATE;
 }
@@ -302,14 +302,14 @@ gpu_vm_status_t gpu_vm_destroy(gpu_vm_t *vm)
     uint64_t flags;
     if (vm == NULL || vm->initialized == 0U)
         return GPU_VM_NOT_INITIALIZED;
-    flags = spinlock_lock_irqsave(&vm->lock);
+    flags = gpu_vm_lock(&vm->lock);
     if (vm->mapping_count != 0U || vm->faulted != 0U) {
-        spinlock_unlock_irqrestore(&vm->lock, flags);
+        gpu_vm_unlock(&vm->lock, flags);
         return GPU_VM_BUSY;
     }
     vm->initialized = 0U;
     vm->va_space = NULL;
     memset(&vm->ops, 0, sizeof(vm->ops));
-    spinlock_unlock_irqrestore(&vm->lock, flags);
+    gpu_vm_unlock(&vm->lock, flags);
     return GPU_VM_OK;
 }

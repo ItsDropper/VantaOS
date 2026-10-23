@@ -59,6 +59,8 @@ on:
       - "include/intel_gen9_regs.h"
       - "include/intel_gen9_pte.h"
       - "include/intel_gen9_vm.h"
+      - "include/intel_gen9_ggtt.h"
+      - "drivers/gpu/intel/intel_gen9_ggtt.c"
       - "drivers/gpu/intel/intel_gen9_vm.c"
       - "drivers/gpu/intel/intel_gen9_pte.c"
       - "drivers/gpu/intel/intel_gen9_regs.c"
@@ -76,6 +78,7 @@ on:
       - "scripts/test_gpu_gen_profiles.c"
       - "scripts/test_gpu_generation_commands.c"
       - "scripts/test_gpu_generation_registers.c"
+      - "scripts/test_intel_gen9_ggtt.c"
       - "scripts/test_gpu_generation_pte.c"
       - "scripts/test_gpu_page_table.c"
       - "scripts/test_amd_polaris_vm_hw.c"
@@ -893,3 +896,15 @@ jobs:
 
       - name: Test Polaris VMID-1 root setup and bounded invalidation
         run: /tmp/vantaos-amd-polaris-vm-hw-test
+
+
+      - name: Compile Intel Gen9 GGTT and forcewake tests
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_intel_gen9_ggtt.c \
+            drivers/gpu/intel/intel_gen9_ggtt.c \
+            drivers/gpu/core/gpu_mmio.c \
+            -o /tmp/vantaos-intel-gen9-ggtt-test
+
+      - name: Test GGTT map/unmap, posting read and forcewake timeout
+        run: /tmp/vantaos-intel-gen9-ggtt-test

@@ -22,6 +22,28 @@ on:
       - "scripts/test_nvx_gsp_fwsec_result.c"
       - "drivers/gpu/core/**"
       - "include/gpu_pci_resources.h"
+      - "include/gpu_mmio.h"
+      - "scripts/test_gpu_mmio.c"
+      - "include/gpu_pci_mmio.h"
+      - "scripts/test_gpu_pci_mmio.c"
+      - "include/gpu_irq.h"
+      - "scripts/test_gpu_irq.c"
+      - "include/gpu_va.h"
+      - "scripts/test_gpu_va.c"
+      - "include/gpu_vm.h"
+      - "scripts/test_gpu_vm.c"
+      - "include/gpu_registers.h"
+      - "scripts/test_gpu_registers.c"
+      - "include/gpu_engine.h"
+      - "scripts/test_gpu_engine.c"
+      - "include/gpu_bringup.h"
+      - "include/gpu_dma.h"
+      - "scripts/test_gpu_dma.c"
+      - "include/gpu_dma_sync.h"
+      - "scripts/test_gpu_dma_sync.c"
+      - "include/gpu_engine_runtime.h"
+      - "scripts/test_gpu_engine_runtime.c"
+      - "scripts/test_gpu_bringup.c"
       - "scripts/test_gpu_pci_resources.c"
       - "drivers/gpu/intel/**"
       - "drivers/gpu/amd/**"
@@ -154,6 +176,36 @@ jobs:
 
       - name: Test GPU classification, lifecycle and fail-closed capabilities
         run: /tmp/vantaos-gpu-vendor-framework-test
+
+      - name: Compile shared GPU MMIO access tests with strict warnings
+        run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_gpu_mmio.c drivers/gpu/core/gpu_mmio.c -o /tmp/vantaos-gpu-mmio-test
+
+      - name: Test shared GPU MMIO bounds, alignment, reads and writes
+        run: /tmp/vantaos-gpu-mmio-test
+
+      - name: Compile transactional PCI BAR MMIO mapping tests
+        run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_gpu_pci_mmio.c drivers/gpu/core/gpu_pci_mmio.c drivers/gpu/core/gpu_pci_resources.c drivers/gpu/core/gpu_mmio.c -o /tmp/vantaos-gpu-pci-mmio-test
+
+      - name: Test PCI decode rollback, bus-master refusal, BAR bounds and exact unmap
+        run: /tmp/vantaos-gpu-pci-mmio-test
+
+      - name: Compile bounded GPU register transaction tests
+        run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_gpu_registers.c drivers/gpu/core/gpu_registers.c drivers/gpu/core/gpu_mmio.c -o /tmp/vantaos-gpu-registers-test
+
+      - name: Test GPU register fields, polling and verified sequences
+        run: /tmp/vantaos-gpu-registers-test
+
+      - name: Compile generic GPU command ring and fence tests
+        run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_gpu_engine.c drivers/gpu/core/gpu_engine.c -o /tmp/vantaos-gpu-engine-test
+
+      - name: Test GPU ring reservation, atomic packet publication, wraparound and fences
+        run: /tmp/vantaos-gpu-engine-test
+
+      - name: Compile staged GPU bring-up and rollback tests
+        run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_gpu_bringup.c drivers/gpu/core/gpu_bringup.c -o /tmp/vantaos-gpu-bringup-test
+
+      - name: Test verified stage gates, reverse rollback and capability revocation
+        run: /tmp/vantaos-gpu-bringup-test
 
       - name: Compile GPU PCI BAR inventory tests with strict warnings
         run: |
@@ -341,10 +393,34 @@ jobs:
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
             scripts/test_nvx_dma.c drivers/gpu/nvx/memory/nvx_dma.c \
-            -o /tmp/vantaos-nvx-dma-test
+            drivers/gpu/core/gpu_dma.c -o /tmp/vantaos-nvx-dma-test
 
       - name: Test contiguous DMA allocation bounds, validation and cleanup
         run: /tmp/vantaos-nvx-dma-test
+
+      - name: Compile shared GPU DMA allocator tests
+        run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_gpu_dma.c drivers/gpu/core/gpu_dma.c -o /tmp/vantaos-gpu-dma-test
+
+      - name: Test shared GPU DMA allocation, contiguity, bounds and cleanup
+        run: /tmp/vantaos-gpu-dma-test
+
+      - name: Compile shared GPU DMA ownership and ordering tests
+        run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_gpu_dma_sync.c drivers/gpu/core/gpu_dma_sync.c drivers/gpu/core/gpu_dma.c -o /tmp/vantaos-gpu-dma-sync-test
+
+      - name: Test GPU DMA ownership transitions, range checks and stale handles
+        run: /tmp/vantaos-gpu-dma-sync-test
+
+      - name: Compile integrated GPU DMA ring runtime tests
+        run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_gpu_engine_runtime.c drivers/gpu/core/gpu_engine_runtime.c drivers/gpu/core/gpu_engine.c drivers/gpu/core/gpu_dma_sync.c drivers/gpu/core/gpu_dma.c -o /tmp/vantaos-gpu-engine-runtime-test
+
+      - name: Test DMA-backed ring submission, fences, quiesce and teardown
+        run: /tmp/vantaos-gpu-engine-runtime-test
+
+      - name: Compile GPU interrupt event queue tests
+        run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_gpu_irq.c drivers/gpu/core/gpu_irq.c -o /tmp/vantaos-gpu-irq-test
+
+      - name: Test IRQ queue back-pressure, ordering, device loss and deferred dispatch
+        run: /tmp/vantaos-gpu-irq-test
 
       - name: Compile WPR metadata layout tests
         run: |
@@ -561,10 +637,22 @@ jobs:
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
             scripts/test_nvx_gpuva.c drivers/gpu/nvx/memory/nvx_gpuva.c \
-            -o /tmp/vantaos-nvx-gpuva-test
+            drivers/gpu/core/gpu_va.c -o /tmp/vantaos-nvx-gpuva-test
 
       - name: Test GPU VA split/merge, guards, handles, and randomized invariants
         run: /tmp/vantaos-nvx-gpuva-test
+
+      - name: Compile shared GPU VA allocator regression tests
+        run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_gpu_va.c drivers/gpu/core/gpu_va.c -o /tmp/vantaos-gpu-va-test
+
+      - name: Test shared GPU VA splitting, coalescing, guards and stale handles
+        run: /tmp/vantaos-gpu-va-test
+
+      - name: Compile transactional GPU page-table mapping tests
+        run: gcc -DGPU_VM_HOST_TEST -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_gpu_vm.c drivers/gpu/core/gpu_vm.c drivers/gpu/core/gpu_va.c drivers/gpu/core/gpu_dma.c -o /tmp/vantaos-gpu-vm-test
+
+      - name: Test GPU PTE mapping rollback, invalidation retries and stale handles
+        run: /tmp/vantaos-gpu-vm-test
 
       - name: Compile NVX memory object tests with strict warnings
         run: |
@@ -572,6 +660,7 @@ jobs:
             scripts/test_nvx_object_memory.c drivers/gpu/nvx/memory/nvx_object_memory.c \
             drivers/gpu/nvx/memory/nvx_gpuvm.c drivers/gpu/nvx/memory/nvx_gpuva.c \
             drivers/gpu/nvx/memory/nvx_dma.c \
+            drivers/gpu/core/gpu_dma.c drivers/gpu/core/gpu_va.c \
             -o /tmp/vantaos-nvx-memory-test
 
       - name: Test NVX memory object ownership, rollback and stale handles
@@ -591,7 +680,8 @@ jobs:
           gcc -DNVX_GPUVM_TEST -std=c11 -Wall -Wextra -Werror -Iinclude \
             scripts/test_nvx_submit.c drivers/gpu/nvx/execution/nvx_submit.c drivers/gpu/nvx/memory/nvx_gpuvm.c \
             drivers/gpu/nvx/memory/nvx_object_memory.c drivers/gpu/nvx/memory/nvx_gpuva.c \
-            drivers/gpu/nvx/memory/nvx_dma.c -o /tmp/vantaos-nvx-submit-test
+            drivers/gpu/nvx/memory/nvx_dma.c drivers/gpu/core/gpu_dma.c \
+            drivers/gpu/core/gpu_va.c -o /tmp/vantaos-nvx-submit-test
 
       - name: Test command bounds, relocation overlap and target ranges
         run: /tmp/vantaos-nvx-submit-test
@@ -628,7 +718,8 @@ jobs:
         run: |
           gcc -DNVX_GPUVM_TEST -std=c11 -Wall -Wextra -Werror -Iinclude \
             scripts/test_nvx_gpuvm.c drivers/gpu/nvx/memory/nvx_gpuvm.c \
-            drivers/gpu/nvx/memory/nvx_gpuva.c -o /tmp/vantaos-nvx-gpuvm-test
+            drivers/gpu/nvx/memory/nvx_gpuva.c drivers/gpu/core/gpu_va.c \
+            -o /tmp/vantaos-nvx-gpuvm-test
 
       - name: Test Ampere V2 page tables and MMU flush failure handling
         run: /tmp/vantaos-nvx-gpuvm-test

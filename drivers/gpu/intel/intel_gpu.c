@@ -24,7 +24,7 @@ static int intel_gpu_initialize(gpu_device_t *device)
 
 static int intel_gpu_quiesce(gpu_device_t *device)
 {
-    return device != 0 && device->state == GPU_DEVICE_RUNNING;
+    return device != 0 && device->state == GPU_DEVICE_QUIESCING;
 }
 
 static void intel_gpu_shutdown(gpu_device_t *device)

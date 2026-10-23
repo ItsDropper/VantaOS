@@ -12,6 +12,53 @@
 #include <stddef.h>
 
 
+static int test_probe_fails;
+static int test_quiesce_fails;
+static int test_initialize_fails;
+static int test_probe_calls;
+static int test_initialize_calls;
+static int test_shutdown_calls;
+
+static int test_driver_match(const struct pci_device *device)
+{
+    return device != 0 && device->vendor_id == 0x8086U;
+}
+
+static int test_driver_probe(gpu_device_t *device)
+{
+    ++test_probe_calls;
+    return device != 0 && device->state == GPU_DEVICE_PROBING && !test_probe_fails;
+}
+
+static int test_driver_initialize(gpu_device_t *device)
+{
+    ++test_initialize_calls;
+    return device != 0 && !test_initialize_fails;
+}
+
+static int test_driver_quiesce(gpu_device_t *device)
+{
+    return device != 0 && device->state == GPU_DEVICE_QUIESCING && !test_quiesce_fails;
+}
+
+static void test_driver_shutdown(gpu_device_t *device)
+{
+    ++test_shutdown_calls;
+    gpu_device_clear_capabilities(device);
+}
+
+static const gpu_driver_ops_t test_ops = {
+    .probe = test_driver_probe,
+    .initialize = test_driver_initialize,
+    .quiesce = test_driver_quiesce,
+    .shutdown = test_driver_shutdown
+};
+
+static const gpu_driver_descriptor_t test_driver = {
+    .name = "test-gpu", .vendor_id = 0x8086U,
+    .match = test_driver_match, .ops = &test_ops
+};
+
 static const struct pci_device inventory[] = {
     { .vendor_id = 0x8086U, .device_id = 0x56A0U, .class_code = 0x03U, .subclass = 0x00U },
     { .vendor_id = 0x1002U, .device_id = 0x744CU, .class_code = 0x03U, .subclass = 0x00U },
@@ -103,6 +150,11 @@ int main(void)
     assert(intel_desc.mmio_aperture_enabled == 0U);
     assert(gpu_driver_matches(intel_gpu_driver(), &intel));
     assert(!gpu_driver_matches(intel_gpu_driver(), &amd));
+    assert(gpu_classify_pci_function(&intel, &match));
+    assert(gpu_device_construct(&device, &intel, &match));
+    assert(!gpu_driver_start(&device, intel_gpu_driver()));
+    assert(device.state == GPU_DEVICE_FAILED);
+    assert(device.verified_capabilities == 0U);
 
     assert(gpu_classify_pci_function(&amd, &match));
     assert(match.vendor == GPU_VENDOR_AMD);
@@ -115,6 +167,10 @@ int main(void)
     assert(amd_desc.mmio_aperture_enabled == 0U);
     assert(gpu_driver_matches(amd_gpu_driver(), &amd));
     assert(!gpu_driver_matches(amd_gpu_driver(), &intel));
+    assert(gpu_device_construct(&device, &amd, &match));
+    assert(!gpu_driver_start(&device, amd_gpu_driver()));
+    assert(device.state == GPU_DEVICE_FAILED);
+    assert(device.verified_capabilities == 0U);
 
     assert(gpu_classify_pci_function(&unknown_intel, &match));
     assert(match.vendor == GPU_VENDOR_INTEL);
@@ -166,6 +222,55 @@ int main(void)
         assert(discovered[2].architecture == GPU_ARCH_NVIDIA_AMPERE);
         assert(discovered[0].state == GPU_DEVICE_DISCOVERED);
         assert(discovered[0].verified_capabilities == 0U);
+    }
+    {
+        gpu_device_t attached;
+        gpu_pci_match_t intel_match;
+        assert(gpu_classify_pci_function(&intel, &intel_match));
+        assert(gpu_device_construct(&attached, &intel, &intel_match));
+        test_probe_fails = 0;
+        test_initialize_fails = 0;
+        test_probe_calls = test_initialize_calls = test_shutdown_calls = 0;
+        assert(gpu_driver_start(&attached, &test_driver));
+        assert(attached.state == GPU_DEVICE_RUNNING);
+        assert(attached.ops == &test_ops);
+        assert(test_probe_calls == 1 && test_initialize_calls == 1);
+        assert(gpu_device_publish_capabilities(&attached, GPU_CAP_DISPLAY_SCANOUT));
+        assert(gpu_driver_stop(&attached));
+        assert(attached.state == GPU_DEVICE_STOPPED);
+        assert(attached.ops == 0);
+        assert(attached.verified_capabilities == 0U);
+        assert(test_shutdown_calls == 1);
+        assert(!gpu_driver_stop(&attached));
+
+        assert(gpu_device_construct(&attached, &intel, &intel_match));
+        test_initialize_fails = 1;
+        assert(!gpu_driver_start(&attached, &test_driver));
+        assert(attached.state == GPU_DEVICE_FAILED);
+        assert(attached.verified_capabilities == 0U);
+        assert(test_shutdown_calls == 2);
+        assert(!gpu_driver_start(&attached, &test_driver));
+        assert(test_initialize_calls == 2);
+
+        assert(gpu_device_construct(&attached, &intel, &intel_match));
+        test_initialize_fails = 0;
+        test_quiesce_fails = 0;
+        assert(gpu_driver_start(&attached, &test_driver));
+        assert(gpu_device_publish_capabilities(&attached, GPU_CAP_DISPLAY_SCANOUT));
+        test_quiesce_fails = 1;
+        assert(!gpu_driver_stop(&attached));
+        assert(attached.state == GPU_DEVICE_FAILED);
+        assert(attached.ops == 0);
+        assert(attached.verified_capabilities == 0U);
+        assert(test_shutdown_calls == 3);
+
+        assert(gpu_device_construct(&attached, &intel, &intel_match));
+        test_quiesce_fails = 0;
+        test_probe_fails = 1;
+        assert(!gpu_driver_start(&attached, &test_driver));
+        assert(attached.state == GPU_DEVICE_FAILED);
+        assert(test_shutdown_calls == 4);
+        assert(test_initialize_calls == 3);
     }
     assert(strcmp(gpu_vendor_name(GPU_VENDOR_AMD), "AMD") == 0);
     assert(strcmp(gpu_architecture_name(GPU_ARCH_AMD_RDNA3), "AMD RDNA 3") == 0);

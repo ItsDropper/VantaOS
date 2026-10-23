@@ -24,7 +24,10 @@ static int gpu_transition_allowed(gpu_device_state_t current,
         case GPU_DEVICE_RUNNING:
             return next == GPU_DEVICE_QUIESCING || next == GPU_DEVICE_FAILED;
         case GPU_DEVICE_QUIESCING:
-            return next == GPU_DEVICE_INITIALIZED || next == GPU_DEVICE_FAILED;
+            return next == GPU_DEVICE_INITIALIZED || next == GPU_DEVICE_STOPPED ||
+                   next == GPU_DEVICE_FAILED;
+        case GPU_DEVICE_STOPPED:
+            return next == GPU_DEVICE_FAILED;
         case GPU_DEVICE_FAILED:
         default:
             return 0;
@@ -97,6 +100,70 @@ int gpu_driver_matches(const gpu_driver_descriptor_t *driver,
         device->vendor_id != driver->vendor_id)
         return 0;
     return driver->match(device) != 0;
+}
+
+int gpu_driver_start(gpu_device_t *device,
+                     const gpu_driver_descriptor_t *driver)
+{
+    if (device == NULL || device->pci_device == NULL ||
+        device->state != GPU_DEVICE_DISCOVERED ||
+        !gpu_driver_matches(driver, device->pci_device) ||
+        driver->ops->probe == NULL || driver->ops->initialize == NULL)
+        return 0;
+
+    device->ops = driver->ops;
+    if (!gpu_device_transition(device, GPU_DEVICE_PROBING))
+        return 0;
+    if (!device->ops->probe(device)) {
+        if (device->ops->shutdown != NULL)
+            device->ops->shutdown(device);
+        (void)gpu_device_transition(device, GPU_DEVICE_FAILED);
+        return 0;
+    }
+    if (!device->ops->initialize(device)) {
+        if (device->ops->shutdown != NULL)
+            device->ops->shutdown(device);
+        (void)gpu_device_transition(device, GPU_DEVICE_FAILED);
+        return 0;
+    }
+    if (!gpu_device_transition(device, GPU_DEVICE_INITIALIZED) ||
+        !gpu_device_transition(device, GPU_DEVICE_RUNNING)) {
+        if (device->ops->shutdown != NULL)
+            device->ops->shutdown(device);
+        if (device->state != GPU_DEVICE_FAILED)
+            (void)gpu_device_transition(device, GPU_DEVICE_FAILED);
+        return 0;
+    }
+    return 1;
+}
+
+int gpu_driver_stop(gpu_device_t *device)
+{
+    if (device == NULL || device->state != GPU_DEVICE_RUNNING ||
+        device->ops == NULL || device->ops->quiesce == NULL ||
+        device->ops->shutdown == NULL)
+        return 0;
+
+    if (!gpu_device_transition(device, GPU_DEVICE_QUIESCING))
+        return 0;
+
+    if (!device->ops->quiesce(device)) {
+        gpu_device_clear_capabilities(device);
+        device->ops->shutdown(device);
+        device->ops = NULL;
+        (void)gpu_device_transition(device, GPU_DEVICE_FAILED);
+        return 0;
+    }
+
+    gpu_device_clear_capabilities(device);
+    device->ops->shutdown(device);
+    if (!gpu_device_transition(device, GPU_DEVICE_STOPPED)) {
+        device->ops = NULL;
+        (void)gpu_device_transition(device, GPU_DEVICE_FAILED);
+        return 0;
+    }
+    device->ops = NULL;
+    return 1;
 }
 
 int gpu_discover_pci(gpu_device_t *out_devices, size_t capacity,

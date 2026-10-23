@@ -40,6 +40,7 @@ typedef struct amd_polaris_gfx_ring {
     size_t ring_bytes;
     uint64_t ring_gpu_address;
     uint32_t write_pointer;
+    uint8_t vmid;
     uint8_t initialized;
     uint8_t faulted;
 } amd_polaris_gfx_ring_t;
@@ -52,7 +53,7 @@ typedef struct amd_polaris_gfx_ring {
 amd_polaris_gfx_ring_status_t amd_polaris_gfx_ring_init(
     amd_polaris_gfx_ring_t *ring, const gpu_mmio_region_t *mmio,
     volatile uint32_t *ring_storage, uint64_t ring_gpu_address,
-    size_t ring_bytes, uint64_t rptr_gpu_address,
+    size_t ring_bytes, uint64_t rptr_gpu_address, uint8_t vmid,
     int firmware_ready, int device_quiesced);
 
 /* Submits only the exact, prevalidated single-dword WRITE_DATA fence packet. */

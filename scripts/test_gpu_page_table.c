@@ -6,6 +6,9 @@
  */
 #include "gpu_page_table.h"
 #include "intel_gen9_pte.h"
+#include "intel_gen9_vm.h"
+#include "amd_polaris_pte.h"
+#include "amd_polaris_vm.h"
 
 #include <assert.h>
 #include <stdint.h>
@@ -159,9 +162,72 @@ static void test_fail_closed_on_flush_failure(void)
     assert(mock.frees == mock.allocations);
 }
 
+
+static uint64_t mapped_leaf_entry(const gpu_page_table_t *table,
+                                  uint64_t gpu_address)
+{
+    static const unsigned shifts[] = {39U, 30U, 21U, 12U};
+    const gpu_page_table_page_t *page = &table->pages[0];
+    for (size_t level = 0U; level < 3U; ++level) {
+        size_t index = (size_t)((gpu_address >> shifts[level]) & 0x1FFU);
+        uint64_t physical = page->entries[index] & GPU_PAGE_TABLE_ADDRESS_MASK;
+        page = NULL;
+        for (size_t i = 0U; i < table->page_count; ++i)
+            if (table->pages[i].physical_address == physical)
+                page = &table->pages[i];
+        assert(page != NULL);
+    }
+    return page->entries[(gpu_address >> 12U) & 0x1FFU];
+}
+
+static void test_vendor_vm_backends(void)
+{
+    mock_allocator_t mock;
+    gpu_page_table_t table;
+    gpu_page_table_ops_t ops;
+    intel_gen9_vm_backend_t intel_backend;
+    amd_polaris_vm_backend_t amd_backend;
+    const uint64_t va = 0x00001234567000ULL;
+
+    memset(&mock, 0, sizeof(mock));
+    memset(&table, 0, sizeof(table));
+    intel_backend.context = &mock;
+    intel_backend.allocate_page = mock_alloc;
+    intel_backend.free_page = mock_free;
+    intel_backend.invalidate_tlb = mock_flush;
+    assert(intel_gen9_vm_make_ops(&intel_backend, &ops));
+    assert(gpu_page_table_init(&table, &ops) == GPU_PAGE_TABLE_OK);
+    assert(gpu_page_table_map(&table, va, 0x500000ULL,
+              INTEL_GEN9_VM_READ | INTEL_GEN9_VM_WRITE) == GPU_PAGE_TABLE_OK);
+    assert(mapped_leaf_entry(&table, va) ==
+           (0x500000ULL | INTEL_GEN9_PTE_PRESENT |
+            INTEL_GEN9_PTE_WRITABLE | INTEL_GEN9_PTE_PAT));
+    assert(gpu_page_table_destroy(&table, 1) == GPU_PAGE_TABLE_OK);
+    assert(mock.frees == mock.allocations);
+
+    memset(&mock, 0, sizeof(mock));
+    memset(&table, 0, sizeof(table));
+    amd_backend.context = &mock;
+    amd_backend.allocate_page = mock_alloc;
+    amd_backend.free_page = mock_free;
+    amd_backend.invalidate_tlb = mock_flush;
+    assert(amd_polaris_vm_make_ops(&amd_backend, &ops));
+    assert(gpu_page_table_init(&table, &ops) == GPU_PAGE_TABLE_OK);
+    assert(gpu_page_table_map(&table, va, 0x600000ULL,
+              AMD_POLARIS_PTE_ACCESS_READ |
+              AMD_POLARIS_PTE_ACCESS_WRITE) == GPU_PAGE_TABLE_OK);
+    assert(mapped_leaf_entry(&table, va) ==
+           (0x600000ULL | AMD_POLARIS_PTE_VALID |
+            AMD_POLARIS_PTE_SYSTEM | AMD_POLARIS_PTE_SNOOPED |
+            AMD_POLARIS_PTE_READABLE | AMD_POLARIS_PTE_WRITEABLE));
+    assert(gpu_page_table_destroy(&table, 1) == GPU_PAGE_TABLE_OK);
+    assert(mock.frees == mock.allocations);
+}
+
 int main(void)
 {
     test_mapping_lifecycle();
     test_fail_closed_on_flush_failure();
+    test_vendor_vm_backends();
     return 0;
 }

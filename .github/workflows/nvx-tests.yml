@@ -71,7 +71,10 @@ on:
       - "include/amd_polaris_vm.h"
       - "include/amd_polaris_vm_hw.h"
       - "include/amd_polaris_vm_runtime.h"
+      - "include/amd_polaris_gfx_ring.h"
       - "drivers/gpu/amd/amd_polaris_vm_runtime.c"
+      - "drivers/gpu/amd/amd_polaris_gfx_ring.c"
+      - "scripts/test_amd_polaris_gfx_ring.c"
       - "drivers/gpu/amd/amd_polaris_vm_hw.c"
       - "drivers/gpu/amd/amd_polaris_vm.c"
       - "drivers/gpu/amd/amd_polaris_pte.c"
@@ -915,3 +918,16 @@ jobs:
 
       - name: Test GGTT map/unmap, posting read and forcewake timeout
         run: /tmp/vantaos-intel-gen9-ggtt-test
+
+
+      - name: Compile Polaris GFX command-ring tests with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_amd_polaris_gfx_ring.c \
+            drivers/gpu/amd/amd_polaris_gfx_ring.c \
+            drivers/gpu/amd/amd_polaris_commands.c \
+            drivers/gpu/core/gpu_mmio.c \
+            -o /tmp/vantaos-amd-polaris-gfx-ring-test
+
+      - name: Test Polaris CP ring setup, fenced submission, wrap and fail-closed timeout
+        run: /tmp/vantaos-amd-polaris-gfx-ring-test

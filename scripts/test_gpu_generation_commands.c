@@ -36,6 +36,43 @@ static void test_intel_batch(void)
            INTEL_GEN9_COMMAND_EMPTY);
 }
 
+
+static void test_intel_fence_batch(void)
+{
+    uint32_t words[INTEL_GEN9_FENCE_BATCH_DWORDS];
+    size_t count = 99U;
+    const uint64_t target = 0x00001234567000ULL;
+    const uint32_t value = 0xA55A1234U;
+
+    assert(intel_gen9_build_fence_batch(words, 5U, target, value, &count) ==
+           INTEL_GEN9_COMMAND_OK);
+    assert(count == INTEL_GEN9_FENCE_BATCH_DWORDS);
+    assert(intel_gen9_validate_fence_batch(words, count, target, value) ==
+           INTEL_GEN9_COMMAND_OK);
+
+    words[1] ^= 4U;
+    assert(intel_gen9_validate_fence_batch(words, count, target, value) ==
+           INTEL_GEN9_COMMAND_UNSUPPORTED);
+    words[1] ^= 4U;
+    words[3] ^= 1U;
+    assert(intel_gen9_validate_fence_batch(words, count, target, value) ==
+           INTEL_GEN9_COMMAND_UNSUPPORTED);
+    words[3] ^= 1U;
+    words[0] |= INTEL_GEN9_MI_USE_GGTT;
+    assert(intel_gen9_validate_fence_batch(words, count, target, value) ==
+           INTEL_GEN9_COMMAND_UNSUPPORTED);
+
+    assert(intel_gen9_build_fence_batch(words, 4U, target, value, &count) ==
+           INTEL_GEN9_COMMAND_TOO_LARGE);
+    assert(count == 0U);
+    assert(intel_gen9_build_fence_batch(words, 5U, target + 1U, value, &count) ==
+           INTEL_GEN9_COMMAND_INVALID_ARGUMENT);
+    assert(intel_gen9_build_fence_batch(words, 5U, 1ULL << 48U, value, &count) ==
+           INTEL_GEN9_COMMAND_INVALID_ARGUMENT);
+    assert(intel_gen9_build_fence_batch(words, 5U, target, value, NULL) ==
+           INTEL_GEN9_COMMAND_INVALID_ARGUMENT);
+}
+
 static void test_amd_pm4_noop_stream(void)
 {
     amd_polaris_pm4_summary_t s;
@@ -65,6 +102,7 @@ static void test_amd_pm4_noop_stream(void)
 int main(void)
 {
     test_intel_batch();
+    test_intel_fence_batch();
     test_amd_pm4_noop_stream();
     return 0;
 }

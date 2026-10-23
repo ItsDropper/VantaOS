@@ -115,6 +115,10 @@ static void test_contiguous_dma_mapping(void)
         .acquire_render = acquire,
         .release_render = release
     };
+    intel_gen9_ggtt_vm_context_t vm_context = {
+        .gttmmadr = &mmio, .forcewake = &ops
+    };
+    gpu_vm_ops_t vm_ops;
     uint64_t first = 0U, second = 0U;
 
     memset(fake_aperture, 0, sizeof(fake_aperture));
@@ -138,6 +142,14 @@ static void test_contiguous_dma_mapping(void)
 
     assert(intel_gen9_ggtt_map_contiguous(&mmio, 0x2000U, 0x300000U,
                4097U, &ops) == INTEL_GEN9_GGTT_INVALID_ARGUMENT);
+
+    assert(intel_gen9_ggtt_make_vm_ops(&vm_context, &vm_ops));
+    assert(vm_ops.map_page(vm_ops.context, 0x8000U, 0x500000U,
+                           GPU_VM_ACCESS_READ | GPU_VM_ACCESS_WRITE));
+    assert(vm_ops.flush(vm_ops.context));
+    assert(vm_ops.unmap_page(vm_ops.context, 0x8000U));
+    assert(vm_ops.flush(vm_ops.context));
+
     state.acquire_ok = 0;
     assert(intel_gen9_ggtt_map_contiguous(&mmio, 0x4000U, 0x400000U,
                4096U, &ops) == INTEL_GEN9_GGTT_STATE_UNCERTAIN);

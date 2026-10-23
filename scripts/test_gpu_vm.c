@@ -10,6 +10,7 @@
 #include <assert.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 
 #define PAGE_SIZE 4096U
@@ -106,6 +107,7 @@ int main(void)
     gpu_vm_ops_t ops = { .map_page = map_page, .unmap_page = unmap_page,
                          .flush = flush };
 
+    puts("gpu-vm-stage-1 init"); fflush(stdout);
     assert(gpu_va_init(&va_space, 0x10000000ULL, 0x1000000ULL) == GPU_VA_OK);
     assert(gpu_vm_init(&vm, &va_space, &ops) == GPU_VM_OK);
     assert(gpu_vm_map_dma(&vm, NULL, &dma, GPU_VM_ACCESS_READ, &handle) ==
@@ -114,10 +116,12 @@ int main(void)
     assert(gpu_va_alloc(&va_space, dma.allocated_size, GPU_VA_PAGE_SIZE,
                         GPU_VA_GUARD_ONE_PAGE, &va) == GPU_VA_OK);
 
+    puts("gpu-vm-stage-2 map success"); fflush(stdout);
     assert(gpu_vm_map_dma(&vm, &va, &dma,
                           GPU_VM_ACCESS_READ | GPU_VM_ACCESS_WRITE,
                           &handle) == GPU_VM_OK);
     assert(handle.token != 0U && mapped_count == 2U && map_calls == 2U);
+    puts("gpu-vm-stage-6 destroy/reinit"); fflush(stdout);
     assert(gpu_vm_validate(&vm) == GPU_VM_OK);
     assert(gpu_vm_destroy(&vm) == GPU_VM_BUSY);
     assert(gpu_vm_unmap(&vm, &handle) == GPU_VM_OK);
@@ -126,6 +130,7 @@ int main(void)
     assert(gpu_va_free(&va_space, &va) == GPU_VA_OK);
     gpu_dma_release(&dma);
 
+    puts("gpu-vm-stage-3 rollback success"); fflush(stdout);
     assert(gpu_dma_alloc(8192U, 32U, &dma) == GPU_DMA_OK);
     assert(gpu_va_alloc(&va_space, dma.allocated_size, GPU_VA_PAGE_SIZE,
                         0U, &va) == GPU_VA_OK);
@@ -137,6 +142,7 @@ int main(void)
     assert(gpu_va_free(&va_space, &va) == GPU_VA_OK);
     gpu_dma_release(&dma);
 
+    puts("gpu-vm-stage-4 failed rollback"); fflush(stdout);
     assert(gpu_dma_alloc(8192U, 32U, &dma) == GPU_DMA_OK);
     assert(gpu_va_alloc(&va_space, dma.allocated_size, GPU_VA_PAGE_SIZE,
                         0U, &va) == GPU_VA_OK);
@@ -154,6 +160,7 @@ int main(void)
     assert(gpu_va_free(&va_space, &va) == GPU_VA_OK);
     gpu_dma_release(&dma);
 
+    puts("gpu-vm-stage-5 unmap retry"); fflush(stdout);
     assert(gpu_dma_alloc(4096U, 32U, &dma) == GPU_DMA_OK);
     assert(gpu_va_alloc(&va_space, dma.allocated_size, GPU_VA_PAGE_SIZE,
                         0U, &va) == GPU_VA_OK);

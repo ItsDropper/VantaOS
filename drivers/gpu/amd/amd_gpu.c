@@ -20,20 +20,79 @@ static int amd_gpu_probe(gpu_device_t *device)
 
 static int amd_gpu_initialize(gpu_device_t *device)
 {
-    (void)device;
-    /* Deliberately fail closed until PSP, GMC and engine setup exist. */
-    return 0;
+    amd_gpu_runtime_binding_t *binding;
+    amd_polaris_device_status_t status;
+    uint32_t fence = 0U;
+
+    if (device == NULL || device->driver_private == NULL ||
+        device->pci_device == NULL)
+        return 0;
+    binding = (amd_gpu_runtime_binding_t *)device->driver_private;
+    if (binding->configured == 0U || binding->firmware_ready == 0U ||
+        binding->fence_timeout_iterations == 0U)
+        return 0;
+
+    status = amd_polaris_device_runtime_init(&binding->runtime,
+        device->pci_device, binding->ring_bytes, 1, 1);
+    if (status != AMD_POLARIS_DEVICE_OK) {
+        binding->initialized = (uint8_t)(binding->runtime.initialized != 0U);
+        return 0;
+    }
+    binding->initialized = 1U;
+
+    /*
+     * Do not report a started driver based on register readback alone. Execute
+     * the restricted PM4 fence packet and require the GPU to write it back.
+     */
+    status = amd_polaris_device_submit_fence(&binding->runtime, &fence);
+    if (status == AMD_POLARIS_DEVICE_OK)
+        status = amd_polaris_device_wait_fence(&binding->runtime, fence,
+            binding->fence_timeout_iterations);
+    if (status != AMD_POLARIS_DEVICE_OK) {
+        if (amd_polaris_device_runtime_shutdown(&binding->runtime, 1) ==
+            AMD_POLARIS_DEVICE_OK)
+            binding->initialized = 0U;
+        return 0;
+    }
+
+    binding->fence_verified = 1U;
+    return 1;
 }
 
 static int amd_gpu_quiesce(gpu_device_t *device)
 {
-    return device != 0 && device->state == GPU_DEVICE_QUIESCING;
+    amd_gpu_runtime_binding_t *binding;
+
+    if (device == NULL || device->state != GPU_DEVICE_QUIESCING)
+        return 0;
+    if (device->driver_private == NULL)
+        return 0;
+    binding = (amd_gpu_runtime_binding_t *)device->driver_private;
+    if (binding->initialized == 0U)
+        return 1;
+    if (amd_polaris_device_runtime_shutdown(&binding->runtime, 1) !=
+        AMD_POLARIS_DEVICE_OK)
+        return 0;
+    binding->initialized = 0U;
+    binding->fence_verified = 0U;
+    return 1;
 }
 
 static void amd_gpu_shutdown(gpu_device_t *device)
 {
-    if (device != 0)
-        gpu_device_clear_capabilities(device);
+    if (device == NULL)
+        return;
+    if (device->driver_private != NULL) {
+        amd_gpu_runtime_binding_t *binding =
+            (amd_gpu_runtime_binding_t *)device->driver_private;
+        if (binding->initialized != 0U &&
+            amd_polaris_device_runtime_shutdown(&binding->runtime, 1) ==
+                AMD_POLARIS_DEVICE_OK) {
+            binding->initialized = 0U;
+            binding->fence_verified = 0U;
+        }
+    }
+    gpu_device_clear_capabilities(device);
 }
 
 static const gpu_driver_ops_t amd_ops = {
@@ -93,4 +152,30 @@ int amd_gpu_describe(const struct pci_device *device,
 const gpu_driver_descriptor_t *amd_gpu_driver(void)
 {
     return &amd_driver;
+}
+
+int amd_gpu_configure_runtime(gpu_device_t *device,
+                              amd_gpu_runtime_binding_t *binding,
+                              size_t ring_bytes,
+                              unsigned fence_timeout_iterations,
+                              int authenticated_firmware_ready)
+{
+    if (device == NULL || binding == NULL ||
+        device->state != GPU_DEVICE_DISCOVERED ||
+        device->pci_device == NULL ||
+        !amd_polaris_match_id(device->identity.vendor_id,
+                              device->identity.device_id) ||
+        binding->configured != 0U || binding->initialized != 0U ||
+        binding->runtime.initialized != 0U ||
+        fence_timeout_iterations == 0U ||
+        !authenticated_firmware_ready)
+        return 0;
+
+    memset(binding, 0, sizeof(*binding));
+    binding->ring_bytes = ring_bytes;
+    binding->fence_timeout_iterations = fence_timeout_iterations;
+    binding->firmware_ready = 1U;
+    binding->configured = 1U;
+    device->driver_private = binding;
+    return 1;
 }

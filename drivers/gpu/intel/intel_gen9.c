@@ -31,7 +31,7 @@ intel_gen9_status_t intel_gen9_inspect(
     out_profile->device_id = device_id;
     out_profile->generation = 9U;
     out_profile->requires_guc_firmware = 1U;
-    out_profile->requires_huc_firmware = 1U;
+    out_profile->huc_firmware_media_only = 1U;
     out_profile->requires_gttmmadr = 1U;
     out_profile->acceleration_ready = 0U;
 

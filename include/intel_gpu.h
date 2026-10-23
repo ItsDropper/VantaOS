@@ -9,6 +9,7 @@
 
 #include "gpu_core.h"
 #include "gpu_pci_resources.h"
+#include "intel_gen9.h"
 
 #define INTEL_GPU_PCI_VENDOR_ID GPU_PCI_VENDOR_INTEL
 
@@ -20,6 +21,8 @@ typedef struct intel_gpu_descriptor {
     uint8_t mmio_aperture_enabled;
     uint16_t pci_command;
     gpu_pci_resource_inventory_t resources;
+    intel_gen9_status_t gen9_profile_status;
+    intel_gen9_profile_t gen9_profile;
 } intel_gpu_descriptor_t;
 
 /* Read-only PCI identity and assigned BAR inventory; no decode/DMA changes. */

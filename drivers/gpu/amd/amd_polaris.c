@@ -39,7 +39,7 @@ amd_polaris_status_t amd_polaris_inspect(
     bar = gpu_pci_resources_find_mmio(resources, AMD_POLARIS_MMIO_BAR);
     if (bar == NULL || bar->base == 0U)
         return AMD_POLARIS_NO_ASSIGNED_MMIO;
-    if (bar->is_io != 0U || (bar->base & 0xFFFFU) != 0U)
+    if (bar->is_io != 0U || (bar->base & 0xFFFU) != 0U)
         return AMD_POLARIS_INVALID_MMIO;
 
     out_profile->mmio_base = bar->base;

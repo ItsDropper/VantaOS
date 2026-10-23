@@ -85,7 +85,6 @@ amd_polaris_gfx_ring_status_t amd_polaris_gfx_ring_init(
 {
     uint32_t control, observed;
     unsigned buffer_size_log2;
-    uint64_t ring_gpu_shifted;
 
     if (ring == NULL || mmio == NULL || mmio->base == NULL ||
         ring_storage == NULL || ring->initialized != 0U ||

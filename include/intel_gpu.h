@@ -16,6 +16,7 @@
 
 /*
  * Caller-owned binding for an already constructed Gen9 LRCA/context and ring.
+ * The context workload must write expected_fence_value to fence_cpu_address.
  * quiesce_engine must stop all engine access to that context before returning 1.
  * The binding and runtime must remain at stable addresses.
  */
@@ -24,6 +25,8 @@ typedef struct intel_gpu_runtime_binding {
     uint64_t lrca_ggtt_address;
     uint32_t context_id;
     uint16_t descriptor_flags;
+    const volatile uint32_t *fence_cpu_address;
+    uint32_t expected_fence_value;
     unsigned completion_timeout_iterations;
     int (*quiesce_engine)(void *context);
     void *quiesce_context;
@@ -56,6 +59,8 @@ int intel_gpu_configure_runtime(gpu_device_t *device,
                                 uint64_t lrca_ggtt_address,
                                 uint32_t context_id,
                                 uint16_t descriptor_flags,
+                                const volatile uint32_t *fence_cpu_address,
+                                uint32_t expected_fence_value,
                                 unsigned completion_timeout_iterations,
                                 int context_ready,
                                 int (*quiesce_engine)(void *context),

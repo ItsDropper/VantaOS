@@ -22,6 +22,23 @@ static int descriptor_valid(uint64_t descriptor, uint32_t *id)
     return 1;
 }
 
+intel_gen9_execlist_status_t intel_gen9_execlist_build_descriptor(
+    uint64_t lrca_ggtt_address, uint32_t context_id, uint16_t flags,
+    uint64_t *out_descriptor)
+{
+    if (out_descriptor == NULL || lrca_ggtt_address == 0U ||
+        (lrca_ggtt_address & 0xFFFU) != 0U ||
+        lrca_ggtt_address > INTEL_GEN9_CONTEXT_DESCRIPTOR_LRCA_MASK ||
+        context_id == 0U || context_id > 0x1FFFFFU ||
+        (flags & INTEL_GEN9_CONTEXT_DESCRIPTOR_VALID) == 0U ||
+        (((uint64_t)flags) & ~INTEL_GEN9_CONTEXT_DESCRIPTOR_ALLOWED_FLAGS) != 0U)
+        return INTEL_GEN9_EXECLIST_INVALID_DESCRIPTOR;
+
+    *out_descriptor = lrca_ggtt_address |
+                      ((uint64_t)context_id << 32U) | flags;
+    return INTEL_GEN9_EXECLIST_OK;
+}
+
 intel_gen9_execlist_status_t intel_gen9_execlist_init(
     intel_gen9_execlist_t *state, const gpu_mmio_region_t *mmio,
     int render_forcewake_held, int engine_quiesced)

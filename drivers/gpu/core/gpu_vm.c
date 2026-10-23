@@ -8,6 +8,29 @@
 
 #include <string.h>
 
+/* Host regressions run in userspace and cannot execute privileged CLI/PUSHFQ. */
+#ifdef GPU_VM_HOST_TEST
+static uint64_t gpu_vm_lock(spinlock_t *lock)
+{
+    spinlock_lock(lock);
+    return 0U;
+}
+static void gpu_vm_unlock(spinlock_t *lock, uint64_t flags)
+{
+    (void)flags;
+    spinlock_unlock(lock);
+}
+#else
+static uint64_t gpu_vm_lock(spinlock_t *lock)
+{
+    return spinlock_lock_irqsave(lock);
+}
+static void gpu_vm_unlock(spinlock_t *lock, uint64_t flags)
+{
+    spinlock_unlock_irqrestore(lock, flags);
+}
+#endif
+
 static size_t gpu_vm_find_free_record(const gpu_vm_t *vm)
 {
     for (size_t i = 0U; i < GPU_VM_MAX_MAPPINGS; ++i)
@@ -105,9 +128,9 @@ gpu_vm_status_t gpu_vm_map_dma(gpu_vm_t *vm,
     if (!gpu_vm_validate_inputs(va, dma, access))
         return GPU_VM_INVALID_ARGUMENT;
 
-    flags = spinlock_lock_irqsave(&vm->lock);
+    flags = gpu_vm_lock(&vm->lock);
     if (vm->faulted != 0U) {
-        spinlock_unlock_irqrestore(&vm->lock, flags);
+        gpu_vm_unlock(&vm->lock, flags);
         return GPU_VM_DEVICE_FAULTED;
     }
     slot = gpu_vm_find_free_record(vm);

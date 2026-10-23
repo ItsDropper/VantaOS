@@ -65,7 +65,7 @@ static void test_intel_snapshot(void)
            INTEL_GEN9_RING_SNAPSHOT_INVALID_TAIL);
 
     store_register(INTEL_GEN9_RING_TAIL, 0x108U);
-    store_register(INTEL_GEN9_RING_CTL, 0x001FF000U);
+    store_register(INTEL_GEN9_RING_CTL, 0x001FE000U);
     assert(intel_gen9_read_ring_snapshot(&region, &snapshot) ==
            INTEL_GEN9_RING_SNAPSHOT_INVALID_RING_SIZE);
 

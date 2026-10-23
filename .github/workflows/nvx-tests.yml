@@ -92,6 +92,7 @@ on:
       - "scripts/test_gpu_generation_pte.c"
       - "scripts/test_gpu_page_table.c"
       - "scripts/test_amd_polaris_vm_hw.c"
+      - "scripts/test_amd_polaris_vm_dma.c"
       - "include/gpu.h"
       - "include/gpu_core.h"
       - "include/gpu_vendor.h"
@@ -911,6 +912,12 @@ jobs:
 
       - name: Test Polaris VMID-1 root setup and bounded invalidation
         run: /tmp/vantaos-amd-polaris-vm-hw-test
+
+      - name: Compile native-DMA Polaris VM integration tests
+        run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_amd_polaris_vm_dma.c drivers/gpu/amd/amd_polaris_vm_runtime.c drivers/gpu/amd/amd_polaris_vm_runtime_dma.c drivers/gpu/amd/amd_polaris_vm_hw.c drivers/gpu/amd/amd_polaris_vm.c drivers/gpu/amd/amd_polaris_pte.c drivers/gpu/core/gpu_page_table.c drivers/gpu/core/gpu_page_table_vm.c drivers/gpu/core/gpu_dma_page_table.c drivers/gpu/core/gpu_dma.c drivers/gpu/core/gpu_mmio.c -o /tmp/vantaos-amd-polaris-vm-dma-test
+
+      - name: Test real DMA-backed Polaris VM setup, mapping, invalidation and teardown
+        run: /tmp/vantaos-amd-polaris-vm-dma-test
 
 
       - name: Compile Intel Gen9 GGTT and forcewake tests

@@ -21,7 +21,8 @@ typedef enum intel_gen9_ggtt_status {
     INTEL_GEN9_GGTT_OUT_OF_RANGE,
     INTEL_GEN9_GGTT_MMIO_ERROR,
     INTEL_GEN9_GGTT_VERIFY_FAILED,
-    INTEL_GEN9_GGTT_FORCEWAKE_FAILED
+    INTEL_GEN9_GGTT_FORCEWAKE_FAILED,
+    INTEL_GEN9_GGTT_STATE_UNCERTAIN
 } intel_gen9_ggtt_status_t;
 
 typedef struct intel_gen9_ggtt_forcewake_ops {

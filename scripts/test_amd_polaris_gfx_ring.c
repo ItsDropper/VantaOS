@@ -121,15 +121,13 @@ static void test_ring_full_and_wrap(void)
         0x600000U, 1U, &packet_count) == AMD_POLARIS_PM4_OK);
 
     /* With five dwords free-space unavailable, submission must not overwrite the ring. */
-    registers[REG_CP_RB0_RPTR / 4U] =
-        (uint32_t)(sizeof(ring_storage) / sizeof(uint32_t) -
-                   AMD_POLARIS_PM4_FENCE_DWORDS);
+    registers[REG_CP_RB0_RPTR / 4U] = AMD_POLARIS_PM4_FENCE_DWORDS;
     assert(amd_polaris_gfx_ring_submit_fence(&ring, packet, packet_count,
         0x600000U, 1U) == AMD_POLARIS_GFX_RING_BUSY);
 
     /* Exercise wraparound by placing the producer just before the end. */
     ring.write_pointer = (uint32_t)(sizeof(ring_storage) / sizeof(uint32_t) - 2U);
-    registers[REG_CP_RB0_RPTR / 4U] = 0U;
+    registers[REG_CP_RB0_RPTR / 4U] = 4U;
     assert(amd_polaris_gfx_ring_submit_fence(&ring, packet, packet_count,
         0x600000U, 1U) == AMD_POLARIS_GFX_RING_OK);
     assert(reg(REG_CP_RB0_WPTR) == AMD_POLARIS_PM4_FENCE_DWORDS - 2U);

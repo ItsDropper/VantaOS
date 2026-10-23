@@ -7,10 +7,11 @@
 #include "amd_polaris_vm.h"
 #include "amd_polaris_pte.h"
 
-static int allocate_page(void *context, gpu_page_table_page_t *out_page)
+static int allocate_page(void *context, size_t entry_count,
+                         gpu_page_table_page_t *out_page)
 {
     amd_polaris_vm_backend_t *backend = context;
-    return backend->allocate_page(backend->context, out_page);
+    return backend->allocate_table(backend->context, entry_count, out_page);
 }
 
 static void free_page(void *context, gpu_page_table_page_t *page)
@@ -45,11 +46,23 @@ static int flush(void *context, uint64_t root_physical)
     return backend->invalidate_tlb(backend->context, root_physical);
 }
 
+static const gpu_page_table_config_t amd_config = {
+    .level_count = 2U,
+    .virtual_address_bits = 36U,
+    .root_entry_count = 32768U,
+    .index_shifts = {21U, 12U, 0U, 0U}
+};
+
+const gpu_page_table_config_t *amd_polaris_vm_config(void)
+{
+    return &amd_config;
+}
+
 int amd_polaris_vm_make_ops(amd_polaris_vm_backend_t *backend,
                             gpu_page_table_ops_t *out_ops)
 {
     if (backend == 0 || out_ops == 0 ||
-        backend->allocate_page == 0 || backend->free_page == 0 ||
+        backend->allocate_table == 0 || backend->free_page == 0 ||
         backend->invalidate_tlb == 0)
         return 0;
     out_ops->context = backend;

@@ -28,7 +28,7 @@ typedef struct intel_gen9_profile {
     uint16_t device_id;
     uint8_t generation;
     uint8_t requires_guc_firmware;
-    uint8_t requires_huc_firmware;
+    uint8_t huc_firmware_media_only;
     uint8_t requires_gttmmadr;
     uint8_t acceleration_ready;
     uint64_t gttmmadr_base;

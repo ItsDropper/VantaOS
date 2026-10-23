@@ -83,6 +83,8 @@ on:
       - "include/amd_polaris_gfx_ring.h"
       - "include/amd_polaris_gfx_runtime.h"
       - "include/amd_polaris_device_runtime.h"
+      - "include/amd_polaris_memory.h"
+      - "scripts/test_amd_polaris_memory.c"
       - "scripts/test_amd_polaris_gfx_runtime.c"
       - "drivers/gpu/amd/amd_polaris_vm_runtime.c"
       - "drivers/gpu/amd/amd_polaris_gfx_ring.c"
@@ -995,3 +997,12 @@ jobs:
 
       - name: Compile Gen9 GPU-visible memory runtime for the kernel
         run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude -c drivers/gpu/intel/intel_gen9_memory.c -o /tmp/vantaos-intel-gen9-memory.o
+
+      - name: Compile Polaris GPU virtual-memory allocation tests
+        run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_amd_polaris_memory.c drivers/gpu/amd/amd_polaris_memory.c drivers/gpu/core/gpu_dma.c -o /tmp/vantaos-amd-polaris-memory-test
+
+      - name: Test Polaris VA allocation, DMA mapping, rollback and TLB flush recovery
+        run: /tmp/vantaos-amd-polaris-memory-test
+
+      - name: Compile Polaris GPU virtual-memory runtime for the kernel
+        run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude -c drivers/gpu/amd/amd_polaris_memory.c -o /tmp/vantaos-amd-polaris-memory.o

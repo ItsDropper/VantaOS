@@ -14,6 +14,8 @@
 #define INTEL_GEN9_MEMORY_GGTT_LIMIT (1ULL << 32U)
 #define INTEL_GEN9_MEMORY_DEFAULT_GGTT_BASE 0x10000000ULL
 #define INTEL_GEN9_MEMORY_FORCEWAKE_TIMEOUT 100000U
+#define INTEL_GEN9_MEMORY_MAX_ALLOCATIONS 64U
+#define INTEL_GEN9_MEMORY_VA_SIZE 0x10000000ULL
 
 typedef enum intel_gen9_memory_status {
     INTEL_GEN9_MEMORY_OK = 0,
@@ -28,10 +30,18 @@ typedef enum intel_gen9_memory_status {
     INTEL_GEN9_MEMORY_SHUTDOWN_FAILED
 } intel_gen9_memory_status_t;
 
+struct intel_gen9_gpu_allocation;
+typedef struct intel_gen9_memory_slot {
+    struct intel_gen9_gpu_allocation *allocation;
+    uint64_t address;
+    size_t size;
+} intel_gen9_memory_slot_t;
+
 typedef struct intel_gen9_memory_runtime {
     const struct pci_device *device;
     gpu_pci_mmio_mapping_t mapping;
     intel_gen9_ggtt_forcewake_ops_t forcewake;
+    intel_gen9_memory_slot_t slots[INTEL_GEN9_MEMORY_MAX_ALLOCATIONS];
     uint8_t initialized;
     uint8_t faulted;
 } intel_gen9_memory_runtime_t;
@@ -52,7 +62,11 @@ intel_gen9_memory_status_t intel_gen9_memory_init(
     intel_gen9_memory_runtime_t *runtime, const struct pci_device *device,
     int device_quiesced);
 
-/* Allocate contiguous DMA and map it into the 32-bit GGTT at an aligned VA. */
+/*
+ * Allocate contiguous DMA and map it into the 32-bit GGTT. Pass address 0 to
+ * choose a free page-aligned VA in the driver's reserved 256 MiB window.
+ * The runtime and allocation object must remain at stable addresses.
+ */
 intel_gen9_memory_status_t intel_gen9_memory_alloc(
     intel_gen9_memory_runtime_t *runtime, size_t size, uint64_t ggtt_address,
     intel_gen9_gpu_allocation_t *out_allocation);

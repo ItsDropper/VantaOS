@@ -16,7 +16,9 @@ static int descriptor_valid(uint64_t descriptor, uint32_t *id)
 
     if ((descriptor & INTEL_GEN9_CONTEXT_DESCRIPTOR_VALID) == 0U ||
         lrca == 0U || context_id == 0U ||
-        (descriptor & INTEL_GEN9_CONTEXT_DESCRIPTOR_RESERVED_MASK) != 0U)
+        (descriptor & INTEL_GEN9_CONTEXT_DESCRIPTOR_RESERVED_MASK) != 0U ||
+        ((descriptor & 0xFFFULL) &
+         ~INTEL_GEN9_CONTEXT_DESCRIPTOR_ALLOWED_FLAGS) != 0U)
         return 0;
     *id = context_id;
     return 1;

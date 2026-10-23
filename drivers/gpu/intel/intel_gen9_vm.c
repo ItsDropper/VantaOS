@@ -7,10 +7,11 @@
 #include "intel_gen9_vm.h"
 #include "intel_gen9_pte.h"
 
-static int allocate_page(void *context, gpu_page_table_page_t *out_page)
+static int allocate_page(void *context, size_t entry_count,
+                         gpu_page_table_page_t *out_page)
 {
     intel_gen9_vm_backend_t *backend = context;
-    return backend->allocate_page(backend->context, out_page);
+    return backend->allocate_table(backend->context, entry_count, out_page);
 }
 
 static void free_page(void *context, gpu_page_table_page_t *page)
@@ -49,11 +50,23 @@ static int flush(void *context, uint64_t root_physical)
     return backend->invalidate_tlb(backend->context, root_physical);
 }
 
+static const gpu_page_table_config_t intel_config = {
+    .level_count = 4U,
+    .virtual_address_bits = 48U,
+    .root_entry_count = GPU_PAGE_TABLE_ENTRIES,
+    .index_shifts = {39U, 30U, 21U, 12U}
+};
+
+const gpu_page_table_config_t *intel_gen9_vm_config(void)
+{
+    return &intel_config;
+}
+
 int intel_gen9_vm_make_ops(intel_gen9_vm_backend_t *backend,
                            gpu_page_table_ops_t *out_ops)
 {
     if (backend == 0 || out_ops == 0 ||
-        backend->allocate_page == 0 || backend->free_page == 0 ||
+        backend->allocate_table == 0 || backend->free_page == 0 ||
         backend->invalidate_tlb == 0)
         return 0;
     out_ops->context = backend;

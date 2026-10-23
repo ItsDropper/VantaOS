@@ -45,7 +45,7 @@ static gpu_pci_resource_inventory_t resources_with_bars(void)
         .is_64bit = 1U, .prefetchable = 0U
     };
     resources.bars[1] = (gpu_pci_bar_resource_t) {
-        .base = 0xA0000000ULL, .index = 5U, .is_io = 0U,
+        .base = 0xA0000000ULL, .index = 2U, .is_io = 0U,
         .is_64bit = 0U, .prefetchable = 0U
     };
     resources.count = 2U;

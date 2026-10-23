@@ -402,7 +402,7 @@ int main(void)
         assert(intel_device.driver_private == &intel_binding);
         assert(intel_binding.configured && intel_binding.context_ready);
         assert(!intel_gpu_configure_runtime(&intel_device, &intel_binding,
-            0x1000U, 1U, 0x9U, 100U, 1, test_driver_quiesce, NULL));
+            0x1000U, 1U, 0x9U, 100U, 1, test_engine_quiesce, NULL));
     }
     assert(strcmp(gpu_vendor_name(GPU_VENDOR_AMD), "AMD") == 0);
     assert(strcmp(gpu_architecture_name(GPU_ARCH_AMD_RDNA3), "AMD RDNA 3") == 0);

@@ -184,9 +184,18 @@ intel_gen9_execlist_status_t intel_gen9_execlist_build_descriptor(
     uint64_t lrca_ggtt_address, uint32_t context_id, uint16_t flags,
     uint64_t *out_descriptor)
 {
-    (void)lrca_ggtt_address; (void)context_id; (void)flags;
-    if (out_descriptor != NULL) *out_descriptor = 0U;
-    return INTEL_GEN9_EXECLIST_INVALID_DESCRIPTOR;
+    if (out_descriptor == NULL || lrca_ggtt_address == 0U ||
+        (lrca_ggtt_address & 0xFFFU) != 0U ||
+        lrca_ggtt_address > 0x00000000FFFFF000ULL ||
+        context_id == 0U || context_id > 0x1FFFFFU ||
+        (flags & 0x0001U) == 0U ||
+        (((uint64_t)flags) & ~0x0000000000000119ULL) != 0U) {
+        if (out_descriptor != NULL) *out_descriptor = 0U;
+        return INTEL_GEN9_EXECLIST_INVALID_DESCRIPTOR;
+    }
+    *out_descriptor = lrca_ggtt_address |
+                      ((uint64_t)context_id << 32U) | flags;
+    return INTEL_GEN9_EXECLIST_OK;
 }
 
 int main(void)
@@ -351,6 +360,43 @@ int main(void)
         assert(attached.state == GPU_DEVICE_FAILED);
         assert(test_shutdown_calls == 4);
         assert(test_initialize_calls == 3);
+    }
+    {
+        const struct pci_device polaris = {
+            .vendor_id = 0x1002U, .device_id = 0x67DFU,
+            .class_code = 0x03U, .subclass = 0x00U
+        };
+        gpu_device_t amd_device;
+        gpu_pci_match_t amd_match;
+        amd_gpu_runtime_binding_t amd_binding = {0};
+        intel_gpu_runtime_binding_t intel_binding = {0};
+        gpu_device_t intel_device;
+        gpu_pci_match_t intel_match;
+        const struct pci_device gen9 = {
+            .vendor_id = 0x8086U, .device_id = 0x1912U,
+            .class_code = 0x03U, .subclass = 0x00U
+        };
+
+        assert(gpu_classify_pci_function(&polaris, &amd_match));
+        assert(gpu_device_construct(&amd_device, &polaris, &amd_match));
+        assert(!amd_gpu_configure_runtime(&amd_device, &amd_binding,
+            65536U, 100U, 0));
+        assert(amd_device.driver_private == NULL);
+        assert(amd_gpu_configure_runtime(&amd_device, &amd_binding,
+            65536U, 100U, 1));
+        assert(amd_device.driver_private == &amd_binding);
+        assert(amd_binding.configured && amd_binding.firmware_ready);
+        assert(!amd_gpu_configure_runtime(&amd_device, &amd_binding,
+            65536U, 100U, 1));
+
+        assert(gpu_classify_pci_function(&gen9, &intel_match));
+        assert(gpu_device_construct(&intel_device, &gen9, &intel_match));
+        assert(intel_gpu_configure_runtime(&intel_device, &intel_binding,
+            0x1000U, 1U, 0x9U, 100U, 1, test_driver_quiesce, NULL));
+        assert(intel_device.driver_private == &intel_binding);
+        assert(intel_binding.configured && intel_binding.context_ready);
+        assert(!intel_gpu_configure_runtime(&intel_device, &intel_binding,
+            0x1000U, 1U, 0x9U, 100U, 1, test_driver_quiesce, NULL));
     }
     assert(strcmp(gpu_vendor_name(GPU_VENDOR_AMD), "AMD") == 0);
     assert(strcmp(gpu_architecture_name(GPU_ARCH_AMD_RDNA3), "AMD RDNA 3") == 0);

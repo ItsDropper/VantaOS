@@ -44,6 +44,8 @@ typedef struct amd_polaris_gpu_allocation {
     amd_polaris_memory_runtime_t *runtime;
     gpu_dma_buffer_t dma;
     uint64_t gpu_address;
+    uint8_t *mapped_pages;
+    size_t page_count;
     uint8_t mapped;
 } amd_polaris_gpu_allocation_t;
 

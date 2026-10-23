@@ -19,8 +19,17 @@
 typedef struct gpu_page_table_page {
     uint64_t *entries;
     uint64_t physical_address;
+    size_t entry_count;
+    size_t allocation_size;
     void *cookie;
 } gpu_page_table_page_t;
+
+typedef struct gpu_page_table_config {
+    uint8_t level_count;
+    uint8_t virtual_address_bits;
+    size_t root_entry_count;
+    unsigned index_shifts[GPU_PAGE_TABLE_LEVELS];
+} gpu_page_table_config_t;
 
 typedef enum gpu_page_table_status {
     GPU_PAGE_TABLE_OK = 0,
@@ -39,7 +48,9 @@ typedef enum gpu_page_table_status {
 
 typedef struct gpu_page_table_ops {
     void *context;
-    int (*allocate_page)(void *context, gpu_page_table_page_t *out_page);
+    /* Must allocate a physically contiguous, suitably aligned table region. */
+    int (*allocate_table)(void *context, size_t entry_count,
+                          gpu_page_table_page_t *out_page);
     void (*free_page)(void *context, gpu_page_table_page_t *page);
     int (*encode_directory)(void *context, uint64_t child_physical,
                             uint64_t *out_entry);
@@ -53,15 +64,21 @@ typedef struct gpu_page_table {
     gpu_page_table_page_t pages[GPU_PAGE_TABLE_MAX_PAGES];
     size_t page_count;
     uint64_t root_physical;
+    gpu_page_table_config_t config;
     uint8_t initialized;
     uint8_t faulted;
 } gpu_page_table_t;
 
 /*
- * Software 4-level, 48-bit GPU page-table walker. Vendor callbacks own PTE/PDE
- * encoding, DMA-coherent page allocation, hardware root installation and TLB
- * invalidation. Caller must quiesce the GPU before destroy frees any table.
+ * Configurable GPU page-table walker. Intel Gen9 uses a 4-level 48-bit
+ * layout; Polaris GCN4 uses a 2-level layout with a larger contiguous root
+ * directory for the configured 36-bit VA range. Vendor callbacks own entry
+ * encoding, DMA-coherent allocation, root installation and TLB invalidation.
+ * Caller must quiesce the GPU before destroy frees any table.
  */
+gpu_page_table_status_t gpu_page_table_init_config(
+    gpu_page_table_t *table, const gpu_page_table_ops_t *ops,
+    const gpu_page_table_config_t *config);
 gpu_page_table_status_t gpu_page_table_init(
     gpu_page_table_t *table, const gpu_page_table_ops_t *ops);
 gpu_page_table_status_t gpu_page_table_map(

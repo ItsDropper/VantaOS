@@ -111,6 +111,43 @@ const struct pci_device *pci_get_device(int index)
     return &inventory[index];
 }
 
+/*
+ * This framework-only test does not link the hardware runtime. Its scenarios
+ * deliberately have no assigned BARs or firmware, so every runtime entrypoint
+ * must fail closed if accidentally reached.
+ */
+amd_polaris_device_status_t amd_polaris_device_runtime_init(
+    amd_polaris_device_runtime_t *runtime, const struct pci_device *device,
+    size_t ring_bytes, int firmware_ready, int device_quiesced)
+{
+    (void)runtime; (void)device; (void)ring_bytes;
+    (void)firmware_ready; (void)device_quiesced;
+    return AMD_POLARIS_DEVICE_NOT_READY;
+}
+
+amd_polaris_device_status_t amd_polaris_device_submit_fence(
+    amd_polaris_device_runtime_t *runtime, uint32_t *out_fence)
+{
+    (void)runtime;
+    if (out_fence != NULL) *out_fence = 0U;
+    return AMD_POLARIS_DEVICE_NOT_READY;
+}
+
+amd_polaris_device_status_t amd_polaris_device_wait_fence(
+    amd_polaris_device_runtime_t *runtime, uint32_t fence,
+    unsigned timeout_iterations)
+{
+    (void)runtime; (void)fence; (void)timeout_iterations;
+    return AMD_POLARIS_DEVICE_NOT_READY;
+}
+
+amd_polaris_device_status_t amd_polaris_device_runtime_shutdown(
+    amd_polaris_device_runtime_t *runtime, int device_quiesced)
+{
+    (void)runtime; (void)device_quiesced;
+    return AMD_POLARIS_DEVICE_NOT_READY;
+}
+
 int main(void)
 {
     const struct pci_device intel = {

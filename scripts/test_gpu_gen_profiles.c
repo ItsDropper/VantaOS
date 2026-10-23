@@ -19,7 +19,7 @@ static gpu_pci_resource_inventory_t resources_with_bars(void)
         .base = 0x90000000ULL, .index = 0U, .is_io = 0U,
         .is_64bit = 1U, .prefetchable = 0U
     };
-    resources.bars[5] = (gpu_pci_bar_resource_t) {
+    resources.bars[1] = (gpu_pci_bar_resource_t) {
         .base = 0xA0000000ULL, .index = 5U, .is_io = 0U,
         .is_64bit = 0U, .prefetchable = 0U
     };
@@ -67,10 +67,10 @@ int main(void)
            amd.requires_gfx_firmware);
     assert(!amd.acceleration_ready);
 
-    resources.bars[5].base = 0U;
+    resources.bars[1].base = 0U;
     assert(amd_polaris_inspect(0x1002U, 0x67DFU, &resources, &amd) ==
            AMD_POLARIS_NO_ASSIGNED_MMIO);
-    resources.bars[5].base = 0xA0001000ULL;
+    resources.bars[1].base = 0xA0001000ULL;
     assert(amd_polaris_inspect(0x1002U, 0x67DFU, &resources, &amd) ==
            AMD_POLARIS_INVALID_MMIO);
     assert(amd_polaris_inspect(0x1002U, 0x744CU, &resources, &amd) ==

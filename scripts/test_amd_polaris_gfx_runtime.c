@@ -23,6 +23,7 @@ static unsigned char dma_memory[GPU_DMA_MAX_BYTES]
 static size_t dma_used;
 static uint16_t pci_command = 0x0002U;
 static int reject_bus_master_clear;
+static int fail_next_pci_write_after_effect;
 
 int heap_is_initialized(void) { return 1; }
 void *kmalloc(size_t size) { return malloc(size); }
@@ -44,6 +45,10 @@ int pci_write_config16(const struct pci_device *device, uint8_t offset,
         (value & PCI_COMMAND_BUS_MASTER) == 0U)
         return 0;
     pci_command = value;
+    if (fail_next_pci_write_after_effect) {
+        fail_next_pci_write_after_effect = 0;
+        return 0;
+    }
     return 1;
 }
 
@@ -142,5 +147,23 @@ int main(void)
     assert(runtime.initialized == 0U);
     assert((pci_command & PCI_COMMAND_BUS_MASTER) == 0U);
     assert((pci_command & 0x0002U) != 0U);
+
+    /*
+     * Simulate a bus-master write that takes effect but fails readback.
+     * DMA must remain owned until a later config write verifies bus mastering
+     * is disabled; it must never be freed while the device can still DMA.
+     */
+    memset(&runtime, 0, sizeof(runtime));
+    memset(registers, 0, sizeof(registers));
+    pci_command = 0x0002U;
+    fail_next_pci_write_after_effect = 1;
+    assert(amd_polaris_gfx_runtime_init(&runtime, &device, &mmio,
+        AMD_POLARIS_GFX_RING_MIN_BYTES, 1, 1) ==
+        AMD_POLARIS_GFX_RUNTIME_PCI_ERROR);
+    assert((pci_command & PCI_COMMAND_BUS_MASTER) == 0U);
+    assert(runtime.initialized == 0U);
+    assert(runtime.ring_dma.acquired == 0U &&
+           runtime.rptr_dma.acquired == 0U &&
+           runtime.fence_dma.acquired == 0U);
     return 0;
 }

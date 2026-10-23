@@ -40,7 +40,7 @@ static void test_amd_pm4_noop_stream(void)
 {
     amd_polaris_pm4_summary_t s;
     const uint32_t valid[] = {0x80000000U, 0xC0001000U, 0x12345678U};
-    const uint32_t truncated[] = {0xC0001001U, 0xDEADBEEFU};
+    const uint32_t truncated[] = {0xC0011000U, 0xDEADBEEFU};
     const uint32_t execution[] = {0xC0002D00U};
     const uint32_t malformed_type2[] = {0x80000001U};
 

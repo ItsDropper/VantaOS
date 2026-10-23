@@ -25,6 +25,8 @@ int main(void)
                                 (1ULL << 3U);
     uint64_t invalid;
     uint64_t built_descriptor = 0U;
+    uint32_t completed_context_id = 0U;
+    uint32_t completion_status = 0U;
 
     memset(registers, 0, sizeof(registers));
     assert(intel_gen9_execlist_build_descriptor(0x1000U, 1U, 0x9U,
@@ -40,9 +42,11 @@ int main(void)
            INTEL_GEN9_EXECLIST_NOT_READY);
     assert(intel_gen9_execlist_init(&state, &mmio, 1, 1) ==
            INTEL_GEN9_EXECLIST_OK);
+    assert(intel_gen9_execlist_poll_csb(&state, &completed_context_id,
+        &completion_status) == INTEL_GEN9_EXECLIST_BUSY);
+
     assert(intel_gen9_execlist_submit(&state, descriptor, 0) ==
            INTEL_GEN9_EXECLIST_BUSY);
-
     invalid = descriptor & ~INTEL_GEN9_CONTEXT_DESCRIPTOR_VALID;
     assert(intel_gen9_execlist_submit(&state, invalid, 1) ==
            INTEL_GEN9_EXECLIST_INVALID_DESCRIPTOR);
@@ -58,8 +62,19 @@ int main(void)
            INTEL_GEN9_EXECLIST_BUSY);
     assert(intel_gen9_execlist_complete(&state, 2U) ==
            INTEL_GEN9_EXECLIST_STALE_COMPLETION);
-    assert(intel_gen9_execlist_complete(&state, 1U) ==
-           INTEL_GEN9_EXECLIST_OK);
+
+    /* Gen9 CSB uses six 64-bit slots; slot 1 reports context 1 complete. */
+    registers[INTEL_GEN9_CSB_PTR_OFFSET / 4U] = 1U;
+    registers[(INTEL_GEN9_CSB_BASE_OFFSET + 8U) / 4U] =
+        INTEL_GEN9_CSB_STATUS_COMPLETE;
+    registers[(INTEL_GEN9_CSB_BASE_OFFSET + 12U) / 4U] = 1U;
+    assert(intel_gen9_execlist_poll_csb(&state, &completed_context_id,
+        &completion_status) == INTEL_GEN9_EXECLIST_OK);
+    assert(completed_context_id == 1U);
+    assert(completion_status == INTEL_GEN9_CSB_STATUS_COMPLETE);
+    assert(state.pending == 0U);
+    assert(registers[INTEL_GEN9_CSB_PTR_OFFSET / 4U] == 0x07000100U);
+
     assert(intel_gen9_execlist_shutdown(&state, 0) ==
            INTEL_GEN9_EXECLIST_NOT_READY);
     assert(intel_gen9_execlist_shutdown(&state, 1) ==

@@ -32,6 +32,7 @@ typedef struct intel_gen9_ggtt_forcewake_ops {
     int (*release_render)(void *context);
 } intel_gen9_ggtt_forcewake_ops_t;
 
+/* Keep the context, MMIO mapping and forcewake ops alive at stable addresses. */
 typedef struct intel_gen9_ggtt_vm_context {
     const gpu_mmio_region_t *gttmmadr;
     const intel_gen9_ggtt_forcewake_ops_t *forcewake;

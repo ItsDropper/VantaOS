@@ -5,6 +5,7 @@
  * See the LICENSE file in the project root for the full license text.
  */
 #include "intel_gen9_memory.h"
+#include "intel_gen9_pte.h"
 #include "heap.h"
 
 #include <assert.h>

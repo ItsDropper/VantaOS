@@ -1020,3 +1020,9 @@ jobs:
 
       - name: Test Polaris device boot, VMID-1 allocations, fenced work and safe teardown
         run: /tmp/vantaos-amd-polaris-device-runtime-test
+
+      - name: Compile exact Intel Gen9 and AMD Polaris PCI classification regression
+        run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_gpu_supported_ids.c drivers/gpu/core/gpu_vendor.c -o /tmp/vantaos-gpu-supported-ids-test
+
+      - name: Verify all four scoped PCI IDs classify to the intended architecture
+        run: /tmp/vantaos-gpu-supported-ids-test

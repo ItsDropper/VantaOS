@@ -169,22 +169,20 @@ mmio_fail:
     return AMD_POLARIS_GFX_RING_MMIO_ERROR;
 }
 
-amd_polaris_gfx_ring_status_t amd_polaris_gfx_ring_submit_fence(
+amd_polaris_gfx_ring_status_t amd_polaris_gfx_ring_submit_write32(
     amd_polaris_gfx_ring_t *ring, const uint32_t *packet, size_t packet_dwords,
-    uint64_t allowed_fence_gpu_address, uint32_t expected_value)
+    uint64_t allowed_gpu_address, uint32_t expected_value)
 {
     uint32_t read_pointer, write_pointer, next_pointer;
     size_t capacity_dwords, free_dwords;
-    amd_polaris_pm4_status_t packet_status;
 
     if (ring == NULL || ring->initialized == 0U || ring->mmio == NULL ||
         ring->ring_storage == NULL || packet == NULL)
         return AMD_POLARIS_GFX_RING_INVALID_ARGUMENT;
     if (ring->faulted != 0U)
         return AMD_POLARIS_GFX_RING_FAULTED;
-    packet_status = amd_polaris_validate_fence_packet(
-        packet, packet_dwords, allowed_fence_gpu_address, expected_value);
-    if (packet_status != AMD_POLARIS_PM4_OK ||
+    if (amd_polaris_validate_write32_packet(packet, packet_dwords,
+            allowed_gpu_address, expected_value) != AMD_POLARIS_PM4_OK ||
         packet_dwords != AMD_POLARIS_GFX_RING_FENCE_DWORDS)
         return AMD_POLARIS_GFX_RING_PACKET_REJECTED;
     if (!read32(ring->mmio, REG_CP_RB0_RPTR, &read_pointer))
@@ -211,6 +209,14 @@ amd_polaris_gfx_ring_status_t amd_polaris_gfx_ring_submit_fence(
     }
     ring->write_pointer = next_pointer;
     return AMD_POLARIS_GFX_RING_OK;
+}
+
+amd_polaris_gfx_ring_status_t amd_polaris_gfx_ring_submit_fence(
+    amd_polaris_gfx_ring_t *ring, const uint32_t *packet, size_t packet_dwords,
+    uint64_t allowed_fence_gpu_address, uint32_t expected_value)
+{
+    return amd_polaris_gfx_ring_submit_write32(ring, packet, packet_dwords,
+        allowed_fence_gpu_address, expected_value);
 }
 
 amd_polaris_gfx_ring_status_t amd_polaris_gfx_ring_wait_fence(

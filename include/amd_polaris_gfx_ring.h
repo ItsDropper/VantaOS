@@ -56,7 +56,12 @@ amd_polaris_gfx_ring_status_t amd_polaris_gfx_ring_init(
     size_t ring_bytes, uint64_t rptr_gpu_address, uint8_t vmid,
     int firmware_ready, int device_quiesced);
 
-/* Submits only the exact, prevalidated single-dword WRITE_DATA fence packet. */
+/* Submit a single validated WRITE_DATA dword to one authorized GPU address. */
+amd_polaris_gfx_ring_status_t amd_polaris_gfx_ring_submit_write32(
+    amd_polaris_gfx_ring_t *ring, const uint32_t *packet, size_t packet_dwords,
+    uint64_t allowed_gpu_address, uint32_t expected_value);
+
+/* Fence-specific spelling retained for the queue completion path. */
 amd_polaris_gfx_ring_status_t amd_polaris_gfx_ring_submit_fence(
     amd_polaris_gfx_ring_t *ring, const uint32_t *packet, size_t packet_dwords,
     uint64_t allowed_fence_gpu_address, uint32_t expected_value);

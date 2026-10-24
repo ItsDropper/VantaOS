@@ -255,6 +255,107 @@ amd_polaris_gfx_runtime_status_t amd_polaris_gfx_runtime_init_vm(
                                firmware_ready, device_quiesced);
 }
 
+amd_polaris_gfx_runtime_status_t amd_polaris_gfx_runtime_write32(
+    amd_polaris_gfx_runtime_t *runtime,
+    const amd_polaris_gpu_allocation_t *allocation, size_t offset,
+    uint32_t value, uint32_t *out_fence_value)
+{
+    uint32_t write_packet[AMD_POLARIS_PM4_FENCE_DWORDS];
+    uint32_t fence_packet[AMD_POLARIS_PM4_FENCE_DWORDS];
+    uint32_t fence_value;
+    uint64_t target;
+    size_t packet_count = 0U;
+    amd_polaris_gfx_ring_status_t ring_status;
+
+    if (out_fence_value == NULL)
+        return AMD_POLARIS_GFX_RUNTIME_INVALID_ARGUMENT;
+    *out_fence_value = 0U;
+    if (runtime == NULL || allocation == NULL ||
+        runtime->initialized == 0U || runtime->ring.initialized == 0U ||
+        runtime->uses_vm == 0U || runtime->memory_runtime == NULL ||
+        allocation->mapped == 0U ||
+        allocation->runtime != runtime->memory_runtime ||
+        allocation->dma.acquired == 0U || offset > allocation->dma.size ||
+        allocation->dma.size - offset < sizeof(uint32_t) ||
+        (offset & (sizeof(uint32_t) - 1U)) != 0U ||
+        allocation->gpu_address > UINT64_MAX - (uint64_t)offset)
+        return AMD_POLARIS_GFX_RUNTIME_INVALID_ARGUMENT;
+    if (runtime->faulted != 0U)
+        return AMD_POLARIS_GFX_RUNTIME_NOT_READY;
+    if (runtime->pending != 0U)
+        return AMD_POLARIS_GFX_RUNTIME_BUSY;
+
+    /* Require the exact live allocation handle to be registered in this VM. */
+    {
+        int owned = 0;
+        for (size_t i = 0U; i < AMD_POLARIS_MEMORY_MAX_ALLOCATIONS; ++i) {
+            if (runtime->memory_runtime->slots[i].allocation == allocation &&
+                runtime->memory_runtime->slots[i].address ==
+                    allocation->gpu_address &&
+                runtime->memory_runtime->slots[i].size ==
+                    allocation->dma.allocated_size) {
+                owned = 1;
+                break;
+            }
+        }
+        if (!owned)
+            return AMD_POLARIS_GFX_RUNTIME_INVALID_ARGUMENT;
+    }
+
+    target = allocation->gpu_address + (uint64_t)offset;
+    if (target >= (1ULL << 48U) || (target & 3U) != 0U)
+        return AMD_POLARIS_GFX_RUNTIME_INVALID_ARGUMENT;
+
+    fence_value = runtime->next_fence++;
+    if (fence_value == 0U) {
+        fence_value = runtime->next_fence++;
+        if (fence_value == 0U) {
+            runtime->faulted = 1U;
+            return AMD_POLARIS_GFX_RUNTIME_NOT_READY;
+        }
+    }
+
+    *(volatile uint32_t *)fence_cpu_address(runtime) = 0U;
+    __atomic_thread_fence(__ATOMIC_RELEASE);
+    if (amd_polaris_build_write32_packet(write_packet,
+            AMD_POLARIS_PM4_FENCE_DWORDS, target, value,
+            &packet_count) != AMD_POLARIS_PM4_OK ||
+        packet_count != AMD_POLARIS_PM4_FENCE_DWORDS ||
+        amd_polaris_build_fence_packet(fence_packet,
+            AMD_POLARIS_PM4_FENCE_DWORDS, fence_gpu_address(runtime),
+            fence_value, &packet_count) != AMD_POLARIS_PM4_OK) {
+        runtime->faulted = 1U;
+        return AMD_POLARIS_GFX_RUNTIME_RING_ERROR;
+    }
+
+    ring_status = amd_polaris_gfx_ring_submit_write32(&runtime->ring,
+        write_packet, AMD_POLARIS_PM4_FENCE_DWORDS, target, value);
+    if (ring_status != AMD_POLARIS_GFX_RING_OK) {
+        if (runtime->ring.faulted != 0U)
+            runtime->faulted = 1U;
+        return ring_status == AMD_POLARIS_GFX_RING_BUSY ?
+            AMD_POLARIS_GFX_RUNTIME_BUSY : AMD_POLARIS_GFX_RUNTIME_RING_ERROR;
+    }
+
+    /*
+     * The fence is a second ring packet, so completion proves the preceding
+     * write reached memory. If queueing the fence fails, fault the runtime:
+     * the write may already be executing and must not be retried blindly.
+     */
+    ring_status = amd_polaris_gfx_ring_submit_fence(&runtime->ring,
+        fence_packet, AMD_POLARIS_PM4_FENCE_DWORDS,
+        fence_gpu_address(runtime), fence_value);
+    if (ring_status != AMD_POLARIS_GFX_RING_OK) {
+        runtime->faulted = 1U;
+        return AMD_POLARIS_GFX_RUNTIME_RING_ERROR;
+    }
+
+    runtime->pending_fence = fence_value;
+    runtime->pending = 1U;
+    *out_fence_value = fence_value;
+    return AMD_POLARIS_GFX_RUNTIME_OK;
+}
+
 amd_polaris_gfx_runtime_status_t amd_polaris_gfx_runtime_submit_fence(
     amd_polaris_gfx_runtime_t *runtime, uint32_t *out_fence_value)
 {

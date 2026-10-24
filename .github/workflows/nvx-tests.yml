@@ -70,6 +70,7 @@ on:
       - "drivers/gpu/intel/intel_gen9_ggtt.c"
       - "drivers/gpu/intel/intel_gen9_execlist.c"
       - "scripts/test_intel_gen9_execlist.c"
+      - "scripts/test_intel_gen9_commands.c"
       - "drivers/gpu/intel/intel_gen9_vm.c"
       - "drivers/gpu/intel/intel_gen9_pte.c"
       - "drivers/gpu/intel/intel_gen9_regs.c"
@@ -983,6 +984,12 @@ jobs:
 
       - name: Test ELSP descriptor validation, submission serialization and completion
         run: /tmp/vantaos-intel-gen9-execlist-test
+
+      - name: Compile restricted Intel Gen9 store workload tests
+        run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_intel_gen9_commands.c drivers/gpu/intel/intel_gen9_commands.c -o /tmp/vantaos-intel-gen9-commands-test
+
+      - name: Test Intel Gen9 GGTT store packet bounds and exact-target validation
+        run: /tmp/vantaos-intel-gen9-commands-test
 
       - name: Compile DMA-backed page-table allocator tests with strict warnings
         run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_gpu_dma_page_table.c drivers/gpu/core/gpu_dma_page_table.c drivers/gpu/core/gpu_dma.c -o /tmp/vantaos-gpu-dma-page-table-test

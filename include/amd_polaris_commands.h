@@ -39,6 +39,18 @@ typedef struct amd_polaris_pm4_summary {
 amd_polaris_pm4_status_t amd_polaris_build_fence_packet(
     uint32_t *out_dwords, size_t capacity, uint64_t fence_gpu_address,
     uint32_t fence_value, size_t *out_count);
+
+/*
+ * Build/validate the same GFX8 WRITE_DATA opcode for one caller-authorized
+ * GPU-visible dword. The caller must prove the destination belongs to a
+ * live allocation and serialize it with a following fence packet.
+ */
+amd_polaris_pm4_status_t amd_polaris_build_write32_packet(
+    uint32_t *out_dwords, size_t capacity, uint64_t destination_gpu_address,
+    uint32_t value, size_t *out_count);
+amd_polaris_pm4_status_t amd_polaris_validate_write32_packet(
+    const uint32_t *dwords, size_t count, uint64_t allowed_gpu_address,
+    uint32_t expected_value);
 amd_polaris_pm4_status_t amd_polaris_validate_fence_packet(
     const uint32_t *dwords, size_t count, uint64_t allowed_fence_gpu_address,
     uint32_t expected_value);

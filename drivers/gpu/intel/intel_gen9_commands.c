@@ -58,6 +58,45 @@ intel_gen9_command_status_t intel_gen9_validate_fence_batch(
     return INTEL_GEN9_COMMAND_OK;
 }
 
+intel_gen9_command_status_t intel_gen9_build_store_dword_batch(
+    uint32_t *out_dwords, size_t capacity, uint64_t destination_ggtt_address,
+    uint32_t value, size_t *out_count)
+{
+    if (out_count == NULL)
+        return INTEL_GEN9_COMMAND_INVALID_ARGUMENT;
+    *out_count = 0U;
+    if (out_dwords == NULL || capacity < INTEL_GEN9_FENCE_BATCH_DWORDS ||
+        (destination_ggtt_address & 3U) != 0U ||
+        destination_ggtt_address > UINT32_MAX)
+        return INTEL_GEN9_COMMAND_INVALID_ARGUMENT;
+
+    out_dwords[0] = INTEL_GEN9_MI_STORE_DWORD_IMM_GEN4 |
+                    INTEL_GEN9_MI_USE_GGTT;
+    out_dwords[1] = (uint32_t)destination_ggtt_address;
+    out_dwords[2] = 0U;
+    out_dwords[3] = value;
+    out_dwords[4] = INTEL_GEN9_MI_BATCH_BUFFER_END;
+    *out_count = INTEL_GEN9_FENCE_BATCH_DWORDS;
+    return INTEL_GEN9_COMMAND_OK;
+}
+
+intel_gen9_command_status_t intel_gen9_validate_store_dword_batch(
+    const uint32_t *dwords, size_t count, uint64_t allowed_ggtt_address,
+    uint32_t expected_value)
+{
+    if (dwords == NULL || count != INTEL_GEN9_FENCE_BATCH_DWORDS ||
+        (allowed_ggtt_address & 3U) != 0U ||
+        allowed_ggtt_address > UINT32_MAX)
+        return INTEL_GEN9_COMMAND_INVALID_ARGUMENT;
+    if (dwords[0] != (INTEL_GEN9_MI_STORE_DWORD_IMM_GEN4 |
+                      INTEL_GEN9_MI_USE_GGTT) ||
+        dwords[1] != (uint32_t)allowed_ggtt_address ||
+        dwords[2] != 0U || dwords[3] != expected_value ||
+        dwords[4] != INTEL_GEN9_MI_BATCH_BUFFER_END)
+        return INTEL_GEN9_COMMAND_UNSUPPORTED;
+    return INTEL_GEN9_COMMAND_OK;
+}
+
 intel_gen9_command_status_t intel_gen9_validate_batch(
     const uint32_t *dwords, size_t count, size_t max_dwords,
     intel_gen9_command_summary_t *summary)

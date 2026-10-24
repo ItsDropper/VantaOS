@@ -151,14 +151,28 @@ int main(void)
     assert(amd_polaris_device_memory_alloc(&runtime, 8192U, 0U, &extra) ==
         AMD_POLARIS_DEVICE_OK);
     assert(extra.mapped != 0U && extra.page_count == 2U);
-    assert(amd_polaris_device_memory_free(&extra) == AMD_POLARIS_DEVICE_OK);
 
-    assert(amd_polaris_device_submit_fence(&runtime, &fence) ==
-        AMD_POLARIS_DEVICE_OK);
-    assert(fence == 1U);
+    /* Queue a real GFX8 WRITE_DATA into this allocation, followed by a fence. */
+    assert(amd_polaris_device_write32(&runtime, &extra, 4U, 0xC0FFEE42U,
+        &fence) == AMD_POLARIS_DEVICE_OK);
+    assert(fence == 1U && runtime.gfx.pending != 0U);
+    assert(runtime.gfx.ring.ring_storage[0] == AMD_POLARIS_PM4_PACKET3_WRITE_DATA);
+    assert(runtime.gfx.ring.ring_storage[1] == AMD_POLARIS_PM4_WRITE_DATA_MEMORY);
+    assert(runtime.gfx.ring.ring_storage[2] ==
+        (uint32_t)(extra.gpu_address + 4U));
+    assert(runtime.gfx.ring.ring_storage[3] ==
+        (uint32_t)((extra.gpu_address + 4U) >> 32U));
+    assert(runtime.gfx.ring.ring_storage[4] == 0xC0FFEE42U);
+    assert(runtime.gfx.ring.ring_storage[5] == AMD_POLARIS_PM4_PACKET3_WRITE_DATA);
+    assert(runtime.gfx.ring.ring_storage[9] == fence);
+
+    /* Host regression emulates GPU execution; hardware is not available in CI. */
+    *(volatile uint32_t *)((uint8_t *)extra.dma.cpu_address + 4U) = 0xC0FFEE42U;
     *(volatile uint32_t *)runtime.gfx.fence_allocation.dma.cpu_address = fence;
     assert(amd_polaris_device_wait_fence(&runtime, fence, 4U) ==
         AMD_POLARIS_DEVICE_OK);
+    assert(*(uint32_t *)((uint8_t *)extra.dma.cpu_address + 4U) == 0xC0FFEE42U);
+    assert(amd_polaris_device_memory_free(&extra) == AMD_POLARIS_DEVICE_OK);
 
     assert(amd_polaris_device_runtime_shutdown(&runtime, 0) ==
         AMD_POLARIS_DEVICE_NOT_READY);

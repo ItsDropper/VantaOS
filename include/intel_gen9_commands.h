@@ -45,6 +45,14 @@ intel_gen9_command_status_t intel_gen9_validate_fence_batch(
     const uint32_t *dwords, size_t count, uint64_t allowed_fence_gpu_address,
     uint32_t expected_value);
 
+/* Build/validate a one-dword MI_STORE_DWORD_IMM batch plus BATCH_BUFFER_END. */
+intel_gen9_command_status_t intel_gen9_build_store_dword_batch(
+    uint32_t *out_dwords, size_t capacity, uint64_t destination_ggtt_address,
+    uint32_t value, size_t *out_count);
+intel_gen9_command_status_t intel_gen9_validate_store_dword_batch(
+    const uint32_t *dwords, size_t count, uint64_t allowed_ggtt_address,
+    uint32_t expected_value);
+
 /*
  * Conservative Gen9 MI batch preflight. Only MI_NOOP and MI_BATCH_BUFFER_END
  * are accepted; this does not execute commands or authorize hardware submission.

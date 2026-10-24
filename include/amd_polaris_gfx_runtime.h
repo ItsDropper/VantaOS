@@ -63,6 +63,16 @@ amd_polaris_gfx_runtime_status_t amd_polaris_gfx_runtime_init_vm(
     const gpu_mmio_region_t *mmio, amd_polaris_memory_runtime_t *memory,
     size_t ring_bytes, int firmware_ready, int device_quiesced);
 
+/*
+ * Queue one authorized GPU-visible memory write followed by a fence. The
+ * allocation must be owned by this runtime's VM and stay alive until the
+ * returned fence completes. This is a real GPU command, not a CPU memcpy.
+ */
+amd_polaris_gfx_runtime_status_t amd_polaris_gfx_runtime_write32(
+    amd_polaris_gfx_runtime_t *runtime,
+    const amd_polaris_gpu_allocation_t *allocation, size_t offset,
+    uint32_t value, uint32_t *out_fence_value);
+
 /* Single-flight fence submission; returned value must be passed to wait_fence. */
 amd_polaris_gfx_runtime_status_t amd_polaris_gfx_runtime_submit_fence(
     amd_polaris_gfx_runtime_t *runtime, uint32_t *out_fence_value);

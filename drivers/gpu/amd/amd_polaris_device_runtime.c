@@ -139,6 +139,19 @@ amd_polaris_device_status_t amd_polaris_device_runtime_init(
     return AMD_POLARIS_DEVICE_OK;
 }
 
+amd_polaris_device_status_t amd_polaris_device_write32(
+    amd_polaris_device_runtime_t *runtime,
+    const amd_polaris_gpu_allocation_t *allocation, size_t offset,
+    uint32_t value, uint32_t *out_fence)
+{
+    if (runtime == NULL || runtime->initialized == 0U ||
+        runtime->memory_initialized == 0U || runtime->gfx.initialized == 0U)
+        return AMD_POLARIS_DEVICE_NOT_READY;
+    return amd_polaris_gfx_runtime_write32(&runtime->gfx, allocation, offset,
+        value, out_fence) == AMD_POLARIS_GFX_RUNTIME_OK ?
+        AMD_POLARIS_DEVICE_OK : AMD_POLARIS_DEVICE_ENGINE_FAILED;
+}
+
 amd_polaris_device_status_t amd_polaris_device_submit_fence(
     amd_polaris_device_runtime_t *runtime, uint32_t *out_fence)
 {

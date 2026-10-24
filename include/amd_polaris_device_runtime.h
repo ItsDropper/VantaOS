@@ -50,6 +50,11 @@ amd_polaris_device_status_t amd_polaris_device_runtime_init(
     amd_polaris_device_runtime_t *runtime, const struct pci_device *device,
     size_t ring_bytes, int firmware_ready, int device_quiesced);
 
+/* Queue a hardware WRITE_DATA into a mapped buffer; wait on returned fence. */
+amd_polaris_device_status_t amd_polaris_device_write32(
+    amd_polaris_device_runtime_t *runtime,
+    const amd_polaris_gpu_allocation_t *allocation, size_t offset,
+    uint32_t value, uint32_t *out_fence);
 amd_polaris_device_status_t amd_polaris_device_submit_fence(
     amd_polaris_device_runtime_t *runtime, uint32_t *out_fence);
 amd_polaris_device_status_t amd_polaris_device_wait_fence(

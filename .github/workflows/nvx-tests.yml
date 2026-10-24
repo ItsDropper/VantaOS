@@ -31,6 +31,14 @@ on:
       - "include/gpu_va.h"
       - "scripts/test_gpu_va.c"
       - "include/gpu_vm.h"
+      - "include/gpu_page_table.h"
+      - "include/gpu_page_table_vm.h"
+      - "drivers/gpu/core/gpu_page_table_vm.c"
+      - "drivers/gpu/core/gpu_page_table.c"
+      - "drivers/gpu/core/gpu_page_table_vm.c"
+      - "drivers/gpu/core/Makefile"
+      - "drivers/gpu/intel/Makefile"
+      - "drivers/gpu/amd/Makefile"
       - "scripts/test_gpu_vm.c"
       - "include/gpu_registers.h"
       - "scripts/test_gpu_registers.c"
@@ -38,7 +46,9 @@ on:
       - "scripts/test_gpu_engine.c"
       - "include/gpu_bringup.h"
       - "include/gpu_dma.h"
+      - "include/gpu_dma_page_table.h"
       - "scripts/test_gpu_dma.c"
+      - "scripts/test_gpu_dma_page_table.c"
       - "include/gpu_dma_sync.h"
       - "scripts/test_gpu_dma_sync.c"
       - "include/gpu_engine_runtime.h"
@@ -47,6 +57,53 @@ on:
       - "scripts/test_gpu_pci_resources.c"
       - "drivers/gpu/intel/**"
       - "drivers/gpu/amd/**"
+      - "include/intel_gen9.h"
+      - "include/intel_gen9_regs.h"
+      - "include/intel_gen9_pte.h"
+      - "include/intel_gen9_vm.h"
+      - "include/intel_gen9_ggtt.h"
+      - "include/intel_gen9_execlist.h"
+      - "include/intel_gen9_device_runtime.h"
+      - "include/intel_gen9_memory.h"
+      - "scripts/test_intel_gen9_memory.c"
+      - "scripts/test_intel_gen9_device_runtime.c"
+      - "drivers/gpu/intel/intel_gen9_ggtt.c"
+      - "drivers/gpu/intel/intel_gen9_execlist.c"
+      - "scripts/test_intel_gen9_execlist.c"
+      - "scripts/test_intel_gen9_commands.c"
+      - "drivers/gpu/intel/intel_gen9_vm.c"
+      - "drivers/gpu/intel/intel_gen9_pte.c"
+      - "drivers/gpu/intel/intel_gen9_regs.c"
+      - "include/intel_gen9_commands.h"
+      - "include/amd_polaris.h"
+      - "include/amd_polaris_regs.h"
+      - "include/amd_polaris_pte.h"
+      - "include/amd_polaris_vm.h"
+      - "include/amd_polaris_vm_hw.h"
+      - "include/amd_polaris_vm_runtime.h"
+      - "include/amd_polaris_gfx_ring.h"
+      - "include/amd_polaris_gfx_runtime.h"
+      - "include/amd_polaris_device_runtime.h"
+      - "include/amd_polaris_memory.h"
+      - "scripts/test_amd_polaris_memory.c"
+      - "scripts/test_amd_polaris_device_runtime.c"
+      - "scripts/test_amd_polaris_gfx_runtime.c"
+      - "drivers/gpu/amd/amd_polaris_vm_runtime.c"
+      - "drivers/gpu/amd/amd_polaris_gfx_ring.c"
+      - "scripts/test_amd_polaris_gfx_ring.c"
+      - "drivers/gpu/amd/amd_polaris_vm_hw.c"
+      - "drivers/gpu/amd/amd_polaris_vm.c"
+      - "drivers/gpu/amd/amd_polaris_pte.c"
+      - "drivers/gpu/amd/amd_polaris_regs.c"
+      - "include/amd_polaris_commands.h"
+      - "scripts/test_gpu_gen_profiles.c"
+      - "scripts/test_gpu_generation_commands.c"
+      - "scripts/test_gpu_generation_registers.c"
+      - "scripts/test_intel_gen9_ggtt.c"
+      - "scripts/test_gpu_generation_pte.c"
+      - "scripts/test_gpu_page_table.c"
+      - "scripts/test_amd_polaris_vm_hw.c"
+      - "scripts/test_amd_polaris_vm_dma.c"
       - "include/gpu.h"
       - "include/gpu_core.h"
       - "include/gpu_vendor.h"
@@ -172,10 +229,22 @@ jobs:
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
             scripts/test_gpu_vendor_framework.c drivers/gpu/core/gpu_vendor.c \
             drivers/gpu/core/gpu_core.c drivers/gpu/core/gpu_pci_resources.c \
-            drivers/gpu/intel/intel_gpu.c drivers/gpu/amd/amd_gpu.c -o /tmp/vantaos-gpu-vendor-framework-test
+            drivers/gpu/intel/intel_gpu.c drivers/gpu/intel/intel_gen9.c drivers/gpu/amd/amd_gpu.c drivers/gpu/amd/amd_polaris.c -o /tmp/vantaos-gpu-vendor-framework-test
 
       - name: Test GPU classification, lifecycle and fail-closed capabilities
         run: /tmp/vantaos-gpu-vendor-framework-test
+
+      - name: Compile generation-specific Intel Gen9 and AMD Polaris profile tests
+        run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_gpu_gen_profiles.c drivers/gpu/intel/intel_gen9.c drivers/gpu/amd/amd_polaris.c drivers/gpu/core/gpu_pci_resources.c -o /tmp/vantaos-gpu-gen-profiles-test
+
+      - name: Test exact PCI allowlists, BAR preflight and fail-closed capability state
+        run: /tmp/vantaos-gpu-gen-profiles-test
+
+      - name: Compile strict Intel Gen9 MI and AMD Polaris PM4 packet validators
+        run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_gpu_generation_commands.c drivers/gpu/intel/intel_gen9_commands.c drivers/gpu/amd/amd_polaris_commands.c -o /tmp/vantaos-gpu-generation-commands-test
+
+      - name: Test command allowlists, truncation, trailing data and unsafe packet rejection
+        run: /tmp/vantaos-gpu-generation-commands-test
 
       - name: Compile shared GPU MMIO access tests with strict warnings
         run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_gpu_mmio.c drivers/gpu/core/gpu_mmio.c -o /tmp/vantaos-gpu-mmio-test
@@ -796,3 +865,158 @@ jobs:
       - name: Test FWSEC scratch, WPR2, PLM and GFW progress decoding
         run: /tmp/vantaos-nvx-fwsec-mmio-test
 
+
+
+      - name: Compile Intel Gen9 and AMD Polaris register snapshot tests
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_gpu_generation_registers.c \
+            drivers/gpu/core/gpu_mmio.c \
+            drivers/gpu/intel/intel_gen9_regs.c \
+            drivers/gpu/amd/amd_polaris_regs.c \
+            -o /tmp/vantaos-gpu-generation-registers-test
+
+      - name: Test bounded, read-only generation-specific register snapshots
+        run: /tmp/vantaos-gpu-generation-registers-test
+
+
+      - name: Compile Intel Gen9 and Polaris PTE encoding tests
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_gpu_generation_pte.c \
+            drivers/gpu/intel/intel_gen9_pte.c \
+            drivers/gpu/amd/amd_polaris_pte.c \
+            -o /tmp/vantaos-gpu-generation-pte-test
+
+      - name: Test permission bits, cache policy and address validation
+        run: /tmp/vantaos-gpu-generation-pte-test
+
+
+      - name: Compile four-level GPU page-table tests
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_gpu_page_table.c \
+            drivers/gpu/core/gpu_page_table.c \
+            drivers/gpu/core/gpu_page_table_vm.c \
+            drivers/gpu/intel/intel_gen9_pte.c \
+            drivers/gpu/intel/intel_gen9_vm.c \
+            drivers/gpu/amd/amd_polaris_pte.c \
+            drivers/gpu/amd/amd_polaris_vm.c \
+            -o /tmp/vantaos-gpu-page-table-test
+
+      - name: Test page-table map/unmap, bounds and failed invalidation
+        run: /tmp/vantaos-gpu-page-table-test
+
+
+      - name: Compile Polaris VM root and invalidation tests
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_amd_polaris_vm_hw.c \
+            drivers/gpu/amd/amd_polaris_vm_hw.c \
+            drivers/gpu/amd/amd_polaris_vm_runtime.c \
+            drivers/gpu/amd/amd_polaris_vm.c \
+            drivers/gpu/amd/amd_polaris_pte.c \
+            drivers/gpu/core/gpu_page_table.c \
+            drivers/gpu/core/gpu_page_table_vm.c \
+            drivers/gpu/core/gpu_mmio.c \
+            -o /tmp/vantaos-amd-polaris-vm-hw-test
+
+      - name: Test Polaris VMID-1 root setup and bounded invalidation
+        run: /tmp/vantaos-amd-polaris-vm-hw-test
+
+      - name: Compile native-DMA Polaris VM integration tests
+        run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_amd_polaris_vm_dma.c drivers/gpu/amd/amd_polaris_vm_runtime.c drivers/gpu/amd/amd_polaris_vm_runtime_dma.c drivers/gpu/amd/amd_polaris_vm_hw.c drivers/gpu/amd/amd_polaris_vm.c drivers/gpu/amd/amd_polaris_pte.c drivers/gpu/core/gpu_page_table.c drivers/gpu/core/gpu_page_table_vm.c drivers/gpu/core/gpu_dma_page_table.c drivers/gpu/core/gpu_dma.c drivers/gpu/core/gpu_mmio.c -o /tmp/vantaos-amd-polaris-vm-dma-test
+
+      - name: Test real DMA-backed Polaris VM setup, mapping, invalidation and teardown
+        run: /tmp/vantaos-amd-polaris-vm-dma-test
+
+
+      - name: Compile Intel Gen9 GGTT and forcewake tests
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_intel_gen9_ggtt.c \
+            drivers/gpu/intel/intel_gen9_ggtt.c \
+            drivers/gpu/core/gpu_mmio.c \
+            -o /tmp/vantaos-intel-gen9-ggtt-test
+
+      - name: Test GGTT map/unmap, posting read and forcewake timeout
+        run: /tmp/vantaos-intel-gen9-ggtt-test
+
+
+      - name: Compile Polaris GFX command-ring tests with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_amd_polaris_gfx_ring.c \
+            drivers/gpu/amd/amd_polaris_gfx_ring.c \
+            drivers/gpu/amd/amd_polaris_commands.c \
+            drivers/gpu/core/gpu_mmio.c \
+            -o /tmp/vantaos-amd-polaris-gfx-ring-test
+
+      - name: Test Polaris CP ring setup, fenced submission, wrap and fail-closed timeout
+        run: /tmp/vantaos-amd-polaris-gfx-ring-test
+
+      - name: Compile native DMA-backed Polaris GFX runtime tests
+        run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_amd_polaris_gfx_runtime.c drivers/gpu/amd/amd_polaris_gfx_runtime.c drivers/gpu/amd/amd_polaris_gfx_ring.c drivers/gpu/amd/amd_polaris_commands.c drivers/gpu/amd/amd_polaris_memory.c drivers/gpu/core/gpu_dma.c drivers/gpu/core/gpu_mmio.c -o /tmp/vantaos-amd-polaris-gfx-runtime-test
+
+      - name: Test DMA-backed Polaris submission, fence completion, timeout and teardown
+        run: /tmp/vantaos-amd-polaris-gfx-runtime-test
+
+      - name: Compile PCI-bound Polaris device lifecycle
+        run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude -c drivers/gpu/amd/amd_polaris_device_runtime.c -o /tmp/vantaos-amd-polaris-device-runtime.o
+
+
+      - name: Compile PCI-bound Intel Gen9 device lifecycle
+        run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude -c drivers/gpu/intel/intel_gen9_device_runtime.c -o /tmp/vantaos-intel-gen9-device-runtime.o
+
+      - name: Compile Gen9 device-runtime lifecycle tests
+        run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_intel_gen9_device_runtime.c drivers/gpu/intel/intel_gen9_device_runtime.c -o /tmp/vantaos-intel-gen9-device-runtime-test
+
+      - name: Test Gen9 submission, completion timeout and quiesce-gated teardown
+        run: /tmp/vantaos-intel-gen9-device-runtime-test
+
+      - name: Compile Intel Gen9 execlist submission tests with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_intel_gen9_execlist.c \
+            drivers/gpu/intel/intel_gen9_execlist.c \
+            drivers/gpu/core/gpu_mmio.c \
+            -o /tmp/vantaos-intel-gen9-execlist-test
+
+      - name: Test ELSP descriptor validation, submission serialization and completion
+        run: /tmp/vantaos-intel-gen9-execlist-test
+
+      - name: Compile restricted Intel Gen9 store workload tests
+        run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_intel_gen9_commands.c drivers/gpu/intel/intel_gen9_commands.c -o /tmp/vantaos-intel-gen9-commands-test
+
+      - name: Test Intel Gen9 GGTT store packet bounds and exact-target validation
+        run: /tmp/vantaos-intel-gen9-commands-test
+
+      - name: Compile DMA-backed page-table allocator tests with strict warnings
+        run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_gpu_dma_page_table.c drivers/gpu/core/gpu_dma_page_table.c drivers/gpu/core/gpu_dma.c -o /tmp/vantaos-gpu-dma-page-table-test
+
+      - name: Test contiguous 32 MiB Polaris leaf-table allocation and release
+        run: /tmp/vantaos-gpu-dma-page-table-test
+
+      - name: Compile Gen9 GPU-visible memory runtime tests with strict warnings
+        run: gcc -std=c11 -Wall -Wextra -Werror -ffunction-sections -fdata-sections -Iinclude scripts/test_intel_gen9_memory.c drivers/gpu/intel/intel_gen9_memory.c drivers/gpu/intel/intel_gen9_ggtt.c drivers/gpu/core/gpu_dma.c drivers/gpu/core/gpu_mmio.c -Wl,--gc-sections -o /tmp/vantaos-intel-gen9-memory-test
+
+      - name: Test Gen9 DMA allocation, GGTT mapping, overlap rejection and VA reuse
+        run: /tmp/vantaos-intel-gen9-memory-test
+
+      - name: Compile Gen9 GPU-visible memory runtime for the kernel
+        run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude -c drivers/gpu/intel/intel_gen9_memory.c -o /tmp/vantaos-intel-gen9-memory.o
+
+      - name: Compile Polaris GPU virtual-memory allocation tests
+        run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_amd_polaris_memory.c drivers/gpu/amd/amd_polaris_memory.c drivers/gpu/core/gpu_dma.c -o /tmp/vantaos-amd-polaris-memory-test
+
+      - name: Test Polaris VA allocation, DMA mapping, rollback and TLB flush recovery
+        run: /tmp/vantaos-amd-polaris-memory-test
+
+      - name: Compile Polaris GPU virtual-memory runtime for the kernel
+        run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude -c drivers/gpu/amd/amd_polaris_memory.c -o /tmp/vantaos-amd-polaris-memory.o
+
+      - name: Compile full Polaris VMID-1 device-runtime integration test
+        run: gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_amd_polaris_device_runtime.c drivers/gpu/amd/amd_polaris_device_runtime.c drivers/gpu/amd/amd_polaris_vm_runtime.c drivers/gpu/amd/amd_polaris_vm_runtime_dma.c drivers/gpu/amd/amd_polaris_vm_hw.c drivers/gpu/amd/amd_polaris_vm.c drivers/gpu/amd/amd_polaris_pte.c drivers/gpu/amd/amd_polaris_gfx_runtime.c drivers/gpu/amd/amd_polaris_gfx_ring.c drivers/gpu/amd/amd_polaris_commands.c drivers/gpu/amd/amd_polaris_memory.c drivers/gpu/core/gpu_page_table.c drivers/gpu/core/gpu_page_table_vm.c drivers/gpu/core/gpu_dma_page_table.c drivers/gpu/core/gpu_dma.c drivers/gpu/core/gpu_mmio.c -o /tmp/vantaos-amd-polaris-device-runtime-test
+
+      - name: Test Polaris device boot, VMID-1 allocations, fenced work and safe teardown
+        run: /tmp/vantaos-amd-polaris-device-runtime-test

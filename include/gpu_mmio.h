@@ -27,5 +27,9 @@ gpu_mmio_status_t gpu_mmio_read32(const gpu_mmio_region_t *region,
                                   size_t offset, uint32_t *out_value);
 gpu_mmio_status_t gpu_mmio_write32(const gpu_mmio_region_t *region,
                                    size_t offset, uint32_t value);
+gpu_mmio_status_t gpu_mmio_read64(const gpu_mmio_region_t *region,
+                                  size_t offset, uint64_t *out_value);
+gpu_mmio_status_t gpu_mmio_write64(const gpu_mmio_region_t *region,
+                                   size_t offset, uint64_t value);
 
 #endif

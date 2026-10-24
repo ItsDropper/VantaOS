@@ -54,3 +54,45 @@ gpu_mmio_status_t gpu_mmio_write32(const gpu_mmio_region_t *region,
     *(volatile uint32_t *)(void *)(region->base + offset) = value;
     return GPU_MMIO_OK;
 }
+
+static gpu_mmio_status_t gpu_mmio_validate64(
+    const gpu_mmio_region_t *region, size_t offset)
+{
+    uintptr_t base;
+
+    if (region == NULL || region->base == NULL)
+        return GPU_MMIO_INVALID_ARGUMENT;
+    if (offset > region->length ||
+        sizeof(uint64_t) > region->length - offset)
+        return GPU_MMIO_OUT_OF_RANGE;
+    base = (uintptr_t)region->base;
+    if (base > UINTPTR_MAX - offset)
+        return GPU_MMIO_OUT_OF_RANGE;
+    if (((base + offset) & (sizeof(uint64_t) - 1U)) != 0U)
+        return GPU_MMIO_UNALIGNED;
+    return GPU_MMIO_OK;
+}
+
+gpu_mmio_status_t gpu_mmio_read64(const gpu_mmio_region_t *region,
+                                  size_t offset, uint64_t *out_value)
+{
+    gpu_mmio_status_t status;
+    if (out_value == NULL)
+        return GPU_MMIO_INVALID_ARGUMENT;
+    *out_value = 0U;
+    status = gpu_mmio_validate64(region, offset);
+    if (status != GPU_MMIO_OK)
+        return status;
+    *out_value = *(volatile uint64_t *)(void *)(region->base + offset);
+    return GPU_MMIO_OK;
+}
+
+gpu_mmio_status_t gpu_mmio_write64(const gpu_mmio_region_t *region,
+                                   size_t offset, uint64_t value)
+{
+    gpu_mmio_status_t status = gpu_mmio_validate64(region, offset);
+    if (status != GPU_MMIO_OK)
+        return status;
+    *(volatile uint64_t *)(void *)(region->base + offset) = value;
+    return GPU_MMIO_OK;
+}

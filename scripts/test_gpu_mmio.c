@@ -17,6 +17,12 @@ int main(void)
         .length = sizeof(registers)
     };
     uint32_t value = 0U;
+    volatile uint64_t registers64[2] = {0x1122334455667788ULL, 0U};
+    gpu_mmio_region_t region64 = {
+        .base = (volatile uint8_t *)(void *)registers64,
+        .length = sizeof(registers64)
+    };
+    uint64_t value64 = 0U;
 
     assert(gpu_mmio_read32(&region, 0U, &value) == GPU_MMIO_OK);
     assert(value == 0x11223344U);
@@ -41,5 +47,20 @@ int main(void)
     assert(gpu_mmio_write32(&region, 0U, 1U) == GPU_MMIO_UNALIGNED);
     region.base = NULL;
     assert(gpu_mmio_read32(&region, 0U, &value) == GPU_MMIO_INVALID_ARGUMENT);
+
+    assert(gpu_mmio_read64(&region64, 0U, &value64) == GPU_MMIO_OK);
+    assert(value64 == 0x1122334455667788ULL);
+    assert(gpu_mmio_write64(&region64, 8U, 0xAABBCCDDEEFF0011ULL) ==
+           GPU_MMIO_OK);
+    assert(registers64[1] == 0xAABBCCDDEEFF0011ULL);
+    value64 = UINT64_MAX;
+    assert(gpu_mmio_read64(&region64, 4U, &value64) == GPU_MMIO_UNALIGNED);
+    assert(value64 == 0U);
+    assert(gpu_mmio_read64(&region64, 12U, &value64) ==
+           GPU_MMIO_OUT_OF_RANGE);
+    assert(gpu_mmio_write64(&region64, 12U, 1U) == GPU_MMIO_OUT_OF_RANGE);
+    assert(gpu_mmio_read64(&region64, 0U, NULL) ==
+           GPU_MMIO_INVALID_ARGUMENT);
+    assert(gpu_mmio_write64(NULL, 0U, 1U) == GPU_MMIO_INVALID_ARGUMENT);
     return 0;
 }

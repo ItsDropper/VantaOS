@@ -41,6 +41,12 @@ static int test_driver_quiesce(gpu_device_t *device)
     return device != 0 && device->state == GPU_DEVICE_QUIESCING && !test_quiesce_fails;
 }
 
+static int test_engine_quiesce(void *context)
+{
+    (void)context;
+    return 1;
+}
+
 static void test_driver_shutdown(gpu_device_t *device)
 {
     ++test_shutdown_calls;
@@ -111,6 +117,93 @@ const struct pci_device *pci_get_device(int index)
     return &inventory[index];
 }
 
+/*
+ * This framework-only test does not link the hardware runtime. Its scenarios
+ * deliberately have no assigned BARs or firmware, so every runtime entrypoint
+ * must fail closed if accidentally reached.
+ */
+amd_polaris_device_status_t amd_polaris_device_runtime_init(
+    amd_polaris_device_runtime_t *runtime, const struct pci_device *device,
+    size_t ring_bytes, int firmware_ready, int device_quiesced)
+{
+    (void)runtime; (void)device; (void)ring_bytes;
+    (void)firmware_ready; (void)device_quiesced;
+    return AMD_POLARIS_DEVICE_NOT_READY;
+}
+
+amd_polaris_device_status_t amd_polaris_device_submit_fence(
+    amd_polaris_device_runtime_t *runtime, uint32_t *out_fence)
+{
+    (void)runtime;
+    if (out_fence != NULL) *out_fence = 0U;
+    return AMD_POLARIS_DEVICE_NOT_READY;
+}
+
+amd_polaris_device_status_t amd_polaris_device_wait_fence(
+    amd_polaris_device_runtime_t *runtime, uint32_t fence,
+    unsigned timeout_iterations)
+{
+    (void)runtime; (void)fence; (void)timeout_iterations;
+    return AMD_POLARIS_DEVICE_NOT_READY;
+}
+
+amd_polaris_device_status_t amd_polaris_device_runtime_shutdown(
+    amd_polaris_device_runtime_t *runtime, int device_quiesced)
+{
+    (void)runtime; (void)device_quiesced;
+    return AMD_POLARIS_DEVICE_NOT_READY;
+}
+
+intel_gen9_device_status_t intel_gen9_device_runtime_init(
+    intel_gen9_device_runtime_t *runtime, const struct pci_device *device,
+    uint64_t lrca_ggtt_address, uint32_t context_id,
+    uint16_t descriptor_flags, int context_ready, int device_quiesced)
+{
+    (void)runtime; (void)device; (void)lrca_ggtt_address;
+    (void)context_id; (void)descriptor_flags;
+    (void)context_ready; (void)device_quiesced;
+    return INTEL_GEN9_DEVICE_NOT_READY;
+}
+
+intel_gen9_device_status_t intel_gen9_device_submit(
+    intel_gen9_device_runtime_t *runtime)
+{
+    (void)runtime;
+    return INTEL_GEN9_DEVICE_NOT_READY;
+}
+
+intel_gen9_device_status_t intel_gen9_device_wait(
+    intel_gen9_device_runtime_t *runtime, unsigned timeout_iterations)
+{
+    (void)runtime; (void)timeout_iterations;
+    return INTEL_GEN9_DEVICE_NOT_READY;
+}
+
+intel_gen9_device_status_t intel_gen9_device_runtime_shutdown(
+    intel_gen9_device_runtime_t *runtime, int device_quiesced)
+{
+    (void)runtime; (void)device_quiesced;
+    return INTEL_GEN9_DEVICE_NOT_READY;
+}
+
+intel_gen9_execlist_status_t intel_gen9_execlist_build_descriptor(
+    uint64_t lrca_ggtt_address, uint32_t context_id, uint16_t flags,
+    uint64_t *out_descriptor)
+{
+    if (out_descriptor == NULL || lrca_ggtt_address == 0U ||
+        (lrca_ggtt_address & 0xFFFU) != 0U ||
+        lrca_ggtt_address > 0x00000000FFFFF000ULL ||
+        context_id == 0U || context_id > 0x1FFFFFU ||
+        (flags & 0x0001U) == 0U ||
+        (((uint64_t)flags) & ~0x0000000000000119ULL) != 0U) {
+        if (out_descriptor != NULL) *out_descriptor = 0U;
+        return INTEL_GEN9_EXECLIST_INVALID_DESCRIPTOR;
+    }
+    *out_descriptor = lrca_ggtt_address |
+                      ((uint64_t)context_id << 32U) | flags;
+    return INTEL_GEN9_EXECLIST_OK;
+}
+
 int main(void)
 {
     const struct pci_device intel = {
@@ -144,6 +237,7 @@ int main(void)
     assert(match.is_known_device_id == 1U);
     assert(intel_gpu_match(&intel));
     assert(intel_gpu_describe(&intel, &intel_desc));
+    assert(intel_desc.gen9_profile_status == INTEL_GEN9_UNSUPPORTED_DEVICE);
     assert(intel_desc.firmware_required == 1U);
     assert(intel_desc.acceleration_ready == 0U);
     assert(intel_desc.resources.count == 0U);
@@ -161,6 +255,7 @@ int main(void)
     assert(match.architecture == GPU_ARCH_AMD_RDNA3);
     assert(amd_gpu_match(&amd));
     assert(amd_gpu_describe(&amd, &amd_desc));
+    assert(amd_desc.polaris_profile_status == AMD_POLARIS_UNSUPPORTED_DEVICE);
     assert(amd_desc.firmware_required == 1U);
     assert(amd_desc.acceleration_ready == 0U);
     assert(amd_desc.resources.count == 0U);
@@ -271,6 +366,44 @@ int main(void)
         assert(attached.state == GPU_DEVICE_FAILED);
         assert(test_shutdown_calls == 4);
         assert(test_initialize_calls == 3);
+    }
+    {
+        const struct pci_device polaris = {
+            .vendor_id = 0x1002U, .device_id = 0x67DFU,
+            .class_code = 0x03U, .subclass = 0x00U
+        };
+        gpu_device_t amd_device;
+        gpu_pci_match_t amd_match;
+        amd_gpu_runtime_binding_t amd_binding = {0};
+        intel_gpu_runtime_binding_t intel_binding = {0};
+        volatile uint32_t intel_fence = 0xA5A5U;
+        gpu_device_t intel_device;
+        gpu_pci_match_t intel_match;
+        const struct pci_device gen9 = {
+            .vendor_id = 0x8086U, .device_id = 0x1912U,
+            .class_code = 0x03U, .subclass = 0x00U
+        };
+
+        assert(gpu_classify_pci_function(&polaris, &amd_match));
+        assert(gpu_device_construct(&amd_device, &polaris, &amd_match));
+        assert(!amd_gpu_configure_runtime(&amd_device, &amd_binding,
+            65536U, 100U, 0));
+        assert(amd_device.driver_private == NULL);
+        assert(amd_gpu_configure_runtime(&amd_device, &amd_binding,
+            65536U, 100U, 1));
+        assert(amd_device.driver_private == &amd_binding);
+        assert(amd_binding.configured && amd_binding.firmware_ready);
+        assert(!amd_gpu_configure_runtime(&amd_device, &amd_binding,
+            65536U, 100U, 1));
+
+        assert(gpu_classify_pci_function(&gen9, &intel_match));
+        assert(gpu_device_construct(&intel_device, &gen9, &intel_match));
+        assert(intel_gpu_configure_runtime(&intel_device, &intel_binding,
+            0x1000U, 1U, 0x9U, &intel_fence, 0xA5A5U, 100U, 1, test_engine_quiesce, NULL));
+        assert(intel_device.driver_private == &intel_binding);
+        assert(intel_binding.configured && intel_binding.context_ready);
+        assert(!intel_gpu_configure_runtime(&intel_device, &intel_binding,
+            0x1000U, 1U, 0x9U, &intel_fence, 0xA5A5U, 100U, 1, test_engine_quiesce, NULL));
     }
     assert(strcmp(gpu_vendor_name(GPU_VENDOR_AMD), "AMD") == 0);
     assert(strcmp(gpu_architecture_name(GPU_ARCH_AMD_RDNA3), "AMD RDNA 3") == 0);

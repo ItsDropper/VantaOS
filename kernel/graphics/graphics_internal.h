@@ -66,6 +66,9 @@ int graphics_display_present_damage(
     const uint8_t* backbuffer, uint32_t width, uint32_t height,
     uint32_t backbuffer_pitch, const uint8_t* damage_bitmap,
     size_t damage_bitmap_bytes, uint32_t tile_size);
+void graphics_set_clip_rect(int x, int y, int width, int height);
+void graphics_clear_clip_rect(void);
+int graphics_clip_bounds(int* x0, int* y0, int* x1, int* y1);
 void graphics_mark_damage(int x, int y, int width, int height);
 void graphics_invalidate_scene(void);
 void graphics_reset_backbuffer(void);

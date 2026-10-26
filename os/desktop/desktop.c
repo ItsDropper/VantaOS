@@ -137,6 +137,26 @@ static void desktop_gui_present(void)
 }
 
 /*
+ * A clock tick changes only the taskbar. Preserve the retained window pixels
+ * and avoid snapshotting/replaying every window on each clock refresh.
+ */
+static void desktop_gui_present_clock_only(void)
+{
+    if (!graphics_is_initialized())
+        return;
+
+    graphics_begin_frame();
+    if (!graphics_frame_is_active())
+        return;
+
+    /* The taskbar can overlap the cursor, so restore and redraw it safely. */
+    graphics_cursor_restore();
+    graphics_present();
+    graphics_draw_cursor();
+    graphics_end_frame();
+}
+
+/*
  * Terminal text changes do not alter the wallpaper or taskbar. Redraw the
  * retained windows on the compositor's shadow surface and commit only their
  * damaged tiles. Never paint the terminal directly into the scanout buffer.
@@ -234,7 +254,7 @@ void desktop_update(void)
         if (refresh != desktop_last_clock_refresh)
         {
             desktop_last_clock_refresh = refresh;
-            desktop_gui_present();
+            desktop_gui_present_clock_only();
         }
     }
 

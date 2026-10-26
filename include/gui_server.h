@@ -37,6 +37,10 @@ int gui_server_poll_event(uint32_t pid, uint32_t id,
 int gui_server_set_owner_visible(uint32_t pid, int visible);
 void gui_server_notify_theme_changed(void);
 void gui_server_draw_windows(void);
+void gui_server_draw_windows_clipped(int32_t x, int32_t y,
+                                     int32_t width, int32_t height);
+int gui_server_take_drag_damage(int32_t* x, int32_t* y,
+                                int32_t* width, int32_t* height);
 void gui_server_draw_taskbar_items(int taskbar_y, int screen_width);
 int gui_server_taskbar_click(int x, int y, int taskbar_y, int screen_width);
 int gui_server_mouse_click(int x, int y, int button);

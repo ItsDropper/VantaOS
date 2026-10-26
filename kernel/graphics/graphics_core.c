@@ -712,13 +712,7 @@ void graphics_fill_rect(
     int x1 = x + width;
     int y1 = y + height;
 
-    if (x1 > (int)framebuffer_width)
-        x1 = (int)framebuffer_width;
-
-    if (y1 > (int)framebuffer_height)
-        y1 = (int)framebuffer_height;
-
-    if (x0 >= x1 || y0 >= y1)
+    if (!graphics_clip_bounds(&x0, &y0, &x1, &y1))
         return;
 
     uint32_t packed = graphics_pack_color(color);
@@ -779,6 +773,9 @@ void graphics_fill_rounded_rect(
 
     if (y1 > (int)framebuffer_height)
         y1 = (int)framebuffer_height;
+
+    if (!graphics_clip_bounds(&x0, &y0, &x1, &y1))
+        return;
 
     int r2 = radius * radius;
 

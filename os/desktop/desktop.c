@@ -151,7 +151,7 @@ static void desktop_gui_present_clock_only(void)
 
     /* The taskbar can overlap the cursor, so restore and redraw it safely. */
     graphics_cursor_restore();
-    graphics_present();
+    graphics_draw_taskbar_clock_only();
     graphics_draw_cursor();
     graphics_end_frame();
 }

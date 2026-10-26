@@ -50,6 +50,31 @@ int main(void)
                                           0));
     assert(untouched.first_x == 1U && untouched.count_y == 4U);
 
-    puts("graphics damage geometry tests passed");
+    graphics_damage_rect_t a = { 10, 20, 30, 40 };
+    graphics_damage_rect_t b = { 25, 5, 20, 25 };
+    graphics_damage_rect_t rect = { 0, 0, 0, 0 };
+    assert(graphics_damage_rect_union(&a, &b, &rect));
+    assert(rect.x == 10 && rect.y == 5 &&
+           rect.width == 35 && rect.height == 55);
+    assert(graphics_damage_rect_intersection(&a, &b, &rect));
+    assert(rect.x == 25 && rect.y == 20 &&
+           rect.width == 20 && rect.height == 10);
+
+    graphics_damage_rect_t touching = { 40, 20, 10, 10 };
+    assert(!graphics_damage_rect_intersection(&a, &touching, &rect));
+    graphics_damage_rect_t offscreen = { -20, -10, 5, 5 };
+    assert(graphics_damage_rect_union(&a, &offscreen, &rect));
+    assert(rect.x == -20 && rect.y == -10 &&
+           rect.width == 60 && rect.height == 70);
+
+    graphics_damage_rect_t invalid = { 0, 0, -1, 10 };
+    rect.x = 7;
+    assert(!graphics_damage_rect_union(&a, &invalid, &rect));
+    assert(rect.x == 7);
+
+    graphics_damage_rect_t overflow = { INT32_MAX - 2, 0, 20, 10 };
+    assert(!graphics_damage_rect_union(&a, &overflow, &rect));
+
+    puts("graphics damage geometry tests passed");    puts("graphics damage geometry tests passed");
     return 0;
 }

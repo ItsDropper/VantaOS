@@ -11,6 +11,74 @@
 #include <stdint.h>
 
 /* Tile coordinates are half-open: [first, first + count). */
+/* Pixel-space rectangles use half-open bounds: [x, x + width). */
+typedef struct
+{
+    int32_t x;
+    int32_t y;
+    int32_t width;
+    int32_t height;
+} graphics_damage_rect_t;
+
+/* Build a bounded union without overflowing signed coordinates. */
+static inline int graphics_damage_rect_union(
+    const graphics_damage_rect_t* a,
+    const graphics_damage_rect_t* b,
+    graphics_damage_rect_t* out)
+{
+    if (!a || !b || !out || a->width <= 0 || a->height <= 0 ||
+        b->width <= 0 || b->height <= 0)
+        return 0;
+
+    int64_t left = a->x < b->x ? a->x : b->x;
+    int64_t top = a->y < b->y ? a->y : b->y;
+    int64_t ar = (int64_t)a->x + a->width;
+    int64_t br = (int64_t)b->x + b->width;
+    int64_t ab = (int64_t)a->y + a->height;
+    int64_t bb = (int64_t)b->y + b->height;
+    int64_t right = ar > br ? ar : br;
+    int64_t bottom = ab > bb ? ab : bb;
+
+    if (left < INT32_MIN || top < INT32_MIN ||
+        right > INT32_MAX || bottom > INT32_MAX ||
+        right - left > INT32_MAX || bottom - top > INT32_MAX)
+        return 0;
+
+    out->x = (int32_t)left;
+    out->y = (int32_t)top;
+    out->width = (int32_t)(right - left);
+    out->height = (int32_t)(bottom - top);
+    return 1;
+}
+
+/* Return the visible intersection of two half-open pixel rectangles. */
+static inline int graphics_damage_rect_intersection(
+    const graphics_damage_rect_t* a,
+    const graphics_damage_rect_t* b,
+    graphics_damage_rect_t* out)
+{
+    if (!a || !b || !out || a->width <= 0 || a->height <= 0 ||
+        b->width <= 0 || b->height <= 0)
+        return 0;
+
+    int64_t left = a->x > b->x ? a->x : b->x;
+    int64_t top = a->y > b->y ? a->y : b->y;
+    int64_t ar = (int64_t)a->x + a->width;
+    int64_t br = (int64_t)b->x + b->width;
+    int64_t ab = (int64_t)a->y + a->height;
+    int64_t bb = (int64_t)b->y + b->height;
+    int64_t right = ar < br ? ar : br;
+    int64_t bottom = ab < bb ? ab : bb;
+
+    if (left >= right || top >= bottom)
+        return 0;
+    out->x = (int32_t)left;
+    out->y = (int32_t)top;
+    out->width = (int32_t)(right - left);
+    out->height = (int32_t)(bottom - top);
+    return 1;
+}
+
 typedef struct
 {
     uint32_t first_x;

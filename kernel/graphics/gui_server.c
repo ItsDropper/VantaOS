@@ -655,6 +655,12 @@ static void gui_server_draw_windows_region(
         gui_window_t* source = &windows[i];
         gui_render_snapshot_t* target = &render_snapshot[i];
         target->visible = source->used && source->visible;
+        if (target->visible && clip_enabled &&
+            ((int64_t)source->x + source->width + 6 <= clip_x ||
+             (int64_t)source->y + source->height + 8 <= clip_y ||
+             source->x >= (int64_t)clip_x + clip_width ||
+             source->y >= (int64_t)clip_y + clip_height))
+            target->visible = 0;
         target->focused = target->visible &&
                           source->id == focused_window_id;
         if (!target->visible)
@@ -694,13 +700,6 @@ static void gui_server_draw_windows_region(
         if (!window)
             break;
         previous_z = window->z_order;
-
-        if (clip_enabled &&
-            ((int64_t)window->x + window->width + 6 <= clip_x ||
-             (int64_t)window->y + window->height + 8 <= clip_y ||
-             window->x >= (int64_t)clip_x + clip_width ||
-             window->y >= (int64_t)clip_y + clip_height))
-            continue;
 
         int32_t x = window->x;
         int32_t y = window->y;

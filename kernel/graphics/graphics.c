@@ -167,6 +167,7 @@ void graphics_reset_backbuffer(void)
 {
     graphics_backbuffer_valid = 0;
     graphics_scene_invalidated = 1;
+    graphics_clip_enabled = 0;
     cursor_saved_valid = 0;
 }
 
@@ -227,6 +228,7 @@ int graphics_panic_prepare(void)
 
     /* If a compositor frame was interrupted, abandon it and target scanout. */
     graphics_frame_active = 0;
+    graphics_clip_enabled = 0;
     if (graphics_display_framebuffer && graphics_display_pitch >= framebuffer_width * 4U)
     {
         framebuffer = graphics_display_framebuffer;

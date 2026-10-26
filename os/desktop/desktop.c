@@ -140,6 +140,34 @@ static void desktop_gui_present(void)
  * A clock tick changes only the taskbar. Preserve the retained window pixels
  * and avoid snapshotting/replaying every window on each clock refresh.
  */
+static void desktop_gui_present_damage(int32_t x, int32_t y,
+                                       int32_t width, int32_t height)
+{
+    if (!graphics_is_initialized() || width <= 0 || height <= 0) return;
+    int32_t screen_w = (int32_t)graphics_get_width();
+    int32_t screen_h = (int32_t)graphics_get_height();
+    if (x < 0) { width += x; x = 0; }
+    if (y < 0) { height += y; y = 0; }
+    if ((int64_t)x + width > screen_w) width = screen_w - x;
+    if ((int64_t)y + height > screen_h) height = screen_h - y;
+    if (width <= 0 || height <= 0) return;
+
+    graphics_begin_frame();
+    if (!graphics_frame_is_active()) return;
+    graphics_cursor_restore();
+    graphics_set_clip_rect((int)x, (int)y, (int)width, (int)height);
+    /* Rebuild the damaged wallpaper/taskbar before repainting windows in z-order. */
+    graphics_draw_desktop_backdrop((int)graphics_get_width(),
+                                   (int)graphics_get_height());
+    graphics_draw_taskbar((int)graphics_get_height() - 64,
+                          (int)graphics_get_width());
+    gui_server_draw_windows_clipped(x, y, width, height);
+    graphics_draw_start_menu_overlay();
+    graphics_clear_clip_rect();
+    graphics_draw_cursor();
+    graphics_end_frame();
+}
+
 static void desktop_gui_present_clock_only(void)
 {
     if (!graphics_is_initialized())
@@ -309,12 +337,13 @@ void desktop_update(void)
             }
             else if (mouse_has_move_event())
             {
-                /*
-                 * Pointer-only motion uses the shadow surface and damage
-                 * tracker. Cursor save-under is restored in the shadow buffer
-                 * and only the old/new cursor tiles are committed to scanout.
-                 */
-                graphics_update_cursor();
+                int32_t damage_x, damage_y, damage_width, damage_height;
+                if (gui_server_take_drag_damage(&damage_x, &damage_y,
+                                                &damage_width, &damage_height))
+                    desktop_gui_present_damage(damage_x, damage_y,
+                                               damage_width, damage_height);
+                else
+                    graphics_update_cursor();
             }
         }
 

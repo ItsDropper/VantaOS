@@ -16,6 +16,8 @@ void graphics_clear(uint32_t color);
 /* Switch panic rendering to scanout, bypassing compositor/backbuffer state. */
 int graphics_panic_prepare(void);
 void graphics_present(void);
+/* Update only the clock/date surface in the taskbar. */
+void graphics_draw_taskbar_clock_only(void);
 /* Request a full scene redraw on the next compositor frame. */
 void graphics_invalidate_scene(void);
 void graphics_begin_frame(void);

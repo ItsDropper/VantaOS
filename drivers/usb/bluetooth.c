@@ -55,7 +55,18 @@ int usb_bluetooth_find_hci_interface(const uint8_t *configuration,
         return 0;
 
     *candidate = (usb_bluetooth_hci_candidate_t){0};
-    if (configuration == NULL || length < 2U)
+    if (configuration == NULL || length < 9U)
+        return 0;
+
+    /*
+     * The caller supplies the complete configuration descriptor returned by
+     * enumeration, not an arbitrary slice. Validate its header and total
+     * length before considering interface descriptors.
+     */
+    if (configuration[0] < 9U || configuration[1] != 2U)
+        return 0;
+    if ((uint16_t)configuration[2] |
+        ((uint16_t)configuration[3] << 8) != length)
         return 0;
 
     while (offset < length) {

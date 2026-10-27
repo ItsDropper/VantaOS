@@ -6,6 +6,7 @@
  */
 
 #include "gui_server.h"
+#include "gui_event_queue.h"
 
 #include "graphics.h"
 #include "keyboard.h"
@@ -215,67 +216,9 @@ static void gui_queue_event_locked(gui_window_t* window,
 {
     if (!window || !event)
         return;
-
-    /*
-     * Pointer motion is state, not a history that applications need to replay.
-     * Collapse adjacent motion events to the newest position. This prevents a
-     * busy client from processing a long trail of stale mouse coordinates.
-     * Do not coalesce across a button/focus/key event: ordering matters there.
-     */
-    if (event->type == VANTA_GUI_EVENT_POINTER_MOVE &&
-        window->event_count != 0U)
-    {
-        uint32_t last = (window->event_head + window->event_count - 1U) %
-                        GUI_EVENT_QUEUE_CAPACITY;
-        if (window->events[last].type == VANTA_GUI_EVENT_POINTER_MOVE)
-        {
-            window->events[last] = *event;
-            return;
-        }
-    }
-
-    if (window->event_count == GUI_EVENT_QUEUE_CAPACITY)
-    {
-        /*
-         * Prefer discarding obsolete pointer motion over semantic events such
-         * as close, focus, key, or button transitions. Remove the oldest move
-         * in-place in logical FIFO order; only fall back to the oldest event
-         * when the queue contains no coalescible motion at all.
-         */
-        uint32_t remove_offset = GUI_EVENT_QUEUE_CAPACITY;
-        for (uint32_t i = 0; i < window->event_count; i++)
-        {
-            uint32_t index = (window->event_head + i) %
-                             GUI_EVENT_QUEUE_CAPACITY;
-            if (window->events[index].type == VANTA_GUI_EVENT_POINTER_MOVE)
-            {
-                remove_offset = i;
-                break;
-            }
-        }
-        if (remove_offset == GUI_EVENT_QUEUE_CAPACITY)
-        {
-            /* Never evict a queued key/click/focus event just to add motion. */
-            if (event->type == VANTA_GUI_EVENT_POINTER_MOVE)
-                return;
-            remove_offset = 0U;
-        }
-
-        for (uint32_t i = remove_offset; i + 1U < window->event_count; i++)
-        {
-            uint32_t destination = (window->event_head + i) %
-                                  GUI_EVENT_QUEUE_CAPACITY;
-            uint32_t source = (window->event_head + i + 1U) %
-                              GUI_EVENT_QUEUE_CAPACITY;
-            window->events[destination] = window->events[source];
-        }
-        window->event_count--;
-    }
-
-    uint32_t tail = (window->event_head + window->event_count) %
-                    GUI_EVENT_QUEUE_CAPACITY;
-    window->events[tail] = *event;
-    window->event_count++;
+    (void)gui_event_queue_push(window->events, GUI_EVENT_QUEUE_CAPACITY,
+                               &window->event_head, &window->event_count,
+                               event);
 }
 
 static void gui_emit_simple_event_locked(gui_window_t* window,

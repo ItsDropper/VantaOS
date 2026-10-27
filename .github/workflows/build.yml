@@ -164,6 +164,11 @@ jobs:
             -fno-pie -fno-stack-protector -mno-red-zone -mgeneral-regs-only \
             -nostdlib -Iinclude -DVANTAOS_BOOT_LOG_TO_FAT32 \
             -c kernel/serial.c -o /tmp/vantaos-serial-bootlog.o
+      - name: Test GUI event queue coalescing and semantic ordering
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_gui_event_queue.c -o /tmp/vantaos-gui-event-queue-test
+          /tmp/vantaos-gui-event-queue-test
+
       - name: Test compositor damage rectangle clipping
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_graphics_damage.c -o /tmp/vantaos-graphics-damage-test

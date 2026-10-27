@@ -231,3 +231,7 @@ int cpu_feature_has(cpu_feature_t f)
  return cpu_state_valid && (cpu_state.features&(uint64_t)f)!=0U;
 }
 int cpu_feature_avx_usable(void) { return cpu_feature_has(CPU_FEATURE_AVX_USABLE); }
+int cpu_feature_avx2_usable(void)
+{
+ return cpu_feature_avx_usable() && cpu_feature_has(CPU_FEATURE_AVX2);
+}

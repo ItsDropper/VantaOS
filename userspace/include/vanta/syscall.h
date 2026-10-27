@@ -18,7 +18,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define VANTA_USER_ABI_VERSION 7U
+#define VANTA_USER_ABI_VERSION 8U
 
 #define VANTA_SYS_EXIT          0U
 #define VANTA_SYS_WRITE         1U

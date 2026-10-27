@@ -12,6 +12,7 @@ VantaOS is an experimental x86-64 OS. Source code for a driver is not proof that
 | Graphics/framebuffer | Initialization code exists and boot logs report framebuffer details | Pixel correctness and broad firmware support unverified |
 | Keyboard/mouse | Driver code exists | Device compatibility and full interaction unverified |
 | PCI/ATA | Driver code exists and initialization runs during boot | Broad controller/device compatibility unverified |
+| PCIe extended configuration | ACPI MCFG region validation and read-only extended-capability traversal are implemented; malformed links are host-tested | Real ECAM firmware tables and physical PCIe devices are not yet hardware-validated |
 | FAT32 | Mount validates BPB geometry against partition bounds; cluster and FAT accesses are volume-bounded; ATA PIO sector-write primitive is implemented | Persistent allocation, directory updates, and file write/create remain unimplemented; write path is not end-to-end tested |
 | USB, Wi-Fi, Ethernet networking, audio | No end-to-end support established by the current CI | Not verified |
 | NVIDIA GA10x (NVX) | Bounded VBIOS/FWSEC and booter parsers; FWSEC interface command-window parser; synthetic BAR0 tests for Falcon reset, DMA, BROM, launch, mailbox and ownership sequencing; CI host tests | Firmware parsing and software sequencing are host-tested; physical SEC2 secure boot, authenticated WPR placement, GSP RISC-V activation, first GSP-RM RPC, and acceleration remain unverified |

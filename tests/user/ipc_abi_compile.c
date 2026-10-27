@@ -8,6 +8,11 @@
 #include <stdint.h>
 #include <vanta/ipc.h>
 
+_Static_assert(VANTA_USER_ABI_VERSION == 8U,
+               "userspace ABI version must track the IPC peek syscall");
+_Static_assert(VANTA_SYS_IPC_PEEK_LENGTH == 30U,
+               "IPC peek syscall number is part of the public ABI");
+
 _Static_assert(sizeof(vanta_ipc_message_t) == VANTA_IPC_MESSAGE_MAX,
                "IPC envelope must match the kernel transport limit");
 _Static_assert(offsetof(vanta_ipc_message_t, payload) == VANTA_IPC_HEADER_SIZE,

@@ -120,6 +120,49 @@ static int decode_topology_leaf(uint32_t leaf)
  cpu_state.topology_leaf=(uint8_t)(leaf==0x1FU ? 0x1FU : 0x0BU);
  return 1;
 }
+
+static int decode_cache_leaf(uint32_t leaf)
+{
+ cpuid_regs_t r;
+ uint32_t count=0U;
+ for (uint32_t subleaf=0U; subleaf<CPU_FEATURES_MAX_CACHES; ++subleaf) {
+  if (!cpuid_read(leaf,subleaf,&r)) break;
+  uint32_t type=r.eax&0x1FU;
+  if (type==0U) break;
+  if (type>3U) continue;
+  uint32_t level=(r.eax>>5U)&0x7U;
+  uint64_t line=(uint64_t)(r.ebx&0xFFFU)+1U;
+  uint64_t partitions=(uint64_t)((r.ebx>>12U)&0x3FFU)+1U;
+  uint64_t ways=(uint64_t)((r.ebx>>22U)&0x3FFU)+1U;
+  uint64_t sets=(uint64_t)r.ecx+1U;
+  if (level==0U || line==0U || ways==0U || sets==0U ||
+      line>UINT16_MAX || ways>UINT16_MAX || sets>UINT32_MAX ||
+      partitions>UINT64_MAX/line)
+   continue;
+  uint64_t size=line*partitions;
+  if (ways>UINT64_MAX/size) continue;
+  size*=ways;
+  if (sets>UINT64_MAX/size) continue;
+  size*=sets;
+  if (size==0U || count>=CPU_FEATURES_MAX_CACHES) continue;
+  cpu_cache_info_t* cache=&cpu_state.caches[count++];
+  cache->level=(uint8_t)level;
+  cache->type=(uint8_t)type; /* 1=data, 2=instruction, 3=unified */
+  cache->line_bytes=(uint16_t)line;
+  cache->ways=(uint16_t)ways;
+  cache->sets=(uint32_t)sets;
+  cache->size_bytes=size;
+ }
+ cpu_state.cache_count=count;
+ return count!=0U;
+}
+static void decode_cache_geometry(void)
+{
+ if (cpu_state.max_basic_leaf>=4U && decode_cache_leaf(4U)) return;
+ if (cpu_state.max_extended_leaf>=0x8000001DU)
+  (void)decode_cache_leaf(0x8000001DU);
+}
+
 static void decode_topology(void)
 {
  if (cpu_state.max_basic_leaf>=0x1FU && decode_topology_leaf(0x1FU)) return;
@@ -164,6 +207,7 @@ int cpu_features_initialize(void)
  if (cpu_state.max_basic_leaf>=7U && cpuid_read(7U,0U,&r))
   decode_structured_features(&r);
  decode_topology();
+ decode_cache_geometry();
  decode_extended_features();
  /* AVX requires both OS-managed extended state and enabled XMM/YMM state. */
  if ((cpu_state.features & (CPU_FEATURE_AVX | CPU_FEATURE_OSXSAVE)) ==

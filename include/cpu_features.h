@@ -27,7 +27,8 @@ typedef struct {
  char vendor[CPU_VENDOR_STRING_LENGTH];
  uint32_t max_basic_leaf, max_extended_leaf, signature, family, model, stepping;
  uint32_t logical_processors, cache_line_bytes;
- uint8_t physical_address_bits, virtual_address_bits;
+ uint32_t initial_apic_id, threads_per_core, cores_per_package;
+ uint8_t topology_leaf, physical_address_bits, virtual_address_bits;
  uint64_t features;
 } cpu_features_t;
 int cpu_features_initialize(void);

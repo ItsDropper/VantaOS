@@ -12,6 +12,7 @@
 
 #define ACPI_MAX_CPUS 32U
 #define ACPI_MAX_ISO 16U
+#define ACPI_MAX_MCFG_REGIONS 8U
 
 typedef struct
 {
@@ -19,6 +20,14 @@ typedef struct
     uint32_t gsi;
     uint16_t flags;
 } acpi_irq_override_t;
+
+typedef struct
+{
+    uint64_t base_address;
+    uint16_t segment_group;
+    uint8_t start_bus;
+    uint8_t end_bus;
+} acpi_mcfg_region_t;
 
 typedef struct
 {
@@ -34,5 +43,8 @@ typedef struct
 
 /* Parses ACPI RSDP and MADT; returns zero if no valid APIC topology is found. */
 int acpi_discover_platform(acpi_platform_info_t* info);
+/* Returns the number of validated PCIe ECAM regions copied to the output. */
+uint32_t acpi_discover_pci_mcfg(acpi_mcfg_region_t* regions,
+                                uint32_t capacity);
 
 #endif

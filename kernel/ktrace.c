@@ -15,6 +15,7 @@
  */
 typedef struct {
     volatile uint64_t committed_sequence;
+    volatile uint32_t writer_active;
     volatile uint32_t type;
     volatile uint32_t cpu_id;
     volatile uint64_t arg0;
@@ -40,11 +41,19 @@ void ktrace_emit(uint32_t type, uint32_t cpu_id, uint64_t arg0, uint64_t arg1)
     ktrace_slot_t* slot = &trace_ring[(sequence - 1U) % KTRACE_CAPACITY];
 
     __atomic_fetch_add(&event_counts[type], 1U, __ATOMIC_RELAXED);
+    uint32_t expected = 0U;
+    /* Never spin here: a preempted writer must not deadlock an interrupt. */
+    if (!__atomic_compare_exchange_n(&slot->writer_active, &expected, 1U,
+                                     0, __ATOMIC_ACQUIRE,
+                                     __ATOMIC_RELAXED))
+        return;
+
     __atomic_store_n(&slot->type, type, __ATOMIC_RELAXED);
     __atomic_store_n(&slot->cpu_id, cpu_id, __ATOMIC_RELAXED);
     __atomic_store_n(&slot->arg0, arg0, __ATOMIC_RELAXED);
     __atomic_store_n(&slot->arg1, arg1, __ATOMIC_RELAXED);
     __atomic_store_n(&slot->committed_sequence, sequence, __ATOMIC_RELEASE);
+    __atomic_store_n(&slot->writer_active, 0U, __ATOMIC_RELEASE);
 }
 
 size_t ktrace_snapshot(ktrace_record_t* output, size_t capacity)
@@ -65,6 +74,8 @@ size_t ktrace_snapshot(ktrace_record_t* output, size_t capacity)
     {
         ktrace_slot_t* slot =
             &trace_ring[(sequence - 1U) % KTRACE_CAPACITY];
+        if (__atomic_load_n(&slot->writer_active, __ATOMIC_ACQUIRE) != 0U)
+            continue;
         uint64_t before = atomic_load_u64(&slot->committed_sequence);
         if (before != sequence)
             continue;
@@ -77,7 +88,8 @@ size_t ktrace_snapshot(ktrace_record_t* output, size_t capacity)
         record.arg1 = __atomic_load_n(&slot->arg1, __ATOMIC_RELAXED);
 
         uint64_t after = atomic_load_u64(&slot->committed_sequence);
-        if (after != before)
+        if (after != before ||
+            __atomic_load_n(&slot->writer_active, __ATOMIC_ACQUIRE) != 0U)
             continue;
         output[copied++] = record;
     }

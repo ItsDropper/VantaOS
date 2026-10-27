@@ -16,6 +16,7 @@
 #define OUTPUT_LINES 512U
 #define OUTPUT_COLUMNS (VANTA_GUI_TEXT_MAX + 1U)
 #define DISPLAY_LINES 13U
+#define HISTORY_ENTRIES 16U
 #define WINDOW_WIDTH 760U
 #define WINDOW_HEIGHT 460U
 
@@ -27,6 +28,11 @@ static vanta_theme_t current_theme;
 #define COLOR_ACCENT vanta_theme_accent_color(&current_theme)
 
 static char line[LINE_CAPACITY];
+static char history[HISTORY_ENTRIES][LINE_CAPACITY];
+static size_t history_count;
+static size_t history_start;
+static size_t history_position;
+static int history_browsing;
 static char list_buffer[LIST_CAPACITY];
 static char io_buffer[IO_CHUNK];
 static char kernel_output[KERNEL_OUTPUT_CAPACITY];
@@ -364,6 +370,66 @@ static void command_kernel(const char* command)
         write_text("\n");
 }
 
+static void history_store(const char* command)
+{
+    if (!command || !command[0])
+        return;
+
+    size_t slot;
+    if (history_count < HISTORY_ENTRIES)
+    {
+        slot = (history_start + history_count) % HISTORY_ENTRIES;
+        history_count++;
+    }
+    else
+    {
+        history_start = (history_start + 1U) % HISTORY_ENTRIES;
+        slot = (history_start + history_count - 1U) % HISTORY_ENTRIES;
+    }
+
+    size_t i = 0U;
+    while (i + 1U < LINE_CAPACITY && command[i])
+    {
+        history[slot][i] = command[i];
+        i++;
+    }
+    history[slot][i] = '\0';
+    history_position = history_count;
+    history_browsing = 0;
+}
+
+/* Replace the editable command without leaving stale characters on screen. */
+static void history_recall(size_t position)
+{
+    if (position > history_count)
+        position = history_count;
+
+    while (input_length > 0U)
+    {
+        input_length--;
+        output_backspace();
+    }
+    for (size_t i = 0U; i < sizeof(line); i++)
+        line[i] = '\0';
+
+    if (position < history_count)
+    {
+        size_t slot = (history_start + position) % HISTORY_ENTRIES;
+        size_t i = 0U;
+        while (i + 1U < sizeof(line) && history[slot][i])
+        {
+            line[i] = history[slot][i];
+            output_character(line[i]);
+            i++;
+        }
+        input_length = i;
+    }
+
+    history_position = position;
+    history_browsing = position < history_count;
+    render();
+}
+
 static void execute_line(char* command)
 {
     while (*command == ' ')
@@ -485,11 +551,24 @@ int main(int argc, char** argv)
             render();
             continue;
         }
+        if (key == VANTA_GUI_KEY_UP)
+        {
+            if (history_count != 0U && history_position > 0U)
+                history_recall(history_position - 1U);
+            continue;
+        }
+        if (key == VANTA_GUI_KEY_DOWN)
+        {
+            if (history_browsing && history_position < history_count)
+                history_recall(history_position + 1U);
+            continue;
+        }
         if (key == '\r' || key == '\n')
         {
             output_character('\n');
             line[input_length] = '\0';
             prompt_length = 0U;
+            history_store(line);
             execute_line(line);
             for (size_t i = 0U; i < sizeof(line); i++)
                 line[i] = '\0';

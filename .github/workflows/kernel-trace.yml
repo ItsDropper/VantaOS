@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Compile trace tests with strict warnings
         run: |
-          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+          gcc -std=c11 -Wall -Wextra -Werror -pthread -Iinclude \
             scripts/test_ktrace.c kernel/ktrace.c -o /tmp/vantaos-ktrace-test
       - name: Test event counters, snapshots, and wraparound
         run: /tmp/vantaos-ktrace-test

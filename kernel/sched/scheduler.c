@@ -47,7 +47,14 @@ int scheduler_is_initialized(void)
     return __atomic_load_n(&initialized, __ATOMIC_ACQUIRE) != 0;
 }
 
-static uint32_t scheduler_next_ready(uint32_t current_pid)
+/*
+ * Select a candidate without claiming it. Another CPU may win the race
+ * between this snapshot and process_prepare_context_switch(); the caller
+ * passes that rejected PID back on the next scan so one lost race cannot
+ * waste the entire scheduling quantum.
+ */
+static uint32_t scheduler_next_ready(uint32_t current_pid,
+                                     uint32_t rejected_pid)
 {
     uint32_t cpu_id = process_current_cpu_id();
     cpu_local_t* local = cpu_local_current();
@@ -58,7 +65,7 @@ static uint32_t scheduler_next_ready(uint32_t current_pid)
     for (uint32_t offset = 1; offset < PROCESS_MAX; offset++)
     {
         uint32_t pid = (current_pid + offset) % PROCESS_MAX;
-        if (pid == idle_pid)
+        if (pid == idle_pid || pid == rejected_pid)
             continue;
 
         process_t process;
@@ -70,7 +77,8 @@ static uint32_t scheduler_next_ready(uint32_t current_pid)
             return pid;
     }
 
-    if (idle_pid == 0U || idle_pid >= PROCESS_MAX)
+    if (idle_pid == 0U || idle_pid >= PROCESS_MAX ||
+        idle_pid == rejected_pid)
         return current_pid;
 
     process_t idle;
@@ -103,19 +111,13 @@ static int scheduler_install_kernel_stack(uint32_t pid)
 static uint64_t scheduler_switch_from_stack(uint64_t current_stack,
                                            uint32_t current_pid)
 {
-    uint32_t next_pid = scheduler_next_ready(current_pid);
-    if (next_pid == current_pid)
-    {
-        process_t current;
-        if (process_snapshot(current_pid, &current) &&
-            current.state != PROCESS_RUNNING && current.state != PROCESS_READY)
-            serial_write("VANTAOS_SCHED_NO_RUNNABLE\\n");
-        return current_stack;
-    }
-
     uint32_t cpu_id = process_current_cpu_id();
     uint64_t next_stack = 0;
     paging_address_space_t* next_address_space = NULL;
+    uint32_t next_pid = current_pid;
+    uint32_t rejected_pid = 0U;
+    int prepared = 0;
+
     if (cpu_id >= CPU_LOCAL_MAX)
         return current_stack;
     if (__atomic_load_n(&pending_outgoing_pid[cpu_id], __ATOMIC_ACQUIRE) != 0U)
@@ -124,10 +126,35 @@ static uint64_t scheduler_switch_from_stack(uint64_t current_stack,
             serial_write("VANTAOS_SCHED_PENDING_OUTGOING\\n");
         return current_stack;
     }
-    if (!process_prepare_context_switch(next_pid, current_pid, cpu_id,
-                                        &next_stack, &next_address_space))
+
+    /*
+     * Selection and ownership are separate operations because the process
+     * table is shared by every CPU. If a peer claims the selected process
+     * first, reject that PID and continue searching instead of idling or
+     * burning a full quantum while other runnable work exists.
+     */
+    for (uint32_t attempt = 0; attempt < PROCESS_MAX; attempt++)
     {
-        serial_write("VANTAOS_SCHED_PREPARE_FAILED\\n");
+        next_pid = scheduler_next_ready(current_pid, rejected_pid);
+        if (next_pid == current_pid)
+            break;
+
+        if (process_prepare_context_switch(next_pid, current_pid, cpu_id,
+                                           &next_stack, &next_address_space))
+        {
+            prepared = 1;
+            break;
+        }
+
+        rejected_pid = next_pid;
+    }
+
+    if (!prepared)
+    {
+        process_t current;
+        if (process_snapshot(current_pid, &current) &&
+            current.state != PROCESS_RUNNING && current.state != PROCESS_READY)
+            serial_write("VANTAOS_SCHED_NO_RUNNABLE\\n");
         return current_stack;
     }
 

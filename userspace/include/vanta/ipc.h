@@ -91,7 +91,11 @@ static inline long vanta_ipc_send_message(uint64_t endpoint, uint16_t type,
 /*
  * Receives one complete envelope. Returns payload byte count on success.
  * type_out and request_id_out may be NULL. If capacity is too small, the
- * message has already been dequeued; callers should size buffers accordingly.
+ * queued message remains available for a later receive with a larger buffer.
+ *
+ * The peek/receive sequence relies on the current process model: only the
+ * endpoint owner can receive, and VantaOS does not yet expose user threads.
+ * Revisit this contract if concurrent receivers are introduced.
  */
 static inline long vanta_ipc_receive_message(uint64_t endpoint,
                                              uint16_t* type_out,
@@ -99,8 +103,29 @@ static inline long vanta_ipc_receive_message(uint64_t endpoint,
                                              void* payload,
                                              size_t capacity)
 {
+    long next_length = vanta_ipc_peek_length(endpoint);
+    if (next_length < 0)
+        return next_length;
+    if ((size_t)next_length > VANTA_IPC_MESSAGE_MAX)
+        return -VANTA_EPROTO;
+
+    /*
+     * Malformed short messages must be consumed so they cannot permanently
+     * block the endpoint. A valid-size envelope with insufficient caller
+     * capacity is left queued and can be retried with a larger buffer.
+     */
+    if ((size_t)next_length < VANTA_IPC_HEADER_SIZE) {
+        uint8_t discard[VANTA_IPC_MESSAGE_MAX];
+        (void)vanta_ipc_receive(endpoint, discard, (size_t)next_length);
+        return -VANTA_EPROTO;
+    }
+    size_t expected_payload = (size_t)next_length - VANTA_IPC_HEADER_SIZE;
+    if (expected_payload > capacity ||
+        (expected_payload != 0U && !payload))
+        return -VANTA_EMSGSIZE;
+
     vanta_ipc_message_t message;
-    long received = vanta_ipc_receive(endpoint, &message, sizeof(message));
+    long received = vanta_ipc_receive(endpoint, &message, (size_t)next_length);
     if (received < 0)
         return received;
     int valid = vanta_ipc_message_validate(&message, (size_t)received);

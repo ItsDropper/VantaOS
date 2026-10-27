@@ -47,5 +47,7 @@ size_t ktrace_snapshot(ktrace_record_t* output, size_t capacity);
 uint64_t ktrace_event_count(uint32_t type);
 uint64_t ktrace_total_events(void);
 uint64_t ktrace_overwritten_estimate(void);
+/* Emit a bounded recent-history dump to the existing serial console. */
+void ktrace_dump_serial(size_t max_records);
 
 #endif

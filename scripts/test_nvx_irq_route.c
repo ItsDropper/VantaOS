@@ -26,6 +26,15 @@ static int apic_enabled = 1;
 static void dummy_stub(void) {}
 void (*device_irq_stub_table[DEVICE_IRQ_VECTOR_COUNT])(void);
 
+int pci_test_ecam_read32(uint16_t segment, uint8_t bus, uint8_t slot,
+                         uint8_t function, uint16_t offset,
+                         uint32_t* value)
+{
+    (void)segment; (void)bus; (void)slot; (void)function; (void)offset;
+    if (value) *value = 0xFFFFFFFFU;
+    return 0;
+}
+
 void pci_test_outl(uint16_t port, uint32_t value)
 {
     if (port == CONFIG_ADDRESS_PORT) { selected_address = value; return; }

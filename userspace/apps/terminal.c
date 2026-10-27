@@ -222,6 +222,7 @@ static void command_help(void)
     write_text("  kernel <command>     Run a supported kernel-shell command\n");
     write_text("  clear                Clear visible terminal history\n");
     write_text("  exit                 Close the terminal\n");
+    write_text("  Up / Down            Recall the last 16 commands\n");
     write_text("  PageUp / PageDown    Scroll retained output\n");
     write_text("Paths refer to VantaOS, not files on the host computer.\n");
     write_text("The kernel command interface is privileged; use it deliberately.\n");

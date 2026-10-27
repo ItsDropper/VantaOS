@@ -94,8 +94,67 @@ int process_set_running(uint32_t pid)
     return 1;
 }
 
+static volatile uint32_t wakeup_cpu_cursor;
+
+/*
+ * Estimate runnable load from the authoritative process table, then choose
+ * one online CPU rather than broadcasting an IPI to every AP. Owned tasks
+ * count against their current CPU; unowned CPU-pinned READY tasks count
+ * against their affinity target. Unpinned READY tasks remain unassigned.
+ */
+static uint32_t process_choose_wakeup_cpu(uint32_t excluded_cpu)
+{
+    uint32_t load[CPU_LOCAL_MAX] = {0};
+    uint64_t flags = process_table_lock_acquire();
+    for (uint32_t pid = 1U; pid < PROCESS_MAX; pid++)
+    {
+        const process_t* process = &process_table_records[pid];
+        if (process->state != PROCESS_READY &&
+            process->state != PROCESS_RUNNING)
+            continue;
+
+        uint32_t cpu = process->owner_cpu;
+        if (cpu == PROCESS_CPU_UNOWNED)
+            cpu = process->affinity_cpu;
+        if (cpu < CPU_LOCAL_MAX && cpu != PROCESS_CPU_ANY &&
+            load[cpu] != UINT32_MAX)
+            load[cpu]++;
+    }
+    process_table_lock_release(flags);
+
+    uint32_t start = __atomic_fetch_add(&wakeup_cpu_cursor, 1U,
+                                        __ATOMIC_RELAXED) %
+                     cpu_local_capacity();
+    uint32_t selected = PROCESS_CPU_UNOWNED;
+    uint32_t least_load = UINT32_MAX;
+    for (uint32_t offset = 0; offset < cpu_local_capacity(); offset++)
+    {
+        uint32_t cpu = (start + offset) % cpu_local_capacity();
+        if (cpu == excluded_cpu || !cpu_local_get(cpu))
+            continue;
+        if (load[cpu] < least_load)
+        {
+            selected = cpu;
+            least_load = load[cpu];
+        }
+    }
+    return selected;
+}
+
+static void process_request_cpu_reschedule(uint32_t cpu_id)
+{
+    const cpu_local_t* local = cpu_local_get(cpu_id);
+    if (!local)
+        return;
+
+    __atomic_store_n((uint32_t*)&local->reschedule_pending, 1U,
+                     __ATOMIC_RELEASE);
+    if (apic_is_enabled())
+        (void)apic_send_reschedule_ipi(local->apic_id);
+}
+
 static void process_send_wake_ipi(uint32_t owner_cpu,
-                                       uint32_t affinity_cpu)
+                                  uint32_t affinity_cpu)
 {
     /*
      * Publish the scheduling request before attempting hardware delivery.
@@ -104,37 +163,25 @@ static void process_send_wake_ipi(uint32_t owner_cpu,
      */
     if (owner_cpu != PROCESS_CPU_UNOWNED)
     {
-        const cpu_local_t* local = cpu_local_get(owner_cpu);
-        if (local)
-            __atomic_store_n((uint32_t*)&local->reschedule_pending, 1U,
-                             __ATOMIC_RELEASE);
-        if (apic_is_enabled() && local)
-            (void)apic_send_reschedule_ipi(local->apic_id);
+        process_request_cpu_reschedule(owner_cpu);
         return;
     }
 
     if (affinity_cpu != PROCESS_CPU_ANY)
     {
-        const cpu_local_t* local = cpu_local_get(affinity_cpu);
-        if (local)
-            __atomic_store_n((uint32_t*)&local->reschedule_pending, 1U,
-                             __ATOMIC_RELEASE);
-        if (apic_is_enabled() && local)
-            (void)apic_send_reschedule_ipi(local->apic_id);
+        process_request_cpu_reschedule(affinity_cpu);
         return;
     }
 
-    /* An unpinned task can be claimed by any online CPU. */
-    for (uint32_t cpu = 0; cpu < cpu_local_capacity(); cpu++)
-    {
-        const cpu_local_t* local = cpu_local_get(cpu);
-        if (!local)
-            continue;
-        __atomic_store_n((uint32_t*)&local->reschedule_pending, 1U,
-                         __ATOMIC_RELEASE);
-        if (apic_is_enabled())
-            (void)apic_send_reschedule_ipi(local->apic_id);
-    }
+    /*
+     * Unpinned work is eligible on every CPU. Wake the least-loaded eligible
+     * CPU and let the next scheduler decision claim the task atomically;
+     * other CPUs continue their own timers and may steal it if this CPU is
+     * busy or loses a claim race.
+     */
+    uint32_t target = process_choose_wakeup_cpu(PROCESS_CPU_UNOWNED);
+    if (target != PROCESS_CPU_UNOWNED)
+        process_request_cpu_reschedule(target);
 }
 
 int process_wake(uint32_t pid)
@@ -160,13 +207,6 @@ int process_wake(uint32_t pid)
     return ok;
 }
 
-
-static void process_request_cpu_reschedule(uint32_t cpu_id)
-{
-    const cpu_local_t* local = cpu_local_get(cpu_id);
-    if (local && apic_is_enabled())
-        (void)apic_send_reschedule_ipi(local->apic_id);
-}
 
 int process_set_affinity(uint32_t pid, uint32_t cpu_id)
 {
@@ -213,11 +253,9 @@ int process_set_affinity(uint32_t pid, uint32_t cpu_id)
     }
     else
     {
-        for (uint32_t cpu = 0; cpu < cpu_local_capacity(); cpu++)
-        {
-            if (cpu != owner_cpu)
-                process_request_cpu_reschedule(cpu);
-        }
+        uint32_t target = process_choose_wakeup_cpu(owner_cpu);
+        if (target != PROCESS_CPU_UNOWNED)
+            process_request_cpu_reschedule(target);
     }
     return 1;
 }

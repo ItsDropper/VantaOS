@@ -271,7 +271,13 @@ _Noreturn void smp_ap_entry(uint32_t apic_id)
 
     __atomic_store_n(&work_probe_done[index], 1U, __ATOMIC_RELEASE);
 
-    /* Work execution is proven; general scheduling is intentionally not enabled. */
+    /*
+     * Keep the AP on its bootstrap stack until the process manager has created
+     * CPU-pinned idle contexts and smp_scheduler_initialize() publishes
+     * scheduler_online. Its LAPIC timer then calls scheduler_start_cpu() to
+     * switch onto that idle context; this bootstrap HLT loop is not the
+     * CPU's normal idle process.
+     */
     for (;;)
         __asm__ volatile ("sti; hlt" ::: "memory");
 }

@@ -126,7 +126,7 @@ void kernel_panic(
     ktrace_emit(KTRACE_EVENT_PANIC, KTRACE_CPU_UNKNOWN,
                 exception_number, has_fault_address ? fault_address : 0U);
     panic_serial_report(reason, exception_number, frame, fault_address, has_fault_address);
-    ktrace_dump_serial(24U);
+    ktrace_dump_serial(12U);
 
     if (!graphics_is_initialized())
     {

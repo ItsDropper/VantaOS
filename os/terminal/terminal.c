@@ -368,7 +368,7 @@ void terminal_redraw_input(const char* text)
      */
     while (*text)
     {
-        terminal_putchar(*text);
+        terminal_putchar_internal(*text, 0);
         text++;
     }
 
@@ -413,7 +413,7 @@ void terminal_set_input_cursor(unsigned int offset)
     terminal_render();
 }
 
-void terminal_putchar(char c)
+static void terminal_putchar_internal(char c, int redraw)
 {
     if (capture_buffer && capture_capacity > 0U &&
         capture_length + 1U < capture_capacity)
@@ -430,14 +430,16 @@ void terminal_putchar(char c)
     if (c == '\n')
     {
         terminal_add_line();
-        terminal_render();
+        if (redraw)
+            terminal_render();
         return;
     }
 
     if (c == '\r')
     {
         cursor_column = 0;
-        terminal_render();
+        if (redraw)
+            terminal_render();
         return;
     }
 
@@ -458,7 +460,13 @@ void terminal_putchar(char c)
     if (cursor_column >= VGA_WIDTH)
         terminal_add_line();
 
-    terminal_render();
+    if (redraw)
+        terminal_render();
+}
+
+void terminal_putchar(char c)
+{
+    terminal_putchar_internal(c, 1);
 }
 
 void terminal_backspace(void)
@@ -525,9 +533,10 @@ void terminal_write(const char* text)
 {
     while (*text)
     {
-        terminal_putchar(*text);
+        terminal_putchar_internal(*text, 0);
         text++;
     }
+    terminal_render();
 }
 
 void terminal_writestring(const char* text)
@@ -544,10 +553,11 @@ void terminal_write_hex(uint32_t value)
 
     for (int i = 7; i >= 0; i--)
     {
-        terminal_putchar(
-            hex[(value >> (i * 4)) & 0xF]
+        terminal_putchar_internal(
+            hex[(value >> (i * 4)) & 0xF], 0
         );
     }
+    terminal_render();
 }
 
 size_t terminal_history_count(void)

@@ -13,6 +13,10 @@ VantaOS has an initial user-mode GUI boundary and three standalone ring-3 deskto
 - Accent, light/dark surfaces, contrast, and Explorer row density are applied to the desktop when saved; the text-size option currently changes the Settings controls only. The settings-apply syscall reloads the validated on-disk config without restarting and broadcasts a theme-change event so open apps refresh their own surfaces. Settings does not yet provide timezone-aware local time.
 - Terminal's shell, window, text rendering, input editing, and bounded scrollback run in the ring-3 `/TERMINAL.ELF` app. File Explorer runs as `/EXPLORER.ELF` at ring 3. It supports editable absolute-path navigation, per-directory substring search, active sidebar locations, single and Ctrl-click multi-selection, selected-row outlines, right-click actions and properties, create-file/create-folder, rename (including extension changes), recursive delete/copy/move of folder trees, Ctrl+C/Ctrl+X/Ctrl+V file operations, and per-file RLE compression/extraction using the documented Vanta `.VZA` format. It also previews text and launches validated ELF programs. The filesystem supports ASCII long-filename creation through FAT32 LFN records; Unicode filename creation, general content editing, cross-directory rename, and crash-atomic transactions remain unsupported.
 
+## Input responsiveness
+
+The per-window event queue is bounded. Consecutive pointer-motion events are coalesced to the newest coordinates, and when the queue fills the oldest pending pointer-motion event is discarded before key, focus, button, or close events. Motion is only coalesced when adjacent in FIFO order, so it never moves across a semantic event. This reduces stale pointer work without changing click/key ordering.
+
 ## Current GUI ABI
 
 The kernel validates requests and retains a bounded draw list for each window.

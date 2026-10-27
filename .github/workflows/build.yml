@@ -245,8 +245,14 @@ jobs:
 
       - name: Test bounded IPC queue, capability permissions, and owner cleanup
         run: |
-          gcc -std=c11 -Wall -Wextra -Werror -Itests/ipc_host -Iinclude scripts/test_ipc.c -o /tmp/vantaos-ipc-test
+          gcc -std=c11 -Wall -Wextra -Werror -Itests/ipc_host -Iuserspace/include -Iinclude scripts/test_ipc.c -o /tmp/vantaos-ipc-test
           /tmp/vantaos-ipc-test
+
+      - name: Compile normalized userspace IPC message ABI
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -ffreestanding -Iuserspace/include -Iinclude \
+            -c tests/user/ipc_abi_compile.c -o /tmp/vantaos-ipc-abi.o
+          test -s /tmp/vantaos-ipc-abi.o
 
       - name: Test hardware crypto entropy source
         run: |

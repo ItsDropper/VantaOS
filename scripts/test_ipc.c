@@ -8,6 +8,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <vanta/ipc.h>
 #include "../kernel/ipc.c"
 
 static uint64_t rng_counter = 0x123456789ULL;
@@ -22,6 +23,29 @@ int crypto_rng_fill(void *output, size_t length)
 
 int main(void)
 {
+    vanta_ipc_message_t abi_message;
+    const char abi_payload[] = "hello";
+    assert(vanta_ipc_message_init(&abi_message, 1U, 42U,
+                                  abi_payload, sizeof(abi_payload)) == 0);
+    assert(sizeof(abi_message) == VANTA_IPC_MESSAGE_MAX);
+    assert(vanta_ipc_message_validate(&abi_message,
+           VANTA_IPC_HEADER_SIZE + sizeof(abi_payload)) == 0);
+    assert(abi_message.magic == VANTA_IPC_MAGIC);
+    assert(abi_message.version == VANTA_IPC_VERSION);
+    assert(abi_message.type == 1U && abi_message.request_id == 42U);
+    assert(abi_message.payload_length == sizeof(abi_payload));
+    assert(memcmp(abi_message.payload, abi_payload, sizeof(abi_payload)) == 0);
+    assert(vanta_ipc_message_init(&abi_message, 0U, 0U, 0, 0U) == -VANTA_EINVAL);
+    assert(vanta_ipc_message_init(&abi_message, 1U, 0U, 0,
+                                  VANTA_IPC_PAYLOAD_MAX + 1U) == -VANTA_EMSGSIZE);
+    assert(vanta_ipc_message_init(&abi_message, 1U, 0U, 0, 0U) == 0);
+    assert(vanta_ipc_message_validate(&abi_message,
+           VANTA_IPC_HEADER_SIZE) == 0);
+    assert(vanta_ipc_message_validate(&abi_message,
+           VANTA_IPC_HEADER_SIZE + 1U) == -VANTA_EPROTO);
+    abi_message.version++;
+    assert(vanta_ipc_message_validate(&abi_message,
+           VANTA_IPC_HEADER_SIZE) == -VANTA_EPROTO);
     int64_t endpoint = ipc_endpoint_create(10U);
     assert(endpoint > 0);
     char out[IPC_MESSAGE_MAX] = {0};

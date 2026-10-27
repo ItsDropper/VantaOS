@@ -239,7 +239,7 @@ static int usb_enumerate_port(uint32_t port)
     if (usb_bluetooth_find_hci_interface(configuration_buffer,
                                          configuration_length,
                                          &bluetooth_candidate)) {
-        serial_write("VANTAOS_USB_BLUETOOTH_HCI_DESCRIPTOR_MATCH_ONLY\\n");
+        serial_write("VANTAOS_USB_BLUETOOTH_HCI_DESCRIPTOR_MATCH_ONLY\n");
         goto cleanup;
     }
 

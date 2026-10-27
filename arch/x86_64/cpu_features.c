@@ -47,7 +47,7 @@ static void copy_vendor(uint32_t ebx, uint32_t edx, uint32_t ecx)
  for (uint32_t w=0; w<3U; ++w)
   for (uint32_t b=0; b<4U; ++b)
    cpu_state.vendor[w*4U+b]=(char)(words[w]>>(b*8U));
- cpu_state.vendor[12]='\\0';
+  cpu_state.vendor[12] = 0;
 }
 static void decode_signature(uint32_t signature)
 {

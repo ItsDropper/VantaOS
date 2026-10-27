@@ -8,6 +8,12 @@
 #include <stdint.h>
 #include <stdio.h>
 
+/* Host test stub: the serial backend is hardware-specific. */
+void serial_write(const char* text)
+{
+    (void)text;
+}
+
 static void test_empty_and_invalid_inputs(void)
 {
     ktrace_record_t record;

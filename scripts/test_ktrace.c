@@ -114,6 +114,7 @@ static void test_concurrent_writers_and_readers(void)
     enum { THREAD_COUNT = 4, ITERATIONS = 5000 };
     pthread_t threads[THREAD_COUNT];
     writer_args_t args[THREAD_COUNT];
+    uint64_t start_sequence = ktrace_total_events();
 
     for (uint32_t i = 0U; i < THREAD_COUNT; ++i)
     {
@@ -129,6 +130,8 @@ static void test_concurrent_writers_and_readers(void)
         size_t count = ktrace_snapshot(snapshot, 16U);
         for (size_t i = 0U; i < count; ++i)
         {
+            if (snapshot[i].sequence <= start_sequence)
+                continue;
             assert(snapshot[i].cpu_id < THREAD_COUNT);
             assert(snapshot[i].arg1 == ~snapshot[i].arg0);
             assert(snapshot[i].type == KTRACE_EVENT_SCHED_SWITCH ||
@@ -143,6 +146,8 @@ static void test_concurrent_writers_and_readers(void)
     size_t count = ktrace_snapshot(snapshot, 64U);
     for (size_t i = 0U; i < count; ++i)
     {
+        if (snapshot[i].sequence <= start_sequence)
+            continue;
         assert(snapshot[i].cpu_id < THREAD_COUNT);
         assert(snapshot[i].arg1 == ~snapshot[i].arg0);
         assert(snapshot[i].type == KTRACE_EVENT_SCHED_SWITCH ||

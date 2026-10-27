@@ -36,7 +36,7 @@ int main(void)
     assert(abi_message.payload_length == sizeof(abi_payload));
     assert(memcmp(abi_message.payload, abi_payload, sizeof(abi_payload)) == 0);
     assert(vanta_ipc_message_init(&abi_message, 0U, 0U, 0, 0U) == -VANTA_EINVAL);
-    assert(vanta_ipc_message_init(&abi_message, 1U, 0U, 0,
+    assert(vanta_ipc_message_init(&abi_message, 1U, 0U, abi_payload,
                                   VANTA_IPC_PAYLOAD_MAX + 1U) == -VANTA_EMSGSIZE);
     assert(vanta_ipc_message_init(&abi_message, 1U, 0U, 0, 0U) == 0);
     assert(vanta_ipc_message_validate(&abi_message,

@@ -155,6 +155,42 @@ int ipc_message_send(uint64_t token, uint32_t sender_pid,
     return 0;
 }
 
+/*
+ * Return the queued message's byte length without consuming it. Only the
+ * endpoint owner may inspect the receive queue, matching receive semantics.
+ */
+int ipc_message_peek_length(uint64_t token, uint32_t receiver_pid)
+{
+    if (token == 0U || receiver_pid == 0U)
+        return -22;
+
+    uint64_t flags = spinlock_lock_irqsave(&ipc_lock);
+    ipc_endpoint_t *endpoint = NULL;
+    for (uint32_t i = 0; i < IPC_ENDPOINTS_MAX; ++i) {
+        if (endpoints[i].active && endpoints[i].token == token) {
+            endpoint = &endpoints[i];
+            break;
+        }
+    }
+
+    if (endpoint == NULL) {
+        spinlock_unlock_irqrestore(&ipc_lock, flags);
+        return -9;
+    }
+    if (endpoint->owner_pid != receiver_pid) {
+        spinlock_unlock_irqrestore(&ipc_lock, flags);
+        return -1;
+    }
+    if (endpoint->count == 0U) {
+        spinlock_unlock_irqrestore(&ipc_lock, flags);
+        return -11;
+    }
+
+    int length = (int)endpoint->queue[endpoint->head].length;
+    spinlock_unlock_irqrestore(&ipc_lock, flags);
+    return length;
+}
+
 int ipc_message_receive(uint64_t token, uint32_t receiver_pid,
                         void *message, size_t capacity)
 {

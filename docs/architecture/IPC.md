@@ -14,6 +14,7 @@ VantaOS IPC has two layers:
 - Only the owner PID may receive from or close the endpoint.
 - Each endpoint holds at most eight messages, each up to 256 bytes. Send returns `-VANTA_EAGAIN` when full; receive returns it when empty.
 - Closing an endpoint or exiting its owner clears the endpoint and queued payloads. A capability is a bearer token; do not disclose it to untrusted processes.
+- `vanta_ipc_peek_length()` reports the next queued message's byte length without consuming it; only the endpoint owner may peek.
 - Blocking receive, timeouts, endpoint discovery, and automatic reply routing are not implemented.
 
 ## Message envelope
@@ -67,6 +68,6 @@ This example documents the envelope only. It does not imply that a built-in serv
 - `-VANTA_EPROTO`: invalid magic/version/type or inconsistent length.
 - Kernel endpoint errors such as `-VANTA_EPERM`, `-VANTA_EBADF`, and `-VANTA_ENOMEM` retain their kernel-defined meanings.
 
-`vanta_ipc_receive_message()` dequeues the transport message before validating the envelope and output capacity. If the output buffer is too small, the message is consumed and `-VANTA_EMSGSIZE` is returned. Allocate for `VANTA_IPC_PAYLOAD_MAX` when the payload size is unknown.
+`vanta_ipc_receive_message()` first peeks at the queued transport length. If the caller's payload capacity is too small, it returns `-VANTA_EMSGSIZE` without consuming the message, allowing a retry with a larger buffer. A too-short malformed transport message is consumed and rejected with `-VANTA_EPROTO` so it cannot permanently block the queue. The peek/receive pair assumes the current single-receiver process model; revisit it if user threads or concurrent receive calls are introduced.
 
 Do not change syscall numbers to evolve this envelope. New message types belong to the application/service layer; type values are not globally assigned. Increment the envelope version if the header layout changes, reject unknown versions, and add host plus QEMU integration tests before connecting a system service to a new protocol.

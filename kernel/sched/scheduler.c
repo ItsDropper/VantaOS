@@ -7,6 +7,7 @@
 
 #include <stddef.h>
 #include "scheduler.h"
+#include "ktrace.h"
 #include "cpu_local.h"
 #include "process.h"
 #include "paging.h"
@@ -223,6 +224,9 @@ void scheduler_finish_context_switch(void)
 
     if (!process_finish_context_switch(outgoing_pid, cpu_id))
         kernel_panic_halt_all();
+
+    ktrace_emit(KTRACE_EVENT_SCHED_SWITCH, cpu_id, outgoing_pid,
+                process_current_pid());
 }
 
 

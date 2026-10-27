@@ -8,6 +8,7 @@
 #include "kernel_init.h"
 
 #include "apic.h"
+#include "cpu_features.h"
 #include "drivers_init.h"
 #include "gdt.h"
 #include "heap.h"
@@ -40,6 +41,10 @@ static unsigned long long boot_interrupts;
 
 void kernel_initialize(const vanta_boot_info_t* boot_info)
 {
+    /* Inventory capabilities before any subsystem considers optional ISA. */
+    if (!cpu_features_initialize())
+        serial_write("VANTAOS_CPU_DISCOVERY_UNAVAILABLE\n");
+
     /* Phase 1: CPU tables and physical memory must precede paging setup. */
     gdt_initialize();
     boot_gdt = read_tsc();

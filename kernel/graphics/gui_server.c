@@ -254,7 +254,12 @@ static void gui_queue_event_locked(gui_window_t* window,
             }
         }
         if (remove_offset == GUI_EVENT_QUEUE_CAPACITY)
+        {
+            /* Never evict a queued key/click/focus event just to add motion. */
+            if (event->type == VANTA_GUI_EVENT_POINTER_MOVE)
+                return;
             remove_offset = 0U;
+        }
 
         for (uint32_t i = remove_offset; i + 1U < window->event_count; i++)
         {

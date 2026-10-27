@@ -283,8 +283,12 @@ uint32_t acpi_discover_pci_mcfg(acpi_mcfg_region_t* regions,
             ((table->length - 44U) % 16U) != 0U)
             return 0U;
 
-        uint32_t count = 0U;
         const uint8_t* bytes = (const uint8_t*)table;
+        for (uint32_t reserved = 36U; reserved < 44U; reserved++)
+            if (bytes[reserved] != 0U)
+                return 0U;
+
+        uint32_t count = 0U;
         for (uint32_t cursor = 44U; cursor < table->length; cursor += 16U)
         {
             uint64_t base = *(const uint64_t*)(bytes + cursor);
@@ -308,6 +312,12 @@ uint32_t acpi_discover_pci_mcfg(acpi_mcfg_region_t* regions,
                     const acpi_mcfg_region_t* prior = &regions[j];
                     if (prior->segment_group != segment)
                         continue;
+                    if (start_bus <= prior->end_bus &&
+                        prior->start_bus <= end_bus)
+                    {
+                        overlaps = 1;
+                        continue;
+                    }
                     uint64_t prior_span =
                         ((uint64_t)prior->end_bus - prior->start_bus + 1U)
                         << 20U;

@@ -5,9 +5,19 @@
  * See the LICENSE file in the project root for the full license text.
  */
 #include "pci.h"
+#include "ktrace.h"
 
 #include <assert.h>
 #include <stdint.h>
+
+/* PCI_TEST validates config-space parsing independently of kernel tracing. */
+void ktrace_emit(uint32_t type, uint32_t cpu_id, uint64_t arg0, uint64_t arg1)
+{
+    (void)type;
+    (void)cpu_id;
+    (void)arg0;
+    (void)arg1;
+}
 
 #define CONFIG_ADDRESS_PORT 0xCF8U
 #define CONFIG_DATA_PORT 0xCFCU

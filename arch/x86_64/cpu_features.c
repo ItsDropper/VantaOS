@@ -78,6 +78,9 @@ static void decode_basic_features(const cpuid_regs_t* r)
  set_feature(CPU_FEATURE_X2APIC,c&(1U<<21)); set_feature(CPU_FEATURE_RDRAND,c&(1U<<30));
  cpu_state.cache_line_bytes=((r->ebx>>8U)&0xFFU)*8U;
  cpu_state.logical_processors=(r->ebx>>16U)&0xFFU;
+ cpu_state.initial_apic_id=(r->ebx>>24U)&0xFFU;
+ cpu_state.threads_per_core=1U;
+ cpu_state.cores_per_package=cpu_state.logical_processors ? cpu_state.logical_processors : 1U;
 }
 static void decode_structured_features(const cpuid_regs_t* r)
 {
@@ -86,6 +89,44 @@ static void decode_structured_features(const cpuid_regs_t* r)
  set_feature(CPU_FEATURE_BMI2,b&(1U<<8)); set_feature(CPU_FEATURE_INVPCID,b&(1U<<10));
  set_feature(CPU_FEATURE_RDSEED,b&(1U<<18));
 }
+
+/*
+ * Intel's 0x1F/0x0B leaves describe hierarchical logical-processor counts.
+ * Treat malformed or empty levels as unavailable and retain the leaf-1
+ * fallback rather than manufacturing a topology from partial data.
+ */
+static int decode_topology_leaf(uint32_t leaf)
+{
+ cpuid_regs_t r;
+ uint32_t threads=0U, package_logical=0U, apic_id=0U;
+ int found=0;
+ for (uint32_t subleaf=0U; subleaf<8U; ++subleaf) {
+  if (!cpuid_read(leaf,subleaf,&r)) break;
+  uint32_t count=r.ebx&0xFFFFU;
+  uint32_t level_type=(r.ecx>>8U)&0xFFU;
+  if (count==0U || level_type==0U) break;
+  found=1;
+  apic_id=r.edx;
+  if (level_type==1U) threads=count;
+  if (count>package_logical) package_logical=count;
+ }
+ if (!found || package_logical==0U) return 0;
+ if (threads==0U) threads=1U;
+ cpu_state.initial_apic_id=apic_id;
+ cpu_state.logical_processors=package_logical;
+ cpu_state.threads_per_core=threads;
+ cpu_state.cores_per_package=package_logical/threads;
+ if (cpu_state.cores_per_package==0U) cpu_state.cores_per_package=1U;
+ cpu_state.topology_leaf=(uint8_t)(leaf==0x1FU ? 0x1FU : 0x0BU);
+ return 1;
+}
+static void decode_topology(void)
+{
+ if (cpu_state.max_basic_leaf>=0x1FU && decode_topology_leaf(0x1FU)) return;
+ if (cpu_state.max_basic_leaf>=0x0BU && decode_topology_leaf(0x0BU)) return;
+ cpu_state.topology_leaf=0U;
+}
+
 static void decode_extended_features(void)
 {
  cpuid_regs_t r;
@@ -122,6 +163,7 @@ int cpu_features_initialize(void)
  }
  if (cpu_state.max_basic_leaf>=7U && cpuid_read(7U,0U,&r))
   decode_structured_features(&r);
+ decode_topology();
  decode_extended_features();
  /* AVX requires both OS-managed extended state and enabled XMM/YMM state. */
  if ((cpu_state.features & (CPU_FEATURE_AVX | CPU_FEATURE_OSXSAVE)) ==

@@ -211,8 +211,9 @@ int cpu_features_initialize(void)
  decode_cache_geometry();
  decode_extended_features();
  /* AVX requires both OS-managed extended state and enabled XMM/YMM state. */
- if ((cpu_state.features & (CPU_FEATURE_AVX | CPU_FEATURE_OSXSAVE)) ==
-     (CPU_FEATURE_AVX | CPU_FEATURE_OSXSAVE) && (read_xcr0()&0x6U)==0x6U)
+ if ((cpu_state.features & (CPU_FEATURE_AVX | CPU_FEATURE_XSAVE | CPU_FEATURE_OSXSAVE)) ==
+     (CPU_FEATURE_AVX | CPU_FEATURE_XSAVE | CPU_FEATURE_OSXSAVE) &&
+     (read_xcr0()&0x6U)==0x6U)
   set_feature(CPU_FEATURE_AVX_USABLE,1);
  cpu_state_valid=1;
  serial_write("VANTAOS_CPU_VENDOR="); serial_write(cpu_state.vendor); serial_write("\n");

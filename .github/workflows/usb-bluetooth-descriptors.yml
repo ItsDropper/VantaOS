@@ -5,6 +5,9 @@ on:
     branches: [master, 'work/**']
     paths:
       - 'drivers/usb/bluetooth.c'
+      - 'drivers/usb/usb.c'
+      - 'drivers/usb/Makefile'
+      - 'docs/USB_BLUETOOTH_BRINGUP.md'
       - 'include/usb_bluetooth.h'
       - 'scripts/test_usb_bluetooth_descriptors.c'
       - '.github/workflows/usb-bluetooth-descriptors.yml'

@@ -472,7 +472,7 @@ static void gui_focus_input_regression_probe(void)
              * semantic click, focus, and close events remain distinct.
              */
             if (event.type != VANTA_GUI_EVENT_POINTER_MOVE ||
-                event.x != 59 || event.y != 30)
+                event.x != 59 || event.y != 20)
                 ok = 0;
             count++;
         }

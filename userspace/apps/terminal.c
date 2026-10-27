@@ -117,7 +117,7 @@ static void output_character(char value)
     if (length >= OUTPUT_COLUMNS - 1U)
     {
         output_newline();
-        row = output_count - 1U;
+        row_text = output_line(output_count - 1U);
         length = 0U;
     }
     row_text[length] = value;

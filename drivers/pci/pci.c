@@ -24,9 +24,11 @@
 static struct pci_device devices[PCI_MAX_DEVICES];
 static int device_count = 0;
 static spinlock_t pci_config_lock = SPINLOCK_INITIALIZER;
+#ifndef PCI_TEST
 static acpi_mcfg_region_t pci_mcfg_regions[ACPI_MAX_MCFG_REGIONS];
 static uint32_t pci_mcfg_region_count;
 static int pci_mcfg_initialized;
+#endif
 
 #ifdef PCI_TEST
 /* Host-side tests replace privileged port I/O with a deterministic config model. */
@@ -207,6 +209,7 @@ static void pci_read_device(
     device->bus = bus;
     device->slot = slot;
     device->function = function;
+    device->segment_group = 0U;
 
     device->vendor_id =
         (uint16_t)(id & 0xFFFF);
@@ -1131,17 +1134,17 @@ int pci_find_capability(const struct pci_device *device, uint8_t capability_id,
     return 0;
 }
 
+#ifndef PCI_TEST
 static void pci_ensure_mcfg(void)
 {
-#ifndef PCI_TEST
     if (!pci_mcfg_initialized)
     {
         pci_mcfg_region_count = acpi_discover_pci_mcfg(
             pci_mcfg_regions, ACPI_MAX_MCFG_REGIONS);
         pci_mcfg_initialized = 1;
     }
-#endif
 }
+#endif
 
 int pci_read_config_extended32(const struct pci_device* device,
                                uint16_t offset, uint32_t* value)

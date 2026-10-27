@@ -52,6 +52,8 @@ static char* capture_buffer;
 static size_t capture_capacity;
 static size_t capture_length;
 
+static void terminal_putchar_internal(char c, int redraw);
+
 static uint16_t terminal_entry(char c)
 {
     return (uint16_t)c |

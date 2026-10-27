@@ -68,7 +68,7 @@ cc -std=c11 -Wall -Wextra -Werror -Iinclude \
 /tmp/test-usb-bluetooth-descriptors
 ```
 
-The test suite checks a valid endpoint set, an incomplete endpoint set, truncated/malformed descriptor lengths, null arguments, and a non-Bluetooth interface. These are parser tests, not physical-device tests.
+The test suite checks a valid endpoint set, an incomplete endpoint set, truncated/malformed descriptor lengths, a malformed tail after an otherwise valid interface, invalid configuration headers/total lengths, null arguments, and a non-Bluetooth interface. These are parser tests, not physical-device tests.
 
 Do not turn a failed match into a fatal USB enumeration error. An unsupported interface should remain unbound, and other interfaces/devices must continue to enumerate.
 

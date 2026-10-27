@@ -5,6 +5,7 @@
  * See the LICENSE file in the project root for the full license text.
  */
 #include "ktrace.h"
+#include "serial.h"
 
 /*
  * Keep every shared field atomic. A reader can inspect a record while another
@@ -100,4 +101,49 @@ uint64_t ktrace_overwritten_estimate(void)
 {
     uint64_t total = atomic_load_u64(&next_sequence);
     return total > KTRACE_CAPACITY ? total - KTRACE_CAPACITY : 0U;
+}
+
+static void ktrace_write_hex64(uint64_t value)
+{
+    static const char digits[] = "0123456789ABCDEF";
+    char text[19];
+    text[0] = '0';
+    text[1] = 'x';
+    for (uint32_t i = 0U; i < 16U; ++i)
+        text[2U + i] = digits[(value >> (60U - i * 4U)) & 0xFU];
+    text[18] = '\0';
+    serial_write(text);
+}
+
+void ktrace_dump_serial(size_t max_records)
+{
+    static ktrace_record_t records[32];
+    if (max_records == 0U)
+        return;
+    if (max_records > 32U)
+        max_records = 32U;
+
+    size_t count = ktrace_snapshot(records, max_records);
+    serial_write("KTRACE_BEGIN\n");
+    serial_write("KTRACE_TOTAL=");
+    ktrace_write_hex64(ktrace_total_events());
+    serial_write(" KTRACE_OVERWRITTEN_ESTIMATE=");
+    ktrace_write_hex64(ktrace_overwritten_estimate());
+    serial_write("\n");
+
+    for (size_t i = 0U; i < count; ++i)
+    {
+        serial_write("KTRACE seq=");
+        ktrace_write_hex64(records[i].sequence);
+        serial_write(" type=");
+        ktrace_write_hex64(records[i].type);
+        serial_write(" cpu=");
+        ktrace_write_hex64(records[i].cpu_id);
+        serial_write(" a0=");
+        ktrace_write_hex64(records[i].arg0);
+        serial_write(" a1=");
+        ktrace_write_hex64(records[i].arg1);
+        serial_write("\n");
+    }
+    serial_write("KTRACE_END\n");
 }

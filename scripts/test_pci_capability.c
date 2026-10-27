@@ -13,6 +13,7 @@
 #define CONFIG_DATA_PORT 0xCFCU
 
 static uint32_t config_space[64];
+static uint32_t extended_config[1024];
 static uint32_t selected_address;
 
 void pci_test_outl(uint16_t port, uint32_t value)
@@ -31,10 +32,23 @@ uint32_t pci_test_inl(uint16_t port)
     return config_space[(selected_address & 0xFCU) / 4U];
 }
 
+int pci_test_ecam_read32(uint16_t segment, uint8_t bus, uint8_t slot,
+                         uint8_t function, uint16_t offset,
+                         uint32_t* value)
+{
+    (void)segment; (void)bus; (void)slot; (void)function;
+    if (!value || offset < 0x100U || offset > 0xFFCU || (offset & 3U))
+        return 0;
+    *value = extended_config[offset / 4U];
+    return 1;
+}
+
 static void reset_config(void)
 {
     for (unsigned i = 0; i < 64U; ++i)
         config_space[i] = 0U;
+    for (unsigned i = 0; i < 1024U; ++i)
+        extended_config[i] = 0U;
     selected_address = 0U;
     config_space[3] = 0U; /* Type-0 header. */
     config_space[1] = 0x00100000U; /* Status.capabilities-list bit. */
@@ -97,6 +111,34 @@ int main(void)
     assert(!pci_find_capability(&device, 0x05U, &offset));
 
     assert(!pci_find_capability(0, 0x05U, &offset));
+    /* PCIe extended capabilities use the 12-bit next pointer. */
+    struct pci_device pcie_device = device;
+    uint16_t extended_offset = 0xAAAAU;
+    extended_config[0x100U / 4U] = (0x180U << 20U) | (1U << 16U) | 0x0001U;
+    extended_config[0x180U / 4U] = (2U << 16U) | 0x000DU; /* AER */
+    assert(pci_find_extended_capability(&pcie_device, 0x000DU,
+                                        &extended_offset));
+    assert(extended_offset == 0x180U);
+    assert(!pci_find_extended_capability(&pcie_device, 0x000EU,
+                                         &extended_offset));
+    assert(extended_offset == 0U);
+
+    /* Malformed pointers and loops must fail closed. */
+    extended_config[0x100U / 4U] = (0x181U << 20U) | 0x0001U;
+    assert(!pci_find_extended_capability(&pcie_device, 0x000DU,
+                                         &extended_offset));
+    extended_config[0x100U / 4U] = (0x100U << 20U) | 0x0001U;
+    assert(!pci_find_extended_capability(&pcie_device, 0x000DU,
+                                         &extended_offset));
+    assert(!pci_find_extended_capability(&pcie_device, 0U,
+                                         &extended_offset));
+    assert(!pci_find_extended_capability(&pcie_device, 0xFFFFU,
+                                         &extended_offset));
+    assert(!pci_find_extended_capability(&pcie_device, 0x000DU, 0));
+    assert(!pci_read_config_extended32(&pcie_device, 0x0FCU,
+                                       (uint32_t*)&selected_address));
+    assert(!pci_read_config_extended32(&pcie_device, 0x100U, 0));
+
     assert(!pci_find_capability(&device, 0U, &offset));
     assert(!pci_find_capability(&device, 0xFFU, &offset));
     assert(!pci_find_capability(&device, 0x05U, 0));

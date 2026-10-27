@@ -16,6 +16,15 @@
 static uint32_t config_space[64];
 static uint32_t selected_address;
 
+int pci_test_ecam_read32(uint16_t segment, uint8_t bus, uint8_t slot,
+                         uint8_t function, uint16_t offset,
+                         uint32_t* value)
+{
+    (void)segment; (void)bus; (void)slot; (void)function; (void)offset;
+    if (value) *value = 0xFFFFFFFFU;
+    return 0;
+}
+
 void pci_test_outl(uint16_t port, uint32_t value)
 {
     if (port == CONFIG_ADDRESS_PORT) {

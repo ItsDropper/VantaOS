@@ -6,6 +6,8 @@
  */
 
 #include "pci.h"
+#include "acpi.h"
+#include "mmio.h"
 #include "spinlock.h"
 #include "vanta_boot_info.h"
 #include "serial.h"
@@ -17,16 +19,24 @@
 
 #define PCI_INVALID_VENDOR 0xFFFF
 
-#define PCI_MAX_DEVICES 256
+#define PCI_MAX_DEVICES 1024
 
 static struct pci_device devices[PCI_MAX_DEVICES];
 static int device_count = 0;
 static spinlock_t pci_config_lock = SPINLOCK_INITIALIZER;
+#ifndef PCI_TEST
+static acpi_mcfg_region_t pci_mcfg_regions[ACPI_MAX_MCFG_REGIONS];
+static uint32_t pci_mcfg_region_count;
+static int pci_mcfg_initialized;
+#endif
 
 #ifdef PCI_TEST
 /* Host-side tests replace privileged port I/O with a deterministic config model. */
 void pci_test_outl(uint16_t port, uint32_t value);
 uint32_t pci_test_inl(uint16_t port);
+int pci_test_ecam_read32(uint16_t segment, uint8_t bus, uint8_t slot,
+                         uint8_t function, uint16_t offset,
+                         uint32_t* value);
 
 static inline void outl(uint16_t port, uint32_t value)
 {
@@ -199,6 +209,7 @@ static void pci_read_device(
     device->bus = bus;
     device->slot = slot;
     device->function = function;
+    device->segment_group = 0U;
 
     device->vendor_id =
         (uint16_t)(id & 0xFFFF);
@@ -282,6 +293,11 @@ static void pci_scan(void)
 
 void pci_initialize(void)
 {
+#ifndef PCI_TEST
+    pci_mcfg_region_count = acpi_discover_pci_mcfg(
+        pci_mcfg_regions, ACPI_MAX_MCFG_REGIONS);
+    pci_mcfg_initialized = 1;
+#endif
     pci_scan();
 }
 
@@ -1117,3 +1133,105 @@ int pci_find_capability(const struct pci_device *device, uint8_t capability_id,
     }
     return 0;
 }
+
+#ifndef PCI_TEST
+static void pci_ensure_mcfg(void)
+{
+    if (!pci_mcfg_initialized)
+    {
+        pci_mcfg_region_count = acpi_discover_pci_mcfg(
+            pci_mcfg_regions, ACPI_MAX_MCFG_REGIONS);
+        pci_mcfg_initialized = 1;
+    }
+}
+#endif
+
+int pci_read_config_extended32(const struct pci_device* device,
+                               uint16_t offset, uint32_t* value)
+{
+    if (value)
+        *value = 0xFFFFFFFFU;
+    if (!device || !value || offset < 0x100U ||
+        offset > 0xFFCU || (offset & 3U) != 0U)
+        return 0;
+
+#ifdef PCI_TEST
+    return pci_test_ecam_read32(device->segment_group, device->bus,
+                                device->slot, device->function, offset, value);
+#else
+    pci_ensure_mcfg();
+    for (uint32_t i = 0; i < pci_mcfg_region_count; i++)
+    {
+        const acpi_mcfg_region_t* region = &pci_mcfg_regions[i];
+        if (region->segment_group != device->segment_group ||
+            device->bus < region->start_bus ||
+            device->bus > region->end_bus)
+            continue;
+
+        uint64_t bus_offset =
+            ((uint64_t)(device->bus - region->start_bus) << 20U) |
+            ((uint64_t)device->slot << 15U) |
+            ((uint64_t)device->function << 12U);
+        if (region->base_address > UINT64_MAX - bus_offset - offset)
+            return 0;
+        uint64_t physical = region->base_address + bus_offset + offset;
+        volatile uint32_t* mapped =
+            (volatile uint32_t*)mmio_map_region(physical, sizeof(uint32_t));
+        if (!mapped)
+            return 0;
+        *value = *mapped;
+        (void)mmio_unmap_region((void*)mapped, sizeof(uint32_t));
+        return 1;
+    }
+    return 0;
+#endif
+}
+
+int pci_find_extended_capability(const struct pci_device* device,
+                                 uint16_t capability_id,
+                                 uint16_t* out_offset)
+{
+    uint32_t visited[30] = {0};
+    uint16_t offset = 0x100U;
+
+    if (out_offset)
+        *out_offset = 0U;
+    if (!device || !out_offset || capability_id == 0U ||
+        capability_id == 0xFFFFU)
+        return 0;
+
+    for (uint32_t hops = 0U; hops < 960U; hops++)
+    {
+        uint32_t header = 0xFFFFFFFFU;
+        uint16_t id;
+        uint16_t next;
+        uint32_t index;
+        if (!pci_read_config_extended32(device, offset, &header))
+            return 0;
+        id = (uint16_t)(header & 0xFFFFU);
+        if (id == 0U || id == 0xFFFFU)
+            return 0;
+        if (id == capability_id)
+        {
+            *out_offset = offset;
+            return 1;
+        }
+
+        index = (uint32_t)(offset - 0x100U) / 4U;
+        if (index >= 960U)
+            return 0;
+        uint32_t bit = 1U << (index & 31U);
+        if (visited[index >> 5U] & bit)
+            return 0;
+        visited[index >> 5U] |= bit;
+
+        next = (uint16_t)((header >> 20U) & 0x0FFFU);
+        if (next == 0U)
+            return 0;
+        if (next < 0x100U || next > 0xFFCU || (next & 3U) != 0U)
+            return 0;
+        offset = next;
+    }
+    return 0;
+}
+

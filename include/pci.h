@@ -23,6 +23,8 @@ struct pci_device
     uint8_t subclass;
     uint8_t prog_if;
     uint8_t revision;
+    /* PCI domain/segment; zero for legacy configuration-space devices. */
+    uint16_t segment_group;
 };
 
 void pci_initialize(void);
@@ -35,6 +37,12 @@ int pci_write_config32(const struct pci_device *device, uint8_t offset, uint32_t
 /* Find a conventional capability (for example MSI 0x05 or MSI-X 0x11). */
 int pci_find_capability(const struct pci_device *device, uint8_t capability_id,
                         uint8_t *out_offset);
+/* PCIe extended config space (0x100-0xFFF), available with valid ACPI MCFG. */
+int pci_read_config_extended32(const struct pci_device* device,
+                               uint16_t offset, uint32_t* value);
+int pci_find_extended_capability(const struct pci_device* device,
+                                 uint16_t capability_id,
+                                 uint16_t* out_offset);
 
 /* Assign an implemented but unassigned BAR from a validated PCI MMIO hole. */
 int pci_allocate_unassigned_bar(const struct pci_device* device, uint8_t index);

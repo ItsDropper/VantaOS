@@ -8,11 +8,15 @@
 #include <stdint.h>
 #include <string.h>
 typedef struct { uint32_t eax,ebx,ecx,edx; } cpuid_regs_t;
-static cpuid_regs_t l0,l1,l7,e0,e1,e7,e8,topology_smt,topology_core,cache_l1,cache_l2;
+static cpuid_regs_t l0,l1,l7,e0,e1,e7,e8,topology_smt,topology_core,cache_l1,cache_l2,cache_amd;
 static uint64_t xcr0;
 int cpu_test_cpuid(uint32_t leaf,uint32_t subleaf,cpuid_regs_t* r)
 {
  if(!r) return 0;
+ if(leaf==0x8000001DU) {
+  if(subleaf==0U) {*r=cache_amd;return 1;}
+  memset(r,0,sizeof(*r));return 1;
+ }
  if(leaf==4U) {
   if(subleaf==0U) {*r=cache_l1;return 1;}
   if(subleaf==1U) {*r=cache_l2;return 1;}
@@ -44,7 +48,8 @@ static void reset(void)
  memset(&e0,0,sizeof(e0));memset(&e1,0,sizeof(e1));memset(&e7,0,sizeof(e7));
  memset(&e8,0,sizeof(e8));memset(&topology_smt,0,sizeof(topology_smt));
  memset(&topology_core,0,sizeof(topology_core));
- memset(&cache_l1,0,sizeof(cache_l1));memset(&cache_l2,0,sizeof(cache_l2));xcr0=0;
+ memset(&cache_l1,0,sizeof(cache_l1));memset(&cache_l2,0,sizeof(cache_l2));
+ memset(&cache_amd,0,sizeof(cache_amd));xcr0=0;
  l0.eax=7U;l0.ebx=pack4("Genu");l0.edx=pack4("ineI");l0.ecx=pack4("ntel");
  e0.eax=0x80000008U;
 }
@@ -92,6 +97,19 @@ int main(void)
  assert(c->topology_leaf==0x1FU&&c->initial_apic_id==0x123U);
  assert(c->logical_processors==12U&&c->threads_per_core==2U);
  assert(c->cores_per_package==6U);
+ /* AMD's extended deterministic-cache leaf is a supported fallback. */
+ reset();l0.eax=3U;e0.eax=0x8000001DU;
+ cache_amd.eax=3U|(3U<<5U);cache_amd.ebx=(15U<<22U)|63U;
+ cache_amd.ecx=2047U;
+ assert(cpu_features_initialize());
+ c=cpu_features_get();
+ assert(c->cache_count==1U&&c->caches[0].level==3U);
+ assert(c->caches[0].size_bytes==2097152U);
+ /* Reject unrepresentable cache-set counts instead of truncating them. */
+ reset();l0.eax=4U;e0.eax=0x80000000U;
+ cache_l1.eax=1U|(1U<<5U);cache_l1.ebx=63U;cache_l1.ecx=0xFFFFFFFFU;
+ assert(cpu_features_initialize());
+ assert(cpu_features_get()->cache_count==0U);
  reset();l0.eax=1U;e0.eax=0x80000000U;l1.edx=1U<<9U;
  assert(cpu_features_initialize()&&cpu_feature_has(CPU_FEATURE_APIC));
  assert(!cpu_feature_has(CPU_FEATURE_NX)&&!cpu_feature_has(CPU_FEATURE_LONG_MODE));

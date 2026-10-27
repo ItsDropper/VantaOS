@@ -8,6 +8,13 @@
 #define CPU_FEATURES_H
 #include <stdint.h>
 #define CPU_VENDOR_STRING_LENGTH 13U
+#define CPU_FEATURES_MAX_CACHES 8U
+typedef struct {
+ uint8_t level, type;
+ uint16_t line_bytes, ways;
+ uint32_t sets;
+ uint64_t size_bytes;
+} cpu_cache_info_t;
 typedef enum {
  CPU_FEATURE_FPU=1ULL<<0, CPU_FEATURE_TSC=1ULL<<1, CPU_FEATURE_MSR=1ULL<<2,
  CPU_FEATURE_PAE=1ULL<<3, CPU_FEATURE_APIC=1ULL<<4, CPU_FEATURE_SEP=1ULL<<5,
@@ -29,6 +36,8 @@ typedef struct {
  uint32_t logical_processors, cache_line_bytes;
  uint32_t initial_apic_id, threads_per_core, cores_per_package;
  uint8_t topology_leaf, physical_address_bits, virtual_address_bits;
+ uint32_t cache_count;
+ cpu_cache_info_t caches[CPU_FEATURES_MAX_CACHES];
  uint64_t features;
 } cpu_features_t;
 int cpu_features_initialize(void);

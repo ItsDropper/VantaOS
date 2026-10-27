@@ -84,8 +84,10 @@ int main(void)
  assert(cpu_feature_has(CPU_FEATURE_AVX2)&&cpu_feature_has(CPU_FEATURE_BMI1));
  assert(cpu_feature_has(CPU_FEATURE_BMI2)&&cpu_feature_has(CPU_FEATURE_INVPCID));
  assert(cpu_feature_has(CPU_FEATURE_RDSEED)&&cpu_feature_avx_usable());
+ assert(cpu_feature_avx2_usable());
  l1.ecx&=~(1U<<27U);
  assert(cpu_features_initialize()&&!cpu_feature_avx_usable());
+ assert(!cpu_feature_avx2_usable());
  /* Prefer architectural topology leaves when firmware/CPU exposes them. */
  reset();l0.eax=0x1FU;l1.ebx=(12U<<16U)|(0x23U<<24U);
  topology_smt.eax=1U;topology_smt.ebx=2U;topology_smt.ecx=(1U<<8U);

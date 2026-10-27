@@ -58,7 +58,7 @@ int main(void)
            rect.width == 35 && rect.height == 55);
     assert(graphics_damage_rect_intersection(&a, &b, &rect));
     assert(rect.x == 25 && rect.y == 20 &&
-           rect.width == 20 && rect.height == 10);
+           rect.width == 15 && rect.height == 10);
 
     graphics_damage_rect_t touching = { 40, 20, 10, 10 };
     assert(!graphics_damage_rect_intersection(&a, &touching, &rect));
@@ -75,6 +75,6 @@ int main(void)
     graphics_damage_rect_t overflow = { INT32_MAX - 2, 0, 20, 10 };
     assert(!graphics_damage_rect_union(&a, &overflow, &rect));
 
-    puts("graphics damage geometry tests passed");    puts("graphics damage geometry tests passed");
+    puts("graphics damage geometry tests passed");
     return 0;
 }

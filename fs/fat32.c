@@ -269,6 +269,42 @@ static int fat32_raw_entry(uint32_t cluster, uint32_t* value)
     return 1;
 }
 
+/*
+ * Allocation must never select a cluster whose mirrored FAT entries disagree.
+ * A disagreement marks only that cluster unusable; it must not abort the
+ * entire free-cluster scan. Device read failures remain fatal.
+ *
+ * Returns 1 for matching copies, -1 for a mirror mismatch, and 0 for I/O or
+ * geometry failure.
+ */
+static int fat32_allocation_entry(uint32_t cluster, uint32_t* value)
+{
+    if (cluster < 2U || cluster > cluster_count + 1U || !value)
+        return 0;
+    uint64_t offset = (uint64_t)cluster * 4U;
+    if (offset + 4U > (uint64_t)sectors_per_fat * 512U)
+        return 0;
+
+    uint32_t expected = 0U;
+    for (uint32_t copy = 0U; copy < fat_count; ++copy)
+    {
+        uint64_t lba64 = (uint64_t)fat_lba +
+            (uint64_t)copy * sectors_per_fat + offset / 512U;
+        if (lba64 > UINT32_MAX ||
+            !read_sector((uint32_t)lba64, sector_buffer))
+            return 0;
+
+        uint32_t entry =
+            fat32(&sector_buffer[(uint32_t)(offset % 512U)]) & 0x0FFFFFFFU;
+        if (copy != 0U && entry != expected)
+            return -1;
+        expected = entry;
+    }
+
+    *value = expected;
+    return 1;
+}
+
 static int fat32_set_raw_entry(uint32_t cluster, uint32_t value)
 {
     if (cluster < 2 || cluster > cluster_count + 1U || value > FAT32_EOC_MIN)
@@ -298,9 +334,13 @@ static uint32_t fat32_allocate_one(void)
     for (uint32_t cluster = 2; cluster <= cluster_count + 1U; cluster++)
     {
         uint32_t value;
-        if (!fat32_raw_entry(cluster, &value))
+        int entry_status = fat32_allocation_entry(cluster, &value);
+        if (entry_status == 0)
             return 0;
-        if (value != 0)
+        /* Do not allocate a cluster with inconsistent FAT mirrors, but keep
+           searching: one damaged entry must not make the whole volume appear
+           out of free space when later clusters are usable. */
+        if (entry_status < 0 || value != 0U)
             continue;
         if (!fat32_set_raw_entry(cluster, FAT32_EOC_MIN))
             return 0;

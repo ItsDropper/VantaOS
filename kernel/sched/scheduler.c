@@ -21,6 +21,7 @@ extern unsigned char stack_top;
 
 static int initialized;
 static uint32_t fallback_quantum_ticks;
+static uint32_t fallback_scheduler_cursor = 1U;
 /* PID being switched away from; consumed after interrupt assembly changes RSP. */
 static volatile uint32_t pending_outgoing_pid[CPU_LOCAL_MAX];
 
@@ -30,6 +31,14 @@ static volatile uint32_t* scheduler_quantum_slot(void)
     if (local && local->self == local && local->online != 0U)
         return &local->scheduler_ticks;
     return &fallback_quantum_ticks;
+}
+
+static volatile uint32_t* scheduler_cursor_slot(void)
+{
+    cpu_local_t* local = cpu_local_current();
+    if (local && local->self == local && local->online != 0U)
+        return &local->scheduler_cursor;
+    return &fallback_scheduler_cursor;
 }
 
 void scheduler_initialize(void)
@@ -62,10 +71,21 @@ static uint32_t scheduler_next_ready(uint32_t current_pid,
         local->online != 0U ?
         __atomic_load_n(&local->idle_pid, __ATOMIC_ACQUIRE) : 1U;
 
-    for (uint32_t offset = 1; offset < PROCESS_MAX; offset++)
+    /*
+     * Each CPU advances its own scan origin after dispatch. This keeps the
+     * shared process table as the authoritative lifecycle store while
+     * avoiding every CPU repeatedly racing for the same low PID first.
+     */
+    uint32_t cursor = __atomic_load_n(scheduler_cursor_slot(),
+                                     __ATOMIC_RELAXED);
+    if (cursor == 0U || cursor >= PROCESS_MAX)
+        cursor = 1U;
+
+    for (uint32_t offset = 0; offset < PROCESS_MAX; offset++)
     {
-        uint32_t pid = (current_pid + offset) % PROCESS_MAX;
-        if (pid == idle_pid || pid == rejected_pid)
+        uint32_t pid = (cursor + offset) % PROCESS_MAX;
+        if (pid == 0U || pid == current_pid ||
+            pid == idle_pid || pid == rejected_pid)
             continue;
 
         process_t process;
@@ -142,6 +162,11 @@ static uint64_t scheduler_switch_from_stack(uint64_t current_stack,
         if (process_prepare_context_switch(next_pid, current_pid, cpu_id,
                                            &next_stack, &next_address_space))
         {
+            uint32_t cursor = (next_pid + 1U) % PROCESS_MAX;
+            if (cursor == 0U)
+                cursor = 1U;
+            __atomic_store_n(scheduler_cursor_slot(), cursor,
+                             __ATOMIC_RELAXED);
             prepared = 1;
             break;
         }

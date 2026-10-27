@@ -8,11 +8,16 @@
 #include <stdint.h>
 #include <string.h>
 typedef struct { uint32_t eax,ebx,ecx,edx; } cpuid_regs_t;
-static cpuid_regs_t l0,l1,l7,e0,e1,e7,e8,topology_smt,topology_core;
+static cpuid_regs_t l0,l1,l7,e0,e1,e7,e8,topology_smt,topology_core,cache_l1,cache_l2;
 static uint64_t xcr0;
 int cpu_test_cpuid(uint32_t leaf,uint32_t subleaf,cpuid_regs_t* r)
 {
  if(!r) return 0;
+ if(leaf==4U) {
+  if(subleaf==0U) {*r=cache_l1;return 1;}
+  if(subleaf==1U) {*r=cache_l2;return 1;}
+  memset(r,0,sizeof(*r));return 1;
+ }
  if(leaf==0x1FU) {
   if(subleaf==0U) {*r=topology_smt;return 1;}
   if(subleaf==1U) {*r=topology_core;return 1;}
@@ -38,7 +43,8 @@ static void reset(void)
  memset(&l0,0,sizeof(l0));memset(&l1,0,sizeof(l1));memset(&l7,0,sizeof(l7));
  memset(&e0,0,sizeof(e0));memset(&e1,0,sizeof(e1));memset(&e7,0,sizeof(e7));
  memset(&e8,0,sizeof(e8));memset(&topology_smt,0,sizeof(topology_smt));
- memset(&topology_core,0,sizeof(topology_core));xcr0=0;
+ memset(&topology_core,0,sizeof(topology_core));
+ memset(&cache_l1,0,sizeof(cache_l1));memset(&cache_l2,0,sizeof(cache_l2));xcr0=0;
  l0.eax=7U;l0.ebx=pack4("Genu");l0.edx=pack4("ineI");l0.ecx=pack4("ntel");
  e0.eax=0x80000008U;
 }
@@ -50,6 +56,8 @@ int main(void)
  l1.ecx=(1U<<0U)|(1U<<9U)|(1U<<19U)|(1U<<20U)|(1U<<26U)|
         (1U<<27U)|(1U<<28U)|(1U<<30U);
  l1.edx=(1U<<4U)|(1U<<9U)|(1U<<25U)|(1U<<26U);
+ cache_l1.eax=1U|(1U<<5U);cache_l1.ebx=(7U<<22U)|63U;cache_l1.ecx=63U;
+ cache_l2.eax=3U|(2U<<5U);cache_l2.ebx=(7U<<22U)|63U;cache_l2.ecx=511U;
  l7.ebx=(1U<<5U)|(1U<<3U)|(1U<<8U)|(1U<<10U)|(1U<<18U);
  e1.edx=(1U<<11U)|(1U<<20U)|(1U<<26U)|(1U<<27U)|(1U<<29U);
  e1.ecx=1U;e7.edx=1U<<8U;e8.eax=48U|(48U<<8U);xcr0=0x6U;
@@ -60,6 +68,12 @@ int main(void)
  assert(c->logical_processors==12U&&c->cache_line_bytes==64U);
  assert(c->threads_per_core==1U&&c->cores_per_package==12U&&c->topology_leaf==0U);
  assert(c->physical_address_bits==48U&&c->virtual_address_bits==48U);
+ assert(c->cache_count==2U);
+ assert(c->caches[0].level==1U&&c->caches[0].type==1U);
+ assert(c->caches[0].line_bytes==64U&&c->caches[0].ways==8U);
+ assert(c->caches[0].size_bytes==32768U);
+ assert(c->caches[1].level==2U&&c->caches[1].type==3U);
+ assert(c->caches[1].size_bytes==262144U);
  assert(cpu_feature_has(CPU_FEATURE_LONG_MODE)&&cpu_feature_has(CPU_FEATURE_NX));
  assert(cpu_feature_has(CPU_FEATURE_APIC)&&cpu_feature_has(CPU_FEATURE_INVARIANT_TSC));
  assert(cpu_feature_has(CPU_FEATURE_AVX2)&&cpu_feature_has(CPU_FEATURE_BMI1));

@@ -48,19 +48,13 @@ int usb_bluetooth_find_hci_interface(const uint8_t *configuration,
 {
     uint32_t offset = 0;
     hci_interface_t current = {0};
+    usb_bluetooth_hci_candidate_t found = {0};
+    int have_candidate = 0;
 
     if (candidate == NULL)
         return 0;
 
-    candidate->interface_number = 0;
-    candidate->event_endpoint = 0;
-    candidate->acl_in_endpoint = 0;
-    candidate->acl_out_endpoint = 0;
-    candidate->event_interval = 0;
-    candidate->event_max_packet = 0;
-    candidate->acl_in_max_packet = 0;
-    candidate->acl_out_max_packet = 0;
-
+    *candidate = (usb_bluetooth_hci_candidate_t){0};
     if (configuration == NULL || length < 2U)
         return 0;
 
@@ -81,18 +75,19 @@ int usb_bluetooth_find_hci_interface(const uint8_t *configuration,
             if (descriptor_length < 9U)
                 return 0;
 
-            if (current.active && current.event_endpoint != 0U &&
+            if (!have_candidate && current.active &&
+                current.event_endpoint != 0U &&
                 current.acl_in_endpoint != 0U &&
                 current.acl_out_endpoint != 0U) {
-                candidate->interface_number = current.interface_number;
-                candidate->event_endpoint = current.event_endpoint;
-                candidate->acl_in_endpoint = current.acl_in_endpoint;
-                candidate->acl_out_endpoint = current.acl_out_endpoint;
-                candidate->event_interval = current.event_interval;
-                candidate->event_max_packet = current.event_max_packet;
-                candidate->acl_in_max_packet = current.acl_in_max_packet;
-                candidate->acl_out_max_packet = current.acl_out_max_packet;
-                return 1;
+                found.interface_number = current.interface_number;
+                found.event_endpoint = current.event_endpoint;
+                found.acl_in_endpoint = current.acl_in_endpoint;
+                found.acl_out_endpoint = current.acl_out_endpoint;
+                found.event_interval = current.event_interval;
+                found.event_max_packet = current.event_max_packet;
+                found.acl_in_max_packet = current.acl_in_max_packet;
+                found.acl_out_max_packet = current.acl_out_max_packet;
+                have_candidate = 1;
             }
 
             current = (hci_interface_t){0};
@@ -139,18 +134,28 @@ next_descriptor:
         offset += descriptor_length;
     }
 
-    if (current.active && current.event_endpoint != 0U &&
-        current.acl_in_endpoint != 0U && current.acl_out_endpoint != 0U) {
-        candidate->interface_number = current.interface_number;
-        candidate->event_endpoint = current.event_endpoint;
-        candidate->acl_in_endpoint = current.acl_in_endpoint;
-        candidate->acl_out_endpoint = current.acl_out_endpoint;
-        candidate->event_interval = current.event_interval;
-        candidate->event_max_packet = current.event_max_packet;
-        candidate->acl_in_max_packet = current.acl_in_max_packet;
-        candidate->acl_out_max_packet = current.acl_out_max_packet;
-        return 1;
+    if (!have_candidate && current.active &&
+        current.event_endpoint != 0U &&
+        current.acl_in_endpoint != 0U &&
+        current.acl_out_endpoint != 0U) {
+        found.interface_number = current.interface_number;
+        found.event_endpoint = current.event_endpoint;
+        found.acl_in_endpoint = current.acl_in_endpoint;
+        found.acl_out_endpoint = current.acl_out_endpoint;
+        found.event_interval = current.event_interval;
+        found.event_max_packet = current.event_max_packet;
+        found.acl_in_max_packet = current.acl_in_max_packet;
+        found.acl_out_max_packet = current.acl_out_max_packet;
+        have_candidate = 1;
     }
 
-    return 0;
+    /*
+     * Validate the entire stream before publishing a match. Returning as soon
+     * as a valid interface ended would accept a valid prefix followed by a
+     * malformed descriptor tail.
+     */
+    if (!have_candidate)
+        return 0;
+    *candidate = found;
+    return 1;
 }

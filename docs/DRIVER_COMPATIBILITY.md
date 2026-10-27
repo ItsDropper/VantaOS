@@ -15,7 +15,7 @@ Copyright (c) 2026 ItsDropper
 
 The first descriptor-recognition milestone is implemented in `drivers/usb/bluetooth.c` and tested by `scripts/test_usb_bluetooth_descriptors.c`. It checks the Bluetooth wireless-controller class/subclass/protocol and requires an interrupt-IN endpoint plus bulk-IN and bulk-OUT endpoints on the same interface. Malformed streams and incomplete endpoint sets are rejected. This milestone does not yet claim the interface, and the current serial marker explicitly says `DESCRIPTOR_MATCH_ONLY`.
 
-Recognition is not a driver. The next milestone needs interface claiming and xHCI endpoint configuration, interrupt event reception and bulk ACL transfers with bounded waits, then HCI command/event dispatch, disconnect cleanup and tests. The descriptor tests run in the dedicated `USB Bluetooth descriptor tests` workflow. Pairing and application support require additional L2CAP, security and profile layers. Pairing and application support require additional L2CAP, security and profile layers. Do not claim Bluetooth works until a controller can be initialized and a supported profile passes tests.
+Recognition is not a driver. The next milestone needs interface claiming and xHCI endpoint configuration, interrupt event reception and bulk ACL transfers with bounded waits, then HCI command/event dispatch, disconnect cleanup and tests. The descriptor tests run in the dedicated `USB Bluetooth descriptor tests` workflow. Pairing and application support require additional L2CAP, security and profile layers. Do not claim Bluetooth works until a controller can be initialized and a supported profile passes tests.
 
 ## Wi-Fi adapter versus router
 

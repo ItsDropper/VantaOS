@@ -53,6 +53,7 @@
 #define USER_SYSCALL_IPC_SEND 27U
 #define USER_SYSCALL_IPC_RECEIVE 28U
 #define USER_SYSCALL_IPC_CLOSE 29U
+#define USER_SYSCALL_IPC_PEEK_LENGTH 30U
 #define USER_SYSCALL_KERNEL_COMMAND_MAX 2048U
 #define USER_SYSCALL_IO_MAX 4096U
 #define USER_SYSCALL_WRITE_MAX 4096U
@@ -875,6 +876,14 @@ static int syscall_ipc_receive(struct exception_frame* frame, const process_t* p
     frame->rax=(uint64_t)(int64_t)n; return 0;
 }
 
+static int syscall_ipc_peek_length(struct exception_frame* frame,
+                                     const process_t* process)
+{
+    frame->rax = (uint64_t)(int64_t)
+        ipc_message_peek_length(frame->rdi, process->pid);
+    return 0;
+}
+
 static int syscall_ipc_close(struct exception_frame* frame, const process_t* process)
 {
     frame->rax=(uint64_t)(int64_t)ipc_endpoint_close(frame->rdi,process->pid); return 0;
@@ -949,6 +958,8 @@ static int syscall_dispatch(struct exception_frame* frame)
             return syscall_ipc_receive(frame, &process);
         case USER_SYSCALL_IPC_CLOSE:
             return syscall_ipc_close(frame, &process);
+        case USER_SYSCALL_IPC_PEEK_LENGTH:
+            return syscall_ipc_peek_length(frame, &process);
         case USER_SYSCALL_GUI_CREATE_WINDOW:
             return syscall_gui_create_window(frame, &process);
         case USER_SYSCALL_GUI_CLOSE_WINDOW:

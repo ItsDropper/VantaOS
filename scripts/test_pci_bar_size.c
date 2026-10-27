@@ -5,10 +5,20 @@
  * See the LICENSE file in the project root for the full license text.
  */
 #include "pci.h"
+#include "ktrace.h"
 #include "vanta_boot_info.h"
 
 #include <assert.h>
 #include <stdint.h>
+
+/* PCI_TEST exercises configuration logic without the kernel trace runtime. */
+void ktrace_emit(uint32_t type, uint32_t cpu_id, uint64_t arg0, uint64_t arg1)
+{
+    (void)type;
+    (void)cpu_id;
+    (void)arg0;
+    (void)arg1;
+}
 
 #define TEST_CONFIG_ADDRESS 0xCF8U
 #define TEST_CONFIG_DATA    0xCFCU

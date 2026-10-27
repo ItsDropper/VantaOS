@@ -30,6 +30,8 @@ typedef struct cpu_local
     volatile uint64_t work_iterations;
     /* Per-CPU scheduler quantum; never shared between logical CPUs. */
     volatile uint32_t scheduler_ticks;
+    /* Independent round-robin scan origin to reduce cross-CPU candidate collisions. */
+    volatile uint32_t scheduler_cursor;
     /* Incremented only by this CPU's local APIC timer interrupt. */
     volatile uint32_t lapic_timer_ticks;
     /* Number of reschedule IPIs delivered to this CPU (not scheduled yet). */

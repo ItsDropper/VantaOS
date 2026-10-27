@@ -69,6 +69,20 @@ static void test_malformed_lengths_are_rejected(void)
                                                NULL));
 }
 
+static void test_malformed_tail_after_valid_interface_is_rejected(void)
+{
+    uint8_t configuration[sizeof(valid_configuration) + 2U];
+    usb_bluetooth_hci_candidate_t candidate;
+    for (unsigned int i = 0; i < sizeof(valid_configuration); ++i)
+        configuration[i] = valid_configuration[i];
+    configuration[sizeof(valid_configuration)] = 0U;
+    configuration[sizeof(valid_configuration) + 1U] = 0xFFU;
+    assert(!usb_bluetooth_find_hci_interface(configuration,
+                                               sizeof(configuration),
+                                               &candidate));
+    assert(candidate.event_endpoint == 0U);
+}
+
 static void test_non_bluetooth_interface_is_ignored(void)
 {
     uint8_t configuration[sizeof(valid_configuration)];
@@ -86,6 +100,7 @@ int main(void)
     test_complete_hci_interface();
     test_incomplete_interface_is_not_claimed();
     test_malformed_lengths_are_rejected();
+    test_malformed_tail_after_valid_interface_is_rejected();
     test_non_bluetooth_interface_is_ignored();
     puts("USB Bluetooth descriptor tests passed");
     return 0;

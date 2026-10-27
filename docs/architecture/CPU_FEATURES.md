@@ -15,6 +15,10 @@ on its own.
   XSAVE/OSXSAVE, AVX/AVX2, BMI, INVPCID, RDSEED, NX, 1 GiB pages, SYSCALL,
   RDTSCP, invariant TSC, and long mode.
 - Address widths are populated only when leaf 0x80000008 is advertised.
+- Logical topology prefers CPUID leaf 0x1F, falls back to 0x0B, and retains a
+  conservative leaf-1 count when topology leaves are absent. Cache geometry
+  uses deterministic leaf 4, with AMD extended leaf 0x8000001D as a fallback,
+  and validates sizes before publishing bounded cache records.
 - AVX is marked usable only when hardware AVX and OSXSAVE are present and XCR0
   enables both XMM and YMM state. A hardware feature bit alone is never a
   license to execute that instruction.

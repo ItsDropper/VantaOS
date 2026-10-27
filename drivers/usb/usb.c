@@ -10,6 +10,7 @@
 #include "../input/usb/hid.h"
 #include "xhci.h"
 #include "rtl8188eu.h"
+#include "usb_bluetooth.h"
 #include "serial.h"
 
 #include <stdbool.h>
@@ -218,7 +219,7 @@ static int usb_enumerate_port(uint32_t port)
                      configuration_value, 0, 0, 0))
         goto cleanup;
 
-    /* Bind supported RTL8188EU USB IDs before boot-HID interface matching. */
+    /* Bind supported RTL8188EU USB IDs before generic interface matching. */
     if (vendor_id == 0x0BDAU &&
         (product_id == 0x8179U || product_id == 0x0179U)) {
         if (rtl8188eu_probe(slot, port, vendor_id, product_id, configuration_buffer,
@@ -226,6 +227,19 @@ static int usb_enumerate_port(uint32_t port)
             serial_write("VANTAOS_USB_RTL8188EU_BOUND\n");
             success = 1;
         }
+        goto cleanup;
+    }
+
+    /*
+     * Descriptor recognition only: the xHCI path does not yet claim Bluetooth
+     * interfaces or configure their interrupt/bulk endpoints. Keep this
+     * distinct from a bound/working Bluetooth driver.
+     */
+    usb_bluetooth_hci_candidate_t bluetooth_candidate = {0};
+    if (usb_bluetooth_find_hci_interface(configuration_buffer,
+                                         configuration_length,
+                                         &bluetooth_candidate)) {
+        serial_write("VANTAOS_USB_BLUETOOTH_HCI_DESCRIPTOR_MATCH_ONLY\\n");
         goto cleanup;
     }
 

@@ -9,13 +9,13 @@ Copyright (c) 2026 ItsDropper
 - USB host support through xHCI; HID boot keyboard and mouse enumeration.
 - USB Wi-Fi work for Realtek RTL8188EU. See RTL8188EU_WIFI.md for the exact limitations; firmware readiness is not proof of association or Internet access.
 - ATA and NVMe storage paths, plus block-device and partition layers.
-- Bluetooth is not currently a working feature.
+- USB Bluetooth HCI interface recognition now identifies a matching interface with interrupt-IN events and bulk-IN/bulk-OUT ACL endpoints. It logs `VANTAOS_USB_BLUETOOTH_HCI_DESCRIPTOR_MATCH_ONLY` and deliberately does not claim or initialize the device. Bluetooth remains unsupported as a working feature; see [the bring-up course lesson](USB_BLUETOOTH_BRINGUP.md).
 
 ## Bluetooth implementation plan
 
-Start with USB Bluetooth HCI controllers, not a vendor-specific adapter guess. The first milestone is safe interface-descriptor recognition for the Bluetooth wireless-controller class, subclass and protocol. It must validate descriptor lengths and endpoint types, record the exact vendor/product/interface IDs, and leave unsupported interfaces untouched.
+The first descriptor-recognition milestone is implemented in `drivers/usb/bluetooth.c` and tested by `scripts/test_usb_bluetooth_descriptors.c`. It checks the Bluetooth wireless-controller class/subclass/protocol and requires an interrupt-IN endpoint plus bulk-IN and bulk-OUT endpoints on the same interface. Malformed streams and incomplete endpoint sets are rejected. This milestone does not yet claim the interface, and the current serial marker explicitly says `DESCRIPTOR_MATCH_ONLY`.
 
-Recognition is not a driver. The next milestone needs xHCI control-command transport, interrupt event reception and bulk ACL transfers with bounded waits, then HCI command/event dispatch, disconnect cleanup and tests. Pairing and application support require additional L2CAP, security and profile layers. Do not claim Bluetooth works until a controller can be initialized and a supported profile passes tests.
+Recognition is not a driver. The next milestone needs interface claiming and xHCI endpoint configuration, interrupt event reception and bulk ACL transfers with bounded waits, then HCI command/event dispatch, disconnect cleanup and tests. The descriptor tests run in the dedicated `USB Bluetooth descriptor tests` workflow. Pairing and application support require additional L2CAP, security and profile layers. Pairing and application support require additional L2CAP, security and profile layers. Do not claim Bluetooth works until a controller can be initialized and a supported profile passes tests.
 
 ## Wi-Fi adapter versus router
 

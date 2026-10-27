@@ -15,8 +15,10 @@ requiring heap allocation, filesystem access, a running scheduler, or graphics.
   builtins. Each slot publishes a sequence number after writing its payload;
   snapshots verify that sequence before and after reading.
 - **Best-effort:** a concurrent overwrite or an uncommitted record can be
-  omitted from a snapshot. This is diagnostic history, not a durable journal
-  or a synchronization primitive.
+  omitted from a snapshot. A writer never spins for a busy slot; if two CPUs
+  collide on the same wrapped slot, one event can be absent from the ring while
+  the event counter still records the attempted event. This is diagnostic
+  history, not a durable journal or a synchronization primitive.
 - **Counters:** per-event totals survive ring wraparound for the current boot.
   The overwritten estimate is max(total_events - KTRACE_CAPACITY, 0); a
   concurrent snapshot may be slightly stale.

@@ -65,6 +65,7 @@
 #define VANTA_ENOEXEC     8
 #define VANTA_EAGAIN     11
 #define VANTA_EMSGSIZE   90
+#define VANTA_EPROTO     71
 
 static inline long vanta_syscall3(
     long number, uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)

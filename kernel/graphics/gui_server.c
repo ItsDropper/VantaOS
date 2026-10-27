@@ -6,6 +6,7 @@
  */
 
 #include "gui_server.h"
+#include "gui_event_queue.h"
 
 #include "graphics.h"
 #include "keyboard.h"
@@ -215,19 +216,9 @@ static void gui_queue_event_locked(gui_window_t* window,
 {
     if (!window || !event)
         return;
-
-    /* Bounded queues retain the newest input when a client falls behind. */
-    if (window->event_count == GUI_EVENT_QUEUE_CAPACITY)
-    {
-        window->event_head = (window->event_head + 1U) %
-                             GUI_EVENT_QUEUE_CAPACITY;
-        window->event_count--;
-    }
-
-    uint32_t tail = (window->event_head + window->event_count) %
-                    GUI_EVENT_QUEUE_CAPACITY;
-    window->events[tail] = *event;
-    window->event_count++;
+    (void)gui_event_queue_push(window->events, GUI_EVENT_QUEUE_CAPACITY,
+                               &window->event_head, &window->event_count,
+                               event);
 }
 
 static void gui_emit_simple_event_locked(gui_window_t* window,

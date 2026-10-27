@@ -466,13 +466,17 @@ static void gui_focus_input_regression_probe(void)
         int count = 0;
         while (gui_server_poll_event(pid, (uint32_t)first, &event) == 1)
         {
+            /*
+             * Pointer motion represents current state, not a history to
+             * replay. Adjacent moves coalesce to the newest coordinates;
+             * semantic click, focus, and close events remain distinct.
+             */
             if (event.type != VANTA_GUI_EVENT_POINTER_MOVE ||
-                (count == 0 && event.x != 20) ||
-                (count == 31 && event.x != 51))
+                event.x != 51 || event.y != 20)
                 ok = 0;
             count++;
         }
-        ok = count == 32 && ok;
+        ok = count == 1 && ok;
     }
 
     if (ok)

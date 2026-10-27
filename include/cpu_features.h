@@ -67,4 +67,5 @@ int cpu_features_initialize(void);
 const cpu_features_t* cpu_features_get(void);
 int cpu_feature_has(cpu_feature_t feature);
 int cpu_feature_avx_usable(void);
+int cpu_feature_avx2_usable(void);
 #endif

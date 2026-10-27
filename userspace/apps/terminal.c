@@ -13,7 +13,7 @@
 #define LIST_CAPACITY 2048U
 #define IO_CHUNK 256U
 #define KERNEL_OUTPUT_CAPACITY 2048U
-#define OUTPUT_LINES 80U
+#define OUTPUT_LINES 512U
 #define OUTPUT_COLUMNS (VANTA_GUI_TEXT_MAX + 1U)
 #define DISPLAY_LINES 13U
 #define WINDOW_WIDTH 760U
@@ -32,6 +32,7 @@ static char io_buffer[IO_CHUNK];
 static char kernel_output[KERNEL_OUTPUT_CAPACITY];
 static char output[OUTPUT_LINES][OUTPUT_COLUMNS];
 static size_t output_count = 1U;
+static size_t output_start;
 static size_t input_length;
 static size_t prompt_length;
 static size_t output_scroll_offset;
@@ -75,20 +76,30 @@ static void clear_line(size_t index)
         output[index][i] = '\0';
 }
 
+/* Map a retained logical line to its ring-buffer slot. Keeping scrollback in
+   a ring avoids copying 40 KiB of history every time output reaches capacity. */
+static size_t output_slot(size_t logical_line)
+{
+    return (output_start + logical_line) % OUTPUT_LINES;
+}
+
+static char* output_line(size_t logical_line)
+{
+    return output[output_slot(logical_line)];
+}
+
 static void output_newline(void)
 {
     output_scroll_offset = 0U;
     if (output_count < OUTPUT_LINES)
     {
         output_count++;
-        clear_line(output_count - 1U);
+        clear_line(output_slot(output_count - 1U));
         return;
     }
 
-    for (size_t row = 1U; row < OUTPUT_LINES; row++)
-        for (size_t column = 0U; column < OUTPUT_COLUMNS; column++)
-            output[row - 1U][column] = output[row][column];
-    clear_line(OUTPUT_LINES - 1U);
+    output_start = (output_start + 1U) % OUTPUT_LINES;
+    clear_line(output_slot(output_count - 1U));
 }
 
 static void output_character(char value)
@@ -101,24 +112,24 @@ static void output_character(char value)
         return;
     }
 
-    size_t row = output_count - 1U;
-    size_t length = string_length(output[row]);
+    char* row_text = output_line(output_count - 1U);
+    size_t length = string_length(row_text);
     if (length >= OUTPUT_COLUMNS - 1U)
     {
         output_newline();
         row = output_count - 1U;
         length = 0U;
     }
-    output[row][length] = value;
-    output[row][length + 1U] = '\0';
+    row_text[length] = value;
+    row_text[length + 1U] = '\0';
 }
 
 static void output_backspace(void)
 {
-    size_t row = output_count - 1U;
-    size_t length = string_length(output[row]);
+    char* row_text = output_line(output_count - 1U);
+    size_t length = string_length(row_text);
     if (length > prompt_length)
-        output[row][length - 1U] = '\0';
+        row_text[length - 1U] = '\0';
 }
 
 static void write_text(const char* text)
@@ -174,8 +185,8 @@ static void render(void)
     int y = 42;
     for (size_t i = first; i < end && y < 416; i++)
     {
-        if (output[i][0])
-            render_add_text(16, y, output[i], COLOR_TEXT);
+        if (output_line(i)[0])
+            render_add_text(16, y, output_line(i), COLOR_TEXT);
         y += 22;
     }
 
@@ -189,7 +200,7 @@ static void render(void)
 static void prompt(void)
 {
     write_text("vanta:/ $ ");
-    prompt_length = string_length(output[output_count - 1U]);
+    prompt_length = string_length(output_line(output_count - 1U));
 }
 
 static void command_help(void)
@@ -373,6 +384,7 @@ static void execute_line(char* command)
     {
         for (size_t i = 0U; i < OUTPUT_LINES; i++)
             clear_line(i);
+        output_start = 0U;
         output_count = 1U;
         prompt_length = 0U;
         write_text("VantaOS Terminal - ring-3 shell\n");

@@ -6,6 +6,7 @@
  */
 
 #include "pci.h"
+#include "ktrace.h"
 #include "acpi.h"
 #include "mmio.h"
 #include "spinlock.h"
@@ -299,6 +300,8 @@ void pci_initialize(void)
     pci_mcfg_initialized = 1;
 #endif
     pci_scan();
+    ktrace_emit(KTRACE_EVENT_PCI_SCAN_COMPLETE, KTRACE_CPU_UNKNOWN,
+                (uint64_t)device_count, (uint64_t)pci_mcfg_region_count);
 }
 
 int pci_get_device_count(void)

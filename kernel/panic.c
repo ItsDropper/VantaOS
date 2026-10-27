@@ -6,6 +6,7 @@
  */
 
 #include "panic.h"
+#include "ktrace.h"
 #include "panic_format.h"
 #include "cpu_local.h"
 
@@ -58,6 +59,7 @@ _Noreturn void kernel_panic_halt_all(void)
     __asm__ volatile ("cli" ::: "memory");
     if (panic_broadcast_begin())
     {
+        ktrace_emit(KTRACE_EVENT_PANIC, KTRACE_CPU_UNKNOWN, 0U, 0U);
         serial_write("VANTAOS_SMP_FATAL_HALT\n");
         panic_broadcast_stop_peers();
     }

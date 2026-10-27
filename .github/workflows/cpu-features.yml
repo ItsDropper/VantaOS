@@ -1,0 +1,30 @@
+name: CPU feature inventory tests
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cpu-feature-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile CPU feature tests with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -DCPU_FEATURES_TEST -Iinclude \
+            scripts/test_cpu_features.c arch/x86_64/cpu_features.c \
+            -o /tmp/vantaos-cpu-features-test
+      - name: Test CPUID decoding and conservative fallbacks
+        run: /tmp/vantaos-cpu-features-test
+      - name: Compile freestanding x86-64 implementation
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -m64 -march=x86-64 \
+            -ffreestanding -fno-pie -fno-stack-protector -mno-red-zone \
+            -mgeneral-regs-only -nostdlib -Iinclude \
+            -c arch/x86_64/cpu_features.c -o /tmp/vantaos-cpu-features.o

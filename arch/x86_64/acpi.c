@@ -108,6 +108,56 @@ static int table_valid(const acpi_sdt_header_t* table,
     return checksum8(table, table->length) == 0;
 }
 
+static const acpi_sdt_header_t* acpi_get_root_table(
+    unsigned int* entry_size_out)
+{
+    const acpi_rsdp_v1_t* rsdp = NULL;
+    const vanta_boot_info_t* boot = kernel_get_boot_info();
+    if (boot &&
+        (boot->flags & ACPI_RSDP_VALID_FLAG) &&
+        physical_range(boot->acpi_rsdp_address, sizeof(acpi_rsdp_v1_t)))
+    {
+        const acpi_rsdp_v1_t* candidate =
+            (const acpi_rsdp_v1_t*)(uintptr_t)boot->acpi_rsdp_address;
+        if (checksum8(candidate, 20U) == 0)
+            rsdp = candidate;
+    }
+    if (!rsdp)
+        rsdp = scan_rsdp();
+    if (!rsdp)
+        return NULL;
+
+    uint64_t root_address = rsdp->rsdt_address;
+    unsigned int entry_size = sizeof(uint32_t);
+    if (rsdp->revision >= 2)
+    {
+        const acpi_rsdp_v2_t* extended = (const acpi_rsdp_v2_t*)rsdp;
+        if (extended->length >= sizeof(acpi_rsdp_v2_t) &&
+            physical_range((uint64_t)(uintptr_t)rsdp, extended->length) &&
+            checksum8(extended, extended->length) == 0 &&
+            physical_range(extended->xsdt_address,
+                           sizeof(acpi_sdt_header_t)))
+        {
+            root_address = extended->xsdt_address;
+            entry_size = sizeof(uint64_t);
+        }
+    }
+
+    if (!physical_range(root_address, sizeof(acpi_sdt_header_t)))
+        return NULL;
+    const acpi_sdt_header_t* root =
+        (const acpi_sdt_header_t*)(uintptr_t)root_address;
+    const char* signature =
+        entry_size == sizeof(uint64_t) ? "XSDT" : "RSDT";
+    if (!table_valid(root, signature) ||
+        (root->length - sizeof(*root)) % entry_size != 0)
+        return NULL;
+
+    if (entry_size_out)
+        *entry_size_out = entry_size;
+    return root;
+}
+
 static void add_cpu(acpi_platform_info_t* info, uint32_t apic_id,
                     uint32_t flags)
 {
@@ -185,46 +235,9 @@ int acpi_discover_platform(acpi_platform_info_t* info)
     for (size_t i = 0; i < sizeof(*info); i++)
         clear[i] = 0;
 
-    const acpi_rsdp_v1_t* rsdp = NULL;
-    const vanta_boot_info_t* boot = kernel_get_boot_info();
-    if (boot &&
-        (boot->flags & ACPI_RSDP_VALID_FLAG) &&
-        physical_range(boot->acpi_rsdp_address, sizeof(acpi_rsdp_v1_t)))
-    {
-        const acpi_rsdp_v1_t* candidate =
-            (const acpi_rsdp_v1_t*)(uintptr_t)boot->acpi_rsdp_address;
-        if (checksum8(candidate, 20U) == 0)
-            rsdp = candidate;
-    }
-    if (!rsdp)
-        rsdp = scan_rsdp();
-    if (!rsdp)
-        return 0;
-
-    uint64_t root_address = rsdp->rsdt_address;
-    unsigned int entry_size = sizeof(uint32_t);
-    if (rsdp->revision >= 2)
-    {
-        const acpi_rsdp_v2_t* extended = (const acpi_rsdp_v2_t*)rsdp;
-        if (extended->length >= sizeof(acpi_rsdp_v2_t) &&
-            physical_range((uint64_t)(uintptr_t)rsdp, extended->length) &&
-            checksum8(extended, extended->length) == 0 &&
-            physical_range(extended->xsdt_address,
-                           sizeof(acpi_sdt_header_t)))
-        {
-            root_address = extended->xsdt_address;
-            entry_size = sizeof(uint64_t);
-        }
-    }
-
-    if (!physical_range(root_address, sizeof(acpi_sdt_header_t)))
-        return 0;
-    const acpi_sdt_header_t* root =
-        (const acpi_sdt_header_t*)(uintptr_t)root_address;
-    const char* root_signature =
-        entry_size == sizeof(uint64_t) ? "XSDT" : "RSDT";
-    if (!table_valid(root, root_signature) ||
-        (root->length - sizeof(*root)) % entry_size != 0)
+    unsigned int entry_size = 0U;
+    const acpi_sdt_header_t* root = acpi_get_root_table(&entry_size);
+    if (!root)
         return 0;
 
     uint32_t entries = (root->length - sizeof(*root)) / entry_size;
@@ -244,3 +257,80 @@ int acpi_discover_platform(acpi_platform_info_t* info)
     }
     return 0;
 }
+
+uint32_t acpi_discover_pci_mcfg(acpi_mcfg_region_t* regions,
+                                uint32_t capacity)
+{
+    unsigned int entry_size = 0U;
+    const acpi_sdt_header_t* root = acpi_get_root_table(&entry_size);
+    if (!root || (!regions && capacity != 0U))
+        return 0U;
+
+    uint32_t entries = (root->length - sizeof(*root)) / entry_size;
+    const uint8_t* table_entries = (const uint8_t*)root + sizeof(*root);
+    for (uint32_t i = 0; i < entries; i++)
+    {
+        uint64_t address = entry_size == sizeof(uint64_t) ?
+            *(const uint64_t*)(table_entries + i * entry_size) :
+            *(const uint32_t*)(table_entries + i * entry_size);
+        if (!physical_range(address, sizeof(acpi_sdt_header_t)))
+            continue;
+        const acpi_sdt_header_t* table =
+            (const acpi_sdt_header_t*)(uintptr_t)address;
+        if (!signature_is(table->signature, "MCFG"))
+            continue;
+        if (!table_valid(table, "MCFG") || table->length < 44U ||
+            ((table->length - 44U) % 16U) != 0U)
+            return 0U;
+
+        uint32_t count = 0U;
+        const uint8_t* bytes = (const uint8_t*)table;
+        for (uint32_t cursor = 44U; cursor < table->length; cursor += 16U)
+        {
+            uint64_t base = *(const uint64_t*)(bytes + cursor);
+            uint16_t segment = *(const uint16_t*)(bytes + cursor + 8U);
+            uint8_t start_bus = bytes[cursor + 10U];
+            uint8_t end_bus = bytes[cursor + 11U];
+            uint32_t reserved = *(const uint32_t*)(bytes + cursor + 12U);
+            uint64_t bus_count = (uint64_t)end_bus - start_bus + 1U;
+            uint64_t span = bus_count << 20U;
+
+            if (reserved != 0U || base == 0U ||
+                (base & 0xFFFFFU) != 0U || end_bus < start_bus ||
+                span > UINT64_MAX - base)
+                continue;
+
+            /* Reject overlapping ECAM windows within the same segment. */
+            int overlaps = 0;
+            if (regions)
+                for (uint32_t j = 0; j < count && j < capacity; j++)
+                {
+                    const acpi_mcfg_region_t* prior = &regions[j];
+                    if (prior->segment_group != segment)
+                        continue;
+                    uint64_t prior_span =
+                        ((uint64_t)prior->end_bus - prior->start_bus + 1U)
+                        << 20U;
+                    uint64_t prior_end = prior->base_address + prior_span;
+                    uint64_t end = base + span;
+                    if (base < prior_end && prior->base_address < end)
+                        overlaps = 1;
+                }
+            if (overlaps)
+                continue;
+
+            if (regions && count < capacity)
+            {
+                regions[count].base_address = base;
+                regions[count].segment_group = segment;
+                regions[count].start_bus = start_bus;
+                regions[count].end_bus = end_bus;
+            }
+            if (count != UINT32_MAX)
+                count++;
+        }
+        return count < capacity ? count : capacity;
+    }
+    return 0U;
+}
+

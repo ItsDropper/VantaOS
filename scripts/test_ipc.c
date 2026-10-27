@@ -50,9 +50,13 @@ int main(void)
     assert(endpoint > 0);
     char out[IPC_MESSAGE_MAX] = {0};
     assert(ipc_message_receive((uint64_t)endpoint,10U,out,sizeof(out)) == -11);
+    assert(ipc_message_peek_length((uint64_t)endpoint,10U) == -11);
+    assert(ipc_message_peek_length((uint64_t)endpoint,11U) == -1);
     assert(ipc_message_receive((uint64_t)endpoint,11U,out,sizeof(out)) == -1);
     assert(ipc_message_send((uint64_t)endpoint,11U,"one",3U) == 0);
     assert(ipc_message_send((uint64_t)endpoint,12U,"two",3U) == 0);
+    assert(ipc_message_peek_length((uint64_t)endpoint,10U) == 3);
+    assert(ipc_message_peek_length((uint64_t)endpoint,10U) == 3);
     assert(ipc_message_receive((uint64_t)endpoint,10U,out,2U) == -90);
     assert(ipc_message_receive((uint64_t)endpoint,10U,out,sizeof(out)) == 3);
     assert(memcmp(out,"one",3U)==0);
@@ -68,6 +72,7 @@ int main(void)
     assert(ipc_endpoint_close((uint64_t)endpoint,11U) == -1);
     assert(ipc_endpoint_close((uint64_t)endpoint,10U) == 0);
     assert(ipc_message_send((uint64_t)endpoint,11U,"x",1U) == -9);
+    assert(ipc_message_peek_length((uint64_t)endpoint,10U) == -9);
     int64_t cleanup_endpoint = ipc_endpoint_create(77U);
     assert(cleanup_endpoint > 0);
     assert(ipc_message_send((uint64_t)cleanup_endpoint,88U,"queued",6U) == 0);

@@ -1,0 +1,29 @@
+name: Kernel trace infrastructure tests
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ktrace-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile trace tests with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -pthread -Iinclude \
+            scripts/test_ktrace.c kernel/ktrace.c -o /tmp/vantaos-ktrace-test
+      - name: Test event counters, snapshots, and wraparound
+        run: /tmp/vantaos-ktrace-test
+      - name: Compile trace subsystem for freestanding x86-64
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -m64 -march=x86-64 \
+            -ffreestanding -fno-pie -fno-stack-protector -mno-red-zone \
+            -mgeneral-regs-only -nostdlib -Iinclude \
+            -c kernel/ktrace.c -o /tmp/vantaos-ktrace.o

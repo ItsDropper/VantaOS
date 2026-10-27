@@ -5,10 +5,20 @@
  * See the LICENSE file in the project root for the full license text.
  */
 #include "nvx_irq_route.h"
+#include "ktrace.h"
 
 #include <assert.h>
 #include <stdint.h>
 #include <string.h>
+
+/* PCI_TEST exercises configuration logic without the kernel trace runtime. */
+void ktrace_emit(uint32_t type, uint32_t cpu_id, uint64_t arg0, uint64_t arg1)
+{
+    (void)type;
+    (void)cpu_id;
+    (void)arg0;
+    (void)arg1;
+}
 
 #define CONFIG_ADDRESS_PORT 0xCF8U
 #define CONFIG_DATA_PORT 0xCFCU

@@ -6,6 +6,7 @@
  */
 
 #include "pci.h"
+#include "ktrace.h"
 #include "acpi.h"
 #include "mmio.h"
 #include "spinlock.h"
@@ -293,12 +294,16 @@ static void pci_scan(void)
 
 void pci_initialize(void)
 {
+    uint64_t mcfg_regions = 0U;
 #ifndef PCI_TEST
     pci_mcfg_region_count = acpi_discover_pci_mcfg(
         pci_mcfg_regions, ACPI_MAX_MCFG_REGIONS);
     pci_mcfg_initialized = 1;
+    mcfg_regions = pci_mcfg_region_count;
 #endif
     pci_scan();
+    ktrace_emit(KTRACE_EVENT_PCI_SCAN_COMPLETE, KTRACE_CPU_UNKNOWN,
+                (uint64_t)device_count, mcfg_regions);
 }
 
 int pci_get_device_count(void)

@@ -6,6 +6,7 @@
  */
 
 #include "kernel_init.h"
+#include "ktrace.h"
 
 #include "apic.h"
 #include "cpu_features.h"
@@ -41,6 +42,7 @@ static unsigned long long boot_interrupts;
 
 void kernel_initialize(const vanta_boot_info_t* boot_info)
 {
+    ktrace_emit(KTRACE_EVENT_BOOT_PHASE, KTRACE_CPU_UNKNOWN, 0U, 1U);
     /* Inventory capabilities before any subsystem considers optional ISA. */
     if (!cpu_features_initialize())
         serial_write("VANTAOS_CPU_DISCOVERY_UNAVAILABLE\n");
@@ -48,8 +50,11 @@ void kernel_initialize(const vanta_boot_info_t* boot_info)
     /* Phase 1: CPU tables and physical memory must precede paging setup. */
     gdt_initialize();
     boot_gdt = read_tsc();
+    ktrace_emit(KTRACE_EVENT_BOOT_PHASE, KTRACE_CPU_UNKNOWN, 1U, 2U);
 
     pmm_initialize(boot_info);
+    ktrace_emit(KTRACE_EVENT_BOOT_PHASE, KTRACE_CPU_UNKNOWN, 2U,
+                pmm_is_initialized() ? 1U : 0U);
     interrupts_initialize();
     boot_interrupts = read_tsc();
 
@@ -57,6 +62,8 @@ void kernel_initialize(const vanta_boot_info_t* boot_info)
     paging_initialize();
     apic_initialize();
     smp_init_result_t smp_result = smp_initialize();
+    ktrace_emit(KTRACE_EVENT_BOOT_PHASE, KTRACE_CPU_UNKNOWN, 3U,
+                (uint64_t)smp_result);
     if (smp_result == SMP_INIT_FAILED)
     {
         serial_write("VANTAOS_SMP_INIT_FATAL_FAIL\n");
@@ -68,10 +75,13 @@ void kernel_initialize(const vanta_boot_info_t* boot_info)
 
     /* Phase 3: bus discovery and allocation services precede device drivers. */
     pci_initialize();
+    ktrace_emit(KTRACE_EVENT_BOOT_PHASE, KTRACE_CPU_UNKNOWN, 4U, 1U);
     heap_initialize();
 
     /* Phase 4: hand ownership to the bus/device subsystem coordinators. */
     drivers_initialize();
+    ktrace_emit(KTRACE_EVENT_DRIVER_INIT, KTRACE_CPU_UNKNOWN, 1U, 0U);
+    ktrace_emit(KTRACE_EVENT_BOOT_PHASE, KTRACE_CPU_UNKNOWN, 5U, 1U);
 }
 
 unsigned long long kernel_boot_gdt(void)

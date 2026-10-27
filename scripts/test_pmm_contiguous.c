@@ -5,10 +5,21 @@
  * See the LICENSE file in the project root for the full license text.
  */
 #include "pmm.h"
+#include "ktrace.h"
 
 #include <assert.h>
 #include <stdint.h>
 #include <string.h>
+
+/* PMM is tested in isolation; tracing is a no-op in this host harness. */
+void ktrace_emit(uint32_t type, uint32_t cpu_id, uint64_t arg0, uint64_t arg1)
+{
+    (void)type;
+    (void)cpu_id;
+    (void)arg0;
+    (void)arg1;
+}
+
 
 int main(void)
 {

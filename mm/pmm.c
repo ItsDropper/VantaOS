@@ -6,6 +6,7 @@
  */
 
 #include "pmm.h"
+#include "ktrace.h"
 #include "spinlock.h"
 
 #include <stdint.h>
@@ -302,6 +303,9 @@ void pmm_initialize(const vanta_boot_info_t* boot_info)
         bitmap_set(pmm_bitmap, block);
         bitmap_set(pmm_reserved_bitmap, block);
     }
+
+    ktrace_emit(KTRACE_EVENT_PMM_READY, KTRACE_CPU_UNKNOWN,
+                total_blocks, free_blocks);
 }
 
 void* pmm_alloc_block(void)
@@ -344,7 +348,10 @@ void* pmm_alloc_block(void)
         }
     }
 
+    uint32_t free_snapshot = free_blocks;
     spinlock_unlock(&pmm_lock);
+    ktrace_emit(KTRACE_EVENT_PMM_ALLOC_FAILURE, KTRACE_CPU_UNKNOWN,
+                total_blocks, free_snapshot);
     return NULL;
 }
 

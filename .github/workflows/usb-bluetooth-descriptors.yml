@@ -1,0 +1,36 @@
+name: USB Bluetooth descriptor tests
+
+on:
+  push:
+    branches: [master, 'work/**']
+    paths:
+      - 'drivers/usb/bluetooth.c'
+      - 'include/usb_bluetooth.h'
+      - 'scripts/test_usb_bluetooth_descriptors.c'
+      - '.github/workflows/usb-bluetooth-descriptors.yml'
+  pull_request:
+    paths:
+      - 'drivers/usb/bluetooth.c'
+      - 'include/usb_bluetooth.h'
+      - 'scripts/test_usb_bluetooth_descriptors.c'
+      - '.github/workflows/usb-bluetooth-descriptors.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  descriptor-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Compile descriptor tests with strict warnings
+        run: |
+          set -euo pipefail
+          cc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            drivers/usb/bluetooth.c scripts/test_usb_bluetooth_descriptors.c \
+            -o /tmp/test-usb-bluetooth-descriptors
+      - name: Run descriptor tests
+        run: /tmp/test-usb-bluetooth-descriptors

@@ -46,6 +46,7 @@
 #define VANTA_SYS_IPC_SEND              27U
 #define VANTA_SYS_IPC_RECEIVE           28U
 #define VANTA_SYS_IPC_CLOSE             29U
+#define VANTA_SYS_IPC_PEEK_LENGTH        30U
 
 #define VANTA_OPEN_READ      1
 #define VANTA_OPEN_WRITE     2
@@ -99,6 +100,8 @@ static inline long vanta_ipc_send(uint64_t endpoint,const void *message,size_t l
 { return vanta_syscall3(VANTA_SYS_IPC_SEND,(uintptr_t)endpoint,(uintptr_t)message,(uintptr_t)length); }
 static inline long vanta_ipc_receive(uint64_t endpoint,void *message,size_t capacity)
 { return vanta_syscall3(VANTA_SYS_IPC_RECEIVE,(uintptr_t)endpoint,(uintptr_t)message,(uintptr_t)capacity); }
+static inline long vanta_ipc_peek_length(uint64_t endpoint)
+{ return vanta_syscall3(VANTA_SYS_IPC_PEEK_LENGTH,(uintptr_t)endpoint,0U,0U); }
 static inline long vanta_ipc_close(uint64_t endpoint)
 { return vanta_syscall3(VANTA_SYS_IPC_CLOSE,(uintptr_t)endpoint,0U,0U); }
 

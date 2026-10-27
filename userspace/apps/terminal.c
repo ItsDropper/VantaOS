@@ -205,8 +205,20 @@ static void prompt(void)
 
 static void command_help(void)
 {
-    write_text("Commands: help, about, pwd, ls [path], cat <path>, echo <text>, exec <elf> [args...], kernel <command>, clear, exit\n");
-    write_text("kernel <command> runs built-in kernel commands with full privileges.\n");
+    write_text("VantaOS user terminal commands:\n");
+    write_text("  help                 Show this command list\n");
+    write_text("  about                Show terminal information\n");
+    write_text("  pwd                  Show the current VFS location\n");
+    write_text("  ls [path]            List a VFS directory\n");
+    write_text("  cat <path>           Print a VFS file\n");
+    write_text("  echo <text>          Print text\n");
+    write_text("  exec <elf> [args...] Run a user ELF and wait for it\n");
+    write_text("  kernel <command>     Run a supported kernel-shell command\n");
+    write_text("  clear                Clear visible terminal history\n");
+    write_text("  exit                 Close the terminal\n");
+    write_text("  PageUp / PageDown    Scroll retained output\n");
+    write_text("Paths refer to VantaOS, not files on the host computer.\n");
+    write_text("The kernel command interface is privileged; use it deliberately.\n");
 }
 
 static void command_list(const char* path)

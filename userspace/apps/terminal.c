@@ -398,6 +398,7 @@ static void execute_line(char* command)
             clear_line(i);
         output_start = 0U;
         output_count = 1U;
+        output_scroll_offset = 0U;
         prompt_length = 0U;
         write_text("VantaOS Terminal - ring-3 shell\n");
     }

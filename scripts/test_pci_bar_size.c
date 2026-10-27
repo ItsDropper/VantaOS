@@ -50,6 +50,15 @@ void pci_test_outl(uint16_t port, uint32_t value)
     config_space[dword] = value;
 }
 
+int pci_test_ecam_read32(uint16_t segment, uint8_t bus, uint8_t slot,
+                         uint8_t function, uint16_t offset,
+                         uint32_t* value)
+{
+    (void)segment; (void)bus; (void)slot; (void)function; (void)offset;
+    if (value) *value = 0xFFFFFFFFU;
+    return 0;
+}
+
 uint32_t pci_test_inl(uint16_t port)
 {
     assert(port == TEST_CONFIG_DATA);

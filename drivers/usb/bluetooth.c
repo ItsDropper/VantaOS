@@ -65,8 +65,8 @@ int usb_bluetooth_find_hci_interface(const uint8_t *configuration,
      */
     if (configuration[0] < 9U || configuration[1] != 2U)
         return 0;
-    if ((uint16_t)configuration[2] |
-        ((uint16_t)configuration[3] << 8) != length)
+    if (((uint16_t)configuration[2] |
+         ((uint16_t)configuration[3] << 8)) != length)
         return 0;
 
     while (offset < length) {

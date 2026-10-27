@@ -13,6 +13,7 @@
 int64_t ipc_endpoint_create(uint32_t owner_pid);
 int ipc_message_send(uint64_t endpoint, uint32_t sender_pid, const void *message, size_t length);
 int ipc_message_receive(uint64_t endpoint, uint32_t receiver_pid, void *message, size_t capacity);
+int ipc_message_peek_length(uint64_t endpoint, uint32_t receiver_pid);
 int ipc_endpoint_close(uint64_t endpoint, uint32_t owner_pid);
 void ipc_process_cleanup(uint32_t pid);
 #endif

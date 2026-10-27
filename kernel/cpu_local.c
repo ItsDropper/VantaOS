@@ -46,6 +46,7 @@ int cpu_local_initialize(uint32_t logical_id, uint32_t apic_id)
     local->interrupt_depth = 0;
     local->work_iterations = 0;
     local->scheduler_ticks = 0;
+    local->scheduler_cursor = (logical_id * 4U) % 128U;
     local->lapic_timer_ticks = 0;
     local->reschedule_ipi_ticks = 0;
     local->reschedule_pending = 0;

@@ -96,6 +96,34 @@ static int graphics_scene_invalidated = 1;
  * when rendering actually changed their pixels. */
 static uint8_t graphics_damage_bitmap[GRAPHICS_DAMAGE_BITMAP_BYTES];
 
+static int graphics_clip_enabled;
+static int graphics_clip_left, graphics_clip_top;
+static int graphics_clip_right, graphics_clip_bottom;
+
+void graphics_set_clip_rect(int x, int y, int width, int height)
+{
+    if (width <= 0 || height <= 0) { graphics_clip_enabled = 0; return; }
+    graphics_clip_left = x; graphics_clip_top = y;
+    graphics_clip_right = x + width; graphics_clip_bottom = y + height;
+    graphics_clip_enabled = 1;
+}
+void graphics_clear_clip_rect(void) { graphics_clip_enabled = 0; }
+int graphics_clip_bounds(int* x0, int* y0, int* x1, int* y1)
+{
+    if (!x0 || !y0 || !x1 || !y1) return 0;
+    if (*x0 < 0) *x0 = 0;
+    if (*y0 < 0) *y0 = 0;
+    if (*x1 > (int)framebuffer_width) *x1 = (int)framebuffer_width;
+    if (*y1 > (int)framebuffer_height) *y1 = (int)framebuffer_height;
+    if (graphics_clip_enabled) {
+        if (*x0 < graphics_clip_left) *x0 = graphics_clip_left;
+        if (*y0 < graphics_clip_top) *y0 = graphics_clip_top;
+        if (*x1 > graphics_clip_right) *x1 = graphics_clip_right;
+        if (*y1 > graphics_clip_bottom) *y1 = graphics_clip_bottom;
+    }
+    return *x0 < *x1 && *y0 < *y1;
+}
+
 void graphics_mark_damage(int x, int y, int width, int height)
 {
     if (!graphics_frame_active)
@@ -139,6 +167,7 @@ void graphics_reset_backbuffer(void)
 {
     graphics_backbuffer_valid = 0;
     graphics_scene_invalidated = 1;
+    graphics_clip_enabled = 0;
     cursor_saved_valid = 0;
 }
 
@@ -199,6 +228,7 @@ int graphics_panic_prepare(void)
 
     /* If a compositor frame was interrupted, abandon it and target scanout. */
     graphics_frame_active = 0;
+    graphics_clip_enabled = 0;
     if (graphics_display_framebuffer && graphics_display_pitch >= framebuffer_width * 4U)
     {
         framebuffer = graphics_display_framebuffer;

@@ -173,6 +173,9 @@ void graphics_ui_draw_notice(int x, int y, int width, const char* message,
                              uint32_t tint);
 
 void graphics_draw_start_menu_detail(int width, int height);
+void graphics_set_clip_rect(int x, int y, int width, int height);
+void graphics_clear_clip_rect(void);
+int graphics_clip_bounds(int* x0, int* y0, int* x1, int* y1);
 void graphics_draw_desktop_backdrop(int width, int height);
 void graphics_draw_desktop_dashboard(int width, int height);
 void graphics_draw_system_page_detail(int x, int y, int width, int height);

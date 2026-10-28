@@ -10,7 +10,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#define INPUT_CAPACITY 128U
+#define INPUT_CAPACITY 64U
 #define COLOR_ERROR 0x00F87171U
 #define COLOR_SUCCESS 0x0022C55EU
 

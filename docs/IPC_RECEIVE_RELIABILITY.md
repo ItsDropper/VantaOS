@@ -72,3 +72,10 @@ The host regression suite now fills the endpoint table, verifies the exhaustion 
 ## Revocation at current-process exit
 
 When the running process is marked terminated, the process lifecycle now revokes its IPC endpoints immediately after releasing the process-table lock and before returning to the scheduler. The current process still owns its CPU stack at that point, so its PID cannot yet be recycled. Non-current process termination continues to clean IPC as part of the reaper path, which owns the transition to resource teardown. This keeps the expensive queue-zeroing work outside the process-table critical section while avoiding a cleanup racing with PID reuse.
+
+
+## Capability collision and queue-reuse regressions
+
+The host regression suite now forces the deterministic RNG stub to return an already-live endpoint token and verifies that creation fails with the collision error instead of aliasing another process's endpoint. It also fills the bounded receive queue, checks overflow rejection, repeats non-consuming length peeks, confirms that an undersized destination does not consume the head, drains the ring through wraparound, and verifies that consumed message bytes and metadata are cleared before slot reuse.
+
+The IPC host workflow runs the normal strict-warning test binary and a second build under AddressSanitizer and UndefinedBehaviorSanitizer. These tests validate the shared C implementation with host spinlock/RNG shims; they do not validate real SMP contention, interrupt-state restoration, syscall entry, or scheduler timing.

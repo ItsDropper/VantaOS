@@ -107,7 +107,7 @@ http_response_status_t http_response_parse(const char *headers,
         return HTTP_RESPONSE_BAD_STATUS_LINE;
     for (size_t i = 12U; i < line_end; ++i) {
         unsigned char ch = (unsigned char)headers[i];
-        if ((ch < 0x20U && ch != '\\t') || ch == 0x7FU)
+        if ((ch < 0x20U && ch != '\t') || ch == 0x7FU)
             return HTTP_RESPONSE_BAD_STATUS_LINE;
     }
 

@@ -10,8 +10,8 @@
 
 #include <stdint.h>
 
-/* AHCI HBA registers include the port register block at 0x100 + 32 * 0x80. */
-#define AHCI_ABAR_MIN_SIZE 0x1100ULL
+/* Generic AHCI registers through CAP2/BOHC fit within the first 64 bytes. */
+#define AHCI_ABAR_MIN_SIZE 0x40ULL
 #define AHCI_ABAR_ALIGNMENT 0x400ULL
 
 /* BAR sizing writes all ones temporarily; decode and bus mastering must be off. */

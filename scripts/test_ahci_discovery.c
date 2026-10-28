@@ -30,6 +30,7 @@ static uint32_t write_calls;
 static uint32_t map_calls;
 static uint32_t unmap_calls;
 static int discovered_marker;
+static int rejected_marker;
 
 int pci_find_class(uint8_t class_code, uint8_t subclass, int prog_if,
                    int start_index)
@@ -126,9 +127,23 @@ int main(void)
     memcpy(fake_registers + 0x0CU, &pi, sizeof(pi));
     memcpy(fake_registers + 0x10U, &version, sizeof(version));
 
+#ifdef AHCI_TEST_UNSAFE
+    command_register = 0x0004U; /* Bus mastering is already enabled. */
+#endif
     ahci_initialize();
 
     assert(find_calls == 2U);
+#ifdef AHCI_TEST_UNSAFE
+    assert(size_calls == 0U);
+    assert(bar_calls == 0U);
+    assert(enable_calls == 0U);
+    assert(write_calls == 0U);
+    assert(map_calls == 0U);
+    assert(unmap_calls == 0U);
+    assert(command_register == 0x0004U);
+    assert(rejected_marker);
+    puts("VANTAOS_AHCI_DISCOVERY_UNSAFE_GUARD_OK");
+#else
     assert(size_calls == 1U);
     assert(bar_calls == 1U);
     assert(enable_calls == 1U);
@@ -137,7 +152,7 @@ int main(void)
     assert(unmap_calls == 1U);
     assert(command_register == 0U);
     assert(discovered_marker);
-
     puts("VANTAOS_AHCI_DISCOVERY_OK");
+#endif
     return 0;
 }

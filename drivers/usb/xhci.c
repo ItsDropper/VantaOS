@@ -512,6 +512,76 @@ int xhci_control_transfer(uint32_t slot_id, const uint8_t setup[8],
     return 0;
 }
 
+
+/*
+ * Clear all software-visible state associated with a slot only after Disable
+ * Slot has completed. A later device may reuse this slot and the same ring
+ * addresses, so stale completion flags or buffered bytes must not survive.
+ */
+static void clear_disabled_slot_state(uint32_t index)
+{
+    interrupt_enqueue[index] = 0U;
+    interrupt_cycle[index] = 1U;
+    interrupt_dci[index] = 0U;
+    interrupt_packet[index] = 0U;
+    interrupt_configured[index] = 0U;
+    interrupt_in_flight[index] = 0U;
+    interrupt_report_ready[index] = 0U;
+    interrupt_pending_length[index] = 0U;
+    interrupt_expected_trb[index] = 0U;
+    interrupt_endpoint_address[index] = 0U;
+    hid_completion_observed[index] = 0U;
+    hid_report_observed[index] = 0U;
+    hid_transfer_submitted[index] = 0U;
+    hid_transfer_event_observed[index] = 0U;
+    hid_completion_mismatch_observed[index] = 0U;
+
+    for (uint32_t i = 0U; i < sizeof(interrupt_dma[index]); ++i) {
+        interrupt_dma[index][i] = 0U;
+        interrupt_pending[index][i] = 0U;
+    }
+    for (uint32_t i = 0U; i < XHCI_EP0_RING_TRBS; ++i) {
+        interrupt_rings[index][i].parameter = 0U;
+        interrupt_rings[index][i].status = 0U;
+        interrupt_rings[index][i].control = 0U;
+    }
+
+    for (uint32_t direction = 0U; direction < 2U; ++direction) {
+        bulk_enqueue[index][direction] = 0U;
+        bulk_cycle[index][direction] = 1U;
+        bulk_dci[index][direction] = 0U;
+        bulk_packet[index][direction] = 0U;
+        bulk_configured[index][direction] = 0U;
+        bulk_in_flight[index][direction] = 0U;
+        bulk_done[index][direction] = 0U;
+        bulk_expected_trb[index][direction] = 0U;
+        bulk_completion_code[index][direction] = 0U;
+        bulk_completion_status[index][direction] = 0U;
+        for (uint32_t i = 0U; i < XHCI_BULK_BUFFER_SIZE; ++i)
+            bulk_dma[index][direction][i] = 0U;
+        for (uint32_t i = 0U; i < XHCI_EP0_RING_TRBS; ++i) {
+            bulk_rings[index][direction][i].parameter = 0U;
+            bulk_rings[index][direction][i].status = 0U;
+            bulk_rings[index][direction][i].control = 0U;
+        }
+    }
+
+    for (uint32_t i = 0U; i < 33U * 64U; ++i)
+        input_contexts[index][i] = 0U;
+    for (uint32_t i = 0U; i < 32U * 64U; ++i)
+        device_contexts[index][i] = 0U;
+    for (uint32_t i = 0U; i < XHCI_EP0_RING_TRBS; ++i) {
+        ep0_rings[index][i].parameter = 0U;
+        ep0_rings[index][i].status = 0U;
+        ep0_rings[index][i].control = 0U;
+    }
+    ep0_enqueue[index] = 0U;
+    ep0_cycle[index] = 1U;
+    slot_port[index] = 0U;
+    slot_speed[index] = 0U;
+    slot_ep0_packet[index] = 0U;
+}
+
 int xhci_disable_device(uint32_t slot_id)
 {
     if (!controller_online || slot_id == 0U || slot_id > XHCI_MAX_SLOTS ||
@@ -520,17 +590,10 @@ int xhci_disable_device(uint32_t slot_id)
     uint32_t completion = 0;
     if (!xhci_submit_command(10U, 0, 0, slot_id << 24, &completion, 0))
         return 0;
-    dcbaa[slot_id] = 0;
-    slot_active[slot_id - 1U] = 0;
-    interrupt_configured[slot_id - 1U] = 0;
-    interrupt_in_flight[slot_id - 1U] = 0;
-    interrupt_report_ready[slot_id - 1U] = 0;
-    for (uint32_t direction = 0; direction < 2U; ++direction) {
-        bulk_configured[slot_id - 1U][direction] = 0;
-        bulk_in_flight[slot_id - 1U][direction] = 0;
-        bulk_done[slot_id - 1U][direction] = 0;
-        bulk_expected_trb[slot_id - 1U][direction] = 0;
-    }
+    uint32_t index = slot_id - 1U;
+    dcbaa[slot_id] = 0U;
+    slot_active[index] = 0U;
+    clear_disabled_slot_state(index);
     return 1;
 }
 int xhci_set_ep0_packet(uint32_t slot_id, uint16_t packet_size)

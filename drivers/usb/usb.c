@@ -68,7 +68,7 @@ typedef struct {
     uint8_t reset_complete_observed;
     uint8_t reset_failed_observed;
     usb_bluetooth_connection_attempt_t connection_attempt;
-    uint8_t inquiry_active;
+    usb_bluetooth_inquiry_state_t inquiry_state;
     usb_bluetooth_hci_command_state_t command_state;
 } usb_bluetooth_slot_t;
 
@@ -195,7 +195,8 @@ int usb_bluetooth_hci_command(uint32_t port, uint16_t opcode,
         bluetooth_slots[slot].reset_failed_observed = 0U;
         usb_bluetooth_connection_attempt_reset(
             &bluetooth_slots[slot].connection_attempt);
-        bluetooth_slots[slot].inquiry_active = 0U;
+        usb_bluetooth_inquiry_state_reset(
+            &bluetooth_slots[slot].inquiry_state);
         usb_bluetooth_hci_command_state_reset(
             &bluetooth_slots[slot].command_state);
         bluetooth_slots[slot].command_state.credits = 1U;
@@ -256,14 +257,17 @@ int usb_bluetooth_inquiry(uint32_t port, uint8_t inquiry_length,
             break;
         }
     }
-    if (slot == 0U || bluetooth_slots[slot].inquiry_active) {
+    if (slot == 0U ||
+        usb_bluetooth_inquiry_state_begin(
+            &bluetooth_slots[slot].inquiry_state) != 0) {
         for (uint32_t i = 0U; i < sizeof(command); ++i)
             command[i] = 0U;
         return 0;
     }
     int sent = usb_bluetooth_hci_command(port, 0x0401U, &command[3], 5U);
-    if (sent)
-        bluetooth_slots[slot].inquiry_active = 1U;
+    if (!sent)
+        usb_bluetooth_inquiry_state_command_rejected(
+            &bluetooth_slots[slot].inquiry_state);
     for (uint32_t i = 0U; i < sizeof(command); ++i)
         command[i] = 0U;
     return sent;
@@ -280,9 +284,14 @@ int usb_bluetooth_inquiry_cancel(uint32_t port)
             break;
         }
     }
-    if (slot == 0U || !bluetooth_slots[slot].inquiry_active)
+    if (slot == 0U ||
+        usb_bluetooth_inquiry_state_cancel_begin(
+            &bluetooth_slots[slot].inquiry_state) != 0)
         return 0;
-    return usb_bluetooth_hci_command(port, 0x0402U, NULL, 0U);
+    int sent = usb_bluetooth_hci_command(port, 0x0402U, NULL, 0U);
+    (void)usb_bluetooth_inquiry_state_cancel_result(
+        &bluetooth_slots[slot].inquiry_state, sent);
+    return sent;
 }
 
 int usb_bluetooth_connect(uint32_t port, const uint8_t address[6],
@@ -846,7 +855,8 @@ void usb_poll(void)
                     event_length);
                 if (bluetooth_event_buffer[0] == 0x01U &&
                     event_length == 3U)
-                    bluetooth->inquiry_active = 0U;
+                    usb_bluetooth_inquiry_state_complete(
+                        &bluetooth->inquiry_state);
                 if (bluetooth_event_buffer[0] == 0x03U &&
                     event_length == 13U) {
                     (void)usb_bluetooth_connection_attempt_finish(
@@ -866,7 +876,16 @@ void usb_poll(void)
                            bluetooth_event_buffer[4] == 0x01U &&
                            bluetooth_event_buffer[5] == 0x04U) {
                     /* Controller rejected the Inquiry command. */
-                    bluetooth->inquiry_active = 0U;
+                    usb_bluetooth_inquiry_state_command_rejected(
+                        &bluetooth->inquiry_state);
+                } else if (bluetooth_event_buffer[0] == 0x0FU &&
+                           event_length == 6U &&
+                           bluetooth_event_buffer[2] != 0U &&
+                           bluetooth_event_buffer[4] == 0x02U &&
+                           bluetooth_event_buffer[5] == 0x04U) {
+                    /* A rejected cancel leaves the inquiry active. */
+                    (void)usb_bluetooth_inquiry_state_cancel_result(
+                        &bluetooth->inquiry_state, 0);
                 }
                 if (bluetooth_event_buffer[0] == 0x03U &&
                     event_length == 13U && bluetooth_event_buffer[2] == 0U &&

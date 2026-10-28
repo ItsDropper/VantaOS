@@ -114,6 +114,13 @@ jobs:
             -Wl,--gc-sections -o /tmp/vantaos-calculator-parser-test
           /tmp/vantaos-calculator-parser-test
 
+      - name: Test HTTP URL parser
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_http_url.c os/terminal/http_url.c \
+            -o /tmp/vantaos-http-url-test
+          /tmp/vantaos-http-url-test
+
       - name: Verify modular source manifests
         run: |
           make list-sources

@@ -227,6 +227,10 @@ int usb_bluetooth_hci_build_read_buffer_size(uint8_t *out, uint32_t capacity);
 int usb_bluetooth_hci_read_buffer_size_result(
     const uint8_t *event, uint32_t length,
     usb_bluetooth_hci_buffer_size_t *result);
+/* Parse Number Of Completed Packets and sum controller-released ACL buffers.
+ * Returns 1 for a valid event, 0 for unrelated, or -22 for malformed data. */
+int usb_bluetooth_hci_completed_acl_packets(
+    const uint8_t *event, uint32_t length, uint16_t *completed);
 int usb_bluetooth_hci_build_inquiry(uint8_t *out, uint32_t capacity,
                                     uint8_t inquiry_length, uint8_t responses);
 /* Parse one indexed result from HCI Inquiry Result (0x02) or Inquiry Result

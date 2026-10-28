@@ -25,6 +25,45 @@ static const uint8_t valid_configuration[] = {
     ENDPOINT, 5, 0x02, 2, 64, 0, 0
 };
 
+static void test_hci_command_encoding(void)
+{
+    uint8_t output[258];
+    const uint8_t parameters[] = {0x12U, 0x34U, 0x56U};
+
+    assert(usb_bluetooth_hci_command_encode(0x0C03U, NULL, 0U,
+                                             output, sizeof(output)) == 3);
+    assert(output[0] == 0x03U && output[1] == 0x0CU && output[2] == 0U);
+    assert(usb_bluetooth_hci_command_encode(0x1234U, NULL, 0U,
+                                             output, sizeof(output)) == 3);
+    assert(output[0] == 0x34U && output[1] == 0x12U && output[2] == 0U);
+    assert(usb_bluetooth_hci_command_encode(0x1234U, parameters,
+                                             sizeof(parameters), output,
+                                             sizeof(output)) == 6);
+    assert(output[0] == 0x34U && output[1] == 0x12U &&
+           output[2] == 3U && output[3] == 0x12U &&
+           output[4] == 0x34U && output[5] == 0x56U);
+    assert(usb_bluetooth_hci_command_encode(0U, NULL, 0U, output,
+                                             sizeof(output)) == -22);
+    assert(usb_bluetooth_hci_command_encode(0x1234U, parameters, 1U,
+                                             NULL, sizeof(output)) == -22);
+    assert(usb_bluetooth_hci_command_encode(0x1234U, NULL, 1U, output,
+                                             sizeof(output)) == -22);
+    assert(usb_bluetooth_hci_command_encode(0x1234U, parameters,
+                                             sizeof(parameters), output,
+                                             5U) == -90);
+
+    uint8_t maximum[255];
+    for (uint32_t i = 0U; i < sizeof(maximum); ++i)
+        maximum[i] = (uint8_t)i;
+    assert(usb_bluetooth_hci_command_encode(0xFC01U, maximum, 255U,
+                                             output, sizeof(output)) == 258);
+    assert(output[0] == 0x01U && output[1] == 0xFCU &&
+           output[2] == 255U && output[3] == 0U &&
+           output[257] == 254U);
+    assert(usb_bluetooth_hci_command_encode(0xFC01U, maximum, 255U,
+                                             output, 257U) == -90);
+}
+
 static void test_complete_hci_interface(void)
 {
     usb_bluetooth_hci_candidate_t candidate;
@@ -663,6 +702,7 @@ static void test_l2cap_signaling_command_boundaries(void)
 
 int main(void)
 {
+    test_hci_command_encoding();
     test_complete_hci_interface();
     test_incomplete_interface_is_not_claimed();
     test_malformed_lengths_are_rejected();

@@ -508,13 +508,18 @@ static int append_text(char *out, size_t capacity, size_t *used,
     return 1;
 }
 
-static int command_http_url(const char *url)
+static int command_http_url(const char *url, const char *output_argument,
+                            int body_only)
 {
-    char host[96], path[96], request[512], output[257];
+    char host[96], path[96], request[512], output[257], headers[2048];
+    char resolved_path[FS_PATH_MAX];
     size_t host_length = 0, path_length = 0, used = 0;
+    size_t header_length = 0, header_end = 0, total_body = 0;
     uint32_t port = 80U, address = 0;
     const char *authority, *cursor, *path_start, *port_start = 0;
     net_device_t *device = 0;
+    int file_handle = -1, response_status = 0, body_started = 0;
+    const size_t max_download = 8U * 1024U * 1024U;
 
     if (!url) return 1;
     if (url[0] == 'h' && url[1] == 't' && url[2] == 't' &&
@@ -525,7 +530,7 @@ static int command_http_url(const char *url)
     }
     if (!(url[0] == 'h' && url[1] == 't' && url[2] == 't' &&
           url[3] == 'p' && url[4] == ':' && url[5] == '/' && url[6] == '/')) {
-        terminal_write("\nusage: net http <http://hostname[:port]/path>");
+        terminal_write("\nusage: curl <http://host/path> | curl -o <file> <http://host/path>");
         return 1;
     }
 
@@ -561,13 +566,13 @@ static int command_http_url(const char *url)
         return 1;
     }
     for (size_t i = 0; i < host_length; ++i) {
-        char c = authority[i];
-        if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-              (c >= '0' && c <= '9') || c == '.' || c == '-')) {
+        char ch = authority[i];
+        if (!((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') ||
+              (ch >= '0' && ch <= '9') || ch == '.' || ch == '-')) {
             terminal_write("\nnet http: invalid hostname; only DNS names and IPv4 literals are supported");
             return 1;
         }
-        host[i] = c;
+        host[i] = ch;
     }
     if (host[0] == '.' || host[host_length - 1U] == '.' ||
         host[0] == '-' || host[host_length - 1U] == '-') {
@@ -598,9 +603,20 @@ static int command_http_url(const char *url)
     path[path_length] = 0;
     if (!path_length) { path[0] = '/'; path[1] = 0; }
     for (size_t i = 0; i < path_length; ++i) {
-        unsigned char c = (unsigned char)path[i];
-        if (c <= 0x20U || c == 0x7FU) {
+        unsigned char ch = (unsigned char)path[i];
+        if (ch <= 0x20U || ch == 0x7FU) {
             terminal_write("\nnet http: URL path contains an unescaped control or space character");
+            return 1;
+        }
+    }
+
+    if (output_argument) {
+        if (!shell_resolve_path(output_argument, resolved_path)) {
+            terminal_write("\ncurl: invalid output path");
+            return 1;
+        }
+        if (resolved_path[0] != '/' || !resolved_path[1]) {
+            terminal_write("\ncurl: output must be a file path");
             return 1;
         }
     }
@@ -616,7 +632,6 @@ static int command_http_url(const char *url)
         terminal_write("\nnet http: no configured link-up interface; run 'net connect' first");
         return 1;
     }
-
     if (!parse_ipv4(host, &address)) {
         if (!device->ipv4_dns) {
             terminal_write("\nnet http: no DNS server configured; run 'net connect' first");
@@ -630,7 +645,6 @@ static int command_http_url(const char *url)
         terminal_write(" -> "); print_ipv4(address);
     }
 
-    request[0] = 0;
     if (!append_text(request, sizeof(request), &used, "GET ") ||
         !append_text(request, sizeof(request), &used, path) ||
         !append_text(request, sizeof(request), &used, " HTTP/1.0\r\nHost: ") ||
@@ -653,7 +667,7 @@ static int command_http_url(const char *url)
         }
     }
     if (!append_text(request, sizeof(request), &used,
-                     "\r\nUser-Agent: VantaOS/0.1\r\nConnection: close\r\nAccept: */*\r\n\r\n")) {
+                     "\r\nUser-Agent: VantaOS-curl/0.1\r\nConnection: close\r\nAccept: */*\r\nAccept-Encoding: identity\r\n\r\n")) {
         terminal_write("\nnet http: request is too large");
         return 1;
     }
@@ -670,26 +684,110 @@ static int command_http_url(const char *url)
         return 1;
     }
 
-    terminal_write("\n--- HTTP response (limited to 4096 bytes) ---\n");
-    size_t total = 0;
-    for (uint32_t chunks = 0; chunks < 16U; ++chunks) {
-        int received = net_tcp_receive(device, output, sizeof(output) - 1U, 10000U);
+    if (!body_only)
+        terminal_write("\n--- HTTP response ---\n");
+    for (uint32_t chunks = 0; chunks < 32768U; ++chunks) {
+        int received = net_tcp_receive(device, output, sizeof(output), 10000U);
         if (received == 0) break;
         if (received < 0) {
-            terminal_write("\nnet http: response timed out or connection failed");
-            break;
+            terminal_write("\ncurl: response timed out or connection failed");
+            if (file_handle >= 0) { (void)vfs_close(file_handle); file_handle = -1; }
+            net_tcp_close(device);
+            return 1;
         }
-        output[received] = 0;
-        terminal_write(output);
-        total += (size_t)received;
-        if (total >= 4096U) {
-            terminal_write("\n[response display limit reached]");
-            break;
+        for (int i = 0; i < received; ++i) {
+            uint8_t byte = (uint8_t)output[i];
+            if (!body_started) {
+                if (header_length >= sizeof(headers) - 1U) {
+                    terminal_write("\ncurl: HTTP headers exceed the supported limit");
+                    if (file_handle >= 0) (void)vfs_close(file_handle);
+                    net_tcp_close(device);
+                    return 1;
+                }
+                headers[header_length++] = (char)byte;
+                headers[header_length] = 0;
+                if (!response_status && header_length >= 12U &&
+                    headers[0] == 'H' && headers[1] == 'T' &&
+                    headers[2] == 'T' && headers[3] == 'P' &&
+                    headers[4] == '/') {
+                    size_t at = 0;
+                    while (at < header_length && headers[at] != ' ') ++at;
+                    if (at + 3U < header_length &&
+                        headers[at + 1U] >= '0' && headers[at + 1U] <= '9' &&
+                        headers[at + 2U] >= '0' && headers[at + 2U] <= '9')
+                        response_status = (headers[at + 1U] - '0') * 100 +
+                                          (headers[at + 2U] - '0') * 10 +
+                                          (headers[at + 3U] - '0');
+                }
+                if (header_length >= 4U &&
+                    headers[header_length - 4U] == '\r' &&
+                    headers[header_length - 3U] == '\n' &&
+                    headers[header_length - 2U] == '\r' &&
+                    headers[header_length - 1U] == '\n') {
+                    header_end = header_length;
+                    body_started = 1;
+                    if (response_status != 200) {
+                        terminal_write("\ncurl: server returned HTTP status ");
+                        shell_print_decimal((unsigned int)response_status);
+                        terminal_write("; redirects and non-200 responses are not followed");
+                        net_tcp_close(device);
+                        return 1;
+                    }
+                    if (output_argument) {
+                        file_handle = vfs_open(resolved_path,
+                                                VFS_OPEN_WRITE | VFS_OPEN_TRUNCATE);
+                        if (file_handle < 0) {
+                            if (vfs_create_file(resolved_path))
+                                file_handle = vfs_open(resolved_path,
+                                    VFS_OPEN_WRITE | VFS_OPEN_TRUNCATE);
+                        }
+                        if (file_handle < 0) {
+                            terminal_write("\ncurl: could not create/open output file");
+                            net_tcp_close(device);
+                            return 1;
+                        }
+                    } else if (!body_only) {
+                        headers[header_end - 4U] = 0;
+                        terminal_write(headers);
+                        terminal_write("\n\n");
+                    }
+                }
+                continue;
+            }
+            if (++total_body > max_download) {
+                terminal_write("\ncurl: download exceeds the 8 MiB safety limit");
+                if (file_handle >= 0) (void)vfs_close(file_handle);
+                net_tcp_close(device);
+                return 1;
+            }
+            if (output_argument) {
+                if (vfs_write(file_handle, (const char *)&output[i], 1U) != 1) {
+                    terminal_write("\ncurl: write failed; output may be incomplete");
+                    (void)vfs_close(file_handle);
+                    net_tcp_close(device);
+                    return 1;
+                }
+            } else if (body_only) {
+                terminal_putchar((char)byte);
+            } else {
+                terminal_putchar((char)byte);
+            }
         }
     }
     net_tcp_close(device);
-    if (!total) terminal_write("\nnet http: server returned no data");
-    terminal_write("\n--- end response ---");
+    if (file_handle >= 0) (void)vfs_close(file_handle);
+    if (!body_started) {
+        terminal_write("\ncurl: no complete HTTP response headers received");
+        return 1;
+    }
+    if (output_argument) {
+        terminal_write("\nSaved "); terminal_write(resolved_path);
+        terminal_write(" ("); shell_print_decimal((unsigned int)total_body);
+        terminal_write(" bytes)");
+    } else if (!total_body) {
+        terminal_write("\ncurl: response body was empty");
+    }
+    if (!body_only) terminal_write("\n--- end response ---");
     return 1;
 }
 
@@ -818,7 +916,14 @@ static int command_net(uint32_t argc, char **argv)
     }
     if (argc == 3U && (shell_string_equals(argv[1], "http") ||
                        shell_string_equals(argv[1], "get"))) {
-        return command_http_url(argv[2]);
+        return command_http_url(argv[2], 0, 0);
+    }
+    if (argc == 2U && shell_string_equals(argv[0], "curl")) {
+        return command_http_url(argv[1], 0, 1);
+    }
+    if (argc == 4U && shell_string_equals(argv[0], "curl") &&
+        shell_string_equals(argv[1], "-o")) {
+        return command_http_url(argv[3], argv[2], 1);
     }
     if (argc == 3U && shell_string_equals(argv[1], "ping")) {
         uint32_t target = 0;

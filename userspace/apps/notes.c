@@ -28,6 +28,7 @@ static int selection_active;
 static char clipboard[TEXT_CAPACITY];
 static size_t clipboard_length;
 static size_t first_row;
+static size_t last_click_position = (size_t)-1;
 static char status[LINE_CAPACITY] = "Ready";
 static uint32_t status_color;
 static uint32_t window_id;
@@ -357,9 +358,44 @@ static void select_at(int32_t x, int32_t y, int extend)
     size_t position = offset_at(row, column);
     if (!extend)
     {
+        if (last_click_position != (size_t)-1 &&
+            (position > last_click_position ? position - last_click_position :
+             last_click_position - position) <= 2U && document_length > 0U)
+        {
+            size_t at = position == document_length && position > 0U ?
+                position - 1U : position;
+            int word_char = at < document_length &&
+                ((document[at] >= 'a' && document[at] <= 'z') ||
+                 (document[at] >= 'A' && document[at] <= 'Z') ||
+                 (document[at] >= '0' && document[at] <= '9') ||
+                 document[at] == '_');
+            if (word_char)
+            {
+                size_t begin = at, end = at + 1U;
+                while (begin > 0U &&
+                       ((document[begin - 1U] >= 'a' && document[begin - 1U] <= 'z') ||
+                        (document[begin - 1U] >= 'A' && document[begin - 1U] <= 'Z') ||
+                        (document[begin - 1U] >= '0' && document[begin - 1U] <= '9') ||
+                        document[begin - 1U] == '_'))
+                    begin--;
+                while (end < document_length &&
+                       ((document[end] >= 'a' && document[end] <= 'z') ||
+                        (document[end] >= 'A' && document[end] <= 'Z') ||
+                        (document[end] >= '0' && document[end] <= '9') ||
+                        document[end] == '_'))
+                    end++;
+                selection_anchor = begin;
+                selection_end = end;
+                selection_active = 1;
+                cursor = end;
+                last_click_position = (size_t)-1;
+                return;
+            }
+        }
         selection_anchor = position;
         selection_end = position;
         selection_active = 1;
+        last_click_position = position;
     }
     else if (selection_active)
         selection_end = position;

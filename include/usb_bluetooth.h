@@ -239,6 +239,12 @@ int usb_bluetooth_l2cap_build_disconnection_request(uint8_t identifier,
                                                      uint16_t local_cid,
                                                      uint8_t *output,
                                                      uint32_t capacity);
+/* Parse a complete reassembled ACL PDU and dispatch CID 0x0001 responses.
+ * Non-signaling L2CAP channels are left to their own consumers (returns 0).
+ */
+int usb_bluetooth_l2cap_dispatch_acl_responses(
+    usb_bluetooth_l2cap_table_t *table, const uint8_t *packet,
+    uint32_t length);
 /* Dispatch a validated signaling list to supported channel responses.
  * Returns number of recognized response commands or a negative errno. */
 int usb_bluetooth_l2cap_dispatch_responses(

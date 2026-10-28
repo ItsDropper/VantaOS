@@ -473,6 +473,26 @@ int main(int argc, char** argv)
             set_status("Path too long; using default note", COLOR_ERROR);
         }
     }
+#if defined(VANTAOS_NOTES_E2E_TEST)
+    {
+        static const char expected[] =
+            "VantaOS Explorer end-to-end fixture: repeated repeated repeated\n";
+        static const char success[] = "VANTAOS_NOTES_FILE_LOAD_OK\n";
+        static const char failure[] = "VANTAOS_NOTES_FILE_LOAD_FAIL\n";
+        int matches = document_length == text_length(expected);
+        for (size_t i = 0U; matches && i < document_length; i++)
+            if (document[i] != expected[i])
+                matches = 0;
+        if (matches)
+        {
+            (void)vanta_write(success, sizeof(success) - 1U);
+            vanta_exit(0);
+        }
+        (void)vanta_write(failure, sizeof(failure) - 1U);
+        vanta_exit(1);
+    }
+#endif
+
     vanta_gui_window_request_t request = {
         .width = WINDOW_WIDTH, .height = WINDOW_HEIGHT, .title = "Notes"
     };

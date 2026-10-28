@@ -583,20 +583,26 @@ static int command_http_url(const char *url, const char *output_argument,
     host[host_length] = 0;
 
     if (*path_start == '#') {
-        terminal_write("\nnet http: URL fragments are not sent to the server");
         path_start = "/";
     }
     if (*path_start == '?' || *path_start == 0) {
         path[path_length++] = '/';
         if (*path_start == '?') {
-            size_t q = 0;
-            while (path_start[q] && path_start[q] != '#' &&
-                   path_length < sizeof(path) - 1U)
+            size_t q = 0U;
+            while (path_start[q] && path_start[q] != '#') {
+                if (path_length >= sizeof(path) - 1U) {
+                    terminal_write("\\ncurl: URL path exceeds the 95-character limit");
+                    return 1;
+                }
                 path[path_length++] = path_start[q++];
+            }
         }
     } else {
-        while (path_start[path_length] && path_start[path_length] != '#' &&
-               path_length < sizeof(path) - 1U) {
+        while (path_start[path_length] && path_start[path_length] != '#') {
+            if (path_length >= sizeof(path) - 1U) {
+                terminal_write("\\ncurl: URL path exceeds the 95-character limit");
+                return 1;
+            }
             path[path_length] = path_start[path_length];
             ++path_length;
         }
@@ -1147,6 +1153,15 @@ int shell_execute_extended(const char *command_line)
     if (shell_string_equals(argv[0], "mkdir")) return command_mkdir(argc, argv, force);
     if (shell_string_equals(argv[0], "touch")) return command_touch(argc, argv, force);
     if (shell_string_equals(argv[0], "write")) return command_write(argc, argv, force);
+    if (shell_string_equals(argv[0], "curl") && argc == 2U &&
+        (shell_string_equals(argv[1], "--help") ||
+         shell_string_equals(argv[1], "-h"))) {
+        terminal_write("\\ncurl: VantaOS plain-HTTP client\\n");
+        terminal_write("Usage: curl <http://host/path>\\n");
+        terminal_write("       curl -o <file> <http://host/path>\\n");
+        terminal_write("Limits: IPv4, HTTP status 200, max 8 MiB; no HTTPS, redirects, or chunked encoding.\\n");
+        return 1;
+    }
     if (shell_string_equals(argv[0], "curl") && argc == 2U)
         return command_http_url(argv[1], 0, 1);
     if (shell_string_equals(argv[0], "curl") && argc == 4U &&

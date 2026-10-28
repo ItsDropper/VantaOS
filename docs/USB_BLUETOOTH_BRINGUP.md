@@ -385,7 +385,7 @@ request handler. Dynamic-CID payloads are delivered only to matching open channe
 
 The USB owner path now maintains a separate L2CAP transaction table for each active BR/EDR connection handle. A successful Connection Complete allocates the handle's table; completed ACL signaling is dispatched only into that table; Disconnection Complete clears only the matching handle's channels; and HCI Reset/slot teardown clear all owner mappings. The host-side link table exposes a handle-membership query, and the Disconnect submission wrapper refuses handles not currently tracked as active.
 
-Pending outbound connection attempts use a host-testable state object. The API rejects a second concurrent attempt, requires a nonzero address, matches cancellation to the exact pending address, and clears the state on a matching Connection Complete, controller rejection of Create Connection, reset, or detach. A successful USB command submission means only that the command transfer was accepted; it is not proof of a successful radio connection. L2CAP setup deadlines use the kernel's monotonic `timer_get_ticks()` counter; pass an absolute tick deadline, or zero to disable expiry. The poll path expires only pending/configuring/closing transactions, not channels that have reached the open state. HCI connection attempts still have no built-in timeout.
+Pending outbound connection attempts use a host-testable state object. The API rejects a second concurrent attempt, requires a nonzero address, matches cancellation to the exact pending address, and clears the state on a matching Connection Complete, controller rejection of Create Connection, reset, or detach. A successful USB command submission means only that the command transfer was accepted; it is not proof of a successful radio connection. L2CAP setup deadlines use the kernel's monotonic `timer_get_ticks()` counter; pass an absolute tick deadline, or zero to disable expiry. The poll path expires only pending/configuring/closing transactions, not channels that have reached the open state. Outbound HCI connection attempts expire after 20 seconds at the current 100 Hz kernel timer rate. The owner loop submits Create Connection Cancel and retries if submission or the controller's cancellation response fails; a matching Connection Complete or successful cancellation clears the pending attempt.
 
 The USB-facing `usb_bluetooth_l2cap_connect` API now starts an outbound L2CAP connection transaction for an already active HCI handle: it allocates a local dynamic CID and signaling identifier, builds the Connection Request inside a signaling ACL packet, and sends it through the bounded ACL transmit path. If packet construction or USB submission fails, it aborts the pending local channel and clears the output CID/identifier. After the connection response, the USB polling path now emits an outbound Configure Request, retries only when packet submission itself fails, and answers inbound Configure Requests with a bounded Configure Response. The channel becomes open only after both the local configuration response and successful submission of the peer's configuration response are recorded. A rejected local configuration response releases the channel rather than retrying indefinitely. This confirms protocol-state integration in source, not runtime success: pairing/authentication/encryption and profile support remain outside this milestone, and the new tests still need a confirmed CI run.
 
@@ -437,13 +437,18 @@ A minimal kernel-side scan consumer can use the public API without touching
 internal adapter structs:
 
 ```c
-if (usb_bluetooth_inquiry(port, 8U, 0U)) {
-    /* Continue calling usb_poll() in the normal owner loop. */
-    uint8_t event[USB_BLUETOOTH_HCI_EVENT_MAX];
-    while (usb_bluetooth_hci_event_receive(port, event, sizeof(event)) > 0) {
-        if (event[0] == 0x01U) /* Inquiry Complete */
-            break;
-    }
+/* Start once, from the normal kernel polling/owner context. */
+int scan_started = usb_bluetooth_inquiry(port, 8U, 0U);
+int inquiry_complete = 0;
+uint8_t event[USB_BLUETOOTH_HCI_EVENT_MAX];
+
+/* Run this event-drain block on each normal polling iteration. */
+while (scan_started &&
+       usb_bluetooth_hci_event_receive(port, event, sizeof(event)) > 0) {
+    if (event[0] == 0x01U) /* Inquiry Complete */
+        inquiry_complete = 1;
+}
+if (inquiry_complete) {
     uint32_t count = usb_bluetooth_discovered_count(port);
     for (uint32_t i = 0U; i < count; ++i) {
         usb_bluetooth_inquiry_result_t device;

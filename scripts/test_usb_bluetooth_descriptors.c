@@ -1418,6 +1418,43 @@ static void test_hci_inquiry_result_parser(void)
                inquiry_result, sizeof(inquiry_result), 0U, NULL) == -22);
 }
 
+static void test_inquiry_lifecycle_state(void)
+{
+    usb_bluetooth_inquiry_state_t state = {0};
+
+    usb_bluetooth_inquiry_state_reset(NULL);
+    usb_bluetooth_inquiry_state_reset(&state);
+    assert(state.active == 0U && state.cancel_pending == 0U);
+    assert(usb_bluetooth_inquiry_state_begin(NULL) == -22);
+    assert(usb_bluetooth_inquiry_state_cancel_begin(&state) == -2);
+    assert(usb_bluetooth_inquiry_state_begin(&state) == 0);
+    assert(state.active == 1U && state.cancel_pending == 0U);
+    assert(usb_bluetooth_inquiry_state_begin(&state) == -16);
+
+    assert(usb_bluetooth_inquiry_state_cancel_begin(&state) == 0);
+    assert(state.active == 1U && state.cancel_pending == 1U);
+    assert(usb_bluetooth_inquiry_state_cancel_begin(&state) == -16);
+    assert(usb_bluetooth_inquiry_state_cancel_result(&state, 0) == 0);
+    assert(state.active == 1U && state.cancel_pending == 0U);
+
+    assert(usb_bluetooth_inquiry_state_cancel_begin(&state) == 0);
+    assert(usb_bluetooth_inquiry_state_cancel_result(&state, 1) == 1);
+    /* An accepted cancel command is not completion of the inquiry itself. */
+    assert(state.active == 1U && state.cancel_pending == 1U);
+    assert(usb_bluetooth_inquiry_state_cancel_result(&state, 1) == -2);
+
+    usb_bluetooth_inquiry_state_complete(&state);
+    assert(state.active == 0U && state.cancel_pending == 0U);
+    assert(usb_bluetooth_inquiry_state_cancel_result(&state, 0) == -2);
+
+    assert(usb_bluetooth_inquiry_state_begin(&state) == 0);
+    usb_bluetooth_inquiry_state_command_rejected(&state);
+    assert(state.active == 0U && state.cancel_pending == 0U);
+    assert(usb_bluetooth_inquiry_state_begin(&state) == 0);
+    usb_bluetooth_inquiry_state_reset(&state);
+    assert(state.active == 0U && state.cancel_pending == 0U);
+}
+
 static void test_connection_attempt_state(void)
 {
     const uint8_t address_a[6] = {1U, 2U, 3U, 4U, 5U, 6U};
@@ -1458,6 +1495,7 @@ int main(void)
     test_hci_connection_command_builders();
     test_hci_inquiry_result_parser();
     test_connection_attempt_state();
+    test_inquiry_lifecycle_state();
     test_hci_command_fault_requires_reset();
     test_l2cap_channel_lifecycle();
     test_l2cap_response_builders();

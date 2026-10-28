@@ -299,9 +299,9 @@ int main(int argc, char **argv)
             render();
             continue;
         }
-        if (key == VANTA_GUI_KEY_ENTER || key == '\n' || key == '\r')
+        if (key == '\n' || key == '\r')
             calculate();
-        else if (key == VANTA_GUI_KEY_BACKSPACE || key == 8U || key == 127U)
+        else if (key == 8U || key == 127U)
         {
             if (expression_length > 0U)
                 expression[--expression_length] = '\0';

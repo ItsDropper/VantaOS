@@ -1294,6 +1294,22 @@ static void test_l2cap_channel_lifecycle(void)
                                              &cid, &id) == -22);
 }
 
+static void test_l2cap_dispatch_rejects_wrong_handle(void)
+{
+    usb_bluetooth_l2cap_table_t table = {0};
+    uint8_t packet[16] = {0};
+    const uint8_t payload[] = {0xA5U};
+    usb_bluetooth_l2cap_table_reset(&table);
+    assert(usb_bluetooth_l2cap_build_acl_packet(
+               0x000BU, 0x0040U, payload, sizeof(payload),
+               packet, sizeof(packet)) == 9);
+    assert(usb_bluetooth_l2cap_dispatch_acl_responses_for_handle(
+               &table, 0x000CU, packet, 9U) == -13);
+    assert(usb_bluetooth_l2cap_dispatch_acl_responses_for_handle(
+               &table, 0x000BU, packet, 9U) == 0);
+    assert(table.channels[0].active == 0U);
+}
+
 int main(void)
 {
     test_hci_command_encoding();
@@ -1311,6 +1327,7 @@ int main(void)
     test_l2cap_response_dispatcher();
     test_l2cap_dispatch_skips_stale_transaction();
     test_l2cap_acl_response_dispatch();
+    test_l2cap_dispatch_rejects_wrong_handle();
     test_fragmented_acl_dispatches_l2cap_response();
     test_single_link_l2cap_dispatch_guard();
     test_active_link_count();

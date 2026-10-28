@@ -587,14 +587,15 @@ int main(int argc, char** argv)
         if (matches)
         {
             static const char save_path[] = "/HOME/USER/NOTES-SAVE-E2E.TXT";
-            static const char old_text[] = "old contents\\n";
-            static const char new_text[] = "replacement contents\\n";
-            static const char save_success[] = "VANTAOS_NOTES_SAVE_ATOMIC_OK\\n";
-            static const char save_failure[] = "VANTAOS_NOTES_SAVE_ATOMIC_FAIL\\n";
+            static const char old_text[] = "old contents\n";
+            static const char new_text[] = "replacement contents\n";
+            static const char save_success[] = "VANTAOS_NOTES_SAVE_ATOMIC_OK\n";
+            static const char save_failure[] = "VANTAOS_NOTES_SAVE_ATOMIC_FAIL\n";
             char readback[64];
             char temporary_path[sizeof(document_path)];
             char backup_path[sizeof(document_path)];
             vanta_file_info_t info;
+            int save_file_created = 0;
             int save_ok = !path_is_home_document("/HOME/USER/../SYSTEM/PROBE.TXT") &&
                           path_with_suffix(save_path, ".VANTA-TMP",
                                            temporary_path, sizeof(temporary_path)) &&
@@ -602,8 +603,12 @@ int main(int argc, char** argv)
                                            backup_path, sizeof(backup_path)) &&
                           vanta_stat_path(save_path, &info) < 0 &&
                           vanta_stat_path(temporary_path, &info) < 0 &&
-                          vanta_stat_path(backup_path, &info) < 0 &&
-                          vanta_create_file(save_path) >= 0;
+                          vanta_stat_path(backup_path, &info) < 0;
+            if (save_ok)
+            {
+                save_file_created = vanta_create_file(save_path) >= 0;
+                save_ok = save_file_created;
+            }
             long save_fd = -1;
             if (save_ok)
             {
@@ -648,7 +653,7 @@ int main(int argc, char** argv)
                         save_ok = 0;
                     else
                     {
-                        readback[(size_t)count] = '\\0';
+                        readback[(size_t)count] = '\0';
                         for (size_t i = 0U; i < (size_t)count; ++i)
                             if (readback[i] != new_text[i])
                                 save_ok = 0;
@@ -660,7 +665,8 @@ int main(int argc, char** argv)
                     vanta_stat_path(backup_path, &info) == 0)
                     save_ok = 0;
             }
-            (void)vanta_delete_path(save_path);
+            if (save_file_created)
+                (void)vanta_delete_path(save_path);
             if (save_ok)
                 (void)vanta_write(save_success, sizeof(save_success) - 1U);
             else

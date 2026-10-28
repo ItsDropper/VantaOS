@@ -767,7 +767,8 @@ static void bluetooth_l2cap_handle_signaling_requests(
             l2cap.payload, l2cap.payload_length, &offset, &command);
         if (next <= 0)
             return;
-        if (command.code != 0x04U && command.code != 0x06U)
+        if (command.code != 0x02U && command.code != 0x04U &&
+            command.code != 0x06U)
             continue;
 
         uint32_t command_length = offset - command_start;
@@ -775,7 +776,12 @@ static void bluetooth_l2cap_handle_signaling_requests(
         uint8_t response_acl[32];
         uint16_t local_cid = 0U;
         int response_length;
-        if (command.code == 0x04U) {
+        if (command.code == 0x02U) {
+            /* No inbound services are registered yet: reject explicitly. */
+            response_length = usb_bluetooth_l2cap_reject_connection_request(
+                l2cap.payload + command_start, command_length,
+                response, sizeof(response));
+        } else if (command.code == 0x04U) {
             response_length = usb_bluetooth_l2cap_configuration_request(
                 table, l2cap.payload + command_start, command_length,
                 response, sizeof(response), &local_cid);

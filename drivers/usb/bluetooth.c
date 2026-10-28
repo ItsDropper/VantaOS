@@ -1214,8 +1214,10 @@ int usb_bluetooth_l2cap_configuration_request(
                    ((uint16_t)command[5] << 8);
     uint16_t flags = (uint16_t)command[6] |
                      ((uint16_t)command[7] << 8);
+    *local_cid = 0U;
     if (flags != 0U)
-        return -95;
+        return usb_bluetooth_l2cap_build_configuration_response(
+            command[1], cid, 0U, 2U, 48U, response, capacity);
 
     usb_bluetooth_l2cap_channel_t *channel = NULL;
     for (uint32_t i = 0U; i < USB_BLUETOOTH_L2CAP_CHANNEL_MAX; ++i) {
@@ -1249,7 +1251,9 @@ int usb_bluetooth_l2cap_configuration_request(
                 return -22;
             mtu_seen = 1U;
         } else if ((type & 0x80U) == 0U) {
-            return -95;
+            /* Mandatory options we cannot honor are rejected explicitly. */
+            return usb_bluetooth_l2cap_build_configuration_response(
+                command[1], cid, 0U, 2U, 48U, response, capacity);
         }
         offset += option_length;
     }

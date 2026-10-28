@@ -552,7 +552,7 @@ static void render(void)
         }
         add_text(190, 236, "Text size currently affects Settings only.", muted);
     }
-    else
+    else if (selected_page == 2U)
     {
         add_text(190, 68, "About Settings", text);
         add_text(190, 98, "VantaOS Settings", accent_value);
@@ -599,15 +599,18 @@ static void render(void)
                 add_text(202, 160, "No results yet. Select Scan devices.", muted);
             uint32_t visible = bluetooth_device_count < 4U ?
                 bluetooth_device_count : 4U;
+            uint32_t first_visible = selected_device >= 4U ?
+                selected_device - 3U : 0U;
             for (uint32_t i = 0U; i < visible; ++i)
             {
+                uint32_t device_index = first_visible + i;
                 usb_bluetooth_inquiry_result_t device = {0};
                 if (vanta_bluetooth_discovered_get(
-                        bluetooth_port, i, &device) <= 0)
+                        bluetooth_port, device_index, &device) <= 0)
                     continue;
                 int y = 154 + (int)i * 42;
                 add_rect(188, y, 408, 36,
-                         selected_device == i ? selected : color_surface());
+                         selected_device == device_index ? selected : color_surface());
                 char address[18];
                 bluetooth_format_address(device.address, address);
                 add_text(198, y + 10, address, text);
@@ -721,7 +724,7 @@ int main(int argc, char** argv)
                 cycle_setting(key - '1');
             else if (key == 'a' || key == 'A')
                 selected_page = 0U;
-            else if (key == 'c' || key == 'C')
+            else if ((key == 'c' || key == 'C') && selected_page != 3U)
                 selected_page = 1U;
             else if (key == 'i' || key == 'I')
                 selected_page = 2U;
@@ -822,8 +825,11 @@ int main(int argc, char** argv)
                 event.y >= 154 && event.y < 322)
             {
                 uint32_t row = (uint32_t)(event.y - 154) / 42U;
-                if (row < bluetooth_device_count && row < 4U)
-                    selected_device = row;
+                uint32_t first_visible = selected_device >= 4U ?
+                    selected_device - 3U : 0U;
+                if (row < bluetooth_device_count && row < 4U &&
+                    first_visible + row < bluetooth_device_count)
+                    selected_device = first_visible + row;
             }
 
             if (event.x >= 172 && event.x < 374 &&

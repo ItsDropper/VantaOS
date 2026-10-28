@@ -521,6 +521,7 @@ static int command_http_url(const char *url, const char *output_argument,
     http_url_status_t url_status;
     net_device_t *device = 0;
     int file_handle = -1, response_status = 0, body_started = 0;
+    int peer_closed = 0;
     const size_t max_download = 8U * 1024U * 1024U;
 
     url_status = http_url_parse(url, host, sizeof(host),
@@ -548,6 +549,11 @@ static int command_http_url(const char *url, const char *output_argument,
         }
         if (resolved_path[0] != '/' || !resolved_path[1]) {
             terminal_write("\ncurl: output must be a file path");
+            return 1;
+        }
+        /* Never truncate a user's existing file before the download is verified. */
+        if (vfs_lookup(resolved_path) >= 0) {
+            terminal_write("\ncurl: output already exists; choose a new path to avoid data loss");
             return 1;
         }
     }
@@ -625,7 +631,7 @@ static int command_http_url(const char *url, const char *output_argument,
         terminal_write("\n--- HTTP response ---\n");
     for (uint32_t chunks = 0; chunks < 32768U; ++chunks) {
         int received = net_tcp_receive(device, output, sizeof(output), 10000U);
-        if (received == 0) break;
+        if (received == 0) { peer_closed = 1; break; }
         if (received < 0) {
             terminal_write("\ncurl: response timed out or connection failed");
             if (file_handle >= 0) { (void)vfs_close(file_handle); file_handle = -1; }
@@ -773,7 +779,19 @@ static int command_http_url(const char *url, const char *output_argument,
         }
     }
     net_tcp_close(device);
-    if (file_handle >= 0) (void)vfs_close(file_handle);
+    if (file_handle >= 0) {
+        if (vfs_close(file_handle) < 0) {
+            if (output_argument) (void)vfs_delete_path(resolved_path);
+            terminal_write("\ncurl: failed to close output file");
+            return 1;
+        }
+        file_handle = -1;
+    }
+    if (!peer_closed) {
+        if (output_argument) (void)vfs_delete_path(resolved_path);
+        terminal_write("\ncurl: response exceeded receive budget without orderly EOF");
+        return 1;
+    }
     if (expected_body_length != UINT32_MAX &&
         total_body != (size_t)expected_body_length) {
         if (output_argument) (void)vfs_delete_path(resolved_path);

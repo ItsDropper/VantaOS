@@ -1871,6 +1871,30 @@ static void test_hci_read_buffer_size_result(void)
     };
     assert(usb_bluetooth_hci_read_buffer_size_result(
                zero_acl_capacity, sizeof(zero_acl_capacity), &result) == -22);
+
+    const uint8_t completed_packets[] = {
+        0x13U, 0x09U, 0x02U,
+        0x01U, 0x00U, 0x03U, 0x00U,
+        0x02U, 0x00U, 0x05U, 0x00U
+    };
+    const uint8_t malformed_completed[] = {
+        0x13U, 0x05U, 0x02U, 0x01U, 0x00U, 0x03U, 0x00U
+    };
+    const uint8_t reserved_handle_bits[] = {
+        0x13U, 0x05U, 0x01U, 0x01U, 0xF0U, 0x01U, 0x00U
+    };
+    uint16_t completed = 0U;
+    assert(usb_bluetooth_hci_completed_acl_packets(
+               completed_packets, sizeof(completed_packets), &completed) == 1);
+    assert(completed == 8U);
+    assert(usb_bluetooth_hci_completed_acl_packets(
+               malformed_completed, sizeof(malformed_completed),
+               &completed) == -22);
+    assert(usb_bluetooth_hci_completed_acl_packets(
+               reserved_handle_bits, sizeof(reserved_handle_bits),
+               &completed) == -22);
+    assert(usb_bluetooth_hci_completed_acl_packets(
+               success, sizeof(success), &completed) == 0);
 }
 
 int main(void)

@@ -832,6 +832,29 @@ static void test_fragmented_acl_dispatches_l2cap_response(void)
            channels.channels[0].remote_cid == 0x0041U);
 }
 
+static void test_l2cap_signaling_acl_builder(void)
+{
+    const uint8_t request[] = {
+        0x02U, 1U, 4U, 0U, 1U, 0U, 0x40U, 0U
+    };
+    const uint8_t malformed[] = {0U, 1U, 0U, 0U};
+    uint8_t packet[32] = {0};
+    usb_bluetooth_l2cap_view_t view;
+
+    assert(usb_bluetooth_l2cap_build_signaling_acl_packet(
+               0x000BU, request, sizeof(request), packet,
+               sizeof(packet)) == 16);
+    assert(usb_bluetooth_l2cap_parse(packet, 16U, &view));
+    assert(view.channel_id == 0x0001U &&
+           view.payload_length == sizeof(request));
+    assert(memcmp(view.payload, request, sizeof(request)) == 0);
+    assert(usb_bluetooth_l2cap_build_signaling_acl_packet(
+               0x000BU, malformed, sizeof(malformed), packet,
+               sizeof(packet)) == -22);
+    assert(usb_bluetooth_l2cap_build_signaling_acl_packet(
+               0x000BU, request, sizeof(request), packet, 8U) == -90);
+}
+
 static void test_l2cap_acl_response_dispatch(void)
 {
     usb_bluetooth_l2cap_table_t table = {0};
@@ -1132,6 +1155,7 @@ int main(void)
     test_l2cap_standard_signaling_builders();
     test_l2cap_connection_response_dispatch();
     test_l2cap_acl_packet_builder();
+    test_l2cap_signaling_acl_builder();
     test_l2cap_configuration_transaction();
     test_l2cap_identifier_collision_guards();
     test_l2cap_configuration_response_parser();

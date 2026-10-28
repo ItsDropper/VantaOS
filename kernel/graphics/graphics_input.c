@@ -155,6 +155,18 @@ void graphics_mouse_click(int button)
             return;
         }
 
+        if (cursor_x >= menu_x + 24 && cursor_x < menu_x + 436 &&
+            cursor_y >= menu_y + 326 && cursor_y < menu_y + 380)
+        {
+            const char* argv[1] = { "/SYSTEM/NOTES.ELF" };
+            int pid = process_spawn_user_elf_file(
+                "/SYSTEM/NOTES.ELF", process_current_pid(), 1U, argv);
+            if (pid > 0)
+                start_menu_open = 0;
+            graphics_invalidate_scene();
+            return;
+        }
+
         if (!(cursor_x >= menu_x && cursor_x < menu_x + menu_w &&
               cursor_y >= menu_y && cursor_y < height - 8))
         {

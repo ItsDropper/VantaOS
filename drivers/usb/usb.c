@@ -714,7 +714,14 @@ void usb_poll(void)
                         &bluetooth_link_tables[slot], incoming_acl.handle,
                         bluetooth_acl_reassembled_buffer,
                         sizeof(bluetooth_acl_reassembled_buffer));
-                    if (assembled_length > 0)
+                    /*
+                     * The channel table is not yet keyed by link handle.
+                     * Process responses automatically only when one link is
+                     * active; multi-link routing remains deliberately disabled.
+                     */
+                    if (assembled_length > 0 &&
+                        usb_bluetooth_link_table_is_single_handle(
+                            &bluetooth_link_tables[slot], incoming_acl.handle))
                         (void)usb_bluetooth_l2cap_dispatch_acl_responses(
                             &bluetooth->l2cap_channels,
                             bluetooth_acl_reassembled_buffer,

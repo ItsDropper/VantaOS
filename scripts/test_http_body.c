@@ -106,7 +106,7 @@ int main(void)
     ok &= expect_status("reject uint32 overflow",
         http_body_consume(&body, 1U), HTTP_BODY_LIMIT_EXCEEDED);
     if (http_body_bytes_received(&body) != UINT32_MAX) {
-        fputs("overflow rejection changed received-byte count\\n", stderr);
+        fputs("overflow rejection changed received-byte count\n", stderr);
         ok = 0;
     }
     ok &= expect_status("finish maximum-size body",

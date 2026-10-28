@@ -320,7 +320,7 @@ static void usb_bluetooth_detach_slot(uint32_t slot)
     bluetooth_slots[slot].reset_failed_observed = 0U;
     usb_bluetooth_acl_queue_reset(&bluetooth_acl_queues[slot]);
     usb_bluetooth_hci_event_queue_reset(&bluetooth_hci_event_queues[slot]);
-        usb_bluetooth_link_table_reset(&bluetooth_link_tables[slot]);
+    usb_bluetooth_link_table_reset(&bluetooth_link_tables[slot]);
     bluetooth_acl_dropped[slot] = 0U;
     __atomic_store_n(&bluetooth_acl_tx_busy[slot], 0U, __ATOMIC_RELEASE);
 }
@@ -468,6 +468,8 @@ static int usb_enumerate_port(uint32_t port)
         bluetooth_slots[slot].reset_complete_observed = 0U;
         bluetooth_slots[slot].reset_failed_observed = 0U;
         usb_bluetooth_acl_queue_reset(&bluetooth_acl_queues[slot]);
+        usb_bluetooth_hci_event_queue_reset(&bluetooth_hci_event_queues[slot]);
+        usb_bluetooth_link_table_reset(&bluetooth_link_tables[slot]);
         bluetooth_acl_dropped[slot] = 0U;
         __atomic_store_n(&bluetooth_acl_tx_busy[slot], 0U, __ATOMIC_RELEASE);
         if (!xhci_start_interrupt_in(slot) ||

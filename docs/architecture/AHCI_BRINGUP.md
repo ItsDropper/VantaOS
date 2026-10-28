@@ -8,7 +8,7 @@ SATA driver and must not be reported as device support.
 
 - Encodes the 16-byte AHCI PRDT entry layout.
 - Splits a contiguous DMA address range into entries of at most 4 MiB each.
-- Validates nonzero length, even DMA address, 64-bit end-address overflow,
+- Validates nonzero length, DWORD-aligned DMA address, 64-bit end-address overflow,
   output capacity, and the PRDT byte-count encoding.
 - Sets IOC only on the final entry when requested.
 - Leaves the entry array unchanged when validation fails.

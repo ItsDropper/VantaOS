@@ -74,6 +74,8 @@ typedef struct {
 } usb_bluetooth_slot_t;
 
 static usb_bluetooth_slot_t bluetooth_slots[USB_MAX_XHCI_SLOTS + 1U];
+static usb_bluetooth_discovery_table_t
+    bluetooth_discovery_tables[USB_MAX_XHCI_SLOTS + 1U];
 static uint8_t bluetooth_event_buffer[64] __attribute__((aligned(64)));
 static usb_bluetooth_hci_event_queue_t bluetooth_hci_event_queues[USB_MAX_XHCI_SLOTS + 1U];
 static usb_bluetooth_link_table_t bluetooth_link_tables[USB_MAX_XHCI_SLOTS + 1U];
@@ -248,6 +250,30 @@ int usb_bluetooth_hci_command(uint32_t port, uint16_t opcode,
     return sent;
 }
 
+uint32_t usb_bluetooth_discovered_count(uint32_t port)
+{
+    if (port == 0U)
+        return 0U;
+    for (uint32_t slot = 1U; slot <= USB_MAX_XHCI_SLOTS; ++slot) {
+        if (bluetooth_slots[slot].active && bluetooth_slots[slot].port == port)
+            return bluetooth_discovery_tables[slot].count;
+    }
+    return 0U;
+}
+
+int usb_bluetooth_discovered_get(uint32_t port, uint32_t index,
+                                 usb_bluetooth_inquiry_result_t *result)
+{
+    if (port == 0U || result == NULL)
+        return -22;
+    for (uint32_t slot = 1U; slot <= USB_MAX_XHCI_SLOTS; ++slot) {
+        if (bluetooth_slots[slot].active && bluetooth_slots[slot].port == port)
+            return usb_bluetooth_discovery_get(
+                &bluetooth_discovery_tables[slot], index, result);
+    }
+    return -19;
+}
+
 int usb_bluetooth_inquiry(uint32_t port, uint8_t inquiry_length,
                           uint8_t responses)
 {
@@ -270,6 +296,7 @@ int usb_bluetooth_inquiry(uint32_t port, uint8_t inquiry_length,
             command[i] = 0U;
         return 0;
     }
+    usb_bluetooth_discovery_reset(&bluetooth_discovery_tables[slot]);
     int sent = usb_bluetooth_hci_command(port, 0x0401U, &command[3], 5U);
     if (!sent)
         usb_bluetooth_inquiry_state_command_rejected(
@@ -996,6 +1023,7 @@ static void usb_bluetooth_detach_slot(uint32_t slot)
         &bluetooth_slots[slot].connection_attempt);
     usb_bluetooth_inquiry_state_reset(
         &bluetooth_slots[slot].inquiry_state);
+    usb_bluetooth_discovery_reset(&bluetooth_discovery_tables[slot]);
     usb_bluetooth_hci_command_state_reset(
         &bluetooth_slots[slot].command_state);
     usb_bluetooth_acl_queue_reset(&bluetooth_acl_queues[slot]);
@@ -1291,6 +1319,22 @@ void usb_poll(void)
         if (event_result > 0) {
             if (usb_bluetooth_hci_event_valid(bluetooth_event_buffer,
                                               event_length)) {
+                if ((bluetooth_event_buffer[0] == 0x02U ||
+                     bluetooth_event_buffer[0] == 0x22U) &&
+                    event_length >= 3U) {
+                    for (uint32_t index = 0U;
+                         index < bluetooth_event_buffer[2]; ++index) {
+                        usb_bluetooth_inquiry_result_t discovered;
+                        int parsed = usb_bluetooth_hci_inquiry_result(
+                            bluetooth_event_buffer, event_length,
+                            (uint8_t)index, &discovered);
+                        if (parsed < 0)
+                            break;
+                        if (parsed > 0)
+                            (void)usb_bluetooth_discovery_record(
+                                &bluetooth_discovery_tables[slot], &discovered);
+                    }
+                }
                 bluetooth->event_count++;
                 (void)usb_bluetooth_hci_command_event(
                     &bluetooth->command_state, bluetooth_event_buffer,

@@ -129,6 +129,11 @@ int main(void)
     ok &= expect_large_path(extended_url, 301U, HTTP_URL_OK);
 
     n = extended_base;
+    while (n < extended_base + 382U) extended_url[n++] = 'a';
+    extended_url[n] = '\0';
+    ok &= expect_large_path(extended_url, 383U, HTTP_URL_OK);
+
+    n = extended_base;
     while (n < extended_base + 383U) extended_url[n++] = 'a';
     extended_url[n] = '\0';
     ok &= expect_large_path(extended_url, 0U, HTTP_URL_PATH_TOO_LONG);

@@ -38,8 +38,8 @@ nvx_gsp_ring_status_t nvx_gsp_ring_init(nvx_gsp_ring_t *r,void *storage,
     nvx_gsp_ring_notify_t notify,void *context)
 {
     if(!r||!storage||!read_ptr||!write_ptr) return NVX_GSP_RING_INVALID_ARGUMENT;
-    if(((uintptr_t)read_ptr % _Alignof(uint32_t)) != 0U ||
-       ((uintptr_t)write_ptr % _Alignof(uint32_t)) != 0U)
+    if(!nvx_gsp_ring_counter_aligned((uintptr_t)read_ptr) ||
+       !nvx_gsp_ring_counter_aligned((uintptr_t)write_ptr))
         return NVX_GSP_RING_INVALID_ARGUMENT;
     if(r->initialized) return NVX_GSP_RING_INVALID_ARGUMENT;
     if(pages<2U||pages>NVX_GSP_MAX_QUEUE_PAGES||

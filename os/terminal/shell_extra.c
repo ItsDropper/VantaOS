@@ -787,7 +787,8 @@ static int command_http_url(const char *url, const char *output_argument,
     if (file_handle >= 0) (void)vfs_close(file_handle);
     if (expected_body_length != UINT32_MAX &&
         total_body != (size_t)expected_body_length) {
-        terminal_write("\ncurl: response body length did not match Content-Length; output may be incomplete");
+        if (output_argument) (void)vfs_delete_path(resolved_path);
+        terminal_write("\ncurl: response body length did not match Content-Length; incomplete output removed");
         return 1;
     }
     if (!body_started) {

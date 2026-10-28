@@ -178,13 +178,20 @@ int usb_bluetooth_hci_event_valid(const uint8_t *packet, uint32_t length)
            (uint32_t)packet[1] == length - 2U;
 }
 
+/* Return Reset status, or -1 if this is not its Command Complete event. */
+int usb_bluetooth_hci_reset_status(const uint8_t *packet, uint32_t length)
+{
+    if (!usb_bluetooth_hci_event_valid(packet, length) ||
+        packet[0] != 0x0EU || packet[1] < 4U ||
+        packet[3] != 0x03U || packet[4] != 0x0CU)
+        return -1;
+    return (int)packet[5];
+}
+
 /* Command Complete event for HCI Reset (opcode 0x0C03, status zero). */
 int usb_bluetooth_hci_reset_complete(const uint8_t *packet, uint32_t length)
 {
-    return usb_bluetooth_hci_event_valid(packet, length) &&
-           packet[0] == 0x0EU && packet[1] >= 4U &&
-           packet[3] == 0x03U && packet[4] == 0x0CU &&
-           packet[5] == 0U;
+    return usb_bluetooth_hci_reset_status(packet, length) == 0;
 }
 
 /* ACL packet header: LE16 handle/flags followed by an LE16 payload length. */

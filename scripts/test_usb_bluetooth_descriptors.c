@@ -123,12 +123,18 @@ static void test_hci_event_and_acl_framing(void)
     assert(!usb_bluetooth_hci_event_valid(reset_complete,
                                            sizeof(reset_complete) - 1U));
     assert(!usb_bluetooth_hci_event_valid(short_event, sizeof(short_event)));
+    assert(usb_bluetooth_hci_reset_status(reset_complete,
+                                          sizeof(reset_complete)) == 0);
     assert(usb_bluetooth_hci_reset_complete(reset_complete,
                                              sizeof(reset_complete)));
     assert(!usb_bluetooth_hci_reset_complete(wrong_opcode,
                                               sizeof(wrong_opcode)));
+    assert(usb_bluetooth_hci_reset_status(failed_reset,
+                                          sizeof(failed_reset)) == 1);
     assert(!usb_bluetooth_hci_reset_complete(failed_reset,
                                               sizeof(failed_reset)));
+    assert(usb_bluetooth_hci_reset_status(wrong_opcode,
+                                          sizeof(wrong_opcode)) == -1);
     assert(usb_bluetooth_acl_packet_valid(acl, sizeof(acl)));
     assert(!usb_bluetooth_acl_packet_valid(acl_truncated,
                                             sizeof(acl_truncated)));

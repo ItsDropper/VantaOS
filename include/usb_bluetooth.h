@@ -37,6 +37,7 @@ int usb_bluetooth_find_hci_interface(const uint8_t *configuration,
 
 /* Strict packet-framing checks for HCI event and ACL-IN transfers. */
 int usb_bluetooth_hci_event_valid(const uint8_t *packet, uint32_t length);
+int usb_bluetooth_hci_reset_status(const uint8_t *packet, uint32_t length);
 int usb_bluetooth_hci_reset_complete(const uint8_t *packet, uint32_t length);
 int usb_bluetooth_acl_packet_valid(const uint8_t *packet, uint32_t length);
 

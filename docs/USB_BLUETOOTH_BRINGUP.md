@@ -101,3 +101,12 @@ The kernel now exposes `usb_bluetooth_acl_send(port, packet, length)` for the tr
 The call is synchronous and deliberately has a narrow execution contract: invoke it only from the USB polling/owner CPU in ordinary kernel context, not from an interrupt handler or another CPU. USB port disconnect and xHCI slot teardown are serialized by that same owner path. The per-slot busy flag rejects nested/re-entrant sends, but it is not a substitute for SMP-safe device lifetime management; if USB work becomes multi-CPU, add a device reference/lock protocol before relaxing this restriction.
 
 This API only transmits raw ACL packets. It does not create L2CAP frames, discover peers, pair devices, or implement profiles. The existing host regression suite validates the shared ACL framing predicate, while actual transfer completion still requires xHCI emulation and hardware testing.
+
+
+## Reset state and transmit gating
+
+The event path distinguishes three outcomes for the HCI Reset Command Complete event: success (status zero), controller-reported failure (nonzero status), and an unrelated or malformed event. Only the matching Reset opcode with a valid event length changes reset state. A failed reset emits `VANTAOS_BLUETOOTH_HCI_RESET_FAILED`; it is not treated as initialized. The raw ACL send API refuses to transmit until a successful Reset Command Complete has been observed.
+
+On disconnect, the USB owner path clears the slot's Bluetooth endpoint/state fields and transmit-busy flag before disabling the xHCI slot. Repeated connect-change notifications also check Bluetooth bindings, avoiding duplicate enumeration of a port already bound to a Bluetooth interface. These rules reduce stale-slot reuse, but do not replace a future reference-counted or locked device-lifetime model if USB work moves to multiple CPUs.
+
+The host tests exercise reset-status classification and framing predicates. They do not test event delivery timing, controller recovery, ACL transfer completion, or hardware disconnect races.

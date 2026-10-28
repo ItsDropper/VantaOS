@@ -1471,6 +1471,56 @@ int usb_bluetooth_l2cap_data_queue_pop(
     return (int)length;
 }
 
+static void l2cap_data_queue_forget(
+    usb_bluetooth_l2cap_data_queue_t *queue, uint16_t handle,
+    uint16_t local_cid, int match_handle_only)
+{
+    if (queue == NULL ||
+        queue->head >= USB_BLUETOOTH_L2CAP_DATA_QUEUE_DEPTH ||
+        queue->count > USB_BLUETOOTH_L2CAP_DATA_QUEUE_DEPTH)
+        return;
+    uint32_t original_count = queue->count;
+    uint32_t kept = 0U;
+    for (uint32_t i = 0U; i < original_count; ++i) {
+        uint32_t source = (queue->head + i) %
+                          USB_BLUETOOTH_L2CAP_DATA_QUEUE_DEPTH;
+        usb_bluetooth_l2cap_data_packet_t *packet = &queue->packets[source];
+        int matches = packet->handle == handle &&
+                      (match_handle_only || packet->local_cid == local_cid);
+        if (matches)
+            continue;
+        uint32_t destination = (queue->head + kept) %
+                               USB_BLUETOOTH_L2CAP_DATA_QUEUE_DEPTH;
+        if (destination != source)
+            queue->packets[destination] = *packet;
+        ++kept;
+    }
+    for (uint32_t i = kept; i < original_count; ++i) {
+        uint32_t index = (queue->head + i) %
+                         USB_BLUETOOTH_L2CAP_DATA_QUEUE_DEPTH;
+        queue->packets[index] = (usb_bluetooth_l2cap_data_packet_t){0};
+    }
+    queue->count = kept;
+}
+
+void usb_bluetooth_l2cap_data_queue_forget_channel(
+    usb_bluetooth_l2cap_data_queue_t *queue, uint16_t handle,
+    uint16_t local_cid)
+{
+    if (handle == 0U ||
+        local_cid < USB_BLUETOOTH_L2CAP_CID_DYNAMIC_MIN)
+        return;
+    l2cap_data_queue_forget(queue, handle, local_cid, 0);
+}
+
+void usb_bluetooth_l2cap_data_queue_forget_handle(
+    usb_bluetooth_l2cap_data_queue_t *queue, uint16_t handle)
+{
+    if (handle == 0U)
+        return;
+    l2cap_data_queue_forget(queue, handle, 0U, 1);
+}
+
 void usb_bluetooth_connection_attempt_reset(
     usb_bluetooth_connection_attempt_t *attempt)
 {

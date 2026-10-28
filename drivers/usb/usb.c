@@ -799,7 +799,9 @@ static void bluetooth_l2cap_handle_signaling_requests(
                    usb_bluetooth_acl_send(
                        bluetooth_slots[slot].port, response_acl,
                        (uint32_t)acl_length);
-        if (sent && command.code == 0x04U)
+        if (sent && command.code == 0x04U && response_length >= 10 &&
+            response[8] == 0U && response[9] == 0U &&
+            local_cid >= USB_BLUETOOTH_L2CAP_CID_DYNAMIC_MIN)
             (void)usb_bluetooth_l2cap_channel_remote_configured(
                 table, local_cid);
         else if (sent && command.code == 0x06U &&

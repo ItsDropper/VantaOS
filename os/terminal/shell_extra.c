@@ -15,6 +15,7 @@
 #include "net_tcp.h"
 #include "http_url.h"
 #include "http_response.h"
+#include "http_body.h"
 #include <stdint.h>
 #include <stddef.h>
 
@@ -516,14 +517,22 @@ static int command_http_url(const char *url, const char *output_argument,
     char host[96], path[96], request[512], output[257], headers[2048];
     char resolved_path[FS_PATH_MAX];
     size_t used = 0;
-    size_t header_length = 0, header_end = 0, total_body = 0, body_used = 0;
+    size_t header_length = 0, header_end = 0, body_used = 0;
     char body_chunk[257];
-    uint32_t port = 80U, address = 0, expected_body_length = UINT32_MAX;
+    uint32_t port = 80U, address = 0;
     http_url_status_t url_status;
     net_device_t *device = 0;
     int file_handle = -1, response_status = 0, body_started = 0;
     int peer_closed = 0;
+    http_body_t body_state;
+    http_body_status_t body_status;
     const size_t max_download = 8U * 1024U * 1024U;
+
+    body_status = http_body_initialize(&body_state, (uint32_t)max_download);
+    if (body_status != HTTP_BODY_OK) {
+        terminal_write("\\ncurl: could not initialize response body framing");
+        return 1;
+    }
 
     url_status = http_url_parse(url, host, sizeof(host),
                                 path, sizeof(path), &port);
@@ -675,8 +684,15 @@ static int command_http_url(const char *url, const char *output_argument,
                         net_tcp_close(device);
                         return 1;
                     }
-                    if (parsed.has_content_length)
-                        expected_body_length = parsed.content_length;
+                    body_status = http_body_set_content_length(
+                        &body_state, parsed.has_content_length != 0U,
+                        parsed.content_length);
+                    if (body_status != HTTP_BODY_OK) {
+                        terminal_write("\\ncurl: ");
+                        terminal_write(http_body_status_string(body_status));
+                        net_tcp_close(device);
+                        return 1;
+                    }
                     body_started = 1;
                     if (output_argument) {
                         /*
@@ -705,18 +721,18 @@ static int command_http_url(const char *url, const char *output_argument,
                 }
                 continue;
             }
-            if (++total_body > max_download) {
-                terminal_write("\ncurl: download exceeds the 8 MiB safety limit");
-                if (file_handle >= 0) (void)vfs_close(file_handle);
-                if (output_argument) (void)vfs_delete_path(resolved_path);
-                net_tcp_close(device);
-                return 1;
-            }
-            if (expected_body_length != UINT32_MAX &&
-                total_body > (size_t)expected_body_length) {
-                terminal_write("\ncurl: response exceeded Content-Length; incomplete output removed");
-                if (file_handle >= 0) (void)vfs_close(file_handle);
-                if (output_argument) (void)vfs_delete_path(resolved_path);
+            body_status = http_body_consume(&body_state, 1U);
+            if (body_status != HTTP_BODY_OK) {
+                terminal_write("\ncurl: ");
+                terminal_write(http_body_status_string(body_status));
+                if (file_handle >= 0) {
+                    (void)vfs_close(file_handle);
+                    file_handle = -1;
+                }
+                if (output_argument) {
+                    terminal_write("; incomplete output removed");
+                    (void)vfs_delete_path(resolved_path);
+                }
                 net_tcp_close(device);
                 return 1;
             }
@@ -748,26 +764,23 @@ static int command_http_url(const char *url, const char *output_argument,
         }
         file_handle = -1;
     }
-    if (!peer_closed) {
-        if (output_argument) (void)vfs_delete_path(resolved_path);
-        terminal_write("\ncurl: response exceeded receive budget without orderly EOF");
-        return 1;
-    }
-    if (expected_body_length != UINT32_MAX &&
-        total_body != (size_t)expected_body_length) {
-        if (output_argument) (void)vfs_delete_path(resolved_path);
-        terminal_write("\ncurl: response body length did not match Content-Length; incomplete output removed");
-        return 1;
-    }
     if (!body_started) {
         terminal_write("\ncurl: no complete HTTP response headers received");
         return 1;
     }
+    body_status = http_body_finish(&body_state, peer_closed);
+    if (body_status != HTTP_BODY_OK) {
+        if (output_argument) (void)vfs_delete_path(resolved_path);
+        terminal_write("\ncurl: ");
+        terminal_write(http_body_status_string(body_status));
+        if (output_argument) terminal_write("; incomplete output removed");
+        return 1;
+    }
     if (output_argument) {
         terminal_write("\nSaved "); terminal_write(resolved_path);
-        terminal_write(" ("); shell_print_decimal((unsigned int)total_body);
+        terminal_write(" ("); shell_print_decimal(http_body_bytes_received(&body_state));
         terminal_write(" bytes)");
-    } else if (!total_body) {
+    } else if (http_body_bytes_received(&body_state) == 0U) {
         terminal_write("\ncurl: response body was empty");
     }
     if (!body_only) terminal_write("\n--- end response ---");

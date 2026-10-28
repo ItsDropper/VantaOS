@@ -395,6 +395,7 @@ static void test_descriptor_byte_mutations_are_bounded(void)
                 assert(candidate.event_endpoint == 0U);
                 assert(candidate.acl_in_endpoint == 0U);
                 assert(candidate.acl_out_endpoint == 0U);
+                assert(candidate.event_interval == 0U);
                 assert(candidate.event_max_packet == 0U);
                 assert(candidate.acl_in_max_packet == 0U);
                 assert(candidate.acl_out_max_packet == 0U);

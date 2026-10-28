@@ -45,3 +45,10 @@ USB Bluetooth's raw ACL send and receive interfaces are gated on a successful HC
 Nonblocking interrupt-IN and bulk-IN receive functions distinguish no completed packet (`0`), success (`1`), invalid/failed transfer (`-1`), and insufficient caller capacity (`-2`). On insufficient capacity, the output length reports the required size and the completed packet remains pending; callers can retry with a larger buffer rather than silently truncating a HID report or dropping a Bluetooth ACL packet. Callers must test for a positive result before consuming output. The Bluetooth polling path only rearms bulk-IN after a failed transfer, not after a capacity-retry result.
 
 This contract is about the driver's software ownership of completed buffers. It does not by itself provide cancellation of in-flight DMA on physical disconnect; endpoint teardown and late-event handling still require controller-level validation.
+
+
+## xHCI slot teardown and receive ownership
+
+After the controller reports successful Disable Slot completion, xHCI now clears the slot's software transfer state, endpoint rings, DMA staging buffers, pending interrupt reports, completion metadata, device/input contexts and port/speed metadata. This prevents buffered input or completion flags from a detached device being exposed when a later device reuses that slot. The state is deliberately not cleared when Disable Slot fails, because the controller may still own the DMA resources.
+
+This cleanup is not a substitute for hardware validation of disconnect timing, controller errors, or late transfer events. It only describes the software cleanup performed after the disable command reports success.

@@ -13,6 +13,7 @@
 #include "net_ipv4.h"
 #include "net_ipv6.h"
 #include "net_tcp.h"
+#include "timer.h"
 #include "http_url.h"
 #include "http_response.h"
 #include "http_body.h"
@@ -20,6 +21,7 @@
 #include <stddef.h>
 
 #define EXTRA_ARG_MAX 64U
+#define HTTP_DOWNLOAD_TIMEOUT_TICKS 30000U /* Five minutes at 100 Hz. */
 
 static int parse_command(char *input, char **argv, uint32_t capacity,
                          uint32_t *argc_out, int *force_out)
@@ -668,7 +670,20 @@ static int command_http_url(const char *url, const char *output_argument,
 
     if (!body_only)
         terminal_write("\n--- HTTP response ---\n");
+    uint32_t transfer_start_ticks = timer_get_ticks();
     for (uint32_t chunks = 0; chunks < 32768U; ++chunks) {
+        if ((uint32_t)(timer_get_ticks() - transfer_start_ticks) >=
+            HTTP_DOWNLOAD_TIMEOUT_TICKS) {
+            terminal_write("\\ncurl: total response-transfer deadline exceeded");
+            if (file_handle >= 0) {
+                (void)vfs_close(file_handle);
+                file_handle = -1;
+            }
+            if (output_argument)
+                (void)vfs_delete_path(download_path);
+            net_tcp_close(device);
+            return 1;
+        }
         int received = net_tcp_receive(device, output, sizeof(output), 10000U);
         if (received == 0) { peer_closed = 1; break; }
         if (received < 0) {

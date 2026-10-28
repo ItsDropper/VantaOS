@@ -119,7 +119,7 @@ void graphics_mouse_click(int button)
         }
 
         if (cursor_x >= menu_x + 24 && cursor_x < menu_x + 436 &&
-            cursor_y >= menu_y + 110 && cursor_y < menu_y + 164)
+            cursor_y >= menu_y + 110 && cursor_y < menu_y + 154)
         {
             active_panel = 3;
             graphics_request_terminal_open();
@@ -128,7 +128,7 @@ void graphics_mouse_click(int button)
         }
 
         if (cursor_x >= menu_x + 24 && cursor_x < menu_x + 436 &&
-            cursor_y >= menu_y + 164 && cursor_y < menu_y + 218)
+            cursor_y >= menu_y + 156 && cursor_y < menu_y + 200)
         {
             active_panel = 2;
             file_explorer_initialize();
@@ -138,7 +138,7 @@ void graphics_mouse_click(int button)
         }
 
         if (cursor_x >= menu_x + 24 && cursor_x < menu_x + 436 &&
-            cursor_y >= menu_y + 218 && cursor_y < menu_y + 272)
+            cursor_y >= menu_y + 202 && cursor_y < menu_y + 246)
         {
             active_panel = 1;
             (void)gui_server_set_builtin_visible("System", 1);
@@ -147,7 +147,7 @@ void graphics_mouse_click(int button)
         }
 
         if (cursor_x >= menu_x + 24 && cursor_x < menu_x + 436 &&
-            cursor_y >= menu_y + 272 && cursor_y < menu_y + 326)
+            cursor_y >= menu_y + 248 && cursor_y < menu_y + 292)
         {
             active_panel = 4;
             (void)gui_server_set_builtin_visible("Settings", 1);
@@ -156,11 +156,23 @@ void graphics_mouse_click(int button)
         }
 
         if (cursor_x >= menu_x + 24 && cursor_x < menu_x + 436 &&
-            cursor_y >= menu_y + 326 && cursor_y < menu_y + 380)
+            cursor_y >= menu_y + 294 && cursor_y < menu_y + 338)
         {
             const char* argv[1] = { "/SYSTEM/NOTES.ELF" };
             int pid = process_spawn_user_elf_file(
                 "/SYSTEM/NOTES.ELF", process_current_pid(), 1U, argv);
+            if (pid > 0)
+                start_menu_open = 0;
+            graphics_invalidate_scene();
+            return;
+        }
+
+        if (cursor_x >= menu_x + 24 && cursor_x < menu_x + 436 &&
+            cursor_y >= menu_y + 340 && cursor_y < menu_y + 384)
+        {
+            const char* argv[1] = { "/SYSTEM/CALCULATOR.ELF" };
+            int pid = process_spawn_user_elf_file(
+                "/SYSTEM/CALCULATOR.ELF", process_current_pid(), 1U, argv);
             if (pid > 0)
                 start_menu_open = 0;
             graphics_invalidate_scene();

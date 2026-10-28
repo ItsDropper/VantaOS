@@ -1056,9 +1056,12 @@ static void test_l2cap_configuration_response_parser(void)
     };
     response[2] = 10U;
     assert(usb_bluetooth_l2cap_configuration_response(&table, response,
-                                                       sizeof(response)) == 1);
-    assert(table.channels[0].state == 4U &&
+                                                       sizeof(response)) == 0);
+    assert(table.channels[0].state == 3U &&
+           table.channels[0].local_configured == 1U &&
            table.channels[0].remote_mtu == 1000U);
+    assert(usb_bluetooth_l2cap_channel_remote_configured(&table, cid) == 1);
+    assert(table.channels[0].state == 4U);
 
     assert(usb_bluetooth_l2cap_channel_begin(&table, 1U, 672U, 0U,
                                              &cid, &conn_id) == 0);
@@ -1123,7 +1126,11 @@ static void test_l2cap_configuration_transaction(void)
                                                           1U, 0U, 672U) == 0);
     assert(table.channels[0].state == 3U);
     assert(usb_bluetooth_l2cap_channel_configure_response(&table, cid, 9U,
-                                                          0U, 0U, 672U) == 1);
+                                                          0U, 0U, 672U) == 0);
+    assert(table.channels[0].state == 3U &&
+           table.channels[0].local_configured == 1U &&
+           table.channels[0].remote_configured == 0U);
+    assert(usb_bluetooth_l2cap_channel_remote_configured(&table, cid) == 1);
     assert(table.channels[0].state == 4U && table.channels[0].remote_mtu == 672U);
     assert(usb_bluetooth_l2cap_channel_configure_begin(&table, cid, 10U) == -16);
 

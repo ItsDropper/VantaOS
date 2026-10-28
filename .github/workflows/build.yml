@@ -121,6 +121,13 @@ jobs:
             -o /tmp/vantaos-http-url-test
           /tmp/vantaos-http-url-test
 
+      - name: Test HTTP response framing parser
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Ios/terminal \
+            scripts/test_http_response.c os/terminal/http_response.c \
+            -o /tmp/vantaos-http-response-test
+          /tmp/vantaos-http-response-test
+
       - name: Verify modular source manifests
         run: |
           make list-sources

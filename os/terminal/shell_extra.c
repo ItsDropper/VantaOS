@@ -530,11 +530,11 @@ static int write_file_all(int handle, const char *data, size_t length)
 static int command_http_url(const char *url, const char *output_argument,
                             int body_only)
 {
-    char host[96], path[96], request[512], output[257], headers[2048];
+    char host[96], path[96], request[512], output[1500], headers[2048];
     char resolved_path[FS_PATH_MAX], download_path[FS_PATH_MAX];
     size_t used = 0;
     size_t header_length = 0, header_end = 0, body_used = 0;
-    char body_chunk[257];
+    char body_chunk[1500];
     uint32_t port = 80U, address = 0;
     http_url_status_t url_status;
     net_device_t *device = 0;

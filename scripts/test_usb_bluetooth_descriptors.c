@@ -1348,6 +1348,19 @@ static void test_hci_connection_command_builders(void)
                0x0123U, 0U, command, sizeof(command)) == -22);
     assert(usb_bluetooth_hci_build_disconnect(
                0x0123U, 0x13U, command, 5U) == -90);
+
+    assert(usb_bluetooth_hci_build_create_connection_cancel(
+               address, command, sizeof(command)) == 9);
+    assert(command[0] == 0x08U && command[1] == 0x04U &&
+           command[2] == 6U);
+    assert(memcmp(&command[3], address, sizeof(address)) == 0);
+    assert(usb_bluetooth_hci_build_create_connection_cancel(
+               NULL, command, sizeof(command)) == -22);
+    const uint8_t zero_address[6] = {0U};
+    assert(usb_bluetooth_hci_build_create_connection_cancel(
+               zero_address, command, sizeof(command)) == -22);
+    assert(usb_bluetooth_hci_build_create_connection_cancel(
+               address, command, 8U) == -90);
 }
 
 int main(void)

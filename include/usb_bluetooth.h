@@ -407,6 +407,11 @@ int usb_bluetooth_l2cap_build_acl_packet(uint16_t handle, uint16_t cid,
                                          const uint8_t *payload,
                                          uint32_t payload_length,
                                          uint8_t *output, uint32_t capacity);
+/* Build one HCI ACL fragment from a complete ACL PDU. offset is relative to
+ * the original ACL data field; returns framed length or -22/-90 on error. */
+int usb_bluetooth_acl_fragment_build(
+    const uint8_t *packet, uint32_t packet_length, uint16_t mtu,
+    uint32_t offset, uint8_t *output, uint32_t capacity);
 /* Assemble one ACL stream per connection handle. feed: 0 incomplete,
  * 1 complete (retained until take), negative errno-style code on failure.
  * An unexpected new start drops the stale partial PDU and returns -16.

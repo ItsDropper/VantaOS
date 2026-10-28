@@ -8,8 +8,9 @@ progress, and checks the latched status from ordinary kernel context.
 
 - There are 32 fixed slots; registration does not allocate memory.
 - Timeouts are PIT ticks in the range 1 through `0x7fffffff`.
-- Handles contain a slot index and generation, so a stale handle cannot
-  operate on a later client that reuses the slot.
+- Handles are 64-bit values containing an 8-bit slot index and a 56-bit
+  generation, so stale handles are rejected across slot reuse unless the
+  generation counter eventually wraps.
 - Expiry is latched. Kicking an expired handle fails; unregister and register
   again to establish a new monitoring lifetime.
 - Deadline comparisons are wrap-safe for the accepted timeout range.

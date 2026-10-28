@@ -164,3 +164,16 @@ The endpoint parser also rejects upper `wMaxPacketSize` bits that would encode h
 ## HCI framing mutation coverage
 
 The sanitizer-backed host suite now mutates every byte of packets at every length from zero through the 64-byte staging-buffer limit. Accepted HCI event and ACL packets must have a declared payload length that exactly matches the supplied transfer length. This is deterministic mutation testing of framing validators, not a claim of coverage-guided fuzzing or hardware-level transfer validation.
+
+
+## L2CAP framing groundwork
+
+The host-tested protocol helpers now decode the HCI ACL handle, packet-boundary
+flag, broadcast flag, and payload view, then validate a single complete L2CAP
+PDU's declared length and channel identifier. A separate validator checks the
+full list of L2CAP signaling command headers and payload lengths before any
+future dispatcher processes commands. These helpers deliberately reject ACL
+continuation fragments as standalone L2CAP PDUs: correct fragment reassembly,
+connection/channel state, pairing, encryption, service discovery, and profiles
+remain unimplemented. This is protocol framing groundwork, not a claim that
+Bluetooth is complete or usable for end-user connections.

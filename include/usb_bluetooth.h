@@ -25,6 +25,20 @@ typedef struct {
  * been initialized or that Bluetooth services are available.
  */
 typedef struct {
+    uint16_t handle;
+    uint8_t packet_boundary;
+    uint8_t broadcast;
+    const uint8_t *payload;
+    uint32_t payload_length;
+} usb_bluetooth_acl_view_t;
+
+typedef struct {
+    uint16_t channel_id;
+    const uint8_t *payload;
+    uint16_t payload_length;
+} usb_bluetooth_l2cap_view_t;
+
+typedef struct {
     uint8_t interface_number;
     uint8_t event_endpoint;
     uint8_t acl_in_endpoint;
@@ -45,6 +59,15 @@ int usb_bluetooth_find_hci_interface(const uint8_t *configuration,
                                      uint16_t length,
                                      usb_bluetooth_hci_candidate_t *candidate);
 
+/* Parse one complete HCI ACL packet without copying its payload. */
+int usb_bluetooth_acl_parse(const uint8_t *packet, uint32_t length,
+                            usb_bluetooth_acl_view_t *view);
+/* Parse one complete, unfragmented L2CAP PDU carried in an ACL packet. */
+int usb_bluetooth_l2cap_parse(const uint8_t *packet, uint32_t length,
+                              usb_bluetooth_l2cap_view_t *view);
+/* Validate a complete L2CAP signaling command list on CID 0x0001. */
+int usb_bluetooth_l2cap_signaling_valid(const uint8_t *payload,
+                                        uint32_t length);
 /* Strict packet-framing checks for HCI event and ACL-IN transfers. */
 int usb_bluetooth_hci_event_valid(const uint8_t *packet, uint32_t length);
 int usb_bluetooth_hci_reset_status(const uint8_t *packet, uint32_t length);

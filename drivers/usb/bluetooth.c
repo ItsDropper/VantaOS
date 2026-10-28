@@ -236,6 +236,87 @@ int usb_bluetooth_transport_ready(int reset_complete, int reset_failed)
     return reset_complete != 0 && reset_failed == 0;
 }
 
+/*
+ * Decode an HCI ACL header. The PB/BC bits are exposed instead of silently
+ * interpreting continuation fragments as standalone L2CAP packets.
+ */
+int usb_bluetooth_acl_parse(const uint8_t *packet, uint32_t length,
+                            usb_bluetooth_acl_view_t *view)
+{
+    if (view == NULL)
+        return 0;
+    *view = (usb_bluetooth_acl_view_t){0};
+    if (!usb_bluetooth_acl_packet_valid(packet, length))
+        return 0;
+
+    uint16_t handle_flags = (uint16_t)packet[0] |
+                            ((uint16_t)packet[1] << 8);
+    view->handle = handle_flags & 0x0FFFU;
+    view->packet_boundary = (uint8_t)((handle_flags >> 12) & 0x03U);
+    view->broadcast = (uint8_t)((handle_flags >> 14) & 0x03U);
+    view->payload = packet + 4U;
+    view->payload_length = length - 4U;
+    return 1;
+}
+
+/*
+ * Parse a single complete L2CAP PDU. Fragment reassembly is intentionally
+ * not implied: continuation ACL fragments must be assembled by a future
+ * connection manager before calling this helper.
+ */
+int usb_bluetooth_l2cap_parse(const uint8_t *packet, uint32_t length,
+                              usb_bluetooth_l2cap_view_t *view)
+{
+    if (view == NULL)
+        return 0;
+    *view = (usb_bluetooth_l2cap_view_t){0};
+
+    usb_bluetooth_acl_view_t acl;
+    if (!usb_bluetooth_acl_parse(packet, length, &acl) ||
+        (acl.packet_boundary != 0U && acl.packet_boundary != 2U &&
+         acl.packet_boundary != 3U) ||
+        acl.payload_length < 4U)
+        return 0;
+
+    uint16_t l2cap_length = (uint16_t)acl.payload[0] |
+                           ((uint16_t)acl.payload[1] << 8);
+    uint16_t cid = (uint16_t)acl.payload[2] |
+                   ((uint16_t)acl.payload[3] << 8);
+    if (cid == 0U || (uint32_t)l2cap_length != acl.payload_length - 4U)
+        return 0;
+
+    view->channel_id = cid;
+    view->payload = acl.payload + 4U;
+    view->payload_length = l2cap_length;
+    return 1;
+}
+
+/*
+ * L2CAP signaling uses a four-byte command header (code, identifier, LE16
+ * length). Validate the entire command list before any caller dispatches it.
+ * Unknown nonzero codes remain structurally valid for forward compatibility.
+ */
+int usb_bluetooth_l2cap_signaling_valid(const uint8_t *payload,
+                                        uint32_t length)
+{
+    if (payload == NULL || length == 0U)
+        return 0;
+    uint32_t offset = 0U;
+    while (offset < length) {
+        if (length - offset < 4U)
+            return 0;
+        uint8_t code = payload[offset];
+        uint8_t identifier = payload[offset + 1U];
+        uint16_t command_length = (uint16_t)payload[offset + 2U] |
+                                 ((uint16_t)payload[offset + 3U] << 8);
+        if (code == 0U || identifier == 0U ||
+            (uint32_t)command_length > length - offset - 4U)
+            return 0;
+        offset += 4U + command_length;
+    }
+    return offset == length;
+}
+
 /* ACL packet header: LE16 handle/flags followed by an LE16 payload length. */
 int usb_bluetooth_acl_packet_valid(const uint8_t *packet, uint32_t length)
 {

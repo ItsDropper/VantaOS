@@ -429,6 +429,71 @@ static void test_hci_packet_framing_mutations_are_bounded(void)
     }
 }
 
+static void test_acl_and_l2cap_views(void)
+{
+    const uint8_t signaling_acl[] = {
+        0x01U, 0x20U, 0x0AU, 0x00U,
+        0x06U, 0x00U, 0x01U, 0x00U,
+        0x02U, 0x01U, 0x02U, 0x00U, 0x34U, 0x12U
+    };
+    const uint8_t malformed_acl[] = {
+        0x01U, 0x20U, 0x09U, 0x00U,
+        0x06U, 0x00U, 0x01U, 0x00U,
+        0x02U, 0x01U, 0x02U, 0x00U, 0x34U
+    };
+    usb_bluetooth_acl_view_t acl = {0};
+    usb_bluetooth_l2cap_view_t l2cap = {0};
+
+    assert(usb_bluetooth_acl_parse(signaling_acl, sizeof(signaling_acl), &acl));
+    assert(acl.handle == 1U && acl.packet_boundary == 2U &&
+           acl.broadcast == 0U && acl.payload_length == 10U);
+    assert(usb_bluetooth_l2cap_parse(signaling_acl, sizeof(signaling_acl),
+                                     &l2cap));
+    assert(l2cap.channel_id == 1U && l2cap.payload_length == 6U);
+    assert(usb_bluetooth_l2cap_signaling_valid(l2cap.payload,
+                                               l2cap.payload_length));
+    assert(!usb_bluetooth_l2cap_parse(malformed_acl, sizeof(malformed_acl),
+                                      &l2cap));
+    assert(l2cap.channel_id == 0U && l2cap.payload == NULL);
+
+    uint8_t continuation[sizeof(signaling_acl)];
+    for (size_t i = 0U; i < sizeof(signaling_acl); ++i)
+        continuation[i] = signaling_acl[i];
+    continuation[1] = 0x10U;
+    assert(usb_bluetooth_acl_parse(continuation, sizeof(continuation), &acl));
+    assert(acl.packet_boundary == 1U);
+    assert(!usb_bluetooth_l2cap_parse(continuation, sizeof(continuation),
+                                      &l2cap));
+    assert(!usb_bluetooth_acl_parse(signaling_acl,
+                                    sizeof(signaling_acl) - 1U, &acl));
+    assert(acl.payload == NULL && acl.payload_length == 0U);
+}
+
+static void test_l2cap_signaling_command_boundaries(void)
+{
+    const uint8_t two_commands[] = {
+        0x02U, 0x01U, 0x02U, 0x00U, 0x34U, 0x12U,
+        0x03U, 0x02U, 0x00U, 0x00U
+    };
+    const uint8_t truncated_header[] = {0x02U, 0x01U, 0x02U};
+    const uint8_t truncated_payload[] = {0x02U, 0x01U, 0x02U, 0x00U, 0x34U};
+    const uint8_t zero_code[] = {0x00U, 0x01U, 0x00U, 0x00U};
+    const uint8_t zero_identifier[] = {0x02U, 0x00U, 0x00U, 0x00U};
+    const uint8_t empty[] = {0U};
+
+    assert(usb_bluetooth_l2cap_signaling_valid(two_commands,
+                                               sizeof(two_commands)));
+    assert(!usb_bluetooth_l2cap_signaling_valid(truncated_header,
+                                                sizeof(truncated_header)));
+    assert(!usb_bluetooth_l2cap_signaling_valid(truncated_payload,
+                                                sizeof(truncated_payload)));
+    assert(!usb_bluetooth_l2cap_signaling_valid(zero_code, sizeof(zero_code)));
+    assert(!usb_bluetooth_l2cap_signaling_valid(zero_identifier,
+                                                sizeof(zero_identifier)));
+    assert(!usb_bluetooth_l2cap_signaling_valid(NULL, 4U));
+    assert(!usb_bluetooth_l2cap_signaling_valid(empty, 0U));
+}
+
 int main(void)
 {
     test_complete_hci_interface();
@@ -447,6 +512,8 @@ int main(void)
     test_failed_parse_clears_candidate();
     test_descriptor_byte_mutations_are_bounded();
     test_hci_packet_framing_mutations_are_bounded();
+    test_acl_and_l2cap_views();
+    test_l2cap_signaling_command_boundaries();
     test_acl_queue_rejects_corrupt_stored_length();
     puts("USB Bluetooth descriptor tests passed");
     return 0;

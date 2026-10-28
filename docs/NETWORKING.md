@@ -80,6 +80,8 @@ DHCP lease negotiation and renewal state is tracked independently for each regis
 
 Modern VirtIO support does not make this a universal networking stack. Physical Wi-Fi association/WPA2/WPA3 and TLS/HTTPS remain separate unsupported capabilities; see [adapter support](network-adapter-support.md) and [secure networking](secure-networking.md).
 
+See also [Vanta Launcher compatibility milestones](VANTA_LAUNCHER_COMPATIBILITY.md) for the concrete network, runtime, JavaFX, and Minecraft gates required before the existing launcher can run.
+
 ### Terminal HTTP fetch (curl)
 
 The legacy kernel shell and GUI Terminal expose a small curl-style client:

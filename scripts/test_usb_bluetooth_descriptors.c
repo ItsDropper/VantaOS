@@ -557,24 +557,26 @@ static void test_hci_event_queue_integrity(void)
 static void test_acl_and_l2cap_views(void)
 {
     const uint8_t signaling_acl[] = {
-        0x01U, 0x20U, 0x0AU, 0x00U,
-        0x06U, 0x00U, 0x01U, 0x00U,
-        0x02U, 0x01U, 0x02U, 0x00U, 0x34U, 0x12U
+        0x01U, 0x20U, 0x0CU, 0x00U,
+        0x08U, 0x00U, 0x01U, 0x00U,
+        0x02U, 0x01U, 0x04U, 0x00U,
+        0x40U, 0x00U, 0x01U, 0x00U
     };
     const uint8_t malformed_acl[] = {
-        0x01U, 0x20U, 0x09U, 0x00U,
-        0x06U, 0x00U, 0x01U, 0x00U,
-        0x02U, 0x01U, 0x02U, 0x00U, 0x34U
+        0x01U, 0x20U, 0x0BU, 0x00U,
+        0x08U, 0x00U, 0x01U, 0x00U,
+        0x02U, 0x01U, 0x04U, 0x00U,
+        0x40U, 0x00U, 0x01U, 0x00U
     };
     usb_bluetooth_acl_view_t acl = {0};
     usb_bluetooth_l2cap_view_t l2cap = {0};
 
     assert(usb_bluetooth_acl_parse(signaling_acl, sizeof(signaling_acl), &acl));
     assert(acl.handle == 1U && acl.packet_boundary == 2U &&
-           acl.broadcast == 0U && acl.payload_length == 10U);
+           acl.broadcast == 0U && acl.payload_length == 12U);
     assert(usb_bluetooth_l2cap_parse(signaling_acl, sizeof(signaling_acl),
                                      &l2cap));
-    assert(l2cap.channel_id == 1U && l2cap.payload_length == 6U);
+    assert(l2cap.channel_id == 1U && l2cap.payload_length == 8U);
     assert(usb_bluetooth_l2cap_signaling_valid(l2cap.payload,
                                                l2cap.payload_length));
     assert(!usb_bluetooth_l2cap_parse(malformed_acl, sizeof(malformed_acl),

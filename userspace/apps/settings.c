@@ -412,7 +412,7 @@ static void bluetooth_scan(void)
     }
     long result = vanta_bluetooth_scan(bluetooth_port);
     if (result > 0)
-        set_status("Scanning for nearby Classic Bluetooth devices...", COLOR_SUCCESS);
+        set_status("Scan started; list updates as devices appear", COLOR_SUCCESS);
     else
         set_status("Scan could not start; check adapter/controller", COLOR_ERROR);
 }
@@ -637,7 +637,7 @@ static void render(void)
     add_rect(384, 365, 224, 38, color_selected());
     add_text(402, 377, selected_page == 3U ? "Connect selected" : "Restore defaults", text);
     add_text(16, 414, status_buffer, status_color);
-    add_text(16, 436, selected_page == 3U ? "Select a device; S scans, X cancels scan, C cancels connect, Q closes." : "Click a category or setting; S saves, R resets, B opens Bluetooth, Q closes.", muted);
+    add_text(16, 436, selected_page == 3U ? "Select device; S scan, X cancel scan, C cancel connect, Q close." : "Click a category or setting; S saves, R resets, B opens Bluetooth, Q closes.", muted);
     (void)vanta_gui_draw(window_id, commands, command_count);
 }
 

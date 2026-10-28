@@ -378,3 +378,12 @@ response to the transaction handlers, while leaving unrelated signaling codes
 for future handlers. This is now a usable dispatcher primitive, but the USB
 poll loop does not yet automatically feed received ACL signaling payloads into
 it; callers must extract a complete CID 0x0001 payload first.
+
+
+## Per-connection L2CAP and pending connection state
+
+The USB owner path now maintains a separate L2CAP transaction table for each active BR/EDR connection handle. A successful Connection Complete allocates the handle's table; completed ACL signaling is dispatched only into that table; Disconnection Complete clears only the matching handle's channels; and HCI Reset/slot teardown clear all owner mappings. The host-side link table exposes a handle-membership query, and the Disconnect submission wrapper refuses handles not currently tracked as active.
+
+Pending outbound connection attempts use a host-testable state object. The API rejects a second concurrent attempt, requires a nonzero address, matches cancellation to the exact pending address, and clears the state on a matching Connection Complete, controller rejection of Create Connection, reset, or detach. A successful USB command submission means only that the command transfer was accepted; it is not proof of a successful radio connection. No wall-clock timeout is claimed yet because the USB path still lacks a verified monotonic deadline source for these operations.
+
+The host regression suite now includes connection-attempt begin/match/finish/reset cases and connection-handle membership checks. The repository's combined status query currently reports no status entries, so these changes have not been confirmed by a CI run in this session.

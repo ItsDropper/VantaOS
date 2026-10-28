@@ -37,7 +37,7 @@ int main(void)
         !expect("/HOME//USER/./docs/../notes.txt", "/", "/HOME/USER/notes.txt") ||
         !expect("notes.txt", "/HOME/USER", "/HOME/USER/notes.txt") ||
         !expect("./docs//guide.txt", "/HOME/USER", "/HOME/USER/docs/guide.txt") ||
-        !expect("../../SYSTEM/APP.ELF", "/HOME/USER/docs", "/SYSTEM/APP.ELF") ||
+        !expect("../../../SYSTEM/APP.ELF", "/HOME/USER/docs", "/SYSTEM/APP.ELF") ||
         !expect("../../../../", "/HOME/USER", "/") ||
         !expect("a/../b/./c", "/", "/b/c") ||
         !expect_reject("", "/", 8U) ||

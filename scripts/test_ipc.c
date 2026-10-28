@@ -13,11 +13,12 @@
 
 static uint64_t rng_counter = 0x123456789ULL;
 static int rng_should_fail;
+static uint64_t rng_forced_value;
 int crypto_rng_fill(void *output, size_t length)
 {
     uint8_t *bytes = (uint8_t *)output;
     if (rng_should_fail) return 0;
-    uint64_t value = ++rng_counter;
+    uint64_t value = rng_forced_value != 0U ? rng_forced_value : ++rng_counter;
     if (length > sizeof(value)) return 0;
     for (size_t i=0;i<length;i++) bytes[i]=(uint8_t)(value>>(i*8U));
     return 1;
@@ -38,6 +39,10 @@ static void test_endpoint_exhaustion_cleanup_and_rng_failure(void)
         assert(tokens[i] > 0);
     }
     assert(ipc_endpoint_create(2000U) == -12);
+    /* A duplicate random capability must not alias an existing endpoint. */
+    rng_forced_value = (uint64_t)tokens[0];
+    assert(ipc_endpoint_create(2001U) == -11);
+    rng_forced_value = 0U;
 
     assert(ipc_message_send((uint64_t)tokens[5], 9000U,
                             payload, sizeof(payload)) == 0);
@@ -62,6 +67,55 @@ static void test_endpoint_exhaustion_cleanup_and_rng_failure(void)
         if (i != 5U)
             assert(ipc_endpoint_close((uint64_t)tokens[i], 1000U + i) == 0);
     }
+}
+
+
+static void test_ipc_queue_wraparound_and_payload_erasure(void)
+{
+    int64_t token = ipc_endpoint_create(6100U);
+    char output[IPC_MESSAGE_MAX] = {0};
+    assert(token > 0);
+
+    uint32_t slot = 0U;
+    while (slot < 32U && (!endpoints[slot].active ||
+           endpoints[slot].token != (uint64_t)token))
+        ++slot;
+    assert(slot < 32U);
+
+    for (uint32_t i = 0U; i < IPC_QUEUE_DEPTH; ++i) {
+        char message[4] = {(char)('A' + i), 'x', 'y', '\0'};
+        assert(ipc_message_send((uint64_t)token, 6200U + i,
+                                message, sizeof(message)) == 0);
+    }
+    assert(endpoints[slot].count == IPC_QUEUE_DEPTH);
+    assert(ipc_message_send((uint64_t)token, 6299U, "overflow", 9U) == -11);
+
+    /* A failed small-buffer receive and repeated peek must preserve the head. */
+    assert(ipc_message_peek_length((uint64_t)token, 6100U) == 4);
+    assert(ipc_message_peek_length((uint64_t)token, 6100U) == 4);
+    assert(ipc_message_receive((uint64_t)token, 6100U, output, 2U) == -90);
+    assert(endpoints[slot].count == IPC_QUEUE_DEPTH);
+
+    for (uint32_t i = 0U; i < IPC_QUEUE_DEPTH; ++i) {
+        assert(ipc_message_receive((uint64_t)token, 6100U,
+                                   output, sizeof(output)) == 4);
+        assert(output[0] == (char)('A' + i));
+        assert(output[1] == 'x' && output[2] == 'y' && output[3] == '\0');
+        uint32_t consumed = (endpoints[slot].head + IPC_QUEUE_DEPTH - 1U) %
+                            IPC_QUEUE_DEPTH;
+        assert(endpoints[slot].queue[consumed].length == 0U);
+        assert(endpoints[slot].queue[consumed].sender_pid == 0U);
+        for (size_t j = 0U; j < IPC_MESSAGE_MAX; ++j)
+            assert(endpoints[slot].queue[consumed].bytes[j] == 0U);
+    }
+    assert(endpoints[slot].count == 0U);
+
+    /* Reuse the wrapped ring and verify FIFO order still holds. */
+    assert(ipc_message_send((uint64_t)token, 6300U, "tail", 4U) == 0);
+    assert(ipc_message_receive((uint64_t)token, 6100U,
+                               output, sizeof(output)) == 4);
+    assert(memcmp(output, "tail", 4U) == 0);
+    assert(ipc_endpoint_close((uint64_t)token, 6100U) == 0);
 }
 
 int main(void)
@@ -122,6 +176,7 @@ int main(void)
     ipc_process_cleanup(77U);
     assert(ipc_message_send((uint64_t)cleanup_endpoint,88U,"x",1U) == -9);
     test_endpoint_exhaustion_cleanup_and_rng_failure();
+    test_ipc_queue_wraparound_and_payload_erasure();
     puts("VANTAOS_IPC_HOST_TEST_OK");
     return 0;
 }

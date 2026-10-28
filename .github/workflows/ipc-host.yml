@@ -44,6 +44,18 @@ jobs:
             scripts/test_ipc.c -o /tmp/vantaos-ipc-test
       - name: Run IPC host regression tests
         run: /tmp/vantaos-ipc-test
+      - name: Compile IPC regressions with address and undefined-behavior sanitizers
+        run: |
+          set -euo pipefail
+          cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined \
+            -fno-omit-frame-pointer -g \
+            -Itests/ipc_host -Iuserspace/include -Iinclude \
+            scripts/test_ipc.c -o /tmp/vantaos-ipc-test-sanitized
+      - name: Run sanitized IPC regressions
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: /tmp/vantaos-ipc-test-sanitized
       - name: Compile public IPC ABI
         run: |
           set -euo pipefail

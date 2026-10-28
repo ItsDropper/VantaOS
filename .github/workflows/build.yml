@@ -107,6 +107,13 @@ jobs:
       - name: Install build dependencies
         run: sudo apt-get update && sudo apt-get install --yes build-essential nasm grub-pc-bin xorriso mtools dosfstools qemu-system-x86 gnu-efi ovmf gdisk xvfb socat imagemagick tesseract-ocr
 
+      - name: Test Calculator expression parser
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -ffunction-sections -fdata-sections \
+            -Iuserspace/include -Iinclude scripts/test_calculator_parser.c \
+            -Wl,--gc-sections -o /tmp/vantaos-calculator-parser-test
+          /tmp/vantaos-calculator-parser-test
+
       - name: Verify modular source manifests
         run: |
           make list-sources

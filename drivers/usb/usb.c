@@ -556,7 +556,8 @@ static void usb_bluetooth_detach_slot(uint32_t slot)
     bluetooth_slots[slot].reset_failed_observed = 0U;
     usb_bluetooth_connection_attempt_reset(
         &bluetooth_slots[slot].connection_attempt);
-    bluetooth_slots[slot].inquiry_active = 0U;
+    usb_bluetooth_inquiry_state_reset(
+        &bluetooth_slots[slot].inquiry_state);
     usb_bluetooth_hci_command_state_reset(
         &bluetooth_slots[slot].command_state);
     usb_bluetooth_acl_queue_reset(&bluetooth_acl_queues[slot]);

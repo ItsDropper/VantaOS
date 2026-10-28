@@ -757,6 +757,35 @@ static void test_hci_command_credits_and_discovery_builders(void)
     assert(usb_bluetooth_hci_build_read_bd_addr(out, 2U) == -90);
 }
 
+static void test_l2cap_acl_packet_builder(void)
+{
+    const uint8_t signaling[] = {0x02U, 0x01U, 0x04U, 0x00U,
+                                 0x01U, 0x00U, 0x40U, 0x00U};
+    uint8_t packet[32] = {0};
+    usb_bluetooth_l2cap_view_t view;
+    assert(usb_bluetooth_l2cap_build_acl_packet(0x000BU, 0x0001U,
+                                                signaling, sizeof(signaling),
+                                                packet, sizeof(packet)) == 16);
+    assert(packet[0] == 0x0BU && packet[1] == 0x20U &&
+           packet[2] == 12U && packet[4] == 8U &&
+           packet[6] == 1U && packet[7] == 0U);
+    assert(usb_bluetooth_l2cap_parse(packet, 16U, &view));
+    assert(view.handle == 0x000BU && view.cid == 0x0001U &&
+           view.payload_length == sizeof(signaling));
+    assert(memcmp(view.payload, signaling, sizeof(signaling)) == 0);
+    assert(usb_bluetooth_l2cap_build_acl_packet(0U, 1U, signaling,
+                                                sizeof(signaling), packet,
+                                                sizeof(packet)) == -22);
+    assert(usb_bluetooth_l2cap_build_acl_packet(0x0F00U, 1U, signaling,
+                                                sizeof(signaling), packet,
+                                                sizeof(packet)) == -22);
+    assert(usb_bluetooth_l2cap_build_acl_packet(0x000BU, 1U, signaling,
+                                                sizeof(signaling), packet,
+                                                8U) == -90);
+    assert(usb_bluetooth_l2cap_build_acl_packet(0x000BU, 1U, NULL, 1U,
+                                                packet, sizeof(packet)) == -22);
+}
+
 static void test_l2cap_connection_response_dispatch(void)
 {
     usb_bluetooth_l2cap_table_t table = {0};
@@ -861,6 +890,7 @@ int main(void)
     test_l2cap_channel_lifecycle();
     test_l2cap_standard_signaling_builders();
     test_l2cap_connection_response_dispatch();
+    test_l2cap_acl_packet_builder();
     test_complete_hci_interface();
     test_incomplete_interface_is_not_claimed();
     test_malformed_lengths_are_rejected();

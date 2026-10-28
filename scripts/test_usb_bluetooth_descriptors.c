@@ -722,9 +722,76 @@ static void test_l2cap_signaling_command_boundaries(void)
     assert(!usb_bluetooth_l2cap_signaling_valid(empty, 0U));
 }
 
+static void test_hci_command_credits_and_discovery_builders(void)
+{
+    usb_bluetooth_hci_command_state_t state = {.credits = 1U};
+    uint8_t out[16] = {0};
+    assert(usb_bluetooth_hci_command_begin(&state, 0x1001U) == 0);
+    assert(state.credits == 0U && state.outstanding == 1U);
+    assert(usb_bluetooth_hci_command_begin(&state, 0x1009U) == -16);
+    const uint8_t unrelated[] = {0x0EU, 0x04U, 0x01U, 0x09U, 0x10U, 0U};
+    assert(usb_bluetooth_hci_command_event(&state, unrelated,
+                                           sizeof(unrelated)) == 0);
+    assert(state.outstanding == 1U);
+    const uint8_t complete[] = {0x0EU, 0x04U, 0x02U, 0x01U, 0x10U, 0U};
+    assert(usb_bluetooth_hci_command_event(&state, complete,
+                                           sizeof(complete)) == 1);
+    assert(state.outstanding == 0U && state.completed == 1U &&
+           state.credits == 2U && state.status == 0U);
+    assert(usb_bluetooth_hci_command_begin(&state, 0x1009U) == 0);
+    const uint8_t failed[] = {0x0FU, 0x04U, 0x0CU, 0x01U, 0x09U, 0x10U};
+    assert(usb_bluetooth_hci_command_event(&state, failed,
+                                           sizeof(failed)) == -5);
+    assert(state.outstanding == 0U && state.status == 0x0CU &&
+           state.event_kind == 2U);
+    assert(usb_bluetooth_hci_build_read_local_version(out, sizeof(out)) == 3);
+    assert(out[0] == 0x01U && out[1] == 0x10U && out[2] == 0U);
+    assert(usb_bluetooth_hci_build_read_bd_addr(out, sizeof(out)) == 3);
+    assert(out[0] == 0x09U && out[1] == 0x10U);
+    assert(usb_bluetooth_hci_build_read_buffer_size(out, sizeof(out)) == 3);
+    assert(out[0] == 0x05U && out[1] == 0x10U);
+    assert(usb_bluetooth_hci_build_inquiry(out, sizeof(out), 8U, 0U) == 8);
+    assert(out[0] == 0x01U && out[1] == 0x04U && out[2] == 5U &&
+           out[3] == 0x33U && out[6] == 8U);
+    assert(usb_bluetooth_hci_build_inquiry(out, sizeof(out), 0U, 0U) == -22);
+    assert(usb_bluetooth_hci_build_read_bd_addr(out, 2U) == -90);
+}
+
+static void test_l2cap_channel_lifecycle(void)
+{
+    usb_bluetooth_l2cap_table_t table = {0};
+    usb_bluetooth_l2cap_table_reset(&table);
+    uint16_t cid = 0U;
+    uint8_t id = 0U;
+    assert(usb_bluetooth_l2cap_channel_begin(&table, 1U, 672U, 100U,
+                                             &cid, &id) == 0);
+    assert(cid >= 0x0040U && id != 0U);
+    assert(usb_bluetooth_l2cap_channel_response(&table, id, 0x0041U,
+                                                0U, 672U) == 1);
+    assert(usb_bluetooth_l2cap_channel_configured(&table, cid) == 1);
+    assert(usb_bluetooth_l2cap_channel_close(&table, cid) == 1);
+    assert(usb_bluetooth_l2cap_channel_close(&table, cid) == -9);
+
+    assert(usb_bluetooth_l2cap_channel_begin(&table, 1U, 672U, 200U,
+                                             &cid, &id) == 0);
+    assert(usb_bluetooth_l2cap_expire(&table, 199U) == 0U);
+    assert(usb_bluetooth_l2cap_expire(&table, 200U) == 1U);
+    assert(usb_bluetooth_l2cap_channel_response(&table, id, 0x0042U,
+                                                0U, 672U) == -9);
+    for (uint32_t i = 0U; i < USB_BLUETOOTH_L2CAP_CHANNEL_MAX; ++i)
+        assert(usb_bluetooth_l2cap_channel_begin(&table, 1U, 672U, 0U,
+                                                 &cid, &id) == 0);
+    assert(usb_bluetooth_l2cap_channel_begin(&table, 1U, 672U, 0U,
+                                             &cid, &id) == -28);
+    assert(usb_bluetooth_l2cap_channel_begin(&table, 2U, 672U, 0U,
+                                             &cid, &id) == -22);
+}
+
 int main(void)
 {
     test_hci_command_encoding();
+    test_hci_command_credits_and_discovery_builders();
+    test_l2cap_channel_lifecycle();
     test_complete_hci_interface();
     test_incomplete_interface_is_not_claimed();
     test_malformed_lengths_are_rejected();

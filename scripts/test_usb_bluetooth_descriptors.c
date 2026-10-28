@@ -1214,8 +1214,7 @@ static void test_l2cap_configuration_transaction(void)
            table.channels[1].config_identifier == 11U);
     assert(usb_bluetooth_l2cap_channel_configure_response(&table, cid, 11U,
                                                           0U, 1U, 672U) == -5);
-    assert(table.channels[1].state == 3U &&
-           table.channels[1].config_identifier == 0U);
+    assert(table.channels[1].active == 0U);
 }
 
 static void test_l2cap_acl_packet_builder(void)

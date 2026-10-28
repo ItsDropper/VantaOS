@@ -1201,6 +1201,55 @@ uint32_t usb_bluetooth_l2cap_expire(usb_bluetooth_l2cap_table_t *table,
     return expired;
 }
 
+void usb_bluetooth_connection_attempt_reset(
+    usb_bluetooth_connection_attempt_t *attempt)
+{
+    if (attempt == NULL)
+        return;
+    attempt->active = 0U;
+    for (uint32_t i = 0U; i < 6U; ++i)
+        attempt->address[i] = 0U;
+}
+
+int usb_bluetooth_connection_attempt_begin(
+    usb_bluetooth_connection_attempt_t *attempt, const uint8_t address[6])
+{
+    if (attempt == NULL || address == NULL)
+        return -22;
+    if (attempt->active)
+        return -17;
+    uint8_t nonzero = 0U;
+    for (uint32_t i = 0U; i < 6U; ++i)
+        nonzero |= address[i];
+    if (nonzero == 0U)
+        return -22;
+    attempt->active = 1U;
+    for (uint32_t i = 0U; i < 6U; ++i)
+        attempt->address[i] = address[i];
+    return 0;
+}
+
+int usb_bluetooth_connection_attempt_matches(
+    const usb_bluetooth_connection_attempt_t *attempt,
+    const uint8_t address[6])
+{
+    if (attempt == NULL || address == NULL || !attempt->active)
+        return 0;
+    uint8_t difference = 0U;
+    for (uint32_t i = 0U; i < 6U; ++i)
+        difference |= (uint8_t)(attempt->address[i] ^ address[i]);
+    return difference == 0U;
+}
+
+int usb_bluetooth_connection_attempt_finish(
+    usb_bluetooth_connection_attempt_t *attempt, const uint8_t address[6])
+{
+    if (!usb_bluetooth_connection_attempt_matches(attempt, address))
+        return 0;
+    usb_bluetooth_connection_attempt_reset(attempt);
+    return 1;
+}
+
 void usb_bluetooth_link_table_reset(usb_bluetooth_link_table_t *table)
 {
     if (table == NULL)

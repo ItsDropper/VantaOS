@@ -1837,9 +1837,46 @@ static void test_connection_attempt_state(void)
     assert(usb_bluetooth_connection_attempt_matches(&attempt, address_b) == 0);
 }
 
+static void test_hci_read_buffer_size_result(void)
+{
+    const uint8_t success[] = {
+        0x0EU, 0x0BU, 0x01U, 0x05U, 0x10U, 0x00U,
+        0xFBU, 0x03U, 0x00U, 0x08U, 0x00U, 0x00U, 0x00U
+    };
+    const uint8_t controller_error[] = {
+        0x0EU, 0x0BU, 0x01U, 0x05U, 0x10U, 0x0CU,
+        0x00U, 0x00U, 0x00U, 0x00U, 0x00U, 0x00U, 0x00U
+    };
+    const uint8_t unrelated[] = {
+        0x0EU, 0x0BU, 0x01U, 0x09U, 0x10U, 0x00U,
+        0xFBU, 0x03U, 0x00U, 0x08U, 0x00U, 0x00U, 0x00U
+    };
+    usb_bluetooth_hci_buffer_size_t result = {0U};
+
+    assert(usb_bluetooth_hci_read_buffer_size_result(
+               success, sizeof(success), &result) == 1);
+    assert(result.acl_packet_length == 1019U);
+    assert(result.sco_packet_length == 0U);
+    assert(result.total_acl_packets == 8U);
+    assert(result.total_sco_packets == 0U);
+    assert(usb_bluetooth_hci_read_buffer_size_result(
+               controller_error, sizeof(controller_error), &result) == -22);
+    assert(usb_bluetooth_hci_read_buffer_size_result(
+               unrelated, sizeof(unrelated), &result) == 0);
+    assert(usb_bluetooth_hci_read_buffer_size_result(
+               success, sizeof(success) - 1U, &result) == -22);
+    const uint8_t zero_acl_capacity[] = {
+        0x0EU, 0x0BU, 0x01U, 0x05U, 0x10U, 0x00U,
+        0x00U, 0x00U, 0x00U, 0x08U, 0x00U, 0x00U, 0x00U
+    };
+    assert(usb_bluetooth_hci_read_buffer_size_result(
+               zero_acl_capacity, sizeof(zero_acl_capacity), &result) == -22);
+}
+
 int main(void)
 {
     test_hci_command_encoding();
+    test_hci_read_buffer_size_result();
     test_hci_command_credits_and_discovery_builders();
     test_hci_connection_command_builders();
     test_hci_inquiry_result_parser();

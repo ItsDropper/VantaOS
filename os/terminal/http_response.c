@@ -187,3 +187,27 @@ http_response_status_t http_response_parse(const char *headers,
     }
     return HTTP_RESPONSE_BAD_HEADER;
 }
+
+const char *http_response_status_string(http_response_status_t status)
+{
+    switch (status) {
+    case HTTP_RESPONSE_OK:
+        return "ok";
+    case HTTP_RESPONSE_BAD_ARGUMENT:
+        return "invalid parser arguments or oversized header block";
+    case HTTP_RESPONSE_BAD_STATUS_LINE:
+        return "malformed HTTP status line";
+    case HTTP_RESPONSE_BAD_HEADER:
+        return "malformed HTTP header syntax";
+    case HTTP_RESPONSE_UNSUPPORTED_TRANSFER_ENCODING:
+        return "Transfer-Encoding is unsupported";
+    case HTTP_RESPONSE_INVALID_CONTENT_LENGTH:
+        return "invalid Content-Length";
+    case HTTP_RESPONSE_CONTENT_LENGTH_TOO_LARGE:
+        return "Content-Length exceeds the 8 MiB limit";
+    case HTTP_RESPONSE_AMBIGUOUS_CONTENT_LENGTH:
+        return "duplicate Content-Length fields are rejected";
+    default:
+        return "unknown HTTP parser error";
+    }
+}

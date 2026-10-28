@@ -146,6 +146,10 @@ Completed ACL packets are tagged by HCI handle in their queue, so queued packets
 for other live peers are preserved. The completed-packet queue is cleared when
 the final active link closes. Automatic L2CAP response dispatch remains restricted to one active link until channel ownership is modeled explicitly. The USB polling path additionally uses a handle-bound dispatcher: it rejects a reassembled ACL packet whose embedded HCI connection handle differs from the handle selected by the link reassembler. This is a defensive routing check, not a substitute for per-handle L2CAP channel tables.
 
+## HCI connection command encoding
+
+The host library now provides checked encoders for the HCI Create Connection command (opcode 0x0405) and Disconnect command (0x0406). Create Connection validates the address, packet type, page-scan repetition mode, clock-offset range, and role-switch flag; Disconnect validates the 12-bit connection handle and nonzero reason. Both produce HCI command packets only: they do not submit commands, select a remote device, or establish a connection by themselves. A connection workflow must still coordinate command credits, controller events, link-table transitions, and failure/cancel handling.
+
 ## Unified binding teardown
 
 Bluetooth binding teardown is centralized so disconnect and a partially failed endpoint-start sequence clear the same state: port/interface/endpoints, counters, reset readiness, transmit-busy state, dropped-packet count, and the full ACL queue. Binding initializes counters and reset state explicitly before starting transfers. This prevents stale per-slot state from surviving a failed start and being mistaken for the next device binding.

@@ -512,9 +512,8 @@ static void test_acl_fragment_reassembly(void)
     const uint8_t first[] = {0x01U, 0x20U, 0x07U, 0x00U,
                              0x06U, 0x00U, 0x01U, 0x00U,
                              0x02U, 0x01U, 0x02U};
-    const uint8_t continuation[] = {0x01U, 0x10U, 0x07U, 0x00U,
-                                    0x00U, 0x34U, 0x12U, 0x56U,
-                                    0x78U, 0x9AU, 0xBCU};
+    const uint8_t continuation[] = {0x01U, 0x10U, 0x03U, 0x00U,
+                                    0x34U, 0x12U, 0x56U};
     const uint8_t wrong_handle[] = {0x02U, 0x10U, 0x01U, 0x00U, 0xFFU};
     usb_bluetooth_acl_reassembly_t state = {0};
     uint8_t output[USB_BLUETOOTH_ACL_MAX_PACKET] = {0};
@@ -538,7 +537,7 @@ static void test_acl_fragment_reassembly(void)
     usb_bluetooth_l2cap_view_t view = {0};
     assert(usb_bluetooth_l2cap_parse(output, (uint32_t)result, &view));
     assert(view.channel_id == 1U && view.payload_length == 6U);
-    assert(view.payload[0] == 0x02U && view.payload[5] == 0xBCU);
+    assert(view.payload[0] == 0x02U && view.payload[5] == 0x56U);
     assert(state.complete == 0U && state.received_length == 0U);
 
     usb_bluetooth_acl_reassembly_reset(&state);

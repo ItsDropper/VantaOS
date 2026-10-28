@@ -37,7 +37,7 @@ static uint32_t ahci_mmio_read32(volatile uint8_t* registers, uint32_t offset)
  * writes all ones to the BAR, so it must never run against an active function.
  * This discovery stage does not reset the HBA or enable DMA.
  */
-static int ahci_probe_idle_function(const struct pci_device* pci)
+static int ahci_probe_inactive_pci_function(const struct pci_device* pci)
 {
     uint16_t saved_command;
     uint64_t bar = 0U;
@@ -118,7 +118,7 @@ void ahci_initialize(void)
             continue;
         candidate_found = 1;
         if (ahci_probe_idle_function(pci)) {
-            serial_write("VANTAOS_AHCI_IDLE_CONTROLLER_DISCOVERED\n");
+            serial_write("VANTAOS_AHCI_CONTROLLER_DISCOVERED_READ_ONLY\n");
         } else {
             serial_write("VANTAOS_AHCI_CONTROLLER_PROBE_REJECTED\n");
         }

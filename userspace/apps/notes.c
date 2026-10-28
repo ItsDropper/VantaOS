@@ -263,9 +263,9 @@ static void copy_selection(void)
 
 static void paste_clipboard(void)
 {
-    long available = vanta_clipboard_get(clipboard, sizeof(clipboard));
-    if (available <= 0) return;
-    clipboard_length = (size_t)available;
+    long clipboard_available = vanta_clipboard_get(clipboard, sizeof(clipboard));
+    if (clipboard_available <= 0) return;
+    clipboard_length = (size_t)clipboard_available;
     if (selection_active) delete_selection();
     size_t available = sizeof(document) - 1U - document_length;
     size_t count = clipboard_length < available ? clipboard_length : available;

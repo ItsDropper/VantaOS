@@ -72,9 +72,9 @@
 static uint8_t user_clipboard[USER_CLIPBOARD_CAPACITY];
 static size_t user_clipboard_length;
 static spinlock_t user_clipboard_lock = SPINLOCK_INITIALIZER;
-#define USER_SYSCALL_KERNEL_COMMAND_MAX 2048U
-#define USER_SYSCALL_IO_MAX 4096U
-#define USER_SYSCALL_WRITE_MAX 4096U
+#define USER_MAX_KERNEL_COMMAND 2048U
+#define USER_MAX_IO 4096U
+#define USER_MAX_WRITE 4096U
 
 static int syscall_write(struct exception_frame* frame,
                          const process_t* process)
@@ -87,7 +87,7 @@ static int syscall_write(struct exception_frame* frame,
         frame->rax = 0U;
         return 0;
     }
-    if (length > USER_SYSCALL_WRITE_MAX)
+    if (length > USER_MAX_WRITE)
     {
         frame->rax = (uint64_t)(int64_t)-22;
         return 0;
@@ -115,7 +115,7 @@ static int syscall_console_write(struct exception_frame* frame,
         frame->rax = 0U;
         return 0;
     }
-    if (length > USER_SYSCALL_WRITE_MAX)
+    if (length > USER_MAX_WRITE)
     {
         frame->rax = (uint64_t)(int64_t)-22;
         return 0;
@@ -212,7 +212,7 @@ static int syscall_read(struct exception_frame* frame, uint32_t pid,
     uintptr_t address = (uintptr_t)frame->rsi;
     uint64_t length = frame->rdx;
 
-    if (length > USER_SYSCALL_IO_MAX)
+    if (length > USER_MAX_IO)
     {
         frame->rax = (uint64_t)(int64_t)-22;
         return 0;
@@ -236,7 +236,7 @@ static int syscall_read(struct exception_frame* frame, uint32_t pid,
         return 0;
     }
 
-    char buffer[USER_SYSCALL_IO_MAX];
+    char buffer[USER_MAX_IO];
     int result = vfs_read(handle, buffer, (unsigned int)length);
     if (result < 0)
     {
@@ -319,7 +319,7 @@ static int syscall_listdir(struct exception_frame* frame,
 {
     uintptr_t buffer_address = (uintptr_t)frame->rsi;
     uint64_t capacity_value = frame->rdx;
-    if (capacity_value == 0U || capacity_value > USER_SYSCALL_IO_MAX)
+    if (capacity_value == 0U || capacity_value > USER_MAX_IO)
     {
         frame->rax = (uint64_t)(int64_t)-22;
         return 0;
@@ -364,7 +364,7 @@ static int syscall_listdir(struct exception_frame* frame,
         return 0;
     }
 
-    char output[USER_SYSCALL_IO_MAX];
+    char output[USER_MAX_IO];
     size_t used = 0U;
     for (int i = 0; i < count; i++)
     {
@@ -564,7 +564,7 @@ static int syscall_file_write(struct exception_frame* frame, uint32_t pid,
     }
 
     uint64_t length = frame->rdx;
-    if (length > USER_SYSCALL_IO_MAX)
+    if (length > USER_MAX_IO)
     {
         frame->rax = (uint64_t)(int64_t)-22;
         return 0;
@@ -590,7 +590,7 @@ static int syscall_file_write(struct exception_frame* frame, uint32_t pid,
         return 0;
     }
 
-    char buffer[USER_SYSCALL_IO_MAX];
+    char buffer[USER_MAX_IO];
     for (size_t i = 0; i < (size_t)length; i++)
         buffer[i] = ((const char*)address)[i];
 
@@ -730,7 +730,7 @@ static int syscall_kernel_command(struct exception_frame* frame,
 
     uint64_t capacity = frame->rdx;
     uintptr_t output_address = (uintptr_t)frame->rsi;
-    if (capacity == 0U || capacity > USER_SYSCALL_KERNEL_COMMAND_MAX ||
+    if (capacity == 0U || capacity > USER_MAX_KERNEL_COMMAND ||
         !paging_user_range_valid(process->address_space, output_address,
                                  (size_t)capacity, 1))
     {
@@ -749,7 +749,7 @@ static int syscall_kernel_command(struct exception_frame* frame,
         return 0;
     }
 
-    char output[USER_SYSCALL_KERNEL_COMMAND_MAX];
+    char output[USER_MAX_KERNEL_COMMAND];
     int result = shell_execute_kernel_command(command, output, sizeof(output));
     if (result < 0)
     {

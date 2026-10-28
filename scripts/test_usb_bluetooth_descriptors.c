@@ -231,6 +231,16 @@ static void test_acl_queue_pop_by_handle(void)
     assert(memcmp(output, first, 10U) == 0);
     assert(usb_bluetooth_acl_queue_pop_handle(&queue, 0x000BU, output,
                                               sizeof(output)) == -11);
+
+    /* Removing the head entry must preserve the later packet and queue order. */
+    usb_bluetooth_acl_queue_reset(&queue);
+    assert(usb_bluetooth_acl_queue_push(&queue, first, 10U) == 0);
+    assert(usb_bluetooth_acl_queue_push(&queue, second, 10U) == 0);
+    assert(usb_bluetooth_acl_queue_pop_handle(&queue, 0x000BU, output,
+                                              sizeof(output)) == 10);
+    assert(memcmp(output, first, 10U) == 0 && queue.count == 1U);
+    assert(usb_bluetooth_acl_queue_pop(&queue, output, sizeof(output)) == 10);
+    assert(memcmp(output, second, 10U) == 0 && queue.count == 0U);
 }
 
 static void test_acl_queue_preserves_messages_on_small_buffer(void)

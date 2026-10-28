@@ -586,6 +586,21 @@ int usb_bluetooth_l2cap_build_disconnection_request(uint8_t identifier,
                                                 capacity);
 }
 
+int usb_bluetooth_l2cap_dispatch_acl_responses(
+    usb_bluetooth_l2cap_table_t *table, const uint8_t *packet,
+    uint32_t length)
+{
+    if (table == NULL || packet == NULL)
+        return -22;
+    usb_bluetooth_l2cap_view_t l2cap;
+    if (!usb_bluetooth_l2cap_parse(packet, length, &l2cap))
+        return -22;
+    if (l2cap.channel_id != 0x0001U)
+        return 0;
+    return usb_bluetooth_l2cap_dispatch_responses(
+        table, l2cap.payload, l2cap.payload_length);
+}
+
 int usb_bluetooth_l2cap_dispatch_responses(
     usb_bluetooth_l2cap_table_t *table, const uint8_t *payload,
     uint32_t length)

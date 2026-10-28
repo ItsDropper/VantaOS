@@ -2,7 +2,7 @@
 
 ## Current state
 
-VantaOS has an initial user-mode GUI boundary and three standalone ring-3 desktop applications. The current syscall ABI is version 6 and is specific to VantaOS; it is not POSIX, Win32, or Wayland compatible.
+VantaOS has an initial user-mode GUI boundary and three standalone ring-3 desktop applications. The current userspace syscall ABI is version 9 and the GUI event ABI is version 2; both are VantaOS-specific, not POSIX, Win32, or Wayland compatible.
 
 - Static ELF64 `ET_EXEC` programs can be loaded from FAT32 and run at CPL3 (ring 3) in a private address space.
 - The public freestanding header `userspace/include/vanta/syscall.h` exposes the current syscall wrappers; GUI structures live in `userspace/include/vanta/gui.h`.
@@ -11,7 +11,7 @@ VantaOS has an initial user-mode GUI boundary and three standalone ring-3 deskto
 - Windows are process-owned. Dead-owner cleanup is tested and required by CI through `VANTAOS_GUI_DEAD_OWNER_CLEANUP_OK`.
 - **Settings runs as a ring-3 ELF** at `/SYSTEM/SETTINGS.ELF`. Its window has Appearance, Accessibility, and About sections; appearance controls cover four accent colors (Blue, Teal, Amber, Violet), light/dark surfaces, and compact/comfortable Explorer rows, while accessibility controls cover Settings text size and high contrast. The About section documents the app and explicitly identifies unsupported time/region settings. It saves version 2 preferences to `/SYSTEM/VANTASET.CFG`, accepts existing version 1 files, and CI checks storage readback and persistence across a second boot.
 - Accent, light/dark surfaces, contrast, and Explorer row density are applied to the desktop when saved; the text-size option currently changes the Settings controls only. The settings-apply syscall reloads the validated on-disk config without restarting and broadcasts a theme-change event so open apps refresh their own surfaces. Settings does not yet provide timezone-aware local time.
-- Terminal's shell, window, text rendering, input editing, and bounded scrollback run in the ring-3 `/TERMINAL.ELF` app. File Explorer runs as `/EXPLORER.ELF` at ring 3. It supports editable absolute-path navigation, per-directory substring search, active sidebar locations, single and Ctrl-click multi-selection, selected-row outlines, right-click actions and properties, create-file/create-folder, rename (including extension changes), recursive delete/copy/move of folder trees, Ctrl+C/Ctrl+X/Ctrl+V file operations, and per-file RLE compression/extraction using the documented Vanta `.VZA` format. It also previews text and launches validated ELF programs. The filesystem supports ASCII long-filename creation through FAT32 LFN records; Unicode filename creation, general content editing, cross-directory rename, and crash-atomic transactions remain unsupported.
+- Terminal's shell, window, text rendering, input editing, and bounded scrollback run in the ring-3 `/TERMINAL.ELF` app. Terminal output supports mouse drag selection, double-click word selection, Ctrl+A selection, and app-local Ctrl+C/Ctrl+V. The new ring-3 `/SYSTEM/NOTES.ELF` Notes app edits `/HOME/USER/NOTES.TXT`, supports keyboard editing, mouse drag selection, double-click word selection, Ctrl+A/Ctrl+C/Ctrl+V, and Ctrl+S save. Notes is pinned in Start and is installed by the build/UEFI setup path. The clipboard is still per-app, not shared between applications. File Explorer runs as `/EXPLORER.ELF` at ring 3. It supports editable absolute-path navigation, per-directory substring search, active sidebar locations, single and Ctrl-click multi-selection, selected-row outlines, right-click actions and properties, create-file/create-folder, rename (including extension changes), recursive delete/copy/move of folder trees, Ctrl+C/Ctrl+X/Ctrl+V file operations, and per-file RLE compression/extraction using the documented Vanta `.VZA` format. It also previews text and launches validated ELF programs. The filesystem supports ASCII long-filename creation through FAT32 LFN records; Unicode filename creation, general content editing, cross-directory rename, and crash-atomic transactions remain unsupported.
 
 ## IPC message contract
 
@@ -30,12 +30,12 @@ The kernel validates requests and retains a bounded draw list for each window.
 | Window lifecycle | Create/close an owned window with a server-assigned ID; at most 8 windows |
 | Drawing | Filled rectangles and text; at most 160 commands per window |
 | Text limits | 31-byte title and 63-byte command text |
-| Events | Poll keyboard-character, pointer, focus, close-request, and theme-change events from a bounded per-window queue |
+| Events | Poll keyboard-character, pointer down/move/up, focus, close-request, resize, and theme-change events from a bounded per-window queue; key events carry Ctrl modifier state |
 | Queue overflow | Oldest event is dropped when the 32-event queue is full |
 | Input ownership | Left/right pointer clicks route to the topmost user window; pointer events carry Ctrl state for multi-selection, and keyboard input follows focus |
 | Isolation boundary | User buffers are validated; no raw framebuffer or kernel pointer is exposed |
 
-The implementation is intentionally small. General window move/resize/maximize controls, resize events, image surfaces, a system-wide clipboard, a blocking event wait, a general widget toolkit, and mature clipping/accessibility support are not implemented. Explorer provides an app-local path clipboard for Ctrl+C/Ctrl+V in the address field, not an OS-wide clipboard.
+The implementation is intentionally small. A system-wide clipboard, a blocking event wait, a general widget toolkit, and mature clipping/accessibility support are not implemented. Window move/resize/maximize and resize notifications exist, but interaction testing remains limited. Explorer provides an app-local path clipboard for Ctrl+C/Ctrl+V in the address field, not an OS-wide clipboard.
 
 ## Storage and Settings persistence
 

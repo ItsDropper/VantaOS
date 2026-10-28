@@ -7,6 +7,7 @@
 
 #include <vanta/syscall.h>
 #include <vanta/gui.h>
+#include <vanta/bluetooth.h>
 
 /* Compiled by CI to keep every public wrapper and argument order buildable. */
 long vanta_user_abi_compile_check(
@@ -15,6 +16,9 @@ long vanta_user_abi_compile_check(
     vanta_gui_window_request_t window_request = {0};
     vanta_gui_draw_command_t draw_command = {0};
     vanta_gui_event_t gui_event = {0};
+    usb_bluetooth_inquiry_result_t bluetooth_result = {0};
+    uint32_t bluetooth_port = 0U;
+    uint16_t bluetooth_handle = 0U;
     window_request.width = 420U;
     window_request.height = 280U;
     window_request.title[0] = 'T';
@@ -48,6 +52,18 @@ long vanta_user_abi_compile_check(
     result += vanta_terminal_begin_input();
     result += vanta_terminal_backspace();
     result += vanta_terminal_clear();
+    result += vanta_bluetooth_adapter_count();
+    result += vanta_bluetooth_adapter_port(0U, &bluetooth_port);
+    result += vanta_bluetooth_scan(bluetooth_port);
+    result += vanta_bluetooth_cancel_scan(bluetooth_port);
+    result += vanta_bluetooth_discovered_count(bluetooth_port);
+    result += vanta_bluetooth_discovered_get(
+        bluetooth_port, 0U, &bluetooth_result);
+    result += vanta_bluetooth_connect(bluetooth_port, &bluetooth_result);
+    result += vanta_bluetooth_peer_state(
+        bluetooth_port, bluetooth_result.address, &bluetooth_handle);
+    result += vanta_bluetooth_cancel_connection(
+        bluetooth_port, bluetooth_result.address);
 
     long child = vanta_spawn(path, argv, 1U);
     if (child > 0)

@@ -487,6 +487,12 @@ void graphics_draw_start_menu_detail(int width, int height)
     graphics_draw_text(mx + 78, my + 285, "Settings", UI_WHITE, 1);
     graphics_draw_text(mx + 78, my + 303, "Display configuration", UI_MUTED, 1);
 
+    ui_surface(mx + 24, my + 326, mw - 48, 54, 9,
+               0x001A2633, UI_EDGE_SOFT);
+    ui_icon_settings(mx + 36, my + 338, 30, UI_MINT);
+    graphics_draw_text(mx + 78, my + 339, "Notes", UI_WHITE, 1);
+    graphics_draw_text(mx + 78, my + 357, "Edit and save text files", UI_MUTED, 1);
+
     ui_line(mx + 24, my + mh - 64, mw - 48, UI_EDGE_SOFT);
     ui_dot(mx + 26, my + mh - 43,
         filesystem_is_initialized() ? UI_MINT : UI_AMBER);

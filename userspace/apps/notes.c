@@ -61,7 +61,7 @@ static void copy_text(char* destination, size_t capacity, const char* source)
 static int path_is_home_document(const char* path)
 {
     static const char prefix[] = "/HOME/USER/";
-    if (!path)
+    if (!path || text_length(path) < sizeof(prefix) - 1U)
         return 0;
     for (size_t i = 0U; i < sizeof(prefix) - 1U; ++i)
     {
@@ -78,14 +78,14 @@ static int path_is_home_document(const char* path)
         return 0;
     for (const char* p = component;; ++p)
     {
-        if (*p == '/' || *p == '\\0')
+        if (*p == '/' || *p == '\0')
         {
             size_t length = (size_t)(p - component);
             if (length == 0U ||
                 (length == 1U && component[0] == '.') ||
                 (length == 2U && component[0] == '.' && component[1] == '.'))
                 return 0;
-            if (*p == '\\0')
+            if (*p == '\0')
                 return 1;
             component = p + 1;
         }
@@ -103,7 +103,7 @@ static int path_with_suffix(const char* path, const char* suffix,
         output[i] = path[i];
     for (size_t i = 0U; i < suffix_length; ++i)
         output[path_length + i] = suffix[i];
-    output[path_length + suffix_length] = '\\0';
+    output[path_length + suffix_length] = '\0';
     return 1;
 }
 

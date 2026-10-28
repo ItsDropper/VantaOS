@@ -290,6 +290,44 @@ int usb_bluetooth_l2cap_build_acl_packet(uint16_t handle, uint16_t cid,
     return (int)total;
 }
 
+int usb_bluetooth_acl_fragment_build(
+    const uint8_t *packet, uint32_t packet_length, uint16_t mtu,
+    uint32_t offset, uint8_t *output, uint32_t capacity)
+{
+    if (packet == NULL || output == NULL || mtu == 0U ||
+        packet_length < 5U ||
+        packet_length > USB_BLUETOOTH_ACL_MAX_PACKET ||
+        !usb_bluetooth_acl_packet_valid(packet, packet_length))
+        return -22;
+
+    uint16_t flags = (uint16_t)packet[0] |
+                     ((uint16_t)packet[1] << 8);
+    uint16_t handle = flags & 0x0FFFU;
+    uint8_t packet_boundary = (uint8_t)((flags >> 12) & 0x03U);
+    uint8_t broadcast = (uint8_t)((flags >> 14) & 0x03U);
+    uint32_t acl_payload_length = packet_length - 4U;
+    if (handle == 0U || broadcast != 0U || packet_boundary == 1U ||
+        offset >= acl_payload_length)
+        return -22;
+
+    uint32_t fragment_length = acl_payload_length - offset;
+    if (fragment_length > mtu)
+        fragment_length = mtu;
+    uint32_t total = fragment_length + 4U;
+    if (total > capacity)
+        return -90;
+
+    uint16_t fragment_flags = (uint16_t)(handle |
+        (offset == 0U ? 0x2000U : 0x1000U));
+    output[0] = (uint8_t)fragment_flags;
+    output[1] = (uint8_t)(fragment_flags >> 8);
+    output[2] = (uint8_t)fragment_length;
+    output[3] = (uint8_t)(fragment_length >> 8);
+    for (uint32_t i = 0U; i < fragment_length; ++i)
+        output[4U + i] = packet[4U + offset + i];
+    return (int)total;
+}
+
 int usb_bluetooth_l2cap_build_signaling_acl_packet(
     uint16_t handle, const uint8_t *commands, uint32_t command_length,
     uint8_t *output, uint32_t capacity)

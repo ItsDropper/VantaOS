@@ -6,6 +6,7 @@
  */
 
 #include "ahci.h"
+#include "ahci_pci.h"
 #include "mmio.h"
 #include "pci.h"
 
@@ -99,7 +100,7 @@ int pci_write_config16(const struct pci_device* device, uint8_t offset,
 void* mmio_map_region(uint64_t physical_address, size_t length)
 {
     assert(physical_address == 0xFEBF0000ULL);
-    assert(length == 0x1100U);
+    assert(length == AHCI_ABAR_MIN_SIZE);
     ++map_calls;
     return fake_registers;
 }

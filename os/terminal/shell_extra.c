@@ -753,7 +753,7 @@ static int command_http_url(const char *url, const char *output_argument,
                             size_t line_end = h + k;
                             while (line_end + 1U < header_end &&
                                    !(headers[line_end] == '\\r' &&
-                                     headers[line_end + 1U] == '\\n'))
+                                     headers[line_end + 1U] == '\n'))
                                 ++line_end;
                             for (size_t q = h + k; q + 7U <= line_end; ++q) {
                                 static const char chunked[] = "chunked";
@@ -765,7 +765,7 @@ static int command_http_url(const char *url, const char *output_argument,
                                     ++m;
                                 }
                                 if (m == sizeof(chunked) - 1U) {
-                                    terminal_write("\\ncurl: chunked transfer encoding is not supported; refusing to save framed data");
+                                    terminal_write("\ncurl: chunked transfer encoding is not supported; refusing to save framed data");
                                     net_tcp_close(device);
                                     return 1;
                                 }
@@ -800,7 +800,7 @@ static int command_http_url(const char *url, const char *output_argument,
                                 parsed_length > max_download ||
                                 (expected_body_length != UINT32_MAX &&
                                  expected_body_length != parsed_length)) {
-                                terminal_write("\\ncurl: invalid or conflicting Content-Length");
+                                terminal_write("\ncurl: invalid or conflicting Content-Length");
                                 net_tcp_close(device);
                                 return 1;
                             }
@@ -857,7 +857,7 @@ static int command_http_url(const char *url, const char *output_argument,
     if (file_handle >= 0) (void)vfs_close(file_handle);
     if (expected_body_length != UINT32_MAX &&
         total_body != (size_t)expected_body_length) {
-        terminal_write("\\ncurl: response body length did not match Content-Length; output may be incomplete");
+        terminal_write("\ncurl: response body length did not match Content-Length; output may be incomplete");
         return 1;
     }
     if (!body_started) {

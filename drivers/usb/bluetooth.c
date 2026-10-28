@@ -260,6 +260,34 @@ int usb_bluetooth_transport_ready(int reset_complete, int reset_failed)
  * Decode an HCI ACL header. The PB/BC bits are exposed instead of silently
  * interpreting continuation fragments as standalone L2CAP packets.
  */
+int usb_bluetooth_l2cap_build_acl_packet(uint16_t handle, uint16_t cid,
+                                         const uint8_t *payload,
+                                         uint32_t payload_length,
+                                         uint8_t *output, uint32_t capacity)
+{
+    if (handle == 0U || handle > 0x0EFFU || cid == 0U ||
+        payload_length > 0xFFFFU - 4U || output == NULL ||
+        (payload_length != 0U && payload == NULL))
+        return -22;
+    uint32_t l2cap_length = payload_length + 4U;
+    uint32_t acl_length = l2cap_length + 4U;
+    uint32_t total = acl_length + 4U;
+    if (total > capacity)
+        return -90;
+    uint16_t handle_flags = (uint16_t)(handle | 0x2000U);
+    output[0] = (uint8_t)handle_flags;
+    output[1] = (uint8_t)(handle_flags >> 8);
+    output[2] = (uint8_t)acl_length;
+    output[3] = (uint8_t)(acl_length >> 8);
+    output[4] = (uint8_t)l2cap_length;
+    output[5] = (uint8_t)(l2cap_length >> 8);
+    output[6] = (uint8_t)cid;
+    output[7] = (uint8_t)(cid >> 8);
+    for (uint32_t i = 0U; i < payload_length; ++i)
+        output[8U + i] = payload[i];
+    return (int)total;
+}
+
 int usb_bluetooth_acl_parse(const uint8_t *packet, uint32_t length,
                             usb_bluetooth_acl_view_t *view)
 {

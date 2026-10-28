@@ -1094,6 +1094,16 @@ static void test_l2cap_configuration_response_parser(void)
     assert(usb_bluetooth_l2cap_configuration_response(&table, response,
                                                        14U) == -22);
     assert(table.channels[1].state == 3U);
+
+    /* A Pending response must not be treated as a terminal failure. */
+    response[2] = 6U;
+    response[8] = 4U;
+    response[9] = 0U;
+    assert(usb_bluetooth_l2cap_configuration_response(&table, response,
+                                                       10U) == 0);
+    assert(table.channels[1].active != 0U &&
+           table.channels[1].state == 3U &&
+           table.channels[1].config_identifier == 45U);
 }
 
 static void test_l2cap_identifier_collision_guards(void)
@@ -1204,7 +1214,7 @@ static void test_l2cap_reject_unsupported_inbound_service(void)
     assert(usb_bluetooth_l2cap_reject_connection_request(
                request, sizeof(request), response, sizeof(response)) == -22);
     request[1] = 0x31U;
-    request[4] = 0x03U; /* Bit 1 is reserved and must be zero. */
+    request[4] = 0x02U; /* PSM bit zero must be set. */
     assert(usb_bluetooth_l2cap_reject_connection_request(
                request, sizeof(request), response, sizeof(response)) == -22);
     request[4] = 0x01U;

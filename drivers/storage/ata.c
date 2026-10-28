@@ -8,6 +8,7 @@
 #include "ata.h"
 #include "block_device.h"
 #include "spinlock.h"
+#include "ata_lba28.h"
 
 #define ATA_CMD_IDENTIFY 0xEC
 #define ATA_CMD_READ_PIO 0x20
@@ -181,8 +182,7 @@ static block_status_t ata_block_read(block_device_t* device, uint64_t lba,
                                      uint32_t count, void* buffer)
 {
     (void)device;
-    if (lba > 0x0FFFFFFFU || count > 255U ||
-        lba >= available_sectors || (uint64_t)count > available_sectors - lba)
+    if (!ata_lba28_request_valid(lba, count, available_sectors))
         return BLOCK_STATUS_OUT_OF_RANGE;
     uint64_t flags = spinlock_lock_irqsave(&ata_io_lock);
     int ok = ata_read_sectors((uint32_t)lba, (uint8_t)count, buffer);
@@ -194,8 +194,7 @@ static block_status_t ata_block_write(block_device_t* device, uint64_t lba,
                                       uint32_t count, const void* buffer)
 {
     (void)device;
-    if (lba > 0x0FFFFFFFU || count > 255U ||
-        lba >= available_sectors || (uint64_t)count > available_sectors - lba)
+    if (!ata_lba28_request_valid(lba, count, available_sectors))
         return BLOCK_STATUS_OUT_OF_RANGE;
     uint64_t flags = spinlock_lock_irqsave(&ata_io_lock);
     int ok = ata_write_sectors((uint32_t)lba, (uint8_t)count, buffer);
@@ -309,9 +308,7 @@ int ata_read_sectors(
     if (!available || count == 0 || !buffer)
         return 0;
 
-    /* Reject a request whose final sector would wrap past LBA28. */
-    if (lba > 0x0FFFFFFFU ||
-        (uint32_t)count - 1U > 0x0FFFFFFFU - lba)
+    if (!ata_lba28_request_valid(lba, count, available_sectors))
         return 0;
 
     uint8_t* destination = (uint8_t*)buffer;
@@ -370,9 +367,7 @@ int ata_write_sectors(uint32_t lba, uint8_t count, const void* buffer)
     if (!available || count == 0 || !buffer)
         return 0;
 
-    /* LBA28 addresses sectors 0..0x0fffffff; reject arithmetic overflow. */
-    if (lba > 0x0FFFFFFFU ||
-        (uint32_t)count - 1U > 0x0FFFFFFFU - lba)
+    if (!ata_lba28_request_valid(lba, count, available_sectors))
         return 0;
 
     const uint8_t* source = (const uint8_t*)buffer;

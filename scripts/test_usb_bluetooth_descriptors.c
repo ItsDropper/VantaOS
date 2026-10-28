@@ -1035,6 +1035,9 @@ static void test_l2cap_response_dispatcher(void)
     command[6] = 0U; command[7] = 0U;
     command[8] = 0U; command[9] = 0U;
     assert(usb_bluetooth_l2cap_dispatch_responses(&table, command, 10U) == 1);
+    assert(table.channels[0].state == 3U &&
+           table.channels[0].local_configured == 1U);
+    assert(usb_bluetooth_l2cap_channel_remote_configured(&table, cid) == 1);
     assert(table.channels[0].state == 4U);
     assert(usb_bluetooth_l2cap_dispatch_responses(&table, command, 9U) == -22);
 }

@@ -59,12 +59,22 @@ gcc -m64 -mcmodel=large -ffreestanding -fno-pie -fno-stack-protector \
 ld -m elf_x86_64 -static -nostdlib -Ttext-segment=0x8000000000 \
     -e _start -o /tmp/vantaos-explorer-e2e.elf \
     /tmp/vantaos-terminal-crt0.o /tmp/vantaos-explorer-e2e.o
+
+echo "==> Building the ring-3 Notes file-load end-to-end test ELF..."
+gcc -m64 -mcmodel=large -ffreestanding -fno-pie -fno-stack-protector \
+    -mno-red-zone -fno-builtin -nostdlib -Wall -Wextra -Werror \
+    -DVANTAOS_NOTES_E2E_TEST -Iuserspace/include -Iinclude \
+    -c userspace/apps/notes.c -o /tmp/vantaos-notes-e2e.o
+ld -m elf_x86_64 -static -nostdlib -Ttext-segment=0x8000000000 \
+    -e _start -o /tmp/vantaos-notes-e2e.elf \
+    /tmp/vantaos-terminal-crt0.o /tmp/vantaos-notes-e2e.o
 test -s /tmp/vantaos-terminal.elf
 test -s /tmp/vantaos-settings.elf
 test -s /tmp/vantaos-explorer.elf
 test -s /tmp/vantaos-notes.elf
 test -s /tmp/vantaos-calculator.elf
 test -s /tmp/vantaos-explorer-e2e.elf
+test -s /tmp/vantaos-notes-e2e.elf
 
 echo "==> Preparing ISO..."
 rm -rf isodir/boot/kernel.bin
@@ -116,6 +126,8 @@ if command -v mkfs.fat >/dev/null 2>&1; then
         echo "    Installed /SYSTEM/CALCULATOR.ELF (static ring-3 Calculator)"
         mcopy -o -i vantaos.img /tmp/vantaos-explorer-e2e.elf ::/EXPLORER-E2E.ELF >/dev/null
         echo "    Installed /EXPLORER-E2E.ELF (automated ring-3 Explorer end-to-end tests)"
+        mcopy -o -i vantaos.img /tmp/vantaos-notes-e2e.elf ::/NOTES-E2E.ELF >/dev/null
+        echo "    Installed /NOTES-E2E.ELF (automated ring-3 Notes file-load test)"
 
         # Firmware is redistributable only under its upstream terms and is not
         # checked into this repository. Supply a locally obtained matching

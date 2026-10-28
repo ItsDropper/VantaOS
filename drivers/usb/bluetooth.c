@@ -865,6 +865,19 @@ int usb_bluetooth_hci_build_disconnect(uint16_t handle, uint8_t reason,
                             out, capacity);
 }
 
+int usb_bluetooth_hci_build_create_connection_cancel(
+    const uint8_t address[6], uint8_t *out, uint32_t capacity)
+{
+    if (address == NULL || out == NULL)
+        return -22;
+    uint8_t address_nonzero = 0U;
+    for (uint32_t i = 0U; i < 6U; ++i)
+        address_nonzero |= address[i];
+    if (address_nonzero == 0U)
+        return -22;
+    return hci_build_simple(0x0408U, 6U, address, out, capacity);
+}
+
 void usb_bluetooth_l2cap_table_reset(usb_bluetooth_l2cap_table_t *table)
 {
     if (table != NULL)

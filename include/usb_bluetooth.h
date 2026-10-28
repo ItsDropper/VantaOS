@@ -88,6 +88,21 @@ typedef struct {
     uint8_t address[6]; /* HCI wire byte order */
 } usb_bluetooth_connection_attempt_t;
 
+/* Inquiry lifecycle state, owned by the serialized USB polling CPU. */
+typedef struct {
+    uint8_t active;
+    uint8_t cancel_pending;
+} usb_bluetooth_inquiry_state_t;
+
+void usb_bluetooth_inquiry_state_reset(usb_bluetooth_inquiry_state_t *state);
+int usb_bluetooth_inquiry_state_begin(usb_bluetooth_inquiry_state_t *state);
+int usb_bluetooth_inquiry_state_cancel_begin(usb_bluetooth_inquiry_state_t *state);
+int usb_bluetooth_inquiry_state_cancel_result(usb_bluetooth_inquiry_state_t *state,
+                                               int accepted);
+void usb_bluetooth_inquiry_state_command_rejected(
+    usb_bluetooth_inquiry_state_t *state);
+void usb_bluetooth_inquiry_state_complete(usb_bluetooth_inquiry_state_t *state);
+
 void usb_bluetooth_connection_attempt_reset(
     usb_bluetooth_connection_attempt_t *attempt);
 int usb_bluetooth_connection_attempt_begin(

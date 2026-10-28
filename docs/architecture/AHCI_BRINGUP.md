@@ -4,13 +4,14 @@ VantaOS currently has legacy IDE-compatible ATA PIO and NVMe code. The
 `ahci_prdt_build()` helper is the first isolated AHCI primitive; it is not a
 SATA driver and must not be reported as device support.
 
-## Implemented primitive
+## Implemented primitives
 
 - Encodes the 16-byte AHCI PRDT entry layout.
 - Splits a contiguous DMA address range into entries of at most 4 MiB each.
 - Validates nonzero length, DWORD-aligned DMA address, 64-bit end-address overflow,
   output capacity, and the PRDT byte-count encoding.
 - Sets IOC only on the final entry when requested.
+- `ahci_pci_abar_valid()` rejects I/O BARs, zero bases, undersized/non-power-of-two apertures, misaligned ranges, and address overflow. It validates caller-supplied metadata only; it does not probe PCI or measure BAR size.
 - Leaves the entry array unchanged when validation fails.
 
 The helper assumes its caller already owns a device-visible DMA mapping. It does
@@ -19,7 +20,7 @@ perform cache synchronization, or transfer buffer ownership to the HBA.
 
 ## Required next stages
 
-1. Add AHCI PCI class/subclass discovery and validate BAR5 as an MMIO resource.
+1. Add AHCI PCI class/subclass discovery and acquire trustworthy BAR5 size metadata without disturbing an active controller. The pure ABAR validator is in place, but discovery/mapping is not.
 2. Implement a reset/enable state machine with bounded waits and fail-closed
    recovery; do not reset an active controller without an explicit ownership
    contract.

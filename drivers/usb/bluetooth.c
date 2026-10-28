@@ -553,7 +553,7 @@ int usb_bluetooth_l2cap_build_connection_request(uint8_t identifier,
                                                   uint8_t *output,
                                                   uint32_t capacity)
 {
-    if (psm == 0U || (psm & 1U) == 0U ||
+    if ((psm & 0x0101U) != 0x0001U ||
         local_cid < USB_BLUETOOTH_L2CAP_CID_DYNAMIC_MIN)
         return -22;
     const uint8_t parameters[4] = {
@@ -948,7 +948,7 @@ int usb_bluetooth_l2cap_channel_begin(usb_bluetooth_l2cap_table_t *table,
                                       uint8_t *identifier)
 {
     if (table == NULL || local_cid == NULL || identifier == NULL ||
-        psm == 0U || (psm & 1U) == 0U || local_mtu < 48U ||
+        (psm & 0x0101U) != 0x0001U || local_mtu < 48U ||
         local_mtu > USB_BLUETOOTH_L2CAP_DATA_MAX)
         return -22;
     uint32_t index = USB_BLUETOOTH_L2CAP_CHANNEL_MAX;

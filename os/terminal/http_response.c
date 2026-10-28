@@ -20,7 +20,7 @@ static int field_name_char(unsigned char c)
         (c >= '0' && c <= '9'))
         return 1;
     switch (c) {
-    case '!': case '#': case '$': case '%': case '&': case 39:
+    case '!': case '#': case '$': case '%': case '&': case 39: /* apostrophe */
     case '*': case '+': case '-': case '.': case '^': case '_':
     case '`': case '|': case '~':
         return 1;

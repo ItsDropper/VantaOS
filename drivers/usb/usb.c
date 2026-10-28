@@ -402,6 +402,9 @@ int usb_bluetooth_l2cap_connect(uint32_t port, uint16_t handle,
     *identifier = 0U;
     if (port == 0U || handle == 0U || handle > 0x0EFFU)
         return 0;
+    if (deadline != 0U &&
+        (int32_t)(deadline - timer_get_ticks()) <= 0)
+        return 0;
 
     uint32_t slot = 0U;
     for (uint32_t i = 1U; i <= USB_MAX_XHCI_SLOTS; ++i) {

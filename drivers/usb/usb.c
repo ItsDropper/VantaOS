@@ -744,8 +744,9 @@ void usb_poll(void)
                         if (usb_bluetooth_link_table_is_single_handle(
                                 &bluetooth_link_tables[slot],
                                 incoming_acl.handle))
-                            (void)usb_bluetooth_l2cap_dispatch_acl_responses(
+                            (void)usb_bluetooth_l2cap_dispatch_acl_responses_for_handle(
                                 &bluetooth->l2cap_channels,
+                                incoming_acl.handle,
                                 bluetooth_acl_reassembled_buffer,
                                 (uint32_t)assembled_length);
                     }

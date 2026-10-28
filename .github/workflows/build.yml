@@ -120,6 +120,12 @@ jobs:
             scripts/test_timer_math.c -o /tmp/vantaos-timer-math-test
           /tmp/vantaos-timer-math-test
 
+      - name: Test AHCI PRDT descriptor builder
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \\
+            scripts/test_ahci_prdt.c -o /tmp/vantaos-ahci-prdt-test
+          /tmp/vantaos-ahci-prdt-test
+
       - name: Test ATA LBA28 request bounds
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \

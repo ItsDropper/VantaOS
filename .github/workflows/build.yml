@@ -128,6 +128,13 @@ jobs:
             -o /tmp/vantaos-http-response-test
           /tmp/vantaos-http-response-test
 
+      - name: Test HTTP body framing state machine
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Ios/terminal \
+            scripts/test_http_body.c os/terminal/http_body.c \
+            -o /tmp/vantaos-http-body-test
+          /tmp/vantaos-http-body-test
+
       - name: Verify modular source manifests
         run: |
           make list-sources

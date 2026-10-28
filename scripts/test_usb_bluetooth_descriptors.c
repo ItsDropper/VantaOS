@@ -1897,10 +1897,54 @@ static void test_hci_read_buffer_size_result(void)
                success, sizeof(success), &completed) == 0);
 }
 
+static void test_acl_fragment_builder(void)
+{
+    const uint8_t complete_acl[] = {
+        0x01U, 0x20U, 0x08U, 0x00U,
+        0x11U, 0x22U, 0x33U, 0x44U,
+        0x55U, 0x66U, 0x77U, 0x88U
+    };
+    uint8_t output[16] = {0U};
+
+    assert(usb_bluetooth_acl_fragment_build(
+               complete_acl, sizeof(complete_acl), 3U, 0U,
+               output, sizeof(output)) == 7);
+    assert(output[0] == 0x01U && output[1] == 0x20U);
+    assert(output[2] == 3U && output[3] == 0U);
+    assert(output[4] == 0x11U && output[5] == 0x22U &&
+           output[6] == 0x33U);
+
+    assert(usb_bluetooth_acl_fragment_build(
+               complete_acl, sizeof(complete_acl), 3U, 3U,
+               output, sizeof(output)) == 7);
+    assert(output[0] == 0x01U && output[1] == 0x10U);
+    assert(output[2] == 3U && output[3] == 0U);
+    assert(output[4] == 0x44U && output[5] == 0x55U &&
+           output[6] == 0x66U);
+
+    assert(usb_bluetooth_acl_fragment_build(
+               complete_acl, sizeof(complete_acl), 3U, 6U,
+               output, sizeof(output)) == 6);
+    assert(output[0] == 0x01U && output[1] == 0x10U);
+    assert(output[2] == 2U && output[3] == 0U);
+    assert(output[4] == 0x77U && output[5] == 0x88U);
+
+    assert(usb_bluetooth_acl_fragment_build(
+               complete_acl, sizeof(complete_acl), 3U, 8U,
+               output, sizeof(output)) == -22);
+    assert(usb_bluetooth_acl_fragment_build(
+               complete_acl, sizeof(complete_acl), 0U, 0U,
+               output, sizeof(output)) == -22);
+    assert(usb_bluetooth_acl_fragment_build(
+               complete_acl, sizeof(complete_acl), 3U, 0U,
+               output, 6U) == -90);
+}
+
 int main(void)
 {
     test_hci_command_encoding();
     test_hci_read_buffer_size_result();
+    test_acl_fragment_builder();
     test_hci_command_credits_and_discovery_builders();
     test_hci_connection_command_builders();
     test_hci_inquiry_result_parser();

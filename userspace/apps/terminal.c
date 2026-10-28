@@ -407,6 +407,11 @@ static void command_help(void)
     write_text("  pwd                  Show the current VFS location\n");
     write_text("  ls [path]            List a VFS directory\n");
     write_text("  cat <path>           Print a VFS file\n");
+    write_text("  mkdir <path>         Create a directory\\n");
+    write_text("  touch <path>         Create an empty file (does not modify existing files)\\n");
+    write_text("  rm <file>            Remove a file (directories are refused)\\n");
+    write_text("  cp <src> <dst>       Copy a file without overwriting the destination\\n");
+    write_text("  mv <src> <dst>       Rename/move a file or directory without overwriting\\n");
     write_text("  echo <text>          Print text\n");
     write_text("  exec <elf> [args...] Run a user ELF and wait for it\n");
     write_text("  curl <URL>           Fetch an HTTP URL and print its body\n");
@@ -468,6 +473,201 @@ static void command_cat(const char* path)
     }
     (void)vanta_close((int)fd);
     write_text("\n");
+}
+
+static int split_two_paths(char* arguments, char** source, char** destination)
+{
+    while (*arguments == ' ')
+        arguments++;
+    if (!*arguments)
+        return 0;
+    *source = arguments;
+    while (*arguments && *arguments != ' ')
+        arguments++;
+    if (!*arguments)
+        return 0;
+    *arguments++ = '\0';
+    while (*arguments == ' ')
+        arguments++;
+    if (!*arguments)
+        return 0;
+    *destination = arguments;
+    while (*arguments && *arguments != ' ')
+        arguments++;
+    if (*arguments)
+    {
+        *arguments++ = '\0';
+        while (*arguments == ' ')
+            arguments++;
+        if (*arguments)
+            return 0;
+    }
+    return 1;
+}
+
+static void command_make_directory(const char* path)
+{
+    if (!path || !path[0])
+    {
+        write_text("mkdir: usage: mkdir <path>\n");
+        return;
+    }
+    if (vanta_create_directory(path) < 0)
+    {
+        write_text("mkdir: could not create directory; check path and permissions\n");
+        return;
+    }
+    write_text("Directory created\n");
+}
+
+static void command_touch(const char* path)
+{
+    vanta_file_info_t info;
+    if (!path || !path[0])
+    {
+        write_text("touch: usage: touch <path>\n");
+        return;
+    }
+    if (vanta_stat_path(path, &info) == 0)
+    {
+        write_text("touch: path already exists\n");
+        return;
+    }
+    if (vanta_create_file(path) < 0)
+    {
+        write_text("touch: could not create file\n");
+        return;
+    }
+    write_text("File created\n");
+}
+
+static void command_remove_file(const char* path)
+{
+    vanta_file_info_t info;
+    if (!path || !path[0])
+    {
+        write_text("rm: usage: rm <file>\n");
+        return;
+    }
+    if (vanta_stat_path(path, &info) < 0)
+    {
+        write_text("rm: path not found\n");
+        return;
+    }
+    if (info.type == 2U)
+    {
+        write_text("rm: directories are not removed by this command\n");
+        return;
+    }
+    if (vanta_delete_path(path) < 0)
+    {
+        write_text("rm: could not remove file\n");
+        return;
+    }
+    write_text("File removed\n");
+}
+
+static void command_move_path(char* arguments)
+{
+    char* source = 0;
+    char* destination = 0;
+    if (!split_two_paths(arguments, &source, &destination))
+    {
+        write_text("mv: usage: mv <source> <destination>\n");
+        return;
+    }
+    if (vanta_rename_path(source, destination) < 0)
+    {
+        write_text("mv: rename failed; destination may exist or path may be invalid\n");
+        return;
+    }
+    write_text("Move completed\n");
+}
+
+static int write_all_file(int descriptor, const char* buffer, size_t length)
+{
+    size_t written = 0U;
+    while (written < length)
+    {
+        long count = vanta_file_write(descriptor, buffer + written, length - written);
+        if (count <= 0 || (size_t)count > length - written)
+            return 0;
+        written += (size_t)count;
+    }
+    return 1;
+}
+
+static void command_copy_file(char* arguments)
+{
+    char* source_path = 0;
+    char* destination_path = 0;
+    vanta_file_info_t source_info, destination_info;
+    if (!split_two_paths(arguments, &source_path, &destination_path))
+    {
+        write_text("cp: usage: cp <source-file> <destination-file>\n");
+        return;
+    }
+    if (vanta_stat_path(source_path, &source_info) < 0 || source_info.type != 1U)
+    {
+        write_text("cp: source is not a readable regular file\n");
+        return;
+    }
+    if (vanta_stat_path(destination_path, &destination_info) == 0)
+    {
+        write_text("cp: destination exists; refusing to overwrite\n");
+        return;
+    }
+    long input = vanta_open(source_path, VANTA_OPEN_READ);
+    if (input < 0)
+    {
+        write_text("cp: could not open source file\n");
+        return;
+    }
+    if (vanta_create_file(destination_path) < 0)
+    {
+        (void)vanta_close((int)input);
+        write_text("cp: could not create destination file\n");
+        return;
+    }
+    long output = vanta_open(destination_path,
+                             VANTA_OPEN_WRITE | VANTA_OPEN_TRUNCATE);
+    if (output < 0)
+    {
+        (void)vanta_close((int)input);
+        (void)vanta_delete_path(destination_path);
+        write_text("cp: could not open destination file\n");
+        return;
+    }
+
+    int ok = 1;
+    for (;;)
+    {
+        long count = vanta_read((int)input, io_buffer, sizeof(io_buffer));
+        if (count < 0)
+        {
+            ok = 0;
+            break;
+        }
+        if (count == 0)
+            break;
+        if ((size_t)count > sizeof(io_buffer) ||
+            !write_all_file((int)output, io_buffer, (size_t)count))
+        {
+            ok = 0;
+            break;
+        }
+    }
+    if (vanta_close((int)input) < 0)
+        ok = 0;
+    if (vanta_close((int)output) < 0)
+        ok = 0;
+    if (!ok)
+    {
+        (void)vanta_delete_path(destination_path);
+        write_text("cp: copy failed; incomplete destination removed\n");
+        return;
+    }
+    write_text("Copy completed\n");
 }
 
 static void command_exec(char* command)
@@ -645,6 +845,16 @@ static void execute_line(char* command)
         command_list(command + 3);
     else if (starts_with(command, "cat "))
         command_cat(command + 4);
+    else if (starts_with(command, "mkdir "))
+        command_make_directory(command + 6);
+    else if (starts_with(command, "touch "))
+        command_touch(command + 6);
+    else if (starts_with(command, "rm "))
+        command_remove_file(command + 3);
+    else if (starts_with(command, "cp "))
+        command_copy_file(command + 3);
+    else if (starts_with(command, "mv "))
+        command_move_path(command + 3);
     else if (starts_with(command, "echo "))
     {
         write_text(command + 5);

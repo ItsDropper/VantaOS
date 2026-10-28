@@ -93,8 +93,9 @@ The separate [anti-cheat and Windows game compatibility plan](ANTI_CHEAT_COMPATI
 
 ## Timekeeping reliability
 
-- [ ] Validate PIT frequency and divisor boundaries before programming hardware.
-- [ ] Use wrap-safe tick arithmetic for deadlines and elapsed time.
+- [x] Validate PIT frequency and divisor boundaries before programming hardware.
+- [x] Use wrap-safe tick arithmetic for deadlines and elapsed time.
+- [x] Add a bounded kernel watchdog registry with latched expiry, stale-handle protection, and host regression coverage.
 - [ ] Add a general kernel watchdog service only after timer semantics are stable; watchdog expiry must be observable outside interrupt context and must not run arbitrary callbacks in IRQ handlers.
 
 ## Latest status

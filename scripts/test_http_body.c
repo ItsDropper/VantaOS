@@ -41,6 +41,16 @@ int main(void)
     ok &= expect_status("consume after finish",
                         http_body_consume(&body, 1U), HTTP_BODY_BAD_ARGUMENT);
 
+    /* A complete Content-Length is sufficient even while TCP remains open. */
+    ok &= expect_status("keep-alive initialize",
+        http_body_initialize(&body, LIMIT), HTTP_BODY_OK);
+    ok &= expect_status("keep-alive configure",
+        http_body_set_content_length(&body, 1, 3U), HTTP_BODY_OK);
+    ok &= expect_status("keep-alive complete body",
+        http_body_consume(&body, 3U), HTTP_BODY_OK);
+    ok &= expect_status("exact Content-Length without EOF",
+        http_body_finish(&body, 0), HTTP_BODY_OK);
+
     ok &= expect_status("truncated initialize",
         http_body_initialize(&body, LIMIT), HTTP_BODY_OK);
     ok &= expect_status("truncated configure",

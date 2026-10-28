@@ -8,7 +8,7 @@ The scheduler enters user mode with `CS=0x23` and `SS=0x1B`. Each process has a 
 
 ## Freestanding C syscall interface
 
-Include `<vanta/syscall.h>` from `userspace/include`. It provides inline wrappers for the current syscall ABI and can be used without libc or a runtime startup object. The ABI version macro is `VANTA_USER_ABI_VERSION` (currently `9`).
+Include `<vanta/syscall.h>` from `userspace/include`. It provides inline wrappers for the current syscall ABI and can be used without libc or a runtime startup object. The ABI version macro is `VANTA_USER_ABI_VERSION` (currently `10`).
 
 ```c
 #include <vanta/syscall.h>
@@ -62,6 +62,8 @@ Userspace enters through `int 0x80`. The syscall number is in `RAX`, arguments a
 | 37 | `vanta_bluetooth_connect(port, result)` | RDI: port, RSI: readable inquiry result | Connection command accepted or zero |
 | 38 | `vanta_bluetooth_peer_state(port, address, handle)` | RDI: port, RSI: 6-byte address, RDX: writable handle | 1 connected, 2 connecting, 0 idle, or negative error |
 | 39 | `vanta_bluetooth_cancel_connection(port, address)` | RDI: port, RSI: 6-byte address | Cancellation command accepted or zero |
+| 40 | `vanta_clipboard_set(buffer, length)` | RDI: readable bytes, RSI: length (0–4096) | Bytes copied into the system clipboard |
+| 41 | `vanta_clipboard_get(buffer, capacity)` | RDI: writable buffer, RSI: capacity (0–4096) | Clipboard length; `-90` if capacity is too small |
 | 26 | `vanta_ipc_endpoint_create()` | None | Random 64-bit endpoint capability or negative error |
 | 27 | `vanta_ipc_send(endpoint, message, length)` | RDI: endpoint capability, RSI: readable message, RDX: length | Zero or negative error |
 | 28 | `vanta_ipc_receive(endpoint, buffer, capacity)` | RDI: endpoint capability, RSI: writable buffer, RDX: capacity | Message length; `-11` if empty; `-90` if buffer too small |

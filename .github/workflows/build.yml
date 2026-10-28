@@ -132,6 +132,13 @@ jobs:
             scripts/test_ahci_pci.c -o /tmp/vantaos-ahci-pci-test
           /tmp/vantaos-ahci-pci-test
 
+      - name: Test safe AHCI PCI discovery lifecycle
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_ahci_discovery.c drivers/storage/ahci.c \
+            -o /tmp/vantaos-ahci-discovery-test
+          /tmp/vantaos-ahci-discovery-test
+
       - name: Test ATA LBA28 request bounds
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \

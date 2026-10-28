@@ -103,7 +103,8 @@ The separate [anti-cheat and Windows game compatibility plan](ANTI_CHEAT_COMPATI
 
 - [x] Add a bounded AHCI PRDT descriptor builder with 4 MiB entry splitting, DWORD-aligned DMA-address validation, overflow/capacity checks, and last-entry IOC encoding.
 - [x] Add host regression cases for descriptor boundaries and reject 1-, 2-, and 3-byte-aligned DMA addresses.
-- [ ] Add AHCI PCI discovery, BAR5/MMIO validation, DMA allocator integration, and bounded controller state transitions before enabling bus mastering.
+- [x] Add a pure AHCI ABAR metadata validator with host tests for minimum aperture, power-of-two sizing, alignment, I/O BAR rejection, address overflow, and 32-bit address limits.
+- [ ] Add AHCI PCI discovery and safely acquire BAR5 size metadata without disrupting an active controller; then integrate MMIO mapping, DMA allocation, and bounded controller transitions before enabling bus mastering.
 - [ ] Add disposable-image QEMU IDENTIFY/read/write/readback coverage and command timeout/error recovery before claiming AHCI/SATA support.
 
 ## Latest status

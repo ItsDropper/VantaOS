@@ -1739,6 +1739,46 @@ static void test_l2cap_data_queue(void)
                USB_BLUETOOTH_L2CAP_DATA_MAX + 1U) == -22);
 }
 
+static void test_bluetooth_discovery_table(void)
+{
+    usb_bluetooth_discovery_table_t table = {0};
+    usb_bluetooth_inquiry_result_t item = {0};
+    usb_bluetooth_inquiry_result_t output = {0};
+    item.address[0] = 0xA1U;
+    item.address[5] = 0xB2U;
+    item.page_scan_repetition_mode = 1U;
+    item.class_of_device = 0x123456U;
+    assert(usb_bluetooth_discovery_record(&table, &item) == 0);
+    assert(table.count == 1U);
+    item.has_rssi = 1U;
+    item.rssi = -31;
+    assert(usb_bluetooth_discovery_record(&table, &item) == 1);
+    assert(table.count == 1U);
+    assert(usb_bluetooth_discovery_get(&table, 0U, &output) == 1);
+    assert(output.has_rssi == 1U && output.rssi == -31);
+    assert(usb_bluetooth_discovery_get(&table, 1U, &output) == 0);
+
+    item.address[0] = 0U;
+    item.address[5] = 0U;
+    assert(usb_bluetooth_discovery_record(&table, &item) == -22);
+    item.address[0] = 1U;
+    item.address[5] = 0U;
+    item.class_of_device = 0x1000000U;
+    assert(usb_bluetooth_discovery_record(&table, &item) == -22);
+
+    item.class_of_device = 0U;
+    for (uint32_t i = 1U; i < USB_BLUETOOTH_DISCOVERY_MAX; ++i) {
+        item.address[0] = (uint8_t)(i + 1U);
+        assert(usb_bluetooth_discovery_record(&table, &item) == 0);
+    }
+    item.address[0] = 0xFEU;
+    assert(usb_bluetooth_discovery_record(&table, &item) == -28);
+    assert(table.count == USB_BLUETOOTH_DISCOVERY_MAX);
+    usb_bluetooth_discovery_reset(&table);
+    assert(table.count == 0U);
+    assert(usb_bluetooth_discovery_get(&table, 0U, &output) == 0);
+}
+
 static void test_connection_attempt_state(void)
 {
     const uint8_t address_a[6] = {1U, 2U, 3U, 4U, 5U, 6U};
@@ -1779,6 +1819,7 @@ int main(void)
     test_hci_connection_command_builders();
     test_hci_inquiry_result_parser();
     test_l2cap_data_queue();
+    test_bluetooth_discovery_table();
     test_connection_attempt_state();
     test_inquiry_lifecycle_state();
     test_hci_command_fault_requires_reset();

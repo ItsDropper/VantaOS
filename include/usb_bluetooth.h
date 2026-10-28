@@ -284,6 +284,10 @@ int usb_bluetooth_acl_queue_push(usb_bluetooth_acl_queue_t *queue,
                                  const uint8_t *packet, uint32_t length);
 int usb_bluetooth_acl_queue_pop(usb_bluetooth_acl_queue_t *queue,
                                 uint8_t *packet, uint32_t capacity);
+/* Pop the oldest queued ACL packet for one connection handle. */
+int usb_bluetooth_acl_queue_pop_handle(usb_bluetooth_acl_queue_t *queue,
+                                       uint16_t handle, uint8_t *packet,
+                                       uint32_t capacity);
 
 /* Encode HCI command data-stage bytes: opcode LE16, parameter length,
  * then parameters. Returns encoded length, -22 for invalid input, -90 if

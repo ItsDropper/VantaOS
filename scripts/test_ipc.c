@@ -34,15 +34,17 @@ static void test_endpoint_exhaustion_cleanup_and_rng_failure(void)
     assert(ipc_endpoint_create(500U) == -19);
     rng_should_fail = 0;
 
-    for (uint32_t i = 0U; i < 32U; ++i) {
+    for (uint32_t i = 0U; i < 31U; ++i) {
         tokens[i] = ipc_endpoint_create(1000U + i);
         assert(tokens[i] > 0);
     }
-    assert(ipc_endpoint_create(2000U) == -12);
-    /* A duplicate random capability must not alias an existing endpoint. */
+    /* Leave one free slot so the collision check is reached. */
     rng_forced_value = (uint64_t)tokens[0];
     assert(ipc_endpoint_create(2001U) == -11);
     rng_forced_value = 0U;
+    tokens[31] = ipc_endpoint_create(1031U);
+    assert(tokens[31] > 0);
+    assert(ipc_endpoint_create(2000U) == -12);
 
     assert(ipc_message_send((uint64_t)tokens[5], 9000U,
                             payload, sizeof(payload)) == 0);

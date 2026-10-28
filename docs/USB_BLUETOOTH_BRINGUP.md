@@ -136,6 +136,16 @@ Queue dequeue now validates the stored length and packet framing before reading 
 The polling loop now discards ACL completions until HCI Reset has succeeded, rather than retaining pre-initialization packets for later delivery. A controller's repeated failed-reset events produce a single diagnostic marker for the binding. Dequeue clears only the validated bytes of the consumed packet instead of sweeping the full 4096-byte slot on every read; reset/disconnect still wipes the complete queue storage.
 
 
+## Multi-link disconnect isolation
+
+The link table exposes a bounded active-link count. A successful Disconnection
+Complete no longer clears the shared L2CAP channel table and completed-ACL queue
+while other HCI links remain active. Since the current L2CAP table still lacks
+per-channel owning handles, automatic response dispatch remains restricted to
+one active link; this change prevents teardown of one peer from destroying
+unrelated peers' queued receive data. The stores are cleared when the final
+active link closes.
+
 ## Unified binding teardown
 
 Bluetooth binding teardown is centralized so disconnect and a partially failed endpoint-start sequence clear the same state: port/interface/endpoints, counters, reset readiness, transmit-busy state, dropped-packet count, and the full ACL queue. Binding initializes counters and reset state explicitly before starting transfers. This prevents stale per-slot state from surviving a failed start and being mistaken for the next device binding.

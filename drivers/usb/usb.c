@@ -70,6 +70,9 @@ typedef struct {
 static usb_bluetooth_slot_t bluetooth_slots[USB_MAX_XHCI_SLOTS + 1U];
 static uint8_t bluetooth_event_buffer[64] __attribute__((aligned(64)));
 static uint8_t bluetooth_acl_buffer[4096] __attribute__((aligned(64)));
+static uint8_t bluetooth_acl_tx_buffers[USB_MAX_XHCI_SLOTS + 1U][4096]
+    __attribute__((aligned(64)));
+static uint8_t bluetooth_acl_tx_busy[USB_MAX_XHCI_SLOTS + 1U];
 static uint8_t keyboard_input_observed;
 static uint8_t mouse_input_observed;
 
@@ -87,6 +90,50 @@ static int usb_control(uint32_t slot, uint8_t request_type, uint8_t request,
     setup[6] = (uint8_t)length;
     setup[7] = (uint8_t)(length >> 8);
     return xhci_control_transfer(slot, setup, data, length);
+}
+
+/*
+ * Submit one complete HCI ACL packet through the configured bulk-OUT
+ * endpoint. This synchronous path is bounded by the xHCI bulk buffer size.
+ * Call from the USB polling/owner CPU, not an interrupt handler or another
+ * CPU: device disconnect and xHCI slot teardown are serialized there.
+ */
+int usb_bluetooth_acl_send(uint32_t port, const uint8_t *packet,
+                           uint32_t length)
+{
+    if (port == 0U || packet == 0 || length < 4U || length > 4096U ||
+        !usb_bluetooth_acl_packet_valid(packet, length))
+        return 0;
+
+    uint32_t slot = 0U;
+    for (uint32_t i = 1U; i <= USB_MAX_XHCI_SLOTS; ++i) {
+        if (bluetooth_slots[i].active && bluetooth_slots[i].port == port) {
+            slot = i;
+            break;
+        }
+    }
+    if (slot == 0U || bluetooth_slots[slot].acl_out_endpoint == 0U)
+        return 0;
+
+    if (__atomic_test_and_set(&bluetooth_acl_tx_busy[slot], __ATOMIC_ACQUIRE))
+        return 0;
+
+    int success = 0;
+    if (bluetooth_slots[slot].active &&
+        bluetooth_slots[slot].port == port) {
+        for (uint32_t i = 0U; i < length; ++i)
+            bluetooth_acl_tx_buffers[slot][i] = packet[i];
+
+        uint32_t actual_length = 0U;
+        success = xhci_bulk_transfer(slot,
+                                     bluetooth_slots[slot].acl_out_endpoint,
+                                     bluetooth_acl_tx_buffers[slot], length,
+                                     &actual_length) &&
+                  actual_length == length;
+    }
+
+    __atomic_clear(&bluetooth_acl_tx_busy[slot], __ATOMIC_RELEASE);
+    return success;
 }
 
 static uint16_t usb_initial_ep0_packet(uint32_t speed)

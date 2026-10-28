@@ -93,3 +93,11 @@ Before counting an interrupt transfer as an HCI event, the polling path verifies
 ACL-IN packets are validated against the four-byte ACL header: the little-endian data length must equal the received transfer length minus four. Truncated headers, short payloads, and trailing bytes are rejected by the framing helper. These checks are transport-level; a future HCI layer still needs to validate handle/flags and route valid payloads into L2CAP.
 
 The descriptor workflow now tests valid, truncated, overlong, wrong-opcode, failed-reset, and malformed ACL packets using strict compiler warnings. This verifies parser/framing logic only; it does not emulate a USB controller or prove that a physical adapter will deliver packets.
+
+## Bounded ACL transmit API
+
+The kernel now exposes `usb_bluetooth_acl_send(port, packet, length)` for the transport layer. It accepts exactly one framed ACL packet, checks the four-byte header and declared little-endian payload length, rejects packets larger than the current 4096-byte xHCI bulk buffer, copies into a per-slot DMA-independent staging buffer, and submits the configured bulk-OUT endpoint. Success is returned only when xHCI reports a full-length transfer; malformed, inactive, busy, failed, or short transfers return zero.
+
+The call is synchronous and deliberately has a narrow execution contract: invoke it only from the USB polling/owner CPU in ordinary kernel context, not from an interrupt handler or another CPU. USB port disconnect and xHCI slot teardown are serialized by that same owner path. The per-slot busy flag rejects nested/re-entrant sends, but it is not a substitute for SMP-safe device lifetime management; if USB work becomes multi-CPU, add a device reference/lock protocol before relaxing this restriction.
+
+This API only transmits raw ACL packets. It does not create L2CAP frames, discover peers, pair devices, or implement profiles. The existing host regression suite validates the shared ACL framing predicate, while actual transfer completion still requires xHCI emulation and hardware testing.

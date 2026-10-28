@@ -40,4 +40,10 @@ int usb_bluetooth_hci_event_valid(const uint8_t *packet, uint32_t length);
 int usb_bluetooth_hci_reset_complete(const uint8_t *packet, uint32_t length);
 int usb_bluetooth_acl_packet_valid(const uint8_t *packet, uint32_t length);
 
+/* Send one complete framed ACL packet through a bound device port.
+ * Returns 1 only if xHCI reports a full transfer; caller-context limits are
+ * documented in docs/USB_BLUETOOTH_BRINGUP.md. */
+int usb_bluetooth_acl_send(uint32_t port, const uint8_t *packet,
+                           uint32_t length);
+
 #endif

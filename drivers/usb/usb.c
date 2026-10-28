@@ -54,6 +54,21 @@ static uint8_t configuration_buffer[USB_MAX_CONFIGURATION_SIZE]
     __attribute__((aligned(64)));
 static uint8_t report_buffer[64] __attribute__((aligned(64)));
 static int usb_initialized;
+
+typedef struct {
+    uint8_t active;
+    uint8_t port;
+    uint8_t interface_number;
+    uint8_t event_endpoint;
+    uint8_t acl_in_endpoint;
+    uint8_t acl_out_endpoint;
+    uint32_t event_count;
+    uint32_t acl_packet_count;
+} usb_bluetooth_slot_t;
+
+static usb_bluetooth_slot_t bluetooth_slots[USB_MAX_XHCI_SLOTS + 1U];
+static uint8_t bluetooth_event_buffer[64] __attribute__((aligned(64)));
+static uint8_t bluetooth_acl_buffer[4096] __attribute__((aligned(64)));
 static uint8_t keyboard_input_observed;
 static uint8_t mouse_input_observed;
 
@@ -231,15 +246,47 @@ static int usb_enumerate_port(uint32_t port)
     }
 
     /*
-     * Descriptor recognition only: the xHCI path does not yet claim Bluetooth
-     * interfaces or configure their interrupt/bulk endpoints. Keep this
-     * distinct from a bound/working Bluetooth driver.
+     * Bind USB HCI transport after endpoint configuration. This is not a full
+     * Bluetooth host stack: pairing, L2CAP, security, profiles, and discovery
+     * remain separate layers.
      */
     usb_bluetooth_hci_candidate_t bluetooth_candidate = {0};
     if (usb_bluetooth_find_hci_interface(configuration_buffer,
                                          configuration_length,
                                          &bluetooth_candidate)) {
-        serial_write("VANTAOS_USB_BLUETOOTH_HCI_DESCRIPTOR_MATCH_ONLY\n");
+        if (!xhci_configure_interrupt_in(slot,
+                                         bluetooth_candidate.event_endpoint,
+                                         bluetooth_candidate.event_max_packet,
+                                         bluetooth_candidate.event_interval) ||
+            !xhci_configure_bulk_endpoint(slot,
+                                         bluetooth_candidate.acl_in_endpoint,
+                                         bluetooth_candidate.acl_in_max_packet) ||
+            !xhci_configure_bulk_endpoint(slot,
+                                         bluetooth_candidate.acl_out_endpoint,
+                                         bluetooth_candidate.acl_out_max_packet))
+            goto cleanup;
+
+        /* HCI Reset opcode 0x0C03, sent over the USB class control pipe. */
+        if (!usb_control(slot, 0x20U, 0U, 0x0C03U,
+                         bluetooth_candidate.interface_number, 0, 0))
+            goto cleanup;
+        bluetooth_slots[slot].active = 1U;
+        bluetooth_slots[slot].port = (uint8_t)port;
+        bluetooth_slots[slot].interface_number =
+            bluetooth_candidate.interface_number;
+        bluetooth_slots[slot].event_endpoint =
+            bluetooth_candidate.event_endpoint;
+        bluetooth_slots[slot].acl_in_endpoint =
+            bluetooth_candidate.acl_in_endpoint;
+        bluetooth_slots[slot].acl_out_endpoint =
+            bluetooth_candidate.acl_out_endpoint;
+        if (!xhci_start_interrupt_in(slot) ||
+            !xhci_start_bulk_in(slot, bluetooth_candidate.acl_in_endpoint)) {
+            bluetooth_slots[slot].active = 0U;
+            goto cleanup;
+        }
+        serial_write("VANTAOS_USB_BLUETOOTH_HCI_TRANSPORT_BOUND\n");
+        success = 1;
         goto cleanup;
     }
 
@@ -316,10 +363,18 @@ void usb_poll(void)
         if ((port_status & 1U) == 0U) {
             (void)rtl8188eu_port_disconnected(port);
             for (uint32_t slot = 1; slot <= USB_MAX_XHCI_SLOTS; ++slot) {
+                int slot_disconnected = 0;
+                if (bluetooth_slots[slot].active &&
+                    bluetooth_slots[slot].port == port) {
+                    bluetooth_slots[slot].active = 0U;
+                    slot_disconnected = 1;
+                }
                 if (input_slots[slot].active && input_slots[slot].port == port) {
                     usb_detach_slot(slot);
-                    (void)xhci_disable_device(slot);
+                    slot_disconnected = 1;
                 }
+                if (slot_disconnected)
+                    (void)xhci_disable_device(slot);
             }
         } else {
             int already_enumerated = rtl8188eu_port_is_bound(port);
@@ -330,6 +385,41 @@ void usb_poll(void)
                 (void)usb_enumerate_port(port);
         }
     }
+    for (uint32_t slot = 1; slot <= USB_MAX_XHCI_SLOTS; ++slot) {
+        usb_bluetooth_slot_t *bluetooth = &bluetooth_slots[slot];
+        if (!bluetooth->active)
+            continue;
+
+        uint32_t event_length = 0U;
+        if (xhci_take_interrupt_report(slot, bluetooth_event_buffer,
+                                       sizeof(bluetooth_event_buffer),
+                                       &event_length) && event_length >= 2U) {
+            bluetooth->event_count++;
+            if (bluetooth->event_count == 1U)
+                serial_write("VANTAOS_BLUETOOTH_HCI_EVENT_RECEIVED\n");
+            if ((bluetooth_event_buffer[0] == 0x0EU ||
+                 bluetooth_event_buffer[0] == 0x0FU) &&
+                bluetooth->event_count == 1U)
+                serial_write("VANTAOS_BLUETOOTH_HCI_COMMAND_RESPONSE\n");
+        }
+
+        uint32_t acl_length = 0U;
+        int acl_result = xhci_take_bulk_in(slot, bluetooth->acl_in_endpoint,
+                                           bluetooth_acl_buffer,
+                                           sizeof(bluetooth_acl_buffer),
+                                           &acl_length);
+        if (acl_result > 0) {
+            if (acl_length != 0U) {
+                bluetooth->acl_packet_count++;
+                if (bluetooth->acl_packet_count == 1U)
+                    serial_write("VANTAOS_BLUETOOTH_ACL_PACKET_RECEIVED\n");
+            }
+            (void)xhci_start_bulk_in(slot, bluetooth->acl_in_endpoint);
+        } else if (acl_result < 0) {
+            (void)xhci_start_bulk_in(slot, bluetooth->acl_in_endpoint);
+        }
+    }
+
     for (uint32_t slot = 1; slot <= USB_MAX_XHCI_SLOTS; ++slot) {
         if (!input_slots[slot].active)
             continue;

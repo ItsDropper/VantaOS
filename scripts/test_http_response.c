@@ -103,10 +103,10 @@ int main(void)
         "HTTP/1.1 200 OK\r\nContent-Length: 5\r\n",
         HTTP_RESPONSE_BAD_HEADER, 0U, 0, 0U);
     ok &= expect("status reason control byte rejected",
-        "HTTP/1.1 200 \\x01OK\\r\\n\\r\\n",
+        "HTTP/1.1 200 \x01OK\r\n\r\n",
         HTTP_RESPONSE_BAD_STATUS_LINE, 0U, 0, 0U);
     ok &= expect("header value control byte rejected",
-        "HTTP/1.1 200 OK\\r\\nX-Test: one\\x01two\\r\\n\\r\\n",
+        "HTTP/1.1 200 OK\r\nX-Test: one\x01two\r\n\r\n",
         HTTP_RESPONSE_BAD_HEADER, 0U, 0, 0U);
 
     if (!ok) return 1;

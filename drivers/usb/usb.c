@@ -67,6 +67,8 @@ typedef struct {
     uint32_t acl_packet_count;
     uint8_t reset_complete_observed;
     uint8_t reset_failed_observed;
+    uint8_t connection_pending;
+    uint8_t pending_address[6];
     usb_bluetooth_hci_command_state_t command_state;
 } usb_bluetooth_slot_t;
 
@@ -247,7 +249,24 @@ int usb_bluetooth_connect(uint32_t port, const uint8_t address[6],
         allow_role_switch, command, sizeof(command));
     if (port == 0U || encoded != 16)
         return 0;
+    uint32_t slot = 0U;
+    for (uint32_t i = 1U; i <= USB_MAX_XHCI_SLOTS; ++i) {
+        if (bluetooth_slots[i].active && bluetooth_slots[i].port == port) {
+            slot = i;
+            break;
+        }
+    }
+    if (slot == 0U || bluetooth_slots[slot].connection_pending) {
+        for (uint32_t i = 0U; i < sizeof(command); ++i)
+            command[i] = 0U;
+        return 0;
+    }
     int sent = usb_bluetooth_hci_command(port, 0x0405U, &command[3], 13U);
+    if (sent) {
+        bluetooth_slots[slot].connection_pending = 1U;
+        for (uint32_t i = 0U; i < 6U; ++i)
+            bluetooth_slots[slot].pending_address[i] = address[i];
+    }
     for (uint32_t i = 0U; i < sizeof(command); ++i)
         command[i] = 0U;
     return sent;
@@ -261,6 +280,25 @@ int usb_bluetooth_cancel_connection(uint32_t port,
         address, command, sizeof(command));
     if (port == 0U || encoded != 9)
         return 0;
+    uint32_t slot = 0U;
+    for (uint32_t i = 1U; i <= USB_MAX_XHCI_SLOTS; ++i) {
+        if (bluetooth_slots[i].active && bluetooth_slots[i].port == port) {
+            slot = i;
+            break;
+        }
+    }
+    if (slot == 0U || !bluetooth_slots[slot].connection_pending) {
+        for (uint32_t i = 0U; i < sizeof(command); ++i)
+            command[i] = 0U;
+        return 0;
+    }
+    for (uint32_t i = 0U; i < 6U; ++i) {
+        if (bluetooth_slots[slot].pending_address[i] != address[i]) {
+            for (uint32_t j = 0U; j < sizeof(command); ++j)
+                command[j] = 0U;
+            return 0;
+        }
+    }
     int sent = usb_bluetooth_hci_command(port, 0x0408U, &command[3], 6U);
     for (uint32_t i = 0U; i < sizeof(command); ++i)
         command[i] = 0U;

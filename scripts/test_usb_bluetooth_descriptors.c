@@ -757,6 +757,31 @@ static void test_hci_command_credits_and_discovery_builders(void)
     assert(usb_bluetooth_hci_build_read_bd_addr(out, 2U) == -90);
 }
 
+static void test_l2cap_standard_signaling_builders(void)
+{
+    uint8_t out[16] = {0};
+    assert(usb_bluetooth_l2cap_build_connection_request(1U, 1U, 0x0040U,
+                                                        out, sizeof(out)) == 8);
+    assert(out[0] == 0x02U && out[1] == 1U && out[2] == 4U &&
+           out[4] == 1U && out[6] == 0x40U);
+    assert(usb_bluetooth_l2cap_signaling_valid(out, 8U));
+    assert(usb_bluetooth_l2cap_build_configuration_request(2U, 0x0041U,
+                                                           out, sizeof(out)) == 8);
+    assert(out[0] == 0x04U && out[4] == 0x41U && out[6] == 0U);
+    assert(usb_bluetooth_l2cap_signaling_valid(out, 8U));
+    assert(usb_bluetooth_l2cap_build_disconnection_request(3U, 0x0041U,
+                                                           0x0040U, out,
+                                                           sizeof(out)) == 8);
+    assert(out[0] == 0x06U && out[4] == 0x41U && out[6] == 0x40U);
+    assert(usb_bluetooth_l2cap_signaling_valid(out, 8U));
+    assert(usb_bluetooth_l2cap_build_connection_request(1U, 2U, 0x0040U,
+                                                        out, sizeof(out)) == -22);
+    assert(usb_bluetooth_l2cap_build_configuration_request(2U, 0x0001U,
+                                                           out, sizeof(out)) == -22);
+    assert(usb_bluetooth_l2cap_build_disconnection_request(3U, 0x0041U,
+                                                           0x0040U, out, 4U) == -90);
+}
+
 static void test_l2cap_channel_lifecycle(void)
 {
     usb_bluetooth_l2cap_table_t table = {0};
@@ -792,6 +817,7 @@ int main(void)
     test_hci_command_encoding();
     test_hci_command_credits_and_discovery_builders();
     test_l2cap_channel_lifecycle();
+    test_l2cap_standard_signaling_builders();
     test_complete_hci_interface();
     test_incomplete_interface_is_not_claimed();
     test_malformed_lengths_are_rejected();

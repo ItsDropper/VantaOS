@@ -824,6 +824,7 @@ int usb_bluetooth_hci_command_begin(usb_bluetooth_hci_command_state_t *state,
     state->status = 0xFFU;
     state->event_kind = 0U;
     state->deadline = 0U;
+    state->watchdog_armed = 0U;
     return 0;
 }
 
@@ -859,6 +860,7 @@ int usb_bluetooth_hci_command_event(usb_bluetooth_hci_command_state_t *state,
     state->status = status;
     state->event_kind = kind;
     state->deadline = 0U;
+    state->watchdog_armed = 0U;
     return status == 0U ? 1 : -5;
 }
 
@@ -871,6 +873,7 @@ int usb_bluetooth_hci_command_watchdog_arm(
     if (state->outstanding == 0U || state->faulted != 0U)
         return -16;
     state->deadline = now + timeout_ticks;
+    state->watchdog_armed = 1U;
     return 0;
 }
 
@@ -879,12 +882,13 @@ int usb_bluetooth_hci_command_watchdog_expire(
 {
     if (state == NULL)
         return -22;
-    if (state->outstanding == 0U || state->deadline == 0U ||
+    if (state->outstanding == 0U || state->watchdog_armed == 0U ||
         (int32_t)(now - state->deadline) < 0)
         return 0;
     state->outstanding = 0U;
     state->completed = 0U;
     state->deadline = 0U;
+    state->watchdog_armed = 0U;
     state->faulted = 1U;
     return 1;
 }

@@ -826,17 +826,24 @@ static void test_active_link_count(void)
     const uint8_t disconnected_a[] = {0x05U, 4U, 0U, 0x0BU, 0U, 0U};
     usb_bluetooth_link_table_reset(&links);
     assert(usb_bluetooth_link_table_active_count(&links) == 0U);
+    assert(usb_bluetooth_link_table_has_handle(&links, 0x000BU) == 0);
+    assert(usb_bluetooth_link_table_has_handle(&links, 0U) == 0);
     assert(usb_bluetooth_link_table_event(&links, connected_a,
                                           sizeof(connected_a)) == 1);
     assert(usb_bluetooth_link_table_active_count(&links) == 1U);
+    assert(usb_bluetooth_link_table_has_handle(&links, 0x000BU) == 1);
+    assert(usb_bluetooth_link_table_has_handle(&links, 0x000CU) == 0);
     memcpy(connected_b, connected_a, sizeof(connected_b));
     connected_b[3] = 0x0CU;
     assert(usb_bluetooth_link_table_event(&links, connected_b,
                                           sizeof(connected_b)) == 1);
     assert(usb_bluetooth_link_table_active_count(&links) == 2U);
+    assert(usb_bluetooth_link_table_has_handle(&links, 0x000CU) == 1);
     assert(usb_bluetooth_link_table_event(&links, disconnected_a,
                                           sizeof(disconnected_a)) == 1);
     assert(usb_bluetooth_link_table_active_count(&links) == 1U);
+    assert(usb_bluetooth_link_table_has_handle(&links, 0x000BU) == 0);
+    assert(usb_bluetooth_link_table_has_handle(&links, 0x000CU) == 1);
     assert(usb_bluetooth_link_table_is_single_handle(&links, 0x000CU) == 1);
 }
 

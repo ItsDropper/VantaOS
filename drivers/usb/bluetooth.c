@@ -823,6 +823,7 @@ int usb_bluetooth_hci_command_begin(usb_bluetooth_hci_command_state_t *state,
     state->completed = 0U;
     state->status = 0xFFU;
     state->event_kind = 0U;
+    state->deadline = 0U;
     return 0;
 }
 
@@ -857,7 +858,35 @@ int usb_bluetooth_hci_command_event(usb_bluetooth_hci_command_state_t *state,
     state->completed = 1U;
     state->status = status;
     state->event_kind = kind;
+    state->deadline = 0U;
     return status == 0U ? 1 : -5;
+}
+
+int usb_bluetooth_hci_command_watchdog_arm(
+    usb_bluetooth_hci_command_state_t *state, uint32_t now,
+    uint32_t timeout_ticks)
+{
+    if (state == NULL || timeout_ticks == 0U || timeout_ticks > 0x7FFFFFFFU)
+        return -22;
+    if (state->outstanding == 0U || state->faulted != 0U)
+        return -16;
+    state->deadline = now + timeout_ticks;
+    return 0;
+}
+
+int usb_bluetooth_hci_command_watchdog_expire(
+    usb_bluetooth_hci_command_state_t *state, uint32_t now)
+{
+    if (state == NULL)
+        return -22;
+    if (state->outstanding == 0U || state->deadline == 0U ||
+        (int32_t)(now - state->deadline) < 0)
+        return 0;
+    state->outstanding = 0U;
+    state->completed = 0U;
+    state->deadline = 0U;
+    state->faulted = 1U;
+    return 1;
 }
 
 static int hci_build_simple(uint16_t opcode, uint8_t parameter_length,

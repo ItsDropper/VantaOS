@@ -107,7 +107,8 @@ int usb_bluetooth_link_table_acl_feed(usb_bluetooth_link_table_t *table,
 int usb_bluetooth_link_table_acl_take(usb_bluetooth_link_table_t *table,
                                       uint16_t handle, uint8_t *packet,
                                       uint32_t capacity);
-/* Parse one complete HCI ACL packet without copying its payload. */
+/* Parse one complete HCI ACL packet without copying its payload.
+ * Rejects reserved connection handle zero and reserved broadcast flag 3. */
 int usb_bluetooth_acl_parse(const uint8_t *packet, uint32_t length,
                             usb_bluetooth_acl_view_t *view);
 /* Parse one complete, unfragmented L2CAP PDU carried in an ACL packet. */
@@ -115,6 +116,7 @@ int usb_bluetooth_l2cap_parse(const uint8_t *packet, uint32_t length,
                               usb_bluetooth_l2cap_view_t *view);
 /* Assemble one ACL stream per connection handle. feed: 0 incomplete,
  * 1 complete (retained until take), negative errno-style code on failure.
+ * An unexpected new start drops the stale partial PDU and returns -16.
  * take returns framed HCI ACL bytes; -90 preserves a completed packet if the
  * caller's output buffer is too small. Owner-CPU context only. */
 void usb_bluetooth_acl_reassembly_reset(usb_bluetooth_acl_reassembly_t *state);

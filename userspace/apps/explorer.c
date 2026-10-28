@@ -1166,6 +1166,15 @@ static long confirm_open_with(void)
     return child;
 }
 
+static int context_menu_action_at(int x, int y)
+{
+    if (!context_menu || x < context_x || x >= context_x + 180 ||
+        y < context_y || y >= context_y + CONTEXT_MENU_HEIGHT)
+        return -1;
+    unsigned int item = (unsigned int)(y - context_y) / 23U;
+    return item < 8U ? (int)item : -1;
+}
+
 static void open_selected(void)
 {
     size_t index = selected_entry;
@@ -1703,7 +1712,12 @@ static void explorer_e2e_run(void)
     source_index = explorer_e2e_find_entry("note.txt");
     EXPLORER_E2E_REQUIRE(source_index != (size_t)-1);
     select_single(source_index);
-    dispatch_context_action(0U);
+    context_menu = 1;
+    context_x = 300;
+    context_y = 120;
+    int open_action = context_menu_action_at(310, 125);
+    EXPLORER_E2E_REQUIRE(open_action == 0);
+    dispatch_context_action((unsigned int)open_action);
     EXPLORER_E2E_REQUIRE(open_with_active);
     EXPLORER_E2E_REQUIRE(text_equals_ci(
         open_with_path, "/EXPLORER-E2E/Source/note.txt"));
@@ -1976,9 +1990,9 @@ int main(int argc, char** argv)
             }
             else if (context_menu)
             {
-                if (x >= context_x && x < context_x + 180 &&
-                    y >= context_y && y < context_y + CONTEXT_MENU_HEIGHT)
-                    dispatch_context_action((unsigned int)(y - context_y) / 23U);
+                int action = context_menu_action_at(x, y);
+                if (action >= 0)
+                    dispatch_context_action((unsigned int)action);
                 else
                     context_menu = CONTEXT_NONE;
             }

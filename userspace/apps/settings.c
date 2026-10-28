@@ -372,8 +372,9 @@ static void bluetooth_format_address(const uint8_t address[6], char output[18])
     size_t used = 0U;
     for (uint32_t i = 0U; i < 6U; ++i)
     {
-        output[used++] = bluetooth_hex_digit((uint8_t)(address[i] >> 4));
-        output[used++] = bluetooth_hex_digit(address[i]);
+        uint8_t byte = address[5U - i]; /* HCI sends BD_ADDR least-significant byte first. */
+        output[used++] = bluetooth_hex_digit((uint8_t)(byte >> 4));
+        output[used++] = bluetooth_hex_digit(byte);
         if (i != 5U)
             output[used++] = ':';
     }
@@ -720,7 +721,7 @@ int main(int argc, char** argv)
             uint32_t key = event.value;
             if (key == 'q' || key == 'Q')
                 close_app();
-            else if (key >= '1' && key <= '5')
+            else if (key >= '1' && key <= '5' && selected_page != 3U)
                 cycle_setting(key - '1');
             else if (key == 'a' || key == 'A')
                 selected_page = 0U;

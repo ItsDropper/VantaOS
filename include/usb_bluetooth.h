@@ -188,6 +188,8 @@ int usb_bluetooth_link_table_event(usb_bluetooth_link_table_t *table,
 /* True only when handle is the sole active link (L2CAP ownership guard). */
 int usb_bluetooth_link_table_is_single_handle(
     const usb_bluetooth_link_table_t *table, uint16_t handle);
+uint32_t usb_bluetooth_link_table_active_count(
+    const usb_bluetooth_link_table_t *table);
 int usb_bluetooth_link_table_acl_feed(usb_bluetooth_link_table_t *table,
                                       const uint8_t *packet, uint32_t length);
 int usb_bluetooth_link_table_acl_take(usb_bluetooth_link_table_t *table,

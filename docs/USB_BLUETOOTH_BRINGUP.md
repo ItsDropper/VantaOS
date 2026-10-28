@@ -148,7 +148,7 @@ the final active link closes. Automatic L2CAP response dispatch remains restrict
 
 ## HCI connection command encoding
 
-The host library now provides checked encoders for the HCI Create Connection command (opcode 0x0405), Disconnect command (0x0406), and Create Connection Cancel command (0x0408). Create Connection validates the address, packet type, page-scan repetition mode, clock-offset range, and role-switch flag; Disconnect validates the 12-bit connection handle and nonzero reason. Both produce HCI command packets only: they do not submit commands, select a remote device, or establish a connection by themselves. A connection workflow must still coordinate command credits, controller events, link-table transitions, and failure/cancel handling.
+The host library now provides checked encoders for the HCI Create Connection command (opcode 0x0405), Disconnect command (0x0406), and Create Connection Cancel command (0x0408). Create Connection validates the address, packet type, page-scan repetition mode, clock-offset range, and role-switch flag; Disconnect validates the 12-bit connection handle and nonzero reason. These builders produce HCI command packets only: they do not submit commands, select a remote device, or establish a connection by themselves. A connection workflow must still coordinate command credits, controller events, link-table transitions, and failure/cancel handling.
 
 ## Unified binding teardown
 

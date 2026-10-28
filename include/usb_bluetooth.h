@@ -256,6 +256,11 @@ int usb_bluetooth_l2cap_data_queue_push(
 int usb_bluetooth_l2cap_data_queue_pop(
     usb_bluetooth_l2cap_data_queue_t *queue, uint16_t handle,
     uint16_t local_cid, uint8_t *payload, uint32_t capacity);
+void usb_bluetooth_l2cap_data_queue_forget_channel(
+    usb_bluetooth_l2cap_data_queue_t *queue, uint16_t handle,
+    uint16_t local_cid);
+void usb_bluetooth_l2cap_data_queue_forget_handle(
+    usb_bluetooth_l2cap_data_queue_t *queue, uint16_t handle);
 /* Bounded L2CAP channel lifecycle primitives; signaling dispatch remains
  * the responsibility of a controller/connection manager. */
 void usb_bluetooth_l2cap_table_reset(usb_bluetooth_l2cap_table_t *table);

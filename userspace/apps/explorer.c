@@ -1646,6 +1646,18 @@ static void explorer_e2e_run(void)
     EXPLORER_E2E_REQUIRE(write_all((int)descriptor, payload,
                                    text_length(payload)));
     EXPLORER_E2E_REQUIRE(vanta_close((int)descriptor) == 0);
+
+    /* Run the actual Notes loader as a child with the selected path in argv[1]. */
+    {
+        const char* notes_argv[2] = { "/NOTES-E2E.ELF", path };
+        long notes_child = vanta_spawn("/NOTES-E2E.ELF", notes_argv, 2U);
+        int32_t notes_exit_status = -1;
+        EXPLORER_E2E_REQUIRE(notes_child >= 0);
+        EXPLORER_E2E_REQUIRE(vanta_waitpid((int)notes_child,
+                                            &notes_exit_status) >= 0);
+        EXPLORER_E2E_REQUIRE(notes_exit_status == 0);
+    }
+
     EXPLORER_E2E_REQUIRE(explorer_e2e_create_through_dialog("Nested", 1));
     copy_text(current_path, sizeof(current_path), "/EXPLORER-E2E/Source/Nested");
     EXPLORER_E2E_REQUIRE(load_directory());

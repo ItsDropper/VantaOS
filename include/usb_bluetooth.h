@@ -237,6 +237,12 @@ int usb_bluetooth_hci_build_create_connection_cancel(
  * Return 1 when the USB control transfer was accepted, 0 on failure.
  * Call only from the serialized USB polling/owner CPU context.
  */
+/* Enumerate parsed inquiry results for a bound adapter. Count is zero before
+ * a scan or after adapter detach; get returns 1, 0 for out-of-range, negative errno.
+ */
+uint32_t usb_bluetooth_discovered_count(uint32_t port);
+int usb_bluetooth_discovered_get(uint32_t port, uint32_t index,
+                                 usb_bluetooth_inquiry_result_t *result);
 int usb_bluetooth_inquiry(uint32_t port, uint8_t inquiry_length,
                           uint8_t responses);
 int usb_bluetooth_inquiry_cancel(uint32_t port);

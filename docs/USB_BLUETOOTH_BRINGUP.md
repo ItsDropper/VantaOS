@@ -314,3 +314,15 @@ commands are rejected until a fresh HCI Reset reinitializes command tracking.
 Host tests cover fault gating, malformed completion events, reset recovery, and
 credit exhaustion. This does not replace a timed completion watchdog for a
 controller that accepts a transfer but never sends its event.
+
+
+## L2CAP configuration response state
+
+Channel state now records the Configure Request identifier separately from the
+initial Connection Request identifier. A configuration response can advance a
+channel to open only when both the local CID and current configuration
+identifier match, the final-response flags are clear, the result indicates
+success, and the negotiated remote MTU is valid. Continuation responses leave
+the channel configuring; rejected or malformed responses do not accidentally
+open it. The caller still has to parse signaling bytes and pass validated
+fields to this primitive.

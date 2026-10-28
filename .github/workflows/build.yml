@@ -114,6 +114,12 @@ jobs:
             -Wl,--gc-sections -o /tmp/vantaos-calculator-parser-test
           /tmp/vantaos-calculator-parser-test
 
+      - name: Test userspace path resolver
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iuserspace/include \
+            scripts/test_user_path.c -o /tmp/vantaos-user-path-test
+          /tmp/vantaos-user-path-test
+
       - name: Test HTTP URL parser
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \

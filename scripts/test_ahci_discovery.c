@@ -115,7 +115,7 @@ int mmio_unmap_region(void* virtual_address, size_t length)
 
 void serial_write(const char* text)
 {
-    if (strcmp(text, "VANTAOS_AHCI_IDLE_CONTROLLER_DISCOVERED\n") == 0)
+    if (strcmp(text, "VANTAOS_AHCI_CONTROLLER_DISCOVERED_READ_ONLY\n") == 0)
         discovered_marker = 1;
     if (strcmp(text, "VANTAOS_AHCI_CONTROLLER_PROBE_REJECTED\n") == 0)
         rejected_marker = 1;

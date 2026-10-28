@@ -59,6 +59,8 @@ static size_t last_click_column = (size_t)-1;
 static int selection_active;
 static int selection_dragging;
 
+static void write_text(const char* text);
+
 static size_t string_length(const char* text)
 {
     size_t length = 0U;

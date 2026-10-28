@@ -726,6 +726,14 @@ static int command_http_url(const char *url, const char *output_argument,
                 net_tcp_close(device);
                 return 1;
             }
+            if (expected_body_length != UINT32_MAX &&
+                total_body > (size_t)expected_body_length) {
+                terminal_write("\\ncurl: response exceeded Content-Length; incomplete output removed");
+                if (file_handle >= 0) (void)vfs_close(file_handle);
+                if (output_argument) (void)vfs_delete_path(resolved_path);
+                net_tcp_close(device);
+                return 1;
+            }
             if (output_argument) {
                 body_chunk[body_used++] = (char)byte;
             } else {

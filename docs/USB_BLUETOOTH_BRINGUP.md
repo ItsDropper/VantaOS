@@ -354,8 +354,9 @@ The configuration transaction now has a byte-level response parser. It
 validates the signaling command's declared size, CID, identifier and option
 TLVs; accepts a single well-formed MTU option; rejects undersized or duplicate
 MTU options and unknown mandatory options; and only opens a channel after a
-matching successful final response. The parser still needs to be called by a
-future inbound L2CAP signaling dispatcher.
+matching successful final response. The USB polling path dispatches complete, reassembled signaling packets into
+this parser. Unsupported mandatory configuration options receive an explicit
+rejection rather than being treated as configured.
 
 
 ## L2CAP response packet builders
@@ -375,9 +376,9 @@ A signaling-list dispatcher now validates the complete command list before
 processing supported Connection Response and Configure Response commands.
 It advances through each command using the bounded iterator and routes each
 response to the transaction handlers, while leaving unrelated signaling codes
-for future handlers. This is now a usable dispatcher primitive, but the USB
-poll loop does not yet automatically feed received ACL signaling payloads into
-it; callers must extract a complete CID 0x0001 payload first.
+for future handlers. The USB poll loop invokes the handle-bound dispatcher on
+complete reassembled ACL PDUs, and routes CID 0x0001 requests through the inbound
+request handler. Dynamic-CID payloads are delivered only to matching open channels.
 
 
 ## Per-connection L2CAP and pending connection state
@@ -408,3 +409,33 @@ be implemented by changing the default response to success. Pairing,
 authentication, encryption, SDP, HID, serial-port emulation, and audio profiles
 remain unsupported. Raw outbound L2CAP data channels are not equivalent to a
 secure, application-ready Bluetooth session.
+
+## Discovery enumeration API
+
+The USB owner path parses HCI Inquiry Result (event 0x02) and Inquiry Result
+with RSSI (event 0x22) records as they arrive. Results are stored per USB
+Bluetooth adapter in a bounded table of 16 unique device addresses. Repeated
+addresses update the existing entry instead of consuming another slot. A new
+inquiry clears the previous result set; USB detach clears it as well.
+
+Applications can call `usb_bluetooth_discovered_count(port)` to get the current
+number of results and `usb_bluetooth_discovered_get(port, index, &result)` to
+retrieve the parsed address, page-scan repetition mode, class of device, clock
+offset, and optional RSSI. The result address is in HCI wire byte order. A
+successful `usb_bluetooth_inquiry` return only means the command was submitted;
+poll the HCI event API for inquiry completion and query the discovered list.
+The result table does not include friendly names or SDP service records.
+
+The host test suite covers bounded discovery storage, duplicate-address updates,
+invalid records, full-table behavior, reset, and index bounds. Host CI does not
+replace physical adapter testing.
+
+## Current integration limits
+
+The implemented public interface is kernel-facing and polling-based. It offers
+inquiry, parsed result enumeration, outbound BR/EDR connection, HCI event
+polling, outbound L2CAP channel setup, bounded data send/receive, and channel
+disconnect. It is not yet a userspace device picker or a secure general-purpose
+Bluetooth product. Pairing, authentication, encryption, SDP, HID,
+RFCOMM/serial-port emulation, and audio remain unsupported. No physical USB
+Bluetooth adapter test is implied by host CI.

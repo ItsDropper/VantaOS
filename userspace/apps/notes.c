@@ -8,7 +8,7 @@
 #include <vanta/gui.h>
 #include <vanta/theme.h>
 
-#define NOTES_PATH "/HOME/USER/NOTES.TXT"
+#define DEFAULT_NOTES_PATH "/HOME/USER/NOTES.TXT"
 #define TEXT_CAPACITY 4096U
 #define LINE_CAPACITY 64U
 #define VISIBLE_ROWS 15U
@@ -19,6 +19,8 @@
 #define COLOR_ERROR 0x00F87171U
 #define COLOR_SUCCESS 0x0022C55EU
 
+static char document_path[128] = DEFAULT_NOTES_PATH;
+static int document_writable = 1;
 static char document[TEXT_CAPACITY];
 static size_t document_length;
 static size_t cursor;
@@ -54,6 +56,19 @@ static void copy_text(char* destination, size_t capacity, const char* source)
         i++;
     }
     destination[i] = '\0';
+}
+
+static int path_is_home_document(const char* path)
+{
+    static const char prefix[] = "/HOME/USER/";
+    for (size_t i = 0U; i < sizeof(prefix) - 1U; ++i)
+    {
+        char a = path[i], b = prefix[i];
+        if (a >= 'a' && a <= 'z') a = (char)(a - 'a' + 'A');
+        if (b >= 'a' && b <= 'z') b = (char)(b - 'a' + 'A');
+        if (a != b) return 0;
+    }
+    return path[sizeof(prefix) - 1U] != '\0';
 }
 
 static void set_status(const char* message, uint32_t color)
@@ -153,7 +168,7 @@ static void render(void)
     command_count = 0U;
     add_rect(8, 8, 720, 426, vanta_theme_surface_color(&theme));
     add_rect(8, 8, 720, 2, vanta_theme_accent_color(&theme));
-    add_text(16, 16, "Notes | /HOME/USER/NOTES.TXT", vanta_theme_text_color(&theme));
+    add_text(16, 16, "Notes editor | Ctrl+S saves", vanta_theme_text_color(&theme));
     add_rect(12, 40, 712, 1, vanta_theme_border_color(&theme));
 
     size_t selected_begin = 0U, selected_end = 0U;
@@ -283,15 +298,20 @@ static void paste_clipboard(void)
 
 static void save_document(void)
 {
-    long fd = vanta_open(NOTES_PATH, VANTA_OPEN_WRITE | VANTA_OPEN_TRUNCATE);
+    if (!document_writable)
+    {
+        set_status("Read-only: saving is limited to /HOME/USER", COLOR_ERROR);
+        return;
+    }
+    long fd = vanta_open(document_path, VANTA_OPEN_WRITE | VANTA_OPEN_TRUNCATE);
     if (fd < 0)
     {
-        if (vanta_create_file(NOTES_PATH) < 0)
+        if (vanta_create_file(document_path) < 0)
         {
             set_status("Could not create Notes file", COLOR_ERROR);
             return;
         }
-        fd = vanta_open(NOTES_PATH, VANTA_OPEN_WRITE | VANTA_OPEN_TRUNCATE);
+        fd = vanta_open(document_path, VANTA_OPEN_WRITE | VANTA_OPEN_TRUNCATE);
     }
     if (fd < 0)
     {
@@ -312,12 +332,12 @@ static void save_document(void)
         written += (size_t)result;
     }
     (void)vanta_close((int)fd);
-    set_status("Saved /HOME/USER/NOTES.TXT", COLOR_SUCCESS);
+    set_status("Saved current file", COLOR_SUCCESS);
 }
 
 static void load_document(void)
 {
-    long fd = vanta_open(NOTES_PATH, VANTA_OPEN_READ);
+    long fd = vanta_open(document_path, VANTA_OPEN_READ);
     if (fd < 0)
     {
         document[0] = '\0';
@@ -416,9 +436,20 @@ static void close_app(void)
 
 int main(int argc, char** argv)
 {
-    (void)argc;
-    (void)argv;
     theme = vanta_theme_load();
+    if (argc > 1 && argv && argv[1] && argv[1][0] == '/')
+    {
+        size_t length = text_length(argv[1]);
+        if (length > 0U && length < sizeof(document_path))
+        {
+            copy_text(document_path, sizeof(document_path), argv[1]);
+            document_writable = path_is_home_document(document_path);
+        }
+        else
+        {
+            set_status("Path too long; using default note", COLOR_ERROR);
+        }
+    }
     vanta_gui_window_request_t request = {
         .width = WINDOW_WIDTH, .height = WINDOW_HEIGHT, .title = "Notes"
     };

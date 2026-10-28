@@ -409,6 +409,11 @@ static void command_help(void)
     write_text("  cat <path>           Print a VFS file\n");
     write_text("  echo <text>          Print text\n");
     write_text("  exec <elf> [args...] Run a user ELF and wait for it\n");
+    write_text("  curl <URL>           Fetch an HTTP URL and print its body\n");
+    write_text("  curl -o <file> <URL> Download an HTTP response to a VFS file\n");
+    write_text("  net connect          Configure networking with DHCP\n");
+    write_text("  net status           Show network interfaces and counters\n");
+    write_text("  curl supports plain HTTP only; HTTPS/TLS is not implemented.\n");
     write_text("  kernel <command>     Run a supported kernel-shell command\n");
     write_text("  clear                Clear visible terminal history\n");
     write_text("  exit                 Close the terminal\n");
@@ -649,6 +654,10 @@ static void execute_line(char* command)
         command_exec(command + 5);
     else if (starts_with(command, "kernel "))
         command_kernel(command + 7);
+    else if (starts_with(command, "curl "))
+        command_kernel(command);
+    else if (starts_with(command, "net "))
+        command_kernel(command);
     else if (string_equals(command, "clear"))
     {
         for (size_t i = 0U; i < OUTPUT_LINES; i++)

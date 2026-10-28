@@ -262,11 +262,11 @@ int usb_bluetooth_acl_queue_pop(usb_bluetooth_acl_queue_t *queue,
     if (length > capacity)
         return -90;
 
-    for (uint32_t i = 0U; i < length; ++i)
+    for (uint32_t i = 0U; i < length; ++i) {
         packet[i] = queue->packets[queue->head][i];
-    queue->lengths[queue->head] = 0U;
-    for (uint32_t i = 0U; i < USB_BLUETOOTH_ACL_MAX_PACKET; ++i)
         queue->packets[queue->head][i] = 0U;
+    }
+    queue->lengths[queue->head] = 0U;
     queue->head = (queue->head + 1U) % USB_BLUETOOTH_ACL_QUEUE_DEPTH;
     --queue->count;
     return (int)length;

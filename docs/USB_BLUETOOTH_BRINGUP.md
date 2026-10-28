@@ -129,3 +129,8 @@ The ACL queue rejects corrupted ring metadata before calculating an array index:
 The raw ACL send and receive entry points share a readiness predicate: neither is exposed to callers until a successful HCI Reset Command Complete has been observed, and a reset failure keeps the transport unavailable. The receive API returns the existing retryable empty/not-ready result until the controller reaches that state. Duplicate reset-failure events emit only one failure marker per device binding.
 
 Queue dequeue now validates the stored length and packet framing before reading from the fixed-size packet buffer. Corrupted length metadata fails closed without changing the queue, preventing a damaged length field from turning into an out-of-bounds read. Host tests cover both an oversized stored length and a length inconsistent with the ACL header.
+
+
+## Polling efficiency and failure markers
+
+The polling loop now discards ACL completions until HCI Reset has succeeded, rather than retaining pre-initialization packets for later delivery. A controller's repeated failed-reset events produce a single diagnostic marker for the binding. Dequeue clears only the validated bytes of the consumed packet instead of sweeping the full 4096-byte slot on every read; reset/disconnect still wipes the complete queue storage.

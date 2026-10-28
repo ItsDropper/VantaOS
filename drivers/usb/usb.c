@@ -499,9 +499,10 @@ void usb_poll(void)
                 bluetooth->reset_failed_observed = 0U;
                 serial_write("VANTAOS_BLUETOOTH_HCI_RESET_COMPLETE\n");
             } else if (reset_status > 0 &&
-                       !bluetooth->reset_complete_observed) {
+                       !bluetooth->reset_complete_observed &&
+                       !bluetooth->reset_failed_observed) {
                 bluetooth->reset_failed_observed = 1U;
-                serial_write("VANTAOS_BLUETOOTH_HCI_RESET_FAILED\n");
+                serial_write("VANTAOS_BLUETOOTH_HCI_RESET_FAILED\\n");
             }
         }
 
@@ -511,7 +512,10 @@ void usb_poll(void)
                                            sizeof(bluetooth_acl_buffer),
                                            &acl_length);
         if (acl_result > 0) {
-            if (usb_bluetooth_acl_packet_valid(bluetooth_acl_buffer,
+            if (usb_bluetooth_transport_ready(
+                    bluetooth->reset_complete_observed,
+                    bluetooth->reset_failed_observed) &&
+                usb_bluetooth_acl_packet_valid(bluetooth_acl_buffer,
                                                acl_length)) {
                 int queued = usb_bluetooth_acl_queue_push(
                     &bluetooth_acl_queues[slot], bluetooth_acl_buffer,

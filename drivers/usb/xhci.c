@@ -204,6 +204,34 @@ static int dma_address(const void* pointer, uint64_t* address_out)
     return 1;
 }
 
+/* xHCI data TRBs describe one physical range; virtual adjacency is not enough. */
+static int dma_range_address(const void* pointer, uint32_t length,
+                             uint64_t* address_out)
+{
+    if (pointer == NULL || address_out == NULL || length == 0U)
+        return 0;
+    uintptr_t start = (uintptr_t)pointer;
+    if (start > UINTPTR_MAX - (uintptr_t)(length - 1U))
+        return 0;
+    uintptr_t physical = paging_get_physical(start);
+    if (physical == 0U || physical >= 0x100000000ULL ||
+        (uint64_t)length > 0x100000000ULL - (uint64_t)physical)
+        return 0;
+    uintptr_t last = start + (uintptr_t)length - 1U;
+    uintptr_t page = (start & ~((uintptr_t)PAGE_SIZE - 1U)) + PAGE_SIZE;
+    while (page <= last) {
+        uintptr_t translated = paging_get_physical(page);
+        uint64_t expected = (uint64_t)physical + (uint64_t)(page - start);
+        if (translated == 0U || (uint64_t)translated != expected)
+            return 0;
+        if (page > UINTPTR_MAX - PAGE_SIZE)
+            return 0;
+        page += PAGE_SIZE;
+    }
+    *address_out = (uint64_t)physical;
+    return 1;
+}
+
 static int map_controller_bar(uint64_t physical_bar)
 {
     uint64_t page = physical_bar & ~((uint64_t)PAGE_SIZE - 1U);
@@ -479,7 +507,7 @@ int xhci_control_transfer(uint32_t slot_id, const uint8_t setup[8],
     int data_in = (setup[0] & 0x80U) != 0U;
     if (length != 0U) {
         uint64_t data_physical;
-        if (!dma_address(data, &data_physical))
+        if (!dma_range_address(data, length, &data_physical))
             return 0;
         uint32_t data_control = (3U << XHCI_TRB_TYPE_SHIFT) |
                                 (1U << 4) |
@@ -907,7 +935,7 @@ int xhci_bulk_transfer(uint32_t slot_id, uint8_t endpoint_address,
         return 0;
     xhci_trb_t* trb = &bulk_rings[index][direction][ring_index];
     uint64_t data_physical, trb_physical;
-    if (!dma_address(dma, &data_physical) ||
+    if (!dma_range_address(dma, length, &data_physical) ||
         !dma_address(trb, &trb_physical))
         return 0;
     if (bulk_in_flight[index][direction])

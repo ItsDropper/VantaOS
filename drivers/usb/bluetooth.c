@@ -122,7 +122,13 @@ int usb_bluetooth_find_hci_interface(const uint8_t *configuration,
             address = configuration[offset + 2U];
             transfer_type = configuration[offset + 3U] & 0x03U;
             max_packet = endpoint_max_packet(configuration + offset);
-            if (!endpoint_address_valid(address) || max_packet == 0U)
+            /*
+             * The transport does not implement high-bandwidth endpoint
+             * transactions. Reject wMaxPacketSize multiplier/reserved bits
+             * rather than silently treating them as a plain packet size.
+             */
+            if (!endpoint_address_valid(address) || max_packet == 0U ||
+                (configuration[offset + 5U] & 0xF8U) != 0U)
                 goto next_descriptor;
 
             if (transfer_type == USB_TRANSFER_INTERRUPT &&

@@ -299,6 +299,14 @@ static void test_endpoint_packet_bounds_and_interval(void)
     assert(!usb_bluetooth_find_hci_interface(configuration,
                                               sizeof(configuration),
                                               &candidate));
+
+    for (unsigned int i = 0U; i < sizeof(valid_configuration); ++i)
+        configuration[i] = valid_configuration[i];
+    /* Reject unsupported high-bandwidth/reserved wMaxPacketSize bits. */
+    configuration[ACL_IN_DESCRIPTOR_OFFSET + 5U] = 0x08U;
+    assert(!usb_bluetooth_find_hci_interface(configuration,
+                                              sizeof(configuration),
+                                              &candidate));
 }
 
 

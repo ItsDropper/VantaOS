@@ -156,3 +156,6 @@ Descriptor matching now rejects unusable event endpoints with a zero polling int
 The descriptor regression iterates every byte position in the canonical configuration and substitutes all 256 byte values. This is a deterministic mutation test, not a coverage-guided fuzzer: its purpose is to exercise descriptor-length, type, endpoint-address, and header checks repeatedly while keeping the input allocation fixed. For every rejected input, the output candidate must remain zeroed; a failed parse must never leak a partial interface match.
 
 The GitHub Actions workflow runs the same suite twice: once with strict C11 warnings treated as errors, and once with AddressSanitizer and UndefinedBehaviorSanitizer enabled. These host-side checks can detect memory-safety defects in the parser and helpers, but they cannot model xHCI DMA, transfer timing, interrupts, controller firmware, radio behavior, or hot-unplug races. Keep those claims separate from test results.
+
+
+The endpoint parser also rejects upper `wMaxPacketSize` bits that would encode high-bandwidth transactions or reserved values. This transport configures ordinary bounded interrupt/bulk transfers only; it must not silently interpret a multi-transaction endpoint as a single packet with the same low 11-bit size. A negative descriptor test covers this case.

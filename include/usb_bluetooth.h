@@ -10,6 +10,16 @@
 
 #include <stdint.h>
 
+#define USB_BLUETOOTH_ACL_MAX_PACKET 4096U
+#define USB_BLUETOOTH_ACL_QUEUE_DEPTH 2U
+
+typedef struct {
+    uint32_t head;
+    uint32_t count;
+    uint32_t lengths[USB_BLUETOOTH_ACL_QUEUE_DEPTH];
+    uint8_t packets[USB_BLUETOOTH_ACL_QUEUE_DEPTH][USB_BLUETOOTH_ACL_MAX_PACKET];
+} usb_bluetooth_acl_queue_t;
+
 /*
  * A descriptor-level match only. It does not mean that the controller has
  * been initialized or that Bluetooth services are available.
@@ -40,11 +50,20 @@ int usb_bluetooth_hci_event_valid(const uint8_t *packet, uint32_t length);
 int usb_bluetooth_hci_reset_status(const uint8_t *packet, uint32_t length);
 int usb_bluetooth_hci_reset_complete(const uint8_t *packet, uint32_t length);
 int usb_bluetooth_acl_packet_valid(const uint8_t *packet, uint32_t length);
+void usb_bluetooth_acl_queue_reset(usb_bluetooth_acl_queue_t *queue);
+int usb_bluetooth_acl_queue_push(usb_bluetooth_acl_queue_t *queue,
+                                 const uint8_t *packet, uint32_t length);
+int usb_bluetooth_acl_queue_pop(usb_bluetooth_acl_queue_t *queue,
+                                uint8_t *packet, uint32_t capacity);
 
 /* Send one complete framed ACL packet through a bound device port.
  * Returns 1 only if xHCI reports a full transfer; caller-context limits are
  * documented in docs/USB_BLUETOOTH_BRINGUP.md. */
 int usb_bluetooth_acl_send(uint32_t port, const uint8_t *packet,
                            uint32_t length);
+/* Receive one queued raw ACL packet; -11 empty, -90 too small (not consumed),
+ * -9 when no bound device exists. Owner-CPU context only. */
+int usb_bluetooth_acl_receive(uint32_t port, uint8_t *packet,
+                              uint32_t capacity);
 
 #endif

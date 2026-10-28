@@ -9,13 +9,13 @@ Copyright (c) 2026 ItsDropper
 - USB host support through xHCI; HID boot keyboard and mouse enumeration.
 - USB Wi-Fi work for Realtek RTL8188EU. See RTL8188EU_WIFI.md for the exact limitations; firmware readiness is not proof of association or Internet access.
 - ATA and NVMe storage paths, plus block-device and partition layers.
-- USB Bluetooth HCI transport binding configures interrupt-IN event and bulk ACL endpoints, issues HCI Reset through the class control pipe, polls event and ACL-IN transfers, and exposes a bounded raw ACL bulk-OUT send API after a successful Reset Command Complete. This is transport bring-up only, not a complete Bluetooth stack; pairing, L2CAP, security, profiles, and end-to-end connectivity remain unsupported. See [the bring-up course lesson](USB_BLUETOOTH_BRINGUP.md).
+- USB Bluetooth HCI transport binding configures interrupt-IN event and bulk ACL endpoints, issues HCI Reset through the class control pipe, polls HCI events, queues validated ACL-IN packets in a bounded per-device queue, and exposes raw ACL receive/send APIs after a successful Reset Command Complete. This is transport bring-up only, not a complete Bluetooth stack; pairing, L2CAP, security, profiles, and end-to-end connectivity remain unsupported. See [the bring-up course lesson](USB_BLUETOOTH_BRINGUP.md).
 
 ## Bluetooth implementation status
 
 `drivers/usb/bluetooth.c` validates the full configuration descriptor and identifies the expected HCI interrupt-IN event endpoint plus bulk-IN and bulk-OUT ACL endpoints. `drivers/usb/usb.c` now configures those xHCI endpoints, sends HCI Reset through the class control pipe, starts event reception and re-arms a bounded ACL-IN receive after completion. Port disconnect marks the transport inactive and releases the xHCI slot. The descriptor parser is covered by `scripts/test_usb_bluetooth_descriptors.c`.
 
-This is a transport milestone, not a complete Bluetooth implementation. A bounded raw ACL transmit path is present and gated on successful HCI Reset completion. L2CAP, pairing/security, device discovery, profile support, and an end-to-end Bluetooth API remain unimplemented. Serial event markers prove only that the event path was reached; they do not prove a controller completed reset successfully or that any Bluetooth profile works. Physical-adapter and QEMU controller testing remain required.
+This is a transport milestone, not a complete Bluetooth implementation. Bounded raw ACL receive and transmit paths are present and gated on successful HCI Reset completion; incoming packets are queued rather than immediately discarded. L2CAP, pairing/security, device discovery, profile support, and an end-to-end Bluetooth API remain unimplemented. Serial event markers prove only that the event path was reached; they do not prove a controller completed reset successfully or that any Bluetooth profile works. Physical-adapter and QEMU controller testing remain required.
 
 ## Wi-Fi adapter versus router
 

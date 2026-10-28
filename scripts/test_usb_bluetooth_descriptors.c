@@ -153,6 +153,32 @@ static void test_non_bluetooth_interface_is_ignored(void)
                                                &candidate));
 }
 
+static void test_acl_queue_preserves_messages_on_small_buffer(void)
+{
+    usb_bluetooth_acl_queue_t queue = {0};
+    const uint8_t first[] = {0x01U, 0x20U, 0x02U, 0x00U, 0xAAU, 0xBBU};
+    const uint8_t second[] = {0x02U, 0x20U, 0x01U, 0x00U, 0xCCU};
+    uint8_t output[16] = {0};
+
+    usb_bluetooth_acl_queue_reset(&queue);
+    assert(usb_bluetooth_acl_queue_pop(&queue, output, sizeof(output)) == -11);
+    assert(usb_bluetooth_acl_queue_push(&queue, first, sizeof(first)) == 0);
+    assert(usb_bluetooth_acl_queue_pop(&queue, output, 2U) == -90);
+    assert(queue.count == 1U);
+    assert(usb_bluetooth_acl_queue_push(&queue, second, sizeof(second)) == 0);
+    assert(usb_bluetooth_acl_queue_push(&queue, first, sizeof(first)) == -11);
+    assert(usb_bluetooth_acl_queue_pop(&queue, output, sizeof(output)) ==
+           (int)sizeof(first));
+    assert(output[4] == 0xAAU && output[5] == 0xBBU);
+    assert(usb_bluetooth_acl_queue_pop(&queue, output, sizeof(output)) ==
+           (int)sizeof(second));
+    assert(output[4] == 0xCCU);
+    assert(usb_bluetooth_acl_queue_pop(&queue, output, sizeof(output)) == -11);
+    assert(usb_bluetooth_acl_queue_push(&queue, first, sizeof(first) - 1U) == -22);
+    usb_bluetooth_acl_queue_reset(&queue);
+    assert(queue.count == 0U && queue.head == 0U);
+}
+
 int main(void)
 {
     test_complete_hci_interface();
@@ -162,6 +188,7 @@ int main(void)
     test_configuration_header_is_validated();
     test_non_bluetooth_interface_is_ignored();
     test_hci_event_and_acl_framing();
+    test_acl_queue_preserves_messages_on_small_buffer();
     puts("USB Bluetooth descriptor tests passed");
     return 0;
 }

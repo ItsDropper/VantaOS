@@ -70,7 +70,10 @@ typedef struct {
 
 static usb_bluetooth_slot_t bluetooth_slots[USB_MAX_XHCI_SLOTS + 1U];
 static uint8_t bluetooth_event_buffer[64] __attribute__((aligned(64)));
-static uint8_t bluetooth_acl_buffer[4096] __attribute__((aligned(64)));
+static uint8_t bluetooth_acl_buffer[USB_BLUETOOTH_ACL_MAX_PACKET]
+    __attribute__((aligned(64)));
+static usb_bluetooth_acl_queue_t bluetooth_acl_queues[USB_MAX_XHCI_SLOTS + 1U];
+static uint32_t bluetooth_acl_dropped[USB_MAX_XHCI_SLOTS + 1U];
 static uint8_t bluetooth_acl_tx_buffers[USB_MAX_XHCI_SLOTS + 1U][4096]
     __attribute__((aligned(64)));
 static uint8_t bluetooth_acl_tx_busy[USB_MAX_XHCI_SLOTS + 1U];
@@ -102,7 +105,7 @@ static int usb_control(uint32_t slot, uint8_t request_type, uint8_t request,
 int usb_bluetooth_acl_send(uint32_t port, const uint8_t *packet,
                            uint32_t length)
 {
-    if (port == 0U || packet == 0 || length < 4U || length > 4096U ||
+    if (port == 0U || packet == 0 || length < 4U || length > USB_BLUETOOTH_ACL_MAX_PACKET ||
         !usb_bluetooth_acl_packet_valid(packet, length))
         return 0;
 
@@ -137,6 +140,19 @@ int usb_bluetooth_acl_send(uint32_t port, const uint8_t *packet,
 
     __atomic_clear(&bluetooth_acl_tx_busy[slot], __ATOMIC_RELEASE);
     return success;
+}
+
+int usb_bluetooth_acl_receive(uint32_t port, uint8_t *packet,
+                              uint32_t capacity)
+{
+    if (port == 0U || packet == 0 || capacity == 0U)
+        return -22;
+    for (uint32_t slot = 1U; slot <= USB_MAX_XHCI_SLOTS; ++slot) {
+        if (bluetooth_slots[slot].active && bluetooth_slots[slot].port == port)
+            return usb_bluetooth_acl_queue_pop(&bluetooth_acl_queues[slot],
+                                               packet, capacity);
+    }
+    return -9;
 }
 
 static uint16_t usb_initial_ep0_packet(uint32_t speed)
@@ -331,6 +347,9 @@ static int usb_enumerate_port(uint32_t port)
             bluetooth_candidate.acl_in_endpoint;
         bluetooth_slots[slot].acl_out_endpoint =
             bluetooth_candidate.acl_out_endpoint;
+        usb_bluetooth_acl_queue_reset(&bluetooth_acl_queues[slot]);
+        bluetooth_acl_dropped[slot] = 0U;
+        bluetooth_acl_tx_busy[slot] = 0U;
         if (!xhci_start_interrupt_in(slot) ||
             !xhci_start_bulk_in(slot, bluetooth_candidate.acl_in_endpoint)) {
             bluetooth_slots[slot].active = 0U;
@@ -425,6 +444,8 @@ void usb_poll(void)
                     bluetooth_slots[slot].acl_out_endpoint = 0U;
                     bluetooth_slots[slot].event_count = 0U;
                     bluetooth_slots[slot].acl_packet_count = 0U;
+                    usb_bluetooth_acl_queue_reset(&bluetooth_acl_queues[slot]);
+                    bluetooth_acl_dropped[slot] = 0U;
                     bluetooth_slots[slot].reset_complete_observed = 0U;
                     bluetooth_slots[slot].reset_failed_observed = 0U;
                     __atomic_store_n(&bluetooth_acl_tx_busy[slot], 0U,
@@ -485,9 +506,18 @@ void usb_poll(void)
         if (acl_result > 0) {
             if (usb_bluetooth_acl_packet_valid(bluetooth_acl_buffer,
                                                acl_length)) {
-                bluetooth->acl_packet_count++;
-                if (bluetooth->acl_packet_count == 1U)
-                    serial_write("VANTAOS_BLUETOOTH_ACL_PACKET_RECEIVED\n");
+                int queued = usb_bluetooth_acl_queue_push(
+                    &bluetooth_acl_queues[slot], bluetooth_acl_buffer,
+                    acl_length);
+                if (queued == 0) {
+                    bluetooth->acl_packet_count++;
+                    if (bluetooth->acl_packet_count == 1U)
+                        serial_write("VANTAOS_BLUETOOTH_ACL_PACKET_QUEUED\\n");
+                } else if (queued == -11) {
+                    bluetooth_acl_dropped[slot]++;
+                    if (bluetooth_acl_dropped[slot] == 1U)
+                        serial_write("VANTAOS_BLUETOOTH_ACL_QUEUE_FULL\\n");
+                }
             }
             (void)xhci_start_bulk_in(slot, bluetooth->acl_in_endpoint);
         } else if (acl_result < 0) {

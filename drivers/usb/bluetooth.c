@@ -203,3 +203,52 @@ int usb_bluetooth_acl_packet_valid(const uint8_t *packet, uint32_t length)
                               ((uint32_t)packet[3] << 8);
     return payload_length == length - 4U;
 }
+
+
+void usb_bluetooth_acl_queue_reset(usb_bluetooth_acl_queue_t *queue)
+{
+    if (queue == NULL)
+        return;
+    queue->head = 0U;
+    queue->count = 0U;
+    for (uint32_t i = 0U; i < USB_BLUETOOTH_ACL_QUEUE_DEPTH; ++i)
+        queue->lengths[i] = 0U;
+}
+
+int usb_bluetooth_acl_queue_push(usb_bluetooth_acl_queue_t *queue,
+                                 const uint8_t *packet, uint32_t length)
+{
+    if (queue == NULL || packet == NULL || length > USB_BLUETOOTH_ACL_MAX_PACKET ||
+        !usb_bluetooth_acl_packet_valid(packet, length))
+        return -22;
+    if (queue->count >= USB_BLUETOOTH_ACL_QUEUE_DEPTH)
+        return -11;
+
+    uint32_t tail = (queue->head + queue->count) %
+                    USB_BLUETOOTH_ACL_QUEUE_DEPTH;
+    for (uint32_t i = 0U; i < length; ++i)
+        queue->packets[tail][i] = packet[i];
+    queue->lengths[tail] = length;
+    ++queue->count;
+    return 0;
+}
+
+int usb_bluetooth_acl_queue_pop(usb_bluetooth_acl_queue_t *queue,
+                                uint8_t *packet, uint32_t capacity)
+{
+    if (queue == NULL || packet == NULL || capacity == 0U)
+        return -22;
+    if (queue->count == 0U)
+        return -11;
+
+    uint32_t length = queue->lengths[queue->head];
+    if (length > capacity)
+        return -90;
+
+    for (uint32_t i = 0U; i < length; ++i)
+        packet[i] = queue->packets[queue->head][i];
+    queue->lengths[queue->head] = 0U;
+    queue->head = (queue->head + 1U) % USB_BLUETOOTH_ACL_QUEUE_DEPTH;
+    --queue->count;
+    return (int)length;
+}

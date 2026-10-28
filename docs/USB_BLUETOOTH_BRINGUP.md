@@ -110,3 +110,10 @@ The event path distinguishes three outcomes for the HCI Reset Command Complete e
 On disconnect, the USB owner path clears the slot's Bluetooth endpoint/state fields and transmit-busy flag before disabling the xHCI slot. Repeated connect-change notifications also check Bluetooth bindings, avoiding duplicate enumeration of a port already bound to a Bluetooth interface. These rules reduce stale-slot reuse, but do not replace a future reference-counted or locked device-lifetime model if USB work moves to multiple CPUs.
 
 The host tests exercise reset-status classification and framing predicates. They do not test event delivery timing, controller recovery, ACL transfer completion, or hardware disconnect races.
+
+
+## Bounded ACL receive queue
+
+Valid ACL-IN packets are now copied into a two-entry per-device queue instead of being discarded after validation. The kernel-facing `usb_bluetooth_acl_receive(port, packet, capacity)` returns one complete raw ACL packet length, `-11` when the queue is empty, `-90` when the destination is too small, and `-9` when no Bluetooth transport is bound to that port. A too-small destination does not consume the queued packet. When the queue is full, the incoming packet is dropped rather than overwriting older unread data; the first overflow emits `VANTAOS_BLUETOOTH_ACL_QUEUE_FULL`.
+
+The queue is deliberately bounded (two packets per slot) to keep memory use predictable. Push/pop and device lifecycle are currently intended for the USB owner CPU; this is not an SMP-safe multi-consumer queue. The host regression tests cover FIFO order, full-queue behavior, malformed packets, empty queues, and retrying after a too-small buffer. They do not establish that a physical controller supplies ACL data or that a higher protocol can use it.

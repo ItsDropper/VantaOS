@@ -1310,10 +1310,51 @@ static void test_l2cap_dispatch_rejects_wrong_handle(void)
     assert(table.channels[0].active == 0U);
 }
 
+static void test_hci_connection_command_builders(void)
+{
+    const uint8_t address[6] = {0x66U, 0x55U, 0x44U, 0x33U, 0x22U, 0x11U};
+    uint8_t command[20] = {0};
+    assert(usb_bluetooth_hci_build_create_connection(
+               address, 0xCC18U, 1U, 0x1234U, 1U,
+               command, sizeof(command)) == 16);
+    assert(command[0] == 0x05U && command[1] == 0x04U &&
+           command[2] == 13U);
+    assert(memcmp(&command[3], address, sizeof(address)) == 0);
+    assert(command[9] == 0x18U && command[10] == 0xCCU);
+    assert(command[11] == 1U && command[12] == 0U);
+    assert(command[13] == 0x34U && command[14] == 0x12U &&
+           command[15] == 1U);
+    assert(usb_bluetooth_hci_build_create_connection(
+               address, 0U, 1U, 0U, 0U, command, sizeof(command)) == -22);
+    assert(usb_bluetooth_hci_build_create_connection(
+               address, 1U, 3U, 0U, 0U, command, sizeof(command)) == -22);
+    assert(usb_bluetooth_hci_build_create_connection(
+               address, 1U, 1U, 0x8000U, 0U, command, sizeof(command)) == -22);
+    assert(usb_bluetooth_hci_build_create_connection(
+               address, 1U, 1U, 0U, 2U, command, sizeof(command)) == -22);
+    assert(usb_bluetooth_hci_build_create_connection(
+               address, 1U, 1U, 0U, 0U, command, 3U) == -90);
+
+    assert(usb_bluetooth_hci_build_disconnect(
+               0x0123U, 0x13U, command, sizeof(command)) == 6);
+    assert(command[0] == 0x06U && command[1] == 0x04U &&
+           command[2] == 3U && command[3] == 0x23U &&
+           command[4] == 0x01U && command[5] == 0x13U);
+    assert(usb_bluetooth_hci_build_disconnect(
+               0U, 0x13U, command, sizeof(command)) == -22);
+    assert(usb_bluetooth_hci_build_disconnect(
+               0x0F00U, 0x13U, command, sizeof(command)) == -22);
+    assert(usb_bluetooth_hci_build_disconnect(
+               0x0123U, 0U, command, sizeof(command)) == -22);
+    assert(usb_bluetooth_hci_build_disconnect(
+               0x0123U, 0x13U, command, 5U) == -90);
+}
+
 int main(void)
 {
     test_hci_command_encoding();
     test_hci_command_credits_and_discovery_builders();
+    test_hci_connection_command_builders();
     test_hci_command_fault_requires_reset();
     test_l2cap_channel_lifecycle();
     test_l2cap_response_builders();

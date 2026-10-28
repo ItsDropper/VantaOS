@@ -221,11 +221,12 @@ static int dma_range_address(const void* pointer, uint32_t length,
     uintptr_t page = (start & ~((uintptr_t)PAGE_SIZE - 1U)) + PAGE_SIZE;
     while (page <= last) {
         uintptr_t translated = paging_get_physical(page);
-        uintptr_t virtual_page = page - (start & ((uintptr_t)PAGE_SIZE - 1U));
-        uint64_t expected = (uint64_t)(physical &
-                            ~((uintptr_t)PAGE_SIZE - 1U)) +
-                            (uint64_t)(virtual_page -
-                            (start & ~((uintptr_t)PAGE_SIZE - 1U)));
+        uintptr_t virtual_page_base =
+            start & ~((uintptr_t)PAGE_SIZE - 1U);
+        uint64_t physical_page_base =
+            (uint64_t)(physical & ~((uintptr_t)PAGE_SIZE - 1U));
+        uint64_t expected = physical_page_base +
+                            (uint64_t)(page - virtual_page_base);
         if (translated == 0U || (uint64_t)translated != expected)
             return 0;
         if (page > UINTPTR_MAX - PAGE_SIZE)

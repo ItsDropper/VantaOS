@@ -154,7 +154,7 @@ The USB layer now also exposes `usb_bluetooth_connect`, `usb_bluetooth_cancel_co
 
 ## Classic device inquiry results
 
-The HCI inquiry-result parser accepts standard Inquiry Result (event 0x02) and Inquiry Result with RSSI (event 0x22) events. It validates the complete event length and per-record count before returning an indexed record containing the six-byte HCI-order address, page-scan repetition mode, 24-bit class of device, clock offset, and optional signed RSSI. Unsupported event types and malformed record layouts are rejected. The parser is a building block for a future device picker; the current USB layer still exposes raw HCI events, so callers must explicitly parse and present results.
+The USB API now exposes `usb_bluetooth_inquiry(port, inquiry_length, responses)` to submit a validated classic Inquiry command through the HCI command-credit gate. The caller must drain events with `usb_bluetooth_hci_event_receive` and pass event `0x02` or `0x22` packets to the parser. The HCI inquiry-result parser accepts standard Inquiry Result (event 0x02) and Inquiry Result with RSSI (event 0x22) events. It validates the complete event length and per-record count before returning an indexed record containing the six-byte HCI-order address, page-scan repetition mode, 24-bit class of device, clock offset, and optional signed RSSI. Unsupported event types and malformed record layouts are rejected. The parser is a building block for a future device picker; the current USB layer still exposes raw HCI events, so callers must explicitly parse and present results.
 
 ## Unified binding teardown
 

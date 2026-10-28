@@ -32,6 +32,26 @@ typedef struct {
     uint16_t acl_out_max_packet;
 } hci_interface_t;
 
+int usb_bluetooth_hci_command_encode(uint16_t opcode,
+                                     const uint8_t *parameters,
+                                     uint8_t parameter_length,
+                                     uint8_t *output, uint32_t capacity)
+{
+    uint32_t required = (uint32_t)parameter_length + 3U;
+    if (opcode == 0U || output == NULL ||
+        (parameter_length != 0U && parameters == NULL))
+        return -22;
+    if (required > capacity)
+        return -90;
+
+    output[0] = (uint8_t)(opcode & 0xFFU);
+    output[1] = (uint8_t)(opcode >> 8);
+    output[2] = parameter_length;
+    for (uint32_t i = 0U; i < parameter_length; ++i)
+        output[3U + i] = parameters[i];
+    return (int)required;
+}
+
 static uint16_t endpoint_max_packet(const uint8_t *descriptor)
 {
     return (uint16_t)descriptor[4] |

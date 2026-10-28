@@ -72,6 +72,7 @@ typedef struct {
     uint8_t reset_failed_observed;
     uint16_t acl_packet_length;
     uint16_t acl_total_packets;
+    uint16_t acl_packets_available;
     usb_bluetooth_connection_attempt_t connection_attempt;
     uint32_t connection_deadline;
     usb_bluetooth_inquiry_state_t inquiry_state;
@@ -207,6 +208,7 @@ int usb_bluetooth_hci_command(uint32_t port, uint16_t opcode,
         bluetooth_slots[slot].reset_failed_observed = 0U;
         bluetooth_slots[slot].acl_packet_length = 0U;
         bluetooth_slots[slot].acl_total_packets = 0U;
+        bluetooth_slots[slot].acl_packets_available = 0U;
         usb_bluetooth_connection_attempt_reset(
             &bluetooth_slots[slot].connection_attempt);
         usb_bluetooth_inquiry_state_reset(
@@ -789,7 +791,11 @@ int usb_bluetooth_acl_send(uint32_t port, const uint8_t *packet,
         if (fragment_limit > buffer_limit)
             fragment_limit = buffer_limit;
 
-        success = handle != 0U && fragment_limit != 0U;
+        uint32_t required_fragments = fragment_limit == 0U ? 0U :
+            (acl_payload_length + fragment_limit - 1U) / fragment_limit;
+        success = handle != 0U && fragment_limit != 0U &&
+                  required_fragments != 0U &&
+                  required_fragments <= bluetooth_slots[slot].acl_packets_available;
         uint32_t offset = 0U;
         uint32_t fragments = 0U;
         while (success && offset < acl_payload_length) {
@@ -810,6 +816,9 @@ int usb_bluetooth_acl_send(uint32_t port, const uint8_t *packet,
 
             uint32_t transfer_length = fragment_length + 4U;
             uint32_t actual_length = 0U;
+            /* Reserve conservatively before USB submission: a failed transfer
+             * can have an ambiguous controller-side outcome. */
+            bluetooth_slots[slot].acl_packets_available--;
             success = xhci_bulk_transfer(
                           slot, bluetooth_slots[slot].acl_out_endpoint,
                           bluetooth_acl_tx_buffers[slot], transfer_length,
@@ -1440,6 +1449,20 @@ void usb_poll(void)
                         buffer_size.acl_packet_length : 0U;
                     bluetooth->acl_total_packets = parsed_size > 0 ?
                         buffer_size.total_acl_packets : 0U;
+                    bluetooth->acl_packets_available = parsed_size > 0 ?
+                        buffer_size.total_acl_packets : 0U;
+                }
+                uint16_t completed_acl_packets = 0U;
+                int completed_result = usb_bluetooth_hci_completed_acl_packets(
+                    bluetooth_event_buffer, event_length,
+                    &completed_acl_packets);
+                if (completed_result > 0) {
+                    uint32_t available =
+                        (uint32_t)bluetooth->acl_packets_available +
+                        completed_acl_packets;
+                    if (available > bluetooth->acl_total_packets)
+                        available = bluetooth->acl_total_packets;
+                    bluetooth->acl_packets_available = (uint16_t)available;
                 }
                 int link_transition = usb_bluetooth_link_table_event(
                     &bluetooth_link_tables[slot], bluetooth_event_buffer,
@@ -1554,6 +1577,7 @@ void usb_poll(void)
                 if (reset_transition > 0) {
                     bluetooth->acl_packet_length = 0U;
                     bluetooth->acl_total_packets = 0U;
+                    bluetooth->acl_packets_available = 0U;
                     serial_write("VANTAOS_BLUETOOTH_HCI_RESET_COMPLETE\n");
                     /* Discover the controller's ACL fragment size before TX. */
                     (void)usb_bluetooth_hci_command(

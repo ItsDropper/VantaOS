@@ -180,6 +180,17 @@ static void test_hci_event_and_acl_framing(void)
     assert(!usb_bluetooth_acl_packet_valid(acl_truncated,
                                             sizeof(acl_truncated)));
     assert(!usb_bluetooth_acl_packet_valid(acl, sizeof(acl) - 1U));
+
+    /* Structurally sized packets still cannot use reserved HCI header values. */
+    const uint8_t zero_handle[] = {0x00U, 0x00U, 0x00U, 0x00U};
+    const uint8_t reserved_broadcast[] = {0x01U, 0xC0U, 0x00U, 0x00U};
+    usb_bluetooth_acl_view_t view = {0};
+    assert(usb_bluetooth_acl_packet_valid(zero_handle, sizeof(zero_handle)));
+    assert(!usb_bluetooth_acl_parse(zero_handle, sizeof(zero_handle), &view));
+    assert(view.payload == NULL && view.handle == 0U);
+    assert(!usb_bluetooth_acl_parse(reserved_broadcast,
+                                    sizeof(reserved_broadcast), &view));
+    assert(view.payload == NULL && view.broadcast == 0U);
 }
 
 static void test_non_bluetooth_interface_is_ignored(void)
@@ -662,6 +673,9 @@ static void test_acl_fragment_reassembly(void)
     usb_bluetooth_acl_reassembly_reset(&state);
     assert(usb_bluetooth_acl_reassembly_feed(&state, first, sizeof(first)) == 0);
     assert(usb_bluetooth_acl_reassembly_feed(&state, first, sizeof(first)) == -16);
+    assert(state.active == 0U && state.received_length == 0U);
+    /* The stale partial packet was cleared, so a fresh start can recover. */
+    assert(usb_bluetooth_acl_reassembly_feed(&state, first, sizeof(first)) == 0);
     const uint8_t overrun[] = {0x01U, 0x10U, 0x04U, 0x00U,
                                0x34U, 0x12U, 0x56U, 0x78U};
     assert(usb_bluetooth_acl_reassembly_feed(&state, overrun, sizeof(overrun)) == -22);

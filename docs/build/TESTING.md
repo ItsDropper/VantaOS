@@ -8,6 +8,10 @@ The workflow tests ATA-backed filesystem operations in the standard QEMU regress
 
 FAT32 currently accepts only writable 512-byte-sector devices. Device selection mounts only when exactly one eligible device contains a valid FAT32 volume; multiple valid candidates intentionally result in no persistent mount. The no-device path must retain the in-memory namespace.
 
+## Terminal path resolution
+
+The host regression test compiles the same `userspace/include/vanta/path.h` helper used by Terminal. It covers absolute and relative paths, repeated separators, `.` and `..` normalization, attempts to walk above root, invalid arguments, and output-buffer limits. It tests lexical normalization only; it does not prove that a path exists or that the filesystem grants access.
+
 ## Continuous integration
 
 Workflow: [`.github/workflows/build.yml`](../.github/workflows/build.yml)

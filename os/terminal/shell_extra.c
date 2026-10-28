@@ -516,7 +516,7 @@ static int command_http_url(const char *url, const char *output_argument,
     size_t host_length = 0, path_length = 0, used = 0;
     size_t header_length = 0, header_end = 0, total_body = 0, body_used = 0;
     char body_chunk[257];
-    uint32_t port = 80U, address = 0;
+    uint32_t port = 80U, address = 0, expected_body_length = UINT32_MAX;
     const char *authority, *cursor, *path_start, *port_start = 0;
     net_device_t *device = 0;
     int file_handle = -1, response_status = 0, body_started = 0;
@@ -772,6 +772,41 @@ static int command_http_url(const char *url, const char *output_argument,
                             }
                         }
                     }
+                    for (size_t h = 0U; h + 15U <= header_end; ++h) {
+                        static const char content_length_name[] = "content-length:";
+                        size_t k = 0U;
+                        while (k < sizeof(content_length_name) - 1U) {
+                            char ch = headers[h + k];
+                            if (ch >= 'A' && ch <= 'Z') ch = (char)(ch - 'A' + 'a');
+                            if (ch != content_length_name[k]) break;
+                            ++k;
+                        }
+                        if (k == sizeof(content_length_name) - 1U) {
+                            size_t value_at = h + k;
+                            while (value_at < header_end &&
+                                   (headers[value_at] == ' ' || headers[value_at] == '\\t'))
+                                ++value_at;
+                            char digits[12];
+                            size_t digit_count = 0U;
+                            while (value_at < header_end &&
+                                   headers[value_at] >= '0' && headers[value_at] <= '9' &&
+                                   digit_count + 1U < sizeof(digits))
+                                digits[digit_count++] = headers[value_at++];
+                            digits[digit_count] = 0;
+                            uint32_t parsed_length = 0U;
+                            if (digit_count == 0U ||
+                                (value_at < header_end && headers[value_at] != '\\r') ||
+                                !parse_u32(digits, &parsed_length) ||
+                                parsed_length > max_download ||
+                                (expected_body_length != UINT32_MAX &&
+                                 expected_body_length != parsed_length)) {
+                                terminal_write("\\ncurl: invalid or conflicting Content-Length");
+                                net_tcp_close(device);
+                                return 1;
+                            }
+                            expected_body_length = parsed_length;
+                        }
+                    }
                     if (output_argument) {
                         file_handle = vfs_open(resolved_path,
                                                 VFS_OPEN_WRITE | VFS_OPEN_TRUNCATE);
@@ -820,6 +855,11 @@ static int command_http_url(const char *url, const char *output_argument,
     }
     net_tcp_close(device);
     if (file_handle >= 0) (void)vfs_close(file_handle);
+    if (expected_body_length != UINT32_MAX &&
+        total_body != (size_t)expected_body_length) {
+        terminal_write("\\ncurl: response body length did not match Content-Length; output may be incomplete");
+        return 1;
+    }
     if (!body_started) {
         terminal_write("\ncurl: no complete HTTP response headers received");
         return 1;

@@ -586,6 +586,42 @@ int usb_bluetooth_l2cap_build_disconnection_request(uint8_t identifier,
                                                 capacity);
 }
 
+int usb_bluetooth_l2cap_dispatch_responses(
+    usb_bluetooth_l2cap_table_t *table, const uint8_t *payload,
+    uint32_t length)
+{
+    if (table == NULL || payload == NULL ||
+        !usb_bluetooth_l2cap_signaling_valid(payload, length))
+        return -22;
+    uint32_t offset = 0U;
+    int handled = 0;
+    usb_bluetooth_l2cap_signal_command_t command;
+    for (;;) {
+        uint32_t command_offset = offset;
+        int next = usb_bluetooth_l2cap_signaling_next(
+            payload, length, &offset, &command);
+        if (next == 0)
+            return handled;
+        if (next < 0)
+            return next;
+        uint32_t command_size = (uint32_t)command.payload_length + 4U;
+        int result = 0;
+        if (command.code == 0x03U) {
+            result = usb_bluetooth_l2cap_connection_response(
+                table, payload + command_offset, command_size, 672U);
+            if (result < 0)
+                return result;
+            ++handled;
+        } else if (command.code == 0x05U) {
+            result = usb_bluetooth_l2cap_configuration_response(
+                table, payload + command_offset, command_size);
+            if (result < 0)
+                return result;
+            ++handled;
+        }
+    }
+}
+
 int usb_bluetooth_l2cap_signaling_valid(const uint8_t *payload,
                                         uint32_t length)
 {

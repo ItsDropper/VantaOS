@@ -1101,6 +1101,8 @@ static void toolbar_action(unsigned int action)
     }
 }
 
+static void open_selected(void);
+
 static void dispatch_context_action(unsigned int item)
 {
     switch (item)

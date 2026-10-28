@@ -1285,7 +1285,7 @@ int usb_bluetooth_inquiry_state_cancel_result(
 {
     if (state == NULL)
         return -22;
-    if (state->active == 0U || state->cancel_state == 0U)
+    if (state->active == 0U || state->cancel_state != 1U)
         return -2;
     state->cancel_state = accepted ? 2U : 0U;
     return accepted ? 1 : 0;

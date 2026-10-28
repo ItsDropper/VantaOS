@@ -336,3 +336,14 @@ TLVs; accepts a single well-formed MTU option; rejects undersized or duplicate
 MTU options and unknown mandatory options; and only opens a channel after a
 matching successful final response. The parser still needs to be called by a
 future inbound L2CAP signaling dispatcher.
+
+
+## L2CAP response dispatcher
+
+A signaling-list dispatcher now validates the complete command list before
+processing supported Connection Response and Configure Response commands.
+It advances through each command using the bounded iterator and routes each
+response to the transaction handlers, while leaving unrelated signaling codes
+for future handlers. This is now a usable dispatcher primitive, but the USB
+poll loop does not yet automatically feed received ACL signaling payloads into
+it; callers must extract a complete CID 0x0001 payload first.

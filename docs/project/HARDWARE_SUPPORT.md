@@ -9,7 +9,7 @@ VantaOS is an experimental x86-64 OS. Source code for a driver is not proof that
 | x86-64 boot path | Kernel/ISO build and headless QEMU boot in CI | Verified in the tested QEMU configuration |
 | Serial diagnostics | CI captures COM1 output and checks boot/test markers | Verified in QEMU |
 | Timer/interrupt path | PIT frequency bounds, tick wrap arithmetic, scheduler probe and process reaping are covered by regression tests | Narrow path tested; not exhaustive |
-| Kernel watchdog | Fixed-size watchdog registry, heartbeat kicks, latched expiry, stale-handle rejection and tick-wrap behavior have host regression coverage | Software expiry only; no hardware watchdog or automatic subsystem recovery |
+| Kernel watchdog | Fixed-size watchdog registry, heartbeat API, latched expiry, stale-handle rejection and tick-wrap behavior have host regression tests wired into CI | No production subsystem client or safe recovery observer is registered yet; software expiry only, no hardware watchdog |
 | Graphics/framebuffer | Initialization code exists and boot logs report framebuffer details | Pixel correctness and broad firmware support unverified |
 | Keyboard/mouse | Driver code exists | Device compatibility and full interaction unverified |
 | AHCI/SATA groundwork | Host-tested PRDT descriptor splitting and bounds helper; no controller driver or disk I/O yet | Not hardware support; DMA mapping, command engine, interrupts, recovery, and block-device integration remain unimplemented |

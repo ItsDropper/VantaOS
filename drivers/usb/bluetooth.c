@@ -750,6 +750,46 @@ int usb_bluetooth_l2cap_channel_response(usb_bluetooth_l2cap_table_t *table,
     return -9;
 }
 
+int usb_bluetooth_l2cap_connection_response(
+    usb_bluetooth_l2cap_table_t *table,
+    const uint8_t *command, uint32_t length, uint16_t default_remote_mtu)
+{
+    if (table == NULL || command == NULL || length != 12U ||
+        command[0] != 0x03U || command[1] == 0U ||
+        command[2] != 8U || command[3] != 0U)
+        return -22;
+    uint16_t remote_cid = (uint16_t)command[4] |
+                          ((uint16_t)command[5] << 8);
+    uint16_t echoed_local_cid = (uint16_t)command[6] |
+                                ((uint16_t)command[7] << 8);
+    uint16_t result = (uint16_t)command[8] |
+                      ((uint16_t)command[9] << 8);
+    uint16_t status = (uint16_t)command[10] |
+                      ((uint16_t)command[11] << 8);
+    for (uint32_t i = 0U; i < USB_BLUETOOTH_L2CAP_CHANNEL_MAX; ++i) {
+        usb_bluetooth_l2cap_channel_t *channel = &table->channels[i];
+        if (!channel->active || channel->identifier != command[1] ||
+            channel->state != 1U)
+            continue;
+        if (channel->local_cid != echoed_local_cid)
+            return -22;
+        /* 0x0001 is Pending; retain the transaction for its later response. */
+        if (result == 1U)
+            return 0;
+        if (result != 0U) {
+            *channel = (usb_bluetooth_l2cap_channel_t){0};
+            return -5;
+        }
+        if (status != 0U || remote_cid <
+                USB_BLUETOOTH_L2CAP_CID_DYNAMIC_MIN ||
+            default_remote_mtu < 48U)
+            return -22;
+        return usb_bluetooth_l2cap_channel_response(
+            table, command[1], remote_cid, 0U, default_remote_mtu);
+    }
+    return -9;
+}
+
 int usb_bluetooth_l2cap_channel_configured(usb_bluetooth_l2cap_table_t *table,
                                            uint16_t local_cid)
 {

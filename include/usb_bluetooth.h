@@ -160,6 +160,13 @@ int usb_bluetooth_acl_queue_push(usb_bluetooth_acl_queue_t *queue,
 int usb_bluetooth_acl_queue_pop(usb_bluetooth_acl_queue_t *queue,
                                 uint8_t *packet, uint32_t capacity);
 
+/* Encode HCI command data-stage bytes: opcode LE16, parameter length,
+ * then parameters. Returns encoded length, -22 for invalid input, -90 if
+ * capacity is insufficient. Maximum encoded length is 258 bytes. */
+int usb_bluetooth_hci_command_encode(uint16_t opcode,
+                                     const uint8_t *parameters,
+                                     uint8_t parameter_length,
+                                     uint8_t *output, uint32_t capacity);
 /* Send one HCI command through the USB class control pipe. Serialize
  * commands on the USB owner CPU and wait for its matching event before the
  * next command; this API does not implement command-credit scheduling. */

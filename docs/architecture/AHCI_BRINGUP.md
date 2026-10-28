@@ -8,7 +8,7 @@ SATA driver and must not be reported as device support.
 
 - Encodes the 16-byte AHCI PRDT entry layout.
 - Splits a contiguous DMA address range into entries of at most 4 MiB each.
-- Validates nonzero length, basic DMA-address alignment, 64-bit end-address overflow,
+- Validates nonzero length, DWORD-aligned DMA address, 64-bit end-address overflow,
   output capacity, and the PRDT byte-count encoding.
 - Sets IOC only on the final entry when requested.
 - Leaves the entry array unchanged when validation fails.
@@ -24,8 +24,8 @@ perform cache synchronization, or transfer buffer ownership to the HBA.
    recovery; do not reset an active controller without an explicit ownership
    contract.
 3. Define aligned command-list, received-FIS, command-table, and PRDT allocations
-   using VantaOS's DMA allocator and physical-address contract. Tighten the PRDT
-   builder to enforce the AHCI-required DWORD alignment before it is used by a driver.
+   using VantaOS's DMA allocator and physical-address contract; the PRDT builder
+   now rejects DMA addresses not aligned to a four-byte boundary.
 4. Implement IDENTIFY DEVICE and bounded READ DMA EXT / WRITE DMA EXT commands,
    with command-slot ownership, timeout handling, status/error capture, and
    cache/ordering rules.

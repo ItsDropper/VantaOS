@@ -63,11 +63,16 @@ http_body_status_t http_body_finish(http_body_t *body, int orderly_eof)
     if (!body || body->limit == 0U || !body->framing_configured ||
         body->finished || (orderly_eof != 0 && orderly_eof != 1))
         return HTTP_BODY_BAD_ARGUMENT;
-    if (!orderly_eof)
+    if (body->has_expected_length) {
+        if (body->received_length != body->expected_length) {
+            if (!orderly_eof)
+                return HTTP_BODY_PEER_NOT_CLOSED;
+            return HTTP_BODY_LENGTH_MISMATCH;
+        }
+        /* Exact Content-Length frames the body without requiring connection EOF. */
+    } else if (!orderly_eof) {
         return HTTP_BODY_PEER_NOT_CLOSED;
-    if (body->has_expected_length &&
-        body->received_length != body->expected_length)
-        return HTTP_BODY_LENGTH_MISMATCH;
+    }
     body->finished = 1U;
     return HTTP_BODY_OK;
 }

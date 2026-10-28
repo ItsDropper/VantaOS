@@ -1222,17 +1222,20 @@ static void test_l2cap_acl_packet_builder(void)
     const uint8_t signaling[] = {0x02U, 0x01U, 0x04U, 0x00U,
                                  0x01U, 0x00U, 0x40U, 0x00U};
     uint8_t packet[32] = {0};
-    usb_bluetooth_l2cap_view_t view;
+    usb_bluetooth_acl_view_t acl_view;
+    usb_bluetooth_l2cap_view_t l2cap_view;
     assert(usb_bluetooth_l2cap_build_acl_packet(0x000BU, 0x0001U,
                                                 signaling, sizeof(signaling),
                                                 packet, sizeof(packet)) == 16);
     assert(packet[0] == 0x0BU && packet[1] == 0x20U &&
            packet[2] == 12U && packet[4] == 8U &&
            packet[6] == 1U && packet[7] == 0U);
-    assert(usb_bluetooth_l2cap_parse(packet, 16U, &view));
-    assert(view.handle == 0x000BU && view.channel_id == 0x0001U &&
-           view.payload_length == sizeof(signaling));
-    assert(memcmp(view.payload, signaling, sizeof(signaling)) == 0);
+    assert(usb_bluetooth_acl_parse(packet, 16U, &acl_view));
+    assert(acl_view.handle == 0x000BU);
+    assert(usb_bluetooth_l2cap_parse(packet, 16U, &l2cap_view));
+    assert(l2cap_view.channel_id == 0x0001U &&
+           l2cap_view.payload_length == sizeof(signaling));
+    assert(memcmp(l2cap_view.payload, signaling, sizeof(signaling)) == 0);
     assert(usb_bluetooth_l2cap_build_acl_packet(0U, 1U, signaling,
                                                 sizeof(signaling), packet,
                                                 sizeof(packet)) == -22);

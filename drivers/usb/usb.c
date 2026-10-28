@@ -79,7 +79,14 @@ typedef struct {
     usb_bluetooth_hci_command_state_t command_state;
 } usb_bluetooth_slot_t;
 
+typedef struct {
+    uint8_t active;
+    uint8_t address[6];
+    uint16_t handle;
+} usb_bluetooth_peer_t;
+
 static usb_bluetooth_slot_t bluetooth_slots[USB_MAX_XHCI_SLOTS + 1U];
+static usb_bluetooth_peer_t bluetooth_peers[USB_MAX_XHCI_SLOTS + 1U][USB_BLUETOOTH_LINK_MAX];
 static usb_bluetooth_discovery_table_t
     bluetooth_discovery_tables[USB_MAX_XHCI_SLOTS + 1U];
 static uint8_t bluetooth_event_buffer[USB_BLUETOOTH_HCI_EVENT_MAX]
@@ -258,6 +265,100 @@ int usb_bluetooth_hci_command(uint32_t port, uint16_t opcode,
         bluetooth_slots[slot].command_state.faulted = 1U;
     }
     return sent;
+}
+
+uint32_t usb_bluetooth_adapter_count(void)
+{
+    uint32_t count = 0U;
+    for (uint32_t slot = 1U; slot <= USB_MAX_XHCI_SLOTS; ++slot)
+        if (bluetooth_slots[slot].active)
+            count++;
+    return count;
+}
+
+int usb_bluetooth_adapter_port(uint32_t index, uint32_t *port)
+{
+    if (port == NULL)
+        return -22;
+    for (uint32_t slot = 1U; slot <= USB_MAX_XHCI_SLOTS; ++slot) {
+        if (!bluetooth_slots[slot].active)
+            continue;
+        if (index == 0U) {
+            *port = bluetooth_slots[slot].port;
+            return 1;
+        }
+        index--;
+    }
+    *port = 0U;
+    return 0;
+}
+
+static void bluetooth_peer_record(uint32_t slot, const uint8_t address[6],
+                                  uint16_t handle)
+{
+    if (slot == 0U || slot > USB_MAX_XHCI_SLOTS || address == NULL ||
+        handle == 0U)
+        return;
+    uint32_t free_index = USB_BLUETOOTH_LINK_MAX;
+    for (uint32_t i = 0U; i < USB_BLUETOOTH_LINK_MAX; ++i) {
+        usb_bluetooth_peer_t *peer = &bluetooth_peers[slot][i];
+        if (peer->active && peer->handle == handle) {
+            free_index = i;
+            break;
+        }
+        if (!peer->active && free_index == USB_BLUETOOTH_LINK_MAX)
+            free_index = i;
+    }
+    if (free_index == USB_BLUETOOTH_LINK_MAX)
+        return;
+    usb_bluetooth_peer_t *peer = &bluetooth_peers[slot][free_index];
+    peer->active = 1U;
+    peer->handle = handle;
+    for (uint32_t i = 0U; i < 6U; ++i)
+        peer->address[i] = address[i];
+}
+
+static void bluetooth_peer_forget_handle(uint32_t slot, uint16_t handle)
+{
+    if (slot == 0U || slot > USB_MAX_XHCI_SLOTS || handle == 0U)
+        return;
+    for (uint32_t i = 0U; i < USB_BLUETOOTH_LINK_MAX; ++i) {
+        usb_bluetooth_peer_t *peer = &bluetooth_peers[slot][i];
+        if (!peer->active || peer->handle != handle)
+            continue;
+        peer->active = 0U;
+        peer->handle = 0U;
+        for (uint32_t j = 0U; j < 6U; ++j)
+            peer->address[j] = 0U;
+        return;
+    }
+}
+
+int usb_bluetooth_peer_state(uint32_t port, const uint8_t address[6],
+                             uint16_t *handle)
+{
+    if (port == 0U || address == NULL || handle == NULL)
+        return -22;
+    *handle = 0U;
+    for (uint32_t slot = 1U; slot <= USB_MAX_XHCI_SLOTS; ++slot) {
+        if (!bluetooth_slots[slot].active || bluetooth_slots[slot].port != port)
+            continue;
+        for (uint32_t i = 0U; i < USB_BLUETOOTH_LINK_MAX; ++i) {
+            const usb_bluetooth_peer_t *peer = &bluetooth_peers[slot][i];
+            if (!peer->active)
+                continue;
+            uint32_t j = 0U;
+            while (j < 6U && peer->address[j] == address[j])
+                ++j;
+            if (j == 6U) {
+                *handle = peer->handle;
+                return 1;
+            }
+        }
+        return usb_bluetooth_connection_attempt_matches(
+            &bluetooth_slots[slot].connection_attempt, address) ? 2 : 0;
+    }
+    return -19;
 }
 
 uint32_t usb_bluetooth_discovered_count(uint32_t port)
@@ -1089,6 +1190,12 @@ static void usb_bluetooth_detach_slot(uint32_t slot)
         return;
     bluetooth_slots[slot].active = 0U;
     bluetooth_slots[slot].port = 0U;
+    for (uint32_t peer = 0U; peer < USB_BLUETOOTH_LINK_MAX; ++peer) {
+        bluetooth_peers[slot][peer].active = 0U;
+        bluetooth_peers[slot][peer].handle = 0U;
+        for (uint32_t byte = 0U; byte < 6U; ++byte)
+            bluetooth_peers[slot][peer].address[byte] = 0U;
+    }
     bluetooth_slots[slot].interface_number = 0U;
     bluetooth_slots[slot].event_endpoint = 0U;
     bluetooth_slots[slot].acl_in_endpoint = 0U;
@@ -1533,6 +1640,8 @@ void usb_poll(void)
                     uint16_t connected_handle =
                         (uint16_t)bluetooth_event_buffer[3] |
                         ((uint16_t)(bluetooth_event_buffer[4] & 0x0FU) << 8);
+                    bluetooth_peer_record(slot, &bluetooth_event_buffer[5],
+                                          connected_handle);
                     if (bluetooth_l2cap_table_for_handle(
                             slot, connected_handle, 1) == NULL)
                         serial_write(
@@ -1545,6 +1654,7 @@ void usb_poll(void)
                         (uint16_t)bluetooth_event_buffer[3] |
                         ((uint16_t)(bluetooth_event_buffer[4] & 0x0FU) << 8);
                     bluetooth_l2cap_forget_handle(slot, disconnected_handle);
+                    bluetooth_peer_forget_handle(slot, disconnected_handle);
                     usb_bluetooth_l2cap_data_queue_forget_handle(
                         &bluetooth_l2cap_data_queues[slot], disconnected_handle);
                     if (usb_bluetooth_link_table_active_count(

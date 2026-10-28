@@ -711,6 +711,20 @@ void usb_bluetooth_l2cap_table_reset(usb_bluetooth_l2cap_table_t *table)
                                                 .next_identifier = 1U};
 }
 
+static int l2cap_identifier_in_use(
+    const usb_bluetooth_l2cap_table_t *table, uint8_t identifier)
+{
+    if (table == NULL || identifier == 0U)
+        return 0;
+    for (uint32_t i = 0U; i < USB_BLUETOOTH_L2CAP_CHANNEL_MAX; ++i) {
+        const usb_bluetooth_l2cap_channel_t *c = &table->channels[i];
+        if (c->active && (c->identifier == identifier ||
+                          c->config_identifier == identifier))
+            return 1;
+    }
+    return 0;
+}
+
 int usb_bluetooth_l2cap_channel_begin(usb_bluetooth_l2cap_table_t *table,
                                       uint16_t psm, uint16_t local_mtu,
                                       uint32_t deadline,
@@ -738,7 +752,17 @@ int usb_bluetooth_l2cap_channel_begin(usb_bluetooth_l2cap_table_t *table,
         if (cid < USB_BLUETOOTH_L2CAP_CID_DYNAMIC_MIN) cid = 0x0040U;
     }
     uint8_t id = table->next_identifier;
-    if (id == 0U) id = 1U;
+    int identifier_found = 0;
+    for (uint32_t attempts = 0U; attempts < 255U; ++attempts) {
+        if (id == 0U) id = 1U;
+        if (!l2cap_identifier_in_use(table, id)) {
+            identifier_found = 1;
+            break;
+        }
+        id = (uint8_t)(id + 1U);
+    }
+    if (!identifier_found)
+        return -28;
     table->next_identifier = (uint8_t)(id + 1U);
     if (table->next_identifier == 0U) table->next_identifier = 1U;
     table->next_local_cid = (uint16_t)(cid + 1U);
@@ -827,6 +851,8 @@ int usb_bluetooth_l2cap_channel_configure_begin(
     if (table == NULL || identifier == 0U ||
         local_cid < USB_BLUETOOTH_L2CAP_CID_DYNAMIC_MIN)
         return -22;
+    if (l2cap_identifier_in_use(table, identifier))
+        return -16;
     for (uint32_t i = 0U; i < USB_BLUETOOTH_L2CAP_CHANNEL_MAX; ++i) {
         usb_bluetooth_l2cap_channel_t *c = &table->channels[i];
         if (c->active && c->local_cid == local_cid) {

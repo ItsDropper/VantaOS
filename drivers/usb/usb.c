@@ -76,7 +76,8 @@ typedef struct {
 static usb_bluetooth_slot_t bluetooth_slots[USB_MAX_XHCI_SLOTS + 1U];
 static usb_bluetooth_discovery_table_t
     bluetooth_discovery_tables[USB_MAX_XHCI_SLOTS + 1U];
-static uint8_t bluetooth_event_buffer[64] __attribute__((aligned(64)));
+static uint8_t bluetooth_event_buffer[USB_BLUETOOTH_HCI_EVENT_MAX]
+    __attribute__((aligned(64)));
 static usb_bluetooth_hci_event_queue_t bluetooth_hci_event_queues[USB_MAX_XHCI_SLOTS + 1U];
 static usb_bluetooth_link_table_t bluetooth_link_tables[USB_MAX_XHCI_SLOTS + 1U];
 /* Keep L2CAP transactions isolated by the HCI connection handle. */

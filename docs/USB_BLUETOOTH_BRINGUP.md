@@ -144,8 +144,7 @@ invalidates its channel transactions; otherwise a stale channel from the closed
 peer could be mistaken for a transaction belonging to the remaining peer.
 Completed ACL packets are tagged by HCI handle in their queue, so queued packets
 for other live peers are preserved. The completed-packet queue is cleared when
-the final active link closes. Automatic L2CAP response dispatch remains
-restricted to one active link until channel ownership is modeled explicitly.
+the final active link closes. Automatic L2CAP response dispatch remains restricted to one active link until channel ownership is modeled explicitly. The USB polling path additionally uses a handle-bound dispatcher: it rejects a reassembled ACL packet whose embedded HCI connection handle differs from the handle selected by the link reassembler. This is a defensive routing check, not a substitute for per-handle L2CAP channel tables.
 
 ## Unified binding teardown
 

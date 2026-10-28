@@ -799,34 +799,26 @@ int usb_bluetooth_acl_send(uint32_t port, const uint8_t *packet,
         uint32_t offset = 0U;
         uint32_t fragments = 0U;
         while (success && offset < acl_payload_length) {
-            uint32_t fragment_length = acl_payload_length - offset;
-            if (fragment_length > fragment_limit)
-                fragment_length = fragment_limit;
-            uint16_t packet_boundary = offset == 0U ? 0x2000U : 0x1000U;
-            uint16_t fragment_flags = (uint16_t)(handle | packet_boundary);
-            bluetooth_acl_tx_buffers[slot][0] = (uint8_t)fragment_flags;
-            bluetooth_acl_tx_buffers[slot][1] =
-                (uint8_t)(fragment_flags >> 8);
-            bluetooth_acl_tx_buffers[slot][2] = (uint8_t)fragment_length;
-            bluetooth_acl_tx_buffers[slot][3] =
-                (uint8_t)(fragment_length >> 8);
-            for (uint32_t i = 0U; i < fragment_length; ++i)
-                bluetooth_acl_tx_buffers[slot][4U + i] =
-                    packet[4U + offset + i];
-
-            uint32_t transfer_length = fragment_length + 4U;
+            int transfer_length = usb_bluetooth_acl_fragment_build(
+                packet, length, (uint16_t)fragment_limit, offset,
+                bluetooth_acl_tx_buffers[slot],
+                sizeof(bluetooth_acl_tx_buffers[slot]));
+            if (transfer_length < 0) {
+                success = 0;
+                break;
+            }
             uint32_t actual_length = 0U;
             /* Reserve conservatively before USB submission: a failed transfer
              * can have an ambiguous controller-side outcome. */
             bluetooth_slots[slot].acl_packets_available--;
             success = xhci_bulk_transfer(
                           slot, bluetooth_slots[slot].acl_out_endpoint,
-                          bluetooth_acl_tx_buffers[slot], transfer_length,
-                          &actual_length) &&
-                      actual_length == transfer_length;
+                          bluetooth_acl_tx_buffers[slot],
+                          (uint32_t)transfer_length, &actual_length) &&
+                      actual_length == (uint32_t)transfer_length;
             if (!success)
                 break;
-            offset += fragment_length;
+            offset += (uint32_t)transfer_length - 4U;
             fragments++;
         }
         success = success && fragments != 0U &&

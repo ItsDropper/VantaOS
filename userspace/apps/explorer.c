@@ -1715,6 +1715,8 @@ static void explorer_e2e_run(void)
     context_menu = 1;
     context_x = 300;
     context_y = 120;
+    EXPLORER_E2E_REQUIRE(context_menu_action_at(299, 125) == -1);
+    EXPLORER_E2E_REQUIRE(context_menu_action_at(310, 304) == -1);
     int open_action = context_menu_action_at(310, 125);
     EXPLORER_E2E_REQUIRE(open_action == 0);
     dispatch_context_action((unsigned int)open_action);

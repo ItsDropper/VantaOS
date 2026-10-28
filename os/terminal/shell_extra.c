@@ -511,6 +511,22 @@ static int append_text(char *out, size_t capacity, size_t *used,
     return 1;
 }
 
+static int write_file_all(int handle, const char *data, size_t length)
+{
+    size_t written = 0U;
+    while (written < length)
+    {
+        size_t remaining = length - written;
+        if (remaining > 0xFFFFFFFFU)
+            return 0;
+        int result = vfs_write(handle, data + written, (unsigned int)remaining);
+        if (result <= 0 || (size_t)result > remaining)
+            return 0;
+        written += (size_t)result;
+    }
+    return 1;
+}
+
 static int command_http_url(const char *url, const char *output_argument,
                             int body_only)
 {
@@ -756,9 +772,7 @@ static int command_http_url(const char *url, const char *output_argument,
             }
         }
         if (output_argument && body_used) {
-            int written = vfs_write(file_handle, body_chunk,
-                                    (unsigned int)body_used);
-            if (written != (int)body_used) {
+            if (!write_file_all(file_handle, body_chunk, body_used)) {
                 terminal_write("\ncurl: write failed; incomplete output removed");
                 (void)vfs_close(file_handle);
                 (void)vfs_delete_path(download_path);

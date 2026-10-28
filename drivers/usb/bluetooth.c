@@ -432,6 +432,29 @@ int usb_bluetooth_acl_reassembly_take(usb_bluetooth_acl_reassembly_t *state,
     return (int)length;
 }
 
+static int l2cap_signal_shape_valid(uint8_t code, uint16_t length)
+{
+    /*
+     * Enforce the fixed fields mandated by Core Specification L2CAP signaling.
+     * Variable option/data tails remain validated by the enclosing command
+     * length and are interpreted by the eventual channel state machine.
+     */
+    switch (code) {
+    case 0x01U: return length >= 2U; /* Command Reject */
+    case 0x02U: return length == 4U; /* Connection Request */
+    case 0x03U: return length == 8U; /* Connection Response */
+    case 0x04U: return length >= 4U; /* Configure Request + options */
+    case 0x05U: return length >= 6U; /* Configure Response + options */
+    case 0x06U: return length == 4U; /* Disconnection Request */
+    case 0x07U: return length == 4U; /* Disconnection Response */
+    case 0x08U: return 1;            /* Echo Request */
+    case 0x09U: return 1;            /* Echo Response */
+    case 0x0AU: return length == 2U; /* Information Request */
+    case 0x0BU: return length >= 4U; /* Information Response + data */
+    default: return 1;               /* Unknown codes can be rejected by peer. */
+    }
+}
+
 int usb_bluetooth_l2cap_signaling_next(
     const uint8_t *payload, uint32_t length, uint32_t *offset,
     usb_bluetooth_l2cap_signal_command_t *command)
@@ -448,7 +471,8 @@ int usb_bluetooth_l2cap_signaling_next(
     uint16_t command_length = (uint16_t)payload[at + 2U] |
                               ((uint16_t)payload[at + 3U] << 8);
     if (payload[at] == 0U || payload[at + 1U] == 0U ||
-        (uint32_t)command_length > length - at - 4U)
+        (uint32_t)command_length > length - at - 4U ||
+        !l2cap_signal_shape_valid(payload[at], command_length))
         return -22;
     command->code = payload[at];
     command->identifier = payload[at + 1U];
@@ -497,7 +521,8 @@ int usb_bluetooth_l2cap_signaling_valid(const uint8_t *payload,
         uint16_t command_length = (uint16_t)payload[offset + 2U] |
                                  ((uint16_t)payload[offset + 3U] << 8);
         if (code == 0U || identifier == 0U ||
-            (uint32_t)command_length > length - offset - 4U)
+            (uint32_t)command_length > length - offset - 4U ||
+            !l2cap_signal_shape_valid(code, command_length))
             return 0;
         offset += 4U + command_length;
     }

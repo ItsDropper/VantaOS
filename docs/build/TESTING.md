@@ -35,7 +35,7 @@ On pushes to `master`, pull requests targeting the repository, and manual workfl
 
 ## HTTP download regression coverage
 
-CI compiles the same URL parser, response-header parser, and body-framing state machine used by the terminal downloader into host-side tests. The URL tests cover the downloader's expanded 383-byte request-path bound; response tests reject ambiguous or malformed framing, unsupported transfer encodings, and oversized lengths; body tests cover declared-length mismatches, orderly EOF, the 8 MiB policy boundary, and 32-bit byte-counter overflow. These tests are deterministic parser/state-machine coverage, not a live network download test. The kernel download path still requires an end-to-end test against a controlled HTTP peer.
+CI compiles the same URL parser, response-header parser, and body-framing state machine used by the terminal downloader into host-side tests. The URL tests cover the downloader's expanded 383-byte request-path bound; response tests reject ambiguous or malformed framing, unsupported transfer encodings, and oversized lengths; body tests cover exact-length completion without EOF, EOF-delimited bodies, declared-length mismatches, the 8 MiB policy boundary, and 32-bit byte-counter overflow. These tests are deterministic parser/state-machine coverage, not a live network download test. The kernel download path still requires an end-to-end test against a controlled HTTP peer.
 
 ## Runtime assertions
 

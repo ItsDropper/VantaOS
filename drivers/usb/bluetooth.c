@@ -274,6 +274,14 @@ int usb_bluetooth_acl_parse(const uint8_t *packet, uint32_t length,
     view->handle = handle_flags & 0x0FFFU;
     view->packet_boundary = (uint8_t)((handle_flags >> 12) & 0x03U);
     view->broadcast = (uint8_t)((handle_flags >> 14) & 0x03U);
+    /*
+     * Handle zero is reserved. Broadcast flag 3 is reserved by BR/EDR HCI;
+     * do not pass either encoding into connection-specific reassembly.
+     */
+    if (view->handle == 0U || view->broadcast == 3U) {
+        *view = (usb_bluetooth_acl_view_t){0};
+        return 0;
+    }
     view->payload = packet + 4U;
     view->payload_length = length - 4U;
     return 1;
@@ -353,8 +361,16 @@ int usb_bluetooth_acl_reassembly_feed(usb_bluetooth_acl_reassembly_t *state,
 
     if (acl.packet_boundary == 0U || acl.packet_boundary == 2U ||
         acl.packet_boundary == 3U) {
-        if (state->active != 0U)
+        if (state->active != 0U) {
+            /*
+             * A new start packet on this handle means the prior PDU was
+             * interrupted/lost. Drop that partial state instead of leaving
+             * the connection permanently unable to accept another PDU.
+             * This incoming packet is rejected; the next start can proceed.
+             */
+            usb_bluetooth_acl_reassembly_reset(state);
             return -16;
+        }
         if (acl.payload_length < 4U)
             return -22;
         uint32_t l2cap_length = (uint32_t)acl.payload[0] |

@@ -543,6 +543,16 @@ static void test_hci_event_queue_integrity(void)
     assert(usb_bluetooth_hci_event_queue_pop(&queue, output, sizeof(output)) ==
            (int)sizeof(second));
     assert(usb_bluetooth_hci_event_queue_pop(&queue, output, sizeof(output)) == -11);
+    uint8_t maximum_event[USB_BLUETOOTH_HCI_EVENT_MAX] = {0};
+    maximum_event[0] = 0xFFU;
+    maximum_event[1] = 0xFFU;
+    assert(usb_bluetooth_hci_event_queue_push(
+               &queue, maximum_event, sizeof(maximum_event)) == 0);
+    assert(usb_bluetooth_hci_event_queue_pop(
+               &queue, output, sizeof(output)) == (int)sizeof(maximum_event));
+    assert(output[0] == 0xFFU && output[1] == 0xFFU &&
+           output[USB_BLUETOOTH_HCI_EVENT_MAX - 1U] == 0U);
+    assert(usb_bluetooth_hci_event_queue_pop(&queue, output, sizeof(output)) == -11);
     assert(usb_bluetooth_hci_event_queue_push(&queue, first,
                                               sizeof(first) - 1U) == -22);
     usb_bluetooth_hci_event_queue_reset(&queue);

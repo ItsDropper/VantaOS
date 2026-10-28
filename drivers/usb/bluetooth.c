@@ -621,6 +621,8 @@ int usb_bluetooth_hci_command_begin(usb_bluetooth_hci_command_state_t *state,
 {
     if (state == NULL || opcode == 0U)
         return -22;
+    if (state->faulted != 0U)
+        return -5;
     if (state->outstanding != 0U)
         return -16;
     if (state->credits == 0U)

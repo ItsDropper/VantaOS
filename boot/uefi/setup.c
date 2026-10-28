@@ -519,6 +519,7 @@ static int preflight_installer_payload(EFI_FILE_PROTOCOL *root,
         { L"\\SYSTEM\\TERMINAL.ELF", SETUP_MAX_FILE_BYTES },
         { L"\\SYSTEM\\SETTINGS.ELF", SETUP_MAX_FILE_BYTES },
         { L"\\SYSTEM\\EXPLORER.ELF", SETUP_MAX_FILE_BYTES },
+        { L"\\SYSTEM\\NOTES.ELF", SETUP_MAX_FILE_BYTES },
         { L"\\SYSTEM\\TERMINAL.VX", 4096U },
         { L"\\SYSTEM\\DRIVERS\\ATA.SYS", 4096U },
         { L"\\SYSTEM\\DRIVERS\\KEYBOARD.SYS", 4096U },
@@ -1073,6 +1074,11 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
     if (!EFI_ERROR(status))
         status = copy_file(source_root, L"\\SYSTEM\\EXPLORER.ELF",
                            system_root, L"\\EXPLORER.ELF",
+                           SETUP_MAX_FILE_BYTES);
+
+    if (!EFI_ERROR(status))
+        status = copy_file(source_root, L"\\SYSTEM\\NOTES.ELF",
+                           system_root, L"\\SYSTEM\\NOTES.ELF",
                            SETUP_MAX_FILE_BYTES);
 
     if (!EFI_ERROR(status))

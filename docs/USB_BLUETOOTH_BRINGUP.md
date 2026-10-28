@@ -138,13 +138,14 @@ The polling loop now discards ACL completions until HCI Reset has succeeded, rat
 
 ## Multi-link disconnect isolation
 
-The link table exposes a bounded active-link count. A successful Disconnection
-Complete no longer clears the shared L2CAP channel table and completed-ACL queue
-while other HCI links remain active. Since the current L2CAP table still lacks
-per-channel owning handles, automatic response dispatch remains restricted to
-one active link; this change prevents teardown of one peer from destroying
-unrelated peers' queued receive data. The stores are cleared when the final
-active link closes.
+The link table exposes a bounded active-link count. Since the L2CAP table
+still lacks per-channel owning handles, every successful Disconnection Complete
+invalidates its channel transactions; otherwise a stale channel from the closed
+peer could be mistaken for a transaction belonging to the remaining peer.
+Completed ACL packets are tagged by HCI handle in their queue, so queued packets
+for other live peers are preserved. The completed-packet queue is cleared when
+the final active link closes. Automatic L2CAP response dispatch remains
+restricted to one active link until channel ownership is modeled explicitly.
 
 ## Unified binding teardown
 

@@ -301,6 +301,100 @@ static void test_endpoint_packet_bounds_and_interval(void)
                                               &candidate));
 }
 
+
+static void test_endpoint_address_and_transfer_roles(void)
+{
+    uint8_t configuration[sizeof(valid_configuration)];
+    usb_bluetooth_hci_candidate_t candidate;
+
+    /* Endpoint zero is reserved and cannot satisfy an HCI endpoint role. */
+    for (unsigned int i = 0U; i < sizeof(valid_configuration); ++i)
+        configuration[i] = valid_configuration[i];
+    configuration[EVENT_DESCRIPTOR_OFFSET + 2U] = 0x80U;
+    assert(!usb_bluetooth_find_hci_interface(configuration,
+                                              sizeof(configuration),
+                                              &candidate));
+
+    /* Reserved endpoint-address bits must not be accepted. */
+    for (unsigned int i = 0U; i < sizeof(valid_configuration); ++i)
+        configuration[i] = valid_configuration[i];
+    configuration[EVENT_DESCRIPTOR_OFFSET + 2U] = 0x91U;
+    assert(!usb_bluetooth_find_hci_interface(configuration,
+                                              sizeof(configuration),
+                                              &candidate));
+
+    /* An interrupt-OUT endpoint cannot substitute for the event endpoint. */
+    for (unsigned int i = 0U; i < sizeof(valid_configuration); ++i)
+        configuration[i] = valid_configuration[i];
+    configuration[EVENT_DESCRIPTOR_OFFSET + 2U] = 0x01U;
+    assert(!usb_bluetooth_find_hci_interface(configuration,
+                                              sizeof(configuration),
+                                              &candidate));
+}
+
+static void test_failed_parse_clears_candidate(void)
+{
+    uint8_t configuration[sizeof(valid_configuration)];
+    usb_bluetooth_hci_candidate_t candidate;
+
+    for (unsigned int i = 0U; i < sizeof(valid_configuration); ++i)
+        configuration[i] = valid_configuration[i];
+    configuration[0] = 1U;
+
+    candidate = (usb_bluetooth_hci_candidate_t){
+        .interface_number = 0xA5U,
+        .event_endpoint = 0xA5U,
+        .acl_in_endpoint = 0xA5U,
+        .acl_out_endpoint = 0xA5U,
+        .event_interval = 0xA5U,
+        .event_max_packet = 0xA5A5U,
+        .acl_in_max_packet = 0xA5A5U,
+        .acl_out_max_packet = 0xA5A5U
+    };
+    assert(!usb_bluetooth_find_hci_interface(configuration,
+                                              sizeof(configuration),
+                                              &candidate));
+    assert(candidate.interface_number == 0U);
+    assert(candidate.event_endpoint == 0U);
+    assert(candidate.acl_in_endpoint == 0U);
+    assert(candidate.acl_out_endpoint == 0U);
+    assert(candidate.event_interval == 0U);
+    assert(candidate.event_max_packet == 0U);
+    assert(candidate.acl_in_max_packet == 0U);
+    assert(candidate.acl_out_max_packet == 0U);
+}
+
+static void test_descriptor_byte_mutations_are_bounded(void)
+{
+    uint8_t configuration[sizeof(valid_configuration)];
+    usb_bluetooth_hci_candidate_t candidate;
+
+    /*
+     * Mutate each byte through every possible value. The parser must never
+     * read outside this fixed input or publish a partial candidate.
+     */
+    for (unsigned int offset = 0U; offset < sizeof(valid_configuration);
+         ++offset) {
+        for (unsigned int value = 0U; value <= 255U; ++value) {
+            for (unsigned int i = 0U; i < sizeof(valid_configuration); ++i)
+                configuration[i] = valid_configuration[i];
+            configuration[offset] = (uint8_t)value;
+            candidate = (usb_bluetooth_hci_candidate_t){0};
+            int matched = usb_bluetooth_find_hci_interface(
+                configuration, sizeof(configuration), &candidate);
+            if (!matched) {
+                assert(candidate.interface_number == 0U);
+                assert(candidate.event_endpoint == 0U);
+                assert(candidate.acl_in_endpoint == 0U);
+                assert(candidate.acl_out_endpoint == 0U);
+                assert(candidate.event_max_packet == 0U);
+                assert(candidate.acl_in_max_packet == 0U);
+                assert(candidate.acl_out_max_packet == 0U);
+            }
+        }
+    }
+}
+
 int main(void)
 {
     test_complete_hci_interface();
@@ -315,6 +409,9 @@ int main(void)
     test_transport_readiness_gate();
     test_reset_state_transitions_are_idempotent();
     test_endpoint_packet_bounds_and_interval();
+    test_endpoint_address_and_transfer_roles();
+    test_failed_parse_clears_candidate();
+    test_descriptor_byte_mutations_are_bounded();
     test_acl_queue_rejects_corrupt_stored_length();
     puts("USB Bluetooth descriptor tests passed");
     return 0;

@@ -38,3 +38,15 @@ jobs:
             -o /tmp/test-usb-bluetooth-descriptors
       - name: Run descriptor tests
         run: /tmp/test-usb-bluetooth-descriptors
+      - name: Compile parser tests with address and undefined-behavior sanitizers
+        run: |
+          set -euo pipefail
+          cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined \
+            -fno-omit-frame-pointer -g -Iinclude \
+            drivers/usb/bluetooth.c scripts/test_usb_bluetooth_descriptors.c \
+            -o /tmp/test-usb-bluetooth-descriptors-sanitized
+      - name: Run sanitized parser tests
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: /tmp/test-usb-bluetooth-descriptors-sanitized

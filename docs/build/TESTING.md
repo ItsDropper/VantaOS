@@ -33,6 +33,10 @@ On pushes to `master`, pull requests targeting the repository, and manual workfl
 8. Builds the separate UEFI system image and boots it with OVMF, requiring loader, `ExitBootServices`, kernel-handoff, and selected kernel/SMP markers.
 9. Compiles the static ring-3 Terminal, Settings, and File Explorer applications with `-Werror`, installs them in the FAT32 image, and captures a graphical boot screenshot artifact. A push to `master` refreshes tracked `media/desktop.png` from that screenshot.
 
+## Notes editor save safety
+
+Notes writes the full document to a sibling `.VANTA-TMP` file and checks all writes and close status before publishing it. When replacing an existing regular file, it first moves the original to `.VANTA-BAK`, publishes the completed temporary file, and restores the original if publication fails. Existing temporary/backup paths cause the save to stop rather than overwrite a possible recovery copy. This protects against ordinary write and rename failures; it is not a power-loss durability guarantee because the filesystem does not currently expose an fsync-style persistence contract. Save paths must stay below `/HOME/USER` and reject empty, `.`, and `..` path components.
+
 ## HTTP download regression coverage
 
 CI compiles the same URL parser, response-header parser, and body-framing state machine used by the terminal downloader into host-side tests. The URL tests cover the downloader's expanded 383-byte request-path bound; response tests reject ambiguous or malformed framing, unsupported transfer encodings, and oversized lengths; body tests cover exact-length completion without EOF, EOF-delimited bodies, declared-length mismatches, the 8 MiB policy boundary, and 32-bit byte-counter overflow. These tests are deterministic parser/state-machine coverage, not a live network download test. The kernel download path still requires an end-to-end test against a controlled HTTP peer.

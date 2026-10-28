@@ -114,6 +114,8 @@ int usb_bluetooth_connection_attempt_finish(
     usb_bluetooth_connection_attempt_t *attempt, const uint8_t address[6]);
 
 #define USB_BLUETOOTH_L2CAP_CHANNEL_MAX 8U
+#define USB_BLUETOOTH_L2CAP_DATA_QUEUE_DEPTH 4U
+#define USB_BLUETOOTH_L2CAP_DATA_MAX 1024U
 #define USB_BLUETOOTH_L2CAP_CID_DYNAMIC_MIN 0x0040U
 #define USB_BLUETOOTH_L2CAP_CID_DYNAMIC_MAX 0xFFFFU
 typedef struct {
@@ -135,6 +137,20 @@ typedef struct {
     uint8_t next_identifier;
     usb_bluetooth_l2cap_channel_t channels[USB_BLUETOOTH_L2CAP_CHANNEL_MAX];
 } usb_bluetooth_l2cap_table_t;
+
+typedef struct {
+    uint16_t handle;
+    uint16_t local_cid;
+    uint16_t length;
+    uint8_t payload[USB_BLUETOOTH_L2CAP_DATA_MAX];
+} usb_bluetooth_l2cap_data_packet_t;
+
+typedef struct {
+    uint32_t head;
+    uint32_t count;
+    usb_bluetooth_l2cap_data_packet_t
+        packets[USB_BLUETOOTH_L2CAP_DATA_QUEUE_DEPTH];
+} usb_bluetooth_l2cap_data_queue_t;
 
 typedef struct {
     usb_bluetooth_link_t links[USB_BLUETOOTH_LINK_MAX];
@@ -223,6 +239,23 @@ int usb_bluetooth_disconnect(uint32_t port, uint16_t handle, uint8_t reason);
 int usb_bluetooth_l2cap_connect(uint32_t port, uint16_t handle, uint16_t psm,
                                 uint16_t local_mtu, uint32_t deadline,
                                 uint16_t *local_cid, uint8_t *identifier);
+int usb_bluetooth_l2cap_channel_status(
+    uint32_t port, uint16_t handle, uint16_t local_cid, uint8_t *state,
+    uint16_t *remote_cid, uint16_t *local_mtu, uint16_t *remote_mtu);
+int usb_bluetooth_l2cap_send(uint32_t port, uint16_t handle,
+                             uint16_t local_cid, const uint8_t *payload,
+                             uint32_t length);
+int usb_bluetooth_l2cap_receive(uint32_t port, uint16_t handle,
+                                uint16_t local_cid, uint8_t *payload,
+                                uint32_t capacity);
+void usb_bluetooth_l2cap_data_queue_reset(
+    usb_bluetooth_l2cap_data_queue_t *queue);
+int usb_bluetooth_l2cap_data_queue_push(
+    usb_bluetooth_l2cap_data_queue_t *queue, uint16_t handle,
+    uint16_t local_cid, const uint8_t *payload, uint32_t length);
+int usb_bluetooth_l2cap_data_queue_pop(
+    usb_bluetooth_l2cap_data_queue_t *queue, uint16_t handle,
+    uint16_t local_cid, uint8_t *payload, uint32_t capacity);
 /* Bounded L2CAP channel lifecycle primitives; signaling dispatch remains
  * the responsibility of a controller/connection manager. */
 void usb_bluetooth_l2cap_table_reset(usb_bluetooth_l2cap_table_t *table);

@@ -99,6 +99,13 @@ The separate [anti-cheat and Windows game compatibility plan](ANTI_CHEAT_COMPATI
 - [x] Add the bounded watchdog registry and timer-IRQ expiry scan; the IRQ path is nonblocking and performs no recovery callbacks.
 - [ ] Add a production watchdog client only at a real progress checkpoint, with a measured timeout and a safe non-IRQ observer/recovery policy. Do not add periodic kicks that could hide a stalled subsystem.
 
+## Storage DMA groundwork
+
+- [x] Add a bounded AHCI PRDT descriptor builder with 4 MiB entry splitting, DWORD-aligned DMA-address validation, overflow/capacity checks, and last-entry IOC encoding.
+- [x] Add host regression cases for descriptor boundaries and reject 1-, 2-, and 3-byte-aligned DMA addresses.
+- [ ] Add AHCI PCI discovery, BAR5/MMIO validation, DMA allocator integration, and bounded controller state transitions before enabling bus mastering.
+- [ ] Add disposable-image QEMU IDENTIFY/read/write/readback coverage and command timeout/error recovery before claiming AHCI/SATA support.
+
 ## Latest status
 
 - Backup branch: `backup/pre-desktop-reliability-2026-10-15`.

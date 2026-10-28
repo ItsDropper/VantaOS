@@ -1418,12 +1418,46 @@ static void test_hci_inquiry_result_parser(void)
                inquiry_result, sizeof(inquiry_result), 0U, NULL) == -22);
 }
 
+static void test_connection_attempt_state(void)
+{
+    const uint8_t address_a[6] = {1U, 2U, 3U, 4U, 5U, 6U};
+    const uint8_t address_b[6] = {6U, 5U, 4U, 3U, 2U, 1U};
+    const uint8_t zero_address[6] = {0U};
+    usb_bluetooth_connection_attempt_t attempt = {0};
+
+    usb_bluetooth_connection_attempt_reset(&attempt);
+    assert(attempt.active == 0U);
+    assert(usb_bluetooth_connection_attempt_begin(NULL, address_a) == -22);
+    assert(usb_bluetooth_connection_attempt_begin(&attempt, NULL) == -22);
+    assert(usb_bluetooth_connection_attempt_begin(
+               &attempt, zero_address) == -22);
+    assert(usb_bluetooth_connection_attempt_begin(&attempt, address_a) == 0);
+    assert(attempt.active == 1U);
+    assert(usb_bluetooth_connection_attempt_begin(&attempt, address_b) == -17);
+    assert(usb_bluetooth_connection_attempt_matches(&attempt, address_a) == 1);
+    assert(usb_bluetooth_connection_attempt_matches(&attempt, address_b) == 0);
+    assert(usb_bluetooth_connection_attempt_matches(&attempt, NULL) == 0);
+    assert(usb_bluetooth_connection_attempt_finish(&attempt, address_b) == 0);
+    assert(attempt.active == 1U);
+    assert(usb_bluetooth_connection_attempt_finish(&attempt, address_a) == 1);
+    assert(attempt.active == 0U);
+    for (uint32_t i = 0U; i < 6U; ++i)
+        assert(attempt.address[i] == 0U);
+    assert(usb_bluetooth_connection_attempt_finish(&attempt, address_a) == 0);
+
+    assert(usb_bluetooth_connection_attempt_begin(&attempt, address_b) == 0);
+    usb_bluetooth_connection_attempt_reset(&attempt);
+    assert(attempt.active == 0U);
+    assert(usb_bluetooth_connection_attempt_matches(&attempt, address_b) == 0);
+}
+
 int main(void)
 {
     test_hci_command_encoding();
     test_hci_command_credits_and_discovery_builders();
     test_hci_connection_command_builders();
     test_hci_inquiry_result_parser();
+    test_connection_attempt_state();
     test_hci_command_fault_requires_reset();
     test_l2cap_channel_lifecycle();
     test_l2cap_response_builders();

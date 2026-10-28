@@ -65,7 +65,7 @@ Treat these bullets as the audit baseline at the time this plan was written. Bef
 ### A1 — stabilize native userspace contracts
 
 - [ ] Define syscall ABI compatibility policy: versioning, reserved numbers, argument/return conventions, error codes, feature discovery, and deprecation rules.
-- [ ] Add automated checks that public syscall numbers and ABI declarations agree with kernel dispatch and tests.
+- [x] Add a static checker that compares all public syscall numbers with kernel definitions and dispatch cases; CI wiring is committed, but the checker has not yet been observed passing in a workflow run.
 - [ ] Expand adversarial tests for invalid user pointers, integer overflow, malformed ELF segments, allocation failure, process exit during IPC/I/O, and address-space cleanup.
 - [ ] Define reusable native interfaces for process/thread lifecycle, virtual memory, file descriptors, clocks, synchronization, and dynamic loading only as implementation/test requirements become concrete.
 - **Exit gate:** documented contracts and passing tests for the supported native ABI. Do not call the ABI stable until a deliberate compatibility policy and migration story exist.

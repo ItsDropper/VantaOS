@@ -7,6 +7,7 @@
 
 #include "timer.h"
 #include "timer_math.h"
+#include "watchdog.h"
 
 #define PIT_COMMAND_PORT 0x43
 #define PIT_DATA_PORT_0  0x40
@@ -34,7 +35,8 @@ int timer_initialize(uint32_t frequency) {
 }
 
 void timer_handle_interrupt(void) {
-    __atomic_add_fetch(&ticks, 1U, __ATOMIC_RELAXED);
+    uint32_t now = __atomic_add_fetch(&ticks, 1U, __ATOMIC_RELAXED);
+    kernel_watchdog_timer_tick(now);
 }
 
 uint32_t timer_get_ticks(void) {

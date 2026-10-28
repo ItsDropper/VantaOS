@@ -122,7 +122,7 @@ jobs:
 
       - name: Test AHCI PRDT descriptor builder
         run: |
-          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \\
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
             scripts/test_ahci_prdt.c -o /tmp/vantaos-ahci-prdt-test
           /tmp/vantaos-ahci-prdt-test
 

@@ -80,7 +80,7 @@ static uint32_t bluetooth_acl_dropped[USB_MAX_XHCI_SLOTS + 1U];
 static uint8_t bluetooth_acl_tx_buffers[USB_MAX_XHCI_SLOTS + 1U][4096]
     __attribute__((aligned(64)));
 static uint8_t bluetooth_acl_tx_busy[USB_MAX_XHCI_SLOTS + 1U];
-static uint8_t bluetooth_hci_command_buffers[USB_MAX_XHCI_SLOTS + 1U][255]
+static uint8_t bluetooth_hci_command_buffers[USB_MAX_XHCI_SLOTS + 1U][258]
     __attribute__((aligned(64)));
 static uint8_t usb_pending_slot_disable[USB_MAX_XHCI_SLOTS + 1U];
 static uint8_t keyboard_input_observed;
@@ -136,14 +136,20 @@ int usb_bluetooth_hci_command(uint32_t port, uint16_t opcode,
         usb_bluetooth_link_table_reset(&bluetooth_link_tables[slot]);
     }
     uint8_t *command_buffer = bluetooth_hci_command_buffers[slot];
-    for (uint32_t i = 0U; i < 255U; ++i)
-        command_buffer[i] = 0U;
-    for (uint32_t i = 0U; i < length; ++i)
-        command_buffer[i] = parameters[i];
-    int sent = usb_control(slot, 0x20U, 0U, opcode,
+    int encoded = usb_bluetooth_hci_command_encode(
+        opcode, parameters, length, command_buffer, 258U);
+    if (encoded < 0)
+        return 0;
+
+    /*
+     * USB Bluetooth HCI commands belong in the control-transfer data stage.
+     * wValue is zero and wIndex is the Bluetooth interface number. The
+     * command buffer remains valid until the synchronous xHCI transfer ends.
+     */
+    int sent = usb_control(slot, 0x20U, 0U, 0U,
                            bluetooth_slots[slot].interface_number,
-                           length == 0U ? 0 : command_buffer, length);
-    for (uint32_t i = 0U; i < 255U; ++i)
+                           command_buffer, (uint16_t)encoded);
+    for (uint32_t i = 0U; i < (uint32_t)encoded; ++i)
         command_buffer[i] = 0U;
     return sent;
 }
@@ -448,10 +454,7 @@ static int usb_enumerate_port(uint32_t port)
                                          bluetooth_candidate.acl_out_max_packet))
             goto cleanup;
 
-        /* HCI Reset opcode 0x0C03, sent over the USB class control pipe. */
-        if (!usb_control(slot, 0x20U, 0U, 0x0C03U,
-                         bluetooth_candidate.interface_number, 0, 0))
-            goto cleanup;
+        /* Bind first; HCI Reset follows after event reception is armed. */
         bluetooth_slots[slot].active = 1U;
         bluetooth_slots[slot].port = (uint8_t)port;
         bluetooth_slots[slot].interface_number =
@@ -474,6 +477,10 @@ static int usb_enumerate_port(uint32_t port)
         __atomic_store_n(&bluetooth_acl_tx_busy[slot], 0U, __ATOMIC_RELEASE);
         if (!xhci_start_interrupt_in(slot) ||
             !xhci_start_bulk_in(slot, bluetooth_candidate.acl_in_endpoint)) {
+            usb_bluetooth_detach_slot(slot);
+            goto cleanup;
+        }
+        if (!usb_bluetooth_hci_command((uint32_t)port, 0x0C03U, 0, 0U)) {
             usb_bluetooth_detach_slot(slot);
             goto cleanup;
         }

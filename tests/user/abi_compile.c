@@ -46,6 +46,8 @@ long vanta_user_abi_compile_check(
         result += vanta_close((int)write_fd);
     }
     result += vanta_console_write(buffer, 1U);
+    result += vanta_clipboard_set(buffer, 1U);
+    result += vanta_clipboard_get(buffer, 1U);
     result += vanta_kernel_command(path, buffer, 1U);
     if (fd >= 0)
     {

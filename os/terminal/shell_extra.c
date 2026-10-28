@@ -693,16 +693,21 @@ static int command_http_url(const char *url, const char *output_argument,
                         expected_body_length = parsed.content_length;
                     body_started = 1;
                     if (output_argument) {
-                        file_handle = vfs_open(resolved_path,
-                                                VFS_OPEN_WRITE | VFS_OPEN_TRUNCATE);
-                        if (file_handle < 0) {
-                            int created = vfs_create_file(resolved_path);
-                            if (created >= 0)
-                                file_handle = vfs_open(resolved_path,
-                                    VFS_OPEN_WRITE | VFS_OPEN_TRUNCATE);
+                        /*
+                         * Create first, then open without truncation. Opening
+                         * first could truncate a file created after the earlier
+                         * existence check; creation failure must never fall
+                         * through to opening an existing destination.
+                         */
+                        if (vfs_create_file(resolved_path) < 0) {
+                            terminal_write("\\ncurl: could not create output file without overwriting an existing path");
+                            net_tcp_close(device);
+                            return 1;
                         }
+                        file_handle = vfs_open(resolved_path, VFS_OPEN_WRITE);
                         if (file_handle < 0) {
-                            terminal_write("\ncurl: could not create/open output file");
+                            (void)vfs_delete_path(resolved_path);
+                            terminal_write("\\ncurl: could not open newly created output file");
                             net_tcp_close(device);
                             return 1;
                         }

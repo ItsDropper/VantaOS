@@ -96,7 +96,8 @@ The separate [anti-cheat and Windows game compatibility plan](ANTI_CHEAT_COMPATI
 - [x] Validate PIT frequency and divisor boundaries before programming hardware.
 - [x] Use wrap-safe tick arithmetic for deadlines and elapsed time.
 - [x] Add a bounded kernel watchdog registry with latched expiry, stale-handle protection, and host regression coverage.
-- [ ] Add a general kernel watchdog service only after timer semantics are stable; watchdog expiry must be observable outside interrupt context and must not run arbitrary callbacks in IRQ handlers.
+- [x] Add the bounded watchdog registry and timer-IRQ expiry scan; the IRQ path is nonblocking and performs no recovery callbacks.
+- [ ] Add a production watchdog client only at a real progress checkpoint, with a measured timeout and a safe non-IRQ observer/recovery policy. Do not add periodic kicks that could hide a stalled subsystem.
 
 ## Latest status
 

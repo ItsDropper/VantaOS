@@ -429,6 +429,43 @@ static void test_hci_packet_framing_mutations_are_bounded(void)
     }
 }
 
+static void test_hci_event_queue_integrity(void)
+{
+    usb_bluetooth_hci_event_queue_t queue = {0};
+    const uint8_t first[] = {0x0EU, 0x04U, 0x01U, 0x03U, 0x0CU, 0x00U};
+    const uint8_t second[] = {0x0FU, 0x04U, 0x01U, 0x00U, 0x00U, 0x00U};
+    uint8_t output[USB_BLUETOOTH_HCI_EVENT_MAX] = {0};
+    usb_bluetooth_hci_event_queue_reset(&queue);
+    assert(usb_bluetooth_hci_event_queue_pop(&queue, output, sizeof(output)) == -11);
+    for (uint32_t i = 0U; i < USB_BLUETOOTH_HCI_EVENT_QUEUE_DEPTH; ++i)
+        assert(usb_bluetooth_hci_event_queue_push(&queue,
+               i % 2U == 0U ? first : second,
+               i % 2U == 0U ? sizeof(first) : sizeof(second)) == 0);
+    assert(usb_bluetooth_hci_event_queue_push(&queue, first, sizeof(first)) == -11);
+    assert(usb_bluetooth_hci_event_queue_pop(&queue, output, 2U) == -90);
+    assert(queue.count == USB_BLUETOOTH_HCI_EVENT_QUEUE_DEPTH);
+    assert(usb_bluetooth_hci_event_queue_pop(&queue, output, sizeof(output)) ==
+           (int)sizeof(first));
+    assert(output[0] == 0x0EU && output[5] == 0U);
+    assert(usb_bluetooth_hci_event_queue_pop(&queue, output, sizeof(output)) ==
+           (int)sizeof(second));
+    assert(output[0] == 0x0FU);
+    assert(usb_bluetooth_hci_event_queue_pop(&queue, output, sizeof(output)) ==
+           (int)sizeof(first));
+    assert(usb_bluetooth_hci_event_queue_pop(&queue, output, sizeof(output)) ==
+           (int)sizeof(second));
+    assert(usb_bluetooth_hci_event_queue_pop(&queue, output, sizeof(output)) == -11);
+    assert(usb_bluetooth_hci_event_queue_push(&queue, first,
+                                              sizeof(first) - 1U) == -22);
+    usb_bluetooth_hci_event_queue_reset(&queue);
+    assert(queue.head == 0U && queue.count == 0U);
+    for (uint32_t i = 0U; i < USB_BLUETOOTH_HCI_EVENT_QUEUE_DEPTH; ++i) {
+        assert(queue.lengths[i] == 0U);
+        for (uint32_t j = 0U; j < USB_BLUETOOTH_HCI_EVENT_MAX; ++j)
+            assert(queue.packets[i][j] == 0U);
+    }
+}
+
 static void test_acl_and_l2cap_views(void)
 {
     const uint8_t signaling_acl[] = {
@@ -512,6 +549,7 @@ int main(void)
     test_failed_parse_clears_candidate();
     test_descriptor_byte_mutations_are_bounded();
     test_hci_packet_framing_mutations_are_bounded();
+    test_hci_event_queue_integrity();
     test_acl_and_l2cap_views();
     test_l2cap_signaling_command_boundaries();
     test_acl_queue_rejects_corrupt_stored_length();

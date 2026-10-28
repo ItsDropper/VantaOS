@@ -70,6 +70,7 @@ typedef struct {
 
 static usb_bluetooth_slot_t bluetooth_slots[USB_MAX_XHCI_SLOTS + 1U];
 static uint8_t bluetooth_event_buffer[64] __attribute__((aligned(64)));
+static usb_bluetooth_hci_event_queue_t bluetooth_hci_event_queues[USB_MAX_XHCI_SLOTS + 1U];
 static uint8_t bluetooth_acl_buffer[USB_BLUETOOTH_ACL_MAX_PACKET]
     __attribute__((aligned(64)));
 static usb_bluetooth_acl_queue_t bluetooth_acl_queues[USB_MAX_XHCI_SLOTS + 1U];
@@ -103,6 +104,50 @@ static int usb_control(uint32_t slot, uint8_t request_type, uint8_t request,
  * Call from the USB polling/owner CPU, not an interrupt handler or another
  * CPU: device disconnect and xHCI slot teardown are serialized there.
  */
+int usb_bluetooth_hci_command(uint32_t port, uint16_t opcode,
+                              const uint8_t *parameters, uint8_t length)
+{
+    if (port == 0U || opcode == 0U || (length != 0U && parameters == 0))
+        return 0;
+    uint32_t slot = 0U;
+    for (uint32_t i = 1U; i <= USB_MAX_XHCI_SLOTS; ++i) {
+        if (bluetooth_slots[i].active && bluetooth_slots[i].port == port) {
+            slot = i;
+            break;
+        }
+    }
+    if (slot == 0U)
+        return 0;
+    if (!usb_bluetooth_transport_ready(
+            bluetooth_slots[slot].reset_complete_observed,
+            bluetooth_slots[slot].reset_failed_observed) &&
+        opcode != 0x0C03U)
+        return 0;
+
+    if (opcode == 0x0C03U) {
+        bluetooth_slots[slot].reset_complete_observed = 0U;
+        bluetooth_slots[slot].reset_failed_observed = 0U;
+        usb_bluetooth_acl_queue_reset(&bluetooth_acl_queues[slot]);
+        usb_bluetooth_hci_event_queue_reset(&bluetooth_hci_event_queues[slot]);
+    }
+    return usb_control(slot, 0x20U, 0U, opcode,
+                       bluetooth_slots[slot].interface_number,
+                       (void *)parameters, length);
+}
+
+int usb_bluetooth_hci_event_receive(uint32_t port, uint8_t *event,
+                                    uint32_t capacity)
+{
+    if (port == 0U || event == 0 || capacity == 0U)
+        return -22;
+    for (uint32_t slot = 1U; slot <= USB_MAX_XHCI_SLOTS; ++slot) {
+        if (bluetooth_slots[slot].active && bluetooth_slots[slot].port == port)
+            return usb_bluetooth_hci_event_queue_pop(
+                &bluetooth_hci_event_queues[slot], event, capacity);
+    }
+    return -9;
+}
+
 int usb_bluetooth_acl_send(uint32_t port, const uint8_t *packet,
                            uint32_t length)
 {
@@ -247,6 +292,7 @@ static void usb_bluetooth_detach_slot(uint32_t slot)
     bluetooth_slots[slot].reset_complete_observed = 0U;
     bluetooth_slots[slot].reset_failed_observed = 0U;
     usb_bluetooth_acl_queue_reset(&bluetooth_acl_queues[slot]);
+    usb_bluetooth_hci_event_queue_reset(&bluetooth_hci_event_queues[slot]);
     bluetooth_acl_dropped[slot] = 0U;
     __atomic_store_n(&bluetooth_acl_tx_busy[slot], 0U, __ATOMIC_RELEASE);
 }
@@ -519,8 +565,13 @@ void usb_poll(void)
             usb_bluetooth_hci_event_valid(bluetooth_event_buffer,
                                           event_length)) {
             bluetooth->event_count++;
-            if (bluetooth->event_count == 1U)
+            int event_queued = usb_bluetooth_hci_event_queue_push(
+                &bluetooth_hci_event_queues[slot], bluetooth_event_buffer,
+                event_length);
+            if (event_queued == 0 && bluetooth->event_count == 1U)
                 serial_write("VANTAOS_BLUETOOTH_HCI_EVENT_RECEIVED\n");
+            else if (event_queued == -11 && bluetooth->event_count == 1U)
+                serial_write("VANTAOS_BLUETOOTH_HCI_EVENT_QUEUE_FULL\n");
             int reset_transition = usb_bluetooth_update_reset_state(
                 bluetooth_event_buffer, event_length,
                 &bluetooth->reset_complete_observed,

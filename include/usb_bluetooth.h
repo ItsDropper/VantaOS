@@ -13,6 +13,18 @@
 #define USB_BLUETOOTH_ACL_MAX_PACKET 4096U
 #define USB_BLUETOOTH_ACL_QUEUE_DEPTH 2U
 
+#define USB_BLUETOOTH_HCI_EVENT_MAX 64U
+#define USB_BLUETOOTH_HCI_EVENT_QUEUE_DEPTH 4U
+
+typedef struct {
+    uint32_t head;
+    uint32_t count;
+    uint32_t lengths[USB_BLUETOOTH_HCI_EVENT_QUEUE_DEPTH];
+    uint8_t packets[USB_BLUETOOTH_HCI_EVENT_QUEUE_DEPTH]
+                   [USB_BLUETOOTH_HCI_EVENT_MAX];
+} usb_bluetooth_hci_event_queue_t;
+
+
 typedef struct {
     uint32_t head;
     uint32_t count;
@@ -79,12 +91,29 @@ int usb_bluetooth_transport_ready(int reset_complete, int reset_failed);
 int usb_bluetooth_update_reset_state(const uint8_t *packet, uint32_t length,
                                      uint8_t *reset_complete,
                                      uint8_t *reset_failed);
+void usb_bluetooth_hci_event_queue_reset(
+    usb_bluetooth_hci_event_queue_t *queue);
+int usb_bluetooth_hci_event_queue_push(
+    usb_bluetooth_hci_event_queue_t *queue, const uint8_t *event,
+    uint32_t length);
+int usb_bluetooth_hci_event_queue_pop(
+    usb_bluetooth_hci_event_queue_t *queue, uint8_t *event,
+    uint32_t capacity);
 void usb_bluetooth_acl_queue_reset(usb_bluetooth_acl_queue_t *queue);
 int usb_bluetooth_acl_queue_push(usb_bluetooth_acl_queue_t *queue,
                                  const uint8_t *packet, uint32_t length);
 int usb_bluetooth_acl_queue_pop(usb_bluetooth_acl_queue_t *queue,
                                 uint8_t *packet, uint32_t capacity);
 
+/* Send one HCI command through the USB class control pipe. Serialize
+ * commands on the USB owner CPU and wait for its matching event before the
+ * next command; this API does not implement command-credit scheduling. */
+int usb_bluetooth_hci_command(uint32_t port, uint16_t opcode,
+                              const uint8_t *parameters, uint8_t length);
+/* Receive a queued complete HCI event; -11 empty, -90 too small (preserved),
+ * -9 unbound. Events are queued independently of reset-state processing. */
+int usb_bluetooth_hci_event_receive(uint32_t port, uint8_t *event,
+                                    uint32_t capacity);
 /* Send one complete framed ACL packet through a bound device port.
  * Returns 1 only if xHCI reports a full transfer; caller-context limits are
  * documented in docs/USB_BLUETOOTH_BRINGUP.md. */

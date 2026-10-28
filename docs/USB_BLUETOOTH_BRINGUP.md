@@ -191,3 +191,19 @@ packet remains in the DMA buffer until the caller can consume it. These
 retries are bounded per poll and do not reset the controller or prove that a
 controller which stopped responding can recover; that still requires xHCI
 emulation and hardware testing.
+
+
+## HCI command access and event delivery
+
+The USB transport now queues complete, framing-validated HCI events in a
+four-entry per-device FIFO while still processing Reset Command Complete
+internally. Callers can drain events through
+`usb_bluetooth_hci_event_receive`; a small destination does not consume the
+event, and overflow drops the new event rather than overwriting older events.
+The `usb_bluetooth_hci_command` API sends a bounded command through the USB
+class control pipe, permits only Reset before transport readiness, and clears
+stale queued events/ACL data when a new Reset is requested. It intentionally
+does not implement HCI command-credit scheduling: callers must serialize
+commands on the USB owner CPU and wait for the matching completion/status event.
+Host tests cover event FIFO order, full/empty behavior, framing rejection,
+capacity retry, and queue erasure.

@@ -51,7 +51,7 @@ CI compiles the same URL parser, response-header parser, and body-framing state 
 | `VANTAOS_PROCESS_NAME_OK` | An overlong process name remains null-terminated at the maximum name index. |
 | `VANTAOS_PROCESS_STATE_TRANSITIONS_OK` | A test process transitions through ready, running, sleeping, wake-up, and termination/reaping paths. |
 | `VANTAOS_FILESYSTEM_MUTATION_OK` | The disposable FAT32 image supports creating a directory and long-named file, renaming it with a changed extension, resolving the new name, and deleting both file and empty directory. |
-| `VANTAOS_FILESYSTEM_RENAME_NO_OVERWRITE_OK` | A rename to an occupied destination is rejected, preserving the existing name and staged source; this guards the download publication path against replacing an existing file. |
+| `VANTAOS_FILESYSTEM_RENAME_NO_OVERWRITE_OK` | A rename to an occupied destination is rejected, preserving both the destination and staged source names and their distinct byte contents; this guards download publication against replacing an existing file. |
 | `VANTAOS_FILESYSTEM_NAMESPACE_OK` | The filesystem/VFS initializes, root and standard directories can be resolved, a missing path stays missing, and root listing returns without error. |
 | `VANTAOS_FAT32_NAME_GUARDS_OK` | FAT32 filename mutation rejects the invalid names covered by the focused name-guard regression. |
 | `VANTAOS_USER_FILE_IO_OK` / `VANTAOS_USER_FILE_WRITE_OK` | The ring-3 smoke path validates file-descriptor read/write and bounded regular-file creation/write behavior for the test fixture. |

@@ -47,5 +47,22 @@ if (kernel_watchdog_status(h) == KERNEL_WATCHDOG_EXPIRED) {
 No production subsystem is registered as a watchdog client yet. Adding a client
 requires a real progress point and a timeout derived from measured worst-case
 latency; arbitrary periodic kicks would mask hangs rather than detect them.
-The state machine has host regression coverage, but SMP contention and full
-kernel behavior still require CI/QEMU evidence.
+
+## Production-client acceptance criteria
+
+Before registering a client, document all of the following:
+
+1. The exact operation that constitutes forward progress (not merely a timer tick).
+2. A timeout derived from a measured or bounded worst-case duration at the
+   configured PIT frequency.
+3. Where expiry is observed outside the timer interrupt, including how that
+   observer remains runnable if the monitored component stops progressing.
+4. A recovery action that is safe for the affected subsystem and does not run
+   while holding the watchdog registry lock or from interrupt context.
+5. A regression test for normal progress, a deliberately withheld heartbeat,
+   expiry observation, and recovery/reporting behavior.
+
+A scheduler heartbeat alone is not sufficient evidence of system liveness: if
+its producer and observer share the same blocked execution path, a stalled CPU
+may never report its own expiry. The state machine has host regression coverage,
+but SMP contention and full kernel behavior still require CI/QEMU evidence.

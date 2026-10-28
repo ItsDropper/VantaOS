@@ -529,6 +529,223 @@ int usb_bluetooth_l2cap_signaling_valid(const uint8_t *payload,
     return offset == length;
 }
 
+void usb_bluetooth_hci_command_state_reset(
+    usb_bluetooth_hci_command_state_t *state)
+{
+    if (state == NULL)
+        return;
+    *state = (usb_bluetooth_hci_command_state_t){0};
+}
+
+int usb_bluetooth_hci_command_begin(usb_bluetooth_hci_command_state_t *state,
+                                    uint16_t opcode)
+{
+    if (state == NULL || opcode == 0U)
+        return -22;
+    if (state->outstanding != 0U)
+        return -16;
+    if (state->credits == 0U)
+        return -11;
+    --state->credits;
+    state->opcode = opcode;
+    state->outstanding = 1U;
+    state->completed = 0U;
+    state->status = 0xFFU;
+    state->event_kind = 0U;
+    return 0;
+}
+
+int usb_bluetooth_hci_command_event(usb_bluetooth_hci_command_state_t *state,
+                                    const uint8_t *event, uint32_t length)
+{
+    if (state == NULL || !usb_bluetooth_hci_event_valid(event, length))
+        return -22;
+    uint16_t opcode;
+    uint8_t credits, status, kind;
+    if (event[0] == 0x0EU) {
+        if (length < 6U)
+            return -22;
+        credits = event[2];
+        opcode = (uint16_t)event[3] | ((uint16_t)event[4] << 8);
+        status = event[5];
+        kind = 1U;
+    } else if (event[0] == 0x0FU) {
+        if (length != 6U)
+            return -22;
+        status = event[2];
+        credits = event[3];
+        opcode = (uint16_t)event[4] | ((uint16_t)event[5] << 8);
+        kind = 2U;
+    } else {
+        return 0;
+    }
+    state->credits = credits;
+    if (state->outstanding == 0U || state->opcode != opcode)
+        return 0;
+    state->outstanding = 0U;
+    state->completed = 1U;
+    state->status = status;
+    state->event_kind = kind;
+    return status == 0U ? 1 : -5;
+}
+
+static int hci_build_simple(uint16_t opcode, uint8_t parameter_length,
+                            const uint8_t *parameters, uint8_t *out,
+                            uint32_t capacity)
+{
+    return usb_bluetooth_hci_command_encode(opcode, parameters,
+                                             parameter_length, out, capacity);
+}
+
+int usb_bluetooth_hci_build_read_local_version(uint8_t *out, uint32_t capacity)
+{
+    return hci_build_simple(0x1001U, 0U, NULL, out, capacity);
+}
+
+int usb_bluetooth_hci_build_read_bd_addr(uint8_t *out, uint32_t capacity)
+{
+    return hci_build_simple(0x1009U, 0U, NULL, out, capacity);
+}
+
+int usb_bluetooth_hci_build_read_buffer_size(uint8_t *out, uint32_t capacity)
+{
+    return hci_build_simple(0x1005U, 0U, NULL, out, capacity);
+}
+
+int usb_bluetooth_hci_build_inquiry(uint8_t *out, uint32_t capacity,
+                                    uint8_t inquiry_length, uint8_t responses)
+{
+    if (inquiry_length == 0U || inquiry_length > 0x30U)
+        return -22;
+    const uint8_t parameters[5] = {0x33U, 0x8BU, 0x9EU,
+                                   inquiry_length, responses};
+    return hci_build_simple(0x0401U, sizeof(parameters), parameters,
+                            out, capacity);
+}
+
+void usb_bluetooth_l2cap_table_reset(usb_bluetooth_l2cap_table_t *table)
+{
+    if (table != NULL)
+        *table = (usb_bluetooth_l2cap_table_t){.next_local_cid = 0x0040U,
+                                                .next_identifier = 1U};
+}
+
+int usb_bluetooth_l2cap_channel_begin(usb_bluetooth_l2cap_table_t *table,
+                                      uint16_t psm, uint16_t local_mtu,
+                                      uint32_t deadline,
+                                      uint16_t *local_cid,
+                                      uint8_t *identifier)
+{
+    if (table == NULL || local_cid == NULL || identifier == NULL ||
+        psm == 0U || (psm & 1U) == 0U || local_mtu < 48U)
+        return -22;
+    uint32_t index = USB_BLUETOOTH_L2CAP_CHANNEL_MAX;
+    for (uint32_t i = 0U; i < USB_BLUETOOTH_L2CAP_CHANNEL_MAX; ++i)
+        if (!table->channels[i].active) { index = i; break; }
+    if (index == USB_BLUETOOTH_L2CAP_CHANNEL_MAX)
+        return -28;
+    uint16_t cid = table->next_local_cid;
+    if (cid < USB_BLUETOOTH_L2CAP_CID_DYNAMIC_MIN)
+        cid = USB_BLUETOOTH_L2CAP_CID_DYNAMIC_MIN;
+    for (uint32_t attempts = 0U; attempts < 0xFFC0U; ++attempts) {
+        int used = 0;
+        for (uint32_t i = 0U; i < USB_BLUETOOTH_L2CAP_CHANNEL_MAX; ++i)
+            if (table->channels[i].active &&
+                table->channels[i].local_cid == cid) used = 1;
+        if (!used) break;
+        ++cid;
+        if (cid < USB_BLUETOOTH_L2CAP_CID_DYNAMIC_MIN) cid = 0x0040U;
+    }
+    uint8_t id = table->next_identifier;
+    if (id == 0U) id = 1U;
+    table->next_identifier = (uint8_t)(id + 1U);
+    if (table->next_identifier == 0U) table->next_identifier = 1U;
+    table->next_local_cid = (uint16_t)(cid + 1U);
+    if (table->next_local_cid < USB_BLUETOOTH_L2CAP_CID_DYNAMIC_MIN)
+        table->next_local_cid = USB_BLUETOOTH_L2CAP_CID_DYNAMIC_MIN;
+    table->channels[index] = (usb_bluetooth_l2cap_channel_t){
+        .active = 1U, .state = 1U, .identifier = id,
+        .local_cid = cid, .psm = psm, .local_mtu = local_mtu,
+        .remote_mtu = 672U, .deadline = deadline
+    };
+    *local_cid = cid;
+    *identifier = id;
+    return 0;
+}
+
+int usb_bluetooth_l2cap_channel_response(usb_bluetooth_l2cap_table_t *table,
+                                         uint8_t identifier, uint16_t remote_cid,
+                                         uint16_t result, uint16_t remote_mtu)
+{
+    if (table == NULL || identifier == 0U)
+        return -22;
+    for (uint32_t i = 0U; i < USB_BLUETOOTH_L2CAP_CHANNEL_MAX; ++i) {
+        usb_bluetooth_l2cap_channel_t *c = &table->channels[i];
+        if (!c->active || c->identifier != identifier || c->state != 1U)
+            continue;
+        if (result != 0U) { *c = (usb_bluetooth_l2cap_channel_t){0}; return -5; }
+        if (remote_cid < USB_BLUETOOTH_L2CAP_CID_DYNAMIC_MIN ||
+            remote_mtu < 48U)
+            return -22;
+        for (uint32_t j = 0U; j < USB_BLUETOOTH_L2CAP_CHANNEL_MAX; ++j)
+            if (j != i && table->channels[j].active &&
+                table->channels[j].remote_cid == remote_cid)
+                return -17;
+        c->remote_cid = remote_cid;
+        c->remote_mtu = remote_mtu;
+        c->state = 3U;
+        return 1;
+    }
+    return -9;
+}
+
+int usb_bluetooth_l2cap_channel_configured(usb_bluetooth_l2cap_table_t *table,
+                                           uint16_t local_cid)
+{
+    if (table == NULL || local_cid < USB_BLUETOOTH_L2CAP_CID_DYNAMIC_MIN)
+        return -22;
+    for (uint32_t i = 0U; i < USB_BLUETOOTH_L2CAP_CHANNEL_MAX; ++i) {
+        usb_bluetooth_l2cap_channel_t *c = &table->channels[i];
+        if (c->active && c->local_cid == local_cid) {
+            if (c->state != 3U) return -16;
+            c->state = 4U;
+            return 1;
+        }
+    }
+    return -9;
+}
+
+int usb_bluetooth_l2cap_channel_close(usb_bluetooth_l2cap_table_t *table,
+                                      uint16_t local_cid)
+{
+    if (table == NULL || local_cid < USB_BLUETOOTH_L2CAP_CID_DYNAMIC_MIN)
+        return -22;
+    for (uint32_t i = 0U; i < USB_BLUETOOTH_L2CAP_CHANNEL_MAX; ++i) {
+        usb_bluetooth_l2cap_channel_t *c = &table->channels[i];
+        if (c->active && c->local_cid == local_cid) {
+            *c = (usb_bluetooth_l2cap_channel_t){0};
+            return 1;
+        }
+    }
+    return -9;
+}
+
+uint32_t usb_bluetooth_l2cap_expire(usb_bluetooth_l2cap_table_t *table,
+                                    uint32_t now)
+{
+    if (table == NULL) return 0U;
+    uint32_t expired = 0U;
+    for (uint32_t i = 0U; i < USB_BLUETOOTH_L2CAP_CHANNEL_MAX; ++i) {
+        usb_bluetooth_l2cap_channel_t *c = &table->channels[i];
+        if (c->active && c->deadline != 0U &&
+            (int32_t)(now - c->deadline) >= 0) {
+            *c = (usb_bluetooth_l2cap_channel_t){0};
+            ++expired;
+        }
+    }
+    return expired;
+}
+
 void usb_bluetooth_link_table_reset(usb_bluetooth_link_table_t *table)
 {
     if (table == NULL)

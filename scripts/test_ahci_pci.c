@@ -18,6 +18,7 @@ int main(void)
 
     assert(!ahci_pci_abar_valid(0U, 0x2000ULL, 0, 0));
     assert(!ahci_pci_abar_valid(0xFEBF0000ULL, 0x2000ULL, 1, 0));
+    assert(!ahci_pci_abar_valid(0xFEBF0000ULL, 0x2000ULL, 0, 2));
     assert(!ahci_pci_abar_valid(0xFEBF0000ULL, 0x1000ULL, 0, 0));
     assert(!ahci_pci_abar_valid(0xFEBF0000ULL, 0x1800ULL, 0, 0));
     assert(!ahci_pci_abar_valid(0xFEBF0001ULL, 0x2000ULL, 0, 0));

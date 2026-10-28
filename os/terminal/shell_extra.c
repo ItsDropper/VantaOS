@@ -629,6 +629,7 @@ static int command_http_url(const char *url, const char *output_argument,
         if (received < 0) {
             terminal_write("\ncurl: response timed out or connection failed");
             if (file_handle >= 0) { (void)vfs_close(file_handle); file_handle = -1; }
+            if (output_argument) (void)vfs_delete_path(resolved_path);
             net_tcp_close(device);
             return 1;
         }
@@ -762,6 +763,7 @@ static int command_http_url(const char *url, const char *output_argument,
             if (++total_body > max_download) {
                 terminal_write("\ncurl: download exceeds the 8 MiB safety limit");
                 if (file_handle >= 0) (void)vfs_close(file_handle);
+                if (output_argument) (void)vfs_delete_path(resolved_path);
                 net_tcp_close(device);
                 return 1;
             }
@@ -775,8 +777,9 @@ static int command_http_url(const char *url, const char *output_argument,
             int written = vfs_write(file_handle, body_chunk,
                                     (unsigned int)body_used);
             if (written != (int)body_used) {
-                terminal_write("\ncurl: write failed; output may be incomplete");
+                terminal_write("\ncurl: write failed; incomplete output removed");
                 (void)vfs_close(file_handle);
+                (void)vfs_delete_path(resolved_path);
                 net_tcp_close(device);
                 return 1;
             }

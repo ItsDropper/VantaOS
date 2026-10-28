@@ -1547,6 +1547,63 @@ static void test_inquiry_lifecycle_state(void)
     assert(state.active == 0U && state.cancel_state == 0U);
 }
 
+static void test_l2cap_data_queue(void)
+{
+    usb_bluetooth_l2cap_data_queue_t queue = {0};
+    const uint8_t a[] = {0x10U, 0x11U, 0x12U};
+    const uint8_t b[] = {0x20U, 0x21U};
+    const uint8_t d[] = {0x30U};
+    uint8_t output[8] = {0};
+
+    usb_bluetooth_l2cap_data_queue_reset(NULL);
+    usb_bluetooth_l2cap_data_queue_reset(&queue);
+    assert(queue.count == 0U && queue.head == 0U);
+    assert(usb_bluetooth_l2cap_data_queue_push(
+               &queue, 0x000BU, 0x0040U, a, sizeof(a)) == 0);
+    assert(usb_bluetooth_l2cap_data_queue_push(
+               &queue, 0x000BU, 0x0041U, b, sizeof(b)) == 0);
+    assert(usb_bluetooth_l2cap_data_queue_push(
+               &queue, 0x000CU, 0x0040U, d, sizeof(d)) == 0);
+    assert(usb_bluetooth_l2cap_data_queue_pop(
+               &queue, 0x000BU, 0x0041U, output, 1U) == -90);
+    assert(queue.count == 3U);
+    assert(usb_bluetooth_l2cap_data_queue_pop(
+               &queue, 0x000BU, 0x0041U, output, sizeof(output)) ==
+           (int)sizeof(b));
+    assert(memcmp(output, b, sizeof(b)) == 0);
+    assert(queue.count == 2U);
+    assert(usb_bluetooth_l2cap_data_queue_pop(
+               &queue, 0x000BU, 0x0040U, output, sizeof(output)) ==
+           (int)sizeof(a));
+    assert(memcmp(output, a, sizeof(a)) == 0);
+    assert(usb_bluetooth_l2cap_data_queue_pop(
+               &queue, 0x000CU, 0x0040U, output, sizeof(output)) ==
+           (int)sizeof(d));
+    assert(output[0] == d[0] && queue.count == 0U);
+    assert(usb_bluetooth_l2cap_data_queue_pop(
+               &queue, 0x000CU, 0x0040U, output, sizeof(output)) == -11);
+
+    for (uint32_t i = 0U; i < USB_BLUETOOTH_L2CAP_DATA_QUEUE_DEPTH; ++i)
+        assert(usb_bluetooth_l2cap_data_queue_push(
+                   &queue, 0x000BU, (uint16_t)(0x0040U + i),
+                   a, sizeof(a)) == 0);
+    assert(usb_bluetooth_l2cap_data_queue_push(
+               &queue, 0x000BU, 0x0044U, a, sizeof(a)) == -11);
+    usb_bluetooth_l2cap_data_queue_forget_channel(&queue, 0x000BU, 0x0041U);
+    assert(queue.count == USB_BLUETOOTH_L2CAP_DATA_QUEUE_DEPTH - 1U);
+    usb_bluetooth_l2cap_data_queue_forget_handle(&queue, 0x000BU);
+    assert(queue.count == 0U);
+    assert(usb_bluetooth_l2cap_data_queue_push(
+               &queue, 0U, 0x0040U, a, sizeof(a)) == -22);
+    assert(usb_bluetooth_l2cap_data_queue_push(
+               &queue, 0x000BU, 0x003FU, a, sizeof(a)) == -22);
+    assert(usb_bluetooth_l2cap_data_queue_push(
+               &queue, 0x000BU, 0x0040U, NULL, sizeof(a)) == -22);
+    assert(usb_bluetooth_l2cap_data_queue_push(
+               &queue, 0x000BU, 0x0040U, a,
+               USB_BLUETOOTH_L2CAP_DATA_MAX + 1U) == -22);
+}
+
 static void test_connection_attempt_state(void)
 {
     const uint8_t address_a[6] = {1U, 2U, 3U, 4U, 5U, 6U};
@@ -1586,6 +1643,7 @@ int main(void)
     test_hci_command_credits_and_discovery_builders();
     test_hci_connection_command_builders();
     test_hci_inquiry_result_parser();
+    test_l2cap_data_queue();
     test_connection_attempt_state();
     test_inquiry_lifecycle_state();
     test_hci_command_fault_requires_reset();

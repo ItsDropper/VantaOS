@@ -907,6 +907,53 @@ int usb_bluetooth_l2cap_channel_configured(usb_bluetooth_l2cap_table_t *table,
     return -9;
 }
 
+int usb_bluetooth_l2cap_configuration_response(
+    usb_bluetooth_l2cap_table_t *table, const uint8_t *command,
+    uint32_t length)
+{
+    if (table == NULL || command == NULL || length < 10U ||
+        command[0] != 0x05U || command[1] == 0U ||
+        (uint32_t)command[2] + ((uint32_t)command[3] << 8) != length - 4U ||
+        !usb_bluetooth_l2cap_signaling_valid(command, length))
+        return -22;
+    uint16_t local_cid = (uint16_t)command[4] |
+                         ((uint16_t)command[5] << 8);
+    uint16_t flags = (uint16_t)command[6] |
+                     ((uint16_t)command[7] << 8);
+    uint16_t result = (uint16_t)command[8] |
+                      ((uint16_t)command[9] << 8);
+    uint16_t remote_mtu = 672U;
+    if (flags == 0U && result == 0U) {
+        uint32_t offset = 10U;
+        uint8_t mtu_seen = 0U;
+        while (offset < length) {
+            if (length - offset < 2U)
+                return -22;
+            uint8_t type = command[offset];
+            uint8_t option_length = command[offset + 1U];
+            offset += 2U;
+            if ((uint32_t)option_length > length - offset)
+                return -22;
+            uint8_t option_type = type & 0x7FU;
+            if (option_type == 0x01U) {
+                if (mtu_seen != 0U || option_length != 2U)
+                    return -22;
+                remote_mtu = (uint16_t)command[offset] |
+                             ((uint16_t)command[offset + 1U] << 8);
+                if (remote_mtu < 48U)
+                    return -22;
+                mtu_seen = 1U;
+            } else if ((type & 0x80U) == 0U) {
+                /* Unknown mandatory option: do not silently accept it. */
+                return -95;
+            }
+            offset += option_length;
+        }
+    }
+    return usb_bluetooth_l2cap_channel_configure_response(
+        table, local_cid, command[1], flags, result, remote_mtu);
+}
+
 int usb_bluetooth_l2cap_channel_close(usb_bluetooth_l2cap_table_t *table,
                                       uint16_t local_cid)
 {

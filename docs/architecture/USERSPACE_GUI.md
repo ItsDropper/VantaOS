@@ -2,7 +2,7 @@
 
 ## Current state
 
-VantaOS has an initial user-mode GUI boundary and three standalone ring-3 desktop applications. The current userspace syscall ABI is version 9 and the GUI event ABI is version 2; both are VantaOS-specific, not POSIX, Win32, or Wayland compatible.
+VantaOS has an initial user-mode GUI boundary and four standalone ring-3 desktop applications. The current userspace syscall ABI is version 10 and the GUI event ABI is version 2; both are VantaOS-specific, not POSIX, Win32, or Wayland compatible.
 
 - Static ELF64 `ET_EXEC` programs can be loaded from FAT32 and run at CPL3 (ring 3) in a private address space.
 - The public freestanding header `userspace/include/vanta/syscall.h` exposes the current syscall wrappers; GUI structures live in `userspace/include/vanta/gui.h`.
@@ -35,7 +35,7 @@ The kernel validates requests and retains a bounded draw list for each window.
 | Input ownership | Left/right pointer clicks route to the topmost user window; pointer events carry Ctrl state for multi-selection, and keyboard input follows focus |
 | Isolation boundary | User buffers are validated; no raw framebuffer or kernel pointer is exposed |
 
-The implementation is intentionally small. A blocking event wait, a general widget toolkit, and mature clipping/accessibility support are not implemented. Window move/resize/maximize and resize notifications exist, but interaction testing remains limited. Explorer provides an app-local path clipboard for Ctrl+C/Ctrl+V in the address field, not an OS-wide clipboard.
+The implementation is intentionally small. A blocking event wait, a general widget toolkit, and mature clipping/accessibility support are not implemented. Window move/resize/maximize and resize notifications exist, but interaction testing remains limited. Explorer's file-operation clipboard remains app-local; the shared text clipboard is available to Terminal and Notes.
 
 ## Storage and Settings persistence
 

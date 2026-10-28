@@ -918,13 +918,6 @@ static int command_net(uint32_t argc, char **argv)
                        shell_string_equals(argv[1], "get"))) {
         return command_http_url(argv[2], 0, 0);
     }
-    if (argc == 2U && shell_string_equals(argv[0], "curl")) {
-        return command_http_url(argv[1], 0, 1);
-    }
-    if (argc == 4U && shell_string_equals(argv[0], "curl") &&
-        shell_string_equals(argv[1], "-o")) {
-        return command_http_url(argv[3], argv[2], 1);
-    }
     if (argc == 3U && shell_string_equals(argv[1], "ping")) {
         uint32_t target = 0;
         if (!parse_ipv4(argv[2], &target)) {
@@ -1070,6 +1063,11 @@ int shell_execute_extended(const char *command_line)
     if (shell_string_equals(argv[0], "mkdir")) return command_mkdir(argc, argv, force);
     if (shell_string_equals(argv[0], "touch")) return command_touch(argc, argv, force);
     if (shell_string_equals(argv[0], "write")) return command_write(argc, argv, force);
+    if (shell_string_equals(argv[0], "curl") && argc == 2U)
+        return command_http_url(argv[1], 0, 1);
+    if (shell_string_equals(argv[0], "curl") && argc == 4U &&
+        shell_string_equals(argv[1], "-o"))
+        return command_http_url(argv[3], argv[2], 1);
     if (shell_string_equals(argv[0], "net")) return command_net(argc, argv);
     return 0;
 }

@@ -258,6 +258,7 @@ jobs:
           mcopy -i install-target.img@@269484032 ::/SYSTEM/SETTINGS.ELF /tmp/installed-settings.elf
           mcopy -i install-target.img@@269484032 ::/EXPLORER.ELF /tmp/installed-explorer.elf
           mcopy -i install-target.img@@269484032 ::/SYSTEM/NOTES.ELF /tmp/installed-notes.elf
+          mcopy -i install-target.img@@269484032 ::/SYSTEM/CALCULATOR.ELF /tmp/installed-calculator.elf
           mcopy -i install-target.img@@269484032 ::/SYSTEM/DRIVERS/ATA.SYS /tmp/installed-ata.sys
           mcopy -i install-target.img@@269484032 ::/SYSTEM/DEVICES/KEYBOARD0.DEV /tmp/installed-keyboard0.dev
           mcopy -i install-target.img@@269484032 ::/ETC/SYSTEM.CONF /tmp/installed-system.conf
@@ -266,6 +267,7 @@ jobs:
           test -s /tmp/installed-settings.elf
           test -s /tmp/installed-explorer.elf
           test -s /tmp/installed-notes.elf
+          test -s /tmp/installed-calculator.elf
           test -s /tmp/installed-ata.sys
           test -s /tmp/installed-keyboard0.dev
           test -s /tmp/installed-system.conf

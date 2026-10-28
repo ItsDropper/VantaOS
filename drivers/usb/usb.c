@@ -144,15 +144,17 @@ int usb_bluetooth_hci_command(uint32_t port, uint16_t opcode,
         usb_bluetooth_link_table_reset(&bluetooth_link_tables[slot]);
         usb_bluetooth_l2cap_table_reset(&bluetooth_slots[slot].l2cap_channels);
     }
-    if (usb_bluetooth_hci_command_begin(
-            &bluetooth_slots[slot].command_state, opcode) != 0)
-        return 0;
-
     uint8_t *command_buffer = bluetooth_hci_command_buffers[slot].bytes;
     int encoded = usb_bluetooth_hci_command_encode(
         opcode, parameters, length, command_buffer, 258U);
     if (encoded < 0)
         return 0;
+    if (usb_bluetooth_hci_command_begin(
+            &bluetooth_slots[slot].command_state, opcode) != 0) {
+        for (uint32_t i = 0U; i < (uint32_t)encoded; ++i)
+            command_buffer[i] = 0U;
+        return 0;
+    }
 
     /*
      * USB Bluetooth HCI commands belong in the control-transfer data stage.

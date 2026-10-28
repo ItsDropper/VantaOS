@@ -651,6 +651,20 @@ int usb_bluetooth_l2cap_dispatch_acl_responses(
         table, l2cap.payload, l2cap.payload_length);
 }
 
+int usb_bluetooth_l2cap_dispatch_acl_responses_for_handle(
+    usb_bluetooth_l2cap_table_t *table, uint16_t expected_handle,
+    const uint8_t *packet, uint32_t length)
+{
+    if (table == NULL || packet == NULL || expected_handle == 0U)
+        return -22;
+    usb_bluetooth_acl_view_t acl;
+    if (!usb_bluetooth_acl_parse(packet, length, &acl))
+        return -22;
+    if (acl.handle != expected_handle)
+        return -13;
+    return usb_bluetooth_l2cap_dispatch_acl_responses(table, packet, length);
+}
+
 int usb_bluetooth_l2cap_dispatch_responses(
     usb_bluetooth_l2cap_table_t *table, const uint8_t *payload,
     uint32_t length)

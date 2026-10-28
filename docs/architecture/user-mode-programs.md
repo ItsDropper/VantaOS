@@ -22,7 +22,7 @@ This is an early execution path, not a complete process environment. There is no
 
 ## Freestanding C wrapper header
 
-C user programs can include `<vanta/syscall.h>` from `userspace/include`; the Bluetooth device-picker API is in `<vanta/bluetooth.h>`. The headers define `VANTA_USER_ABI_VERSION`, syscall numbers, read/write/truncate open flags, bounded file creation/writes, GUI calls, Bluetooth adapter/discovery/connect calls, and wrappers for the other implemented syscalls. The interface is freestanding and does not require libc. Wrappers return the kernel's raw result: a non-negative value on success or a negative error number on failure; they do not set `errno`. See [user-mode.md](user-mode.md) for the complete wrapper table and limitations. CI compiles the public wrappers with `-Wall -Wextra -Werror` to catch ABI/header drift.
+C user programs can include `<vanta/syscall.h>` from `userspace/include`; the Bluetooth device-picker API is in `<vanta/bluetooth.h>`. The headers define `VANTA_USER_ABI_VERSION`, syscall numbers, read/write/truncate open flags, bounded file creation/writes, GUI calls, Bluetooth adapter/discovery/connect calls, a 4 KiB system-wide clipboard, and wrappers for the other implemented syscalls. The interface is freestanding and does not require libc. Wrappers return the kernel's raw result: a non-negative value on success or a negative error number on failure; they do not set `errno`. See [user-mode.md](user-mode.md) for the complete wrapper table and limitations. CI compiles the public wrappers with `-Wall -Wextra -Werror` to catch ABI/header drift.
 
 ## Bring-up syscall ABI
 

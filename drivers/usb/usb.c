@@ -239,6 +239,20 @@ int usb_bluetooth_hci_command(uint32_t port, uint16_t opcode,
     return sent;
 }
 
+int usb_bluetooth_inquiry(uint32_t port, uint8_t inquiry_length,
+                          uint8_t responses)
+{
+    uint8_t command[8];
+    int encoded = usb_bluetooth_hci_build_inquiry(
+        command, sizeof(command), inquiry_length, responses);
+    if (port == 0U || encoded != 8)
+        return 0;
+    int sent = usb_bluetooth_hci_command(port, 0x0401U, &command[3], 5U);
+    for (uint32_t i = 0U; i < sizeof(command); ++i)
+        command[i] = 0U;
+    return sent;
+}
+
 int usb_bluetooth_connect(uint32_t port, const uint8_t address[6],
                           uint16_t packet_type,
                           uint8_t page_scan_repetition_mode,

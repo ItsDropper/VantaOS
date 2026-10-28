@@ -9,6 +9,13 @@
 #include <vanta/gui.h>
 #include <vanta/bluetooth.h>
 
+_Static_assert(VANTA_GUI_ABI_VERSION == 2U,
+               "GUI ABI version must track pointer release and modifiers");
+_Static_assert(VANTA_GUI_EVENT_POINTER_UP == 9U,
+               "GUI pointer release event number must remain stable");
+_Static_assert(VANTA_GUI_MOD_CTRL == 1U,
+               "GUI Ctrl modifier flag must remain stable");
+
 /* Compiled by CI to keep every public wrapper and argument order buildable. */
 long vanta_user_abi_compile_check(
     const char* path, const char* const argv[], char* buffer, int32_t* status)

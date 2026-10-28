@@ -541,6 +541,7 @@ static int command_http_url(const char *url, const char *output_argument,
     http_url_status_t url_status;
     net_device_t *device = 0;
     int file_handle = -1, response_status = 0, body_started = 0;
+    int staged_file_created = 0;
     int peer_closed = 0;
     http_body_t body_state;
     http_body_status_t body_status;
@@ -679,8 +680,10 @@ static int command_http_url(const char *url, const char *output_argument,
                 (void)vfs_close(file_handle);
                 file_handle = -1;
             }
-            if (output_argument)
+            if (staged_file_created) {
                 (void)vfs_delete_path(download_path);
+                staged_file_created = 0;
+            }
             net_tcp_close(device);
             return 1;
         }
@@ -689,7 +692,10 @@ static int command_http_url(const char *url, const char *output_argument,
         if (received < 0) {
             terminal_write("\ncurl: response timed out or connection failed");
             if (file_handle >= 0) { (void)vfs_close(file_handle); file_handle = -1; }
-            if (output_argument) (void)vfs_delete_path(download_path);
+            if (staged_file_created) {
+                (void)vfs_delete_path(download_path);
+                staged_file_created = 0;
+            }
             net_tcp_close(device);
             return 1;
         }
@@ -750,9 +756,11 @@ static int command_http_url(const char *url, const char *output_argument,
                             net_tcp_close(device);
                             return 1;
                         }
+                        staged_file_created = 1;
                         file_handle = vfs_open(download_path, VFS_OPEN_WRITE);
                         if (file_handle < 0) {
                             (void)vfs_delete_path(download_path);
+                            staged_file_created = 0;
                             terminal_write("\ncurl: could not open newly created output file");
                             net_tcp_close(device);
                             return 1;
@@ -773,9 +781,10 @@ static int command_http_url(const char *url, const char *output_argument,
                     (void)vfs_close(file_handle);
                     file_handle = -1;
                 }
-                if (output_argument) {
+                if (staged_file_created) {
                     terminal_write("; incomplete output removed");
                     (void)vfs_delete_path(download_path);
+                    staged_file_created = 0;
                 }
                 net_tcp_close(device);
                 return 1;
@@ -790,7 +799,11 @@ static int command_http_url(const char *url, const char *output_argument,
             if (!write_file_all(file_handle, body_chunk, body_used)) {
                 terminal_write("\ncurl: write failed; incomplete output removed");
                 (void)vfs_close(file_handle);
-                (void)vfs_delete_path(download_path);
+                file_handle = -1;
+                if (staged_file_created) {
+                    (void)vfs_delete_path(download_path);
+                    staged_file_created = 0;
+                }
                 net_tcp_close(device);
                 return 1;
             }
@@ -808,7 +821,10 @@ static int command_http_url(const char *url, const char *output_argument,
     net_tcp_close(device);
     if (file_handle >= 0) {
         if (vfs_close(file_handle) < 0) {
-            if (output_argument) (void)vfs_delete_path(download_path);
+            if (staged_file_created) {
+                (void)vfs_delete_path(download_path);
+                staged_file_created = 0;
+            }
             terminal_write("\ncurl: failed to close output file");
             return 1;
         }
@@ -820,18 +836,25 @@ static int command_http_url(const char *url, const char *output_argument,
     }
     body_status = http_body_finish(&body_state, peer_closed);
     if (body_status != HTTP_BODY_OK) {
-        if (output_argument) (void)vfs_delete_path(download_path);
+        if (staged_file_created) {
+            (void)vfs_delete_path(download_path);
+            staged_file_created = 0;
+            terminal_write("; incomplete output removed");
+        }
         terminal_write("\ncurl: ");
         terminal_write(http_body_status_string(body_status));
-        if (output_argument) terminal_write("; incomplete output removed");
         return 1;
     }
     if (output_argument) {
         if (vfs_rename_path(download_path, resolved_path) < 0) {
-            (void)vfs_delete_path(download_path);
+            if (staged_file_created) {
+                (void)vfs_delete_path(download_path);
+                staged_file_created = 0;
+            }
             terminal_write("\ncurl: download verified, but could not publish the destination; staged file removed");
             return 1;
         }
+        staged_file_created = 0;
         terminal_write("\nSaved "); terminal_write(resolved_path);
         terminal_write(" ("); shell_print_decimal(http_body_bytes_received(&body_state));
         terminal_write(" bytes)");

@@ -872,6 +872,37 @@ int usb_bluetooth_hci_read_buffer_size_result(
     return 1;
 }
 
+
+int usb_bluetooth_hci_completed_acl_packets(
+    const uint8_t *event, uint32_t length, uint16_t *completed)
+{
+    if (event == NULL || completed == NULL ||
+        !usb_bluetooth_hci_event_valid(event, length))
+        return -22;
+    if (event[0] != 0x13U)
+        return 0;
+    if (length < 3U)
+        return -22;
+    uint32_t count = event[2];
+    if (count == 0U || length != 3U + count * 4U)
+        return -22;
+    uint32_t total = 0U;
+    for (uint32_t i = 0U; i < count; ++i) {
+        uint32_t offset = 3U + i * 4U;
+        uint16_t handle = (uint16_t)event[offset] |
+                          ((uint16_t)event[offset + 1U] << 8);
+        uint16_t packets = (uint16_t)event[offset + 2U] |
+                           ((uint16_t)event[offset + 3U] << 8);
+        if ((handle & 0xF000U) != 0U)
+            return -22;
+        total += packets;
+        if (total > 0xFFFFU)
+            return -22;
+    }
+    *completed = (uint16_t)total;
+    return 1;
+}
+
 int usb_bluetooth_hci_build_inquiry(uint8_t *out, uint32_t capacity,
                                     uint8_t inquiry_length, uint8_t responses)
 {

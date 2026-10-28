@@ -33,9 +33,9 @@ int main(void)
  assert(push(q,&h,&n,VANTA_GUI_EVENT_POINTER_MOVE,3,0));
  assert(push(q,&h,&n,VANTA_GUI_EVENT_KEY,0,2));
  assert(push(q,&h,&n,VANTA_GUI_EVENT_POINTER_DOWN,3,1));
- assert(push(q,&h,&n,VANTA_GUI_EVENT_CLOSE_REQUEST,0,0));
+ assert(push(q,&h,&n,VANTA_GUI_EVENT_POINTER_UP,3,1));
  assert(n==N&&at(q,h,0).value==1&&at(q,h,1).value==2);
- assert(at(q,h,2).type==VANTA_GUI_EVENT_POINTER_DOWN&&at(q,h,3).type==VANTA_GUI_EVENT_CLOSE_REQUEST);
+ assert(at(q,h,2).type==VANTA_GUI_EVENT_POINTER_DOWN&&at(q,h,3).type==VANTA_GUI_EVENT_POINTER_UP);
  h=(h+1U)%N;--n;
  assert(push(q,&h,&n,VANTA_GUI_EVENT_KEY,0,3));
  assert(n==N&&at(q,h,3).value==3);

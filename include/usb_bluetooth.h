@@ -89,7 +89,8 @@ typedef struct {
     uint8_t status;
     uint8_t event_kind; /* 1 Command Complete, 2 Command Status */
     uint8_t faulted; /* transport outcome ambiguous; Reset required */
-    uint32_t deadline; /* absolute timer tick; zero means not armed */
+    uint32_t deadline; /* absolute timer tick */
+    uint8_t watchdog_armed;
 } usb_bluetooth_hci_command_state_t;
 
 typedef struct {

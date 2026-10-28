@@ -18,7 +18,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define VANTA_USER_ABI_VERSION 9U
+#define VANTA_USER_ABI_VERSION 10U
 
 #define VANTA_SYS_EXIT          0U
 #define VANTA_SYS_WRITE         1U
@@ -56,6 +56,9 @@
 #define VANTA_SYS_BLUETOOTH_CONNECT 37U
 #define VANTA_SYS_BLUETOOTH_PEER_STATE 38U
 #define VANTA_SYS_BLUETOOTH_CANCEL_CONNECTION 39U
+#define VANTA_SYS_CLIPBOARD_SET 40U
+#define VANTA_SYS_CLIPBOARD_GET 41U
+#define VANTA_CLIPBOARD_CAPACITY 4096U
 
 #define VANTA_OPEN_READ      1
 #define VANTA_OPEN_WRITE     2
@@ -117,6 +120,18 @@ static inline long vanta_ipc_close(uint64_t endpoint)
 static inline long vanta_read_char(void)
 {
     return vanta_syscall3(VANTA_SYS_READ_CHAR, 0U, 0U, 0U);
+}
+
+static inline long vanta_clipboard_set(const void* buffer, size_t length)
+{
+    return vanta_syscall3(VANTA_SYS_CLIPBOARD_SET,
+                          (uintptr_t)buffer, (uintptr_t)length, 0U);
+}
+
+static inline long vanta_clipboard_get(void* buffer, size_t capacity)
+{
+    return vanta_syscall3(VANTA_SYS_CLIPBOARD_GET,
+                          (uintptr_t)buffer, (uintptr_t)capacity, 0U);
 }
 
 static inline long vanta_settings_apply(void)

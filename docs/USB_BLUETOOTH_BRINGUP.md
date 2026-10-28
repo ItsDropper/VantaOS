@@ -426,6 +426,38 @@ successful `usb_bluetooth_inquiry` return only means the command was submitted;
 poll the HCI event API for inquiry completion and query the discovered list.
 The result table does not include friendly names or SDP service records.
 
+Connection-state queries are available through `usb_bluetooth_connection_pending(port, address)`
+and `usb_bluetooth_is_connected(port, handle)`. The former reports whether the
+exact address has an outstanding outbound attempt; the latter checks whether
+the HCI handle is currently owned by that adapter. A handle is learned from
+the successful Connection Complete HCI event, not from the command-submission
+return value.
+
+A minimal kernel-side scan consumer can use the public API without touching
+internal adapter structs:
+
+```c
+if (usb_bluetooth_inquiry(port, 8U, 0U)) {
+    /* Continue calling usb_poll() in the normal owner loop. */
+    uint8_t event[USB_BLUETOOTH_HCI_EVENT_MAX];
+    while (usb_bluetooth_hci_event_receive(port, event, sizeof(event)) > 0) {
+        if (event[0] == 0x01U) /* Inquiry Complete */
+            break;
+    }
+    uint32_t count = usb_bluetooth_discovered_count(port);
+    for (uint32_t i = 0U; i < count; ++i) {
+        usb_bluetooth_inquiry_result_t device;
+        if (usb_bluetooth_discovered_get(port, i, &device) == 1) {
+            /* Select device.address; use its scan mode and clock offset. */
+        }
+    }
+}
+```
+
+This is an API usage example, not a shipped userspace program or a standalone
+diagnostic command. Callbacks are not provided; callers use the kernel's normal
+polling loop and drain events themselves.
+
 The host test suite covers bounded discovery storage, duplicate-address updates,
 invalid records, full-table behavior, reset, and index bounds. Host CI does not
 replace physical adapter testing.

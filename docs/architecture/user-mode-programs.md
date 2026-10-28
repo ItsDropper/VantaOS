@@ -22,7 +22,7 @@ This is an early execution path, not a complete process environment. There is no
 
 ## Freestanding C wrapper header
 
-C user programs can include `<vanta/syscall.h>` from `userspace/include`. The header defines `VANTA_USER_ABI_VERSION`, syscall numbers, read/write/truncate open flags, bounded file creation/writes, and inline wrappers for write, terminal output, open/read/close, child spawn, waitpid, and process exit. It is freestanding and does not require libc. Wrappers return the kernel's raw result: a non-negative value on success or a negative error number on failure; they do not set `errno`. See [user-mode.md](user-mode.md) for the wrapper table and limitations. CI compiles every wrapper with `-Wall -Wextra -Werror` to catch ABI/header drift.
+C user programs can include `<vanta/syscall.h>` from `userspace/include`; the Bluetooth device-picker API is in `<vanta/bluetooth.h>`. The headers define `VANTA_USER_ABI_VERSION`, syscall numbers, read/write/truncate open flags, bounded file creation/writes, GUI calls, Bluetooth adapter/discovery/connect calls, and wrappers for the other implemented syscalls. The interface is freestanding and does not require libc. Wrappers return the kernel's raw result: a non-negative value on success or a negative error number on failure; they do not set `errno`. See [user-mode.md](user-mode.md) for the complete wrapper table and limitations. CI compiles the public wrappers with `-Wall -Wextra -Werror` to catch ABI/header drift.
 
 ## Bring-up syscall ABI
 
@@ -48,6 +48,15 @@ The current syscall entry is `int 0x80`. Put the syscall number in `RAX`; the fi
 | `17` | Close an owned GUI window | `RDI`: window ID |
 | `18` | Replace retained GUI draw commands | `RDI`: window ID; `RSI`: command array; `RDX`: command count |
 | `19` | Poll one GUI event | `RDI`: window ID; `RSI`: writable `vanta_gui_event_t*`; returns 1, 0 if empty, or a negative error |
+| `31` | Count bound USB Bluetooth adapters | No arguments; returns count |
+| `32` | Get adapter USB port | `RDI`: zero-based adapter index; `RSI`: writable `uint32_t*` |
+| `33` | Start Classic Bluetooth inquiry | `RDI`: adapter port; starts a bounded scan |
+| `34` | Cancel inquiry | `RDI`: adapter port |
+| `35` | Count discovered devices | `RDI`: adapter port |
+| `36` | Read discovered device | `RDI`: adapter port; `RSI`: result index; `RDX`: writable inquiry-result structure |
+| `37` | Request BR/EDR connection | `RDI`: adapter port; `RSI`: readable inquiry-result structure |
+| `38` | Query peer state | `RDI`: adapter port; `RSI`: six-byte address; `RDX`: writable connection-handle pointer; returns connected (1), connecting (2), idle (0), or error |
+| `39` | Cancel outbound connection attempt | `RDI`: adapter port; `RSI`: six-byte address |
 
 Serial and terminal writes accept at most 4096 bytes per call and validate the supplied range against the current process address space. File reads are limited to 4096 bytes per call and validate the complete destination range before consuming file data. Paths must terminate within `FS_PATH_MAX`; user-mode create/write supports regular files with conservative 8.3 names; each syscall transfers at most 4096 bytes, while total file size is limited by FAT32's 32-bit size field (4 GiB minus 1 byte) and available volume capacity. `vanta_gui` exposes a bounded VantaOS-specific GUI ABI on this branch: eight owned windows, 24 retained draw commands per window, text and filled rectangles, and a bounded event queue. The GUI server is merged into `master`; CI requires the GUI smoke and dead-owner cleanup markers. The ABI remains an early project-specific interface. Each process has eight descriptor slots, numbered from `3`, and descriptors are closed during process reaping. The spawn syscall copies the path, argument vector, and argument strings into kernel-owned memory before accessing the VFS or ELF loader. It accepts read-only ELF files up to 1 MiB and at most 16 arguments / 512 total argument bytes, creates the child in a private address space, and returns its PID. A child with a live user-mode parent remains as a resource-free zombie until `waitpid` collects its status. `waitpid` validates its optional status pointer before blocking and yields through the scheduler interrupt path while waiting, so the child can run on the single-CPU BSP as well as SMP configurations; it returns the child PID; orphaned children are detached and auto-reaped on exit. Kernel-owned shell launches remain auto-reaped. This is not a stable or POSIX-compatible process ABI. Errors are returned as negative values (`-EFAULT`-style `-14`, missing path `-2`, invalid argument `-22`, unsupported/invalid ELF or child-creation failure `-8`, temporary image-buffer allocation failure `-12`, and descriptor exhaustion `-24`). This is a minimal bring-up interface, not a stable or POSIX-compatible ABI.
 

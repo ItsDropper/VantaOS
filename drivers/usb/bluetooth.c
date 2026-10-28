@@ -1269,8 +1269,10 @@ int usb_bluetooth_l2cap_channel_configure_response(
             return -16;
         if (flags != 0U)
             return 0;
-        if (result != 0U)
+        if (result != 0U) {
+            c->config_identifier = 0U;
             return -5;
+        }
         if (remote_mtu < 48U)
             return -22;
         c->remote_mtu = remote_mtu;

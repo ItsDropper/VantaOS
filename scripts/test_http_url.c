@@ -77,6 +77,21 @@ int main(void)
     ok &= expect_status("http://user@example.com/", HTTP_URL_BAD_HOST);
     ok &= expect_status("http://[::1]/", HTTP_URL_BAD_HOST);
     ok &= expect_status("http://example.com/a b", HTTP_URL_BAD_PATH);
+    ok &= expect_status("http://example.com/a%0Ab", HTTP_URL_OK);
+    ok &= expect_status("http://example.com./", HTTP_URL_BAD_HOST);
+    ok &= expect_status("http://example..com./", HTTP_URL_BAD_HOST);
+    ok &= expect_status("http://example.com:00080/", HTTP_URL_OK);
+    ok &= expect_status("http://example.com:99999/", HTTP_URL_BAD_PORT);
+    ok &= expect_status("http://example.com:80:90/", HTTP_URL_BAD_PORT);
+    ok &= expect_status("http://example.com\\\\evil/", HTTP_URL_BAD_HOST);
+
+    char long_label[128];
+    (void)strcpy(long_label, "http://");
+    size_t label_length = 0U;
+    while (label_length < 64U) long_label[7U + label_length++] = 'a';
+    long_label[71] = '.';
+    (void)strcpy(long_label + 72U, "example/");
+    ok &= expect_status(long_label, HTTP_URL_BAD_HOST);
 
     (void)strcpy(long_url, "http://example.com/");
     size_t n = strlen(long_url);

@@ -291,6 +291,103 @@ int usb_bluetooth_l2cap_parse(const uint8_t *packet, uint32_t length,
     return 1;
 }
 
+void usb_bluetooth_acl_reassembly_reset(usb_bluetooth_acl_reassembly_t *state)
+{
+    if (state == NULL)
+        return;
+    state->active = 0U;
+    state->complete = 0U;
+    state->handle = 0U;
+    state->expected_length = 0U;
+    state->received_length = 0U;
+    for (uint32_t i = 0U; i < USB_BLUETOOTH_ACL_MAX_PACKET; ++i)
+        state->packet[i] = 0U;
+}
+
+/*
+ * Reassemble a single connection handle at a time. This is deliberately a
+ * per-connection primitive, not a global multi-handle dispatcher; callers
+ * must keep one state object per live HCI connection handle.
+ */
+int usb_bluetooth_acl_reassembly_feed(usb_bluetooth_acl_reassembly_t *state,
+                                      const uint8_t *packet, uint32_t length)
+{
+    if (state == NULL || packet == NULL ||
+        !usb_bluetooth_acl_packet_valid(packet, length))
+        return -22;
+    if (state->complete != 0U)
+        return -16;
+
+    usb_bluetooth_acl_view_t acl;
+    if (!usb_bluetooth_acl_parse(packet, length, &acl) ||
+        acl.handle == 0U || acl.broadcast != 0U)
+        return -22;
+
+    if (acl.packet_boundary == 0U || acl.packet_boundary == 2U ||
+        acl.packet_boundary == 3U) {
+        if (state->active != 0U)
+            return -16;
+        if (acl.payload_length < 4U)
+            return -22;
+        uint32_t l2cap_length = (uint32_t)acl.payload[0] |
+                                ((uint32_t)acl.payload[1] << 8);
+        uint32_t expected = l2cap_length + 4U;
+        if (expected > USB_BLUETOOTH_ACL_MAX_PACKET - 4U ||
+            acl.payload_length > expected)
+            return -22;
+        if (acl.packet_boundary == 3U && acl.payload_length != expected)
+            return -22;
+        for (uint32_t i = 0U; i < 4U; ++i)
+            state->packet[i] = packet[i];
+        for (uint32_t i = 0U; i < acl.payload_length; ++i)
+            state->packet[4U + i] = acl.payload[i];
+        state->handle = acl.handle;
+        state->expected_length = expected;
+        state->received_length = acl.payload_length;
+        state->active = 1U;
+    } else if (acl.packet_boundary == 1U) {
+        if (state->active == 0U || state->handle != acl.handle ||
+            acl.payload_length == 0U ||
+            acl.payload_length > state->expected_length - state->received_length)
+            return -22;
+        for (uint32_t i = 0U; i < acl.payload_length; ++i)
+            state->packet[4U + state->received_length + i] = acl.payload[i];
+        state->received_length += acl.payload_length;
+    } else {
+        return -22;
+    }
+
+    uint16_t total = (uint16_t)state->received_length;
+    state->packet[2] = (uint8_t)(total & 0xFFU);
+    state->packet[3] = (uint8_t)(total >> 8);
+    if (state->received_length == state->expected_length) {
+        state->complete = 1U;
+        state->active = 0U;
+        return 1;
+    }
+    return 0;
+}
+
+int usb_bluetooth_acl_reassembly_take(usb_bluetooth_acl_reassembly_t *state,
+                                      uint8_t *packet, uint32_t capacity)
+{
+    if (state == NULL || packet == NULL || capacity == 0U)
+        return -22;
+    if (state->complete == 0U)
+        return -11;
+    uint32_t length = state->expected_length + 4U;
+    if (length > USB_BLUETOOTH_ACL_MAX_PACKET ||
+        state->received_length != state->expected_length ||
+        !usb_bluetooth_acl_packet_valid(state->packet, length))
+        return -22;
+    if (length > capacity)
+        return -90;
+    for (uint32_t i = 0U; i < length; ++i)
+        packet[i] = state->packet[i];
+    usb_bluetooth_acl_reassembly_reset(state);
+    return (int)length;
+}
+
 /*
  * L2CAP signaling uses a four-byte command header (code, identifier, LE16
  * length). Validate the entire command list before any caller dispatches it.

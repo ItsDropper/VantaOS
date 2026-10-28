@@ -506,6 +506,52 @@ static void test_acl_and_l2cap_views(void)
     assert(acl.payload == NULL && acl.payload_length == 0U);
 }
 
+static void test_acl_fragment_reassembly(void)
+{
+    /* L2CAP PDU: 6-byte body, CID 1; first ACL fragment carries 3 bytes. */
+    const uint8_t first[] = {0x01U, 0x20U, 0x07U, 0x00U,
+                             0x06U, 0x00U, 0x01U, 0x00U,
+                             0x02U, 0x01U, 0x02U};
+    const uint8_t continuation[] = {0x01U, 0x10U, 0x07U, 0x00U,
+                                    0x00U, 0x34U, 0x12U, 0x56U,
+                                    0x78U, 0x9AU, 0xBCU};
+    const uint8_t wrong_handle[] = {0x02U, 0x10U, 0x01U, 0x00U, 0xFFU};
+    usb_bluetooth_acl_reassembly_t state = {0};
+    uint8_t output[USB_BLUETOOTH_ACL_MAX_PACKET] = {0};
+
+    usb_bluetooth_acl_reassembly_reset(&state);
+    assert(usb_bluetooth_acl_reassembly_take(&state, output, sizeof(output)) == -11);
+    assert(usb_bluetooth_acl_reassembly_feed(&state, first, sizeof(first)) == 0);
+    assert(usb_bluetooth_acl_reassembly_feed(&state, wrong_handle,
+                                             sizeof(wrong_handle)) == -22);
+    assert(usb_bluetooth_acl_reassembly_feed(&state, continuation,
+                                             sizeof(continuation)) == 1);
+    assert(state.complete == 1U && state.received_length == 10U);
+    assert(usb_bluetooth_acl_reassembly_feed(&state, continuation,
+                                             sizeof(continuation)) == -16);
+    assert(usb_bluetooth_acl_reassembly_take(&state, output, 8U) == -90);
+    assert(state.complete == 1U);
+    int result = usb_bluetooth_acl_reassembly_take(&state, output, sizeof(output));
+    assert(result == 14);
+    assert(output[0] == 0x01U && output[1] == 0x20U);
+    assert(output[2] == 10U && output[3] == 0U);
+    usb_bluetooth_l2cap_view_t view = {0};
+    assert(usb_bluetooth_l2cap_parse(output, (uint32_t)result, &view));
+    assert(view.channel_id == 1U && view.payload_length == 6U);
+    assert(view.payload[0] == 0x02U && view.payload[5] == 0xBCU);
+    assert(state.complete == 0U && state.received_length == 0U);
+
+    usb_bluetooth_acl_reassembly_reset(&state);
+    assert(usb_bluetooth_acl_reassembly_feed(&state, continuation,
+                                             sizeof(continuation)) == -22);
+    assert(usb_bluetooth_acl_reassembly_feed(&state, first,
+                                             sizeof(first) - 1U) == -22);
+    usb_bluetooth_acl_reassembly_reset(&state);
+    assert(state.active == 0U && state.complete == 0U);
+    for (uint32_t i = 0U; i < USB_BLUETOOTH_ACL_MAX_PACKET; ++i)
+        assert(state.packet[i] == 0U);
+}
+
 static void test_l2cap_signaling_command_boundaries(void)
 {
     const uint8_t two_commands[] = {
@@ -552,6 +598,7 @@ int main(void)
     test_hci_event_queue_integrity();
     test_acl_and_l2cap_views();
     test_l2cap_signaling_command_boundaries();
+    test_acl_fragment_reassembly();
     test_acl_queue_rejects_corrupt_stored_length();
     puts("USB Bluetooth descriptor tests passed");
     return 0;

@@ -51,6 +51,15 @@ typedef struct {
 } usb_bluetooth_l2cap_view_t;
 
 typedef struct {
+    uint8_t active;
+    uint8_t complete;
+    uint16_t handle;
+    uint32_t expected_length;
+    uint32_t received_length;
+    uint8_t packet[USB_BLUETOOTH_ACL_MAX_PACKET];
+} usb_bluetooth_acl_reassembly_t;
+
+typedef struct {
     uint8_t interface_number;
     uint8_t event_endpoint;
     uint8_t acl_in_endpoint;
@@ -77,6 +86,15 @@ int usb_bluetooth_acl_parse(const uint8_t *packet, uint32_t length,
 /* Parse one complete, unfragmented L2CAP PDU carried in an ACL packet. */
 int usb_bluetooth_l2cap_parse(const uint8_t *packet, uint32_t length,
                               usb_bluetooth_l2cap_view_t *view);
+/* Assemble one ACL stream per connection handle. feed: 0 incomplete,
+ * 1 complete (retained until take), negative errno-style code on failure.
+ * take returns framed HCI ACL bytes; -90 preserves a completed packet if the
+ * caller's output buffer is too small. Owner-CPU context only. */
+void usb_bluetooth_acl_reassembly_reset(usb_bluetooth_acl_reassembly_t *state);
+int usb_bluetooth_acl_reassembly_feed(usb_bluetooth_acl_reassembly_t *state,
+                                      const uint8_t *packet, uint32_t length);
+int usb_bluetooth_acl_reassembly_take(usb_bluetooth_acl_reassembly_t *state,
+                                      uint8_t *packet, uint32_t capacity);
 /* Validate a complete L2CAP signaling command list on CID 0x0001. */
 int usb_bluetooth_l2cap_signaling_valid(const uint8_t *payload,
                                         uint32_t length);

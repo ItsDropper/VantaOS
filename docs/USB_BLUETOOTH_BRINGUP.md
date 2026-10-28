@@ -207,3 +207,14 @@ does not implement HCI command-credit scheduling: callers must serialize
 commands on the USB owner CPU and wait for the matching completion/status event.
 Host tests cover event FIFO order, full/empty behavior, framing rejection,
 capacity retry, and queue erasure.
+
+
+## ACL fragment reassembly
+
+A bounded, host-testable reassembly primitive now handles one HCI connection
+handle per state object. It validates the L2CAP length before accepting data,
+rejects handle mismatches and overrun fragments, retains completed packets
+when the consumer buffer is too small, and clears the full buffer on reset or
+successful take. Callers must allocate separate state per live connection;
+the USB polling path does not yet create or manage L2CAP channels, so this
+primitive alone does not enable discovery or profiles.

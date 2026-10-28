@@ -8,7 +8,7 @@
 
 static int expect(const char* input, const char* cwd, const char* expected)
 {
-    char output[256];
+    char output[256] = {0};
     if (!vanta_path_resolve(input, cwd, output, sizeof(output)) ||
         strcmp(output, expected) != 0)
     {

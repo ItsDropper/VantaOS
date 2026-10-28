@@ -78,9 +78,9 @@ static int ahci_probe_idle_function(const struct pci_device* pci)
         uint32_t valid_ports = port_count == 32U ? UINT32_MAX :
                                ((1U << port_count) - 1U);
 
-        if (cap == UINT32_MAX || ports == UINT32_MAX ||
-            version == UINT32_MAX || (ports & ~valid_ports) != 0U ||
-            (ports == 0U && port_count == 0U))
+        if (cap == 0U || cap == UINT32_MAX || ports == UINT32_MAX ||
+            version == 0U || version == UINT32_MAX ||
+            (ports & ~valid_ports) != 0U)
             goto cleanup;
 
         /* GHC is read only here to confirm the mapped register block responds. */

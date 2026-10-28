@@ -122,3 +122,10 @@ The queue is deliberately bounded (two packets per slot) to keep memory use pred
 ## Queue integrity and payload clearing
 
 The ACL queue rejects corrupted ring metadata before calculating an array index: the head must be within the two-slot ring and the count cannot exceed its depth. Reset clears both lengths and stored packet bytes; dequeue clears the consumed slot after copying it out. These rules limit stale packet data surviving disconnect/rebind and make malformed queue state fail closed. The host suite covers ring wraparound, invalid head/count values, FIFO order, capacity retry, full queues, and reset clearing. The queue still requires the documented single-owner CPU context.
+
+
+## Transport readiness and queue corruption handling
+
+The raw ACL send and receive entry points share a readiness predicate: neither is exposed to callers until a successful HCI Reset Command Complete has been observed, and a reset failure keeps the transport unavailable. The receive API returns the existing retryable empty/not-ready result until the controller reaches that state. Duplicate reset-failure events emit only one failure marker per device binding.
+
+Queue dequeue now validates the stored length and packet framing before reading from the fixed-size packet buffer. Corrupted length metadata fails closed without changing the queue, preventing a damaged length field from turning into an out-of-bounds read. Host tests cover both an oversized stored length and a length inconsistent with the ACL header.

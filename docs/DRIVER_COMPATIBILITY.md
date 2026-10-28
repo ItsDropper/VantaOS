@@ -35,3 +35,6 @@ Host clipboard access is not implemented. Ctrl+V cannot read the Windows clipboa
 - Clean up outstanding transfers on failed probe and disconnect.
 - Report discovered, bound, initialized, linked and usable as distinct states.
 - Test descriptor parsing, failures and cleanup in CI; report physical-hardware results separately from emulator results.
+
+
+USB Bluetooth's raw ACL send and receive interfaces are gated on a successful HCI Reset event. A descriptor match alone is not a ready transport. Queue dequeue also revalidates stored length metadata before copying a packet to a caller buffer.

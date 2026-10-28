@@ -194,6 +194,12 @@ int usb_bluetooth_hci_reset_complete(const uint8_t *packet, uint32_t length)
     return usb_bluetooth_hci_reset_status(packet, length) == 0;
 }
 
+/* ACL is available to consumers only after a successful HCI Reset. */
+int usb_bluetooth_transport_ready(int reset_complete, int reset_failed)
+{
+    return reset_complete != 0 && reset_failed == 0;
+}
+
 /* ACL packet header: LE16 handle/flags followed by an LE16 payload length. */
 int usb_bluetooth_acl_packet_valid(const uint8_t *packet, uint32_t length)
 {
@@ -250,6 +256,9 @@ int usb_bluetooth_acl_queue_pop(usb_bluetooth_acl_queue_t *queue,
         return -11;
 
     uint32_t length = queue->lengths[queue->head];
+    if (length < 4U || length > USB_BLUETOOTH_ACL_MAX_PACKET ||
+        !usb_bluetooth_acl_packet_valid(queue->packets[queue->head], length))
+        return -22;
     if (length > capacity)
         return -90;
 

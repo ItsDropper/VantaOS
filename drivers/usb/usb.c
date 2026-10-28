@@ -118,8 +118,9 @@ int usb_bluetooth_acl_send(uint32_t port, const uint8_t *packet,
         }
     }
     if (slot == 0U || bluetooth_slots[slot].acl_out_endpoint == 0U ||
-        !bluetooth_slots[slot].reset_complete_observed ||
-        bluetooth_slots[slot].reset_failed_observed)
+        !usb_bluetooth_transport_ready(
+            bluetooth_slots[slot].reset_complete_observed,
+            bluetooth_slots[slot].reset_failed_observed))
         return 0;
 
     if (__atomic_test_and_set(&bluetooth_acl_tx_busy[slot], __ATOMIC_ACQUIRE))
@@ -149,9 +150,14 @@ int usb_bluetooth_acl_receive(uint32_t port, uint8_t *packet,
     if (port == 0U || packet == 0 || capacity == 0U)
         return -22;
     for (uint32_t slot = 1U; slot <= USB_MAX_XHCI_SLOTS; ++slot) {
-        if (bluetooth_slots[slot].active && bluetooth_slots[slot].port == port)
+        if (bluetooth_slots[slot].active && bluetooth_slots[slot].port == port) {
+            if (!usb_bluetooth_transport_ready(
+                    bluetooth_slots[slot].reset_complete_observed,
+                    bluetooth_slots[slot].reset_failed_observed))
+                return -11;
             return usb_bluetooth_acl_queue_pop(&bluetooth_acl_queues[slot],
                                                packet, capacity);
+        }
     }
     return -9;
 }

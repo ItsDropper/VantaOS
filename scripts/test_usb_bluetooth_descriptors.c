@@ -211,6 +211,33 @@ static void test_acl_queue_wraparound_and_invariants(void)
     assert(queue.packets[0][0] == 0U && queue.packets[1][4] == 0U);
 }
 
+static void test_transport_readiness_gate(void)
+{
+    assert(!usb_bluetooth_transport_ready(0, 0));
+    assert(!usb_bluetooth_transport_ready(0, 1));
+    assert(!usb_bluetooth_transport_ready(1, 1));
+    assert(usb_bluetooth_transport_ready(1, 0));
+}
+
+static void test_acl_queue_rejects_corrupt_stored_length(void)
+{
+    usb_bluetooth_acl_queue_t queue = {0};
+    const uint8_t packet[] = {0x01U, 0x20U, 0x01U, 0x00U, 0xAAU};
+    uint8_t output[USB_BLUETOOTH_ACL_MAX_PACKET + 8U] = {0};
+
+    usb_bluetooth_acl_queue_reset(&queue);
+    assert(usb_bluetooth_acl_queue_push(&queue, packet, sizeof(packet)) == 0);
+    queue.lengths[queue.head] = USB_BLUETOOTH_ACL_MAX_PACKET + 1U;
+    assert(usb_bluetooth_acl_queue_pop(&queue, output, sizeof(output)) == -22);
+    assert(queue.count == 1U);
+
+    usb_bluetooth_acl_queue_reset(&queue);
+    assert(usb_bluetooth_acl_queue_push(&queue, packet, sizeof(packet)) == 0);
+    queue.lengths[queue.head] = 4U;
+    assert(usb_bluetooth_acl_queue_pop(&queue, output, sizeof(output)) == -22);
+    assert(queue.count == 1U);
+}
+
 int main(void)
 {
     test_complete_hci_interface();
@@ -222,6 +249,8 @@ int main(void)
     test_hci_event_and_acl_framing();
     test_acl_queue_preserves_messages_on_small_buffer();
     test_acl_queue_wraparound_and_invariants();
+    test_transport_readiness_gate();
+    test_acl_queue_rejects_corrupt_stored_length();
     puts("USB Bluetooth descriptor tests passed");
     return 0;
 }

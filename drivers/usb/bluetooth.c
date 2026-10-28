@@ -897,6 +897,51 @@ int usb_bluetooth_hci_inquiry_result(const uint8_t *event, uint32_t length,
     return 1;
 }
 
+void usb_bluetooth_discovery_reset(usb_bluetooth_discovery_table_t *table)
+{
+    if (table == NULL)
+        return;
+    *table = (usb_bluetooth_discovery_table_t){0};
+}
+
+int usb_bluetooth_discovery_record(
+    usb_bluetooth_discovery_table_t *table,
+    const usb_bluetooth_inquiry_result_t *result)
+{
+    if (table == NULL || result == NULL || table->count >
+            USB_BLUETOOTH_DISCOVERY_MAX)
+        return -22;
+    uint8_t nonzero = 0U;
+    for (uint32_t i = 0U; i < 6U; ++i)
+        nonzero |= result->address[i];
+    if (nonzero == 0U || result->page_scan_repetition_mode > 2U ||
+        result->class_of_device > 0xFFFFFFU || result->has_rssi > 1U)
+        return -22;
+    for (uint32_t i = 0U; i < table->count; ++i) {
+        if (memcmp(table->entries[i].address, result->address, 6U) == 0) {
+            table->entries[i] = *result;
+            return 1;
+        }
+    }
+    if (table->count == USB_BLUETOOTH_DISCOVERY_MAX)
+        return -28;
+    table->entries[table->count++] = *result;
+    return 0;
+}
+
+int usb_bluetooth_discovery_get(
+    const usb_bluetooth_discovery_table_t *table, uint32_t index,
+    usb_bluetooth_inquiry_result_t *result)
+{
+    if (table == NULL || result == NULL ||
+        table->count > USB_BLUETOOTH_DISCOVERY_MAX)
+        return -22;
+    if (index >= table->count)
+        return 0;
+    *result = table->entries[index];
+    return 1;
+}
+
 int usb_bluetooth_hci_build_create_connection(
     const uint8_t address[6], uint16_t packet_type,
     uint8_t page_scan_repetition_mode, uint16_t clock_offset,

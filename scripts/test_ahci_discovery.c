@@ -116,6 +116,8 @@ void serial_write(const char* text)
 {
     if (strcmp(text, "VANTAOS_AHCI_IDLE_CONTROLLER_DISCOVERED\n") == 0)
         discovered_marker = 1;
+    if (strcmp(text, "VANTAOS_AHCI_CONTROLLER_PROBE_REJECTED\n") == 0)
+        rejected_marker = 1;
 }
 
 int main(void)

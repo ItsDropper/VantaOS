@@ -27,6 +27,8 @@ static vanta_theme_t current_theme;
 #define COLOR_BORDER vanta_theme_border_color(&current_theme)
 #define COLOR_ACCENT vanta_theme_accent_color(&current_theme)
 
+#define PATH_CAPACITY 256U
+static char current_directory[PATH_CAPACITY] = "/";
 static char line[LINE_CAPACITY];
 static char history[HISTORY_ENTRIES][LINE_CAPACITY];
 static size_t history_count;
@@ -84,6 +86,80 @@ static int starts_with(const char* text, const char* prefix)
         i++;
     }
     return 1;
+}
+
+/* Normalize paths before passing them through the syscall ABI. */
+static int resolve_path(const char* input, char* output, size_t capacity)
+{
+    if (!input || !input[0] || !output || capacity < 2U)
+        return 0;
+    size_t used = 1U;
+    output[0] = '/';
+    output[1] = '\0';
+    const char* cursor = input;
+    if (input[0] != '/')
+    {
+        size_t base_length = string_length(current_directory);
+        if (base_length >= capacity)
+            return 0;
+        for (size_t i = 0U; i < base_length; ++i)
+            output[i] = current_directory[i];
+        used = base_length;
+        output[used] = '\0';
+    }
+    while (*cursor)
+    {
+        while (*cursor == '/')
+            cursor++;
+        if (!*cursor)
+            break;
+        const char* component = cursor;
+        while (*cursor && *cursor != '/')
+            cursor++;
+        size_t length = (size_t)(cursor - component);
+        if (length == 1U && component[0] == '.')
+            continue;
+        if (length == 2U && component[0] == '.' && component[1] == '.')
+        {
+            if (used > 1U)
+            {
+                while (used > 1U && output[used - 1U] != '/')
+                    used--;
+                if (used > 1U)
+                    used--;
+                output[used] = '\0';
+            }
+            continue;
+        }
+        size_t separator = used > 1U ? 1U : 0U;
+        if (used + separator + length >= capacity)
+            return 0;
+        if (separator)
+            output[used++] = '/';
+        for (size_t i = 0U; i < length; ++i)
+            output[used++] = component[i];
+        output[used] = '\0';
+    }
+    return 1;
+}
+
+static void command_change_directory(const char* path)
+{
+    char resolved[PATH_CAPACITY];
+    vanta_file_info_t info;
+    if (!resolve_path(path, resolved, sizeof(resolved)))
+    {
+        write_text("cd: invalid or overlong path\n");
+        return;
+    }
+    if (vanta_stat_path(resolved, &info) < 0 || info.type != 2U)
+    {
+        write_text("cd: directory not found\n");
+        return;
+    }
+    size_t length = string_length(resolved);
+    for (size_t i = 0U; i <= length; ++i)
+        current_directory[i] = resolved[i];
 }
 
 static void clear_line(size_t index)
@@ -395,7 +471,9 @@ static void render(void)
 
 static void prompt(void)
 {
-    write_text("vanta:/ $ ");
+    write_text("vanta:");
+    write_text(current_directory);
+    write_text(" $ ");
     prompt_length = string_length(output_line(output_count - 1U));
 }
 
@@ -405,6 +483,7 @@ static void command_help(void)
     write_text("  help                 Show this command list\n");
     write_text("  about                Show terminal information\n");
     write_text("  pwd                  Show the current VFS location\n");
+    write_text("  cd <directory>       Change the current VFS directory\n");
     write_text("  ls [path]            List a VFS directory\n");
     write_text("  cat <path>           Print a VFS file\n");
     write_text("  mkdir <path>         Create a directory\n");
@@ -430,8 +509,14 @@ static void command_help(void)
 
 static void command_list(const char* path)
 {
-    long result = vanta_listdir(path && path[0] ? path : "/",
-                                list_buffer, sizeof(list_buffer));
+    char resolved[PATH_CAPACITY];
+    if (!resolve_path(path && path[0] ? path : current_directory,
+                      resolved, sizeof(resolved)))
+    {
+        write_text("ls: invalid or overlong path\n");
+        return;
+    }
+    long result = vanta_listdir(resolved, list_buffer, sizeof(list_buffer));
     if (result < 0)
     {
         write_text("ls: cannot list path (");
@@ -452,7 +537,13 @@ static void command_list(const char* path)
 
 static void command_cat(const char* path)
 {
-    long fd = vanta_open(path, VANTA_OPEN_READ);
+    char resolved[PATH_CAPACITY];
+    if (!resolve_path(path, resolved, sizeof(resolved)))
+    {
+        write_text("cat: invalid or overlong path\n");
+        return;
+    }
+    long fd = vanta_open(resolved, VANTA_OPEN_READ);
     if (fd < 0)
     {
         write_text("cat: file not found or not readable\n");
@@ -507,6 +598,13 @@ static int split_two_paths(char* arguments, char** source, char** destination)
 
 static void command_make_directory(const char* path)
 {
+    char resolved[PATH_CAPACITY];
+    if (!resolve_path(path, resolved, sizeof(resolved)))
+    {
+        write_text("mkdir: invalid or overlong path\n");
+        return;
+    }
+    path = resolved;
     if (!path || !path[0])
     {
         write_text("mkdir: usage: mkdir <path>\n");
@@ -522,7 +620,14 @@ static void command_make_directory(const char* path)
 
 static void command_touch(const char* path)
 {
+    char resolved[PATH_CAPACITY];
     vanta_file_info_t info;
+    if (!resolve_path(path, resolved, sizeof(resolved)))
+    {
+        write_text("touch: invalid or overlong path\n");
+        return;
+    }
+    path = resolved;
     if (!path || !path[0])
     {
         write_text("touch: usage: touch <path>\n");
@@ -543,7 +648,14 @@ static void command_touch(const char* path)
 
 static void command_remove_file(const char* path)
 {
+    char resolved[PATH_CAPACITY];
     vanta_file_info_t info;
+    if (!resolve_path(path, resolved, sizeof(resolved)))
+    {
+        write_text("rm: invalid or overlong path\n");
+        return;
+    }
+    path = resolved;
     if (!path || !path[0])
     {
         write_text("rm: usage: rm <file>\n");
@@ -571,12 +683,19 @@ static void command_move_path(char* arguments)
 {
     char* source = 0;
     char* destination = 0;
+    char resolved_source[PATH_CAPACITY], resolved_destination[PATH_CAPACITY];
     if (!split_two_paths(arguments, &source, &destination))
     {
         write_text("mv: usage: mv <source> <destination>\n");
         return;
     }
-    if (vanta_rename_path(source, destination) < 0)
+    if (!resolve_path(source, resolved_source, sizeof(resolved_source)) ||
+        !resolve_path(destination, resolved_destination, sizeof(resolved_destination)))
+    {
+        write_text("mv: invalid or overlong path\n");
+        return;
+    }
+    if (vanta_rename_path(resolved_source, resolved_destination) < 0)
     {
         write_text("mv: rename failed; destination may exist or path may be invalid\n");
         return;
@@ -601,12 +720,21 @@ static void command_copy_file(char* arguments)
 {
     char* source_path = 0;
     char* destination_path = 0;
+    char resolved_source[PATH_CAPACITY], resolved_destination[PATH_CAPACITY];
     vanta_file_info_t source_info, destination_info;
     if (!split_two_paths(arguments, &source_path, &destination_path))
     {
         write_text("cp: usage: cp <source-file> <destination-file>\n");
         return;
     }
+    if (!resolve_path(source_path, resolved_source, sizeof(resolved_source)) ||
+        !resolve_path(destination_path, resolved_destination, sizeof(resolved_destination)))
+    {
+        write_text("cp: invalid or overlong path\n");
+        return;
+    }
+    source_path = resolved_source;
+    destination_path = resolved_destination;
     if (vanta_stat_path(source_path, &source_info) < 0 || source_info.type != 1U)
     {
         write_text("cp: source is not a readable regular file\n");
@@ -696,7 +824,14 @@ static void command_exec(char* command)
         return;
     }
 
-    long child = vanta_spawn(arguments[0], arguments, argc);
+    char resolved_program[PATH_CAPACITY];
+    if (!resolve_path(arguments[0], resolved_program, sizeof(resolved_program)))
+    {
+        write_text("exec: invalid or overlong executable path\n");
+        return;
+    }
+    arguments[0] = resolved_program;
+    long child = vanta_spawn(resolved_program, arguments, argc);
     if (child < 0)
     {
         write_text("exec: could not start ELF program (");
@@ -838,9 +973,16 @@ static void execute_line(char* command)
     else if (string_equals(command, "about"))
         write_text("VantaOS Terminal - ring-3 application using the GUI syscall ABI.\n");
     else if (string_equals(command, "pwd"))
-        write_text("/\n");
+    {
+        write_text(current_directory);
+        write_text("\n");
+    }
+    else if (string_equals(command, "cd"))
+        command_change_directory("/");
+    else if (starts_with(command, "cd "))
+        command_change_directory(command + 3);
     else if (string_equals(command, "ls"))
-        command_list("/");
+        command_list(current_directory);
     else if (starts_with(command, "ls "))
         command_list(command + 3);
     else if (starts_with(command, "cat "))

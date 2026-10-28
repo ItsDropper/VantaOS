@@ -83,7 +83,7 @@ The USB enumerator now uses a validated candidate to configure the interrupt-IN 
 
 The HCI Reset request uses `bmRequestType = 0x20`, `bRequest = 0`, `wValue = 0x0C03`, `wIndex = interface number`, and zero data length. HCI commands are not sent through the ACL bulk endpoint. The event path records first-event and first Command Complete/Command Status markers; a production HCI layer must still validate event lengths, the returned opcode, status, and controller state.
 
-The bulk-OUT endpoint is configured, but ACL transmit framing and a consumer are not implemented yet. The current loop is not a pairing or profile stack. Treat this as an incremental transport milestone only, and validate it on an emulated xHCI Bluetooth device and physical adapters before advertising compatibility. CI currently validates the descriptor parser and kernel build, not real Bluetooth hardware behavior.
+The bulk-OUT endpoint is configured, and the kernel exposes a bounded raw-ACL transmit API plus a queued raw-ACL receive API. These are transport primitives, not an HCI command scheduler or a complete Bluetooth stack. The current loop is not a pairing or profile stack. Treat this as an incremental transport milestone only, and validate it on an emulated xHCI Bluetooth device and physical adapters before advertising compatibility. CI validates host-side descriptor, framing, queue, and reset-state logic plus selected build/QEMU regressions; it does not prove physical Bluetooth compatibility.
 
 
 ## Packet framing checks
@@ -149,3 +149,10 @@ HCI Reset Command Complete processing is factored into a pure state-transition h
 ## Endpoint limits
 
 Descriptor matching now rejects unusable event endpoints with a zero polling interval or a maximum packet size larger than the fixed 64-byte HCI event staging buffer. Bulk ACL endpoints with packet sizes above 1024 bytes are not accepted. This is a conservative transport limit, not a claim of support for every USB speed or controller; descriptors outside the driver's explicit buffer contract remain unbound rather than risking an oversized endpoint configuration.
+
+
+## Descriptor fuzz-style regression and sanitizers
+
+The descriptor regression iterates every byte position in the canonical configuration and substitutes all 256 byte values. This is a deterministic mutation test, not a coverage-guided fuzzer: its purpose is to exercise descriptor-length, type, endpoint-address, and header checks repeatedly while keeping the input allocation fixed. For every rejected input, the output candidate must remain zeroed; a failed parse must never leak a partial interface match.
+
+The GitHub Actions workflow runs the same suite twice: once with strict C11 warnings treated as errors, and once with AddressSanitizer and UndefinedBehaviorSanitizer enabled. These host-side checks can detect memory-safety defects in the parser and helpers, but they cannot model xHCI DMA, transfer timing, interrupts, controller firmware, radio behavior, or hot-unplug races. Keep those claims separate from test results.

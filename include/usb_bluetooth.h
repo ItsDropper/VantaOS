@@ -123,6 +123,7 @@ typedef struct {
     uint8_t state; /* 1 pending, 2 connected, 3 configuring, 4 open, 5 closing */
     uint8_t identifier;
     uint8_t config_identifier;
+    uint8_t disconnect_identifier;
     uint16_t local_cid;
     uint16_t remote_cid;
     uint16_t psm;
@@ -245,6 +246,8 @@ int usb_bluetooth_l2cap_channel_status(
 int usb_bluetooth_l2cap_send(uint32_t port, uint16_t handle,
                              uint16_t local_cid, const uint8_t *payload,
                              uint32_t length);
+int usb_bluetooth_l2cap_disconnect(uint32_t port, uint16_t handle,
+                                  uint16_t local_cid);
 int usb_bluetooth_l2cap_receive(uint32_t port, uint16_t handle,
                                 uint16_t local_cid, uint8_t *payload,
                                 uint32_t capacity);
@@ -297,6 +300,15 @@ int usb_bluetooth_l2cap_configuration_request(
     uint16_t *local_cid);
 int usb_bluetooth_l2cap_channel_remote_configured(
     usb_bluetooth_l2cap_table_t *table, uint16_t local_cid);
+int usb_bluetooth_l2cap_channel_disconnect_begin(
+    usb_bluetooth_l2cap_table_t *table, uint16_t local_cid,
+    uint8_t identifier);
+int usb_bluetooth_l2cap_channel_disconnect_failed(
+    usb_bluetooth_l2cap_table_t *table, uint16_t local_cid,
+    uint8_t identifier);
+int usb_bluetooth_l2cap_disconnection_response(
+    usb_bluetooth_l2cap_table_t *table, const uint8_t *command,
+    uint32_t length);
 /* Apply a parsed Configure Response; flags!=0 means continuation (returns 0).
  * A successful final response opens the channel. */
 int usb_bluetooth_l2cap_channel_configure_response(

@@ -530,7 +530,7 @@ static int command_http_url(const char *url, const char *output_argument,
 
     body_status = http_body_initialize(&body_state, (uint32_t)max_download);
     if (body_status != HTTP_BODY_OK) {
-        terminal_write("\\ncurl: could not initialize response body framing");
+        terminal_write("\ncurl: could not initialize response body framing");
         return 1;
     }
 
@@ -688,7 +688,7 @@ static int command_http_url(const char *url, const char *output_argument,
                         &body_state, parsed.has_content_length != 0U,
                         parsed.content_length);
                     if (body_status != HTTP_BODY_OK) {
-                        terminal_write("\\ncurl: ");
+                        terminal_write("\ncurl: ");
                         terminal_write(http_body_status_string(body_status));
                         net_tcp_close(device);
                         return 1;

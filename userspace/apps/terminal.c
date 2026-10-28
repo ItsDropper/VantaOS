@@ -189,31 +189,6 @@ static void render_add_text(int32_t x, int32_t y, const char* text,
         command->text[i] = text[i];
 }
 
-static int selection_contains(size_t logical_line, size_t column)
-{
-    if (!selection_active)
-        return 0;
-    size_t first_line = selection_anchor_line;
-    size_t first_column = selection_anchor_column;
-    size_t last_line = selection_end_line;
-    size_t last_column = selection_end_column;
-    if (first_line > last_line ||
-        (first_line == last_line && first_column > last_column))
-    {
-        size_t t = first_line; first_line = last_line; last_line = t;
-        t = first_column; first_column = last_column; last_column = t;
-    }
-    if (logical_line < first_line || logical_line > last_line)
-        return 0;
-    if (first_line == last_line)
-        return column >= first_column && column < last_column;
-    if (logical_line == first_line)
-        return column >= first_column;
-    if (logical_line == last_line)
-        return column < last_column;
-    return 1;
-}
-
 static void render_line_with_selection(size_t logical_line, int y)
 {
     const char* text = output_line(logical_line);
@@ -740,10 +715,55 @@ int main(int argc, char** argv)
             continue;
         }
 
+        if (event.type == VANTA_GUI_EVENT_POINTER_DOWN && event.value == 1U)
+        {
+            terminal_pointer_select(event.x, event.y, 0);
+            render();
+            continue;
+        }
+        if (event.type == VANTA_GUI_EVENT_POINTER_MOVE && event.value == 1U)
+        {
+            terminal_pointer_select(event.x, event.y, 1);
+            render();
+            continue;
+        }
+        if (event.type == VANTA_GUI_EVENT_POINTER_UP)
+        {
+            terminal_pointer_select(event.x, event.y, 1);
+            selection_dragging = 0;
+            render();
+            continue;
+        }
         if (event.type != VANTA_GUI_EVENT_KEY)
             continue;
 
         uint32_t key = event.value;
+        if ((event.reserved & VANTA_GUI_MOD_CTRL) != 0U)
+        {
+            if (key == 'c' || key == 'C' || key == 3U)
+            {
+                terminal_copy_selection();
+                render();
+                continue;
+            }
+            if (key == 'v' || key == 'V' || key == 22U)
+            {
+                terminal_paste_clipboard();
+                render();
+                continue;
+            }
+            if (key == 'a' || key == 'A' || key == 1U)
+            {
+                selection_anchor_line = 0U;
+                selection_anchor_column = 0U;
+                selection_end_line = output_count - 1U;
+                selection_end_column = string_length(output_line(output_count - 1U));
+                selection_active = 1;
+                selection_dragging = 0;
+                render();
+                continue;
+            }
+        }
         if (key == VANTA_GUI_KEY_PAGE_UP)
         {
             size_t maximum = output_count > DISPLAY_LINES ?

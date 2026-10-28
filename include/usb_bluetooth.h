@@ -72,6 +72,36 @@ typedef struct {
     usb_bluetooth_acl_reassembly_t reassembly;
 } usb_bluetooth_link_t;
 
+/* Bounded HCI command-credit state, owned by the USB polling CPU. */
+typedef struct {
+    uint16_t opcode;
+    uint8_t credits;
+    uint8_t outstanding;
+    uint8_t completed;
+    uint8_t status;
+    uint8_t event_kind; /* 1 Command Complete, 2 Command Status */
+} usb_bluetooth_hci_command_state_t;
+
+#define USB_BLUETOOTH_L2CAP_CHANNEL_MAX 8U
+#define USB_BLUETOOTH_L2CAP_CID_DYNAMIC_MIN 0x0040U
+#define USB_BLUETOOTH_L2CAP_CID_DYNAMIC_MAX 0xFFFFU
+typedef struct {
+    uint8_t active;
+    uint8_t state; /* 1 pending, 2 connected, 3 configuring, 4 open, 5 closing */
+    uint8_t identifier;
+    uint16_t local_cid;
+    uint16_t remote_cid;
+    uint16_t psm;
+    uint16_t local_mtu;
+    uint16_t remote_mtu;
+    uint32_t deadline;
+} usb_bluetooth_l2cap_channel_t;
+typedef struct {
+    uint16_t next_local_cid;
+    uint8_t next_identifier;
+    usb_bluetooth_l2cap_channel_t channels[USB_BLUETOOTH_L2CAP_CHANNEL_MAX];
+} usb_bluetooth_l2cap_table_t;
+
 typedef struct {
     usb_bluetooth_link_t links[USB_BLUETOOTH_LINK_MAX];
 } usb_bluetooth_link_table_t;
@@ -97,6 +127,38 @@ int usb_bluetooth_find_hci_interface(const uint8_t *configuration,
                                      uint16_t length,
                                      usb_bluetooth_hci_candidate_t *candidate);
 
+/* HCI command-credit tracking. begin refuses a second outstanding command;
+ * event consumes only matching Command Complete/Status and updates credits. */
+void usb_bluetooth_hci_command_state_reset(
+    usb_bluetooth_hci_command_state_t *state);
+int usb_bluetooth_hci_command_begin(usb_bluetooth_hci_command_state_t *state,
+                                    uint16_t opcode);
+int usb_bluetooth_hci_command_event(usb_bluetooth_hci_command_state_t *state,
+                                    const uint8_t *event, uint32_t length);
+/* Build standard HCI Read Local Version, Read BD_ADDR, Read Buffer Size,
+ * and Inquiry command packets; this does not submit them to a controller. */
+int usb_bluetooth_hci_build_read_local_version(uint8_t *out, uint32_t capacity);
+int usb_bluetooth_hci_build_read_bd_addr(uint8_t *out, uint32_t capacity);
+int usb_bluetooth_hci_build_read_buffer_size(uint8_t *out, uint32_t capacity);
+int usb_bluetooth_hci_build_inquiry(uint8_t *out, uint32_t capacity,
+                                    uint8_t inquiry_length, uint8_t responses);
+/* Bounded L2CAP channel lifecycle primitives; signaling dispatch remains
+ * the responsibility of a controller/connection manager. */
+void usb_bluetooth_l2cap_table_reset(usb_bluetooth_l2cap_table_t *table);
+int usb_bluetooth_l2cap_channel_begin(usb_bluetooth_l2cap_table_t *table,
+                                      uint16_t psm, uint16_t local_mtu,
+                                      uint32_t deadline,
+                                      uint16_t *local_cid,
+                                      uint8_t *identifier);
+int usb_bluetooth_l2cap_channel_response(usb_bluetooth_l2cap_table_t *table,
+                                         uint8_t identifier, uint16_t remote_cid,
+                                         uint16_t result, uint16_t remote_mtu);
+int usb_bluetooth_l2cap_channel_configured(usb_bluetooth_l2cap_table_t *table,
+                                           uint16_t local_cid);
+int usb_bluetooth_l2cap_channel_close(usb_bluetooth_l2cap_table_t *table,
+                                      uint16_t local_cid);
+uint32_t usb_bluetooth_l2cap_expire(usb_bluetooth_l2cap_table_t *table,
+                                    uint32_t now);
 /* Track legacy BR/EDR Connection Complete and Disconnection Complete events.
  * Returns 1 on link state change, 0 for unrelated event, or negative errno. */
 void usb_bluetooth_link_table_reset(usb_bluetooth_link_table_t *table);

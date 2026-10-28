@@ -636,7 +636,7 @@ static void test_hci_link_lifecycle_and_acl_routing(void)
 static void test_l2cap_signaling_iteration_and_build(void)
 {
     const uint8_t commands[] = {
-        0x02U, 0x01U, 0x02U, 0x00U, 0x34U, 0x12U,
+        0x02U, 0x01U, 0x04U, 0x00U, 0x40U, 0x00U, 0x41U, 0x00U,
         0x09U, 0x02U, 0x00U, 0x00U
     };
     const uint8_t request_parameters[] = {0x40U, 0x00U, 0x01U, 0x00U};
@@ -646,8 +646,8 @@ static void test_l2cap_signaling_iteration_and_build(void)
     assert(usb_bluetooth_l2cap_signaling_next(commands, sizeof(commands),
                                                &offset, &command) == 1);
     assert(command.code == 2U && command.identifier == 1U &&
-           command.payload_length == 2U && command.payload[0] == 0x34U);
-    assert(offset == 6U);
+           command.payload_length == 4U && command.payload[0] == 0x40U);
+    assert(offset == 8U);
     assert(usb_bluetooth_l2cap_signaling_next(commands, sizeof(commands),
                                                &offset, &command) == 1);
     assert(command.code == 9U && command.identifier == 2U &&

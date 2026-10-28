@@ -1523,7 +1523,7 @@ static void render(void)
         add_text_tail(180, 158, open_with_path, COLOR_MUTED, 52U);
         add_rect(180, 190, 388, 36, COLOR_ROW);
         add_outline(180, 190, 388, 36, COLOR_ACCENT);
-        add_text(194, 201, "Notes - view or edit file contents", COLOR_TEXT);
+        add_text(194, 201, "Notes - view file contents", COLOR_TEXT);
         add_rect(180, 238, 112, 28, COLOR_ROW);
         add_text(194, 246, "Open", COLOR_TEXT);
         add_rect(304, 238, 112, 28, COLOR_ROW);

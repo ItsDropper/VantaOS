@@ -674,7 +674,7 @@ static int command_http_url(const char *url, const char *output_argument,
     for (uint32_t chunks = 0; chunks < 32768U; ++chunks) {
         if ((uint32_t)(timer_get_ticks() - transfer_start_ticks) >=
             HTTP_DOWNLOAD_TIMEOUT_TICKS) {
-            terminal_write("\\ncurl: total response-transfer deadline exceeded");
+            terminal_write("\ncurl: total response-transfer deadline exceeded");
             if (file_handle >= 0) {
                 (void)vfs_close(file_handle);
                 file_handle = -1;

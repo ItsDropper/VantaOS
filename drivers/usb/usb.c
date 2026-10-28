@@ -648,7 +648,7 @@ static int usb_enumerate_port(uint32_t port)
         usb_bluetooth_hci_command_state_reset(
             &bluetooth_slots[slot].command_state);
         bluetooth_slots[slot].command_state.credits = 1U;
-        usb_bluetooth_l2cap_table_reset(&bluetooth_slots[slot].l2cap_channels);
+        bluetooth_l2cap_reset_all(slot);
         usb_bluetooth_acl_queue_reset(&bluetooth_acl_queues[slot]);
         usb_bluetooth_acl_queue_reset(&bluetooth_reassembled_acl_queues[slot]);
         usb_bluetooth_hci_event_queue_reset(&bluetooth_hci_event_queues[slot]);
@@ -897,11 +897,7 @@ void usb_poll(void)
                         &bluetooth_link_tables[slot], incoming_acl.handle,
                         bluetooth_acl_reassembled_buffer,
                         sizeof(bluetooth_acl_reassembled_buffer));
-                    /*
-                     * The channel table is not yet keyed by link handle.
-                     * Process responses automatically only when one link is
-                     * active; multi-link routing remains deliberately disabled.
-                     */
+                    /* Each connection handle owns an isolated L2CAP table. */
                     if (assembled_length > 0) {
                         (void)usb_bluetooth_acl_queue_push(
                             &bluetooth_reassembled_acl_queues[slot],

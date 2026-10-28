@@ -1396,6 +1396,9 @@ static void test_l2cap_channel_lifecycle(void)
                                              &cid, &id) == -28);
     assert(usb_bluetooth_l2cap_channel_begin(&table, 2U, 672U, 0U,
                                              &cid, &id) == -22);
+    assert(usb_bluetooth_l2cap_channel_begin(
+               &table, 1U, USB_BLUETOOTH_L2CAP_DATA_MAX + 1U, 0U,
+               &cid, &id) == -22);
 }
 
 static void test_l2cap_dispatch_rejects_wrong_handle(void)

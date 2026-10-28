@@ -134,3 +134,8 @@ Queue dequeue now validates the stored length and packet framing before reading 
 ## Polling efficiency and failure markers
 
 The polling loop now discards ACL completions until HCI Reset has succeeded, rather than retaining pre-initialization packets for later delivery. A controller's repeated failed-reset events produce a single diagnostic marker for the binding. Dequeue clears only the validated bytes of the consumed packet instead of sweeping the full 4096-byte slot on every read; reset/disconnect still wipes the complete queue storage.
+
+
+## Unified binding teardown
+
+Bluetooth binding teardown is centralized so disconnect and a partially failed endpoint-start sequence clear the same state: port/interface/endpoints, counters, reset readiness, transmit-busy state, dropped-packet count, and the full ACL queue. Binding initializes counters and reset state explicitly before starting transfers. This prevents stale per-slot state from surviving a failed start and being mistaken for the next device binding.

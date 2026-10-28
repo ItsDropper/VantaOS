@@ -553,7 +553,7 @@ int usb_bluetooth_l2cap_build_connection_request(uint8_t identifier,
                                                   uint8_t *output,
                                                   uint32_t capacity)
 {
-    if ((psm & 0x0101U) != 0x0001U ||
+    if ((psm & 0x0103U) != 0x0001U ||
         local_cid < USB_BLUETOOTH_L2CAP_CID_DYNAMIC_MIN)
         return -22;
     const uint8_t parameters[4] = {

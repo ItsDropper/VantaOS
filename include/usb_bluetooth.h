@@ -151,6 +151,8 @@ int usb_bluetooth_hci_build_create_connection(
     uint8_t allow_role_switch, uint8_t *out, uint32_t capacity);
 int usb_bluetooth_hci_build_disconnect(uint16_t handle, uint8_t reason,
                                        uint8_t *out, uint32_t capacity);
+int usb_bluetooth_hci_build_create_connection_cancel(
+    const uint8_t address[6], uint8_t *out, uint32_t capacity);
 /* Bounded L2CAP channel lifecycle primitives; signaling dispatch remains
  * the responsibility of a controller/connection manager. */
 void usb_bluetooth_l2cap_table_reset(usb_bluetooth_l2cap_table_t *table);

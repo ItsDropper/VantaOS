@@ -700,14 +700,14 @@ static int command_http_url(const char *url, const char *output_argument,
                          * through to opening an existing destination.
                          */
                         if (vfs_create_file(resolved_path) < 0) {
-                            terminal_write("\\ncurl: could not create output file without overwriting an existing path");
+                            terminal_write("\ncurl: could not create output file without overwriting an existing path");
                             net_tcp_close(device);
                             return 1;
                         }
                         file_handle = vfs_open(resolved_path, VFS_OPEN_WRITE);
                         if (file_handle < 0) {
                             (void)vfs_delete_path(resolved_path);
-                            terminal_write("\\ncurl: could not open newly created output file");
+                            terminal_write("\ncurl: could not open newly created output file");
                             net_tcp_close(device);
                             return 1;
                         }
@@ -728,7 +728,7 @@ static int command_http_url(const char *url, const char *output_argument,
             }
             if (expected_body_length != UINT32_MAX &&
                 total_body > (size_t)expected_body_length) {
-                terminal_write("\\ncurl: response exceeded Content-Length; incomplete output removed");
+                terminal_write("\ncurl: response exceeded Content-Length; incomplete output removed");
                 if (file_handle >= 0) (void)vfs_close(file_handle);
                 if (output_argument) (void)vfs_delete_path(resolved_path);
                 net_tcp_close(device);

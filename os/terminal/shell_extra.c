@@ -530,7 +530,7 @@ static int write_file_all(int handle, const char *data, size_t length)
 static int command_http_url(const char *url, const char *output_argument,
                             int body_only)
 {
-    char host[96], path[96], request[512], output[1500], headers[2048];
+    char host[96], path[384], request[1024], output[1500], headers[2048];
     char resolved_path[FS_PATH_MAX], download_path[FS_PATH_MAX];
     size_t used = 0;
     size_t header_length = 0, header_end = 0, body_used = 0;
@@ -560,7 +560,7 @@ static int command_http_url(const char *url, const char *output_argument,
         else if (url_status == HTTP_URL_BAD_HOST)
             terminal_write("\ncurl: invalid or unsupported hostname");
         else if (url_status == HTTP_URL_PATH_TOO_LONG)
-            terminal_write("\ncurl: URL path exceeds the 95-character limit");
+            terminal_write("\\ncurl: URL path exceeds the 383-character limit");
         else if (url_status == HTTP_URL_BAD_PATH)
             terminal_write("\ncurl: URL path contains an unescaped control or space character");
         else

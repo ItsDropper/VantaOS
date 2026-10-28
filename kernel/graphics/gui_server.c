@@ -65,6 +65,9 @@ static uint32_t dragging_window_id;
 static int32_t drag_offset_x;
 static int32_t drag_offset_y;
 static uint32_t resizing_window_id;
+static int32_t pointer_x;
+static int32_t pointer_y;
+static int primary_button_down;
 static int32_t resize_start_x;
 static int32_t resize_start_y;
 static uint32_t resize_start_width;
@@ -565,7 +568,8 @@ int gui_server_poll_event(uint32_t pid, uint32_t id,
         {
             keyboard_event_t key = keyboard_get_event();
             vanta_gui_event_t event = {
-                VANTA_GUI_EVENT_KEY, 0, 0, 0x100U + (uint32_t)key, 0U
+                VANTA_GUI_EVENT_KEY, 0, 0, 0x100U + (uint32_t)key,
+                keyboard_ctrl_pressed() ? VANTA_GUI_MOD_CTRL : 0U
             };
             *event_out = event;
             spinlock_unlock_irqrestore(&gui_lock, flags);
@@ -576,7 +580,8 @@ int gui_server_poll_event(uint32_t pid, uint32_t id,
             char character = keyboard_get_char();
             vanta_gui_event_t event = {
                 VANTA_GUI_EVENT_KEY, 0, 0,
-                (uint32_t)(unsigned char)character, 0U
+                (uint32_t)(unsigned char)character,
+                keyboard_ctrl_pressed() ? VANTA_GUI_MOD_CTRL : 0U
             };
             *event_out = event;
             spinlock_unlock_irqrestore(&gui_lock, flags);
@@ -822,6 +827,10 @@ int gui_server_mouse_click(int x, int y, int button)
 {
     if (button != 1 && button != 3)
         return 0;
+    pointer_x = x;
+    pointer_y = y;
+    if (button == 1)
+        primary_button_down = 1;
 
     gui_builtin_click_fn builtin_click = 0;
     gui_builtin_close_fn builtin_close = 0;
@@ -936,6 +945,8 @@ int gui_server_mouse_click(int x, int y, int button)
 void gui_server_mouse_move(int x, int y)
 {
     uint64_t flags = spinlock_lock_irqsave(&gui_lock);
+    pointer_x = x;
+    pointer_y = y;
     gui_window_t* window = 0;
 
     if (resizing_window_id != 0U)
@@ -1039,7 +1050,7 @@ void gui_server_mouse_move(int x, int y)
             VANTA_GUI_EVENT_POINTER_MOVE,
             x - window->x - GUI_CLIENT_INSET_X,
             y - window->y - GUI_CLIENT_INSET_Y,
-            0U,
+            primary_button_down ? 1U : 0U,
             0U
         };
         gui_queue_event_locked(window, &event);
@@ -1052,6 +1063,7 @@ void gui_server_mouse_release(int button)
     if (button != 1)
         return;
     uint64_t flags = spinlock_lock_irqsave(&gui_lock);
+    primary_button_down = 0;
 
     /* Dragging a titlebar to the top edge is the conventional maximize gesture. */
     if (dragging_window_id != 0U)
@@ -1071,6 +1083,21 @@ void gui_server_mouse_release(int button)
 
     dragging_window_id = 0U;
     resizing_window_id = 0U;
+    for (unsigned int i = 0; i < VANTA_GUI_MAX_WINDOWS; i++)
+    {
+        gui_window_t* window = &windows[i];
+        if (!window->used || !window->visible ||
+            window->id != focused_window_id || window->builtin)
+            continue;
+        vanta_gui_event_t event = {
+            VANTA_GUI_EVENT_POINTER_UP,
+            pointer_x - window->x - GUI_CLIENT_INSET_X,
+            pointer_y - window->y - GUI_CLIENT_INSET_Y,
+            1U, 0U
+        };
+        gui_queue_event_locked(window, &event);
+        break;
+    }
     spinlock_unlock_irqrestore(&gui_lock, flags);
 }
 

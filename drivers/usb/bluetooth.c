@@ -636,16 +636,23 @@ int usb_bluetooth_l2cap_dispatch_responses(
         if (command.code == 0x03U) {
             result = usb_bluetooth_l2cap_connection_response(
                 table, payload + command_offset, command_size, 672U);
-            if (result < 0)
-                return result;
-            ++handled;
         } else if (command.code == 0x05U) {
             result = usb_bluetooth_l2cap_configuration_response(
                 table, payload + command_offset, command_size);
-            if (result < 0)
-                return result;
-            ++handled;
+        } else {
+            continue;
         }
+        /*
+         * A response for an expired/unknown transaction is harmless and must
+         * not suppress later commands in the same validated signaling packet.
+         * Peer rejection (-5) is also a completed transaction, not a framing
+         * failure. Propagate malformed state/fields and other internal errors.
+         */
+        if (result == -9)
+            continue;
+        if (result < 0 && result != -5)
+            return result;
+        ++handled;
     }
 }
 

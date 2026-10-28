@@ -177,3 +177,17 @@ continuation fragments as standalone L2CAP PDUs: correct fragment reassembly,
 connection/channel state, pairing, encryption, service discovery, and profiles
 remain unimplemented. This is protocol framing groundwork, not a claim that
 Bluetooth is complete or usable for end-user connections.
+
+
+## USB disconnect recovery and transfer re-arming
+
+The USB owner loop now defers a slot whose Disable Slot command fails and retries
+it on later polls. This prevents a transient command timeout during disconnect
+or partial enumeration from permanently consuming one of the controller's
+limited device slots. Bluetooth ACL-IN polling also retries a missing
+in-flight submission when no completed packet is being preserved. A capacity
+shortage (`-2`) is deliberately excluded from re-arming because the completed
+packet remains in the DMA buffer until the caller can consume it. These
+retries are bounded per poll and do not reset the controller or prove that a
+controller which stopped responding can recover; that still requires xHCI
+emulation and hardware testing.

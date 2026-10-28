@@ -77,6 +77,7 @@ static uint32_t bluetooth_acl_dropped[USB_MAX_XHCI_SLOTS + 1U];
 static uint8_t bluetooth_acl_tx_buffers[USB_MAX_XHCI_SLOTS + 1U][4096]
     __attribute__((aligned(64)));
 static uint8_t bluetooth_acl_tx_busy[USB_MAX_XHCI_SLOTS + 1U];
+static uint8_t usb_pending_slot_disable[USB_MAX_XHCI_SLOTS + 1U];
 static uint8_t keyboard_input_observed;
 static uint8_t mouse_input_observed;
 
@@ -248,6 +249,20 @@ static void usb_bluetooth_detach_slot(uint32_t slot)
     usb_bluetooth_acl_queue_reset(&bluetooth_acl_queues[slot]);
     bluetooth_acl_dropped[slot] = 0U;
     __atomic_store_n(&bluetooth_acl_tx_busy[slot], 0U, __ATOMIC_RELEASE);
+}
+
+/*
+ * Failed Disable Slot commands must not permanently leak a slot after
+ * disconnect or partial enumeration. Retry from the USB owner poll loop.
+ */
+static void usb_disable_slot_or_defer(uint32_t slot)
+{
+    if (slot == 0U || slot > USB_MAX_XHCI_SLOTS)
+        return;
+    if (xhci_disable_device(slot))
+        usb_pending_slot_disable[slot] = 0U;
+    else
+        usb_pending_slot_disable[slot] = 1U;
 }
 
 static void usb_detach_slot(uint32_t slot)
@@ -429,7 +444,7 @@ static int usb_enumerate_port(uint32_t port)
 
 cleanup:
     if (!success)
-        (void)xhci_disable_device(slot);
+        usb_disable_slot_or_defer(slot);
     return success;
 }
 
@@ -453,6 +468,10 @@ void usb_poll(void)
     if (!usb_initialized || !xhci_controller_online())
         return;
     xhci_poll();
+    for (uint32_t slot = 1U; slot <= USB_MAX_XHCI_SLOTS; ++slot) {
+        if (usb_pending_slot_disable[slot])
+            usb_disable_slot_or_defer(slot);
+    }
     rtl8188eu_poll();
     uint32_t changed_ports = xhci_take_port_events();
     for (uint32_t port = 1; port <= xhci_port_count(); ++port) {
@@ -474,7 +493,7 @@ void usb_poll(void)
                     slot_disconnected = 1;
                 }
                 if (slot_disconnected)
-                    (void)xhci_disable_device(slot);
+                    usb_disable_slot_or_defer(slot);
             }
         } else {
             int already_enumerated = rtl8188eu_port_is_bound(port);
@@ -537,8 +556,14 @@ void usb_poll(void)
                 }
             }
             (void)xhci_start_bulk_in(slot, bluetooth->acl_in_endpoint);
-        } else if (acl_result == -1) {
-            /* -2 means the completed packet is retained for a larger buffer. */
+        } else if (acl_result != -2) {
+            /*
+             * A failed transfer is re-armed above. Also retry a missing
+             * in-flight submission: a transient ring/doorbell failure must
+             * not leave this endpoint permanently silent. Starting while a
+             * transfer is already active is rejected by xHCI without damage.
+             * -2 is different: its completed packet is retained for retry.
+             */
             (void)xhci_start_bulk_in(slot, bluetooth->acl_in_endpoint);
         }
     }

@@ -826,6 +826,48 @@ int usb_bluetooth_hci_build_inquiry(uint8_t *out, uint32_t capacity,
                             out, capacity);
 }
 
+int usb_bluetooth_hci_inquiry_result(const uint8_t *event, uint32_t length,
+                                     uint8_t index,
+                                     usb_bluetooth_inquiry_result_t *result)
+{
+    if (event == NULL || result == NULL || length < 3U ||
+        !usb_bluetooth_hci_event_valid(event, length) ||
+        (event[0] != 0x02U && event[0] != 0x22U))
+        return -22;
+
+    uint32_t stride = event[0] == 0x02U ? 13U : 14U;
+    uint32_t response_count = event[2];
+    if (event[1] != 1U + response_count * stride ||
+        length != (uint32_t)event[1] + 2U)
+        return -22;
+    if ((uint32_t)index >= response_count)
+        return 0;
+
+    uint32_t offset = 3U + (uint32_t)index * stride;
+    usb_bluetooth_inquiry_result_t parsed = {0};
+    uint8_t address_nonzero = 0U;
+    for (uint32_t i = 0U; i < 6U; ++i) {
+        parsed.address[i] = event[offset + i];
+        address_nonzero |= parsed.address[i];
+    }
+    parsed.page_scan_repetition_mode = event[offset + 6U];
+    if (address_nonzero == 0U || parsed.page_scan_repetition_mode > 2U ||
+        event[offset + 7U] != 0U)
+        return -22;
+
+    parsed.class_of_device = (uint32_t)event[offset + 8U] |
+                             ((uint32_t)event[offset + 9U] << 8) |
+                             ((uint32_t)event[offset + 10U] << 16);
+    parsed.clock_offset = (uint16_t)event[offset + 11U] |
+                          ((uint16_t)event[offset + 12U] << 8);
+    if (stride == 14U) {
+        parsed.rssi = (int8_t)event[offset + 13U];
+        parsed.has_rssi = 1U;
+    }
+    *result = parsed;
+    return 1;
+}
+
 int usb_bluetooth_hci_build_create_connection(
     const uint8_t address[6], uint16_t packet_type,
     uint8_t page_scan_repetition_mode, uint16_t clock_offset,

@@ -1283,8 +1283,16 @@ static void test_l2cap_channel_lifecycle(void)
     assert(usb_bluetooth_l2cap_channel_response(&table, id, 0x0041U,
                                                 0U, 672U) == 1);
     assert(usb_bluetooth_l2cap_channel_configured(&table, cid) == 1);
+    assert(usb_bluetooth_l2cap_channel_abort(&table, cid) == -16);
     assert(usb_bluetooth_l2cap_channel_close(&table, cid) == 1);
     assert(usb_bluetooth_l2cap_channel_close(&table, cid) == -9);
+
+    assert(usb_bluetooth_l2cap_channel_begin(&table, 1U, 672U, 150U,
+                                             &cid, &id) == 0);
+    assert(usb_bluetooth_l2cap_channel_abort(&table, cid) == 1);
+    assert(usb_bluetooth_l2cap_channel_abort(&table, cid) == -9);
+    assert(usb_bluetooth_l2cap_channel_response(&table, id, 0x0042U,
+                                                0U, 672U) == -9);
 
     assert(usb_bluetooth_l2cap_channel_begin(&table, 1U, 672U, 200U,
                                              &cid, &id) == 0);

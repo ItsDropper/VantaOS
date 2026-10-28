@@ -671,7 +671,7 @@ static int command_http_url(const char *url, const char *output_argument,
     if (!body_only)
         terminal_write("\n--- HTTP response ---\n");
     uint32_t transfer_start_ticks = timer_get_ticks();
-    for (uint32_t chunks = 0; chunks < 32768U; ++chunks) {
+    for (;;) {
         if ((uint32_t)(timer_get_ticks() - transfer_start_ticks) >=
             HTTP_DOWNLOAD_TIMEOUT_TICKS) {
             terminal_write("\ncurl: total response-transfer deadline exceeded");

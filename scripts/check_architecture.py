@@ -103,8 +103,10 @@ for required in (
 ):
     if required not in network_init:
         fail(f"network initializer is missing required registration/probe step {required}")
-if "ata_initialize();" not in storage_init or "nvme_initialize();" not in storage_init:
-    fail("storage initializer must own ATA and NVMe startup")
+if ("ata_initialize();" not in storage_init or
+        "nvme_initialize();" not in storage_init or
+        "ahci_initialize();" not in storage_init):
+    fail("storage initializer must own ATA, NVMe, and AHCI discovery startup")
 if "xhci_initialize();" not in usb_init:
     fail("USB initializer must own xHCI startup")
 if "network_framework_selftest();" not in network_init or "net_selftest.h" not in network_init:

@@ -25,6 +25,7 @@ static size_t cursor;
 static size_t selection_anchor;
 static size_t selection_end;
 static int selection_active;
+static int selection_dragging;
 static char clipboard[TEXT_CAPACITY];
 static size_t clipboard_length;
 static size_t first_row;
@@ -353,7 +354,7 @@ static void select_at(int32_t x, int32_t y, int extend)
 {
     if (y < 48 || y >= 48 + (int32_t)VISIBLE_ROWS * 20 || x < 16)
     {
-        if (!extend) clear_selection();
+        if (!extend) { clear_selection(); selection_dragging = 0; }
         return;
     }
     size_t row = first_row + (size_t)(y - 48) / 20U;
@@ -390,6 +391,7 @@ static void select_at(int32_t x, int32_t y, int extend)
                 selection_anchor = begin;
                 selection_end = end;
                 selection_active = 1;
+                selection_dragging = 0;
                 cursor = end;
                 last_click_position = (size_t)-1;
                 return;
@@ -398,6 +400,7 @@ static void select_at(int32_t x, int32_t y, int extend)
         selection_anchor = position;
         selection_end = position;
         selection_active = 1;
+        selection_dragging = 1;
         last_click_position = position;
     }
     else if (selection_active)
@@ -450,13 +453,14 @@ int main(int argc, char** argv)
         }
         if (event.type == VANTA_GUI_EVENT_POINTER_MOVE && event.value == 1U)
         {
-            select_at(event.x, event.y, 1);
+            if (selection_dragging) select_at(event.x, event.y, 1);
             render();
             continue;
         }
         if (event.type == VANTA_GUI_EVENT_POINTER_UP)
         {
-            select_at(event.x, event.y, 1);
+            if (selection_dragging) select_at(event.x, event.y, 1);
+            selection_dragging = 0;
             render();
             continue;
         }
@@ -471,6 +475,7 @@ int main(int argc, char** argv)
                 selection_anchor = 0U;
                 selection_end = document_length;
                 selection_active = 1;
+                selection_dragging = 0;
             }
             else if (key == 'c' || key == 'C' || key == 3U) copy_selection();
             else if (key == 'v' || key == 'V' || key == 22U) paste_clipboard();

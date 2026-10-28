@@ -837,12 +837,12 @@ void usb_poll(void)
                             &bluetooth_reassembled_acl_queues[slot],
                             bluetooth_acl_reassembled_buffer,
                             (uint32_t)assembled_length);
-                        if (usb_bluetooth_link_table_is_single_handle(
-                                &bluetooth_link_tables[slot],
-                                incoming_acl.handle))
+                        usb_bluetooth_l2cap_table_t *handle_channels =
+                            bluetooth_l2cap_table_for_handle(
+                                slot, incoming_acl.handle, 0);
+                        if (handle_channels != NULL)
                             (void)usb_bluetooth_l2cap_dispatch_acl_responses_for_handle(
-                                &bluetooth->l2cap_channels,
-                                incoming_acl.handle,
+                                handle_channels, incoming_acl.handle,
                                 bluetooth_acl_reassembled_buffer,
                                 (uint32_t)assembled_length);
                     }

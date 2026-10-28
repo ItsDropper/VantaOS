@@ -1250,6 +1250,63 @@ int usb_bluetooth_connection_attempt_finish(
     return 1;
 }
 
+void usb_bluetooth_inquiry_state_reset(usb_bluetooth_inquiry_state_t *state)
+{
+    if (state == NULL)
+        return;
+    *state = (usb_bluetooth_inquiry_state_t){0};
+}
+
+int usb_bluetooth_inquiry_state_begin(usb_bluetooth_inquiry_state_t *state)
+{
+    if (state == NULL)
+        return -22;
+    if (state->active != 0U)
+        return -16;
+    state->active = 1U;
+    state->cancel_pending = 0U;
+    return 0;
+}
+
+int usb_bluetooth_inquiry_state_cancel_begin(usb_bluetooth_inquiry_state_t *state)
+{
+    if (state == NULL)
+        return -22;
+    if (state->active == 0U)
+        return -2;
+    if (state->cancel_pending != 0U)
+        return -16;
+    state->cancel_pending = 1U;
+    return 0;
+}
+
+int usb_bluetooth_inquiry_state_cancel_result(
+    usb_bluetooth_inquiry_state_t *state, int accepted)
+{
+    if (state == NULL)
+        return -22;
+    if (state->active == 0U || state->cancel_pending == 0U)
+        return -2;
+    if (!accepted)
+        state->cancel_pending = 0U;
+    return accepted ? 1 : 0;
+}
+
+void usb_bluetooth_inquiry_state_command_rejected(
+    usb_bluetooth_inquiry_state_t *state)
+{
+    if (state == NULL)
+        return;
+    usb_bluetooth_inquiry_state_reset(state);
+}
+
+void usb_bluetooth_inquiry_state_complete(usb_bluetooth_inquiry_state_t *state)
+{
+    if (state == NULL)
+        return;
+    usb_bluetooth_inquiry_state_reset(state);
+}
+
 void usb_bluetooth_link_table_reset(usb_bluetooth_link_table_t *table)
 {
     if (table == NULL)

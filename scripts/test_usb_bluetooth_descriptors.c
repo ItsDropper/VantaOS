@@ -1653,6 +1653,21 @@ static void test_hci_inquiry_result_parser(void)
                malformed, sizeof(malformed), 0U, &result) == -22);
     assert(usb_bluetooth_hci_inquiry_result(
                inquiry_result, sizeof(inquiry_result), 0U, NULL) == -22);
+
+    /* Five classic Inquiry Result records occupy a 68-byte HCI event. */
+    uint8_t five_results[68] = {0};
+    five_results[0] = 0x02U;
+    five_results[1] = 66U;
+    five_results[2] = 5U;
+    for (uint32_t index = 0U; index < 5U; ++index) {
+        uint32_t offset = 3U + index * 13U;
+        five_results[offset] = (uint8_t)(index + 1U);
+        five_results[offset + 6U] = 1U;
+        five_results[offset + 7U] = 0U;
+    }
+    assert(usb_bluetooth_hci_inquiry_result(
+               five_results, sizeof(five_results), 4U, &result) == 1);
+    assert(result.address[0] == 5U);
 }
 
 static void test_inquiry_lifecycle_state(void)

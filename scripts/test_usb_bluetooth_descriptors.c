@@ -1424,35 +1424,35 @@ static void test_inquiry_lifecycle_state(void)
 
     usb_bluetooth_inquiry_state_reset(NULL);
     usb_bluetooth_inquiry_state_reset(&state);
-    assert(state.active == 0U && state.cancel_pending == 0U);
+    assert(state.active == 0U && state.cancel_state == 0U);
     assert(usb_bluetooth_inquiry_state_begin(NULL) == -22);
     assert(usb_bluetooth_inquiry_state_cancel_begin(&state) == -2);
     assert(usb_bluetooth_inquiry_state_begin(&state) == 0);
-    assert(state.active == 1U && state.cancel_pending == 0U);
+    assert(state.active == 1U && state.cancel_state == 0U);
     assert(usb_bluetooth_inquiry_state_begin(&state) == -16);
 
     assert(usb_bluetooth_inquiry_state_cancel_begin(&state) == 0);
-    assert(state.active == 1U && state.cancel_pending == 1U);
+    assert(state.active == 1U && state.cancel_state == 1U);
     assert(usb_bluetooth_inquiry_state_cancel_begin(&state) == -16);
     assert(usb_bluetooth_inquiry_state_cancel_result(&state, 0) == 0);
-    assert(state.active == 1U && state.cancel_pending == 0U);
+    assert(state.active == 1U && state.cancel_state == 0U);
 
     assert(usb_bluetooth_inquiry_state_cancel_begin(&state) == 0);
     assert(usb_bluetooth_inquiry_state_cancel_result(&state, 1) == 1);
     /* An accepted cancel command is not completion of the inquiry itself. */
-    assert(state.active == 1U && state.cancel_pending == 1U);
+    assert(state.active == 1U && state.cancel_state == 2U);
     assert(usb_bluetooth_inquiry_state_cancel_result(&state, 1) == -2);
 
     usb_bluetooth_inquiry_state_complete(&state);
-    assert(state.active == 0U && state.cancel_pending == 0U);
+    assert(state.active == 0U && state.cancel_state == 0U);
     assert(usb_bluetooth_inquiry_state_cancel_result(&state, 0) == -2);
 
     assert(usb_bluetooth_inquiry_state_begin(&state) == 0);
     usb_bluetooth_inquiry_state_command_rejected(&state);
-    assert(state.active == 0U && state.cancel_pending == 0U);
+    assert(state.active == 0U && state.cancel_state == 0U);
     assert(usb_bluetooth_inquiry_state_begin(&state) == 0);
     usb_bluetooth_inquiry_state_reset(&state);
-    assert(state.active == 0U && state.cancel_pending == 0U);
+    assert(state.active == 0U && state.cancel_state == 0U);
 }
 
 static void test_connection_attempt_state(void)

@@ -107,8 +107,15 @@ http_response_status_t http_response_parse(const char *headers,
         return HTTP_RESPONSE_BAD_STATUS_LINE;
 
     at = line_end + 2U;
-    while (at < header_length - 2U) {
+    while (at < header_length) {
         size_t end = at;
+        if (at == header_length - 2U &&
+            headers[at] == '\r' && headers[at + 1U] == '\n') {
+            out->status_code = status_code;
+            out->has_content_length = (uint8_t)found_content_length;
+            out->content_length = content_length;
+            return HTTP_RESPONSE_OK;
+        }
         size_t colon;
         size_t value_start, value_end;
 

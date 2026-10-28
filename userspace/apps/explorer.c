@@ -27,6 +27,7 @@
 #define DIALOG_RENAME 3
 #define DIALOG_CONFIRM_DELETE 4
 #define CONTEXT_NONE 0
+#define CONTEXT_MENU_HEIGHT 190
 
 static vanta_theme_t current_theme;
 #define COLOR_TEXT vanta_theme_text_color(&current_theme)
@@ -55,6 +56,8 @@ static char input_buffer[PATH_CAPACITY];
 static int input_mode;
 static int dialog_mode;
 static int context_menu;
+static int open_with_active;
+static char open_with_path[PATH_CAPACITY];
 static int properties_active;
 static int context_x;
 static int context_y;
@@ -1104,17 +1107,33 @@ static void dispatch_context_action(unsigned int item)
     {
         case 0:
         {
+            size_t index = selected_count() == 1U ? first_selected() : (size_t)-1;
+            if (index != (size_t)-1 && entry_is_directory[index])
+                open_selected();
+            else if (index != (size_t)-1 && ends_with_ci(entries[index], ".ELF"))
+                open_selected();
+            else if (index != (size_t)-1 && build_entry_path(index, open_with_path, sizeof(open_with_path)))
+            {
+                open_with_active = 1;
+                context_menu = CONTEXT_NONE;
+            }
+            else
+                set_status("Select one file to open", COLOR_ERROR);
+            break;
+        }
+        case 1:
+        {
             size_t index = first_selected();
             if (index != (size_t)-1 && selected_count() == 1U)
                 show_properties(index);
             break;
         }
-        case 1: start_dialog(DIALOG_RENAME); break;
-        case 2: set_file_clipboard(0); break;
-        case 3: set_file_clipboard(1); break;
-        case 4: toolbar_action(3U); break;
-        case 5: run_compress_selection(); break;
-        case 6: run_extract_selection(); break;
+        case 2: start_dialog(DIALOG_RENAME); break;
+        case 3: set_file_clipboard(0); break;
+        case 4: set_file_clipboard(1); break;
+        case 5: toolbar_action(3U); break;
+        case 6: run_compress_selection(); break;
+        case 7: run_extract_selection(); break;
         default: break;
     }
     context_menu = CONTEXT_NONE;
@@ -1160,11 +1179,13 @@ static void open_selected(void)
         return;
     }
 
+    /* Direct open remains convenient for known text formats; the context-menu
+       Open action below routes other non-program files through Open With. */
     if (ends_with_ci(path, ".TXT") || ends_with_ci(path, ".MD") ||
         ends_with_ci(path, ".LOG") || ends_with_ci(path, ".CFG"))
     {
-        const char* argv[1] = { path };
-        long child = vanta_spawn("/SYSTEM/NOTES.ELF", argv, 1U);
+        const char* argv[2] = { "/SYSTEM/NOTES.ELF", path };
+        long child = vanta_spawn("/SYSTEM/NOTES.ELF", argv, 2U);
         if (child < 0)
         {
             set_status("Could not open text editor", COLOR_ERROR);
@@ -1448,12 +1469,31 @@ static void render(void)
         if (y < 120) y = 120;
         context_x = x;
         context_y = y;
-        add_rect(x, y, 180, 168, COLOR_SURFACE);
-        add_rect(x, y + 167, 180, 1, COLOR_ACCENT);
-        static const char* menu[7] = {"Properties", "Rename", "Copy",
+        if (y > 402 - CONTEXT_MENU_HEIGHT) y = 402 - CONTEXT_MENU_HEIGHT;
+        context_x = x;
+        context_y = y;
+        add_rect(x, y, 180, CONTEXT_MENU_HEIGHT, COLOR_SURFACE);
+        add_rect(x, y + CONTEXT_MENU_HEIGHT - 1, 180, 1, COLOR_ACCENT);
+        static const char* menu[8] = {"Open", "Properties", "Rename", "Copy",
                                       "Cut / Move", "Delete", "Compress", "Extract"};
-        for (unsigned int i = 0; i < 7U; i++)
+        for (unsigned int i = 0; i < 8U; i++)
             add_text(x + 10, y + 5 + (int)i * 23, menu[i], COLOR_TEXT);
+    }
+
+    if (open_with_active)
+    {
+        add_rect(164, 118, 420, 230, COLOR_SURFACE);
+        add_rect(164, 347, 420, 1, COLOR_ACCENT);
+        add_text(180, 132, "Open with", COLOR_TEXT);
+        add_text_tail(180, 158, open_with_path, COLOR_MUTED, 52U);
+        add_rect(180, 190, 388, 36, COLOR_ROW);
+        add_outline(180, 190, 388, 36, COLOR_ACCENT);
+        add_text(194, 201, "Notes - view or edit file contents", COLOR_TEXT);
+        add_rect(180, 238, 112, 28, COLOR_ROW);
+        add_text(194, 246, "Open", COLOR_TEXT);
+        add_rect(304, 238, 112, 28, COLOR_ROW);
+        add_text(318, 246, "Cancel", COLOR_TEXT);
+        add_text(180, 310, "Only installed compatible apps are listed", COLOR_MUTED);
     }
 
     if (input_mode == INPUT_DIALOG)
@@ -1689,11 +1729,11 @@ static void explorer_e2e_run(void)
     size_t renamed_index = explorer_e2e_find_entry("renamed.log");
     EXPLORER_E2E_REQUIRE(renamed_index != (size_t)-1);
     select_single(renamed_index);
-    dispatch_context_action(0U);
+    dispatch_context_action(1U);
     EXPLORER_E2E_REQUIRE(properties_active &&
                           text_equals_ci(properties_info.name, "renamed.log"));
     properties_active = 0;
-    dispatch_context_action(5U);
+    dispatch_context_action(6U);
     EXPLORER_E2E_REQUIRE(vanta_stat_path(
         "/EXPLORER-E2E/Dest/Source/renamed.log.VZA", &info) == 0);
     EXPLORER_E2E_REQUIRE(vanta_delete_path(
@@ -1702,14 +1742,14 @@ static void explorer_e2e_run(void)
     size_t archive_index = explorer_e2e_find_entry("renamed.log.VZA");
     EXPLORER_E2E_REQUIRE(archive_index != (size_t)-1);
     select_single(archive_index);
-    dispatch_context_action(6U);
+    dispatch_context_action(7U);
     EXPLORER_E2E_REQUIRE(explorer_e2e_file_equals(
         "/EXPLORER-E2E/Dest/Source/renamed.log", payload));
     EXPLORER_E2E_REQUIRE(load_directory());
     archive_index = explorer_e2e_find_entry("renamed.log.VZA");
     EXPLORER_E2E_REQUIRE(archive_index != (size_t)-1);
     select_single(archive_index);
-    dispatch_context_action(4U);
+    dispatch_context_action(5U);
     handle_input_key(13U);
     EXPLORER_E2E_REQUIRE(vanta_stat_path(
         "/EXPLORER-E2E/Dest/Source/renamed.log.VZA", &info) < 0);
@@ -1764,6 +1804,21 @@ int main(int argc, char** argv)
         if (event.type == VANTA_GUI_EVENT_KEY)
         {
             uint32_t key = event.value;
+            if (open_with_active)
+            {
+                if (key == 27U)
+                    open_with_active = 0;
+                else if (key == 10U || key == 13U)
+                {
+                    const char* argv[2] = { "/SYSTEM/NOTES.ELF", open_with_path };
+                    long child = vanta_spawn("/SYSTEM/NOTES.ELF", argv, 2U);
+                    open_with_active = 0;
+                    set_status(child < 0 ? "Could not open file in Notes" :
+                               "Opened file in Notes", child < 0 ? COLOR_ERROR : COLOR_ACCENT);
+                }
+                render();
+                continue;
+            }
             if (properties_active)
             {
                 if (key == 27U || key == 10U || key == 13U)
@@ -1858,14 +1913,29 @@ int main(int argc, char** argv)
         else if (event.type == VANTA_GUI_EVENT_POINTER_DOWN)
         {
             int x = event.x, y = event.y;
-            if (properties_active)
+            if (open_with_active)
+            {
+                if (x >= 180 && x < 568 && y >= 190 && y < 226)
+                {
+                    const char* argv[2] = { "/SYSTEM/NOTES.ELF", open_with_path };
+                    long child = vanta_spawn("/SYSTEM/NOTES.ELF", argv, 2U);
+                    open_with_active = 0;
+                    set_status(child < 0 ? "Could not open file in Notes" :
+                               "Opened file in Notes", child < 0 ? COLOR_ERROR : COLOR_ACCENT);
+                }
+                else if (x >= 180 && x < 416 && y >= 238 && y < 266)
+                    open_with_active = 0;
+                else
+                    open_with_active = 0;
+            }
+            else if (properties_active)
             {
                 properties_active = 0;
             }
             else if (context_menu)
             {
                 if (x >= context_x && x < context_x + 180 &&
-                    y >= context_y && y < context_y + 168)
+                    y >= context_y && y < context_y + CONTEXT_MENU_HEIGHT)
                     dispatch_context_action((unsigned int)(y - context_y) / 23U);
                 else
                     context_menu = CONTEXT_NONE;

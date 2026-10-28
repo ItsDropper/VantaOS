@@ -227,6 +227,8 @@ int usb_bluetooth_link_table_is_single_handle(
     const usb_bluetooth_link_table_t *table, uint16_t handle);
 uint32_t usb_bluetooth_link_table_active_count(
     const usb_bluetooth_link_table_t *table);
+int usb_bluetooth_link_table_has_handle(
+    const usb_bluetooth_link_table_t *table, uint16_t handle);
 int usb_bluetooth_link_table_acl_feed(usb_bluetooth_link_table_t *table,
                                       const uint8_t *packet, uint32_t length);
 int usb_bluetooth_link_table_acl_take(usb_bluetooth_link_table_t *table,

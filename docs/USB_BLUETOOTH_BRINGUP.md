@@ -338,6 +338,17 @@ matching successful final response. The parser still needs to be called by a
 future inbound L2CAP signaling dispatcher.
 
 
+## L2CAP response packet builders
+
+The host-side protocol layer also provides
+`usb_bluetooth_l2cap_build_connection_response` and
+`usb_bluetooth_l2cap_build_configuration_response`. They serialize response
+command headers and little-endian fields, enforce dynamic-CID and result/status
+bounds, check output capacity, and include a Basic L2CAP MTU option on a
+successful configuration response. These are serialization helpers only:
+they do not register services, accept inbound connection requests, or submit
+packets through the USB transport.
+
 ## L2CAP response dispatcher
 
 A signaling-list dispatcher now validates the complete command list before

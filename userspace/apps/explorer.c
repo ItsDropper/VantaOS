@@ -57,6 +57,7 @@ static int input_mode;
 static int dialog_mode;
 static int context_menu;
 static int open_with_active;
+static int open_with_notes_selected;
 static char open_with_path[PATH_CAPACITY];
 static int properties_active;
 static int context_x;
@@ -1117,6 +1118,7 @@ static void dispatch_context_action(unsigned int item)
             else if (index != (size_t)-1 && build_entry_path(index, open_with_path, sizeof(open_with_path)))
             {
                 open_with_active = 1;
+                open_with_notes_selected = 1;
                 context_menu = CONTEXT_NONE;
             }
             else
@@ -1836,11 +1838,14 @@ int main(int argc, char** argv)
                     open_with_active = 0;
                 else if (key == 10U || key == 13U)
                 {
-                    const char* argv[2] = { "/SYSTEM/NOTES.ELF", open_with_path };
-                    long child = vanta_spawn("/SYSTEM/NOTES.ELF", argv, 2U);
+                    if (open_with_notes_selected)
+                    {
+                        const char* argv[2] = { "/SYSTEM/NOTES.ELF", open_with_path };
+                        long child = vanta_spawn("/SYSTEM/NOTES.ELF", argv, 2U);
+                        set_status(child < 0 ? "Could not open file in Notes" :
+                                   "Opened file in Notes", child < 0 ? COLOR_ERROR : COLOR_ACCENT);
+                    }
                     open_with_active = 0;
-                    set_status(child < 0 ? "Could not open file in Notes" :
-                               "Opened file in Notes", child < 0 ? COLOR_ERROR : COLOR_ACCENT);
                 }
                 render();
                 continue;
@@ -1942,14 +1947,19 @@ int main(int argc, char** argv)
             if (open_with_active)
             {
                 if (x >= 180 && x < 568 && y >= 190 && y < 226)
+                    open_with_notes_selected = 1;
+                else if (x >= 180 && x < 292 && y >= 238 && y < 266)
                 {
-                    const char* argv[2] = { "/SYSTEM/NOTES.ELF", open_with_path };
-                    long child = vanta_spawn("/SYSTEM/NOTES.ELF", argv, 2U);
+                    if (open_with_notes_selected)
+                    {
+                        const char* argv[2] = { "/SYSTEM/NOTES.ELF", open_with_path };
+                        long child = vanta_spawn("/SYSTEM/NOTES.ELF", argv, 2U);
+                        set_status(child < 0 ? "Could not open file in Notes" :
+                                   "Opened file in Notes", child < 0 ? COLOR_ERROR : COLOR_ACCENT);
+                    }
                     open_with_active = 0;
-                    set_status(child < 0 ? "Could not open file in Notes" :
-                               "Opened file in Notes", child < 0 ? COLOR_ERROR : COLOR_ACCENT);
                 }
-                else if (x >= 180 && x < 416 && y >= 238 && y < 266)
+                else if (x >= 304 && x < 416 && y >= 238 && y < 266)
                     open_with_active = 0;
                 else
                     open_with_active = 0;

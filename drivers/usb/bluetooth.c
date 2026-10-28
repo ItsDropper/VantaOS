@@ -1215,9 +1215,6 @@ int usb_bluetooth_l2cap_configuration_request(
     uint16_t flags = (uint16_t)command[6] |
                      ((uint16_t)command[7] << 8);
     *local_cid = 0U;
-    if (flags != 0U)
-        return usb_bluetooth_l2cap_build_configuration_response(
-            command[1], cid, 0U, 2U, 48U, response, capacity);
 
     usb_bluetooth_l2cap_channel_t *channel = NULL;
     for (uint32_t i = 0U; i < USB_BLUETOOTH_L2CAP_CHANNEL_MAX; ++i) {
@@ -1229,6 +1226,9 @@ int usb_bluetooth_l2cap_configuration_request(
     }
     if (channel == NULL || (channel->state != 3U && channel->state != 4U))
         return -9;
+    if (flags != 0U)
+        return usb_bluetooth_l2cap_build_configuration_response(
+            command[1], cid, 0U, 2U, 48U, response, capacity);
 
     uint32_t offset = 8U;
     uint8_t mtu_seen = 0U;

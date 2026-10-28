@@ -1329,7 +1329,8 @@ static void test_hci_connection_command_builders(void)
     assert(usb_bluetooth_hci_build_create_connection(
                address, 1U, 3U, 0U, 0U, command, sizeof(command)) == -22);
     assert(usb_bluetooth_hci_build_create_connection(
-               address, 1U, 1U, 0x8000U, 0U, command, sizeof(command)) == -22);
+               address, 1U, 1U, 0x8000U, 0U, command, sizeof(command)) == 16);
+    assert(command[13] == 0x00U && command[14] == 0x80U);
     assert(usb_bluetooth_hci_build_create_connection(
                address, 1U, 1U, 0U, 2U, command, sizeof(command)) == -22);
     assert(usb_bluetooth_hci_build_create_connection(

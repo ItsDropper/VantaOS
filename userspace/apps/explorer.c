@@ -1661,7 +1661,7 @@ static void explorer_e2e_run(void)
     size_t source_index = explorer_e2e_find_entry("Source");
     EXPLORER_E2E_REQUIRE(source_index != (size_t)-1);
     select_single(source_index);
-    dispatch_context_action(2U);
+    dispatch_context_action(3U);
     copy_text(current_path, sizeof(current_path), "/EXPLORER-E2E/Dest");
     EXPLORER_E2E_REQUIRE(load_directory());
     toolbar_action(7U);
@@ -1683,7 +1683,7 @@ static void explorer_e2e_run(void)
     size_t move_index = explorer_e2e_find_entry("move.txt");
     EXPLORER_E2E_REQUIRE(move_index != (size_t)-1);
     select_single(move_index);
-    dispatch_context_action(3U);
+    dispatch_context_action(4U);
     copy_text(current_path, sizeof(current_path), "/EXPLORER-E2E/Dest");
     EXPLORER_E2E_REQUIRE(load_directory());
     toolbar_action(7U);

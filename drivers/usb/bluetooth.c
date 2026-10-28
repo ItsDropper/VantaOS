@@ -1245,8 +1245,10 @@ int usb_bluetooth_l2cap_channel_remote_configured(
             if (channel->state != 3U && channel->state != 4U)
                 return -16;
             channel->remote_configured = 1U;
-            if (channel->local_configured != 0U)
+            if (channel->local_configured != 0U) {
                 channel->state = 4U;
+                channel->deadline = 0U;
+            }
             return channel->state == 4U ? 1 : 0;
         }
     }
@@ -1277,8 +1279,10 @@ int usb_bluetooth_l2cap_channel_configure_response(
             return -22;
         c->remote_mtu = remote_mtu;
         c->local_configured = 1U;
-        if (c->remote_configured != 0U)
+        if (c->remote_configured != 0U) {
             c->state = 4U;
+            c->deadline = 0U;
+        }
         return c->state == 4U ? 1 : 0;
     }
     return -9;
@@ -1296,6 +1300,7 @@ int usb_bluetooth_l2cap_channel_configured(usb_bluetooth_l2cap_table_t *table,
             c->local_configured = 1U;
             c->remote_configured = 1U;
             c->state = 4U;
+            c->deadline = 0U;
             return 1;
         }
     }
@@ -1372,6 +1377,7 @@ uint32_t usb_bluetooth_l2cap_expire(usb_bluetooth_l2cap_table_t *table,
     for (uint32_t i = 0U; i < USB_BLUETOOTH_L2CAP_CHANNEL_MAX; ++i) {
         usb_bluetooth_l2cap_channel_t *c = &table->channels[i];
         if (c->active && c->deadline != 0U &&
+            (c->state == 1U || c->state == 3U || c->state == 5U) &&
             (int32_t)(now - c->deadline) >= 0) {
             *c = (usb_bluetooth_l2cap_channel_t){0};
             ++expired;

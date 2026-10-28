@@ -392,6 +392,31 @@ int usb_bluetooth_cancel_connection(uint32_t port,
     return sent;
 }
 
+int usb_bluetooth_connection_pending(uint32_t port,
+                                     const uint8_t address[6])
+{
+    if (port == 0U || address == NULL)
+        return -22;
+    for (uint32_t slot = 1U; slot <= USB_MAX_XHCI_SLOTS; ++slot) {
+        if (bluetooth_slots[slot].active && bluetooth_slots[slot].port == port)
+            return usb_bluetooth_connection_attempt_matches(
+                &bluetooth_slots[slot].connection_attempt, address);
+    }
+    return -19;
+}
+
+int usb_bluetooth_is_connected(uint32_t port, uint16_t handle)
+{
+    if (port == 0U || handle == 0U || handle > 0x0EFFU)
+        return -22;
+    for (uint32_t slot = 1U; slot <= USB_MAX_XHCI_SLOTS; ++slot) {
+        if (bluetooth_slots[slot].active && bluetooth_slots[slot].port == port)
+            return usb_bluetooth_link_table_has_handle(
+                &bluetooth_link_tables[slot], handle);
+    }
+    return -19;
+}
+
 int usb_bluetooth_disconnect(uint32_t port, uint16_t handle, uint8_t reason)
 {
     uint8_t command[6];

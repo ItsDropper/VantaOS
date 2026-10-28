@@ -21,6 +21,7 @@
 #include "shell.h"
 #include "ipc.h"
 #include "usb_bluetooth.h"
+#include "spinlock.h"
 
 #include <stdint.h>
 
@@ -64,6 +65,13 @@
 #define USER_SYSCALL_BLUETOOTH_CONNECT 37U
 #define USER_SYSCALL_BLUETOOTH_PEER_STATE 38U
 #define USER_SYSCALL_BLUETOOTH_CANCEL_CONNECTION 39U
+#define USER_SYSCALL_CLIPBOARD_SET 40U
+#define USER_SYSCALL_CLIPBOARD_GET 41U
+
+#define USER_CLIPBOARD_CAPACITY 4096U
+static uint8_t user_clipboard[USER_CLIPBOARD_CAPACITY];
+static size_t user_clipboard_length;
+static spinlock_t user_clipboard_lock = SPINLOCK_INITIALIZER;
 #define USER_SYSCALL_KERNEL_COMMAND_MAX 2048U
 #define USER_SYSCALL_IO_MAX 4096U
 #define USER_SYSCALL_WRITE_MAX 4096U
@@ -899,6 +907,66 @@ static int syscall_ipc_close(struct exception_frame* frame, const process_t* pro
     frame->rax=(uint64_t)(int64_t)ipc_endpoint_close(frame->rdi,process->pid); return 0;
 }
 
+static int syscall_clipboard_set(struct exception_frame* frame,
+                                 const process_t* process)
+{
+    uintptr_t source = (uintptr_t)frame->rdi;
+    uint64_t length = frame->rsi;
+    if (length > USER_CLIPBOARD_CAPACITY)
+    {
+        frame->rax = (uint64_t)(int64_t)-22;
+        return 0;
+    }
+    if (length != 0U &&
+        !paging_user_range_valid(process->address_space, source,
+                                 (size_t)length, 0))
+    {
+        frame->rax = (uint64_t)(int64_t)-14;
+        return 0;
+    }
+    uint64_t flags = spinlock_lock_irqsave(&user_clipboard_lock);
+    const uint8_t* input = (const uint8_t*)source;
+    for (size_t i = 0U; i < (size_t)length; ++i)
+        user_clipboard[i] = input[i];
+    user_clipboard_length = (size_t)length;
+    spinlock_unlock_irqrestore(&user_clipboard_lock, flags);
+    frame->rax = (uint64_t)length;
+    return 0;
+}
+
+static int syscall_clipboard_get(struct exception_frame* frame,
+                                 const process_t* process)
+{
+    uintptr_t destination = (uintptr_t)frame->rdi;
+    uint64_t capacity = frame->rsi;
+    if (capacity > USER_CLIPBOARD_CAPACITY)
+    {
+        frame->rax = (uint64_t)(int64_t)-22;
+        return 0;
+    }
+    if (capacity != 0U &&
+        !paging_user_range_valid(process->address_space, destination,
+                                 (size_t)capacity, 1))
+    {
+        frame->rax = (uint64_t)(int64_t)-14;
+        return 0;
+    }
+    uint64_t flags = spinlock_lock_irqsave(&user_clipboard_lock);
+    if (capacity < user_clipboard_length)
+    {
+        frame->rax = (uint64_t)(int64_t)-90;
+        spinlock_unlock_irqrestore(&user_clipboard_lock, flags);
+        return 0;
+    }
+    uint8_t* output = (uint8_t*)destination;
+    for (size_t i = 0U; i < user_clipboard_length; ++i)
+        output[i] = user_clipboard[i];
+    size_t length = user_clipboard_length;
+    spinlock_unlock_irqrestore(&user_clipboard_lock, flags);
+    frame->rax = (uint64_t)length;
+    return 0;
+}
+
 static int syscall_dispatch(struct exception_frame* frame)
 {
     if (!frame || (frame->cs & 3U) != 3U)
@@ -1078,6 +1146,10 @@ static int syscall_dispatch(struct exception_frame* frame)
                 (uint32_t)frame->rdi, address);
             return 0;
         }
+        case USER_SYSCALL_CLIPBOARD_SET:
+            return syscall_clipboard_set(frame, &process);
+        case USER_SYSCALL_CLIPBOARD_GET:
+            return syscall_clipboard_get(frame, &process);
         case USER_SYSCALL_GUI_CREATE_WINDOW:
             return syscall_gui_create_window(frame, &process);
         case USER_SYSCALL_GUI_CLOSE_WINDOW:

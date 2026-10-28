@@ -874,7 +874,7 @@ int usb_bluetooth_hci_build_create_connection(
     uint8_t allow_role_switch, uint8_t *out, uint32_t capacity)
 {
     if (address == NULL || out == NULL || packet_type == 0U ||
-        page_scan_repetition_mode > 2U || clock_offset > 0x7FFFU ||
+        page_scan_repetition_mode > 2U ||
         allow_role_switch > 1U)
         return -22;
     uint8_t address_nonzero = 0U;

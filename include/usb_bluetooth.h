@@ -257,6 +257,9 @@ int usb_bluetooth_hci_build_create_connection_cancel(
 /* Enumerate parsed inquiry results for a bound adapter. Count is zero before
  * a scan or after adapter detach; get returns 1, 0 for out-of-range, negative errno.
  */
+/* Enumerate bound USB Bluetooth adapters by their USB port number. */
+uint32_t usb_bluetooth_adapter_count(void);
+int usb_bluetooth_adapter_port(uint32_t index, uint32_t *port);
 uint32_t usb_bluetooth_discovered_count(uint32_t port);
 int usb_bluetooth_discovered_get(uint32_t port, uint32_t index,
                                  usb_bluetooth_inquiry_result_t *result);
@@ -274,6 +277,9 @@ int usb_bluetooth_cancel_connection(uint32_t port,
  */
 int usb_bluetooth_connection_pending(uint32_t port,
                                      const uint8_t address[6]);
+/* 1 connected, 2 connection pending, 0 idle/not connected, negative errno. */
+int usb_bluetooth_peer_state(uint32_t port, const uint8_t address[6],
+                             uint16_t *handle);
 /* Query ownership of a live HCI handle: 1 connected, 0 not connected,
  * -19 if the adapter is not bound.
  */

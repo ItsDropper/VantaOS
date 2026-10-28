@@ -13,7 +13,8 @@
 /**
  * @brief Configures IRQ0 to fire at the specified frequency in Hz.
  */
-void timer_initialize(uint32_t frequency);
+/* Returns zero if frequency is outside the representable PIT range. */
+int timer_initialize(uint32_t frequency);
 
 /**
  * @brief Called by IRQ0 handler in interrupts.c.

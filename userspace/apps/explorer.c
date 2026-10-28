@@ -1160,6 +1160,20 @@ static void open_selected(void)
         return;
     }
 
+    if (ends_with_ci(path, ".TXT") || ends_with_ci(path, ".MD") ||
+        ends_with_ci(path, ".LOG") || ends_with_ci(path, ".CFG"))
+    {
+        const char* argv[1] = { path };
+        long child = vanta_spawn("/SYSTEM/NOTES.ELF", argv, 1U);
+        if (child < 0)
+        {
+            set_status("Could not open text editor", COLOR_ERROR);
+            return;
+        }
+        set_status("Opened in Notes; Ctrl+S saves home files", COLOR_ACCENT);
+        return;
+    }
+
     long descriptor = vanta_open(path, VANTA_OPEN_READ);
     if (descriptor < 0)
     {

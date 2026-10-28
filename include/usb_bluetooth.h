@@ -80,6 +80,7 @@ typedef struct {
     uint8_t completed;
     uint8_t status;
     uint8_t event_kind; /* 1 Command Complete, 2 Command Status */
+    uint8_t faulted; /* transport outcome ambiguous; Reset required */
 } usb_bluetooth_hci_command_state_t;
 
 #define USB_BLUETOOTH_L2CAP_CHANNEL_MAX 8U

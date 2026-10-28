@@ -383,6 +383,69 @@ int usb_bluetooth_disconnect(uint32_t port, uint16_t handle, uint8_t reason)
     return sent;
 }
 
+int usb_bluetooth_l2cap_connect(uint32_t port, uint16_t handle,
+                                uint16_t psm, uint16_t local_mtu,
+                                uint32_t deadline, uint16_t *local_cid,
+                                uint8_t *identifier)
+{
+    if (local_cid == NULL || identifier == NULL)
+        return 0;
+    *local_cid = 0U;
+    *identifier = 0U;
+    if (port == 0U || handle == 0U || handle > 0x0EFFU)
+        return 0;
+
+    uint32_t slot = 0U;
+    for (uint32_t i = 1U; i <= USB_MAX_XHCI_SLOTS; ++i) {
+        if (bluetooth_slots[i].active && bluetooth_slots[i].port == port) {
+            slot = i;
+            break;
+        }
+    }
+    if (slot == 0U ||
+        !usb_bluetooth_transport_ready(
+            bluetooth_slots[slot].reset_complete_observed,
+            bluetooth_slots[slot].reset_failed_observed) ||
+        !usb_bluetooth_link_table_has_handle(&bluetooth_link_tables[slot],
+                                             handle))
+        return 0;
+
+    usb_bluetooth_l2cap_table_t *table =
+        bluetooth_l2cap_table_for_handle(slot, handle, 0);
+    if (table == NULL)
+        return 0;
+
+    uint16_t pending_cid = 0U;
+    uint8_t pending_identifier = 0U;
+    if (usb_bluetooth_l2cap_channel_begin(
+            table, psm, local_mtu, deadline, &pending_cid,
+            &pending_identifier) != 0)
+        return 0;
+
+    uint8_t command[8];
+    uint8_t packet[32];
+    int command_length = usb_bluetooth_l2cap_build_connection_request(
+        pending_identifier, psm, pending_cid, command, sizeof(command));
+    int packet_length = command_length == (int)sizeof(command)
+        ? usb_bluetooth_l2cap_build_signaling_acl_packet(
+              handle, command, (uint32_t)command_length,
+              packet, sizeof(packet))
+        : -22;
+    int sent = packet_length > 0 &&
+               usb_bluetooth_acl_send(port, packet, (uint32_t)packet_length);
+    for (uint32_t i = 0U; i < sizeof(command); ++i)
+        command[i] = 0U;
+    for (uint32_t i = 0U; i < sizeof(packet); ++i)
+        packet[i] = 0U;
+    if (!sent) {
+        (void)usb_bluetooth_l2cap_channel_abort(table, pending_cid);
+        return 0;
+    }
+    *local_cid = pending_cid;
+    *identifier = pending_identifier;
+    return 1;
+}
+
 int usb_bluetooth_hci_event_receive(uint32_t port, uint8_t *event,
                                     uint32_t capacity)
 {

@@ -1,0 +1,52 @@
+name: IPC host regressions
+
+on:
+  push:
+    branches: [master, 'work/**']
+    paths:
+      - 'kernel/ipc.c'
+      - 'kernel/ipc.h'
+      - 'scripts/test_ipc.c'
+      - 'tests/ipc_host/**'
+      - 'tests/user/ipc_abi_compile.c'
+      - 'userspace/include/vanta/ipc.h'
+      - 'userspace/include/vanta/syscall.h'
+      - 'docs/IPC_RECEIVE_RELIABILITY.md'
+      - 'docs/architecture/IPC.md'
+      - '.github/workflows/ipc-host.yml'
+  pull_request:
+    paths:
+      - 'kernel/ipc.c'
+      - 'kernel/ipc.h'
+      - 'scripts/test_ipc.c'
+      - 'tests/ipc_host/**'
+      - 'tests/user/ipc_abi_compile.c'
+      - 'userspace/include/vanta/ipc.h'
+      - 'userspace/include/vanta/syscall.h'
+      - '.github/workflows/ipc-host.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ipc-host:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Compile IPC host regression tests
+        run: |
+          set -euo pipefail
+          cc -std=c11 -Wall -Wextra -Werror \
+            -Itests/ipc_host -Iuserspace/include -Iinclude \
+            scripts/test_ipc.c -o /tmp/vantaos-ipc-test
+      - name: Run IPC host regression tests
+        run: /tmp/vantaos-ipc-test
+      - name: Compile public IPC ABI
+        run: |
+          set -euo pipefail
+          cc -std=c11 -Wall -Wextra -Werror \
+            -Iuserspace/include -Iinclude -c tests/user/ipc_abi_compile.c \
+            -o /tmp/vantaos-ipc-abi.o

@@ -8,6 +8,7 @@ on:
       - 'drivers/usb/usb.c'
       - 'drivers/usb/Makefile'
       - 'docs/USB_BLUETOOTH_BRINGUP.md'
+      - 'docs/DRIVER_COMPATIBILITY.md'
       - 'include/usb_bluetooth.h'
       - 'scripts/test_usb_bluetooth_descriptors.c'
       - '.github/workflows/usb-bluetooth-descriptors.yml'

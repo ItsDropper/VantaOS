@@ -83,6 +83,21 @@ typedef struct {
     uint8_t faulted; /* transport outcome ambiguous; Reset required */
 } usb_bluetooth_hci_command_state_t;
 
+typedef struct {
+    uint8_t active;
+    uint8_t address[6]; /* HCI wire byte order */
+} usb_bluetooth_connection_attempt_t;
+
+void usb_bluetooth_connection_attempt_reset(
+    usb_bluetooth_connection_attempt_t *attempt);
+int usb_bluetooth_connection_attempt_begin(
+    usb_bluetooth_connection_attempt_t *attempt, const uint8_t address[6]);
+int usb_bluetooth_connection_attempt_matches(
+    const usb_bluetooth_connection_attempt_t *attempt,
+    const uint8_t address[6]);
+int usb_bluetooth_connection_attempt_finish(
+    usb_bluetooth_connection_attempt_t *attempt, const uint8_t address[6]);
+
 #define USB_BLUETOOTH_L2CAP_CHANNEL_MAX 8U
 #define USB_BLUETOOTH_L2CAP_CID_DYNAMIC_MIN 0x0040U
 #define USB_BLUETOOTH_L2CAP_CID_DYNAMIC_MAX 0xFFFFU

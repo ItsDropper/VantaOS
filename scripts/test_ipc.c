@@ -120,6 +120,58 @@ static void test_ipc_queue_wraparound_and_payload_erasure(void)
     assert(ipc_endpoint_close((uint64_t)token, 6100U) == 0);
 }
 
+
+static void test_process_cleanup_is_scoped_and_idempotent(void)
+{
+    const uint32_t owner = 7100U;
+    const uint32_t other_owner = 7200U;
+    char output[IPC_MESSAGE_MAX] = {0};
+    const char secret[] = "must be erased";
+    const char survivor[] = "other endpoint survives";
+
+    assert(ipc_endpoint_create(0U) == -22);
+    int64_t first = ipc_endpoint_create(owner);
+    int64_t second = ipc_endpoint_create(owner);
+    int64_t other = ipc_endpoint_create(other_owner);
+    assert(first > 0 && second > 0 && other > 0);
+    assert(first != second && first != other && second != other);
+
+    assert(ipc_message_send((uint64_t)first, 8001U,
+                            secret, sizeof(secret)) == 0);
+    assert(ipc_message_send((uint64_t)second, 8002U,
+                            secret, sizeof(secret)) == 0);
+    assert(ipc_message_send((uint64_t)other, 8003U,
+                            survivor, sizeof(survivor)) == 0);
+
+    ipc_process_cleanup(owner);
+    ipc_process_cleanup(owner); /* Repeated exit cleanup must be harmless. */
+
+    assert(ipc_message_peek_length((uint64_t)first, owner) == -9);
+    assert(ipc_message_receive((uint64_t)second, owner,
+                               output, sizeof(output)) == -9);
+    assert(ipc_message_peek_length((uint64_t)other, other_owner) ==
+           (int)sizeof(survivor));
+    assert(ipc_message_receive((uint64_t)other, other_owner,
+                               output, sizeof(output)) == (int)sizeof(survivor));
+    assert(memcmp(output, survivor, sizeof(survivor)) == 0);
+
+    /* Inspect cleared slots to ensure queued payloads do not survive reuse. */
+    for (uint32_t i = 0U; i < 32U; ++i) {
+        if (endpoints[i].token == (uint64_t)first ||
+            endpoints[i].token == (uint64_t)second) {
+            assert(!endpoints[i].active);
+            assert(endpoints[i].count == 0U);
+            for (uint32_t q = 0U; q < IPC_QUEUE_DEPTH; ++q) {
+                assert(endpoints[i].queue[q].length == 0U);
+                assert(endpoints[i].queue[q].sender_pid == 0U);
+                for (size_t b = 0U; b < IPC_MESSAGE_MAX; ++b)
+                    assert(endpoints[i].queue[q].bytes[b] == 0U);
+            }
+        }
+    }
+    assert(ipc_endpoint_close((uint64_t)other, other_owner) == 0);
+}
+
 int main(void)
 {
     vanta_ipc_message_t abi_message;
@@ -179,6 +231,7 @@ int main(void)
     assert(ipc_message_send((uint64_t)cleanup_endpoint,88U,"x",1U) == -9);
     test_endpoint_exhaustion_cleanup_and_rng_failure();
     test_ipc_queue_wraparound_and_payload_erasure();
+    test_process_cleanup_is_scoped_and_idempotent();
     puts("VANTAOS_IPC_HOST_TEST_OK");
     return 0;
 }

@@ -79,3 +79,8 @@ When the running process is marked terminated, the process lifecycle now revokes
 The host regression suite now forces the deterministic RNG stub to return an already-live endpoint token and verifies that creation fails with the collision error instead of aliasing another process's endpoint. It also fills the bounded receive queue, checks overflow rejection, repeats non-consuming length peeks, confirms that an undersized destination does not consume the head, drains the ring through wraparound, and verifies that consumed message bytes and metadata are cleared before slot reuse.
 
 The IPC host workflow runs the normal strict-warning test binary and a second build under AddressSanitizer and UndefinedBehaviorSanitizer. These tests validate the shared C implementation with host spinlock/RNG shims; they do not validate real SMP contention, interrupt-state restoration, syscall entry, or scheduler timing.
+
+
+## Process-exit cleanup isolation
+
+A host regression now creates multiple endpoints owned by one process and a separate endpoint owned by another. It queues private payloads, invokes process cleanup twice, and verifies both owned endpoints become unreachable and their queued bytes/metadata are erased, while the unrelated endpoint remains readable and intact. This covers cleanup scope and idempotence at the shared IPC implementation layer; it does not replace scheduler/syscall-level exit tests or concurrent SMP stress.

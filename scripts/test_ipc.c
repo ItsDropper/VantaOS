@@ -143,6 +143,15 @@ static void test_process_cleanup_is_scoped_and_idempotent(void)
     assert(ipc_message_send((uint64_t)other, 8003U,
                             survivor, sizeof(survivor)) == 0);
 
+    uint32_t first_slot = 32U, second_slot = 32U;
+    for (uint32_t i = 0U; i < 32U; ++i) {
+        if (endpoints[i].active && endpoints[i].token == (uint64_t)first)
+            first_slot = i;
+        if (endpoints[i].active && endpoints[i].token == (uint64_t)second)
+            second_slot = i;
+    }
+    assert(first_slot < 32U && second_slot < 32U && first_slot != second_slot);
+
     ipc_process_cleanup(owner);
     ipc_process_cleanup(owner); /* Repeated exit cleanup must be harmless. */
 
@@ -156,17 +165,16 @@ static void test_process_cleanup_is_scoped_and_idempotent(void)
     assert(memcmp(output, survivor, sizeof(survivor)) == 0);
 
     /* Inspect cleared slots to ensure queued payloads do not survive reuse. */
-    for (uint32_t i = 0U; i < 32U; ++i) {
-        if (endpoints[i].token == (uint64_t)first ||
-            endpoints[i].token == (uint64_t)second) {
-            assert(!endpoints[i].active);
-            assert(endpoints[i].count == 0U);
-            for (uint32_t q = 0U; q < IPC_QUEUE_DEPTH; ++q) {
-                assert(endpoints[i].queue[q].length == 0U);
-                assert(endpoints[i].queue[q].sender_pid == 0U);
-                for (size_t b = 0U; b < IPC_MESSAGE_MAX; ++b)
-                    assert(endpoints[i].queue[q].bytes[b] == 0U);
-            }
+    const uint32_t owned_slots[] = {first_slot, second_slot};
+    for (uint32_t s = 0U; s < 2U; ++s) {
+        ipc_endpoint_t *endpoint = &endpoints[owned_slots[s]];
+        assert(!endpoint->active && endpoint->token == 0U);
+        assert(endpoint->owner_pid == 0U && endpoint->count == 0U);
+        for (uint32_t q = 0U; q < IPC_QUEUE_DEPTH; ++q) {
+            assert(endpoint->queue[q].length == 0U);
+            assert(endpoint->queue[q].sender_pid == 0U);
+            for (size_t b = 0U; b < IPC_MESSAGE_MAX; ++b)
+                assert(endpoint->queue[q].bytes[b] == 0U);
         }
     }
     assert(ipc_endpoint_close((uint64_t)other, other_owner) == 0);

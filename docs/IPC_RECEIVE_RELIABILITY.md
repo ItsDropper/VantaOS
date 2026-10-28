@@ -84,3 +84,8 @@ The IPC host workflow runs the normal strict-warning test binary and a second bu
 ## Process-exit cleanup isolation
 
 A host regression now creates multiple endpoints owned by one process and a separate endpoint owned by another. It queues private payloads, invokes process cleanup twice, and verifies both owned endpoints become unreachable and their queued bytes/metadata are erased, while the unrelated endpoint remains readable and intact. This covers cleanup scope and idempotence at the shared IPC implementation layer; it does not replace scheduler/syscall-level exit tests or concurrent SMP stress.
+
+
+## IPC boundary-value coverage
+
+The host suite now exercises invalid token/PID/pointer/length combinations, verifies invalid receives do not consume queued data, and round-trips a payload exactly equal to `IPC_MESSAGE_MAX` using a deterministic nontrivial byte pattern. This complements the existing overflow, wraparound, owner isolation, process cleanup, and sanitizer tests.

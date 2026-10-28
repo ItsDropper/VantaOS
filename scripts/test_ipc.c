@@ -180,6 +180,44 @@ static void test_process_cleanup_is_scoped_and_idempotent(void)
     assert(ipc_endpoint_close((uint64_t)other, other_owner) == 0);
 }
 
+
+static void test_ipc_argument_boundaries_and_maximum_payload(void)
+{
+    int64_t token = ipc_endpoint_create(7300U);
+    uint8_t payload[IPC_MESSAGE_MAX];
+    uint8_t output[IPC_MESSAGE_MAX];
+    assert(token > 0);
+    for (size_t i = 0U; i < sizeof(payload); ++i)
+        payload[i] = (uint8_t)((i * 37U + 11U) & 0xFFU);
+    memset(output, 0xCC, sizeof(output));
+
+    assert(ipc_message_send(0U, 7301U, payload, 1U) == -22);
+    assert(ipc_message_send((uint64_t)token, 0U, payload, 1U) == -22);
+    assert(ipc_message_send((uint64_t)token, 7301U, NULL, 1U) == -22);
+    assert(ipc_message_send((uint64_t)token, 7301U, payload, 0U) == -22);
+    assert(ipc_message_send((uint64_t)token, 7301U, payload,
+                            IPC_MESSAGE_MAX + 1U) == -22);
+    assert(ipc_message_peek_length(0U, 7300U) == -22);
+    assert(ipc_message_peek_length((uint64_t)token, 0U) == -22);
+
+    assert(ipc_message_send((uint64_t)token, 7301U,
+                            payload, sizeof(payload)) == 0);
+    assert(ipc_message_receive((uint64_t)token, 7300U,
+                               NULL, sizeof(output)) == -22);
+    assert(ipc_message_receive((uint64_t)token, 7300U,
+                               output, 0U) == -22);
+    assert(ipc_message_receive((uint64_t)token, 7300U,
+                               output, sizeof(output) + 1U) == -22);
+    assert(ipc_message_peek_length((uint64_t)token, 7300U) ==
+           (int)sizeof(payload));
+
+    assert(ipc_message_receive((uint64_t)token, 7300U,
+                               output, sizeof(output)) == (int)sizeof(payload));
+    assert(memcmp(output, payload, sizeof(payload)) == 0);
+    assert(ipc_message_peek_length((uint64_t)token, 7300U) == -11);
+    assert(ipc_endpoint_close((uint64_t)token, 7300U) == 0);
+}
+
 int main(void)
 {
     vanta_ipc_message_t abi_message;
@@ -240,6 +278,7 @@ int main(void)
     test_endpoint_exhaustion_cleanup_and_rng_failure();
     test_ipc_queue_wraparound_and_payload_erasure();
     test_process_cleanup_is_scoped_and_idempotent();
+    test_ipc_argument_boundaries_and_maximum_payload();
     puts("VANTAOS_IPC_HOST_TEST_OK");
     return 0;
 }

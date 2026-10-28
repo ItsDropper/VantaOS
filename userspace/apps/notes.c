@@ -256,12 +256,15 @@ static void copy_selection(void)
     for (size_t i = 0U; i < clipboard_length; ++i)
         clipboard[i] = document[begin + i];
     clipboard[clipboard_length] = '\0';
-    set_status("Selection copied", COLOR_SUCCESS);
+    (void)vanta_clipboard_set(clipboard, clipboard_length);
+    set_status("Selection copied to system clipboard", COLOR_SUCCESS);
 }
 
 static void paste_clipboard(void)
 {
-    if (clipboard_length == 0U) return;
+    long available = vanta_clipboard_get(clipboard, sizeof(clipboard));
+    if (available <= 0) return;
+    clipboard_length = (size_t)available;
     if (selection_active) delete_selection();
     size_t available = sizeof(document) - 1U - document_length;
     size_t count = clipboard_length < available ? clipboard_length : available;

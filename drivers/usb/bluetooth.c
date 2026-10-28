@@ -584,7 +584,8 @@ int usb_bluetooth_l2cap_build_connection_response(
     uint8_t identifier, uint16_t destination_cid, uint16_t source_cid,
     uint16_t result, uint16_t status, uint8_t *output, uint32_t capacity)
 {
-    if (destination_cid < USB_BLUETOOTH_L2CAP_CID_DYNAMIC_MIN ||
+    if ((destination_cid < USB_BLUETOOTH_L2CAP_CID_DYNAMIC_MIN &&
+         (destination_cid != 0U || result == 0U)) ||
         source_cid < USB_BLUETOOTH_L2CAP_CID_DYNAMIC_MIN ||
         result > 4U || status > 2U ||
         (result != 0U && status != 0U))
@@ -597,6 +598,30 @@ int usb_bluetooth_l2cap_build_connection_response(
     };
     return usb_bluetooth_l2cap_signaling_build(
         0x03U, identifier, parameters, sizeof(parameters), output, capacity);
+}
+
+/* Reject inbound connection requests until an application registers a service.
+ * BR/EDR result 0x0002 means PSM not supported; destination CID is zero on
+ * rejection. This prevents silently ignoring requests or advertising a service
+ * whose security and profile semantics are not implemented.
+ */
+int usb_bluetooth_l2cap_reject_connection_request(
+    const uint8_t *command, uint32_t length,
+    uint8_t *response, uint32_t capacity)
+{
+    if (command == NULL || response == NULL || length != 8U ||
+        command[0] != 0x02U || command[1] == 0U ||
+        command[2] != 4U || command[3] != 0U)
+        return -22;
+    uint16_t psm = (uint16_t)command[4] |
+                   ((uint16_t)command[5] << 8);
+    uint16_t source_cid = (uint16_t)command[6] |
+                          ((uint16_t)command[7] << 8);
+    if ((psm & 0x0101U) != 0x0001U ||
+        source_cid < USB_BLUETOOTH_L2CAP_CID_DYNAMIC_MIN)
+        return -22;
+    return usb_bluetooth_l2cap_build_connection_response(
+        command[1], 0U, source_cid, 2U, 0U, response, capacity);
 }
 
 int usb_bluetooth_l2cap_build_configuration_response(

@@ -8,7 +8,7 @@
 #ifndef AHCI_H
 #define AHCI_H
 
-/* Safely identify idle AHCI PCI functions; this does not start the HBA or do I/O. */
+/* Safely identify AHCI PCI functions with decoding and bus mastering disabled; this does not start the HBA or do I/O. */
 void ahci_initialize(void);
 
 #endif

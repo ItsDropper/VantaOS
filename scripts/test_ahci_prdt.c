@@ -37,7 +37,7 @@ int main(void)
     assert(entries[0].data_base_low == 0x2000U);
     assert(entries[0].data_base_high == 1U);
     assert(entries[0].byte_count_and_interrupt == AHCI_PRDT_DBC_MASK);
-    assert(entries[1].data_base_low == 0x102000U);
+    assert(entries[1].data_base_low == 0x402000U);
     assert(entries[1].data_base_high == 1U);
     assert(entries[1].byte_count_and_interrupt == (AHCI_PRDT_IOC | 0U));
 

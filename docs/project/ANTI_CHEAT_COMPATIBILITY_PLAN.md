@@ -52,6 +52,22 @@ The repository currently provides an early foundation, not a stable Windows comp
 
 Treat these bullets as the audit baseline at the time this plan was written. Before implementing each milestone, re-fetch the relevant source and tests from the current branch and revise the status from evidence.
 
+### Source-linked gap matrix
+
+| Area | Repository evidence | Current boundary | Gap relevant to compatibility/security |
+| --- | --- | --- | --- |
+| ELF process loader | [process_elf.c](../../kernel/proc/process_elf.c), [user-mode guide](../architecture/user-mode-programs.md) | Static ET_EXEC with bounded load segments, owned pages, and an initial stack | No ET_DYN, dynamic loader, shared libraries, TLS runtime, or mature exception/unwind model |
+| Process lifecycle | [process.c](../../kernel/proc/process.c), [process interface](../../include/process.h) | Fixed-capacity process table, scheduling state, child spawn/wait, process-owned descriptors | No complete Win32 process/thread object semantics or general-purpose thread API |
+| Syscall boundary | [syscall.c](../../kernel/syscall.c), [public syscall header](../../userspace/include/vanta/syscall.h), [GUI header](../../userspace/include/vanta/gui.h) | VantaOS-specific int 0x80 ABI, raw negative error values, bounded user-buffer checks | ABI is not stable or POSIX-compatible; feature discovery, broader semantic tests, and compatibility policy remain incomplete |
+| Address spaces | [user_mapping.c](../../mm/user_mapping.c), [paging interface](../../include/paging.h) | User page mappings, per-process address spaces, writable/executable page flags, TLB shootdown coordination | No mature VM policy/demand paging; exhaustive allocation-failure and adversarial isolation testing remains outstanding |
+| Files and IPC | [user-mode guide](../architecture/user-mode-programs.md), [syscall implementation](../../kernel/syscall.c) | Bounded per-process file descriptors and capability-like IPC endpoints | No complete POSIX file descriptor semantics, blocking IPC contract, broad device I/O model, or Windows object model |
+| GUI and graphics | [userspace GUI guide](../architecture/USERSPACE_GUI.md), [GPU status](../gpu/README.md) | Kernel-owned compositor with a small project-specific ring-3 GUI API | No Win32 windowing API, DirectX/Vulkan compatibility layer, verified accelerated rendering, or complete input/audio stack |
+| Networking | [networking guide](../NETWORKING.md) | Early custom IPv4/IPv6 networking and plain HTTP paths with documented limits | No TLS/certificate-validation path for HTTPS, no general socket API, and no basis yet for secure game service connectivity |
+| Boot and integrity | [bootloader plan](BOOTLOADER_PLAN.md), [hardware support](HARDWARE_SUPPORT.md) | Separate GRUB and UEFI/OVMF boot paths are documented and tested within the scopes described by CI | No demonstrated signed-artifact enforcement, TPM-backed attestation, or vendor-recognized integrity report |
+| Verification | [testing guide](../build/TESTING.md), [engineering model](../architecture/ENGINEERING_MODEL.md) | CI covers named build, QEMU, OVMF, and host-test assertions | No complete Windows runtime conformance suite or vendor-approved anti-cheat end-to-end test |
+
+This matrix is an implementation-oriented audit, not a test report. Source links establish where to inspect the contract; they do not imply that every path has been independently verified. The current syscall-ID checker is only a static drift check and does not close the semantic or isolation gaps above.
+
 ## Ordered milestones and acceptance gates
 
 ### A0 — source and vendor-requirement audit

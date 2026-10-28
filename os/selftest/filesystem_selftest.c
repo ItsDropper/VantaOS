@@ -250,7 +250,9 @@ void filesystem_selftest_initialize(void)
         serial_write("VANTAOS_FILESYSTEM_RENAME_GUARD_WRITE_FAIL\n");
         return;
     }
-    if (vfs_close(existing_write) < 0 || vfs_close(incoming_write) < 0)
+    int existing_write_close = vfs_close(existing_write);
+    int incoming_write_close = vfs_close(incoming_write);
+    if (existing_write_close < 0 || incoming_write_close < 0)
     {
         serial_write("VANTAOS_FILESYSTEM_RENAME_GUARD_CLOSE_FAIL\n");
         return;

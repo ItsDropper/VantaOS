@@ -586,6 +586,88 @@ int main(int argc, char** argv)
                 matches = 0;
         if (matches)
         {
+            static const char save_path[] = "/HOME/USER/NOTES-SAVE-E2E.TXT";
+            static const char old_text[] = "old contents\\n";
+            static const char new_text[] = "replacement contents\\n";
+            static const char save_success[] = "VANTAOS_NOTES_SAVE_ATOMIC_OK\\n";
+            static const char save_failure[] = "VANTAOS_NOTES_SAVE_ATOMIC_FAIL\\n";
+            char readback[64];
+            char temporary_path[sizeof(document_path)];
+            char backup_path[sizeof(document_path)];
+            vanta_file_info_t info;
+            int save_ok = !path_is_home_document("/HOME/USER/../SYSTEM/PROBE.TXT") &&
+                          path_with_suffix(save_path, ".VANTA-TMP",
+                                           temporary_path, sizeof(temporary_path)) &&
+                          path_with_suffix(save_path, ".VANTA-BAK",
+                                           backup_path, sizeof(backup_path)) &&
+                          vanta_stat_path(save_path, &info) < 0 &&
+                          vanta_stat_path(temporary_path, &info) < 0 &&
+                          vanta_stat_path(backup_path, &info) < 0 &&
+                          vanta_create_file(save_path) >= 0;
+            long save_fd = -1;
+            if (save_ok)
+            {
+                save_fd = vanta_open(save_path, VANTA_OPEN_WRITE | VANTA_OPEN_TRUNCATE);
+                save_ok = save_fd >= 0;
+            }
+            if (save_ok)
+            {
+                size_t used = 0U, length = sizeof(old_text) - 1U;
+                while (used < length)
+                {
+                    long count = vanta_file_write((int)save_fd, old_text + used,
+                                                  length - used);
+                    if (count <= 0 || (size_t)count > length - used)
+                    {
+                        save_ok = 0;
+                        break;
+                    }
+                    used += (size_t)count;
+                }
+            }
+            if (save_fd >= 0 && vanta_close((int)save_fd) < 0)
+                save_ok = 0;
+
+            if (save_ok)
+            {
+                copy_text(document_path, sizeof(document_path), save_path);
+                document_writable = path_is_home_document(document_path);
+                copy_text(document, sizeof(document), new_text);
+                document_length = text_length(new_text);
+                cursor = document_length;
+                save_document();
+
+                save_fd = vanta_open(save_path, VANTA_OPEN_READ);
+                if (save_fd < 0)
+                    save_ok = 0;
+                else
+                {
+                    long count = vanta_read((int)save_fd, readback,
+                                            sizeof(readback) - 1U);
+                    if (count < 0 || (size_t)count != text_length(new_text))
+                        save_ok = 0;
+                    else
+                    {
+                        readback[(size_t)count] = '\\0';
+                        for (size_t i = 0U; i < (size_t)count; ++i)
+                            if (readback[i] != new_text[i])
+                                save_ok = 0;
+                    }
+                    if (vanta_close((int)save_fd) < 0)
+                        save_ok = 0;
+                }
+                if (vanta_stat_path(temporary_path, &info) == 0 ||
+                    vanta_stat_path(backup_path, &info) == 0)
+                    save_ok = 0;
+            }
+            (void)vanta_delete_path(save_path);
+            if (save_ok)
+                (void)vanta_write(save_success, sizeof(save_success) - 1U);
+            else
+            {
+                (void)vanta_write(save_failure, sizeof(save_failure) - 1U);
+                vanta_exit(1);
+            }
             (void)vanta_write(success, sizeof(success) - 1U);
             vanta_exit(0);
         }

@@ -682,7 +682,7 @@ static int command_http_url(const char *url, const char *output_argument,
                         if (k == sizeof(transfer_encoding) - 1U) {
                             size_t line_end = h + k;
                             while (line_end + 1U < header_end &&
-                                   !(headers[line_end] == '\\r' &&
+                                   !(headers[line_end] == '\r' &&
                                      headers[line_end + 1U] == '\n'))
                                 ++line_end;
                             for (size_t q = h + k; q + 7U <= line_end; ++q) {
@@ -714,7 +714,7 @@ static int command_http_url(const char *url, const char *output_argument,
                         if (k == sizeof(content_length_name) - 1U) {
                             size_t value_at = h + k;
                             while (value_at < header_end &&
-                                   (headers[value_at] == ' ' || headers[value_at] == '\\t'))
+                                   (headers[value_at] == ' ' || headers[value_at] == '\t'))
                                 ++value_at;
                             char digits[12];
                             size_t digit_count = 0U;
@@ -725,7 +725,7 @@ static int command_http_url(const char *url, const char *output_argument,
                             digits[digit_count] = 0;
                             uint32_t parsed_length = 0U;
                             if (digit_count == 0U ||
-                                (value_at < header_end && headers[value_at] != '\\r') ||
+                                (value_at < header_end && headers[value_at] != '\r') ||
                                 !parse_u32(digits, &parsed_length) ||
                                 parsed_length > max_download ||
                                 (expected_body_length != UINT32_MAX &&

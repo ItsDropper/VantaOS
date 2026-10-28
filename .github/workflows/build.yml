@@ -110,7 +110,7 @@ jobs:
       - name: Test kernel watchdog state machine
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iscripts/test_stubs -Iinclude \
-            scripts/test_kernel_watchdog.c kernel/watchdog.c \\
+            scripts/test_kernel_watchdog.c kernel/watchdog.c \
             -o /tmp/vantaos-kernel-watchdog-test
           /tmp/vantaos-kernel-watchdog-test
 

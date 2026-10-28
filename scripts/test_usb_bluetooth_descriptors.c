@@ -723,6 +723,26 @@ static void test_l2cap_signaling_command_boundaries(void)
     assert(!usb_bluetooth_l2cap_signaling_valid(empty, 0U));
 }
 
+static void test_hci_command_fault_requires_reset(void)
+{
+    usb_bluetooth_hci_command_state_t state = {.credits = 1U};
+    assert(usb_bluetooth_hci_command_begin(&state, 0x1001U) == 0);
+    state.faulted = 1U;
+    assert(usb_bluetooth_hci_command_begin(&state, 0x1009U) == -5);
+    usb_bluetooth_hci_command_state_reset(&state);
+    state.credits = 1U;
+    assert(usb_bluetooth_hci_command_begin(&state, 0x0C03U) == 0);
+    const uint8_t malformed_complete[] = {0x0EU, 0x03U, 0x01U, 0x03U, 0x0CU};
+    assert(usb_bluetooth_hci_command_event(&state, malformed_complete,
+                                           sizeof(malformed_complete)) == -22);
+    assert(state.outstanding == 1U);
+    const uint8_t reset_complete[] = {0x0EU, 0x04U, 0x01U, 0x03U, 0x0CU, 0U};
+    assert(usb_bluetooth_hci_command_event(&state, reset_complete,
+                                           sizeof(reset_complete)) == 1);
+    assert(state.outstanding == 0U && state.faulted == 0U);
+    assert(usb_bluetooth_hci_command_begin(&state, 0x1009U) == -11);
+}
+
 static void test_hci_command_credits_and_discovery_builders(void)
 {
     usb_bluetooth_hci_command_state_t state = {.credits = 1U};
@@ -888,6 +908,7 @@ int main(void)
 {
     test_hci_command_encoding();
     test_hci_command_credits_and_discovery_builders();
+    test_hci_command_fault_requires_reset();
     test_l2cap_channel_lifecycle();
     test_l2cap_standard_signaling_builders();
     test_l2cap_connection_response_dispatch();

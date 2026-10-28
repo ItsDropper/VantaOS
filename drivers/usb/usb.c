@@ -744,7 +744,7 @@ int usb_bluetooth_acl_receive(uint32_t port, uint8_t *packet,
     return -9;
 }
 
-static void bluetooth_l2cap_handle_configuration_requests(
+static void bluetooth_l2cap_handle_signaling_requests(
     uint32_t slot, uint16_t handle, const uint8_t *packet, uint32_t length)
 {
     if (slot == 0U || slot > USB_MAX_XHCI_SLOTS || packet == NULL)
@@ -767,26 +767,41 @@ static void bluetooth_l2cap_handle_configuration_requests(
             l2cap.payload, l2cap.payload_length, &offset, &command);
         if (next <= 0)
             return;
-        if (command.code != 0x04U)
+        if (command.code != 0x04U && command.code != 0x06U)
             continue;
 
         uint32_t command_length = offset - command_start;
         uint8_t response[16];
         uint8_t response_acl[32];
         uint16_t local_cid = 0U;
-        int response_length = usb_bluetooth_l2cap_configuration_request(
-            table, l2cap.payload + command_start, command_length,
-            response, sizeof(response), &local_cid);
+        int response_length;
+        if (command.code == 0x04U) {
+            response_length = usb_bluetooth_l2cap_configuration_request(
+                table, l2cap.payload + command_start, command_length,
+                response, sizeof(response), &local_cid);
+        } else {
+            response_length = usb_bluetooth_l2cap_disconnection_request(
+                table, l2cap.payload + command_start, command_length,
+                response, sizeof(response), &local_cid);
+        }
         if (response_length <= 0)
             continue;
         int acl_length = usb_bluetooth_l2cap_build_signaling_acl_packet(
             handle, response, (uint32_t)response_length,
             response_acl, sizeof(response_acl));
-        if (acl_length > 0 &&
-            usb_bluetooth_acl_send(bluetooth_slots[slot].port, response_acl,
-                                   (uint32_t)acl_length))
+        int sent = acl_length > 0 &&
+                   usb_bluetooth_acl_send(
+                       bluetooth_slots[slot].port, response_acl,
+                       (uint32_t)acl_length);
+        if (sent && command.code == 0x04U)
             (void)usb_bluetooth_l2cap_channel_remote_configured(
                 table, local_cid);
+        else if (sent && command.code == 0x06U &&
+                 local_cid >= USB_BLUETOOTH_L2CAP_CID_DYNAMIC_MIN) {
+            (void)usb_bluetooth_l2cap_channel_close(table, local_cid);
+            usb_bluetooth_l2cap_data_queue_forget_channel(
+                &bluetooth_l2cap_data_queues[slot], handle, local_cid);
+        }
         for (uint32_t i = 0U; i < sizeof(response); ++i)
             response[i] = 0U;
         for (uint32_t i = 0U; i < sizeof(response_acl); ++i)
@@ -1414,7 +1429,7 @@ void usb_poll(void)
                                 handle_channels, incoming_acl.handle,
                                 bluetooth_acl_reassembled_buffer,
                                 (uint32_t)assembled_length);
-                            bluetooth_l2cap_handle_configuration_requests(
+                            bluetooth_l2cap_handle_signaling_requests(
                                 slot, incoming_acl.handle,
                                 bluetooth_acl_reassembled_buffer,
                                 (uint32_t)assembled_length);

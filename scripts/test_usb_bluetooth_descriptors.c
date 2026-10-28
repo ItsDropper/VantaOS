@@ -1204,7 +1204,7 @@ static void test_l2cap_reject_unsupported_inbound_service(void)
     assert(usb_bluetooth_l2cap_reject_connection_request(
                request, sizeof(request), response, sizeof(response)) == -22);
     request[1] = 0x31U;
-    request[4] = 0x02U; /* PSM must have the BR/EDR odd/reserved-bit form. */
+    request[4] = 0x03U; /* Bit 1 is reserved and must be zero. */
     assert(usb_bluetooth_l2cap_reject_connection_request(
                request, sizeof(request), response, sizeof(response)) == -22);
     request[4] = 0x01U;

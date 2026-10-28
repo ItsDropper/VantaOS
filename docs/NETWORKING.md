@@ -87,7 +87,7 @@ See also [Vanta Launcher compatibility milestones](VANTA_LAUNCHER_COMPATIBILITY.
 The legacy kernel shell and GUI Terminal expose a small curl-style client:
 
 - `curl http://example.com/` prints the HTTP response body.
-- `curl -o /HOME/USER/page.html http://example.com/` writes the response body to a VantaOS VFS file. The client writes to a sibling `.part` file first and renames it to the requested path only after HTTP framing and orderly TCP EOF are verified; an existing destination or stale `.part` file is never overwritten.
+- `curl -o /HOME/USER/page.html http://example.com/` writes the response body to a VantaOS VFS file. The client writes to a sibling `.part` file first and renames it to the requested path only after HTTP framing and orderly TCP EOF are verified; an existing destination or stale `.part` file is never overwritten. URL paths up to 383 bytes are accepted, and body transfer has a five-minute total deadline in addition to the per-operation TCP timeouts.
 - `net connect` obtains IPv4 configuration through DHCP; `net status` inspects interfaces.
 - `net http http://example.com/` remains available for inspecting response headers and body.
 

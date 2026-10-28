@@ -14,6 +14,8 @@
 #define CONFIG_PREFIX 9U
 #define IFACE 9U
 #define ENDPOINT 7U
+#define EVENT_DESCRIPTOR_OFFSET (CONFIG_PREFIX + IFACE)
+#define ACL_IN_DESCRIPTOR_OFFSET (EVENT_DESCRIPTOR_OFFSET + ENDPOINT)
 
 static const uint8_t valid_configuration[] = {
     9, 2, 39, 0, 1, 1, 0, 0x80, 50,
@@ -276,15 +278,15 @@ static void test_endpoint_packet_bounds_and_interval(void)
 
     for (unsigned int i = 0U; i < sizeof(valid_configuration); ++i)
         configuration[i] = valid_configuration[i];
-    configuration[CONFIG_PREFIX + IFACE + 1U + ENDPOINT + 4U] = 65U;
-    configuration[CONFIG_PREFIX + IFACE + 1U + ENDPOINT + 5U] = 0U;
+    configuration[EVENT_DESCRIPTOR_OFFSET + 4U] = 65U;
+    configuration[EVENT_DESCRIPTOR_OFFSET + 5U] = 0U;
     assert(!usb_bluetooth_find_hci_interface(configuration,
                                               sizeof(configuration),
                                               &candidate));
 
     for (unsigned int i = 0U; i < sizeof(valid_configuration); ++i)
         configuration[i] = valid_configuration[i];
-    configuration[CONFIG_PREFIX + IFACE + 1U + ENDPOINT + 6U] = 0U;
+    configuration[EVENT_DESCRIPTOR_OFFSET + 6U] = 0U;
     assert(!usb_bluetooth_find_hci_interface(configuration,
                                               sizeof(configuration),
                                               &candidate));
@@ -292,8 +294,8 @@ static void test_endpoint_packet_bounds_and_interval(void)
     for (unsigned int i = 0U; i < sizeof(valid_configuration); ++i)
         configuration[i] = valid_configuration[i];
     /* First bulk-IN endpoint's wMaxPacketSize becomes 1025. */
-    configuration[CONFIG_PREFIX + IFACE + 1U + ENDPOINT + 7U + 4U] = 1U;
-    configuration[CONFIG_PREFIX + IFACE + 1U + ENDPOINT + 7U + 5U] = 4U;
+    configuration[ACL_IN_DESCRIPTOR_OFFSET + 4U] = 1U;
+    configuration[ACL_IN_DESCRIPTOR_OFFSET + 5U] = 4U;
     assert(!usb_bluetooth_find_hci_interface(configuration,
                                               sizeof(configuration),
                                               &candidate));

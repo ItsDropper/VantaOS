@@ -206,6 +206,33 @@ static void test_non_bluetooth_interface_is_ignored(void)
                                                &candidate));
 }
 
+static void test_acl_queue_pop_by_handle(void)
+{
+    usb_bluetooth_acl_queue_t queue = {0};
+    const uint8_t payload[] = {0xAAU, 0x55U};
+    uint8_t first[16] = {0}, second[16] = {0}, output[16] = {0};
+    usb_bluetooth_acl_queue_reset(&queue);
+    assert(usb_bluetooth_l2cap_build_acl_packet(0x000BU, 0x0040U,
+                                                payload, sizeof(payload),
+                                                first, sizeof(first)) == 10);
+    assert(usb_bluetooth_l2cap_build_acl_packet(0x000CU, 0x0040U,
+                                                payload, sizeof(payload),
+                                                second, sizeof(second)) == 10);
+    assert(usb_bluetooth_acl_queue_push(&queue, first, 10U) == 0);
+    assert(usb_bluetooth_acl_queue_push(&queue, second, 10U) == 0);
+    assert(usb_bluetooth_acl_queue_pop_handle(&queue, 0x000CU, output,
+                                              4U) == -90);
+    assert(queue.count == 2U);
+    assert(usb_bluetooth_acl_queue_pop_handle(&queue, 0x000CU, output,
+                                              sizeof(output)) == 10);
+    assert(memcmp(output, second, 10U) == 0);
+    assert(queue.count == 1U);
+    assert(usb_bluetooth_acl_queue_pop(&queue, output, sizeof(output)) == 10);
+    assert(memcmp(output, first, 10U) == 0);
+    assert(usb_bluetooth_acl_queue_pop_handle(&queue, 0x000BU, output,
+                                              sizeof(output)) == -11);
+}
+
 static void test_acl_queue_preserves_messages_on_small_buffer(void)
 {
     usb_bluetooth_acl_queue_t queue = {0};
@@ -1222,6 +1249,7 @@ int main(void)
     test_configuration_header_is_validated();
     test_non_bluetooth_interface_is_ignored();
     test_hci_event_and_acl_framing();
+    test_acl_queue_pop_by_handle();
     test_acl_queue_preserves_messages_on_small_buffer();
     test_acl_queue_wraparound_and_invariants();
     test_transport_readiness_gate();

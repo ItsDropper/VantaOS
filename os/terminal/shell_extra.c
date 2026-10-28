@@ -515,7 +515,7 @@ static int command_http_url(const char *url, const char *output_argument,
                             int body_only)
 {
     char host[96], path[96], request[512], output[257], headers[2048];
-    char resolved_path[FS_PATH_MAX];
+    char resolved_path[FS_PATH_MAX], download_path[FS_PATH_MAX];
     size_t used = 0;
     size_t header_length = 0, header_end = 0, body_used = 0;
     char body_chunk[257];
@@ -561,9 +561,22 @@ static int command_http_url(const char *url, const char *output_argument,
             terminal_write("\ncurl: output must be a file path");
             return 1;
         }
-        /* Never truncate a user's existing file before the download is verified. */
+        /* Never overwrite a destination; stage bytes beside it until verified. */
         if (vfs_lookup(resolved_path) >= 0) {
             terminal_write("\ncurl: output already exists; choose a new path to avoid data loss");
+            return 1;
+        }
+        size_t temp_used = 0U;
+        download_path[0] = '\0';
+        if (!append_text(download_path, sizeof(download_path), &temp_used,
+                         resolved_path) ||
+            !append_text(download_path, sizeof(download_path), &temp_used,
+                         ".part")) {
+            terminal_write("\ncurl: output path leaves no room for safe temporary file");
+            return 1;
+        }
+        if (vfs_lookup(download_path) >= 0) {
+            terminal_write("\ncurl: temporary download path already exists; remove it or choose another output");
             return 1;
         }
     }
@@ -645,7 +658,7 @@ static int command_http_url(const char *url, const char *output_argument,
         if (received < 0) {
             terminal_write("\ncurl: response timed out or connection failed");
             if (file_handle >= 0) { (void)vfs_close(file_handle); file_handle = -1; }
-            if (output_argument) (void)vfs_delete_path(resolved_path);
+            if (output_argument) (void)vfs_delete_path(download_path);
             net_tcp_close(device);
             return 1;
         }
@@ -701,14 +714,14 @@ static int command_http_url(const char *url, const char *output_argument,
                          * existence check; creation failure must never fall
                          * through to opening an existing destination.
                          */
-                        if (vfs_create_file(resolved_path) < 0) {
+                        if (vfs_create_file(download_path) < 0) {
                             terminal_write("\ncurl: could not create output file without overwriting an existing path");
                             net_tcp_close(device);
                             return 1;
                         }
-                        file_handle = vfs_open(resolved_path, VFS_OPEN_WRITE);
+                        file_handle = vfs_open(download_path, VFS_OPEN_WRITE);
                         if (file_handle < 0) {
-                            (void)vfs_delete_path(resolved_path);
+                            (void)vfs_delete_path(download_path);
                             terminal_write("\ncurl: could not open newly created output file");
                             net_tcp_close(device);
                             return 1;
@@ -731,7 +744,7 @@ static int command_http_url(const char *url, const char *output_argument,
                 }
                 if (output_argument) {
                     terminal_write("; incomplete output removed");
-                    (void)vfs_delete_path(resolved_path);
+                    (void)vfs_delete_path(download_path);
                 }
                 net_tcp_close(device);
                 return 1;
@@ -748,7 +761,7 @@ static int command_http_url(const char *url, const char *output_argument,
             if (written != (int)body_used) {
                 terminal_write("\ncurl: write failed; incomplete output removed");
                 (void)vfs_close(file_handle);
-                (void)vfs_delete_path(resolved_path);
+                (void)vfs_delete_path(download_path);
                 net_tcp_close(device);
                 return 1;
             }
@@ -758,7 +771,7 @@ static int command_http_url(const char *url, const char *output_argument,
     net_tcp_close(device);
     if (file_handle >= 0) {
         if (vfs_close(file_handle) < 0) {
-            if (output_argument) (void)vfs_delete_path(resolved_path);
+            if (output_argument) (void)vfs_delete_path(download_path);
             terminal_write("\ncurl: failed to close output file");
             return 1;
         }
@@ -770,13 +783,18 @@ static int command_http_url(const char *url, const char *output_argument,
     }
     body_status = http_body_finish(&body_state, peer_closed);
     if (body_status != HTTP_BODY_OK) {
-        if (output_argument) (void)vfs_delete_path(resolved_path);
+        if (output_argument) (void)vfs_delete_path(download_path);
         terminal_write("\ncurl: ");
         terminal_write(http_body_status_string(body_status));
         if (output_argument) terminal_write("; incomplete output removed");
         return 1;
     }
     if (output_argument) {
+        if (vfs_rename_path(download_path, resolved_path) < 0) {
+            (void)vfs_delete_path(download_path);
+            terminal_write("\ncurl: download verified, but could not publish the destination; staged file removed");
+            return 1;
+        }
         terminal_write("\nSaved "); terminal_write(resolved_path);
         terminal_write(" ("); shell_print_decimal(http_body_bytes_received(&body_state));
         terminal_write(" bytes)");

@@ -17,5 +17,6 @@ void storage_initialize(void)
 {
     ata_initialize();
     nvme_initialize();
+    ahci_initialize();
     partition_device_initialize();
 }

@@ -1402,6 +1402,15 @@ void usb_poll(void)
                     (void)usb_bluetooth_inquiry_state_cancel_result(
                         &bluetooth->inquiry_state, 0);
                 } else if (bluetooth_event_buffer[0] == 0x0EU &&
+                           event_length == 12U &&
+                           bluetooth_event_buffer[3] == 0x08U &&
+                           bluetooth_event_buffer[4] == 0x04U &&
+                           bluetooth_event_buffer[5] == 0U) {
+                    /* Successful Create Connection Cancel returns BD_ADDR. */
+                    (void)usb_bluetooth_connection_attempt_finish(
+                        &bluetooth->connection_attempt,
+                        &bluetooth_event_buffer[6]);
+                } else if (bluetooth_event_buffer[0] == 0x0EU &&
                            event_length >= 6U &&
                            bluetooth_event_buffer[3] == 0x02U &&
                            bluetooth_event_buffer[4] == 0x04U) {

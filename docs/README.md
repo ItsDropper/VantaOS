@@ -29,6 +29,7 @@ Use this index to find the document that answers a specific engineering question
 ## Roadmap and decisions
 
 - [Development plan](project/DEVELOPMENT_PLAN.md) — current project priorities and staged goals.
+- [Anti-cheat compatibility plan](project/ANTI_CHEAT_COMPATIBILITY_PLAN.md) — EAC support routes, native userspace requirements, platform integrity, and verification gates.
 - [Decision records](decisions/README.md) — rationale for changes that affect long-term architecture.
 
 ## Contribution and security

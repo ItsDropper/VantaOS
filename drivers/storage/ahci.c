@@ -52,7 +52,7 @@ static int ahci_probe_idle_function(const struct pci_device* pci)
         return 0;
 
     saved_command = pci_read_config16(pci, 0x04U);
-    if ((saved_command & 0x0007U) != 0U)
+    if (!ahci_pci_bar_sizing_allowed(saved_command))
         return 0;
 
     if (!pci_get_bar_size(pci, 5U, &bar_size) ||

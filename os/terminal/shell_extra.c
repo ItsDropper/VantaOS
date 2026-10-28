@@ -14,6 +14,7 @@
 #include "net_ipv6.h"
 #include "net_tcp.h"
 #include "http_url.h"
+#include "http_response.h"
 #include <stdint.h>
 #include <stddef.h>
 
@@ -668,8 +669,19 @@ static int command_http_url(const char *url, const char *output_argument,
                     headers[header_length - 3U] == '\n' &&
                     headers[header_length - 2U] == '\r' &&
                     headers[header_length - 1U] == '\n') {
+                    http_response_t parsed;
+                    http_response_status_t parse_status;
                     header_end = header_length;
-                    body_started = 1;
+                    parse_status = http_response_parse(
+                        headers, header_end, (uint32_t)max_download, &parsed);
+                    if (parse_status != HTTP_RESPONSE_OK) {
+                        terminal_write("\ncurl: rejected malformed or unsupported HTTP response headers (parser status ");
+                        shell_print_decimal((unsigned int)parse_status);
+                        terminal_write(")");
+                        net_tcp_close(device);
+                        return 1;
+                    }
+                    response_status = (int)parsed.status_code;
                     if (response_status != 200) {
                         terminal_write("\ncurl: server returned HTTP status ");
                         shell_print_decimal((unsigned int)response_status);
@@ -677,59 +689,9 @@ static int command_http_url(const char *url, const char *output_argument,
                         net_tcp_close(device);
                         return 1;
                     }
-                    for (size_t h = 0U; h + 18U <= header_end; ++h) {
-                        /* Header names are recognized only at field boundaries. */
-                        if (h != 0U && headers[h - 1U] != '\n') continue;
-                        static const char transfer_encoding[] = "transfer-encoding:";
-                        size_t k = 0U;
-                        while (k < sizeof(transfer_encoding) - 1U) {
-                            char ch = headers[h + k];
-                            if (ch >= 'A' && ch <= 'Z') ch = (char)(ch - 'A' + 'a');
-                            if (ch != transfer_encoding[k]) break;
-                            ++k;
-                        }
-                        if (k == sizeof(transfer_encoding) - 1U) {
-                            terminal_write("\ncurl: Transfer-Encoding is unsupported; refusing ambiguous response framing");
-                            net_tcp_close(device);
-                            return 1;
-                        }
-                    }
-                    for (size_t h = 0U; h + 15U <= header_end; ++h) {
-                        if (h != 0U && headers[h - 1U] != '\n') continue;
-                        static const char content_length_name[] = "content-length:";
-                        size_t k = 0U;
-                        while (k < sizeof(content_length_name) - 1U) {
-                            char ch = headers[h + k];
-                            if (ch >= 'A' && ch <= 'Z') ch = (char)(ch - 'A' + 'a');
-                            if (ch != content_length_name[k]) break;
-                            ++k;
-                        }
-                        if (k == sizeof(content_length_name) - 1U) {
-                            size_t value_at = h + k;
-                            while (value_at < header_end &&
-                                   (headers[value_at] == ' ' || headers[value_at] == '\t'))
-                                ++value_at;
-                            char digits[12];
-                            size_t digit_count = 0U;
-                            while (value_at < header_end &&
-                                   headers[value_at] >= '0' && headers[value_at] <= '9' &&
-                                   digit_count + 1U < sizeof(digits))
-                                digits[digit_count++] = headers[value_at++];
-                            digits[digit_count] = 0;
-                            uint32_t parsed_length = 0U;
-                            if (digit_count == 0U ||
-                                (value_at >= header_end || headers[value_at] != '\r') ||
-                                !parse_u32(digits, &parsed_length) ||
-                                parsed_length > max_download ||
-                                (expected_body_length != UINT32_MAX &&
-                                 expected_body_length != parsed_length)) {
-                                terminal_write("\ncurl: invalid or conflicting Content-Length");
-                                net_tcp_close(device);
-                                return 1;
-                            }
-                            expected_body_length = parsed_length;
-                        }
-                    }
+                    if (parsed.has_content_length)
+                        expected_body_length = parsed.content_length;
+                    body_started = 1;
                     if (output_argument) {
                         file_handle = vfs_open(resolved_path,
                                                 VFS_OPEN_WRITE | VFS_OPEN_TRUNCATE);

@@ -120,7 +120,7 @@ void ahci_initialize(void)
         if (ahci_probe_idle_function(pci)) {
             serial_write("VANTAOS_AHCI_IDLE_CONTROLLER_DISCOVERED\n");
         } else {
-            serial_write("VANTAOS_AHCI_CONTROLLER_SKIPPED_UNSAFE_TO_PROBE\n");
+            serial_write("VANTAOS_AHCI_CONTROLLER_PROBE_REJECTED\n");
         }
     }
 

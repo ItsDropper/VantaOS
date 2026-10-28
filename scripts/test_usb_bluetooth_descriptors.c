@@ -1173,6 +1173,20 @@ static void test_l2cap_configuration_request_round_trip(void)
     assert(usb_bluetooth_l2cap_channel_remote_configured(&table, cid) == 0);
     assert(table.channels[0].state == 3U);
 
+    /* Unknown mandatory options must receive a negative protocol response. */
+    uint8_t unsupported_request[10] = {
+        0x04U, 0x33U, 6U, 0U,
+        (uint8_t)cid, (uint8_t)(cid >> 8), 0U, 0U, 0x02U, 0U
+    };
+    uint16_t rejected_cid = 99U;
+    assert(usb_bluetooth_l2cap_configuration_request(
+               &table, unsupported_request, sizeof(unsupported_request),
+               response, sizeof(response), &rejected_cid) == 10);
+    assert(response[0] == 0x05U && response[1] == 0x33U &&
+           response[8] == 2U && response[9] == 0U);
+    assert(rejected_cid == 0U && table.channels[0].remote_mtu == 160U &&
+           table.channels[0].state == 3U);
+
     peer_response[0] = 0x05U;
     peer_response[1] = config_id;
     peer_response[2] = 10U;

@@ -12,7 +12,7 @@
 
 #define KERNEL_WATCHDOG_MAX_CLIENTS 32U
 
-typedef uint32_t kernel_watchdog_handle_t;
+typedef uint64_t kernel_watchdog_handle_t;
 
 typedef enum
 {

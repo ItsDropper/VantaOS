@@ -994,6 +994,23 @@ int usb_bluetooth_l2cap_channel_begin(usb_bluetooth_l2cap_table_t *table,
     return 0;
 }
 
+int usb_bluetooth_l2cap_channel_abort(usb_bluetooth_l2cap_table_t *table,
+                                      uint16_t local_cid)
+{
+    if (table == NULL || local_cid < USB_BLUETOOTH_L2CAP_CID_DYNAMIC_MIN)
+        return -22;
+    for (uint32_t i = 0U; i < USB_BLUETOOTH_L2CAP_CHANNEL_MAX; ++i) {
+        usb_bluetooth_l2cap_channel_t *channel = &table->channels[i];
+        if (channel->active && channel->local_cid == local_cid) {
+            if (channel->state == 4U || channel->state == 5U)
+                return -16;
+            *channel = (usb_bluetooth_l2cap_channel_t){0};
+            return 1;
+        }
+    }
+    return -9;
+}
+
 int usb_bluetooth_l2cap_channel_response(usb_bluetooth_l2cap_table_t *table,
                                          uint8_t identifier, uint16_t remote_cid,
                                          uint16_t result, uint16_t remote_mtu)

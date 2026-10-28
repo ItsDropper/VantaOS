@@ -672,6 +672,8 @@ static int command_http_url(const char *url, const char *output_argument,
                         return 1;
                     }
                     for (size_t h = 0U; h + 18U <= header_end; ++h) {
+                        /* Header names are recognized only at field boundaries. */
+                        if (h != 0U && headers[h - 1U] != '\n') continue;
                         static const char transfer_encoding[] = "transfer-encoding:";
                         size_t k = 0U;
                         while (k < sizeof(transfer_encoding) - 1U) {
@@ -681,29 +683,13 @@ static int command_http_url(const char *url, const char *output_argument,
                             ++k;
                         }
                         if (k == sizeof(transfer_encoding) - 1U) {
-                            size_t line_end = h + k;
-                            while (line_end + 1U < header_end &&
-                                   !(headers[line_end] == '\r' &&
-                                     headers[line_end + 1U] == '\n'))
-                                ++line_end;
-                            for (size_t q = h + k; q + 7U <= line_end; ++q) {
-                                static const char chunked[] = "chunked";
-                                size_t m = 0U;
-                                while (m < sizeof(chunked) - 1U) {
-                                    char ch = headers[q + m];
-                                    if (ch >= 'A' && ch <= 'Z') ch = (char)(ch - 'A' + 'a');
-                                    if (ch != chunked[m]) break;
-                                    ++m;
-                                }
-                                if (m == sizeof(chunked) - 1U) {
-                                    terminal_write("\ncurl: chunked transfer encoding is not supported; refusing to save framed data");
-                                    net_tcp_close(device);
-                                    return 1;
-                                }
-                            }
+                            terminal_write("\ncurl: Transfer-Encoding is unsupported; refusing ambiguous response framing");
+                            net_tcp_close(device);
+                            return 1;
                         }
                     }
                     for (size_t h = 0U; h + 15U <= header_end; ++h) {
+                        if (h != 0U && headers[h - 1U] != '\n') continue;
                         static const char content_length_name[] = "content-length:";
                         size_t k = 0U;
                         while (k < sizeof(content_length_name) - 1U) {
@@ -726,7 +712,7 @@ static int command_http_url(const char *url, const char *output_argument,
                             digits[digit_count] = 0;
                             uint32_t parsed_length = 0U;
                             if (digit_count == 0U ||
-                                (value_at < header_end && headers[value_at] != '\r') ||
+                                (value_at >= header_end || headers[value_at] != '\r') ||
                                 !parse_u32(digits, &parsed_length) ||
                                 parsed_length > max_download ||
                                 (expected_body_length != UINT32_MAX &&

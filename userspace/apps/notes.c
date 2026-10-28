@@ -61,6 +61,8 @@ static void copy_text(char* destination, size_t capacity, const char* source)
 static int path_is_home_document(const char* path)
 {
     static const char prefix[] = "/HOME/USER/";
+    if (!path)
+        return 0;
     for (size_t i = 0U; i < sizeof(prefix) - 1U; ++i)
     {
         char a = path[i], b = prefix[i];
@@ -68,7 +70,41 @@ static int path_is_home_document(const char* path)
         if (b >= 'a' && b <= 'z') b = (char)(b - 'a' + 'A');
         if (a != b) return 0;
     }
-    return path[sizeof(prefix) - 1U] != '\0';
+
+    /* Never allow an argv path such as /HOME/USER/../SYSTEM/FILE to
+       turn the editor's home-only save policy into a path traversal. */
+    const char* component = path + sizeof(prefix) - 1U;
+    if (!*component)
+        return 0;
+    for (const char* p = component;; ++p)
+    {
+        if (*p == '/' || *p == '\\0')
+        {
+            size_t length = (size_t)(p - component);
+            if (length == 0U ||
+                (length == 1U && component[0] == '.') ||
+                (length == 2U && component[0] == '.' && component[1] == '.'))
+                return 0;
+            if (*p == '\\0')
+                return 1;
+            component = p + 1;
+        }
+    }
+}
+
+static int path_with_suffix(const char* path, const char* suffix,
+                            char* output, size_t capacity)
+{
+    size_t path_length = text_length(path);
+    size_t suffix_length = text_length(suffix);
+    if (!path || !suffix || !output || path_length + suffix_length >= capacity)
+        return 0;
+    for (size_t i = 0U; i < path_length; ++i)
+        output[i] = path[i];
+    for (size_t i = 0U; i < suffix_length; ++i)
+        output[path_length + i] = suffix[i];
+    output[path_length + suffix_length] = '\\0';
+    return 1;
 }
 
 static void set_status(const char* message, uint32_t color)
@@ -298,40 +334,104 @@ static void paste_clipboard(void)
 
 static void save_document(void)
 {
-    if (!document_writable)
+    if (!document_writable || !path_is_home_document(document_path))
     {
-        set_status("Read-only: saving is limited to /HOME/USER", COLOR_ERROR);
+        set_status("Read-only: saving is limited to safe /HOME/USER paths",
+                   COLOR_ERROR);
         return;
     }
-    long fd = vanta_open(document_path, VANTA_OPEN_WRITE | VANTA_OPEN_TRUNCATE);
-    if (fd < 0)
+
+    char temporary_path[sizeof(document_path)];
+    char backup_path[sizeof(document_path)];
+    if (!path_with_suffix(document_path, ".VANTA-TMP", temporary_path,
+                          sizeof(temporary_path)) ||
+        !path_with_suffix(document_path, ".VANTA-BAK", backup_path,
+                          sizeof(backup_path)))
     {
-        if (vanta_create_file(document_path) < 0)
-        {
-            set_status("Could not create Notes file", COLOR_ERROR);
-            return;
-        }
-        fd = vanta_open(document_path, VANTA_OPEN_WRITE | VANTA_OPEN_TRUNCATE);
-    }
-    if (fd < 0)
-    {
-        set_status("Could not open Notes file for writing", COLOR_ERROR);
+        set_status("Path is too long to save safely", COLOR_ERROR);
         return;
     }
+
+    vanta_file_info_t temporary_info, backup_info, destination_info;
+    if (vanta_stat_path(temporary_path, &temporary_info) == 0 ||
+        vanta_stat_path(backup_path, &backup_info) == 0)
+    {
+        set_status("Save recovery file exists; rename it before saving",
+                   COLOR_ERROR);
+        return;
+    }
+
+    /* Write the complete new contents to a separate file first. Never truncate
+       the user's current document before the replacement is ready. */
+    if (vanta_create_file(temporary_path) < 0)
+    {
+        set_status("Could not create temporary save file", COLOR_ERROR);
+        return;
+    }
+    long fd = vanta_open(temporary_path, VANTA_OPEN_WRITE | VANTA_OPEN_TRUNCATE);
+    if (fd < 0)
+    {
+        (void)vanta_delete_path(temporary_path);
+        set_status("Could not open temporary save file", COLOR_ERROR);
+        return;
+    }
+
     size_t written = 0U;
+    int write_ok = 1;
     while (written < document_length)
     {
         long result = vanta_file_write((int)fd, document + written,
                                        document_length - written);
-        if (result <= 0)
+        if (result <= 0 || (size_t)result > document_length - written)
         {
-            (void)vanta_close((int)fd);
-            set_status("Save failed; storage may be full", COLOR_ERROR);
-            return;
+            write_ok = 0;
+            break;
         }
         written += (size_t)result;
     }
-    (void)vanta_close((int)fd);
+    if (vanta_close((int)fd) < 0)
+        write_ok = 0;
+    if (!write_ok)
+    {
+        (void)vanta_delete_path(temporary_path);
+        set_status("Save failed; original file was preserved", COLOR_ERROR);
+        return;
+    }
+
+    int destination_exists = vanta_stat_path(document_path, &destination_info) == 0;
+    if (destination_exists && destination_info.type != 1U)
+    {
+        (void)vanta_delete_path(temporary_path);
+        set_status("Save target is not a regular file", COLOR_ERROR);
+        return;
+    }
+
+    if (destination_exists && vanta_rename_path(document_path, backup_path) < 0)
+    {
+        (void)vanta_delete_path(temporary_path);
+        set_status("Could not protect existing file; save cancelled", COLOR_ERROR);
+        return;
+    }
+
+    if (vanta_rename_path(temporary_path, document_path) < 0)
+    {
+        if (destination_exists && vanta_rename_path(backup_path, document_path) < 0)
+        {
+            set_status("Save failed; original is preserved as .VANTA-BAK",
+                       COLOR_ERROR);
+            return;
+        }
+        (void)vanta_delete_path(temporary_path);
+        set_status("Could not publish saved file; original restored", COLOR_ERROR);
+        return;
+    }
+
+    if (destination_exists && vanta_delete_path(backup_path) < 0)
+    {
+        set_status("Saved; cleanup left a .VANTA-BAK recovery file",
+                   COLOR_SUCCESS);
+        return;
+    }
     set_status("Saved current file", COLOR_SUCCESS);
 }
 

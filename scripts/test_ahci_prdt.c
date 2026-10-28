@@ -14,6 +14,7 @@
 
 int main(void)
 {
+    assert(sizeof(ahci_prdt_entry_t) == 16U);
     ahci_prdt_entry_t entries[3];
     memset(entries, 0xA5, sizeof(entries));
     uint32_t count = 99U;

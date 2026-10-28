@@ -191,6 +191,7 @@ int usb_bluetooth_hci_build_create_connection_cancel(
  */
 int usb_bluetooth_inquiry(uint32_t port, uint8_t inquiry_length,
                           uint8_t responses);
+int usb_bluetooth_inquiry_cancel(uint32_t port);
 int usb_bluetooth_connect(uint32_t port, const uint8_t address[6],
                           uint16_t packet_type,
                           uint8_t page_scan_repetition_mode,

@@ -225,3 +225,13 @@ buffer writes. Invalid lengths, impossible active/inactive combinations, a
 second first-fragment while a PDU is in progress, and continuation overruns
 are rejected without discarding the valid partial packet. State objects must
 be initialized with `usb_bluetooth_acl_reassembly_reset` before first use.
+
+
+## L2CAP signaling command construction and iteration
+
+Signaling consumers can now iterate validated commands without reimplementing
+length arithmetic, and can build bounded command frames with nonzero command
+identifiers. The iterator advances its offset only on a valid command and
+distinguishes end-of-list from malformed input. These are safe framing tools;
+they do not yet constitute a live L2CAP connection/configuration state machine
+or automatically transmit signaling commands.

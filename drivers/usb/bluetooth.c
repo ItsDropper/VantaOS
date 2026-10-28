@@ -396,6 +396,52 @@ int usb_bluetooth_acl_reassembly_take(usb_bluetooth_acl_reassembly_t *state,
     return (int)length;
 }
 
+int usb_bluetooth_l2cap_signaling_next(
+    const uint8_t *payload, uint32_t length, uint32_t *offset,
+    usb_bluetooth_l2cap_signal_command_t *command)
+{
+    if (payload == NULL || offset == NULL || command == NULL ||
+        *offset > length)
+        return -22;
+    *command = (usb_bluetooth_l2cap_signal_command_t){0};
+    if (*offset == length)
+        return 0;
+    if (length - *offset < 4U)
+        return -22;
+    uint32_t at = *offset;
+    uint16_t command_length = (uint16_t)payload[at + 2U] |
+                              ((uint16_t)payload[at + 3U] << 8);
+    if (payload[at] == 0U || payload[at + 1U] == 0U ||
+        (uint32_t)command_length > length - at - 4U)
+        return -22;
+    command->code = payload[at];
+    command->identifier = payload[at + 1U];
+    command->payload = payload + at + 4U;
+    command->payload_length = command_length;
+    *offset = at + 4U + command_length;
+    return 1;
+}
+
+int usb_bluetooth_l2cap_signaling_build(uint8_t code, uint8_t identifier,
+                                        const uint8_t *parameters,
+                                        uint16_t parameter_length,
+                                        uint8_t *output, uint32_t capacity)
+{
+    uint32_t required = (uint32_t)parameter_length + 4U;
+    if (code == 0U || identifier == 0U || output == NULL ||
+        (parameter_length != 0U && parameters == NULL))
+        return -22;
+    if (required > capacity)
+        return -90;
+    output[0] = code;
+    output[1] = identifier;
+    output[2] = (uint8_t)(parameter_length & 0xFFU);
+    output[3] = (uint8_t)(parameter_length >> 8);
+    for (uint32_t i = 0U; i < parameter_length; ++i)
+        output[4U + i] = parameters[i];
+    return (int)required;
+}
+
 /*
  * L2CAP signaling uses a four-byte command header (code, identifier, LE16
  * length). Validate the entire command list before any caller dispatches it.

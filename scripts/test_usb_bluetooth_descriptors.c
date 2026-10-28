@@ -506,6 +506,44 @@ static void test_acl_and_l2cap_views(void)
     assert(acl.payload == NULL && acl.payload_length == 0U);
 }
 
+static void test_l2cap_signaling_iteration_and_build(void)
+{
+    const uint8_t commands[] = {
+        0x02U, 0x01U, 0x02U, 0x00U, 0x34U, 0x12U,
+        0x03U, 0x02U, 0x00U, 0x00U
+    };
+    const uint8_t request_parameters[] = {0x40U, 0x00U, 0x01U, 0x00U};
+    uint8_t output[16] = {0};
+    uint32_t offset = 0U;
+    usb_bluetooth_l2cap_signal_command_t command = {0};
+    assert(usb_bluetooth_l2cap_signaling_next(commands, sizeof(commands),
+                                               &offset, &command) == 1);
+    assert(command.code == 2U && command.identifier == 1U &&
+           command.payload_length == 2U && command.payload[0] == 0x34U);
+    assert(offset == 6U);
+    assert(usb_bluetooth_l2cap_signaling_next(commands, sizeof(commands),
+                                               &offset, &command) == 1);
+    assert(command.code == 3U && command.identifier == 2U &&
+           command.payload_length == 0U);
+    assert(usb_bluetooth_l2cap_signaling_next(commands, sizeof(commands),
+                                               &offset, &command) == 0);
+    assert(usb_bluetooth_l2cap_signaling_next(commands, sizeof(commands),
+                                               &offset, &command) == 0);
+
+    assert(usb_bluetooth_l2cap_signaling_build(0x02U, 0x07U,
+               request_parameters, sizeof(request_parameters), output, 3U) == -90);
+    assert(usb_bluetooth_l2cap_signaling_build(0x02U, 0x07U,
+               request_parameters, sizeof(request_parameters), output,
+               sizeof(output)) == 8);
+    assert(output[0] == 0x02U && output[1] == 0x07U &&
+           output[2] == 4U && output[3] == 0U && output[7] == 0U);
+    assert(usb_bluetooth_l2cap_signaling_build(0U, 1U, NULL, 0U,
+                                               output, sizeof(output)) == -22);
+    offset = 9U;
+    assert(usb_bluetooth_l2cap_signaling_next(commands, sizeof(commands),
+                                               &offset, &command) == -22);
+}
+
 static void test_acl_fragment_reassembly(void)
 {
     /* L2CAP PDU: 6-byte body, CID 1; first ACL fragment carries 3 bytes. */
@@ -607,6 +645,7 @@ int main(void)
     test_hci_event_queue_integrity();
     test_acl_and_l2cap_views();
     test_l2cap_signaling_command_boundaries();
+    test_l2cap_signaling_iteration_and_build();
     test_acl_fragment_reassembly();
     test_acl_queue_rejects_corrupt_stored_length();
     puts("USB Bluetooth descriptor tests passed");

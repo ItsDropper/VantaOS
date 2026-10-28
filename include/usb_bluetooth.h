@@ -49,6 +49,12 @@ typedef struct {
     const uint8_t *payload;
     uint16_t payload_length;
 } usb_bluetooth_l2cap_view_t;
+typedef struct {
+    uint8_t code;
+    uint8_t identifier;
+    const uint8_t *payload;
+    uint16_t payload_length;
+} usb_bluetooth_l2cap_signal_command_t;
 
 typedef struct {
     uint8_t active;
@@ -95,6 +101,16 @@ int usb_bluetooth_acl_reassembly_feed(usb_bluetooth_acl_reassembly_t *state,
                                       const uint8_t *packet, uint32_t length);
 int usb_bluetooth_acl_reassembly_take(usb_bluetooth_acl_reassembly_t *state,
                                       uint8_t *packet, uint32_t capacity);
+/* Iterate validated signaling commands: 1 command, 0 end, -22 malformed.
+ * offset starts at zero and advances only after a valid command. */
+int usb_bluetooth_l2cap_signaling_next(
+    const uint8_t *payload, uint32_t length, uint32_t *offset,
+    usb_bluetooth_l2cap_signal_command_t *command);
+/* Build one signaling command; returns bytes written or -90 if too small. */
+int usb_bluetooth_l2cap_signaling_build(uint8_t code, uint8_t identifier,
+                                        const uint8_t *parameters,
+                                        uint16_t parameter_length,
+                                        uint8_t *output, uint32_t capacity);
 /* Validate a complete L2CAP signaling command list on CID 0x0001. */
 int usb_bluetooth_l2cap_signaling_valid(const uint8_t *payload,
                                         uint32_t length);

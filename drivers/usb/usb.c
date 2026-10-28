@@ -611,20 +611,20 @@ void usb_poll(void)
                     &bluetooth_hci_event_queues[slot], bluetooth_event_buffer,
                     event_length);
                 if (event_queued == 0 && bluetooth->event_count == 1U)
-                    serial_write("VANTAOS_BLUETOOTH_HCI_EVENT_RECEIVED\\n");
+                    serial_write("VANTAOS_BLUETOOTH_HCI_EVENT_RECEIVED\n");
                 else if (event_queued == -11) {
                     bluetooth->event_dropped++;
                     if (bluetooth->event_dropped == 1U)
-                        serial_write("VANTAOS_BLUETOOTH_HCI_EVENT_QUEUE_FULL\\n");
+                        serial_write("VANTAOS_BLUETOOTH_HCI_EVENT_QUEUE_FULL\n");
                 }
                 int reset_transition = usb_bluetooth_update_reset_state(
                     bluetooth_event_buffer, event_length,
                     &bluetooth->reset_complete_observed,
                     &bluetooth->reset_failed_observed);
                 if (reset_transition > 0)
-                    serial_write("VANTAOS_BLUETOOTH_HCI_RESET_COMPLETE\\n");
+                    serial_write("VANTAOS_BLUETOOTH_HCI_RESET_COMPLETE\n");
                 else if (reset_transition < 0)
-                    serial_write("VANTAOS_BLUETOOTH_HCI_RESET_FAILED\\n");
+                    serial_write("VANTAOS_BLUETOOTH_HCI_RESET_FAILED\n");
             }
             /*
              * Consuming a completed transfer does not arm the next event.

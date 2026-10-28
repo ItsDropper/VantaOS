@@ -24,6 +24,14 @@ typedef struct {
                    [USB_BLUETOOTH_HCI_EVENT_MAX];
 } usb_bluetooth_hci_event_queue_t;
 
+/* Controller-reported BR/EDR ACL/SCO data buffer capabilities. */
+typedef struct {
+    uint16_t acl_packet_length;
+    uint8_t sco_packet_length;
+    uint16_t total_acl_packets;
+    uint16_t total_sco_packets;
+} usb_bluetooth_hci_buffer_size_t;
+
 
 typedef struct {
     uint32_t head;
@@ -214,6 +222,11 @@ int usb_bluetooth_hci_command_event(usb_bluetooth_hci_command_state_t *state,
 int usb_bluetooth_hci_build_read_local_version(uint8_t *out, uint32_t capacity);
 int usb_bluetooth_hci_build_read_bd_addr(uint8_t *out, uint32_t capacity);
 int usb_bluetooth_hci_build_read_buffer_size(uint8_t *out, uint32_t capacity);
+/* Parse a matching Read Buffer Size Command Complete event. Returns 1 on
+ * valid success, 0 for an unrelated event, or -22 for malformed/failed data. */
+int usb_bluetooth_hci_read_buffer_size_result(
+    const uint8_t *event, uint32_t length,
+    usb_bluetooth_hci_buffer_size_t *result);
 int usb_bluetooth_hci_build_inquiry(uint8_t *out, uint32_t capacity,
                                     uint8_t inquiry_length, uint8_t responses);
 /* Parse one indexed result from HCI Inquiry Result (0x02) or Inquiry Result

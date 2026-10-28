@@ -87,10 +87,18 @@ http_url_status_t http_url_parse(const char *url,
             return HTTP_URL_BAD_HOST;
         host[i] = ch;
     }
-    if (host[0] == '.' || host[host_length - 1U] == '.' ||
-        host[0] == '-' || host[host_length - 1U] == '-')
-        return HTTP_URL_BAD_HOST;
     host[host_length] = '\0';
+    size_t label_start = 0U;
+    for (size_t i = 0U; i <= host_length; ++i)
+    {
+        if (i != host_length && host[i] != '.')
+            continue;
+        size_t label_length = i - label_start;
+        if (!label_length || label_length > 63U ||
+            host[label_start] == '-' || host[i - 1U] == '-')
+            return HTTP_URL_BAD_HOST;
+        label_start = i + 1U;
+    }
 
     size_t path_length = 0U;
     if (*path_start == '#')

@@ -172,6 +172,10 @@ int usb_bluetooth_l2cap_channel_configure_response(
     usb_bluetooth_l2cap_table_t *table, uint16_t local_cid,
     uint8_t identifier, uint16_t flags, uint16_t result,
     uint16_t remote_mtu);
+/* Parse and apply one complete L2CAP Configure Response signaling command. */
+int usb_bluetooth_l2cap_configuration_response(
+    usb_bluetooth_l2cap_table_t *table, const uint8_t *command,
+    uint32_t length);
 int usb_bluetooth_l2cap_channel_close(usb_bluetooth_l2cap_table_t *table,
                                       uint16_t local_cid);
 uint32_t usb_bluetooth_l2cap_expire(usb_bluetooth_l2cap_table_t *table,

@@ -8,7 +8,7 @@
 #include <stdint.h>
 #include <vanta/ipc.h>
 
-_Static_assert(VANTA_USER_ABI_VERSION == 9U,
+_Static_assert(VANTA_USER_ABI_VERSION == 10U,
                "userspace ABI version must track the current syscall ABI");
 _Static_assert(VANTA_SYS_IPC_PEEK_LENGTH == 30U,
                "IPC peek syscall number is part of the public ABI");

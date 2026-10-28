@@ -734,6 +734,38 @@ static int command_http_url(const char *url, const char *output_argument,
                         net_tcp_close(device);
                         return 1;
                     }
+                    for (size_t h = 0U; h + 18U <= header_end; ++h) {
+                        static const char transfer_encoding[] = "transfer-encoding:";
+                        size_t k = 0U;
+                        while (k < sizeof(transfer_encoding) - 1U) {
+                            char ch = headers[h + k];
+                            if (ch >= 'A' && ch <= 'Z') ch = (char)(ch - 'A' + 'a');
+                            if (ch != transfer_encoding[k]) break;
+                            ++k;
+                        }
+                        if (k == sizeof(transfer_encoding) - 1U) {
+                            size_t line_end = h + k;
+                            while (line_end + 1U < header_end &&
+                                   !(headers[line_end] == '\\r' &&
+                                     headers[line_end + 1U] == '\\n'))
+                                ++line_end;
+                            for (size_t q = h + k; q + 7U <= line_end; ++q) {
+                                static const char chunked[] = "chunked";
+                                size_t m = 0U;
+                                while (m < sizeof(chunked) - 1U) {
+                                    char ch = headers[q + m];
+                                    if (ch >= 'A' && ch <= 'Z') ch = (char)(ch - 'A' + 'a');
+                                    if (ch != chunked[m]) break;
+                                    ++m;
+                                }
+                                if (m == sizeof(chunked) - 1U) {
+                                    terminal_write("\\ncurl: chunked transfer encoding is not supported; refusing to save framed data");
+                                    net_tcp_close(device);
+                                    return 1;
+                                }
+                            }
+                        }
+                    }
                     if (output_argument) {
                         file_handle = vfs_open(resolved_path,
                                                 VFS_OPEN_WRITE | VFS_OPEN_TRUNCATE);

@@ -196,6 +196,22 @@ int usb_bluetooth_l2cap_signaling_build(uint8_t code, uint8_t identifier,
                                         const uint8_t *parameters,
                                         uint16_t parameter_length,
                                         uint8_t *output, uint32_t capacity);
+/* Build standard fixed-shape BR/EDR L2CAP signaling commands. Return bytes
+ * written, -22 for invalid fields, or -90 for insufficient output capacity. */
+int usb_bluetooth_l2cap_build_connection_request(uint8_t identifier,
+                                                  uint16_t psm,
+                                                  uint16_t local_cid,
+                                                  uint8_t *output,
+                                                  uint32_t capacity);
+int usb_bluetooth_l2cap_build_configuration_request(uint8_t identifier,
+                                                     uint16_t remote_cid,
+                                                     uint8_t *output,
+                                                     uint32_t capacity);
+int usb_bluetooth_l2cap_build_disconnection_request(uint8_t identifier,
+                                                     uint16_t remote_cid,
+                                                     uint16_t local_cid,
+                                                     uint8_t *output,
+                                                     uint32_t capacity);
 /* Validate a complete L2CAP signaling command list on CID 0x0001. */
 int usb_bluetooth_l2cap_signaling_valid(const uint8_t *payload,
                                         uint32_t length);
@@ -231,9 +247,10 @@ int usb_bluetooth_hci_command_encode(uint16_t opcode,
                                      const uint8_t *parameters,
                                      uint8_t parameter_length,
                                      uint8_t *output, uint32_t capacity);
-/* Send one HCI command through the USB class control pipe. Serialize
- * commands on the USB owner CPU and wait for its matching event before the
- * next command; this API does not implement command-credit scheduling. */
+/* Send one HCI command through the USB class control pipe. Submission is
+ * gated by controller-reported command credits and one outstanding opcode.
+ * The caller must wait for the matching Command Complete/Status event before
+ * retrying after a busy result. Owner-CPU context only. */
 int usb_bluetooth_hci_command(uint32_t port, uint16_t opcode,
                               const uint8_t *parameters, uint8_t length);
 /* Receive a queued complete HCI event; -11 empty, -90 too small (preserved),

@@ -796,6 +796,14 @@ static int command_http_url(const char *url, const char *output_argument,
             }
             body_used = 0U;
         }
+        /*
+         * Content-Length is a complete message boundary. Do not wait for EOF
+         * after the exact declared body has arrived; some valid servers keep
+         * the TCP connection open despite Connection: close.
+         */
+        if (body_state.has_expected_length &&
+            body_state.received_length == body_state.expected_length)
+            break;
     }
     net_tcp_close(device);
     if (file_handle >= 0) {

@@ -12,13 +12,56 @@
 #include "../kernel/ipc.c"
 
 static uint64_t rng_counter = 0x123456789ULL;
+static int rng_should_fail;
 int crypto_rng_fill(void *output, size_t length)
 {
     uint8_t *bytes = (uint8_t *)output;
+    if (rng_should_fail) return 0;
     uint64_t value = ++rng_counter;
     if (length > sizeof(value)) return 0;
     for (size_t i=0;i<length;i++) bytes[i]=(uint8_t)(value>>(i*8U));
     return 1;
+}
+
+static void test_endpoint_exhaustion_cleanup_and_rng_failure(void)
+{
+    int64_t tokens[32];
+    char payload[] = "private";
+    char output[IPC_MESSAGE_MAX] = {0};
+
+    rng_should_fail = 1;
+    assert(ipc_endpoint_create(500U) == -19);
+    rng_should_fail = 0;
+
+    for (uint32_t i = 0U; i < 32U; ++i) {
+        tokens[i] = ipc_endpoint_create(1000U + i);
+        assert(tokens[i] > 0);
+    }
+    assert(ipc_endpoint_create(2000U) == -12);
+
+    assert(ipc_message_send((uint64_t)tokens[5], 9000U,
+                            payload, sizeof(payload)) == 0);
+    uint32_t slot = 0U;
+    while (slot < 32U && (!endpoints[slot].active ||
+           endpoints[slot].token != (uint64_t)tokens[5]))
+        ++slot;
+    assert(slot < 32U);
+    ipc_process_cleanup(1005U);
+    assert(!endpoints[slot].active);
+    assert(endpoints[slot].token == 0U && endpoints[slot].count == 0U);
+    assert(endpoints[slot].queue[0].length == 0U);
+    for (size_t i = 0U; i < IPC_MESSAGE_MAX; ++i)
+        assert(endpoints[slot].queue[0].bytes[i] == 0U);
+    assert(ipc_message_receive((uint64_t)tokens[5], 1005U,
+                               output, sizeof(output)) == -9);
+
+    int64_t replacement = ipc_endpoint_create(3000U);
+    assert(replacement > 0);
+    assert(ipc_endpoint_close((uint64_t)replacement, 3000U) == 0);
+    for (uint32_t i = 0U; i < 32U; ++i) {
+        if (i != 5U)
+            assert(ipc_endpoint_close((uint64_t)tokens[i], 1000U + i) == 0);
+    }
 }
 
 int main(void)
@@ -78,6 +121,7 @@ int main(void)
     assert(ipc_message_send((uint64_t)cleanup_endpoint,88U,"queued",6U) == 0);
     ipc_process_cleanup(77U);
     assert(ipc_message_send((uint64_t)cleanup_endpoint,88U,"x",1U) == -9);
+    test_endpoint_exhaustion_cleanup_and_rng_failure();
     puts("VANTAOS_IPC_HOST_TEST_OK");
     return 0;
 }

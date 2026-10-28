@@ -179,6 +179,38 @@ static void test_acl_queue_preserves_messages_on_small_buffer(void)
     assert(queue.count == 0U && queue.head == 0U);
 }
 
+static void test_acl_queue_wraparound_and_invariants(void)
+{
+    usb_bluetooth_acl_queue_t queue = {0};
+    const uint8_t packet_a[] = {0x01U, 0x20U, 0x01U, 0x00U, 0xA1U};
+    const uint8_t packet_b[] = {0x02U, 0x20U, 0x01U, 0x00U, 0xB2U};
+    const uint8_t packet_c[] = {0x03U, 0x20U, 0x01U, 0x00U, 0xC3U};
+    uint8_t output[16] = {0};
+
+    usb_bluetooth_acl_queue_reset(&queue);
+    assert(usb_bluetooth_acl_queue_push(&queue, packet_a, sizeof(packet_a)) == 0);
+    assert(usb_bluetooth_acl_queue_push(&queue, packet_b, sizeof(packet_b)) == 0);
+    assert(usb_bluetooth_acl_queue_pop(&queue, output, sizeof(output)) == 5);
+    assert(output[4] == 0xA1U);
+    assert(usb_bluetooth_acl_queue_push(&queue, packet_c, sizeof(packet_c)) == 0);
+    assert(usb_bluetooth_acl_queue_pop(&queue, output, sizeof(output)) == 5);
+    assert(output[4] == 0xB2U);
+    assert(usb_bluetooth_acl_queue_pop(&queue, output, sizeof(output)) == 5);
+    assert(output[4] == 0xC3U);
+    assert(queue.count == 0U && queue.head == 1U);
+
+    queue.head = USB_BLUETOOTH_ACL_QUEUE_DEPTH;
+    assert(usb_bluetooth_acl_queue_push(&queue, packet_a, sizeof(packet_a)) == -22);
+    assert(usb_bluetooth_acl_queue_pop(&queue, output, sizeof(output)) == -22);
+    usb_bluetooth_acl_queue_reset(&queue);
+    queue.count = USB_BLUETOOTH_ACL_QUEUE_DEPTH + 1U;
+    assert(usb_bluetooth_acl_queue_push(&queue, packet_a, sizeof(packet_a)) == -22);
+    assert(usb_bluetooth_acl_queue_pop(&queue, output, sizeof(output)) == -22);
+
+    usb_bluetooth_acl_queue_reset(&queue);
+    assert(queue.packets[0][0] == 0U && queue.packets[1][4] == 0U);
+}
+
 int main(void)
 {
     test_complete_hci_interface();
@@ -189,6 +221,7 @@ int main(void)
     test_non_bluetooth_interface_is_ignored();
     test_hci_event_and_acl_framing();
     test_acl_queue_preserves_messages_on_small_buffer();
+    test_acl_queue_wraparound_and_invariants();
     puts("USB Bluetooth descriptor tests passed");
     return 0;
 }

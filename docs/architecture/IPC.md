@@ -71,3 +71,8 @@ This example documents the envelope only. It does not imply that a built-in serv
 `vanta_ipc_receive_message()` first peeks at the queued transport length. If the caller's payload capacity is too small, it returns `-VANTA_EMSGSIZE` without consuming the message, allowing a retry with a larger buffer. A too-short malformed transport message is consumed and rejected with `-VANTA_EPROTO` so it cannot permanently block the queue. The peek/receive pair assumes the current single-receiver process model; revisit it if user threads or concurrent receive calls are introduced.
 
 Do not change syscall numbers to evolve this envelope. New message types belong to the application/service layer; type values are not globally assigned. Increment the envelope version if the header layout changes, reject unknown versions, and add host plus QEMU integration tests before connecting a system service to a new protocol.
+
+
+## Resource limits and capability hygiene
+
+The kernel endpoint table contains 32 entries. Endpoint creation fails with `-VANTA_ENOMEM` when it is full; it does not evict another process's endpoint. If the platform's random source cannot produce a token, creation fails instead of using a predictable fallback. Endpoint close and owner cleanup clear queued bytes before releasing the slot. Applications should close endpoints when finished and treat capabilities as secrets, not as public IDs.

@@ -60,3 +60,10 @@ gcc -std=c11 -Wall -Wextra -Werror \
 ```
 
 The public ABI is compiled separately by `tests/user/ipc_abi_compile.c`. Kernel/QEMU tests are still needed to prove the syscall dispatch path and multi-CPU behavior; a host unit test alone does not prove those integration properties.
+
+
+## Endpoint exhaustion and secret cleanup
+
+The endpoint table is fixed-size. Creation returns `-ENOMEM` when all 32 slots are active, and fails closed with `-ENODEV` if the random-number provider cannot supply a capability token. Endpoint close and owner-process cleanup erase queued message bytes before the slot becomes reusable. Do not silently replace a random token with a predictable counter: the endpoint value is a bearer capability, and predictability would let another process guess authority it was not given.
+
+The host regression suite now fills the endpoint table, verifies the exhaustion result, forces the RNG provider to fail, cleans up an owner with queued data, checks that the slot and payload bytes are cleared, and confirms that a reclaimed slot can be reused.

@@ -211,17 +211,23 @@ void usb_bluetooth_acl_queue_reset(usb_bluetooth_acl_queue_t *queue)
         return;
     queue->head = 0U;
     queue->count = 0U;
-    for (uint32_t i = 0U; i < USB_BLUETOOTH_ACL_QUEUE_DEPTH; ++i)
+    for (uint32_t i = 0U; i < USB_BLUETOOTH_ACL_QUEUE_DEPTH; ++i) {
         queue->lengths[i] = 0U;
+        for (uint32_t j = 0U; j < USB_BLUETOOTH_ACL_MAX_PACKET; ++j)
+            queue->packets[i][j] = 0U;
+    }
 }
 
 int usb_bluetooth_acl_queue_push(usb_bluetooth_acl_queue_t *queue,
                                  const uint8_t *packet, uint32_t length)
 {
-    if (queue == NULL || packet == NULL || length > USB_BLUETOOTH_ACL_MAX_PACKET ||
-        !usb_bluetooth_acl_packet_valid(packet, length))
+    if (queue == NULL || packet == NULL ||
+        length > USB_BLUETOOTH_ACL_MAX_PACKET ||
+        !usb_bluetooth_acl_packet_valid(packet, length) ||
+        queue->head >= USB_BLUETOOTH_ACL_QUEUE_DEPTH ||
+        queue->count > USB_BLUETOOTH_ACL_QUEUE_DEPTH)
         return -22;
-    if (queue->count >= USB_BLUETOOTH_ACL_QUEUE_DEPTH)
+    if (queue->count == USB_BLUETOOTH_ACL_QUEUE_DEPTH)
         return -11;
 
     uint32_t tail = (queue->head + queue->count) %
@@ -236,7 +242,9 @@ int usb_bluetooth_acl_queue_push(usb_bluetooth_acl_queue_t *queue,
 int usb_bluetooth_acl_queue_pop(usb_bluetooth_acl_queue_t *queue,
                                 uint8_t *packet, uint32_t capacity)
 {
-    if (queue == NULL || packet == NULL || capacity == 0U)
+    if (queue == NULL || packet == NULL || capacity == 0U ||
+        queue->head >= USB_BLUETOOTH_ACL_QUEUE_DEPTH ||
+        queue->count > USB_BLUETOOTH_ACL_QUEUE_DEPTH)
         return -22;
     if (queue->count == 0U)
         return -11;
@@ -248,6 +256,8 @@ int usb_bluetooth_acl_queue_pop(usb_bluetooth_acl_queue_t *queue,
     for (uint32_t i = 0U; i < length; ++i)
         packet[i] = queue->packets[queue->head][i];
     queue->lengths[queue->head] = 0U;
+    for (uint32_t i = 0U; i < USB_BLUETOOTH_ACL_MAX_PACKET; ++i)
+        queue->packets[queue->head][i] = 0U;
     queue->head = (queue->head + 1U) % USB_BLUETOOTH_ACL_QUEUE_DEPTH;
     --queue->count;
     return (int)length;

@@ -117,3 +117,8 @@ The host tests exercise reset-status classification and framing predicates. They
 Valid ACL-IN packets are now copied into a two-entry per-device queue instead of being discarded after validation. The kernel-facing `usb_bluetooth_acl_receive(port, packet, capacity)` returns one complete raw ACL packet length, `-11` when the queue is empty, `-90` when the destination is too small, and `-9` when no Bluetooth transport is bound to that port. A too-small destination does not consume the queued packet. When the queue is full, the incoming packet is dropped rather than overwriting older unread data; the first overflow emits `VANTAOS_BLUETOOTH_ACL_QUEUE_FULL`.
 
 The queue is deliberately bounded (two packets per slot) to keep memory use predictable. Push/pop and device lifecycle are currently intended for the USB owner CPU; this is not an SMP-safe multi-consumer queue. The host regression tests cover FIFO order, full-queue behavior, malformed packets, empty queues, and retrying after a too-small buffer. They do not establish that a physical controller supplies ACL data or that a higher protocol can use it.
+
+
+## Queue integrity and payload clearing
+
+The ACL queue rejects corrupted ring metadata before calculating an array index: the head must be within the two-slot ring and the count cannot exceed its depth. Reset clears both lengths and stored packet bytes; dequeue clears the consumed slot after copying it out. These rules limit stale packet data surviving disconnect/rebind and make malformed queue state fail closed. The host suite covers ring wraparound, invalid head/count values, FIFO order, capacity retry, full queues, and reset clearing. The queue still requires the documented single-owner CPU context.

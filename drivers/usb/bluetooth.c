@@ -580,6 +580,44 @@ int usb_bluetooth_l2cap_build_configuration_request(uint8_t identifier,
                                                 capacity);
 }
 
+int usb_bluetooth_l2cap_build_connection_response(
+    uint8_t identifier, uint16_t destination_cid, uint16_t source_cid,
+    uint16_t result, uint16_t status, uint8_t *output, uint32_t capacity)
+{
+    if (destination_cid < USB_BLUETOOTH_L2CAP_CID_DYNAMIC_MIN ||
+        source_cid < USB_BLUETOOTH_L2CAP_CID_DYNAMIC_MIN ||
+        result > 4U || status > 2U ||
+        (result != 0U && status != 0U))
+        return -22;
+    const uint8_t parameters[8] = {
+        (uint8_t)destination_cid, (uint8_t)(destination_cid >> 8),
+        (uint8_t)source_cid, (uint8_t)(source_cid >> 8),
+        (uint8_t)result, (uint8_t)(result >> 8),
+        (uint8_t)status, (uint8_t)(status >> 8)
+    };
+    return usb_bluetooth_l2cap_signaling_build(
+        0x03U, identifier, parameters, sizeof(parameters), output, capacity);
+}
+
+int usb_bluetooth_l2cap_build_configuration_response(
+    uint8_t identifier, uint16_t source_cid, uint16_t flags,
+    uint16_t result, uint16_t mtu, uint8_t *output, uint32_t capacity)
+{
+    if (source_cid < USB_BLUETOOTH_L2CAP_CID_DYNAMIC_MIN ||
+        (flags & 0xFFFEU) != 0U || result > 4U ||
+        (result == 0U && mtu < 48U))
+        return -22;
+    uint8_t parameters[10] = {
+        (uint8_t)source_cid, (uint8_t)(source_cid >> 8),
+        (uint8_t)flags, (uint8_t)(flags >> 8),
+        (uint8_t)result, (uint8_t)(result >> 8),
+        0x01U, 2U, (uint8_t)mtu, (uint8_t)(mtu >> 8)
+    };
+    uint16_t parameter_length = result == 0U ? 10U : 6U;
+    return usb_bluetooth_l2cap_signaling_build(
+        0x05U, identifier, parameters, parameter_length, output, capacity);
+}
+
 int usb_bluetooth_l2cap_build_disconnection_request(uint8_t identifier,
                                                      uint16_t remote_cid,
                                                      uint16_t local_cid,

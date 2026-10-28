@@ -109,6 +109,15 @@ typedef struct {
 } usb_bluetooth_link_table_t;
 
 typedef struct {
+    uint8_t address[6]; /* HCI wire byte order */
+    uint8_t page_scan_repetition_mode;
+    uint32_t class_of_device; /* low 24 bits are valid */
+    uint16_t clock_offset; /* includes the controller's validity bit */
+    int8_t rssi;
+    uint8_t has_rssi;
+} usb_bluetooth_inquiry_result_t;
+
+typedef struct {
     uint8_t interface_number;
     uint8_t event_endpoint;
     uint8_t acl_in_endpoint;
@@ -144,6 +153,13 @@ int usb_bluetooth_hci_build_read_bd_addr(uint8_t *out, uint32_t capacity);
 int usb_bluetooth_hci_build_read_buffer_size(uint8_t *out, uint32_t capacity);
 int usb_bluetooth_hci_build_inquiry(uint8_t *out, uint32_t capacity,
                                     uint8_t inquiry_length, uint8_t responses);
+/* Parse one indexed result from HCI Inquiry Result (0x02) or Inquiry Result
+ * with RSSI (0x22). Returns 1 for a result, 0 if index is out of range,
+ * and -22 for malformed/unsupported event data.
+ */
+int usb_bluetooth_hci_inquiry_result(const uint8_t *event, uint32_t length,
+                                     uint8_t index,
+                                     usb_bluetooth_inquiry_result_t *result);
 /* Build BR/EDR connection commands. BD_ADDR is in HCI wire byte order. */
 int usb_bluetooth_hci_build_create_connection(
     const uint8_t address[6], uint16_t packet_type,

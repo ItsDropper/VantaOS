@@ -252,6 +252,15 @@ int usb_bluetooth_connect(uint32_t port, const uint8_t address[6],
                           uint16_t clock_offset, uint8_t allow_role_switch);
 int usb_bluetooth_cancel_connection(uint32_t port,
                                     const uint8_t address[6]);
+/* Query the tracked outbound connection attempt for an exact address.
+ * Return 1 pending, 0 not pending, -19 if the adapter is not bound.
+ */
+int usb_bluetooth_connection_pending(uint32_t port,
+                                     const uint8_t address[6]);
+/* Query ownership of a live HCI handle: 1 connected, 0 not connected,
+ * -19 if the adapter is not bound.
+ */
+int usb_bluetooth_is_connected(uint32_t port, uint16_t handle);
 int usb_bluetooth_disconnect(uint32_t port, uint16_t handle, uint8_t reason);
 /* Begin an outbound classic L2CAP channel on an active HCI handle.
  * deadline is an absolute timer_get_ticks() value; zero disables expiry.

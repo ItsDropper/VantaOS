@@ -22,7 +22,8 @@
 static inline int ahci_pci_abar_valid(uint64_t base, uint64_t size,
                                       int is_io, int is_64bit)
 {
-    if (base == 0U || is_io != 0 || size < AHCI_ABAR_MIN_SIZE ||
+    if (base == 0U || is_io != 0 || (is_64bit != 0 && is_64bit != 1) ||
+        size < AHCI_ABAR_MIN_SIZE ||
         (base & (AHCI_ABAR_ALIGNMENT - 1ULL)) != 0U ||
         (size & (size - 1ULL)) != 0U ||
         (base & (size - 1ULL)) != 0U ||

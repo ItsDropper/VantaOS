@@ -90,6 +90,7 @@ typedef struct {
     uint8_t active;
     uint8_t state; /* 1 pending, 2 connected, 3 configuring, 4 open, 5 closing */
     uint8_t identifier;
+    uint8_t config_identifier;
     uint16_t local_cid;
     uint16_t remote_cid;
     uint16_t psm;
@@ -161,6 +162,16 @@ int usb_bluetooth_l2cap_connection_response(
     const uint8_t *command, uint32_t length, uint16_t default_remote_mtu);
 int usb_bluetooth_l2cap_channel_configured(usb_bluetooth_l2cap_table_t *table,
                                            uint16_t local_cid);
+/* Record a nonzero identifier for a Configure Request on a configuring CID. */
+int usb_bluetooth_l2cap_channel_configure_begin(
+    usb_bluetooth_l2cap_table_t *table, uint16_t local_cid,
+    uint8_t identifier);
+/* Apply a parsed Configure Response; flags!=0 means continuation (returns 0).
+ * A successful final response opens the channel. */
+int usb_bluetooth_l2cap_channel_configure_response(
+    usb_bluetooth_l2cap_table_t *table, uint16_t local_cid,
+    uint8_t identifier, uint16_t flags, uint16_t result,
+    uint16_t remote_mtu);
 int usb_bluetooth_l2cap_channel_close(usb_bluetooth_l2cap_table_t *table,
                                       uint16_t local_cid);
 uint32_t usb_bluetooth_l2cap_expire(usb_bluetooth_l2cap_table_t *table,

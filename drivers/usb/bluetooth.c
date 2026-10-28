@@ -1111,6 +1111,22 @@ int usb_bluetooth_link_table_event(usb_bluetooth_link_table_t *table,
     return 0;
 }
 
+int usb_bluetooth_link_table_is_single_handle(
+    const usb_bluetooth_link_table_t *table, uint16_t handle)
+{
+    if (table == NULL || handle == 0U)
+        return 0;
+    int found = 0;
+    for (uint32_t i = 0U; i < USB_BLUETOOTH_LINK_MAX; ++i) {
+        if (!table->links[i].active)
+            continue;
+        if (table->links[i].handle != handle)
+            return 0;
+        found = 1;
+    }
+    return found;
+}
+
 int usb_bluetooth_link_table_acl_feed(usb_bluetooth_link_table_t *table,
                                       const uint8_t *packet, uint32_t length)
 {

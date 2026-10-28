@@ -45,6 +45,16 @@ static size_t output_scroll_offset;
 static vanta_gui_draw_command_t commands[VANTA_GUI_MAX_COMMANDS];
 static uint32_t command_count;
 static uint32_t window_id;
+static char clipboard[2048];
+static size_t clipboard_length;
+static size_t selection_anchor_line;
+static size_t selection_anchor_column;
+static size_t selection_end_line;
+static size_t selection_end_column;
+static size_t last_click_line = (size_t)-1;
+static size_t last_click_column = (size_t)-1;
+static int selection_active;
+static int selection_dragging;
 
 static size_t string_length(const char* text)
 {
@@ -179,6 +189,206 @@ static void render_add_text(int32_t x, int32_t y, const char* text,
         command->text[i] = text[i];
 }
 
+static int selection_contains(size_t logical_line, size_t column)
+{
+    if (!selection_active)
+        return 0;
+    size_t first_line = selection_anchor_line;
+    size_t first_column = selection_anchor_column;
+    size_t last_line = selection_end_line;
+    size_t last_column = selection_end_column;
+    if (first_line > last_line ||
+        (first_line == last_line && first_column > last_column))
+    {
+        size_t t = first_line; first_line = last_line; last_line = t;
+        t = first_column; first_column = last_column; last_column = t;
+    }
+    if (logical_line < first_line || logical_line > last_line)
+        return 0;
+    if (first_line == last_line)
+        return column >= first_column && column < last_column;
+    if (logical_line == first_line)
+        return column >= first_column;
+    if (logical_line == last_line)
+        return column < last_column;
+    return 1;
+}
+
+static void render_line_with_selection(size_t logical_line, int y)
+{
+    const char* text = output_line(logical_line);
+    size_t length = string_length(text);
+    if (length == 0U)
+        return;
+    if (!selection_active)
+    {
+        render_add_text(16, y, text, COLOR_TEXT);
+        return;
+    }
+
+    size_t first_line = selection_anchor_line;
+    size_t first_column = selection_anchor_column;
+    size_t last_line = selection_end_line;
+    size_t last_column = selection_end_column;
+    if (first_line > last_line ||
+        (first_line == last_line && first_column > last_column))
+    {
+        size_t t = first_line; first_line = last_line; last_line = t;
+        t = first_column; first_column = last_column; last_column = t;
+    }
+    if (logical_line < first_line || logical_line > last_line)
+    {
+        render_add_text(16, y, text, COLOR_TEXT);
+        return;
+    }
+    size_t begin = logical_line == first_line ? first_column : 0U;
+    size_t end = logical_line == last_line ? last_column : length;
+    if (begin > length) begin = length;
+    if (end > length) end = length;
+    if (end < begin) end = begin;
+    size_t selected_end = end;
+    if (selected_end > begin)
+        render_add_rect(16 + (int32_t)begin * 8, y,
+                        (int32_t)(selected_end - begin) * 8, 16,
+                        0x003B82F6U);
+    if (begin > 0U)
+    {
+        char part[OUTPUT_COLUMNS];
+        for (size_t i = 0U; i < begin; ++i) part[i] = text[i];
+        part[begin] = '\0';
+        render_add_text(16, y, part, COLOR_TEXT);
+    }
+    if (end > begin)
+    {
+        char part[OUTPUT_COLUMNS];
+        size_t count = end - begin;
+        for (size_t i = 0U; i < count; ++i) part[i] = text[begin + i];
+        part[count] = '\0';
+        render_add_text(16 + (int32_t)begin * 8, y, part, 0x00FFFFFFU);
+    }
+    if (length > end)
+        render_add_text(16 + (int32_t)end * 8, y, text + end, COLOR_TEXT);
+}
+
+static void terminal_pointer_select(int32_t x, int32_t y, int extend)
+{
+    size_t end = output_count - output_scroll_offset;
+    size_t first = end > DISPLAY_LINES ? end - DISPLAY_LINES : 0U;
+    if (y < 42 || y >= 42 + (int32_t)DISPLAY_LINES * 22 ||
+        x < 16 || y >= 330)
+    {
+        if (!extend)
+            selection_dragging = 0;
+        return;
+    }
+    size_t logical_line = first + (size_t)(y - 42) / 22U;
+    if (logical_line >= end)
+        logical_line = end == 0U ? 0U : end - 1U;
+    const char* text = output_line(logical_line);
+    size_t length = string_length(text);
+    size_t column = (size_t)(x - 16) / 8U;
+    if (column > length) column = length;
+
+    if (!extend)
+    {
+        if (last_click_line == logical_line && last_click_column != (size_t)-1 &&
+            (column > last_click_column ? column - last_click_column :
+             last_click_column - column) <= 2U && length > 0U)
+        {
+            size_t at = column == length && column > 0U ? column - 1U : column;
+            while (at > 0U &&
+                   ((text[at - 1U] >= 'a' && text[at - 1U] <= 'z') ||
+                    (text[at - 1U] >= 'A' && text[at - 1U] <= 'Z') ||
+                    (text[at - 1U] >= '0' && text[at - 1U] <= '9') ||
+                    text[at - 1U] == '_'))
+                at--;
+            size_t word_end = at;
+            while (word_end < length &&
+                   ((text[word_end] >= 'a' && text[word_end] <= 'z') ||
+                    (text[word_end] >= 'A' && text[word_end] <= 'Z') ||
+                    (text[word_end] >= '0' && text[word_end] <= '9') ||
+                    text[word_end] == '_'))
+                word_end++;
+            if (word_end > at)
+            {
+                selection_anchor_line = logical_line;
+                selection_anchor_column = at;
+                selection_end_line = logical_line;
+                selection_end_column = word_end;
+                selection_active = 1;
+                selection_dragging = 0;
+                last_click_line = (size_t)-1;
+                last_click_column = (size_t)-1;
+                return;
+            }
+        }
+        selection_anchor_line = logical_line;
+        selection_anchor_column = column;
+        selection_end_line = logical_line;
+        selection_end_column = column;
+        selection_active = 1;
+        selection_dragging = 1;
+        last_click_line = logical_line;
+        last_click_column = column;
+    }
+    else if (selection_dragging)
+    {
+        selection_end_line = logical_line;
+        selection_end_column = column;
+    }
+}
+
+static void terminal_copy_selection(void)
+{
+    clipboard_length = 0U;
+    if (!selection_active)
+        return;
+    size_t first_line = selection_anchor_line;
+    size_t first_column = selection_anchor_column;
+    size_t last_line = selection_end_line;
+    size_t last_column = selection_end_column;
+    if (first_line > last_line ||
+        (first_line == last_line && first_column > last_column))
+    {
+        size_t t = first_line; first_line = last_line; last_line = t;
+        t = first_column; first_column = last_column; last_column = t;
+    }
+    if (last_line >= output_count)
+        last_line = output_count - 1U;
+    for (size_t row = first_line; row <= last_line &&
+         clipboard_length + 2U < sizeof(clipboard); ++row)
+    {
+        const char* text = output_line(row);
+        size_t length = string_length(text);
+        size_t begin = row == first_line ? first_column : 0U;
+        size_t end = row == last_line ? last_column : length;
+        if (begin > length) begin = length;
+        if (end > length) end = length;
+        if (end < begin) end = begin;
+        for (size_t i = begin; i < end &&
+             clipboard_length + 2U < sizeof(clipboard); ++i)
+            clipboard[clipboard_length++] = text[i];
+        if (row != last_line && clipboard_length + 2U < sizeof(clipboard))
+            clipboard[clipboard_length++] = '\n';
+    }
+    clipboard[clipboard_length] = '\0';
+}
+
+static void terminal_paste_clipboard(void)
+{
+    for (size_t i = 0U; i < clipboard_length &&
+         input_length + 1U < sizeof(line) &&
+         input_length + prompt_length < OUTPUT_COLUMNS - 1U; ++i)
+    {
+        char ch = clipboard[i];
+        if (ch == '\n' || ch == '\r')
+            continue;
+        line[input_length++] = ch;
+        line[input_length] = '\0';
+        output_character(ch);
+    }
+}
+
 static void render(void)
 {
     command_count = 0U;
@@ -192,14 +402,14 @@ static void render(void)
     for (size_t i = first; i < end && y < 416; i++)
     {
         if (output_line(i)[0])
-            render_add_text(16, y, output_line(i), COLOR_TEXT);
+            render_line_with_selection(i, y);
         y += 22;
     }
 
     render_add_rect(8, 344, 720, 1, COLOR_BORDER);
-    render_add_text(16, 350, "PgUp/PgDn scrollback  |  help lists commands",
+    render_add_text(16, 350, "Drag to select | double-click word | Ctrl+C copy | Ctrl+V paste",
                     COLOR_MUTED);
-    render_add_text(16, 374, "Type exit to close Terminal", COLOR_MUTED);
+    render_add_text(16, 374, "PgUp/PgDn scrollback | type exit to close Terminal", COLOR_MUTED);
     (void)vanta_gui_draw(window_id, commands, command_count);
 }
 

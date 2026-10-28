@@ -38,3 +38,10 @@ Host clipboard access is not implemented. Ctrl+V cannot read the Windows clipboa
 
 
 USB Bluetooth's raw ACL send and receive interfaces are gated on a successful HCI Reset event. A descriptor match alone is not a ready transport. Queue dequeue also revalidates stored length metadata before copying a packet to a caller buffer.
+
+
+## xHCI receive-buffer retry contract
+
+Nonblocking interrupt-IN and bulk-IN receive functions distinguish no completed packet (`0`), success (`1`), invalid/failed transfer (`-1`), and insufficient caller capacity (`-2`). On insufficient capacity, the output length reports the required size and the completed packet remains pending; callers can retry with a larger buffer rather than silently truncating a HID report or dropping a Bluetooth ACL packet. Callers must test for a positive result before consuming output. The Bluetooth polling path only rearms bulk-IN after a failed transfer, not after a capacity-retry result.
+
+This contract is about the driver's software ownership of completed buffers. It does not by itself provide cancellation of in-flight DMA on physical disconnect; endpoint teardown and late-event handling still require controller-level validation.

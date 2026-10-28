@@ -977,17 +977,30 @@ int xhci_take_bulk_in(uint32_t slot_id, uint8_t endpoint_address,
 
     uint32_t completion_code = bulk_completion_code[index][1];
     uint32_t completion_status = bulk_completion_status[index][1];
-    bulk_done[index][1] = 0U;
-    bulk_in_flight[index][1] = 0U;
-    if (completion_code != 1U && completion_code != 13U)
+    if (completion_code != 1U && completion_code != 13U) {
+        bulk_done[index][1] = 0U;
+        bulk_in_flight[index][1] = 0U;
         return -1;
+    }
 
     uint32_t residual = completion_status & 0xFFFFFFU;
-    if (residual > XHCI_BULK_BUFFER_SIZE)
+    if (residual > XHCI_BULK_BUFFER_SIZE) {
+        bulk_done[index][1] = 0U;
+        bulk_in_flight[index][1] = 0U;
         return -1;
+    }
     uint32_t actual = XHCI_BULK_BUFFER_SIZE - residual;
-    if (actual > capacity)
-        return -1;
+    /*
+     * Preserve the completed DMA buffer when the caller's destination is too
+     * small. Return -2 and the required byte count so the caller can retry
+     * without losing the packet or submitting another transfer over it.
+     */
+    if (actual > capacity) {
+        *actual_length = actual;
+        return -2;
+    }
+    bulk_done[index][1] = 0U;
+    bulk_in_flight[index][1] = 0U;
     uint8_t *source = bulk_dma[index][1];
     uint8_t *destination = buffer;
     for (uint32_t i = 0; i < actual; ++i)
@@ -1013,9 +1026,11 @@ void xhci_poll(void)
 int xhci_take_interrupt_report(uint32_t slot_id, uint8_t* output,
                                uint32_t capacity, uint32_t* length_out)
 {
+    if (length_out)
+        *length_out = 0U;
     if (!controller_online || slot_id == 0U || slot_id > XHCI_MAX_SLOTS ||
         !output || !length_out)
-        return 0;
+        return -1;
     consume_event_ring();
     uint32_t index = slot_id - 1U;
     if (!interrupt_configured[index] || !interrupt_report_ready[index]) {
@@ -1024,8 +1039,11 @@ int xhci_take_interrupt_report(uint32_t slot_id, uint8_t* output,
         return 0;
     }
     uint32_t length = interrupt_pending_length[index];
-    if (length > capacity)
-        length = capacity;
+    if (length > capacity) {
+        /* Keep the report pending; report the required capacity for retry. */
+        *length_out = length;
+        return -2;
+    }
     for (uint32_t i = 0; i < length; ++i)
         output[i] = interrupt_pending[index][i];
     *length_out = length;

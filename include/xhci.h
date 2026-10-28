@@ -30,7 +30,10 @@ int xhci_configure_bulk_endpoint(uint32_t slot_id, uint8_t endpoint_address,
                                  uint16_t packet_size);
 int xhci_bulk_transfer(uint32_t slot_id, uint8_t endpoint_address,
                        void* buffer, uint32_t length, uint32_t* actual_length);
-/* Nonblocking bulk-IN receive: submit, then retrieve completed packets. */
+/* Nonblocking bulk-IN receive: submit, then retrieve completed packets.
+ * take returns 1 for a packet, 0 while pending, -1 for a failed/invalid
+ * transfer, or -2 when capacity is too small. On -2, actual_length is the
+ * required size and the completed packet remains available for retry. */
 int xhci_start_bulk_in(uint32_t slot_id, uint8_t endpoint_address);
 int xhci_take_bulk_in(uint32_t slot_id, uint8_t endpoint_address,
                       void* buffer, uint32_t capacity, uint32_t* actual_length);
@@ -38,6 +41,9 @@ int xhci_configure_interrupt_in(uint32_t slot_id, uint8_t endpoint_address,
                                 uint16_t packet_size, uint8_t interval);
 int xhci_start_interrupt_in(uint32_t slot_id);
 void xhci_poll(void);
+/* take returns 1 for a report, 0 when no report is ready, -1 for invalid
+ * arguments/state, or -2 when capacity is too small. On -2, length_out is
+ * the required size and the pending report is not consumed. */
 int xhci_take_interrupt_report(uint32_t slot_id, uint8_t* output,
                                uint32_t capacity, uint32_t* length_out);
 

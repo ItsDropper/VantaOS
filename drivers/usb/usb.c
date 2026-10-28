@@ -496,7 +496,7 @@ void usb_poll(void)
         uint32_t event_length = 0U;
         if (xhci_take_interrupt_report(slot, bluetooth_event_buffer,
                                        sizeof(bluetooth_event_buffer),
-                                       &event_length) &&
+                                       &event_length) > 0 &&
             usb_bluetooth_hci_event_valid(bluetooth_event_buffer,
                                           event_length)) {
             bluetooth->event_count++;
@@ -537,7 +537,8 @@ void usb_poll(void)
                 }
             }
             (void)xhci_start_bulk_in(slot, bluetooth->acl_in_endpoint);
-        } else if (acl_result < 0) {
+        } else if (acl_result == -1) {
+            /* -2 means the completed packet is retained for a larger buffer. */
             (void)xhci_start_bulk_in(slot, bluetooth->acl_in_endpoint);
         }
     }
@@ -546,8 +547,8 @@ void usb_poll(void)
         if (!input_slots[slot].active)
             continue;
         uint32_t length = 0;
-        if (!xhci_take_interrupt_report(slot, report_buffer,
-                                        sizeof(report_buffer), &length))
+        if (xhci_take_interrupt_report(slot, report_buffer,
+                                        sizeof(report_buffer), &length) <= 0)
             continue;
         if (input_slots[slot].kind == 1U) {
             usb_hid_keyboard_report(input_slots[slot].hid_handle,

@@ -12,8 +12,9 @@ FAT32 currently accepts only writable 512-byte-sector devices. Device selection 
 
 Workflow: [`.github/workflows/build.yml`](../.github/workflows/build.yml)
 
-Before compiling, CI runs `scripts/check_architecture.py`. This static boundary
-check verifies that kernel entry does not depend on concrete driver headers,
+Before compiling, CI runs `scripts/check_architecture.py` and `scripts/check_syscall_abi.py`. The latter compares public userspace syscall-number definitions with the kernel constants and dispatch cases; it is a source-contract check, not a runtime security test.
+
+The architecture boundary check verifies that kernel entry does not depend on concrete driver headers,
 that platform initialization hands off through the driver coordinator, that
 network/USB/storage initialization remains owned by each subsystem, and that
 all coordinator sources are registered in their corresponding Makefiles. This

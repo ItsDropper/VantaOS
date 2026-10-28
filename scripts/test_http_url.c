@@ -45,9 +45,30 @@ static int expect_status(const char *url, http_url_status_t expected)
     return 1;
 }
 
+static int expect_large_path(const char *url, size_t expected_length,
+                             http_url_status_t expected)
+{
+    char host[96];
+    char path[384];
+    uint32_t port = 0U;
+    http_url_status_t actual = http_url_parse(
+        url, host, sizeof(host), path, sizeof(path), &port);
+    if (actual != expected ||
+        (actual == HTTP_URL_OK && strlen(path) != expected_length))
+    {
+        fprintf(stderr,
+                "HTTP URL extended-path mismatch: status=%d expected=%d path_length=%zu expected_length=%zu\n",
+                (int)actual, (int)expected,
+                actual == HTTP_URL_OK ? strlen(path) : 0U, expected_length);
+        return 0;
+    }
+    return 1;
+}
+
 int main(void)
 {
     char long_url[160];
+    char extended_url[512];
     int ok = 1;
 
     ok &= expect_ok("http://example.com", "example.com", "/", 80U);
@@ -98,6 +119,19 @@ int main(void)
     while (n + 1U < sizeof(long_url)) long_url[n++] = 'a';
     long_url[n] = '\0';
     ok &= expect_status(long_url, HTTP_URL_PATH_TOO_LONG);
+
+    /* The downloader now supplies a 384-byte path buffer. */
+    (void)strcpy(extended_url, "http://example.com/");
+    n = strlen(extended_url);
+    size_t extended_base = n;
+    while (n < extended_base + 300U) extended_url[n++] = 'a';
+    extended_url[n] = '\0';
+    ok &= expect_large_path(extended_url, 301U, HTTP_URL_OK);
+
+    n = extended_base;
+    while (n < extended_base + 383U) extended_url[n++] = 'a';
+    extended_url[n] = '\0';
+    ok &= expect_large_path(extended_url, 0U, HTTP_URL_PATH_TOO_LONG);
 
     if (!ok) return 1;
     puts("HTTP URL parser tests passed (scheme, host, port, path, query, fragments and bounds).");

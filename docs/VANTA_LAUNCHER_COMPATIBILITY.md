@@ -17,13 +17,13 @@ curl http://<reachable-host>/<path>
 curl -o /HOME/USER/file.bin http://<reachable-host>/<path>
 ```
 
-Only plain HTTP over IPv4 is supported today. The client rejects HTTPS, redirects, chunked transfer encoding, and non-200 responses; downloads are capped at 8 MiB. Do not use plain HTTP for credentials, private data, or unverified executable downloads. The actual Vanta Launcher release endpoints use HTTPS, so these commands cannot yet fetch the launcher from its normal distribution source.
+Only plain HTTP over IPv4 is supported today. The client rejects HTTPS, redirects, non-200 responses, and any `Transfer-Encoding` header; downloads are capped at 8 MiB. `Content-Length` is checked when present, and malformed/conflicting values are rejected. Output files are removed on several transfer failures, but this cleanup is not yet covered by an end-to-end regression test. The current client is not a general-purpose `curl.exe` replacement. Do not use plain HTTP for credentials, private data, or unverified executable downloads. The actual Vanta Launcher release endpoints use HTTPS, so these commands cannot yet fetch the launcher from its normal distribution source.
 
 ## Compatibility milestones
 
 The following are gates, not claims that these features are complete.
 
-1. **Reliable network bootstrap.** Validate TCP/DNS behavior with deterministic local test servers; add robust transfer framing, bounded retries, correct cleanup, and a tested downloader. Implement TLS only after the kernel has suitable entropy and trusted time plus reviewed cryptographic and certificate-validation code. HTTPS must fail closed on certificate or hostname errors.
+1. **Reliable network bootstrap.** Validate TCP/DNS behavior with deterministic local test servers; add robust transfer framing, bounded retries, and a deterministic downloader suite covering exact bytes, malformed framing, truncated responses, size limits, and filesystem failures. Verify cleanup through the real VFS before treating it as a guarantee. Implement TLS only after the kernel has suitable entropy and trusted time plus reviewed cryptographic and certificate-validation code. HTTPS must fail closed on certificate or hostname errors.
 2. **Native userspace contract.** Stabilize ELF loading, process lifecycle/waiting, file descriptors, directory operations, memory mapping, clocks, threads/synchronization, and error reporting. Publish a small C runtime ABI so applications do not bind directly to internal kernel functions.
 3. **Java runtime feasibility.** Port or bring up a compatible JVM only after the required virtual-memory, thread, signal/exception, dynamic-linking, filesystem, clock, and synchronization interfaces exist. A JVM is not a single ELF file that can simply be downloaded and launched.
 4. **Windowing and JavaFX.** Provide the native graphics/input/event facilities and compatible runtime libraries required by JavaFX. The existing Vanta Launcher UI depends on JavaFX controls; the current VantaOS GUI API is not JavaFX-compatible.

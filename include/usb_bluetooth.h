@@ -126,6 +126,8 @@ typedef struct {
     uint16_t psm;
     uint16_t local_mtu;
     uint16_t remote_mtu;
+    uint8_t local_configured;
+    uint8_t remote_configured;
     uint32_t deadline;
 } usb_bluetooth_l2cap_channel_t;
 typedef struct {
@@ -245,6 +247,18 @@ int usb_bluetooth_l2cap_channel_configured(usb_bluetooth_l2cap_table_t *table,
 int usb_bluetooth_l2cap_channel_configure_begin(
     usb_bluetooth_l2cap_table_t *table, uint16_t local_cid,
     uint8_t identifier);
+int usb_bluetooth_l2cap_configuration_request_begin(
+    usb_bluetooth_l2cap_table_t *table, uint16_t local_cid,
+    uint8_t *output, uint32_t capacity);
+int usb_bluetooth_l2cap_configuration_request_failed(
+    usb_bluetooth_l2cap_table_t *table, uint16_t local_cid,
+    uint8_t identifier);
+int usb_bluetooth_l2cap_configuration_request(
+    usb_bluetooth_l2cap_table_t *table, const uint8_t *command,
+    uint32_t length, uint8_t *response, uint32_t capacity,
+    uint16_t *local_cid);
+int usb_bluetooth_l2cap_channel_remote_configured(
+    usb_bluetooth_l2cap_table_t *table, uint16_t local_cid);
 /* Apply a parsed Configure Response; flags!=0 means continuation (returns 0).
  * A successful final response opens the channel. */
 int usb_bluetooth_l2cap_channel_configure_response(

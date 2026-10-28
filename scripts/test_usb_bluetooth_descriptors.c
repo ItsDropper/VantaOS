@@ -815,6 +815,31 @@ static void test_hci_command_credits_and_discovery_builders(void)
     assert(usb_bluetooth_hci_build_read_bd_addr(out, 2U) == -90);
 }
 
+static void test_active_link_count(void)
+{
+    usb_bluetooth_link_table_t links = {0};
+    const uint8_t connected_a[] = {
+        0x03U, 11U, 0U, 0x0BU, 0U, 1U, 0U,
+        0U, 0U, 0U, 0U, 0U, 0U
+    };
+    uint8_t connected_b[sizeof(connected_a)];
+    const uint8_t disconnected_a[] = {0x05U, 4U, 0U, 0x0BU, 0U, 0U};
+    usb_bluetooth_link_table_reset(&links);
+    assert(usb_bluetooth_link_table_active_count(&links) == 0U);
+    assert(usb_bluetooth_link_table_event(&links, connected_a,
+                                          sizeof(connected_a)) == 1);
+    assert(usb_bluetooth_link_table_active_count(&links) == 1U);
+    memcpy(connected_b, connected_a, sizeof(connected_b));
+    connected_b[3] = 0x0CU;
+    assert(usb_bluetooth_link_table_event(&links, connected_b,
+                                          sizeof(connected_b)) == 1);
+    assert(usb_bluetooth_link_table_active_count(&links) == 2U);
+    assert(usb_bluetooth_link_table_event(&links, disconnected_a,
+                                          sizeof(disconnected_a)) == 1);
+    assert(usb_bluetooth_link_table_active_count(&links) == 1U);
+    assert(usb_bluetooth_link_table_is_single_handle(&links, 0x000CU) == 1);
+}
+
 static void test_single_link_l2cap_dispatch_guard(void)
 {
     usb_bluetooth_link_table_t links = {0};
@@ -1288,6 +1313,7 @@ int main(void)
     test_l2cap_acl_response_dispatch();
     test_fragmented_acl_dispatches_l2cap_response();
     test_single_link_l2cap_dispatch_guard();
+    test_active_link_count();
     test_complete_hci_interface();
     test_incomplete_interface_is_not_claimed();
     test_malformed_lengths_are_rejected();

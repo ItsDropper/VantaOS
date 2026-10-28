@@ -7,6 +7,7 @@
 
 #include "storage_init.h"
 
+#include "ahci.h"
 #include "ata.h"
 #include "nvme.h"
 #include "partition_device.h"

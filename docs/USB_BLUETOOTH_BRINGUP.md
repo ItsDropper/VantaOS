@@ -326,3 +326,13 @@ success, and the negotiated remote MTU is valid. Continuation responses leave
 the channel configuring; rejected or malformed responses do not accidentally
 open it. The caller still has to parse signaling bytes and pass validated
 fields to this primitive.
+
+
+## L2CAP Configure Response byte parser
+
+The configuration transaction now has a byte-level response parser. It
+validates the signaling command's declared size, CID, identifier and option
+TLVs; accepts a single well-formed MTU option; rejects undersized or duplicate
+MTU options and unknown mandatory options; and only opens a channel after a
+matching successful final response. The parser still needs to be called by a
+future inbound L2CAP signaling dispatcher.

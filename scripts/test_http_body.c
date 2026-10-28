@@ -96,6 +96,22 @@ int main(void)
     ok &= expect_status("second framing configuration",
         http_body_set_content_length(&body, 0, 0U), HTTP_BODY_BAD_ARGUMENT);
 
+    /* The counter must reject UINT32 overflow without corrupting its state. */
+    ok &= expect_status("uint32 boundary initialize",
+        http_body_initialize(&body, UINT32_MAX), HTTP_BODY_OK);
+    ok &= expect_status("uint32 boundary framing",
+        http_body_set_content_length(&body, 0, 0U), HTTP_BODY_OK);
+    ok &= expect_status("consume uint32 maximum",
+        http_body_consume(&body, (size_t)UINT32_MAX), HTTP_BODY_OK);
+    ok &= expect_status("reject uint32 overflow",
+        http_body_consume(&body, 1U), HTTP_BODY_LIMIT_EXCEEDED);
+    if (http_body_bytes_received(&body) != UINT32_MAX) {
+        fputs("overflow rejection changed received-byte count\\n", stderr);
+        ok = 0;
+    }
+    ok &= expect_status("finish maximum-size body",
+        http_body_finish(&body, 1), HTTP_BODY_OK);
+
     if (!ok) return 1;
     puts("HTTP body framing tests passed (limits, Content-Length and orderly EOF).");
     return 0;

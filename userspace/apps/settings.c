@@ -6,6 +6,7 @@
  */
 
 #include <vanta/gui.h>
+#include <vanta/bluetooth.h>
 
 #define SETTINGS_PATH "/SYSTEM/VANTASET.CFG"
 #define INSTALL_CONFIG_PATH "/SYSTEM/SETUP.CFG"
@@ -43,6 +44,9 @@ static uint32_t selected_page;
 static int running = 1;
 static char status_buffer[64] = "Defaults loaded; save to keep changes";
 static char installed_device_name[33] = "Not configured";
+static uint32_t bluetooth_port;
+static uint32_t selected_device;
+static uint32_t bluetooth_device_count;
 static uint32_t status_color;
 
 static size_t text_length(const char* text)
@@ -357,6 +361,127 @@ static int run_storage_self_test(void)
     return 0;
 }
 
+static char bluetooth_hex_digit(uint8_t value)
+{
+    value &= 0x0FU;
+    return (char)(value < 10U ? '0' + value : 'A' + (value - 10U));
+}
+
+static void bluetooth_format_address(const uint8_t address[6], char output[18])
+{
+    size_t used = 0U;
+    for (uint32_t i = 0U; i < 6U; ++i)
+    {
+        output[used++] = bluetooth_hex_digit((uint8_t)(address[i] >> 4));
+        output[used++] = bluetooth_hex_digit(address[i]);
+        if (i != 5U)
+            output[used++] = ':';
+    }
+    output[used] = '\0';
+}
+
+static void bluetooth_refresh(void)
+{
+    long adapters = vanta_bluetooth_adapter_count();
+    bluetooth_port = 0U;
+    if (adapters > 0)
+    {
+        uint32_t port = 0U;
+        if (vanta_bluetooth_adapter_port(0U, &port) > 0)
+            bluetooth_port = port;
+    }
+    long count = bluetooth_port != 0U ?
+        vanta_bluetooth_discovered_count(bluetooth_port) : 0;
+    bluetooth_device_count = count > 0 ? (uint32_t)count : 0U;
+    if (bluetooth_device_count == 0U)
+        selected_device = 0U;
+    else if (selected_device >= bluetooth_device_count)
+        selected_device = bluetooth_device_count - 1U;
+}
+
+static void bluetooth_scan(void)
+{
+    bluetooth_refresh();
+    if (bluetooth_port == 0U)
+    {
+        set_status("No USB Bluetooth adapter detected", COLOR_ERROR);
+        return;
+    }
+    long result = vanta_bluetooth_scan(bluetooth_port);
+    if (result > 0)
+        set_status("Scanning for nearby Classic Bluetooth devices...", COLOR_SUCCESS);
+    else
+        set_status("Scan could not start; check adapter/controller", COLOR_ERROR);
+}
+
+static void bluetooth_cancel_scan(void)
+{
+    if (bluetooth_port == 0U)
+    {
+        set_status("No Bluetooth adapter available", COLOR_ERROR);
+        return;
+    }
+    if (vanta_bluetooth_cancel_scan(bluetooth_port) > 0)
+        set_status("Scan cancellation requested", COLOR_MUTED);
+    else
+        set_status("No active scan or cancellation failed", COLOR_ERROR);
+}
+
+static void bluetooth_connect_selected(void)
+{
+    bluetooth_refresh();
+    if (bluetooth_port == 0U)
+    {
+        set_status("Connect a USB Bluetooth adapter first", COLOR_ERROR);
+        return;
+    }
+    usb_bluetooth_inquiry_result_t result = {0};
+    if (vanta_bluetooth_discovered_get(
+            bluetooth_port, selected_device, &result) <= 0)
+    {
+        set_status("Select a discovered device first", COLOR_ERROR);
+        return;
+    }
+    uint16_t handle = 0U;
+    long state = vanta_bluetooth_peer_state(
+        bluetooth_port, result.address, &handle);
+    if (state == 1)
+    {
+        set_status("Device is already connected", COLOR_SUCCESS);
+        return;
+    }
+    if (state == 2)
+    {
+        set_status("Connection attempt already in progress", COLOR_MUTED);
+        return;
+    }
+    long connected = vanta_bluetooth_connect(bluetooth_port, &result);
+    if (connected > 0)
+        set_status("Connection requested; waiting for controller", COLOR_SUCCESS);
+    else
+        set_status("Connect failed; device may be out of range", COLOR_ERROR);
+}
+
+static void bluetooth_cancel_selected(void)
+{
+    if (bluetooth_port == 0U || bluetooth_device_count == 0U)
+    {
+        set_status("No selected Bluetooth device", COLOR_ERROR);
+        return;
+    }
+    usb_bluetooth_inquiry_result_t result = {0};
+    if (vanta_bluetooth_discovered_get(
+            bluetooth_port, selected_device, &result) <= 0)
+    {
+        set_status("Selected device is no longer available", COLOR_ERROR);
+        return;
+    }
+    if (vanta_bluetooth_cancel_connection(bluetooth_port, result.address) > 0)
+        set_status("Connection cancellation requested", COLOR_MUTED);
+    else
+        set_status("No cancellable connection attempt", COLOR_ERROR);
+}
+
 static void render(void)
 {
     command_count = 0U;
@@ -372,9 +497,9 @@ static void render(void)
     /* Persistent navigation keeps the three settings areas easy to scan. */
     add_rect(12, 56, 148, 294, surface);
     add_text(24, 66, "CATEGORIES", muted);
-    const int nav_y[3] = { 88, 132, 176 };
-    const char* nav_labels[3] = { "Appearance", "Accessibility", "About" };
-    for (uint32_t i = 0U; i < 3U; i++)
+    const int nav_y[4] = { 88, 132, 176, 220 };
+    const char* nav_labels[4] = { "Appearance", "Accessibility", "About", "Bluetooth" };
+    for (uint32_t i = 0U; i < 4U; i++)
     {
         if (selected_page == i)
             add_rect(18, nav_y[i], 136, 36, selected);
@@ -440,13 +565,73 @@ static void render(void)
         add_text(190, 248, "Time zone is saved by Setup but not applied to the clock.", muted);
         add_text(190, 272, "Language and keyboard integration is not implemented yet.", muted);
     }
+    else
+    {
+        add_text(190, 68, "Bluetooth", text);
+        add_text(190, 88, "Discover and connect to nearby Classic Bluetooth devices.", muted);
+        bluetooth_refresh();
+        if (bluetooth_port == 0U)
+        {
+            add_rect(188, 112, 408, 76, selected);
+            add_text(202, 126, "No USB Bluetooth adapter detected", text);
+            add_text(202, 150, "Connect a supported USB adapter, then scan.", muted);
+        }
+        else
+        {
+            add_text(190, 108, "Adapter detected", COLOR_SUCCESS);
+            add_text(330, 108, "USB port", muted);
+            char port_text[12];
+            uint32_t value = bluetooth_port;
+            uint32_t digits = 0U;
+            do {
+                port_text[digits++] = (char)('0' + (value % 10U));
+                value /= 10U;
+            } while (value != 0U && digits < sizeof(port_text) - 1U);
+            for (uint32_t i = 0U; i < digits / 2U; ++i) {
+                char tmp = port_text[i];
+                port_text[i] = port_text[digits - 1U - i];
+                port_text[digits - 1U - i] = tmp;
+            }
+            port_text[digits] = '\0';
+            add_text(390, 108, port_text, text);
+            add_text(190, 132, "Nearby devices", text);
+            if (bluetooth_device_count == 0U)
+                add_text(202, 160, "No results yet. Select Scan devices.", muted);
+            uint32_t visible = bluetooth_device_count < 4U ?
+                bluetooth_device_count : 4U;
+            for (uint32_t i = 0U; i < visible; ++i)
+            {
+                usb_bluetooth_inquiry_result_t device = {0};
+                if (vanta_bluetooth_discovered_get(
+                        bluetooth_port, i, &device) <= 0)
+                    continue;
+                int y = 154 + (int)i * 42;
+                add_rect(188, y, 408, 36,
+                         selected_device == i ? selected : color_surface());
+                char address[18];
+                bluetooth_format_address(device.address, address);
+                add_text(198, y + 10, address, text);
+                uint16_t handle = 0U;
+                long peer = vanta_bluetooth_peer_state(
+                    bluetooth_port, device.address, &handle);
+                const char* state = peer == 1 ? "Connected" :
+                    peer == 2 ? "Connecting" : "Found";
+                add_text(476, y + 10, state,
+                         peer == 1 ? COLOR_SUCCESS :
+                         peer == 2 ? COLOR_AMBER : muted);
+            }
+            if (bluetooth_device_count > 4U)
+                add_text(190, 326, "Use Up/Down to select additional results.", muted);
+        }
+    }
 
     add_rect(172, 365, 202, 38, accent_value);
-    add_text(190, 377, "Save changes", 0x00FFFFFFU);
+    add_text(190, 377, selected_page == 3U ? "Scan devices" : "Save changes",
+             0x00FFFFFFU);
     add_rect(384, 365, 224, 38, color_selected());
-    add_text(402, 377, "Restore defaults", text);
+    add_text(402, 377, selected_page == 3U ? "Connect selected" : "Restore defaults", text);
     add_text(16, 414, status_buffer, status_color);
-    add_text(16, 436, "Click a category or setting; S saves, R resets, Q closes.", muted);
+    add_text(16, 436, selected_page == 3U ? "Select a device; S scans, X cancels scan, C cancels connect, Q closes." : "Click a category or setting; S saves, R resets, B opens Bluetooth, Q closes.", muted);
     (void)vanta_gui_draw(window_id, commands, command_count);
 }
 
@@ -514,6 +699,8 @@ int main(int argc, char** argv)
             close_app();
         if (result == 0)
         {
+            if (selected_page == 3U)
+                render();
             (void)vanta_yield();
             continue;
         }
@@ -538,7 +725,15 @@ int main(int argc, char** argv)
                 selected_page = 1U;
             else if (key == 'i' || key == 'I')
                 selected_page = 2U;
-            else if (key == 's' || key == 'S')
+            else if ((key == 's' || key == 'S') && selected_page == 3U)
+                bluetooth_scan();
+            else if (key == 'x' || key == 'X')
+                bluetooth_cancel_scan();
+            else if ((key == 'c' || key == 'C') && selected_page == 3U)
+                bluetooth_cancel_selected();
+            else if (key == 'b' || key == 'B')
+                selected_page = 3U;
+            else if ((key == 's' || key == 'S') && selected_page != 3U)
                 save_and_report();
             else if (key == 'r' || key == 'R')
             {
@@ -564,11 +759,22 @@ int main(int argc, char** argv)
                         selected_setting = selected_setting >= 4U ||
                             selected_setting < 3U ? 3U : 4U;
                 }
+                else if (selected_page == 3U && bluetooth_device_count > 0U)
+                {
+                    if (key == VANTA_GUI_KEY_UP)
+                        selected_device = selected_device == 0U ?
+                            bluetooth_device_count - 1U : selected_device - 1U;
+                    else
+                        selected_device = selected_device + 1U >= bluetooth_device_count ?
+                            0U : selected_device + 1U;
+                }
             }
             else if (key == '\r' || key == '\n' || key == ' ')
             {
                 if (selected_page == 2U)
                     selected_page = 0U;
+                else if (selected_page == 3U)
+                    bluetooth_connect_selected();
                 else if ((selected_page == 0U && selected_setting < 3U) ||
                          (selected_page == 1U && selected_setting >= 3U))
                     cycle_setting(selected_setting);
@@ -587,6 +793,8 @@ int main(int argc, char** argv)
                     selected_page = 1U;
                 else if (event.y >= 176 && event.y < 212)
                     selected_page = 2U;
+                else if (event.y >= 220 && event.y < 256)
+                    selected_page = 3U;
             }
 
             if (event.x >= 184 && event.x < 596 && selected_page == 0U)
@@ -610,14 +818,32 @@ int main(int argc, char** argv)
                     }
             }
 
+            if (event.x >= 184 && event.x < 596 && selected_page == 3U &&
+                event.y >= 154 && event.y < 322)
+            {
+                uint32_t row = (uint32_t)(event.y - 154) / 42U;
+                if (row < bluetooth_device_count && row < 4U)
+                    selected_device = row;
+            }
+
             if (event.x >= 172 && event.x < 374 &&
                 event.y >= 365 && event.y < 403)
-                save_and_report();
+            {
+                if (selected_page == 3U)
+                    bluetooth_scan();
+                else
+                    save_and_report();
+            }
             else if (event.x >= 384 && event.x < 608 &&
                      event.y >= 365 && event.y < 403)
             {
-                reset_defaults();
-                set_status("Defaults restored; save to keep them", color_muted());
+                if (selected_page == 3U)
+                    bluetooth_connect_selected();
+                else
+                {
+                    reset_defaults();
+                    set_status("Defaults restored; save to keep them", color_muted());
+                }
             }
             render();
         }

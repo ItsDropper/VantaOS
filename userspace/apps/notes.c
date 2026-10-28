@@ -19,7 +19,7 @@
 #define COLOR_ERROR 0x00F87171U
 #define COLOR_SUCCESS 0x0022C55EU
 
-static char document_path[128] = DEFAULT_NOTES_PATH;
+static char document_path[256] = DEFAULT_NOTES_PATH;
 static int document_writable = 1;
 static char document[TEXT_CAPACITY];
 static size_t document_length;
@@ -346,19 +346,42 @@ static void load_document(void)
         set_status("New note; Ctrl+S creates the file", vanta_theme_muted_color(&theme));
         return;
     }
-    long count = vanta_read((int)fd, document, sizeof(document) - 1U);
-    (void)vanta_close((int)fd);
-    if (count < 0)
+
+    size_t total = 0U;
+    int read_failed = 0;
+    while (total < sizeof(document) - 1U)
+    {
+        long count = vanta_read((int)fd, document + total,
+                                sizeof(document) - 1U - total);
+        if (count < 0)
+        {
+            read_failed = 1;
+            break;
+        }
+        if (count == 0)
+            break;
+        if ((size_t)count > sizeof(document) - 1U - total)
+        {
+            read_failed = 1;
+            break;
+        }
+        total += (size_t)count;
+    }
+    if (vanta_close((int)fd) < 0)
+        read_failed = 1;
+    if (read_failed)
     {
         document[0] = '\0';
         document_length = 0U;
-        set_status("Could not read note", COLOR_ERROR);
+        cursor = 0U;
+        set_status("Could not read note completely", COLOR_ERROR);
         return;
     }
-    document_length = (size_t)count;
+
+    document_length = total;
     document[document_length] = '\0';
     cursor = document_length;
-    set_status(count == (long)(sizeof(document) - 1U) ?
+    set_status(total == sizeof(document) - 1U ?
                "Loaded first 4095 bytes" : "Loaded note", COLOR_SUCCESS);
     ensure_cursor_visible();
 }

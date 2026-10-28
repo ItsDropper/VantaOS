@@ -7,6 +7,7 @@
 
 #include <vanta/gui.h>
 #include <vanta/theme.h>
+#include <vanta/path.h>
 
 #define PROCESS_USER_MAX_ARGS 16U
 #define LINE_CAPACITY 256U
@@ -88,59 +89,9 @@ static int starts_with(const char* text, const char* prefix)
     return 1;
 }
 
-/* Normalize paths before passing them through the syscall ABI. */
 static int resolve_path(const char* input, char* output, size_t capacity)
 {
-    if (!input || !input[0] || !output || capacity < 2U)
-        return 0;
-    size_t used = 1U;
-    output[0] = '/';
-    output[1] = '\0';
-    const char* cursor = input;
-    if (input[0] != '/')
-    {
-        size_t base_length = string_length(current_directory);
-        if (base_length >= capacity)
-            return 0;
-        for (size_t i = 0U; i < base_length; ++i)
-            output[i] = current_directory[i];
-        used = base_length;
-        output[used] = '\0';
-    }
-    while (*cursor)
-    {
-        while (*cursor == '/')
-            cursor++;
-        if (!*cursor)
-            break;
-        const char* component = cursor;
-        while (*cursor && *cursor != '/')
-            cursor++;
-        size_t length = (size_t)(cursor - component);
-        if (length == 1U && component[0] == '.')
-            continue;
-        if (length == 2U && component[0] == '.' && component[1] == '.')
-        {
-            if (used > 1U)
-            {
-                while (used > 1U && output[used - 1U] != '/')
-                    used--;
-                if (used > 1U)
-                    used--;
-                output[used] = '\0';
-            }
-            continue;
-        }
-        size_t separator = used > 1U ? 1U : 0U;
-        if (used + separator + length >= capacity)
-            return 0;
-        if (separator)
-            output[used++] = '/';
-        for (size_t i = 0U; i < length; ++i)
-            output[used++] = component[i];
-        output[used] = '\0';
-    }
-    return 1;
+    return vanta_path_resolve(input, current_directory, output, capacity);
 }
 
 static void command_change_directory(const char* path)

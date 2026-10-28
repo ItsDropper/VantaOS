@@ -2,6 +2,8 @@
 
 This roadmap prioritizes a trustworthy kernel over visual features. A Windows alternative is a multi-year goal, not a delivery guarantee.
 
+The separate [anti-cheat and Windows game compatibility plan](ANTI_CHEAT_COMPATIBILITY_PLAN.md) tracks EAC investigation, userspace compatibility, platform integrity, and vendor-approved acceptance gates. It explicitly forbids spoofing trust or claiming unsupported anti-cheat compatibility.
+
 ## Engineering rules
 
 - Work on a feature branch and preserve the default branch and dated backup.

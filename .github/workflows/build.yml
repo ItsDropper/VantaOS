@@ -155,6 +155,9 @@ jobs:
       - name: Enforce architecture boundaries
         run: python3 scripts/check_architecture.py
 
+      - name: Check public and kernel syscall ABI consistency
+        run: python3 scripts/check_syscall_abi.py
+
       - name: Compile strict partition scanner host tests
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \

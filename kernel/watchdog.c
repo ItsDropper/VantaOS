@@ -13,11 +13,11 @@
 
 #define WATCHDOG_SLOT_BITS 8U
 #define WATCHDOG_SLOT_MASK 0xFFU
-#define WATCHDOG_GENERATION_MASK 0x00FFFFFFU
+#define WATCHDOG_GENERATION_MASK 0x00FFFFFFFFFFFFFFULL
 
 typedef struct
 {
-    uint32_t generation;
+    uint64_t generation;
     uint32_t timeout_ticks;
     uint32_t deadline;
     kernel_watchdog_status_t status;
@@ -30,7 +30,7 @@ static kernel_watchdog_slot_t* watchdog_find_locked(
     kernel_watchdog_handle_t handle)
 {
     uint32_t encoded_slot = handle & WATCHDOG_SLOT_MASK;
-    uint32_t generation = handle >> WATCHDOG_SLOT_BITS;
+    uint64_t generation = handle >> WATCHDOG_SLOT_BITS;
     if (encoded_slot == 0U || encoded_slot > KERNEL_WATCHDOG_MAX_CLIENTS ||
         generation == 0U)
         return 0;
@@ -54,7 +54,7 @@ kernel_watchdog_handle_t kernel_watchdog_register(uint32_t timeout_ticks)
         if (slot->status != KERNEL_WATCHDOG_INVALID)
             continue;
 
-        uint32_t generation =
+        uint64_t generation =
             (slot->generation + 1U) & WATCHDOG_GENERATION_MASK;
         if (generation == 0U)
             generation = 1U;

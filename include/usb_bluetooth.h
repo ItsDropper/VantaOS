@@ -309,6 +309,10 @@ int usb_bluetooth_l2cap_channel_disconnect_failed(
 int usb_bluetooth_l2cap_disconnection_response(
     usb_bluetooth_l2cap_table_t *table, const uint8_t *command,
     uint32_t length);
+int usb_bluetooth_l2cap_disconnection_request(
+    usb_bluetooth_l2cap_table_t *table, const uint8_t *command,
+    uint32_t length, uint8_t *response, uint32_t capacity,
+    uint16_t *local_cid);
 /* Apply a parsed Configure Response; flags!=0 means continuation (returns 0).
  * A successful final response opens the channel. */
 int usb_bluetooth_l2cap_channel_configure_response(

@@ -258,3 +258,27 @@ connection handle through `usb_bluetooth_reassembled_acl_receive`. The raw ACL
 queue remains available for diagnostics and lower-level consumers. Only legacy
 BR/EDR connection events are currently tracked; LE Meta events and service
 discovery/profile logic are not implemented.
+
+
+## DMA buffer safety and controller capability limits
+
+The xHCI transfer path validates the full physical range of control and bulk
+data buffers before publishing a data TRB. It rejects buffers whose virtual
+pages do not translate to a contiguous physical range or whose DMA range
+exceeds the controller path's 32-bit address limit. This is fail-closed
+validation, not a replacement for an IOMMU or a DMA mapping/bounce-buffer
+subsystem. Bluetooth command buffers are individually cache-line aligned and
+have a stride aligned to that boundary.
+
+HCI command tracking now gates submissions on controller command credits and
+matches Command Complete/Command Status events by opcode. Host-testable command
+builders cover Read Local Version, Read BD_ADDR, Read Buffer Size, and Inquiry.
+A bounded L2CAP channel table provides pending/connected/configuring/open/close
+lifecycle primitives, response-identifier matching, duplicate remote-CID
+rejection, MTU validation, and deadline cleanup.
+
+These additions do not implement pairing, encryption, authentication, SDP,
+GATT, or application profiles. Inquiry and information command builders are
+not evidence that discovery has been run against a real controller. The USB
+polling layer still needs a full asynchronous command queue and deadline clock,
+and the L2CAP channel primitives are not yet a complete signaling dispatcher.

@@ -260,6 +260,10 @@ int usb_bluetooth_l2cap_build_disconnection_request(uint8_t identifier,
 int usb_bluetooth_l2cap_dispatch_acl_responses(
     usb_bluetooth_l2cap_table_t *table, const uint8_t *packet,
     uint32_t length);
+/* Handle-bound variant: rejects ACL packets from any other connection. */
+int usb_bluetooth_l2cap_dispatch_acl_responses_for_handle(
+    usb_bluetooth_l2cap_table_t *table, uint16_t expected_handle,
+    const uint8_t *packet, uint32_t length);
 /* Dispatch a validated signaling list to supported channel responses.
  * Returns number of recognized response commands or a negative errno. */
 int usb_bluetooth_l2cap_dispatch_responses(

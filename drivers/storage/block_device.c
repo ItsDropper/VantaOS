@@ -38,7 +38,7 @@ static void make_disk_name(char *name, uint32_t number)
  do { digits[count++]=(char)('0'+number%10U); number/=10U; } while(number && count<sizeof(digits));
  uint32_t pos=4U;
  while(count) name[pos++]=digits[--count];
- name[pos]='\\0';
+ name[pos]='\0';
 }
 block_status_t block_device_register_disk(block_device_t* d)
 {

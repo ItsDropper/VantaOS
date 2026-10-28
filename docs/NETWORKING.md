@@ -79,3 +79,14 @@ DHCP lease negotiation and renewal state is tracked independently for each regis
 
 
 Modern VirtIO support does not make this a universal networking stack. Physical Wi-Fi association/WPA2/WPA3 and TLS/HTTPS remain separate unsupported capabilities; see [adapter support](network-adapter-support.md) and [secure networking](secure-networking.md).
+
+### Terminal HTTP fetch (curl)
+
+The legacy kernel shell and GUI Terminal expose a small curl-style client:
+
+- `curl http://example.com/` prints the HTTP response body.
+- `curl -o /HOME/USER/page.html http://example.com/` writes the response body to a VantaOS VFS file.
+- `net connect` obtains IPv4 configuration through DHCP; `net status` inspects interfaces.
+- `net http http://example.com/` remains available for inspecting response headers and body.
+
+This is deliberately **not a drop-in implementation of Windows `curl.exe`**. It currently supports plain HTTP over IPv4, one TCP connection at a time, HTTP status 200 only, and downloads up to 8 MiB. Redirects, HTTPS/TLS, chunked transfer encoding, IPv6 HTTP, authentication, and general curl flags are unsupported. HTTPS is rejected rather than downgraded. Do not download executables or send private data over plain HTTP. Network commands require a supported link-up NIC and working DHCP/DNS or a valid static configuration. A successful TCP connection does not prove a downloaded file is trustworthy.

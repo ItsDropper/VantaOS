@@ -197,6 +197,10 @@ int usb_bluetooth_acl_parse(const uint8_t *packet, uint32_t length,
 /* Parse one complete, unfragmented L2CAP PDU carried in an ACL packet. */
 int usb_bluetooth_l2cap_parse(const uint8_t *packet, uint32_t length,
                               usb_bluetooth_l2cap_view_t *view);
+/* Validate and frame a complete CID 0x0001 signaling command list. */
+int usb_bluetooth_l2cap_build_signaling_acl_packet(
+    uint16_t handle, const uint8_t *commands, uint32_t command_length,
+    uint8_t *output, uint32_t capacity);
 /* Wrap an L2CAP payload in a first-fragment HCI ACL packet (PB=2).
  * Returns framed byte count, -22 for invalid fields, -90 for short output. */
 int usb_bluetooth_l2cap_build_acl_packet(uint16_t handle, uint16_t cid,

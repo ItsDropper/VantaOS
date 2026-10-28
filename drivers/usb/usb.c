@@ -85,6 +85,7 @@ static usb_bluetooth_l2cap_table_t
                           [USB_BLUETOOTH_LINK_MAX];
 static usb_bluetooth_l2cap_data_queue_t
     bluetooth_l2cap_data_queues[USB_MAX_XHCI_SLOTS + 1U];
+static uint32_t bluetooth_l2cap_data_dropped[USB_MAX_XHCI_SLOTS + 1U];
 
 static usb_bluetooth_l2cap_table_t *bluetooth_l2cap_table_for_handle(
     uint32_t slot, uint16_t handle, int create)
@@ -209,6 +210,7 @@ int usb_bluetooth_hci_command(uint32_t port, uint16_t opcode,
         usb_bluetooth_link_table_reset(&bluetooth_link_tables[slot]);
         bluetooth_l2cap_reset_all(slot);
     usb_bluetooth_l2cap_data_queue_reset(&bluetooth_l2cap_data_queues[slot]);
+    bluetooth_l2cap_data_dropped[slot] = 0U;
     }
     uint8_t *command_buffer = bluetooth_hci_command_buffers[slot].bytes;
     int encoded = usb_bluetooth_hci_command_encode(
@@ -697,6 +699,37 @@ static void bluetooth_l2cap_handle_configuration_requests(
     }
 }
 
+static void bluetooth_l2cap_queue_data(
+    uint32_t slot, uint16_t handle, const uint8_t *packet, uint32_t length)
+{
+    if (slot == 0U || slot > USB_MAX_XHCI_SLOTS || packet == NULL)
+        return;
+    usb_bluetooth_l2cap_view_t l2cap;
+    if (!usb_bluetooth_l2cap_parse(packet, length, &l2cap) ||
+        l2cap.channel_id < USB_BLUETOOTH_L2CAP_CID_DYNAMIC_MIN ||
+        l2cap.payload_length == 0U ||
+        l2cap.payload_length > USB_BLUETOOTH_L2CAP_DATA_MAX)
+        return;
+    usb_bluetooth_l2cap_table_t *table =
+        bluetooth_l2cap_table_for_handle(slot, handle, 0);
+    if (table == NULL)
+        return;
+    for (uint32_t i = 0U; i < USB_BLUETOOTH_L2CAP_CHANNEL_MAX; ++i) {
+        const usb_bluetooth_l2cap_channel_t *channel = &table->channels[i];
+        if (!channel->active || channel->state != 4U ||
+            channel->local_cid != l2cap.channel_id)
+            continue;
+        if (l2cap.payload_length > channel->local_mtu)
+            return;
+        int queued = usb_bluetooth_l2cap_data_queue_push(
+            &bluetooth_l2cap_data_queues[slot], handle, channel->local_cid,
+            l2cap.payload, l2cap.payload_length);
+        if (queued == -11 && ++bluetooth_l2cap_data_dropped[slot] == 1U)
+            serial_write("VANTAOS_BLUETOOTH_L2CAP_DATA_QUEUE_FULL\\n");
+        return;
+    }
+}
+
 static void bluetooth_l2cap_progress_channels(uint32_t slot)
 {
     if (slot == 0U || slot > USB_MAX_XHCI_SLOTS ||
@@ -710,7 +743,19 @@ static void bluetooth_l2cap_progress_channels(uint32_t slot)
             &bluetooth_l2cap_tables[slot][i];
         if (table == NULL)
             continue;
-        (void)usb_bluetooth_l2cap_expire(table, timer_get_ticks());
+        uint32_t now = timer_get_ticks();
+        for (uint32_t j = 0U; j < USB_BLUETOOTH_L2CAP_CHANNEL_MAX; ++j) {
+            const usb_bluetooth_l2cap_channel_t *channel =
+                &table->channels[j];
+            if (channel->active && channel->deadline != 0U &&
+                (channel->state == 1U || channel->state == 3U ||
+                 channel->state == 5U) &&
+                (int32_t)(now - channel->deadline) >= 0)
+                usb_bluetooth_l2cap_data_queue_forget_channel(
+                    &bluetooth_l2cap_data_queues[slot], handle,
+                    channel->local_cid);
+        }
+        (void)usb_bluetooth_l2cap_expire(table, now);
         for (uint32_t j = 0U; j < USB_BLUETOOTH_L2CAP_CHANNEL_MAX; ++j) {
             usb_bluetooth_l2cap_channel_t *channel = &table->channels[j];
             if (!channel->active || channel->state != 3U ||
@@ -840,6 +885,7 @@ static void usb_bluetooth_detach_slot(uint32_t slot)
     usb_bluetooth_link_table_reset(&bluetooth_link_tables[slot]);
     bluetooth_l2cap_reset_all(slot);
     usb_bluetooth_l2cap_data_queue_reset(&bluetooth_l2cap_data_queues[slot]);
+    bluetooth_l2cap_data_dropped[slot] = 0U;
     bluetooth_acl_dropped[slot] = 0U;
     __atomic_store_n(&bluetooth_acl_tx_busy[slot], 0U, __ATOMIC_RELEASE);
 }
@@ -988,12 +1034,14 @@ static int usb_enumerate_port(uint32_t port)
         bluetooth_slots[slot].command_state.credits = 1U;
         bluetooth_l2cap_reset_all(slot);
     usb_bluetooth_l2cap_data_queue_reset(&bluetooth_l2cap_data_queues[slot]);
+    bluetooth_l2cap_data_dropped[slot] = 0U;
         usb_bluetooth_acl_queue_reset(&bluetooth_acl_queues[slot]);
         usb_bluetooth_acl_queue_reset(&bluetooth_reassembled_acl_queues[slot]);
         usb_bluetooth_hci_event_queue_reset(&bluetooth_hci_event_queues[slot]);
         usb_bluetooth_link_table_reset(&bluetooth_link_tables[slot]);
         bluetooth_l2cap_reset_all(slot);
     usb_bluetooth_l2cap_data_queue_reset(&bluetooth_l2cap_data_queues[slot]);
+    bluetooth_l2cap_data_dropped[slot] = 0U;
         bluetooth_acl_dropped[slot] = 0U;
         __atomic_store_n(&bluetooth_acl_tx_busy[slot], 0U, __ATOMIC_RELEASE);
         if (!xhci_start_interrupt_in(slot) ||
@@ -1271,6 +1319,10 @@ void usb_poll(void)
                                 bluetooth_acl_reassembled_buffer,
                                 (uint32_t)assembled_length);
                             bluetooth_l2cap_handle_configuration_requests(
+                                slot, incoming_acl.handle,
+                                bluetooth_acl_reassembled_buffer,
+                                (uint32_t)assembled_length);
+                            bluetooth_l2cap_queue_data(
                                 slot, incoming_acl.handle,
                                 bluetooth_acl_reassembled_buffer,
                                 (uint32_t)assembled_length);

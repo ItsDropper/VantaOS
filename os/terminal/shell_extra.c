@@ -662,9 +662,8 @@ static int command_http_url(const char *url, const char *output_argument,
                     parse_status = http_response_parse(
                         headers, header_end, (uint32_t)max_download, &parsed);
                     if (parse_status != HTTP_RESPONSE_OK) {
-                        terminal_write("\ncurl: rejected malformed or unsupported HTTP response headers (parser status ");
-                        shell_print_decimal((unsigned int)parse_status);
-                        terminal_write(")");
+                        terminal_write("\\ncurl: rejected HTTP response headers: ");
+                        terminal_write(http_response_status_string(parse_status));
                         net_tcp_close(device);
                         return 1;
                     }

@@ -67,3 +67,8 @@ The public ABI is compiled separately by `tests/user/ipc_abi_compile.c`. Kernel/
 The endpoint table is fixed-size. Creation returns `-ENOMEM` when all 32 slots are active, and fails closed with `-ENODEV` if the random-number provider cannot supply a capability token. Endpoint close and owner-process cleanup erase queued message bytes before the slot becomes reusable. Do not silently replace a random token with a predictable counter: the endpoint value is a bearer capability, and predictability would let another process guess authority it was not given.
 
 The host regression suite now fills the endpoint table, verifies the exhaustion result, forces the RNG provider to fail, cleans up an owner with queued data, checks that the slot and payload bytes are cleared, and confirms that a reclaimed slot can be reused.
+
+
+## Revocation at current-process exit
+
+When the running process is marked terminated, the process lifecycle now revokes its IPC endpoints immediately after releasing the process-table lock and before returning to the scheduler. The current process still owns its CPU stack at that point, so its PID cannot yet be recycled. Non-current process termination continues to clean IPC as part of the reaper path, which owns the transition to resource teardown. This keeps the expensive queue-zeroing work outside the process-table critical section while avoiding a cleanup racing with PID reuse.

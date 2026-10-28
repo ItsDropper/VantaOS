@@ -76,3 +76,6 @@ Do not change syscall numbers to evolve this envelope. New message types belong 
 ## Resource limits and capability hygiene
 
 The kernel endpoint table contains 32 entries. Endpoint creation fails with `-VANTA_ENOMEM` when it is full; it does not evict another process's endpoint. If the platform's random source cannot produce a token, creation fails instead of using a predictable fallback. Endpoint close and owner cleanup clear queued bytes before releasing the slot. Applications should close endpoints when finished and treat capabilities as secrets, not as public IDs.
+
+
+When a running process exits, its IPC endpoints are revoked before control returns to the scheduler. For a non-current process, the reaper revokes endpoints during teardown. IPC cleanup runs outside the process-table lock so clearing queued payloads does not lengthen that critical section.

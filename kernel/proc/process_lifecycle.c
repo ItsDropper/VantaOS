@@ -294,8 +294,15 @@ int process_terminate(uint32_t pid)
     int is_current = pid == process_current_slot();
     process_table_lock_release(flags);
 
-    if (is_current)
+    if (is_current) {
+        /*
+         * The current task still owns its stack, so no reaper can recycle
+         * this PID yet. Revoke its IPC capabilities before returning to the
+         * scheduler; non-current tasks are cleaned by process_reap().
+         */
+        ipc_process_cleanup(pid);
         return 1;
+    }
     return process_reap(pid);
 }
 
@@ -308,6 +315,7 @@ void process_terminate_current_with_status(int32_t exit_status)
 {
     if (!process_initialized_state)
         return;
+    uint32_t terminated_pid = 0U;
     uint64_t flags = process_table_lock_acquire();
     uint32_t current_pid = process_current_slot();
     if (current_pid != 0 && current_pid < PROCESS_MAX &&
@@ -316,8 +324,18 @@ void process_terminate_current_with_status(int32_t exit_status)
     {
         process_table_records[current_pid].state = PROCESS_TERMINATED;
         process_table_records[current_pid].exit_status = exit_status;
+        terminated_pid = current_pid;
     }
     process_table_lock_release(flags);
+
+    /*
+     * The running task cannot be reaped/reused until it relinquishes this
+     * CPU's stack, so cleanup after dropping the process-table lock cannot
+     * accidentally erase capabilities created by a new process with the
+     * same PID.
+     */
+    if (terminated_pid != 0U)
+        ipc_process_cleanup(terminated_pid);
 }
 
 void process_save_stack(uint32_t pid, uint64_t stack_pointer)

@@ -20,6 +20,7 @@
 #include "desktop_theme.h"
 #include "shell.h"
 #include "ipc.h"
+#include "usb_bluetooth.h"
 
 #include <stdint.h>
 
@@ -54,6 +55,15 @@
 #define USER_SYSCALL_IPC_RECEIVE 28U
 #define USER_SYSCALL_IPC_CLOSE 29U
 #define USER_SYSCALL_IPC_PEEK_LENGTH 30U
+#define USER_SYSCALL_BLUETOOTH_ADAPTER_COUNT 31U
+#define USER_SYSCALL_BLUETOOTH_ADAPTER_PORT 32U
+#define USER_SYSCALL_BLUETOOTH_INQUIRY 33U
+#define USER_SYSCALL_BLUETOOTH_INQUIRY_CANCEL 34U
+#define USER_SYSCALL_BLUETOOTH_DISCOVERED_COUNT 35U
+#define USER_SYSCALL_BLUETOOTH_DISCOVERED_GET 36U
+#define USER_SYSCALL_BLUETOOTH_CONNECT 37U
+#define USER_SYSCALL_BLUETOOTH_PEER_STATE 38U
+#define USER_SYSCALL_BLUETOOTH_CANCEL_CONNECTION 39U
 #define USER_SYSCALL_KERNEL_COMMAND_MAX 2048U
 #define USER_SYSCALL_IO_MAX 4096U
 #define USER_SYSCALL_WRITE_MAX 4096U
@@ -960,6 +970,104 @@ static int syscall_dispatch(struct exception_frame* frame)
             return syscall_ipc_close(frame, &process);
         case USER_SYSCALL_IPC_PEEK_LENGTH:
             return syscall_ipc_peek_length(frame, &process);
+        case USER_SYSCALL_BLUETOOTH_ADAPTER_COUNT:
+            frame->rax = usb_bluetooth_adapter_count();
+            return 0;
+        case USER_SYSCALL_BLUETOOTH_ADAPTER_PORT:
+        {
+            uint32_t port = 0U;
+            uintptr_t output = (uintptr_t)frame->rsi;
+            if (!paging_user_range_valid(process.address_space, output,
+                                         sizeof(port), 1)) {
+                frame->rax = (uint64_t)(int64_t)-14;
+                return 0;
+            }
+            int result = usb_bluetooth_adapter_port(
+                (uint32_t)frame->rdi, &port);
+            *(uint32_t*)output = port;
+            frame->rax = (uint64_t)(int64_t)result;
+            return 0;
+        }
+        case USER_SYSCALL_BLUETOOTH_INQUIRY:
+            frame->rax = (uint64_t)(int64_t)usb_bluetooth_inquiry(
+                (uint32_t)frame->rdi, (uint8_t)frame->rsi,
+                (uint8_t)frame->rdx);
+            return 0;
+        case USER_SYSCALL_BLUETOOTH_INQUIRY_CANCEL:
+            frame->rax = (uint64_t)(int64_t)usb_bluetooth_inquiry_cancel(
+                (uint32_t)frame->rdi);
+            return 0;
+        case USER_SYSCALL_BLUETOOTH_DISCOVERED_COUNT:
+            frame->rax = usb_bluetooth_discovered_count(
+                (uint32_t)frame->rdi);
+            return 0;
+        case USER_SYSCALL_BLUETOOTH_DISCOVERED_GET:
+        {
+            usb_bluetooth_inquiry_result_t result = {0};
+            uintptr_t output = (uintptr_t)frame->rdx;
+            if (!paging_user_range_valid(process.address_space, output,
+                                         sizeof(result), 1)) {
+                frame->rax = (uint64_t)(int64_t)-14;
+                return 0;
+            }
+            int status = usb_bluetooth_discovered_get(
+                (uint32_t)frame->rdi, (uint32_t)frame->rsi, &result);
+            if (status > 0)
+                *(usb_bluetooth_inquiry_result_t*)output = result;
+            frame->rax = (uint64_t)(int64_t)status;
+            return 0;
+        }
+        case USER_SYSCALL_BLUETOOTH_CONNECT:
+        {
+            usb_bluetooth_inquiry_result_t result;
+            uintptr_t input = (uintptr_t)frame->rsi;
+            if (!paging_user_range_valid(process.address_space, input,
+                                         sizeof(result), 0)) {
+                frame->rax = (uint64_t)(int64_t)-14;
+                return 0;
+            }
+            result = *(const usb_bluetooth_inquiry_result_t*)input;
+            frame->rax = (uint64_t)(int64_t)usb_bluetooth_connect(
+                (uint32_t)frame->rdi, result.address, 0xCC18U,
+                result.page_scan_repetition_mode, result.clock_offset, 1U);
+            return 0;
+        }
+        case USER_SYSCALL_BLUETOOTH_PEER_STATE:
+        {
+            uint8_t address[6];
+            uint16_t handle = 0U;
+            uintptr_t input = (uintptr_t)frame->rsi;
+            uintptr_t output = (uintptr_t)frame->rdx;
+            if (!paging_user_range_valid(process.address_space, input,
+                                         sizeof(address), 0) ||
+                !paging_user_range_valid(process.address_space, output,
+                                         sizeof(handle), 1)) {
+                frame->rax = (uint64_t)(int64_t)-14;
+                return 0;
+            }
+            for (uint32_t i = 0U; i < sizeof(address); ++i)
+                address[i] = ((const uint8_t*)input)[i];
+            int status = usb_bluetooth_peer_state(
+                (uint32_t)frame->rdi, address, &handle);
+            *(uint16_t*)output = handle;
+            frame->rax = (uint64_t)(int64_t)status;
+            return 0;
+        }
+        case USER_SYSCALL_BLUETOOTH_CANCEL_CONNECTION:
+        {
+            uint8_t address[6];
+            uintptr_t input = (uintptr_t)frame->rsi;
+            if (!paging_user_range_valid(process.address_space, input,
+                                         sizeof(address), 0)) {
+                frame->rax = (uint64_t)(int64_t)-14;
+                return 0;
+            }
+            for (uint32_t i = 0U; i < sizeof(address); ++i)
+                address[i] = ((const uint8_t*)input)[i];
+            frame->rax = (uint64_t)(int64_t)usb_bluetooth_cancel_connection(
+                (uint32_t)frame->rdi, address);
+            return 0;
+        }
         case USER_SYSCALL_GUI_CREATE_WINDOW:
             return syscall_gui_create_window(frame, &process);
         case USER_SYSCALL_GUI_CLOSE_WINDOW:

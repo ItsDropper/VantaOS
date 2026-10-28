@@ -91,7 +91,7 @@ typedef struct {
 /* Inquiry lifecycle state, owned by the serialized USB polling CPU. */
 typedef struct {
     uint8_t active;
-    uint8_t cancel_state; /* 0 idle, 1 awaiting command status, 2 accepted */
+    uint8_t cancel_state; /* 0 idle, 1 awaiting controller completion, 2 accepted */
 } usb_bluetooth_inquiry_state_t;
 
 void usb_bluetooth_inquiry_state_reset(usb_bluetooth_inquiry_state_t *state);

@@ -812,6 +812,13 @@ static void test_hci_command_watchdog(void)
     assert(usb_bluetooth_hci_command_watchdog_arm(&state, 0xFFFFFFF0U, 32U) == 0);
     assert(usb_bluetooth_hci_command_watchdog_expire(&state, 0x0000000FU) == 0);
     assert(usb_bluetooth_hci_command_watchdog_expire(&state, 0x00000010U) == 1);
+    usb_bluetooth_hci_command_state_reset(&state);
+    state.credits = 1U;
+    assert(usb_bluetooth_hci_command_begin(&state, 0x1001U) == 0);
+    assert(usb_bluetooth_hci_command_watchdog_arm(&state, 0xFFFFFFECU, 20U) == 0);
+    assert(state.deadline == 0U);
+    assert(usb_bluetooth_hci_command_watchdog_expire(&state, 0xFFFFFFFBU) == 0);
+    assert(usb_bluetooth_hci_command_watchdog_expire(&state, 0U) == 1);
     assert(usb_bluetooth_hci_command_watchdog_arm(&state, 1U, 0U) == -22);
     assert(usb_bluetooth_hci_command_watchdog_arm(&state, 1U, 0x80000000U) == -22);
 }

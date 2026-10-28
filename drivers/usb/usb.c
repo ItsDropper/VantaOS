@@ -315,6 +315,20 @@ int usb_bluetooth_disconnect(uint32_t port, uint16_t handle, uint8_t reason)
         handle, reason, command, sizeof(command));
     if (port == 0U || encoded != 6)
         return 0;
+    uint32_t slot = 0U;
+    for (uint32_t i = 1U; i <= USB_MAX_XHCI_SLOTS; ++i) {
+        if (bluetooth_slots[i].active && bluetooth_slots[i].port == port) {
+            slot = i;
+            break;
+        }
+    }
+    if (slot == 0U ||
+        !usb_bluetooth_link_table_has_handle(&bluetooth_link_tables[slot],
+                                             handle)) {
+        for (uint32_t i = 0U; i < sizeof(command); ++i)
+            command[i] = 0U;
+        return 0;
+    }
     int sent = usb_bluetooth_hci_command(port, 0x0406U, &command[3], 3U);
     for (uint32_t i = 0U; i < sizeof(command); ++i)
         command[i] = 0U;

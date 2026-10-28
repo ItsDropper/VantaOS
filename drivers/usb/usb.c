@@ -12,6 +12,7 @@
 #include "rtl8188eu.h"
 #include "usb_bluetooth.h"
 #include "serial.h"
+#include "timer.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -598,6 +599,7 @@ static void bluetooth_l2cap_progress_channels(uint32_t slot)
             &bluetooth_l2cap_tables[slot][i];
         if (table == NULL)
             continue;
+        (void)usb_bluetooth_l2cap_expire(table, timer_get_ticks());
         for (uint32_t j = 0U; j < USB_BLUETOOTH_L2CAP_CHANNEL_MAX; ++j) {
             usb_bluetooth_l2cap_channel_t *channel = &table->channels[j];
             if (!channel->active || channel->state != 3U ||

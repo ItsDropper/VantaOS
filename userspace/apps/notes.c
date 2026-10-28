@@ -475,6 +475,7 @@ int main(int argc, char** argv)
     }
 #if defined(VANTAOS_NOTES_E2E_TEST)
     {
+        load_document();
         static const char expected[] =
             "VantaOS Explorer end-to-end fixture: repeated repeated repeated\n";
         static const char success[] = "VANTAOS_NOTES_FILE_LOAD_OK\n";

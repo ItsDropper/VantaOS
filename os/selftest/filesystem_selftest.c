@@ -222,6 +222,33 @@ void filesystem_selftest_initialize(void)
         serial_write("VANTAOS_FILESYSTEM_MUTATION_CREATE_FILE_FAIL\n");
         return;
     }
+
+    /*
+     * Download publication relies on rename refusing to replace an existing
+     * destination. Keep both entries intact when the target name is occupied.
+     */
+    if (filesystem_create_file("/FMTEST/Existing.txt") < 0 ||
+        filesystem_create_file("/FMTEST/Incoming.part") < 0)
+    {
+        serial_write("VANTAOS_FILESYSTEM_RENAME_GUARD_SETUP_FAIL\n");
+        return;
+    }
+    if (filesystem_rename_path("/FMTEST/Incoming.part",
+                               "/FMTEST/Existing.txt") >= 0 ||
+        filesystem_lookup("/FMTEST/Existing.txt") < 0 ||
+        filesystem_lookup("/FMTEST/Incoming.part") < 0)
+    {
+        serial_write("VANTAOS_FILESYSTEM_RENAME_NO_OVERWRITE_FAIL\n");
+        return;
+    }
+    if (filesystem_delete_path("/FMTEST/Incoming.part") < 0 ||
+        filesystem_delete_path("/FMTEST/Existing.txt") < 0)
+    {
+        serial_write("VANTAOS_FILESYSTEM_RENAME_GUARD_CLEANUP_FAIL\n");
+        return;
+    }
+    serial_write("VANTAOS_FILESYSTEM_RENAME_NO_OVERWRITE_OK\n");
+
     if (filesystem_rename_path("/FMTEST/Long File Name.txt",
                                "/FMTEST/Renamed App.bin") < 0)
     {

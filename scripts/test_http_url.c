@@ -71,6 +71,9 @@ int main(void)
     ok &= expect_status("http://example.com:abc/", HTTP_URL_BAD_PORT);
     ok &= expect_status("http://example.com:/", HTTP_URL_BAD_PORT);
     ok &= expect_status("http://bad host/file", HTTP_URL_BAD_HOST);
+    ok &= expect_status("http://example..com/", HTTP_URL_BAD_HOST);
+    ok &= expect_status("http://-bad.example/", HTTP_URL_BAD_HOST);
+    ok &= expect_status("http://bad-.example/", HTTP_URL_BAD_HOST);
     ok &= expect_status("http://user@example.com/", HTTP_URL_BAD_HOST);
     ok &= expect_status("http://[::1]/", HTTP_URL_BAD_HOST);
     ok &= expect_status("http://example.com/a b", HTTP_URL_BAD_PATH);

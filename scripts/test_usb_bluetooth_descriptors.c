@@ -10,6 +10,7 @@
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 #define CONFIG_PREFIX 9U
 #define IFACE 9U
@@ -770,7 +771,7 @@ static void test_l2cap_acl_packet_builder(void)
            packet[2] == 12U && packet[4] == 8U &&
            packet[6] == 1U && packet[7] == 0U);
     assert(usb_bluetooth_l2cap_parse(packet, 16U, &view));
-    assert(view.handle == 0x000BU && view.cid == 0x0001U &&
+    assert(view.handle == 0x000BU && view.channel_id == 0x0001U &&
            view.payload_length == sizeof(signaling));
     assert(memcmp(view.payload, signaling, sizeof(signaling)) == 0);
     assert(usb_bluetooth_l2cap_build_acl_packet(0U, 1U, signaling,

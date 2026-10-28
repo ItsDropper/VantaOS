@@ -167,9 +167,15 @@ int usb_bluetooth_hci_command(uint32_t port, uint16_t opcode,
     for (uint32_t i = 0U; i < (uint32_t)encoded; ++i)
         command_buffer[i] = 0U;
     if (!sent) {
+        /*
+         * A failed control transfer may have reached the controller even
+         * though the host did not observe successful completion. Do not
+         * guess the controller's credits or allow another ordinary command;
+         * only a fresh HCI Reset can re-synchronize this transport.
+         */
         usb_bluetooth_hci_command_state_reset(
             &bluetooth_slots[slot].command_state);
-        bluetooth_slots[slot].command_state.credits = 1U;
+        bluetooth_slots[slot].command_state.faulted = 1U;
     }
     return sent;
 }

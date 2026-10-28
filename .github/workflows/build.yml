@@ -107,6 +107,13 @@ jobs:
       - name: Install build dependencies
         run: sudo apt-get update && sudo apt-get install --yes build-essential nasm grub-pc-bin xorriso mtools dosfstools qemu-system-x86 gnu-efi ovmf gdisk xvfb socat imagemagick tesseract-ocr
 
+      - name: Test kernel watchdog state machine
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iscripts/test_stubs -Iinclude \\
+            scripts/test_kernel_watchdog.c kernel/watchdog.c \\
+            -o /tmp/vantaos-kernel-watchdog-test
+          /tmp/vantaos-kernel-watchdog-test
+
       - name: Test timer math and wraparound
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \\

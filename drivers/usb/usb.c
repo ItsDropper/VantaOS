@@ -68,13 +68,65 @@ typedef struct {
     uint8_t reset_complete_observed;
     uint8_t reset_failed_observed;
     usb_bluetooth_hci_command_state_t command_state;
-    usb_bluetooth_l2cap_table_t l2cap_channels;
 } usb_bluetooth_slot_t;
 
 static usb_bluetooth_slot_t bluetooth_slots[USB_MAX_XHCI_SLOTS + 1U];
 static uint8_t bluetooth_event_buffer[64] __attribute__((aligned(64)));
 static usb_bluetooth_hci_event_queue_t bluetooth_hci_event_queues[USB_MAX_XHCI_SLOTS + 1U];
 static usb_bluetooth_link_table_t bluetooth_link_tables[USB_MAX_XHCI_SLOTS + 1U];
+/* Keep L2CAP transactions isolated by the HCI connection handle. */
+static uint16_t bluetooth_l2cap_owner_handles[USB_MAX_XHCI_SLOTS + 1U]
+    [USB_BLUETOOTH_LINK_MAX];
+static usb_bluetooth_l2cap_table_t
+    bluetooth_l2cap_tables[USB_MAX_XHCI_SLOTS + 1U]
+                          [USB_BLUETOOTH_LINK_MAX];
+
+static usb_bluetooth_l2cap_table_t *bluetooth_l2cap_table_for_handle(
+    uint32_t slot, uint16_t handle, int create)
+{
+    if (slot == 0U || slot > USB_MAX_XHCI_SLOTS ||
+        handle == 0U || handle > 0x0EFFU)
+        return NULL;
+    uint32_t free_index = USB_BLUETOOTH_LINK_MAX;
+    for (uint32_t i = 0U; i < USB_BLUETOOTH_LINK_MAX; ++i) {
+        if (bluetooth_l2cap_owner_handles[slot][i] == handle)
+            return &bluetooth_l2cap_tables[slot][i];
+        if (bluetooth_l2cap_owner_handles[slot][i] == 0U &&
+            free_index == USB_BLUETOOTH_LINK_MAX)
+            free_index = i;
+    }
+    if (!create || free_index == USB_BLUETOOTH_LINK_MAX)
+        return NULL;
+    bluetooth_l2cap_owner_handles[slot][free_index] = handle;
+    usb_bluetooth_l2cap_table_reset(
+        &bluetooth_l2cap_tables[slot][free_index]);
+    return &bluetooth_l2cap_tables[slot][free_index];
+}
+
+static void bluetooth_l2cap_forget_handle(uint32_t slot, uint16_t handle)
+{
+    if (slot == 0U || slot > USB_MAX_XHCI_SLOTS || handle == 0U)
+        return;
+    for (uint32_t i = 0U; i < USB_BLUETOOTH_LINK_MAX; ++i) {
+        if (bluetooth_l2cap_owner_handles[slot][i] == handle) {
+            usb_bluetooth_l2cap_table_reset(
+                &bluetooth_l2cap_tables[slot][i]);
+            bluetooth_l2cap_owner_handles[slot][i] = 0U;
+            return;
+        }
+    }
+}
+
+static void bluetooth_l2cap_reset_all(uint32_t slot)
+{
+    if (slot == 0U || slot > USB_MAX_XHCI_SLOTS)
+        return;
+    for (uint32_t i = 0U; i < USB_BLUETOOTH_LINK_MAX; ++i) {
+        usb_bluetooth_l2cap_table_reset(
+            &bluetooth_l2cap_tables[slot][i]);
+        bluetooth_l2cap_owner_handles[slot][i] = 0U;
+    }
+}
 static uint8_t bluetooth_acl_buffer[USB_BLUETOOTH_ACL_MAX_PACKET]
     __attribute__((aligned(64)));
 static uint8_t bluetooth_acl_reassembled_buffer[USB_BLUETOOTH_ACL_MAX_PACKET]
@@ -146,7 +198,7 @@ int usb_bluetooth_hci_command(uint32_t port, uint16_t opcode,
         usb_bluetooth_acl_queue_reset(&bluetooth_reassembled_acl_queues[slot]);
         usb_bluetooth_hci_event_queue_reset(&bluetooth_hci_event_queues[slot]);
         usb_bluetooth_link_table_reset(&bluetooth_link_tables[slot]);
-        usb_bluetooth_l2cap_table_reset(&bluetooth_slots[slot].l2cap_channels);
+        bluetooth_l2cap_reset_all(slot);
     }
     uint8_t *command_buffer = bluetooth_hci_command_buffers[slot].bytes;
     int encoded = usb_bluetooth_hci_command_encode(

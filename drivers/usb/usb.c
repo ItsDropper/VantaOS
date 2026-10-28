@@ -63,6 +63,7 @@ typedef struct {
     uint8_t acl_in_endpoint;
     uint8_t acl_out_endpoint;
     uint32_t event_count;
+    uint32_t event_dropped;
     uint32_t acl_packet_count;
     uint8_t reset_complete_observed;
     uint8_t reset_failed_observed;
@@ -78,6 +79,8 @@ static uint32_t bluetooth_acl_dropped[USB_MAX_XHCI_SLOTS + 1U];
 static uint8_t bluetooth_acl_tx_buffers[USB_MAX_XHCI_SLOTS + 1U][4096]
     __attribute__((aligned(64)));
 static uint8_t bluetooth_acl_tx_busy[USB_MAX_XHCI_SLOTS + 1U];
+static uint8_t bluetooth_hci_command_buffers[USB_MAX_XHCI_SLOTS + 1U][255]
+    __attribute__((aligned(64)));
 static uint8_t usb_pending_slot_disable[USB_MAX_XHCI_SLOTS + 1U];
 static uint8_t keyboard_input_observed;
 static uint8_t mouse_input_observed;
@@ -130,9 +133,17 @@ int usb_bluetooth_hci_command(uint32_t port, uint16_t opcode,
         usb_bluetooth_acl_queue_reset(&bluetooth_acl_queues[slot]);
         usb_bluetooth_hci_event_queue_reset(&bluetooth_hci_event_queues[slot]);
     }
-    return usb_control(slot, 0x20U, 0U, opcode,
-                       bluetooth_slots[slot].interface_number,
-                       (void *)parameters, length);
+    uint8_t *command_buffer = bluetooth_hci_command_buffers[slot];
+    for (uint32_t i = 0U; i < 255U; ++i)
+        command_buffer[i] = 0U;
+    for (uint32_t i = 0U; i < length; ++i)
+        command_buffer[i] = parameters[i];
+    int sent = usb_control(slot, 0x20U, 0U, opcode,
+                           bluetooth_slots[slot].interface_number,
+                           length == 0U ? 0 : command_buffer, length);
+    for (uint32_t i = 0U; i < 255U; ++i)
+        command_buffer[i] = 0U;
+    return sent;
 }
 
 int usb_bluetooth_hci_event_receive(uint32_t port, uint8_t *event,
@@ -288,6 +299,7 @@ static void usb_bluetooth_detach_slot(uint32_t slot)
     bluetooth_slots[slot].acl_in_endpoint = 0U;
     bluetooth_slots[slot].acl_out_endpoint = 0U;
     bluetooth_slots[slot].event_count = 0U;
+    bluetooth_slots[slot].event_dropped = 0U;
     bluetooth_slots[slot].acl_packet_count = 0U;
     bluetooth_slots[slot].reset_complete_observed = 0U;
     bluetooth_slots[slot].reset_failed_observed = 0U;
@@ -435,6 +447,7 @@ static int usb_enumerate_port(uint32_t port)
         bluetooth_slots[slot].acl_out_endpoint =
             bluetooth_candidate.acl_out_endpoint;
         bluetooth_slots[slot].event_count = 0U;
+        bluetooth_slots[slot].event_dropped = 0U;
         bluetooth_slots[slot].acl_packet_count = 0U;
         bluetooth_slots[slot].reset_complete_observed = 0U;
         bluetooth_slots[slot].reset_failed_observed = 0U;
@@ -570,8 +583,11 @@ void usb_poll(void)
                 event_length);
             if (event_queued == 0 && bluetooth->event_count == 1U)
                 serial_write("VANTAOS_BLUETOOTH_HCI_EVENT_RECEIVED\n");
-            else if (event_queued == -11 && bluetooth->event_count == 1U)
-                serial_write("VANTAOS_BLUETOOTH_HCI_EVENT_QUEUE_FULL\n");
+            else if (event_queued == -11) {
+                bluetooth->event_dropped++;
+                if (bluetooth->event_dropped == 1U)
+                    serial_write("VANTAOS_BLUETOOTH_HCI_EVENT_QUEUE_FULL\n");
+            }
             int reset_transition = usb_bluetooth_update_reset_state(
                 bluetooth_event_buffer, event_length,
                 &bluetooth->reset_complete_observed,

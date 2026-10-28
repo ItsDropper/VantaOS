@@ -396,7 +396,8 @@ int usb_bluetooth_cancel_connection(uint32_t port,
     }
     int sent = usb_bluetooth_hci_command(port, 0x0408U, &command[3], 6U);
     if (sent)
-        bluetooth_slots[slot].connection_deadline = 0U;
+        bluetooth_slots[slot].connection_deadline = timer_get_ticks() +
+            USB_BLUETOOTH_CANCEL_RETRY_TICKS;
     for (uint32_t i = 0U; i < sizeof(command); ++i)
         command[i] = 0U;
     return sent;

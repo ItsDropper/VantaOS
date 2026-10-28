@@ -1672,6 +1672,18 @@ static void explorer_e2e_run(void)
     EXPLORER_E2E_REQUIRE(explorer_e2e_file_equals(
         "/EXPLORER-E2E/Dest/Source/note.txt", payload));
 
+    /* The context-menu Open action must route ordinary files to Open With. */
+    copy_text(current_path, sizeof(current_path), "/EXPLORER-E2E/Source");
+    EXPLORER_E2E_REQUIRE(load_directory());
+    source_index = explorer_e2e_find_entry("note.txt");
+    EXPLORER_E2E_REQUIRE(source_index != (size_t)-1);
+    select_single(source_index);
+    dispatch_context_action(0U);
+    EXPLORER_E2E_REQUIRE(open_with_active);
+    EXPLORER_E2E_REQUIRE(text_equals_ci(
+        open_with_path, "/EXPLORER-E2E/Source/note.txt"));
+    open_with_active = 0;
+
     /* Exercise Cut/Move and verify source removal plus destination contents. */
     copy_text(current_path, sizeof(current_path), "/EXPLORER-E2E/Source");
     EXPLORER_E2E_REQUIRE(load_directory());

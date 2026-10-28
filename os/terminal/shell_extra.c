@@ -638,12 +638,16 @@ static int command_http_url(const char *url, const char *output_argument,
             terminal_write("\nnet http: no DNS server configured; run 'net connect' first");
             return 1;
         }
-        terminal_write("\nResolving "); terminal_write(host); terminal_write("...");
+        if (!body_only) {
+            terminal_write("\nResolving "); terminal_write(host); terminal_write("...");
+        }
         if (!net_dns_resolve(device, host, &address, 8000U)) {
             terminal_write("\nnet http: DNS lookup failed or timed out");
             return 1;
         }
-        terminal_write(" -> "); print_ipv4(address);
+        if (!body_only) {
+            terminal_write(" -> "); print_ipv4(address);
+        }
     }
 
     if (!append_text(request, sizeof(request), &used, "GET ") ||
@@ -673,8 +677,10 @@ static int command_http_url(const char *url, const char *output_argument,
         return 1;
     }
 
-    terminal_write("\nConnecting to "); print_ipv4(address);
-    terminal_write(":"); shell_print_decimal(port); terminal_write("...");
+    if (!body_only) {
+        terminal_write("\nConnecting to "); print_ipv4(address);
+        terminal_write(":"); shell_print_decimal(port); terminal_write("...");
+    }
     if (!net_tcp_connect(device, address, (uint16_t)port, 15000U)) {
         terminal_write("\nnet http: TCP connection failed or timed out");
         return 1;

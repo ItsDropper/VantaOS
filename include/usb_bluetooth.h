@@ -214,6 +214,13 @@ int usb_bluetooth_connect(uint32_t port, const uint8_t address[6],
 int usb_bluetooth_cancel_connection(uint32_t port,
                                     const uint8_t address[6]);
 int usb_bluetooth_disconnect(uint32_t port, uint16_t handle, uint8_t reason);
+/* Begin an outbound classic L2CAP channel on an active HCI handle.
+ * deadline is an owner-supplied monotonic tick value; no implicit clock units
+ * are assumed. Return 1 only when the initial signaling ACL packet is sent.
+ */
+int usb_bluetooth_l2cap_connect(uint32_t port, uint16_t handle, uint16_t psm,
+                                uint16_t local_mtu, uint32_t deadline,
+                                uint16_t *local_cid, uint8_t *identifier);
 /* Bounded L2CAP channel lifecycle primitives; signaling dispatch remains
  * the responsibility of a controller/connection manager. */
 void usb_bluetooth_l2cap_table_reset(usb_bluetooth_l2cap_table_t *table);
@@ -222,6 +229,8 @@ int usb_bluetooth_l2cap_channel_begin(usb_bluetooth_l2cap_table_t *table,
                                       uint32_t deadline,
                                       uint16_t *local_cid,
                                       uint8_t *identifier);
+int usb_bluetooth_l2cap_channel_abort(usb_bluetooth_l2cap_table_t *table,
+                                      uint16_t local_cid);
 int usb_bluetooth_l2cap_channel_response(usb_bluetooth_l2cap_table_t *table,
                                          uint8_t identifier, uint16_t remote_cid,
                                          uint16_t result, uint16_t remote_mtu);

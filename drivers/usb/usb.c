@@ -82,8 +82,11 @@ static uint32_t bluetooth_acl_dropped[USB_MAX_XHCI_SLOTS + 1U];
 static uint8_t bluetooth_acl_tx_buffers[USB_MAX_XHCI_SLOTS + 1U][4096]
     __attribute__((aligned(64)));
 static uint8_t bluetooth_acl_tx_busy[USB_MAX_XHCI_SLOTS + 1U];
-static uint8_t bluetooth_hci_command_buffers[USB_MAX_XHCI_SLOTS + 1U][258]
-    __attribute__((aligned(64)));
+typedef struct __attribute__((aligned(64))) {
+    uint8_t bytes[258];
+} usb_bluetooth_dma_command_buffer_t;
+static usb_bluetooth_dma_command_buffer_t
+    bluetooth_hci_command_buffers[USB_MAX_XHCI_SLOTS + 1U];
 static uint8_t usb_pending_slot_disable[USB_MAX_XHCI_SLOTS + 1U];
 static uint8_t keyboard_input_observed;
 static uint8_t mouse_input_observed;
@@ -145,7 +148,7 @@ int usb_bluetooth_hci_command(uint32_t port, uint16_t opcode,
             &bluetooth_slots[slot].command_state, opcode) != 0)
         return 0;
 
-    uint8_t *command_buffer = bluetooth_hci_command_buffers[slot];
+    uint8_t *command_buffer = bluetooth_hci_command_buffers[slot].bytes;
     int encoded = usb_bluetooth_hci_command_encode(
         opcode, parameters, length, command_buffer, 258U);
     if (encoded < 0)

@@ -153,6 +153,11 @@ int usb_bluetooth_l2cap_channel_begin(usb_bluetooth_l2cap_table_t *table,
 int usb_bluetooth_l2cap_channel_response(usb_bluetooth_l2cap_table_t *table,
                                          uint8_t identifier, uint16_t remote_cid,
                                          uint16_t result, uint16_t remote_mtu);
+/* Apply one validated L2CAP Connection Response command (code 0x03).
+ * Checks the signaling identifier and echoed local CID before changing state. */
+int usb_bluetooth_l2cap_connection_response(
+    usb_bluetooth_l2cap_table_t *table,
+    const uint8_t *command, uint32_t length, uint16_t default_remote_mtu);
 int usb_bluetooth_l2cap_channel_configured(usb_bluetooth_l2cap_table_t *table,
                                            uint16_t local_cid);
 int usb_bluetooth_l2cap_channel_close(usb_bluetooth_l2cap_table_t *table,

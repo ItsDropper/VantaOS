@@ -13,6 +13,12 @@
 
 int main(void)
 {
+    assert(ahci_pci_bar_sizing_allowed(0x0000U));
+    assert(ahci_pci_bar_sizing_allowed(0x0008U));
+    assert(!ahci_pci_bar_sizing_allowed(0x0001U));
+    assert(!ahci_pci_bar_sizing_allowed(0x0002U));
+    assert(!ahci_pci_bar_sizing_allowed(0x0004U));
+    assert(!ahci_pci_bar_sizing_allowed(0x0007U));
     assert(ahci_pci_abar_valid(0xFEBF0000ULL, 0x2000ULL, 0, 0));
     assert(ahci_pci_abar_valid(0x100000000ULL, 0x2000ULL, 0, 1));
 

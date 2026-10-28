@@ -179,9 +179,9 @@ void shell_execute(void)
     else if (shell_string_equals(shell_buffer, "parttool list"))
     {
         uint32_t count = block_device_count();
-        terminal_write("\\nBlock devices: ");
+        terminal_write("\nBlock devices: ");
         shell_print_decimal(count);
-        terminal_putchar('\\n');
+        terminal_putchar('\n');
         for (uint32_t i = 0U; i < count; ++i)
         {
             block_device_t* device = block_device_get(i);
@@ -207,7 +207,7 @@ void shell_execute(void)
             shell_print_hex64((unsigned long long)device->sector_count);
             terminal_write("  sector-size=");
             shell_print_decimal(device->sector_size);
-            terminal_putchar('\\n');
+            terminal_putchar('\n');
         }
     }
     else if (shell_buffer[0] == 'm' &&

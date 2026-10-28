@@ -1108,6 +1108,75 @@ static void test_l2cap_identifier_collision_guards(void)
     assert(usb_bluetooth_l2cap_channel_configure_begin(&table, cid_b, 77U) == -16);
 }
 
+static void test_l2cap_configuration_request_round_trip(void)
+{
+    usb_bluetooth_l2cap_table_t table = {0};
+    uint16_t cid = 0U;
+    uint8_t connection_id = 0U;
+    uint8_t outgoing[16] = {0};
+    uint8_t response[16] = {0};
+    uint8_t peer_request[] = {
+        0x04U, 0x22U, 8U, 0U,
+        0U, 0U, 0U, 0U,
+        0x01U, 2U, 0xA0U, 0U
+    };
+    uint8_t peer_response[14] = {0};
+    usb_bluetooth_l2cap_table_reset(&table);
+
+    assert(usb_bluetooth_l2cap_channel_begin(
+               &table, 1U, 672U, 0U, &cid, &connection_id) == 0);
+    assert(usb_bluetooth_l2cap_channel_response(
+               &table, connection_id, 0x0041U, 0U, 672U) == 1);
+
+    assert(usb_bluetooth_l2cap_configuration_request_begin(
+               &table, cid, outgoing, sizeof(outgoing)) == 8);
+    assert(outgoing[0] == 0x04U && outgoing[1] != 0U &&
+           outgoing[2] == 4U && outgoing[4] == 0x41U &&
+           outgoing[5] == 0U);
+    uint8_t config_id = outgoing[1];
+    assert(usb_bluetooth_l2cap_configuration_request_begin(
+               &table, cid, outgoing, sizeof(outgoing)) == -16);
+    assert(usb_bluetooth_l2cap_configuration_request_failed(
+               &table, cid, config_id) == 1);
+    assert(table.channels[0].config_identifier == 0U);
+
+    assert(usb_bluetooth_l2cap_configuration_request_begin(
+               &table, cid, outgoing, sizeof(outgoing)) == 8);
+    config_id = outgoing[1];
+    peer_request[4] = (uint8_t)cid;
+    peer_request[5] = (uint8_t)(cid >> 8);
+    assert(usb_bluetooth_l2cap_configuration_request(
+               &table, peer_request, sizeof(peer_request),
+               response, sizeof(response), &cid) == 14);
+    assert(response[0] == 0x05U && response[1] == 0x22U &&
+           response[2] == 10U && response[4] == (uint8_t)cid);
+    assert(table.channels[0].remote_mtu == 160U);
+    assert(usb_bluetooth_l2cap_channel_remote_configured(&table, cid) == 0);
+    assert(table.channels[0].state == 3U);
+
+    peer_response[0] = 0x05U;
+    peer_response[1] = config_id;
+    peer_response[2] = 10U;
+    peer_response[4] = (uint8_t)cid;
+    peer_response[5] = (uint8_t)(cid >> 8);
+    peer_response[10] = 0x01U;
+    peer_response[11] = 2U;
+    peer_response[12] = 200U;
+    peer_response[13] = 0U;
+    assert(usb_bluetooth_l2cap_configuration_response(
+               &table, peer_response, sizeof(peer_response)) == 1);
+    assert(table.channels[0].state == 4U &&
+           table.channels[0].local_configured == 1U &&
+           table.channels[0].remote_configured == 1U &&
+           table.channels[0].remote_mtu == 200U);
+
+    peer_request[10] = 47U;
+    peer_request[11] = 0U;
+    assert(usb_bluetooth_l2cap_configuration_request(
+               &table, peer_request, sizeof(peer_request),
+               response, sizeof(response), &cid) == -22);
+}
+
 static void test_l2cap_configuration_transaction(void)
 {
     usb_bluetooth_l2cap_table_t table = {0};
@@ -1518,6 +1587,7 @@ int main(void)
     test_l2cap_connection_response_dispatch();
     test_l2cap_acl_packet_builder();
     test_l2cap_signaling_acl_builder();
+    test_l2cap_configuration_request_round_trip();
     test_l2cap_configuration_transaction();
     test_l2cap_identifier_collision_guards();
     test_l2cap_configuration_response_parser();

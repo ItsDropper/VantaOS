@@ -74,7 +74,9 @@ Do not turn a failed match into a fatal USB enumeration error. An unsupported in
 
 ## What comes next
 
-A real driver needs explicit interface claiming, endpoint configuration, bounded transfer completion, interrupt-IN event handling, bulk ACL transport, HCI command/event correlation, reset/recovery, and disconnect cleanup. Only after those layers pass emulator and supported-hardware tests should VantaOS advertise Bluetooth functionality.
+The HCI command-state layer now has a software watchdog: after an accepted control transfer, the USB polling loop arms a 200-tick deadline. If the matching Command Complete/Status event does not arrive, it marks the command channel faulted, emits `VANTAOS_USB_BLUETOOTH_HCI_WATCHDOG_TIMEOUT`, and rejects ordinary commands until a fresh HCI Reset re-synchronizes command state. Deadline comparisons are wrap-safe and the pure state transition is host-testable. This does not time out a synchronous xHCI transfer that itself never returns; that remains the host-controller transfer layer's responsibility.
+
+A real driver still needs complete interface claiming, endpoint lifecycle, reliable interrupt-IN event handling, bulk ACL transport, reset/recovery, and disconnect cleanup. Only after those layers pass emulator and supported-hardware tests should VantaOS advertise Bluetooth functionality.
 
 
 ## Transport binding milestone

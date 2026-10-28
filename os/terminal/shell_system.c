@@ -121,10 +121,10 @@ void shell_help(void)
     terminal_write("  net      - Show network devices, IPv4 config and counters\n");
     terminal_write("  net connect - Obtain DHCP IPv4/gateway/DNS automatically\n");
     terminal_write("  net dhcp  - Alias for net connect\n");
-    terminal_write("  net dns <hostname> - Resolve an A record using DHCP DNS\\n");
-    terminal_write("  net http <URL> - Display a plain-HTTP response (no HTTPS/TLS)\\n");
-    terminal_write("  curl <URL> - Print a plain-HTTP response body\\n");
-    terminal_write("  curl -o <file> <URL> - Save an HTTP body to a VFS file (max 8 MiB)\\n");
+    terminal_write("  net dns <hostname> - Resolve an A record using DHCP DNS\n");
+    terminal_write("  net http <URL> - Display a plain-HTTP response (no HTTPS/TLS)\n");
+    terminal_write("  curl <URL> - Print a plain-HTTP response body\n");
+    terminal_write("  curl -o <file> <URL> - Save an HTTP body to a VFS file (max 8 MiB)\n");
     terminal_write("  net ping <IPv4> - Test reachability with ICMP echo\n");
     terminal_write("  net poll - Poll network drivers and receive queues\n");
     terminal_write("  net config <index> <ip> <mask> <gateway> - Set static IPv4\n");

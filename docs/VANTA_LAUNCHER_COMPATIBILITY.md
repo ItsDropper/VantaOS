@@ -17,7 +17,7 @@ curl http://<reachable-host>/<path>
 curl -o /HOME/USER/file.bin http://<reachable-host>/<path>
 ```
 
-Only plain HTTP over IPv4 is supported today. The client rejects HTTPS, redirects, non-200 responses, and any `Transfer-Encoding` header; downloads are capped at 8 MiB. `Content-Length` is checked when present, and malformed/conflicting values are rejected. Output files are removed on several transfer failures, but this cleanup is not yet covered by an end-to-end regression test. The current client is not a general-purpose `curl.exe` replacement. Do not use plain HTTP for credentials, private data, or unverified executable downloads. The actual Vanta Launcher release endpoints use HTTPS, so these commands cannot yet fetch the launcher from its normal distribution source.
+Only plain HTTP over IPv4 is supported today. The client rejects HTTPS, redirects, non-200 responses, and any `Transfer-Encoding` header; downloads are capped at 8 MiB. `Content-Length` is checked when present, and malformed/conflicting values are rejected. The command refuses to overwrite an existing output path, requires an orderly peer close before accepting the response, and removes output files on several transfer failures. These safeguards are not yet covered by an end-to-end regression test. The current client is not a general-purpose `curl.exe` replacement. Do not use plain HTTP for credentials, private data, or unverified executable downloads. The actual Vanta Launcher release endpoints use HTTPS, so these commands cannot yet fetch the launcher from its normal distribution source.
 
 ## Compatibility milestones
 

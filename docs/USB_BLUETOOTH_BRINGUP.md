@@ -303,3 +303,14 @@ length, source pointer, and destination capacity before writing headers. Host
 regression coverage parses the resulting packet back and verifies the handle,
 CID, payload, and invalid-input paths. The builder does not itself transmit
 the packet or establish a connection.
+
+
+## HCI transport desynchronization
+
+A failed USB control transfer no longer resets command credits to an assumed
+default. The controller may have received the command even if the host-side
+transfer reported failure, so the state is now marked faulted and ordinary
+commands are rejected until a fresh HCI Reset reinitializes command tracking.
+Host tests cover fault gating, malformed completion events, reset recovery, and
+credit exhaustion. This does not replace a timed completion watchdog for a
+controller that accepts a transfer but never sends its event.

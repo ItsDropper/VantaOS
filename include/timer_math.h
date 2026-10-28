@@ -45,7 +45,7 @@ static inline uint64_t vanta_timer_ms_to_ticks(uint32_t milliseconds,
 static inline int vanta_timer_deadline_reached(uint32_t now,
                                                uint32_t deadline)
 {
-    return (int32_t)(now - deadline) >= 0;
+    return (uint32_t)(now - deadline) < 0x80000000U;
 }
 
 /* Unsigned elapsed-time subtraction remains correct across uint32 wrap. */

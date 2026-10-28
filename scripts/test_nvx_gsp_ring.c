@@ -18,6 +18,10 @@ static uint32_t read32(const uint8_t *p) {
 }
 static void notify(void *p) { assert(p==&notifications); notifications++; }
 int main(void) {
+ assert(!nvx_gsp_ring_counter_aligned(1U));
+ assert(!nvx_gsp_ring_counter_aligned(2U));
+ assert(!nvx_gsp_ring_counter_aligned(3U));
+ assert(nvx_gsp_ring_counter_aligned(4U));
  nvx_gsp_ring_t ring={0}; nvx_gsp_rpc_view_t view;
  uint8_t payload[5000]; uint32_t seq=0; memset(payload,0x5A,sizeof(payload));
  assert(nvx_gsp_ring_init(0,ring_mem,4,&read_index,&write_index,notify,&notifications)==NVX_GSP_RING_INVALID_ARGUMENT);

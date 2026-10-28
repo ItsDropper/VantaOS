@@ -103,7 +103,7 @@ VANTASETUP.EFI: $(UEFI_OBJDIR)/setup.o $(UEFI_OBJDIR)/installer-layout.o $(UEFI_
 VantaOS-Setup.img: VANTASETUP.EFI BOOTX64.EFI kernel-uefi.elf vantaos.img
 	@command -v mkfs.fat >/dev/null && command -v mmd >/dev/null && command -v mcopy >/dev/null && command -v sgdisk >/dev/null || \
 		(echo "dosfstools, mtools, and gdisk are required to build the setup image."; exit 1)
-	@test -s /tmp/vantaos-terminal.elf -a -s /tmp/vantaos-settings.elf -a -s /tmp/vantaos-explorer.elf -a -s /tmp/vantaos-notes.elf || \
+	@test -s /tmp/vantaos-terminal.elf -a -s /tmp/vantaos-settings.elf -a -s /tmp/vantaos-explorer.elf -a -s /tmp/vantaos-notes.elf -a -s /tmp/vantaos-calculator.elf || \
 		(echo "Run build.sh first so the ring-3 application ELFs are available."; exit 1)
 	rm -rf /tmp/vantaos-setup-staging
 	mkdir -p /tmp/vantaos-setup-staging/system/drivers /tmp/vantaos-setup-staging/system/devices /tmp/vantaos-setup-staging/etc
@@ -130,6 +130,7 @@ VantaOS-Setup.img: VANTASETUP.EFI BOOTX64.EFI kernel-uefi.elf vantaos.img
 	mcopy -i $@@@1048576 /tmp/vantaos-settings.elf ::/SYSTEM/SETTINGS.ELF
 	mcopy -i $@@@1048576 /tmp/vantaos-explorer.elf ::/SYSTEM/EXPLORER.ELF
 mcopy -i $@@@1048576 /tmp/vantaos-notes.elf ::/SYSTEM/NOTES.ELF
+mcopy -i $@@@1048576 /tmp/vantaos-calculator.elf ::/SYSTEM/CALCULATOR.ELF
 	mcopy -i $@@@1048576 /tmp/vantaos-setup-staging/system/terminal.vx ::/SYSTEM/TERMINAL.VX
 	mcopy -i $@@@1048576 /tmp/vantaos-setup-staging/system/drivers/ata.sys ::/SYSTEM/DRIVERS/ATA.SYS
 	mcopy -i $@@@1048576 /tmp/vantaos-setup-staging/system/drivers/keyboard.sys ::/SYSTEM/DRIVERS/KEYBOARD.SYS

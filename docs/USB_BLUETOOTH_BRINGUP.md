@@ -469,10 +469,6 @@ replace physical adapter testing.
 
 ## Current integration limits
 
-The implemented public interface is kernel-facing and polling-based. It offers
-inquiry, parsed result enumeration, outbound BR/EDR connection, HCI event
-polling, outbound L2CAP channel setup, bounded data send/receive, and channel
-disconnect. It is not yet a userspace device picker or a secure general-purpose
-Bluetooth product. Pairing, authentication, encryption, SDP, HID,
-RFCOMM/serial-port emulation, and audio remain unsupported. No physical USB
-Bluetooth adapter test is implied by host CI.
+The kernel now exposes a small userspace syscall interface for adapter enumeration, inquiry start/cancel, discovered-result reads, outbound BR/EDR connection requests, and peer state. The standalone Settings application includes a Bluetooth page with a scan button, a selectable list of discovered device addresses, per-device Found/Connecting/Connected status, Connect selected, and keyboard cancellation shortcuts. This is a basic connection picker, not yet a full device manager: friendly remote names are not resolved, and the app currently uses the first bound adapter.
+
+A successful connect action means the Create Connection command was submitted; the page updates status from the HCI connection-complete/disconnect events. It does not mean pairing or trust has been established. Pairing, authentication, encryption, SDP, HID, RFCOMM/serial-port emulation, and audio remain unsupported, so devices requiring those services cannot yet be used as keyboards, mice, headsets, or serial devices. No physical USB Bluetooth adapter test is implied by host CI.

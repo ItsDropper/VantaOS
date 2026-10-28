@@ -691,6 +691,9 @@ int usb_bluetooth_l2cap_dispatch_responses(
         } else if (command.code == 0x05U) {
             result = usb_bluetooth_l2cap_configuration_response(
                 table, payload + command_offset, command_size);
+        } else if (command.code == 0x07U) {
+            result = usb_bluetooth_l2cap_disconnection_response(
+                table, payload + command_offset, command_size);
         } else {
             continue;
         }
@@ -700,7 +703,8 @@ int usb_bluetooth_l2cap_dispatch_responses(
          * Peer rejection (-5) is also a completed transaction, not a framing
          * failure. Propagate malformed state/fields and other internal errors.
          */
-        if (result == -9)
+        if (result == -9 ||
+            (command.code == 0x07U && result == -16))
             continue;
         if (result < 0 && result != -5)
             return result;

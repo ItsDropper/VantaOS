@@ -75,3 +75,12 @@ Do not turn a failed match into a fatal USB enumeration error. An unsupported in
 ## What comes next
 
 A real driver needs explicit interface claiming, endpoint configuration, bounded transfer completion, interrupt-IN event handling, bulk ACL transport, HCI command/event correlation, reset/recovery, and disconnect cleanup. Only after those layers pass emulator and supported-hardware tests should VantaOS advertise Bluetooth functionality.
+
+
+## Transport binding milestone
+
+The USB enumerator now uses a validated candidate to configure the interrupt-IN event endpoint and both bulk ACL endpoints through the xHCI endpoint configuration API. It sends the HCI Reset command (`0x0C03`) using a USB class control request, starts interrupt event reception, and submits one bounded bulk-IN ACL receive. The polling loop consumes completed event/ACL-IN transfers and re-arms ACL reception.
+
+The HCI Reset request uses `bmRequestType = 0x20`, `bRequest = 0`, `wValue = 0x0C03`, `wIndex = interface number`, and zero data length. HCI commands are not sent through the ACL bulk endpoint. The event path records first-event and first Command Complete/Command Status markers; a production HCI layer must still validate event lengths, the returned opcode, status, and controller state.
+
+The bulk-OUT endpoint is configured, but ACL transmit framing and a consumer are not implemented yet. The current loop is not a pairing or profile stack. Treat this as an incremental transport milestone only, and validate it on an emulated xHCI Bluetooth device and physical adapters before advertising compatibility. CI currently validates the descriptor parser and kernel build, not real Bluetooth hardware behavior.

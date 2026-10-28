@@ -9,13 +9,13 @@ Copyright (c) 2026 ItsDropper
 - USB host support through xHCI; HID boot keyboard and mouse enumeration.
 - USB Wi-Fi work for Realtek RTL8188EU. See RTL8188EU_WIFI.md for the exact limitations; firmware readiness is not proof of association or Internet access.
 - ATA and NVMe storage paths, plus block-device and partition layers.
-- USB Bluetooth HCI interface recognition now identifies a matching interface with interrupt-IN events and bulk-IN/bulk-OUT ACL endpoints. It logs `VANTAOS_USB_BLUETOOTH_HCI_DESCRIPTOR_MATCH_ONLY` and deliberately does not claim or initialize the device. Bluetooth remains unsupported as a working feature; see [the bring-up course lesson](USB_BLUETOOTH_BRINGUP.md).
+- USB Bluetooth HCI transport binding configures interrupt-IN event and bulk ACL endpoints, issues HCI Reset through the class control pipe, and polls for event and ACL-IN transfers. This is transport bring-up only, not a complete Bluetooth stack; pairing, L2CAP, security, profiles, and end-to-end connectivity remain unsupported. See [the bring-up course lesson](USB_BLUETOOTH_BRINGUP.md).
 
-## Bluetooth implementation plan
+## Bluetooth implementation status
 
-The first descriptor-recognition milestone is implemented in `drivers/usb/bluetooth.c` and tested by `scripts/test_usb_bluetooth_descriptors.c`. It checks the Bluetooth wireless-controller class/subclass/protocol and requires an interrupt-IN endpoint plus bulk-IN and bulk-OUT endpoints on the same interface. Malformed streams and incomplete endpoint sets are rejected. This milestone does not yet claim the interface, and the current serial marker explicitly says `DESCRIPTOR_MATCH_ONLY`.
+`drivers/usb/bluetooth.c` validates the full configuration descriptor and identifies the expected HCI interrupt-IN event endpoint plus bulk-IN and bulk-OUT ACL endpoints. `drivers/usb/usb.c` now configures those xHCI endpoints, sends HCI Reset through the class control pipe, starts event reception and re-arms a bounded ACL-IN receive after completion. Port disconnect marks the transport inactive and releases the xHCI slot. The descriptor parser is covered by `scripts/test_usb_bluetooth_descriptors.c`.
 
-Recognition is not a driver. The next milestone needs interface claiming and xHCI endpoint configuration, interrupt event reception and bulk ACL transfers with bounded waits, then HCI command/event dispatch, disconnect cleanup and tests. The descriptor tests run in the dedicated `USB Bluetooth descriptor tests` workflow. Pairing and application support require additional L2CAP, security and profile layers. Do not claim Bluetooth works until a controller can be initialized and a supported profile passes tests.
+This is a transport milestone, not a complete Bluetooth implementation. The bulk-OUT endpoint is configured but there is not yet a complete ACL transmit path, L2CAP, pairing/security, device discovery, profile support, or an end-to-end Bluetooth API. Serial event markers prove only that the event path was reached; they do not prove a controller completed reset successfully or that any Bluetooth profile works. Physical-adapter and QEMU controller testing remain required.
 
 ## Wi-Fi adapter versus router
 

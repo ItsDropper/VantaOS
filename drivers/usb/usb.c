@@ -64,6 +64,7 @@ typedef struct {
     uint8_t acl_out_endpoint;
     uint32_t event_count;
     uint32_t acl_packet_count;
+    uint8_t command_response_observed;
 } usb_bluetooth_slot_t;
 
 static usb_bluetooth_slot_t bluetooth_slots[USB_MAX_XHCI_SLOTS + 1U];
@@ -399,8 +400,10 @@ void usb_poll(void)
                 serial_write("VANTAOS_BLUETOOTH_HCI_EVENT_RECEIVED\n");
             if ((bluetooth_event_buffer[0] == 0x0EU ||
                  bluetooth_event_buffer[0] == 0x0FU) &&
-                bluetooth->event_count == 1U)
+                !bluetooth->command_response_observed) {
+                bluetooth->command_response_observed = 1U;
                 serial_write("VANTAOS_BLUETOOTH_HCI_COMMAND_RESPONSE\n");
+            }
         }
 
         uint32_t acl_length = 0U;

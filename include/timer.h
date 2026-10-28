@@ -11,9 +11,9 @@
 #include <stdint.h>
 
 /**
- * @brief Configures IRQ0 to fire at the specified frequency in Hz.
+ * @brief Configures PIT channel 0 to fire at the requested frequency.
+ * @return Nonzero on success; zero if the frequency cannot be represented.
  */
-/* Returns zero if frequency is outside the representable PIT range. */
 int timer_initialize(uint32_t frequency);
 
 /**
@@ -23,6 +23,7 @@ void timer_handle_interrupt(void);
 
 /**
  * @brief Blocks execution for the specified duration in milliseconds.
+ * @note Requires maskable interrupts to remain enabled so timer ticks advance.
  */
 void sleep_ms(uint32_t ms);
 

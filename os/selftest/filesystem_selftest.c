@@ -233,12 +233,59 @@ void filesystem_selftest_initialize(void)
         serial_write("VANTAOS_FILESYSTEM_RENAME_GUARD_SETUP_FAIL\n");
         return;
     }
+    int existing_write = vfs_open("/FMTEST/Existing.txt", VFS_OPEN_WRITE);
+    int incoming_write = vfs_open("/FMTEST/Incoming.part", VFS_OPEN_WRITE);
+    if (existing_write < 0 || incoming_write < 0)
+    {
+        if (existing_write >= 0) (void)vfs_close(existing_write);
+        if (incoming_write >= 0) (void)vfs_close(incoming_write);
+        serial_write("VANTAOS_FILESYSTEM_RENAME_GUARD_OPEN_FAIL\n");
+        return;
+    }
+    if (vfs_write(existing_write, "DEST", 4U) != 4 ||
+        vfs_write(incoming_write, "PART", 4U) != 4)
+    {
+        (void)vfs_close(existing_write);
+        (void)vfs_close(incoming_write);
+        serial_write("VANTAOS_FILESYSTEM_RENAME_GUARD_WRITE_FAIL\n");
+        return;
+    }
+    if (vfs_close(existing_write) < 0 || vfs_close(incoming_write) < 0)
+    {
+        serial_write("VANTAOS_FILESYSTEM_RENAME_GUARD_CLOSE_FAIL\n");
+        return;
+    }
     if (filesystem_rename_path("/FMTEST/Incoming.part",
                                "/FMTEST/Existing.txt") >= 0 ||
         filesystem_lookup("/FMTEST/Existing.txt") < 0 ||
         filesystem_lookup("/FMTEST/Incoming.part") < 0)
     {
         serial_write("VANTAOS_FILESYSTEM_RENAME_NO_OVERWRITE_FAIL\n");
+        return;
+    }
+    char existing_bytes[4];
+    char incoming_bytes[4];
+    int existing_read = vfs_open("/FMTEST/Existing.txt", VFS_OPEN_READ);
+    int incoming_read = vfs_open("/FMTEST/Incoming.part", VFS_OPEN_READ);
+    if (existing_read < 0 || incoming_read < 0)
+    {
+        if (existing_read >= 0) (void)vfs_close(existing_read);
+        if (incoming_read >= 0) (void)vfs_close(incoming_read);
+        serial_write("VANTAOS_FILESYSTEM_RENAME_GUARD_READ_OPEN_FAIL\n");
+        return;
+    }
+    int existing_count = vfs_read(existing_read, existing_bytes, 4U);
+    int incoming_count = vfs_read(incoming_read, incoming_bytes, 4U);
+    int existing_close = vfs_close(existing_read);
+    int incoming_close = vfs_close(incoming_read);
+    if (existing_count != 4 || incoming_count != 4 ||
+        existing_bytes[0] != 'D' || existing_bytes[1] != 'E' ||
+        existing_bytes[2] != 'S' || existing_bytes[3] != 'T' ||
+        incoming_bytes[0] != 'P' || incoming_bytes[1] != 'A' ||
+        incoming_bytes[2] != 'R' || incoming_bytes[3] != 'T' ||
+        existing_close < 0 || incoming_close < 0)
+    {
+        serial_write("VANTAOS_FILESYSTEM_RENAME_GUARD_CONTENT_FAIL\n");
         return;
     }
     if (filesystem_delete_path("/FMTEST/Incoming.part") < 0 ||

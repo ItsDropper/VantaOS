@@ -33,6 +33,7 @@ http_url_status_t http_url_parse(const char *url,
         return HTTP_URL_BAD_SCHEME;
 
     const char *authority = url + 7U;
+    if (*authority == '[') return HTTP_URL_BAD_HOST;
     const char *cursor = authority;
     const char *port_start = 0;
     while (*cursor && *cursor != '/' && *cursor != '?' && *cursor != '#')

@@ -77,6 +77,8 @@ static usb_bluetooth_hci_event_queue_t bluetooth_hci_event_queues[USB_MAX_XHCI_S
 static usb_bluetooth_link_table_t bluetooth_link_tables[USB_MAX_XHCI_SLOTS + 1U];
 static uint8_t bluetooth_acl_buffer[USB_BLUETOOTH_ACL_MAX_PACKET]
     __attribute__((aligned(64)));
+static uint8_t bluetooth_acl_reassembled_buffer[USB_BLUETOOTH_ACL_MAX_PACKET]
+    __attribute__((aligned(64)));
 static usb_bluetooth_acl_queue_t bluetooth_acl_queues[USB_MAX_XHCI_SLOTS + 1U];
 static uint32_t bluetooth_acl_dropped[USB_MAX_XHCI_SLOTS + 1U];
 static uint8_t bluetooth_acl_tx_buffers[USB_MAX_XHCI_SLOTS + 1U][4096]
@@ -695,9 +697,29 @@ void usb_poll(void)
                     bluetooth->reset_failed_observed) &&
                 usb_bluetooth_acl_packet_valid(bluetooth_acl_buffer,
                                                acl_length)) {
-                (void)usb_bluetooth_link_table_acl_feed(
+                usb_bluetooth_acl_view_t incoming_acl;
+                int feed_result = usb_bluetooth_link_table_acl_feed(
                     &bluetooth_link_tables[slot], bluetooth_acl_buffer,
                     acl_length);
+                /*
+                 * Only dispatch signaling after per-handle reassembly yields
+                 * one complete L2CAP PDU. Preserve the original ACL fragment
+                 * for the raw receive queue; assembled bytes use a separate
+                 * bounded buffer.
+                 */
+                if (feed_result == 1 &&
+                    usb_bluetooth_acl_parse(bluetooth_acl_buffer, acl_length,
+                                            &incoming_acl)) {
+                    int assembled_length = usb_bluetooth_link_table_acl_take(
+                        &bluetooth_link_tables[slot], incoming_acl.handle,
+                        bluetooth_acl_reassembled_buffer,
+                        sizeof(bluetooth_acl_reassembled_buffer));
+                    if (assembled_length > 0)
+                        (void)usb_bluetooth_l2cap_dispatch_acl_responses(
+                            &bluetooth->l2cap_channels,
+                            bluetooth_acl_reassembled_buffer,
+                            (uint32_t)assembled_length);
+                }
                 int queued = usb_bluetooth_acl_queue_push(
                     &bluetooth_acl_queues[slot], bluetooth_acl_buffer,
                     acl_length);

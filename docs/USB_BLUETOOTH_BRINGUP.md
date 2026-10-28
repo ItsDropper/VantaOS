@@ -152,6 +152,10 @@ The host library now provides checked encoders for the HCI Create Connection com
 
 The USB layer now also exposes `usb_bluetooth_connect`, `usb_bluetooth_cancel_connection`, and `usb_bluetooth_disconnect`. These wrappers validate through the encoders and submit through the existing command-credit/fault gate. They return 1 when the USB control transfer succeeds, not when the remote connection succeeds. Callers must consume HCI events and confirm Connection Complete status before treating a link as connected. These calls must run on the serialized USB polling/owner CPU context.
 
+## Classic device inquiry results
+
+The HCI inquiry-result parser accepts standard Inquiry Result (event 0x02) and Inquiry Result with RSSI (event 0x22) events. It validates the complete event length and per-record count before returning an indexed record containing the six-byte HCI-order address, page-scan repetition mode, 24-bit class of device, clock offset, and optional signed RSSI. Unsupported event types and malformed record layouts are rejected. The parser is a building block for a future device picker; the current USB layer still exposes raw HCI events, so callers must explicitly parse and present results.
+
 ## Unified binding teardown
 
 Bluetooth binding teardown is centralized so disconnect and a partially failed endpoint-start sequence clear the same state: port/interface/endpoints, counters, reset readiness, transmit-busy state, dropped-packet count, and the full ACL queue. Binding initializes counters and reset state explicitly before starting transfers. This prevents stale per-slot state from surviving a failed start and being mistaken for the next device binding.

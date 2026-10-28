@@ -51,6 +51,10 @@ int main(void)
     assert(memcmp(entries, before, sizeof(entries)) == 0);
     assert(!ahci_prdt_build(0x1001U, 512U, entries, 3U, &count, 1));
     assert(count == 0U);
+    assert(!ahci_prdt_build(0x1002U, 512U, entries, 3U, &count, 1));
+    assert(count == 0U);
+    assert(!ahci_prdt_build(0x1003U, 512U, entries, 3U, &count, 1));
+    assert(count == 0U);
     assert(!ahci_prdt_build(0x1000U, 0U, entries, 3U, &count, 1));
     assert(count == 0U);
     assert(!ahci_prdt_build(UINT64_MAX - 1U, 4U,

@@ -1186,6 +1186,38 @@ static void test_l2cap_configuration_request_round_trip(void)
                response, sizeof(response), &cid) == -22);
 }
 
+static void test_l2cap_reject_unsupported_inbound_service(void)
+{
+    uint8_t request[8] = {0x02U, 0x31U, 4U, 0U,
+                          0x01U, 0U, 0x40U, 0U};
+    uint8_t response[12] = {0};
+    assert(usb_bluetooth_l2cap_reject_connection_request(
+               request, sizeof(request), response, sizeof(response)) == 12);
+    assert(response[0] == 0x03U && response[1] == 0x31U &&
+           response[2] == 8U && response[3] == 0U);
+    assert(response[4] == 0U && response[5] == 0U);
+    assert(response[6] == 0x40U && response[7] == 0U);
+    assert(response[8] == 2U && response[9] == 0U);
+    assert(response[10] == 0U && response[11] == 0U);
+
+    request[1] = 0U;
+    assert(usb_bluetooth_l2cap_reject_connection_request(
+               request, sizeof(request), response, sizeof(response)) == -22);
+    request[1] = 0x31U;
+    request[4] = 0x02U; /* PSM must have the BR/EDR odd/reserved-bit form. */
+    assert(usb_bluetooth_l2cap_reject_connection_request(
+               request, sizeof(request), response, sizeof(response)) == -22);
+    request[4] = 0x01U;
+    request[6] = 0x3FU; /* Dynamic source CID required. */
+    assert(usb_bluetooth_l2cap_reject_connection_request(
+               request, sizeof(request), response, sizeof(response)) == -22);
+    request[6] = 0x40U;
+    assert(usb_bluetooth_l2cap_reject_connection_request(
+               request, sizeof(request), response, 11U) == -90);
+    assert(usb_bluetooth_l2cap_reject_connection_request(
+               request, 7U, response, sizeof(response)) == -22);
+}
+
 static void test_l2cap_disconnection_transactions(void)
 {
     usb_bluetooth_l2cap_table_t table = {0};
@@ -1733,6 +1765,7 @@ int main(void)
     test_l2cap_acl_packet_builder();
     test_l2cap_signaling_acl_builder();
     test_l2cap_configuration_request_round_trip();
+    test_l2cap_reject_unsupported_inbound_service();
     test_l2cap_disconnection_transactions();
     test_l2cap_configuration_transaction();
     test_l2cap_identifier_collision_guards();

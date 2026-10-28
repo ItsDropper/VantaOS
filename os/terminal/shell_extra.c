@@ -13,6 +13,7 @@
 #include "net_ipv4.h"
 #include "net_ipv6.h"
 #include "net_tcp.h"
+#include "http_url.h"
 #include <stdint.h>
 #include <stddef.h>
 
@@ -513,108 +514,31 @@ static int command_http_url(const char *url, const char *output_argument,
 {
     char host[96], path[96], request[512], output[257], headers[2048];
     char resolved_path[FS_PATH_MAX];
-    size_t host_length = 0, path_length = 0, used = 0;
+    size_t used = 0;
     size_t header_length = 0, header_end = 0, total_body = 0, body_used = 0;
     char body_chunk[257];
     uint32_t port = 80U, address = 0, expected_body_length = UINT32_MAX;
-    const char *authority, *cursor, *path_start, *port_start = 0;
+    http_url_status_t url_status;
     net_device_t *device = 0;
     int file_handle = -1, response_status = 0, body_started = 0;
     const size_t max_download = 8U * 1024U * 1024U;
 
-    if (!url) return 1;
-    if (url[0] == 'h' && url[1] == 't' && url[2] == 't' &&
-        url[3] == 'p' && url[4] == 's' && url[5] == ':' &&
-        url[6] == '/' && url[7] == '/') {
-        terminal_write("\nnet http: HTTPS requires TLS, which is not implemented; refusing insecure downgrade.");
+    url_status = http_url_parse(url, host, sizeof(host),
+                                path, sizeof(path), &port);
+    if (url_status != HTTP_URL_OK) {
+        if (url_status == HTTP_URL_HTTPS_UNSUPPORTED)
+            terminal_write("\nnet http: HTTPS requires TLS, which is not implemented; refusing insecure downgrade");
+        else if (url_status == HTTP_URL_BAD_PORT)
+            terminal_write("\ncurl: invalid TCP port");
+        else if (url_status == HTTP_URL_BAD_HOST)
+            terminal_write("\ncurl: invalid or unsupported hostname");
+        else if (url_status == HTTP_URL_PATH_TOO_LONG)
+            terminal_write("\ncurl: URL path exceeds the 95-character limit");
+        else if (url_status == HTTP_URL_BAD_PATH)
+            terminal_write("\ncurl: URL path contains an unescaped control or space character");
+        else
+            terminal_write("\nusage: curl <http://host/path> | curl -o <file> <http://host/path>");
         return 1;
-    }
-    if (!(url[0] == 'h' && url[1] == 't' && url[2] == 't' &&
-          url[3] == 'p' && url[4] == ':' && url[5] == '/' && url[6] == '/')) {
-        terminal_write("\nusage: curl <http://host/path> | curl -o <file> <http://host/path>");
-        return 1;
-    }
-
-    authority = url + 7U;
-    cursor = authority;
-    while (*cursor && *cursor != '/' && *cursor != '?' && *cursor != '#') {
-        if (*cursor == ':') { port_start = cursor + 1U; break; }
-        ++cursor;
-    }
-    path_start = cursor;
-    if (port_start) {
-        path_start = port_start;
-        while (*path_start && *path_start != '/' &&
-               *path_start != '?' && *path_start != '#') ++path_start;
-        char port_text[6];
-        size_t digits = (size_t)(path_start - port_start);
-        if (!digits || digits >= sizeof(port_text)) {
-            terminal_write("\nnet http: invalid TCP port");
-            return 1;
-        }
-        for (size_t i = 0; i < digits; ++i) port_text[i] = port_start[i];
-        port_text[digits] = 0;
-        if (!parse_u32(port_text, &port) || !port || port > 65535U) {
-            terminal_write("\nnet http: invalid TCP port");
-            return 1;
-        }
-        host_length = (size_t)((port_start - 1U) - authority);
-    } else {
-        host_length = (size_t)(cursor - authority);
-    }
-    if (!host_length || host_length >= sizeof(host)) {
-        terminal_write("\nnet http: invalid or oversized hostname");
-        return 1;
-    }
-    for (size_t i = 0; i < host_length; ++i) {
-        char ch = authority[i];
-        if (!((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') ||
-              (ch >= '0' && ch <= '9') || ch == '.' || ch == '-')) {
-            terminal_write("\nnet http: invalid hostname; only DNS names and IPv4 literals are supported");
-            return 1;
-        }
-        host[i] = ch;
-    }
-    if (host[0] == '.' || host[host_length - 1U] == '.' ||
-        host[0] == '-' || host[host_length - 1U] == '-') {
-        terminal_write("\nnet http: invalid hostname");
-        return 1;
-    }
-    host[host_length] = 0;
-
-    if (*path_start == '#') {
-        path_start = "/";
-    }
-    if (*path_start == '?' || *path_start == 0) {
-        path[path_length++] = '/';
-        if (*path_start == '?') {
-            size_t q = 0U;
-            while (path_start[q] && path_start[q] != '#') {
-                if (path_length >= sizeof(path) - 1U) {
-                    terminal_write("\ncurl: URL path exceeds the 95-character limit");
-                    return 1;
-                }
-                path[path_length++] = path_start[q++];
-            }
-        }
-    } else {
-        while (path_start[path_length] && path_start[path_length] != '#') {
-            if (path_length >= sizeof(path) - 1U) {
-                terminal_write("\ncurl: URL path exceeds the 95-character limit");
-                return 1;
-            }
-            path[path_length] = path_start[path_length];
-            ++path_length;
-        }
-    }
-    path[path_length] = 0;
-    if (!path_length) { path[0] = '/'; path[1] = 0; }
-    for (size_t i = 0; i < path_length; ++i) {
-        unsigned char ch = (unsigned char)path[i];
-        if (ch <= 0x20U || ch == 0x7FU) {
-            terminal_write("\nnet http: URL path contains an unescaped control or space character");
-            return 1;
-        }
     }
 
     if (output_argument) {

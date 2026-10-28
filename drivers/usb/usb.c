@@ -67,8 +67,7 @@ typedef struct {
     uint32_t acl_packet_count;
     uint8_t reset_complete_observed;
     uint8_t reset_failed_observed;
-    uint8_t connection_pending;
-    uint8_t pending_address[6];
+    usb_bluetooth_connection_attempt_t connection_attempt;
     usb_bluetooth_hci_command_state_t command_state;
 } usb_bluetooth_slot_t;
 
@@ -193,9 +192,8 @@ int usb_bluetooth_hci_command(uint32_t port, uint16_t opcode,
     if (opcode == 0x0C03U) {
         bluetooth_slots[slot].reset_complete_observed = 0U;
         bluetooth_slots[slot].reset_failed_observed = 0U;
-        bluetooth_slots[slot].connection_pending = 0U;
-        for (uint32_t i = 0U; i < 6U; ++i)
-            bluetooth_slots[slot].pending_address[i] = 0U;
+        usb_bluetooth_connection_attempt_reset(
+            &bluetooth_slots[slot].connection_attempt);
         usb_bluetooth_hci_command_state_reset(
             &bluetooth_slots[slot].command_state);
         bluetooth_slots[slot].command_state.credits = 1U;
@@ -259,17 +257,17 @@ int usb_bluetooth_connect(uint32_t port, const uint8_t address[6],
             break;
         }
     }
-    if (slot == 0U || bluetooth_slots[slot].connection_pending) {
+    if (slot == 0U ||
+        usb_bluetooth_connection_attempt_begin(
+            &bluetooth_slots[slot].connection_attempt, address) != 0) {
         for (uint32_t i = 0U; i < sizeof(command); ++i)
             command[i] = 0U;
         return 0;
     }
     int sent = usb_bluetooth_hci_command(port, 0x0405U, &command[3], 13U);
-    if (sent) {
-        bluetooth_slots[slot].connection_pending = 1U;
-        for (uint32_t i = 0U; i < 6U; ++i)
-            bluetooth_slots[slot].pending_address[i] = address[i];
-    }
+    if (!sent)
+        usb_bluetooth_connection_attempt_reset(
+            &bluetooth_slots[slot].connection_attempt);
     for (uint32_t i = 0U; i < sizeof(command); ++i)
         command[i] = 0U;
     return sent;
@@ -290,17 +288,12 @@ int usb_bluetooth_cancel_connection(uint32_t port,
             break;
         }
     }
-    if (slot == 0U || !bluetooth_slots[slot].connection_pending) {
+    if (slot == 0U ||
+        !usb_bluetooth_connection_attempt_matches(
+            &bluetooth_slots[slot].connection_attempt, address)) {
         for (uint32_t i = 0U; i < sizeof(command); ++i)
             command[i] = 0U;
         return 0;
-    }
-    for (uint32_t i = 0U; i < 6U; ++i) {
-        if (bluetooth_slots[slot].pending_address[i] != address[i]) {
-            for (uint32_t j = 0U; j < sizeof(command); ++j)
-                command[j] = 0U;
-            return 0;
-        }
     }
     int sent = usb_bluetooth_hci_command(port, 0x0408U, &command[3], 6U);
     for (uint32_t i = 0U; i < sizeof(command); ++i)
@@ -506,9 +499,8 @@ static void usb_bluetooth_detach_slot(uint32_t slot)
     bluetooth_slots[slot].acl_packet_count = 0U;
     bluetooth_slots[slot].reset_complete_observed = 0U;
     bluetooth_slots[slot].reset_failed_observed = 0U;
-    bluetooth_slots[slot].connection_pending = 0U;
-    for (uint32_t i = 0U; i < 6U; ++i)
-        bluetooth_slots[slot].pending_address[i] = 0U;
+    usb_bluetooth_connection_attempt_reset(
+        &bluetooth_slots[slot].connection_attempt);
     usb_bluetooth_hci_command_state_reset(
         &bluetooth_slots[slot].command_state);
     usb_bluetooth_acl_queue_reset(&bluetooth_acl_queues[slot]);
@@ -805,30 +797,19 @@ void usb_poll(void)
                 int link_transition = usb_bluetooth_link_table_event(
                     &bluetooth_link_tables[slot], bluetooth_event_buffer,
                     event_length);
-                if (bluetooth->connection_pending &&
-                    bluetooth_event_buffer[0] == 0x03U &&
+                if (bluetooth_event_buffer[0] == 0x03U &&
                     event_length == 13U) {
-                    uint8_t address_matches = 1U;
-                    for (uint32_t i = 0U; i < 6U; ++i) {
-                        if (bluetooth->pending_address[i] !=
-                            bluetooth_event_buffer[5U + i])
-                            address_matches = 0U;
-                    }
-                    if (address_matches) {
-                        bluetooth->connection_pending = 0U;
-                        for (uint32_t i = 0U; i < 6U; ++i)
-                            bluetooth->pending_address[i] = 0U;
-                    }
-                } else if (bluetooth->connection_pending &&
-                           bluetooth_event_buffer[0] == 0x0FU &&
+                    (void)usb_bluetooth_connection_attempt_finish(
+                        &bluetooth->connection_attempt,
+                        &bluetooth_event_buffer[5]);
+                } else if (bluetooth_event_buffer[0] == 0x0FU &&
                            event_length == 6U &&
                            bluetooth_event_buffer[2] != 0U &&
                            bluetooth_event_buffer[4] == 0x05U &&
                            bluetooth_event_buffer[5] == 0x04U) {
                     /* Controller rejected the Create Connection command. */
-                    bluetooth->connection_pending = 0U;
-                    for (uint32_t i = 0U; i < 6U; ++i)
-                        bluetooth->pending_address[i] = 0U;
+                    usb_bluetooth_connection_attempt_reset(
+                        &bluetooth->connection_attempt);
                 }
                 if (bluetooth_event_buffer[0] == 0x03U &&
                     event_length == 13U && bluetooth_event_buffer[2] == 0U &&

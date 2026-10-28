@@ -746,24 +746,24 @@ void usb_poll(void)
                 int link_transition = usb_bluetooth_link_table_event(
                     &bluetooth_link_tables[slot], bluetooth_event_buffer,
                     event_length);
-                /*
-                 * L2CAP channels are not yet associated with individual
-                 * connection records. Fail closed: a successful BR/EDR
-                 * disconnect invalidates all pending channels for this
-                 * controller rather than risk reusing a stale remote CID.
-                 */
+                if (bluetooth_event_buffer[0] == 0x03U &&
+                    event_length == 13U && bluetooth_event_buffer[2] == 0U &&
+                    link_transition > 0) {
+                    uint16_t connected_handle =
+                        (uint16_t)bluetooth_event_buffer[3] |
+                        ((uint16_t)(bluetooth_event_buffer[4] & 0x0FU) << 8);
+                    if (bluetooth_l2cap_table_for_handle(
+                            slot, connected_handle, 1) == NULL)
+                        serial_write(
+                            "VANTAOS_BLUETOOTH_L2CAP_OWNER_TABLE_FULL\\n");
+                }
                 if (bluetooth_event_buffer[0] == 0x05U &&
                     event_length == 6U && bluetooth_event_buffer[2] == 0U &&
                     link_transition > 0) {
-                    /*
-                     * The L2CAP table has no owner handle yet. Reset its
-                     * transactions on every disconnect so a stale channel
-                     * cannot be attributed to the remaining peer. Completed
-                     * ACL packets are handle-tagged, so preserve their queue
-                     * until the final active link closes.
-                     */
-                    usb_bluetooth_l2cap_table_reset(
-                        &bluetooth->l2cap_channels);
+                    uint16_t disconnected_handle =
+                        (uint16_t)bluetooth_event_buffer[3] |
+                        ((uint16_t)(bluetooth_event_buffer[4] & 0x0FU) << 8);
+                    bluetooth_l2cap_forget_handle(slot, disconnected_handle);
                     if (usb_bluetooth_link_table_active_count(
                             &bluetooth_link_tables[slot]) == 0U)
                         usb_bluetooth_acl_queue_reset(

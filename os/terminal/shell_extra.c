@@ -651,19 +651,6 @@ static int command_http_url(const char *url, const char *output_argument,
                 }
                 headers[header_length++] = (char)byte;
                 headers[header_length] = 0;
-                if (!response_status && header_length >= 12U &&
-                    headers[0] == 'H' && headers[1] == 'T' &&
-                    headers[2] == 'T' && headers[3] == 'P' &&
-                    headers[4] == '/') {
-                    size_t at = 0;
-                    while (at < header_length && headers[at] != ' ') ++at;
-                    if (at + 3U < header_length &&
-                        headers[at + 1U] >= '0' && headers[at + 1U] <= '9' &&
-                        headers[at + 2U] >= '0' && headers[at + 2U] <= '9')
-                        response_status = (headers[at + 1U] - '0') * 100 +
-                                          (headers[at + 2U] - '0') * 10 +
-                                          (headers[at + 3U] - '0');
-                }
                 if (header_length >= 4U &&
                     headers[header_length - 4U] == '\r' &&
                     headers[header_length - 3U] == '\n' &&

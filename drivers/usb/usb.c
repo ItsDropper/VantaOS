@@ -762,6 +762,7 @@ static void bluetooth_l2cap_progress_channels(uint32_t slot)
         for (uint32_t j = 0U; j < USB_BLUETOOTH_L2CAP_CHANNEL_MAX; ++j) {
             usb_bluetooth_l2cap_channel_t *channel = &table->channels[j];
             if (!channel->active || channel->state != 3U ||
+                channel->local_configured != 0U ||
                 channel->config_identifier != 0U ||
                 channel->remote_cid < USB_BLUETOOTH_L2CAP_CID_DYNAMIC_MIN)
                 continue;

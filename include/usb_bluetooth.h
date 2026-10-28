@@ -89,6 +89,7 @@ typedef struct {
     uint8_t status;
     uint8_t event_kind; /* 1 Command Complete, 2 Command Status */
     uint8_t faulted; /* transport outcome ambiguous; Reset required */
+    uint32_t deadline; /* absolute timer tick; zero means not armed */
 } usb_bluetooth_hci_command_state_t;
 
 typedef struct {
@@ -217,6 +218,14 @@ int usb_bluetooth_hci_command_begin(usb_bluetooth_hci_command_state_t *state,
                                     uint16_t opcode);
 int usb_bluetooth_hci_command_event(usb_bluetooth_hci_command_state_t *state,
                                     const uint8_t *event, uint32_t length);
+/* Arm after a command transfer is accepted. Expiry faults the command channel;
+ * ordinary commands remain blocked until a fresh HCI Reset. Deadlines use
+ * wrap-safe signed tick subtraction and must be less than 2^31 ticks away. */
+int usb_bluetooth_hci_command_watchdog_arm(
+    usb_bluetooth_hci_command_state_t *state, uint32_t now,
+    uint32_t timeout_ticks);
+int usb_bluetooth_hci_command_watchdog_expire(
+    usb_bluetooth_hci_command_state_t *state, uint32_t now);
 /* Build standard HCI Read Local Version, Read BD_ADDR, Read Buffer Size,
  * and Inquiry command packets; this does not submit them to a controller. */
 int usb_bluetooth_hci_build_read_local_version(uint8_t *out, uint32_t capacity);

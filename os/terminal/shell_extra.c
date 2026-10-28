@@ -514,7 +514,8 @@ static int command_http_url(const char *url, const char *output_argument,
     char host[96], path[96], request[512], output[257], headers[2048];
     char resolved_path[FS_PATH_MAX];
     size_t host_length = 0, path_length = 0, used = 0;
-    size_t header_length = 0, header_end = 0, total_body = 0;
+    size_t header_length = 0, header_end = 0, total_body = 0, body_used = 0;
+    char body_chunk[257];
     uint32_t port = 80U, address = 0;
     const char *authority, *cursor, *path_start, *port_start = 0;
     net_device_t *device = 0;
@@ -737,7 +738,8 @@ static int command_http_url(const char *url, const char *output_argument,
                         file_handle = vfs_open(resolved_path,
                                                 VFS_OPEN_WRITE | VFS_OPEN_TRUNCATE);
                         if (file_handle < 0) {
-                            if (vfs_create_file(resolved_path))
+                            int created = vfs_create_file(resolved_path);
+                            if (created >= 0)
                                 file_handle = vfs_open(resolved_path,
                                     VFS_OPEN_WRITE | VFS_OPEN_TRUNCATE);
                         }
@@ -761,17 +763,21 @@ static int command_http_url(const char *url, const char *output_argument,
                 return 1;
             }
             if (output_argument) {
-                if (vfs_write(file_handle, (const char *)&output[i], 1U) != 1) {
-                    terminal_write("\ncurl: write failed; output may be incomplete");
-                    (void)vfs_close(file_handle);
-                    net_tcp_close(device);
-                    return 1;
-                }
-            } else if (body_only) {
-                terminal_putchar((char)byte);
+                body_chunk[body_used++] = (char)byte;
             } else {
                 terminal_putchar((char)byte);
             }
+        }
+        if (output_argument && body_used) {
+            int written = vfs_write(file_handle, body_chunk,
+                                    (unsigned int)body_used);
+            if (written != (int)body_used) {
+                terminal_write("\ncurl: write failed; output may be incomplete");
+                (void)vfs_close(file_handle);
+                net_tcp_close(device);
+                return 1;
+            }
+            body_used = 0U;
         }
     }
     net_tcp_close(device);

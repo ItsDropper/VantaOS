@@ -855,7 +855,7 @@ int usb_bluetooth_hci_read_buffer_size_result(
     if (event[0] != 0x0EU || event[1] != 0x0BU ||
         event[3] != 0x05U || event[4] != 0x10U)
         return 0;
-    if (length != 13U || event[2] == 0U)
+    if (length != 13U || event[5] != 0U)
         return -22;
     uint16_t acl_length = (uint16_t)event[6] |
                           ((uint16_t)event[7] << 8);

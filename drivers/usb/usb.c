@@ -184,6 +184,50 @@ int usb_bluetooth_hci_command(uint32_t port, uint16_t opcode,
     return sent;
 }
 
+int usb_bluetooth_connect(uint32_t port, const uint8_t address[6],
+                          uint16_t packet_type,
+                          uint8_t page_scan_repetition_mode,
+                          uint16_t clock_offset, uint8_t allow_role_switch)
+{
+    uint8_t command[16];
+    int encoded = usb_bluetooth_hci_build_create_connection(
+        address, packet_type, page_scan_repetition_mode, clock_offset,
+        allow_role_switch, command, sizeof(command));
+    if (port == 0U || encoded != 16)
+        return 0;
+    int sent = usb_bluetooth_hci_command(port, 0x0405U, &command[3], 13U);
+    for (uint32_t i = 0U; i < sizeof(command); ++i)
+        command[i] = 0U;
+    return sent;
+}
+
+int usb_bluetooth_cancel_connection(uint32_t port,
+                                    const uint8_t address[6])
+{
+    uint8_t command[9];
+    int encoded = usb_bluetooth_hci_build_create_connection_cancel(
+        address, command, sizeof(command));
+    if (port == 0U || encoded != 9)
+        return 0;
+    int sent = usb_bluetooth_hci_command(port, 0x0408U, &command[3], 6U);
+    for (uint32_t i = 0U; i < sizeof(command); ++i)
+        command[i] = 0U;
+    return sent;
+}
+
+int usb_bluetooth_disconnect(uint32_t port, uint16_t handle, uint8_t reason)
+{
+    uint8_t command[6];
+    int encoded = usb_bluetooth_hci_build_disconnect(
+        handle, reason, command, sizeof(command));
+    if (port == 0U || encoded != 6)
+        return 0;
+    int sent = usb_bluetooth_hci_command(port, 0x0406U, &command[3], 3U);
+    for (uint32_t i = 0U; i < sizeof(command); ++i)
+        command[i] = 0U;
+    return sent;
+}
+
 int usb_bluetooth_hci_event_receive(uint32_t port, uint8_t *event,
                                     uint32_t capacity)
 {

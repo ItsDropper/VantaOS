@@ -404,6 +404,31 @@ static void test_descriptor_byte_mutations_are_bounded(void)
     }
 }
 
+
+static void test_hci_packet_framing_mutations_are_bounded(void)
+{
+    uint8_t packet[64];
+    for (uint32_t length = 0U; length <= sizeof(packet); ++length) {
+        for (uint32_t offset = 0U; offset < length; ++offset) {
+            for (uint32_t value = 0U; value <= 255U; ++value) {
+                for (uint32_t i = 0U; i < sizeof(packet); ++i)
+                    packet[i] = (uint8_t)(i * 13U + length);
+                packet[offset] = (uint8_t)value;
+
+                if (usb_bluetooth_hci_event_valid(packet, length))
+                    assert(length >= 2U &&
+                           (uint32_t)packet[1] + 2U == length);
+
+                if (usb_bluetooth_acl_packet_valid(packet, length)) {
+                    uint32_t payload_length = (uint32_t)packet[2] |
+                                              ((uint32_t)packet[3] << 8);
+                    assert(length >= 4U && payload_length + 4U == length);
+                }
+            }
+        }
+    }
+}
+
 int main(void)
 {
     test_complete_hci_interface();
@@ -421,6 +446,7 @@ int main(void)
     test_endpoint_address_and_transfer_roles();
     test_failed_parse_clears_candidate();
     test_descriptor_byte_mutations_are_bounded();
+    test_hci_packet_framing_mutations_are_bounded();
     test_acl_queue_rejects_corrupt_stored_length();
     puts("USB Bluetooth descriptor tests passed");
     return 0;

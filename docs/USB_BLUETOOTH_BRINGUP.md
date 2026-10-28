@@ -159,3 +159,8 @@ The GitHub Actions workflow runs the same suite twice: once with strict C11 warn
 
 
 The endpoint parser also rejects upper `wMaxPacketSize` bits that would encode high-bandwidth transactions or reserved values. This transport configures ordinary bounded interrupt/bulk transfers only; it must not silently interpret a multi-transaction endpoint as a single packet with the same low 11-bit size. A negative descriptor test covers this case.
+
+
+## HCI framing mutation coverage
+
+The sanitizer-backed host suite now mutates every byte of packets at every length from zero through the 64-byte staging-buffer limit. Accepted HCI event and ACL packets must have a declared payload length that exactly matches the supplied transfer length. This is deterministic mutation testing of framing validators, not a claim of coverage-guided fuzzing or hardware-level transfer validation.

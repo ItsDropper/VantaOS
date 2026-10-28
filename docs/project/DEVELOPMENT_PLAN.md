@@ -91,6 +91,12 @@ The separate [anti-cheat and Windows game compatibility plan](ANTI_CHEAT_COMPATI
 - [ ] Package installation, signed updates, recovery, and rollback.
 - [ ] Security model, permissions, app APIs, and real-hardware testing.
 
+## Timekeeping reliability
+
+- [ ] Validate PIT frequency and divisor boundaries before programming hardware.
+- [ ] Use wrap-safe tick arithmetic for deadlines and elapsed time.
+- [ ] Add a general kernel watchdog service only after timer semantics are stable; watchdog expiry must be observable outside interrupt context and must not run arbitrary callbacks in IRQ handlers.
+
 ## Latest status
 
 - Backup branch: `backup/pre-desktop-reliability-2026-10-15`.

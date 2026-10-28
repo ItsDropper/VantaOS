@@ -1179,6 +1179,41 @@ static void test_l2cap_connection_response_dispatch(void)
                                                    672U) == -22);
 }
 
+static void test_l2cap_response_builders(void)
+{
+    uint8_t output[32] = {0};
+    const uint8_t expected_connection[] = {
+        0x03U, 7U, 8U, 0U, 0x41U, 0U, 0x42U, 0U,
+        0U, 0U, 0U, 0U
+    };
+    const uint8_t expected_configuration[] = {
+        0x05U, 8U, 10U, 0U, 0x42U, 0U, 0U, 0U,
+        0U, 0U, 1U, 2U, 0xA0U, 0x02U
+    };
+    assert(usb_bluetooth_l2cap_build_connection_response(
+               7U, 0x0041U, 0x0042U, 0U, 0U, output,
+               sizeof(output)) == (int)sizeof(expected_connection));
+    assert(memcmp(output, expected_connection,
+                  sizeof(expected_connection)) == 0);
+    assert(usb_bluetooth_l2cap_build_connection_response(
+               7U, 0x0041U, 0x0042U, 0U, 0U, output, 8U) == -90);
+    assert(usb_bluetooth_l2cap_build_connection_response(
+               7U, 0x003FU, 0x0042U, 0U, 0U, output,
+               sizeof(output)) == -22);
+
+    assert(usb_bluetooth_l2cap_build_configuration_response(
+               8U, 0x0042U, 0U, 0U, 672U, output,
+               sizeof(output)) == (int)sizeof(expected_configuration));
+    assert(memcmp(output, expected_configuration,
+                  sizeof(expected_configuration)) == 0);
+    assert(usb_bluetooth_l2cap_build_configuration_response(
+               8U, 0x0042U, 0U, 0U, 47U, output,
+               sizeof(output)) == -22);
+    assert(usb_bluetooth_l2cap_build_configuration_response(
+               8U, 0x0042U, 0U, 2U, 672U, output,
+               sizeof(output)) == 10);
+}
+
 static void test_l2cap_standard_signaling_builders(void)
 {
     uint8_t out[16] = {0};
@@ -1240,6 +1275,7 @@ int main(void)
     test_hci_command_credits_and_discovery_builders();
     test_hci_command_fault_requires_reset();
     test_l2cap_channel_lifecycle();
+    test_l2cap_response_builders();
     test_l2cap_standard_signaling_builders();
     test_l2cap_connection_response_dispatch();
     test_l2cap_acl_packet_builder();

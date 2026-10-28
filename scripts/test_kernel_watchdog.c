@@ -26,10 +26,11 @@ int main(void)
 
     kernel_watchdog_timer_tick(109U);
     assert(kernel_watchdog_status(first) == KERNEL_WATCHDOG_ACTIVE);
+    fake_ticks = 109U;
     assert(kernel_watchdog_kick(first));
-    kernel_watchdog_timer_tick(119U);
+    kernel_watchdog_timer_tick(118U);
     assert(kernel_watchdog_status(first) == KERNEL_WATCHDOG_ACTIVE);
-    kernel_watchdog_timer_tick(120U);
+    kernel_watchdog_timer_tick(119U);
     assert(kernel_watchdog_status(first) == KERNEL_WATCHDOG_EXPIRED);
     assert(!kernel_watchdog_kick(first));
     assert(!kernel_watchdog_kick(first + 0x100U));

@@ -194,6 +194,30 @@ int usb_bluetooth_hci_reset_complete(const uint8_t *packet, uint32_t length)
     return usb_bluetooth_hci_reset_status(packet, length) == 0;
 }
 
+/*
+ * Apply an HCI Reset Command Complete event to the transport state.
+ * Returns 1 for a newly observed success, -1 for a newly observed failure,
+ * and 0 for unrelated or duplicate events.
+ */
+int usb_bluetooth_update_reset_state(const uint8_t *packet, uint32_t length,
+                                     uint8_t *reset_complete,
+                                     uint8_t *reset_failed)
+{
+    if (reset_complete == NULL || reset_failed == NULL)
+        return 0;
+    int status = usb_bluetooth_hci_reset_status(packet, length);
+    if (status == 0 && *reset_complete == 0U) {
+        *reset_complete = 1U;
+        *reset_failed = 0U;
+        return 1;
+    }
+    if (status > 0 && *reset_complete == 0U && *reset_failed == 0U) {
+        *reset_failed = 1U;
+        return -1;
+    }
+    return 0;
+}
+
 /* ACL is available to consumers only after a successful HCI Reset. */
 int usb_bluetooth_transport_ready(int reset_complete, int reset_failed)
 {

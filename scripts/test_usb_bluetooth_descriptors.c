@@ -238,6 +238,37 @@ static void test_acl_queue_rejects_corrupt_stored_length(void)
     assert(queue.count == 1U);
 }
 
+static void test_reset_state_transitions_are_idempotent(void)
+{
+    const uint8_t success[] = {0x0EU, 0x04U, 0x01U,
+                               0x03U, 0x0CU, 0x00U};
+    const uint8_t failure[] = {0x0EU, 0x04U, 0x01U,
+                               0x03U, 0x0CU, 0x01U};
+    const uint8_t unrelated[] = {0x0EU, 0x04U, 0x01U,
+                                 0x01U, 0x10U, 0x00U};
+    uint8_t complete = 0U;
+    uint8_t failed = 0U;
+
+    assert(usb_bluetooth_update_reset_state(unrelated, sizeof(unrelated),
+                                             &complete, &failed) == 0);
+    assert(complete == 0U && failed == 0U);
+    assert(usb_bluetooth_update_reset_state(failure, sizeof(failure),
+                                             &complete, &failed) == -1);
+    assert(complete == 0U && failed == 1U);
+    assert(usb_bluetooth_update_reset_state(failure, sizeof(failure),
+                                             &complete, &failed) == 0);
+    assert(complete == 0U && failed == 1U);
+    assert(!usb_bluetooth_transport_ready(complete, failed));
+    assert(usb_bluetooth_update_reset_state(success, sizeof(success),
+                                             &complete, &failed) == 1);
+    assert(complete == 1U && failed == 0U);
+    assert(usb_bluetooth_update_reset_state(success, sizeof(success),
+                                             &complete, &failed) == 0);
+    assert(usb_bluetooth_transport_ready(complete, failed));
+    assert(usb_bluetooth_update_reset_state(success, sizeof(success),
+                                             NULL, &failed) == 0);
+}
+
 int main(void)
 {
     test_complete_hci_interface();
@@ -250,6 +281,7 @@ int main(void)
     test_acl_queue_preserves_messages_on_small_buffer();
     test_acl_queue_wraparound_and_invariants();
     test_transport_readiness_gate();
+    test_reset_state_transitions_are_idempotent();
     test_acl_queue_rejects_corrupt_stored_length();
     puts("USB Bluetooth descriptor tests passed");
     return 0;

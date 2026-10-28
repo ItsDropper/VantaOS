@@ -52,6 +52,10 @@ int usb_bluetooth_hci_reset_complete(const uint8_t *packet, uint32_t length);
 int usb_bluetooth_acl_packet_valid(const uint8_t *packet, uint32_t length);
 /* True only after a successful HCI Reset and before any reset failure. */
 int usb_bluetooth_transport_ready(int reset_complete, int reset_failed);
+/* Apply reset completion; returns 1 new success, -1 new failure, 0 otherwise. */
+int usb_bluetooth_update_reset_state(const uint8_t *packet, uint32_t length,
+                                     uint8_t *reset_complete,
+                                     uint8_t *reset_failed);
 void usb_bluetooth_acl_queue_reset(usb_bluetooth_acl_queue_t *queue);
 int usb_bluetooth_acl_queue_push(usb_bluetooth_acl_queue_t *queue,
                                  const uint8_t *packet, uint32_t length);

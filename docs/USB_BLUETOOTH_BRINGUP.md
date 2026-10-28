@@ -139,3 +139,8 @@ The polling loop now discards ACL completions until HCI Reset has succeeded, rat
 ## Unified binding teardown
 
 Bluetooth binding teardown is centralized so disconnect and a partially failed endpoint-start sequence clear the same state: port/interface/endpoints, counters, reset readiness, transmit-busy state, dropped-packet count, and the full ACL queue. Binding initializes counters and reset state explicitly before starting transfers. This prevents stale per-slot state from surviving a failed start and being mistaken for the next device binding.
+
+
+## Unit-tested reset state transitions
+
+HCI Reset Command Complete processing is factored into a pure state-transition helper. It distinguishes unrelated events, the first successful reset completion, and the first nonzero reset status; duplicate events do not emit duplicate markers. Tests exercise failure followed by success, duplicate failure, duplicate success, unrelated opcodes, null state pointers, and the resulting readiness gate.

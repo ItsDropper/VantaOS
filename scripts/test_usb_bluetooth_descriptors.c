@@ -1209,11 +1209,13 @@ static void test_l2cap_configuration_transaction(void)
                                                 0U, 672U) == 1);
     assert(usb_bluetooth_l2cap_channel_configure_begin(&table, cid, 11U) == 1);
     assert(usb_bluetooth_l2cap_channel_configure_response(&table, cid, 11U,
-                                                          0U, 1U, 672U) == -5);
-    assert(table.channels[1].state == 3U);
-    assert(usb_bluetooth_l2cap_channel_configure_response(&table, cid, 11U,
                                                           0U, 0U, 47U) == -22);
-    assert(table.channels[1].state == 3U);
+    assert(table.channels[1].state == 3U &&
+           table.channels[1].config_identifier == 11U);
+    assert(usb_bluetooth_l2cap_channel_configure_response(&table, cid, 11U,
+                                                          0U, 1U, 672U) == -5);
+    assert(table.channels[1].state == 3U &&
+           table.channels[1].config_identifier == 0U);
 }
 
 static void test_l2cap_acl_packet_builder(void)

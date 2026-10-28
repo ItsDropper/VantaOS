@@ -218,3 +218,10 @@ when the consumer buffer is too small, and clears the full buffer on reset or
 successful take. Callers must allocate separate state per live connection;
 the USB polling path does not yet create or manage L2CAP channels, so this
 primitive alone does not enable discovery or profiles.
+
+
+The reassembly API also validates its public state fields before arithmetic or
+buffer writes. Invalid lengths, impossible active/inactive combinations, a
+second first-fragment while a PDU is in progress, and continuation overruns
+are rejected without discarding the valid partial packet. State objects must
+be initialized with `usb_bluetooth_acl_reassembly_reset` before first use.

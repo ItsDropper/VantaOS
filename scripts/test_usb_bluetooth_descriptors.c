@@ -546,6 +546,16 @@ static void test_acl_fragment_reassembly(void)
     assert(usb_bluetooth_acl_reassembly_feed(&state, first,
                                              sizeof(first) - 1U) == -22);
     usb_bluetooth_acl_reassembly_reset(&state);
+    assert(usb_bluetooth_acl_reassembly_feed(&state, first, sizeof(first)) == 0);
+    assert(usb_bluetooth_acl_reassembly_feed(&state, first, sizeof(first)) == -16);
+    const uint8_t overrun[] = {0x01U, 0x10U, 0x04U, 0x00U,
+                               0x34U, 0x12U, 0x56U, 0x78U};
+    assert(usb_bluetooth_acl_reassembly_feed(&state, overrun, sizeof(overrun)) == -22);
+    assert(state.active == 1U && state.received_length == 7U);
+    state.received_length = state.expected_length + 1U;
+    assert(usb_bluetooth_acl_reassembly_feed(&state, continuation,
+                                             sizeof(continuation)) == -22);
+    usb_bluetooth_acl_reassembly_reset(&state);
     assert(state.active == 0U && state.complete == 0U);
     for (uint32_t i = 0U; i < USB_BLUETOOTH_ACL_MAX_PACKET; ++i)
         assert(state.packet[i] == 0U);

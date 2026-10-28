@@ -317,6 +317,14 @@ int usb_bluetooth_acl_reassembly_feed(usb_bluetooth_acl_reassembly_t *state,
         return -22;
     if (state->complete != 0U)
         return -16;
+    if (state->active > 1U || state->complete > 1U ||
+        state->expected_length > USB_BLUETOOTH_ACL_MAX_PACKET - 4U ||
+        state->received_length > state->expected_length ||
+        (state->active == 0U &&
+         (state->expected_length != 0U || state->received_length != 0U)) ||
+        (state->active != 0U &&
+         (state->handle == 0U || state->expected_length < 4U)))
+        return -22;
 
     usb_bluetooth_acl_view_t acl;
     if (!usb_bluetooth_acl_parse(packet, length, &acl) ||

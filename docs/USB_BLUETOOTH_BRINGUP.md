@@ -293,3 +293,13 @@ channel. A Pending result keeps the transaction alive; a rejected result frees
 the pending slot. This handler is a protocol primitive and is not yet wired
 into automatic ACL-to-L2CAP dispatch, and configuration response negotiation
 still requires its own transaction tracking.
+
+
+## Outbound ACL/L2CAP framing
+
+Added a bounded builder for wrapping L2CAP payloads in first-fragment HCI ACL
+packets. It validates the connection handle, channel identifier, 16-bit L2CAP
+length, source pointer, and destination capacity before writing headers. Host
+regression coverage parses the resulting packet back and verifies the handle,
+CID, payload, and invalid-input paths. The builder does not itself transmit
+the packet or establish a connection.

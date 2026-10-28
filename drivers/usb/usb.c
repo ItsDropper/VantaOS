@@ -105,7 +105,8 @@ static int usb_control(uint32_t slot, uint8_t request_type, uint8_t request,
 int usb_bluetooth_acl_send(uint32_t port, const uint8_t *packet,
                            uint32_t length)
 {
-    if (port == 0U || packet == 0 || length < 4U || length > USB_BLUETOOTH_ACL_MAX_PACKET ||
+    if (port == 0U || packet == 0 || length < 4U ||
+        length > USB_BLUETOOTH_ACL_MAX_PACKET ||
         !usb_bluetooth_acl_packet_valid(packet, length))
         return 0;
 
@@ -490,11 +491,11 @@ void usb_poll(void)
             if (reset_status == 0 && !bluetooth->reset_complete_observed) {
                 bluetooth->reset_complete_observed = 1U;
                 bluetooth->reset_failed_observed = 0U;
-                serial_write("VANTAOS_BLUETOOTH_HCI_RESET_COMPLETE\\n");
+                serial_write("VANTAOS_BLUETOOTH_HCI_RESET_COMPLETE\n");
             } else if (reset_status > 0 &&
                        !bluetooth->reset_complete_observed) {
                 bluetooth->reset_failed_observed = 1U;
-                serial_write("VANTAOS_BLUETOOTH_HCI_RESET_FAILED\\n");
+                serial_write("VANTAOS_BLUETOOTH_HCI_RESET_FAILED\n");
             }
         }
 
@@ -512,11 +513,11 @@ void usb_poll(void)
                 if (queued == 0) {
                     bluetooth->acl_packet_count++;
                     if (bluetooth->acl_packet_count == 1U)
-                        serial_write("VANTAOS_BLUETOOTH_ACL_PACKET_QUEUED\\n");
+                        serial_write("VANTAOS_BLUETOOTH_ACL_PACKET_QUEUED\n");
                 } else if (queued == -11) {
                     bluetooth_acl_dropped[slot]++;
                     if (bluetooth_acl_dropped[slot] == 1U)
-                        serial_write("VANTAOS_BLUETOOTH_ACL_QUEUE_FULL\\n");
+                        serial_write("VANTAOS_BLUETOOTH_ACL_QUEUE_FULL\n");
                 }
             }
             (void)xhci_start_bulk_in(slot, bluetooth->acl_in_endpoint);

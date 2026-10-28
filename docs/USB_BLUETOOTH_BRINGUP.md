@@ -391,3 +391,20 @@ The USB-facing `usb_bluetooth_l2cap_connect` API now starts an outbound L2CAP co
 The first application-facing data APIs are now present: `usb_bluetooth_l2cap_channel_status` reports a channel's lifecycle and negotiated CIDs/MTUs; `usb_bluetooth_l2cap_send` sends a bounded payload only on an open channel and respects the peer MTU; and `usb_bluetooth_l2cap_receive` returns queued payload bytes for a specific HCI handle and local CID. Incoming dynamic-CID payloads are routed only to matching open channels. The per-adapter receive queue holds four bounded payloads, preserves packets when the caller's buffer is too small, and drops new arrivals on overflow rather than overwriting unread data. Queued payloads are purged on handle disconnect, slot reset/detach, and setup deadline expiry. This is a raw L2CAP data path, not yet a user-facing Bluetooth device picker or profile implementation.
 
 The host regression suite now includes connection-attempt begin/match/finish/reset cases and connection-handle membership checks. The repository's combined status query currently reports no status entries, so these changes have not been confirmed by a CI run in this session.
+
+## Inbound L2CAP service policy
+
+VantaOS currently has no registered inbound L2CAP services. The USB polling path
+therefore validates inbound Connection Request signaling commands and explicitly
+returns the BR/EDR **PSM not supported** result (0x0002), with a zero destination
+CID. It does not accept arbitrary PSMs or imply that a peer connection is
+authenticated. Malformed requests (zero signaling identifier, incorrect
+command length, invalid PSM bit pattern, or non-dynamic source CID) are not
+answered as if they were valid requests.
+
+This rejection is deliberately conservative. Adding a service requires a
+registration/lifetime API and a profile-specific security policy; it must not
+be implemented by changing the default response to success. Pairing,
+authentication, encryption, SDP, HID, serial-port emulation, and audio profiles
+remain unsupported. Raw outbound L2CAP data channels are not equivalent to a
+secure, application-ready Bluetooth session.

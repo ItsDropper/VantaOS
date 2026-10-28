@@ -777,7 +777,9 @@ static void test_hci_command_fault_requires_reset(void)
     assert(usb_bluetooth_hci_command_event(&state, reset_complete,
                                            sizeof(reset_complete)) == 1);
     assert(state.outstanding == 0U && state.faulted == 0U);
-    assert(usb_bluetooth_hci_command_begin(&state, 0x1009U) == -11);
+    /* Reset Command Complete restored one command credit. */
+    assert(usb_bluetooth_hci_command_begin(&state, 0x1009U) == 0);
+    assert(state.outstanding == 1U && state.credits == 0U);
 }
 
 static void test_hci_command_credits_and_discovery_builders(void)

@@ -1156,6 +1156,18 @@ int usb_bluetooth_link_table_event(usb_bluetooth_link_table_t *table,
     return 0;
 }
 
+uint32_t usb_bluetooth_link_table_active_count(
+    const usb_bluetooth_link_table_t *table)
+{
+    if (table == NULL)
+        return 0U;
+    uint32_t count = 0U;
+    for (uint32_t i = 0U; i < USB_BLUETOOTH_LINK_MAX; ++i)
+        if (table->links[i].active != 0U)
+            ++count;
+    return count;
+}
+
 int usb_bluetooth_link_table_is_single_handle(
     const usb_bluetooth_link_table_t *table, uint16_t handle)
 {

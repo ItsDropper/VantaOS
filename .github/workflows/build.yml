@@ -109,14 +109,14 @@ jobs:
 
       - name: Test kernel watchdog state machine
         run: |
-          gcc -std=c11 -Wall -Wextra -Werror -Iscripts/test_stubs -Iinclude \\
+          gcc -std=c11 -Wall -Wextra -Werror -Iscripts/test_stubs -Iinclude \
             scripts/test_kernel_watchdog.c kernel/watchdog.c \\
             -o /tmp/vantaos-kernel-watchdog-test
           /tmp/vantaos-kernel-watchdog-test
 
       - name: Test timer math and wraparound
         run: |
-          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \\
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
             scripts/test_timer_math.c -o /tmp/vantaos-timer-math-test
           /tmp/vantaos-timer-math-test
 

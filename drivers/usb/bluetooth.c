@@ -269,7 +269,8 @@ int usb_bluetooth_l2cap_build_acl_packet(uint16_t handle, uint16_t cid,
         payload_length > 0xFFFFU - 4U || output == NULL ||
         (payload_length != 0U && payload == NULL))
         return -22;
-    uint32_t l2cap_length = payload_length + 4U;
+    /* L2CAP's length field counts payload bytes, excluding its 4-byte header. */
+    uint32_t l2cap_length = payload_length;
     uint32_t acl_length = l2cap_length + 4U;
     uint32_t total = acl_length + 4U;
     if (total > capacity)

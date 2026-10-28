@@ -935,7 +935,8 @@ static int l2cap_identifier_in_use(
     for (uint32_t i = 0U; i < USB_BLUETOOTH_L2CAP_CHANNEL_MAX; ++i) {
         const usb_bluetooth_l2cap_channel_t *c = &table->channels[i];
         if (c->active && (c->identifier == identifier ||
-                          c->config_identifier == identifier))
+                          c->config_identifier == identifier ||
+                          c->disconnect_identifier == identifier))
             return 1;
     }
     return 0;
@@ -1280,6 +1281,7 @@ int usb_bluetooth_l2cap_channel_configure_response(
             return -22;
         c->remote_mtu = remote_mtu;
         c->local_configured = 1U;
+        c->config_identifier = 0U;
         if (c->remote_configured != 0U) {
             c->state = 4U;
             c->deadline = 0U;
@@ -1353,6 +1355,79 @@ int usb_bluetooth_l2cap_configuration_response(
     }
     return usb_bluetooth_l2cap_channel_configure_response(
         table, local_cid, command[1], flags, result, remote_mtu);
+}
+
+int usb_bluetooth_l2cap_channel_disconnect_begin(
+    usb_bluetooth_l2cap_table_t *table, uint16_t local_cid,
+    uint8_t identifier)
+{
+    if (table == NULL || local_cid <
+            USB_BLUETOOTH_L2CAP_CID_DYNAMIC_MIN || identifier == 0U)
+        return -22;
+    if (l2cap_identifier_in_use(table, identifier))
+        return -16;
+    for (uint32_t i = 0U; i < USB_BLUETOOTH_L2CAP_CHANNEL_MAX; ++i) {
+        usb_bluetooth_l2cap_channel_t *channel = &table->channels[i];
+        if (!channel->active || channel->local_cid != local_cid)
+            continue;
+        if (channel->state != 4U ||
+            channel->remote_cid < USB_BLUETOOTH_L2CAP_CID_DYNAMIC_MIN)
+            return -16;
+        channel->state = 5U;
+        channel->disconnect_identifier = identifier;
+        return 1;
+    }
+    return -9;
+}
+
+int usb_bluetooth_l2cap_channel_disconnect_failed(
+    usb_bluetooth_l2cap_table_t *table, uint16_t local_cid,
+    uint8_t identifier)
+{
+    if (table == NULL || local_cid <
+            USB_BLUETOOTH_L2CAP_CID_DYNAMIC_MIN || identifier == 0U)
+        return -22;
+    for (uint32_t i = 0U; i < USB_BLUETOOTH_L2CAP_CHANNEL_MAX; ++i) {
+        usb_bluetooth_l2cap_channel_t *channel = &table->channels[i];
+        if (channel->active && channel->local_cid == local_cid) {
+            if (channel->state != 5U ||
+                channel->disconnect_identifier != identifier)
+                return -16;
+            channel->state = 4U;
+            channel->disconnect_identifier = 0U;
+            return 1;
+        }
+    }
+    return -9;
+}
+
+int usb_bluetooth_l2cap_disconnection_response(
+    usb_bluetooth_l2cap_table_t *table, const uint8_t *command,
+    uint32_t length)
+{
+    if (table == NULL || command == NULL || length != 8U ||
+        command[0] != 0x07U || command[1] == 0U ||
+        command[2] != 4U || command[3] != 0U)
+        return -22;
+    uint16_t remote_cid = (uint16_t)command[4] |
+                          ((uint16_t)command[5] << 8);
+    uint16_t local_cid = (uint16_t)command[6] |
+                         ((uint16_t)command[7] << 8);
+    if (remote_cid < USB_BLUETOOTH_L2CAP_CID_DYNAMIC_MIN ||
+        local_cid < USB_BLUETOOTH_L2CAP_CID_DYNAMIC_MIN)
+        return -22;
+    for (uint32_t i = 0U; i < USB_BLUETOOTH_L2CAP_CHANNEL_MAX; ++i) {
+        usb_bluetooth_l2cap_channel_t *channel = &table->channels[i];
+        if (channel->active && channel->local_cid == local_cid) {
+            if (channel->state != 5U ||
+                channel->disconnect_identifier != command[1] ||
+                channel->remote_cid != remote_cid)
+                return -16;
+            *channel = (usb_bluetooth_l2cap_channel_t){0};
+            return 1;
+        }
+    }
+    return -9;
 }
 
 int usb_bluetooth_l2cap_channel_close(usb_bluetooth_l2cap_table_t *table,

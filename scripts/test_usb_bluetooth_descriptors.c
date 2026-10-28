@@ -778,6 +778,27 @@ static void test_hci_command_credits_and_discovery_builders(void)
     assert(usb_bluetooth_hci_build_read_bd_addr(out, 2U) == -90);
 }
 
+static void test_l2cap_identifier_collision_guards(void)
+{
+    usb_bluetooth_l2cap_table_t table = {0};
+    uint16_t cid_a = 0U, cid_b = 0U;
+    uint8_t id_a = 0U, id_b = 0U;
+    usb_bluetooth_l2cap_table_reset(&table);
+    assert(usb_bluetooth_l2cap_channel_begin(&table, 1U, 672U, 0U,
+                                             &cid_a, &id_a) == 0);
+    assert(usb_bluetooth_l2cap_channel_begin(&table, 1U, 672U, 0U,
+                                             &cid_b, &id_b) == 0);
+    assert(id_a != id_b);
+    assert(usb_bluetooth_l2cap_channel_response(&table, id_a, 0x0041U,
+                                                0U, 672U) == 1);
+    assert(usb_bluetooth_l2cap_channel_response(&table, id_b, 0x0042U,
+                                                0U, 672U) == 1);
+    assert(usb_bluetooth_l2cap_channel_configure_begin(&table, cid_a,
+                                                       id_b) == -16);
+    assert(usb_bluetooth_l2cap_channel_configure_begin(&table, cid_a, 77U) == 1);
+    assert(usb_bluetooth_l2cap_channel_configure_begin(&table, cid_b, 77U) == -16);
+}
+
 static void test_l2cap_configuration_transaction(void)
 {
     usb_bluetooth_l2cap_table_t table = {0};
@@ -949,6 +970,7 @@ int main(void)
     test_l2cap_connection_response_dispatch();
     test_l2cap_acl_packet_builder();
     test_l2cap_configuration_transaction();
+    test_l2cap_identifier_collision_guards();
     test_complete_hci_interface();
     test_incomplete_interface_is_not_claimed();
     test_malformed_lengths_are_rejected();

@@ -658,7 +658,16 @@ void usb_poll(void)
                  */
                 if (bluetooth_event_buffer[0] == 0x05U &&
                     event_length == 6U && bluetooth_event_buffer[2] == 0U &&
-                    link_transition > 0) {
+                    link_transition > 0 &&
+                    usb_bluetooth_link_table_active_count(
+                        &bluetooth_link_tables[slot]) == 0U) {
+                    /*
+                     * L2CAP channels are not yet keyed by link handle. Do not
+                     * erase the controller-wide channel table or other peers'
+                     * queued ACL PDUs when just one of several links closes.
+                     * Once the last link is gone, no channel transaction can
+                     * still be valid, so clear both stores.
+                     */
                     usb_bluetooth_l2cap_table_reset(
                         &bluetooth->l2cap_channels);
                     usb_bluetooth_acl_queue_reset(

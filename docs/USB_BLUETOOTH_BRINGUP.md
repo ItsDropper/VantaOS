@@ -282,3 +282,14 @@ GATT, or application profiles. Inquiry and information command builders are
 not evidence that discovery has been run against a real controller. The USB
 polling layer still needs a full asynchronous command queue and deadline clock,
 and the L2CAP channel primitives are not yet a complete signaling dispatcher.
+
+
+## L2CAP Connection Response transaction validation
+
+A new host-testable response handler consumes a complete validated Connection
+Response command and checks its command identifier, echoed local CID, response
+result/status, remote CID range, and MTU floor before advancing the pending
+channel. A Pending result keeps the transaction alive; a rejected result frees
+the pending slot. This handler is a protocol primitive and is not yet wired
+into automatic ACL-to-L2CAP dispatch, and configuration response negotiation
+still requires its own transaction tracking.

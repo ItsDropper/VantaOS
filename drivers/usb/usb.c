@@ -32,6 +32,7 @@
 #define USB_HID_SET_PROTOCOL 11U
 #define USB_MAX_CONFIGURATION_SIZE 512U
 #define USB_BLUETOOTH_CONNECTION_TIMEOUT_TICKS 2000U
+#define USB_BLUETOOTH_HCI_COMMAND_TIMEOUT_TICKS 200U
 #define USB_BLUETOOTH_CANCEL_RETRY_TICKS 100U
 
 typedef struct {
@@ -253,6 +254,14 @@ int usb_bluetooth_hci_command(uint32_t port, uint16_t opcode,
                            command_buffer, (uint16_t)encoded);
     for (uint32_t i = 0U; i < (uint32_t)encoded; ++i)
         command_buffer[i] = 0U;
+    if (sent && usb_bluetooth_hci_command_watchdog_arm(
+                    &bluetooth_slots[slot].command_state,
+                    timer_get_ticks(), USB_BLUETOOTH_HCI_COMMAND_TIMEOUT_TICKS) != 0) {
+        usb_bluetooth_hci_command_state_reset(
+            &bluetooth_slots[slot].command_state);
+        bluetooth_slots[slot].command_state.faulted = 1U;
+        sent = 0;
+    }
     if (!sent) {
         /*
          * A failed control transfer may have reached the controller even
@@ -1500,6 +1509,9 @@ void usb_poll(void)
             continue;
 
         uint32_t now = timer_get_ticks();
+        if (usb_bluetooth_hci_command_watchdog_expire(
+                &bluetooth->command_state, now) > 0)
+            serial_write("VANTAOS_USB_BLUETOOTH_HCI_WATCHDOG_TIMEOUT\n");
         if (bluetooth->connection_attempt.active != 0U &&
             bluetooth->connection_deadline != 0U &&
             (int32_t)(now - bluetooth->connection_deadline) >= 0) {

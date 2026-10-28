@@ -233,8 +233,8 @@ int usb_bluetooth_cancel_connection(uint32_t port,
                                     const uint8_t address[6]);
 int usb_bluetooth_disconnect(uint32_t port, uint16_t handle, uint8_t reason);
 /* Begin an outbound classic L2CAP channel on an active HCI handle.
- * deadline is an owner-supplied monotonic tick value; no implicit clock units
- * are assumed. Return 1 only when the initial signaling ACL packet is sent.
+ * deadline is an absolute timer_get_ticks() value; zero disables expiry.
+ * Return 1 only when the initial signaling ACL packet is sent.
  */
 int usb_bluetooth_l2cap_connect(uint32_t port, uint16_t handle, uint16_t psm,
                                 uint16_t local_mtu, uint32_t deadline,

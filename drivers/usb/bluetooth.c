@@ -9,6 +9,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 #define USB_DESC_INTERFACE 4U
 #define USB_DESC_ENDPOINT 5U

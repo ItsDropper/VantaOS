@@ -597,7 +597,7 @@ static void test_l2cap_signaling_iteration_and_build(void)
 {
     const uint8_t commands[] = {
         0x02U, 0x01U, 0x02U, 0x00U, 0x34U, 0x12U,
-        0x03U, 0x02U, 0x00U, 0x00U
+        0x09U, 0x02U, 0x00U, 0x00U
     };
     const uint8_t request_parameters[] = {0x40U, 0x00U, 0x01U, 0x00U};
     uint8_t output[16] = {0};
@@ -610,7 +610,7 @@ static void test_l2cap_signaling_iteration_and_build(void)
     assert(offset == 6U);
     assert(usb_bluetooth_l2cap_signaling_next(commands, sizeof(commands),
                                                &offset, &command) == 1);
-    assert(command.code == 3U && command.identifier == 2U &&
+    assert(command.code == 9U && command.identifier == 2U &&
            command.payload_length == 0U);
     assert(usb_bluetooth_l2cap_signaling_next(commands, sizeof(commands),
                                                &offset, &command) == 0);
@@ -693,7 +693,7 @@ static void test_l2cap_signaling_command_boundaries(void)
 {
     const uint8_t two_commands[] = {
         0x02U, 0x01U, 0x02U, 0x00U, 0x34U, 0x12U,
-        0x03U, 0x02U, 0x00U, 0x00U
+        0x09U, 0x02U, 0x00U, 0x00U
     };
     const uint8_t truncated_header[] = {0x02U, 0x01U, 0x02U};
     const uint8_t truncated_payload[] = {0x02U, 0x01U, 0x02U, 0x00U, 0x34U};
@@ -710,6 +710,14 @@ static void test_l2cap_signaling_command_boundaries(void)
     assert(!usb_bluetooth_l2cap_signaling_valid(zero_code, sizeof(zero_code)));
     assert(!usb_bluetooth_l2cap_signaling_valid(zero_identifier,
                                                 sizeof(zero_identifier)));
+    const uint8_t short_connection_request[] = {0x02U, 0x01U, 0x03U, 0x00U,
+                                                0x40U, 0x00U, 0x01U};
+    const uint8_t short_connection_response[] = {0x03U, 0x01U, 0x04U, 0x00U,
+                                                 0U, 0U, 0U, 0U};
+    assert(!usb_bluetooth_l2cap_signaling_valid(short_connection_request,
+                                                sizeof(short_connection_request)));
+    assert(!usb_bluetooth_l2cap_signaling_valid(short_connection_response,
+                                                sizeof(short_connection_response)));
     assert(!usb_bluetooth_l2cap_signaling_valid(NULL, 4U));
     assert(!usb_bluetooth_l2cap_signaling_valid(empty, 0U));
 }

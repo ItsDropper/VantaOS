@@ -166,6 +166,20 @@ typedef struct {
     uint8_t has_rssi;
 } usb_bluetooth_inquiry_result_t;
 
+#define USB_BLUETOOTH_DISCOVERY_MAX 16U
+typedef struct {
+    uint32_t count;
+    usb_bluetooth_inquiry_result_t entries[USB_BLUETOOTH_DISCOVERY_MAX];
+} usb_bluetooth_discovery_table_t;
+
+/* Bounded, duplicate-coalescing discovery results for one adapter. */
+void usb_bluetooth_discovery_reset(usb_bluetooth_discovery_table_t *table);
+int usb_bluetooth_discovery_record(usb_bluetooth_discovery_table_t *table,
+                                   const usb_bluetooth_inquiry_result_t *result);
+int usb_bluetooth_discovery_get(
+    const usb_bluetooth_discovery_table_t *table, uint32_t index,
+    usb_bluetooth_inquiry_result_t *result);
+
 typedef struct {
     uint8_t interface_number;
     uint8_t event_endpoint;

@@ -407,11 +407,11 @@ static void command_help(void)
     write_text("  pwd                  Show the current VFS location\n");
     write_text("  ls [path]            List a VFS directory\n");
     write_text("  cat <path>           Print a VFS file\n");
-    write_text("  mkdir <path>         Create a directory\\n");
-    write_text("  touch <path>         Create an empty file (does not modify existing files)\\n");
-    write_text("  rm <file>            Remove a file (directories are refused)\\n");
-    write_text("  cp <src> <dst>       Copy a file without overwriting the destination\\n");
-    write_text("  mv <src> <dst>       Rename/move a file or directory without overwriting\\n");
+    write_text("  mkdir <path>         Create a directory\n");
+    write_text("  touch <path>         Create an empty file (does not modify existing files)\n");
+    write_text("  rm <file>            Remove a file (directories are refused)\n");
+    write_text("  cp <src> <dst>       Copy a file without overwriting the destination\n");
+    write_text("  mv <src> <dst>       Rename/move a file or directory without overwriting\n");
     write_text("  echo <text>          Print text\n");
     write_text("  exec <elf> [args...] Run a user ELF and wait for it\n");
     write_text("  curl <URL>           Fetch an HTTP URL and print its body\n");

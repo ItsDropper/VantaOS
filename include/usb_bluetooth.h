@@ -239,6 +239,11 @@ int usb_bluetooth_l2cap_build_disconnection_request(uint8_t identifier,
                                                      uint16_t local_cid,
                                                      uint8_t *output,
                                                      uint32_t capacity);
+/* Dispatch a validated signaling list to supported channel responses.
+ * Returns number of recognized response commands or a negative errno. */
+int usb_bluetooth_l2cap_dispatch_responses(
+    usb_bluetooth_l2cap_table_t *table, const uint8_t *payload,
+    uint32_t length);
 /* Validate a complete L2CAP signaling command list on CID 0x0001. */
 int usb_bluetooth_l2cap_signaling_valid(const uint8_t *payload,
                                         uint32_t length);

@@ -309,7 +309,9 @@ int ata_read_sectors(
     if (!available || count == 0 || !buffer)
         return 0;
 
-    if (lba > 0x0FFFFFFFU)
+    /* Reject a request whose final sector would wrap past LBA28. */
+    if (lba > 0x0FFFFFFFU ||
+        (uint32_t)count - 1U > 0x0FFFFFFFU - lba)
         return 0;
 
     uint8_t* destination = (uint8_t*)buffer;
@@ -325,6 +327,8 @@ int ata_read_sectors(
                    ((lba >> 24) & 0x0F)));
 
     ata_wait_400ns(&active_channel);
+    if (!ata_wait_not_busy(&active_channel))
+        return 0;
 
     outb(active_channel.base + 2, count);
     outb(active_channel.base + 3, (uint8_t)lba);
@@ -378,6 +382,8 @@ int ata_write_sectors(uint32_t lba, uint8_t count, const void* buffer)
                    0x40U |
                    ((lba >> 24) & 0x0FU)));
     ata_wait_400ns(&active_channel);
+    if (!ata_wait_not_busy(&active_channel))
+        return 0;
 
     outb(active_channel.base + 2, count);
     outb(active_channel.base + 3, (uint8_t)lba);

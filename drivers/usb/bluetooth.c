@@ -468,6 +468,99 @@ int usb_bluetooth_l2cap_signaling_valid(const uint8_t *payload,
     return offset == length;
 }
 
+void usb_bluetooth_link_table_reset(usb_bluetooth_link_table_t *table)
+{
+    if (table == NULL)
+        return;
+    for (uint32_t i = 0U; i < USB_BLUETOOTH_LINK_MAX; ++i) {
+        table->links[i].active = 0U;
+        table->links[i].handle = 0U;
+        usb_bluetooth_acl_reassembly_reset(&table->links[i].reassembly);
+    }
+}
+
+int usb_bluetooth_link_table_event(usb_bluetooth_link_table_t *table,
+                                   const uint8_t *event, uint32_t length)
+{
+    if (table == NULL || !usb_bluetooth_hci_event_valid(event, length))
+        return -22;
+    if (event[0] == 0x03U) {
+        if (length != 13U || event[1] != 11U)
+            return -22;
+        if (event[2] != 0U)
+            return -5;
+        uint16_t handle = (uint16_t)event[3] |
+                          ((uint16_t)(event[4] & 0x0FU) << 8);
+        if (handle == 0U || (event[4] & 0xF0U) != 0U)
+            return -22;
+        uint32_t free_index = USB_BLUETOOTH_LINK_MAX;
+        for (uint32_t i = 0U; i < USB_BLUETOOTH_LINK_MAX; ++i) {
+            if (table->links[i].active && table->links[i].handle == handle)
+                return -17;
+            if (!table->links[i].active && free_index == USB_BLUETOOTH_LINK_MAX)
+                free_index = i;
+        }
+        if (free_index == USB_BLUETOOTH_LINK_MAX)
+            return -28;
+        table->links[free_index].active = 1U;
+        table->links[free_index].handle = handle;
+        usb_bluetooth_acl_reassembly_reset(
+            &table->links[free_index].reassembly);
+        return 1;
+    }
+    if (event[0] == 0x05U) {
+        if (length != 6U || event[1] != 4U)
+            return -22;
+        if (event[2] != 0U)
+            return -5;
+        uint16_t handle = (uint16_t)event[3] |
+                          ((uint16_t)(event[4] & 0x0FU) << 8);
+        if (handle == 0U || (event[4] & 0xF0U) != 0U)
+            return -22;
+        for (uint32_t i = 0U; i < USB_BLUETOOTH_LINK_MAX; ++i) {
+            if (table->links[i].active && table->links[i].handle == handle) {
+                table->links[i].active = 0U;
+                table->links[i].handle = 0U;
+                usb_bluetooth_acl_reassembly_reset(
+                    &table->links[i].reassembly);
+                return 1;
+            }
+        }
+        return -9;
+    }
+    return 0;
+}
+
+int usb_bluetooth_link_table_acl_feed(usb_bluetooth_link_table_t *table,
+                                      const uint8_t *packet, uint32_t length)
+{
+    if (table == NULL)
+        return -22;
+    usb_bluetooth_acl_view_t acl;
+    if (!usb_bluetooth_acl_parse(packet, length, &acl))
+        return -22;
+    for (uint32_t i = 0U; i < USB_BLUETOOTH_LINK_MAX; ++i) {
+        if (table->links[i].active && table->links[i].handle == acl.handle)
+            return usb_bluetooth_acl_reassembly_feed(
+                &table->links[i].reassembly, packet, length);
+    }
+    return -9;
+}
+
+int usb_bluetooth_link_table_acl_take(usb_bluetooth_link_table_t *table,
+                                      uint16_t handle, uint8_t *packet,
+                                      uint32_t capacity)
+{
+    if (table == NULL || handle == 0U || packet == NULL || capacity == 0U)
+        return -22;
+    for (uint32_t i = 0U; i < USB_BLUETOOTH_LINK_MAX; ++i) {
+        if (table->links[i].active && table->links[i].handle == handle)
+            return usb_bluetooth_acl_reassembly_take(
+                &table->links[i].reassembly, packet, capacity);
+    }
+    return -9;
+}
+
 /* ACL packet header: LE16 handle/flags followed by an LE16 payload length. */
 int usb_bluetooth_acl_packet_valid(const uint8_t *packet, uint32_t length)
 {

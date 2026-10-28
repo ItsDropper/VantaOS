@@ -64,6 +64,17 @@ typedef struct {
     uint32_t received_length;
     uint8_t packet[USB_BLUETOOTH_ACL_MAX_PACKET];
 } usb_bluetooth_acl_reassembly_t;
+#define USB_BLUETOOTH_LINK_MAX 8U
+
+typedef struct {
+    uint8_t active;
+    uint16_t handle;
+    usb_bluetooth_acl_reassembly_t reassembly;
+} usb_bluetooth_link_t;
+
+typedef struct {
+    usb_bluetooth_link_t links[USB_BLUETOOTH_LINK_MAX];
+} usb_bluetooth_link_table_t;
 
 typedef struct {
     uint8_t interface_number;
@@ -86,6 +97,16 @@ int usb_bluetooth_find_hci_interface(const uint8_t *configuration,
                                      uint16_t length,
                                      usb_bluetooth_hci_candidate_t *candidate);
 
+/* Track legacy BR/EDR Connection Complete and Disconnection Complete events.
+ * Returns 1 on link state change, 0 for unrelated event, or negative errno. */
+void usb_bluetooth_link_table_reset(usb_bluetooth_link_table_t *table);
+int usb_bluetooth_link_table_event(usb_bluetooth_link_table_t *table,
+                                   const uint8_t *event, uint32_t length);
+int usb_bluetooth_link_table_acl_feed(usb_bluetooth_link_table_t *table,
+                                      const uint8_t *packet, uint32_t length);
+int usb_bluetooth_link_table_acl_take(usb_bluetooth_link_table_t *table,
+                                      uint16_t handle, uint8_t *packet,
+                                      uint32_t capacity);
 /* Parse one complete HCI ACL packet without copying its payload. */
 int usb_bluetooth_acl_parse(const uint8_t *packet, uint32_t length,
                             usb_bluetooth_acl_view_t *view);

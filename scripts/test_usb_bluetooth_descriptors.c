@@ -506,6 +506,43 @@ static void test_acl_and_l2cap_views(void)
     assert(acl.payload == NULL && acl.payload_length == 0U);
 }
 
+static void test_hci_link_lifecycle_and_acl_routing(void)
+{
+    const uint8_t connected[] = {
+        0x03U, 0x0BU, 0x00U, 0x01U, 0x00U,
+        0x01U, 0x02U, 0x03U, 0x04U, 0x05U, 0x06U, 0x01U, 0x00U
+    };
+    const uint8_t disconnected[] = {0x05U, 0x04U, 0x00U, 0x01U, 0x00U, 0x13U};
+    const uint8_t first[] = {0x01U, 0x20U, 0x07U, 0x00U,
+                             0x06U, 0x00U, 0x01U, 0x00U,
+                             0x02U, 0x01U, 0x02U};
+    const uint8_t continuation[] = {0x01U, 0x10U, 0x03U, 0x00U,
+                                    0x34U, 0x12U, 0x56U};
+    usb_bluetooth_link_table_t table = {0};
+    uint8_t output[USB_BLUETOOTH_ACL_MAX_PACKET] = {0};
+    usb_bluetooth_link_table_reset(&table);
+    assert(usb_bluetooth_link_table_event(&table, connected,
+                                           sizeof(connected)) == 1);
+    assert(usb_bluetooth_link_table_event(&table, connected,
+                                           sizeof(connected)) == -17);
+    assert(usb_bluetooth_link_table_acl_feed(&table, first, sizeof(first)) == 0);
+    assert(usb_bluetooth_link_table_acl_feed(&table, continuation,
+                                              sizeof(continuation)) == 1);
+    assert(usb_bluetooth_link_table_acl_take(&table, 1U, output, 8U) == -90);
+    assert(usb_bluetooth_link_table_acl_take(&table, 1U, output,
+                                              sizeof(output)) == 14);
+    assert(usb_bluetooth_link_table_event(&table, disconnected,
+                                           sizeof(disconnected)) == 1);
+    assert(usb_bluetooth_link_table_acl_feed(&table, first, sizeof(first)) == -9);
+    assert(usb_bluetooth_link_table_acl_take(&table, 1U, output,
+                                              sizeof(output)) == -9);
+    assert(usb_bluetooth_link_table_event(&table, disconnected,
+                                           sizeof(disconnected)) == -9);
+    usb_bluetooth_link_table_reset(&table);
+    for (uint32_t i = 0U; i < USB_BLUETOOTH_LINK_MAX; ++i)
+        assert(table.links[i].active == 0U && table.links[i].handle == 0U);
+}
+
 static void test_l2cap_signaling_iteration_and_build(void)
 {
     const uint8_t commands[] = {
@@ -645,6 +682,7 @@ int main(void)
     test_hci_event_queue_integrity();
     test_acl_and_l2cap_views();
     test_l2cap_signaling_command_boundaries();
+    test_hci_link_lifecycle_and_acl_routing();
     test_l2cap_signaling_iteration_and_build();
     test_acl_fragment_reassembly();
     test_acl_queue_rejects_corrupt_stored_length();

@@ -235,3 +235,13 @@ identifiers. The iterator advances its offset only on a valid command and
 distinguishes end-of-list from malformed input. These are safe framing tools;
 they do not yet constitute a live L2CAP connection/configuration state machine
 or automatically transmit signaling commands.
+
+
+## HCI link lifecycle tracking
+
+A bounded eight-entry BR/EDR link table now tracks successful legacy HCI
+Connection Complete and Disconnection Complete events. It rejects duplicate
+handles, handles invalid status/length fields, routes ACL fragments by handle,
+and clears a link's reassembly buffer on disconnect. This is a reusable
+owner-CPU primitive, not yet wired into the USB poll loop; LE Meta connection
+events and multi-role connection management remain separate work.

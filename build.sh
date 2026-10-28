@@ -43,6 +43,14 @@ gcc -m64 -mcmodel=large -ffreestanding -fno-pie -fno-stack-protector \
 ld -m elf_x86_64 -static -nostdlib -Ttext-segment=0x8000000000 \
     -e _start -o /tmp/vantaos-notes.elf \
     /tmp/vantaos-terminal-crt0.o /tmp/vantaos-notes.o
+
+echo "==> Building the ring-3 Calculator application ELF..."
+gcc -m64 -mcmodel=large -ffreestanding -fno-pie -fno-stack-protector \
+    -mno-red-zone -fno-builtin -nostdlib -Wall -Wextra -Werror \
+    -Iuserspace/include -Iinclude -c userspace/apps/calculator.c -o /tmp/vantaos-calculator.o
+ld -m elf_x86_64 -static -nostdlib -Ttext-segment=0x8000000000 \
+    -e _start -o /tmp/vantaos-calculator.elf \
+    /tmp/vantaos-terminal-crt0.o /tmp/vantaos-calculator.o
 echo "==> Building the ring-3 Explorer end-to-end test ELF..."
 gcc -m64 -mcmodel=large -ffreestanding -fno-pie -fno-stack-protector \
     -mno-red-zone -fno-builtin -nostdlib -Wall -Wextra -Werror \
@@ -55,6 +63,7 @@ test -s /tmp/vantaos-terminal.elf
 test -s /tmp/vantaos-settings.elf
 test -s /tmp/vantaos-explorer.elf
 test -s /tmp/vantaos-notes.elf
+test -s /tmp/vantaos-calculator.elf
 test -s /tmp/vantaos-explorer-e2e.elf
 
 echo "==> Preparing ISO..."
@@ -103,6 +112,8 @@ if command -v mkfs.fat >/dev/null 2>&1; then
         echo "    Installed /EXPLORER.ELF (static ring-3 File Explorer application)"
         mcopy -o -i vantaos.img /tmp/vantaos-notes.elf ::/SYSTEM/NOTES.ELF >/dev/null
         echo "    Installed /SYSTEM/NOTES.ELF (static ring-3 Notes editor)"
+        mcopy -o -i vantaos.img /tmp/vantaos-calculator.elf ::/SYSTEM/CALCULATOR.ELF >/dev/null
+        echo "    Installed /SYSTEM/CALCULATOR.ELF (static ring-3 Calculator)"
         mcopy -o -i vantaos.img /tmp/vantaos-explorer-e2e.elf ::/EXPLORER-E2E.ELF >/dev/null
         echo "    Installed /EXPLORER-E2E.ELF (automated ring-3 Explorer end-to-end tests)"
 

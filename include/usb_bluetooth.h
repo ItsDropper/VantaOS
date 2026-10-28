@@ -241,6 +241,12 @@ int usb_bluetooth_l2cap_build_configuration_request(uint8_t identifier,
                                                      uint16_t remote_cid,
                                                      uint8_t *output,
                                                      uint32_t capacity);
+int usb_bluetooth_l2cap_build_connection_response(
+    uint8_t identifier, uint16_t destination_cid, uint16_t source_cid,
+    uint16_t result, uint16_t status, uint8_t *output, uint32_t capacity);
+int usb_bluetooth_l2cap_build_configuration_response(
+    uint8_t identifier, uint16_t source_cid, uint16_t flags,
+    uint16_t result, uint16_t mtu, uint8_t *output, uint32_t capacity);
 int usb_bluetooth_l2cap_build_disconnection_request(uint8_t identifier,
                                                      uint16_t remote_cid,
                                                      uint16_t local_cid,

@@ -826,6 +826,45 @@ int usb_bluetooth_hci_build_inquiry(uint8_t *out, uint32_t capacity,
                             out, capacity);
 }
 
+int usb_bluetooth_hci_build_create_connection(
+    const uint8_t address[6], uint16_t packet_type,
+    uint8_t page_scan_repetition_mode, uint16_t clock_offset,
+    uint8_t allow_role_switch, uint8_t *out, uint32_t capacity)
+{
+    if (address == NULL || out == NULL || packet_type == 0U ||
+        page_scan_repetition_mode > 2U || clock_offset > 0x7FFFU ||
+        allow_role_switch > 1U)
+        return -22;
+    uint8_t address_nonzero = 0U;
+    for (uint32_t i = 0U; i < 6U; ++i)
+        address_nonzero |= address[i];
+    if (address_nonzero == 0U)
+        return -22;
+
+    const uint8_t parameters[13] = {
+        address[0], address[1], address[2],
+        address[3], address[4], address[5],
+        (uint8_t)packet_type, (uint8_t)(packet_type >> 8),
+        page_scan_repetition_mode, 0U,
+        (uint8_t)clock_offset, (uint8_t)(clock_offset >> 8),
+        allow_role_switch
+    };
+    return hci_build_simple(0x0405U, sizeof(parameters), parameters,
+                            out, capacity);
+}
+
+int usb_bluetooth_hci_build_disconnect(uint16_t handle, uint8_t reason,
+                                       uint8_t *out, uint32_t capacity)
+{
+    if (handle == 0U || handle > 0x0EFFU || reason == 0U || out == NULL)
+        return -22;
+    const uint8_t parameters[3] = {
+        (uint8_t)handle, (uint8_t)(handle >> 8), reason
+    };
+    return hci_build_simple(0x0406U, sizeof(parameters), parameters,
+                            out, capacity);
+}
+
 void usb_bluetooth_l2cap_table_reset(usb_bluetooth_l2cap_table_t *table)
 {
     if (table != NULL)

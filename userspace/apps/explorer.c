@@ -1143,6 +1143,29 @@ static void dispatch_context_action(unsigned int item)
     context_menu = CONTEXT_NONE;
 }
 
+static long launch_notes_for_path(const char *path)
+{
+#if defined(VANTAOS_EXPLORER_E2E_TEST)
+    const char *program = "/NOTES-E2E.ELF";
+#else
+    const char *program = "/SYSTEM/NOTES.ELF";
+#endif
+    const char *argv[2] = { program, path };
+    return vanta_spawn(program, argv, 2U);
+}
+
+static long confirm_open_with(void)
+{
+    if (!open_with_active || !open_with_notes_selected)
+    {
+        open_with_active = 0;
+        return -1;
+    }
+    long child = launch_notes_for_path(open_with_path);
+    open_with_active = 0;
+    return child;
+}
+
 static void open_selected(void)
 {
     size_t index = selected_entry;
@@ -1188,8 +1211,7 @@ static void open_selected(void)
     if (ends_with_ci(path, ".TXT") || ends_with_ci(path, ".MD") ||
         ends_with_ci(path, ".LOG") || ends_with_ci(path, ".CFG"))
     {
-        const char* argv[2] = { "/SYSTEM/NOTES.ELF", path };
-        long child = vanta_spawn("/SYSTEM/NOTES.ELF", argv, 2U);
+        long child = launch_notes_for_path(path);
         if (child < 0)
         {
             set_status("Could not open text editor", COLOR_ERROR);
@@ -1649,17 +1671,6 @@ static void explorer_e2e_run(void)
                                    text_length(payload)));
     EXPLORER_E2E_REQUIRE(vanta_close((int)descriptor) == 0);
 
-    /* Run the actual Notes loader as a child with the selected path in argv[1]. */
-    {
-        const char* notes_argv[2] = { "/NOTES-E2E.ELF", path };
-        long notes_child = vanta_spawn("/NOTES-E2E.ELF", notes_argv, 2U);
-        int32_t notes_exit_status = -1;
-        EXPLORER_E2E_REQUIRE(notes_child >= 0);
-        EXPLORER_E2E_REQUIRE(vanta_waitpid((int)notes_child,
-                                            &notes_exit_status) >= 0);
-        EXPLORER_E2E_REQUIRE(notes_exit_status == 0);
-    }
-
     EXPLORER_E2E_REQUIRE(explorer_e2e_create_through_dialog("Nested", 1));
     copy_text(current_path, sizeof(current_path), "/EXPLORER-E2E/Source/Nested");
     EXPLORER_E2E_REQUIRE(load_directory());
@@ -1696,7 +1707,12 @@ static void explorer_e2e_run(void)
     EXPLORER_E2E_REQUIRE(open_with_active);
     EXPLORER_E2E_REQUIRE(text_equals_ci(
         open_with_path, "/EXPLORER-E2E/Source/note.txt"));
-    open_with_active = 0;
+    long notes_child = confirm_open_with();
+    int32_t notes_exit_status = -1;
+    EXPLORER_E2E_REQUIRE(notes_child >= 0);
+    EXPLORER_E2E_REQUIRE(vanta_waitpid((int)notes_child,
+                                        &notes_exit_status) >= 0);
+    EXPLORER_E2E_REQUIRE(notes_exit_status == 0);
 
     /* Exercise Cut/Move and verify source removal plus destination contents. */
     copy_text(current_path, sizeof(current_path), "/EXPLORER-E2E/Source");
@@ -1838,14 +1854,9 @@ int main(int argc, char** argv)
                     open_with_active = 0;
                 else if (key == 10U || key == 13U)
                 {
-                    if (open_with_notes_selected)
-                    {
-                        const char* argv[2] = { "/SYSTEM/NOTES.ELF", open_with_path };
-                        long child = vanta_spawn("/SYSTEM/NOTES.ELF", argv, 2U);
-                        set_status(child < 0 ? "Could not open file in Notes" :
-                                   "Opened file in Notes", child < 0 ? COLOR_ERROR : COLOR_ACCENT);
-                    }
-                    open_with_active = 0;
+                    long child = confirm_open_with();
+                    set_status(child < 0 ? "Could not open file in Notes" :
+                               "Opened file in Notes", child < 0 ? COLOR_ERROR : COLOR_ACCENT);
                 }
                 render();
                 continue;
@@ -1950,14 +1961,9 @@ int main(int argc, char** argv)
                     open_with_notes_selected = 1;
                 else if (x >= 180 && x < 292 && y >= 238 && y < 266)
                 {
-                    if (open_with_notes_selected)
-                    {
-                        const char* argv[2] = { "/SYSTEM/NOTES.ELF", open_with_path };
-                        long child = vanta_spawn("/SYSTEM/NOTES.ELF", argv, 2U);
-                        set_status(child < 0 ? "Could not open file in Notes" :
-                                   "Opened file in Notes", child < 0 ? COLOR_ERROR : COLOR_ACCENT);
-                    }
-                    open_with_active = 0;
+                    long child = confirm_open_with();
+                    set_status(child < 0 ? "Could not open file in Notes" :
+                               "Opened file in Notes", child < 0 ? COLOR_ERROR : COLOR_ACCENT);
                 }
                 else if (x >= 304 && x < 416 && y >= 238 && y < 266)
                     open_with_active = 0;

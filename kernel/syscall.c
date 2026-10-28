@@ -984,7 +984,10 @@ static int syscall_dispatch(struct exception_frame* frame)
             }
             int result = usb_bluetooth_adapter_port(
                 (uint32_t)frame->rdi, &port);
-            *(uint32_t*)output = port;
+            ((uint8_t*)output)[0] = (uint8_t)port;
+            ((uint8_t*)output)[1] = (uint8_t)(port >> 8);
+            ((uint8_t*)output)[2] = (uint8_t)(port >> 16);
+            ((uint8_t*)output)[3] = (uint8_t)(port >> 24);
             frame->rax = (uint64_t)(int64_t)result;
             return 0;
         }
@@ -1012,8 +1015,11 @@ static int syscall_dispatch(struct exception_frame* frame)
             }
             int status = usb_bluetooth_discovered_get(
                 (uint32_t)frame->rdi, (uint32_t)frame->rsi, &result);
-            if (status > 0)
-                *(usb_bluetooth_inquiry_result_t*)output = result;
+            if (status > 0) {
+                const uint8_t *source = (const uint8_t*)&result;
+                for (uint32_t i = 0U; i < sizeof(result); ++i)
+                    ((uint8_t*)output)[i] = source[i];
+            }
             frame->rax = (uint64_t)(int64_t)status;
             return 0;
         }
@@ -1026,7 +1032,10 @@ static int syscall_dispatch(struct exception_frame* frame)
                 frame->rax = (uint64_t)(int64_t)-14;
                 return 0;
             }
-            result = *(const usb_bluetooth_inquiry_result_t*)input;
+            uint8_t *destination = (uint8_t*)&result;
+            const uint8_t *source = (const uint8_t*)input;
+            for (uint32_t i = 0U; i < sizeof(result); ++i)
+                destination[i] = source[i];
             frame->rax = (uint64_t)(int64_t)usb_bluetooth_connect(
                 (uint32_t)frame->rdi, result.address, 0xCC18U,
                 result.page_scan_repetition_mode, result.clock_offset, 1U);
@@ -1049,7 +1058,8 @@ static int syscall_dispatch(struct exception_frame* frame)
                 address[i] = ((const uint8_t*)input)[i];
             int status = usb_bluetooth_peer_state(
                 (uint32_t)frame->rdi, address, &handle);
-            *(uint16_t*)output = handle;
+            ((uint8_t*)output)[0] = (uint8_t)handle;
+            ((uint8_t*)output)[1] = (uint8_t)(handle >> 8);
             frame->rax = (uint64_t)(int64_t)status;
             return 0;
         }

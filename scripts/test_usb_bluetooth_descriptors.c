@@ -105,6 +105,36 @@ static void test_configuration_header_is_validated(void)
                                                &candidate));
 }
 
+static void test_hci_event_and_acl_framing(void)
+{
+    const uint8_t reset_complete[] = {0x0EU, 0x04U, 0x01U,
+                                      0x03U, 0x0CU, 0x00U};
+    const uint8_t wrong_opcode[] = {0x0EU, 0x04U, 0x01U,
+                                    0x01U, 0x10U, 0x00U};
+    const uint8_t failed_reset[] = {0x0EU, 0x04U, 0x01U,
+                                    0x03U, 0x0CU, 0x01U};
+    const uint8_t short_event[] = {0x0EU, 0x04U, 0x01U};
+    const uint8_t acl[] = {0x01U, 0x20U, 0x02U, 0x00U, 0xAAU, 0xBBU};
+    const uint8_t acl_truncated[] = {0x01U, 0x20U, 0x03U, 0x00U,
+                                     0xAAU, 0xBBU};
+
+    assert(usb_bluetooth_hci_event_valid(reset_complete,
+                                          sizeof(reset_complete)));
+    assert(!usb_bluetooth_hci_event_valid(reset_complete,
+                                           sizeof(reset_complete) - 1U));
+    assert(!usb_bluetooth_hci_event_valid(short_event, sizeof(short_event)));
+    assert(usb_bluetooth_hci_reset_complete(reset_complete,
+                                             sizeof(reset_complete)));
+    assert(!usb_bluetooth_hci_reset_complete(wrong_opcode,
+                                              sizeof(wrong_opcode)));
+    assert(!usb_bluetooth_hci_reset_complete(failed_reset,
+                                              sizeof(failed_reset)));
+    assert(usb_bluetooth_acl_packet_valid(acl, sizeof(acl)));
+    assert(!usb_bluetooth_acl_packet_valid(acl_truncated,
+                                            sizeof(acl_truncated)));
+    assert(!usb_bluetooth_acl_packet_valid(acl, sizeof(acl) - 1U));
+}
+
 static void test_non_bluetooth_interface_is_ignored(void)
 {
     uint8_t configuration[sizeof(valid_configuration)];
@@ -125,6 +155,7 @@ int main(void)
     test_malformed_tail_after_valid_interface_is_rejected();
     test_configuration_header_is_validated();
     test_non_bluetooth_interface_is_ignored();
+    test_hci_event_and_acl_framing();
     puts("USB Bluetooth descriptor tests passed");
     return 0;
 }

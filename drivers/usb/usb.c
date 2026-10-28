@@ -64,7 +64,7 @@ typedef struct {
     uint8_t acl_out_endpoint;
     uint32_t event_count;
     uint32_t acl_packet_count;
-    uint8_t command_response_observed;
+    uint8_t reset_complete_observed;
 } usb_bluetooth_slot_t;
 
 static usb_bluetooth_slot_t bluetooth_slots[USB_MAX_XHCI_SLOTS + 1U];
@@ -394,15 +394,17 @@ void usb_poll(void)
         uint32_t event_length = 0U;
         if (xhci_take_interrupt_report(slot, bluetooth_event_buffer,
                                        sizeof(bluetooth_event_buffer),
-                                       &event_length) && event_length >= 2U) {
+                                       &event_length) &&
+            usb_bluetooth_hci_event_valid(bluetooth_event_buffer,
+                                          event_length)) {
             bluetooth->event_count++;
             if (bluetooth->event_count == 1U)
                 serial_write("VANTAOS_BLUETOOTH_HCI_EVENT_RECEIVED\n");
-            if ((bluetooth_event_buffer[0] == 0x0EU ||
-                 bluetooth_event_buffer[0] == 0x0FU) &&
-                !bluetooth->command_response_observed) {
-                bluetooth->command_response_observed = 1U;
-                serial_write("VANTAOS_BLUETOOTH_HCI_COMMAND_RESPONSE\n");
+            if (!bluetooth->reset_complete_observed &&
+                usb_bluetooth_hci_reset_complete(bluetooth_event_buffer,
+                                                 event_length)) {
+                bluetooth->reset_complete_observed = 1U;
+                serial_write("VANTAOS_BLUETOOTH_HCI_RESET_COMPLETE\n");
             }
         }
 
@@ -412,7 +414,8 @@ void usb_poll(void)
                                            sizeof(bluetooth_acl_buffer),
                                            &acl_length);
         if (acl_result > 0) {
-            if (acl_length != 0U) {
+            if (usb_bluetooth_acl_packet_valid(bluetooth_acl_buffer,
+                                               acl_length)) {
                 bluetooth->acl_packet_count++;
                 if (bluetooth->acl_packet_count == 1U)
                     serial_write("VANTAOS_BLUETOOTH_ACL_PACKET_RECEIVED\n");

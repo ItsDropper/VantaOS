@@ -170,3 +170,29 @@ next_descriptor:
     *candidate = found;
     return 1;
 }
+
+/* USB interrupt transfers carry one complete HCI event. */
+int usb_bluetooth_hci_event_valid(const uint8_t *packet, uint32_t length)
+{
+    return packet != NULL && length >= 2U &&
+           (uint32_t)packet[1] == length - 2U;
+}
+
+/* Command Complete event for HCI Reset (opcode 0x0C03, status zero). */
+int usb_bluetooth_hci_reset_complete(const uint8_t *packet, uint32_t length)
+{
+    return usb_bluetooth_hci_event_valid(packet, length) &&
+           packet[0] == 0x0EU && packet[1] >= 4U &&
+           packet[3] == 0x03U && packet[4] == 0x0CU &&
+           packet[5] == 0U;
+}
+
+/* ACL packet header: LE16 handle/flags followed by an LE16 payload length. */
+int usb_bluetooth_acl_packet_valid(const uint8_t *packet, uint32_t length)
+{
+    if (packet == NULL || length < 4U)
+        return 0;
+    uint32_t payload_length = (uint32_t)packet[2] |
+                              ((uint32_t)packet[3] << 8);
+    return payload_length == length - 4U;
+}

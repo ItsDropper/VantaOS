@@ -84,3 +84,12 @@ The USB enumerator now uses a validated candidate to configure the interrupt-IN 
 The HCI Reset request uses `bmRequestType = 0x20`, `bRequest = 0`, `wValue = 0x0C03`, `wIndex = interface number`, and zero data length. HCI commands are not sent through the ACL bulk endpoint. The event path records first-event and first Command Complete/Command Status markers; a production HCI layer must still validate event lengths, the returned opcode, status, and controller state.
 
 The bulk-OUT endpoint is configured, but ACL transmit framing and a consumer are not implemented yet. The current loop is not a pairing or profile stack. Treat this as an incremental transport milestone only, and validate it on an emulated xHCI Bluetooth device and physical adapters before advertising compatibility. CI currently validates the descriptor parser and kernel build, not real Bluetooth hardware behavior.
+
+
+## Packet framing checks
+
+Before counting an interrupt transfer as an HCI event, the polling path verifies that the event's parameter-length byte exactly matches the transfer length minus the two-byte event header. The HCI Reset success marker is emitted only for a Command Complete event carrying opcode `0x0C03` and status zero. Receiving an unrelated event or a Command Status event is not considered a completed reset.
+
+ACL-IN packets are validated against the four-byte ACL header: the little-endian data length must equal the received transfer length minus four. Truncated headers, short payloads, and trailing bytes are rejected by the framing helper. These checks are transport-level; a future HCI layer still needs to validate handle/flags and route valid payloads into L2CAP.
+
+The descriptor workflow now tests valid, truncated, overlong, wrong-opcode, failed-reset, and malformed ACL packets using strict compiler warnings. This verifies parser/framing logic only; it does not emulate a USB controller or prove that a physical adapter will deliver packets.

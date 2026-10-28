@@ -189,6 +189,8 @@ int usb_bluetooth_hci_build_create_connection_cancel(
  * Return 1 when the USB control transfer was accepted, 0 on failure.
  * Call only from the serialized USB polling/owner CPU context.
  */
+int usb_bluetooth_inquiry(uint32_t port, uint8_t inquiry_length,
+                          uint8_t responses);
 int usb_bluetooth_connect(uint32_t port, const uint8_t address[6],
                           uint16_t packet_type,
                           uint8_t page_scan_repetition_mode,

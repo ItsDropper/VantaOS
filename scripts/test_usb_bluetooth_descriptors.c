@@ -796,6 +796,26 @@ static void test_hci_command_fault_requires_reset(void)
     assert(state.outstanding == 1U && state.credits == 0U);
 }
 
+static void test_hci_command_watchdog(void)
+{
+    usb_bluetooth_hci_command_state_t state = {.credits = 1U};
+    assert(usb_bluetooth_hci_command_begin(&state, 0x1001U) == 0);
+    assert(usb_bluetooth_hci_command_watchdog_arm(&state, 100U, 20U) == 0);
+    assert(usb_bluetooth_hci_command_watchdog_expire(&state, 119U) == 0);
+    assert(state.outstanding == 1U && state.faulted == 0U);
+    assert(usb_bluetooth_hci_command_watchdog_expire(&state, 120U) == 1);
+    assert(state.outstanding == 0U && state.faulted == 1U);
+    assert(usb_bluetooth_hci_command_begin(&state, 0x1009U) == -5);
+    usb_bluetooth_hci_command_state_reset(&state);
+    state.credits = 1U;
+    assert(usb_bluetooth_hci_command_begin(&state, 0x0C03U) == 0);
+    assert(usb_bluetooth_hci_command_watchdog_arm(&state, 0xFFFFFFF0U, 32U) == 0);
+    assert(usb_bluetooth_hci_command_watchdog_expire(&state, 0x0000000FU) == 0);
+    assert(usb_bluetooth_hci_command_watchdog_expire(&state, 0x00000010U) == 1);
+    assert(usb_bluetooth_hci_command_watchdog_arm(&state, 1U, 0U) == -22);
+    assert(usb_bluetooth_hci_command_watchdog_arm(&state, 1U, 0x80000000U) == -22);
+}
+
 static void test_hci_command_credits_and_discovery_builders(void)
 {
     usb_bluetooth_hci_command_state_t state = {.credits = 1U};
@@ -1945,6 +1965,7 @@ int main(void)
     test_hci_command_encoding();
     test_hci_read_buffer_size_result();
     test_acl_fragment_builder();
+    test_hci_command_watchdog();
     test_hci_command_credits_and_discovery_builders();
     test_hci_connection_command_builders();
     test_hci_inquiry_result_parser();

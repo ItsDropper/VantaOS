@@ -72,6 +72,7 @@ typedef struct {
 static usb_bluetooth_slot_t bluetooth_slots[USB_MAX_XHCI_SLOTS + 1U];
 static uint8_t bluetooth_event_buffer[64] __attribute__((aligned(64)));
 static usb_bluetooth_hci_event_queue_t bluetooth_hci_event_queues[USB_MAX_XHCI_SLOTS + 1U];
+static usb_bluetooth_link_table_t bluetooth_link_tables[USB_MAX_XHCI_SLOTS + 1U];
 static uint8_t bluetooth_acl_buffer[USB_BLUETOOTH_ACL_MAX_PACKET]
     __attribute__((aligned(64)));
 static usb_bluetooth_acl_queue_t bluetooth_acl_queues[USB_MAX_XHCI_SLOTS + 1U];
@@ -132,6 +133,7 @@ int usb_bluetooth_hci_command(uint32_t port, uint16_t opcode,
         bluetooth_slots[slot].reset_failed_observed = 0U;
         usb_bluetooth_acl_queue_reset(&bluetooth_acl_queues[slot]);
         usb_bluetooth_hci_event_queue_reset(&bluetooth_hci_event_queues[slot]);
+        usb_bluetooth_link_table_reset(&bluetooth_link_tables[slot]);
     }
     uint8_t *command_buffer = bluetooth_hci_command_buffers[slot];
     for (uint32_t i = 0U; i < 255U; ++i)
@@ -155,6 +157,19 @@ int usb_bluetooth_hci_event_receive(uint32_t port, uint8_t *event,
         if (bluetooth_slots[slot].active && bluetooth_slots[slot].port == port)
             return usb_bluetooth_hci_event_queue_pop(
                 &bluetooth_hci_event_queues[slot], event, capacity);
+    }
+    return -9;
+}
+
+int usb_bluetooth_reassembled_acl_receive(uint32_t port, uint16_t handle,
+                                          uint8_t *packet, uint32_t capacity)
+{
+    if (port == 0U || handle == 0U || packet == 0 || capacity == 0U)
+        return -22;
+    for (uint32_t slot = 1U; slot <= USB_MAX_XHCI_SLOTS; ++slot) {
+        if (bluetooth_slots[slot].active && bluetooth_slots[slot].port == port)
+            return usb_bluetooth_link_table_acl_take(
+                &bluetooth_link_tables[slot], handle, packet, capacity);
     }
     return -9;
 }
@@ -305,6 +320,7 @@ static void usb_bluetooth_detach_slot(uint32_t slot)
     bluetooth_slots[slot].reset_failed_observed = 0U;
     usb_bluetooth_acl_queue_reset(&bluetooth_acl_queues[slot]);
     usb_bluetooth_hci_event_queue_reset(&bluetooth_hci_event_queues[slot]);
+        usb_bluetooth_link_table_reset(&bluetooth_link_tables[slot]);
     bluetooth_acl_dropped[slot] = 0U;
     __atomic_store_n(&bluetooth_acl_tx_busy[slot], 0U, __ATOMIC_RELEASE);
 }
@@ -578,6 +594,9 @@ void usb_poll(void)
             usb_bluetooth_hci_event_valid(bluetooth_event_buffer,
                                           event_length)) {
             bluetooth->event_count++;
+            (void)usb_bluetooth_link_table_event(
+                &bluetooth_link_tables[slot], bluetooth_event_buffer,
+                event_length);
             int event_queued = usb_bluetooth_hci_event_queue_push(
                 &bluetooth_hci_event_queues[slot], bluetooth_event_buffer,
                 event_length);
@@ -609,6 +628,9 @@ void usb_poll(void)
                     bluetooth->reset_failed_observed) &&
                 usb_bluetooth_acl_packet_valid(bluetooth_acl_buffer,
                                                acl_length)) {
+                (void)usb_bluetooth_link_table_acl_feed(
+                    &bluetooth_link_tables[slot], bluetooth_acl_buffer,
+                    acl_length);
                 int queued = usb_bluetooth_acl_queue_push(
                     &bluetooth_acl_queues[slot], bluetooth_acl_buffer,
                     acl_length);

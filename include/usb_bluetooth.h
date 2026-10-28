@@ -169,6 +169,10 @@ int usb_bluetooth_hci_command(uint32_t port, uint16_t opcode,
  * -9 unbound. Events are queued independently of reset-state processing. */
 int usb_bluetooth_hci_event_receive(uint32_t port, uint8_t *event,
                                     uint32_t capacity);
+/* Receive one completed reassembled HCI ACL packet for a live BR/EDR
+ * handle; -11 incomplete/empty, -90 output too small (preserved), -9 unknown. */
+int usb_bluetooth_reassembled_acl_receive(uint32_t port, uint16_t handle,
+                                          uint8_t *packet, uint32_t capacity);
 /* Send one complete framed ACL packet through a bound device port.
  * Returns 1 only if xHCI reports a full transfer; caller-context limits are
  * documented in docs/USB_BLUETOOTH_BRINGUP.md. */

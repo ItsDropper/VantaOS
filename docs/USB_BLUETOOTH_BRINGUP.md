@@ -245,3 +245,16 @@ handles, handles invalid status/length fields, routes ACL fragments by handle,
 and clears a link's reassembly buffer on disconnect. This is a reusable
 owner-CPU primitive, not yet wired into the USB poll loop; LE Meta connection
 events and multi-role connection management remain separate work.
+
+
+## USB polling integration for BR/EDR links
+
+The USB polling loop now feeds valid HCI connection/disconnection events into
+the per-device link table and routes incoming ACL fragments into the matching
+connection's reassembly state. Link state and partial/completed reassembly
+buffers are cleared when the device is rebound, detached, or HCI Reset is
+requested. Consumers can retrieve a completed framed ACL packet by port and
+connection handle through `usb_bluetooth_reassembled_acl_receive`. The raw ACL
+queue remains available for diagnostics and lower-level consumers. Only legacy
+BR/EDR connection events are currently tracked; LE Meta events and service
+discovery/profile logic are not implemented.

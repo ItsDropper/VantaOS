@@ -6,15 +6,14 @@
 #ifndef VANTA_NVX_GSP_RING_H
 #define VANTA_NVX_GSP_RING_H
 
+#include <stddef.h>
 #include <stdint.h>
+#include "spinlock.h"
 
 static inline int nvx_gsp_ring_counter_aligned(uintptr_t address)
 {
     return address % _Alignof(uint32_t) == 0U;
 }
-#include <stddef.h>
-#include <stdint.h>
-#include "spinlock.h"
 #define NVX_GSP_PAGE_SIZE 4096U
 #define NVX_GSP_MSG_HEADER_SIZE 24U
 #define NVX_GSP_RPC_HEADER_SIZE 32U

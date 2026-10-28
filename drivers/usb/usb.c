@@ -289,8 +289,10 @@ int usb_bluetooth_inquiry_cancel(uint32_t port)
             &bluetooth_slots[slot].inquiry_state) != 0)
         return 0;
     int sent = usb_bluetooth_hci_command(port, 0x0402U, NULL, 0U);
-    (void)usb_bluetooth_inquiry_state_cancel_result(
-        &bluetooth_slots[slot].inquiry_state, sent);
+    if (!sent)
+        (void)usb_bluetooth_inquiry_state_cancel_result(
+            &bluetooth_slots[slot].inquiry_state, 0);
+    /* A successful USB transfer is not the controller's Command Complete. */
     return sent;
 }
 
@@ -1046,6 +1048,14 @@ void usb_poll(void)
                     /* A rejected cancel leaves the inquiry active. */
                     (void)usb_bluetooth_inquiry_state_cancel_result(
                         &bluetooth->inquiry_state, 0);
+                } else if (bluetooth_event_buffer[0] == 0x0EU &&
+                           event_length >= 6U &&
+                           bluetooth_event_buffer[3] == 0x02U &&
+                           bluetooth_event_buffer[4] == 0x04U) {
+                    /* Inquiry Cancel completes through Command Complete. */
+                    (void)usb_bluetooth_inquiry_state_cancel_result(
+                        &bluetooth->inquiry_state,
+                        bluetooth_event_buffer[5] == 0U);
                 }
                 if (bluetooth_event_buffer[0] == 0x03U &&
                     event_length == 13U && bluetooth_event_buffer[2] == 0U &&

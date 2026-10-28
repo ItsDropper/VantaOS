@@ -40,5 +40,6 @@ http_response_status_t http_response_parse(const char *headers,
                                            size_t header_length,
                                            uint32_t max_body_length,
                                            http_response_t *out);
+const char *http_response_status_string(http_response_status_t status);
 
 #endif

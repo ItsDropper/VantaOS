@@ -117,7 +117,7 @@ void ahci_initialize(void)
         if (pci == 0)
             continue;
         candidate_found = 1;
-        if (ahci_probe_idle_function(pci)) {
+        if (ahci_probe_inactive_pci_function(pci)) {
             serial_write("VANTAOS_AHCI_CONTROLLER_DISCOVERED_READ_ONLY\n");
         } else {
             serial_write("VANTAOS_AHCI_CONTROLLER_PROBE_REJECTED\n");

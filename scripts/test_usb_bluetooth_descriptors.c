@@ -913,6 +913,31 @@ static void test_l2cap_acl_response_dispatch(void)
     assert(usb_bluetooth_l2cap_dispatch_acl_responses(&table, packet, 3U) == -22);
 }
 
+static void test_l2cap_dispatch_skips_stale_transaction(void)
+{
+    usb_bluetooth_l2cap_table_t table = {0};
+    uint16_t local_cid = 0U;
+    uint8_t identifier = 0U;
+    uint8_t commands[24] = {0};
+    usb_bluetooth_l2cap_table_reset(&table);
+    assert(usb_bluetooth_l2cap_channel_begin(&table, 1U, 672U, 0U,
+                                             &local_cid, &identifier) == 0);
+
+    for (uint32_t offset = 0U; offset < sizeof(commands); offset += 12U) {
+        commands[offset] = 0x03U;
+        commands[offset + 1U] = offset == 0U ? 99U : identifier;
+        commands[offset + 2U] = 8U;
+        commands[offset + 4U] = 0x41U;
+        commands[offset + 6U] = (uint8_t)local_cid;
+        commands[offset + 7U] = (uint8_t)(local_cid >> 8);
+    }
+    assert(usb_bluetooth_l2cap_signaling_valid(commands, sizeof(commands)));
+    assert(usb_bluetooth_l2cap_dispatch_responses(&table, commands,
+                                                   sizeof(commands)) == 1);
+    assert(table.channels[0].state == 3U &&
+           table.channels[0].remote_cid == 0x0041U);
+}
+
 static void test_l2cap_response_dispatcher(void)
 {
     usb_bluetooth_l2cap_table_t table = {0};
@@ -1186,6 +1211,7 @@ int main(void)
     test_l2cap_identifier_collision_guards();
     test_l2cap_configuration_response_parser();
     test_l2cap_response_dispatcher();
+    test_l2cap_dispatch_skips_stale_transaction();
     test_l2cap_acl_response_dispatch();
     test_fragmented_acl_dispatches_l2cap_response();
     test_single_link_l2cap_dispatch_guard();

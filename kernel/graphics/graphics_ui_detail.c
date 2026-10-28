@@ -495,7 +495,7 @@ void graphics_draw_start_menu_detail(int width, int height)
 
     ui_surface(mx + 24, my + 340, mw - 48, 44, 9,
                0x001A2633, UI_EDGE_SOFT);
-    ui_icon_system(mx + 36, my + 352, 30, UI_VIOLET);
+    ui_icon_system(mx + 36, my + 352, 30, UI_BLUE);
     graphics_draw_text(mx + 78, my + 353, "Calculator", UI_WHITE, 1);
     graphics_draw_text(mx + 78, my + 371, "Integer arithmetic", UI_MUTED, 1);
 

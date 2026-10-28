@@ -153,6 +153,18 @@ int usb_bluetooth_hci_build_disconnect(uint16_t handle, uint8_t reason,
                                        uint8_t *out, uint32_t capacity);
 int usb_bluetooth_hci_build_create_connection_cancel(
     const uint8_t address[6], uint8_t *out, uint32_t capacity);
+
+/* Submit connection-management commands on a bound USB Bluetooth port.
+ * Return 1 when the USB control transfer was accepted, 0 on failure.
+ * Call only from the serialized USB polling/owner CPU context.
+ */
+int usb_bluetooth_connect(uint32_t port, const uint8_t address[6],
+                          uint16_t packet_type,
+                          uint8_t page_scan_repetition_mode,
+                          uint16_t clock_offset, uint8_t allow_role_switch);
+int usb_bluetooth_cancel_connection(uint32_t port,
+                                    const uint8_t address[6]);
+int usb_bluetooth_disconnect(uint32_t port, uint16_t handle, uint8_t reason);
 /* Bounded L2CAP channel lifecycle primitives; signaling dispatch remains
  * the responsibility of a controller/connection manager. */
 void usb_bluetooth_l2cap_table_reset(usb_bluetooth_l2cap_table_t *table);

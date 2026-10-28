@@ -45,7 +45,7 @@ static size_t output_scroll_offset;
 static vanta_gui_draw_command_t commands[VANTA_GUI_MAX_COMMANDS];
 static uint32_t command_count;
 static uint32_t window_id;
-static char clipboard[2048];
+static char clipboard[VANTA_CLIPBOARD_CAPACITY];
 static size_t clipboard_length;
 static size_t selection_anchor_line;
 static size_t selection_anchor_column;
@@ -315,9 +315,9 @@ static void terminal_pointer_select(int32_t x, int32_t y, int extend)
 
 static void terminal_copy_selection(void)
 {
-    clipboard_length = 0U;
     if (!selection_active)
         return;
+    clipboard_length = 0U;
     size_t first_line = selection_anchor_line;
     size_t first_column = selection_anchor_column;
     size_t last_line = selection_end_line;
@@ -347,10 +347,15 @@ static void terminal_copy_selection(void)
             clipboard[clipboard_length++] = '\n';
     }
     clipboard[clipboard_length] = '\0';
+    (void)vanta_clipboard_set(clipboard, clipboard_length);
 }
 
 static void terminal_paste_clipboard(void)
 {
+    long available = vanta_clipboard_get(clipboard, sizeof(clipboard));
+    if (available < 0)
+        return;
+    clipboard_length = (size_t)available;
     for (size_t i = 0U; i < clipboard_length &&
          input_length + 1U < sizeof(line) &&
          input_length + prompt_length < OUTPUT_COLUMNS - 1U; ++i)

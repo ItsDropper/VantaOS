@@ -664,6 +664,8 @@ static void test_l2cap_signaling_iteration_and_build(void)
                sizeof(output)) == 8);
     assert(output[0] == 0x02U && output[1] == 0x07U &&
            output[2] == 4U && output[3] == 0U && output[7] == 0U);
+    assert(usb_bluetooth_l2cap_build_connection_request(
+               0x08U, 0x0101U, 0x0040U, output, sizeof(output)) == -22);
     assert(usb_bluetooth_l2cap_signaling_build(0U, 1U, NULL, 0U,
                                                output, sizeof(output)) == -22);
     offset = 9U;
@@ -1396,6 +1398,8 @@ static void test_l2cap_channel_lifecycle(void)
                                              &cid, &id) == -28);
     assert(usb_bluetooth_l2cap_channel_begin(&table, 2U, 672U, 0U,
                                              &cid, &id) == -22);
+    assert(usb_bluetooth_l2cap_channel_begin(
+               &table, 0x0101U, 672U, 0U, &cid, &id) == -22);
     assert(usb_bluetooth_l2cap_channel_begin(
                &table, 1U, USB_BLUETOOTH_L2CAP_DATA_MAX + 1U, 0U,
                &cid, &id) == -22);

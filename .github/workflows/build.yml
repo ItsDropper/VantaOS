@@ -107,6 +107,12 @@ jobs:
       - name: Install build dependencies
         run: sudo apt-get update && sudo apt-get install --yes build-essential nasm grub-pc-bin xorriso mtools dosfstools qemu-system-x86 gnu-efi ovmf gdisk xvfb socat imagemagick tesseract-ocr
 
+      - name: Test ATA LBA28 request bounds
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \\
+            scripts/test_ata_lba28.c -o /tmp/vantaos-ata-lba28-test
+          /tmp/vantaos-ata-lba28-test
+
       - name: Test Calculator expression parser
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -ffunction-sections -fdata-sections \

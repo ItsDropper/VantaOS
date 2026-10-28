@@ -757,6 +757,48 @@ static void test_hci_command_credits_and_discovery_builders(void)
     assert(usb_bluetooth_hci_build_read_bd_addr(out, 2U) == -90);
 }
 
+static void test_l2cap_connection_response_dispatch(void)
+{
+    usb_bluetooth_l2cap_table_t table = {0};
+    uint16_t local_cid = 0U;
+    uint8_t identifier = 0U;
+    uint8_t response[12] = {0x03U, 0U, 8U, 0U,
+                            0x41U, 0x00U, 0U, 0U,
+                            0U, 0U, 0U, 0U};
+    usb_bluetooth_l2cap_table_reset(&table);
+    assert(usb_bluetooth_l2cap_channel_begin(&table, 1U, 672U, 0U,
+                                             &local_cid, &identifier) == 0);
+    response[1] = identifier;
+    response[6] = (uint8_t)local_cid;
+    response[7] = (uint8_t)(local_cid >> 8);
+    assert(usb_bluetooth_l2cap_connection_response(&table, response,
+                                                   sizeof(response), 672U) == 1);
+    assert(table.channels[0].remote_cid == 0x0041U &&
+           table.channels[0].state == 3U);
+
+    usb_bluetooth_l2cap_table_reset(&table);
+    assert(usb_bluetooth_l2cap_channel_begin(&table, 1U, 672U, 0U,
+                                             &local_cid, &identifier) == 0);
+    response[1] = identifier;
+    response[6] = (uint8_t)(local_cid + 1U);
+    response[7] = (uint8_t)((local_cid + 1U) >> 8);
+    assert(usb_bluetooth_l2cap_connection_response(&table, response,
+                                                   sizeof(response), 672U) == -22);
+    assert(table.channels[0].state == 1U);
+    response[6] = (uint8_t)local_cid;
+    response[7] = (uint8_t)(local_cid >> 8);
+    response[8] = 1U; response[9] = 0U;
+    assert(usb_bluetooth_l2cap_connection_response(&table, response,
+                                                   sizeof(response), 672U) == 0);
+    assert(table.channels[0].active && table.channels[0].state == 1U);
+    response[8] = 2U; response[9] = 0U;
+    assert(usb_bluetooth_l2cap_connection_response(&table, response,
+                                                   sizeof(response), 672U) == -5);
+    assert(!table.channels[0].active);
+    assert(usb_bluetooth_l2cap_connection_response(&table, response, 11U,
+                                                   672U) == -22);
+}
+
 static void test_l2cap_standard_signaling_builders(void)
 {
     uint8_t out[16] = {0};
@@ -818,6 +860,7 @@ int main(void)
     test_hci_command_credits_and_discovery_builders();
     test_l2cap_channel_lifecycle();
     test_l2cap_standard_signaling_builders();
+    test_l2cap_connection_response_dispatch();
     test_complete_hci_interface();
     test_incomplete_interface_is_not_claimed();
     test_malformed_lengths_are_rejected();

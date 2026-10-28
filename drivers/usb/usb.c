@@ -632,9 +632,20 @@ void usb_poll(void)
                 (void)usb_bluetooth_hci_command_event(
                     &bluetooth->command_state, bluetooth_event_buffer,
                     event_length);
-                (void)usb_bluetooth_link_table_event(
+                int link_transition = usb_bluetooth_link_table_event(
                     &bluetooth_link_tables[slot], bluetooth_event_buffer,
                     event_length);
+                /*
+                 * L2CAP channels are not yet associated with individual
+                 * connection records. Fail closed: a successful BR/EDR
+                 * disconnect invalidates all pending channels for this
+                 * controller rather than risk reusing a stale remote CID.
+                 */
+                if (bluetooth_event_buffer[0] == 0x05U &&
+                    event_length == 6U && bluetooth_event_buffer[2] == 0U &&
+                    link_transition > 0)
+                    usb_bluetooth_l2cap_table_reset(
+                        &bluetooth->l2cap_channels);
                 int event_queued = usb_bluetooth_hci_event_queue_push(
                     &bluetooth_hci_event_queues[slot], bluetooth_event_buffer,
                     event_length);

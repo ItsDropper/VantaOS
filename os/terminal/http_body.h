@@ -34,6 +34,7 @@ http_body_status_t http_body_set_content_length(http_body_t *body,
                                                 int has_content_length,
                                                 uint32_t content_length);
 http_body_status_t http_body_consume(http_body_t *body, size_t length);
+/* Exact Content-Length completes framing; otherwise orderly EOF is required. */
 http_body_status_t http_body_finish(http_body_t *body, int orderly_eof);
 uint32_t http_body_bytes_received(const http_body_t *body);
 const char *http_body_status_string(http_body_status_t status);

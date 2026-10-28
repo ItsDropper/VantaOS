@@ -57,14 +57,15 @@ int main(void)
     assert(count == 0U);
     assert(!ahci_prdt_build(0x1000U, 0U, entries, 3U, &count, 1));
     assert(count == 0U);
-    assert(!ahci_prdt_build(UINT64_MAX - 1U, 4U,
+    assert(!ahci_prdt_build(UINT64_MAX - 3U, 8U,
                             entries, 3U, &count, 1));
     assert(count == 0U);
-    assert(ahci_prdt_build(UINT64_MAX - 1U, 2U,
+    assert(ahci_prdt_build(UINT64_MAX - 3U, 4U,
                            entries, 3U, &count, 0));
     assert(count == 1U);
-    assert(entries[0].data_base_low == 0xFFFFFFFEU);
+    assert(entries[0].data_base_low == 0xFFFFFFFCU);
     assert(entries[0].data_base_high == 0xFFFFFFFFU);
+    assert(entries[0].byte_count_and_interrupt == 3U);
     assert(!ahci_prdt_build(0x1000U, 512U, 0, 3U, &count, 1));
     assert(count == 0U);
     assert(!ahci_prdt_build(0x1000U, 512U, entries, 3U, 0, 1));

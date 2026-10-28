@@ -4,6 +4,10 @@ VantaOS is an experimental hobby operating system for x86-64, written in C and N
 
 The project focuses on learning and validating operating-system fundamentals: boot and interrupt handling, memory management, kernel execution contexts, scheduling across CPUs, device discovery, a virtual filesystem, and a graphical shell. Its features have different maturity levels; see the documentation before assuming a capability is complete.
 
+## Vanta Launcher target
+
+The existing JavaFX Vanta Launcher is not yet runnable on VantaOS. The current `curl` command is plain-HTTP-only and cannot download the launcher from its normal HTTPS release source. See [the compatibility milestones](docs/VANTA_LAUNCHER_COMPATIBILITY.md) for the required HTTPS, userspace runtime, Java/JavaFX, and Minecraft prerequisites.
+
 ## Project status
 
 - **Target:** x86-64. The established GRUB/Multiboot path and a separate UEFI/OVMF path are exercised by CI.

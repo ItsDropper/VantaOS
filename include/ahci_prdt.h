@@ -43,7 +43,7 @@ static inline int ahci_prdt_build(uint64_t dma_address, uint32_t byte_length,
         *entry_count_out = 0U;
 
     if (entries == 0 || entry_count_out == 0 || byte_length == 0U ||
-        (dma_address & 1U) != 0U ||
+        (dma_address & 3U) != 0U ||
         (uint64_t)(byte_length - 1U) > UINT64_MAX - dma_address)
         return 0;
 

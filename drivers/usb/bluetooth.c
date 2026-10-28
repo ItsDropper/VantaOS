@@ -507,6 +507,57 @@ int usb_bluetooth_l2cap_signaling_build(uint8_t code, uint8_t identifier,
  * length). Validate the entire command list before any caller dispatches it.
  * Unknown nonzero codes remain structurally valid for forward compatibility.
  */
+int usb_bluetooth_l2cap_build_connection_request(uint8_t identifier,
+                                                  uint16_t psm,
+                                                  uint16_t local_cid,
+                                                  uint8_t *output,
+                                                  uint32_t capacity)
+{
+    if (psm == 0U || (psm & 1U) == 0U ||
+        local_cid < USB_BLUETOOTH_L2CAP_CID_DYNAMIC_MIN)
+        return -22;
+    const uint8_t parameters[4] = {
+        (uint8_t)psm, (uint8_t)(psm >> 8),
+        (uint8_t)local_cid, (uint8_t)(local_cid >> 8)
+    };
+    return usb_bluetooth_l2cap_signaling_build(0x02U, identifier, parameters,
+                                                sizeof(parameters), output,
+                                                capacity);
+}
+
+int usb_bluetooth_l2cap_build_configuration_request(uint8_t identifier,
+                                                     uint16_t remote_cid,
+                                                     uint8_t *output,
+                                                     uint32_t capacity)
+{
+    if (remote_cid < USB_BLUETOOTH_L2CAP_CID_DYNAMIC_MIN)
+        return -22;
+    const uint8_t parameters[4] = {
+        (uint8_t)remote_cid, (uint8_t)(remote_cid >> 8), 0U, 0U
+    };
+    return usb_bluetooth_l2cap_signaling_build(0x04U, identifier, parameters,
+                                                sizeof(parameters), output,
+                                                capacity);
+}
+
+int usb_bluetooth_l2cap_build_disconnection_request(uint8_t identifier,
+                                                     uint16_t remote_cid,
+                                                     uint16_t local_cid,
+                                                     uint8_t *output,
+                                                     uint32_t capacity)
+{
+    if (remote_cid < USB_BLUETOOTH_L2CAP_CID_DYNAMIC_MIN ||
+        local_cid < USB_BLUETOOTH_L2CAP_CID_DYNAMIC_MIN)
+        return -22;
+    const uint8_t parameters[4] = {
+        (uint8_t)remote_cid, (uint8_t)(remote_cid >> 8),
+        (uint8_t)local_cid, (uint8_t)(local_cid >> 8)
+    };
+    return usb_bluetooth_l2cap_signaling_build(0x06U, identifier, parameters,
+                                                sizeof(parameters), output,
+                                                capacity);
+}
+
 int usb_bluetooth_l2cap_signaling_valid(const uint8_t *payload,
                                         uint32_t length)
 {

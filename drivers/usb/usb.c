@@ -507,9 +507,9 @@ void usb_poll(void)
                 &bluetooth->reset_complete_observed,
                 &bluetooth->reset_failed_observed);
             if (reset_transition > 0)
-                serial_write("VANTAOS_BLUETOOTH_HCI_RESET_COMPLETE\\n");
+                serial_write("VANTAOS_BLUETOOTH_HCI_RESET_COMPLETE\n");
             else if (reset_transition < 0)
-                serial_write("VANTAOS_BLUETOOTH_HCI_RESET_FAILED\\n");
+                serial_write("VANTAOS_BLUETOOTH_HCI_RESET_FAILED\n");
         }
 
         uint32_t acl_length = 0U;

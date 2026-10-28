@@ -1,7 +1,7 @@
 # AHCI/SATA bring-up plan
 
-VantaOS currently has legacy IDE-compatible ATA PIO and NVMe code. The
-`ahci_prdt_build()` helper is the first isolated AHCI primitive; it is not a
+VantaOS has legacy IDE-compatible ATA PIO and NVMe code. The PRDT builder,
+ABAR validator, and read-only PCI discovery stage are AHCI groundwork, not a
 SATA driver and must not be reported as device support.
 
 ## Implemented primitives
@@ -12,6 +12,7 @@ SATA driver and must not be reported as device support.
   output capacity, and the PRDT byte-count encoding.
 - Sets IOC only on the final entry when requested.
 - `ahci_pci_abar_valid()` rejects I/O BARs, zero bases, undersized/non-power-of-two apertures, misaligned ranges, and address overflow. It validates caller-supplied metadata only; it does not probe PCI or measure BAR size.
+- `ahci_initialize()` scans AHCI-class PCI functions and inspects CAP/PI/version only when PCI I/O decode, memory decode, and bus mastering are disabled. It measures BAR5 only under that safe condition, temporarily enables memory decode for a read-only register probe, unmaps the range, and restores the original command register.
 - Leaves the entry array unchanged when validation fails.
 
 The helper assumes its caller already owns a device-visible DMA mapping. It does
@@ -20,7 +21,7 @@ perform cache synchronization, or transfer buffer ownership to the HBA.
 
 ## Required next stages
 
-1. Add AHCI PCI class/subclass discovery and acquire trustworthy BAR5 size metadata without disturbing an active controller. The pure ABAR validator is in place, but discovery/mapping is not.
+1. Extend discovery to handle firmware-active controllers through an explicit safe handoff/resource contract. Current discovery intentionally skips functions with I/O decode, memory decode, or bus mastering already enabled.
 2. Implement a reset/enable state machine with bounded waits and fail-closed
    recovery; do not reset an active controller without an explicit ownership
    contract.

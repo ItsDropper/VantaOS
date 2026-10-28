@@ -392,6 +392,12 @@ int usb_bluetooth_l2cap_build_configuration_request(uint8_t identifier,
                                                      uint16_t remote_cid,
                                                      uint8_t *output,
                                                      uint32_t capacity);
+/* Build a PSM-not-supported response for a valid inbound Connection Request.
+ * All inbound services are currently unregistered, so no request is accepted.
+ */
+int usb_bluetooth_l2cap_reject_connection_request(
+    const uint8_t *command, uint32_t length,
+    uint8_t *response, uint32_t capacity);
 int usb_bluetooth_l2cap_build_connection_response(
     uint8_t identifier, uint16_t destination_cid, uint16_t source_cid,
     uint16_t result, uint16_t status, uint8_t *output, uint32_t capacity);

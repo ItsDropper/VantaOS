@@ -24,7 +24,8 @@ perform cache synchronization, or transfer buffer ownership to the HBA.
    recovery; do not reset an active controller without an explicit ownership
    contract.
 3. Define aligned command-list, received-FIS, command-table, and PRDT allocations
-   using VantaOS's DMA allocator and physical-address contract.
+   using VantaOS's DMA allocator and physical-address contract. Tighten the PRDT
+   builder to enforce the AHCI-required DWORD alignment before it is used by a driver.
 4. Implement IDENTIFY DEVICE and bounded READ DMA EXT / WRITE DMA EXT commands,
    with command-slot ownership, timeout handling, status/error capture, and
    cache/ordering rules.

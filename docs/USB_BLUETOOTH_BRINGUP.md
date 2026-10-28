@@ -144,3 +144,8 @@ Bluetooth binding teardown is centralized so disconnect and a partially failed e
 ## Unit-tested reset state transitions
 
 HCI Reset Command Complete processing is factored into a pure state-transition helper. It distinguishes unrelated events, the first successful reset completion, and the first nonzero reset status; duplicate events do not emit duplicate markers. Tests exercise failure followed by success, duplicate failure, duplicate success, unrelated opcodes, null state pointers, and the resulting readiness gate.
+
+
+## Endpoint limits
+
+Descriptor matching now rejects unusable event endpoints with a zero polling interval or a maximum packet size larger than the fixed 64-byte HCI event staging buffer. Bulk ACL endpoints with packet sizes above 1024 bytes are not accepted. This is a conservative transport limit, not a claim of support for every USB speed or controller; descriptors outside the driver's explicit buffer contract remain unbound rather than risking an oversized endpoint configuration.

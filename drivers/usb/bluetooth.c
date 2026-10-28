@@ -17,6 +17,8 @@
 #define USB_PROTOCOL_BLUETOOTH 0x01U
 #define USB_TRANSFER_BULK 2U
 #define USB_TRANSFER_INTERRUPT 3U
+#define USB_BLUETOOTH_EVENT_BUFFER_SIZE 64U
+#define USB_BLUETOOTH_MAX_BULK_PACKET 1024U
 
 typedef struct {
     uint8_t active;
@@ -124,18 +126,22 @@ int usb_bluetooth_find_hci_interface(const uint8_t *configuration,
                 goto next_descriptor;
 
             if (transfer_type == USB_TRANSFER_INTERRUPT &&
-                (address & 0x80U) != 0U && current.event_endpoint == 0U) {
+                (address & 0x80U) != 0U && current.event_endpoint == 0U &&
+                max_packet <= USB_BLUETOOTH_EVENT_BUFFER_SIZE &&
+                configuration[offset + 6U] != 0U) {
                 current.event_endpoint = address;
                 current.event_interval = configuration[offset + 6U];
                 current.event_max_packet = max_packet;
             } else if (transfer_type == USB_TRANSFER_BULK &&
                        (address & 0x80U) != 0U &&
-                       current.acl_in_endpoint == 0U) {
+                       current.acl_in_endpoint == 0U &&
+                       max_packet <= USB_BLUETOOTH_MAX_BULK_PACKET) {
                 current.acl_in_endpoint = address;
                 current.acl_in_max_packet = max_packet;
             } else if (transfer_type == USB_TRANSFER_BULK &&
                        (address & 0x80U) == 0U &&
-                       current.acl_out_endpoint == 0U) {
+                       current.acl_out_endpoint == 0U &&
+                       max_packet <= USB_BLUETOOTH_MAX_BULK_PACKET) {
                 current.acl_out_endpoint = address;
                 current.acl_out_max_packet = max_packet;
             }

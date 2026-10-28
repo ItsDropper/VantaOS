@@ -269,6 +269,36 @@ static void test_reset_state_transitions_are_idempotent(void)
                                              NULL, &failed) == 0);
 }
 
+static void test_endpoint_packet_bounds_and_interval(void)
+{
+    uint8_t configuration[sizeof(valid_configuration)];
+    usb_bluetooth_hci_candidate_t candidate;
+
+    for (unsigned int i = 0U; i < sizeof(valid_configuration); ++i)
+        configuration[i] = valid_configuration[i];
+    configuration[CONFIG_PREFIX + IFACE + 1U + ENDPOINT + 4U] = 65U;
+    configuration[CONFIG_PREFIX + IFACE + 1U + ENDPOINT + 5U] = 0U;
+    assert(!usb_bluetooth_find_hci_interface(configuration,
+                                              sizeof(configuration),
+                                              &candidate));
+
+    for (unsigned int i = 0U; i < sizeof(valid_configuration); ++i)
+        configuration[i] = valid_configuration[i];
+    configuration[CONFIG_PREFIX + IFACE + 1U + ENDPOINT + 6U] = 0U;
+    assert(!usb_bluetooth_find_hci_interface(configuration,
+                                              sizeof(configuration),
+                                              &candidate));
+
+    for (unsigned int i = 0U; i < sizeof(valid_configuration); ++i)
+        configuration[i] = valid_configuration[i];
+    /* First bulk-IN endpoint's wMaxPacketSize becomes 1025. */
+    configuration[CONFIG_PREFIX + IFACE + 1U + ENDPOINT + 7U + 4U] = 1U;
+    configuration[CONFIG_PREFIX + IFACE + 1U + ENDPOINT + 7U + 5U] = 4U;
+    assert(!usb_bluetooth_find_hci_interface(configuration,
+                                              sizeof(configuration),
+                                              &candidate));
+}
+
 int main(void)
 {
     test_complete_hci_interface();
@@ -282,6 +312,7 @@ int main(void)
     test_acl_queue_wraparound_and_invariants();
     test_transport_readiness_gate();
     test_reset_state_transitions_are_idempotent();
+    test_endpoint_packet_bounds_and_interval();
     test_acl_queue_rejects_corrupt_stored_length();
     puts("USB Bluetooth descriptor tests passed");
     return 0;

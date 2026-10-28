@@ -364,7 +364,9 @@ static int run_storage_self_test(void)
 static char bluetooth_hex_digit(uint8_t value)
 {
     value &= 0x0FU;
-    return (char)(value < 10U ? '0' + value : 'A' + (value - 10U));
+    if (value < 10U)
+        return (char)('0' + (int)value);
+    return (char)('A' + (int)(value - 10U));
 }
 
 static void bluetooth_format_address(const uint8_t address[6], char output[18])

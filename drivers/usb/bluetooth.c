@@ -289,6 +289,17 @@ int usb_bluetooth_l2cap_build_acl_packet(uint16_t handle, uint16_t cid,
     return (int)total;
 }
 
+int usb_bluetooth_l2cap_build_signaling_acl_packet(
+    uint16_t handle, const uint8_t *commands, uint32_t command_length,
+    uint8_t *output, uint32_t capacity)
+{
+    if (commands == NULL || command_length == 0U ||
+        !usb_bluetooth_l2cap_signaling_valid(commands, command_length))
+        return -22;
+    return usb_bluetooth_l2cap_build_acl_packet(
+        handle, 0x0001U, commands, command_length, output, capacity);
+}
+
 int usb_bluetooth_acl_parse(const uint8_t *packet, uint32_t length,
                             usb_bluetooth_acl_view_t *view)
 {

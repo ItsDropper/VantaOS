@@ -204,7 +204,7 @@ const char *http_response_status_string(http_response_status_t status)
     case HTTP_RESPONSE_INVALID_CONTENT_LENGTH:
         return "invalid Content-Length";
     case HTTP_RESPONSE_CONTENT_LENGTH_TOO_LARGE:
-        return "Content-Length exceeds the 8 MiB limit";
+        return "Content-Length exceeds the configured download limit";
     case HTTP_RESPONSE_AMBIGUOUS_CONTENT_LENGTH:
         return "duplicate Content-Length fields are rejected";
     default:

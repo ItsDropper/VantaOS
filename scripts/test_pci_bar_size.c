@@ -102,6 +102,18 @@ int pci_test_ecam_read32(uint16_t segment, uint8_t bus, uint8_t slot,
     assert(size == 0U);
     assert(bar_write_count == writes_before_invalid_wide_bar);
 
+    /* Invalid 64-bit masks must restore both halves of the BAR. */
+    reset_config();
+    config_space[TEST_BAR0_INDEX] = 0x80000004U;
+    config_space[TEST_BAR0_INDEX + 1U] = 0x00000012U;
+    bar_masks[0] = 0xF0001004U;
+    bar_masks[1] = 0xFFFFFFFFU;
+    assert(!pci_get_bar_size(&gpu, 0U, &size));
+    assert(size == 0U);
+    assert(config_space[TEST_BAR0_INDEX] == 0x80000004U);
+    assert(config_space[TEST_BAR0_INDEX + 1U] == 0x00000012U);
+    assert(bar_write_count == 4U); /* two probe writes and two restores */
+
     return 0;
 }
 

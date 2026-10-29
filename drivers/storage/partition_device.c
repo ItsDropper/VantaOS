@@ -132,9 +132,9 @@ static int partition_device_has_table_unlocked(const block_device_t *disk)
 
 int partition_device_has_table(const block_device_t *disk)
 {
-    uint64_t flags = spinlock_lock_irqsave(&partition_device_lock);
+    spinlock_lock(&partition_device_lock);
     int result = partition_device_has_table_unlocked(disk);
-    spinlock_unlock_irqrestore(&partition_device_lock, flags);
+    spinlock_unlock(&partition_device_lock);
     return result;
 }
 
@@ -214,9 +214,9 @@ static int partition_device_scan_disk_unlocked(block_device_t *disk)
 
 int partition_device_scan_disk(block_device_t *disk)
 {
-    uint64_t flags = spinlock_lock_irqsave(&partition_device_lock);
+    spinlock_lock(&partition_device_lock);
     int result = partition_device_scan_disk_unlocked(disk);
-    spinlock_unlock_irqrestore(&partition_device_lock, flags);
+    spinlock_unlock(&partition_device_lock);
     return result;
 }
 

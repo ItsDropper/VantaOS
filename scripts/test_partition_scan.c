@@ -101,6 +101,9 @@ int main(void)
     refresh_crc(d.data+BACKUP_HEADER*SS);
     assert(partition_scan(memread,&d,d.sectors,out,PARTITION_SCAN_MAX,&n)==PARTITION_SCAN_BAD_TABLE);
     wipe(&d);gpt_image(&d);
+    mbr_entry(d.data,1U,0x0CU,40U,60U);
+    assert(partition_scan(memread,&d,d.sectors,out,PARTITION_SCAN_MAX,&n)==PARTITION_SCAN_BAD_TABLE);
+    wipe(&d);gpt_image(&d);
     wr32(d.data+SS+20U,1U);
     refresh_crc(d.data+SS);
     assert(partition_scan(memread,&d,d.sectors,out,PARTITION_SCAN_MAX,&n)==PARTITION_SCAN_BAD_TABLE);

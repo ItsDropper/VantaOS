@@ -254,6 +254,14 @@ static partition_scan_status_t partition_scan_unlocked(partition_read_fn read, v
     }
     if (protective_count > 1U)
         return PARTITION_SCAN_BAD_TABLE;
+    if (protective_count) {
+        /* Hybrid MBRs are ambiguous: this scanner accepts pure GPT only. */
+        for (unsigned i = 0U; i < 4U; ++i) {
+            const uint8_t *record = mbr + MBR_OFF + i * 16U;
+            if (record[4U] != 0xEEU && !zeros(record, 16U))
+                return PARTITION_SCAN_BAD_TABLE;
+        }
+    }
     size_t staged_count = 0U;
     partition_scan_status_t status = protective_count ?
         scan_gpt(read, ctx, disk_sectors, staging, capacity, &staged_count) :

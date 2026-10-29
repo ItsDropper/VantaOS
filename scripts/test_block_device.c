@@ -55,6 +55,18 @@ static const block_device_ops_t read_only_ops = {
     mock_read, 0, mock_flush
 };
 
+static block_status_t capacity_read(block_device_t *d, uint64_t lba,
+                                    uint32_t count, void *buffer)
+{
+    (void)d;
+    (void)lba;
+    (void)count;
+    (void)buffer;
+    return BLOCK_STATUS_OK;
+}
+
+static const block_device_ops_t capacity_ops = { capacity_read, 0, 0 };
+
 static void initialize_device(block_device_t *d, const char *name,
                               const block_device_ops_t *ops)
 {

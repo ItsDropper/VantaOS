@@ -466,8 +466,10 @@ int filesystem_write_file_range_unlocked(const char* path, uint32_t offset,
     int id = filesystem_lookup_unlocked(path);
     if (id < 0 || nodes[id].type != FS_NODE_FILE)
         return -1;
-    if (offset > nodes[id].size)
-        return -1;
+    /* The FAT32 directory entry is authoritative for range bounds. The
+       namespace node is a cache and can lag a just-committed range extension;
+       rejecting against its size would prevent sequential multi-chunk writes.
+       fat32_write_file_range validates offset against the on-disk file size. */
     int result = fat32_write_file_range(path, offset, data, length);
     if (result < 0)
         return -1;

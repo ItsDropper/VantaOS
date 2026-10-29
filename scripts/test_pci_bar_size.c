@@ -66,6 +66,24 @@ int pci_test_ecam_read32(uint16_t segment, uint8_t bus, uint8_t slot,
 {
     (void)segment; (void)bus; (void)slot; (void)function; (void)offset;
     if (value) *value = 0xFFFFFFFFU;
+    /* Reject a base address that is not aligned to its decoded aperture. */
+    reset_config();
+    config_space[TEST_BAR0_INDEX] = 0x81000000U;
+    bar_masks[0] = 0xFF000000U; /* 16 MiB aperture requires 16 MiB alignment. */
+    assert(!pci_get_bar_size(&gpu, 0U, &size));
+    assert(size == 0U);
+    assert(config_space[TEST_BAR0_INDEX] == 0x81000000U);
+    assert(bar_write_count == 2U);
+
+    /* A mask that does not encode a power-of-two aperture must fail closed. */
+    reset_config();
+    config_space[TEST_BAR0_INDEX] = 0x80000000U;
+    bar_masks[0] = 0xFF100000U;
+    assert(!pci_get_bar_size(&gpu, 0U, &size));
+    assert(size == 0U);
+    assert(config_space[TEST_BAR0_INDEX] == 0x80000000U);
+    assert(bar_write_count == 2U);
+
     return 0;
 }
 

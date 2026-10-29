@@ -122,7 +122,11 @@ int mmio_unmap_region(void* virtual_address, size_t length)
     assert(virtual_address == fake_registers);
     assert(length == AHCI_ABAR_PROBE_SIZE);
     ++unmap_calls;
+#ifdef AHCI_TEST_UNMAP_FAIL
+    return 0;
+#else
     return 1;
+#endif
 }
 
 void serial_write(const char* text)
@@ -169,6 +173,17 @@ int main(void)
     assert(command_register == 0x0004U);
     assert(rejected_marker);
     puts("VANTAOS_AHCI_DISCOVERY_UNSAFE_GUARD_OK");
+#elif defined(AHCI_TEST_UNMAP_FAIL)
+    assert(size_calls == 1U);
+    assert(bar_calls == 1U);
+    assert(enable_calls == 1U);
+    assert(write_calls == 1U);
+    assert(map_calls == 1U);
+    assert(unmap_calls == 1U);
+    assert(command_register == 0U);
+    assert(!discovered_marker);
+    assert(rejected_marker);
+    puts("VANTAOS_AHCI_DISCOVERY_UNMAP_FAILURE_REJECTED");
 #elif defined(AHCI_TEST_RESTORE_FAIL)
     assert(size_calls == 1U);
     assert(bar_calls == 1U);

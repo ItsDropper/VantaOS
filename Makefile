@@ -129,8 +129,8 @@ VantaOS-Setup.img: VANTASETUP.EFI BOOTX64.EFI kernel-uefi.elf vantaos.img
 	mcopy -i $@@@1048576 /tmp/vantaos-terminal.elf ::/SYSTEM/TERMINAL.ELF
 	mcopy -i $@@@1048576 /tmp/vantaos-settings.elf ::/SYSTEM/SETTINGS.ELF
 	mcopy -i $@@@1048576 /tmp/vantaos-explorer.elf ::/SYSTEM/EXPLORER.ELF
-mcopy -i $@@@1048576 /tmp/vantaos-notes.elf ::/SYSTEM/NOTES.ELF
-mcopy -i $@@@1048576 /tmp/vantaos-calculator.elf ::/SYSTEM/CALCULATOR.ELF
+	mcopy -i $@@@1048576 /tmp/vantaos-notes.elf ::/SYSTEM/NOTES.ELF
+	mcopy -i $@@@1048576 /tmp/vantaos-calculator.elf ::/SYSTEM/CALCULATOR.ELF
 	mcopy -i $@@@1048576 /tmp/vantaos-setup-staging/system/terminal.vx ::/SYSTEM/TERMINAL.VX
 	mcopy -i $@@@1048576 /tmp/vantaos-setup-staging/system/drivers/ata.sys ::/SYSTEM/DRIVERS/ATA.SYS
 	mcopy -i $@@@1048576 /tmp/vantaos-setup-staging/system/drivers/keyboard.sys ::/SYSTEM/DRIVERS/KEYBOARD.SYS

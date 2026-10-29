@@ -58,7 +58,7 @@ static int ahci_probe_inactive_pci_function(const struct pci_device* pci)
     if (!pci_get_bar_size(pci, 5U, &bar_size) ||
         !pci_get_bar(pci, 5U, &bar, &is_io, &is_64bit) ||
         !ahci_pci_abar_valid(bar, bar_size, is_io, is_64bit) ||
-        bar_size < AHCI_ABAR_MIN_SIZE)
+        bar_size < AHCI_ABAR_PROBE_SIZE)
         return 0;
 
     if (!pci_enable_memory_space(pci))
@@ -66,7 +66,7 @@ static int ahci_probe_inactive_pci_function(const struct pci_device* pci)
     memory_enabled = 1;
 
     registers = (volatile uint8_t*)mmio_map_region(
-        bar, (size_t)AHCI_ABAR_MIN_SIZE);
+        bar, (size_t)AHCI_ABAR_PROBE_SIZE);
     if (registers == 0)
         goto cleanup;
 
@@ -81,7 +81,8 @@ static int ahci_probe_inactive_pci_function(const struct pci_device* pci)
 
         if (cap == 0U || cap == UINT32_MAX || ghc == UINT32_MAX ||
             ports == UINT32_MAX || version == 0U || version == UINT32_MAX ||
-            (ports & ~valid_ports) != 0U)
+            (ports & ~valid_ports) != 0U ||
+            !ahci_pci_abar_fits_ports(bar_size, cap))
             goto cleanup;
 
         /* Register reads only; discovery never writes GHC or port registers. */
@@ -91,7 +92,7 @@ static int ahci_probe_inactive_pci_function(const struct pci_device* pci)
 cleanup:
     if (registers != 0) {
         if (!mmio_unmap_region((void*)registers,
-                               (size_t)AHCI_ABAR_MIN_SIZE))
+                               (size_t)AHCI_ABAR_PROBE_SIZE))
             ok = 0;
     }
     if (memory_enabled || pci_read_config16(pci, 0x04U) != saved_command) {

@@ -261,8 +261,10 @@ static EFI_STATUS load_elf64(
         }
 
         UINT64 segment_end = ph->p_paddr + ph->p_memsz;
-        if (segment_end > UEFI_MAX_PHYSICAL_ADDRESS)
+        if (segment_end > UEFI_MAX_PHYSICAL_ADDRESS) {
+            serial_write("VANTAOS_UEFI_ELF_SEGMENT_ABOVE_LIMIT_FAIL\\n");
             return EFI_UNSUPPORTED;
+        }
 
         /* PT_LOAD destinations must not alias one another. */
         for (UINTN previous = 0; previous < i; previous++)
@@ -316,8 +318,10 @@ static EFI_STATUS load_elf64(
         BS->AllocatePages, 4, AllocateAddress, EfiLoaderData, pages,
         &allocation
     );
-    if (EFI_ERROR(status) || allocation != image_start)
+    if (EFI_ERROR(status) || allocation != image_start) {
+        serial_write("VANTAOS_UEFI_ELF_PAGE_ALLOCATION_FAIL\\n");
         return EFI_OUT_OF_RESOURCES;
+    }
 
     SetMem((void*)(UINTN)image_start, (UINTN)image_bytes, 0);
 

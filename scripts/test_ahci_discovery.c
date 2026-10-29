@@ -123,7 +123,12 @@ void serial_write(const char* text)
 
 int main(void)
 {
-    const uint32_t cap = 3U;       /* Four ports described by CAP.NP. */
+    const uint32_t cap =
+#ifdef AHCI_TEST_BAD_CAP
+        0U;
+#else
+        3U;                         /* Four ports described by CAP.NP. */
+#endif
     const uint32_t pi = 5U;        /* Ports zero and two are implemented. */
     const uint32_t version = 0x00010300U;
     memcpy(fake_registers + 0x00U, &cap, sizeof(cap));
@@ -146,6 +151,17 @@ int main(void)
     assert(command_register == 0x0004U);
     assert(rejected_marker);
     puts("VANTAOS_AHCI_DISCOVERY_UNSAFE_GUARD_OK");
+#elif defined(AHCI_TEST_BAD_CAP)
+    assert(size_calls == 1U);
+    assert(bar_calls == 1U);
+    assert(enable_calls == 1U);
+    assert(write_calls == 1U);
+    assert(map_calls == 1U);
+    assert(unmap_calls == 1U);
+    assert(command_register == 0U);
+    assert(!discovered_marker);
+    assert(rejected_marker);
+    puts("VANTAOS_AHCI_DISCOVERY_BAD_CAP_CLEANUP_OK");
 #else
     assert(size_calls == 1U);
     assert(bar_calls == 1U);

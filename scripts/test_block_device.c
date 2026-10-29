@@ -58,7 +58,12 @@ static void initialize_device(block_device_t *d, const char *name,
                               const block_device_ops_t *ops)
 {
     memset(d, 0, sizeof(*d));
-    strncpy(d->name, name, sizeof(d->name) - 1U);
+    size_t i = 0U;
+    while (i + 1U < sizeof(d->name) && name[i]) {
+        d->name[i] = name[i];
+        ++i;
+    }
+    d->name[i] = '\0';
     d->sector_count = 8U;
     d->sector_size = 512U;
     d->ops = ops;

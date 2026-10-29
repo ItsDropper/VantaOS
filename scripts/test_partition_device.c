@@ -11,6 +11,8 @@
 #include <assert.h>
 #include <string.h>
 
+static unsigned read_calls;
+
 static block_status_t failing_read(block_device_t *device, uint64_t lba,
                                    uint32_t count, void *buffer)
 {
@@ -21,8 +23,6 @@ static block_status_t failing_read(block_device_t *device, uint64_t lba,
     ++read_calls;
     return BLOCK_STATUS_IO_ERROR;
 }
-
-static unsigned read_calls;
 
 static const block_device_ops_t failing_ops = {
     failing_read, 0, 0

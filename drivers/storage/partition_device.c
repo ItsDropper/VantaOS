@@ -6,6 +6,7 @@
 #include "partition_device.h"
 #include "partition_scan.h"
 #include "serial.h"
+#include "spinlock.h"
 
 #define PARTITION_DEVICE_MAX (BLOCK_DEVICE_MAX - 1U)
 
@@ -26,6 +27,7 @@ static partition_context_t partitions[PARTITION_DEVICE_MAX];
 static disk_scan_state_t scan_state[BLOCK_DEVICE_MAX];
 static size_t partition_count;
 static size_t scan_state_count;
+static spinlock_t partition_device_lock = SPINLOCK_INITIALIZER;
 
 static int read_disk(void *context, uint64_t lba, uint32_t count, void *buffer)
 {
@@ -120,12 +122,20 @@ static int has_partition_entry(const uint8_t *mbr, uint64_t disk_sectors)
     return 0;
 }
 
-int partition_device_has_table(const block_device_t *disk)
+static int partition_device_has_table_unlocked(const block_device_t *disk)
 {
     for (size_t i = 0U; i < scan_state_count; ++i)
         if (scan_state[i].disk == disk)
             return scan_state[i].has_table != 0U;
     return 0;
+}
+
+int partition_device_has_table(const block_device_t *disk)
+{
+    uint64_t flags = spinlock_lock_irqsave(&partition_device_lock);
+    int result = partition_device_has_table_unlocked(disk);
+    spinlock_unlock_irqrestore(&partition_device_lock, flags);
+    return result;
 }
 
 static void record_scan(block_device_t *disk, int has_table, int scan_success)
@@ -138,7 +148,7 @@ static void record_scan(block_device_t *disk, int has_table, int scan_success)
     ++scan_state_count;
 }
 
-int partition_device_scan_disk(block_device_t *disk)
+static int partition_device_scan_disk_unlocked(block_device_t *disk)
 {
     if (!disk || (disk->flags & BLOCK_DEVICE_PARTITION) ||
         disk->sector_size != 512U || !disk->sector_count)
@@ -200,6 +210,14 @@ int partition_device_scan_disk(block_device_t *disk)
     }
     record_scan(disk, has_table, all_registered);
     return all_registered;
+}
+
+int partition_device_scan_disk(block_device_t *disk)
+{
+    uint64_t flags = spinlock_lock_irqsave(&partition_device_lock);
+    int result = partition_device_scan_disk_unlocked(disk);
+    spinlock_unlock_irqrestore(&partition_device_lock, flags);
+    return result;
 }
 
 void partition_device_initialize(void)

@@ -9,8 +9,8 @@ ENTRY(uefi_kernel_entry)
 
 SECTIONS
 {
-    /* Keep the fixed-address kernel image clear of low-memory firmware allocations. */
-    .multiboot 16M :
+    /* OVMF may reserve the first 32 MiB for firmware and boot allocations. */
+    .multiboot 64M :
     {
         KEEP(*(.multiboot))
     }

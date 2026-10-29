@@ -89,6 +89,8 @@ int main(void)
     assert(block_device_get(0U) == &device);
     assert(block_device_get(1U) == 0);
     assert(block_device_register(&device) == BLOCK_STATUS_BUSY);
+    assert(block_device_register_disk(&device) == BLOCK_STATUS_BUSY);
+    assert(strcmp(device.name, "unit-disk") == 0);
     assert(block_device_register(&duplicate) == BLOCK_STATUS_BUSY);
 
     assert(block_device_read(&device, 0U, 1U, output) == BLOCK_STATUS_OK);

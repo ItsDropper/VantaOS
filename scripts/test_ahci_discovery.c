@@ -102,7 +102,11 @@ void* mmio_map_region(uint64_t physical_address, size_t length)
     assert(physical_address == 0xFEBF0000ULL);
     assert(length == AHCI_ABAR_MIN_SIZE);
     ++map_calls;
+#ifdef AHCI_TEST_MAP_FAIL
+    return 0;
+#else
     return fake_registers;
+#endif
 }
 
 int mmio_unmap_region(void* virtual_address, size_t length)
@@ -157,6 +161,17 @@ int main(void)
     assert(command_register == 0x0004U);
     assert(rejected_marker);
     puts("VANTAOS_AHCI_DISCOVERY_UNSAFE_GUARD_OK");
+#elif defined(AHCI_TEST_MAP_FAIL)
+    assert(size_calls == 1U);
+    assert(bar_calls == 1U);
+    assert(enable_calls == 1U);
+    assert(write_calls == 1U);
+    assert(map_calls == 1U);
+    assert(unmap_calls == 0U);
+    assert(command_register == 0U);
+    assert(!discovered_marker);
+    assert(rejected_marker);
+    puts("VANTAOS_AHCI_DISCOVERY_MAP_FAILURE_CLEANUP_OK");
 #elif defined(AHCI_TEST_BAD_CAP) || defined(AHCI_TEST_BAD_GHC)
     assert(size_calls == 1U);
     assert(bar_calls == 1U);

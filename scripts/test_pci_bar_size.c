@@ -84,6 +84,24 @@ int pci_test_ecam_read32(uint16_t segment, uint8_t bus, uint8_t slot,
     assert(config_space[TEST_BAR0_INDEX] == 0x80000000U);
     assert(bar_write_count == 2U);
 
+    /* A 64-bit BAR cannot consume a nonexistent BAR slot 6. */
+    reset_config();
+    config_space[TEST_BAR0_INDEX + 5U] = 0x80000004U;
+    unsigned writes_before_invalid_wide_bar = bar_write_count;
+    assert(!pci_get_bar_size(&gpu, 5U, &size));
+    assert(size == 0U);
+    assert(bar_write_count == writes_before_invalid_wide_bar);
+
+    /* Type-1 bridges expose only BAR0 and BAR1; reject BAR2 without writes. */
+    reset_config();
+    config_space[3] = 0x00010000U;
+    config_space[TEST_BAR0_INDEX] = 0x80000000U;
+    bar_masks[0] = 0xFF000000U;
+    writes_before_invalid_wide_bar = bar_write_count;
+    assert(!pci_get_bar_size(&gpu, 2U, &size));
+    assert(size == 0U);
+    assert(bar_write_count == writes_before_invalid_wide_bar);
+
     return 0;
 }
 

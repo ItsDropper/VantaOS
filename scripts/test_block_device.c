@@ -9,6 +9,7 @@
 
 #include <assert.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
 static block_device_t device;
@@ -131,6 +132,30 @@ int main(void)
     initialize_device(&device, "zero-capacity", &full_ops);
     device.sector_count = 0U;
     assert(block_device_register(&device) == BLOCK_STATUS_INVALID);
+
+    /* Full registry must leave a rejected disk's caller-owned name untouched. */
+    block_device_t occupied[BLOCK_DEVICE_MAX];
+    for (unsigned i = 0U; i < BLOCK_DEVICE_MAX; ++i) {
+        memset(&occupied[i], 0, sizeof(occupied[i]));
+        (void)snprintf(occupied[i].name, sizeof(occupied[i].name),
+                       "occupied-%02u", i);
+        occupied[i].sector_count = 1U;
+        occupied[i].sector_size = 512U;
+        occupied[i].ops = &capacity_ops;
+        assert(block_device_register(&occupied[i]) == BLOCK_STATUS_OK);
+    }
+    block_device_t unavailable;
+    memset(&unavailable, 0, sizeof(unavailable));
+    memcpy(unavailable.name, "preserve-me", sizeof("preserve-me"));
+    unavailable.sector_count = 1U;
+    unavailable.sector_size = 512U;
+    unavailable.ops = &capacity_ops;
+    assert(block_device_register_disk(&unavailable) == BLOCK_STATUS_NO_MEMORY);
+    assert(strcmp(unavailable.name, "preserve-me") == 0);
+    assert(unavailable.online == 0U);
+    assert(block_device_count() == BLOCK_DEVICE_MAX);
+    for (unsigned i = 0U; i < BLOCK_DEVICE_MAX; ++i)
+        assert(block_device_unregister(&occupied[i]) == BLOCK_STATUS_OK);
 
     return 0;
 }

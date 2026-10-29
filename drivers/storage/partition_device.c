@@ -159,6 +159,7 @@ int partition_device_scan_disk(block_device_t *disk)
     partition_scan_status_t status = partition_scan(read_disk, disk,
         disk->sector_count, found, PARTITION_SCAN_MAX, &found_count);
     if (status != PARTITION_SCAN_OK) {
+        record_scan(disk, has_table, 0);
         if (has_table)
             serial_write("VANTAOS_PARTITION_FAIL\n");
         return 0;

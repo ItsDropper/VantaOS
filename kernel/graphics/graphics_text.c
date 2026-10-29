@@ -243,14 +243,28 @@ void graphics_draw_text(
         for (int row = 0; row < 7; row++)
         {
             uint8_t bits = glyph[row];
-            for (int col = 0; col < 5; col++)
+            int col = 0;
+            while (col < 5)
             {
-                if ((bits & (1U << (4 - col))) == 0U)
+                while (col < 5 && (bits & (1U << (4 - col))) == 0U)
+                    col++;
+                if (col >= 5)
+                    break;
+
+                int run_start = col++;
+                while (col < 5 && (bits & (1U << (4 - col))) != 0U)
+                    col++;
+
+                int64_t run_x0 = pen_x + (int64_t)run_start * scale_i;
+                int64_t run_x1 = pen_x + (int64_t)col * scale_i;
+                if (run_x0 < 0)
+                    run_x0 = 0;
+                if (run_x1 > framebuffer_width)
+                    run_x1 = framebuffer_width;
+                if (run_x0 >= run_x1)
                     continue;
 
-                int64_t pixel_x0 = pen_x + (int64_t)col * scale_i;
                 int64_t pixel_y0 = pen_y + (int64_t)row * scale_i;
-
                 for (int sy = 0; sy < scale_i; sy++)
                 {
                     int64_t draw_y = pixel_y0 + sy;
@@ -259,13 +273,8 @@ void graphics_draw_text(
 
                     volatile uint32_t* dest = (volatile uint32_t*)(
                         framebuffer + (size_t)draw_y * framebuffer_pitch);
-
-                    for (int sx = 0; sx < scale_i; sx++)
+                    for (int64_t draw_x = run_x0; draw_x < run_x1; draw_x++)
                     {
-                        int64_t draw_x = pixel_x0 + sx;
-                        if (draw_x < 0 || draw_x >= framebuffer_width)
-                            continue;
-
                         uint32_t px = (uint32_t)draw_x;
                         if (dest[px] == packed)
                             continue;

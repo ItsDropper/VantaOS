@@ -150,6 +150,10 @@ jobs:
             scripts/test_ahci_discovery.c drivers/storage/ahci.c \
             -o /tmp/vantaos-ahci-discovery-bad-ghc-test
           /tmp/vantaos-ahci-discovery-bad-ghc-test
+          gcc -std=c11 -Wall -Wextra -Werror -DAHCI_TEST_MAP_FAIL -Iinclude \
+            scripts/test_ahci_discovery.c drivers/storage/ahci.c \
+            -o /tmp/vantaos-ahci-discovery-map-fail-test
+          /tmp/vantaos-ahci-discovery-map-fail-test
 
       - name: Test ATA LBA28 request bounds
         run: |

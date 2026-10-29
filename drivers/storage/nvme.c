@@ -133,6 +133,16 @@ static uint32_t controller_count;
 static uint32_t namespace_count;
 static uint8_t driver_registered;
 
+static void nvme_restore_pci_command(const struct pci_device* pci,
+                                        uint16_t saved_command)
+{
+    if (pci_read_config16(pci, 0x04U) == saved_command)
+        return;
+    if (!pci_write_config16(pci, 0x04U, saved_command) ||
+        pci_read_config16(pci, 0x04U) != saved_command)
+        serial_write("VANTAOS_NVME_PCI_COMMAND_RESTORE_FAIL\n");
+}
+
 static inline uint32_t mmio_read32(volatile uint8_t* base, uint32_t offset)
 {
     return *(volatile uint32_t*)(base + offset);
@@ -632,8 +642,11 @@ static storage_probe_result_t nvme_probe(const struct pci_device* pci)
     int is_io = 0, is_64 = 0;
     if (!pci_get_bar(pci, 0, &bar, &is_io, &is_64) || is_io || !bar)
         return STORAGE_PROBE_FAILED;
-    if (!pci_enable_memory_space(pci))
+    uint16_t saved_command = pci_read_config16(pci, 0x04U);
+    if (!pci_enable_memory_space(pci)) {
+        nvme_restore_pci_command(pci, saved_command);
         return STORAGE_PROBE_FAILED;
+    }
 
     nvme_controller_t* c = &controllers[controller_count];
     *c = (nvme_controller_t){0};
@@ -641,6 +654,7 @@ static storage_probe_result_t nvme_probe(const struct pci_device* pci)
     spinlock_init(&c->io_lock);
     if (!allocate_controller_memory(c)) {
         free_controller_memory(c);
+        nvme_restore_pci_command(pci, saved_command);
         return STORAGE_PROBE_FAILED;
     }
 
@@ -648,6 +662,7 @@ static storage_probe_result_t nvme_probe(const struct pci_device* pci)
     c->registers = (volatile uint8_t*)mmio_map_region(bar, NVME_REGISTERS_SIZE);
     if (!c->registers) {
         free_controller_memory(c);
+        nvme_restore_pci_command(pci, saved_command);
         return STORAGE_PROBE_FAILED;
     }
     uint64_t cap = mmio_read64(c->registers, 0x00U);
@@ -658,23 +673,28 @@ static storage_probe_result_t nvme_probe(const struct pci_device* pci)
     uint32_t command_sets = (uint32_t)((cap >> 37) & 0xFFU);
     if (max_entries < 2U || stride_shift > 15U ||
         minimum_page_shift != 0U || (command_sets & 1U) == 0U) {
-        mmio_unmap_region((void*)c->registers, NVME_REGISTERS_SIZE);
+        (void)mmio_unmap_region((void*)c->registers, NVME_REGISTERS_SIZE);
+        c->registers = 0;
         free_controller_memory(c);
+        nvme_restore_pci_command(pci, saved_command);
         return STORAGE_PROBE_FAILED;
     }
     c->queue_depth = (uint16_t)(max_entries < NVME_QUEUE_DEPTH ?
                                   max_entries : NVME_QUEUE_DEPTH);
     c->doorbell_stride = 4ULL << stride_shift;
     uint64_t required_length = 0x1000ULL + 3ULL * c->doorbell_stride + sizeof(uint32_t);
-    if (required_length > PAGING_MMIO_SIZE ||
-        !mmio_unmap_region((void*)c->registers, NVME_REGISTERS_SIZE)) {
-        c->registers = 0;
+    int probe_mapping_released =
+        mmio_unmap_region((void*)c->registers, NVME_REGISTERS_SIZE);
+    c->registers = 0;
+    if (required_length > PAGING_MMIO_SIZE || !probe_mapping_released) {
         free_controller_memory(c);
+        nvme_restore_pci_command(pci, saved_command);
         return STORAGE_PROBE_FAILED;
     }
     c->registers = (volatile uint8_t*)mmio_map_region(bar, (size_t)required_length);
     if (!c->registers) {
         free_controller_memory(c);
+        nvme_restore_pci_command(pci, saved_command);
         return STORAGE_PROBE_FAILED;
     }
     c->admin_submission_doorbell = (volatile uint32_t*)
@@ -762,6 +782,7 @@ fail:
         (void)mmio_unmap_region((void*)c->registers, (size_t)mapped_length);
         c->registers = 0;
         free_controller_memory(c);
+        nvme_restore_pci_command(pci, saved_command);
     } else {
         serial_write("VANTAOS_NVME_DMA_RETAINED_AFTER_RESET_TIMEOUT\n");
     }

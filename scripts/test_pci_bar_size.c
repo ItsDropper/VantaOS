@@ -66,57 +66,8 @@ int pci_test_ecam_read32(uint16_t segment, uint8_t bus, uint8_t slot,
 {
     (void)segment; (void)bus; (void)slot; (void)function; (void)offset;
     if (value) *value = 0xFFFFFFFFU;
-    /* Reject a base address that is not aligned to its decoded aperture. */
-    reset_config();
-    config_space[TEST_BAR0_INDEX] = 0x81000000U;
-    bar_masks[0] = 0xFF000000U; /* 16 MiB aperture requires 16 MiB alignment. */
-    assert(!pci_get_bar_size(&gpu, 0U, &size));
-    assert(size == 0U);
-    assert(config_space[TEST_BAR0_INDEX] == 0x81000000U);
-    assert(bar_write_count == 2U);
-
-    /* A mask that does not encode a power-of-two aperture must fail closed. */
-    reset_config();
-    config_space[TEST_BAR0_INDEX] = 0x80000000U;
-    bar_masks[0] = 0xFF100000U;
-    assert(!pci_get_bar_size(&gpu, 0U, &size));
-    assert(size == 0U);
-    assert(config_space[TEST_BAR0_INDEX] == 0x80000000U);
-    assert(bar_write_count == 2U);
-
-    /* A 64-bit BAR cannot consume a nonexistent BAR slot 6. */
-    reset_config();
-    config_space[TEST_BAR0_INDEX + 5U] = 0x80000004U;
-    unsigned writes_before_invalid_wide_bar = bar_write_count;
-    assert(!pci_get_bar_size(&gpu, 5U, &size));
-    assert(size == 0U);
-    assert(bar_write_count == writes_before_invalid_wide_bar);
-
-    /* Type-1 bridges expose only BAR0 and BAR1; reject BAR2 without writes. */
-    reset_config();
-    config_space[3] = 0x00010000U;
-    config_space[TEST_BAR0_INDEX] = 0x80000000U;
-    bar_masks[0] = 0xFF000000U;
-    writes_before_invalid_wide_bar = bar_write_count;
-    assert(!pci_get_bar_size(&gpu, 2U, &size));
-    assert(size == 0U);
-    assert(bar_write_count == writes_before_invalid_wide_bar);
-
-    /* Invalid 64-bit masks must restore both halves of the BAR. */
-    reset_config();
-    config_space[TEST_BAR0_INDEX] = 0x80000004U;
-    config_space[TEST_BAR0_INDEX + 1U] = 0x00000012U;
-    bar_masks[0] = 0xF0001004U;
-    bar_masks[1] = 0xFFFFFFFFU;
-    assert(!pci_get_bar_size(&gpu, 0U, &size));
-    assert(size == 0U);
-    assert(config_space[TEST_BAR0_INDEX] == 0x80000004U);
-    assert(config_space[TEST_BAR0_INDEX + 1U] == 0x00000012U);
-    assert(bar_write_count == 4U); /* two probe writes and two restores */
-
     return 0;
 }
-
 uint32_t pci_test_inl(uint16_t port)
 {
     assert(port == TEST_CONFIG_DATA);
@@ -215,6 +166,54 @@ int main(void)
     config_space[TEST_BAR0_INDEX] = 0U;
     assert(!pci_get_bar_size(&gpu, 0U, &size));
     assert(!pci_get_bar_size(&gpu, 0U, 0));
+
+    /* Reject a base address that is not aligned to its decoded aperture. */
+    reset_config();
+    config_space[TEST_BAR0_INDEX] = 0x81000000U;
+    bar_masks[0] = 0xFF000000U;
+    assert(!pci_get_bar_size(&gpu, 0U, &size));
+    assert(size == 0U);
+    assert(config_space[TEST_BAR0_INDEX] == 0x81000000U);
+    assert(bar_write_count == 2U);
+
+    /* Reject a mask that does not encode a power-of-two aperture. */
+    reset_config();
+    config_space[TEST_BAR0_INDEX] = 0x80000000U;
+    bar_masks[0] = 0xFF100000U;
+    assert(!pci_get_bar_size(&gpu, 0U, &size));
+    assert(size == 0U);
+    assert(config_space[TEST_BAR0_INDEX] == 0x80000000U);
+    assert(bar_write_count == 2U);
+
+    /* A 64-bit BAR cannot consume a nonexistent BAR slot 6. */
+    reset_config();
+    config_space[TEST_BAR0_INDEX + 5U] = 0x80000004U;
+    unsigned writes_before_invalid_wide_bar = bar_write_count;
+    assert(!pci_get_bar_size(&gpu, 5U, &size));
+    assert(size == 0U);
+    assert(bar_write_count == writes_before_invalid_wide_bar);
+
+    /* Type-1 bridges expose only BAR0 and BAR1; reject BAR2 without writes. */
+    reset_config();
+    config_space[3] = 0x00010000U;
+    config_space[TEST_BAR0_INDEX] = 0x80000000U;
+    bar_masks[0] = 0xFF000000U;
+    writes_before_invalid_wide_bar = bar_write_count;
+    assert(!pci_get_bar_size(&gpu, 2U, &size));
+    assert(size == 0U);
+    assert(bar_write_count == writes_before_invalid_wide_bar);
+
+    /* Invalid 64-bit masks must restore both halves of the BAR. */
+    reset_config();
+    config_space[TEST_BAR0_INDEX] = 0x80000004U;
+    config_space[TEST_BAR0_INDEX + 1U] = 0x00000012U;
+    bar_masks[0] = 0xF0001004U;
+    bar_masks[1] = 0xFFFFFFFFU;
+    assert(!pci_get_bar_size(&gpu, 0U, &size));
+    assert(size == 0U);
+    assert(config_space[TEST_BAR0_INDEX] == 0x80000004U);
+    assert(config_space[TEST_BAR0_INDEX + 1U] == 0x00000012U);
+    assert(bar_write_count == 4U);
 
     return 0;
 }

@@ -169,11 +169,11 @@ int main(void)
 
     /* Reject a base address that is not aligned to its decoded aperture. */
     reset_config();
-    config_space[TEST_BAR0_INDEX] = 0x81000000U;
+    config_space[TEST_BAR0_INDEX] = 0x81800000U;
     bar_masks[0] = 0xFF000000U;
     assert(!pci_get_bar_size(&gpu, 0U, &size));
     assert(size == 0U);
-    assert(config_space[TEST_BAR0_INDEX] == 0x81000000U);
+    assert(config_space[TEST_BAR0_INDEX] == 0x81800000U);
     assert(bar_write_count == 2U);
 
     /* Reject a mask that does not encode a power-of-two aperture. */

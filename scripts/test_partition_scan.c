@@ -50,8 +50,8 @@ static void gpt_image(memdisk_t *d)
 {
     uint8_t *m=d->data;m[510]=0x55;m[511]=0xAA;mbr_entry(m,0U,0xEEU,1U,SECTORS-1U);
     uint8_t *a=d->data+ARRAY_LBA*SS;
-    a[0]=0x28;a[1]=0x73;wr64(a+32U,40U);wr64(a+40U,99U);a[56]='F';a[58]='A';a[60]='T';
-    uint8_t *b=a+ENTRY_SIZE;b[0]=0x28;b[1]=0x73;wr64(b+32U,100U);wr64(b+40U,199U);b[56]='D';b[58]='A';b[60]='T';
+    a[0]=0x28;a[1]=0x73;a[16]=1U;wr64(a+32U,40U);wr64(a+40U,99U);a[56]='F';a[58]='A';a[60]='T';
+    uint8_t *b=a+ENTRY_SIZE;b[0]=0x28;b[1]=0x73;b[16]=2U;wr64(b+32U,100U);wr64(b+40U,199U);b[56]='D';b[58]='A';b[60]='T';
     uint32_t sum=crc(a,ENTRY_COUNT*ENTRY_SIZE);
     for(unsigned i=0;i<ENTRY_COUNT*ENTRY_SIZE;++i)d->data[BACKUP_ARRAY*SS+i]=a[i];
     gpt_header(d->data+SS,1U,BACKUP_HEADER,ARRAY_LBA,sum);
@@ -102,6 +102,31 @@ int main(void)
     assert(partition_scan(memread,&d,d.sectors,out,PARTITION_SCAN_MAX,&n)==PARTITION_SCAN_BAD_TABLE);
     wipe(&d);gpt_image(&d);
     mbr_entry(d.data,1U,0x0CU,40U,60U);
+    assert(partition_scan(memread,&d,d.sectors,out,PARTITION_SCAN_MAX,&n)==PARTITION_SCAN_BAD_TABLE);
+    wipe(&d);gpt_image(&d);
+    uint8_t *entries = d.data + ARRAY_LBA * SS;
+    for (unsigned i = 16U; i < 32U; ++i) entries[i] = 0U;
+    uint32_t sum_unique = crc(entries, ENTRY_COUNT * ENTRY_SIZE);
+    uint8_t *backup_entries = d.data + BACKUP_ARRAY * SS;
+    for (unsigned i = 0U; i < ENTRY_COUNT * ENTRY_SIZE; ++i)
+        backup_entries[i] = entries[i];
+    wr32(d.data + SS + 88U, sum_unique);
+    refresh_crc(d.data + SS);
+    wr32(d.data + BACKUP_HEADER * SS + 88U, sum_unique);
+    refresh_crc(d.data + BACKUP_HEADER * SS);
+    assert(partition_scan(memread,&d,d.sectors,out,PARTITION_SCAN_MAX,&n)==PARTITION_SCAN_BAD_TABLE);
+    wipe(&d);gpt_image(&d);
+    entries = d.data + ARRAY_LBA * SS;
+    for (unsigned i = 16U; i < 32U; ++i)
+        entries[ENTRY_SIZE + i] = entries[i];
+    sum_unique = crc(entries, ENTRY_COUNT * ENTRY_SIZE);
+    backup_entries = d.data + BACKUP_ARRAY * SS;
+    for (unsigned i = 0U; i < ENTRY_COUNT * ENTRY_SIZE; ++i)
+        backup_entries[i] = entries[i];
+    wr32(d.data + SS + 88U, sum_unique);
+    refresh_crc(d.data + SS);
+    wr32(d.data + BACKUP_HEADER * SS + 88U, sum_unique);
+    refresh_crc(d.data + BACKUP_HEADER * SS);
     assert(partition_scan(memread,&d,d.sectors,out,PARTITION_SCAN_MAX,&n)==PARTITION_SCAN_BAD_TABLE);
     wipe(&d);gpt_image(&d);
     wr32(d.data+SS+20U,1U);

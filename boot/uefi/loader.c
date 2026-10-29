@@ -208,8 +208,10 @@ static EFI_STATUS load_elf64(
     UINT64* out_entry
 )
 {
-    if (!file || file_size < sizeof(Elf64_Ehdr))
+    if (!file || file_size < sizeof(Elf64_Ehdr)) {
+        serial_write("VANTAOS_UEFI_ELF_HEADER_SIZE_FAIL\\n");
         return EFI_LOAD_ERROR;
+    }
 
     const Elf64_Ehdr* header = (const Elf64_Ehdr*)file;
     if (header->e_ident[EI_MAG0] != ELFMAG0 ||
@@ -223,14 +225,18 @@ static EFI_STATUS load_elf64(
         header->e_machine != EM_X86_64 ||
         header->e_ehsize != sizeof(Elf64_Ehdr) ||
         header->e_phentsize != sizeof(Elf64_Phdr) ||
-        header->e_phnum == 0 || header->e_phnum > 128U)
+        header->e_phnum == 0 || header->e_phnum > 128U) {
+        serial_write("VANTAOS_UEFI_ELF_HEADER_INVALID_FAIL\\n");
         return EFI_LOAD_ERROR;
+    }
 
     if (header->e_phoff > file_size ||
         (UINT64)header->e_phnum >
             (UINT64)(file_size - (UINTN)header->e_phoff) /
-                sizeof(Elf64_Phdr))
+                sizeof(Elf64_Phdr)) {
+        serial_write("VANTAOS_UEFI_ELF_PROGRAM_TABLE_FAIL\\n");
         return EFI_LOAD_ERROR;
+    }
 
     const Elf64_Phdr* phdrs =
         (const Elf64_Phdr*)(file + (UINTN)header->e_phoff);
@@ -249,8 +255,10 @@ static EFI_STATUS load_elf64(
             ph->p_filesz > file_size - (UINTN)ph->p_offset ||
             ph->p_paddr != ph->p_vaddr ||
             ph->p_paddr < 0x100000ULL ||
-            ph->p_memsz > UINT64_MAX - ph->p_paddr)
+            ph->p_memsz > UINT64_MAX - ph->p_paddr) {
+            serial_write("VANTAOS_UEFI_ELF_SEGMENT_INVALID_FAIL\\n");
             return EFI_LOAD_ERROR;
+        }
 
         UINT64 segment_end = ph->p_paddr + ph->p_memsz;
         if (segment_end > UEFI_MAX_PHYSICAL_ADDRESS)
@@ -264,19 +272,25 @@ static EFI_STATUS load_elf64(
                 continue;
 
             UINT64 other_end = other->p_paddr + other->p_memsz;
-            if (ph->p_paddr < other_end && other->p_paddr < segment_end)
+            if (ph->p_paddr < other_end && other->p_paddr < segment_end) {
+                serial_write("VANTAOS_UEFI_ELF_SEGMENT_OVERLAP_FAIL\\n");
                 return EFI_LOAD_ERROR;
+            }
         }
 
         if (ph->p_align > 1U &&
             ((ph->p_align & (ph->p_align - 1U)) != 0 ||
-             (ph->p_vaddr % ph->p_align) != (ph->p_offset % ph->p_align)))
+             (ph->p_vaddr % ph->p_align) != (ph->p_offset % ph->p_align))) {
+            serial_write("VANTAOS_UEFI_ELF_ALIGNMENT_FAIL\\n");
             return EFI_LOAD_ERROR;
+        }
 
         UINT64 segment_page_start = align_down_page(ph->p_paddr);
         UINT64 segment_page_end;
-        if (!align_up_page(segment_end, &segment_page_end))
+        if (!align_up_page(segment_end, &segment_page_end)) {
+            serial_write("VANTAOS_UEFI_ELF_SEGMENT_ALIGN_OVERFLOW_FAIL\\n");
             return EFI_LOAD_ERROR;
+        }
 
         if (segment_page_start < image_start)
             image_start = segment_page_start;
@@ -290,8 +304,10 @@ static EFI_STATUS load_elf64(
     }
 
     if (image_start == UINT64_MAX || image_end <= image_start ||
-        image_end > UEFI_MAX_PHYSICAL_ADDRESS || !entry_is_executable)
+        image_end > UEFI_MAX_PHYSICAL_ADDRESS || !entry_is_executable) {
+        serial_write("VANTAOS_UEFI_ELF_IMAGE_RANGE_FAIL\\n");
         return EFI_LOAD_ERROR;
+    }
 
     UINT64 image_bytes = image_end - image_start;
     UINTN pages = (UINTN)(image_bytes / EFI_PAGE_SIZE);

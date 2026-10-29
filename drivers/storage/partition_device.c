@@ -19,6 +19,7 @@ typedef struct {
 typedef struct {
     block_device_t *disk;
     uint8_t has_table;
+    uint8_t scan_success;
 } disk_scan_state_t;
 
 static partition_context_t partitions[PARTITION_DEVICE_MAX];
@@ -127,12 +128,13 @@ int partition_device_has_table(const block_device_t *disk)
     return 0;
 }
 
-static void record_scan(block_device_t *disk, int has_table)
+static void record_scan(block_device_t *disk, int has_table, int scan_success)
 {
     if (scan_state_count >= BLOCK_DEVICE_MAX)
         return;
     scan_state[scan_state_count].disk = disk;
     scan_state[scan_state_count].has_table = has_table ? 1U : 0U;
+    scan_state[scan_state_count].scan_success = scan_success ? 1U : 0U;
     ++scan_state_count;
 }
 
@@ -144,7 +146,7 @@ int partition_device_scan_disk(block_device_t *disk)
 
     for (size_t i = 0U; i < scan_state_count; ++i)
         if (scan_state[i].disk == disk)
-            return 1;
+            return scan_state[i].scan_success != 0U;
 
     if (scan_state_count >= BLOCK_DEVICE_MAX)
         return 0;
@@ -152,8 +154,6 @@ int partition_device_scan_disk(block_device_t *disk)
     uint8_t first_sector[512];
     int has_table = read_disk(disk, 0U, 1U, first_sector) &&
                     has_partition_entry(first_sector, disk->sector_count);
-    record_scan(disk, has_table);
-
     partition_scan_entry_t found[PARTITION_SCAN_MAX];
     size_t found_count = 0U;
     partition_scan_status_t status = partition_scan(read_disk, disk,
@@ -196,6 +196,7 @@ int partition_device_scan_disk(block_device_t *disk)
             serial_write("VANTAOS_PARTITION_FAIL\n");
         }
     }
+    record_scan(disk, has_table, all_registered);
     return all_registered;
 }
 

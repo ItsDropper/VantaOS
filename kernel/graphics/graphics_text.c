@@ -7,6 +7,7 @@
 
 #include "graphics_internal.h"
 #include <stdint.h>
+#include <limits.h>
 
 const uint8_t font[36][7] =
 {
@@ -184,10 +185,15 @@ void graphics_draw_text(
     unsigned int scale
 )
 {
-    if (!initialized || !text || scale == 0)
+    if (!initialized || !text || scale == 0U ||
+        scale > (unsigned int)(INT_MAX / 8))
         return;
 
-    int start_x = x;
+    const int scale_i = (int)scale;
+    const uint32_t packed = graphics_pack_color(color);
+    int64_t pen_x = x;
+    int64_t pen_y = y;
+    const int64_t line_x = x;
 
     while (*text)
     {
@@ -195,14 +201,14 @@ void graphics_draw_text(
 
         if (c == '\n')
         {
-            y += 8 * (int)scale;
-            x = start_x;
+            pen_y += 8 * (int64_t)scale_i;
+            pen_x = line_x;
             continue;
         }
 
         if (c == ' ')
         {
-            x += 6 * (int)scale;
+            pen_x += 6 * (int64_t)scale_i;
             continue;
         }
 
@@ -219,27 +225,68 @@ void graphics_draw_text(
 
         if (!glyph)
         {
-            x += 6 * (int)scale;
+            pen_x += 6 * (int64_t)scale_i;
             continue;
         }
 
+        int dirty_x0 = (int)framebuffer_width;
+        int dirty_y0 = (int)framebuffer_height;
+        int dirty_x1 = -1;
+        int dirty_y1 = -1;
+
+        /*
+         * Rasterize directly into the shadow buffer. Calling fill_rect for
+         * each lit glyph pixel repeatedly packed the same color and updated
+         * the damage bitmap for overlapping tiles. Track changed pixels and
+         * publish one damage rectangle per glyph instead.
+         */
         for (int row = 0; row < 7; row++)
         {
             uint8_t bits = glyph[row];
-
             for (int col = 0; col < 5; col++)
             {
-                if (bits & (1U << (4 - col)))
-                    graphics_fill_rect(
-                        x + col * (int)scale,
-                        y + row * (int)scale,
-                        (int)scale,
-                        (int)scale,
-                        color
-                    );
+                if ((bits & (1U << (4 - col))) == 0U)
+                    continue;
+
+                int64_t pixel_x0 = pen_x + (int64_t)col * scale_i;
+                int64_t pixel_y0 = pen_y + (int64_t)row * scale_i;
+
+                for (int sy = 0; sy < scale_i; sy++)
+                {
+                    int64_t draw_y = pixel_y0 + sy;
+                    if (draw_y < 0 || draw_y >= framebuffer_height)
+                        continue;
+
+                    volatile uint32_t* dest = (volatile uint32_t*)(
+                        framebuffer + (size_t)draw_y * framebuffer_pitch);
+
+                    for (int sx = 0; sx < scale_i; sx++)
+                    {
+                        int64_t draw_x = pixel_x0 + sx;
+                        if (draw_x < 0 || draw_x >= framebuffer_width)
+                            continue;
+
+                        uint32_t px = (uint32_t)draw_x;
+                        if (dest[px] == packed)
+                            continue;
+
+                        dest[px] = packed;
+                        if ((int)px < dirty_x0) dirty_x0 = (int)px;
+                        if ((int)px > dirty_x1) dirty_x1 = (int)px;
+                        if ((int)draw_y < dirty_y0)
+                            dirty_y0 = (int)draw_y;
+                        if ((int)draw_y > dirty_y1)
+                            dirty_y1 = (int)draw_y;
+                    }
+                }
             }
         }
 
-        x += 6 * (int)scale;
+        if (dirty_x1 >= dirty_x0 && dirty_y1 >= dirty_y0)
+            graphics_mark_damage(dirty_x0, dirty_y0,
+                                 dirty_x1 - dirty_x0 + 1,
+                                 dirty_y1 - dirty_y0 + 1);
+
+        pen_x += 6 * (int64_t)scale_i;
     }
 }

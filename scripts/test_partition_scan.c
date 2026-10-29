@@ -115,5 +115,13 @@ int main(void)
     wr64(d.data+BACKUP_HEADER*SS+40U,35U);
     refresh_crc(d.data+BACKUP_HEADER*SS);
     assert(partition_scan(memread,&d,d.sectors,out,PARTITION_SCAN_MAX,&n)==PARTITION_SCAN_BAD_TABLE);
+    wipe(&d);d.data[510]=0x55;d.data[511]=0xAA;
+    mbr_entry(d.data,0U,0x0FU,100U,500U);
+    ebr=d.data+100U*SS;ebr[510]=0x55;ebr[511]=0xAA;
+    mbr_entry(ebr,0U,0x0CU,1U,100U);
+    mbr_entry(ebr,1U,0x0FU,50U,450U);
+    ebr=d.data+150U*SS;ebr[510]=0x55;ebr[511]=0xAA;
+    mbr_entry(ebr,0U,0x0CU,1U,10U);
+    assert(partition_scan(memread,&d,d.sectors,out,PARTITION_SCAN_MAX,&n)==PARTITION_SCAN_BAD_TABLE);
     free(d.data);return 0;
 }

@@ -142,6 +142,10 @@ jobs:
             scripts/test_ahci_discovery.c drivers/storage/ahci.c \
             -o /tmp/vantaos-ahci-discovery-unsafe-test
           /tmp/vantaos-ahci-discovery-unsafe-test
+          gcc -std=c11 -Wall -Wextra -Werror -DAHCI_TEST_BAD_CAP -Iinclude \
+            scripts/test_ahci_discovery.c drivers/storage/ahci.c \
+            -o /tmp/vantaos-ahci-discovery-bad-cap-test
+          /tmp/vantaos-ahci-discovery-bad-cap-test
 
       - name: Test ATA LBA28 request bounds
         run: |

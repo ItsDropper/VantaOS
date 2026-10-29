@@ -133,6 +133,13 @@ int main(void)
     device.sector_count = 0U;
     assert(block_device_register(&device) == BLOCK_STATUS_INVALID);
 
+    initialize_device(&device, "incoming-name", &capacity_ops);
+    device.sector_count = 1U;
+    assert(block_device_register_disk(&device) == BLOCK_STATUS_OK);
+    assert(strcmp(device.name, "disk0") == 0);
+    assert(device.online == 1U);
+    assert(block_device_unregister(&device) == BLOCK_STATUS_OK);
+
     /* Full registry must leave a rejected disk's caller-owned name untouched. */
     block_device_t occupied[BLOCK_DEVICE_MAX];
     for (unsigned i = 0U; i < BLOCK_DEVICE_MAX; ++i) {

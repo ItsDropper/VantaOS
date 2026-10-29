@@ -62,7 +62,11 @@ int pci_get_bar_size(const struct pci_device* device, uint8_t index,
     assert(index == 5U);
     assert((command_register & 0x0007U) == 0U);
     ++size_calls;
+#ifdef AHCI_TEST_SMALL_BAR
+    *size = 0x100U;
+#else
     *size = 0x2000U;
+#endif
     return 1;
 }
 
@@ -172,6 +176,17 @@ int main(void)
     assert(!discovered_marker);
     assert(rejected_marker);
     puts("VANTAOS_AHCI_DISCOVERY_MAP_FAILURE_CLEANUP_OK");
+#elif defined(AHCI_TEST_SMALL_BAR)
+    assert(size_calls == 1U);
+    assert(bar_calls == 1U);
+    assert(enable_calls == 1U);
+    assert(write_calls == 1U);
+    assert(map_calls == 1U);
+    assert(unmap_calls == 1U);
+    assert(command_register == 0U);
+    assert(!discovered_marker);
+    assert(rejected_marker);
+    puts("VANTAOS_AHCI_DISCOVERY_SMALL_BAR_REJECTED_OK");
 #elif defined(AHCI_TEST_BAD_CAP) || defined(AHCI_TEST_BAD_GHC)
     assert(size_calls == 1U);
     assert(bar_calls == 1U);

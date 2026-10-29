@@ -234,6 +234,13 @@ jobs:
             -o /tmp/vantaos-pci-bar-test
           /tmp/vantaos-pci-bar-test
 
+      - name: Test PCI BAR sizing edge cases
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -DPCI_TEST -Iinclude \
+            scripts/test_pci_bar_size.c drivers/pci/pci.c \
+            -o /tmp/vantaos-pci-bar-size-test
+          /tmp/vantaos-pci-bar-size-test
+
       - name: Test PCI conventional and extended capability traversal
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -DPCI_TEST -Iinclude scripts/test_pci_capability.c drivers/pci/pci.c -o /tmp/vantaos-pci-capability-test

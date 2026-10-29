@@ -54,5 +54,43 @@ int main(void)
     assert(!partition_device_has_table(&disk));
 
     assert(block_device_unregister(&disk) == BLOCK_STATUS_OK);
+
+    /* A name collision on partition 2 must roll back partition 1. */
+    block_device_t disk2;
+    block_device_t conflict;
+    memset(&disk2, 0, sizeof(disk2));
+    memset(&conflict, 0, sizeof(conflict));
+    memset(valid_mbr, 0, sizeof(valid_mbr));
+    valid_mbr[510] = 0x55U;
+    valid_mbr[511] = 0xAAU;
+    valid_mbr[446U + 4U] = 0x0CU;
+    write_u32(valid_mbr + 446U + 8U, 1U);
+    write_u32(valid_mbr + 446U + 12U, 10U);
+    valid_mbr[462U + 4U] = 0x0CU;
+    write_u32(valid_mbr + 462U + 8U, 20U);
+    write_u32(valid_mbr + 462U + 12U, 10U);
+
+    memcpy(disk2.name, "rollback", sizeof("rollback"));
+    disk2.sector_count = 128U;
+    disk2.sector_size = 512U;
+    disk2.ops = &valid_ops;
+    disk2.driver_data = valid_mbr;
+    memcpy(conflict.name, "rollbackp2", sizeof("rollbackp2"));
+    conflict.sector_count = 1U;
+    conflict.sector_size = 512U;
+    conflict.ops = &failing_ops;
+
+    assert(block_device_register(&conflict) == BLOCK_STATUS_OK);
+    assert(block_device_register(&disk2) == BLOCK_STATUS_OK);
+    uint32_t count_before_scan = block_device_count();
+    assert(partition_device_scan_disk(&disk2) == 0);
+    assert(block_device_count() == count_before_scan);
+    assert(block_device_find("rollbackp1") == 0);
+    assert(block_device_find("rollbackp2") == &conflict);
+    assert(partition_device_has_table(&disk2));
+    assert(partition_device_scan_disk(&disk2) == 0);
+    assert(block_device_count() == count_before_scan);
+    assert(block_device_unregister(&disk2) == BLOCK_STATUS_OK);
+    assert(block_device_unregister(&conflict) == BLOCK_STATUS_OK);
     return 0;
 }

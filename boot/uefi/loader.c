@@ -499,6 +499,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* system_tab
     );
     if (EFI_ERROR(status))
     {
+        serial_write("VANTAOS_UEFI_KERNEL_FILE_OPEN_FAIL\n");
         serial_write("VANTAOS_UEFI_LOADER_FAIL\n");
         return status;
     }
@@ -514,6 +515,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* system_tab
     if (EFI_ERROR(status) || boot_info_address >= UEFI_MAX_PHYSICAL_ADDRESS)
     {
         uefi_call_wrapper(BS->FreePool, 1, kernel_file);
+        serial_write("VANTAOS_UEFI_BOOT_INFO_ALLOC_FAIL\n");
         serial_write("VANTAOS_UEFI_LOADER_FAIL\n");
         return EFI_OUT_OF_RESOURCES;
     }
@@ -531,6 +533,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* system_tab
     if (EFI_ERROR(status))
     {
         uefi_call_wrapper(BS->FreePool, 1, kernel_file);
+        serial_write("VANTAOS_UEFI_GRAPHICS_UNAVAILABLE_FAIL\n");
         serial_write("VANTAOS_UEFI_LOADER_FAIL\n");
         return status;
     }
@@ -544,6 +547,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* system_tab
     uefi_call_wrapper(BS->FreePool, 1, kernel_file);
     if (EFI_ERROR(status))
     {
+        serial_write("VANTAOS_UEFI_ELF_LOAD_FAIL\n");
         serial_write("VANTAOS_UEFI_LOADER_FAIL\n");
         return status;
     }
@@ -559,6 +563,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* system_tab
     );
     if (EFI_ERROR(status) || !map_buffer)
     {
+        serial_write("VANTAOS_UEFI_MEMORY_MAP_ALLOC_FAIL\n");
         serial_write("VANTAOS_UEFI_LOADER_FAIL\n");
         return EFI_OUT_OF_RESOURCES;
     }

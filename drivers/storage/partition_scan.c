@@ -114,6 +114,7 @@ static partition_scan_status_t scan_gpt(partition_read_fn read, void *ctx,
     if (!read_checked(read, ctx, disk, 1U, 1U, primary)) return PARTITION_SCAN_IO_ERROR;
     if (!valid_gpt_header(primary, 1U, disk)) return PARTITION_SCAN_BAD_TABLE;
     uint64_t backup_lba = rd64(primary + 32U);
+    if (backup_lba != disk - 1U) return PARTITION_SCAN_BAD_TABLE;
     if (!read_checked(read, ctx, disk, backup_lba, 1U, backup)) return PARTITION_SCAN_IO_ERROR;
     if (!valid_gpt_header(backup, backup_lba, disk) ||
         rd64(backup + 32U) != 1U || rd32(backup + 80U) != rd32(primary + 80U) ||
@@ -130,10 +131,10 @@ static partition_scan_status_t scan_gpt(partition_read_fn read, void *ctx,
     uint64_t backup_array_lba = rd64(backup + 72U);
     if (n == 0U || n > GPT_MAX || size < 128U || size > GPT_ENTRY_MAX ||
         (size & 7U) != 0U ||
-        (primary_array_lba < last_usable + 1U &&
-         primary_array_lba + array_sectors > first_usable) ||
-        (backup_array_lba < last_usable + 1U &&
-         backup_array_lba + array_sectors > first_usable) ||
+        primary_array_lba < 2U || primary_array_lba >= first_usable ||
+        array_sectors > first_usable - primary_array_lba ||
+        backup_array_lba <= last_usable || backup_array_lba >= backup_lba ||
+        array_sectors > backup_lba - backup_array_lba ||
         !read_array(read, ctx, disk, primary_array_lba, n, size,
                     array_crc, entry_storage) ||
         !read_array(read, ctx, disk, backup_array_lba, n, size,

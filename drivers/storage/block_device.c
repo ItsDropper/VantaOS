@@ -42,22 +42,38 @@ static void make_disk_name(char *name, uint32_t number)
 }
 block_status_t block_device_register_disk(block_device_t* d)
 {
- if(!d) return BLOCK_STATUS_INVALID;
- /* Do not rename an object that is already visible in the registry. */
+ if(!d || !valid_sector_size(d->sector_size) || !d->sector_count ||
+    !d->ops || !d->ops->read) return BLOCK_STATUS_INVALID;
+
  uint64_t flags=spinlock_lock_irqsave(&registry_lock);
  for(uint32_t i=0;i<device_count_value;i++) if(devices[i]==d) {
   spinlock_unlock_irqrestore(&registry_lock,flags); return BLOCK_STATUS_BUSY;
  }
- spinlock_unlock_irqrestore(&registry_lock,flags);
- char candidate[BLOCK_DEVICE_NAME_MAX];
- for(uint32_t i=0U;i<BLOCK_DEVICE_MAX;i++) {
-  make_disk_name(candidate,i);
-  if(!block_device_find(candidate)) {
-   uint32_t j=0U;
-   do { d->name[j]=candidate[j]; } while(candidate[j++] && j<BLOCK_DEVICE_NAME_MAX);
-   return block_device_register(d);
-  }
+ if(device_count_value==BLOCK_DEVICE_MAX) {
+  spinlock_unlock_irqrestore(&registry_lock,flags); return BLOCK_STATUS_NO_MEMORY;
  }
+
+ char candidate[BLOCK_DEVICE_NAME_MAX];
+ for(uint32_t number=0U;number<BLOCK_DEVICE_MAX;number++) {
+  make_disk_name(candidate,number);
+  int collision=0;
+  for(uint32_t i=0U;i<device_count_value;i++) {
+   if(same_name(devices[i]->name,candidate)) {
+    collision=1;
+    break;
+   }
+  }
+  if(collision) continue;
+
+  uint32_t j=0U;
+  do { d->name[j]=candidate[j]; } while(candidate[j++] && j<BLOCK_DEVICE_NAME_MAX);
+  d->active_operations=0U;
+  d->online=1U;
+  devices[device_count_value++]=d;
+  spinlock_unlock_irqrestore(&registry_lock,flags);
+  return BLOCK_STATUS_OK;
+ }
+ spinlock_unlock_irqrestore(&registry_lock,flags);
  return BLOCK_STATUS_NO_MEMORY;
 }
 block_status_t block_device_unregister(block_device_t* d) {

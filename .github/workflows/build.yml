@@ -235,6 +235,14 @@ jobs:
       - name: Check public and kernel syscall ABI consistency
         run: python3 scripts/check_syscall_abi.py
 
+      - name: Test partition device scan result caching
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iscripts/test_stubs -Iinclude \
+            scripts/test_partition_device.c drivers/storage/partition_device.c \
+            drivers/storage/partition_scan.c drivers/storage/block_device.c \
+            -o /tmp/vantaos-partition-device-test
+          /tmp/vantaos-partition-device-test
+
       - name: Compile strict partition scanner host tests
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \

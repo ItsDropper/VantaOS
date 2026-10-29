@@ -9,7 +9,8 @@ ENTRY(uefi_kernel_entry)
 
 SECTIONS
 {
-    .multiboot 2M :
+    /* Keep the fixed-address kernel image clear of low-memory firmware allocations. */
+    .multiboot 16M :
     {
         KEEP(*(.multiboot))
     }

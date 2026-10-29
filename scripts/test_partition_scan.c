@@ -92,5 +92,13 @@ int main(void)
     uint8_t *ebr=d.data+100U*SS;ebr[510]=0x55;ebr[511]=0xAA;
     mbr_entry(ebr,0U,0x0CU,1U,20U);mbr_entry(ebr,1U,0x0FU,0U,500U);
     assert(partition_scan(memread,&d,d.sectors,out,PARTITION_SCAN_MAX,&n)==PARTITION_SCAN_BAD_TABLE);
+    wipe(&d);gpt_image(&d);
+    wr64(d.data+SS+72U,BACKUP_ARRAY);
+    refresh_crc(d.data+SS);
+    assert(partition_scan(memread,&d,d.sectors,out,PARTITION_SCAN_MAX,&n)==PARTITION_SCAN_BAD_TABLE);
+    wipe(&d);gpt_image(&d);
+    wr64(d.data+BACKUP_HEADER*SS+72U,ARRAY_LBA);
+    refresh_crc(d.data+BACKUP_HEADER*SS);
+    assert(partition_scan(memread,&d,d.sectors,out,PARTITION_SCAN_MAX,&n)==PARTITION_SCAN_BAD_TABLE);
     free(d.data);return 0;
 }

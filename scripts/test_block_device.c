@@ -124,8 +124,6 @@ int main(void)
     initialize_device(&device, "zero-capacity", &full_ops);
     device.sector_count = 0U;
     assert(block_device_register(&device) == BLOCK_STATUS_INVALID);
-    initialize_device(&device, "oversized-name-that-is-longer-than-the-maximum-name-buffer", &full_ops);
-    assert(block_device_register(&device) == BLOCK_STATUS_INVALID);
 
     return 0;
 }

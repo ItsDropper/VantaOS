@@ -51,6 +51,13 @@ static void serial_write(const char* text)
     }
 }
 
+static void serial_write_hex64(UINT64 value)
+{
+    static const char digits[] = "0123456789ABCDEF";
+    for (int shift = 60; shift >= 0; shift -= 4)
+        serial_write((char[2]){ digits[(value >> shift) & 0x0FU], '\0' });
+}
+
 static void zero_bytes(void* destination, UINTN length)
 {
     UINT8* bytes = (UINT8*)destination;
@@ -262,7 +269,7 @@ static EFI_STATUS load_elf64(
 
         UINT64 segment_end = ph->p_paddr + ph->p_memsz;
         if (segment_end > UEFI_MAX_PHYSICAL_ADDRESS) {
-            serial_write("VANTAOS_UEFI_ELF_SEGMENT_ABOVE_LIMIT_FAIL\\n");
+            serial_write("VANTAOS_UEFI_ELF_SEGMENT_ABOVE_LIMIT_FAIL\n");
             return EFI_UNSUPPORTED;
         }
 
@@ -319,7 +326,14 @@ static EFI_STATUS load_elf64(
         &allocation
     );
     if (EFI_ERROR(status) || allocation != image_start) {
-        serial_write("VANTAOS_UEFI_ELF_PAGE_ALLOCATION_FAIL\\n");
+        serial_write("VANTAOS_UEFI_ELF_PAGE_ALLOCATION_FAIL\n");
+        serial_write("VANTAOS_UEFI_ELF_ALLOC_STATUS=");
+        serial_write_hex64((UINT64)status);
+        serial_write("\nVANTAOS_UEFI_ELF_ALLOC_RANGE=");
+        serial_write_hex64(image_start);
+        serial_write("-");
+        serial_write_hex64(image_end);
+        serial_write("\n");
         return EFI_OUT_OF_RESOURCES;
     }
 

@@ -484,15 +484,15 @@ static block_status_t namespace_transfer(nvme_namespace_t* ns, uint64_t lba,
     if ((uintptr_t)buffer > UINTPTR_MAX - total_bytes)
         return BLOCK_STATUS_INVALID;
 
-    /* Polled NVMe completions must not mask timer/scheduler interrupts. */
-    spinlock_lock(&c->io_lock);
+    /* IRQ-save prevents same-CPU re-entry until this lock is preemption-aware. */
+    uint64_t flags = spinlock_lock_irqsave(&c->io_lock);
     block_status_t status = BLOCK_STATUS_OK;
     uint32_t transferred = 0U;
     uint8_t* user_buffer = (uint8_t*)buffer;
     const uint32_t sectors_per_page = NVME_PAGE_SIZE / ns->sector_size;
     uint32_t fallback_sectors_per_command = c->max_transfer_pages * sectors_per_page;
     if (!fallback_sectors_per_command) {
-        spinlock_unlock(&c->io_lock);
+        spinlock_unlock_irqrestore(&c->io_lock, flags);
         return BLOCK_STATUS_IO_ERROR;
     }
 
@@ -545,7 +545,7 @@ static block_status_t namespace_transfer(nvme_namespace_t* ns, uint64_t lba,
         }
         if (status != BLOCK_STATUS_OK) break;
     }
-    spinlock_unlock(&c->io_lock);
+    spinlock_unlock_irqrestore(&c->io_lock, flags);
     return status;
 }
 
@@ -578,13 +578,13 @@ static block_status_t namespace_flush(block_device_t* block)
     if (!ns || !ns->controller || ns->controller->failed)
         return BLOCK_STATUS_NOT_READY;
     nvme_controller_t* c = ns->controller;
-    /* Polled NVMe completions must not mask timer/scheduler interrupts. */
-    spinlock_lock(&c->io_lock);
+    /* IRQ-save prevents same-CPU re-entry until this lock is preemption-aware. */
+    uint64_t flags = spinlock_lock_irqsave(&c->io_lock);
     nvme_command_t command = {0};
     command.opcode = NVME_IO_FLUSH;
     command.namespace_id = ns->namespace_id;
     int ok = submit_command(c, 0, &command, 0);
-    spinlock_unlock(&c->io_lock);
+    spinlock_unlock_irqrestore(&c->io_lock, flags);
     return ok ? BLOCK_STATUS_OK : BLOCK_STATUS_IO_ERROR;
 }
 

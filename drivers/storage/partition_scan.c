@@ -5,6 +5,7 @@
  */
 #include "partition_scan.h"
 #include "spinlock.h"
+#include <string.h>
 
 #define SECTOR 512U
 #define GPT_MAX 128U
@@ -150,6 +151,15 @@ static partition_scan_status_t scan_gpt(partition_read_fn read, void *ctx,
     for (uint32_t i = 0U; i < n; ++i) {
         const uint8_t *r = entry_storage + (size_t)i * size;
         if (zeros(r, 16U)) continue;
+        if (zeros(r + 16U, 16U))
+            return PARTITION_SCAN_BAD_TABLE;
+        for (uint32_t prior = 0U; prior < i; ++prior) {
+            const uint8_t *previous = entry_storage + (size_t)prior * size;
+            if (!zeros(previous, 16U) &&
+                !zeros(previous + 16U, 16U) &&
+                !memcmp(previous + 16U, r + 16U, 16U))
+                return PARTITION_SCAN_BAD_TABLE;
+        }
         uint64_t first = rd64(r + 32U), last = rd64(r + 40U);
         if (first > last || first < first_usable || last > last_usable || last >= disk)
             return PARTITION_SCAN_BAD_TABLE;

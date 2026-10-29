@@ -13,6 +13,7 @@ SATA driver and must not be reported as device support.
 - Sets IOC only on the final entry when requested.
 - `ahci_pci_abar_valid()` rejects I/O BARs, zero bases, undersized/non-power-of-two apertures, misaligned ranges, and address overflow. It validates caller-supplied metadata only; it does not probe PCI or measure BAR size.
 - `ahci_initialize()` scans AHCI-class PCI functions and inspects CAP/PI/version only when PCI I/O decode, memory decode, and bus mastering are disabled. It measures BAR5 only under that safe condition, temporarily enables memory decode for a read-only register probe, unmaps the range, and restores the original command register.
+- Host regression coverage exercises the normal discovery/restore path, refuses a function with bus mastering already enabled before touching BARs, and verifies cleanup after invalid CAP or GHC register reads.
 - Leaves the entry array unchanged when validation fails.
 
 The helper assumes its caller already owns a device-visible DMA mapping. It does

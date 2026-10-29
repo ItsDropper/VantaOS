@@ -16,6 +16,11 @@
 #else
 #define FAT32_RENAME_DIAG(message) ((void)0)
 #endif
+#ifdef VANTAOS_SELF_TEST
+#define FAT32_WRITE_DIAG(message) serial_write(message "\n")
+#else
+#define FAT32_WRITE_DIAG(message) ((void)0)
+#endif
 
 #define FAT32_MAX_CLUSTER 0x0FFFFFF7U
 #define FAT32_EOC_MIN 0x0FFFFFF8U
@@ -1553,7 +1558,7 @@ int fat32_write_file_range(const char* path, uint32_t offset,
 {
     if (!mounted || !path || (length && !data) ||
         length > 0x7FFFFFFFU)
-        return -1;
+    { FAT32_WRITE_DIAG("VANTAOS_FAT32_RANGE_FAIL_ARGUMENT"); return -1; }
     if (length == 0U)
         return 0;
 
@@ -1561,7 +1566,7 @@ int fat32_write_file_range(const char* path, uint32_t offset,
     uint64_t cluster_bytes = (uint64_t)sectors_per_cluster * 512U;
     uint64_t volume_bytes = (uint64_t)cluster_count * cluster_bytes;
     if (end > UINT32_MAX || end > volume_bytes)
-        return -1;
+    { FAT32_WRITE_DIAG("VANTAOS_FAT32_RANGE_FAIL_BOUNDS"); return -1; }
 
     uint32_t parent;
     uint8_t leaf[11];
@@ -1571,7 +1576,7 @@ int fat32_write_file_range(const char* path, uint32_t offset,
         (entry.attributes & 0x01U) != 0U ||
         offset > entry.size ||
         (entry.size != 0U && entry.first_cluster < 2U))
-        return -1;
+    { FAT32_WRITE_DIAG("VANTAOS_FAT32_RANGE_FAIL_LOOKUP"); return -1; }
 
     uint32_t first_cluster = entry.first_cluster;
     int newly_allocated_first = 0;
@@ -1579,7 +1584,7 @@ int fat32_write_file_range(const char* path, uint32_t offset,
     {
         first_cluster = fat32_allocate_one();
         if (!first_cluster)
-            return -1;
+        { FAT32_WRITE_DIAG("VANTAOS_FAT32_RANGE_FAIL_FIRST_ALLOC"); return -1; }
         newly_allocated_first = 1;
     }
 
@@ -1596,6 +1601,7 @@ int fat32_write_file_range(const char* path, uint32_t offset,
             uint32_t next;
             if (!fat32_next_for_write(current_cluster, &next))
             {
+                FAT32_WRITE_DIAG("VANTAOS_FAT32_RANGE_FAIL_CHAIN_ALLOC");
                 if (newly_allocated_first)
                     fat32_release_chain(first_cluster);
                 return -1;
@@ -1612,6 +1618,7 @@ int fat32_write_file_range(const char* path, uint32_t offset,
             sector_index >= sectors_per_cluster ||
             !read_sector(lba + sector_index, sector_buffer))
         {
+            FAT32_WRITE_DIAG("VANTAOS_FAT32_RANGE_FAIL_SECTOR_READ");
             if (newly_allocated_first)
                 fat32_release_chain(first_cluster);
             return -1;
@@ -1624,6 +1631,7 @@ int fat32_write_file_range(const char* path, uint32_t offset,
             sector_buffer[in_sector + i] = (uint8_t)data[written + i];
         if (!fat32_write_sector(lba + sector_index, sector_buffer))
         {
+            FAT32_WRITE_DIAG("VANTAOS_FAT32_RANGE_FAIL_SECTOR_WRITE");
             if (newly_allocated_first)
                 fat32_release_chain(first_cluster);
             return -1;
@@ -1637,6 +1645,7 @@ int fat32_write_file_range(const char* path, uint32_t offset,
     if (!fat32_update_file_entry(entry.entry_lba, entry.entry_offset,
                                  first_cluster, final_size))
     {
+        FAT32_WRITE_DIAG("VANTAOS_FAT32_RANGE_FAIL_DIRECTORY_COMMIT");
         /* The directory-sector write may have reached the device. Do not
            release the new chain after an ambiguous commit result. */
         return -1;

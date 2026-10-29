@@ -639,10 +639,15 @@ static storage_probe_result_t nvme_probe(const struct pci_device* pci)
         return STORAGE_PROBE_FAILED;
 
     uint64_t bar = 0;
+    uint64_t bar_size = 0;
     int is_io = 0, is_64 = 0;
-    if (!pci_get_bar(pci, 0, &bar, &is_io, &is_64) || is_io || !bar)
-        return STORAGE_PROBE_FAILED;
     uint16_t saved_command = pci_read_config16(pci, 0x04U);
+    /* BAR sizing is destructive; refuse functions already decoding or DMAing. */
+    if ((saved_command & 0x0007U) != 0U ||
+        !pci_get_bar_size(pci, 0U, &bar_size) ||
+        bar_size < NVME_REGISTERS_SIZE ||
+        !pci_get_bar(pci, 0U, &bar, &is_io, &is_64) || is_io || !bar)
+        return STORAGE_PROBE_FAILED;
     if (!pci_enable_memory_space(pci)) {
         nvme_restore_pci_command(pci, saved_command);
         return STORAGE_PROBE_FAILED;
@@ -686,7 +691,8 @@ static storage_probe_result_t nvme_probe(const struct pci_device* pci)
     int probe_mapping_released =
         mmio_unmap_region((void*)c->registers, NVME_REGISTERS_SIZE);
     c->registers = 0;
-    if (required_length > PAGING_MMIO_SIZE || !probe_mapping_released) {
+    if (required_length > PAGING_MMIO_SIZE || required_length > bar_size ||
+        !probe_mapping_released) {
         free_controller_memory(c);
         nvme_restore_pci_command(pci, saved_command);
         return STORAGE_PROBE_FAILED;

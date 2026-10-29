@@ -784,6 +784,8 @@ fail:
         free_controller_memory(c);
         nvme_restore_pci_command(pci, saved_command);
     } else {
+        /* Reserve this slot: its DMA buffers may still be owned by hardware. */
+        ++controller_count;
         serial_write("VANTAOS_NVME_DMA_RETAINED_AFTER_RESET_TIMEOUT\n");
     }
     serial_write("VANTAOS_NVME_CONTROLLER_FAIL\n");

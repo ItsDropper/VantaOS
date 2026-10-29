@@ -100,7 +100,7 @@ int pci_write_config16(const struct pci_device* device, uint8_t offset,
 void* mmio_map_region(uint64_t physical_address, size_t length)
 {
     assert(physical_address == 0xFEBF0000ULL);
-    assert(length == AHCI_ABAR_MIN_SIZE);
+    assert(length == AHCI_ABAR_PROBE_SIZE);
     ++map_calls;
 #ifdef AHCI_TEST_MAP_FAIL
     return 0;
@@ -112,7 +112,7 @@ void* mmio_map_region(uint64_t physical_address, size_t length)
 int mmio_unmap_region(void* virtual_address, size_t length)
 {
     assert(virtual_address == fake_registers);
-    assert(length == AHCI_ABAR_MIN_SIZE);
+    assert(length == AHCI_ABAR_PROBE_SIZE);
     ++unmap_calls;
     return 1;
 }

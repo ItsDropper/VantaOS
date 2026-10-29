@@ -231,23 +231,24 @@ static void calculate(void)
 static void render(void)
 {
     command_count = 0U;
-    add_rect(8, 8, 520, 256, vanta_theme_surface_color(&theme));
-    add_rect(8, 8, 520, 2, vanta_theme_accent_color(&theme));
+    /* Draw commands are client-relative; leave room for window chrome. */
+    add_rect(8, 8, 488, 224, vanta_theme_surface_color(&theme));
+    add_rect(8, 8, 488, 2, vanta_theme_accent_color(&theme));
     add_text(20, 20, "Calculator", vanta_theme_text_color(&theme));
     add_text(20, 42, "INTEGER MODE  |  PRECEDENCE AND PARENTHESES",
              vanta_theme_muted_color(&theme));
-    add_rect(16, 66, 504, 44, vanta_theme_surface_color(&theme));
-    add_rect(16, 66, 504, 1, vanta_theme_border_color(&theme));
+    add_rect(16, 66, 472, 44, vanta_theme_surface_color(&theme));
+    add_rect(16, 66, 472, 1, vanta_theme_border_color(&theme));
     add_text(26, 82, expression_length ? expression : "0",
              vanta_theme_text_color(&theme));
     add_text(20, 124, "RESULT", vanta_theme_muted_color(&theme));
     add_text(20, 146, result_text, vanta_theme_text_color(&theme));
-    add_rect(16, 178, 504, 1, vanta_theme_border_color(&theme));
+    add_rect(16, 178, 472, 1, vanta_theme_border_color(&theme));
     add_text(20, 188, status_text, status_color ? status_color :
              vanta_theme_muted_color(&theme));
     add_text(20, 212, "Enter: calculate   Backspace: edit   Esc: clear",
              vanta_theme_muted_color(&theme));
-    add_text(20, 232, "Keys: + - * / % ( ) and digits | Ctrl+A clears",
+    add_text(20, 216, "Keys: + - * / % ( ) and digits | Ctrl+A clears",
              vanta_theme_muted_color(&theme));
     (void)vanta_gui_draw(window_id, commands, command_count);
 }

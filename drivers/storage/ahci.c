@@ -72,19 +72,19 @@ static int ahci_probe_inactive_pci_function(const struct pci_device* pci)
 
     {
         uint32_t cap = ahci_mmio_read32(registers, AHCI_REG_CAP);
+        uint32_t ghc = ahci_mmio_read32(registers, AHCI_REG_GHC);
         uint32_t ports = ahci_mmio_read32(registers, AHCI_REG_PI);
         uint32_t version = ahci_mmio_read32(registers, AHCI_REG_VS);
         uint32_t port_count = (cap & 0x1FU) + 1U;
         uint32_t valid_ports = port_count == 32U ? UINT32_MAX :
                                ((1U << port_count) - 1U);
 
-        if (cap == 0U || cap == UINT32_MAX || ports == UINT32_MAX ||
-            version == 0U || version == UINT32_MAX ||
+        if (cap == 0U || cap == UINT32_MAX || ghc == UINT32_MAX ||
+            ports == UINT32_MAX || version == 0U || version == UINT32_MAX ||
             (ports & ~valid_ports) != 0U)
             goto cleanup;
 
-        /* GHC is read only here to confirm the mapped register block responds. */
-        (void)ahci_mmio_read32(registers, AHCI_REG_GHC);
+        /* Register reads only; discovery never writes GHC or port registers. */
         ok = 1;
     }
 

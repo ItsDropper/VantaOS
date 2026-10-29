@@ -25,6 +25,11 @@ static inline int spinlock_try_lock(spinlock_t* lock)
     (void)lock;
     return 1;
 }
+static inline void spinlock_lock(spinlock_t* lock)
+{
+    (void)lock;
+}
+
 static inline void spinlock_unlock(spinlock_t* lock)
 {
     (void)lock;

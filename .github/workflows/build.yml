@@ -304,6 +304,13 @@ jobs:
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_graphics_damage.c -o /tmp/vantaos-graphics-damage-test
           /tmp/vantaos-graphics-damage-test
 
+      - name: Test direct shadow-buffer text rasterization
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude -Ikernel/graphics \
+            scripts/test_graphics_text.c kernel/graphics/graphics_text.c \
+            -o /tmp/vantaos-graphics-text-test
+          /tmp/vantaos-graphics-text-test
+
       - name: Test RTL8139 transmit status semantics
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_rtl8139_status.c -o /tmp/vantaos-rtl8139-status-test

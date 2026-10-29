@@ -165,7 +165,8 @@ int partition_device_scan_disk(block_device_t *disk)
         return 0;
     }
 
-    int all_registered = 1;
+    int all_registered =
+        found_count <= PARTITION_DEVICE_MAX - partition_count;
     for (size_t i = 0U; i < found_count &&
          partition_count < PARTITION_DEVICE_MAX; ++i) {
         partition_context_t *part = &partitions[partition_count];

@@ -18,8 +18,11 @@ static block_status_t failing_read(block_device_t *device, uint64_t lba,
     (void)lba;
     (void)count;
     (void)buffer;
+    ++read_calls;
     return BLOCK_STATUS_IO_ERROR;
 }
+
+static unsigned read_calls;
 
 static const block_device_ops_t failing_ops = {
     failing_read, 0, 0
@@ -44,7 +47,10 @@ int main(void)
 
     /* A failed first scan must not become a false success on repeat. */
     assert(partition_device_scan_disk(&disk) == 0);
+    unsigned calls_after_first_scan = read_calls;
+    assert(calls_after_first_scan > 0U);
     assert(partition_device_scan_disk(&disk) == 0);
+    assert(read_calls == calls_after_first_scan);
     assert(!partition_device_has_table(&disk));
 
     assert(block_device_unregister(&disk) == BLOCK_STATUS_OK);

@@ -141,31 +141,55 @@ static void graphics_copy_damage_tiles(
     size_t damage_bitmap_bytes,
     uint32_t tile_size, uint32_t tiles_x, uint32_t tiles_y)
 {
+    /*
+     * Coalesce adjacent dirty tiles into horizontal spans. The previous
+     * per-tile pixel loop repeated address arithmetic and a dirty-bit branch
+     * for every tile; row spans keep the framebuffer writes contiguous and
+     * reduce per-pixel loop overhead while preserving volatile scanout writes.
+     */
     for (uint32_t ty = 0; ty < tiles_y; ty++)
     {
         uint32_t y0 = ty * tile_size;
         uint32_t y1 = y0 + tile_size;
         if (y1 > height) y1 = height;
-        for (uint32_t tx = 0; tx < tiles_x; tx++)
+
+        uint32_t tx = 0;
+        while (tx < tiles_x)
         {
             uint32_t index = ty * tiles_x + tx;
             size_t byte_index = index >> 3;
             if (byte_index >= damage_bitmap_bytes ||
                 (damage_bitmap[byte_index] &
                  (uint8_t)(1U << (index & 7U))) == 0U)
+            {
+                tx++;
                 continue;
+            }
 
-            uint32_t x0 = tx * tile_size;
-            uint32_t x1 = x0 + tile_size;
+            uint32_t first_tx = tx++;
+            while (tx < tiles_x)
+            {
+                index = ty * tiles_x + tx;
+                byte_index = index >> 3;
+                if (byte_index >= damage_bitmap_bytes ||
+                    (damage_bitmap[byte_index] &
+                     (uint8_t)(1U << (index & 7U))) == 0U)
+                    break;
+                tx++;
+            }
+
+            uint32_t x0 = first_tx * tile_size;
+            uint32_t x1 = tx * tile_size;
             if (x1 > width) x1 = width;
+            size_t x_offset = (size_t)x0 * sizeof(uint32_t);
+            size_t span_bytes = (size_t)(x1 - x0) * sizeof(uint32_t);
+
             for (uint32_t y = y0; y < y1; y++)
             {
-                volatile uint32_t* dst =
-                    (volatile uint32_t*)(target + (size_t)y * target_pitch);
-                const uint32_t* src =
-                    (const uint32_t*)(source + (size_t)y * source_pitch);
-                for (uint32_t x = x0; x < x1; x++)
-                    dst[x] = src[x];
+                graphics_copy_bytes(
+                    target + (size_t)y * target_pitch + x_offset,
+                    source + (size_t)y * source_pitch + x_offset,
+                    span_bytes);
             }
         }
     }

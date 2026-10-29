@@ -10,8 +10,10 @@
 
 #include <stdint.h>
 
-/* Generic AHCI registers through CAP2/BOHC fit within the first 64 bytes. */
-#define AHCI_ABAR_MIN_SIZE 0x40ULL
+/* Map only global registers until CAP reveals the HBA's implemented port span. */
+#define AHCI_ABAR_PROBE_SIZE 0x40ULL
+#define AHCI_ABAR_PORT_BASE 0x100ULL
+#define AHCI_ABAR_PORT_SIZE 0x80ULL
 #define AHCI_ABAR_ALIGNMENT 0x400ULL
 
 /* BAR sizing writes all ones temporarily; decode and bus mastering must be off. */
@@ -29,7 +31,7 @@ static inline int ahci_pci_abar_valid(uint64_t base, uint64_t size,
                                       int is_io, int is_64bit)
 {
     if (base == 0U || is_io != 0 || (is_64bit != 0 && is_64bit != 1) ||
-        size < AHCI_ABAR_MIN_SIZE ||
+        size < AHCI_ABAR_PROBE_SIZE ||
         (size & (size - 1ULL)) != 0U ||
         size - 1ULL > UINT64_MAX - base)
         return 0;
@@ -42,6 +44,15 @@ static inline int ahci_pci_abar_valid(uint64_t base, uint64_t size,
         return 0;
 
     return 1;
+}
+
+/* CAP.NP encodes the maximum port index; reserve its full register block. */
+static inline int ahci_pci_abar_fits_ports(uint64_t size, uint32_t cap)
+{
+    uint64_t port_count = (uint64_t)(cap & 0x1FU) + 1ULL;
+    uint64_t required = AHCI_ABAR_PORT_BASE +
+                        port_count * AHCI_ABAR_PORT_SIZE;
+    return size >= required;
 }
 
 #endif

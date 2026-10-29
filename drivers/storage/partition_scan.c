@@ -4,6 +4,7 @@
  * See the LICENSE file in the project root for the full license text.
  */
 #include "partition_scan.h"
+#include "spinlock.h"
 
 #define SECTOR 512U
 #define GPT_MAX 128U
@@ -15,6 +16,7 @@
 static uint8_t entry_storage[GPT_ARRAY_MAX];
 static partition_scan_entry_t staging[PARTITION_SCAN_MAX];
 static uint8_t backup_storage[GPT_ARRAY_MAX];
+static spinlock_t partition_scan_lock = SPINLOCK_INITIALIZER;
 
 static uint16_t rd16(const uint8_t *p)
 { return (uint16_t)p[0] | (uint16_t)((uint16_t)p[1] << 8); }
@@ -223,7 +225,7 @@ static partition_scan_status_t scan_mbr(partition_read_fn read, void *ctx,
     *out_count = count; return PARTITION_SCAN_OK;
 }
 
-partition_scan_status_t partition_scan(partition_read_fn read, void *ctx,
+static partition_scan_status_t partition_scan_unlocked(partition_read_fn read, void *ctx,
     uint64_t disk_sectors, partition_scan_entry_t *entries, size_t capacity,
     size_t *out_count)
 {
@@ -258,4 +260,15 @@ partition_scan_status_t partition_scan(partition_read_fn read, void *ctx,
         entries[i] = staging[i];
     *out_count = staged_count;
     return PARTITION_SCAN_OK;
+}
+
+partition_scan_status_t partition_scan(partition_read_fn read, void *ctx,
+    uint64_t disk_sectors, partition_scan_entry_t *entries, size_t capacity,
+    size_t *out_count)
+{
+    spinlock_lock(&partition_scan_lock);
+    partition_scan_status_t status = partition_scan_unlocked(
+        read, ctx, disk_sectors, entries, capacity, out_count);
+    spinlock_unlock(&partition_scan_lock);
+    return status;
 }

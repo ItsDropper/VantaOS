@@ -43,6 +43,12 @@ static void make_disk_name(char *name, uint32_t number)
 block_status_t block_device_register_disk(block_device_t* d)
 {
  if(!d) return BLOCK_STATUS_INVALID;
+ /* Do not rename an object that is already visible in the registry. */
+ uint64_t flags=spinlock_lock_irqsave(&registry_lock);
+ for(uint32_t i=0;i<device_count_value;i++) if(devices[i]==d) {
+  spinlock_unlock_irqrestore(&registry_lock,flags); return BLOCK_STATUS_BUSY;
+ }
+ spinlock_unlock_irqrestore(&registry_lock,flags);
  char candidate[BLOCK_DEVICE_NAME_MAX];
  for(uint32_t i=0U;i<BLOCK_DEVICE_MAX;i++) {
   make_disk_name(candidate,i);

@@ -179,7 +179,7 @@ static int partition_device_scan_disk_unlocked(block_device_t *disk)
     if (found_count > PARTITION_DEVICE_MAX - partition_count) {
         record_scan(disk, has_table, 0);
         if (has_table)
-            serial_write("VANTAOS_PARTITION_FAIL\\n");
+            serial_write("VANTAOS_PARTITION_FAIL\n");
         return 0;
     }
     int all_registered = 1;
@@ -207,10 +207,10 @@ static int partition_device_scan_disk_unlocked(block_device_t *disk)
                     sizeof(part->block.partition_label), found[i].name);
         if (block_device_register(&part->block) == BLOCK_STATUS_OK) {
             ++partition_count;
-            serial_write("VANTAOS_PARTITION_OK\\n");
+            serial_write("VANTAOS_PARTITION_OK\n");
         } else {
             all_registered = 0;
-            serial_write("VANTAOS_PARTITION_FAIL\\n");
+            serial_write("VANTAOS_PARTITION_FAIL\n");
             break;
         }
     }
@@ -219,7 +219,7 @@ static int partition_device_scan_disk_unlocked(block_device_t *disk)
         while (partition_count > initial_partition_count) {
             partition_context_t *part = &partitions[partition_count - 1U];
             if (block_device_unregister(&part->block) != BLOCK_STATUS_OK) {
-                serial_write("VANTAOS_PARTITION_ROLLBACK_FAIL\\n");
+                serial_write("VANTAOS_PARTITION_ROLLBACK_FAIL\n");
                 break;
             }
             *part = (partition_context_t){0};

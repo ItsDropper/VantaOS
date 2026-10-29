@@ -13,6 +13,34 @@
 
 static unsigned read_calls;
 
+static uint8_t valid_mbr[512];
+
+static void write_u32(uint8_t *out, uint32_t value)
+{
+    out[0] = (uint8_t)value;
+    out[1] = (uint8_t)(value >> 8U);
+    out[2] = (uint8_t)(value >> 16U);
+    out[3] = (uint8_t)(value >> 24U);
+}
+
+static block_status_t valid_read(block_device_t *device, uint64_t lba,
+                                 uint32_t count, void *buffer)
+{
+    (void)device;
+    if (!buffer || !count || lba >= 128U || (uint64_t)count > 128U - lba)
+        return BLOCK_STATUS_OUT_OF_RANGE;
+    memset(buffer, 0, (size_t)count * 512U);
+    if (lba == 0U)
+        memcpy(buffer, valid_mbr, sizeof(valid_mbr));
+    return BLOCK_STATUS_OK;
+}
+
+static const block_device_ops_t valid_ops = {
+    valid_read, 0, 0
+};
+
+
+
 static block_status_t failing_read(block_device_t *device, uint64_t lba,
                                    uint32_t count, void *buffer)
 {

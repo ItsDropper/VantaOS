@@ -203,7 +203,7 @@ static void render(void)
 {
     command_count = 0U;
     /* Keep every command inside the kernel-validated client rectangle. */
-    add_rect(8, 8, 712, 404, vanta_theme_surface_color(&theme));
+    add_rect(8, 8, 712, 394, vanta_theme_surface_color(&theme));
     add_rect(8, 8, 712, 2, vanta_theme_accent_color(&theme));
     add_text(16, 16, "Notes editor | Ctrl+S saves", vanta_theme_text_color(&theme));
     add_rect(12, 40, 700, 1, vanta_theme_border_color(&theme));
@@ -251,12 +251,12 @@ static void render(void)
         if (start == document_length) break;
     }
 
-    add_rect(12, 354, 700, 1, vanta_theme_border_color(&theme));
-    add_text(16, 362, status, status_color ? status_color :
+    add_rect(12, 346, 700, 1, vanta_theme_border_color(&theme));
+    add_text(16, 354, status, status_color ? status_color :
              vanta_theme_muted_color(&theme));
-    add_text(16, 390, "Ctrl+S Save | Ctrl+A Select all | Ctrl+C Copy | Ctrl+V Paste",
+    add_text(16, 370, "Ctrl+S Save | Ctrl+A Select all | Ctrl+C Copy | Ctrl+V Paste",
              vanta_theme_muted_color(&theme));
-    add_text(16, 400, "Mouse drag selects text; double-click selects a word",
+    add_text(16, 386, "Mouse drag selects text; double-click selects a word",
              vanta_theme_muted_color(&theme));
     (void)vanta_gui_draw(window_id, commands, command_count);
 }

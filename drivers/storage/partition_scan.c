@@ -202,6 +202,9 @@ static partition_scan_status_t scan_mbr(partition_read_fn read, void *ctx,
             current >= disk) return PARTITION_SCAN_BAD_TABLE;
         for (size_t i = 0U; i < seen; ++i)
             if (visited[i] == current) return PARTITION_SCAN_BAD_TABLE;
+        /* An EBR sector cannot also belong to a logical partition's data. */
+        if (overlap(out, count, current, 1U))
+            return PARTITION_SCAN_BAD_TABLE;
         visited[seen++] = current;
         uint8_t ebr[SECTOR];
         if (!read_checked(read, ctx, disk, current, 1U, ebr)) return PARTITION_SCAN_IO_ERROR;

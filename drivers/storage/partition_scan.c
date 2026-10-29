@@ -80,7 +80,8 @@ static int valid_gpt_header(const uint8_t *h, uint64_t current, uint64_t disk)
     if (h[0]!='E'||h[1]!='F'||h[2]!='I'||h[3]!=' '||
         h[4]!='P'||h[5]!='A'||h[6]!='R'||h[7]!='T') return 0;
     uint32_t size = rd32(h + 12U);
-    if (size < 92U || size > SECTOR || rd64(h + 24U) != current ||
+    if (rd32(h + 20U) != 0U ||
+        size < 92U || size > SECTOR || rd64(h + 24U) != current ||
         rd64(h + 32U) >= disk || rd64(h + 32U) == current ||
         rd64(h + 40U) < 2U || rd64(h + 40U) > rd64(h + 48U) ||
         rd64(h + 48U) >= disk - 1U) return 0;
@@ -119,7 +120,10 @@ static partition_scan_status_t scan_gpt(partition_read_fn read, void *ctx,
     if (backup_lba != disk - 1U) return PARTITION_SCAN_BAD_TABLE;
     if (!read_checked(read, ctx, disk, backup_lba, 1U, backup)) return PARTITION_SCAN_IO_ERROR;
     if (!valid_gpt_header(backup, backup_lba, disk) ||
-        rd64(backup + 32U) != 1U || rd32(backup + 80U) != rd32(primary + 80U) ||
+        rd64(backup + 32U) != 1U ||
+        rd64(backup + 40U) != rd64(primary + 40U) ||
+        rd64(backup + 48U) != rd64(primary + 48U) ||
+        rd32(backup + 80U) != rd32(primary + 80U) ||
         rd32(backup + 84U) != rd32(primary + 84U) ||
         rd32(backup + 88U) != rd32(primary + 88U))
         return PARTITION_SCAN_BAD_TABLE;

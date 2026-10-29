@@ -642,12 +642,21 @@ static storage_probe_result_t nvme_probe(const struct pci_device* pci)
     uint64_t bar_size = 0;
     int is_io = 0, is_64 = 0;
     uint16_t saved_command = pci_read_config16(pci, 0x04U);
-    /* BAR sizing is destructive; refuse functions already decoding or DMAing. */
-    if ((saved_command & 0x0007U) != 0U ||
-        !pci_get_bar_size(pci, 0U, &bar_size) ||
+    /* BAR sizing is destructive; disable decode and bus mastering first. */
+    if ((saved_command & 0x0007U) != 0U) {
+        uint16_t disabled_command = (uint16_t)(saved_command & ~0x0007U);
+        if (!pci_write_config16(pci, 0x04U, disabled_command) ||
+            (pci_read_config16(pci, 0x04U) & 0x0007U) != 0U) {
+            nvme_restore_pci_command(pci, saved_command);
+            return STORAGE_PROBE_FAILED;
+        }
+    }
+    if (!pci_get_bar_size(pci, 0U, &bar_size) ||
         bar_size < NVME_REGISTERS_SIZE ||
-        !pci_get_bar(pci, 0U, &bar, &is_io, &is_64) || is_io || !bar)
+        !pci_get_bar(pci, 0U, &bar, &is_io, &is_64) || is_io || !bar) {
+        nvme_restore_pci_command(pci, saved_command);
         return STORAGE_PROBE_FAILED;
+    }
     if (!pci_enable_memory_space(pci)) {
         nvme_restore_pci_command(pci, saved_command);
         return STORAGE_PROBE_FAILED;

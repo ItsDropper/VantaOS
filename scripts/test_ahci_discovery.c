@@ -98,6 +98,10 @@ int pci_write_config16(const struct pci_device* device, uint8_t offset,
     assert(offset == 0x04U);
     ++write_calls;
     command_register = value;
+#ifdef AHCI_TEST_RESTORE_FAIL
+    if (value == 0U)
+        return 0; /* Simulate a failed PCI write despite restored readback. */
+#endif
     return 1;
 }
 
@@ -165,6 +169,17 @@ int main(void)
     assert(command_register == 0x0004U);
     assert(rejected_marker);
     puts("VANTAOS_AHCI_DISCOVERY_UNSAFE_GUARD_OK");
+#elif defined(AHCI_TEST_RESTORE_FAIL)
+    assert(size_calls == 1U);
+    assert(bar_calls == 1U);
+    assert(enable_calls == 1U);
+    assert(write_calls == 1U);
+    assert(map_calls == 1U);
+    assert(unmap_calls == 1U);
+    assert(command_register == 0U);
+    assert(!discovered_marker);
+    assert(rejected_marker);
+    puts("VANTAOS_AHCI_DISCOVERY_RESTORE_FAILURE_REJECTED");
 #elif defined(AHCI_TEST_MAP_FAIL)
     assert(size_calls == 1U);
     assert(bar_calls == 1U);

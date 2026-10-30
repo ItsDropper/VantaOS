@@ -41,17 +41,27 @@ static size_t align_up(size_t value)
 
 static int block_is_valid(const heap_block_t* block)
 {
-    if (!block ||
-        block->magic != BLOCK_MAGIC ||
-        (block->status != BLOCK_FREE &&
-         block->status != BLOCK_USED) ||
-        block->size == 0)
+    if (!block)
         return 0;
 
     uintptr_t address = (uintptr_t)block;
+    if (address < HEAP_VIRTUAL_BASE ||
+        address >= HEAP_VIRTUAL_BASE + heap_size ||
+        (address - HEAP_VIRTUAL_BASE) % HEAP_ALIGNMENT != 0U)
+        return 0;
 
-    return address >= HEAP_VIRTUAL_BASE &&
-           address < HEAP_VIRTUAL_BASE + heap_size;
+    size_t offset = (size_t)(address - HEAP_VIRTUAL_BASE);
+    if (heap_size - offset < sizeof(*block))
+        return 0;
+
+    if (block->magic != BLOCK_MAGIC ||
+        (block->status != BLOCK_FREE &&
+         block->status != BLOCK_USED) ||
+        block->size == 0U ||
+        block->size > heap_size - offset - sizeof(*block))
+        return 0;
+
+    return 1;
 }
 
 static void split_block(heap_block_t* block, size_t size)

@@ -51,7 +51,10 @@ int process_mark_ready(uint32_t pid)
              process_table_records[pid].state != PROCESS_ZOMBIE &&
              process_table_records[pid].state != PROCESS_REAPING;
     if (ok)
+    {
         process_table_records[pid].state = PROCESS_READY;
+        process_table_records[pid].sleep_deadline_ticks = 0U;
+    }
     process_table_lock_release(flags);
     return ok;
 }
@@ -197,6 +200,7 @@ int process_wake(uint32_t pid)
     if (ok)
     {
         process->state = PROCESS_READY;
+        process->sleep_deadline_ticks = 0U;
         owner_cpu = process->owner_cpu;
         affinity_cpu = process->affinity_cpu;
     }
@@ -207,6 +211,70 @@ int process_wake(uint32_t pid)
     return ok;
 }
 
+
+/*
+ * Timed sleep uses the process table as the authoritative wait state. The
+ * deadline is published in the same critical section as PROCESS_SLEEPING, so
+ * the timer cannot observe a half-registered sleeper.
+ */
+int process_sleep_current_until(uint64_t deadline_ticks)
+{
+    if (!process_initialized_state || deadline_ticks == 0U)
+        return 0;
+
+    uint64_t flags = process_table_lock_acquire();
+    uint32_t pid = process_current_slot();
+    if (pid == 0U || pid >= PROCESS_MAX ||
+        process_is_idle_locked(pid) ||
+        process_table_records[pid].state != PROCESS_RUNNING)
+    {
+        process_table_lock_release(flags);
+        return 0;
+    }
+
+    process_t* process = &process_table_records[pid];
+    process->sleep_deadline_ticks = deadline_ticks;
+    process->state = PROCESS_SLEEPING;
+    process_table_lock_release(flags);
+    return 1;
+}
+
+/*
+ * Bounded O(PROCESS_MAX) scan at the PIT rate. State transitions happen under
+ * one table-lock acquisition; IPIs are sent only after releasing that lock.
+ * A stale deadline can never wake a reused slot because reset clears it.
+ */
+void process_wake_expired(uint64_t now_ticks)
+{
+    uint32_t wake_pids[PROCESS_MAX];
+    uint32_t wake_owners[PROCESS_MAX];
+    uint32_t wake_affinities[PROCESS_MAX];
+    uint32_t wake_count = 0U;
+
+    if (!process_initialized_state || now_ticks == 0U)
+        return;
+
+    uint64_t flags = process_table_lock_acquire();
+    for (uint32_t pid = 1U; pid < PROCESS_MAX; pid++)
+    {
+        process_t* process = &process_table_records[pid];
+        if (process->state != PROCESS_SLEEPING ||
+            process->sleep_deadline_ticks == 0U ||
+            process->sleep_deadline_ticks > now_ticks)
+            continue;
+
+        process->state = PROCESS_READY;
+        process->sleep_deadline_ticks = 0U;
+        wake_pids[wake_count] = pid;
+        wake_owners[wake_count] = process->owner_cpu;
+        wake_affinities[wake_count] = process->affinity_cpu;
+        wake_count++;
+    }
+    process_table_lock_release(flags);
+
+    for (uint32_t i = 0U; i < wake_count; i++)
+        process_send_wake_ipi(wake_owners[i], wake_affinities[i]);
+}
 
 int process_set_affinity(uint32_t pid, uint32_t cpu_id)
 {

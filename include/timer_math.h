@@ -63,6 +63,15 @@ static inline uint64_t vanta_timer_ticks_to_ms(uint64_t ticks,
 {
     if (frequency == 0U)
         return 0U;
-    return (ticks / frequency) * 1000U +
-           ((ticks % frequency) * 1000U) / frequency;
+    uint64_t whole_seconds = ticks / frequency;
+    uint64_t whole_ms;
+    uint64_t fractional_ms = ((ticks % frequency) * 1000U) / frequency;
+
+    if (whole_seconds > UINT64_MAX / 1000U)
+        return UINT64_MAX;
+
+    whole_ms = whole_seconds * 1000U;
+    if (UINT64_MAX - whole_ms < fractional_ms)
+        return UINT64_MAX;
+    return whole_ms + fractional_ms;
 }

@@ -7,6 +7,7 @@
 
 #include "process_internal.h"
 #include "apic.h"
+#include "scheduler.h"
 #include "../ipc.h"
 
 #include <stddef.h>
@@ -54,6 +55,7 @@ int process_mark_ready(uint32_t pid)
     {
         process_table_records[pid].state = PROCESS_READY;
         process_table_records[pid].sleep_deadline_ticks = 0U;
+        process_table_records[pid].wait_queue = NULL;
     }
     process_table_lock_release(flags);
     return ok;
@@ -92,6 +94,7 @@ int process_set_running(uint32_t pid)
 
     process_set_current_slot(pid);
     target->sleep_deadline_ticks = 0U;
+    target->wait_queue = NULL;
     target->state = PROCESS_RUNNING;
     target->owner_cpu = cpu_id;
     process_table_lock_release(flags);
@@ -202,6 +205,7 @@ int process_wake(uint32_t pid)
     {
         process->state = PROCESS_READY;
         process->sleep_deadline_ticks = 0U;
+        process->wait_queue = NULL;
         owner_cpu = process->owner_cpu;
         affinity_cpu = process->affinity_cpu;
     }
@@ -235,6 +239,7 @@ int process_sleep_current_until(uint64_t deadline_ticks)
 
     process_t* process = &process_table_records[pid];
     process->sleep_deadline_ticks = deadline_ticks;
+    process->wait_queue = NULL;
     process->state = PROCESS_SLEEPING;
     process_table_lock_release(flags);
     return 1;
@@ -294,6 +299,115 @@ void process_wake_expired(uint64_t now_ticks)
         if ((target_mask & (1U << cpu)) != 0U)
             process_request_cpu_reschedule(cpu);
     }
+}
+
+
+void process_wait_queue_init(process_wait_queue_t* queue)
+{
+    if (!queue)
+        return;
+    spinlock_init(&queue->lock);
+    for (uint32_t i = 0U;
+         i < (PROCESS_MAX + 31U) / 32U; i++)
+        __atomic_store_n(&queue->waiters[i], 0U, __ATOMIC_RELAXED);
+}
+
+/*
+ * Register and block while holding queue->lock across the process-state
+ * transition. A concurrent waker therefore cannot slip between registration
+ * and PROCESS_SLEEPING. This function returns after the task is scheduled
+ * again; callers must always re-evaluate their wait condition.
+ */
+int process_wait_queue_sleep(process_wait_queue_t* queue)
+{
+    uint64_t interrupt_flags;
+    if (!queue)
+        return 0;
+
+    __asm__ volatile ("pushfq; popq %0" : "=r"(interrupt_flags));
+    if ((interrupt_flags & (1ULL << 9)) == 0U)
+        return 0;
+
+    uint64_t queue_flags = spinlock_lock_irqsave(&queue->lock);
+    uint64_t process_flags = process_table_lock_acquire();
+    uint32_t pid = process_current_slot();
+    if (pid == 0U || pid >= PROCESS_MAX ||
+        process_is_idle_locked(pid) ||
+        process_table_records[pid].state != PROCESS_RUNNING ||
+        process_table_records[pid].wait_queue != NULL)
+    {
+        process_table_lock_release(process_flags);
+        spinlock_unlock_irqrestore(&queue->lock, queue_flags);
+        return 0;
+    }
+
+    process_t* process = &process_table_records[pid];
+    process->sleep_deadline_ticks = 0U;
+    process->wait_queue = queue;
+    process->state = PROCESS_SLEEPING;
+    queue->waiters[pid / 32U] |= 1U << (pid % 32U);
+
+    process_table_lock_release(process_flags);
+    spinlock_unlock_irqrestore(&queue->lock, queue_flags);
+
+    scheduler_request_reschedule();
+    /* IF was enabled on entry; STI;HLT closes the lost-wakeup window. */
+    __asm__ volatile ("sti; hlt" ::: "memory");
+    return 1;
+}
+
+/* Wake the first live waiter, discarding stale PID bits safely. */
+uint32_t process_wait_queue_wake_one(process_wait_queue_t* queue)
+{
+    if (!queue)
+        return 0U;
+
+    uint32_t awakened_pid = 0U;
+    uint32_t owner_cpu = PROCESS_CPU_UNOWNED;
+    uint32_t affinity_cpu = PROCESS_CPU_ANY;
+    uint64_t queue_flags = spinlock_lock_irqsave(&queue->lock);
+
+    for (uint32_t pid = 1U; pid < PROCESS_MAX; pid++)
+    {
+        uint32_t mask = 1U << (pid % 32U);
+        uint32_t* word = &queue->waiters[pid / 32U];
+        if ((__atomic_load_n(word, __ATOMIC_RELAXED) & mask) == 0U)
+            continue;
+
+        *word &= ~mask;
+        uint64_t process_flags = process_table_lock_acquire();
+        process_t* process = &process_table_records[pid];
+        if (process->state == PROCESS_SLEEPING &&
+            process->wait_queue == queue)
+        {
+            process->state = PROCESS_READY;
+            process->wait_queue = NULL;
+            process->sleep_deadline_ticks = 0U;
+            owner_cpu = process->owner_cpu;
+            affinity_cpu = process->affinity_cpu;
+            awakened_pid = pid;
+        }
+        process_table_lock_release(process_flags);
+        if (awakened_pid != 0U)
+            break;
+    }
+
+    spinlock_unlock_irqrestore(&queue->lock, queue_flags);
+    if (awakened_pid != 0U)
+        process_send_wake_ipi(owner_cpu, affinity_cpu);
+    return awakened_pid;
+}
+
+uint32_t process_wait_queue_wake_all(process_wait_queue_t* queue)
+{
+    if (!queue)
+        return 0U;
+
+    uint32_t count = 0U;
+    while (count < PROCESS_MAX &&
+           process_wait_queue_wake_one(queue) != 0U)
+        count++;
+    return count;
 }
 
 int process_set_affinity(uint32_t pid, uint32_t cpu_id)
@@ -357,6 +471,7 @@ void process_block_current(void)
     if (current_pid < PROCESS_MAX)
     {
         process_table_records[current_pid].sleep_deadline_ticks = 0U;
+        process_table_records[current_pid].wait_queue = NULL;
         process_table_records[current_pid].state = PROCESS_SLEEPING;
     }
     /* Ownership remains with this CPU until it actually switches stacks. */

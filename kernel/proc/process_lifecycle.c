@@ -247,13 +247,18 @@ int process_sleep_current_until(uint64_t deadline_ticks)
  */
 void process_wake_expired(uint64_t now_ticks)
 {
-    uint32_t wake_owners[PROCESS_MAX];
-    uint32_t wake_affinities[PROCESS_MAX];
-    uint32_t wake_count = 0U;
+    uint32_t target_mask = 0U;
+    int has_unpinned_wakeup = 0;
 
     if (!process_initialized_state || now_ticks == 0U)
         return;
 
+    /*
+     * Make all due sleepers runnable in one table-lock transaction. Record
+     * destinations, then send at most one reschedule IPI per CPU after
+     * dropping the lock. Unpinned work needs only one initial nudge: any CPU
+     * can claim it on a later scheduling pass.
+     */
     uint64_t flags = process_table_lock_acquire();
     for (uint32_t pid = 1U; pid < PROCESS_MAX; pid++)
     {
@@ -265,14 +270,30 @@ void process_wake_expired(uint64_t now_ticks)
 
         process->state = PROCESS_READY;
         process->sleep_deadline_ticks = 0U;
-        wake_owners[wake_count] = process->owner_cpu;
-        wake_affinities[wake_count] = process->affinity_cpu;
-        wake_count++;
+
+        uint32_t target = process->owner_cpu;
+        if (target == PROCESS_CPU_UNOWNED)
+            target = process->affinity_cpu;
+
+        if (target < CPU_LOCAL_MAX)
+            target_mask |= 1U << target;
+        else if (target == PROCESS_CPU_ANY)
+            has_unpinned_wakeup = 1;
     }
     process_table_lock_release(flags);
 
-    for (uint32_t i = 0U; i < wake_count; i++)
-        process_send_wake_ipi(wake_owners[i], wake_affinities[i]);
+    if (has_unpinned_wakeup)
+    {
+        uint32_t target = process_choose_wakeup_cpu(PROCESS_CPU_UNOWNED);
+        if (target < CPU_LOCAL_MAX)
+            target_mask |= 1U << target;
+    }
+
+    for (uint32_t cpu = 0U; cpu < CPU_LOCAL_MAX; cpu++)
+    {
+        if ((target_mask & (1U << cpu)) != 0U)
+            process_request_cpu_reschedule(cpu);
+    }
 }
 
 int process_set_affinity(uint32_t pid, uint32_t cpu_id)

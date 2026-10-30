@@ -134,6 +134,11 @@ jobs:
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
             scripts/test_semaphore_api.c -o /tmp/vantaos-semaphore-api-test
           /tmp/vantaos-semaphore-api-test
+      - name: Test kernel event API contract
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_event_api.c -o /tmp/vantaos-event-api-test
+          /tmp/vantaos-event-api-test
 
       - name: Test AHCI PRDT descriptor builder
         run: |

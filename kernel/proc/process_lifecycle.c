@@ -312,23 +312,36 @@ void process_wait_queue_init(process_wait_queue_t* queue)
         __atomic_store_n(&queue->waiters[i], 0U, __ATOMIC_RELAXED);
 }
 
-/*
- * Register and block while holding queue->lock across the process-state
- * transition. A concurrent waker therefore cannot slip between registration
- * and PROCESS_SLEEPING. This function returns after the task is scheduled
- * again; callers must always re-evaluate their wait condition.
- */
-int process_wait_queue_sleep(process_wait_queue_t* queue)
+uint64_t process_wait_queue_lock(process_wait_queue_t* queue)
 {
-    uint64_t interrupt_flags;
     if (!queue)
-        return 0;
+        return 0U;
+    return spinlock_lock_irqsave(&queue->lock);
+}
 
-    __asm__ volatile ("pushfq; popq %0" : "=r"(interrupt_flags));
-    if ((interrupt_flags & (1ULL << 9)) == 0U)
-        return 0;
+void process_wait_queue_unlock(process_wait_queue_t* queue,
+                               uint64_t interrupt_flags)
+{
+    if (queue)
+        spinlock_unlock_irqrestore(&queue->lock, interrupt_flags);
+}
 
-    uint64_t queue_flags = spinlock_lock_irqsave(&queue->lock);
+/*
+ * Caller holds queue->lock and has checked its predicate while holding it.
+ * The producer must publish predicate changes atomically before waking. A
+ * producer racing this transition blocks on queue->lock and cannot lose the
+ * wakeup between the predicate check and waiter registration.
+ */
+int process_wait_queue_sleep_locked(process_wait_queue_t* queue,
+                                    uint64_t interrupt_flags)
+{
+    if (!queue || (interrupt_flags & (1ULL << 9)) == 0U)
+    {
+        if (queue)
+            spinlock_unlock_irqrestore(&queue->lock, interrupt_flags);
+        return 0;
+    }
+
     uint64_t process_flags = process_table_lock_acquire();
     uint32_t pid = process_current_slot();
     if (pid == 0U || pid >= PROCESS_MAX ||
@@ -337,7 +350,7 @@ int process_wait_queue_sleep(process_wait_queue_t* queue)
         process_table_records[pid].wait_queue != NULL)
     {
         process_table_lock_release(process_flags);
-        spinlock_unlock_irqrestore(&queue->lock, queue_flags);
+        spinlock_unlock_irqrestore(&queue->lock, interrupt_flags);
         return 0;
     }
 
@@ -348,12 +361,19 @@ int process_wait_queue_sleep(process_wait_queue_t* queue)
     queue->waiters[pid / 32U] |= 1U << (pid % 32U);
 
     process_table_lock_release(process_flags);
-    spinlock_unlock_irqrestore(&queue->lock, queue_flags);
+    spinlock_unlock_irqrestore(&queue->lock, interrupt_flags);
 
     scheduler_request_reschedule();
-    /* IF was enabled on entry; STI;HLT closes the lost-wakeup window. */
     __asm__ volatile ("sti; hlt" ::: "memory");
     return 1;
+}
+
+int process_wait_queue_sleep(process_wait_queue_t* queue)
+{
+    if (!queue)
+        return 0;
+    uint64_t flags = process_wait_queue_lock(queue);
+    return process_wait_queue_sleep_locked(queue, flags);
 }
 
 /* Wake the first live waiter, discarding stale PID bits safely. */

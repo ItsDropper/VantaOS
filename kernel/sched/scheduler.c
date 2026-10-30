@@ -319,3 +319,17 @@ void scheduler_yield(void)
     if (pid != 0)
         process_mark_ready(pid);
 }
+
+void scheduler_request_reschedule(void)
+{
+    cpu_local_t* local = cpu_local_current();
+    if (local && local->self == local && local->online != 0U)
+    {
+        __atomic_store_n(&local->reschedule_pending, 1U, __ATOMIC_RELEASE);
+        return;
+    }
+
+    /* Legacy single-CPU path has no per-CPU pending flag. */
+    __atomic_store_n(&fallback_quantum_ticks,
+                     SCHEDULER_QUANTUM_TICKS - 1U, __ATOMIC_RELEASE);
+}

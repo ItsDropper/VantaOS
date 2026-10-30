@@ -32,4 +32,13 @@ void sleep_ms(uint32_t ms);
  */
 uint32_t timer_get_ticks(void);
 
+/** Returns the monotonic tick counter without the legacy 32-bit wrap. */
+uint64_t timer_get_ticks64(void);
+
+/** Returns the configured PIT frequency in ticks per second. */
+uint32_t timer_get_frequency(void);
+
+/** Returns monotonic milliseconds since timer initialization. */
+uint64_t timer_get_uptime_ms(void);
+
 #endif // TIMER_H

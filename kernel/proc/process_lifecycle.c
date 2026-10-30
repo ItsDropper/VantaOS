@@ -91,6 +91,7 @@ int process_set_running(uint32_t pid)
     }
 
     process_set_current_slot(pid);
+    target->sleep_deadline_ticks = 0U;
     target->state = PROCESS_RUNNING;
     target->owner_cpu = cpu_id;
     process_table_lock_release(flags);
@@ -333,7 +334,10 @@ void process_block_current(void)
     uint64_t flags = process_table_lock_acquire();
     uint32_t current_pid = process_current_slot();
     if (current_pid < PROCESS_MAX)
+    {
+        process_table_records[current_pid].sleep_deadline_ticks = 0U;
         process_table_records[current_pid].state = PROCESS_SLEEPING;
+    }
     /* Ownership remains with this CPU until it actually switches stacks. */
     process_table_lock_release(flags);
 }

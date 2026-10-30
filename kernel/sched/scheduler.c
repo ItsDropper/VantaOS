@@ -102,6 +102,7 @@ static uint64_t scheduler_switch_from_stack(uint64_t current_stack,
                                            uint32_t current_pid)
 {
     uint32_t cpu_id = process_current_cpu_id();
+    cpu_local_t* local = cpu_local_current();
     uint64_t next_stack = 0;
     paging_address_space_t* next_address_space = NULL;
     uint32_t next_pid = current_pid;

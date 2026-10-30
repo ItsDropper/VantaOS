@@ -12,7 +12,7 @@
 
 static uint32_t wake_all_calls;
 
-uint32_t process_current_pid(void) { return 0U; }
+uint32_t process_current_pid(void) { return 7U; }
 void process_wait_queue_init(process_wait_queue_t* queue)
 {
     spinlock_init(&queue->lock);
@@ -53,12 +53,13 @@ int main(void)
     assert(barrier.arrived == 0U);
     assert(barrier.generation == 0U);
 
-    /* Host test has no scheduled process; wait must fail without mutation. */
-    assert(!kernel_barrier_wait(&barrier));
+    /* A one-participant barrier releases immediately without sleeping. */
+    assert(kernel_barrier_wait(&barrier));
     assert(barrier.arrived == 0U);
-    assert(barrier.generation == 0U);
+    assert(barrier.generation == 1U);
+    assert(wake_all_calls == 1U);
     assert(!kernel_barrier_wait(NULL));
-    assert(wake_all_calls == 0U);
+    assert(wake_all_calls == 1U);
 
     puts("VANTAOS_BARRIER_API_OK");
     return 0;

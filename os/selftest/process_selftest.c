@@ -554,6 +554,27 @@ static void gui_dead_owner_cleanup_probe(void)
     serial_write("VANTAOS_GUI_DEAD_OWNER_CLEANUP_OK\n");
 }
 
+static void scheduler_reschedule_request_probe(void)
+{
+    cpu_local_t* local = cpu_local_current();
+    if (!local || local->self != local || local->online == 0U)
+    {
+        serial_write("VANTAOS_SCHEDULER_RESCHEDULE_REQUEST_FAIL_CPU\\n");
+        return;
+    }
+
+    uint32_t previous = __atomic_exchange_n(
+        &local->reschedule_pending, 0U, __ATOMIC_ACQ_REL);
+    scheduler_request_reschedule();
+    int requested = __atomic_load_n(
+        &local->reschedule_pending, __ATOMIC_ACQUIRE) == 1U;
+    __atomic_store_n(&local->reschedule_pending, previous, __ATOMIC_RELEASE);
+
+    serial_write(requested ?
+        "VANTAOS_SCHEDULER_RESCHEDULE_REQUEST_OK\\n" :
+        "VANTAOS_SCHEDULER_RESCHEDULE_REQUEST_FAIL\\n");
+}
+
 void os_selftest_initialize(void)
 {
     if (!process_idle_lifecycle_probe())
@@ -562,6 +583,7 @@ void os_selftest_initialize(void)
     filesystem_selftest_initialize();
     process_state_transition_probe();
     process_deferred_switch_probe();
+    scheduler_reschedule_request_probe();
     process_owned_terminated_reuse_probe();
     gui_focus_input_regression_probe();
     gui_dead_owner_cleanup_probe();

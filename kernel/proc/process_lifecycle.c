@@ -424,9 +424,53 @@ uint32_t process_wait_queue_wake_all(process_wait_queue_t* queue)
         return 0U;
 
     uint32_t count = 0U;
-    while (count < PROCESS_MAX &&
-           process_wait_queue_wake_one(queue) != 0U)
+    uint32_t target_mask = 0U;
+    int has_unpinned_wakeup = 0;
+    uint64_t queue_flags = spinlock_lock_irqsave(&queue->lock);
+    uint64_t process_flags = process_table_lock_acquire();
+
+    for (uint32_t pid = 1U; pid < PROCESS_MAX; pid++)
+    {
+        uint32_t mask = 1U << (pid % 32U);
+        uint32_t* word = &queue->waiters[pid / 32U];
+        if ((__atomic_load_n(word, __ATOMIC_RELAXED) & mask) == 0U)
+            continue;
+
+        *word &= ~mask;
+        process_t* process = &process_table_records[pid];
+        if (process->state != PROCESS_SLEEPING ||
+            process->wait_queue != queue)
+            continue;
+
+        process->state = PROCESS_READY;
+        process->wait_queue = NULL;
+        process->sleep_deadline_ticks = 0U;
         count++;
+
+        uint32_t target = process->owner_cpu;
+        if (target == PROCESS_CPU_UNOWNED)
+            target = process->affinity_cpu;
+        if (target < CPU_LOCAL_MAX)
+            target_mask |= 1U << target;
+        else if (target == PROCESS_CPU_ANY)
+            has_unpinned_wakeup = 1;
+    }
+
+    process_table_lock_release(process_flags);
+    spinlock_unlock_irqrestore(&queue->lock, queue_flags);
+
+    if (has_unpinned_wakeup)
+    {
+        uint32_t target = process_choose_wakeup_cpu(PROCESS_CPU_UNOWNED);
+        if (target < CPU_LOCAL_MAX)
+            target_mask |= 1U << target;
+    }
+
+    for (uint32_t cpu = 0U; cpu < CPU_LOCAL_MAX; cpu++)
+    {
+        if ((target_mask & (1U << cpu)) != 0U)
+            process_request_cpu_reschedule(cpu);
+    }
     return count;
 }
 

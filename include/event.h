@@ -9,6 +9,7 @@
 #define KERNEL_EVENT_H
 
 #include "process.h"
+#include "timer.h"
 
 /*
  * Process-context event. Manual-reset events remain signaled until reset and
@@ -63,6 +64,44 @@ static inline int kernel_event_wait(kernel_event_t* event)
         }
 
         if (!process_wait_queue_sleep_locked(&event->waiters, flags))
+            return 0;
+    }
+}
+
+/*
+ * Wait until signaled or an absolute monotonic PIT tick deadline expires.
+ * A signal observed at the deadline wins over timeout. Returns zero for
+ * timeout or an invalid/non-blockable process context.
+ */
+static inline int kernel_event_wait_until(kernel_event_t* event,
+                                          uint64_t deadline_ticks)
+{
+    if (!event || deadline_ticks == 0U)
+        return 0;
+
+    uint32_t pid = process_current_pid();
+    if (pid == 0U || pid >= PROCESS_MAX)
+        return 0;
+
+    for (;;)
+    {
+        uint64_t flags = process_wait_queue_lock(&event->waiters);
+        if (event->signaled != 0U)
+        {
+            if (event->manual_reset == 0U)
+                event->signaled = 0U;
+            process_wait_queue_unlock(&event->waiters, flags);
+            return 1;
+        }
+
+        if (timer_get_ticks64() >= deadline_ticks)
+        {
+            process_wait_queue_unlock(&event->waiters, flags);
+            return 0;
+        }
+
+        if (!process_wait_queue_sleep_until_locked(&event->waiters, flags,
+                                                   deadline_ticks))
             return 0;
     }
 }

@@ -559,7 +559,7 @@ static void scheduler_reschedule_request_probe(void)
     cpu_local_t* local = cpu_local_current();
     if (!local || local->self != local || local->online == 0U)
     {
-        serial_write("VANTAOS_SCHEDULER_RESCHEDULE_REQUEST_FAIL_CPU\\n");
+        serial_write("VANTAOS_SCHEDULER_RESCHEDULE_REQUEST_FAIL_CPU\n");
         return;
     }
 
@@ -571,8 +571,8 @@ static void scheduler_reschedule_request_probe(void)
     __atomic_store_n(&local->reschedule_pending, previous, __ATOMIC_RELEASE);
 
     serial_write(requested ?
-        "VANTAOS_SCHEDULER_RESCHEDULE_REQUEST_OK\\n" :
-        "VANTAOS_SCHEDULER_RESCHEDULE_REQUEST_FAIL\\n");
+        "VANTAOS_SCHEDULER_RESCHEDULE_REQUEST_OK\n" :
+        "VANTAOS_SCHEDULER_RESCHEDULE_REQUEST_FAIL\n");
 }
 
 void os_selftest_initialize(void)

@@ -65,9 +65,7 @@ void sleep_ms(uint32_t ms) {
         return;
 
     uint64_t start_tick = timer_get_ticks64();
-    uint64_t deadline = start_tick + remaining;
-    if (deadline < start_tick)
-        deadline = UINT64_MAX;
+    uint64_t deadline = vanta_timer_deadline_after(start_tick, remaining);
 
     /*
      * Scheduled processes block instead of consuming a CPU in an HLT polling

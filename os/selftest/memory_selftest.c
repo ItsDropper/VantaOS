@@ -112,7 +112,7 @@ static void heap_allocator_probe(void)
         kmalloc(HEAP_MAX_SIZE) != NULL ||
         kmalloc((size_t)-1) != NULL)
     {
-        serial_write("VANTAOS_HEAP_ALLOCATOR_FAIL\\n");
+        serial_write("VANTAOS_HEAP_ALLOCATOR_FAIL\n");
         return;
     }
 

@@ -159,7 +159,6 @@ int process_prepare_context_switch(uint32_t next_pid, uint32_t current_pid,
         current_pid == 0U || current_pid >= PROCESS_MAX ||
         !next_stack_out || !next_address_space_out)
     {
-        serial_write("VANTAOS_SWITCH_REJECT_ARGS\\n");
         return 0;
     }
 
@@ -167,7 +166,6 @@ int process_prepare_context_switch(uint32_t next_pid, uint32_t current_pid,
     if (cpu_id != process_current_cpu_id() ||
         current_pid != process_current_slot() || next_pid == current_pid)
     {
-        serial_write("VANTAOS_SWITCH_REJECT_CURRENT\\n");
         process_table_lock_release(flags);
         return 0;
     }
@@ -180,7 +178,6 @@ int process_prepare_context_switch(uint32_t next_pid, uint32_t current_pid,
          current->state != PROCESS_SLEEPING &&
          current->state != PROCESS_TERMINATED))
     {
-        serial_write("VANTAOS_SWITCH_REJECT_OUTGOING\\n");
         process_table_lock_release(flags);
         return 0;
     }
@@ -189,13 +186,11 @@ int process_prepare_context_switch(uint32_t next_pid, uint32_t current_pid,
         (next->affinity_cpu != PROCESS_CPU_ANY &&
          next->affinity_cpu != cpu_id))
     {
-        serial_write("VANTAOS_SWITCH_REJECT_INCOMING_STATE\\n");
         process_table_lock_release(flags);
         return 0;
     }
     if (!process_stack_is_valid_locked(next) || next->address_space == NULL)
     {
-        serial_write("VANTAOS_SWITCH_REJECT_INCOMING_CONTEXT\\n");
         process_table_lock_release(flags);
         return 0;
     }

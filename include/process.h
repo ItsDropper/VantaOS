@@ -120,8 +120,16 @@ int process_wake(uint32_t pid);
 int process_sleep_current_until(uint64_t deadline_ticks);
 /* Called from the timer interrupt; wakes all expired timed sleepers. */
 void process_wake_expired(uint64_t now_ticks);
-/* Wait-queue sleepers must recheck their condition after waking. */
+/*
+ * Lock the queue while checking an atomic wait predicate. The locked sleep
+ * operation registers the current task and releases the queue before blocking.
+ */
 void process_wait_queue_init(process_wait_queue_t* queue);
+uint64_t process_wait_queue_lock(process_wait_queue_t* queue);
+void process_wait_queue_unlock(process_wait_queue_t* queue,
+                               uint64_t interrupt_flags);
+int process_wait_queue_sleep_locked(process_wait_queue_t* queue,
+                                    uint64_t interrupt_flags);
 int process_wait_queue_sleep(process_wait_queue_t* queue);
 uint32_t process_wait_queue_wake_one(process_wait_queue_t* queue);
 uint32_t process_wait_queue_wake_all(process_wait_queue_t* queue);

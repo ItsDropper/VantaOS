@@ -60,6 +60,12 @@ uint64_t timer_get_uptime_ms(void) {
 }
 
 void sleep_ms(uint32_t ms) {
+    uint64_t interrupt_flags;
+    __asm__ volatile ("pushfq; popq %0" : "=r"(interrupt_flags));
+    /* Sleeping with IF clear would halt forever because the PIT cannot wake us. */
+    if ((interrupt_flags & (1ULL << 9)) == 0U)
+        return;
+
     uint64_t remaining = vanta_timer_ms_to_ticks(ms, timer_get_frequency());
     if (remaining == 0U)
         return;
@@ -79,7 +85,7 @@ void sleep_ms(uint32_t ms) {
             if (!process_sleep_current_until(deadline))
                 break;
             scheduler_request_reschedule();
-            __asm__ volatile ("sti; hlt" ::: "memory");
+            __asm__ volatile ("hlt" ::: "memory");
         }
         if (timer_get_ticks64() >= deadline)
             return;

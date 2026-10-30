@@ -101,6 +101,7 @@ void process_reset_record(process_t* process)
     process->parent_pid = 0;
     process->owner_cpu = PROCESS_CPU_UNOWNED;
     process->state = PROCESS_UNUSED;
+    process->sleep_deadline_ticks = 0U;
     process->exit_status = 0;
     process->name[0] = 0;
     process->stack_pointer = 0;

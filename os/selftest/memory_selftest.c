@@ -107,9 +107,12 @@ static void heap_allocator_probe(void)
 
     if (total_before < 16U * 4096U ||
         used_before > total_before ||
-        free_before > total_before)
+        free_before > total_before ||
+        kmalloc(0U) != NULL ||
+        kmalloc(HEAP_MAX_SIZE) != NULL ||
+        kmalloc((size_t)-1) != NULL)
     {
-        serial_write("VANTAOS_HEAP_ALLOCATOR_FAIL\n");
+        serial_write("VANTAOS_HEAP_ALLOCATOR_FAIL\\n");
         return;
     }
 
@@ -152,6 +155,29 @@ static void heap_allocator_probe(void)
     kfree(first); /* A double free must not change accounting. */
 
     ok = (used_after_free == used_before) && ok;
+
+    /* Adjacent free blocks must coalesce into a reusable allocation span. */
+    unsigned char* left = (unsigned char*)kmalloc(96U);
+    unsigned char* middle = (unsigned char*)kmalloc(160U);
+    unsigned char* right = (unsigned char*)kmalloc(64U);
+    ok = left != NULL && middle != NULL && right != NULL && ok;
+    if (left && middle && right)
+    {
+        kfree(left);
+        kfree(middle);
+        unsigned char* combined = (unsigned char*)kmalloc(272U);
+        ok = combined != NULL && ok;
+        if (combined)
+            kfree(combined);
+        kfree(right);
+    }
+    else
+    {
+        if (left) kfree(left);
+        if (middle) kfree(middle);
+        if (right) kfree(right);
+    }
+
     ok = (heap_get_used_size() == used_before) && ok;
     ok = (heap_get_total_size() == total_before) && ok;
     ok = (heap_get_free_size() == free_before) && ok;

@@ -8,6 +8,7 @@
 #include "heap.h"
 #include "paging.h"
 #include "pmm.h"
+#include "spinlock.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -30,6 +31,7 @@ static size_t heap_used;
 static size_t heap_size;
 static uint32_t heap_pages;
 static int heap_initialized;
+static spinlock_t heap_lock = SPINLOCK_INITIALIZER;
 
 static size_t align_up(size_t value)
 {
@@ -184,30 +186,38 @@ static int heap_add_page(void)
 
 void heap_initialize(void)
 {
+    uint64_t flags = spinlock_lock_irqsave(&heap_lock);
     first_block = NULL;
     heap_used = 0;
     heap_size = 0;
     heap_pages = 0;
-    heap_initialized = 0;
+    __atomic_store_n(&heap_initialized, 0, __ATOMIC_RELEASE);
 
     for (uint32_t i = 0; i < HEAP_INITIAL_PAGES; i++)
     {
         if (!heap_add_page())
+        {
+            spinlock_unlock_irqrestore(&heap_lock, flags);
             return;
+        }
     }
 
-    heap_initialized = 1;
+    __atomic_store_n(&heap_initialized, 1, __ATOMIC_RELEASE);
+    spinlock_unlock_irqrestore(&heap_lock, flags);
 }
 
 void* kmalloc(size_t size)
 {
-    if (!heap_initialized || size == 0)
-        return NULL;
-
-    if (size > HEAP_MAX_SIZE - sizeof(heap_block_t))
+    if (size == 0 || size > HEAP_MAX_SIZE - sizeof(heap_block_t))
         return NULL;
 
     size = align_up(size);
+    uint64_t flags = spinlock_lock_irqsave(&heap_lock);
+    if (!__atomic_load_n(&heap_initialized, __ATOMIC_ACQUIRE))
+    {
+        spinlock_unlock_irqrestore(&heap_lock, flags);
+        return NULL;
+    }
 
     while (1)
     {
@@ -216,7 +226,10 @@ void* kmalloc(size_t size)
         while (block)
         {
             if (!block_is_valid(block))
+            {
+                spinlock_unlock_irqrestore(&heap_lock, flags);
                 return NULL;
+            }
 
             if (block->status == BLOCK_FREE &&
                 block->size >= size)
@@ -225,31 +238,49 @@ void* kmalloc(size_t size)
                 block->status = BLOCK_USED;
                 heap_used += block->size;
 
-                return (void*)((uint8_t*)block +
-                               sizeof(heap_block_t));
+                void* result = (void*)((uint8_t*)block +
+                                       sizeof(heap_block_t));
+                spinlock_unlock_irqrestore(&heap_lock, flags);
+                return result;
             }
 
             block = block->next;
         }
 
         if (!heap_add_page())
+        {
+            spinlock_unlock_irqrestore(&heap_lock, flags);
             return NULL;
+        }
     }
 }
 
 void kfree(void* ptr)
 {
-    if (!heap_initialized || !ptr)
+    if (!ptr)
         return;
+
+    uint64_t flags = spinlock_lock_irqsave(&heap_lock);
+    if (!__atomic_load_n(&heap_initialized, __ATOMIC_ACQUIRE))
+    {
+        spinlock_unlock_irqrestore(&heap_lock, flags);
+        return;
+    }
 
     uintptr_t address = (uintptr_t)ptr;
 
     if (address < HEAP_VIRTUAL_BASE + sizeof(heap_block_t) ||
         address >= HEAP_VIRTUAL_BASE + heap_size)
+    {
+        spinlock_unlock_irqrestore(&heap_lock, flags);
         return;
+    }
 
     if ((address - HEAP_VIRTUAL_BASE) % HEAP_ALIGNMENT != 0)
+    {
+        spinlock_unlock_irqrestore(&heap_lock, flags);
         return;
+    }
 
     heap_block_t* block =
         (heap_block_t*)((uint8_t*)ptr -
@@ -257,26 +288,37 @@ void kfree(void* ptr)
 
     if (!block_is_valid(block) ||
         block->status != BLOCK_USED)
+    {
+        spinlock_unlock_irqrestore(&heap_lock, flags);
         return;
+    }
 
     block->status = BLOCK_FREE;
     heap_used -= block->size;
 
     merge_free_blocks();
+    spinlock_unlock_irqrestore(&heap_lock, flags);
 }
 
 size_t heap_get_total_size(void)
 {
-    return heap_size;
+    uint64_t flags = spinlock_lock_irqsave(&heap_lock);
+    size_t result = heap_size;
+    spinlock_unlock_irqrestore(&heap_lock, flags);
+    return result;
 }
 
 size_t heap_get_used_size(void)
 {
-    return heap_used;
+    uint64_t flags = spinlock_lock_irqsave(&heap_lock);
+    size_t result = heap_used;
+    spinlock_unlock_irqrestore(&heap_lock, flags);
+    return result;
 }
 
 size_t heap_get_free_size(void)
 {
+    uint64_t flags = spinlock_lock_irqsave(&heap_lock);
     size_t free_size = 0;
     heap_block_t* block = first_block;
 
@@ -291,10 +333,11 @@ size_t heap_get_free_size(void)
         block = block->next;
     }
 
+    spinlock_unlock_irqrestore(&heap_lock, flags);
     return free_size;
 }
 
 int heap_is_initialized(void)
 {
-    return heap_initialized;
+    return __atomic_load_n(&heap_initialized, __ATOMIC_ACQUIRE);
 }

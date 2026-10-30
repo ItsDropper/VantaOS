@@ -55,3 +55,14 @@ static inline uint32_t vanta_timer_elapsed(uint32_t start, uint32_t now)
 }
 
 #endif
+
+/* Convert monotonic ticks to milliseconds without multiplying the full
+ * 64-bit counter by 1000 (which could overflow after long uptimes). */
+static inline uint64_t vanta_timer_ticks_to_ms(uint64_t ticks,
+                                               uint32_t frequency)
+{
+    if (frequency == 0U)
+        return 0U;
+    return (ticks / frequency) * 1000U +
+           ((ticks % frequency) * 1000U) / frequency;
+}

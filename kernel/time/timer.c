@@ -85,7 +85,8 @@ void sleep_ms(uint32_t ms) {
             if (!process_sleep_current_until(deadline))
                 break;
             scheduler_request_reschedule();
-            __asm__ volatile ("hlt" ::: "memory");
+            /* STI;HLT is atomic with respect to maskable IRQ delivery. */
+            __asm__ volatile ("sti; hlt" ::: "memory");
         }
         if (timer_get_ticks64() >= deadline)
             return;

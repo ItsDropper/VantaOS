@@ -139,6 +139,11 @@ jobs:
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
             scripts/test_event_api.c -o /tmp/vantaos-event-api-test
           /tmp/vantaos-event-api-test
+      - name: Test kernel barrier API contract
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_barrier_api.c -o /tmp/vantaos-barrier-api-test
+          /tmp/vantaos-barrier-api-test
 
       - name: Test AHCI PRDT descriptor builder
         run: |

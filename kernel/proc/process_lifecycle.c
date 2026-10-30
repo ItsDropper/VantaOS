@@ -246,7 +246,6 @@ int process_sleep_current_until(uint64_t deadline_ticks)
  */
 void process_wake_expired(uint64_t now_ticks)
 {
-    uint32_t wake_pids[PROCESS_MAX];
     uint32_t wake_owners[PROCESS_MAX];
     uint32_t wake_affinities[PROCESS_MAX];
     uint32_t wake_count = 0U;
@@ -265,7 +264,6 @@ void process_wake_expired(uint64_t now_ticks)
 
         process->state = PROCESS_READY;
         process->sleep_deadline_ticks = 0U;
-        wake_pids[wake_count] = pid;
         wake_owners[wake_count] = process->owner_cpu;
         wake_affinities[wake_count] = process->affinity_cpu;
         wake_count++;

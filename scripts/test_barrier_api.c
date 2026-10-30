@@ -61,6 +61,13 @@ int main(void)
     assert(!kernel_barrier_wait(NULL));
     assert(wake_all_calls == 1U);
 
+    /* Failed blocking must roll back the caller's partial arrival. */
+    assert(kernel_barrier_init(&barrier, 2U));
+    assert(!kernel_barrier_wait(&barrier));
+    assert(barrier.arrived == 0U);
+    assert(barrier.generation == 0U);
+    assert(wake_all_calls == 1U);
+
     puts("VANTAOS_BARRIER_API_OK");
     return 0;
 }

@@ -307,8 +307,11 @@ static int syscall_read_char(struct exception_frame* frame)
 
 static int syscall_yield(struct exception_frame* frame)
 {
-    /* Wait for the next interrupt; timer preemption remains responsible for
-       selecting another runnable process. */
+    /* Defer the context switch to the timer IRQ return path. The syscall
+       frame is not an interrupt-scheduler frame and must not be switched
+       directly. HLT closes the race until the next interrupt observes the
+       per-CPU reschedule request. */
+    scheduler_request_reschedule();
     __asm__ volatile ("sti; hlt; cli" : : : "memory");
     frame->rax = 0U;
     return 0;

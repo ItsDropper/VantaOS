@@ -129,6 +129,12 @@ jobs:
             scripts/test_mutex_api.c -o /tmp/vantaos-mutex-api-test
           /tmp/vantaos-mutex-api-test
 
+      - name: Test kernel semaphore API contract
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_semaphore_api.c -o /tmp/vantaos-semaphore-api-test
+          /tmp/vantaos-semaphore-api-test
+
       - name: Test AHCI PRDT descriptor builder
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \

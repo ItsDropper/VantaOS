@@ -51,6 +51,11 @@ int main(void)
     assert(vanta_timer_deadline_reached(1U, 1U));
     assert(vanta_timer_elapsed(0xFFFFFFFEU, 1U) == 3U);
 
+    assert(vanta_timer_deadline_after(100U, 25U) == 125U);
+    assert(vanta_timer_deadline_after(UINT64_MAX - 2U, 1U) ==
+           UINT64_MAX - 1U);
+    assert(vanta_timer_deadline_after(UINT64_MAX - 2U, 3U) == UINT64_MAX);
+
     puts("VANTAOS_TIMER_MATH_OK");
     return 0;
 }

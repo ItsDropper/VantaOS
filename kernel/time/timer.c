@@ -23,7 +23,7 @@ int timer_initialize(uint32_t frequency) {
     uint16_t divisor;
     if (!vanta_timer_pit_divisor(frequency, &divisor))
         return 0;
-    timer_freq = frequency;
+    __atomic_store_n(&timer_freq, frequency, __ATOMIC_RELEASE);
 
     // Command byte: Channel 0, Access mode lobyte/hibyte, Square wave mode
     outb(PIT_COMMAND_PORT, 0x36);

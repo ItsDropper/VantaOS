@@ -12,8 +12,10 @@
 
 static uint32_t wake_one_calls;
 static uint32_t wake_all_calls;
+static uint64_t fake_ticks;
 
 uint32_t process_current_pid(void) { return 7U; }
+uint64_t timer_get_ticks64(void) { return fake_ticks; }
 
 void process_wait_queue_init(process_wait_queue_t* queue)
 {
@@ -42,6 +44,16 @@ int process_wait_queue_sleep_locked(process_wait_queue_t* queue,
     return 0;
 }
 
+int process_wait_queue_sleep_until_locked(process_wait_queue_t* queue,
+                                          uint64_t flags,
+                                          uint64_t deadline_ticks)
+{
+    (void)queue;
+    (void)flags;
+    fake_ticks = deadline_ticks;
+    return 1;
+}
+
 uint32_t process_wait_queue_wake_one(process_wait_queue_t* queue)
 {
     (void)queue;
@@ -67,6 +79,10 @@ int main(void)
     assert(kernel_event_wait(&automatic));
     assert(!kernel_event_is_set(&automatic));
     assert(!kernel_event_wait(&automatic));
+    assert(!kernel_event_wait_until(&automatic, 10U));
+    assert(fake_ticks == 10U);
+    assert(kernel_event_set(&automatic));
+    assert(kernel_event_wait_until(&automatic, 20U));
     assert(wake_one_calls == 1U);
     assert(wake_all_calls == 0U);
 

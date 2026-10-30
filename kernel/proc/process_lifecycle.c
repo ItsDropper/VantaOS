@@ -275,6 +275,7 @@ void process_wake_expired(uint64_t now_ticks)
 
         process->state = PROCESS_READY;
         process->sleep_deadline_ticks = 0U;
+        process->wait_queue = NULL;
 
         uint32_t target = process->owner_cpu;
         if (target == PROCESS_CPU_UNOWNED)
@@ -366,14 +367,6 @@ int process_wait_queue_sleep_locked(process_wait_queue_t* queue,
     scheduler_request_reschedule();
     __asm__ volatile ("sti; hlt" ::: "memory");
     return 1;
-}
-
-int process_wait_queue_sleep(process_wait_queue_t* queue)
-{
-    if (!queue)
-        return 0;
-    uint64_t flags = process_wait_queue_lock(queue);
-    return process_wait_queue_sleep_locked(queue, flags);
 }
 
 /* Wake the first live waiter, discarding stale PID bits safely. */
@@ -560,6 +553,8 @@ int process_terminate(uint32_t pid)
     }
 
     process->state = PROCESS_TERMINATED;
+    process->sleep_deadline_ticks = 0U;
+    process->wait_queue = NULL;
     process->exit_status = -1;
     int is_current = pid == process_current_slot();
     process_table_lock_release(flags);
@@ -593,6 +588,8 @@ void process_terminate_current_with_status(int32_t exit_status)
         !process_is_idle_locked(current_pid))
     {
         process_table_records[current_pid].state = PROCESS_TERMINATED;
+        process_table_records[current_pid].sleep_deadline_ticks = 0U;
+        process_table_records[current_pid].wait_queue = NULL;
         process_table_records[current_pid].exit_status = exit_status;
         terminated_pid = current_pid;
     }

@@ -128,6 +128,57 @@ uint32_t process_find_next_ready(uint32_t cursor, uint32_t current_pid,
     return result;
 }
 
+/*
+ * Snapshot every eligible runnable PID in round-robin order with one lock.
+ * The scheduler validates each candidate again when claiming it; this list is
+ * deliberately advisory, so a competing CPU may win any individual claim.
+ * Returning a batch avoids reacquiring the global process lock after every
+ * cross-CPU claim race.
+ */
+size_t process_collect_ready(uint32_t cursor, uint32_t current_pid,
+                             uint32_t cpu_id, uint32_t idle_pid,
+                             uint32_t* candidates, size_t capacity)
+{
+    if (!process_initialized_state || current_pid >= PROCESS_MAX ||
+        cpu_id >= CPU_LOCAL_MAX || !candidates || capacity == 0U)
+        return 0U;
+
+    if (cursor == 0U || cursor >= PROCESS_MAX)
+        cursor = 1U;
+
+    size_t count = 0U;
+    uint64_t flags = process_table_lock_acquire();
+    for (uint32_t offset = 0U; offset < PROCESS_MAX &&
+         count < capacity; offset++)
+    {
+        uint32_t pid = (cursor + offset) % PROCESS_MAX;
+        if (pid == 0U || pid == current_pid || pid == idle_pid)
+            continue;
+
+        const process_t* process = &process_table_records[pid];
+        if (process->state == PROCESS_READY &&
+            process->owner_cpu == PROCESS_CPU_UNOWNED &&
+            (process->affinity_cpu == PROCESS_CPU_ANY ||
+             process->affinity_cpu == cpu_id))
+            candidates[count++] = pid;
+    }
+
+    /* Idle is a last resort, never preferred over runnable application work. */
+    if (count < capacity && idle_pid != 0U && idle_pid < PROCESS_MAX &&
+        idle_pid != current_pid)
+    {
+        const process_t* idle = &process_table_records[idle_pid];
+        if (idle->state == PROCESS_READY &&
+            idle->owner_cpu == PROCESS_CPU_UNOWNED &&
+            (idle->affinity_cpu == PROCESS_CPU_ANY ||
+             idle->affinity_cpu == cpu_id))
+            candidates[count++] = idle_pid;
+    }
+
+    process_table_lock_release(flags);
+    return count;
+}
+
 int process_claim_for_cpu(uint32_t next_pid, uint32_t current_pid,
                           uint32_t cpu_id)
 {

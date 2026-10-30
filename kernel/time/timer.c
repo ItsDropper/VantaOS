@@ -8,6 +8,8 @@
 #include "timer.h"
 #include "timer_math.h"
 #include "watchdog.h"
+#include "process.h"
+#include "scheduler.h"
 
 #define PIT_COMMAND_PORT 0x43
 #define PIT_DATA_PORT_0  0x40
@@ -37,6 +39,7 @@ int timer_initialize(uint32_t frequency) {
 void timer_handle_interrupt(void) {
     uint64_t now = __atomic_add_fetch(&ticks, 1ULL, __ATOMIC_RELAXED);
     kernel_watchdog_timer_tick((uint32_t)now);
+    process_wake_expired(now);
 }
 
 uint32_t timer_get_ticks(void) {
@@ -62,6 +65,28 @@ void sleep_ms(uint32_t ms) {
         return;
 
     uint64_t start_tick = timer_get_ticks64();
-    while (timer_get_ticks64() - start_tick < remaining)
+    uint64_t deadline = start_tick + remaining;
+    if (deadline < start_tick)
+        deadline = UINT64_MAX;
+
+    /*
+     * Scheduled processes block instead of consuming a CPU in an HLT polling
+     * loop. The PIT wakes the process at its absolute deadline. Keep the
+     * polling fallback for early boot and non-process kernel contexts.
+     */
+    if (scheduler_is_initialized() && process_current_pid() != 0U)
+    {
+        while (timer_get_ticks64() < deadline)
+        {
+            if (!process_sleep_current_until(deadline))
+                break;
+            scheduler_request_reschedule();
+            __asm__ volatile ("sti; hlt" ::: "memory");
+        }
+        if (timer_get_ticks64() >= deadline)
+            return;
+    }
+
+    while (timer_get_ticks64() < deadline)
         __asm__ volatile ("hlt" ::: "memory");
 }

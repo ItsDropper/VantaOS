@@ -369,6 +369,49 @@ int process_wait_queue_sleep_locked(process_wait_queue_t* queue,
     return 1;
 }
 
+/*
+ * Timed wait registration publishes the deadline and queue association in
+ * the same process-table critical section. Expiration clears wait_queue;
+ * the stale PID bit is reclaimed by the next queue wake operation.
+ */
+int process_wait_queue_sleep_until_locked(process_wait_queue_t* queue,
+                                          uint64_t interrupt_flags,
+                                          uint64_t deadline_ticks)
+{
+    if (!queue || deadline_ticks == 0U ||
+        (interrupt_flags & (1ULL << 9)) == 0U)
+    {
+        if (queue)
+            spinlock_unlock_irqrestore(&queue->lock, interrupt_flags);
+        return 0;
+    }
+
+    uint64_t process_flags = process_table_lock_acquire();
+    uint32_t pid = process_current_slot();
+    if (pid == 0U || pid >= PROCESS_MAX ||
+        process_is_idle_locked(pid) ||
+        process_table_records[pid].state != PROCESS_RUNNING ||
+        process_table_records[pid].wait_queue != NULL)
+    {
+        process_table_lock_release(process_flags);
+        spinlock_unlock_irqrestore(&queue->lock, interrupt_flags);
+        return 0;
+    }
+
+    process_t* process = &process_table_records[pid];
+    process->sleep_deadline_ticks = deadline_ticks;
+    process->wait_queue = queue;
+    process->state = PROCESS_SLEEPING;
+    queue->waiters[pid / 32U] |= 1U << (pid % 32U);
+
+    process_table_lock_release(process_flags);
+    spinlock_unlock_irqrestore(&queue->lock, interrupt_flags);
+
+    scheduler_request_reschedule();
+    __asm__ volatile ("sti; hlt" ::: "memory");
+    return 1;
+}
+
 /* Wake the first live waiter, discarding stale PID bits safely. */
 uint32_t process_wait_queue_wake_one(process_wait_queue_t* queue)
 {

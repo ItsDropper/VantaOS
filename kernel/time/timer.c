@@ -12,8 +12,8 @@
 #define PIT_COMMAND_PORT 0x43
 #define PIT_DATA_PORT_0  0x40
 
-static volatile uint32_t ticks = 0;
-static uint32_t timer_freq = 100; // Default 100 Hz
+static volatile uint64_t ticks = 0;
+static volatile uint32_t timer_freq = 100; // Default 100 Hz
 
 static inline void outb(uint16_t port, uint8_t val) {
     __asm__ volatile ("outb %0, %1" : : "a"(val), "Nd"(port));
@@ -35,24 +35,33 @@ int timer_initialize(uint32_t frequency) {
 }
 
 void timer_handle_interrupt(void) {
-    uint32_t now = __atomic_add_fetch(&ticks, 1U, __ATOMIC_RELAXED);
-    kernel_watchdog_timer_tick(now);
+    uint64_t now = __atomic_add_fetch(&ticks, 1ULL, __ATOMIC_RELAXED);
+    kernel_watchdog_timer_tick((uint32_t)now);
 }
 
 uint32_t timer_get_ticks(void) {
     return __atomic_load_n(&ticks, __ATOMIC_ACQUIRE);
 }
 
+uint64_t timer_get_ticks64(void) {
+    return __atomic_load_n(&ticks, __ATOMIC_ACQUIRE);
+}
+
+uint32_t timer_get_frequency(void) {
+    return __atomic_load_n(&timer_freq, __ATOMIC_ACQUIRE);
+}
+
+uint64_t timer_get_uptime_ms(void) {
+    return vanta_timer_ticks_to_ms(timer_get_ticks64(),
+                                   timer_get_frequency());
+}
+
 void sleep_ms(uint32_t ms) {
-    uint64_t remaining = vanta_timer_ms_to_ticks(ms, timer_freq);
-    while (remaining != 0U) {
-        uint32_t chunk = remaining > VANTA_TIMER_MAX_WAIT_TICKS ?
-            VANTA_TIMER_MAX_WAIT_TICKS : (uint32_t)remaining;
-        uint32_t start_tick = timer_get_ticks();
+    uint64_t remaining = vanta_timer_ms_to_ticks(ms, timer_get_frequency());
+    if (remaining == 0U)
+        return;
 
-        while (vanta_timer_elapsed(start_tick, timer_get_ticks()) < chunk)
-            __asm__ volatile ("hlt" ::: "memory");
-
-        remaining -= chunk;
-    }
+    uint64_t start_tick = timer_get_ticks64();
+    while (timer_get_ticks64() - start_tick < remaining)
+        __asm__ volatile ("hlt" ::: "memory");
 }

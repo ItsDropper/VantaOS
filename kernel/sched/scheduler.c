@@ -57,32 +57,6 @@ int scheduler_is_initialized(void)
     return __atomic_load_n(&initialized, __ATOMIC_ACQUIRE) != 0;
 }
 
-/*
- * Select a candidate without claiming it. Another CPU may win the race
- * between this snapshot and process_prepare_context_switch(); the caller
- * passes that rejected PID back on the next scan so one lost race cannot
- * waste the entire scheduling quantum.
- */
-static uint32_t scheduler_next_ready(uint32_t current_pid,
-                                     uint32_t rejected_pid)
-{
-    uint32_t cpu_id = process_current_cpu_id();
-    cpu_local_t* local = cpu_local_current();
-    uint32_t idle_pid = local && local->self == local &&
-        local->online != 0U ?
-        __atomic_load_n(&local->idle_pid, __ATOMIC_ACQUIRE) : 1U;
-
-    /*
-     * Each CPU advances its own scan origin after dispatch. The process layer
-     * scans under one table-lock acquisition; the subsequent context-switch
-     * claim remains the race-safe ownership point.
-     */
-    uint32_t cursor = __atomic_load_n(scheduler_cursor_slot(),
-                                     __ATOMIC_RELAXED);
-    return process_find_next_ready(cursor, current_pid, rejected_pid,
-                                   cpu_id, idle_pid);
-}
-
 static int scheduler_install_kernel_stack(uint32_t pid)
 {
     process_t process;

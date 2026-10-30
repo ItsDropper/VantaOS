@@ -36,6 +36,14 @@ int main(void)
     assert(vanta_timer_ms_to_ticks(UINT32_MAX, 100U) ==
            (((uint64_t)UINT32_MAX * 100U + 999U) / 1000U));
 
+    assert(vanta_timer_ticks_to_ms(0U, 100U) == 0U);
+    assert(vanta_timer_ticks_to_ms(1U, 100U) == 10U);
+    assert(vanta_timer_ticks_to_ms(101U, 100U) == 1010U);
+    assert(vanta_timer_ticks_to_ms(UINT64_MAX, 100U) ==
+           (UINT64_MAX / 100U) * 1000U +
+           ((UINT64_MAX % 100U) * 1000U) / 100U);
+    assert(vanta_timer_ticks_to_ms(100U, 0U) == 0U);
+
     assert(vanta_timer_deadline_reached(100U, 100U));
     assert(vanta_timer_deadline_reached(101U, 100U));
     assert(!vanta_timer_deadline_reached(99U, 100U));

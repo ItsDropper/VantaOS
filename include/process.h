@@ -148,6 +148,10 @@ int process_switch_to(uint32_t pid);
 /* Atomically releases current_pid and claims a READY process for cpu_id. */
 int process_claim_for_cpu(uint32_t next_pid, uint32_t current_pid,
                           uint32_t cpu_id);
+/* Find the next eligible READY task with one process-table lock acquisition. */
+uint32_t process_find_next_ready(uint32_t cursor, uint32_t current_pid,
+                                 uint32_t rejected_pid, uint32_t cpu_id,
+                                 uint32_t idle_pid);
 /* Claims a process and returns its validated context under the same lock. */
 int process_claim_for_cpu_context(uint32_t next_pid, uint32_t current_pid,
                                   uint32_t cpu_id, uint64_t* stack_pointer_out,

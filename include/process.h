@@ -11,6 +11,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include "paging.h"
+#include "spinlock.h"
 
 #define PROCESS_MAX 128
 #define PROCESS_NAME_MAX 31
@@ -26,6 +27,7 @@
 #define PROCESS_CPU_ANY PROCESS_CPU_UNOWNED
 
 typedef void (*process_entry_t)(void);
+typedef struct process_wait_queue process_wait_queue_t;
 
 typedef enum
 {
@@ -62,6 +64,7 @@ typedef struct
     process_state_t state;
     /* Absolute PIT tick deadline; zero means not sleeping on a timer. */
     uint64_t sleep_deadline_ticks;
+    process_wait_queue_t* wait_queue;
     int32_t exit_status;
     char name[PROCESS_NAME_MAX + 1];
     uint64_t stack_pointer;
@@ -79,6 +82,13 @@ typedef struct
     process_user_page_t user_pages[PROCESS_USER_MAX_PAGES];
     int32_t file_descriptors[PROCESS_FD_COUNT];
 } process_t;
+
+typedef struct process_wait_queue
+{
+    spinlock_t lock;
+    /* One bit per PID; stale bits are validated against process.wait_queue. */
+    uint32_t waiters[(PROCESS_MAX + 31U) / 32U];
+} process_wait_queue_t;
 
 void process_initialize(void);
 int process_is_initialized(void);
@@ -110,6 +120,11 @@ int process_wake(uint32_t pid);
 int process_sleep_current_until(uint64_t deadline_ticks);
 /* Called from the timer interrupt; wakes all expired timed sleepers. */
 void process_wake_expired(uint64_t now_ticks);
+/* Wait-queue sleepers must recheck their condition after waking. */
+void process_wait_queue_init(process_wait_queue_t* queue);
+int process_wait_queue_sleep(process_wait_queue_t* queue);
+uint32_t process_wait_queue_wake_one(process_wait_queue_t* queue);
+uint32_t process_wait_queue_wake_all(process_wait_queue_t* queue);
 int process_terminate(uint32_t pid);
 void process_block_current(void);
 void process_terminate_current(void);

@@ -72,7 +72,19 @@ static inline int kernel_barrier_wait(kernel_barrier_t* barrier)
     while (barrier->generation == generation)
     {
         if (!process_wait_queue_sleep_locked(&barrier->waiters, flags))
-            return 0;
+        {
+            /*
+             * A failed block must not strand an arrival in this generation.
+             * If other participants completed the generation meanwhile, our
+             * arrival was already consumed and this wait succeeded.
+             */
+            flags = process_wait_queue_lock(&barrier->waiters);
+            int completed = barrier->generation != generation;
+            if (!completed && barrier->arrived != 0U)
+                barrier->arrived--;
+            process_wait_queue_unlock(&barrier->waiters, flags);
+            return completed;
+        }
         flags = process_wait_queue_lock(&barrier->waiters);
     }
 

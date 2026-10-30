@@ -54,8 +54,6 @@ static inline uint32_t vanta_timer_elapsed(uint32_t start, uint32_t now)
     return now - start;
 }
 
-#endif
-
 /* Convert monotonic ticks to milliseconds without multiplying the full
  * 64-bit counter by 1000 (which could overflow after long uptimes). */
 static inline uint64_t vanta_timer_ticks_to_ms(uint64_t ticks,
@@ -75,3 +73,12 @@ static inline uint64_t vanta_timer_ticks_to_ms(uint64_t ticks,
         return UINT64_MAX;
     return whole_ms + fractional_ms;
 }
+
+/* Saturating absolute deadline for monotonic 64-bit tick counters. */
+static inline uint64_t vanta_timer_deadline_after(uint64_t now,
+                                                  uint64_t interval)
+{
+    return UINT64_MAX - now < interval ? UINT64_MAX : now + interval;
+}
+
+#endif /* TIMER_MATH_H */

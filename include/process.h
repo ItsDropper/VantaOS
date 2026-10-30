@@ -130,7 +130,6 @@ void process_wait_queue_unlock(process_wait_queue_t* queue,
                                uint64_t interrupt_flags);
 int process_wait_queue_sleep_locked(process_wait_queue_t* queue,
                                     uint64_t interrupt_flags);
-int process_wait_queue_sleep(process_wait_queue_t* queue);
 uint32_t process_wait_queue_wake_one(process_wait_queue_t* queue);
 uint32_t process_wait_queue_wake_all(process_wait_queue_t* queue);
 int process_terminate(uint32_t pid);

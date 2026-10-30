@@ -60,6 +60,8 @@ typedef struct
     uint32_t owner_cpu;
     uint32_t affinity_cpu;
     process_state_t state;
+    /* Absolute PIT tick deadline; zero means not sleeping on a timer. */
+    uint64_t sleep_deadline_ticks;
     int32_t exit_status;
     char name[PROCESS_NAME_MAX + 1];
     uint64_t stack_pointer;
@@ -104,6 +106,10 @@ int process_attach_current(const char* name, uint32_t parent_pid);
 int process_set_running(uint32_t pid);
 int process_mark_ready(uint32_t pid);
 int process_wake(uint32_t pid);
+/* Atomically blocks the current process until an absolute monotonic tick. */
+int process_sleep_current_until(uint64_t deadline_ticks);
+/* Called from the timer interrupt; wakes all expired timed sleepers. */
+void process_wake_expired(uint64_t now_ticks);
 int process_terminate(uint32_t pid);
 void process_block_current(void);
 void process_terminate_current(void);

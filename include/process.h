@@ -152,6 +152,10 @@ int process_claim_for_cpu(uint32_t next_pid, uint32_t current_pid,
 uint32_t process_find_next_ready(uint32_t cursor, uint32_t current_pid,
                                  uint32_t rejected_pid, uint32_t cpu_id,
                                  uint32_t idle_pid);
+/* Collect an ordered runnable snapshot under one process-table lock. */
+size_t process_collect_ready(uint32_t cursor, uint32_t current_pid,
+                             uint32_t cpu_id, uint32_t idle_pid,
+                             uint32_t* candidates, size_t capacity);
 /* Claims a process and returns its validated context under the same lock. */
 int process_claim_for_cpu_context(uint32_t next_pid, uint32_t current_pid,
                                   uint32_t cpu_id, uint64_t* stack_pointer_out,

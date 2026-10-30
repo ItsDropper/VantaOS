@@ -75,60 +75,6 @@ static int process_claim_for_cpu_internal(uint32_t next_pid,
 }
 
 /*
- * Select one eligible task while holding the process-table lock once.
- * The scheduler still claims the returned PID separately; that transition
- * is authoritative and may reject the candidate if another CPU wins first.
- * Keeping the scan under one lock avoids repeatedly disabling interrupts and
- * contending on the global table lock for every PID in a scheduling pass.
- */
-uint32_t process_find_next_ready(uint32_t cursor, uint32_t current_pid,
-                                 uint32_t rejected_pid, uint32_t cpu_id,
-                                 uint32_t idle_pid)
-{
-    if (!process_initialized_state || current_pid >= PROCESS_MAX ||
-        cpu_id >= CPU_LOCAL_MAX)
-        return current_pid;
-
-    if (cursor == 0U || cursor >= PROCESS_MAX)
-        cursor = 1U;
-
-    uint64_t flags = process_table_lock_acquire();
-    for (uint32_t offset = 0U; offset < PROCESS_MAX; offset++)
-    {
-        uint32_t pid = (cursor + offset) % PROCESS_MAX;
-        if (pid == 0U || pid == current_pid || pid == idle_pid ||
-            pid == rejected_pid)
-            continue;
-
-        const process_t* process = &process_table_records[pid];
-        if (process->state == PROCESS_READY &&
-            process->owner_cpu == PROCESS_CPU_UNOWNED &&
-            (process->affinity_cpu == PROCESS_CPU_ANY ||
-             process->affinity_cpu == cpu_id))
-        {
-            process_table_lock_release(flags);
-            return pid;
-        }
-    }
-
-    uint32_t result = current_pid;
-    if (idle_pid != 0U && idle_pid < PROCESS_MAX &&
-        idle_pid != rejected_pid)
-    {
-        const process_t* idle = &process_table_records[idle_pid];
-        if ((idle->state == PROCESS_READY &&
-             idle->owner_cpu == PROCESS_CPU_UNOWNED &&
-             (idle->affinity_cpu == PROCESS_CPU_ANY ||
-              idle->affinity_cpu == cpu_id)) ||
-            (idle->state == PROCESS_RUNNING && idle->owner_cpu == cpu_id))
-            result = idle_pid;
-    }
-
-    process_table_lock_release(flags);
-    return result;
-}
-
-/*
  * Snapshot every eligible runnable PID in round-robin order with one lock.
  * The scheduler validates each candidate again when claiming it; this list is
  * deliberately advisory, so a competing CPU may win any individual claim.
@@ -159,7 +105,9 @@ size_t process_collect_ready(uint32_t cursor, uint32_t current_pid,
         if (process->state == PROCESS_READY &&
             process->owner_cpu == PROCESS_CPU_UNOWNED &&
             (process->affinity_cpu == PROCESS_CPU_ANY ||
-             process->affinity_cpu == cpu_id))
+             process->affinity_cpu == cpu_id) &&
+            process->address_space != NULL &&
+            process_stack_is_valid_locked(process))
             candidates[count++] = pid;
     }
 
@@ -171,7 +119,9 @@ size_t process_collect_ready(uint32_t cursor, uint32_t current_pid,
         if (idle->state == PROCESS_READY &&
             idle->owner_cpu == PROCESS_CPU_UNOWNED &&
             (idle->affinity_cpu == PROCESS_CPU_ANY ||
-             idle->affinity_cpu == cpu_id))
+             idle->affinity_cpu == cpu_id) &&
+            idle->address_space != NULL &&
+            process_stack_is_valid_locked(idle))
             candidates[count++] = idle_pid;
     }
 

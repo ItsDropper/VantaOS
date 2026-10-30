@@ -17,6 +17,8 @@
  *
  * The state and waiter registration share the wait-queue lock, so set/wait
  * cannot lose a notification between checking the predicate and blocking.
+ * All operations are process-context only; even set/reset/is_set may contend
+ * on a lock held by a process interrupted on this CPU.
  */
 typedef struct
 {

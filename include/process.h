@@ -130,6 +130,10 @@ void process_wait_queue_unlock(process_wait_queue_t* queue,
                                uint64_t interrupt_flags);
 int process_wait_queue_sleep_locked(process_wait_queue_t* queue,
                                     uint64_t interrupt_flags);
+/* Like sleep_locked, but expires at an absolute PIT tick deadline. */
+int process_wait_queue_sleep_until_locked(process_wait_queue_t* queue,
+                                          uint64_t interrupt_flags,
+                                          uint64_t deadline_ticks);
 uint32_t process_wait_queue_wake_one(process_wait_queue_t* queue);
 uint32_t process_wait_queue_wake_all(process_wait_queue_t* queue);
 int process_terminate(uint32_t pid);

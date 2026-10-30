@@ -73,45 +73,14 @@ static uint32_t scheduler_next_ready(uint32_t current_pid,
         __atomic_load_n(&local->idle_pid, __ATOMIC_ACQUIRE) : 1U;
 
     /*
-     * Each CPU advances its own scan origin after dispatch. This keeps the
-     * shared process table as the authoritative lifecycle store while
-     * avoiding every CPU repeatedly racing for the same low PID first.
+     * Each CPU advances its own scan origin after dispatch. The process layer
+     * scans under one table-lock acquisition; the subsequent context-switch
+     * claim remains the race-safe ownership point.
      */
     uint32_t cursor = __atomic_load_n(scheduler_cursor_slot(),
                                      __ATOMIC_RELAXED);
-    if (cursor == 0U || cursor >= PROCESS_MAX)
-        cursor = 1U;
-
-    for (uint32_t offset = 0; offset < PROCESS_MAX; offset++)
-    {
-        uint32_t pid = (cursor + offset) % PROCESS_MAX;
-        if (pid == 0U || pid == current_pid ||
-            pid == idle_pid || pid == rejected_pid)
-            continue;
-
-        process_t process;
-        if (process_snapshot(pid, &process) &&
-            process.state == PROCESS_READY &&
-            process.owner_cpu == PROCESS_CPU_UNOWNED &&
-            (process.affinity_cpu == PROCESS_CPU_ANY ||
-             process.affinity_cpu == cpu_id))
-            return pid;
-    }
-
-    if (idle_pid == 0U || idle_pid >= PROCESS_MAX ||
-        idle_pid == rejected_pid)
-        return current_pid;
-
-    process_t idle;
-    if (process_snapshot(idle_pid, &idle) &&
-        ((idle.state == PROCESS_READY &&
-          idle.owner_cpu == PROCESS_CPU_UNOWNED &&
-          (idle.affinity_cpu == PROCESS_CPU_ANY ||
-           idle.affinity_cpu == cpu_id)) ||
-         (idle.state == PROCESS_RUNNING && idle.owner_cpu == cpu_id)))
-        return idle_pid;
-
-    return current_pid;
+    return process_find_next_ready(cursor, current_pid, rejected_pid,
+                                   cpu_id, idle_pid);
 }
 
 static int scheduler_install_kernel_stack(uint32_t pid)

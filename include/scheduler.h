@@ -20,5 +20,7 @@ uint64_t scheduler_reschedule(uint64_t current_stack);
 /* IRQ/IPI assembly calls this only after switching to the incoming RSP. */
 void scheduler_finish_context_switch(void);
 void scheduler_yield(void);
+/* Request a scheduling decision at the next safe timer interrupt. */
+void scheduler_request_reschedule(void);
 
 #endif

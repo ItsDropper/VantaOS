@@ -1656,12 +1656,12 @@ int fat32_write_file_range(const char* path, uint32_t offset,
 int fat32_write_file(const char* path, const char* data, uint32_t size)
 {
     if (!mounted || !path || (size && !data))
-        return -1;
+    { FAT32_WRITE_DIAG("VANTAOS_FAT32_REPLACE_FAIL_ARGUMENT"); return -1; }
 
     uint64_t cluster_bytes = (uint64_t)sectors_per_cluster * 512U;
     uint64_t volume_bytes = (uint64_t)cluster_count * cluster_bytes;
     if (size > volume_bytes)
-        return -1;
+    { FAT32_WRITE_DIAG("VANTAOS_FAT32_REPLACE_FAIL_BOUNDS"); return -1; }
 
     uint32_t parent;
     uint8_t leaf[11];
@@ -1669,18 +1669,18 @@ int fat32_write_file(const char* path, const char* data, uint32_t size)
     if (!fat32_parent_and_leaf(path, &parent, leaf) ||
         !fat32_find_entry(parent, leaf, &entry) ||
         (entry.found && (entry.attributes & 0x01U)))
-        return -1;
+    { FAT32_WRITE_DIAG("VANTAOS_FAT32_REPLACE_FAIL_LOOKUP"); return -1; }
 
     if (!entry.found)
     {
         if (fat32_create_file(path) < 0 ||
             !fat32_find_entry(parent, leaf, &entry) || !entry.found)
-            return -1;
+        { FAT32_WRITE_DIAG("VANTAOS_FAT32_REPLACE_FAIL_CREATE"); return -1; }
     }
 
     uint32_t old_cluster = entry.first_cluster;
     if (!fat32_update_file_entry(entry.entry_lba, entry.entry_offset, 0U, 0U))
-        return -1;
+    { FAT32_WRITE_DIAG("VANTAOS_FAT32_REPLACE_FAIL_CLEAR_ENTRY"); return -1; }
     if (old_cluster >= 2U)
         fat32_release_chain(old_cluster);
 
@@ -1692,7 +1692,7 @@ int fat32_write_file(const char* path, const char* data, uint32_t size)
             amount = 4096U;
         int result = fat32_write_file_range(path, offset, data + offset, amount);
         if (result != (int)amount)
-            return -1;
+        { FAT32_WRITE_DIAG("VANTAOS_FAT32_REPLACE_FAIL_RANGE"); return -1; }
         offset += amount;
     }
     return 0;

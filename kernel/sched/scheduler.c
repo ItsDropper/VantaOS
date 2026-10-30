@@ -105,7 +105,7 @@ static uint64_t scheduler_switch_from_stack(uint64_t current_stack,
     uint64_t next_stack = 0;
     paging_address_space_t* next_address_space = NULL;
     uint32_t next_pid = current_pid;
-    uint32_t rejected_pid = 0U;
+    uint32_t candidates[PROCESS_MAX];
     int prepared = 0;
 
     if (cpu_id >= CPU_LOCAL_MAX)
@@ -118,30 +118,33 @@ static uint64_t scheduler_switch_from_stack(uint64_t current_stack,
     }
 
     /*
-     * Selection and ownership are separate operations because the process
-     * table is shared by every CPU. If a peer claims the selected process
-     * first, reject that PID and continue searching instead of idling or
-     * burning a full quantum while other runnable work exists.
+     * Collect a complete ordered candidate snapshot once. Each claim remains
+     * serialized by process_prepare_context_switch(), but CPUs no longer
+     * contend on the global process lock for a full rescan after every lost
+     * candidate race.
      */
-    for (uint32_t attempt = 0; attempt < PROCESS_MAX; attempt++)
-    {
-        next_pid = scheduler_next_ready(current_pid, rejected_pid);
-        if (next_pid == current_pid)
-            break;
+    uint32_t idle_pid = local && local->self == local &&
+        local->online != 0U ?
+        __atomic_load_n(&local->idle_pid, __ATOMIC_ACQUIRE) : 1U;
+    uint32_t cursor = __atomic_load_n(scheduler_cursor_slot(),
+                                      __ATOMIC_RELAXED);
+    size_t candidate_count = process_collect_ready(
+        cursor, current_pid, cpu_id, idle_pid, candidates, PROCESS_MAX);
 
+    for (size_t i = 0U; i < candidate_count; i++)
+    {
+        next_pid = candidates[i];
         if (process_prepare_context_switch(next_pid, current_pid, cpu_id,
                                            &next_stack, &next_address_space))
-        {
-            uint32_t cursor = (next_pid + 1U) % PROCESS_MAX;
-            if (cursor == 0U)
-                cursor = 1U;
-            __atomic_store_n(scheduler_cursor_slot(), cursor,
-                             __ATOMIC_RELAXED);
-            prepared = 1;
-            break;
-        }
-
-        rejected_pid = next_pid;
+            {
+                uint32_t next_cursor = (next_pid + 1U) % PROCESS_MAX;
+                if (next_cursor == 0U)
+                    next_cursor = 1U;
+                __atomic_store_n(scheduler_cursor_slot(), next_cursor,
+                                 __ATOMIC_RELAXED);
+                prepared = 1;
+                break;
+            }
     }
 
     if (!prepared)

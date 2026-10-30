@@ -43,6 +43,7 @@ void worker(void)
 ## Contract
 
 - Initialize once before concurrent use; do not reset or destroy storage while waiters may reference it.
+- Every operation, including set/reset/is-set, is process-context only. The queue lock can be held by a process interrupted on this CPU, so calling even a nonblocking event operation from an ISR can deadlock.
 - Blocking waits require a normal scheduled process context with maskable interrupts enabled.
 - Always publish the associated data before setting the event. Use the event as notification, not as a replacement for protecting the data itself.
 - Auto-reset events are not FIFO-fair. Repeated sets coalesce into one pending signal; they are not counting semaphores.

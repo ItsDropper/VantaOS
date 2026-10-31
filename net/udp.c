@@ -21,6 +21,7 @@ typedef struct {
     uint16_t port;
     net_udp_handler_fn fn;
     void* context;
+    uint32_t active;
 } udp_handler_t;
 
 static udp_handler_t handlers[NET_UDP_HANDLER_MAX];
@@ -99,7 +100,7 @@ int net_udp_handler_register(uint16_t port, net_udp_handler_fn fn, void* context
         spinlock_unlock_irqrestore(&handler_lock, flags);
         return 0;
     }
-    handlers[handlers_used++] = (udp_handler_t){port, fn, context};
+    handlers[handlers_used++] = (udp_handler_t){port, fn, context, 0U};
     spinlock_unlock_irqrestore(&handler_lock, flags);
     return 1;
 }
@@ -115,7 +116,7 @@ int net_udp_handler_unregister(uint16_t port, net_udp_handler_fn fn, void* conte
             break;
         }
     }
-    if (at == handlers_used) {
+    if (at == handlers_used || handlers[at].active != 0U) {
         spinlock_unlock_irqrestore(&handler_lock, flags);
         return 0;
     }
@@ -148,6 +149,9 @@ void net_udp_receive_ipv4(net_device_t* device, const uint8_t* ip,
     uint64_t flags = spinlock_lock_irqsave(&handler_lock);
     for (uint32_t i = 0; i < handlers_used; ++i) {
         if (handlers[i].port == destination_port) {
+            if (handlers[i].active == UINT32_MAX)
+                break;
+            ++handlers[i].active;
             snapshot = handlers[i];
             found = 1;
             break;
@@ -160,6 +164,18 @@ void net_udp_receive_ipv4(net_device_t* device, const uint8_t* ip,
     snapshot.fn(device, read_be32(ip + 12U), source_port, destination_port,
                 udp + UDP_HEADER_SIZE, udp_length - UDP_HEADER_SIZE,
                 snapshot.context);
+
+    flags = spinlock_lock_irqsave(&handler_lock);
+    for (uint32_t i = 0U; i < handlers_used; ++i) {
+        if (handlers[i].port == snapshot.port &&
+            handlers[i].fn == snapshot.fn &&
+            handlers[i].context == snapshot.context) {
+            if (handlers[i].active != 0U)
+                --handlers[i].active;
+            break;
+        }
+    }
+    spinlock_unlock_irqrestore(&handler_lock, flags);
 }
 
 

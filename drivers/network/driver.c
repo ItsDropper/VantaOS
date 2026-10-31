@@ -208,14 +208,20 @@ const char* net_pci_bound_driver(const struct pci_device* device)
 
 size_t net_pci_poll_devices(void)
 {
-    net_driver_adapter_t* snapshot[NET_PCI_DRIVER_MAX];
+    typedef struct
+    {
+        net_driver_adapter_t* adapter;
+        device_t* pci_device;
+    } poll_entry_t;
+
+    poll_entry_t snapshot[NET_PCI_DRIVER_MAX];
     uint32_t count = 0U;
     uint64_t flags = spinlock_lock_irqsave(&driver_lock);
 
     /*
-     * A network driver's poll callback operates on driver-owned state, not on
-     * a per-binding object. Run it at most once per adapter and never overlap
-     * it with another CPU or a recursive net_poll() invocation.
+     * Poll callbacks operate on driver-global state. Select each adapter once,
+     * and reserve its callback before dropping the registry lock. The PCI
+     * device reference is acquired outside this lock to preserve lock order.
      */
     for (uint32_t i = 0U; i < binding_count; ++i)
     {
@@ -233,19 +239,28 @@ size_t net_pci_poll_devices(void)
             continue;
 
         adapter->active_polls = 1U;
-        snapshot[count++] = adapter;
+        snapshot[count].adapter = adapter;
+        snapshot[count].pci_device = (device_t*)&bindings[i].device->core;
+        ++count;
     }
     spinlock_unlock_irqrestore(&driver_lock, flags);
 
     size_t work = 0U;
     for (uint32_t i = 0U; i < count; ++i)
     {
-        net_driver_adapter_t* adapter = snapshot[i];
-        int result = adapter->network->poll();
+        net_driver_adapter_t* adapter = snapshot[i].adapter;
+        device_t* pci_device = snapshot[i].pci_device;
+        int pinned = device_acquire(pci_device);
+        int result = 0;
+
+        if (pinned)
+            result = adapter->network->poll();
+
+        if (pinned)
+            device_release(pci_device);
 
         flags = spinlock_lock_irqsave(&driver_lock);
-        if (adapter->active_polls != 0U)
-            --adapter->active_polls;
+        adapter->active_polls = 0U;
         spinlock_unlock_irqrestore(&driver_lock, flags);
 
         if (result > 0)

@@ -15,6 +15,18 @@ static int transmit(net_device_t* device, const uint8_t* frame, size_t length)
     return frame != NULL && length >= NET_ETHERNET_HEADER_SIZE;
 }
 
+static net_device_t* active_network;
+static uint32_t transmit_calls;
+
+static int transmit(net_device_t* device, const uint8_t* frame, size_t length)
+{
+    assert(device == active_network);
+    ++transmit_calls;
+    /* Teardown from a concurrent path must not race an active TX callback. */
+    assert(!net_device_unregister(device));
+    return frame != NULL && length >= NET_ETHERNET_HEADER_SIZE;
+}
+
 static const net_device_ops_t operations = { .transmit = transmit };
 
 int main(void)
@@ -32,9 +44,19 @@ int main(void)
         .parent_device = &pci_parent
     };
 
+    uint8_t frame[NET_ETHERNET_HEADER_SIZE] = {0};
+    frame[12] = 0x08U;
+    frame[13] = 0x00U;
+
     assert(device_register(&pci_parent));
     net_initialize();
     assert(net_device_register(&network));
+    active_network = &network;
+    net_initialize(); /* Must not reset an already-published interface. */
+    assert(net_device_count() == 1U);
+    assert(net_device_transmit(&network, frame, sizeof(frame)));
+    assert(transmit_calls == 1U);
+    assert(network.core.state == DEVICE_STATE_REGISTERED);
     assert(net_device_count() == 1U);
     assert(device_count() == 2U);
     assert(network.core.state == DEVICE_STATE_REGISTERED);

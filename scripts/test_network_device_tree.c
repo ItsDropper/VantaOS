@@ -51,12 +51,20 @@ int main(void)
     assert(net_device_transmit(&network, frame, sizeof(frame)));
     assert(transmit_calls == 1U);
     assert(network.core.state == DEVICE_STATE_REGISTERED);
+    net_device_stats_t stats;
+    assert(net_device_get_stats(&network, &stats));
+    assert(stats.tx_frames == 1U);
+    assert(stats.tx_bytes == sizeof(frame));
+    assert(stats.tx_errors == 0U);
     assert(net_device_count() == 1U);
     assert(device_count() == 2U);
     assert(network.core.state == DEVICE_STATE_REGISTERED);
     assert(network.core.bus == DEVICE_BUS_VIRTUAL);
     assert(network.core.parent == &pci_parent);
     assert(network.core.bus_data == &network);
+    assert(network.core.vendor_id == 0U);
+    assert(network.core.device_id == 0U);
+    assert(network.core.class_code == 0U);
     assert(device_find(DEVICE_BUS_VIRTUAL, "en-test") == &network.core);
     assert(!device_unregister(&pci_parent));
 

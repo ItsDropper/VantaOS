@@ -22,6 +22,7 @@
 #define NET_UDP_HANDLER_MAX 8U
 #define NET_PCI_DRIVER_MAX 16U
 #define NET_PCI_BINDING_MAX 16U
+#define NET_PCI_ID_MAX 32U
 typedef struct net_device net_device_t;
 typedef struct { int (*transmit)(net_device_t*, const uint8_t*, size_t); } net_device_ops_t;
 /* Registered descriptors and ops must outlive registration. transmit is synchronous. */

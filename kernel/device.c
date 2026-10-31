@@ -286,12 +286,20 @@ device_bind_result_t device_bind(device_t* device,
         result = DEVICE_PROBE_NO_MATCH;
     else
         result = driver->probe(device);
+    if (result != DEVICE_PROBE_BOUND &&
+        result != DEVICE_PROBE_NO_MATCH &&
+        result != DEVICE_PROBE_FAILED)
+        result = DEVICE_PROBE_FAILED;
 
     flags = spinlock_lock_irqsave(&device_lock);
     device_index = find_device_locked(device);
     driver_index = find_driver_locked(driver);
     if (device_index >= 0 && driver_index >= 0)
     {
+        /* A probe callback may not mutate registry-owned lifecycle state. */
+        if (device->state != DEVICE_STATE_PROBING ||
+            device->driver != driver)
+            result = DEVICE_PROBE_FAILED;
         if (result == DEVICE_PROBE_BOUND)
             device->state = DEVICE_STATE_BOUND;
         else

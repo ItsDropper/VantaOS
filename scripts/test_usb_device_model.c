@@ -10,6 +10,24 @@
 #include <assert.h>
 #include <stddef.h>
 
+static uint32_t hid_probe_count;
+static uint32_t hid_remove_count;
+
+static device_probe_result_t hid_interface_probe(device_t* device)
+{
+    assert(device != NULL);
+    assert(device->bus == DEVICE_BUS_USB);
+    assert(device->class_code == 3U);
+    ++hid_probe_count;
+    return DEVICE_PROBE_BOUND;
+}
+
+static void hid_interface_remove(device_t* device)
+{
+    assert(device != NULL);
+    ++hid_remove_count;
+}
+
 int main(void)
 {
     device_t controller = {
@@ -86,6 +104,29 @@ int main(void)
     assert(!device_unregister(&controller));
     assert(!device_unregister(hid_interface));
     assert(!device_unregister(storage_interface));
+
+    const device_id_t hid_ids[] = {{
+        DEVICE_ID_ANY16, DEVICE_ID_ANY16, 3U, 1U, 1U
+    }};
+    const device_driver_t hid_driver = {
+        .name = "usb-hid-interface-test",
+        .bus = DEVICE_BUS_USB,
+        .ids = hid_ids,
+        .id_count = 1U,
+        .probe = hid_interface_probe,
+        .remove = hid_interface_remove
+    };
+    assert(device_driver_register(&hid_driver));
+    assert(device_bind(hid_interface, &hid_driver) == DEVICE_BIND_BOUND);
+    assert(hid_probe_count == 1U);
+    /* A bound interface prevents parent teardown until its driver detaches. */
+    assert(!usb_device_unregister(1U));
+    assert(usb_device_interface_count(1U) == 1U);
+    assert(usb_device_interface_node(1U, 0U) == hid_interface);
+    assert(usb_device_interface_node(1U, 1U) == NULL);
+    assert(device_unbind(hid_interface));
+    assert(hid_remove_count == 1U);
+    assert(device_driver_unregister(&hid_driver));
 
     assert(usb_device_unregister(1U));
     assert(usb_device_count() == 0U);

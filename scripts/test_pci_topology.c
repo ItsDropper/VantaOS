@@ -194,5 +194,10 @@ int main(void)
     assert(endpoint_device->core.parent == &downstream_device->core);
     assert(downstream_device->core.parent == &root_device->core);
     assert(root_device->core.parent == NULL);
+
+    /* Repeated initialization must not duplicate registry objects. */
+    pci_initialize();
+    assert(pci_get_device_count() == 4);
+    assert(device_count() == 4U);
     return 0;
 }

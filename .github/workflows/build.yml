@@ -217,6 +217,13 @@ jobs:
             kernel/device.c -o /tmp/vantaos-storage-driver-model-test
           /tmp/vantaos-storage-driver-model-test
 
+      - name: Test network drivers through the common device model
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iscripts/test_stubs -Iinclude \
+            scripts/test_network_driver_model.c drivers/network/driver.c \
+            kernel/device.c -o /tmp/vantaos-network-driver-model-test
+          /tmp/vantaos-network-driver-model-test
+
       - name: Test block device registry and I/O contracts
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iscripts/test_stubs -Iinclude \

@@ -65,6 +65,8 @@ typedef struct {
     uint16_t last_used;
     uint16_t buffer_count;
     uint8_t ring_allocated;
+    uint8_t device_owned[VNET_QUEUE_LIMIT];
+    uint8_t failed;
     vnet_desc_t *desc;
     vnet_avail_t *avail;
     vnet_used_t *used;
@@ -85,6 +87,7 @@ typedef struct {
     uint8_t ready;
     uint8_t registered;
     uint8_t selftest_handler_registered;
+    uint8_t tx_failed;
     net_device_t netdev;
     vnet_queue_t rx;
     vnet_queue_t tx;
@@ -330,6 +333,10 @@ static int vnet_modern_transmit(net_device_t *device, const uint8_t *frame, size
         return 0;
     spinlock_lock(&state.tx_lock);
     vnet_queue_t *q = &state.tx;
+    if (!state.ready || state.tx_failed || !q->size) {
+        spinlock_unlock(&state.tx_lock);
+        return 0;
+    }
     uint16_t slot = (uint16_t)(q->avail_index % q->size);
     uint8_t *buffer = (uint8_t *)q->buffers[slot].virtual_address;
     size_t header_size = virtio_header_size();
@@ -345,17 +352,28 @@ static int vnet_modern_transmit(net_device_t *device, const uint8_t *frame, size
     q->avail->index = q->avail_index;
     dma_barrier();
     notify_queue(q, 1U);
-    uint16_t expected = (uint16_t)(q->last_used + 1U);
     int completed = 0;
     for (uint32_t i = 0; i < VNET_WAIT_LIMIT; ++i) {
         dma_barrier();
-        if (q->used->index == expected) {
-            q->last_used = expected;
-            completed = 1;
+        uint16_t pending = (uint16_t)(q->used->index - q->last_used);
+        if (pending != 0U) {
+            if (pending == 1U) {
+                vnet_used_elem_t element =
+                    q->used->ring[q->last_used % q->size];
+                if (element.id == slot) {
+                    ++q->last_used;
+                    completed = 1;
+                }
+            }
+            if (!completed)
+                state.tx_failed = 1U;
             break;
         }
         __asm__ volatile ("pause");
     }
+    /* A timeout leaves ownership ambiguous; never recycle that descriptor. */
+    if (!completed)
+        state.tx_failed = 1U;
     spinlock_unlock(&state.tx_lock);
     return completed;
 }
@@ -365,13 +383,24 @@ static int vnet_modern_poll(void)
     if (!state.ready) return 0;
     vnet_queue_t *q = &state.rx;
     int received = 0;
+    if (q->failed || !q->size)
+        return 0;
     for (uint32_t budget = 0; budget < 64U; ++budget) {
         dma_barrier();
-        if (q->last_used == q->used->index) break;
+        uint16_t pending = (uint16_t)(q->used->index - q->last_used);
+        if (pending == 0U) break;
+        if (pending > q->size) {
+            q->failed = 1U;
+            break;
+        }
         vnet_used_elem_t element = q->used->ring[q->last_used % q->size];
         ++q->last_used;
-        if (element.id >= q->size) continue;
+        if (element.id >= q->size || !q->device_owned[element.id]) {
+            q->failed = 1U;
+            break;
+        }
         uint16_t slot = (uint16_t)element.id;
+        q->device_owned[slot] = 0U;
         uint8_t *buffer = (uint8_t *)q->buffers[slot].virtual_address;
         size_t header_size = virtio_header_size();
         if (element.length >= header_size + NET_ETHERNET_HEADER_SIZE &&
@@ -388,6 +417,7 @@ static int vnet_modern_poll(void)
         q->desc[slot].next = 0U;
         q->avail->ring[q->avail_index % q->size] = slot;
         ++q->avail_index;
+        q->device_owned[slot] = 1U;
         dma_barrier();
         q->avail->index = q->avail_index;
         dma_barrier();
@@ -476,6 +506,7 @@ static net_pci_probe_result_t vnet_modern_probe(const struct pci_device *pci)
         state.rx.desc[i].flags = VNET_DESC_WRITE;
         state.rx.desc[i].next = 0U;
         state.rx.avail->ring[i] = i;
+        state.rx.device_owned[i] = 1U;
     }
     state.rx.avail_index = state.rx.size;
     dma_barrier();

@@ -1154,7 +1154,7 @@ uint8_t pci_read_config8(const struct pci_device *device, uint8_t offset)
 uint16_t pci_read_config16(const struct pci_device *device, uint8_t offset)
 {
     uint32_t value;
-    if (!device || offset > 254U)
+    if (!device || offset > 254U || (offset & 1U) != 0U)
         return 0xFFFFU;
     value = pci_read_device_config(device, (uint8_t)(offset & 0xFCU));
     return (uint16_t)(value >> ((offset & 2U) * 8U));

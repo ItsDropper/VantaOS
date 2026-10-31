@@ -345,9 +345,19 @@ static int pmm_find_free_block_locked(uint32_t start, uint32_t end,
     return 0;
 }
 
-void* pmm_alloc_block(void)
+void* pmm_alloc_block_below(uint64_t max_address_exclusive)
 {
     void *result = NULL;
+    uint32_t limit_blocks;
+    uint32_t start;
+    uint32_t block;
+    int found = 0;
+
+    if (max_address_exclusive > PMM_MAX_PHYSICAL_ADDRESS)
+        max_address_exclusive = PMM_MAX_PHYSICAL_ADDRESS;
+    limit_blocks = (uint32_t)(max_address_exclusive / PAGE_SIZE);
+    if (limit_blocks == 0U)
+        return NULL;
 
     spinlock_lock(&pmm_lock);
     if (!initialized || total_blocks == 0U)
@@ -355,14 +365,16 @@ void* pmm_alloc_block(void)
         spinlock_unlock(&pmm_lock);
         return NULL;
     }
+    if (limit_blocks > total_blocks)
+        limit_blocks = total_blocks;
 
     /*
-     * Search from the last successful allocation and wrap once. Word-level
-     * bit scans keep the common path efficient even with a heavily used map.
+     * Respect the caller's address ceiling while retaining next-fit behavior.
+     * A page is eligible only when its entire 4 KiB extent fits below the
+     * exclusive limit, not merely when its first byte does.
      */
-    uint32_t start = allocation_hint < total_blocks ? allocation_hint : 0U;
-    uint32_t block;
-    int found = pmm_find_free_block_locked(start, total_blocks, &block);
+    start = allocation_hint < limit_blocks ? allocation_hint : 0U;
+    found = pmm_find_free_block_locked(start, limit_blocks, &block);
     if (!found && start != 0U)
         found = pmm_find_free_block_locked(0U, start, &block);
 
@@ -375,26 +387,38 @@ void* pmm_alloc_block(void)
         if (allocation_hint >= total_blocks)
             allocation_hint = 0U;
         result = (void *)(uintptr_t)((uint64_t)block * PAGE_SIZE);
-        spinlock_unlock(&pmm_lock);
-        return result;
     }
 
     uint32_t free_snapshot = free_blocks;
     spinlock_unlock(&pmm_lock);
-    ktrace_emit(KTRACE_EVENT_PMM_ALLOC_FAILURE, KTRACE_CPU_UNKNOWN,
-                total_blocks, free_snapshot);
-    return NULL;
+    if (!found)
+        ktrace_emit(KTRACE_EVENT_PMM_ALLOC_FAILURE, KTRACE_CPU_UNKNOWN,
+                    limit_blocks, free_snapshot);
+    return result;
 }
 
-int pmm_alloc_contiguous_blocks(uint32_t count, void **base_address)
+void* pmm_alloc_block(void)
+{
+    return pmm_alloc_block_below(PMM_MAX_PHYSICAL_ADDRESS);
+}
+
+int pmm_alloc_contiguous_blocks_below(uint32_t count,
+                                      uint64_t max_address_exclusive,
+                                      void **base_address)
 {
     uint32_t run_start = 0U;
     uint32_t run_length = 0U;
+    uint32_t limit_blocks;
 
     if (base_address == NULL)
         return 0;
     *base_address = NULL;
     if (count == 0U)
+        return 0;
+    if (max_address_exclusive > PMM_MAX_PHYSICAL_ADDRESS)
+        max_address_exclusive = PMM_MAX_PHYSICAL_ADDRESS;
+    limit_blocks = (uint32_t)(max_address_exclusive / PAGE_SIZE);
+    if (limit_blocks < count)
         return 0;
 
     spinlock_lock(&pmm_lock);
@@ -403,13 +427,17 @@ int pmm_alloc_contiguous_blocks(uint32_t count, void **base_address)
         spinlock_unlock(&pmm_lock);
         return 0;
     }
+    if (limit_blocks > total_blocks)
+        limit_blocks = total_blocks;
+    if (count > limit_blocks)
+    {
+        spinlock_unlock(&pmm_lock);
+        return 0;
+    }
 
-    /*
-     * Contiguous runs must be searched in physical order. Starting at the
-     * single-page next-fit hint would split a run crossing that hint and could
-     * incorrectly report fragmentation despite enough adjacent free frames.
-     */
-    for (uint32_t block = 0U; block < total_blocks; ++block)
+    /* Search the complete eligible physical range; next-fit hints can split
+       an otherwise valid contiguous run and are intentionally not used here. */
+    for (uint32_t block = 0U; block <= limit_blocks - count; ++block)
     {
         if (!bitmap_test(pmm_bitmap, block) &&
             !bitmap_test(pmm_reserved_bitmap, block))
@@ -436,6 +464,12 @@ int pmm_alloc_contiguous_blocks(uint32_t count, void **base_address)
 
     spinlock_unlock(&pmm_lock);
     return 0;
+}
+
+int pmm_alloc_contiguous_blocks(uint32_t count, void **base_address)
+{
+    return pmm_alloc_contiguous_blocks_below(
+        count, PMM_MAX_PHYSICAL_ADDRESS, base_address);
 }
 
 void pmm_free_block(void* ptr)

@@ -920,12 +920,7 @@ int pci_get_bar0(const struct pci_device* device, uint32_t* bar)
     if (!device || !bar)
         return 0;
 
-    uint32_t value = pci_read_config(
-        device->bus,
-        device->slot,
-        device->function,
-        0x10
-    );
+    uint32_t value = pci_read_config32(device, 0x10U);
 
     if (value & 1U)
         return 0;

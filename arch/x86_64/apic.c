@@ -167,10 +167,15 @@ int apic_initialize(void)
     }
 
     if (!paging_map_mmio_page((uintptr_t)APIC_MMIO_VIRTUAL,
-                              (uintptr_t)platform_info.local_apic_address) ||
-        !paging_map_mmio_page((uintptr_t)IOAPIC_MMIO_VIRTUAL,
+                              (uintptr_t)platform_info.local_apic_address))
+    {
+        serial_write("VANTAOS_APIC_MMIO_MAP_FAIL\n");
+        return 0;
+    }
+    if (!paging_map_mmio_page((uintptr_t)IOAPIC_MMIO_VIRTUAL,
                               (uintptr_t)platform_info.io_apic_address))
     {
+        paging_unmap_page((uintptr_t)APIC_MMIO_VIRTUAL);
         serial_write("VANTAOS_APIC_MMIO_MAP_FAIL\n");
         return 0;
     }

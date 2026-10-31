@@ -158,7 +158,8 @@ block_status_t block_device_register_disk(block_device_t* device)
                 break;
             }
         }
-        if (collision)
+        if (collision ||
+            device_find(DEVICE_BUS_VIRTUAL, candidate) != NULL)
             continue;
 
         prepare_core_device(device, candidate);

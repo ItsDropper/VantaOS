@@ -23,7 +23,7 @@
 #define PCI_MAX_DEVICES 1024
 
 static struct pci_device devices[PCI_MAX_DEVICES];
-static int device_count = 0;
+static int pci_device_count = 0;
 static spinlock_t pci_config_lock = SPINLOCK_INITIALIZER;
 #ifndef PCI_TEST
 static acpi_mcfg_region_t pci_mcfg_regions[ACPI_MAX_MCFG_REGIONS];
@@ -497,15 +497,15 @@ static void pci_scan_range(uint16_t segment, uint8_t first_bus,
                 id = pci_read_device_config(&probe, 0x00U);
                 if ((uint16_t)id == PCI_INVALID_VENDOR)
                     continue;
-                if (device_count >= PCI_MAX_DEVICES)
+                if (pci_device_count >= PCI_MAX_DEVICES)
                 {
                     capacity_reached = 1;
                     goto bus_complete;
                 }
 
-                pci_read_device(&devices[device_count], segment,
+                pci_read_device(&devices[pci_device_count], segment,
                                 (uint8_t)bus, slot, function);
-                ++device_count;
+                ++pci_device_count;
             }
         }
 bus_complete:
@@ -525,7 +525,7 @@ bus_complete:
 
 static void pci_scan(void)
 {
-    device_count = 0U;
+    pci_device_count = 0U;
 #ifndef PCI_TEST
     /* Segment zero remains discoverable through legacy CF8/CFC when firmware
        does not publish MCFG; published MCFG ranges use ECAM instead. */
@@ -594,10 +594,10 @@ static void pci_register_core_devices(void)
      * to be ordered by bus number, so use bounded passes rather than assuming
      * enumeration-array order is a valid parent-before-child order.
      */
-    for (int pass = 0; pass < device_count; ++pass)
+    for (int pass = 0; pass < pci_device_count; ++pass)
     {
         int progress = 0;
-        for (int i = 0; i < device_count; ++i)
+        for (int i = 0; i < pci_device_count; ++i)
         {
             struct pci_device* pci = &devices[i];
             const struct pci_device* parent;
@@ -615,7 +615,7 @@ static void pci_register_core_devices(void)
     }
 
     /* Preserve discovery even when firmware reports an unusable bridge chain. */
-    for (int i = 0; i < device_count; ++i)
+    for (int i = 0; i < pci_device_count; ++i)
     {
         struct pci_device* pci = &devices[i];
         if (pci->core.state == DEVICE_STATE_UNREGISTERED)
@@ -639,17 +639,17 @@ void pci_initialize(void)
     pci_scan();
     pci_register_core_devices();
     ktrace_emit(KTRACE_EVENT_PCI_SCAN_COMPLETE, KTRACE_CPU_UNKNOWN,
-                (uint64_t)device_count, mcfg_regions);
+                (uint64_t)pci_device_count, mcfg_regions);
 }
 
 int pci_get_device_count(void)
 {
-    return device_count;
+    return pci_device_count;
 }
 
 const struct pci_device* pci_get_device(int index)
 {
-    if (index < 0 || index >= device_count)
+    if (index < 0 || index >= pci_device_count)
         return 0;
 
     return &devices[index];
@@ -664,7 +664,7 @@ const struct pci_device* pci_get_parent_bridge(
     if (!device)
         return NULL;
 
-    for (int i = 0; i < device_count; ++i)
+    for (int i = 0; i < pci_device_count; ++i)
     {
         const struct pci_device* bridge = &devices[i];
         uint16_t span;
@@ -996,7 +996,7 @@ static int pci_bar_address_conflicts(uint64_t base, uint64_t size)
                            base - 0x01000000ULL : 0U;
     uint64_t guard_end = end > UINT64_MAX - 0x01000000ULL ?
                          UINT64_MAX : end + 0x01000000ULL;
-    for (int d = 0; d < device_count; ++d)
+    for (int d = 0; d < pci_device_count; ++d)
     {
         for (uint8_t b = 0; b < 6U; ++b)
         {
@@ -1202,7 +1202,7 @@ int pci_find_class(uint8_t class_code, uint8_t subclass, int prog_if,
                    int start_index)
 {
     if (start_index < 0) start_index = 0;
-    for (int i = start_index; i < device_count; ++i)
+    for (int i = start_index; i < pci_device_count; ++i)
     {
         const struct pci_device* device = &devices[i];
         if (device->class_code == class_code && device->subclass == subclass &&

@@ -224,6 +224,13 @@ jobs:
             kernel/device.c -o /tmp/vantaos-network-driver-model-test
           /tmp/vantaos-network-driver-model-test
 
+      - name: Test network interface device-tree lifecycle
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iscripts/test_stubs -Iinclude \
+            scripts/test_network_device_tree.c net/core.c kernel/device.c \
+            -o /tmp/vantaos-network-device-tree-test
+          /tmp/vantaos-network-device-tree-test
+
       - name: Test block device registry and I/O contracts
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iscripts/test_stubs -Iinclude \

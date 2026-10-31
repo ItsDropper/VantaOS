@@ -13,6 +13,7 @@ typedef struct
 {
     device_t* device;
     uint32_t references;
+    uint64_t sequence;
 } device_entry_t;
 
 typedef struct
@@ -20,12 +21,15 @@ typedef struct
     const device_driver_t* driver;
     uint32_t references;
     uint32_t active_probes;
+    uint64_t sequence;
 } driver_entry_t;
 
 static device_entry_t devices[DEVICE_MAX];
 static driver_entry_t drivers[DEVICE_DRIVER_MAX];
 static uint32_t devices_used;
 static uint32_t drivers_used;
+static uint64_t next_device_sequence;
+static uint64_t next_driver_sequence;
 static spinlock_t device_lock = SPINLOCK_INITIALIZER;
 
 static int valid_name(const char* name)
@@ -99,6 +103,7 @@ int device_register(device_t* device)
 
     flags = spinlock_lock_irqsave(&device_lock);
     if (devices_used >= DEVICE_MAX ||
+        next_device_sequence == UINT64_MAX ||
         (device->parent && find_device_locked(device->parent) < 0))
     {
         spinlock_unlock_irqrestore(&device_lock, flags);
@@ -117,6 +122,7 @@ int device_register(device_t* device)
 
     devices[devices_used].device = device;
     devices[devices_used].references = 0U;
+    devices[devices_used].sequence = ++next_device_sequence;
     ++devices_used;
     device->state = DEVICE_STATE_REGISTERED;
     spinlock_unlock_irqrestore(&device_lock, flags);
@@ -199,7 +205,8 @@ int device_driver_register(const device_driver_t* driver)
         return 0;
 
     flags = spinlock_lock_irqsave(&device_lock);
-    if (drivers_used >= DEVICE_DRIVER_MAX)
+    if (drivers_used >= DEVICE_DRIVER_MAX ||
+        next_driver_sequence == UINT64_MAX)
     {
         spinlock_unlock_irqrestore(&device_lock, flags);
         return 0;
@@ -217,6 +224,7 @@ int device_driver_register(const device_driver_t* driver)
     drivers[drivers_used].driver = driver;
     drivers[drivers_used].references = 0U;
     drivers[drivers_used].active_probes = 0U;
+    drivers[drivers_used].sequence = ++next_driver_sequence;
     ++drivers_used;
     spinlock_unlock_irqrestore(&device_lock, flags);
     return 1;
@@ -377,42 +385,66 @@ int device_unbind(device_t* device)
 uint32_t device_probe_all(void)
 {
     uint32_t bound = 0U;
-    for (uint32_t device_index = 0U; ; ++device_index)
-    {
-        device_t* device;
-        uint64_t flags = spinlock_lock_irqsave(&device_lock);
-        if (device_index >= devices_used)
-        {
-            spinlock_unlock_irqrestore(&device_lock, flags);
-            break;
-        }
-        device = devices[device_index].device;
-        if (device->state != DEVICE_STATE_REGISTERED ||
-            devices[device_index].references == UINT32_MAX)
-        {
-            spinlock_unlock_irqrestore(&device_lock, flags);
-            continue;
-        }
-        ++devices[device_index].references;
-        spinlock_unlock_irqrestore(&device_lock, flags);
+    uint64_t device_cursor = 0U;
 
-        for (uint32_t driver_index = 0U; ; ++driver_index)
+    /*
+     * Sequence-based cursors keep iteration stable when unrelated devices or
+     * drivers are concurrently removed from the compact registry arrays.
+     * Each object is pinned before dropping the lock for callbacks.
+     */
+    for (;;)
+    {
+        device_t* device = NULL;
+        uint64_t device_sequence = UINT64_MAX;
+        uint64_t flags = spinlock_lock_irqsave(&device_lock);
+        int device_index = -1;
+        for (uint32_t i = 0U; i < devices_used; ++i)
         {
-            const device_driver_t* driver;
+            if (devices[i].sequence > device_cursor &&
+                devices[i].sequence < device_sequence &&
+                devices[i].device->state == DEVICE_STATE_REGISTERED &&
+                devices[i].references != UINT32_MAX)
+            {
+                device_index = (int)i;
+                device_sequence = devices[i].sequence;
+            }
+        }
+        if (device_index >= 0)
+        {
+            device = devices[device_index].device;
+            ++devices[device_index].references;
+            device_cursor = device_sequence;
+        }
+        spinlock_unlock_irqrestore(&device_lock, flags);
+        if (!device)
+            break;
+
+        uint64_t driver_cursor = 0U;
+        for (;;)
+        {
+            const device_driver_t* driver = NULL;
+            uint64_t driver_sequence = UINT64_MAX;
             flags = spinlock_lock_irqsave(&device_lock);
-            if (driver_index >= drivers_used)
+            int driver_index = -1;
+            for (uint32_t i = 0U; i < drivers_used; ++i)
             {
-                spinlock_unlock_irqrestore(&device_lock, flags);
-                break;
+                if (drivers[i].sequence > driver_cursor &&
+                    drivers[i].sequence < driver_sequence &&
+                    drivers[i].references != UINT32_MAX)
+                {
+                    driver_index = (int)i;
+                    driver_sequence = drivers[i].sequence;
+                }
             }
-            driver = drivers[driver_index].driver;
-            if (drivers[driver_index].references == UINT32_MAX)
+            if (driver_index >= 0)
             {
-                spinlock_unlock_irqrestore(&device_lock, flags);
-                continue;
+                driver = drivers[driver_index].driver;
+                ++drivers[driver_index].references;
+                driver_cursor = driver_sequence;
             }
-            ++drivers[driver_index].references;
             spinlock_unlock_irqrestore(&device_lock, flags);
+            if (!driver)
+                break;
 
             device_bind_result_t result = device_bind(device, driver);
             flags = spinlock_lock_irqsave(&device_lock);

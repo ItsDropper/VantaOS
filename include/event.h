@@ -115,11 +115,21 @@ static inline int kernel_event_set(kernel_event_t* event)
     uint64_t flags = process_wait_queue_lock(&event->waiters);
     event->signaled = 1U;
     uint32_t manual = event->manual_reset;
+    int has_waiters = 0;
+    for (uint32_t i = 0U; i < (PROCESS_MAX + 31U) / 32U; i++)
+    {
+        if (event->waiters.waiters[i] != 0U)
+        {
+            has_waiters = 1;
+            break;
+        }
+    }
     process_wait_queue_unlock(&event->waiters, flags);
 
-    if (manual)
+    /* A stored signal needs no scheduler work when nobody is blocked. */
+    if (has_waiters && manual)
         (void)process_wait_queue_wake_all(&event->waiters);
-    else
+    else if (has_waiters)
         (void)process_wait_queue_wake_one(&event->waiters);
     return 1;
 }

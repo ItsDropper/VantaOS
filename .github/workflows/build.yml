@@ -306,6 +306,12 @@ jobs:
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -DPCI_TEST -Iinclude scripts/test_pci_capability.c drivers/pci/pci.c -o /tmp/vantaos-pci-capability-test
           /tmp/vantaos-pci-capability-test
+      - name: Test PCI bridge topology discovery
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -DPCI_TEST -Iinclude \
+            scripts/test_pci_topology.c drivers/pci/pci.c \
+            -o /tmp/vantaos-pci-topology-test
+          /tmp/vantaos-pci-topology-test
       - name: Compile strict panic formatting host tests
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \

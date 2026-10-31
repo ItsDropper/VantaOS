@@ -349,12 +349,21 @@ int graphics_initialize_bochs(void)
     if (pages == 0 || pages > GRAPHICS_MAX_PAGES)
         return 0;
 
-    for (uint32_t i = 0; i < pages; i++)
+    uint32_t mapped_pages = 0U;
+    for (; mapped_pages < pages; ++mapped_pages)
     {
         if (!paging_map_page(
-                GRAPHICS_VIRTUAL_BASE + i * 4096U,
-                first_page + i * 4096U))
+                GRAPHICS_VIRTUAL_BASE + mapped_pages * 4096U,
+                first_page + mapped_pages * 4096U))
+        {
+            while (mapped_pages > 0U)
+            {
+                --mapped_pages;
+                paging_unmap_page(GRAPHICS_VIRTUAL_BASE +
+                                  mapped_pages * 4096U);
+            }
             return 0;
+        }
     }
 
     /*
@@ -439,12 +448,21 @@ int graphics_initialize(multiboot_info_t* mbd)
 
         if (pages != 0 && pages <= GRAPHICS_MAX_PAGES)
         {
-            for (uint32_t i = 0; i < pages; i++)
+            uint32_t mapped_pages = 0U;
+            for (; mapped_pages < pages; ++mapped_pages)
             {
                 if (!paging_map_page(
-                        GRAPHICS_VIRTUAL_BASE + i * 4096U,
-                        first_page + i * 4096U))
+                        GRAPHICS_VIRTUAL_BASE + mapped_pages * 4096U,
+                        first_page + mapped_pages * 4096U))
+                {
+                    while (mapped_pages > 0U)
+                    {
+                        --mapped_pages;
+                        paging_unmap_page(GRAPHICS_VIRTUAL_BASE +
+                                          mapped_pages * 4096U);
+                    }
                     return 0;
+                }
             }
 
             if (paging_get_physical(GRAPHICS_VIRTUAL_BASE) != first_page)
@@ -572,12 +590,21 @@ int graphics_set_resolution(uint32_t width, uint32_t height)
     bochs_vbe_write(BOCHS_VBE_INDEX_Y_OFFSET, 0U);
     bochs_vbe_write(BOCHS_VBE_INDEX_ENABLE, BOCHS_VBE_ENABLE_LFB);
 
-    for (uint32_t i = 0; i < pages; i++)
+    uint32_t mapped_pages = 0U;
+    for (; mapped_pages < pages; ++mapped_pages)
     {
         if (!paging_map_page(
-                GRAPHICS_VIRTUAL_BASE + i * 4096U,
-                first_page + i * 4096U))
+                GRAPHICS_VIRTUAL_BASE + mapped_pages * 4096U,
+                first_page + mapped_pages * 4096U))
+        {
+            while (mapped_pages > 0U)
+            {
+                --mapped_pages;
+                paging_unmap_page(GRAPHICS_VIRTUAL_BASE +
+                                  mapped_pages * 4096U);
+            }
             return 0;
+        }
     }
 
     framebuffer = (uint8_t*)(uintptr_t)(GRAPHICS_VIRTUAL_BASE + offset);

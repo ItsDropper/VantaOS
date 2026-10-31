@@ -580,6 +580,8 @@ static void pci_prepare_core_device(struct pci_device* pci,
     pci->core.prog_if = pci->prog_if;
     pci->core.revision = pci->revision;
     pci->core.bus_data = pci;
+    /* The PCI enumerator owns this node; generic callers cannot remove it. */
+    pci->core.owner = pci;
     pci->core.driver = NULL;
     pci->core.state = DEVICE_STATE_UNREGISTERED;
 }

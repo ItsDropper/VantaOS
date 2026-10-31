@@ -228,7 +228,7 @@ jobs:
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iscripts/test_stubs -Iinclude \
             scripts/test_block_device.c drivers/storage/block_device.c \
-            -o /tmp/vantaos-block-device-test
+            kernel/device.c -o /tmp/vantaos-block-device-test
           /tmp/vantaos-block-device-test
 
       - name: Test ATA LBA28 request bounds
@@ -299,7 +299,7 @@ jobs:
           gcc -std=c11 -Wall -Wextra -Werror -Iscripts/test_stubs -Iinclude \
             scripts/test_partition_device.c drivers/storage/partition_device.c \
             drivers/storage/partition_scan.c drivers/storage/block_device.c \
-            -o /tmp/vantaos-partition-device-test
+            kernel/device.c -o /tmp/vantaos-partition-device-test
           /tmp/vantaos-partition-device-test
 
       - name: Compile strict partition scanner host tests

@@ -127,6 +127,12 @@ int main(void)
 
     root = add_function(0U, 1U, 0x8086U, 0x2448U, 0x06U, 0x04U, 1U);
     root->config[0x18U / 4U] = 0U | (1U << 8U) | (5U << 16U);
+    root->config[0x1CU / 4U] = 0x00002111U;
+    root->config[0x20U / 4U] = 0x80F08000U;
+    root->config[0x24U / 4U] = 0x90019001U;
+    root->config[0x28U / 4U] = 0x00000012U;
+    root->config[0x2CU / 4U] = 0x00000012U;
+    root->config[0x30U / 4U] = 0x00010001U;
 
     downstream = add_function(1U, 2U, 0x8086U, 0x2448U, 0x06U, 0x04U, 1U);
     downstream->config[0x18U / 4U] = 1U | (2U << 8U) | (4U << 16U);
@@ -161,6 +167,17 @@ int main(void)
     assert(root_device->secondary_bus == 1U);
     assert(root_device->subordinate_bus == 5U);
     assert(endpoint_device->header_type == 0U);
+
+    assert(root_device->io_window_valid);
+    assert(root_device->io_window_base == 0x00011000ULL);
+    assert(root_device->io_window_limit == 0x00012FFFULL);
+    assert(root_device->memory_window_valid);
+    assert(root_device->memory_window_base == 0x80000000ULL);
+    assert(root_device->memory_window_limit == 0x80FFFFFFULL);
+    assert(root_device->prefetch_window_valid);
+    assert(root_device->prefetch_window_base == 0x1290000000ULL);
+    assert(root_device->prefetch_window_limit == 0x1290FFFFFFULL);
+    assert(!malformed_device->io_window_valid);
 
     assert(pci_get_parent_bridge(root_device) == NULL);
     assert(pci_get_parent_bridge(downstream_device) == root_device);

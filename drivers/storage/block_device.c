@@ -58,6 +58,12 @@ static void prepare_core_device(block_device_t* device, const char* name)
         ++i;
     }
     device->core.name[i] = '\0';
+    device->core.vendor_id = 0U;
+    device->core.device_id = 0U;
+    device->core.class_code = 0U;
+    device->core.subclass = 0U;
+    device->core.prog_if = 0U;
+    device->core.revision = 0U;
     device->core.bus = DEVICE_BUS_VIRTUAL;
     device->core.parent = device->parent_device;
     device->core.bus_data = device;

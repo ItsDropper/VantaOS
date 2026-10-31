@@ -129,6 +129,12 @@ jobs:
             scripts/test_pmm_contiguous.c mm/pmm.c \
             -o /tmp/vantaos-pmm-contiguous-test
           /tmp/vantaos-pmm-contiguous-test
+      - name: Test DMA device address-mask contract
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_dma_contract.c mm/dma.c \
+            -o /tmp/vantaos-dma-contract-test
+          /tmp/vantaos-dma-contract-test
 
       - name: Test kernel mutex API contract
         run: |

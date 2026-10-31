@@ -630,6 +630,8 @@ static void pci_register_core_devices(void)
 void pci_initialize(void)
 {
     uint64_t mcfg_regions = 0U;
+    if (pci_devices_registered)
+        return;
 #ifndef PCI_TEST
     pci_mcfg_region_count = acpi_discover_pci_mcfg(
         pci_mcfg_regions, ACPI_MAX_MCFG_REGIONS);

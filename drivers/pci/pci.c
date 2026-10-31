@@ -327,6 +327,88 @@ static void pci_write_config_locked(
     outl(PCI_CONFIG_DATA, value);
 }
 
+static void pci_decode_bridge_windows(struct pci_device* device)
+{
+    uint32_t io_register = pci_read_device_config(device, 0x1CU);
+    uint32_t memory_register = pci_read_device_config(device, 0x20U);
+    uint32_t prefetch_register = pci_read_device_config(device, 0x24U);
+    uint32_t prefetch_base_upper = pci_read_device_config(device, 0x28U);
+    uint32_t prefetch_limit_upper = pci_read_device_config(device, 0x2CU);
+    uint32_t io_upper = pci_read_device_config(device, 0x30U);
+    uint8_t io_base_type = (uint8_t)(io_register & 0x0FU);
+    uint8_t io_limit_type = (uint8_t)((io_register >> 8U) & 0x0FU);
+    uint8_t prefetch_base_type = (uint8_t)(prefetch_register & 0x0FU);
+    uint8_t prefetch_limit_type =
+        (uint8_t)((prefetch_register >> 16U) & 0x0FU);
+
+    device->io_window_base = 0U;
+    device->io_window_limit = 0U;
+    device->memory_window_base = 0U;
+    device->memory_window_limit = 0U;
+    device->prefetch_window_base = 0U;
+    device->prefetch_window_limit = 0U;
+    device->io_window_valid = 0U;
+    device->memory_window_valid = 0U;
+    device->prefetch_window_valid = 0U;
+
+    /* I/O windows use 4 KiB granularity and may be 16- or 32-bit. */
+    if (io_base_type == io_limit_type &&
+        (io_base_type == 0U || io_base_type == 1U))
+    {
+        uint64_t base = (uint64_t)(io_register & 0x00F0U) << 8U;
+        uint64_t limit =
+            ((uint64_t)((io_register >> 8U) & 0x00F0U) << 8U) |
+            0x0FFFU;
+        if (io_base_type == 1U)
+        {
+            base |= (uint64_t)(io_upper & 0x0000FFFFU) << 16U;
+            limit |= (uint64_t)(io_upper >> 16U) << 16U;
+        }
+        if (base <= limit)
+        {
+            device->io_window_base = base;
+            device->io_window_limit = limit;
+            device->io_window_valid = 1U;
+        }
+    }
+
+    /* Non-prefetchable memory windows have fixed 1 MiB granularity. */
+    {
+        uint64_t base = (uint64_t)(memory_register & 0x0000FFF0U) << 16U;
+        uint64_t limit =
+            ((uint64_t)((memory_register >> 16U) & 0x0000FFF0U) << 16U) |
+            0x000FFFFFULL;
+        if (base <= limit)
+        {
+            device->memory_window_base = base;
+            device->memory_window_limit = limit;
+            device->memory_window_valid = 1U;
+        }
+    }
+
+    /* Prefetchable windows may carry a 64-bit upper address. */
+    if (prefetch_base_type == prefetch_limit_type &&
+        (prefetch_base_type == 0U || prefetch_base_type == 1U))
+    {
+        uint64_t base =
+            (uint64_t)(prefetch_register & 0x0000FFF0U) << 16U;
+        uint64_t limit =
+            ((uint64_t)((prefetch_register >> 16U) & 0x0000FFF0U) << 16U) |
+            0x000FFFFFULL;
+        if (prefetch_base_type == 1U)
+        {
+            base |= (uint64_t)prefetch_base_upper << 32U;
+            limit |= (uint64_t)prefetch_limit_upper << 32U;
+        }
+        if (base <= limit)
+        {
+            device->prefetch_window_base = base;
+            device->prefetch_window_limit = limit;
+            device->prefetch_window_valid = 1U;
+        }
+    }
+}
+
 static void pci_read_device(struct pci_device* device,
                              uint16_t segment, uint8_t bus,
                              uint8_t slot, uint8_t function)
@@ -364,6 +446,7 @@ static void pci_read_device(struct pci_device* device,
         device->primary_bus = (uint8_t)(bus_numbers & 0xFFU);
         device->secondary_bus = (uint8_t)((bus_numbers >> 8U) & 0xFFU);
         device->subordinate_bus = (uint8_t)((bus_numbers >> 16U) & 0xFFU);
+        pci_decode_bridge_windows(device);
     }
 }
 

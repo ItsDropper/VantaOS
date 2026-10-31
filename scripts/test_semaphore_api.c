@@ -94,6 +94,9 @@ int main(void)
     fake_ticks = 0U;
     assert(kernel_semaphore_wait_until(&semaphore, 10U));
     assert(semaphore.count == 2U);
+    assert(kernel_semaphore_try_wait(&semaphore));
+    assert(kernel_semaphore_try_wait(&semaphore));
+    assert(semaphore.count == 0U);
     assert(!kernel_semaphore_wait_until(&semaphore, 20U));
     assert(fake_ticks == 20U);
     assert(!kernel_semaphore_wait_until(&semaphore, 0U));

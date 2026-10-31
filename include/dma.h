@@ -7,22 +7,41 @@
 
 #ifndef DMA_H
 #define DMA_H
+
 #include <stdint.h>
 #include <stddef.h>
+
 /*
- * Current x86 contract: PMM pages below 4 GiB are identity mapped and the
- * platform is DMA cache-coherent. Allocations are one page each, not a
- * promise that multiple calls return physically adjacent pages.
- *
- * Polaris GCN4 requires a 32 MiB contiguous leaf table (4,194,304 64-bit
- * entries). Keep the contiguous allocator limit large enough for that table
- * plus normal ring and context allocations.
+ * The current x86 DMA backend is identity-mapped and coherent. Physical
+ * memory is currently managed below 4 GiB; dma_mask expresses the device's
+ * inclusive address limit so controllers with narrower masks are supported.
+ * This interface deliberately does not claim IOMMU translation or streaming
+ * cache-maintenance support.
  */
-typedef struct { void* virtual_address; uint64_t physical_address; size_t size; } dma_page_t;
+typedef struct
+{
+    uint64_t dma_mask;
+} dma_device_t;
+
+typedef struct
+{
+    void* virtual_address;
+    uint64_t physical_address;
+    size_t size;
+} dma_page_t;
+
 #define DMA_MAX_CONTIGUOUS_PAGES 16384U
-int dma_alloc_page(dma_page_t*);
+#define DMA_DEFAULT_MASK 0xFFFFFFFFULL
+
+int dma_alloc_page(dma_page_t* page);
+int dma_alloc_page_for_device(const dma_device_t* device, dma_page_t* page);
 int dma_alloc_contiguous(dma_page_t* pages, size_t count);
+int dma_alloc_contiguous_for_device(const dma_device_t* device,
+                                    dma_page_t* pages, size_t count);
 void dma_free_contiguous(dma_page_t* pages, size_t count);
-void dma_free_page(dma_page_t*);
-int dma_page_is_valid(const dma_page_t*);
+void dma_free_page(dma_page_t* page);
+int dma_page_is_valid(const dma_page_t* page);
+int dma_page_is_valid_for_device(const dma_device_t* device,
+                                 const dma_page_t* page);
+
 #endif

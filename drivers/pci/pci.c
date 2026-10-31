@@ -29,6 +29,10 @@ static spinlock_t pci_config_lock = SPINLOCK_INITIALIZER;
 static acpi_mcfg_region_t pci_mcfg_regions[ACPI_MAX_MCFG_REGIONS];
 static uint32_t pci_mcfg_region_count;
 static int pci_mcfg_initialized;
+/* A single 1 MiB bus window is held while enumerating that ECAM bus. */
+static void* pci_scan_ecam_mapping;
+static uint16_t pci_scan_ecam_segment;
+static uint8_t pci_scan_ecam_bus;
 #endif
 
 #ifdef PCI_TEST
@@ -178,6 +182,15 @@ static uint32_t pci_read_device_config_locked(
     if (device->segment_group != 0U ||
         pci_find_mcfg_region(device->segment_group, device->bus) != NULL)
     {
+        if (pci_scan_ecam_mapping &&
+            pci_scan_ecam_segment == device->segment_group &&
+            pci_scan_ecam_bus == device->bus)
+        {
+            uintptr_t entry = (uintptr_t)pci_scan_ecam_mapping +
+                ((uintptr_t)device->slot << 15U) +
+                ((uintptr_t)device->function << 12U) + offset;
+            return *(volatile uint32_t*)entry;
+        }
         volatile uint32_t* mapped = pci_ecam_dword(device, offset);
         uint32_t value;
         if (!mapped)
@@ -209,6 +222,16 @@ static int pci_write_device_config_locked(
     if (device->segment_group != 0U ||
         pci_find_mcfg_region(device->segment_group, device->bus) != NULL)
     {
+        if (pci_scan_ecam_mapping &&
+            pci_scan_ecam_segment == device->segment_group &&
+            pci_scan_ecam_bus == device->bus)
+        {
+            uintptr_t entry = (uintptr_t)pci_scan_ecam_mapping +
+                ((uintptr_t)device->slot << 15U) +
+                ((uintptr_t)device->function << 12U) + offset;
+            *(volatile uint32_t*)entry = value;
+            return 1;
+        }
         volatile uint32_t* mapped = pci_ecam_dword(device, offset);
         if (!mapped)
             return 0;
@@ -234,6 +257,16 @@ static int pci_write_device_config16_locked(
     if (device->segment_group != 0U ||
         pci_find_mcfg_region(device->segment_group, device->bus) != NULL)
     {
+        if (pci_scan_ecam_mapping &&
+            pci_scan_ecam_segment == device->segment_group &&
+            pci_scan_ecam_bus == device->bus)
+        {
+            uintptr_t entry = (uintptr_t)pci_scan_ecam_mapping +
+                ((uintptr_t)device->slot << 15U) +
+                ((uintptr_t)device->function << 12U) + offset;
+            *(volatile uint16_t*)entry = value;
+            return 1;
+        }
         volatile uint32_t* mapped =
             pci_ecam_dword(device, (uint8_t)(offset & 0xFCU));
         if (!mapped)
@@ -321,6 +354,26 @@ static void pci_scan_range(uint16_t segment, uint8_t first_bus,
 {
     for (uint16_t bus = first_bus; bus <= last_bus; ++bus)
     {
+#ifndef PCI_TEST
+        const acpi_mcfg_region_t* region =
+            pci_find_mcfg_region(segment, (uint8_t)bus);
+        if (region)
+        {
+            uint64_t bus_offset =
+                (uint64_t)((uint8_t)bus - region->start_bus) << 20U;
+            if (region->base_address <= UINT64_MAX - bus_offset)
+            {
+                uint64_t physical = region->base_address + bus_offset;
+                pci_scan_ecam_mapping = mmio_map_region(
+                    physical, 1U << 20U);
+                if (pci_scan_ecam_mapping)
+                {
+                    pci_scan_ecam_segment = segment;
+                    pci_scan_ecam_bus = (uint8_t)bus;
+                }
+            }
+        }
+#endif
         for (uint8_t slot = 0U; slot < 32U; ++slot)
         {
             struct pci_device probe = {
@@ -350,6 +403,15 @@ static void pci_scan_range(uint16_t segment, uint8_t first_bus,
                 ++device_count;
             }
         }
+#ifndef PCI_TEST
+        if (pci_scan_ecam_mapping &&
+            pci_scan_ecam_segment == segment &&
+            pci_scan_ecam_bus == (uint8_t)bus)
+        {
+            (void)mmio_unmap_region(pci_scan_ecam_mapping, 1U << 20U);
+            pci_scan_ecam_mapping = NULL;
+        }
+#endif
     }
 }
 

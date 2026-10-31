@@ -152,14 +152,20 @@ int main(void)
     device.sector_count = 0U;
     assert(block_device_register(&device) == BLOCK_STATUS_INVALID);
 
+    device_t reserved_disk_name = {
+        .name = "disk0",
+        .bus = DEVICE_BUS_VIRTUAL
+    };
+    assert(device_register(&reserved_disk_name));
     initialize_device(&device, "incoming-name", &capacity_ops);
     device.sector_count = 1U;
     assert(block_device_register_disk(&device) == BLOCK_STATUS_OK);
-    assert(strcmp(device.name, "disk0") == 0);
-    assert(strcmp(device.core.name, "disk0") == 0);
+    assert(strcmp(device.name, "disk1") == 0);
+    assert(strcmp(device.core.name, "disk1") == 0);
     assert(device.core.bus == DEVICE_BUS_VIRTUAL);
     assert(device.online == 1U);
     assert(block_device_unregister(&device) == BLOCK_STATUS_OK);
+    assert(device_unregister(&reserved_disk_name));
 
     /* Full registry must leave a rejected disk's caller-owned name untouched. */
     block_device_t occupied[BLOCK_DEVICE_MAX];

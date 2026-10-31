@@ -85,6 +85,7 @@ struct device_driver
     uint32_t id_count;
     device_probe_result_t (*probe)(device_t*);
     void (*remove)(device_t*);
+    void* context;
 };
 
 /* Device and driver storage remain caller-owned until unregister succeeds. */

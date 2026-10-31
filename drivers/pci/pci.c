@@ -370,6 +370,7 @@ static void pci_read_device(struct pci_device* device,
 static void pci_scan_range(uint16_t segment, uint8_t first_bus,
                            uint8_t last_bus)
 {
+    int capacity_reached = 0;
     for (uint16_t bus = first_bus; bus <= last_bus; ++bus)
     {
 #ifndef PCI_TEST
@@ -414,7 +415,10 @@ static void pci_scan_range(uint16_t segment, uint8_t first_bus,
                 if ((uint16_t)id == PCI_INVALID_VENDOR)
                     continue;
                 if (device_count >= PCI_MAX_DEVICES)
+                {
+                    capacity_reached = 1;
                     goto bus_complete;
+                }
 
                 pci_read_device(&devices[device_count], segment,
                                 (uint8_t)bus, slot, function);
@@ -431,6 +435,8 @@ bus_complete:
             pci_scan_ecam_mapping = NULL;
         }
 #endif
+        if (capacity_reached)
+            return;
     }
 }
 

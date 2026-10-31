@@ -35,7 +35,7 @@ typedef struct {
  uint16_t size,avail_index,last_used;vnet_desc_t *descriptors;vnet_avail_t *available;vnet_used_t *used;
 } vnet_queue_t;
 typedef struct {
- const struct pci_device *pci;uint16_t io_base;uint32_t host_features;uint8_t has_status,ready,registered;
+ const struct pci_device *pci;uint16_t io_base;uint32_t host_features;uint8_t has_status,ready,registered,selftest_handler_registered;
  net_device_t netdev;vnet_queue_t rx,tx;spinlock_t tx_lock;
 } vnet_state_t;
 static vnet_state_t state;
@@ -94,6 +94,16 @@ static int vnet_transmit(net_device_t*d,const uint8_t*f,size_t n){
  int done=0;for(uint32_t w=0;w<VNET_WAIT_LIMIT;w++){__asm__ volatile("":::"memory");if((uint16_t)(q->used->index-target)<0x8000U){q->last_used=q->used->index;done=1;break;}__asm__ volatile("pause");}
  spinlock_unlock(&state.tx_lock);return done;
 }
+#ifdef VANTAOS_SELF_TEST
+static void vnet_rx_selftest_handler(net_device_t*d,const uint8_t*f,size_t n,
+                                     uint16_t type,size_t header,void*context){
+ (void)context;
+ if(d!=&state.netdev||!f||type!=0x88B5U||header>n||n-header<4U)return;
+ if(f[header]==0x56U&&f[header+1U]==0x41U&&
+    f[header+2U]==0x4EU&&f[header+3U]==0x54U)
+  serial_write("VANTAOS_VIRTIO_NET_RX_SELFTEST_OK\\n");
+}
+#endif
 static int vnet_poll_device(void){
  if(!state.ready)return 0;vnet_queue_t*q=&state.rx;int count=0;
  for(uint32_t budget=0;budget<64U;budget++){
@@ -110,6 +120,12 @@ static int vnet_poll_device(void){
 static void vnet_release(void){
  int reset_complete=state.io_base?vnet_reset_device():1;
  state.ready=0;
+#ifdef VANTAOS_SELF_TEST
+ if(state.selftest_handler_registered){
+  (void)net_ethernet_handler_unregister(0x88B5U,vnet_rx_selftest_handler,0);
+  state.selftest_handler_registered=0;
+ }
+#endif
  if(state.registered){(void)net_device_unregister(&state.netdev);state.registered=0;}
  if(reset_complete){
   queue_release(&state.rx);queue_release(&state.tx);
@@ -145,7 +161,13 @@ static net_pci_probe_result_t vnet_probe(const struct pci_device*pci){
  state.netdev.link_up=state.has_status?((in16(state.io_base+0x1AU)&1U)!=0U):1U;
  state.netdev.ops=&vnet_net_ops;state.netdev.driver_data=&state;
  state.netdev.parent_device=(device_t*)&state.pci->core;
- spinlock_init(&state.tx_lock);if(!net_device_register(&state.netdev))goto fail;state.registered=1;state.ready=1;queue_notify(state.io_base,0U);
+ spinlock_init(&state.tx_lock);if(!net_device_register(&state.netdev))goto fail;state.registered=1;
+#ifdef VANTAOS_SELF_TEST
+ if(!net_device_configure_ipv4(&state.netdev,0x0A00020FU,0xFFFFFF00U,0x0A000202U)||
+    !net_ethernet_handler_register(0x88B5U,vnet_rx_selftest_handler,0))goto fail;
+ state.selftest_handler_registered=1U;
+#endif
+ state.ready=1;queue_notify(state.io_base,0U);
 #ifdef VANTAOS_SELF_TEST
  uint8_t probe[18]={0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,mac[0],mac[1],mac[2],mac[3],mac[4],mac[5],0x88,0xB5,0x56,0x41,0x4E,0x54};
  if(net_device_transmit(&state.netdev,probe,sizeof(probe)))serial_write("VANTAOS_VIRTIO_NET_TX_SELFTEST_OK\n");

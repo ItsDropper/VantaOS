@@ -35,6 +35,17 @@ struct pci_device
     uint8_t primary_bus;
     uint8_t secondary_bus;
     uint8_t subordinate_bus;
+
+    /* Decoded type-1 bridge forwarding windows (limits are inclusive). */
+    uint64_t io_window_base;
+    uint64_t io_window_limit;
+    uint64_t memory_window_base;
+    uint64_t memory_window_limit;
+    uint64_t prefetch_window_base;
+    uint64_t prefetch_window_limit;
+    uint8_t io_window_valid;
+    uint8_t memory_window_valid;
+    uint8_t prefetch_window_valid;
 };
 
 void pci_initialize(void);

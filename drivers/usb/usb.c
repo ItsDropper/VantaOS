@@ -1335,6 +1335,11 @@ static int usb_enumerate_port(uint32_t port)
     };
     if (!usb_device_register(slot, port, xhci_controller_device(), &identity))
         goto cleanup;
+    if (!usb_device_register_interfaces(slot, configuration_buffer,
+                                         configuration_length)) {
+        (void)usb_device_unregister(slot);
+        goto cleanup;
+    }
     /* Enumeration is a successful generic USB bind even without a class driver. */
     success = 1;
 

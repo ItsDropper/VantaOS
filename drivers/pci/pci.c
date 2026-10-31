@@ -159,6 +159,14 @@ static volatile uint32_t* pci_ecam_dword(
 }
 #endif
 
+
+/* Legacy configuration helpers are also used when no ECAM range exists. */
+static uint32_t pci_read_config_locked(
+    uint8_t bus, uint8_t slot, uint8_t function, uint8_t offset);
+static void pci_write_config_locked(
+    uint8_t bus, uint8_t slot, uint8_t function, uint8_t offset,
+    uint32_t value);
+
 /* Caller holds pci_config_lock. */
 static uint32_t pci_read_device_config_locked(
     const struct pci_device* device, uint8_t offset)
@@ -179,7 +187,8 @@ static uint32_t pci_read_device_config_locked(
     if (device->segment_group != 0U)
         return 0xFFFFFFFFU;
 #endif
-    return pci_read_device_config_locked(device, offset);
+    return pci_read_config_locked(device->bus, device->slot,
+                                  device->function, offset);
 }
 
 /* Caller holds pci_config_lock. */
@@ -250,13 +259,6 @@ static uint32_t pci_read_config(
     pci_unlock_config(flags);
     return value;
 }
-
-/* Legacy configuration helpers are also used when no ECAM range exists. */
-static uint32_t pci_read_config_locked(
-    uint8_t bus, uint8_t slot, uint8_t function, uint8_t offset);
-static void pci_write_config_locked(
-    uint8_t bus, uint8_t slot, uint8_t function, uint8_t offset,
-    uint32_t value);
 
 /* These helpers require pci_config_lock to be held by the caller. */
 static uint32_t pci_read_config_locked(
@@ -616,8 +618,8 @@ int pci_enable_io_space(const struct pci_device* device)
     uint16_t command = (uint16_t)command_status;
     if (command & 1U) return 1;
     command |= 1U;
-    pci_write_device_config_locked(device, 0x04,
-                     (uint32_t)command);
+    if (!pci_write_config16(device, 0x04U, command))
+        return 0;
     return (pci_read_device_config(device, 0x04) & 1U) != 0;
 }
 

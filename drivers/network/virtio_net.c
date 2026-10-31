@@ -25,6 +25,7 @@
 #define VNET_STATUS_DRIVER 2U
 #define VNET_STATUS_DRIVER_OK 4U
 #define VNET_NET_HDR_SIZE 10U
+#define VNET_DESC_WRITE 2U
 typedef struct __attribute__((packed)){uint64_t address;uint32_t length;uint16_t flags,next;} vnet_desc_t;
 typedef struct __attribute__((packed)){uint16_t flags,index;uint16_t ring[VNET_MAX_QUEUE];} vnet_avail_t;
 typedef struct __attribute__((packed)){uint32_t id,length;} vnet_used_elem_t;
@@ -100,7 +101,7 @@ static int vnet_poll_device(void){
   vnet_used_elem_t e=q->used->ring[q->last_used%q->size];++q->last_used;if(e.id>=q->size)continue;
   uint16_t id=(uint16_t)e.id;uint8_t*b=(uint8_t*)q->buffers[id].virtual_address;
   if(e.length>=VNET_NET_HDR_SIZE+NET_ETHERNET_HEADER_SIZE&&e.length<=VNET_BUFFER_SIZE){size_t n=e.length-VNET_NET_HDR_SIZE;if(n<=NET_FRAME_MAX_SIZE)(void)net_receive_frame(&state.netdev,b+VNET_NET_HDR_SIZE,n);}
-  q->descriptors[id].address=q->buffers[id].physical_address;q->descriptors[id].length=VNET_BUFFER_SIZE;q->descriptors[id].flags=0;q->descriptors[id].next=0;
+  q->descriptors[id].address=q->buffers[id].physical_address;q->descriptors[id].length=VNET_BUFFER_SIZE;q->descriptors[id].flags=VNET_DESC_WRITE;q->descriptors[id].next=0;
   q->available->ring[q->avail_index%q->size]=id;++q->avail_index;q->available->index=q->avail_index;queue_notify(state.io_base,0U);++count;
  }
  if(state.has_status){int up=(in16(state.io_base+0x1AU)&1U)!=0U;if((int)state.netdev.link_up!=up)(void)net_device_set_link(&state.netdev,up);}
@@ -132,7 +133,7 @@ static net_pci_probe_result_t vnet_probe(const struct pci_device*pci){
  state.has_status=(state.host_features&VNET_F_STATUS)!=0U;out32(state.io_base+0x04U,VNET_F_MAC|(state.has_status?VNET_F_STATUS:0U));
  out16(state.io_base+0x0EU,0U);uint16_t rn=in16(state.io_base+0x0CU);out16(state.io_base+0x0EU,1U);uint16_t tn=in16(state.io_base+0x0CU);
  if(!queue_allocate(&state.rx,rn)||!queue_allocate(&state.tx,tn))goto fail;
- for(uint16_t i=0;i<state.rx.size;i++){state.rx.descriptors[i].address=state.rx.buffers[i].physical_address;state.rx.descriptors[i].length=VNET_BUFFER_SIZE;state.rx.descriptors[i].flags=0;state.rx.descriptors[i].next=0;state.rx.available->ring[i]=i;}
+ for(uint16_t i=0;i<state.rx.size;i++){state.rx.descriptors[i].address=state.rx.buffers[i].physical_address;state.rx.descriptors[i].length=VNET_BUFFER_SIZE;state.rx.descriptors[i].flags=VNET_DESC_WRITE;state.rx.descriptors[i].next=0;state.rx.available->ring[i]=i;}
  state.rx.avail_index=state.rx.size;state.rx.available->index=state.rx.avail_index;queue_publish(state.io_base,0U,&state.rx);queue_publish(state.io_base,1U,&state.tx);
  uint8_t mac[6],any=0;for(uint32_t i=0;i<6U;i++){mac[i]=in8(state.io_base+0x14U+(uint16_t)i);any|=mac[i];}if(!any||(mac[0]&1U))goto fail;
  if(!pci_enable_bus_mastering(pci))goto fail;

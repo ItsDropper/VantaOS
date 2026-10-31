@@ -27,6 +27,21 @@ if (!kernel_mutex_lock(&device_mutex))
 
 `kernel_mutex_try_lock()` never sleeps and returns zero if the mutex is already owned. Unlock is restricted to the owning process. Contended `kernel_mutex_lock()` requires a normal scheduled process with maskable interrupts enabled; it blocks through the wait queue and retries ownership after every wakeup.
 
+## Deadline-based acquisition
+
+`kernel_mutex_lock_until(mutex, deadline_ticks)` attempts to acquire the mutex until an absolute monotonic PIT-tick deadline. A free mutex is acquired before checking timeout, including when the deadline has just arrived. Contended waits use the same atomic wait-queue registration as ordinary mutex locking.
+
+```c
+uint64_t deadline = timer_get_ticks64() + 100U;
+if (!kernel_mutex_lock_until(&device_mutex, deadline))
+    return; /* Timeout or invalid context. */
+
+use_device();
+(void)kernel_mutex_unlock(&device_mutex);
+```
+
+Deadlines are PIT ticks, not milliseconds. Derive them using `timer_get_ticks64()` and the configured timer frequency. The operation still requires normal scheduled process context and enabled maskable interrupts.
+
 ## Current guarantees and limitations
 
 - Ownership transitions are serialized by the embedded wait-queue lock.

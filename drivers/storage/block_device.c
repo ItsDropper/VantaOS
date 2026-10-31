@@ -67,6 +67,7 @@ static void prepare_core_device(block_device_t* device, const char* name)
     device->core.bus = DEVICE_BUS_VIRTUAL;
     device->core.parent = device->parent_device;
     device->core.bus_data = device;
+    device->core.owner = device;
     device->core.driver = NULL;
     device->core.state = DEVICE_STATE_UNREGISTERED;
 }
@@ -214,7 +215,7 @@ block_status_t block_device_unregister(block_device_t* device)
      * The generic tree rejects removal while partitions or other child
      * devices still reference this block device as their parent.
      */
-    if (!device_unregister(&device->core))
+    if (!device_unregister_owned(&device->core, device))
     {
         __atomic_store_n(&device->online, 1U, __ATOMIC_RELEASE);
         spinlock_unlock_irqrestore(&registry_lock, flags);

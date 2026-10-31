@@ -543,6 +543,90 @@ static void pci_scan(void)
 #endif
 }
 
+static int pci_devices_registered;
+
+static void pci_write_hex(char* output, uint32_t value, uint32_t digits)
+{
+    static const char hex[] = "0123456789abcdef";
+    for (uint32_t i = 0U; i < digits; ++i)
+    {
+        uint32_t shift = (digits - i - 1U) * 4U;
+        output[i] = hex[(value >> shift) & 0x0FU];
+    }
+}
+
+static void pci_prepare_core_device(struct pci_device* pci,
+                                    const struct pci_device* parent)
+{
+    char* name = pci->core.name;
+    name[0] = 'p';
+    name[1] = 'c';
+    name[2] = 'i';
+    pci_write_hex(name + 3U, pci->segment_group, 4U);
+    name[7] = ':';
+    pci_write_hex(name + 8U, pci->bus, 2U);
+    name[10] = ':';
+    pci_write_hex(name + 11U, pci->slot, 2U);
+    name[13] = '.';
+    pci_write_hex(name + 14U, pci->function, 1U);
+    name[15] = '\0';
+
+    pci->core.bus = DEVICE_BUS_PCI;
+    pci->core.parent = parent ? (device_t*)&parent->core : NULL;
+    pci->core.vendor_id = pci->vendor_id;
+    pci->core.device_id = pci->device_id;
+    pci->core.class_code = pci->class_code;
+    pci->core.subclass = pci->subclass;
+    pci->core.prog_if = pci->prog_if;
+    pci->core.revision = pci->revision;
+    pci->core.bus_data = pci;
+    pci->core.driver = NULL;
+    pci->core.state = DEVICE_STATE_UNREGISTERED;
+}
+
+static void pci_register_core_devices(void)
+{
+    if (pci_devices_registered)
+        return;
+
+    /*
+     * Register roots before descendants. ACPI MCFG regions are not required
+     * to be ordered by bus number, so use bounded passes rather than assuming
+     * enumeration-array order is a valid parent-before-child order.
+     */
+    for (int pass = 0; pass < device_count; ++pass)
+    {
+        int progress = 0;
+        for (int i = 0; i < device_count; ++i)
+        {
+            struct pci_device* pci = &devices[i];
+            const struct pci_device* parent;
+            if (pci->core.state != DEVICE_STATE_UNREGISTERED)
+                continue;
+            parent = pci_get_parent_bridge(pci);
+            if (parent && parent->core.state == DEVICE_STATE_UNREGISTERED)
+                continue;
+            pci_prepare_core_device(pci, parent);
+            if (device_register(&pci->core))
+                progress = 1;
+        }
+        if (!progress)
+            break;
+    }
+
+    /* Preserve discovery even when firmware reports an unusable bridge chain. */
+    for (int i = 0; i < device_count; ++i)
+    {
+        struct pci_device* pci = &devices[i];
+        if (pci->core.state == DEVICE_STATE_UNREGISTERED)
+        {
+            pci_prepare_core_device(pci, NULL);
+            (void)device_register(&pci->core);
+        }
+    }
+    pci_devices_registered = 1;
+}
+
 void pci_initialize(void)
 {
     uint64_t mcfg_regions = 0U;
@@ -553,6 +637,7 @@ void pci_initialize(void)
     mcfg_regions = pci_mcfg_region_count;
 #endif
     pci_scan();
+    pci_register_core_devices();
     ktrace_emit(KTRACE_EVENT_PCI_SCAN_COMPLETE, KTRACE_CPU_UNKNOWN,
                 (uint64_t)device_count, mcfg_regions);
 }

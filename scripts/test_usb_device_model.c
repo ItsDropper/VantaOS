@@ -46,13 +46,19 @@ int main(void)
 
     fprintf(stderr, "usb-test: controller\n");
     assert(device_register(&controller));
+    fprintf(stderr, "usb-test: controller registered\n");
     assert(!usb_device_register(0U, 1U, &controller, &identity));
+    fprintf(stderr, "usb-test: invalid slot\n");
     assert(!usb_device_register(1U, 0U, &controller, &identity));
+    fprintf(stderr, "usb-test: invalid port\n");
     assert(!usb_device_register(1U, 1U, NULL, &identity));
+    fprintf(stderr, "usb-test: null parent\n");
     assert(usb_device_count() == 0U);
 
     fprintf(stderr, "usb-test: register device\n");
+    fprintf(stderr, "usb-test: before valid register\n");
     assert(usb_device_register(1U, 3U, &controller, &identity));
+    fprintf(stderr, "usb-test: after valid register\n");
     assert(usb_device_count() == 1U);
     assert(usb_device_port(1U) == 3U);
 

@@ -176,17 +176,18 @@ static void vnet_release(void){
  if(state.registered){(void)net_device_unregister(&state.netdev);state.registered=0;}
  if(reset_complete){
   queue_release(&state.rx);queue_release(&state.tx);
+  state.io_base=0;state.pci=0;
  }else{
   /*
-   * The device may still own descriptors. Retain every queue page instead
-   * of returning potentially active DMA memory to the physical allocator.
+   * The device may still own descriptors. Retain queue metadata and the
+   * transport identity as a quarantine: a later probe must not overwrite
+   * these pointers or configure a second queue set while DMA may continue.
    */
   serial_write("VANTAOS_VIRTIO_NET_RESET_TIMEOUT_DMA_RETAINED\\n");
  }
- state.io_base=0;state.pci=0;
 }
 static net_pci_probe_result_t vnet_probe(const struct pci_device*pci){
- if(!pci||state.ready)return NET_PCI_PROBE_NOT_MINE;
+ if(!pci||state.ready||state.pci)return NET_PCI_PROBE_NOT_MINE;
  uint64_t bar=0;int io=0;if(!pci_get_bar(pci,0,&bar,&io,0)||!io||!bar||bar>0xFFFFU||bar+0x1BU>0xFFFFU)return NET_PCI_PROBE_NOT_MINE;
  if(!pci_enable_io_space(pci))return NET_PCI_PROBE_FAILED;
  state.pci=pci;state.io_base=(uint16_t)bar;

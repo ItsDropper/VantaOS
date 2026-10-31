@@ -215,6 +215,32 @@ static int pci_write_device_config_locked(
     return 1;
 }
 
+static int pci_write_device_config16_locked(
+    const struct pci_device* device, uint8_t offset, uint16_t value)
+{
+#ifndef PCI_TEST
+    if (device->segment_group != 0U ||
+        pci_find_mcfg_region(device->segment_group, device->bus) != NULL)
+    {
+        volatile uint32_t* mapped =
+            pci_ecam_dword(device, (uint8_t)(offset & 0xFCU));
+        if (!mapped)
+            return 0;
+        *(volatile uint16_t*)((uintptr_t)mapped + (offset & 2U)) = value;
+        (void)mmio_unmap_region((void*)mapped, sizeof(uint32_t));
+        return 1;
+    }
+#else
+    if (device->segment_group != 0U)
+        return 0;
+#endif
+    outl(PCI_CONFIG_ADDRESS,
+         pci_config_address(device->bus, device->slot,
+                            device->function, offset));
+    outw((uint16_t)(PCI_CONFIG_DATA + (offset & 2U)), value);
+    return 1;
+}
+
 static uint32_t pci_read_device_config(
     const struct pci_device* device, uint8_t offset)
 {
@@ -1082,30 +1108,18 @@ int pci_write_config16(const struct pci_device *device, uint8_t offset,
                        uint16_t value)
 {
     uint64_t flags;
-    uint32_t current;
-    uint32_t updated;
     uint16_t actual;
-    uint8_t aligned;
 
-    if (!device || offset > 254U)
+    if (!device || offset > 254U || (offset & 1U) != 0U)
         return 0;
-    aligned = (uint8_t)(offset & 0xFCU);
     flags = pci_lock_config();
-    current = pci_read_device_config_locked(device, aligned);
-    if (current == 0xFFFFFFFFU)
+    if (!pci_write_device_config16_locked(device, offset, value))
     {
         pci_unlock_config(flags);
         return 0;
     }
-    updated = (current & ~(0xFFFFU << ((offset & 2U) * 8U))) |
-              ((uint32_t)value << ((offset & 2U) * 8U));
-    if (!pci_write_device_config_locked(device, aligned, updated))
-    {
-        pci_unlock_config(flags);
-        return 0;
-    }
-    actual = (uint16_t)(pci_read_device_config_locked(device, aligned) >>
-                        ((offset & 2U) * 8U));
+    actual = (uint16_t)(pci_read_device_config_locked(
+        device, (uint8_t)(offset & 0xFCU)) >> ((offset & 2U) * 8U));
     pci_unlock_config(flags);
     return actual == value;
 }

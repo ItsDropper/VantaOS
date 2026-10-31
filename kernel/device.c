@@ -180,7 +180,7 @@ int device_unregister_owned(device_t* device, const void* owner)
     return device_unregister_internal(device, owner);
 }
 
-int device_acquire(device_t* device)
+static int device_acquire_internal(device_t* device, int require_bound)
 {
     uint64_t flags;
     int index;
@@ -189,6 +189,7 @@ int device_acquire(device_t* device)
     flags = spinlock_lock_irqsave(&device_lock);
     index = find_device_locked(device);
     if (index < 0 || device->state == DEVICE_STATE_REMOVING ||
+        (require_bound && device->state != DEVICE_STATE_BOUND) ||
         devices[index].references == UINT32_MAX)
     {
         spinlock_unlock_irqrestore(&device_lock, flags);
@@ -197,6 +198,16 @@ int device_acquire(device_t* device)
     ++devices[index].references;
     spinlock_unlock_irqrestore(&device_lock, flags);
     return 1;
+}
+
+int device_acquire(device_t* device)
+{
+    return device_acquire_internal(device, 0);
+}
+
+int device_acquire_bound(device_t* device)
+{
+    return device_acquire_internal(device, 1);
 }
 
 void device_release(device_t* device)
@@ -363,7 +374,7 @@ int device_unbind(device_t* device)
     device_index = find_device_locked(device);
     if (device_index < 0 || device->state != DEVICE_STATE_BOUND ||
         !device->driver || !device->driver->remove ||
-        devices[device_index].references == UINT32_MAX)
+        devices[device_index].references != 0U)
     {
         spinlock_unlock_irqrestore(&device_lock, flags);
         return 0;

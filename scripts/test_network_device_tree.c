@@ -9,12 +9,6 @@
 
 #include <assert.h>
 
-static int transmit(net_device_t* device, const uint8_t* frame, size_t length)
-{
-    (void)device;
-    return frame != NULL && length >= NET_ETHERNET_HEADER_SIZE;
-}
-
 static net_device_t* active_network;
 static uint32_t transmit_calls;
 

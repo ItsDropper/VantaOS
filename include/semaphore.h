@@ -9,6 +9,7 @@
 #define KERNEL_SEMAPHORE_H
 
 #include "process.h"
+#include "timer.h"
 
 /* Bounded counting semaphore for normal process context. */
 typedef struct
@@ -61,6 +62,42 @@ static inline int kernel_semaphore_wait(kernel_semaphore_t* semaphore)
         }
 
         if (!process_wait_queue_sleep_locked(&semaphore->waiters, flags))
+            return 0;
+    }
+}
+
+/*
+ * Wait until a permit is available or an absolute PIT tick deadline expires.
+ * A permit observed while holding the semaphore queue lock wins over timeout.
+ */
+static inline int kernel_semaphore_wait_until(kernel_semaphore_t* semaphore,
+                                              uint64_t deadline_ticks)
+{
+    if (!semaphore || deadline_ticks == 0U)
+        return 0;
+
+    uint32_t pid = process_current_pid();
+    if (pid == 0U || pid >= PROCESS_MAX)
+        return 0;
+
+    for (;;)
+    {
+        uint64_t flags = process_wait_queue_lock(&semaphore->waiters);
+        if (semaphore->count != 0U)
+        {
+            semaphore->count--;
+            process_wait_queue_unlock(&semaphore->waiters, flags);
+            return 1;
+        }
+
+        if (timer_get_ticks64() >= deadline_ticks)
+        {
+            process_wait_queue_unlock(&semaphore->waiters, flags);
+            return 0;
+        }
+
+        if (!process_wait_queue_sleep_until_locked(&semaphore->waiters, flags,
+                                                   deadline_ticks))
             return 0;
     }
 }

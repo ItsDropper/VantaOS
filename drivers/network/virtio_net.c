@@ -167,25 +167,33 @@ static int vnet_poll_device(void){
  return count;
 }
 static void vnet_release(void){
- int reset_complete=state.io_base?vnet_reset_device():1;
  spinlock_lock(&state.tx_lock);state.ready=0;spinlock_unlock(&state.tx_lock);
+ int reset_complete=state.io_base?vnet_reset_device():1;
 #ifdef VANTAOS_SELF_TEST
- if(state.selftest_handler_registered){
-  (void)net_ethernet_handler_unregister(0x88B5U,vnet_rx_selftest_handler,0);
-  state.selftest_handler_registered=0;
+ for(uint32_t i=0U;state.selftest_handler_registered&&i<VNET_WAIT_LIMIT;i++){
+  if(net_ethernet_handler_unregister(0x88B5U,vnet_rx_selftest_handler,0)){
+   state.selftest_handler_registered=0U;break;
+  }
+  __asm__ volatile("pause");
  }
 #endif
- if(state.registered){(void)net_device_unregister(&state.netdev);state.registered=0;}
- if(reset_complete){
+ for(uint32_t i=0U;state.registered&&i<VNET_WAIT_LIMIT;i++){
+  if(net_device_unregister(&state.netdev)){state.registered=0U;break;}
+  __asm__ volatile("pause");
+ }
+ if(reset_complete&&!state.registered&&!state.selftest_handler_registered){
   queue_release(&state.rx);queue_release(&state.tx);
   state.io_base=0;state.pci=0;
- }else{
+ }else if(!reset_complete){
   /*
    * The device may still own descriptors. Retain queue metadata and the
    * transport identity as a quarantine: a later probe must not overwrite
    * these pointers or configure a second queue set while DMA may continue.
    */
   serial_write("VANTAOS_VIRTIO_NET_RESET_TIMEOUT_DMA_RETAINED\\n");
+ }else{
+  /* Keep the published netdev/handler storage alive if unregister is busy. */
+  serial_write("VANTAOS_VIRTIO_NET_UNREGISTER_BUSY_STATE_RETAINED\\n");
  }
 }
 static net_pci_probe_result_t vnet_probe(const struct pci_device*pci){

@@ -500,16 +500,15 @@ const struct pci_device* pci_get_parent_bridge(
             bridge->class_code != 0x06U ||
             bridge->subclass != 0x04U ||
             bridge->header_type != 1U ||
-            bridge->secondary_bus == 0U ||
+            bridge->primary_bus != bridge->bus ||
+            bridge->secondary_bus <= bridge->primary_bus ||
             bridge->secondary_bus > bridge->subordinate_bus ||
             device->bus < bridge->secondary_bus ||
             device->bus > bridge->subordinate_bus)
             continue;
 
-        /* A bridge cannot be its own ancestor or contain its primary bus. */
-        if (bridge->bus == device->bus ||
-            (device->bus == bridge->secondary_bus &&
-             bridge->primary_bus == device->bus))
+        /* A bridge cannot be its own ancestor. */
+        if (bridge->bus == device->bus)
             continue;
 
         span = (uint16_t)bridge->subordinate_bus -

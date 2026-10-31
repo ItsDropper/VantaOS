@@ -51,6 +51,7 @@ static int find_device_locked(const block_device_t* device)
 
 static void prepare_core_device(block_device_t* device, const char* name)
 {
+    device->core = (device_t){0};
     uint32_t i = 0U;
     while (i + 1U < DEVICE_NAME_MAX && name[i])
     {

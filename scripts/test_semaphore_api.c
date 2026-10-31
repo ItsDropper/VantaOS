@@ -10,10 +10,15 @@
 #include <assert.h>
 #include <stdio.h>
 
+static uint32_t current_pid = 0U;
+static uint64_t fake_ticks;
+
 uint32_t process_current_pid(void)
 {
-    return 0U;
+    return current_pid;
 }
+
+uint64_t timer_get_ticks64(void) { return fake_ticks; }
 
 void process_wait_queue_init(process_wait_queue_t* queue)
 {
@@ -39,6 +44,16 @@ int process_wait_queue_sleep_locked(process_wait_queue_t* queue, uint64_t flags)
     (void)queue;
     (void)flags;
     return 0;
+}
+
+int process_wait_queue_sleep_until_locked(process_wait_queue_t* queue,
+                                          uint64_t flags,
+                                          uint64_t deadline_ticks)
+{
+    (void)queue;
+    (void)flags;
+    fake_ticks = deadline_ticks;
+    return 1;
 }
 
 uint32_t process_wait_queue_wake_one(process_wait_queue_t* queue)
@@ -75,6 +90,14 @@ int main(void)
     assert(!kernel_semaphore_post(&semaphore));
     assert(semaphore.count == 3U);
 
+    current_pid = 7U;
+    fake_ticks = 0U;
+    assert(kernel_semaphore_wait_until(&semaphore, 10U));
+    assert(semaphore.count == 2U);
+    assert(!kernel_semaphore_wait_until(&semaphore, 20U));
+    assert(fake_ticks == 20U);
+    assert(!kernel_semaphore_wait_until(&semaphore, 0U));
+    current_pid = 0U;
     /* Blocking requires a scheduled process, which this host test lacks. */
     assert(!kernel_semaphore_wait(&semaphore));
     assert(!kernel_semaphore_wait(NULL));

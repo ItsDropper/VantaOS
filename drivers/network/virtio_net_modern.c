@@ -454,21 +454,31 @@ static int vnet_modern_poll(void)
 
 static void cleanup(void)
 {
-    int reset_complete = state.common ? reset_device() : 1;
     spinlock_lock(&state.tx_lock);
     state.ready = 0U;
     spinlock_unlock(&state.tx_lock);
+    int reset_complete = state.common ? reset_device() : 1;
 #ifdef VANTAOS_SELF_TEST
-    if (state.selftest_handler_registered) {
-        (void)net_ethernet_handler_unregister(0x88B5U, vnet_modern_rx_selftest_handler, 0);
-        state.selftest_handler_registered = 0U;
+    for (uint32_t i = 0U; state.selftest_handler_registered &&
+         i < VNET_WAIT_LIMIT; ++i) {
+        if (net_ethernet_handler_unregister(
+                0x88B5U, vnet_modern_rx_selftest_handler, 0)) {
+            state.selftest_handler_registered = 0U;
+            break;
+        }
+        __asm__ volatile ("pause");
     }
 #endif
-    if (state.registered) {
-        (void)net_device_unregister(&state.netdev);
-        state.registered = 0U;
+    for (uint32_t i = 0U; state.registered && i < VNET_WAIT_LIMIT; ++i) {
+        if (net_device_unregister(&state.netdev)) {
+            state.registered = 0U;
+            break;
+        }
+        __asm__ volatile ("pause");
     }
-    if (reset_complete) {
+
+    if (reset_complete && !state.registered &&
+        !state.selftest_handler_registered) {
         release_queue(&state.rx);
         release_queue(&state.tx);
         if (state.common)
@@ -478,17 +488,20 @@ static void cleanup(void)
         if (state.device_config)
             (void)mmio_unmap_region((void *)state.device_config,
                                     state.device_config_length);
-    } else {
+        state = (vnet_modern_state_t){0};
+        return;
+    }
+
+    if (!reset_complete) {
         /*
          * A device that did not acknowledge reset may still own its DMA
-         * descriptors. Leak those pages rather than returning live DMA memory
-         * to the allocator; also retain the MMIO mappings until reboot.
+         * descriptors. Retain all metadata and mappings as a quarantine.
          */
-        serial_write("VANTAOS_VIRTIO_NET_MODERN_RESET_TIMEOUT_DMA_RETAINED\n");
+        serial_write("VANTAOS_VIRTIO_NET_MODERN_RESET_TIMEOUT_DMA_RETAINED\\n");
+    } else {
+        /* A published netdev/handler still references this storage. */
+        serial_write("VANTAOS_VIRTIO_NET_MODERN_UNREGISTER_BUSY_STATE_RETAINED\\n");
     }
-    if (!reset_complete)
-        return; /* Keep PCI/MMIO/DMA metadata quarantined against reprobe. */
-    state = (vnet_modern_state_t){0};
 }
 
 static net_pci_probe_result_t vnet_modern_probe(const struct pci_device *pci)

@@ -92,6 +92,8 @@ int main(void)
 
     initialize_device(&device, "unit-disk", &full_ops);
     initialize_device(&duplicate, "unit-disk", &full_ops);
+    device.core.owner = (void*)(uintptr_t)1U;
+    device.core.vendor_id = 0xFFFFU;
 
     assert(block_device_register(0) == BLOCK_STATUS_INVALID);
     assert(block_device_register(&device) == BLOCK_STATUS_OK);
@@ -103,6 +105,7 @@ int main(void)
     assert(device.core.bus == DEVICE_BUS_VIRTUAL);
     assert(device.core.bus_data == &device);
     assert(device.core.owner == &device);
+    assert(device.core.vendor_id == 0U);
     assert(!device_unregister(&device.core));
     assert(device_find(DEVICE_BUS_VIRTUAL, "unit-disk") == &device.core);
     assert(block_device_find("unit-disk") == &device);

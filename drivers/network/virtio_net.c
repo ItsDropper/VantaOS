@@ -97,7 +97,7 @@ static void vnet_rx_selftest_handler(net_device_t*d,const uint8_t*f,size_t n,
 }
 #endif
 static int vnet_transmit(net_device_t*d,const uint8_t*f,size_t n){
- if(d!=&state.netdev||!state.ready||!state.tx.size||!f||
+ if(d!=&state.netdev||!state.tx.size||!f||
     n<NET_ETHERNET_HEADER_SIZE||n>NET_FRAME_MAX_SIZE||
     n+VNET_NET_HDR_SIZE>VNET_BUFFER_SIZE)return 0;
  spinlock_lock(&state.tx_lock);
@@ -168,7 +168,7 @@ static int vnet_poll_device(void){
 }
 static void vnet_release(void){
  int reset_complete=state.io_base?vnet_reset_device():1;
- state.ready=0;
+ spinlock_lock(&state.tx_lock);state.ready=0;spinlock_unlock(&state.tx_lock);
 #ifdef VANTAOS_SELF_TEST
  if(state.selftest_handler_registered){
   (void)net_ethernet_handler_unregister(0x88B5U,vnet_rx_selftest_handler,0);
@@ -211,13 +211,17 @@ static net_pci_probe_result_t vnet_probe(const struct pci_device*pci){
  state.netdev.link_up=state.has_status?((in16(state.io_base+0x1AU)&1U)!=0U):1U;
  state.netdev.ops=&vnet_net_ops;state.netdev.driver_data=&state;
  state.netdev.parent_device=(device_t*)&state.pci->core;
- spinlock_init(&state.tx_lock);if(!net_device_register(&state.netdev))goto fail;state.registered=1;
+ spinlock_init(&state.tx_lock);spinlock_lock(&state.tx_lock);
+ if(!net_device_register(&state.netdev)){spinlock_unlock(&state.tx_lock);goto fail;}
+ state.registered=1;
 #ifdef VANTAOS_SELF_TEST
  if(!net_device_configure_ipv4(&state.netdev,0x0A00020FU,0xFFFFFF00U,0x0A000202U)||
-    !net_ethernet_handler_register(0x88B5U,vnet_rx_selftest_handler,0))goto fail;
+    !net_ethernet_handler_register(0x88B5U,vnet_rx_selftest_handler,0)){
+  spinlock_unlock(&state.tx_lock);goto fail;
+ }
  state.selftest_handler_registered=1U;
 #endif
- state.ready=1;queue_notify(state.io_base,0U);
+ state.ready=1;spinlock_unlock(&state.tx_lock);queue_notify(state.io_base,0U);
 #ifdef VANTAOS_SELF_TEST
  uint8_t probe[18]={0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,mac[0],mac[1],mac[2],mac[3],mac[4],mac[5],0x88,0xB5,0x56,0x41,0x4E,0x54};
  if(net_device_transmit(&state.netdev,probe,sizeof(probe)))serial_write("VANTAOS_VIRTIO_NET_TX_SELFTEST_OK\n");

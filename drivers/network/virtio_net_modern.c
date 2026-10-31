@@ -346,7 +346,7 @@ static void notify_queue(vnet_queue_t *q, uint16_t index)
 
 static int vnet_modern_transmit(net_device_t *device, const uint8_t *frame, size_t length)
 {
-    if (device != &state.netdev || !state.ready || !frame ||
+    if (device != &state.netdev || !frame ||
         length < NET_ETHERNET_HEADER_SIZE || length > NET_FRAME_MAX_SIZE ||
         length + virtio_header_size() > VNET_BUFFER_SIZE)
         return 0;
@@ -455,7 +455,9 @@ static int vnet_modern_poll(void)
 static void cleanup(void)
 {
     int reset_complete = state.common ? reset_device() : 1;
+    spinlock_lock(&state.tx_lock);
     state.ready = 0U;
+    spinlock_unlock(&state.tx_lock);
 #ifdef VANTAOS_SELF_TEST
     if (state.selftest_handler_registered) {
         (void)net_ethernet_handler_unregister(0x88B5U, vnet_modern_rx_selftest_handler, 0);
@@ -570,7 +572,9 @@ static net_pci_probe_result_t vnet_modern_probe(const struct pci_device *pci)
     wr8(state.common, 20U, VNET_STATUS_ACK | VNET_STATUS_DRIVER |
          VNET_STATUS_FEATURES_OK | VNET_STATUS_DRIVER_OK);
     if (!(rd8(state.common, 20U) & VNET_STATUS_DRIVER_OK)) goto fail;
+    spinlock_lock(&state.tx_lock);
     state.ready = 1U;
+    spinlock_unlock(&state.tx_lock);
     notify_queue(&state.rx, 0U);
 #ifdef VANTAOS_SELF_TEST
     uint8_t probe[18] = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,

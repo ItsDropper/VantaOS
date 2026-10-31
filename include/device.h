@@ -73,6 +73,8 @@ struct device
     uint8_t prog_if;
     uint8_t revision;
     void* bus_data;
+    /* Non-NULL when a subsystem owns the device's public lifecycle. */
+    const void* owner;
     const device_driver_t* driver;
     device_state_t state;
 };
@@ -91,6 +93,8 @@ struct device_driver
 /* Device and driver storage remain caller-owned until unregister succeeds. */
 int device_register(device_t* device);
 int device_unregister(device_t* device);
+/* Subsystem-owned devices can only be removed by their registered owner. */
+int device_unregister_owned(device_t* device, const void* owner);
 int device_acquire(device_t* device);
 void device_release(device_t* device);
 

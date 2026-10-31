@@ -24,10 +24,6 @@
 /*
  * Network composition root: initialize the core, register protocols and
  * drivers, then probe PCI only after all network drivers have registered.
- */
-/*
- * Network composition root: initialize the core, register protocols and
- * drivers, then probe PCI only after all network drivers have registered.
  *
  * Driver initialization mutates static state and may publish live DMA-backed
  * interfaces. Make this entry point one-shot so a repeated call cannot reset
@@ -70,16 +66,16 @@ void net_stack_initialize(void)
     if (!net_udp_initialize()) protocols_ok = 0;
     if (!net_tcp_initialize()) protocols_ok = 0;
     if (!protocols_ok)
-        serial_write("VANTAOS_NETWORK_PROTOCOL_REGISTER_FAIL\\n");
+        serial_write("VANTAOS_NETWORK_PROTOCOL_REGISTER_FAIL\n");
 
     if (!e1000_initialize())
-        serial_write("VANTAOS_E1000_DRIVER_REGISTER_FAIL\\n");
+        serial_write("VANTAOS_E1000_DRIVER_REGISTER_FAIL\n");
     if (!virtio_net_initialize())
-        serial_write("VANTAOS_VIRTIO_NET_DRIVER_REGISTER_FAIL\\n");
+        serial_write("VANTAOS_VIRTIO_NET_DRIVER_REGISTER_FAIL\n");
     if (!virtio_net_modern_initialize())
-        serial_write("VANTAOS_VIRTIO_NET_MODERN_DRIVER_REGISTER_FAIL\\n");
+        serial_write("VANTAOS_VIRTIO_NET_MODERN_DRIVER_REGISTER_FAIL\n");
     if (!rtl8139_initialize())
-        serial_write("VANTAOS_RTL8139_DRIVER_REGISTER_FAIL\\n");
+        serial_write("VANTAOS_RTL8139_DRIVER_REGISTER_FAIL\n");
 
     (void)net_probe_pci_devices();
 #ifdef VANTAOS_SELF_TEST

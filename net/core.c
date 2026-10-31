@@ -44,25 +44,96 @@ static int valid_name(const char* n) {
     for(uint32_t i=0;i<NET_DEVICE_NAME_MAX;i++)if(!n[i])return 1;
     return 0;
 }
-int net_device_register(net_device_t* d) {
-    if(!d||!valid_name(d->name)||!valid_mac(d->mac)||d->mtu<NET_MTU_MIN||
-       d->mtu>NET_MTU_DEFAULT||!d->ops||!d->ops->transmit)return 0;
-    uint64_t f=spinlock_lock_irqsave(&lock);
-    if(!initialized||find_locked(d)||device_count_used==NET_DEVICE_MAX){spinlock_unlock_irqrestore(&lock,f);return 0;}
-    devices[device_count_used].device=d;devices[device_count_used].stats=(net_device_stats_t){0};devices[device_count_used].rx_inflight=0;++device_count_used;
-    spinlock_unlock_irqrestore(&lock,f);return 1;
+static void prepare_net_core_device(net_device_t* network)
+{
+    uint32_t i = 0U;
+    while (i + 1U < DEVICE_NAME_MAX && network->name[i])
+    {
+        network->core.name[i] = network->name[i];
+        ++i;
+    }
+    network->core.name[i] = '\0';
+    network->core.bus = DEVICE_BUS_VIRTUAL;
+    network->core.parent = network->parent_device;
+    network->core.bus_data = network;
+    network->core.driver = NULL;
+    network->core.state = DEVICE_STATE_UNREGISTERED;
 }
-int net_device_unregister(net_device_t* d) {
-    if(!d)return 0;
-    uint64_t f=spinlock_lock_irqsave(&lock);uint32_t at=device_count_used;
-    for(uint32_t i=0;i<device_count_used;i++)if(devices[i].device==d){at=i;break;}
-    if(at==device_count_used||devices[at].rx_inflight){spinlock_unlock_irqrestore(&lock,f);return 0;}
-    for(uint32_t i=0,pos=rx_head;i<rx_used;i++,pos=(pos+1U)%NET_RX_QUEUE_CAPACITY)
-        if(rxq[pos].device==d){spinlock_unlock_irqrestore(&lock,f);return 0;}
-    for(uint32_t i=at;i+1U<device_count_used;i++)devices[i]=devices[i+1U];
-    --device_count_used;devices[device_count_used].device=0;devices[device_count_used].stats=(net_device_stats_t){0};devices[device_count_used].rx_inflight=0;
-    d->ipv4_address=0;d->ipv4_netmask=0;d->ipv4_gateway=0;d->ipv4_dns=0;d->ipv4_configured=0;
-    spinlock_unlock_irqrestore(&lock,f);return 1;
+
+int net_device_register(net_device_t* d)
+{
+    if (!d || !valid_name(d->name) || !valid_mac(d->mac) ||
+        d->mtu < NET_MTU_MIN || d->mtu > NET_MTU_DEFAULT ||
+        !d->ops || !d->ops->transmit ||
+        d->core.state != DEVICE_STATE_UNREGISTERED || d->core.driver)
+        return 0;
+
+    uint64_t flags = spinlock_lock_irqsave(&lock);
+    if (!initialized || find_locked(d) ||
+        device_count_used >= NET_DEVICE_MAX)
+    {
+        spinlock_unlock_irqrestore(&lock, flags);
+        return 0;
+    }
+
+    prepare_net_core_device(d);
+    if (!device_register(&d->core))
+    {
+        spinlock_unlock_irqrestore(&lock, flags);
+        return 0;
+    }
+    devices[device_count_used].device = d;
+    devices[device_count_used].stats = (net_device_stats_t){0};
+    devices[device_count_used].rx_inflight = 0U;
+    ++device_count_used;
+    spinlock_unlock_irqrestore(&lock, flags);
+    return 1;
+}
+int net_device_unregister(net_device_t* d)
+{
+    if (!d)
+        return 0;
+    uint64_t flags = spinlock_lock_irqsave(&lock);
+    uint32_t index = device_count_used;
+    for (uint32_t i = 0U; i < device_count_used; ++i)
+        if (devices[i].device == d)
+        {
+            index = i;
+            break;
+        }
+    if (index == device_count_used || devices[index].rx_inflight)
+    {
+        spinlock_unlock_irqrestore(&lock, flags);
+        return 0;
+    }
+    for (uint32_t i = 0U, position = rx_head; i < rx_used;
+         ++i, position = (position + 1U) % NET_RX_QUEUE_CAPACITY)
+    {
+        if (rxq[position].device == d)
+        {
+            spinlock_unlock_irqrestore(&lock, flags);
+            return 0;
+        }
+    }
+    if (!device_unregister(&d->core))
+    {
+        spinlock_unlock_irqrestore(&lock, flags);
+        return 0;
+    }
+
+    for (uint32_t i = index; i + 1U < device_count_used; ++i)
+        devices[i] = devices[i + 1U];
+    --device_count_used;
+    devices[device_count_used].device = NULL;
+    devices[device_count_used].stats = (net_device_stats_t){0};
+    devices[device_count_used].rx_inflight = 0U;
+    d->ipv4_address = 0U;
+    d->ipv4_netmask = 0U;
+    d->ipv4_gateway = 0U;
+    d->ipv4_dns = 0U;
+    d->ipv4_configured = 0U;
+    spinlock_unlock_irqrestore(&lock, flags);
+    return 1;
 }
 int net_device_set_link(net_device_t* d,int up) {
     uint64_t f=spinlock_lock_irqsave(&lock);if(!find_locked(d)){spinlock_unlock_irqrestore(&lock,f);return 0;}

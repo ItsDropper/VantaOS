@@ -53,6 +53,7 @@ int usb_device_register(uint32_t slot, uint32_t port, device_t* parent,
         return 0;
 
     usb_device_entry_t* entry = &entries[slot];
+    entry->interface_count = 0U;
     entry->core = (device_t){0};
     if (!make_name(entry->core.name, slot))
         return 0;

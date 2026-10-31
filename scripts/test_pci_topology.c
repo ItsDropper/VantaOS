@@ -191,6 +191,10 @@ int main(void)
     assert(device_find(DEVICE_BUS_PCI, "pci0000:03:04.0") ==
            &endpoint_device->core);
     assert(endpoint_device->core.bus_data == endpoint_device);
+    assert(endpoint_device->core.owner == endpoint_device);
+    assert(!device_unregister((device_t*)&endpoint_device->core));
+    assert(!device_unregister_owned((device_t*)&endpoint_device->core,
+                                    &root_device->core));
     assert(endpoint_device->core.parent == &downstream_device->core);
     assert(downstream_device->core.parent == &root_device->core);
     assert(root_device->core.parent == NULL);

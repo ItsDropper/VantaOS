@@ -348,7 +348,8 @@ int device_unbind(device_t* device)
     flags = spinlock_lock_irqsave(&device_lock);
     device_index = find_device_locked(device);
     if (device_index < 0 || device->state != DEVICE_STATE_BOUND ||
-        !device->driver || devices[device_index].references == UINT32_MAX)
+        !device->driver || !device->driver->remove ||
+        devices[device_index].references == UINT32_MAX)
     {
         spinlock_unlock_irqrestore(&device_lock, flags);
         return 0;
@@ -365,8 +366,7 @@ int device_unbind(device_t* device)
     device->state = DEVICE_STATE_REMOVING;
     spinlock_unlock_irqrestore(&device_lock, flags);
 
-    if (driver->remove)
-        driver->remove(device);
+    driver->remove(device);
 
     flags = spinlock_lock_irqsave(&device_lock);
     device_index = find_device_locked(device);

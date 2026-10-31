@@ -70,6 +70,9 @@ typedef struct
     process_state_t state;
     /* Scheduling weight: larger values receive longer round-robin quanta. */
     uint32_t priority;
+    /* Monotonic accounting, reset only when this PID slot is reused. */
+    uint64_t runtime_ticks;
+    uint64_t context_switches;
     /* Absolute PIT tick deadline; zero means not sleeping on a timer. */
     uint64_t sleep_deadline_ticks;
     process_wait_queue_t* wait_queue;
@@ -120,6 +123,11 @@ int process_create_kernel_on_cpu(const char* name, uint32_t parent_pid,
 int process_set_affinity(uint32_t pid, uint32_t cpu_id);
 int process_set_priority(uint32_t pid, uint32_t priority);
 int process_get_priority(uint32_t pid, uint32_t* priority_out);
+/* Read scheduler accounting from one lock-consistent process snapshot. */
+int process_get_runtime_stats(uint32_t pid, uint64_t* runtime_ticks_out,
+                              uint64_t* context_switches_out);
+/* Account one timer tick for the currently executing process. */
+void process_account_runtime_tick(uint32_t pid);
 int process_create_idle_for_cpu(uint32_t cpu_id, const char* name,
                                 process_entry_t entry);
 int process_attach_current(const char* name, uint32_t parent_pid);

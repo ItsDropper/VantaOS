@@ -69,9 +69,9 @@ int main(void)
     assert(storage_driver_bound_name(&test_pci) != NULL);
     assert(storage_driver_bound_name(&test_pci)[0] == 't');
 
-    assert(device_unbind(&test_pci.core));
-    assert(test_pci.core.state == DEVICE_STATE_REGISTERED);
-    assert(storage_driver_bound_name(&test_pci) == NULL);
-    assert(device_unregister(&test_pci.core));
+    /* Storage hardware has no safe teardown path yet; refuse unbind. */
+    assert(!device_unbind(&test_pci.core));
+    assert(test_pci.core.state == DEVICE_STATE_BOUND);
+    assert(storage_driver_bound_name(&test_pci) != NULL);
     return 0;
 }

@@ -96,7 +96,7 @@ static void vnet_rx_selftest_handler(net_device_t*d,const uint8_t*f,size_t n,
 }
 #endif
 static int vnet_transmit(net_device_t*d,const uint8_t*f,size_t n){
- if(d!=&state.netdev||!state.ready||state.tx_failed||!state.tx.size||!f||
+ if(d!=&state.netdev||!state.ready||!state.tx.size||!f||
     n<NET_ETHERNET_HEADER_SIZE||n>NET_FRAME_MAX_SIZE||
     n+VNET_NET_HDR_SIZE>VNET_BUFFER_SIZE)return 0;
  spinlock_lock(&state.tx_lock);

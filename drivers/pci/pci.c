@@ -179,8 +179,7 @@ static uint32_t pci_read_device_config_locked(
     if (device->segment_group != 0U)
         return 0xFFFFFFFFU;
 #endif
-    return pci_read_config_locked(device->bus, device->slot,
-                                  device->function, offset);
+    return pci_read_device_config_locked(device, offset);
 }
 
 /* Caller holds pci_config_lock. */
@@ -495,13 +494,11 @@ int pci_get_bar_size(const struct pci_device* device, uint8_t index,
         return 0;
 
     flags = pci_lock_config();
-    command_status = pci_read_config_locked(
-        device->bus, device->slot, device->function, 0x04U);
+    command_status = pci_read_device_config_locked(device, 0x04U);
     if ((command_status & 0x0007U) != 0U)
         goto done;
 
-    header_type = (uint8_t)((pci_read_config_locked(
-        device->bus, device->slot, device->function, 0x0CU) >> 16) & 0x7FU);
+    header_type = (uint8_t)((pci_read_device_config_locked(device, 0x0CU) >> 16) & 0x7FU);
     if (header_type == 0U)
         bar_count = 6U;
     else if (header_type == 1U)
@@ -514,9 +511,7 @@ int pci_get_bar_size(const struct pci_device* device, uint8_t index,
     /* Refuse an index that is the upper half of an earlier 64-bit BAR. */
     for (uint8_t prior = 0; prior < index; ++prior)
     {
-        uint32_t prior_low = pci_read_config_locked(
-            device->bus, device->slot, device->function,
-            (uint8_t)(0x10U + prior * 4U));
+        uint32_t prior_low = pci_read_device_config_locked(device, (uint8_t)(0x10U + prior * 4U));
         if (prior_low != 0U && prior_low != 0xFFFFFFFFU &&
             !(prior_low & 1U) && ((prior_low >> 1) & 0x03U) == 0x02U)
         {
@@ -527,8 +522,7 @@ int pci_get_bar_size(const struct pci_device* device, uint8_t index,
     }
 
     offset = (uint8_t)(0x10U + index * 4U);
-    low = pci_read_config_locked(
-        device->bus, device->slot, device->function, offset);
+    low = pci_read_device_config_locked(device, offset);
     if (low == 0U || low == 0xFFFFFFFFU)
         goto done;
 
@@ -545,9 +539,7 @@ int pci_get_bar_size(const struct pci_device* device, uint8_t index,
         {
             if ((uint8_t)(index + 1U) >= bar_count)
                 goto done;
-            high = pci_read_config_locked(
-                device->bus, device->slot, device->function,
-                (uint8_t)(offset + 4U));
+            high = pci_read_device_config_locked(device, (uint8_t)(offset + 4U));
         }
         base = ((uint64_t)high << 32) |
                (uint64_t)(low & 0xFFFFFFF0U);
@@ -555,31 +547,21 @@ int pci_get_bar_size(const struct pci_device* device, uint8_t index,
     /* A zero base is valid while sizing an implemented but unassigned BAR. */
 
     /* Probe mask while decode and DMA are disabled; always restore original. */
-    pci_write_config_locked(device->bus, device->slot, device->function,
-                            offset, 0xFFFFFFFFU);
+    pci_write_device_config_locked(device, offset, 0xFFFFFFFFU);
     if (is_64bit)
-        pci_write_config_locked(device->bus, device->slot, device->function,
-                                (uint8_t)(offset + 4U), 0xFFFFFFFFU);
+        pci_write_device_config_locked(device, (uint8_t)(offset + 4U), 0xFFFFFFFFU);
     touched = 1;
-    mask_low = pci_read_config_locked(
-        device->bus, device->slot, device->function, offset);
+    mask_low = pci_read_device_config_locked(device, offset);
     if (is_64bit)
-        mask_high = pci_read_config_locked(
-            device->bus, device->slot, device->function,
-            (uint8_t)(offset + 4U));
+        mask_high = pci_read_device_config_locked(device, (uint8_t)(offset + 4U));
 
     /* Restore upper half before low half so the original 64-bit BAR is whole. */
     if (is_64bit)
-        pci_write_config_locked(device->bus, device->slot, device->function,
-                                (uint8_t)(offset + 4U), high);
-    pci_write_config_locked(device->bus, device->slot, device->function,
-                            offset, low);
-    restored_low = pci_read_config_locked(
-        device->bus, device->slot, device->function, offset);
+        pci_write_device_config_locked(device, (uint8_t)(offset + 4U), high);
+    pci_write_device_config_locked(device, offset, low);
+    restored_low = pci_read_device_config_locked(device, offset);
     if (is_64bit)
-        restored_high = pci_read_config_locked(
-            device->bus, device->slot, device->function,
-            (uint8_t)(offset + 4U));
+        restored_high = pci_read_device_config_locked(device, (uint8_t)(offset + 4U));
     touched = 0;
     if (restored_low != low || (is_64bit && restored_high != high)) {
         touched = 1;
@@ -620,10 +602,8 @@ done:
     if (touched)
     {
         if (is_64bit)
-            pci_write_config_locked(device->bus, device->slot, device->function,
-                                    (uint8_t)(0x10U + (index + 1U) * 4U), high);
-        pci_write_config_locked(device->bus, device->slot, device->function,
-                                (uint8_t)(0x10U + index * 4U), low);
+            pci_write_device_config_locked(device, (uint8_t)(0x10U + (index + 1U) * 4U), high);
+        pci_write_device_config_locked(device, (uint8_t)(0x10U + index * 4U), low);
     }
     pci_unlock_config(flags);
     return valid;
@@ -632,13 +612,13 @@ done:
 int pci_enable_io_space(const struct pci_device* device)
 {
     if (!device) return 0;
-    uint32_t command_status = pci_read_config(device->bus, device->slot, device->function, 0x04);
+    uint32_t command_status = pci_read_device_config(device, 0x04);
     uint16_t command = (uint16_t)command_status;
     if (command & 1U) return 1;
     command |= 1U;
-    pci_write_config(device->bus, device->slot, device->function, 0x04,
+    pci_write_device_config_locked(device, 0x04,
                      (uint32_t)command);
-    return (pci_read_config(device->bus, device->slot, device->function, 0x04) & 1U) != 0;
+    return (pci_read_device_config(device, 0x04) & 1U) != 0;
 }
 
 #ifdef PCI_TEST
@@ -880,25 +860,25 @@ fail_early:
 int pci_enable_memory_space(const struct pci_device* device)
 {
     if (!device) return 0;
-    uint32_t command_status = pci_read_config(device->bus, device->slot, device->function, 0x04);
+    uint32_t command_status = pci_read_device_config(device, 0x04);
     uint16_t command = (uint16_t)command_status;
     if (command & (1U << 1)) return 1;
     command |= (1U << 1);
-    pci_write_config(device->bus, device->slot, device->function, 0x04,
+    pci_write_device_config_locked(device, 0x04,
                      (uint32_t)command);
-    return (pci_read_config(device->bus, device->slot, device->function, 0x04) & (1U << 1)) != 0;
+    return (pci_read_device_config(device, 0x04) & (1U << 1)) != 0;
 }
 
 int pci_enable_bus_mastering(const struct pci_device* device)
 {
     if (!device) return 0;
-    uint32_t command_status = pci_read_config(device->bus, device->slot, device->function, 0x04);
+    uint32_t command_status = pci_read_device_config(device, 0x04);
     uint16_t command = (uint16_t)command_status;
     if (command & (1U << 2)) return 1;
     command |= (1U << 2);
-    pci_write_config(device->bus, device->slot, device->function, 0x04,
+    pci_write_device_config_locked(device, 0x04,
                      (uint32_t)command);
-    return (pci_read_config(device->bus, device->slot, device->function, 0x04) & (1U << 2)) != 0;
+    return (pci_read_device_config(device, 0x04) & (1U << 2)) != 0;
 }
 
 int pci_find_class(uint8_t class_code, uint8_t subclass, int prog_if,

@@ -784,7 +784,7 @@ jobs:
             -device VGA,id=video0 \
             -m 256M \
             -device virtio-net-pci,disable-modern=on,netdev=net0 \
-            -netdev user,id=net0 \
+            -netdev socket,id=net0,listen=127.0.0.1:1236 \
             -drive file=VantaOS.iso,media=cdrom,format=raw \
             -drive file=virtio-network.img,if=ide,format=raw \
             -boot order=d \
@@ -813,6 +813,22 @@ jobs:
           grep -q 'VANTAOS_BOOT_OK' "$log"
           grep -q 'VANTAOS_VIRTIO_NET_INITIALIZED' "$log"
           grep -q 'VANTAOS_VIRTIO_NET_TX_SELFTEST_OK' "$log"
+          VANTAOS_TEST_PORT=1236 python3 scripts/test_e1000_network.py || {
+            cat "$log" qemu-virtio-stderr.log
+            exit 1
+          }
+          for attempt in $(seq 1 100); do
+            grep -q 'VANTAOS_VIRTIO_NET_RX_SELFTEST_OK' "$log" && break
+            sleep 0.1
+          done
+          for marker in VANTAOS_VIRTIO_NET_RX_SELFTEST_OK VANTAOS_ARP_REPLY_OK VANTAOS_ICMP_ECHO_REPLY_OK VANTAOS_UDP_RX_SELFTEST_OK; do
+            if ! grep -q "$marker" "$log"; then
+              echo "Missing legacy VirtIO receive/network marker: $marker"
+              cat "$log" qemu-virtio-stderr.log
+              exit 1
+            fi
+          done
+          test "$(grep -c 'VANTAOS_VIRTIO_NET_RX_SELFTEST_OK' "$log")" -eq 1
 
       - name: USB HID xHCI input end-to-end test
         if: steps.scope.outputs.full == '1' || steps.scope.outputs.usb == '1'

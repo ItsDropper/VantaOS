@@ -98,6 +98,11 @@ int main(void)
     assert(device.online == 1U);
     assert(device.active_operations == 0U);
     assert(block_device_count() == 1U);
+    assert(device_count() == 1U);
+    assert(device.core.state == DEVICE_STATE_REGISTERED);
+    assert(device.core.bus == DEVICE_BUS_VIRTUAL);
+    assert(device.core.bus_data == &device);
+    assert(device_find(DEVICE_BUS_VIRTUAL, "unit-disk") == &device.core);
     assert(block_device_find("unit-disk") == &device);
     assert(block_device_get(0U) == &device);
     assert(block_device_get(1U) == 0);
@@ -127,6 +132,8 @@ int main(void)
 
     assert(block_device_unregister(&device) == BLOCK_STATUS_OK);
     assert(block_device_count() == 0U);
+    assert(device_count() == 0U);
+    assert(device.core.state == DEVICE_STATE_UNREGISTERED);
     assert(block_device_find("unit-disk") == 0);
     assert(block_device_read(&device, 0U, 1U, output) == BLOCK_STATUS_NOT_READY);
     assert(block_device_unregister(&device) == BLOCK_STATUS_NOT_READY);
@@ -149,6 +156,8 @@ int main(void)
     device.sector_count = 1U;
     assert(block_device_register_disk(&device) == BLOCK_STATUS_OK);
     assert(strcmp(device.name, "disk0") == 0);
+    assert(strcmp(device.core.name, "disk0") == 0);
+    assert(device.core.bus == DEVICE_BUS_VIRTUAL);
     assert(device.online == 1U);
     assert(block_device_unregister(&device) == BLOCK_STATUS_OK);
 

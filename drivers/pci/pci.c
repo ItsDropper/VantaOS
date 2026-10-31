@@ -38,6 +38,9 @@ uint32_t pci_test_inl(uint16_t port);
 int pci_test_ecam_read32(uint16_t segment, uint8_t bus, uint8_t slot,
                          uint8_t function, uint16_t offset,
                          uint32_t* value);
+int pci_test_ecam_write32(uint16_t segment, uint8_t bus, uint8_t slot,
+                          uint8_t function, uint16_t offset,
+                          uint32_t value);
 
 static inline void outl(uint16_t port, uint32_t value)
 {
@@ -185,7 +188,14 @@ static uint32_t pci_read_device_config_locked(
     }
 #else
     if (device->segment_group != 0U)
-        return 0xFFFFFFFFU;
+    {
+        uint32_t value = 0xFFFFFFFFU;
+        if (!pci_test_ecam_read32(device->segment_group, device->bus,
+                                  device->slot, device->function,
+                                  offset, &value))
+            return 0xFFFFFFFFU;
+        return value;
+    }
 #endif
     return pci_read_config_locked(device->bus, device->slot,
                                   device->function, offset);
@@ -208,7 +218,9 @@ static int pci_write_device_config_locked(
     }
 #else
     if (device->segment_group != 0U)
-        return 0;
+        return pci_test_ecam_write32(device->segment_group, device->bus,
+                                     device->slot, device->function,
+                                     offset, value);
 #endif
     pci_write_config_locked(device->bus, device->slot,
                             device->function, offset, value);
@@ -232,7 +244,19 @@ static int pci_write_device_config16_locked(
     }
 #else
     if (device->segment_group != 0U)
-        return 0;
+    {
+        uint32_t current = 0xFFFFFFFFU;
+        uint32_t shift = (uint32_t)(offset & 2U) * 8U;
+        if (!pci_test_ecam_read32(device->segment_group, device->bus,
+                                  device->slot, device->function,
+                                  (uint16_t)(offset & 0xFCU), &current))
+            return 0;
+        current = (current & ~(0xFFFFU << shift)) |
+                  ((uint32_t)value << shift);
+        return pci_test_ecam_write32(device->segment_group, device->bus,
+                                     device->slot, device->function,
+                                     (uint16_t)(offset & 0xFCU), current);
+    }
 #endif
     outl(PCI_CONFIG_ADDRESS,
          pci_config_address(device->bus, device->slot,

@@ -16,6 +16,7 @@ typedef struct
     const net_pci_driver_t* network;
     device_id_t ids[NET_PCI_ID_MAX];
     device_driver_t generic;
+    uint32_t active_polls;
 } net_driver_adapter_t;
 
 typedef struct
@@ -207,18 +208,46 @@ const char* net_pci_bound_driver(const struct pci_device* device)
 
 size_t net_pci_poll_devices(void)
 {
-    const net_pci_driver_t* snapshot[NET_PCI_BINDING_MAX];
+    net_driver_adapter_t* snapshot[NET_PCI_DRIVER_MAX];
     uint32_t count = 0U;
     uint64_t flags = spinlock_lock_irqsave(&driver_lock);
+
+    /*
+     * A network driver's poll callback operates on driver-owned state, not on
+     * a per-binding object. Run it at most once per adapter and never overlap
+     * it with another CPU or a recursive net_poll() invocation.
+     */
     for (uint32_t i = 0U; i < binding_count; ++i)
-        if (bindings[i].driver->poll)
-            snapshot[count++] = bindings[i].driver;
+    {
+        net_driver_adapter_t* adapter = NULL;
+        for (uint32_t j = 0U; j < adapter_count; ++j)
+        {
+            if (adapters[j].network == bindings[i].driver)
+            {
+                adapter = &adapters[j];
+                break;
+            }
+        }
+        if (!adapter || !adapter->network->poll ||
+            adapter->active_polls != 0U)
+            continue;
+
+        adapter->active_polls = 1U;
+        snapshot[count++] = adapter;
+    }
     spinlock_unlock_irqrestore(&driver_lock, flags);
 
     size_t work = 0U;
     for (uint32_t i = 0U; i < count; ++i)
     {
-        int result = snapshot[i]->poll();
+        net_driver_adapter_t* adapter = snapshot[i];
+        int result = adapter->network->poll();
+
+        flags = spinlock_lock_irqsave(&driver_lock);
+        if (adapter->active_polls != 0U)
+            --adapter->active_polls;
+        spinlock_unlock_irqrestore(&driver_lock, flags);
+
         if (result > 0)
             work += (size_t)result;
     }

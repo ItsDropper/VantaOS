@@ -21,6 +21,7 @@ static void gpu_dma_clear(gpu_dma_buffer_t *buffer)
     buffer->allocated_size = 0U;
     buffer->page_count = 0U;
     buffer->allocation_id = 0U;
+    buffer->address_bits = 0U;
     buffer->acquired = 0U;
 }
 
@@ -35,15 +36,19 @@ int gpu_dma_buffer_is_valid(const gpu_dma_buffer_t *buffer)
         buffer->gpu_address != buffer->pages[0].physical_address ||
         buffer->cpu_address != buffer->pages[0].virtual_address ||
         buffer->allocation_id == 0U ||
+        (buffer->address_bits != 32U && buffer->address_bits != 64U) ||
         buffer->gpu_address > UINT64_MAX - (buffer->allocated_size - 1U) ||
         (uintptr_t)buffer->cpu_address >
             UINTPTR_MAX - (buffer->allocated_size - 1U))
         return 0;
 
+    const dma_device_t dma_device = {
+        .dma_mask = buffer->address_bits == 32U ? UINT32_MAX : UINT64_MAX
+    };
     for (size_t i = 0U; i < buffer->page_count; ++i) {
         const dma_page_t *page = &buffer->pages[i];
         uintptr_t virtual_address;
-        if (!dma_page_is_valid(page) ||
+        if (!dma_page_is_valid_for_device(&dma_device, page) ||
             (page->physical_address & (GPU_DMA_PAGE_SIZE - 1U)) != 0U ||
             ((uintptr_t)page->virtual_address &
              (GPU_DMA_PAGE_SIZE - 1U)) != 0U)
@@ -98,7 +103,11 @@ gpu_dma_status_t gpu_dma_alloc(size_t size, unsigned address_bits,
         return GPU_DMA_ALLOCATION_FAILED;
     }
     memset(out_buffer->pages, 0, page_count * sizeof(dma_page_t));
-    if (!dma_alloc_contiguous(out_buffer->pages, page_count)) {
+    const dma_device_t dma_device = {
+        .dma_mask = address_bits == 32U ? UINT32_MAX : UINT64_MAX
+    };
+    if (!dma_alloc_contiguous_for_device(&dma_device,
+                                         out_buffer->pages, page_count)) {
         kfree(out_buffer->pages);
         gpu_dma_clear(out_buffer);
         return GPU_DMA_ALLOCATION_FAILED;
@@ -106,7 +115,7 @@ gpu_dma_status_t gpu_dma_alloc(size_t size, unsigned address_bits,
 
     for (size_t i = 0U; i < page_count; ++i) {
         const dma_page_t *page = &out_buffer->pages[i];
-        if (!dma_page_is_valid(page)) {
+        if (!dma_page_is_valid_for_device(&dma_device, page)) {
             dma_free_contiguous(out_buffer->pages, page_count);
             kfree(out_buffer->pages);
             gpu_dma_clear(out_buffer);
@@ -131,6 +140,7 @@ gpu_dma_status_t gpu_dma_alloc(size_t size, unsigned address_bits,
     out_buffer->size = size;
     out_buffer->allocated_size = allocated_size;
     out_buffer->page_count = page_count;
+    out_buffer->address_bits = (uint8_t)address_bits;
 
     if (out_buffer->gpu_address >
             UINT64_MAX - ((uint64_t)allocated_size - 1U) ||

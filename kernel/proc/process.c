@@ -101,6 +101,7 @@ void process_reset_record(process_t* process)
     process->parent_pid = 0;
     process->owner_cpu = PROCESS_CPU_UNOWNED;
     process->state = PROCESS_UNUSED;
+    process->priority = PROCESS_PRIORITY_NORMAL;
     process->sleep_deadline_ticks = 0U;
     process->wait_queue = NULL;
     process->exit_status = 0;
@@ -356,6 +357,8 @@ static int process_create_kernel_affinity(const char* name,
         }
 
         process->affinity_cpu = affinity_cpu;
+        if (idle_local)
+            process->priority = PROCESS_PRIORITY_IDLE;
         process->kernel_stack = process_stack_storage[pid];
         process->entry = entry;
         uintptr_t stack_top =

@@ -9,6 +9,7 @@
 #define BLOCK_DEVICE_H
 #include <stdint.h>
 #include <stddef.h>
+#include "device.h"
 #define BLOCK_DEVICE_NAME_MAX 32U
 #define BLOCK_DEVICE_MAX 64U
 #define BLOCK_DEVICE_READ_ONLY (1U << 0)
@@ -39,6 +40,9 @@ struct block_device {
  volatile uint32_t active_operations;
  const block_device_ops_t* ops;
  void* driver_data;
+ /* Generic topology parent, e.g. the PCI controller or whole-disk device. */
+ device_t* parent_device;
+ device_t core;
  uint8_t partition_scheme;
  uint8_t partition_type;
  uint8_t partition_type_guid[16];

@@ -286,5 +286,5 @@ void scheduler_request_reschedule(void)
 
     /* Legacy single-CPU path has no per-CPU pending flag. */
     __atomic_store_n(&fallback_quantum_ticks,
-                     SCHEDULER_QUANTUM_TICKS - 1U, __ATOMIC_RELEASE);
+                     SCHEDULER_QUANTUM_BASE_TICKS - 1U, __ATOMIC_RELEASE);
 }

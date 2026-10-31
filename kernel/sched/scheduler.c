@@ -18,7 +18,8 @@
 extern unsigned char stack_bottom;
 extern unsigned char stack_top;
 
-#define SCHEDULER_QUANTUM_TICKS 5U
+#define SCHEDULER_QUANTUM_BASE_TICKS 3U
+#define SCHEDULER_QUANTUM_PRIORITY_STEP 2U
 
 static int initialized;
 static uint32_t fallback_quantum_ticks;
@@ -253,7 +254,13 @@ uint64_t scheduler_tick(uint64_t current_stack)
         requested = 1;
 
     volatile uint32_t* quantum_ticks = scheduler_quantum_slot();
-    if (!requested && ++(*quantum_ticks) < SCHEDULER_QUANTUM_TICKS)
+    uint32_t priority = PROCESS_PRIORITY_NORMAL;
+    if (current.state == PROCESS_RUNNING &&
+        current.priority <= PROCESS_PRIORITY_MAX)
+        priority = current.priority;
+    uint32_t quantum_limit = SCHEDULER_QUANTUM_BASE_TICKS +
+        priority * SCHEDULER_QUANTUM_PRIORITY_STEP;
+    if (!requested && ++(*quantum_ticks) < quantum_limit)
         return current_stack;
     *quantum_ticks = 0;
 

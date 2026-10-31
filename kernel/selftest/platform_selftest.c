@@ -81,8 +81,8 @@ static void kernel_mapping_probe(void)
         pmm_free_block(replacement_frame);
 
     serial_write(ok ?
-        "VANTAOS_KERNEL_MAPPING_GUARDS_OK\\n" :
-        "VANTAOS_KERNEL_MAPPING_GUARDS_FAIL\\n");
+        "VANTAOS_KERNEL_MAPPING_GUARDS_OK\n" :
+        "VANTAOS_KERNEL_MAPPING_GUARDS_FAIL\n");
 }
 
 static void unpublished_image_cleanup_probe(void)

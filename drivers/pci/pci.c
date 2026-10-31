@@ -252,6 +252,13 @@ static uint32_t pci_read_config(
     return value;
 }
 
+/* Legacy configuration helpers are also used when no ECAM range exists. */
+static uint32_t pci_read_config_locked(
+    uint8_t bus, uint8_t slot, uint8_t function, uint8_t offset);
+static void pci_write_config_locked(
+    uint8_t bus, uint8_t slot, uint8_t function, uint8_t offset,
+    uint32_t value);
+
 /* These helpers require pci_config_lock to be held by the caller. */
 static uint32_t pci_read_config_locked(
     uint8_t bus, uint8_t slot, uint8_t function, uint8_t offset)
@@ -1093,16 +1100,30 @@ int pci_write_config16(const struct pci_device *device, uint8_t offset,
                        uint16_t value)
 {
     uint64_t flags;
+    uint32_t current;
+    uint32_t updated;
     uint16_t actual;
-    if (device == 0 || offset > 254U)
+    uint8_t aligned;
+
+    if (!device || offset > 254U)
         return 0;
+    aligned = (uint8_t)(offset & 0xFCU);
     flags = pci_lock_config();
-    outl(PCI_CONFIG_ADDRESS,
-         pci_config_address(device->bus, device->slot, device->function, offset));
-    outw((uint16_t)(PCI_CONFIG_DATA + (offset & 2U)), value);
-    actual = (uint16_t)(pci_read_config_locked(
-        device->bus, device->slot, device->function, offset) >>
-        ((offset & 2U) * 8U));
+    current = pci_read_device_config_locked(device, aligned);
+    if (current == 0xFFFFFFFFU)
+    {
+        pci_unlock_config(flags);
+        return 0;
+    }
+    updated = (current & ~(0xFFFFU << ((offset & 2U) * 8U))) |
+              ((uint32_t)value << ((offset & 2U) * 8U));
+    if (!pci_write_device_config_locked(device, aligned, updated))
+    {
+        pci_unlock_config(flags);
+        return 0;
+    }
+    actual = (uint16_t)(pci_read_device_config_locked(device, aligned) >>
+                        ((offset & 2U) * 8U));
     pci_unlock_config(flags);
     return actual == value;
 }
@@ -1112,35 +1133,43 @@ int pci_write_config32(const struct pci_device *device, uint8_t offset,
 {
     uint64_t flags;
     uint32_t actual;
-    if (device == 0 || offset > 252U || (offset & 3U) != 0U)
+
+    if (!device || offset > 252U || (offset & 3U) != 0U)
         return 0;
     flags = pci_lock_config();
-    pci_write_config_locked(device->bus, device->slot, device->function,
-                            offset, value);
-    actual = pci_read_config_locked(device->bus, device->slot,
-                                    device->function, offset);
+    if (!pci_write_device_config_locked(device, offset, value))
+    {
+        pci_unlock_config(flags);
+        return 0;
+    }
+    actual = pci_read_device_config_locked(device, offset);
     pci_unlock_config(flags);
     return actual == value;
 }
 
 uint32_t pci_read_config32(const struct pci_device *device, uint8_t offset)
 {
-    if (!device || offset > 252U) return 0xFFFFFFFFU;
-    return pci_read_config(device->bus, device->slot, device->function, offset);
+    if (!device || offset > 252U || (offset & 3U) != 0U)
+        return 0xFFFFFFFFU;
+    return pci_read_device_config(device, offset);
 }
+
 uint8_t pci_read_config8(const struct pci_device *device, uint8_t offset)
 {
-    if (!device) return 0xFFU;
-    uint32_t value = pci_read_config(device->bus, device->slot, device->function,
-                                     (uint8_t)(offset & 0xFCU));
+    uint32_t value;
+    if (!device)
+        return 0xFFU;
+    value = pci_read_device_config(device, (uint8_t)(offset & 0xFCU));
     return (uint8_t)(value >> ((offset & 3U) * 8U));
 }
+
 uint16_t pci_read_config16(const struct pci_device *device, uint8_t offset)
 {
-    if (!device || offset > 254U) return 0xFFFFU;
-    uint16_t lo = pci_read_config8(device, offset);
-    uint16_t hi = pci_read_config8(device, (uint8_t)(offset + 1U));
-    return (uint16_t)(lo | (uint16_t)(hi << 8));
+    uint32_t value;
+    if (!device || offset > 254U)
+        return 0xFFFFU;
+    value = pci_read_device_config(device, (uint8_t)(offset & 0xFCU));
+    return (uint16_t)(value >> ((offset & 2U) * 8U));
 }
 
 /* Find one conventional PCI capability without writing config space. */

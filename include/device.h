@@ -96,6 +96,8 @@ int device_unregister(device_t* device);
 /* Subsystem-owned devices can only be removed by their registered owner. */
 int device_unregister_owned(device_t* device, const void* owner);
 int device_acquire(device_t* device);
+/* Acquires only a device that is currently bound to a driver. */
+int device_acquire_bound(device_t* device);
 void device_release(device_t* device);
 
 int device_driver_register(const device_driver_t* driver);

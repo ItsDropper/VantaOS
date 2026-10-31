@@ -268,12 +268,16 @@ device_bind_result_t device_bind(device_t* device,
     driver_index = find_driver_locked(driver);
     if (device_index < 0 || driver_index < 0 ||
         device->state != DEVICE_STATE_REGISTERED ||
-        device->bus != driver->bus ||
         devices[device_index].references == UINT32_MAX ||
         drivers[driver_index].active_probes == UINT32_MAX)
     {
         spinlock_unlock_irqrestore(&device_lock, flags);
         return DEVICE_BIND_INVALID;
+    }
+    if (device->bus != driver->bus)
+    {
+        spinlock_unlock_irqrestore(&device_lock, flags);
+        return DEVICE_BIND_NO_MATCH;
     }
 
     ++devices[device_index].references;
@@ -383,7 +387,8 @@ uint32_t device_probe_all(void)
             break;
         }
         device = devices[device_index].device;
-        if (devices[device_index].references == UINT32_MAX)
+        if (device->state != DEVICE_STATE_REGISTERED ||
+            devices[device_index].references == UINT32_MAX)
         {
             spinlock_unlock_irqrestore(&device_lock, flags);
             continue;

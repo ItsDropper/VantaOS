@@ -510,6 +510,56 @@ uint32_t process_wait_queue_wake_all(process_wait_queue_t* queue)
     return count;
 }
 
+/*
+ * Priority changes affect the next scheduler quantum. Scheduling remains
+ * round-robin across runnable tasks; priority changes the length of each
+ * task's slice rather than permanently starving lower-priority work.
+ */
+int process_set_priority(uint32_t pid, uint32_t priority)
+{
+    if (!process_initialized_state || pid == 0U || pid >= PROCESS_MAX ||
+        priority > PROCESS_PRIORITY_MAX)
+        return 0;
+
+    uint64_t flags = process_table_lock_acquire();
+    process_t* process = &process_table_records[pid];
+    if (process->state == PROCESS_UNUSED ||
+        process->state == PROCESS_TERMINATED ||
+        process->state == PROCESS_ZOMBIE ||
+        process->state == PROCESS_REAPING ||
+        process_is_idle_locked(pid))
+    {
+        process_table_lock_release(flags);
+        return 0;
+    }
+
+    process->priority = priority;
+    uint32_t owner_cpu = process->owner_cpu;
+    process_table_lock_release(flags);
+
+    if (owner_cpu < CPU_LOCAL_MAX)
+        process_request_cpu_reschedule(owner_cpu);
+    return 1;
+}
+
+int process_get_priority(uint32_t pid, uint32_t* priority_out)
+{
+    if (!process_initialized_state || pid == 0U || pid >= PROCESS_MAX ||
+        !priority_out)
+        return 0;
+
+    uint64_t flags = process_table_lock_acquire();
+    const process_t* process = &process_table_records[pid];
+    int valid = process->state != PROCESS_UNUSED &&
+                process->state != PROCESS_TERMINATED &&
+                process->state != PROCESS_ZOMBIE &&
+                process->state != PROCESS_REAPING;
+    if (valid)
+        *priority_out = process->priority;
+    process_table_lock_release(flags);
+    return valid;
+}
+
 int process_set_affinity(uint32_t pid, uint32_t cpu_id)
 {
     if (!process_initialized_state || pid == 0U || pid >= PROCESS_MAX ||

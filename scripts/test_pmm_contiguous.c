@@ -106,5 +106,29 @@ int main(void)
     for (uint32_t i = 0U; i < 4U; ++i)
         pmm_free_block((void *)((uintptr_t)run + (uintptr_t)i * PAGE_SIZE));
     assert(pmm_get_free_blocks() == free_before);
+
+    /* Address-limited single-page allocations must not cross the ceiling. */
+    void* limited_a = pmm_alloc_block_below(0x104000ULL);
+    void* limited_b = pmm_alloc_block_below(0x104000ULL);
+    assert(limited_a == (void*)(uintptr_t)0x101000ULL);
+    assert(limited_b == (void*)(uintptr_t)0x102000ULL);
+    assert((uintptr_t)limited_a + PAGE_SIZE <= 0x104000ULL);
+    assert((uintptr_t)limited_b + PAGE_SIZE <= 0x104000ULL);
+    assert(pmm_alloc_block_below(0x101000ULL) == 0);
+    pmm_free_block(limited_a);
+    pmm_free_block(limited_b);
+    assert(pmm_get_free_blocks() == free_before);
+
+    /* Contiguous allocations obey the same complete-range ceiling. */
+    run = 0;
+    assert(pmm_alloc_contiguous_blocks_below(2U, 0x104000ULL, &run));
+    assert(run == (void*)(uintptr_t)0x101000ULL);
+    assert((uintptr_t)run + 2U * PAGE_SIZE <= 0x104000ULL);
+    pmm_free_block(run);
+    pmm_free_block((void*)((uintptr_t)run + PAGE_SIZE));
+    run = (void*)(uintptr_t)1U;
+    assert(!pmm_alloc_contiguous_blocks_below(3U, 0x104000ULL, &run));
+    assert(run == 0);
+    assert(pmm_get_free_blocks() == free_before);
     return 0;
 }

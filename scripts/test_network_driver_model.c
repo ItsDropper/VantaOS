@@ -23,6 +23,8 @@ static net_pci_probe_result_t test_probe(const struct pci_device* pci)
 static int test_poll(void)
 {
     ++poll_count;
+    /* Recursive polling must skip this driver's active callback. */
+    assert(net_pci_poll_devices() == 0U);
     return 3;
 }
 

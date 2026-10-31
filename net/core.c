@@ -7,7 +7,7 @@
 
 #include "net.h"
 #include "spinlock.h"
-typedef struct { net_device_t* device; net_device_stats_t stats; uint32_t rx_inflight; } device_slot_t;
+typedef struct { net_device_t* device; net_device_stats_t stats; uint32_t rx_inflight; uint32_t tx_inflight; } device_slot_t;
 typedef struct { net_device_t* device; uint16_t length; uint8_t frame[NET_FRAME_MAX_SIZE]; } rx_entry_t;
 typedef struct { uint16_t type; net_ethernet_handler_fn fn; void* context; } eth_handler_t;
 static device_slot_t devices[NET_DEVICE_MAX];
@@ -30,8 +30,20 @@ static int frame_length_valid(const uint8_t* frame,size_t len,uint16_t mtu) {
 }
 void net_initialize(void) {
     uint64_t f=spinlock_lock_irqsave(&lock);
-    for(uint32_t i=0;i<NET_DEVICE_MAX;i++){devices[i].device=0;devices[i].stats=(net_device_stats_t){0};devices[i].rx_inflight=0;}
-    device_count_used=rx_head=rx_tail=rx_used=handlers_used=0; initialized=1;
+    /* Initialization is one-shot: a repeated call must not orphan registered
+     * interfaces or queued RX frames from the generic device tree. */
+    if (initialized) {
+        spinlock_unlock_irqrestore(&lock,f);
+        return;
+    }
+    for(uint32_t i=0;i<NET_DEVICE_MAX;i++){
+        devices[i].device=0;
+        devices[i].stats=(net_device_stats_t){0};
+        devices[i].rx_inflight=0;
+        devices[i].tx_inflight=0;
+    }
+    device_count_used=rx_head=rx_tail=rx_used=handlers_used=0;
+    initialized=1;
     spinlock_unlock_irqrestore(&lock,f);
 }
 static int valid_mac(const uint8_t* m) {
@@ -85,6 +97,7 @@ int net_device_register(net_device_t* d)
     devices[device_count_used].device = d;
     devices[device_count_used].stats = (net_device_stats_t){0};
     devices[device_count_used].rx_inflight = 0U;
+    devices[device_count_used].tx_inflight = 0U;
     ++device_count_used;
     spinlock_unlock_irqrestore(&lock, flags);
     return 1;
@@ -101,7 +114,8 @@ int net_device_unregister(net_device_t* d)
             index = i;
             break;
         }
-    if (index == device_count_used || devices[index].rx_inflight)
+    if (index == device_count_used || devices[index].rx_inflight ||
+        devices[index].tx_inflight)
     {
         spinlock_unlock_irqrestore(&lock, flags);
         return 0;
@@ -127,6 +141,7 @@ int net_device_unregister(net_device_t* d)
     devices[device_count_used].device = NULL;
     devices[device_count_used].stats = (net_device_stats_t){0};
     devices[device_count_used].rx_inflight = 0U;
+    devices[device_count_used].tx_inflight = 0U;
     d->ipv4_address = 0U;
     d->ipv4_netmask = 0U;
     d->ipv4_gateway = 0U;
@@ -215,12 +230,25 @@ int net_device_transmit(net_device_t* d,const void* frame,size_t len) {
         spinlock_unlock_irqrestore(&lock,f);return 0;
     }
     uint64_t f=spinlock_lock_irqsave(&lock);device_slot_t* s=find_locked(d);
-    if(!s||!d->link_up){if(s)++s->stats.tx_errors;spinlock_unlock_irqrestore(&lock,f);return 0;}
-    const net_device_ops_t* ops=d->ops;spinlock_unlock_irqrestore(&lock,f);
+    if(!s||!d->link_up||s->tx_inflight==UINT32_MAX){
+        if(s)++s->stats.tx_errors;
+        spinlock_unlock_irqrestore(&lock,f);
+        return 0;
+    }
+    const net_device_ops_t* ops=d->ops;
+    ++s->tx_inflight;
+    spinlock_unlock_irqrestore(&lock,f);
     int sent=ops->transmit(d,(const uint8_t*)frame,len);
-    f=spinlock_lock_irqsave(&lock);s=find_locked(d);int still_registered=s!=0;
-    if(s){if(sent){++s->stats.tx_frames;s->stats.tx_bytes+=len;}else ++s->stats.tx_errors;}
-    spinlock_unlock_irqrestore(&lock,f);return sent&&still_registered;
+    f=spinlock_lock_irqsave(&lock);
+    s=find_locked(d);
+    int still_registered=s!=0;
+    if(s){
+        if(sent){++s->stats.tx_frames;s->stats.tx_bytes+=len;}
+        else ++s->stats.tx_errors;
+        if(s->tx_inflight)--s->tx_inflight;
+    }
+    spinlock_unlock_irqrestore(&lock,f);
+    return sent&&still_registered;
 }
 int net_receive_frame(net_device_t* d,const void* frame,size_t len) {
     if(!d||!frame)return 0;

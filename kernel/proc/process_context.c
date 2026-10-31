@@ -288,6 +288,8 @@ int process_finish_context_switch(uint32_t outgoing_pid, uint32_t cpu_id)
     if (retain_zombie)
     {
         int32_t exit_status = outgoing->exit_status;
+        uint64_t runtime_ticks = outgoing->runtime_ticks;
+        uint64_t context_switches = outgoing->context_switches;
         char name[PROCESS_NAME_MAX + 1U];
         for (uint32_t i = 0; i < sizeof(name); i++)
             name[i] = outgoing->name[i];
@@ -296,6 +298,8 @@ int process_finish_context_switch(uint32_t outgoing_pid, uint32_t cpu_id)
         outgoing->pid = outgoing_pid;
         outgoing->parent_pid = parent_pid;
         outgoing->exit_status = exit_status;
+        outgoing->runtime_ticks = runtime_ticks;
+        outgoing->context_switches = context_switches;
         for (uint32_t i = 0; i < sizeof(name); i++)
             outgoing->name[i] = name[i];
         outgoing->state = PROCESS_ZOMBIE;

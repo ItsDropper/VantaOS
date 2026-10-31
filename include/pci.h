@@ -72,6 +72,14 @@ int pci_get_device_count(void);
 
 const struct pci_device* pci_get_device(int index);
 
+/*
+ * Return the narrowest enumerated PCI-to-PCI bridge whose secondary bus
+ * range contains the device. Returns NULL for root-bus devices or when
+ * firmware bridge bus numbering is inconsistent.
+ */
+const struct pci_device* pci_get_parent_bridge(
+    const struct pci_device* device);
+
 const char* pci_get_vendor_name(uint16_t vendor_id);
 
 const char* pci_get_device_name(

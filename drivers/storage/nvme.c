@@ -94,6 +94,7 @@ typedef struct {
     dma_page_t identify;
     nvme_io_slot_t io_slots[NVME_IO_SLOTS];
     volatile uint8_t* registers;
+    const struct pci_device* pci_device;
     volatile uint32_t* admin_submission_doorbell;
     volatile uint32_t* admin_completion_doorbell;
     volatile uint32_t* io_submission_doorbell;
@@ -623,6 +624,8 @@ static int register_namespace(nvme_controller_t* c, uint32_t nsid)
     ns->block.flags = BLOCK_DEVICE_TRANSPORT_NVME;
     ns->block.ops = &namespace_ops;
     ns->block.driver_data = ns;
+    ns->block.parent_device = c->pci_device ?
+        (device_t*)&c->pci_device->core : NULL;
     if (block_device_register_disk(&ns->block) != BLOCK_STATUS_OK) {
         ns->used = 0U;
         return 0;
@@ -667,6 +670,7 @@ static storage_probe_result_t nvme_probe(const struct pci_device* pci)
     nvme_controller_t* c = &controllers[controller_count];
     *c = (nvme_controller_t){0};
     c->controller_index = controller_count;
+    c->pci_device = pci;
     spinlock_init(&c->io_lock);
     if (!allocate_controller_memory(c)) {
         free_controller_memory(c);

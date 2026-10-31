@@ -252,6 +252,12 @@ int paging_map_page(uintptr_t virtual_address, uintptr_t physical_address)
     }
 
     uint32_t table_index = (uint32_t)((virtual_address >> 12) & 0x1FFU);
+    if ((table[table_index] & PAGE_PRESENT) != 0U)
+    {
+        /* Never silently replace a live mapping and orphan its old frame. */
+        paging_lock_release(saved_flags);
+        return 0;
+    }
     table[table_index] = ((uint64_t)physical_address) |
                          PAGE_PRESENT | PAGE_WRITE;
     paging_lock_release(saved_flags);
@@ -308,6 +314,12 @@ int paging_map_mmio_page(uintptr_t virtual_address, uintptr_t physical_address)
     }
 
     uint32_t index = (uint32_t)((virtual_address >> 12) & 0x1FFU);
+    if ((table[index] & PAGE_PRESENT) != 0U)
+    {
+        /* MMIO callers must explicitly unmap before reusing a VA. */
+        paging_lock_release(saved_flags);
+        return 0;
+    }
     table[index] = ((uint64_t)physical_address & 0x000FFFFFFFFFF000ULL) |
                    PAGE_PRESENT | PAGE_WRITE | 0x018U; /* PWT + PCD */
     paging_lock_release(saved_flags);

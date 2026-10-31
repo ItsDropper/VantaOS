@@ -42,6 +42,28 @@ static int valid_driver(const net_pci_driver_t* driver)
     return 0;
 }
 
+static void net_adapter_remove(device_t* device)
+{
+    const struct pci_device* pci = device ?
+        (const struct pci_device*)device->bus_data : NULL;
+    if (!pci)
+        return;
+
+    uint64_t flags = spinlock_lock_irqsave(&driver_lock);
+    for (uint32_t i = 0U; i < binding_count; ++i)
+    {
+        if (bindings[i].device == pci)
+        {
+            for (uint32_t j = i + 1U; j < binding_count; ++j)
+                bindings[j - 1U] = bindings[j];
+            --binding_count;
+            bindings[binding_count] = (net_binding_t){0};
+            break;
+        }
+    }
+    spinlock_unlock_irqrestore(&driver_lock, flags);
+}
+
 static device_probe_result_t net_adapter_probe(device_t* device)
 {
     net_driver_adapter_t* adapter;
@@ -99,7 +121,7 @@ int net_pci_driver_register(const net_pci_driver_t* driver)
     adapter->generic.ids = adapter->ids;
     adapter->generic.id_count = driver->id_count;
     adapter->generic.probe = net_adapter_probe;
-    adapter->generic.remove = NULL;
+    adapter->generic.remove = net_adapter_remove;
     adapter->generic.context = adapter;
 
     if (!device_driver_register(&adapter->generic))
@@ -156,9 +178,7 @@ uint32_t net_probe_pci_devices(void)
                 if (binding_count < NET_PCI_BINDING_MAX && !bound(pci))
                 {
                     bindings[binding_count].device = pci;
-                    bindings[binding_count].driver =
-                        (const net_pci_driver_t*)snapshot[i]->context;
-                    /* context is the adapter; recover its original descriptor. */
+                    /* Context points to the adapter, not the public descriptor. */
                     bindings[binding_count].driver =
                         ((const net_driver_adapter_t*)snapshot[i]->context)->network;
                     ++binding_count;

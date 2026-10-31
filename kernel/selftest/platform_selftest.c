@@ -36,6 +36,55 @@ static void spinlock_primitive_probe(void)
         "VANTAOS_SPINLOCK_PRIMITIVE_FAIL\n");
 }
 
+static void kernel_mapping_probe(void)
+{
+    const uintptr_t window_end =
+        (uintptr_t)(PAGING_MMIO_BASE + PAGING_MMIO_SIZE);
+    uintptr_t virtual_address = 0U;
+    void* first_frame = pmm_alloc_block();
+    void* replacement_frame = pmm_alloc_block();
+    int mapped = 0;
+    int ok = first_frame != NULL && replacement_frame != NULL;
+
+    /* Find an unused MMIO-window slot without disturbing live mappings. */
+    for (uintptr_t candidate = window_end;
+         candidate > (uintptr_t)PAGING_MMIO_BASE;)
+    {
+        candidate -= PAGE_SIZE;
+        if ((paging_get_page_flags(candidate) & PAGE_PRESENT) == 0U)
+        {
+            virtual_address = candidate;
+            break;
+        }
+    }
+    ok = ok && virtual_address != 0U;
+
+    if (ok)
+    {
+        mapped = paging_map_page(virtual_address,
+                                 (uintptr_t)first_frame);
+        ok = mapped &&
+             !paging_map_page(virtual_address,
+                              (uintptr_t)replacement_frame) &&
+             paging_get_physical(virtual_address) ==
+                 (uintptr_t)first_frame;
+    }
+
+    if (mapped)
+    {
+        paging_unmap_page(virtual_address);
+        ok = ok && paging_get_physical(virtual_address) == 0U;
+    }
+    if (first_frame)
+        pmm_free_block(first_frame);
+    if (replacement_frame)
+        pmm_free_block(replacement_frame);
+
+    serial_write(ok ?
+        "VANTAOS_KERNEL_MAPPING_GUARDS_OK\\n" :
+        "VANTAOS_KERNEL_MAPPING_GUARDS_FAIL\\n");
+}
+
 static void unpublished_image_cleanup_probe(void)
 {
     const uint32_t free_before = pmm_get_free_blocks();
@@ -216,6 +265,7 @@ static void user_mapping_probe(void)
 void kernel_platform_selftest(void)
 {
     spinlock_primitive_probe();
+    kernel_mapping_probe();
     int tlb_shootdown_ok = paging_tlb_shootdown(
         paging_get_kernel_address_space(), (uintptr_t)0xC0000000ULL);
     serial_write(tlb_shootdown_ok ?

@@ -116,6 +116,7 @@ static net_pci_probe_result_t vnet_probe(const struct pci_device*pci){
  state.netdev.mtu=NET_MTU_DEFAULT;
  state.netdev.link_up=state.has_status?((in16(state.io_base+0x1AU)&1U)!=0U):1U;
  state.netdev.ops=&vnet_net_ops;state.netdev.driver_data=&state;
+ state.netdev.parent_device=(device_t*)&state.pci->core;
  spinlock_init(&state.tx_lock);if(!net_device_register(&state.netdev))goto fail;state.registered=1;state.ready=1;queue_notify(state.io_base,0U);
 #ifdef VANTAOS_SELF_TEST
  uint8_t probe[18]={0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,mac[0],mac[1],mac[2],mac[3],mac[4],mac[5],0x88,0xB5,0x56,0x41,0x4E,0x54};

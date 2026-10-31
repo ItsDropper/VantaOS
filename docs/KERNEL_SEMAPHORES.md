@@ -28,6 +28,18 @@ perform_io();
 
 `kernel_semaphore_try_wait()` consumes a token without blocking. `kernel_semaphore_post()` adds one token and wakes one waiter; it fails rather than exceeding the configured maximum.
 
+## Deadline-based wait
+
+`kernel_semaphore_wait_until(semaphore, deadline_ticks)` waits until a permit is available or the absolute monotonic PIT-tick deadline expires. A permit observed while holding the semaphore's queue lock takes precedence over timeout.
+
+```c
+uint64_t deadline = timer_get_ticks64() + 250U;
+if (!kernel_semaphore_wait_until(&io_slots, deadline))
+    handle_io_capacity_timeout();
+```
+
+The deadline is expressed in PIT ticks, not milliseconds. Derive it from `timer_get_ticks64()` and the configured timer frequency. Timed waits require the same scheduled process context and enabled maskable interrupts as ordinary blocking waits.
+
 ## Constraints
 
 - Blocking waits require a normal scheduled process with maskable interrupts enabled.

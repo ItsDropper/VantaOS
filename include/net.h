@@ -89,6 +89,7 @@ int net_device_transmit(net_device_t*, const void*, size_t);
 int net_receive_frame(net_device_t*, const void*, size_t);
 size_t net_poll(size_t packet_budget);
 int net_ethernet_handler_register(uint16_t, net_ethernet_handler_fn, void*);
+/* Unregister fails while a matching callback is executing. */
 int net_ethernet_handler_unregister(uint16_t, net_ethernet_handler_fn, void*);
 int net_udp_initialize(void);
 /* Sends a UDP datagram through IPv4; may block briefly for ARP resolution. */
@@ -96,6 +97,7 @@ int net_udp_send(net_device_t*, uint32_t destination_address,
                  uint16_t source_port, uint16_t destination_port,
                  const void* payload, size_t payload_length);
 int net_udp_handler_register(uint16_t, net_udp_handler_fn, void*);
+/* Unregister fails while the matching UDP callback is executing. */
 int net_udp_handler_unregister(uint16_t, net_udp_handler_fn, void*);
 /* Internal IPv4-to-UDP dispatch; the IP header has already been validated. */
 void net_udp_receive_ipv4(net_device_t*, const uint8_t*, size_t, size_t);

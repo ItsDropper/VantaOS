@@ -199,6 +199,7 @@ static int partition_device_scan_disk_unlocked(block_device_t *disk)
                             BLOCK_DEVICE_PARTITION;
         part->block.ops = &partition_ops;
         part->block.driver_data = part;
+        part->block.parent_device = &disk->core;
         part->block.partition_scheme = found[i].scheme;
         part->block.partition_type = found[i].mbr_type;
         for (size_t j = 0U; j < 16U; ++j)

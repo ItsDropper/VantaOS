@@ -75,6 +75,14 @@ int pci_test_ecam_read32(uint16_t segment, uint8_t bus, uint8_t slot,
     return 1;
 }
 
+int pci_test_ecam_write32(uint16_t segment, uint8_t bus, uint8_t slot,
+                          uint8_t function, uint16_t offset, uint32_t value)
+{
+    (void)segment; (void)bus; (void)slot; (void)function;
+    (void)offset; (void)value;
+    return 0;
+}
+
 static void reset_config(void)
 {
     for (uint32_t i = 0; i < 64U; ++i)

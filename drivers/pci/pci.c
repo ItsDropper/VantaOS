@@ -481,6 +481,49 @@ const struct pci_device* pci_get_device(int index)
     return &devices[index];
 }
 
+const struct pci_device* pci_get_parent_bridge(
+    const struct pci_device* device)
+{
+    const struct pci_device* best = NULL;
+    uint16_t best_span = UINT16_MAX;
+
+    if (!device)
+        return NULL;
+
+    for (int i = 0; i < device_count; ++i)
+    {
+        const struct pci_device* bridge = &devices[i];
+        uint16_t span;
+
+        if (bridge == device ||
+            bridge->segment_group != device->segment_group ||
+            bridge->class_code != 0x06U ||
+            bridge->subclass != 0x04U ||
+            bridge->header_type != 1U ||
+            bridge->secondary_bus == 0U ||
+            bridge->secondary_bus > bridge->subordinate_bus ||
+            device->bus < bridge->secondary_bus ||
+            device->bus > bridge->subordinate_bus)
+            continue;
+
+        /* A bridge cannot be its own ancestor or contain its primary bus. */
+        if (bridge->bus == device->bus ||
+            (device->bus == bridge->secondary_bus &&
+             bridge->primary_bus == device->bus))
+            continue;
+
+        span = (uint16_t)bridge->subordinate_bus -
+               (uint16_t)bridge->secondary_bus;
+        if (span < best_span)
+        {
+            best = bridge;
+            best_span = span;
+        }
+    }
+
+    return best;
+}
+
 int pci_get_bar(const struct pci_device* device, uint8_t index,
                 uint64_t* address, int* is_io, int* is_64bit)
 {

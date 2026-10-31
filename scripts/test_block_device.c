@@ -102,6 +102,8 @@ int main(void)
     assert(device.core.state == DEVICE_STATE_REGISTERED);
     assert(device.core.bus == DEVICE_BUS_VIRTUAL);
     assert(device.core.bus_data == &device);
+    assert(device.core.owner == &device);
+    assert(!device_unregister(&device.core));
     assert(device_find(DEVICE_BUS_VIRTUAL, "unit-disk") == &device.core);
     assert(block_device_find("unit-disk") == &device);
     assert(block_device_get(0U) == &device);

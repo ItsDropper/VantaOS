@@ -9,6 +9,7 @@
 #define KERNEL_MUTEX_H
 
 #include "process.h"
+#include "timer.h"
 
 /*
  * Sleeping, non-recursive mutex. Ownership is a PID and all ownership
@@ -77,6 +78,49 @@ static inline int kernel_mutex_lock(kernel_mutex_t* mutex)
         if (!process_wait_queue_sleep_locked(&mutex->waiters, flags))
             return 0;
         /* A wakeup is advisory; retry ownership under the queue lock. */
+    }
+}
+
+/*
+ * Acquire before an absolute PIT-tick deadline. Availability is checked
+ * before timeout while holding the same lock that serializes ownership.
+ * Returns zero on timeout, invalid context, or recursive acquisition.
+ */
+static inline int kernel_mutex_lock_until(kernel_mutex_t* mutex,
+                                          uint64_t deadline_ticks)
+{
+    if (!mutex || deadline_ticks == 0U)
+        return 0;
+
+    uint32_t pid = process_current_pid();
+    if (pid == 0U || pid >= PROCESS_MAX)
+        return 0;
+
+    for (;;)
+    {
+        uint64_t flags = process_wait_queue_lock(&mutex->waiters);
+        if (mutex->owner_pid == 0U)
+        {
+            mutex->owner_pid = pid;
+            process_wait_queue_unlock(&mutex->waiters, flags);
+            return 1;
+        }
+
+        if (mutex->owner_pid == pid)
+        {
+            process_wait_queue_unlock(&mutex->waiters, flags);
+            return 0;
+        }
+
+        if (timer_get_ticks64() >= deadline_ticks)
+        {
+            process_wait_queue_unlock(&mutex->waiters, flags);
+            return 0;
+        }
+
+        if (!process_wait_queue_sleep_until_locked(&mutex->waiters, flags,
+                                                   deadline_ticks))
+            return 0;
     }
 }
 

@@ -296,7 +296,8 @@ static net_pci_probe_result_t e1000_probe(const struct pci_device* pci)
     state.rx_next=0;state.tx_next=0;
     state.netdev=(net_device_t){.name="en0",.mac={mac[0],mac[1],mac[2],mac[3],mac[4],mac[5]},
         .mtu=NET_MTU_DEFAULT,.link_up=(reg_read(REG_STATUS)&STATUS_LU)?1U:0U,
-        .ops=&e1000_net_ops,.driver_data=&state};
+        .ops=&e1000_net_ops,.driver_data=&state,
+        .parent_device=(device_t*)&pci->core};
     /* Publish descriptors only after their DMA memory and PCI command state are valid. */
     if(!pci_enable_bus_mastering(pci))goto fail_dma;
     if(!net_device_register(&state.netdev))goto fail_dma;

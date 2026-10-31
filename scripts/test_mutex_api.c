@@ -13,6 +13,9 @@
 static uint32_t current_pid;
 static uint32_t wake_one_calls;
 static int simulate_handoff;
+static uint64_t fake_ticks;
+
+uint64_t timer_get_ticks64(void) { return fake_ticks; }
 
 uint32_t process_current_pid(void)
 {
@@ -52,6 +55,17 @@ int process_wait_queue_sleep_locked(process_wait_queue_t* queue,
     ((kernel_mutex_t*)((char*)queue -
         __builtin_offsetof(kernel_mutex_t, waiters)))->owner_pid = 0U;
     simulate_handoff = 0;
+    return 1;
+}
+
+int process_wait_queue_sleep_until_locked(process_wait_queue_t* queue,
+                                          uint64_t flags,
+                                          uint64_t deadline_ticks)
+{
+    (void)flags;
+    fake_ticks = deadline_ticks;
+    ((kernel_mutex_t*)((char*)queue -
+        __builtin_offsetof(kernel_mutex_t, waiters)))->owner_pid = 7U;
     return 1;
 }
 
@@ -119,6 +133,21 @@ int main(void)
     simulate_handoff = 0;
     assert(!kernel_mutex_lock(&dynamic));
     assert(dynamic.owner_pid == 7U);
+
+    /* Deadline expiry leaves ownership with the existing owner. */
+    current_pid = 8U;
+    fake_ticks = 0U;
+    dynamic.owner_pid = 7U;
+    assert(!kernel_mutex_lock_until(&dynamic, 10U));
+    assert(fake_ticks == 10U);
+    assert(dynamic.owner_pid == 7U);
+
+    /* A free mutex is acquired even when the deadline has just arrived. */
+    dynamic.owner_pid = 0U;
+    assert(kernel_mutex_lock_until(&dynamic, 10U));
+    assert(dynamic.owner_pid == 8U);
+    assert(kernel_mutex_unlock(&dynamic));
+    assert(!kernel_mutex_lock_until(&dynamic, 0U));
 
     puts("VANTAOS_MUTEX_API_OK");
     return 0;

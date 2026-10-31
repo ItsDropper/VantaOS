@@ -97,9 +97,10 @@ void device_release(device_t* device);
 int device_driver_register(const device_driver_t* driver);
 int device_driver_unregister(const device_driver_t* driver);
 
-/* Probe callbacks and remove callbacks always execute without the registry lock. */
+/* Probe and remove callbacks always execute without the registry lock. */
 device_bind_result_t device_bind(device_t* device,
                                  const device_driver_t* driver);
+/* Unbind is refused unless the bound driver supplies a hardware-safe remove callback. */
 int device_unbind(device_t* device);
 uint32_t device_probe_all(void);
 

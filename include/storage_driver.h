@@ -11,6 +11,7 @@
 #include <stdint.h>
 #define STORAGE_DRIVER_NAME_MAX 32U
 #define STORAGE_DRIVER_MAX 16U
+#define STORAGE_DRIVER_ID_MAX 32U
 typedef enum { STORAGE_PROBE_NO_MATCH=0, STORAGE_PROBE_BOUND=1, STORAGE_PROBE_FAILED=-1 } storage_probe_result_t;
 typedef struct {
  uint16_t vendor_id; /* 0xFFFF = wildcard */

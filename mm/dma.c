@@ -25,15 +25,20 @@ static uint64_t dma_limit_exclusive(const dma_device_t* device)
     return mask + 1U;
 }
 
+static int dma_page_is_well_formed(const dma_page_t* page)
+{
+    return page && page->virtual_address &&
+           page->size == DMA_PAGE_SIZE &&
+           (page->physical_address & (DMA_PAGE_SIZE - 1U)) == 0U &&
+           ((uintptr_t)page->virtual_address & (DMA_PAGE_SIZE - 1U)) == 0U &&
+           (uint64_t)(uintptr_t)page->virtual_address == page->physical_address;
+}
+
 int dma_page_is_valid_for_device(const dma_device_t* device,
                                  const dma_page_t* page)
 {
     uint64_t mask;
-    if (!page || !page->virtual_address ||
-        page->size != DMA_PAGE_SIZE ||
-        (page->physical_address & (DMA_PAGE_SIZE - 1U)) != 0U ||
-        ((uintptr_t)page->virtual_address & (DMA_PAGE_SIZE - 1U)) != 0U ||
-        (uint64_t)(uintptr_t)page->virtual_address != page->physical_address)
+    if (!dma_page_is_well_formed(page))
         return 0;
 
     mask = device ? device->dma_mask : DMA_DEFAULT_MASK;
@@ -160,7 +165,8 @@ void dma_free_contiguous(dma_page_t* pages, size_t count)
 
 void dma_free_page(dma_page_t* page)
 {
-    if (!dma_page_is_valid(page))
+    /* Freeing must not depend on the device mask used at allocation time. */
+    if (!dma_page_is_well_formed(page))
         return;
     pmm_free_block(page->virtual_address);
     page->virtual_address = NULL;

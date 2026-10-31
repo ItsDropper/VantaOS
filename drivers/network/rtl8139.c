@@ -288,7 +288,8 @@ static net_pci_probe_result_t rtl8139_probe(const struct pci_device *pci)
         .mtu = NET_MTU_DEFAULT,
         .link_up = 1U,
         .ops = &rtl8139_net_ops,
-        .driver_data = &state
+        .driver_data = &state,
+        .parent_device = (device_t*)&pci->core
     };
     spinlock_init(&state.tx_lock);
     if (!pci_enable_bus_mastering(pci))

@@ -388,6 +388,9 @@ void* pmm_alloc_block(void)
 
 int pmm_alloc_contiguous_blocks(uint32_t count, void **base_address)
 {
+    uint32_t run_start = 0U;
+    uint32_t run_length = 0U;
+
     if (base_address == NULL)
         return 0;
     *base_address = NULL;
@@ -402,44 +405,32 @@ int pmm_alloc_contiguous_blocks(uint32_t count, void **base_address)
     }
 
     /*
-     * Search from the next-fit hint, then wrap to the beginning. Each pass
-     * examines only a physically contiguous interval; a run never wraps from
-     * the highest frame back to frame zero.
+     * Contiguous runs must be searched in physical order. Starting at the
+     * single-page next-fit hint would split a run crossing that hint and could
+     * incorrectly report fragmentation despite enough adjacent free frames.
      */
-    uint32_t start = allocation_hint < total_blocks ? allocation_hint : 0U;
-    for (uint32_t pass = 0U; pass < 2U; ++pass)
+    for (uint32_t block = 0U; block < total_blocks; ++block)
     {
-        uint32_t range_start = pass == 0U ? start : 0U;
-        uint32_t range_end = pass == 0U ? total_blocks : start;
-        uint32_t run_start = 0U;
-        uint32_t run_length = 0U;
-
-        for (uint32_t block = range_start; block < range_end; ++block)
+        if (!bitmap_test(pmm_bitmap, block) &&
+            !bitmap_test(pmm_reserved_bitmap, block))
         {
-            if (!bitmap_test(pmm_bitmap, block) &&
-                !bitmap_test(pmm_reserved_bitmap, block))
+            if (run_length == 0U)
+                run_start = block;
+            ++run_length;
+            if (run_length == count)
             {
-                if (run_length == 0U)
-                    run_start = block;
-                ++run_length;
-                if (run_length == count)
-                {
-                    for (uint32_t i = 0U; i < count; ++i)
-                        bitmap_set(pmm_bitmap, run_start + i);
-                    free_blocks -= count;
-                    allocation_hint = run_start + count;
-                    if (allocation_hint >= total_blocks)
-                        allocation_hint = 0U;
-                    *base_address = (void *)(uintptr_t)(
-                        (uint64_t)run_start * PAGE_SIZE);
-                    spinlock_unlock(&pmm_lock);
-                    return 1;
-                }
+                for (uint32_t i = 0U; i < count; ++i)
+                    bitmap_set(pmm_bitmap, run_start + i);
+                free_blocks -= count;
+                *base_address = (void *)(uintptr_t)(
+                    (uint64_t)run_start * PAGE_SIZE);
+                spinlock_unlock(&pmm_lock);
+                return 1;
             }
-            else
-            {
-                run_length = 0U;
-            }
+        }
+        else
+        {
+            run_length = 0U;
         }
     }
 

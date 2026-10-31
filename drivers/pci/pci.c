@@ -333,6 +333,8 @@ static void pci_read_device(struct pci_device* device,
 {
     uint32_t id;
     uint32_t class_info;
+    uint32_t header_info;
+    uint32_t interrupt_info;
 
     device->bus = bus;
     device->slot = slot;
@@ -341,12 +343,28 @@ static void pci_read_device(struct pci_device* device,
 
     id = pci_read_device_config(device, 0x00U);
     class_info = pci_read_device_config(device, 0x08U);
+    header_info = pci_read_device_config(device, 0x0CU);
+    interrupt_info = pci_read_device_config(device, 0x3CU);
     device->vendor_id = (uint16_t)(id & 0xFFFFU);
     device->device_id = (uint16_t)(id >> 16U);
     device->revision = (uint8_t)(class_info & 0xFFU);
     device->prog_if = (uint8_t)((class_info >> 8U) & 0xFFU);
     device->subclass = (uint8_t)((class_info >> 16U) & 0xFFU);
     device->class_code = (uint8_t)((class_info >> 24U) & 0xFFU);
+    device->header_type = (uint8_t)((header_info >> 16U) & 0x7FU);
+    device->interrupt_line = (uint8_t)(interrupt_info & 0xFFU);
+    device->interrupt_pin = (uint8_t)((interrupt_info >> 8U) & 0xFFU);
+
+    device->primary_bus = 0U;
+    device->secondary_bus = 0U;
+    device->subordinate_bus = 0U;
+    if (device->header_type == 1U)
+    {
+        uint32_t bus_numbers = pci_read_device_config(device, 0x18U);
+        device->primary_bus = (uint8_t)(bus_numbers & 0xFFU);
+        device->secondary_bus = (uint8_t)((bus_numbers >> 8U) & 0xFFU);
+        device->subordinate_bus = (uint8_t)((bus_numbers >> 16U) & 0xFFU);
+    }
 }
 
 static void pci_scan_range(uint16_t segment, uint8_t first_bus,

@@ -120,5 +120,31 @@ int main(void)
     assert(block_device_count() == count_before_scan);
     assert(block_device_unregister(&disk2) == BLOCK_STATUS_OK);
     assert(block_device_unregister(&conflict) == BLOCK_STATUS_OK);
+
+    /* A successfully published partition is a child of its whole-disk node. */
+    block_device_t disk3;
+    memset(&disk3, 0, sizeof(disk3));
+    memset(valid_mbr, 0, sizeof(valid_mbr));
+    valid_mbr[510] = 0x55U;
+    valid_mbr[511] = 0xAAU;
+    valid_mbr[446U + 4U] = 0x0CU;
+    write_u32(valid_mbr + 446U + 8U, 1U);
+    write_u32(valid_mbr + 446U + 12U, 10U);
+    memcpy(disk3.name, "parent-disk", sizeof("parent-disk"));
+    disk3.sector_count = 128U;
+    disk3.sector_size = 512U;
+    disk3.ops = &valid_ops;
+    assert(block_device_register(&disk3) == BLOCK_STATUS_OK);
+    assert(partition_device_scan_disk(&disk3) == 1);
+    block_device_t* partition = block_device_find("parent-diskp1");
+    assert(partition != NULL);
+    assert(partition->parent_device == &disk3.core);
+    assert(partition->core.parent == &disk3.core);
+    assert(device_find(DEVICE_BUS_VIRTUAL, "parent-diskp1") ==
+           &partition->core);
+    assert(block_device_unregister(&disk3) == BLOCK_STATUS_BUSY);
+    assert(block_device_unregister(partition) == BLOCK_STATUS_OK);
+    assert(block_device_unregister(&disk3) == BLOCK_STATUS_OK);
+    assert(device_count() == 0U);
     return 0;
 }

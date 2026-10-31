@@ -7,6 +7,8 @@
 #include "device.h"
 #include "spinlock.h"
 
+#include <stddef.h>
+
 #define DEVICE_NAME_SCAN_LIMIT DEVICE_NAME_MAX
 
 typedef struct

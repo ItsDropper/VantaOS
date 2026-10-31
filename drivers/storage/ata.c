@@ -7,6 +7,7 @@
 
 #include "ata.h"
 #include "block_device.h"
+#include "device.h"
 #include "spinlock.h"
 #include "ata_lba28.h"
 
@@ -29,6 +30,13 @@ typedef struct
 static int available;
 static uint64_t available_sectors;
 static block_device_t ata_block;
+static device_t ata_controller_device = {
+    .name = "ata-legacy0",
+    .bus = DEVICE_BUS_PLATFORM,
+    .class_code = 0x01U,
+    .subclass = 0x01U,
+    .bus_data = &active_channel
+};
 static spinlock_t ata_io_lock = SPINLOCK_INITIALIZER;
 static ata_channel_t active_channel;
 static uint8_t active_drive;
@@ -267,7 +275,11 @@ void ata_initialize(void)
                 ata_block.flags = BLOCK_DEVICE_TRANSPORT_ATA;
                 ata_block.ops = &ata_block_ops;
                 ata_block.driver_data = 0;
-                (void)block_device_register_disk(&ata_block);
+                ata_block.parent_device = &ata_controller_device.core;
+                if (!device_register(&ata_controller_device))
+                    return;
+                if (block_device_register_disk(&ata_block) != BLOCK_STATUS_OK)
+                    (void)device_unregister(&ata_controller_device);
                 return;
             }
         }

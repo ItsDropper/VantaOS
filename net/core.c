@@ -9,7 +9,7 @@
 #include "spinlock.h"
 typedef struct { net_device_t* device; net_device_stats_t stats; uint32_t rx_inflight; uint32_t tx_inflight; } device_slot_t;
 typedef struct { net_device_t* device; uint16_t length; uint8_t frame[NET_FRAME_MAX_SIZE]; } rx_entry_t;
-typedef struct { uint16_t type; net_ethernet_handler_fn fn; void* context; } eth_handler_t;
+typedef struct { uint16_t type; net_ethernet_handler_fn fn; void* context; uint32_t active; } eth_handler_t;
 static device_slot_t devices[NET_DEVICE_MAX];
 static uint32_t device_count_used;
 static rx_entry_t rxq[NET_RX_QUEUE_CAPACITY];
@@ -232,13 +232,14 @@ int net_device_get_stats(net_device_t* d,net_device_stats_t* out) {
 }
 int net_device_transmit(net_device_t* d,const void* frame,size_t len) {
     if(!d||!frame)return 0;
-    if(!frame_length_valid((const uint8_t*)frame,len,d->mtu)) {
-        uint64_t f=spinlock_lock_irqsave(&lock);device_slot_t* s=find_locked(d);if(s)++s->stats.tx_errors;
-        spinlock_unlock_irqrestore(&lock,f);return 0;
-    }
     uint64_t f=spinlock_lock_irqsave(&lock);device_slot_t* s=find_locked(d);
     if(!s||!d->link_up||s->tx_inflight==UINT32_MAX){
         if(s)++s->stats.tx_errors;
+        spinlock_unlock_irqrestore(&lock,f);
+        return 0;
+    }
+    if(!frame_length_valid((const uint8_t*)frame,len,d->mtu)){
+        ++s->stats.tx_errors;
         spinlock_unlock_irqrestore(&lock,f);
         return 0;
     }
@@ -281,10 +282,26 @@ int net_internal_pop_rx(net_device_t** d,uint8_t* frame,size_t cap,size_t* len) 
     rx_head=(rx_head+1U)%NET_RX_QUEUE_CAPACITY;--rx_used;spinlock_unlock_irqrestore(&lock,f);return 1;
 }
 int net_internal_dispatch_ethernet(net_device_t* d,const uint8_t* frame,size_t len,uint16_t type,size_t header) {
-    eth_handler_t snap[NET_ETH_HANDLER_MAX];uint32_t n=0;uint64_t f=spinlock_lock_irqsave(&lock);
-    for(uint32_t i=0;i<handlers_used;i++)if(handlers[i].type==type)snap[n++]=handlers[i];
+    eth_handler_t snap[NET_ETH_HANDLER_MAX];uint32_t n=0;
+    uint64_t f=spinlock_lock_irqsave(&lock);
+    for(uint32_t i=0;i<handlers_used;i++){
+        if(handlers[i].type!=type||handlers[i].active==UINT32_MAX)continue;
+        ++handlers[i].active;
+        snap[n++]=handlers[i];
+    }
     spinlock_unlock_irqrestore(&lock,f);
-    for(uint32_t i=0;i<n;i++)snap[i].fn(d,frame,len,type,header,snap[i].context);
+    for(uint32_t i=0;i<n;i++){
+        snap[i].fn(d,frame,len,type,header,snap[i].context);
+        f=spinlock_lock_irqsave(&lock);
+        for(uint32_t j=0;j<handlers_used;j++){
+            if(handlers[j].type==snap[i].type&&handlers[j].fn==snap[i].fn&&
+               handlers[j].context==snap[i].context){
+                if(handlers[j].active) --handlers[j].active;
+                break;
+            }
+        }
+        spinlock_unlock_irqrestore(&lock,f);
+    }
     return n!=0;
 }
 int net_ethernet_handler_register(uint16_t type,net_ethernet_handler_fn fn,void* ctx) {
@@ -292,12 +309,12 @@ int net_ethernet_handler_register(uint16_t type,net_ethernet_handler_fn fn,void*
     uint64_t f=spinlock_lock_irqsave(&lock);
     for(uint32_t i=0;i<handlers_used;i++)if(handlers[i].type==type&&handlers[i].fn==fn&&handlers[i].context==ctx){spinlock_unlock_irqrestore(&lock,f);return 0;}
     if(handlers_used==NET_ETH_HANDLER_MAX){spinlock_unlock_irqrestore(&lock,f);return 0;}
-    handlers[handlers_used++]=(eth_handler_t){type,fn,ctx};spinlock_unlock_irqrestore(&lock,f);return 1;
+    handlers[handlers_used++]=(eth_handler_t){type,fn,ctx,0U};spinlock_unlock_irqrestore(&lock,f);return 1;
 }
 int net_ethernet_handler_unregister(uint16_t type,net_ethernet_handler_fn fn,void* ctx) {
     uint64_t f=spinlock_lock_irqsave(&lock);uint32_t at=handlers_used;
     for(uint32_t i=0;i<handlers_used;i++)if(handlers[i].type==type&&handlers[i].fn==fn&&handlers[i].context==ctx){at=i;break;}
-    if(at==handlers_used){spinlock_unlock_irqrestore(&lock,f);return 0;}
+    if(at==handlers_used||handlers[at].active!=0U){spinlock_unlock_irqrestore(&lock,f);return 0;}
     for(uint32_t i=at;i+1U<handlers_used;i++)handlers[i]=handlers[i+1U];
     --handlers_used;spinlock_unlock_irqrestore(&lock,f);return 1;
 }

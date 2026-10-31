@@ -127,6 +127,25 @@ static size_t virtio_header_size(void)
     return state.mergeable_rx ? VNET_HEADER_MRG_SIZE : VNET_HEADER_BASE_SIZE;
 }
 
+/*
+ * VirtIO requires the device to acknowledge reset by clearing the status
+ * register. Do not configure queues or release DMA memory while that
+ * acknowledgement is missing.
+ */
+static int reset_device(void)
+{
+    if (!state.common)
+        return 0;
+    wr8(state.common, 20U, 0U);
+    for (uint32_t i = 0U; i < VNET_WAIT_LIMIT; ++i) {
+        dma_barrier();
+        if (rd8(state.common, 20U) == 0U)
+            return 1;
+        __asm__ volatile ("pause");
+    }
+    return rd8(state.common, 20U) == 0U;
+}
+
 static volatile uint8_t *map_cap(const struct pci_device *pci, uint8_t bar,
                                  uint32_t offset, uint32_t length)
 {
@@ -435,14 +454,7 @@ static int vnet_modern_poll(void)
 
 static void cleanup(void)
 {
-    int reset_complete = 1;
-    if (state.common) {
-        wr8(state.common, 20U, 0U);
-        for (uint32_t i = 0U; i < VNET_WAIT_LIMIT &&
-             rd8(state.common, 20U) != 0U; ++i)
-            __asm__ volatile ("pause");
-        reset_complete = rd8(state.common, 20U) == 0U;
-    }
+    int reset_complete = state.common ? reset_device() : 1;
     state.ready = 0U;
 #ifdef VANTAOS_SELF_TEST
     if (state.selftest_handler_registered) {
@@ -487,9 +499,10 @@ static net_pci_probe_result_t vnet_modern_probe(const struct pci_device *pci)
     failure = "capabilities";
     if (!discover_capabilities(pci)) goto fail;
     failure = "status-reset";
-    wr8(state.common, 20U, 0U);
-    for (uint32_t i = 0; i < 100000U && rd8(state.common, 20U) != 0U; ++i)
-        __asm__ volatile ("pause");
+    if (!reset_device()) {
+        failure = "status-reset-timeout";
+        goto fail;
+    }
     wr8(state.common, 20U, VNET_STATUS_ACK);
     wr8(state.common, 20U, VNET_STATUS_ACK | VNET_STATUS_DRIVER);
     failure = "features";

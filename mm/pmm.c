@@ -437,7 +437,7 @@ int pmm_alloc_contiguous_blocks_below(uint32_t count,
 
     /* Search the complete eligible physical range; next-fit hints can split
        an otherwise valid contiguous run and are intentionally not used here. */
-    for (uint32_t block = 0U; block <= limit_blocks - count; ++block)
+    for (uint32_t block = 0U; block < limit_blocks; ++block)
     {
         if (!bitmap_test(pmm_bitmap, block) &&
             !bitmap_test(pmm_reserved_bitmap, block))

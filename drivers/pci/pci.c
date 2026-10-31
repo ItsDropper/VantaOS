@@ -120,6 +120,106 @@ static uint32_t pci_config_address(
         (offset & 0xFC);
 }
 
+#ifndef PCI_TEST
+static const acpi_mcfg_region_t* pci_find_mcfg_region(
+    uint16_t segment, uint8_t bus)
+{
+    for (uint32_t i = 0U; i < pci_mcfg_region_count; ++i)
+    {
+        const acpi_mcfg_region_t* region = &pci_mcfg_regions[i];
+        if (region->segment_group == segment &&
+            bus >= region->start_bus && bus <= region->end_bus)
+            return region;
+    }
+    return NULL;
+}
+
+static volatile uint32_t* pci_ecam_dword(
+    const struct pci_device* device, uint16_t offset)
+{
+    const acpi_mcfg_region_t* region =
+        pci_find_mcfg_region(device->segment_group, device->bus);
+    uint64_t bus_offset;
+    uint64_t physical;
+
+    if (!region || offset > 0xFFCU || (offset & 3U) != 0U)
+        return NULL;
+
+    bus_offset =
+        ((uint64_t)(device->bus - region->start_bus) << 20U) |
+        ((uint64_t)device->slot << 15U) |
+        ((uint64_t)device->function << 12U);
+    if (region->base_address > UINT64_MAX - bus_offset)
+        return NULL;
+    physical = region->base_address + bus_offset;
+    if (physical > UINT64_MAX - offset)
+        return NULL;
+    physical += offset;
+    return (volatile uint32_t*)mmio_map_region(physical, sizeof(uint32_t));
+}
+#endif
+
+/* Caller holds pci_config_lock. */
+static uint32_t pci_read_device_config_locked(
+    const struct pci_device* device, uint8_t offset)
+{
+#ifndef PCI_TEST
+    if (device->segment_group != 0U ||
+        pci_find_mcfg_region(device->segment_group, device->bus) != NULL)
+    {
+        volatile uint32_t* mapped = pci_ecam_dword(device, offset);
+        uint32_t value;
+        if (!mapped)
+            return 0xFFFFFFFFU;
+        value = *mapped;
+        (void)mmio_unmap_region((void*)mapped, sizeof(uint32_t));
+        return value;
+    }
+#else
+    if (device->segment_group != 0U)
+        return 0xFFFFFFFFU;
+#endif
+    return pci_read_config_locked(device->bus, device->slot,
+                                  device->function, offset);
+}
+
+/* Caller holds pci_config_lock. */
+static int pci_write_device_config_locked(
+    const struct pci_device* device, uint8_t offset, uint32_t value)
+{
+#ifndef PCI_TEST
+    if (device->segment_group != 0U ||
+        pci_find_mcfg_region(device->segment_group, device->bus) != NULL)
+    {
+        volatile uint32_t* mapped = pci_ecam_dword(device, offset);
+        if (!mapped)
+            return 0;
+        *mapped = value;
+        (void)mmio_unmap_region((void*)mapped, sizeof(uint32_t));
+        return 1;
+    }
+#else
+    if (device->segment_group != 0U)
+        return 0;
+#endif
+    pci_write_config_locked(device->bus, device->slot,
+                            device->function, offset, value);
+    return 1;
+}
+
+static uint32_t pci_read_device_config(
+    const struct pci_device* device, uint8_t offset)
+{
+    uint64_t flags;
+    uint32_t value;
+    if (!device)
+        return 0xFFFFFFFFU;
+    flags = pci_lock_config();
+    value = pci_read_device_config_locked(device, offset);
+    pci_unlock_config(flags);
+    return value;
+}
+
 static void pci_write_config(
     uint8_t bus, uint8_t slot, uint8_t function, uint8_t offset, uint32_t value
 )
@@ -168,128 +268,83 @@ static void pci_write_config_locked(
     outl(PCI_CONFIG_DATA, value);
 }
 
-static uint16_t pci_get_vendor(
-    uint8_t bus,
-    uint8_t slot,
-    uint8_t function
-)
+static void pci_read_device(struct pci_device* device,
+                             uint16_t segment, uint8_t bus,
+                             uint8_t slot, uint8_t function)
 {
-    return (uint16_t)(
-        pci_read_config(
-            bus,
-            slot,
-            function,
-            0x00
-        ) & 0xFFFF
-    );
-}
-
-static void pci_read_device(
-    struct pci_device* device,
-    uint8_t bus,
-    uint8_t slot,
-    uint8_t function
-)
-{
-    uint32_t id =
-        pci_read_config(
-            bus,
-            slot,
-            function,
-            0x00
-        );
-
-    uint32_t class_info =
-        pci_read_config(
-            bus,
-            slot,
-            function,
-            0x08
-        );
+    uint32_t id;
+    uint32_t class_info;
 
     device->bus = bus;
     device->slot = slot;
     device->function = function;
-    device->segment_group = 0U;
+    device->segment_group = segment;
 
-    device->vendor_id =
-        (uint16_t)(id & 0xFFFF);
+    id = pci_read_device_config(device, 0x00U);
+    class_info = pci_read_device_config(device, 0x08U);
+    device->vendor_id = (uint16_t)(id & 0xFFFFU);
+    device->device_id = (uint16_t)(id >> 16U);
+    device->revision = (uint8_t)(class_info & 0xFFU);
+    device->prog_if = (uint8_t)((class_info >> 8U) & 0xFFU);
+    device->subclass = (uint8_t)((class_info >> 16U) & 0xFFU);
+    device->class_code = (uint8_t)((class_info >> 24U) & 0xFFU);
+}
 
-    device->device_id =
-        (uint16_t)(id >> 16);
+static void pci_scan_range(uint16_t segment, uint8_t first_bus,
+                           uint8_t last_bus)
+{
+    for (uint16_t bus = first_bus; bus <= last_bus; ++bus)
+    {
+        for (uint8_t slot = 0U; slot < 32U; ++slot)
+        {
+            struct pci_device probe = {
+                .bus = (uint8_t)bus, .slot = slot, .function = 0U,
+                .segment_group = segment
+            };
+            uint32_t id = pci_read_device_config(&probe, 0x00U);
+            if ((uint16_t)id == PCI_INVALID_VENDOR)
+                continue;
 
-    device->revision =
-        (uint8_t)(class_info & 0xFF);
+            uint8_t header_type = (uint8_t)(
+                pci_read_device_config(&probe, 0x0CU) >> 16U);
+            uint8_t function_count =
+                (header_type & 0x80U) != 0U ? 8U : 1U;
 
-    device->prog_if =
-        (uint8_t)((class_info >> 8) & 0xFF);
+            for (uint8_t function = 0U; function < function_count; ++function)
+            {
+                probe.function = function;
+                id = pci_read_device_config(&probe, 0x00U);
+                if ((uint16_t)id == PCI_INVALID_VENDOR)
+                    continue;
+                if (device_count >= PCI_MAX_DEVICES)
+                    return;
 
-    device->subclass =
-        (uint8_t)((class_info >> 16) & 0xFF);
-
-    device->class_code =
-        (uint8_t)((class_info >> 24) & 0xFF);
+                pci_read_device(&devices[device_count], segment,
+                                (uint8_t)bus, slot, function);
+                ++device_count;
+            }
+        }
+    }
 }
 
 static void pci_scan(void)
 {
-    device_count = 0;
-
-    for (uint16_t bus = 0; bus < 256; bus++)
+    device_count = 0U;
+#ifndef PCI_TEST
+    /* Segment zero remains discoverable through legacy CF8/CFC when firmware
+       does not publish MCFG; published MCFG ranges use ECAM instead. */
+    pci_scan_range(0U, 0U, 255U);
+    for (uint32_t i = 0U; i < pci_mcfg_region_count; ++i)
     {
-        for (uint8_t slot = 0; slot < 32; slot++)
-        {
-            uint16_t vendor =
-                pci_get_vendor(
-                    (uint8_t)bus,
-                    slot,
-                    0
-                );
-
-            if (vendor == PCI_INVALID_VENDOR)
-                continue;
-
-            uint8_t header_type =
-                (uint8_t)(
-                    pci_read_config(
-                        (uint8_t)bus,
-                        slot,
-                        0,
-                        0x0C
-                    ) >> 16
-                );
-
-            uint8_t function_count =
-                (header_type & 0x80) ? 8 : 1;
-
-            for (uint8_t function = 0;
-                 function < function_count;
-                 function++)
-            {
-                vendor =
-                    pci_get_vendor(
-                        (uint8_t)bus,
-                        slot,
-                        function
-                    );
-
-                if (vendor == PCI_INVALID_VENDOR)
-                    continue;
-
-                if (device_count >= PCI_MAX_DEVICES)
-                    return;
-
-                pci_read_device(
-                    &devices[device_count],
-                    (uint8_t)bus,
-                    slot,
-                    function
-                );
-
-                device_count++;
-            }
-        }
+        const acpi_mcfg_region_t* region = &pci_mcfg_regions[i];
+        if (region->segment_group == 0U)
+            continue; /* Already covered, including ECAM-backed bus ranges. */
+        pci_scan_range(region->segment_group,
+                       region->start_bus, region->end_bus);
     }
+#else
+    pci_scan_range(0U, 0U, 255U);
+#endif
 }
 
 void pci_initialize(void)

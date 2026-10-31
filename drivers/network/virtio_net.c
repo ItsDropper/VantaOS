@@ -85,6 +85,16 @@ static int vnet_reset_device(void)
  }
  return in8(state.io_base+0x12U)==0U;
 }
+#ifdef VANTAOS_SELF_TEST
+static void vnet_rx_selftest_handler(net_device_t*d,const uint8_t*f,size_t n,
+                                     uint16_t type,size_t header,void*context){
+ (void)context;
+ if(d!=&state.netdev||!f||type!=0x88B5U||header>n||n-header<4U)return;
+ if(f[header]==0x56U&&f[header+1U]==0x41U&&
+    f[header+2U]==0x4EU&&f[header+3U]==0x54)
+  serial_write("VANTAOS_VIRTIO_NET_RX_SELFTEST_OK\n");
+}
+#endif
 static int vnet_transmit(net_device_t*d,const uint8_t*f,size_t n){
  if(d!=&state.netdev||!state.ready||state.tx_failed||!state.tx.size||!f||
     n<NET_ETHERNET_HEADER_SIZE||n>NET_FRAME_MAX_SIZE||

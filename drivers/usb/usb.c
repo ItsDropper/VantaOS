@@ -9,6 +9,7 @@
 
 #include "../input/usb/hid.h"
 #include "xhci.h"
+#include "usb_device.h"
 #include "rtl8188eu.h"
 #include "usb_bluetooth.h"
 #include "serial.h"
@@ -1324,6 +1325,19 @@ static int usb_enumerate_port(uint32_t port)
                      configuration_value, 0, 0, 0))
         goto cleanup;
 
+    usb_device_identity_t identity = {
+        .vendor_id = vendor_id,
+        .product_id = product_id,
+        .class_code = descriptor_buffer[4],
+        .subclass = descriptor_buffer[5],
+        .protocol = descriptor_buffer[6],
+        .revision = descriptor_buffer[12]
+    };
+    if (!usb_device_register(slot, port, xhci_controller_device(), &identity))
+        goto cleanup;
+    /* Enumeration is a successful generic USB bind even without a class driver. */
+    success = 1;
+
     /* Bind supported RTL8188EU USB IDs before generic interface matching. */
     if (vendor_id == 0x0BDAU &&
         (product_id == 0x8179U || product_id == 0x0179U)) {
@@ -1439,8 +1453,10 @@ static int usb_enumerate_port(uint32_t port)
     success = 1;
 
 cleanup:
-    if (!success)
+    if (!success) {
+        (void)usb_device_unregister(slot);
         usb_disable_slot_or_defer(slot);
+    }
     return success;
 }
 
@@ -1488,6 +1504,10 @@ void usb_poll(void)
                     usb_detach_slot(slot);
                     slot_disconnected = 1;
                 }
+                if (usb_device_port(slot) == port) {
+                    (void)usb_device_unregister(slot);
+                    slot_disconnected = 1;
+                }
                 if (slot_disconnected)
                     usb_disable_slot_or_defer(slot);
             }
@@ -1496,7 +1516,8 @@ void usb_poll(void)
             for (uint32_t slot = 1; slot <= USB_MAX_XHCI_SLOTS; ++slot) {
                 if ((input_slots[slot].active && input_slots[slot].port == port) ||
                     (bluetooth_slots[slot].active &&
-                     bluetooth_slots[slot].port == port))
+                     bluetooth_slots[slot].port == port) ||
+                    usb_device_port(slot) == port)
                     already_enumerated = 1;
             }
             if (!already_enumerated)

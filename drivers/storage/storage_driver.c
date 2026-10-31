@@ -32,6 +32,18 @@ static int valid_name(const char* name)
     return 0;
 }
 
+static int same_name(const char* left, const char* right)
+{
+    for (uint32_t i = 0U; i < STORAGE_DRIVER_NAME_MAX; ++i)
+    {
+        if (left[i] != right[i])
+            return 0;
+        if (left[i] == '\0')
+            return 1;
+    }
+    return 0;
+}
+
 static device_probe_result_t storage_adapter_probe(device_t* device)
 {
     storage_adapter_t* adapter;
@@ -59,25 +71,10 @@ int storage_driver_register(const storage_driver_t* driver)
     {
         if (adapters[i].storage == driver ||
             (adapters[i].storage &&
-             adapters[i].storage->name[0] == driver->name[0] &&
-             valid_name(adapters[i].storage->name)))
+             same_name(adapters[i].storage->name, driver->name)))
         {
-            int same_name = 1;
-            for (uint32_t j = 0U; j < STORAGE_DRIVER_NAME_MAX; ++j)
-            {
-                if (adapters[i].storage->name[j] != driver->name[j])
-                {
-                    same_name = 0;
-                    break;
-                }
-                if (driver->name[j] == '\0')
-                    break;
-            }
-            if (same_name)
-            {
-                spinlock_unlock_irqrestore(&storage_lock, flags);
-                return 0;
-            }
+            spinlock_unlock_irqrestore(&storage_lock, flags);
+            return 0;
         }
     }
     if (adapters_used >= STORAGE_DRIVER_MAX)

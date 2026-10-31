@@ -30,13 +30,6 @@ typedef struct
 static int available;
 static uint64_t available_sectors;
 static block_device_t ata_block;
-static device_t ata_controller_device = {
-    .name = "ata-legacy0",
-    .bus = DEVICE_BUS_PLATFORM,
-    .class_code = 0x01U,
-    .subclass = 0x01U,
-    .bus_data = &active_channel
-};
 static spinlock_t ata_io_lock = SPINLOCK_INITIALIZER;
 static ata_channel_t active_channel;
 static uint8_t active_drive;
@@ -44,6 +37,14 @@ static uint8_t last_status;
 static uint8_t last_error;
 static uint8_t last_signature_mid;
 static uint8_t last_signature_high;
+
+static device_t ata_controller_device = {
+    .name = "ata-legacy0",
+    .bus = DEVICE_BUS_PLATFORM,
+    .class_code = 0x01U,
+    .subclass = 0x01U,
+    .bus_data = &active_channel
+};
 
 static inline void outb(uint16_t port, uint8_t value)
 {

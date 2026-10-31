@@ -1400,24 +1400,58 @@ static int controller_start(const struct pci_device* pci)
     return 1;
 }
 
+static device_probe_result_t xhci_device_probe(device_t* device)
+{
+    const struct pci_device* pci;
+    if (!device || device->bus != DEVICE_BUS_PCI || !device->bus_data)
+        return DEVICE_PROBE_FAILED;
+    pci = (const struct pci_device*)device->bus_data;
+    return controller_start(pci) ?
+        DEVICE_PROBE_BOUND : DEVICE_PROBE_FAILED;
+}
+
+static const device_id_t xhci_device_ids[] = {
+    {DEVICE_ID_ANY16, DEVICE_ID_ANY16, XHCI_PCI_CLASS,
+     XHCI_PCI_SUBCLASS, XHCI_PCI_PROG_IF}
+};
+static const device_driver_t xhci_device_driver = {
+    .name = "xhci-host-controller",
+    .bus = DEVICE_BUS_PCI,
+    .ids = xhci_device_ids,
+    .id_count = sizeof(xhci_device_ids) / sizeof(xhci_device_ids[0]),
+    .probe = xhci_device_probe
+};
+
 void xhci_initialize(void)
 {
     if (initialized)
         return;
     initialized = 1;
 
+    if (!device_driver_register(&xhci_device_driver))
+    {
+        serial_write("VANTAOS_XHCI_DRIVER_REGISTER_FAIL\n");
+        return;
+    }
+
     int index = -1;
     while ((index = pci_find_class(XHCI_PCI_CLASS, XHCI_PCI_SUBCLASS,
-                                   XHCI_PCI_PROG_IF, index + 1)) >= 0) {
+                                   XHCI_PCI_PROG_IF, index + 1)) >= 0)
+    {
         const struct pci_device* pci = pci_get_device(index);
         if (!pci)
             continue;
-        if (controller_start(pci)) {
+
+        device_bind_result_t result =
+            device_bind((device_t*)&pci->core, &xhci_device_driver);
+        if (result == DEVICE_BIND_BOUND)
+        {
             controller_online = 1;
             serial_write("VANTAOS_XHCI_CONTROLLER_ONLINE\n");
             return;
         }
-        serial_write("VANTAOS_XHCI_CONTROLLER_INIT_FAILED\n");
+        if (result == DEVICE_BIND_FAILED)
+            serial_write("VANTAOS_XHCI_CONTROLLER_INIT_FAILED\n");
     }
 
     serial_write("VANTAOS_XHCI_CONTROLLER_NOT_FOUND\n");

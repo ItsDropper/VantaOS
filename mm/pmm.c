@@ -25,6 +25,8 @@ static uint32_t pmm_reserved_bitmap[PMM_BITMAP_WORDS]
 
 static uint32_t total_blocks;
 static uint32_t free_blocks;
+/* Next-fit hint avoids rescanning allocated low memory on every allocation. */
+static uint32_t allocation_hint;
 static int initialized;
 static spinlock_t pmm_lock = SPINLOCK_INITIALIZER;
 
@@ -129,6 +131,7 @@ void pmm_initialize(const vanta_boot_info_t* boot_info)
     initialized = 0;
     total_blocks = 0;
     free_blocks = 0;
+    allocation_hint = 0U;
 
     for (uint32_t i = 0; i < PMM_BITMAP_WORDS; i++)
     {
@@ -313,38 +316,36 @@ void* pmm_alloc_block(void)
     void *result = NULL;
 
     spinlock_lock(&pmm_lock);
-    if (!initialized || total_blocks == 0)
+    if (!initialized || total_blocks == 0U)
     {
         spinlock_unlock(&pmm_lock);
         return NULL;
     }
 
-    for (uint32_t word = 0;
-         word < (total_blocks + 31U) / 32U;
-         word++)
+    /*
+     * Search from the last successful allocation and wrap once. This keeps
+     * allocation cost proportional to the free-space region rather than
+     * repeatedly scanning an increasingly occupied low-memory prefix.
+     */
+    uint32_t start = allocation_hint < total_blocks ? allocation_hint : 0U;
+    for (uint32_t offset = 0U; offset < total_blocks; ++offset)
     {
-        uint32_t bits = pmm_bitmap[word];
+        uint32_t block = start + offset;
+        if (block >= total_blocks)
+            block -= total_blocks;
 
-        if (bits == 0xFFFFFFFFU)
-            continue;
-
-        for (uint32_t bit = 0; bit < 32U; bit++)
+        if (!bitmap_test(pmm_bitmap, block) &&
+            !bitmap_test(pmm_reserved_bitmap, block))
         {
-            uint32_t block = word * 32U + bit;
-
-            if (block >= total_blocks)
-                break;
-
-            if (!bitmap_test(pmm_bitmap, block) &&
-                !bitmap_test(pmm_reserved_bitmap, block))
-            {
-                bitmap_set(pmm_bitmap, block);
-                if (free_blocks > 0U)
-                    free_blocks--;
-                result = (void *)(uintptr_t)((uint64_t)block * PAGE_SIZE);
-                spinlock_unlock(&pmm_lock);
-                return result;
-            }
+            bitmap_set(pmm_bitmap, block);
+            if (free_blocks > 0U)
+                free_blocks--;
+            allocation_hint = block + 1U;
+            if (allocation_hint >= total_blocks)
+                allocation_hint = 0U;
+            result = (void *)(uintptr_t)((uint64_t)block * PAGE_SIZE);
+            spinlock_unlock(&pmm_lock);
+            return result;
         }
     }
 
@@ -357,9 +358,6 @@ void* pmm_alloc_block(void)
 
 int pmm_alloc_contiguous_blocks(uint32_t count, void **base_address)
 {
-    uint32_t run_start = 0U;
-    uint32_t run_length = 0U;
-
     if (base_address == NULL)
         return 0;
     *base_address = NULL;
@@ -374,32 +372,44 @@ int pmm_alloc_contiguous_blocks(uint32_t count, void **base_address)
     }
 
     /*
-     * Search for the whole run before marking any frame. The previous DMA
-     * implementation allocated pages one at a time and then rejected a
-     * fragmented first-fit result even if a suitable run existed later.
+     * Search from the next-fit hint, then wrap to the beginning. Each pass
+     * examines only a physically contiguous interval; a run never wraps from
+     * the highest frame back to frame zero.
      */
-    for (uint32_t block = 0U; block < total_blocks; ++block)
+    uint32_t start = allocation_hint < total_blocks ? allocation_hint : 0U;
+    for (uint32_t pass = 0U; pass < 2U; ++pass)
     {
-        if (!bitmap_test(pmm_bitmap, block) &&
-            !bitmap_test(pmm_reserved_bitmap, block))
+        uint32_t range_start = pass == 0U ? start : 0U;
+        uint32_t range_end = pass == 0U ? total_blocks : start;
+        uint32_t run_start = 0U;
+        uint32_t run_length = 0U;
+
+        for (uint32_t block = range_start; block < range_end; ++block)
         {
-            if (run_length == 0U)
-                run_start = block;
-            ++run_length;
-            if (run_length == count)
+            if (!bitmap_test(pmm_bitmap, block) &&
+                !bitmap_test(pmm_reserved_bitmap, block))
             {
-                for (uint32_t i = 0U; i < count; ++i)
-                    bitmap_set(pmm_bitmap, run_start + i);
-                free_blocks -= count;
-                *base_address =
-                    (void *)(uintptr_t)((uint64_t)run_start * PAGE_SIZE);
-                spinlock_unlock(&pmm_lock);
-                return 1;
+                if (run_length == 0U)
+                    run_start = block;
+                ++run_length;
+                if (run_length == count)
+                {
+                    for (uint32_t i = 0U; i < count; ++i)
+                        bitmap_set(pmm_bitmap, run_start + i);
+                    free_blocks -= count;
+                    allocation_hint = run_start + count;
+                    if (allocation_hint >= total_blocks)
+                        allocation_hint = 0U;
+                    *base_address = (void *)(uintptr_t)(
+                        (uint64_t)run_start * PAGE_SIZE);
+                    spinlock_unlock(&pmm_lock);
+                    return 1;
+                }
             }
-        }
-        else
-        {
-            run_length = 0U;
+            else
+            {
+                run_length = 0U;
+            }
         }
     }
 

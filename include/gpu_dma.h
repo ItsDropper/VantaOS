@@ -34,6 +34,7 @@ typedef struct gpu_dma_buffer {
     size_t allocated_size;
     size_t page_count;
     uint64_t allocation_id;
+    uint8_t address_bits;
     uint8_t acquired;
 } gpu_dma_buffer_t;
 

@@ -9,6 +9,7 @@
 #define XHCI_H
 
 #include <stdint.h>
+#include "device.h"
 
 /* Initialize the first usable PCI xHCI host controller. Safe to call once. */
 void xhci_initialize(void);
@@ -49,6 +50,8 @@ int xhci_take_interrupt_report(uint32_t slot_id, uint8_t* output,
 
 /* True after controller reset, rings, and Run/Stop have completed. */
 int xhci_controller_online(void);
+/* Generic device node for the active host controller, if any. */
+device_t* xhci_controller_device(void);
 
 /* Bit N is set when a port-status-change event was observed for port N. */
 unsigned int xhci_take_port_events(void);

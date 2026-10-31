@@ -102,6 +102,8 @@ void process_reset_record(process_t* process)
     process->owner_cpu = PROCESS_CPU_UNOWNED;
     process->state = PROCESS_UNUSED;
     process->priority = PROCESS_PRIORITY_NORMAL;
+    process->runtime_ticks = 0U;
+    process->context_switches = 0U;
     process->sleep_deadline_ticks = 0U;
     process->wait_queue = NULL;
     process->exit_status = 0;
@@ -283,6 +285,41 @@ void process_initialize(void)
 int process_is_initialized(void)
 {
     return __atomic_load_n(&process_initialized_state, __ATOMIC_ACQUIRE) != 0;
+}
+
+void process_account_runtime_tick(uint32_t pid)
+{
+    if (!process_initialized_state || pid == 0U || pid >= PROCESS_MAX)
+        return;
+
+    uint64_t flags = process_table_lock_acquire();
+    process_t* process = &process_table_records[pid];
+    if (process->state == PROCESS_RUNNING &&
+        process->owner_cpu == process_current_cpu_id() &&
+        process->runtime_ticks != UINT64_MAX)
+        process->runtime_ticks++;
+    process_table_lock_release(flags);
+}
+
+int process_get_runtime_stats(uint32_t pid, uint64_t* runtime_ticks_out,
+                              uint64_t* context_switches_out)
+{
+    if (!process_initialized_state || pid == 0U || pid >= PROCESS_MAX ||
+        (!runtime_ticks_out && !context_switches_out))
+        return 0;
+
+    uint64_t flags = process_table_lock_acquire();
+    const process_t* process = &process_table_records[pid];
+    int valid = process->state != PROCESS_UNUSED;
+    if (valid)
+    {
+        if (runtime_ticks_out)
+            *runtime_ticks_out = process->runtime_ticks;
+        if (context_switches_out)
+            *context_switches_out = process->context_switches;
+    }
+    process_table_lock_release(flags);
+    return valid;
 }
 
 int process_attach_current(const char* name, uint32_t parent_pid)

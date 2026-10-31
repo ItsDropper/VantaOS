@@ -248,14 +248,15 @@ uint64_t scheduler_tick(uint64_t current_stack)
      * next timer interrupt must switch to the runnable child (or idle task).
      */
     process_t current;
-    int current_runnable = process_snapshot(current_pid, &current) &&
+    int have_current = process_snapshot(current_pid, &current);
+    int current_runnable = have_current &&
         (current.state == PROCESS_RUNNING || current.state == PROCESS_READY);
     if (!current_runnable)
         requested = 1;
 
     volatile uint32_t* quantum_ticks = scheduler_quantum_slot();
     uint32_t priority = PROCESS_PRIORITY_NORMAL;
-    if (current.state == PROCESS_RUNNING &&
+    if (have_current && current.state == PROCESS_RUNNING &&
         current.priority <= PROCESS_PRIORITY_MAX)
         priority = current.priority;
     uint32_t quantum_limit = SCHEDULER_QUANTUM_BASE_TICKS +

@@ -244,11 +244,16 @@ static int map_controller_bar(uint64_t physical_bar)
     if (offset + XHCI_MMIO_MAP_SIZE > 0x400000ULL)
         return 0;
 
-    for (uint64_t mapped = 0; mapped < XHCI_MMIO_MAP_SIZE;
-         mapped += PAGE_SIZE) {
+    uint64_t mapped = 0U;
+    for (; mapped < XHCI_MMIO_MAP_SIZE; mapped += PAGE_SIZE) {
         if (!paging_map_mmio_page((uintptr_t)(XHCI_MMIO_BASE + mapped),
-                                  (uintptr_t)(page + mapped)))
+                                  (uintptr_t)(page + mapped))) {
+            while (mapped > 0U) {
+                mapped -= PAGE_SIZE;
+                paging_unmap_page((uintptr_t)(XHCI_MMIO_BASE + mapped));
+            }
             return 0;
+        }
     }
 
     registers = (volatile uint8_t*)(uintptr_t)(XHCI_MMIO_BASE + offset);

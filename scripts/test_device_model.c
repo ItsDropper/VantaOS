@@ -11,6 +11,8 @@
 
 static uint32_t probe_count;
 static uint32_t remove_count;
+static uint32_t usb_probe_count;
+static uint32_t usb_remove_count;
 
 static device_probe_result_t display_probe(device_t* device)
 {
@@ -30,6 +32,19 @@ static device_probe_result_t failing_probe(device_t* device)
     assert(device != NULL);
     ++probe_count;
     return DEVICE_PROBE_FAILED;
+}
+
+static device_probe_result_t usb_probe(device_t* device)
+{
+    assert(device != NULL);
+    ++usb_probe_count;
+    return DEVICE_PROBE_BOUND;
+}
+
+static void usb_remove(device_t* device)
+{
+    assert(device != NULL);
+    ++usb_remove_count;
 }
 
 int main(void)
@@ -89,6 +104,21 @@ int main(void)
         .id_count = 1U,
         .probe = failing_probe
     };
+    const device_id_t usb_ids[] = {{
+        .vendor_id = 0x1234U,
+        .device_id = 0x5678U,
+        .class_code = DEVICE_ID_ANY8,
+        .subclass = DEVICE_ID_ANY8,
+        .prog_if = DEVICE_ID_ANY8
+    }};
+    const device_driver_t usb_driver = {
+        .name = "test-usb",
+        .bus = DEVICE_BUS_USB,
+        .ids = usb_ids,
+        .id_count = 1U,
+        .probe = usb_probe,
+        .remove = usb_remove
+    };
 
     assert(!device_register(&display)); /* Parent must be registered first. */
     assert(device_register(&root));
@@ -101,12 +131,15 @@ int main(void)
     assert(device_find(DEVICE_BUS_USB, "pci0000:01:04.0") == NULL);
 
     assert(device_driver_register(&display_driver));
-    assert(device_probe_all() == 1U);
+    assert(device_driver_register(&usb_driver));
+    assert(device_probe_all() == 2U);
     assert(probe_count == 1U);
+    assert(usb_probe_count == 1U);
     assert(display.state == DEVICE_STATE_BOUND);
     assert(display.driver == &display_driver);
+    assert(usb.state == DEVICE_STATE_BOUND);
+    assert(usb.driver == &usb_driver);
     assert(root.state == DEVICE_STATE_REGISTERED);
-    assert(usb.state == DEVICE_STATE_REGISTERED);
 
     assert(!device_unregister(&root)); /* A registered child still exists. */
     assert(!device_driver_unregister(&display_driver));
@@ -114,6 +147,10 @@ int main(void)
     assert(remove_count == 1U);
     assert(display.state == DEVICE_STATE_REGISTERED);
     assert(display.driver == NULL);
+    assert(device_unbind(&usb));
+    assert(usb_remove_count == 1U);
+    assert(usb.state == DEVICE_STATE_REGISTERED);
+    assert(usb.driver == NULL);
 
     assert(device_acquire(&usb));
     assert(!device_unregister(&usb));
@@ -122,6 +159,7 @@ int main(void)
     assert(device_unregister(&display));
     assert(device_unregister(&root));
     assert(device_driver_unregister(&display_driver));
+    assert(device_driver_unregister(&usb_driver));
 
     assert(device_driver_register(&failing_driver));
     assert(device_register(&root));

@@ -435,7 +435,14 @@ static int vnet_modern_poll(void)
 
 static void cleanup(void)
 {
-    if (state.common) wr8(state.common, 20U, 0U);
+    int reset_complete = 1;
+    if (state.common) {
+        wr8(state.common, 20U, 0U);
+        for (uint32_t i = 0U; i < VNET_WAIT_LIMIT &&
+             rd8(state.common, 20U) != 0U; ++i)
+            __asm__ volatile ("pause");
+        reset_complete = rd8(state.common, 20U) == 0U;
+    }
     state.ready = 0U;
 #ifdef VANTAOS_SELF_TEST
     if (state.selftest_handler_registered) {
@@ -447,11 +454,24 @@ static void cleanup(void)
         (void)net_device_unregister(&state.netdev);
         state.registered = 0U;
     }
-    release_queue(&state.rx);
-    release_queue(&state.tx);
-    if (state.common) (void)mmio_unmap_region((void *)state.common, state.common_length);
-    if (state.notify_region) (void)mmio_unmap_region((void *)state.notify_region, state.notify_length);
-    if (state.device_config) (void)mmio_unmap_region((void *)state.device_config, state.device_config_length);
+    if (reset_complete) {
+        release_queue(&state.rx);
+        release_queue(&state.tx);
+        if (state.common)
+            (void)mmio_unmap_region((void *)state.common, state.common_length);
+        if (state.notify_region)
+            (void)mmio_unmap_region((void *)state.notify_region, state.notify_length);
+        if (state.device_config)
+            (void)mmio_unmap_region((void *)state.device_config,
+                                    state.device_config_length);
+    } else {
+        /*
+         * A device that did not acknowledge reset may still own its DMA
+         * descriptors. Leak those pages rather than returning live DMA memory
+         * to the allocator; also retain the MMIO mappings until reboot.
+         */
+        serial_write("VANTAOS_VIRTIO_NET_MODERN_RESET_TIMEOUT_DMA_RETAINED\n");
+    }
     state = (vnet_modern_state_t){0};
 }
 

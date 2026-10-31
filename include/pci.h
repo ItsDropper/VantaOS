@@ -9,6 +9,7 @@
 #define PCI_H
 
 #include <stdint.h>
+#include "device.h"
 
 struct pci_device
 {
@@ -46,6 +47,9 @@ struct pci_device
     uint8_t io_window_valid;
     uint8_t memory_window_valid;
     uint8_t prefetch_window_valid;
+
+    /* Generic kernel device object; bus_data points back to this PCI record. */
+    device_t core;
 };
 
 void pci_initialize(void);

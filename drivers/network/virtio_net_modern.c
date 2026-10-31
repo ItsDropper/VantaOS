@@ -488,6 +488,7 @@ static net_pci_probe_result_t vnet_modern_probe(const struct pci_device *pci)
     state.netdev.link_up = state.has_status ? ((rd16(state.device_config, 6U) & 1U) != 0U) : 1U;
     state.netdev.ops = &vnet_modern_ops;
     state.netdev.driver_data = &state;
+    state.netdev.parent_device = (device_t*)&state.pci->core;
     spinlock_init(&state.tx_lock);
     failure = "net-register";
     if (!net_device_register(&state.netdev)) goto fail;

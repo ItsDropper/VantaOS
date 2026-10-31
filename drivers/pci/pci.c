@@ -396,13 +396,14 @@ static void pci_scan_range(uint16_t segment, uint8_t first_bus,
                 if ((uint16_t)id == PCI_INVALID_VENDOR)
                     continue;
                 if (device_count >= PCI_MAX_DEVICES)
-                    return;
+                    goto bus_complete;
 
                 pci_read_device(&devices[device_count], segment,
                                 (uint8_t)bus, slot, function);
                 ++device_count;
             }
         }
+bus_complete:
 #ifndef PCI_TEST
         if (pci_scan_ecam_mapping &&
             pci_scan_ecam_segment == segment &&

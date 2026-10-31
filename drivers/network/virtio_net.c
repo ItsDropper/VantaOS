@@ -51,6 +51,7 @@ static inline void out32(uint16_t p,uint32_t v){__asm__ volatile("outl %0,%1"::"
 static inline uint8_t in8(uint16_t p){uint8_t v;__asm__ volatile("inb %1,%0":"=a"(v):"Nd"(p));return v;}
 static inline uint16_t in16(uint16_t p){uint16_t v;__asm__ volatile("inw %1,%0":"=a"(v):"Nd"(p));return v;}
 static inline uint32_t in32(uint16_t p){uint32_t v;__asm__ volatile("inl %1,%0":"=a"(v):"Nd"(p));return v;}
+static inline void vnet_dma_barrier(void){__asm__ volatile("mfence":::"memory");}
 static size_t align_page(size_t n){return(n+VNET_PAGE_SIZE-1U)&~(size_t)(VNET_PAGE_SIZE-1U);}
 static size_t queue_bytes(uint16_t n){return align_page((size_t)n*sizeof(vnet_desc_t)+4U+(size_t)n*2U)+4U+(size_t)n*sizeof(vnet_used_elem_t);}
 static int queue_allocate(vnet_queue_t*q,uint16_t n){
@@ -111,15 +112,15 @@ static int vnet_transmit(net_device_t*d,const uint8_t*f,size_t n){
  q->descriptors[slot].length=(uint32_t)(VNET_NET_HDR_SIZE+n);
  q->descriptors[slot].flags=0;q->descriptors[slot].next=0;
  q->available->ring[q->avail_index%q->size]=slot;
- __asm__ volatile("":::"memory");
- q->avail_index=target;q->available->index=target;
- __asm__ volatile("":::"memory");
+ q->avail_index=target;vnet_dma_barrier();q->available->index=target;
+ vnet_dma_barrier();
  queue_notify(state.io_base,1U);
  int done=0;
  for(uint32_t w=0;w<VNET_WAIT_LIMIT;w++){
   __asm__ volatile("":::"memory");
   uint16_t pending=(uint16_t)(q->used->index-q->last_used);
   if(pending){
+   vnet_dma_barrier();
    if(pending==1U&&q->used->ring[q->last_used%q->size].id==slot){
     ++q->last_used;done=1;
    }
@@ -140,6 +141,7 @@ static int vnet_poll_device(void){
   uint16_t pending=(uint16_t)(q->used->index-q->last_used);
   if(!pending)break;
   if(pending>q->size){q->failed=1U;break;}
+  vnet_dma_barrier();
   vnet_used_elem_t e=q->used->ring[q->last_used%q->size];
   ++q->last_used;
   if(e.id>=q->size||!q->device_owned[e.id]){q->failed=1U;break;}
@@ -155,8 +157,8 @@ static int vnet_poll_device(void){
   q->descriptors[id].flags=VNET_DESC_WRITE;q->descriptors[id].next=0;
   q->available->ring[q->avail_index%q->size]=id;
   ++q->avail_index;q->device_owned[id]=1U;
-  q->available->index=q->avail_index;
-  queue_notify(state.io_base,0U);++count;
+  vnet_dma_barrier();q->available->index=q->avail_index;
+  vnet_dma_barrier();queue_notify(state.io_base,0U);++count;
  }
  if(state.has_status){
   int up=(in16(state.io_base+0x1AU)&1U)!=0U;
@@ -198,7 +200,7 @@ static net_pci_probe_result_t vnet_probe(const struct pci_device*pci){
  out16(state.io_base+0x0EU,0U);uint16_t rn=in16(state.io_base+0x0CU);out16(state.io_base+0x0EU,1U);uint16_t tn=in16(state.io_base+0x0CU);
  if(!queue_allocate(&state.rx,rn)||!queue_allocate(&state.tx,tn))goto fail;
  for(uint16_t i=0;i<state.rx.size;i++){state.rx.descriptors[i].address=state.rx.buffers[i].physical_address;state.rx.descriptors[i].length=VNET_BUFFER_SIZE;state.rx.descriptors[i].flags=VNET_DESC_WRITE;state.rx.descriptors[i].next=0;state.rx.available->ring[i]=i;state.rx.device_owned[i]=1U;}
- state.rx.avail_index=state.rx.size;state.rx.available->index=state.rx.avail_index;queue_publish(state.io_base,0U,&state.rx);queue_publish(state.io_base,1U,&state.tx);
+ state.rx.avail_index=state.rx.size;vnet_dma_barrier();state.rx.available->index=state.rx.avail_index;vnet_dma_barrier();queue_publish(state.io_base,0U,&state.rx);queue_publish(state.io_base,1U,&state.tx);
  uint8_t mac[6],any=0;for(uint32_t i=0;i<6U;i++){mac[i]=in8(state.io_base+0x14U+(uint16_t)i);any|=mac[i];}if(!any||(mac[0]&1U))goto fail;
  if(!pci_enable_bus_mastering(pci))goto fail;
  out8(state.io_base+0x12U,VNET_STATUS_ACK|VNET_STATUS_DRIVER|VNET_STATUS_DRIVER_OK);

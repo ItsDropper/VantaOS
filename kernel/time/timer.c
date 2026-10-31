@@ -39,6 +39,7 @@ int timer_initialize(uint32_t frequency) {
 void timer_handle_interrupt(void) {
     uint64_t now = __atomic_add_fetch(&ticks, 1ULL, __ATOMIC_RELAXED);
     kernel_watchdog_timer_tick((uint32_t)now);
+    process_account_runtime_tick(process_current_pid());
     process_wake_expired(now);
 }
 

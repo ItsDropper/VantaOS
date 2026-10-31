@@ -162,6 +162,7 @@ static uint64_t bulk_expected_trb[XHCI_MAX_SLOTS][2];
 static uint32_t bulk_completion_code[XHCI_MAX_SLOTS][2];
 static uint32_t bulk_completion_status[XHCI_MAX_SLOTS][2];
 static int controller_online;
+static device_t* controller_device;
 static int initialized;
 
 static uint32_t mmio_read32(volatile uint8_t* base, uint32_t offset)
@@ -1406,8 +1407,10 @@ static device_probe_result_t xhci_device_probe(device_t* device)
     if (!device || device->bus != DEVICE_BUS_PCI || !device->bus_data)
         return DEVICE_PROBE_FAILED;
     pci = (const struct pci_device*)device->bus_data;
-    return controller_start(pci) ?
-        DEVICE_PROBE_BOUND : DEVICE_PROBE_FAILED;
+    if (!controller_start(pci))
+        return DEVICE_PROBE_FAILED;
+    controller_device = device;
+    return DEVICE_PROBE_BOUND;
 }
 
 static const device_id_t xhci_device_ids[] = {
@@ -1460,6 +1463,11 @@ void xhci_initialize(void)
 int xhci_controller_online(void)
 {
     return controller_online;
+}
+
+device_t* xhci_controller_device(void)
+{
+    return controller_online ? controller_device : NULL;
 }
 
 unsigned int xhci_take_port_events(void)

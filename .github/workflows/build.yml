@@ -224,6 +224,13 @@ jobs:
             kernel/device.c -o /tmp/vantaos-network-driver-model-test
           /tmp/vantaos-network-driver-model-test
 
+      - name: Test network stack initialization is idempotent
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iscripts/test_stubs -Iinclude \
+            scripts/test_network_stack_init.c net/init.c \
+            -o /tmp/vantaos-network-stack-init-test
+          /tmp/vantaos-network-stack-init-test
+
       - name: Test network interface device-tree lifecycle
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iscripts/test_stubs -Iinclude \

@@ -19,8 +19,14 @@
 
 void pmm_initialize(const vanta_boot_info_t* boot_info);
 void* pmm_alloc_block(void);
+/* Allocate one complete frame below an exclusive physical-address limit. */
+void* pmm_alloc_block_below(uint64_t max_address_exclusive);
 /* Atomically reserve a physically contiguous run of page frames. */
 int pmm_alloc_contiguous_blocks(uint32_t count, void **base_address);
+/* Contiguous variant; the complete run must end at or below the limit. */
+int pmm_alloc_contiguous_blocks_below(uint32_t count,
+                                      uint64_t max_address_exclusive,
+                                      void **base_address);
 void pmm_free_block(void* ptr);
 uint32_t pmm_get_total_blocks(void);
 uint32_t pmm_get_used_blocks(void);

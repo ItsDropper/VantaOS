@@ -123,6 +123,13 @@ jobs:
             scripts/test_timer_math.c -o /tmp/vantaos-timer-math-test
           /tmp/vantaos-timer-math-test
 
+      - name: Test physical memory allocator contiguous and next-fit allocation
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_pmm_contiguous.c mm/pmm.c \
+            -o /tmp/vantaos-pmm-contiguous-test
+          /tmp/vantaos-pmm-contiguous-test
+
       - name: Test kernel mutex API contract
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \

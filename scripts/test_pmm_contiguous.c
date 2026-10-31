@@ -88,5 +88,23 @@ int main(void)
     pmm_free_block(single);
     pmm_free_block(following);
     assert(pmm_get_free_blocks() == free_before);
+
+    /*
+     * Place the next-fit hint inside a four-frame free run. Contiguous
+     * allocation must still discover the complete physical run.
+     */
+    void *prefix_a = pmm_alloc_block();
+    void *prefix_b = pmm_alloc_block();
+    assert(prefix_a == (void *)(uintptr_t)0x104000ULL);
+    assert(prefix_b == (void *)(uintptr_t)0x105000ULL);
+    pmm_free_block(prefix_a);
+    pmm_free_block(prefix_b);
+
+    run = 0;
+    assert(pmm_alloc_contiguous_blocks(4U, &run));
+    assert(run == (void *)(uintptr_t)0x104000ULL);
+    for (uint32_t i = 0U; i < 4U; ++i)
+        pmm_free_block((void *)((uintptr_t)run + (uintptr_t)i * PAGE_SIZE));
+    assert(pmm_get_free_blocks() == free_before);
     return 0;
 }

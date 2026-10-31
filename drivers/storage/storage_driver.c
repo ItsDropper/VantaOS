@@ -9,6 +9,8 @@
 #include "device.h"
 #include "spinlock.h"
 
+#include <stddef.h>
+
 typedef struct
 {
     const storage_driver_t* storage;

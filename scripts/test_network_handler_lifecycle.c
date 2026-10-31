@@ -6,11 +6,20 @@
  */
 #include "net.h"
 #include "device.h"
+#include "net_ipv4.h"
 
 #include <assert.h>
 
 extern int net_internal_dispatch_ethernet(net_device_t*, const uint8_t*,
                                           size_t, uint16_t, size_t);
+
+int net_ipv4_send(net_device_t* device, uint32_t destination,
+                  uint8_t protocol, const void* payload, size_t payload_length)
+{
+    (void)device; (void)destination; (void)protocol;
+    (void)payload; (void)payload_length;
+    return 0;
+}
 
 static net_device_t* active_device;
 static uint32_t ethernet_calls;

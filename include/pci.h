@@ -25,6 +25,16 @@ struct pci_device
     uint8_t revision;
     /* PCI domain/segment; zero for legacy configuration-space devices. */
     uint16_t segment_group;
+
+    /* Standard header metadata, retained for bus topology and driver matching. */
+    uint8_t header_type;
+    uint8_t interrupt_line;
+    uint8_t interrupt_pin;
+
+    /* Type-1 bridge bus numbers; zero for non-bridge headers. */
+    uint8_t primary_bus;
+    uint8_t secondary_bus;
+    uint8_t subordinate_bus;
 };
 
 void pci_initialize(void);

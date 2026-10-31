@@ -143,6 +143,10 @@ int main(void)
 
     assert(!device_unregister(&root)); /* A registered child still exists. */
     assert(!device_driver_unregister(&display_driver));
+    /* Active users pin a bound device against hardware teardown. */
+    assert(device_acquire_bound(&display));
+    assert(!device_unbind(&display));
+    device_release(&display);
     assert(device_unbind(&display));
     assert(remove_count == 1U);
     assert(display.state == DEVICE_STATE_REGISTERED);

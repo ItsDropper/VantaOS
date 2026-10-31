@@ -83,8 +83,15 @@ int main(void)
     assert(fake_ticks == 10U);
     assert(kernel_event_set(&automatic));
     assert(kernel_event_wait_until(&automatic, 20U));
-    assert(wake_one_calls == 1U);
+    /* No blocked waiter means the stored signal must not trigger a wake. */
+    assert(wake_one_calls == 0U);
     assert(wake_all_calls == 0U);
+
+    automatic.waiters.waiters[7U / 32U] |= 1U << (7U % 32U);
+    assert(kernel_event_set(&automatic));
+    assert(wake_one_calls == 1U);
+    automatic.waiters.waiters[7U / 32U] = 0U;
+    assert(kernel_event_wait(&automatic));
 
     kernel_event_t manual = KERNEL_EVENT_INITIALIZER(1, 1);
     assert(kernel_event_wait(&manual));
@@ -93,8 +100,10 @@ int main(void)
     assert(kernel_event_reset(&manual));
     assert(!kernel_event_is_set(&manual));
     assert(!kernel_event_wait(&manual));
+    manual.waiters.waiters[8U / 32U] |= 1U << (8U % 32U);
     assert(kernel_event_set(&manual));
     assert(wake_all_calls == 1U);
+    manual.waiters.waiters[8U / 32U] = 0U;
     assert(kernel_event_wait(&manual));
     assert(kernel_event_wait(&manual));
     assert(kernel_event_reset(&manual));

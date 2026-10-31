@@ -68,6 +68,22 @@ static void queue_release(vnet_queue_t*q){
 }
 static void queue_publish(uint16_t base,uint16_t index,vnet_queue_t*q){out16(base+0x0EU,index);out32(base+0x08U,(uint32_t)(q->ring_pages[0].physical_address>>12));}
 static void queue_notify(uint16_t base,uint16_t index){out16(base+0x10U,index);}
+
+/*
+ * The legacy transport acknowledges reset by clearing device status. DMA
+ * memory must remain allocated if that acknowledgement never arrives.
+ */
+static int vnet_reset_device(void)
+{
+ if(!state.io_base)return 0;
+ out8(state.io_base+0x12U,0U);
+ for(uint32_t i=0U;i<VNET_WAIT_LIMIT;i++){
+  __asm__ volatile("":::"memory");
+  if(in8(state.io_base+0x12U)==0U)return 1;
+  __asm__ volatile("pause");
+ }
+ return in8(state.io_base+0x12U)==0U;
+}
 static int vnet_transmit(net_device_t*d,const uint8_t*f,size_t n){
  if(d!=&state.netdev||!state.ready||!f||n<NET_ETHERNET_HEADER_SIZE||n>NET_FRAME_MAX_SIZE||n+VNET_NET_HDR_SIZE>VNET_BUFFER_SIZE)return 0;
  spinlock_lock(&state.tx_lock);vnet_queue_t*q=&state.tx;uint16_t slot=(uint16_t)(q->avail_index%q->size),target=(uint16_t)(q->avail_index+1U);
@@ -91,15 +107,26 @@ static int vnet_poll_device(void){
  return count;
 }
 static void vnet_release(void){
- if(state.registered){(void)net_device_unregister(&state.netdev);state.registered=0;}state.ready=0;
- queue_release(&state.rx);queue_release(&state.tx);state.io_base=0;state.pci=0;
+ int reset_complete=state.io_base?vnet_reset_device():1;
+ state.ready=0;
+ if(state.registered){(void)net_device_unregister(&state.netdev);state.registered=0;}
+ if(reset_complete){
+  queue_release(&state.rx);queue_release(&state.tx);
+ }else{
+  /*
+   * The device may still own descriptors. Retain every queue page instead
+   * of returning potentially active DMA memory to the physical allocator.
+   */
+  serial_write("VANTAOS_VIRTIO_NET_RESET_TIMEOUT_DMA_RETAINED\\n");
+ }
+ state.io_base=0;state.pci=0;
 }
 static net_pci_probe_result_t vnet_probe(const struct pci_device*pci){
  if(!pci||state.ready)return NET_PCI_PROBE_NOT_MINE;
  uint64_t bar=0;int io=0;if(!pci_get_bar(pci,0,&bar,&io,0)||!io||!bar||bar>0xFFFFU||bar+0x1BU>0xFFFFU)return NET_PCI_PROBE_NOT_MINE;
  if(!pci_enable_io_space(pci))return NET_PCI_PROBE_FAILED;
- state.pci=pci;state.io_base=(uint16_t)bar;out8(state.io_base+0x12U,0U);
- for(uint32_t i=0;i<100000U&&in8(state.io_base+0x12U)!=0U;i++)__asm__ volatile("pause");
+ state.pci=pci;state.io_base=(uint16_t)bar;
+ if(!vnet_reset_device())goto fail;
  out8(state.io_base+0x12U,VNET_STATUS_ACK);out8(state.io_base+0x12U,VNET_STATUS_ACK|VNET_STATUS_DRIVER);
  state.host_features=in32(state.io_base);if(!(state.host_features&VNET_F_MAC))goto fail;
  state.has_status=(state.host_features&VNET_F_STATUS)!=0U;out32(state.io_base+0x04U,VNET_F_MAC|(state.has_status?VNET_F_STATUS:0U));
@@ -124,8 +151,6 @@ static net_pci_probe_result_t vnet_probe(const struct pci_device*pci){
  else serial_write("VANTAOS_VIRTIO_NET_TX_SELFTEST_FAIL\n");
 #endif
  serial_write("VANTAOS_VIRTIO_NET_INITIALIZED\n");return NET_PCI_PROBE_BOUND;
-fail: out8(state.io_base+0x12U,0U);
- for(uint32_t i=0;i<100000U&&in8(state.io_base+0x12U)!=0U;i++)__asm__ volatile("pause");
- vnet_release();return NET_PCI_PROBE_FAILED;
+fail: vnet_release();return NET_PCI_PROBE_FAILED;
 }
 int virtio_net_initialize(void){uint8_t*p=(uint8_t*)&state;for(size_t i=0;i<sizeof(state);i++)p[i]=0;spinlock_init(&state.tx_lock);return net_pci_driver_register(&vnet_driver);}

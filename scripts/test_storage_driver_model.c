@@ -8,6 +8,7 @@
 #include "device.h"
 
 #include <assert.h>
+#include <stddef.h>
 
 static struct pci_device test_pci;
 

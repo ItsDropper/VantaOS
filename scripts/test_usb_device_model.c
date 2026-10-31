@@ -34,6 +34,39 @@ int main(void)
     assert(usb_device_register(1U, 3U, &controller, &identity));
     assert(usb_device_count() == 1U);
     assert(usb_device_port(1U) == 3U);
+
+    const uint8_t malformed_configuration[11] = {
+        9U, 2U, 11U, 0U, 1U, 1U, 0U, 0x80U, 50U,
+        1U, 4U
+    };
+    assert(!usb_device_register_interfaces(
+        1U, malformed_configuration, sizeof(malformed_configuration)));
+    assert(usb_device_interface_count(1U) == 0U);
+    assert(device_count() == 2U);
+
+    const uint8_t configuration[36] = {
+        9U, 2U, 36U, 0U, 2U, 1U, 0U, 0x80U, 50U,
+        9U, 4U, 0U, 0U, 0U, 3U, 1U, 1U, 0U,
+        9U, 4U, 0U, 1U, 1U, 3U, 1U, 0U, 0U,
+        9U, 4U, 1U, 0U, 0U, 8U, 6U, 0x50U, 0U
+    };
+    assert(usb_device_register_interfaces(1U, configuration,
+                                          sizeof(configuration)));
+    assert(usb_device_interface_count(1U) == 2U);
+    device_t* hid_interface = usb_device_interface_node(1U, 0U);
+    device_t* storage_interface = usb_device_interface_node(1U, 1U);
+    assert(hid_interface != NULL);
+    assert(storage_interface != NULL);
+    assert(hid_interface->parent == usb_device_node(1U));
+    assert(hid_interface->class_code == 3U);
+    assert(hid_interface->subclass == 1U);
+    assert(hid_interface->prog_if == 1U);
+    assert(storage_interface->class_code == 8U);
+    assert(storage_interface->subclass == 6U);
+    assert(storage_interface->prog_if == 0x50U);
+    assert(device_find(DEVICE_BUS_USB, "usb-slot1-if0") == hid_interface);
+    assert(device_find(DEVICE_BUS_USB, "usb-slot1-if1") == storage_interface);
+
     device_t* node = usb_device_node(1U);
     assert(node != NULL);
     assert(node->state == DEVICE_STATE_REGISTERED);
@@ -51,6 +84,8 @@ int main(void)
     assert(!device_unregister(node));
     assert(!device_unregister_owned(node, &controller));
     assert(!device_unregister(&controller));
+    assert(!device_unregister(hid_interface));
+    assert(!device_unregister(storage_interface));
 
     assert(usb_device_unregister(1U));
     assert(usb_device_count() == 0U);

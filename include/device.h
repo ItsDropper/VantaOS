@@ -10,7 +10,7 @@
 #include <stdint.h>
 
 #define DEVICE_NAME_MAX 48U
-#define DEVICE_MAX 1024U
+#define DEVICE_MAX 2048U
 #define DEVICE_DRIVER_MAX 128U
 #define DEVICE_ID_ANY16 0xFFFFU
 #define DEVICE_ID_ANY8 0xFFU

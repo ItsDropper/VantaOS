@@ -140,7 +140,7 @@ int main(void)
     /* This bridge advertises an impossible primary-bus relationship. */
     malformed = add_function(1U, 3U, 0x1234U, 0x1111U, 0x06U, 0x04U, 1U);
     malformed->config[0x18U / 4U] = 0U | (2U << 8U) | (4U << 16U);
-    malformed->config[0x1CU / 4U] = 0x00002010U; /* Mismatched I/O types. */
+    malformed->config[0x1CU / 4U] = 0x00002110U; /* Mismatched I/O types. */
 
     endpoint = add_function(3U, 4U, 0x10DEU, 0x2503U, 0x03U, 0x00U, 0U);
     (void)endpoint;

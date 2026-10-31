@@ -484,6 +484,8 @@ static void cleanup(void)
          */
         serial_write("VANTAOS_VIRTIO_NET_MODERN_RESET_TIMEOUT_DMA_RETAINED\n");
     }
+    if (!reset_complete)
+        return; /* Keep PCI/MMIO/DMA metadata quarantined against reprobe. */
     state = (vnet_modern_state_t){0};
 }
 

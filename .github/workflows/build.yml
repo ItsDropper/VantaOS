@@ -231,6 +231,13 @@ jobs:
             -o /tmp/vantaos-network-device-tree-test
           /tmp/vantaos-network-device-tree-test
 
+      - name: Test USB peripheral device-tree lifecycle
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_usb_device_model.c drivers/usb/device.c kernel/device.c \
+            -o /tmp/vantaos-usb-device-model-test
+          /tmp/vantaos-usb-device-model-test
+
       - name: Test block device registry and I/O contracts
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iscripts/test_stubs -Iinclude \

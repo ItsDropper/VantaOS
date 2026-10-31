@@ -220,8 +220,9 @@ size_t net_pci_poll_devices(void)
 
     /*
      * Poll callbacks operate on driver-global state. Select each adapter once,
-     * and reserve its callback before dropping the registry lock. The PCI
-     * device reference is acquired outside this lock to preserve lock order.
+     * and reserve its callback while holding the registry lock. Acquiring the
+     * device reference here makes unbind observe the active poll before it
+     * can begin hardware teardown.
      */
     for (uint32_t i = 0U; i < binding_count; ++i)
     {

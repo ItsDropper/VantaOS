@@ -176,7 +176,7 @@ int main(void)
     assert(root_device->memory_window_limit == 0x80FFFFFFULL);
     assert(root_device->prefetch_window_valid);
     assert(root_device->prefetch_window_base == 0x1290000000ULL);
-    assert(root_device->prefetch_window_limit == 0x1290FFFFFFULL);
+    assert(root_device->prefetch_window_limit == 0x12900FFFFFULL);
     assert(!malformed_device->io_window_valid);
 
     assert(pci_get_parent_bridge(root_device) == NULL);

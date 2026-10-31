@@ -26,9 +26,13 @@ typedef struct
 /* Called only by the serialized USB owner/poll context. */
 int usb_device_register(uint32_t slot, uint32_t port, device_t* parent,
                         const usb_device_identity_t* identity);
+int usb_device_register_interfaces(uint32_t slot, const uint8_t* configuration,
+                                   uint16_t length);
 int usb_device_unregister(uint32_t slot);
 uint32_t usb_device_port(uint32_t slot);
 device_t* usb_device_node(uint32_t slot);
+uint32_t usb_device_interface_count(uint32_t slot);
+device_t* usb_device_interface_node(uint32_t slot, uint8_t interface_number);
 uint32_t usb_device_count(void);
 
 #endif

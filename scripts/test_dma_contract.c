@@ -18,7 +18,8 @@ int pmm_alloc_contiguous_blocks(uint32_t count, void** base)
 int pmm_alloc_contiguous_blocks_below(uint32_t count, uint64_t limit,
                                       void** base)
 { (void)count; (void)limit; (void)base; return 0; }
-void pmm_free_block(void* page) { (void)page; }
+static void* freed_page;
+void pmm_free_block(void* page) { freed_page = page; }
 
 int main(void)
 {
@@ -50,5 +51,13 @@ int main(void)
     page.virtual_address = (void*)(uintptr_t)0x100000000ULL;
     assert(!dma_page_is_valid_for_device(&device, &page));
     assert(!dma_page_is_valid(&page));
+
+    /* Release validates ownership shape, not the allocator's default mask. */
+    freed_page = NULL;
+    dma_free_page(&page);
+    assert(freed_page == (void*)(uintptr_t)0x100000000ULL);
+    assert(page.virtual_address == NULL);
+    assert(page.physical_address == 0U);
+    assert(page.size == 0U);
     return 0;
 }

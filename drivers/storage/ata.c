@@ -276,7 +276,7 @@ void ata_initialize(void)
                 ata_block.flags = BLOCK_DEVICE_TRANSPORT_ATA;
                 ata_block.ops = &ata_block_ops;
                 ata_block.driver_data = 0;
-                ata_block.parent_device = &ata_controller_device.core;
+                ata_block.parent_device = &ata_controller_device;
                 if (!device_register(&ata_controller_device))
                     return;
                 if (block_device_register_disk(&ata_block) != BLOCK_STATUS_OK)

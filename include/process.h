@@ -26,6 +26,12 @@
 #define PROCESS_CPU_UNOWNED UINT32_MAX
 #define PROCESS_CPU_ANY PROCESS_CPU_UNOWNED
 
+#define PROCESS_PRIORITY_IDLE   0U
+#define PROCESS_PRIORITY_LOW    1U
+#define PROCESS_PRIORITY_NORMAL 2U
+#define PROCESS_PRIORITY_HIGH   3U
+#define PROCESS_PRIORITY_MAX    PROCESS_PRIORITY_HIGH
+
 typedef void (*process_entry_t)(void);
 typedef struct process_wait_queue process_wait_queue_t;
 
@@ -62,6 +68,8 @@ typedef struct
     uint32_t owner_cpu;
     uint32_t affinity_cpu;
     process_state_t state;
+    /* Scheduling weight: larger values receive longer round-robin quanta. */
+    uint32_t priority;
     /* Absolute PIT tick deadline; zero means not sleeping on a timer. */
     uint64_t sleep_deadline_ticks;
     process_wait_queue_t* wait_queue;
@@ -110,6 +118,8 @@ int process_create_kernel_any(const char* name, uint32_t parent_pid,
 int process_create_kernel_on_cpu(const char* name, uint32_t parent_pid,
                                   process_entry_t entry, uint32_t cpu_id);
 int process_set_affinity(uint32_t pid, uint32_t cpu_id);
+int process_set_priority(uint32_t pid, uint32_t priority);
+int process_get_priority(uint32_t pid, uint32_t* priority_out);
 int process_create_idle_for_cpu(uint32_t cpu_id, const char* name,
                                 process_entry_t entry);
 int process_attach_current(const char* name, uint32_t parent_pid);

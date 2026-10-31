@@ -210,6 +210,13 @@ jobs:
             -o /tmp/vantaos-device-model-test
           /tmp/vantaos-device-model-test
 
+      - name: Test storage drivers through the common device model
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iscripts/test_stubs -Iinclude \
+            scripts/test_storage_driver_model.c drivers/storage/storage_driver.c \
+            kernel/device.c -o /tmp/vantaos-storage-driver-model-test
+          /tmp/vantaos-storage-driver-model-test
+
       - name: Test block device registry and I/O contracts
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iscripts/test_stubs -Iinclude \

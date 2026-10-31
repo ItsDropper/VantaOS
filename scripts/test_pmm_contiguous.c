@@ -80,9 +80,13 @@ int main(void)
         pmm_free_block((void *)((uintptr_t)run + (uintptr_t)i * PAGE_SIZE));
     assert(pmm_get_free_blocks() == free_before);
 
+    /* Single-page allocations advance from the next-fit hint. */
     void *single = pmm_alloc_block();
-    assert(single == (void *)(uintptr_t)0x101000ULL);
+    assert(single == (void *)(uintptr_t)0x108000ULL);
+    void *following = pmm_alloc_block();
+    assert(following == (void *)(uintptr_t)0x109000ULL);
     pmm_free_block(single);
+    pmm_free_block(following);
     assert(pmm_get_free_blocks() == free_before);
     return 0;
 }

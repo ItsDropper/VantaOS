@@ -64,6 +64,8 @@ static int process_claim_for_cpu_internal(uint32_t next_pid,
 
     next->state = PROCESS_RUNNING;
     next->owner_cpu = cpu_id;
+    if (stack_pointer_out && next->context_switches != UINT64_MAX)
+        next->context_switches++;
     process_set_current_slot(next_pid);
     if (stack_pointer_out)
     {
@@ -202,6 +204,8 @@ int process_prepare_context_switch(uint32_t next_pid, uint32_t current_pid,
     /* Keep current->owner_cpu until process_finish_context_switch(). */
     next->state = PROCESS_RUNNING;
     next->owner_cpu = cpu_id;
+    if (next->context_switches != UINT64_MAX)
+        next->context_switches++;
     process_set_current_slot(next_pid);
     *next_stack_out = next->stack_pointer;
     *next_address_space_out = next->address_space;

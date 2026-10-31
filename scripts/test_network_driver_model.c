@@ -70,9 +70,11 @@ int main(void)
     assert(net_pci_poll_devices() == 3U);
     assert(poll_count == 1U);
 
-    assert(device_unbind(&test_pci.core));
-    assert(net_pci_bound_driver(&test_pci) == NULL);
-    assert(net_pci_poll_devices() == 0U);
-    assert(device_unregister(&test_pci.core));
+    /* No hardware teardown callback exists, so unbind must fail closed. */
+    assert(!device_unbind(&test_pci.core));
+    assert(test_pci.core.state == DEVICE_STATE_BOUND);
+    assert(net_pci_bound_driver(&test_pci) != NULL);
+    assert(net_pci_poll_devices() == 3U);
+    assert(poll_count == 2U);
     return 0;
 }

@@ -238,9 +238,13 @@ size_t net_pci_poll_devices(void)
             adapter->active_polls != 0U)
             continue;
 
+        device_t* pci_device = (device_t*)&bindings[i].device->core;
+        if (!device_acquire_bound(pci_device))
+            continue;
+
         adapter->active_polls = 1U;
         snapshot[count].adapter = adapter;
-        snapshot[count].pci_device = (device_t*)&bindings[i].device->core;
+        snapshot[count].pci_device = pci_device;
         ++count;
     }
     spinlock_unlock_irqrestore(&driver_lock, flags);
@@ -250,14 +254,8 @@ size_t net_pci_poll_devices(void)
     {
         net_driver_adapter_t* adapter = snapshot[i].adapter;
         device_t* pci_device = snapshot[i].pci_device;
-        int pinned = device_acquire(pci_device);
-        int result = 0;
-
-        if (pinned)
-            result = adapter->network->poll();
-
-        if (pinned)
-            device_release(pci_device);
+        int result = adapter->network->poll();
+        device_release(pci_device);
 
         flags = spinlock_lock_irqsave(&driver_lock);
         adapter->active_polls = 0U;

@@ -9,7 +9,6 @@
 
 #include <assert.h>
 #include <stddef.h>
-#include <stdio.h>
 
 static uint32_t hid_probe_count;
 static uint32_t hid_remove_count;
@@ -44,21 +43,13 @@ int main(void)
         .revision = 0x12U
     };
 
-    fprintf(stderr, "usb-test: controller\n");
     assert(device_register(&controller));
-    fprintf(stderr, "usb-test: controller registered\n");
     assert(!usb_device_register(0U, 1U, &controller, &identity));
-    fprintf(stderr, "usb-test: invalid slot\n");
     assert(!usb_device_register(1U, 0U, &controller, &identity));
-    fprintf(stderr, "usb-test: invalid port\n");
     assert(!usb_device_register(1U, 1U, NULL, &identity));
-    fprintf(stderr, "usb-test: null parent\n");
     assert(usb_device_count() == 0U);
 
-    fprintf(stderr, "usb-test: register device\n");
-    fprintf(stderr, "usb-test: before valid register\n");
     assert(usb_device_register(1U, 3U, &controller, &identity));
-    fprintf(stderr, "usb-test: after valid register\n");
     assert(usb_device_count() == 1U);
     assert(usb_device_port(1U) == 3U);
 
@@ -66,7 +57,6 @@ int main(void)
         9U, 2U, 11U, 0U, 1U, 1U, 0U, 0x80U, 50U,
         1U, 4U
     };
-    fprintf(stderr, "usb-test: malformed descriptors\n");
     assert(!usb_device_register_interfaces(
         1U, malformed_configuration, sizeof(malformed_configuration)));
     assert(usb_device_interface_count(1U) == 0U);
@@ -78,7 +68,6 @@ int main(void)
         9U, 4U, 0U, 1U, 1U, 3U, 1U, 0U, 0U,
         9U, 4U, 1U, 0U, 0U, 8U, 6U, 0x50U, 0U
     };
-    fprintf(stderr, "usb-test: valid descriptors\n");
     assert(usb_device_register_interfaces(1U, configuration,
                                           sizeof(configuration)));
     assert(usb_device_interface_count(1U) == 2U);
@@ -127,22 +116,18 @@ int main(void)
         .probe = hid_interface_probe,
         .remove = hid_interface_remove
     };
-    fprintf(stderr, "usb-test: driver bind\n");
     assert(device_driver_register(&hid_driver));
     assert(device_bind(hid_interface, &hid_driver) == DEVICE_BIND_BOUND);
     assert(hid_probe_count == 1U);
     /* A bound interface prevents parent teardown until its driver detaches. */
-    fprintf(stderr, "usb-test: reject bound teardown\n");
     assert(!usb_device_unregister(1U));
     assert(usb_device_interface_count(1U) == 1U);
     assert(usb_device_interface_node(1U, 0U) == hid_interface);
     assert(usb_device_interface_node(1U, 1U) == NULL);
-    fprintf(stderr, "usb-test: unbind\n");
     assert(device_unbind(hid_interface));
     assert(hid_remove_count == 1U);
     assert(device_driver_unregister(&hid_driver));
 
-    fprintf(stderr, "usb-test: final unregister\n");
     assert(usb_device_unregister(1U));
     assert(usb_device_count() == 0U);
     assert(usb_device_port(1U) == 0U);

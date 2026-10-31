@@ -33,6 +33,9 @@ struct net_device {
     uint8_t link_up;
     const net_device_ops_t* ops;
     void* driver_data;
+    /* Generic device-tree parent, normally the backing PCI function. */
+    device_t* parent_device;
+    device_t core;
     /* IPv4 values use host byte order; configuration is explicit, never guessed. */
     uint32_t ipv4_address, ipv4_netmask, ipv4_gateway, ipv4_dns;
     uint8_t ipv4_configured;

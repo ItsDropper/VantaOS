@@ -203,6 +203,13 @@ jobs:
           gcc -std=c11 -Wall -Wextra -Werror -DAHCI_TEST_SMALL_BAR -Iinclude scripts/test_ahci_discovery.c drivers/storage/ahci.c -o /tmp/vantaos-ahci-discovery-small-bar-test
           /tmp/vantaos-ahci-discovery-small-bar-test
 
+      - name: Test common device registry and driver lifecycle
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iscripts/test_stubs -Iinclude \
+            scripts/test_device_model.c kernel/device.c \
+            -o /tmp/vantaos-device-model-test
+          /tmp/vantaos-device-model-test
+
       - name: Test block device registry and I/O contracts
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iscripts/test_stubs -Iinclude \

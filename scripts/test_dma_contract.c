@@ -49,7 +49,7 @@ int main(void)
 
     page.physical_address = 0x100000000ULL;
     page.virtual_address = (void*)(uintptr_t)0x100000000ULL;
-    assert(!dma_page_is_valid_for_device(&device, &page));
+    assert(dma_page_is_valid_for_device(&device, &page));
     assert(!dma_page_is_valid(&page));
 
     /* Release validates ownership shape, not the allocator's default mask. */

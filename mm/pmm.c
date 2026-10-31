@@ -311,6 +311,40 @@ void pmm_initialize(const vanta_boot_info_t* boot_info)
                 total_blocks, free_blocks);
 }
 
+/*
+ * Find the first free frame in [start, end). The bitmap is scanned a word at
+ * a time and the first available bit is selected with a bit-scan instruction.
+ * Caller holds pmm_lock.
+ */
+static int pmm_find_free_block_locked(uint32_t start, uint32_t end,
+                                      uint32_t* block_out)
+{
+    if (!block_out || start >= end || end > total_blocks)
+        return 0;
+
+    uint32_t first_word = start / 32U;
+    uint32_t last_word = (end - 1U) / 32U;
+    for (uint32_t word = first_word; word <= last_word; ++word)
+    {
+        uint32_t low_bit = word == first_word ? start % 32U : 0U;
+        uint32_t high_bit = word == last_word ?
+            ((end - 1U) % 32U) + 1U : 32U;
+        uint32_t mask = UINT32_MAX << low_bit;
+        if (high_bit < 32U)
+            mask &= (1U << high_bit) - 1U;
+
+        uint32_t available = ~(pmm_bitmap[word] |
+                               pmm_reserved_bitmap[word]) & mask;
+        if (available != 0U)
+        {
+            *block_out = word * 32U +
+                         (uint32_t)__builtin_ctz(available);
+            return 1;
+        }
+    }
+    return 0;
+}
+
 void* pmm_alloc_block(void)
 {
     void *result = NULL;
@@ -323,30 +357,26 @@ void* pmm_alloc_block(void)
     }
 
     /*
-     * Search from the last successful allocation and wrap once. This keeps
-     * allocation cost proportional to the free-space region rather than
-     * repeatedly scanning an increasingly occupied low-memory prefix.
+     * Search from the last successful allocation and wrap once. Word-level
+     * bit scans keep the common path efficient even with a heavily used map.
      */
     uint32_t start = allocation_hint < total_blocks ? allocation_hint : 0U;
-    for (uint32_t offset = 0U; offset < total_blocks; ++offset)
-    {
-        uint32_t block = start + offset;
-        if (block >= total_blocks)
-            block -= total_blocks;
+    uint32_t block;
+    int found = pmm_find_free_block_locked(start, total_blocks, &block);
+    if (!found && start != 0U)
+        found = pmm_find_free_block_locked(0U, start, &block);
 
-        if (!bitmap_test(pmm_bitmap, block) &&
-            !bitmap_test(pmm_reserved_bitmap, block))
-        {
-            bitmap_set(pmm_bitmap, block);
-            if (free_blocks > 0U)
-                free_blocks--;
-            allocation_hint = block + 1U;
-            if (allocation_hint >= total_blocks)
-                allocation_hint = 0U;
-            result = (void *)(uintptr_t)((uint64_t)block * PAGE_SIZE);
-            spinlock_unlock(&pmm_lock);
-            return result;
-        }
+    if (found)
+    {
+        bitmap_set(pmm_bitmap, block);
+        if (free_blocks > 0U)
+            free_blocks--;
+        allocation_hint = block + 1U;
+        if (allocation_hint >= total_blocks)
+            allocation_hint = 0U;
+        result = (void *)(uintptr_t)((uint64_t)block * PAGE_SIZE);
+        spinlock_unlock(&pmm_lock);
+        return result;
     }
 
     uint32_t free_snapshot = free_blocks;

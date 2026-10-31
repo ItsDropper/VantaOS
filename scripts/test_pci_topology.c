@@ -185,5 +185,14 @@ int main(void)
     assert(pci_get_parent_bridge(malformed_device) == root_device);
     assert(pci_get_parent_bridge(endpoint_device) == downstream_device);
     assert(pci_get_parent_bridge(NULL) == NULL);
+
+    /* PCI discovery publishes stable bus objects into the generic registry. */
+    assert(device_count() == 4U);
+    assert(device_find(DEVICE_BUS_PCI, "pci0000:03:04.0") ==
+           &endpoint_device->core);
+    assert(endpoint_device->core.bus_data == endpoint_device);
+    assert(endpoint_device->core.parent == &downstream_device->core);
+    assert(downstream_device->core.parent == &root_device->core);
+    assert(root_device->core.parent == NULL);
     return 0;
 }

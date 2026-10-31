@@ -28,6 +28,7 @@ static net_driver_adapter_t adapters[NET_PCI_DRIVER_MAX];
 static uint32_t adapter_count;
 static net_binding_t bindings[NET_PCI_BINDING_MAX];
 static uint32_t binding_count;
+static uint32_t binding_reservations;
 static spinlock_t driver_lock = SPINLOCK_INITIALIZER;
 
 static int valid_driver(const net_pci_driver_t* driver)
@@ -164,30 +165,41 @@ uint32_t net_probe_pci_devices(void)
 
         flags = spinlock_lock_irqsave(&driver_lock);
         int claimed = bound(pci);
+        int room = binding_count + binding_reservations < NET_PCI_BINDING_MAX;
         spinlock_unlock_irqrestore(&driver_lock, flags);
-        if (claimed)
+        if (claimed || !room)
             continue;
 
         for (uint32_t i = 0U; i < count; ++i)
         {
-            device_bind_result_t result =
-                device_bind((device_t*)&pci->core, snapshot[i]);
-            if (result == DEVICE_BIND_BOUND)
+            flags = spinlock_lock_irqsave(&driver_lock);
+            if (binding_count + binding_reservations >= NET_PCI_BINDING_MAX)
             {
-                flags = spinlock_lock_irqsave(&driver_lock);
-                if (binding_count < NET_PCI_BINDING_MAX && !bound(pci))
-                {
-                    bindings[binding_count].device = pci;
-                    /* Context points to the adapter, not the public descriptor. */
-                    bindings[binding_count].driver =
-                        ((const net_driver_adapter_t*)snapshot[i]->context)->network;
-                    ++binding_count;
-                    ++added;
-                }
                 spinlock_unlock_irqrestore(&driver_lock, flags);
                 break;
             }
-            if (result == DEVICE_BIND_FAILED ||
+            ++binding_reservations;
+            spinlock_unlock_irqrestore(&driver_lock, flags);
+
+            device_bind_result_t result =
+                device_bind((device_t*)&pci->core, snapshot[i]);
+            flags = spinlock_lock_irqsave(&driver_lock);
+            if (binding_reservations != 0U)
+                --binding_reservations;
+            if (result == DEVICE_BIND_BOUND && !bound(pci) &&
+                binding_count < NET_PCI_BINDING_MAX)
+            {
+                bindings[binding_count].device = pci;
+                /* Context points to the adapter, not the public descriptor. */
+                bindings[binding_count].driver =
+                    ((const net_driver_adapter_t*)snapshot[i]->context)->network;
+                ++binding_count;
+                ++added;
+            }
+            spinlock_unlock_irqrestore(&driver_lock, flags);
+
+            if (result == DEVICE_BIND_BOUND ||
+                result == DEVICE_BIND_FAILED ||
                 result == DEVICE_BIND_INVALID)
                 break;
         }

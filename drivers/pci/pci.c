@@ -254,38 +254,6 @@ static uint32_t pci_read_device_config(
     return value;
 }
 
-static void pci_write_config(
-    uint8_t bus, uint8_t slot, uint8_t function, uint8_t offset, uint32_t value
-)
-{
-    uint64_t flags = pci_lock_config();
-    outl(PCI_CONFIG_ADDRESS, pci_config_address(bus, slot, function, offset));
-    outl(PCI_CONFIG_DATA, value);
-    pci_unlock_config(flags);
-}
-
-static uint32_t pci_read_config(
-    uint8_t bus,
-    uint8_t slot,
-    uint8_t function,
-    uint8_t offset
-)
-{
-    uint64_t flags = pci_lock_config();
-    outl(
-        PCI_CONFIG_ADDRESS,
-        pci_config_address(
-            bus,
-            slot,
-            function,
-            offset
-        )
-    );
-    uint32_t value = inl(PCI_CONFIG_DATA);
-    pci_unlock_config(flags);
-    return value;
-}
-
 /* These helpers require pci_config_lock to be held by the caller. */
 static uint32_t pci_read_config_locked(
     uint8_t bus, uint8_t slot, uint8_t function, uint8_t offset)

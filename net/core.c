@@ -74,6 +74,7 @@ static void prepare_net_core_device(net_device_t* network)
     network->core.bus = DEVICE_BUS_VIRTUAL;
     network->core.parent = network->parent_device;
     network->core.bus_data = network;
+    network->core.owner = network;
     network->core.driver = NULL;
     network->core.state = DEVICE_STATE_UNREGISTERED;
 }
@@ -135,7 +136,7 @@ int net_device_unregister(net_device_t* d)
             return 0;
         }
     }
-    if (!device_unregister(&d->core))
+    if (!device_unregister_owned(&d->core, d))
     {
         spinlock_unlock_irqrestore(&lock, flags);
         return 0;

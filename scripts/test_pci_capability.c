@@ -24,6 +24,7 @@ void ktrace_emit(uint32_t type, uint32_t cpu_id, uint64_t arg0, uint64_t arg1)
 
 static uint32_t config_space[64];
 static uint32_t extended_config[1024];
+static uint32_t segment_config[1024];
 static uint32_t selected_address;
 
 void pci_test_outl(uint16_t port, uint32_t value)
@@ -46,10 +47,26 @@ int pci_test_ecam_read32(uint16_t segment, uint8_t bus, uint8_t slot,
                          uint8_t function, uint16_t offset,
                          uint32_t* value)
 {
-    (void)segment; (void)bus; (void)slot; (void)function;
-    if (!value || offset < 0x100U || offset > 0xFFCU || (offset & 3U))
+    (void)bus; (void)slot; (void)function;
+    if (!value || offset > 0xFFCU || (offset & 3U))
+        return 0;
+    if (segment != 0U) {
+        *value = segment_config[offset / 4U];
+        return 1;
+    }
+    if (offset < 0x100U)
         return 0;
     *value = extended_config[offset / 4U];
+    return 1;
+}
+
+int pci_test_ecam_write32(uint16_t segment, uint8_t bus, uint8_t slot,
+                          uint8_t function, uint16_t offset, uint32_t value)
+{
+    (void)bus; (void)slot; (void)function;
+    if (segment == 0U || offset > 0xFFCU || (offset & 3U))
+        return 0;
+    segment_config[offset / 4U] = value;
     return 1;
 }
 
@@ -57,8 +74,10 @@ static void reset_config(void)
 {
     for (unsigned i = 0; i < 64U; ++i)
         config_space[i] = 0U;
-    for (unsigned i = 0; i < 1024U; ++i)
+    for (unsigned i = 0; i < 1024U; ++i) {
         extended_config[i] = 0U;
+        segment_config[i] = 0U;
+    }
     selected_address = 0U;
     config_space[3] = 0U; /* Type-0 header. */
     config_space[1] = 0x00100000U; /* Status.capabilities-list bit. */
@@ -144,6 +163,18 @@ int main(void)
                                          &extended_offset));
     assert(!pci_find_extended_capability(&pcie_device, 0xFFFFU,
                                          &extended_offset));
+
+    /* Nonzero PCI segments must use ECAM for ordinary configuration space. */
+    struct pci_device secondary_segment = {
+        .bus = 3U, .slot = 4U, .function = 1U, .segment_group = 2U
+    };
+    segment_config[0x04U / 4U] = 0xAABBCCDDU;
+    assert(pci_read_config32(&secondary_segment, 0x04U) == 0xAABBCCDDU);
+    assert(pci_read_config16(&secondary_segment, 0x04U) == 0xCCDDU);
+    assert(pci_write_config16(&secondary_segment, 0x04U, 0x1234U));
+    assert(segment_config[0x04U / 4U] == 0xAABB1234U);
+    assert(pci_write_config32(&secondary_segment, 0x10U, 0xDEADBEEFU));
+    assert(pci_read_config32(&secondary_segment, 0x10U) == 0xDEADBEEFU);
     assert(!pci_find_extended_capability(&pcie_device, 0x000DU, 0));
     assert(!pci_read_config_extended32(&pcie_device, 0x0FCU,
                                        (uint32_t*)&selected_address));

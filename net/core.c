@@ -65,6 +65,12 @@ static void prepare_net_core_device(net_device_t* network)
         ++i;
     }
     network->core.name[i] = '\0';
+    network->core.vendor_id = 0U;
+    network->core.device_id = 0U;
+    network->core.class_code = 0U;
+    network->core.subclass = 0U;
+    network->core.prog_if = 0U;
+    network->core.revision = 0U;
     network->core.bus = DEVICE_BUS_VIRTUAL;
     network->core.parent = network->parent_device;
     network->core.bus_data = network;

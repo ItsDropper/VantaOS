@@ -62,6 +62,8 @@ int main(void)
     assert(network.core.bus == DEVICE_BUS_VIRTUAL);
     assert(network.core.parent == &pci_parent);
     assert(network.core.bus_data == &network);
+    assert(network.core.owner == &network);
+    assert(!device_unregister(&network.core));
     assert(network.core.vendor_id == 0U);
     assert(network.core.device_id == 0U);
     assert(network.core.class_code == 0U);

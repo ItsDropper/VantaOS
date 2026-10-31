@@ -8,6 +8,7 @@
 #include "usb_device.h"
 
 #include <assert.h>
+#include <stddef.h>
 
 int main(void)
 {

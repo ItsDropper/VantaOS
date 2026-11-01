@@ -4,7 +4,7 @@
 # This file is part of VantaOS and is licensed under the MIT License.
 # See the LICENSE file in the project root for the full license text.
 
-"""QEMU socket-backend integration test for VantaOS Ethernet, ARP, and ICMP."""
+"""QEMU socket-backend integration test for VantaOS Ethernet, ARP, ICMP, and UDP."""
 import os
 import socket
 import struct
@@ -150,6 +150,28 @@ def main():
 
         udp_frame = guest_mac + host_mac + struct.pack("!H", 0x0800) + bytes(udp_ip) + bytes(udp)
         send_frame(connection, udp_frame.ljust(60, b"\x00"))
+
+        # Require a guest UDP echo: this proves RX dispatch, checksum
+        # validation, handler invocation, and the return TX path completed.
+        udp_reply = None
+        for _ in range(8):
+            candidate = recv_frame(connection)
+            if len(candidate) < 42 or struct.unpack_from("!H", candidate, 12)[0] != 0x0800:
+                continue
+            packet = candidate[14:]
+            ihl = (packet[0] & 0x0F) * 4
+            total = struct.unpack_from("!H", packet, 2)[0]
+            if packet[9] != 17 or total < ihl + 8 or len(packet) < total:
+                continue
+            segment = packet[ihl:total]
+            source_port, destination_port, udp_length, _ = struct.unpack_from("!HHHH", segment)
+            if (source_port == 4242 and destination_port == 53000
+                    and udp_length == len(segment)
+                    and segment[8:] == udp_payload):
+                udp_reply = segment
+                break
+        if udp_reply is None:
+            raise RuntimeError("No UDP echo reply from VantaOS")
     finally:
         connection.close()
 

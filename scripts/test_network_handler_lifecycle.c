@@ -78,8 +78,27 @@ int main(void)
     ip[22] = 0x10U; ip[23] = 0xE1U; /* destination port 4321 */
     ip[24] = 0U; ip[25] = 11U;
     ip[28] = 'v'; ip[29] = 'n'; ip[30] = 't';
+    /* IPv4 permits a zero UDP checksum; the handler must still run. */
     net_udp_receive_ipv4(&device, ip, 20U, sizeof(ip));
     assert(udp_calls == 1U);
+
+    /* A non-zero but invalid UDP checksum must be rejected before dispatch. */
+    ip[26] = 0x12U; ip[27] = 0x34U;
+    net_udp_receive_ipv4(&device, ip, 20U, sizeof(ip));
+    assert(udp_calls == 1U);
+
+    /* UDP length must exactly match the IPv4 payload length. */
+    ip[26] = 0U; ip[27] = 0U;
+    ip[25] = 10U;
+    net_udp_receive_ipv4(&device, ip, 20U, sizeof(ip));
+    assert(udp_calls == 1U);
+
+    /* A zero source port is invalid even when the checksum is disabled. */
+    ip[25] = 11U;
+    ip[20] = 0U; ip[21] = 0U;
+    net_udp_receive_ipv4(&device, ip, 20U, sizeof(ip));
+    assert(udp_calls == 1U);
+
     assert(net_udp_handler_unregister(4321U, udp_handler, &udp_calls));
     return 0;
 }

@@ -151,7 +151,7 @@ int main(void)
     ip[26] = 0U; ip[27] = 0U;
     ip[25] = 10U;
     net_udp_receive_ipv4(&device, ip, 20U, sizeof(ip));
-    assert(udp_calls == 1U);
+    assert(udp_calls == 2U);
 
     /* A zero source port is invalid even when the checksum is disabled. */
     ip[25] = 11U;

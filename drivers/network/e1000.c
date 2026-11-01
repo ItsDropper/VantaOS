@@ -88,11 +88,14 @@ typedef struct {
     spinlock_t tx_lock;
     uint32_t rx_next,tx_next;
     uint8_t ready;
+    uint8_t registered;
+    uint8_t handler_registered;
 } e1000_state_t;
 
 static e1000_state_t state;
 static int e1000_poll_device(void);
 static net_pci_probe_result_t e1000_probe(const struct pci_device* pci);
+static int e1000_remove(const struct pci_device* pci);
 
 static const net_pci_id_t e1000_ids[] = {
     /* Legacy 8254x E1000 controllers share this register and descriptor model. */
@@ -124,7 +127,8 @@ static const net_pci_driver_t e1000_pci_driver = {
     .ids=e1000_ids,
     .id_count=sizeof(e1000_ids)/sizeof(e1000_ids[0]),
     .probe=e1000_probe,
-    .poll=e1000_poll_device
+    .poll=e1000_poll_device,
+    .remove=e1000_remove
 };
 
 static uint32_t reg_read(uint32_t offset)
@@ -258,7 +262,8 @@ static void e1000_rx_selftest_handler(net_device_t* device,const uint8_t* frame,
 
 static net_pci_probe_result_t e1000_probe(const struct pci_device* pci)
 {
-    if(!pci||state.ready)return NET_PCI_PROBE_FAILED;
+    if(!pci||state.pci||state.ready||state.registered||
+       state.handler_registered)return NET_PCI_PROBE_FAILED;
     uint64_t bar=0;int is_io=0,is_64=0;
     if(!pci_get_bar(pci,0,&bar,&is_io,&is_64)||is_io||!bar)return NET_PCI_PROBE_FAILED;
     if(!pci_enable_memory_space(pci))return NET_PCI_PROBE_FAILED;
@@ -301,15 +306,17 @@ static net_pci_probe_result_t e1000_probe(const struct pci_device* pci)
     /* Publish descriptors only after their DMA memory and PCI command state are valid. */
     if(!pci_enable_bus_mastering(pci))goto fail_dma;
     if(!net_device_register(&state.netdev))goto fail_dma;
+    state.registered=1U;
 #ifdef VANTAOS_SELF_TEST
     if(!net_device_configure_ipv4(&state.netdev,0x0A00020FU,0xFFFFFF00U,0x0A000202U)){
-        (void)net_device_unregister(&state.netdev);
+        if(net_device_unregister(&state.netdev))state.registered=0U;
         goto fail_dma;
     }
     if(!net_ethernet_handler_register(0x88B5U,e1000_rx_selftest_handler,0)){
-        (void)net_device_unregister(&state.netdev);
+        if(net_device_unregister(&state.netdev))state.registered=0U;
         goto fail_dma;
     }
+    state.handler_registered=1U;
 #endif
     /* No engine is active until registration succeeds, so failure cleanup is DMA-safe. */
     state.ready=1;
@@ -329,12 +336,102 @@ static net_pci_probe_result_t e1000_probe(const struct pci_device* pci)
 #endif
     return NET_PCI_PROBE_BOUND;
 fail_dma:
+    /*
+     * No TX/RX engine is enabled before the probe reaches the success path.
+     * Bus mastering is nevertheless revoked before freeing any programmed
+     * descriptor memory. If that cannot be verified, retain the entire state.
+     */
+    if(state.pci&&!pci_disable_bus_mastering(state.pci)){
+        serial_write("VANTAOS_E1000_PROBE_CLEANUP_DMA_RETAINED\\n");
+        return NET_PCI_PROBE_FAILED;
+    }
+    if(state.handler_registered){
+        if(!net_ethernet_handler_unregister(0x88B5U,e1000_rx_selftest_handler,0)){
+            serial_write("VANTAOS_E1000_PROBE_CLEANUP_HANDLER_RETAINED\\n");
+            return NET_PCI_PROBE_FAILED;
+        }
+        state.handler_registered=0U;
+    }
+    if(state.registered){
+        if(!net_device_unregister(&state.netdev)){
+            serial_write("VANTAOS_E1000_PROBE_CLEANUP_NETDEV_RETAINED\\n");
+            return NET_PCI_PROBE_FAILED;
+        }
+        state.registered=0U;
+    }
     release_dma();
 fail_mmio:
-    if(state.mmio)(void)mmio_unmap_region(state.mmio,E1000_MMIO_SIZE);
-    state.mmio=0;state.registers=0;state.pci=0;state.ready=0;
+    if(state.mmio){
+        if(!mmio_unmap_region(state.mmio,E1000_MMIO_SIZE)){
+            serial_write("VANTAOS_E1000_PROBE_CLEANUP_MMIO_RETAINED\\n");
+            return NET_PCI_PROBE_FAILED;
+        }
+    }
+    state=(e1000_state_t){0};
+    spinlock_init(&state.tx_lock);
     return NET_PCI_PROBE_FAILED;
 }
+
+static int e1000_remove(const struct pci_device* pci)
+{
+    if(!pci||state.pci!=pci||!state.mmio||!state.registers)
+        return 0;
+
+    /* Close driver entry points before touching hardware or registrations. */
+    state.ready=0U;
+    spinlock_lock(&state.tx_lock);
+    spinlock_unlock(&state.tx_lock);
+
+    /* Mask interrupts and stop both DMA engines before issuing global reset. */
+    reg_write(REG_IMC,0xFFFFFFFFU);
+    (void)reg_read(REG_ICR);
+    reg_write(REG_RCTL,0U);
+    reg_write(REG_TCTL,0U);
+    (void)reg_read(REG_STATUS);
+    reg_write(REG_CTRL,reg_read(REG_CTRL)|CTRL_RST);
+    if(!wait_register(REG_CTRL,CTRL_RST,0U)){
+        serial_write("VANTAOS_E1000_REMOVE_RESET_TIMEOUT_DMA_RETAINED\\n");
+        return 0;
+    }
+    if(!pci_disable_bus_mastering(pci)){
+        serial_write("VANTAOS_E1000_REMOVE_BUS_MASTER_ACTIVE_DMA_RETAINED\\n");
+        return 0;
+    }
+
+#ifdef VANTAOS_SELF_TEST
+    if(state.handler_registered){
+        for(uint32_t i=0U;i<E1000_WAIT_LIMIT;i++){
+            if(net_ethernet_handler_unregister(
+                    0x88B5U,e1000_rx_selftest_handler,0)){
+                state.handler_registered=0U;
+                break;
+            }
+            __asm__ volatile("pause");
+        }
+        if(state.handler_registered){
+            serial_write("VANTAOS_E1000_REMOVE_HANDLER_BUSY_RETAINED\\n");
+            return 0;
+        }
+    }
+#endif
+    if(state.registered){
+        if(!net_device_unregister(&state.netdev)){
+            serial_write("VANTAOS_E1000_REMOVE_NETDEV_BUSY_RETAINED\\n");
+            return 0;
+        }
+        state.registered=0U;
+    }
+
+    release_dma();
+    if(!mmio_unmap_region(state.mmio,E1000_MMIO_SIZE)){
+        serial_write("VANTAOS_E1000_REMOVE_MMIO_RETAINED\\n");
+        return 0;
+    }
+    state=(e1000_state_t){0};
+    spinlock_init(&state.tx_lock);
+    return 1;
+}
+
 int e1000_initialize(void)
 {
     state=(e1000_state_t){0};

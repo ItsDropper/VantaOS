@@ -25,6 +25,7 @@ static net_device_t* active_device;
 static uint32_t ethernet_calls;
 static uint32_t udp_calls;
 static uint32_t late_ethernet_calls;
+static int late_ethernet_registered;
 
 static void late_ethernet_handler(net_device_t* device, const uint8_t* frame,
                                   size_t length, uint16_t type, size_t header,
@@ -47,9 +48,13 @@ static void register_late_ethernet_handler(net_device_t* device,
     assert(type == 0x88B5U);
     assert(context == &ethernet_calls);
     ++ethernet_calls;
-    assert(net_ethernet_handler_register(0x88B5U,
-                                         late_ethernet_handler,
-                                         &late_ethernet_calls));
+    if (!late_ethernet_registered)
+    {
+        assert(net_ethernet_handler_register(0x88B5U,
+                                             late_ethernet_handler,
+                                             &late_ethernet_calls));
+        late_ethernet_registered = 1;
+    }
 }
 
 static void ethernet_handler(net_device_t* device, const uint8_t* frame,

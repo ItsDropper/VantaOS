@@ -165,8 +165,13 @@ def main():
                 continue
             segment = packet[ihl:total]
             source_port, destination_port, udp_length, _ = struct.unpack_from("!HHHH", segment)
-            if (source_port == 4242 and destination_port == 53000
+            reply_pseudo = guest_ip + host_ip + struct.pack("!BBH", 0, 17, len(segment))
+            if (candidate[:6] == host_mac and candidate[6:12] == guest_mac
+                    and packet[12:16] == guest_ip and packet[16:20] == host_ip
+                    and checksum(packet[:ihl]) == 0
+                    and source_port == 4242 and destination_port == 53000
                     and udp_length == len(segment)
+                    and checksum(reply_pseudo + segment) == 0
                     and segment[8:] == udp_payload):
                 udp_reply = segment
                 break

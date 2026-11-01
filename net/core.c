@@ -127,20 +127,39 @@ int net_device_unregister(net_device_t* d)
         spinlock_unlock_irqrestore(&lock, flags);
         return 0;
     }
-    for (uint32_t i = 0U, position = rx_head; i < rx_used;
-         ++i, position = (position + 1U) % NET_RX_QUEUE_CAPACITY)
-    {
-        if (rxq[position].device == d)
-        {
-            spinlock_unlock_irqrestore(&lock, flags);
-            return 0;
-        }
-    }
+    /*
+     * Remove the generic device-tree node before discarding queued packets.
+     * If another subsystem still owns a reference, leave the RX queue intact.
+     */
     if (!device_unregister_owned(&d->core, d))
     {
         spinlock_unlock_irqrestore(&lock, flags);
         return 0;
     }
+
+    /*
+     * Frames not yet dequeued belong to the departing interface and must not
+     * keep its storage pinned forever. Compact the circular queue in FIFO
+     * order, retaining frames for every other interface.
+     */
+    uint32_t kept = 0U;
+    uint32_t dropped = 0U;
+    for (uint32_t i = 0U; i < rx_used; ++i)
+    {
+        uint32_t source = (rx_head + i) % NET_RX_QUEUE_CAPACITY;
+        if (rxq[source].device == d)
+        {
+            ++dropped;
+            continue;
+        }
+        uint32_t destination = (rx_head + kept) % NET_RX_QUEUE_CAPACITY;
+        if (destination != source)
+            rxq[destination] = rxq[source];
+        ++kept;
+    }
+    rx_used = kept;
+    rx_tail = (rx_head + kept) % NET_RX_QUEUE_CAPACITY;
+    devices[index].stats.rx_dropped += dropped;
 
     for (uint32_t i = index; i + 1U < device_count_used; ++i)
         devices[i] = devices[i + 1U];

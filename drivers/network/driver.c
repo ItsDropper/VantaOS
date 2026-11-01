@@ -256,11 +256,18 @@ size_t net_pci_poll_devices(void)
         net_driver_adapter_t* adapter = snapshot[i].adapter;
         device_t* pci_device = snapshot[i].pci_device;
         int result = adapter->network->poll();
-        device_release(pci_device);
 
+        /*
+         * Clear the adapter reservation before dropping the PCI reference.
+         * An unbind racing with this transition must observe either an active
+         * poll reservation or the outstanding device reference; it must never
+         * see both as idle while the callback is still unwinding.
+         */
         flags = spinlock_lock_irqsave(&driver_lock);
         adapter->active_polls = 0U;
         spinlock_unlock_irqrestore(&driver_lock, flags);
+
+        device_release(pci_device);
 
         if (result > 0)
             work += (size_t)result;

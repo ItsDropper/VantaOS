@@ -13,6 +13,8 @@ static uint32_t probe_count;
 static uint32_t remove_count;
 static uint32_t usb_probe_count;
 static uint32_t usb_remove_count;
+static int remove_should_fail;
+static uint32_t reentrant_remove_rejections;
 
 static device_probe_result_t display_probe(device_t* device)
 {
@@ -21,10 +23,14 @@ static device_probe_result_t display_probe(device_t* device)
     return DEVICE_PROBE_BOUND;
 }
 
-static void display_remove(device_t* device)
+static int display_remove(device_t* device)
 {
     assert(device != NULL);
     ++remove_count;
+    /* The active callback must not be entered recursively. */
+    assert(!device_unbind(device));
+    ++reentrant_remove_rejections;
+    return !remove_should_fail;
 }
 
 static device_probe_result_t failing_probe(device_t* device)
@@ -41,10 +47,11 @@ static device_probe_result_t usb_probe(device_t* device)
     return DEVICE_PROBE_BOUND;
 }
 
-static void usb_remove(device_t* device)
+static int usb_remove(device_t* device)
 {
     assert(device != NULL);
     ++usb_remove_count;
+    return 1;
 }
 
 int main(void)
@@ -146,9 +153,14 @@ int main(void)
     /* Active users pin a bound device against hardware teardown. */
     assert(device_acquire_bound(&display));
     assert(!device_unbind(&display));
+    assert(display.state == DEVICE_STATE_REMOVING);
+    assert(!device_acquire(&display));
+    assert(!device_acquire_bound(&display));
+    assert(remove_count == 0U);
     device_release(&display);
     assert(device_unbind(&display));
     assert(remove_count == 1U);
+    assert(reentrant_remove_rejections == 1U);
     assert(display.state == DEVICE_STATE_REGISTERED);
     assert(display.driver == NULL);
     assert(device_unbind(&usb));
@@ -173,5 +185,44 @@ int main(void)
     assert(probe_count == 2U);
     assert(device_unregister(&root));
     assert(device_driver_unregister(&failing_driver));
+    assert(device_driver_unregister(&failing_driver));
+
+    /*
+     * A failed hardware quiescence callback must quarantine the device.
+     * The driver stays attached and neither users nor unregister can reclaim it.
+     */
+    device_t quarantined = {
+        .name = "test-quarantined",
+        .bus = DEVICE_BUS_VIRTUAL,
+        .vendor_id = 0xCAFEU,
+        .device_id = 0x0001U
+    };
+    const device_id_t quarantine_ids[] = {{
+        .vendor_id = 0xCAFEU,
+        .device_id = 0x0001U,
+        .class_code = DEVICE_ID_ANY8,
+        .subclass = DEVICE_ID_ANY8,
+        .prog_if = DEVICE_ID_ANY8
+    }};
+    const device_driver_t quarantine_driver = {
+        .name = "test-quarantine",
+        .bus = DEVICE_BUS_VIRTUAL,
+        .ids = quarantine_ids,
+        .id_count = 1U,
+        .probe = display_probe,
+        .remove = display_remove
+    };
+    remove_should_fail = 1;
+    assert(device_register(&quarantined));
+    assert(device_driver_register(&quarantine_driver));
+    assert(device_bind(&quarantined, &quarantine_driver) == DEVICE_BIND_BOUND);
+    assert(!device_unbind(&quarantined));
+    assert(quarantined.state == DEVICE_STATE_QUARANTINED);
+    assert(quarantined.driver == &quarantine_driver);
+    assert(!device_acquire(&quarantined));
+    assert(!device_acquire_bound(&quarantined));
+    assert(!device_unregister(&quarantined));
+    assert(!device_driver_unregister(&quarantine_driver));
+    assert(remove_count == 2U);
     return 0;
 }

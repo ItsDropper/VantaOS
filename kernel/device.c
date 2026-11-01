@@ -16,6 +16,7 @@ typedef struct
     device_t* device;
     uint32_t references;
     uint64_t sequence;
+    uint8_t remove_active;
 } device_entry_t;
 
 typedef struct
@@ -125,6 +126,7 @@ int device_register(device_t* device)
     devices[devices_used].device = device;
     devices[devices_used].references = 0U;
     devices[devices_used].sequence = ++next_device_sequence;
+    devices[devices_used].remove_active = 0U;
     ++devices_used;
     device->state = DEVICE_STATE_REGISTERED;
     spinlock_unlock_irqrestore(&device_lock, flags);
@@ -163,6 +165,7 @@ static int device_unregister_internal(device_t* device,
         devices[i - 1U] = devices[i];
     devices[--devices_used].device = 0;
     devices[devices_used].references = 0U;
+    devices[devices_used].remove_active = 0U;
     device->state = DEVICE_STATE_UNREGISTERED;
     spinlock_unlock_irqrestore(&device_lock, flags);
     return 1;
@@ -189,6 +192,7 @@ static int device_acquire_internal(device_t* device, int require_bound)
     flags = spinlock_lock_irqsave(&device_lock);
     index = find_device_locked(device);
     if (index < 0 || device->state == DEVICE_STATE_REMOVING ||
+        device->state == DEVICE_STATE_QUARANTINED ||
         (require_bound && device->state != DEVICE_STATE_BOUND) ||
         devices[index].references == UINT32_MAX)
     {
@@ -370,43 +374,77 @@ int device_unbind(device_t* device)
 
     if (!device)
         return 0;
+
     flags = spinlock_lock_irqsave(&device_lock);
     device_index = find_device_locked(device);
-    if (device_index < 0 || device->state != DEVICE_STATE_BOUND ||
-        !device->driver || !device->driver->remove ||
+    if (device_index < 0 ||
+        (device->state != DEVICE_STATE_BOUND &&
+         device->state != DEVICE_STATE_REMOVING) ||
+        !device->driver || !device->driver->remove)
+    {
+        spinlock_unlock_irqrestore(&device_lock, flags);
+        return 0;
+    }
+
+    driver = device->driver;
+    driver_index = find_driver_locked(driver);
+    if (driver_index < 0 ||
+        drivers[driver_index].references == UINT32_MAX)
+    {
+        spinlock_unlock_irqrestore(&device_lock, flags);
+        return 0;
+    }
+
+    /*
+     * Close admission before checking the reference count. Existing holders
+     * can finish and release; new acquisitions are rejected from this point.
+     * The caller retries unbind after the count reaches zero.
+     */
+    device->state = DEVICE_STATE_REMOVING;
+    if (devices[device_index].remove_active ||
         devices[device_index].references != 0U)
     {
         spinlock_unlock_irqrestore(&device_lock, flags);
         return 0;
     }
-    driver = device->driver;
-    driver_index = find_driver_locked(driver);
-    if (driver_index < 0 || drivers[driver_index].references == UINT32_MAX)
-    {
-        spinlock_unlock_irqrestore(&device_lock, flags);
-        return 0;
-    }
-    ++devices[device_index].references;
+
+    devices[device_index].remove_active = 1U;
+    ++devices[device_index].references; /* Pin device across the callback. */
     ++drivers[driver_index].references;
-    device->state = DEVICE_STATE_REMOVING;
     spinlock_unlock_irqrestore(&device_lock, flags);
 
-    driver->remove(device);
+    /* Driver code runs without the registry lock held. */
+    int removed = driver->remove(device);
 
     flags = spinlock_lock_irqsave(&device_lock);
     device_index = find_device_locked(device);
     driver_index = find_driver_locked(driver);
-    if (device_index >= 0 && driver_index >= 0)
+    if (device_index >= 0 && driver_index >= 0 &&
+        device->state == DEVICE_STATE_REMOVING &&
+        device->driver == driver &&
+        devices[device_index].remove_active)
     {
-        device->driver = 0;
-        device->state = DEVICE_STATE_REGISTERED;
+        if (removed)
+        {
+            device->driver = 0;
+            device->state = DEVICE_STATE_REGISTERED;
+        }
+        else
+        {
+            /*
+             * Hardware quiescence was not proven. Keep the driver attached
+             * and prevent all future acquisitions; reclaim nothing here.
+             */
+            device->state = DEVICE_STATE_QUARANTINED;
+        }
+        devices[device_index].remove_active = 0U;
         if (devices[device_index].references != 0U)
             --devices[device_index].references;
         if (drivers[driver_index].references != 0U)
             --drivers[driver_index].references;
     }
     spinlock_unlock_irqrestore(&device_lock, flags);
-    return 1;
+    return removed != 0;
 }
 
 uint32_t device_probe_all(void)

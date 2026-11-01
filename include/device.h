@@ -31,7 +31,9 @@ typedef enum
     DEVICE_STATE_PROBING,
     DEVICE_STATE_BOUND,
     DEVICE_STATE_FAILED,
-    DEVICE_STATE_REMOVING
+    DEVICE_STATE_REMOVING,
+    /* Removal failed; driver and hardware resources remain attached. */
+    DEVICE_STATE_QUARANTINED
 } device_state_t;
 
 typedef enum
@@ -86,7 +88,8 @@ struct device_driver
     const device_id_t* ids;
     uint32_t id_count;
     device_probe_result_t (*probe)(device_t*);
-    void (*remove)(device_t*);
+    /* Return nonzero only after hardware and all DMA access are quiescent. */
+    int (*remove)(device_t*);
     void* context;
 };
 
@@ -106,7 +109,11 @@ int device_driver_unregister(const device_driver_t* driver);
 /* Probe and remove callbacks always execute without the registry lock. */
 device_bind_result_t device_bind(device_t* device,
                                  const device_driver_t* driver);
-/* Unbind is refused unless the bound driver supplies a hardware-safe remove callback. */
+/*
+ * Unbind first closes admission, then returns 0 while existing references
+ * drain. Retry after releasing them. A failed remove callback quarantines the
+ * still-bound device; its resources must remain retained.
+ */
 int device_unbind(device_t* device);
 uint32_t device_probe_all(void);
 

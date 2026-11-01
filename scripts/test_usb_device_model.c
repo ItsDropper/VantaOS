@@ -22,10 +22,11 @@ static device_probe_result_t hid_interface_probe(device_t* device)
     return DEVICE_PROBE_BOUND;
 }
 
-static void hid_interface_remove(device_t* device)
+static int hid_interface_remove(device_t* device)
 {
     assert(device != NULL);
     ++hid_remove_count;
+    return 1;
 }
 
 int main(void)

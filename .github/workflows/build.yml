@@ -770,7 +770,7 @@ jobs:
             cat "$log" qemu-rtl8139-stderr.log
             exit 1
           fi
-      - name: VirtIO legacy network device QEMU probe and TX regression
+      - name: VirtIO legacy network device QEMU RX and TX integration
         if: steps.scope.outputs.full == '1'
         shell: bash
         run: |

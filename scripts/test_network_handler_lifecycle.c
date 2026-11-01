@@ -24,6 +24,33 @@ int net_ipv4_send(net_device_t* device, uint32_t destination,
 static net_device_t* active_device;
 static uint32_t ethernet_calls;
 static uint32_t udp_calls;
+static uint32_t late_ethernet_calls;
+
+static void late_ethernet_handler(net_device_t* device, const uint8_t* frame,
+                                  size_t length, uint16_t type, size_t header,
+                                  void* context)
+{
+    assert(device == active_device);
+    assert(frame != NULL && length >= header);
+    assert(type == 0x88B5U);
+    assert(context == &late_ethernet_calls);
+    ++late_ethernet_calls;
+}
+
+static void register_late_ethernet_handler(net_device_t* device,
+                                           const uint8_t* frame, size_t length,
+                                           uint16_t type, size_t header,
+                                           void* context)
+{
+    assert(device == active_device);
+    assert(frame != NULL && length >= header);
+    assert(type == 0x88B5U);
+    assert(context == &ethernet_calls);
+    ++ethernet_calls;
+    assert(net_ethernet_handler_register(0x88B5U,
+                                         late_ethernet_handler,
+                                         &late_ethernet_calls));
+}
 
 static void ethernet_handler(net_device_t* device, const uint8_t* frame,
                              size_t length, uint16_t type, size_t header,
@@ -70,6 +97,28 @@ int main(void)
     assert(ethernet_calls == 1U);
     assert(net_ethernet_handler_unregister(0x88B5U, ethernet_handler,
                                            &ethernet_calls));
+
+    /*
+     * Dispatch uses a stable callback snapshot: a handler registered by an
+     * executing callback must not receive the frame already being dispatched.
+     */
+    assert(net_ethernet_handler_register(0x88B5U,
+                                         register_late_ethernet_handler,
+                                         &ethernet_calls));
+    assert(net_internal_dispatch_ethernet(&device, frame, sizeof(frame),
+                                          0x88B5U, NET_ETHERNET_HEADER_SIZE));
+    assert(ethernet_calls == 2U);
+    assert(late_ethernet_calls == 0U);
+    assert(net_internal_dispatch_ethernet(&device, frame, sizeof(frame),
+                                          0x88B5U, NET_ETHERNET_HEADER_SIZE));
+    assert(ethernet_calls == 3U);
+    assert(late_ethernet_calls == 1U);
+    assert(net_ethernet_handler_unregister(0x88B5U,
+                                           register_late_ethernet_handler,
+                                           &ethernet_calls));
+    assert(net_ethernet_handler_unregister(0x88B5U,
+                                           late_ethernet_handler,
+                                           &late_ethernet_calls));
 
     assert(net_udp_handler_register(4321U, udp_handler, &udp_calls));
     uint8_t ip[31] = {0};

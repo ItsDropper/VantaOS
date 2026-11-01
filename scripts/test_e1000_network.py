@@ -25,7 +25,7 @@ def recv_exact(sock, count):
     while len(chunks) < count:
         part = sock.recv(count - len(chunks))
         if not part:
-            raise RuntimeError("QEMU closed the E1000 socket")
+            raise RuntimeError("QEMU closed the Ethernet socket")
         chunks.extend(part)
     return bytes(chunks)
 
@@ -51,7 +51,7 @@ def main():
         except OSError:
             time.sleep(0.1)
     if connection is None:
-        raise RuntimeError("Could not connect to QEMU's E1000 socket backend")
+        raise RuntimeError("Could not connect to QEMU's Ethernet socket backend")
 
     connection.settimeout(5)
     host_mac = bytes.fromhex("020000000002")

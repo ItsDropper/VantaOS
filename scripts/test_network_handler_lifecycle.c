@@ -153,7 +153,7 @@ int main(void)
         ip_options[i] = ip[i];
     ip_options[20] = 1U; ip_options[21] = 1U;
     ip_options[22] = 1U; ip_options[23] = 1U;
-    for (uint32_t i = 20U; i < sizeof(ip) - 20U; ++i)
+    for (uint32_t i = 20U; i < sizeof(ip); ++i)
         ip_options[i + 4U] = ip[i];
     ip_options[30] = 0xE7U; ip_options[31] = 0xB3U;
     net_udp_receive_ipv4(&device, ip_options, 24U, sizeof(ip_options));
@@ -163,19 +163,19 @@ int main(void)
     ip[26] = 0U; ip[27] = 0U;
     ip[25] = 10U;
     net_udp_receive_ipv4(&device, ip, 20U, sizeof(ip));
-    assert(udp_calls == 2U);
+    assert(udp_calls == 3U);
 
     /* A zero source port is invalid even when the checksum is disabled. */
     ip[25] = 11U;
     ip[20] = 0U; ip[21] = 0U;
     net_udp_receive_ipv4(&device, ip, 20U, sizeof(ip));
-    assert(udp_calls == 2U);
+    assert(udp_calls == 3U);
 
     /* A zero destination port must also be rejected before handler lookup. */
     ip[20] = 0x04U; ip[21] = 0xD2U;
     ip[22] = 0U; ip[23] = 0U;
     net_udp_receive_ipv4(&device, ip, 20U, sizeof(ip));
-    assert(udp_calls == 2U);
+    assert(udp_calls == 3U);
 
     assert(net_udp_handler_unregister(4321U, udp_handler, &udp_calls));
     return 0;

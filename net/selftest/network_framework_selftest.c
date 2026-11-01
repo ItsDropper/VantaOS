@@ -59,17 +59,20 @@ void network_framework_selftest(void) {
     ok=received_type==0x88B5U&&received_header==NET_ETHERNET_VLAN_HEADER_SIZE&&received_length==sizeof(vlan)&&ok;
     ok=!net_receive_frame(&d,short_frame,sizeof(short_frame))&&ok;
     for(uint32_t i=0;i<NET_RX_QUEUE_CAPACITY;i++)ok=net_receive_frame(&d,frame,sizeof(frame))&&ok;
-    ok=!net_device_unregister(&d)&&ok; /* queued frames pin the device descriptor */
     ok=!net_receive_frame(&d,frame,sizeof(frame))&&ok; /* bounded queue reports overflow */
-    ok=net_poll(NET_RX_QUEUE_CAPACITY)==NET_RX_QUEUE_CAPACITY&&ok;
     net_device_stats_t stats;
     ok=net_device_get_stats(&d,&stats)&&ok;
-    /* net_poll also emits one IPv6 Router Solicitation for this live test NIC. */
-    ok=mock_tx_count==2&&stats.tx_frames==2&&stats.tx_errors==1&&
+    /*
+     * Queue-full accounting is checked before teardown. Unregister now
+     * discards frames owned by this interface instead of pinning it forever.
+     */
+    ok=mock_tx_count==1&&stats.tx_frames==1&&stats.tx_errors==1&&
        stats.rx_frames==2+NET_RX_QUEUE_CAPACITY&&stats.rx_dropped==1&&
        stats.rx_malformed==1&&ok;
     ok=net_ethernet_handler_unregister(0x88B5U,mock_handler,0)&&ok;
     ok=net_device_unregister(&d)&&ok;
+    ok=net_device_count()==0U&&ok;
+    ok=!net_receive_frame(&d,frame,sizeof(frame))&&ok;
     ok=!net_device_get_ipv4(&d,&address,&mask,&gateway)&&ok;
     serial_write(ok?"VANTAOS_NETWORK_FRAMEWORK_OK\n":"VANTAOS_NETWORK_FRAMEWORK_FAIL\n");
 }

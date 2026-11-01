@@ -235,8 +235,15 @@ static void udp_selftest_handler(net_device_t* device, uint32_t source_address,
         size_t i = 0;
         while (i < payload_length && payload[i] == expected[i])
             ++i;
-        if (i == payload_length)
+        if (i == payload_length) {
             serial_write("VANTAOS_UDP_RX_SELFTEST_OK\n");
+            /*
+             * Echo the validated datagram so the host-side QEMU test can
+             * synchronize on actual protocol dispatch, not a timing delay.
+             */
+            (void)net_udp_send(device, source_address, destination_port,
+                              source_port, payload, payload_length);
+        }
     }
 }
 #endif

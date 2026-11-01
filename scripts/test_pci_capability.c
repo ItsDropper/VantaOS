@@ -183,5 +183,25 @@ int main(void)
     assert(!pci_find_capability(&device, 0U, &offset));
     assert(!pci_find_capability(&device, 0xFFU, &offset));
     assert(!pci_find_capability(&device, 0x05U, 0));
+
+    /*
+     * PCI command updates must preserve unrelated command bits and the
+     * adjacent status word, which has write-one-to-clear semantics.
+     */
+    reset_config();
+    config_space[1] = 0xA5A50008U;
+    assert(pci_enable_io_space(&device));
+    assert((config_space[1] & 0xFFFFU) == 0x0009U);
+    assert((config_space[1] >> 16U) == 0xA5A5U);
+    assert(pci_enable_memory_space(&device));
+    assert((config_space[1] & 0xFFFFU) == 0x000BU);
+    assert((config_space[1] >> 16U) == 0xA5A5U);
+    assert(pci_enable_bus_mastering(&device));
+    assert((config_space[1] & 0xFFFFU) == 0x000FU);
+    assert((config_space[1] >> 16U) == 0xA5A5U);
+    assert(pci_disable_bus_mastering(&device));
+    assert((config_space[1] & 0xFFFFU) == 0x000BU);
+    assert((config_space[1] >> 16U) == 0xA5A5U);
+    assert(!pci_disable_bus_mastering(NULL));
     return 0;
 }

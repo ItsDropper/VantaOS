@@ -930,16 +930,59 @@ done:
     return valid;
 }
 
+/*
+ * Update PCI command bits as one config-space transaction. The lock protects
+ * the read/modify/write sequence across CPUs and the 16-bit write preserves
+ * the adjacent write-one-to-clear status register.
+ */
+static int pci_update_command_bits(const struct pci_device* device,
+                                   uint16_t set_bits, uint16_t clear_bits)
+{
+    uint64_t flags;
+    uint32_t command_status;
+    uint16_t command;
+    uint16_t actual;
+
+    if (!device || (set_bits & clear_bits) != 0U)
+        return 0;
+
+    flags = pci_lock_config();
+    command_status = pci_read_device_config_locked(device, 0x04U);
+    if (command_status == UINT32_MAX) {
+        pci_unlock_config(flags);
+        return 0;
+    }
+
+    command = (uint16_t)command_status;
+    command = (uint16_t)((command | set_bits) & (uint16_t)~clear_bits);
+    if (!pci_write_device_config16_locked(device, 0x04U, command)) {
+        pci_unlock_config(flags);
+        return 0;
+    }
+
+    actual = (uint16_t)(pci_read_device_config_locked(device, 0x04U) & 0xFFFFU);
+    pci_unlock_config(flags);
+    return (actual & (uint16_t)(set_bits | clear_bits)) == set_bits;
+}
+
 int pci_enable_io_space(const struct pci_device* device)
 {
-    if (!device) return 0;
-    uint32_t command_status = pci_read_device_config(device, 0x04);
-    uint16_t command = (uint16_t)command_status;
-    if (command & 1U) return 1;
-    command |= 1U;
-    if (!pci_write_config16(device, 0x04U, command))
-        return 0;
-    return (pci_read_device_config(device, 0x04) & 1U) != 0;
+    return pci_update_command_bits(device, 1U << 0U, 0U);
+}
+
+int pci_enable_memory_space(const struct pci_device* device)
+{
+    return pci_update_command_bits(device, 1U << 1U, 0U);
+}
+
+int pci_enable_bus_mastering(const struct pci_device* device)
+{
+    return pci_update_command_bits(device, 1U << 2U, 0U);
+}
+
+int pci_disable_bus_mastering(const struct pci_device* device)
+{
+    return pci_update_command_bits(device, 0U, 1U << 2U);
 }
 
 #ifdef PCI_TEST
@@ -1177,30 +1220,6 @@ fail_early:
 }
 
 #endif
-
-int pci_enable_memory_space(const struct pci_device* device)
-{
-    if (!device) return 0;
-    uint32_t command_status = pci_read_device_config(device, 0x04);
-    uint16_t command = (uint16_t)command_status;
-    if (command & (1U << 1)) return 1;
-    command |= (1U << 1);
-    pci_write_device_config_locked(device, 0x04,
-                     (uint32_t)command);
-    return (pci_read_device_config(device, 0x04) & (1U << 1)) != 0;
-}
-
-int pci_enable_bus_mastering(const struct pci_device* device)
-{
-    if (!device) return 0;
-    uint32_t command_status = pci_read_device_config(device, 0x04);
-    uint16_t command = (uint16_t)command_status;
-    if (command & (1U << 2)) return 1;
-    command |= (1U << 2);
-    pci_write_device_config_locked(device, 0x04,
-                     (uint32_t)command);
-    return (pci_read_device_config(device, 0x04) & (1U << 2)) != 0;
-}
 
 int pci_find_class(uint8_t class_code, uint8_t subclass, int prog_if,
                    int start_index)

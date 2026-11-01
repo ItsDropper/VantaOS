@@ -185,7 +185,7 @@ int main(void)
     assert(probe_count == 2U);
     assert(device_unregister(&root));
     assert(device_driver_unregister(&failing_driver));
-    assert(device_driver_unregister(&failing_driver));
+    assert(!device_driver_unregister(&failing_driver));
 
     /*
      * A failed hardware quiescence callback must quarantine the device.

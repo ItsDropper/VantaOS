@@ -200,6 +200,10 @@ static int e1000_transmit(net_device_t* device,const uint8_t* frame,size_t lengt
     if(device!=&state.netdev||!state.ready||!frame||
        length<NET_ETHERNET_HEADER_SIZE||length>NET_FRAME_MAX_SIZE)return 0;
     spinlock_lock(&state.tx_lock);
+    if(!state.ready){
+        spinlock_unlock(&state.tx_lock);
+        return 0;
+    }
     volatile e1000_tx_desc_t* ring=(volatile e1000_tx_desc_t*)state.tx_ring_page.virtual_address;
     uint32_t index=state.tx_next;
     volatile e1000_tx_desc_t* desc=&ring[index];
@@ -345,6 +349,7 @@ fail_dma:
         serial_write("VANTAOS_E1000_PROBE_CLEANUP_DMA_RETAINED\\n");
         return NET_PCI_PROBE_FAILED;
     }
+#ifdef VANTAOS_SELF_TEST
     if(state.handler_registered){
         if(!net_ethernet_handler_unregister(0x88B5U,e1000_rx_selftest_handler,0)){
             serial_write("VANTAOS_E1000_PROBE_CLEANUP_HANDLER_RETAINED\\n");
@@ -352,6 +357,7 @@ fail_dma:
         }
         state.handler_registered=0U;
     }
+#endif
     if(state.registered){
         if(!net_device_unregister(&state.netdev)){
             serial_write("VANTAOS_E1000_PROBE_CLEANUP_NETDEV_RETAINED\\n");

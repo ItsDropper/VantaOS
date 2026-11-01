@@ -128,6 +128,7 @@ int main(void)
     assert(net_udp_handler_register(4321U, udp_handler, &udp_calls));
     uint8_t ip[31] = {0};
     ip[12] = 0x0AU; ip[13] = 0x00U; ip[14] = 0x02U; ip[15] = 0x02U;
+    ip[16] = 0x0AU; ip[17] = 0x00U; ip[18] = 0x02U; ip[19] = 0x01U;
     ip[20] = 0x04U; ip[21] = 0xD2U; /* source port 1234 */
     ip[22] = 0x10U; ip[23] = 0xE1U; /* destination port 4321 */
     ip[24] = 0U; ip[25] = 11U;
@@ -136,10 +137,15 @@ int main(void)
     net_udp_receive_ipv4(&device, ip, 20U, sizeof(ip));
     assert(udp_calls == 1U);
 
+    /* A valid non-zero checksum must be accepted, including odd payloads. */
+    ip[26] = 0xE7U; ip[27] = 0xB3U;
+    net_udp_receive_ipv4(&device, ip, 20U, sizeof(ip));
+    assert(udp_calls == 2U);
+
     /* A non-zero but invalid UDP checksum must be rejected before dispatch. */
     ip[26] = 0x12U; ip[27] = 0x34U;
     net_udp_receive_ipv4(&device, ip, 20U, sizeof(ip));
-    assert(udp_calls == 1U);
+    assert(udp_calls == 2U);
 
     /* UDP length must exactly match the IPv4 payload length. */
     ip[26] = 0U; ip[27] = 0U;
@@ -151,13 +157,13 @@ int main(void)
     ip[25] = 11U;
     ip[20] = 0U; ip[21] = 0U;
     net_udp_receive_ipv4(&device, ip, 20U, sizeof(ip));
-    assert(udp_calls == 1U);
+    assert(udp_calls == 2U);
 
     /* A zero destination port must also be rejected before handler lookup. */
     ip[20] = 0x04U; ip[21] = 0xD2U;
     ip[22] = 0U; ip[23] = 0U;
     net_udp_receive_ipv4(&device, ip, 20U, sizeof(ip));
-    assert(udp_calls == 1U);
+    assert(udp_calls == 2U);
 
     assert(net_udp_handler_unregister(4321U, udp_handler, &udp_calls));
     return 0;

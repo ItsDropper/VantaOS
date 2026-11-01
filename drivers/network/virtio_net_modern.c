@@ -97,6 +97,7 @@ typedef struct {
 static vnet_modern_state_t state;
 static int vnet_modern_poll(void);
 static net_pci_probe_result_t vnet_modern_probe(const struct pci_device *);
+static int vnet_modern_remove(const struct pci_device *);
 static int vnet_modern_transmit(net_device_t *, const uint8_t *, size_t);
 static const net_device_ops_t vnet_modern_ops = { .transmit = vnet_modern_transmit };
 static const net_pci_id_t vnet_modern_ids[] = {
@@ -107,7 +108,8 @@ static const net_pci_driver_t vnet_modern_driver = {
     .ids = vnet_modern_ids,
     .id_count = sizeof(vnet_modern_ids) / sizeof(vnet_modern_ids[0]),
     .probe = vnet_modern_probe,
-    .poll = vnet_modern_poll
+    .poll = vnet_modern_poll,
+    .remove = vnet_modern_remove
 };
 
 static uint8_t rd8(volatile uint8_t *p, uint32_t o) { return p[o]; }
@@ -452,12 +454,25 @@ static int vnet_modern_poll(void)
 }
 
 
-static void cleanup(void)
+static int cleanup(void)
 {
     spinlock_lock(&state.tx_lock);
     state.ready = 0U;
     spinlock_unlock(&state.tx_lock);
+
+    /*
+     * VirtIO reset acknowledgement stops queue processing. Also clear PCI
+     * bus mastering before reclaiming any descriptor or buffer memory.
+     * Neither operation alone is treated as sufficient evidence.
+     */
     int reset_complete = state.common ? reset_device() : 1;
+    int bus_master_disabled =
+        !state.pci || pci_disable_bus_mastering(state.pci);
+    if (!reset_complete || !bus_master_disabled) {
+        serial_write("VANTAOS_VIRTIO_NET_MODERN_QUIESCE_FAILED_DMA_RETAINED\\n");
+        return 0;
+    }
+
 #ifdef VANTAOS_SELF_TEST
     for (uint32_t i = 0U; state.selftest_handler_registered &&
          i < VNET_WAIT_LIMIT; ++i) {
@@ -477,31 +492,44 @@ static void cleanup(void)
         __asm__ volatile ("pause");
     }
 
-    if (reset_complete && !state.registered &&
-        !state.selftest_handler_registered) {
-        release_queue(&state.rx);
-        release_queue(&state.tx);
-        if (state.common)
-            (void)mmio_unmap_region((void *)state.common, state.common_length);
-        if (state.notify_region)
-            (void)mmio_unmap_region((void *)state.notify_region, state.notify_length);
-        if (state.device_config)
-            (void)mmio_unmap_region((void *)state.device_config,
-                                    state.device_config_length);
-        state = (vnet_modern_state_t){0};
-        return;
+    if (state.registered || state.selftest_handler_registered) {
+        serial_write("VANTAOS_VIRTIO_NET_MODERN_UNREGISTER_BUSY_STATE_RETAINED\\n");
+        return 0;
     }
 
-    if (!reset_complete) {
-        /*
-         * A device that did not acknowledge reset may still own its DMA
-         * descriptors. Retain all metadata and mappings as a quarantine.
-         */
-        serial_write("VANTAOS_VIRTIO_NET_MODERN_RESET_TIMEOUT_DMA_RETAINED\\n");
-    } else {
-        /* A published netdev/handler still references this storage. */
-        serial_write("VANTAOS_VIRTIO_NET_MODERN_UNREGISTER_BUSY_STATE_RETAINED\\n");
+    /*
+     * Unmap each BAR capability independently and clear its pointer only
+     * after success. A failed unmap leaves the remaining state quarantined.
+     */
+    if (state.common) {
+        if (!mmio_unmap_region((void *)state.common, state.common_length))
+            return 0;
+        state.common = 0;
     }
+    if (state.notify_region) {
+        if (!mmio_unmap_region((void *)state.notify_region,
+                               state.notify_length))
+            return 0;
+        state.notify_region = 0;
+    }
+    if (state.device_config) {
+        if (!mmio_unmap_region((void *)state.device_config,
+                               state.device_config_length))
+            return 0;
+        state.device_config = 0;
+    }
+
+    release_queue(&state.rx);
+    release_queue(&state.tx);
+    state = (vnet_modern_state_t){0};
+    return 1;
+}
+
+static int vnet_modern_remove(const struct pci_device *pci)
+{
+    if (!pci || state.pci != pci)
+        return 0;
+    return cleanup();
 }
 
 static net_pci_probe_result_t vnet_modern_probe(const struct pci_device *pci)
@@ -603,7 +631,7 @@ fail:
     serial_write("VANTAOS_VIRTIO_NET_MODERN_FAIL_");
     serial_write(failure);
     serial_write("\\n");
-    cleanup();
+    (void)cleanup();
     return NET_PCI_PROBE_FAILED;
 }
 

@@ -10,7 +10,10 @@
 #include <assert.h>
 
 static struct pci_device test_pci;
+static struct pci_device failed_remove_pci;
 static uint32_t probe_count;
+static uint32_t failed_remove_probe_count;
+static uint32_t failed_remove_count;
 static uint32_t poll_count;
 static uint32_t remove_count;
 
@@ -49,6 +52,22 @@ static int test_remove(const struct pci_device* pci)
     return 1;
 }
 
+static net_pci_probe_result_t failed_remove_probe(const struct pci_device* pci)
+{
+    assert(pci == &failed_remove_pci);
+    ++failed_remove_probe_count;
+    return NET_PCI_PROBE_BOUND;
+}
+
+static int failed_remove(const struct pci_device* pci)
+{
+    assert(pci == &failed_remove_pci);
+    assert(failed_remove_pci.core.state == DEVICE_STATE_REMOVING);
+    ++failed_remove_count;
+    /* Hardware quiescence cannot be proven: the adapter must retain binding. */
+    return 0;
+}
+
 static const net_pci_id_t test_ids[] = {
     {0xFFFFU, 0xFFFFU, 0x02U, 0x00U, 0x00U}
 };
@@ -61,14 +80,27 @@ static const net_pci_driver_t test_driver = {
     .remove = test_remove
 };
 
+static const net_pci_id_t failed_remove_ids[] = {
+    {0x1234U, 0x5679U, 0x02U, 0x00U, 0x00U}
+};
+static const net_pci_driver_t failed_remove_driver = {
+    .name = "test-net-fail-remove",
+    .ids = failed_remove_ids,
+    .id_count = 1U,
+    .probe = failed_remove_probe,
+    .remove = failed_remove
+};
+
 int pci_get_device_count(void)
 {
-    return 1;
+    return 2;
 }
 
 const struct pci_device* pci_get_device(int index)
 {
-    return index == 0 ? &test_pci : NULL;
+    if (index == 0) return &test_pci;
+    if (index == 1) return &failed_remove_pci;
+    return NULL;
 }
 
 int main(void)
@@ -87,11 +119,28 @@ int main(void)
     test_pci.core.name[3] = '0';
     test_pci.core.name[4] = '\0';
 
+    failed_remove_pci.vendor_id = 0x1234U;
+    failed_remove_pci.device_id = 0x5679U;
+    failed_remove_pci.class_code = 0x02U;
+    failed_remove_pci.core.bus = DEVICE_BUS_PCI;
+    failed_remove_pci.core.bus_data = &failed_remove_pci;
+    failed_remove_pci.core.class_code = failed_remove_pci.class_code;
+    failed_remove_pci.core.name[0] = 'n';
+    failed_remove_pci.core.name[1] = 'e';
+    failed_remove_pci.core.name[2] = 't';
+    failed_remove_pci.core.name[3] = '1';
+    failed_remove_pci.core.name[4] = '\\0';
+
     assert(device_register(&test_pci.core));
+    assert(device_register(&failed_remove_pci.core));
     assert(net_pci_driver_register(&test_driver));
     assert(!net_pci_driver_register(&test_driver));
-    assert(net_probe_pci_devices() == 1U);
+    assert(net_pci_driver_register(&failed_remove_driver));
+    assert(net_probe_pci_devices() == 2U);
     assert(probe_count == 1U);
+    assert(failed_remove_probe_count == 1U);
+    assert(failed_remove_pci.core.state == DEVICE_STATE_BOUND);
+    assert(net_pci_bound_driver(&failed_remove_pci) != NULL);
     assert(test_pci.core.state == DEVICE_STATE_BOUND);
     assert(net_pci_bound_driver(&test_pci) != NULL);
     assert(net_pci_bound_driver(&test_pci)[0] == 't');
@@ -107,5 +156,18 @@ int main(void)
     assert(net_pci_poll_devices() == 0U);
     assert(poll_count == 1U);
     assert(device_unregister(&test_pci.core));
+
+    /*
+     * A failed hardware removal quarantines the generic device and leaves the
+     * network adapter binding intact; no new poll or bound reference is admitted.
+     */
+    assert(!device_unbind(&failed_remove_pci.core));
+    assert(failed_remove_count == 1U);
+    assert(failed_remove_pci.core.state == DEVICE_STATE_QUARANTINED);
+    assert(failed_remove_pci.core.driver != NULL);
+    assert(net_pci_bound_driver(&failed_remove_pci) != NULL);
+    assert(!device_acquire_bound(&failed_remove_pci.core));
+    assert(net_pci_poll_devices() == 0U);
+    assert(!device_unregister(&failed_remove_pci.core));
     return 0;
 }

@@ -27,6 +27,13 @@ static int test_poll(void)
     /* The bound PCI function remains registered throughout the callback. */
     assert(test_pci.core.state == DEVICE_STATE_BOUND);
     assert(test_pci.core.bus_data == &test_pci);
+    /*
+     * Unbind closes admission but must defer removal while this poll owns
+     * a device reference. The caller retries after the callback returns.
+     */
+    assert(!device_unbind(&test_pci.core));
+    assert(test_pci.core.state == DEVICE_STATE_REMOVING);
+    assert(!device_acquire_bound(&test_pci.core));
     /* Recursive polling must skip this driver's active callback. */
     assert(net_pci_poll_devices() == 0U);
     return 3;
@@ -37,7 +44,7 @@ static int test_remove(const struct pci_device* pci)
     assert(pci == &test_pci);
     assert(test_pci.core.state == DEVICE_STATE_REMOVING);
     /* The poll callback has fully returned before teardown starts. */
-    assert(poll_count == 2U);
+    assert(poll_count == 1U);
     ++remove_count;
     return 1;
 }
@@ -98,7 +105,7 @@ int main(void)
     assert(test_pci.core.driver == NULL);
     assert(net_pci_bound_driver(&test_pci) == NULL);
     assert(net_pci_poll_devices() == 0U);
-    assert(poll_count == 2U);
+    assert(poll_count == 1U);
     assert(device_unregister(&test_pci.core));
     return 0;
 }

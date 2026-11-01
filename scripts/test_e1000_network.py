@@ -165,6 +165,16 @@ def main():
         send_frame(connection, bad_frame.ljust(60, b"\x00"))
         assert_no_frame(connection, "an inconsistent UDP length")
 
+        # UDP port zero is reserved and must not reach a registered handler.
+        for port_offset, description in ((0, "a zero UDP source port"),
+                                         (2, "a zero UDP destination port")):
+            bad_port = bytearray(udp)
+            struct.pack_into("!H", bad_port, port_offset, 0)
+            bad_frame = (guest_mac + host_mac + struct.pack("!H", 0x0800)
+                         + bytes(udp_ip) + bytes(bad_port))
+            send_frame(connection, bad_frame.ljust(60, b"\x00"))
+            assert_no_frame(connection, description)
+
         udp_frame = guest_mac + host_mac + struct.pack("!H", 0x0800) + bytes(udp_ip) + bytes(udp)
         send_frame(connection, udp_frame.ljust(60, b"\x00"))
 

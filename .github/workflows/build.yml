@@ -238,7 +238,7 @@ jobs:
             -o /tmp/vantaos-network-device-tree-test
           /tmp/vantaos-network-device-tree-test
 
-      - name: Test network protocol handler lifetime
+      - name: Test network protocol and UDP validation lifetimes
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iscripts/test_stubs -Iinclude \
             scripts/test_network_handler_lifecycle.c net/core.c net/udp.c \

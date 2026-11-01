@@ -41,6 +41,21 @@ def send_frame(sock, frame):
     sock.sendall(struct.pack("!I", len(frame)) + frame)
 
 
+def assert_no_frame(sock, description):
+    previous_timeout = sock.gettimeout()
+    sock.settimeout(0.5)
+    try:
+        try:
+            pending = sock.recv(1, socket.MSG_PEEK)
+        except socket.timeout:
+            return
+        if not pending:
+            raise RuntimeError("QEMU closed the Ethernet socket")
+        raise RuntimeError(f"Unexpected Ethernet response after {description}")
+    finally:
+        sock.settimeout(previous_timeout)
+
+
 def main():
     deadline = time.monotonic() + 10
     connection = None
@@ -142,11 +157,13 @@ def main():
         bad_checksum[6] ^= 0x01
         bad_frame = guest_mac + host_mac + struct.pack("!H", 0x0800) + bytes(udp_ip) + bytes(bad_checksum)
         send_frame(connection, bad_frame.ljust(60, b"\x00"))
+        assert_no_frame(connection, "an invalid UDP checksum")
 
         bad_length = bytearray(udp)
         struct.pack_into("!H", bad_length, 4, len(bad_length) + 1)
         bad_frame = guest_mac + host_mac + struct.pack("!H", 0x0800) + bytes(udp_ip) + bytes(bad_length)
         send_frame(connection, bad_frame.ljust(60, b"\x00"))
+        assert_no_frame(connection, "an inconsistent UDP length")
 
         udp_frame = guest_mac + host_mac + struct.pack("!H", 0x0800) + bytes(udp_ip) + bytes(udp)
         send_frame(connection, udp_frame.ljust(60, b"\x00"))

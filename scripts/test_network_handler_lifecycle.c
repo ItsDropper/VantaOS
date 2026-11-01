@@ -147,6 +147,18 @@ int main(void)
     net_udp_receive_ipv4(&device, ip, 20U, sizeof(ip));
     assert(udp_calls == 2U);
 
+    /* IPv4 options shift the UDP header but not the pseudo-header addresses. */
+    uint8_t ip_options[35] = {0};
+    for (uint32_t i = 12U; i < 20U; ++i)
+        ip_options[i] = ip[i];
+    ip_options[20] = 1U; ip_options[21] = 1U;
+    ip_options[22] = 1U; ip_options[23] = 1U;
+    for (uint32_t i = 20U; i < sizeof(ip) - 20U; ++i)
+        ip_options[i + 4U] = ip[i];
+    ip_options[30] = 0xE7U; ip_options[31] = 0xB3U;
+    net_udp_receive_ipv4(&device, ip_options, 24U, sizeof(ip_options));
+    assert(udp_calls == 3U);
+
     /* UDP length must exactly match the IPv4 payload length. */
     ip[26] = 0U; ip[27] = 0U;
     ip[25] = 10U;

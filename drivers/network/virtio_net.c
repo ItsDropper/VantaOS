@@ -41,10 +41,11 @@ typedef struct {
 static vnet_state_t state;
 static int vnet_poll_device(void);
 static net_pci_probe_result_t vnet_probe(const struct pci_device*);
+static int vnet_remove(const struct pci_device*);
 static const net_pci_id_t vnet_ids[]={{VNET_VENDOR,VNET_LEGACY_ID,0x02U,0x00U,0x00U}};
 static int vnet_transmit(net_device_t*,const uint8_t*,size_t);
 static const net_device_ops_t vnet_net_ops={.transmit=vnet_transmit};
-static const net_pci_driver_t vnet_driver={.name="virtio-net-legacy",.ids=vnet_ids,.id_count=1,.probe=vnet_probe,.poll=vnet_poll_device};
+static const net_pci_driver_t vnet_driver={.name="virtio-net-legacy",.ids=vnet_ids,.id_count=1,.probe=vnet_probe,.poll=vnet_poll_device,.remove=vnet_remove};
 static inline void out8(uint16_t p,uint8_t v){__asm__ volatile("outb %0,%1"::"a"(v),"Nd"(p));}
 static inline void out16(uint16_t p,uint16_t v){__asm__ volatile("outw %0,%1"::"a"(v),"Nd"(p));}
 static inline void out32(uint16_t p,uint32_t v){__asm__ volatile("outl %0,%1"::"a"(v),"Nd"(p));}
@@ -166,9 +167,18 @@ static int vnet_poll_device(void){
  }
  return count;
 }
-static void vnet_release(void){
- spinlock_lock(&state.tx_lock);state.ready=0;spinlock_unlock(&state.tx_lock);
+static int vnet_release(void){
+ spinlock_lock(&state.tx_lock);
+ state.ready=0U;
+ spinlock_unlock(&state.tx_lock);
+
+ /* VirtIO reset must complete, then PCI bus mastering must be disabled. */
  int reset_complete=state.io_base?vnet_reset_device():1;
+ int bus_master_disabled=!state.pci||pci_disable_bus_mastering(state.pci);
+ if(!reset_complete||!bus_master_disabled){
+  serial_write("VANTAOS_VIRTIO_NET_QUIESCE_FAILED_DMA_RETAINED\\n");
+  return 0;
+ }
 #ifdef VANTAOS_SELF_TEST
  for(uint32_t i=0U;state.selftest_handler_registered&&i<VNET_WAIT_LIMIT;i++){
   if(net_ethernet_handler_unregister(0x88B5U,vnet_rx_selftest_handler,0)){
@@ -181,20 +191,21 @@ static void vnet_release(void){
   if(net_device_unregister(&state.netdev)){state.registered=0U;break;}
   __asm__ volatile("pause");
  }
- if(reset_complete&&!state.registered&&!state.selftest_handler_registered){
-  queue_release(&state.rx);queue_release(&state.tx);
-  state.io_base=0;state.pci=0;
- }else if(!reset_complete){
-  /*
-   * The device may still own descriptors. Retain queue metadata and the
-   * transport identity as a quarantine: a later probe must not overwrite
-   * these pointers or configure a second queue set while DMA may continue.
-   */
-  serial_write("VANTAOS_VIRTIO_NET_RESET_TIMEOUT_DMA_RETAINED\\n");
- }else{
-  /* Keep the published netdev/handler storage alive if unregister is busy. */
+ if(state.registered||state.selftest_handler_registered){
   serial_write("VANTAOS_VIRTIO_NET_UNREGISTER_BUSY_STATE_RETAINED\\n");
+  return 0;
  }
+
+ queue_release(&state.rx);
+ queue_release(&state.tx);
+ state=(vnet_state_t){0};
+ spinlock_init(&state.tx_lock);
+ return 1;
+}
+
+static int vnet_remove(const struct pci_device*pci){
+ if(!pci||state.pci!=pci)return 0;
+ return vnet_release();
 }
 static net_pci_probe_result_t vnet_probe(const struct pci_device*pci){
  if(!pci||state.ready||state.pci)return NET_PCI_PROBE_NOT_MINE;
@@ -236,6 +247,6 @@ static net_pci_probe_result_t vnet_probe(const struct pci_device*pci){
  else serial_write("VANTAOS_VIRTIO_NET_TX_SELFTEST_FAIL\n");
 #endif
  serial_write("VANTAOS_VIRTIO_NET_INITIALIZED\n");return NET_PCI_PROBE_BOUND;
-fail: vnet_release();return NET_PCI_PROBE_FAILED;
+fail: (void)vnet_release();return NET_PCI_PROBE_FAILED;
 }
 int virtio_net_initialize(void){uint8_t*p=(uint8_t*)&state;for(size_t i=0;i<sizeof(state);i++)p[i]=0;spinlock_init(&state.tx_lock);return net_pci_driver_register(&vnet_driver);}

@@ -64,6 +64,51 @@ static device_probe_result_t net_adapter_probe(device_t* device)
     return DEVICE_PROBE_NO_MATCH;
 }
 
+static int net_adapter_remove(device_t* device)
+{
+    net_driver_adapter_t* adapter;
+    const struct pci_device* pci;
+    uint64_t flags;
+    uint32_t binding_index = NET_PCI_BINDING_MAX;
+
+    if (!device || !device->driver || !device->bus_data)
+        return 0;
+    adapter = (net_driver_adapter_t*)device->driver->context;
+    pci = (const struct pci_device*)device->bus_data;
+    if (!adapter || !adapter->network || !adapter->network->remove)
+        return 0;
+
+    flags = spinlock_lock_irqsave(&driver_lock);
+    for (uint32_t i = 0U; i < binding_count; ++i) {
+        if (bindings[i].device == pci &&
+            bindings[i].driver == adapter->network) {
+            binding_index = i;
+            break;
+        }
+    }
+    spinlock_unlock_irqrestore(&driver_lock, flags);
+    if (binding_index == NET_PCI_BINDING_MAX)
+        return 0;
+
+    /* Hardware and network callbacks execute without driver_lock held. */
+    if (!adapter->network->remove(pci))
+        return 0;
+
+    flags = spinlock_lock_irqsave(&driver_lock);
+    for (uint32_t i = 0U; i < binding_count; ++i) {
+        if (bindings[i].device == pci &&
+            bindings[i].driver == adapter->network) {
+            for (uint32_t j = i; j + 1U < binding_count; ++j)
+                bindings[j] = bindings[j + 1U];
+            --binding_count;
+            bindings[binding_count] = (net_binding_t){0};
+            break;
+        }
+    }
+    spinlock_unlock_irqrestore(&driver_lock, flags);
+    return 1;
+}
+
 int net_pci_driver_register(const net_pci_driver_t* driver)
 {
     uint64_t flags;
@@ -102,8 +147,7 @@ int net_pci_driver_register(const net_pci_driver_t* driver)
     adapter->generic.ids = adapter->ids;
     adapter->generic.id_count = driver->id_count;
     adapter->generic.probe = net_adapter_probe;
-    /* Hardware teardown is not implemented; generic unbind stays disabled. */
-    adapter->generic.remove = NULL;
+    adapter->generic.remove = driver->remove ? net_adapter_remove : NULL;
     adapter->generic.context = adapter;
 
     if (!device_driver_register(&adapter->generic))

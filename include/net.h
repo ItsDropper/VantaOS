@@ -65,6 +65,12 @@ typedef struct {
     net_pci_probe_result_t (*probe)(const struct pci_device*);
     /* Called by net_poll() in process context; must be bounded and nonblocking. */
     int (*poll)(void);
+    /*
+     * Optional teardown. Return nonzero only after the device is quiescent,
+     * network registrations are drained, and all driver-owned resources are
+     * safe to reclaim. Failure leaves the device bound and resources retained.
+     */
+    int (*remove)(const struct pci_device*);
 } net_pci_driver_t;
 /* Initialize network core, protocols, drivers, and PCI probing in order. */
 void net_stack_initialize(void);

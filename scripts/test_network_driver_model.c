@@ -12,6 +12,7 @@
 static struct pci_device test_pci;
 static uint32_t probe_count;
 static uint32_t poll_count;
+static uint32_t remove_count;
 
 static net_pci_probe_result_t test_probe(const struct pci_device* pci)
 {
@@ -31,11 +32,26 @@ static int test_poll(void)
     return 3;
 }
 
+static int test_remove(const struct pci_device* pci)
+{
+    assert(pci == &test_pci);
+    assert(test_pci.core.state == DEVICE_STATE_REMOVING);
+    /* The poll callback has fully returned before teardown starts. */
+    assert(poll_count == 2U);
+    ++remove_count;
+    return 1;
+}
+
 static const net_pci_id_t test_ids[] = {
     {0xFFFFU, 0xFFFFU, 0x02U, 0x00U, 0x00U}
 };
 static const net_pci_driver_t test_driver = {
-    "test-net", test_ids, 1U, test_probe, test_poll
+    .name = "test-net",
+    .ids = test_ids,
+    .id_count = 1U,
+    .probe = test_probe,
+    .poll = test_poll,
+    .remove = test_remove
 };
 
 int pci_get_device_count(void)
@@ -75,11 +91,14 @@ int main(void)
     assert(net_pci_poll_devices() == 3U);
     assert(poll_count == 1U);
 
-    /* No hardware teardown callback exists, so unbind must fail closed. */
-    assert(!device_unbind(&test_pci.core));
-    assert(test_pci.core.state == DEVICE_STATE_BOUND);
-    assert(net_pci_bound_driver(&test_pci) != NULL);
-    assert(net_pci_poll_devices() == 3U);
+    /* Poll references drain before the driver's removal callback executes. */
+    assert(device_unbind(&test_pci.core));
+    assert(remove_count == 1U);
+    assert(test_pci.core.state == DEVICE_STATE_REGISTERED);
+    assert(test_pci.core.driver == NULL);
+    assert(net_pci_bound_driver(&test_pci) == NULL);
+    assert(net_pci_poll_devices() == 0U);
     assert(poll_count == 2U);
+    assert(device_unregister(&test_pci.core));
     return 0;
 }

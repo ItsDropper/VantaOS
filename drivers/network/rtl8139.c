@@ -53,11 +53,14 @@ typedef struct {
     uint32_t tx_next;
     uint8_t ready;
     uint8_t registered;
+    uint8_t handler_registered;
 } rtl8139_state_t;
 
 static rtl8139_state_t state;
 static int rtl8139_poll_device(void);
 static net_pci_probe_result_t rtl8139_probe(const struct pci_device *pci);
+static int rtl8139_remove(const struct pci_device *pci);
+static int rtl8139_release(void);
 static int rtl8139_transmit(net_device_t *device, const uint8_t *frame, size_t length);
 
 static const net_pci_id_t rtl8139_ids[] = {
@@ -69,7 +72,8 @@ static const net_pci_driver_t rtl8139_driver = {
     .ids = rtl8139_ids,
     .id_count = sizeof(rtl8139_ids) / sizeof(rtl8139_ids[0]),
     .probe = rtl8139_probe,
-    .poll = rtl8139_poll_device
+    .poll = rtl8139_poll_device,
+    .remove = rtl8139_remove
 };
 
 static inline void io_out8(uint16_t port, uint8_t value)
@@ -129,6 +133,10 @@ static int rtl8139_transmit(net_device_t *device, const uint8_t *frame, size_t l
         return 0;
 
     uint64_t flags = spinlock_lock_irqsave(&state.tx_lock);
+    if (!state.ready) {
+        spinlock_unlock_irqrestore(&state.tx_lock, flags);
+        return 0;
+    }
     uint32_t slot = state.tx_next % RTL8139_TX_SLOTS;
     uint16_t tsd = (uint16_t)(state.io_base + RTL8139_REG_TSD0 + slot * 4U);
     uint8_t *buffer = (uint8_t *)state.tx_pages[slot].virtual_address;
@@ -299,12 +307,11 @@ static net_pci_probe_result_t rtl8139_probe(const struct pci_device *pci)
     state.registered = 1U;
 #ifdef VANTAOS_SELF_TEST
     if (!net_device_configure_ipv4(&state.netdev, 0x0A00020FU,
-                                   0xFFFFFF00U, 0x0A000202U) ||
-        !net_ethernet_handler_register(0x88B5U, rtl8139_rx_selftest_handler, 0)) {
-        (void)net_device_unregister(&state.netdev);
-        state.registered = 0U;
+                                   0xFFFFFF00U, 0x0A000202U))
         goto fail;
-    }
+    if (!net_ethernet_handler_register(0x88B5U, rtl8139_rx_selftest_handler, 0))
+        goto fail;
+    state.handler_registered = 1U;
 #endif
     state.ready = 1U;
     io_out8((uint16_t)(state.io_base + RTL8139_REG_CR),
@@ -327,19 +334,67 @@ static net_pci_probe_result_t rtl8139_probe(const struct pci_device *pci)
     return NET_PCI_PROBE_BOUND;
 
 fail:
-    if (state.io_base) {
-        io_out8((uint16_t)(state.io_base + RTL8139_REG_CR), 0U);
-        io_out16((uint16_t)(state.io_base + RTL8139_REG_IMR), 0U);
-    }
-    if (state.rx_pages[0].virtual_address || state.rx_pages[1].virtual_address ||
-        state.rx_pages[2].virtual_address || state.tx_pages[0].virtual_address ||
-        state.tx_pages[1].virtual_address || state.tx_pages[2].virtual_address ||
-        state.tx_pages[3].virtual_address)
-        release_dma();
-    if (state.registered)
-        (void)net_device_unregister(&state.netdev);
-    state = (rtl8139_state_t){0};
+    (void)rtl8139_release();
     return NET_PCI_PROBE_FAILED;
+}
+
+static int rtl8139_release(void)
+{
+    state.ready = 0U;
+    uint64_t flags = spinlock_lock_irqsave(&state.tx_lock);
+    spinlock_unlock_irqrestore(&state.tx_lock, flags);
+
+    if (state.io_base) {
+        io_out16((uint16_t)(state.io_base + RTL8139_REG_IMR), 0U);
+        io_out32((uint16_t)(state.io_base + RTL8139_REG_RCR), 0U);
+        io_out8((uint16_t)(state.io_base + RTL8139_REG_CR), 0U);
+        io_out8((uint16_t)(state.io_base + RTL8139_REG_CR), RTL8139_CR_RST);
+        uint32_t spin = 0U;
+        while ((io_in8((uint16_t)(state.io_base + RTL8139_REG_CR)) &
+                RTL8139_CR_RST) && spin++ < RTL8139_WAIT_LIMIT)
+            __asm__ volatile ("pause");
+        if (spin >= RTL8139_WAIT_LIMIT) {
+            /* Still revoke PCI DMA, but never reclaim pages without reset. */
+            (void)pci_disable_bus_mastering(state.pci);
+            serial_write("VANTAOS_RTL8139_RESET_TIMEOUT_DMA_RETAINED\\n");
+            return 0;
+        }
+    }
+
+    if (state.pci && !pci_disable_bus_mastering(state.pci)) {
+        serial_write("VANTAOS_RTL8139_BUS_MASTER_ACTIVE_DMA_RETAINED\\n");
+        return 0;
+    }
+
+#ifdef VANTAOS_SELF_TEST
+    if (state.handler_registered) {
+        if (!net_ethernet_handler_unregister(
+                0x88B5U, rtl8139_rx_selftest_handler, 0)) {
+            serial_write("VANTAOS_RTL8139_HANDLER_BUSY_RETAINED\\n");
+            return 0;
+        }
+        state.handler_registered = 0U;
+    }
+#endif
+    if (state.registered) {
+        if (!net_device_unregister(&state.netdev)) {
+            serial_write("VANTAOS_RTL8139_NETDEV_BUSY_RETAINED\\n");
+            return 0;
+        }
+        state.registered = 0U;
+    }
+
+    release_dma();
+    state = (rtl8139_state_t){0};
+    spinlock_init(&state.tx_lock);
+    return 1;
+}
+
+static int rtl8139_remove(const struct pci_device *pci)
+{
+    if (!pci || state.pci != pci || !state.io_base)
+        return 0;
+    return rtl8139_release();
 }
 
 int rtl8139_initialize(void)

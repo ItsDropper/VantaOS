@@ -158,7 +158,7 @@ int main(void)
                        VANTA_DESIGN_STATE_DANGER),
                        "danger outline button renders");
     failures += expect(commands[outlined_start].color ==
-                       vanta_design_danger_color() &&
+                       vanta_design_danger_color(&design) &&
                        commands[outlined_start + 2U].color ==
                        vanta_design_text_color(&design),
                        "danger outline preserves readable text color");

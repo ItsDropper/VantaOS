@@ -267,7 +267,7 @@ static inline int vanta_design_button_impl(vanta_design_t* design,
             foreground = vanta_design_muted_color(design);
         else if (state == VANTA_DESIGN_STATE_DANGER)
         {
-            fill = vanta_design_danger_color();
+            fill = vanta_design_danger_color(design);
             foreground = vanta_design_on_color(fill);
         }
         else if (state != VANTA_DESIGN_STATE_DEFAULT)
@@ -341,7 +341,7 @@ static inline int vanta_design_badge(vanta_design_t* design,
     }
     else if (state == VANTA_DESIGN_STATE_DANGER)
     {
-        fill = vanta_design_danger_color();
+        fill = vanta_design_danger_color(design);
         foreground = vanta_design_on_color(fill);
     }
     else if (state == VANTA_DESIGN_STATE_SUCCESS)

@@ -49,6 +49,7 @@ void graphics_update_cursor(void);
 void graphics_cursor_restore(void);
 int graphics_can_redraw_windows_incrementally(void);
 void graphics_fill_rounded_rect(int x,int y,int width,int height,int radius,uint32_t color);
+void graphics_fill_squircle_rect(int x,int y,int width,int height,int radius,uint32_t color);
 int graphics_set_resolution(uint32_t width,uint32_t height);
 
 int graphics_is_initialized(void);

@@ -148,7 +148,7 @@ static void add_rect(int32_t x, int32_t y, int32_t width,
     };
     int added;
     if (width >= 8 && height >= 8)
-        added = vanta_design_round_rect(&design, x, y, width, height,
+        added = vanta_design_squircle_rect(&design, x, y, width, height,
                                         VANTA_DESIGN_RADIUS_CONTROL, color);
     else
         added = vanta_design_rect(&design, x, y, width, height, color);

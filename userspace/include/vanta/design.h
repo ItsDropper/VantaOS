@@ -86,11 +86,8 @@ static inline int vanta_design_rect(vanta_design_t* design,
     return vanta_design_push(design, &command);
 }
 
-/*
- * The current rasterizer uses circular corner masks. Consistent radii and
- * nested surfaces provide a squircle-inspired visual language; this is not
- * advertised as a mathematically exact superellipse rasterizer.
- */
+/* Radius follows the shared size tiers; the kernel uses an exponent-4
+ * superellipse boundary for squircle-style corner transitions. */
 static inline uint32_t vanta_design_radius(int32_t width, int32_t height,
                                            uint32_t preferred)
 {
@@ -102,7 +99,7 @@ static inline uint32_t vanta_design_radius(int32_t width, int32_t height,
     return preferred < limit ? preferred : limit;
 }
 
-static inline int vanta_design_round_rect(vanta_design_t* design,
+static inline int vanta_design_squircle_rect(vanta_design_t* design,
                                           int32_t x, int32_t y,
                                           int32_t width, int32_t height,
                                           uint32_t radius, uint32_t color)
@@ -111,7 +108,7 @@ static inline int vanta_design_round_rect(vanta_design_t* design,
         return 0;
     radius = vanta_design_radius(width, height, radius);
     vanta_gui_draw_command_t command = {
-        .type = VANTA_GUI_DRAW_FILL_ROUNDED_RECT,
+        .type = VANTA_GUI_DRAW_FILL_SQUIRCLE_RECT,
         .x = x, .y = y, .width = width, .height = height,
         .color = color, .scale = radius
     };
@@ -172,12 +169,12 @@ static inline int vanta_design_panel(vanta_design_t* design,
         return 0;
     uint32_t border = vanta_design_border_color(design);
     uint32_t surface = vanta_design_surface_color(design);
-    if (!vanta_design_round_rect(design, x, y, width, height,
+    if (!vanta_design_squircle_rect(design, x, y, width, height,
                                  VANTA_DESIGN_RADIUS_SURFACE, border))
         return 0;
     if (width <= 2 || height <= 2)
         return 1;
-    return vanta_design_round_rect(design, x + 1, y + 1, width - 2,
+    return vanta_design_squircle_rect(design, x + 1, y + 1, width - 2,
                                    height - 2,
                                    VANTA_DESIGN_RADIUS_SURFACE - 1U,
                                    surface);
@@ -207,7 +204,7 @@ static inline int vanta_design_button(vanta_design_t* design,
         text = 0x00FFFFFFU;
     }
 
-    if (!vanta_design_round_rect(design, x, y, width, height,
+    if (!vanta_design_squircle_rect(design, x, y, width, height,
                                  VANTA_DESIGN_RADIUS_CONTROL, fill))
         return 0;
     size_t length = 0U;

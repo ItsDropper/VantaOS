@@ -794,6 +794,69 @@ void graphics_fill_rect(
     }
 }
 
+/*
+ * Fill a rectangle with superellipse (fourth-power) corners. The exponent-4
+ * boundary is a practical squircle approximation with a flatter transition
+ * than circular rounded corners. Radius is capped to keep integer arithmetic
+ * bounded and to prevent corner overlap.
+ */
+void graphics_fill_squircle_rect(
+    int x, int y, int width, int height, int radius, uint32_t color)
+{
+    if (!initialized || width <= 0 || height <= 0)
+        return;
+    if (radius <= 0)
+    {
+        graphics_fill_rect(x, y, width, height, color);
+        return;
+    }
+    if (radius > 32) radius = 32;
+    if (radius * 2 > width) radius = width / 2;
+    if (radius * 2 > height) radius = height / 2;
+    if (radius <= 0)
+    {
+        graphics_fill_rect(x, y, width, height, color);
+        return;
+    }
+
+    uint32_t packed = graphics_pack_color(color);
+    int x0 = x < 0 ? 0 : x;
+    int y0 = y < 0 ? 0 : y;
+    int x1 = x + width;
+    int y1 = y + height;
+    if (x1 > (int)framebuffer_width) x1 = (int)framebuffer_width;
+    if (y1 > (int)framebuffer_height) y1 = (int)framebuffer_height;
+    int radius2 = radius * radius;
+    int radius4 = radius2 * radius2;
+
+    for (int py = y0; py < y1; py++)
+    {
+        volatile uint32_t* row =
+            (volatile uint32_t*)(framebuffer + py * framebuffer_pitch);
+        int first = -1;
+        int last = -1;
+        for (int px = x0; px < x1; px++)
+        {
+            int cx = px < x + radius ? x + radius :
+                (px >= x + width - radius ? x + width - radius - 1 : px);
+            int cy = py < y + radius ? y + radius :
+                (py >= y + height - radius ? y + height - radius - 1 : py);
+            int dx = px - cx;
+            int dy = py - cy;
+            int dx2 = dx * dx;
+            int dy2 = dy * dy;
+            if (dx2 * dx2 + dy2 * dy2 <= radius4 && row[px] != packed)
+            {
+                row[px] = packed;
+                if (first < 0) first = px;
+                last = px;
+            }
+        }
+        if (first >= 0)
+            graphics_mark_damage(first, py, last - first + 1, 1);
+    }
+}
+
 void graphics_fill_rounded_rect(
     int x,
     int y,

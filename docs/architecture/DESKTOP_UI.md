@@ -71,7 +71,7 @@ Remaining architectural work is explicit: the manager uses a bounded draw-comman
 
 Ring-3 applications should prefer `userspace/include/vanta/design.h` over local color and geometry constants. VDS centralizes spacing, corner-radius tiers, semantic theme colors, bounded draw-list construction, panels, and button visual states. It does not own input dispatch: applications must continue pairing visual controls with their own event/hitbox logic.
 
-The GUI draw ABI includes a rounded-rectangle command. Its corner radius is carried in the existing `scale` field for that command type, preserving the command structure layout and ABI version. The kernel validates dimensions, radius, and client bounds before rasterizing. The current renderer uses circular corner masks, so the design language is intentionally described as squircle-inspired rather than claiming exact continuous-superellipse geometry.
+The GUI draw ABI includes a squircle-rectangle command. Its corner radius is carried in the existing `scale` field for that command type, preserving the command structure layout and ABI version. The kernel validates dimensions, radius, and client bounds before rasterizing. The renderer uses an exponent-4 superellipse boundary (|x|^4 + |y|^4 <= r^4) for a flatter corner transition than a circular mask; this is a deterministic raster approximation, not a claim of mathematically continuous vector geometry.
 
 Use a restrained hierarchy:
 - 4 px base spacing rhythm, composed into 8/12/16/24/32 px steps.

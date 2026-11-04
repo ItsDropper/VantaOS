@@ -286,7 +286,7 @@ static int gui_command_valid(const vanta_gui_draw_command_t* command,
         return 1;
     }
 
-    if (command->type == VANTA_GUI_DRAW_FILL_ROUNDED_RECT)
+    if (command->type == VANTA_GUI_DRAW_FILL_SQUIRCLE_RECT)
     {
         if (command->width <= 0 || command->height <= 0 ||
             command->scale > 32U)
@@ -693,10 +693,10 @@ void gui_server_draw_windows(void)
             const vanta_gui_draw_command_t* command = &window->commands[j];
             int cx = x + GUI_CLIENT_INSET_X + command->x;
             int cy = y + GUI_CLIENT_INSET_Y + command->y;
-            if (command->type == VANTA_GUI_DRAW_FILL_ROUNDED_RECT &&
+            if (command->type == VANTA_GUI_DRAW_FILL_SQUIRCLE_RECT &&
                 gui_command_valid(command, width, height))
             {
-                graphics_fill_rounded_rect(cx, cy, command->width,
+                graphics_fill_squircle_rect(cx, cy, command->width,
                     command->height, (int)command->scale,
                     command->color & 0x00FFFFFFU);
             }

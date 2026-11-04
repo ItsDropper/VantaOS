@@ -81,7 +81,7 @@ int main(void)
     failures += expect(vanta_design_on_color(0x00102030U) == 0x00FFFFFFU,
                        "dark surfaces use light foreground");
     const uint32_t accent_swatches[] = {
-        0x004B9CFFU, 0x0014B8A6U, 0x00D97706U, 0x008B5CF6U,
+        0x004B9CFFU, 0x0014B8A6U, 0x00D97706U, 0x00936CF0U,
         0x0022C55EU, 0x00EF4444U
     };
     for (size_t i = 0U; i < sizeof(accent_swatches) /
@@ -98,6 +98,26 @@ int main(void)
                        &design, 0, 0, 112, 28, "Cancel",
                        VANTA_DESIGN_STATE_DEFAULT),
                        "outline button appends atomically");
+    size_t outlined_start = design.count;
+    failures += expect(vanta_design_outline_button(
+                       &design, 0, 0, 112, 28, "Selected",
+                       VANTA_DESIGN_STATE_SELECTED),
+                       "selected outline button renders");
+    failures += expect(commands[outlined_start].color ==
+                       vanta_design_accent_color(&design) &&
+                       commands[outlined_start + 2U].color ==
+                       vanta_design_text_color(&design),
+                       "selected outline uses accent border and readable text");
+    outlined_start = design.count;
+    failures += expect(vanta_design_outline_button(
+                       &design, 0, 0, 112, 28, "Delete",
+                       VANTA_DESIGN_STATE_DANGER),
+                       "danger outline button renders");
+    failures += expect(commands[outlined_start].color ==
+                       vanta_design_danger_color() &&
+                       commands[outlined_start + 2U].color ==
+                       vanta_design_text_color(&design),
+                       "danger outline preserves readable text color");
     failures += expect(design.count == before_controls + 3U,
                        "outline button emits border, surface and label");
     failures += expect(commands[before_controls].color ==

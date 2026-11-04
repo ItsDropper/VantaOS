@@ -71,7 +71,7 @@ static inline uint32_t vanta_theme_accent_color(const vanta_theme_t* theme)
 {
     if (theme && theme->accent == 1U) return 0x0014B8A6U;
     if (theme && theme->accent == 2U) return 0x00D97706U;
-    if (theme && theme->accent == 3U) return 0x008B5CF6U;
+    if (theme && theme->accent == 3U) return 0x00936CF0U;
     return 0x004B9CFFU;
 }
 

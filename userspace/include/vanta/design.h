@@ -237,15 +237,16 @@ static inline int vanta_design_button_impl(vanta_design_t* design,
             fill = vanta_theme_row_color(&design->theme);
         else if (state == VANTA_DESIGN_STATE_SELECTED)
         {
+            /* The accent communicates selection through the outline; preserve
+             * the normal semantic foreground for readable label contrast. */
             border = vanta_design_accent_color(design);
-            foreground = border;
         }
         else if (state == VANTA_DESIGN_STATE_DISABLED)
             foreground = vanta_design_muted_color(design);
         else if (state == VANTA_DESIGN_STATE_DANGER)
         {
+            /* Danger remains an outline treatment, not red-on-surface text. */
             border = vanta_design_danger_color();
-            foreground = border;
         }
         else if (state != VANTA_DESIGN_STATE_DEFAULT)
             return 0;

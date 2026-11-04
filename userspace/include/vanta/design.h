@@ -140,6 +140,77 @@ static inline int vanta_design_text(vanta_design_t* design,
     return vanta_design_push(design, &command);
 }
 
+/*
+ * Text measurement deliberately follows gui_server's conservative ABI
+ * validation (8 px per glyph), not the bitmap renderer's 6 px pen advance.
+ * This keeps measured bounds safe even before the kernel sees the command.
+ */
+static inline uint32_t vanta_design_text_width(const char* text,
+                                               uint32_t scale)
+{
+    if (!text || scale < 1U || scale > 2U)
+        return 0U;
+    size_t length = 0U;
+    while (text[length] && length <= VANTA_GUI_TEXT_MAX)
+        length++;
+    if (length == 0U || length > VANTA_GUI_TEXT_MAX)
+        return 0U;
+    return (uint32_t)length * 8U * scale;
+}
+
+static inline uint32_t vanta_design_text_height(uint32_t scale)
+{
+    return scale >= 1U && scale <= 2U ? 16U * scale : 0U;
+}
+
+static inline int vanta_design_text_fits(const char* text, uint32_t scale,
+                                         int32_t available_width,
+                                         int32_t available_height)
+{
+    uint32_t width = vanta_design_text_width(text, scale);
+    uint32_t height = vanta_design_text_height(scale);
+    return width != 0U && height != 0U &&
+        available_width >= 0 && available_height >= 0 &&
+        width <= (uint32_t)available_width &&
+        height <= (uint32_t)available_height;
+}
+
+static inline int vanta_design_heading(vanta_design_t* design,
+                                       int32_t x, int32_t y,
+                                       const char* text)
+{
+    return vanta_design_text(design, x, y, text,
+                             vanta_theme_text_color(
+                                 design ? &design->theme : 0), 2U);
+}
+
+static inline int vanta_design_body(vanta_design_t* design,
+                                    int32_t x, int32_t y,
+                                    const char* text)
+{
+    return vanta_design_text(design, x, y, text,
+                             vanta_theme_text_color(
+                                 design ? &design->theme : 0), 1U);
+}
+
+static inline int vanta_design_caption(vanta_design_t* design,
+                                       int32_t x, int32_t y,
+                                       const char* text)
+{
+    return vanta_design_text(design, x, y, text,
+                             vanta_theme_muted_color(
+                                 design ? &design->theme : 0), 1U);
+}
+
+static inline int vanta_design_eyebrow(vanta_design_t* design,
+                                       int32_t x, int32_t y,
+                                       const char* text)
+{
+    return vanta_design_text(design, x, y, text,
+                             vanta_theme_accent_color(
+                                 design ? &design->theme : 0), 1U);
+}
+
 static inline uint32_t vanta_design_text_color(const vanta_design_t* design)
 {
     return vanta_theme_text_color(design ? &design->theme : 0);

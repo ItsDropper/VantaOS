@@ -56,6 +56,17 @@ int main(void)
 
     failures += expect(vanta_design_accent_color(&design) == 0x000D9488U,
                        "theme accent resolves through shared tokens");
+    failures += expect(vanta_design_text_width("Vanta", 1U) == 40U,
+                       "text width follows conservative ABI glyph advance");
+    failures += expect(vanta_design_text_width("Vanta", 2U) == 80U &&
+                       vanta_design_text_height(2U) == 32U,
+                       "scaled text dimensions follow the ABI");
+    failures += expect(vanta_design_text_fits("Vanta", 1U, 40, 16),
+                       "text fits exact measured client bounds");
+    failures += expect(!vanta_design_text_fits("Vanta", 1U, 39, 16),
+                       "text rejects one-pixel width overflow");
+    failures += expect(!vanta_design_text_fits("Vanta", 2U, 80, 31),
+                       "text rejects insufficient scaled height");
     failures += expect(!vanta_design_squircle_rect(
                        &design, 0, 0, 0, 10, 4U, 0U),
                        "reject empty geometry");

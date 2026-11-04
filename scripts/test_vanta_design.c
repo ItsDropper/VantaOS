@@ -115,6 +115,49 @@ int main(void)
                        "text rejects one-pixel width overflow");
     failures += expect(!vanta_design_text_fits("Vanta", 2U, 80, 31),
                        "text rejects insufficient scaled height");
+
+    {
+        vanta_design_bounds_t text_bounds = {
+            .x = 10, .y = 20, .width = 100, .height = 40
+        };
+        int32_t text_x = -1, text_y = -1;
+        failures += expect(vanta_design_text_align(
+                           &text_bounds, "Vanta", 1U,
+                           VANTA_DESIGN_ALIGN_CENTER,
+                           VANTA_DESIGN_ALIGN_CENTER, &text_x, &text_y),
+                           "text alignment accepts fitting centered text");
+        failures += expect(text_x == 40 && text_y == 32,
+                           "center alignment uses conservative ABI metrics");
+        failures += expect(vanta_design_text_align(
+                           &text_bounds, "Vanta", 1U,
+                           VANTA_DESIGN_ALIGN_END, VANTA_DESIGN_ALIGN_END,
+                           &text_x, &text_y) && text_x == 70 && text_y == 44,
+                           "end alignment pins text to inner bounds");
+        failures += expect(vanta_design_text_align(
+                           &text_bounds, "Vanta", 1U,
+                           VANTA_DESIGN_ALIGN_START,
+                           VANTA_DESIGN_ALIGN_START, &text_x, &text_y) &&
+                           text_x == 10 && text_y == 20,
+                           "start alignment preserves bounds origin");
+        failures += expect(!vanta_design_text_align(
+                           &text_bounds, "Vanta", 2U,
+                           VANTA_DESIGN_ALIGN_CENTER,
+                           VANTA_DESIGN_ALIGN_CENTER, &text_x, &text_y),
+                           "text alignment rejects scaled overflow");
+        failures += expect(!vanta_design_text_align(
+                           &text_bounds, "Vanta", 1U, 3U,
+                           VANTA_DESIGN_ALIGN_CENTER, &text_x, &text_y),
+                           "text alignment rejects unknown alignment modes");
+        vanta_design_bounds_t edge_bounds = {
+            .x = INT32_MAX - 4, .y = INT32_MAX - 4,
+            .width = 40, .height = 40
+        };
+        failures += expect(!vanta_design_text_align(
+                           &edge_bounds, "Vanta", 1U,
+                           VANTA_DESIGN_ALIGN_END,
+                           VANTA_DESIGN_ALIGN_END, &text_x, &text_y),
+                           "text alignment rejects coordinate overflow");
+    }
     failures += expect(!vanta_design_squircle_rect(
                        &design, 0, 0, 0, 10, 4U, 0U),
                        "reject empty geometry");

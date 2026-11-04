@@ -276,6 +276,53 @@ static inline int vanta_design_text_fits(const char* text, uint32_t scale,
         height <= (uint32_t)available_height;
 }
 
+#define VANTA_DESIGN_ALIGN_START 0U
+#define VANTA_DESIGN_ALIGN_CENTER 1U
+#define VANTA_DESIGN_ALIGN_END 2U
+
+/*
+ * Resolve text placement inside client-local bounds. Measurement is shared
+ * with the conservative GUI ABI limits, so a successful result is guaranteed
+ * to fit without clipping. Alignment never relies on renderer-specific
+ * glyph advances.
+ */
+static inline int vanta_design_text_align(
+    const vanta_design_bounds_t* bounds, const char* text, uint32_t scale,
+    uint32_t horizontal, uint32_t vertical, int32_t* result_x,
+    int32_t* result_y)
+{
+    if (!bounds || !result_x || !result_y ||
+        bounds->width <= 0 || bounds->height <= 0 ||
+        horizontal > VANTA_DESIGN_ALIGN_END ||
+        vertical > VANTA_DESIGN_ALIGN_END)
+        return 0;
+
+    uint32_t text_width = vanta_design_text_width(text, scale);
+    uint32_t text_height = vanta_design_text_height(scale);
+    if (!text_width || !text_height ||
+        text_width > (uint32_t)bounds->width ||
+        text_height > (uint32_t)bounds->height)
+        return 0;
+
+    int64_t x = bounds->x;
+    int64_t y = bounds->y;
+    if (horizontal == VANTA_DESIGN_ALIGN_CENTER)
+        x += ((int64_t)bounds->width - text_width) / 2;
+    else if (horizontal == VANTA_DESIGN_ALIGN_END)
+        x += (int64_t)bounds->width - text_width;
+    if (vertical == VANTA_DESIGN_ALIGN_CENTER)
+        y += ((int64_t)bounds->height - text_height) / 2;
+    else if (vertical == VANTA_DESIGN_ALIGN_END)
+        y += (int64_t)bounds->height - text_height;
+
+    if (x < INT32_MIN || x > INT32_MAX ||
+        y < INT32_MIN || y > INT32_MAX)
+        return 0;
+    *result_x = (int32_t)x;
+    *result_y = (int32_t)y;
+    return 1;
+}
+
 static inline int vanta_design_heading(vanta_design_t* design,
                                        int32_t x, int32_t y,
                                        const char* text)

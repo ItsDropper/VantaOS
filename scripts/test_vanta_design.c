@@ -139,11 +139,14 @@ int main(void)
                            VANTA_DESIGN_ALIGN_START, &text_x, &text_y) &&
                            text_x == 10 && text_y == 20,
                            "start alignment preserves bounds origin");
+        vanta_design_bounds_t narrow_bounds = {
+            .x = 10, .y = 20, .width = 79, .height = 40
+        };
         failures += expect(!vanta_design_text_align(
-                           &text_bounds, "Vanta", 2U,
+                           &narrow_bounds, "Vanta", 2U,
                            VANTA_DESIGN_ALIGN_CENTER,
                            VANTA_DESIGN_ALIGN_CENTER, &text_x, &text_y),
-                           "text alignment rejects scaled overflow");
+                           "text alignment rejects scaled width overflow");
         failures += expect(!vanta_design_text_align(
                            &text_bounds, "Vanta", 1U, 3U,
                            VANTA_DESIGN_ALIGN_CENTER, &text_x, &text_y),

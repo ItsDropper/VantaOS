@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 APPS = {
     "notes": ("userspace/apps/notes.c", 760, 460),
     "calculator": ("userspace/apps/calculator.c", 536, 280),
+    "explorer": ("userspace/apps/explorer.c", 760, 460),
 }
 INSET_X = 8
 INSET_Y = 50
@@ -40,14 +41,16 @@ def check_app(name: str, path: str, window_width: int, window_height: int) -> li
     errors = []
 
     rect_pattern = re.compile(
-        r"\badd_rect\s*\(\s*(-?\d+)\s*,\s*(-?\d+)\s*,"
-        r"\s*(-?\d+)\s*,\s*(-?\d+)\s*,"
+        r"\b(add_rect|add_squircle|add_panel|add_button|add_outline)\s*"
+        r"\(\s*(-?\d+)\s*,\s*(-?\d+)\s*,"
+        r"\s*(-?\d+)\s*,\s*(-?\d+)"
     )
     for match in rect_pattern.finditer(body):
-        x, y, width, height = map(int, match.groups())
+        primitive = match.group(1)
+        x, y, width, height = map(int, match.groups()[1:])
         if x < 0 or y < 0 or width <= 0 or height <= 0 or x + width > client_width or y + height > client_height:
             errors.append(
-                f"{name}: rectangle ({x},{y},{width},{height}) exceeds "
+                f"{name}: {primitive} ({x},{y},{width},{height}) exceeds "
                 f"{client_width}x{client_height} client area"
             )
 

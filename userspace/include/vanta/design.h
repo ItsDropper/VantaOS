@@ -165,8 +165,10 @@ static inline int vanta_design_panel(vanta_design_t* design,
                                      int32_t x, int32_t y,
                                      int32_t width, int32_t height)
 {
-    if (!design || width <= 0 || height <= 0 ||
-        !vanta_design_has_capacity(design, 2U))
+    if (!design || !design->commands || width <= 0 || height <= 0 ||
+        design->count > design->capacity ||
+        design->capacity - design->count < 2U ||
+        design->count > VANTA_GUI_MAX_COMMANDS - 2U)
         return 0;
     uint32_t border = vanta_design_border_color(design);
     uint32_t surface = vanta_design_surface_color(design);

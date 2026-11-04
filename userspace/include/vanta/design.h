@@ -165,7 +165,8 @@ static inline int vanta_design_panel(vanta_design_t* design,
                                      int32_t x, int32_t y,
                                      int32_t width, int32_t height)
 {
-    if (!design || width <= 0 || height <= 0)
+    if (!design || width <= 0 || height <= 0 ||
+        !vanta_design_has_capacity(design, 2U))
         return 0;
     uint32_t border = vanta_design_border_color(design);
     uint32_t surface = vanta_design_surface_color(design);
@@ -236,22 +237,45 @@ static inline int vanta_design_button_impl(vanta_design_t* design,
     uint32_t fill = vanta_design_surface_color(design);
     uint32_t foreground = vanta_design_text_color(design);
     uint32_t border = vanta_design_border_color(design);
-    if (state == VANTA_DESIGN_STATE_HOVER)
-        fill = vanta_theme_row_color(&design->theme);
-    else if (state == VANTA_DESIGN_STATE_SELECTED)
+
+    if (outlined)
     {
-        fill = vanta_design_accent_color(design);
-        foreground = vanta_design_on_color(fill);
+        if (state == VANTA_DESIGN_STATE_HOVER)
+            fill = vanta_theme_row_color(&design->theme);
+        else if (state == VANTA_DESIGN_STATE_SELECTED)
+        {
+            border = vanta_design_accent_color(design);
+            foreground = border;
+        }
+        else if (state == VANTA_DESIGN_STATE_DISABLED)
+            foreground = vanta_design_muted_color(design);
+        else if (state == VANTA_DESIGN_STATE_DANGER)
+        {
+            border = vanta_design_danger_color();
+            foreground = border;
+        }
+        else if (state != VANTA_DESIGN_STATE_DEFAULT)
+            return 0;
     }
-    else if (state == VANTA_DESIGN_STATE_DISABLED)
-        foreground = vanta_design_muted_color(design);
-    else if (state == VANTA_DESIGN_STATE_DANGER)
+    else
     {
-        fill = vanta_design_danger_color();
-        foreground = 0x00FFFFFFU;
+        if (state == VANTA_DESIGN_STATE_HOVER)
+            fill = vanta_theme_row_color(&design->theme);
+        else if (state == VANTA_DESIGN_STATE_SELECTED)
+        {
+            fill = vanta_design_accent_color(design);
+            foreground = vanta_design_on_color(fill);
+        }
+        else if (state == VANTA_DESIGN_STATE_DISABLED)
+            foreground = vanta_design_muted_color(design);
+        else if (state == VANTA_DESIGN_STATE_DANGER)
+        {
+            fill = vanta_design_danger_color();
+            foreground = 0x00FFFFFFU;
+        }
+        else if (state != VANTA_DESIGN_STATE_DEFAULT)
+            return 0;
     }
-    else if (state != VANTA_DESIGN_STATE_DEFAULT)
-        return 0;
 
     uint32_t radius = vanta_design_radius(width, height,
                                           VANTA_DESIGN_RADIUS_CONTROL);
@@ -261,10 +285,7 @@ static inline int vanta_design_button_impl(vanta_design_t* design,
     if (!vanta_design_squircle_rect(design, x + 1, y + 1,
                                     width - 2, height - 2,
                                     radius > 0U ? radius - 1U : 0U,
-                                    outlined ? fill :
-                                        (state == VANTA_DESIGN_STATE_SELECTED ||
-                                         state == VANTA_DESIGN_STATE_DANGER ?
-                                         fill : fill)))
+                                    fill))
         return 0;
 
     int32_t text_x = x + (width - (int32_t)(length * 6U)) / 2;

@@ -78,6 +78,11 @@ int main(void)
                        "outline button appends atomically");
     failures += expect(design.count == before_controls + 3U,
                        "outline button emits border, surface and label");
+    failures += expect(commands[before_controls].color ==
+                       vanta_design_border_color(&design) &&
+                       commands[before_controls + 1U].color ==
+                       vanta_design_surface_color(&design),
+                       "outline button uses border and neutral fill");
     failures += expect(vanta_design_badge(
                        &design, 0, 0, "Ready",
                        VANTA_DESIGN_STATE_SELECTED),

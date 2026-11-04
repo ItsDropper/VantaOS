@@ -1463,8 +1463,8 @@ static void render(void)
             add_squircle(12, y - 2, 128, 23, VANTA_DESIGN_RADIUS_CONTROL, COLOR_SELECTED);
             add_rect(12, y + 20, 128, 1, COLOR_ACCENT);
         }
-        add_text(18, y + 1, sidebar_labels[i],
-                 active ? COLOR_ACCENT : COLOR_TEXT);
+        add_text_box(18, y - 1, 116, 20, sidebar_labels[i],
+                     active ? COLOR_ACCENT : COLOR_TEXT);
     }
     add_text(14, 300, "Current folder", COLOR_MUTED);
     add_text_tail(14, 320, current_path, COLOR_TEXT, 15U);
@@ -1472,8 +1472,8 @@ static void render(void)
     add_panel(152, 112, 584, 236);
     if (!context_menu)
     {
-        add_text(160, 114, "Name", COLOR_MUTED);
-        add_text(600, 114, "Kind", COLOR_MUTED);
+        add_text_box(160, 112, 428, 20, "Name", COLOR_MUTED);
+        add_text_box(600, 112, 128, 20, "Kind", COLOR_MUTED);
     }
     size_t end = first_visible + DISPLAY_ROWS;
     if (end > visible_count)
@@ -1488,9 +1488,16 @@ static void render(void)
             add_squircle(156, y - 2, 576, 19, VANTA_DESIGN_RADIUS_SMALL, COLOR_SELECTED);
             add_outline(156, y - 2, 576, 19, COLOR_ACCENT);
         }
-        add_text_tail(164, y, entries[index], COLOR_TEXT, 52U);
-        add_text(600, y, entry_is_directory[index] ? "Folder" : file_type_name(entries[index]),
-                 entry_is_directory[index] ? COLOR_ACCENT : COLOR_MUTED);
+        char display_name[VANTA_GUI_TEXT_MAX + 1U];
+        size_t name_length = text_length(entries[index]);
+        size_t shown = name_length > 52U ? 52U : name_length;
+        for (size_t j = 0U; j < shown; ++j)
+            display_name[j] = entries[index][j];
+        display_name[shown] = '\0';
+        add_text_box(164, y - 2, 428, 20, display_name, COLOR_TEXT);
+        add_text_box(600, y - 2, 128, 20,
+                     entry_is_directory[index] ? "Folder" : file_type_name(entries[index]),
+                     entry_is_directory[index] ? COLOR_ACCENT : COLOR_MUTED);
     }
     if (visible_count == 0U)
         add_text(166, 156, search_query[0] ? "No matching items" : "This folder is empty",

@@ -74,13 +74,13 @@ static inline uint32_t vanta_design_contrast_ratio_milli(uint32_t foreground,
 /* Select whichever of black or white has the stronger WCAG contrast. */
 static inline uint32_t vanta_design_on_color(uint32_t background)
 {
-    uint32_t luminance =
-        vanta_design_relative_luminance_million(background);
-    uint32_t black_ratio = (uint32_t)(
-        ((uint64_t)(luminance + 50000U) * 1000ULL) / 50000U);
-    uint32_t white_ratio = (uint32_t)(
-        (1050000ULL * 1000ULL) / (luminance + 50000U));
-    return white_ratio > black_ratio ? 0x00FFFFFFU : 0x00101820U;
+    const uint32_t dark = 0x00101820U;
+    const uint32_t light = 0x00FFFFFFU;
+    uint32_t dark_ratio =
+        vanta_design_contrast_ratio_milli(dark, background);
+    uint32_t light_ratio =
+        vanta_design_contrast_ratio_milli(light, background);
+    return light_ratio > dark_ratio ? light : dark;
 }
 
 #endif

@@ -91,6 +91,15 @@ int main(void)
         failures += expect(vanta_design_contrast_ratio_milli(
                            foreground, accent_swatches[i]) >= 4500U,
                            "accent foreground reaches at least 4.5:1 contrast");
+        uint32_t dark_ratio = vanta_design_contrast_ratio_milli(
+            0x00101820U, accent_swatches[i]);
+        uint32_t light_ratio = vanta_design_contrast_ratio_milli(
+            0x00FFFFFFU, accent_swatches[i]);
+        failures += expect(
+            vanta_design_contrast_ratio_milli(foreground,
+                accent_swatches[i]) ==
+                (dark_ratio > light_ratio ? dark_ratio : light_ratio),
+            "foreground helper selects the stronger real contrast ratio");
     }
 
     size_t before_controls = design.count;

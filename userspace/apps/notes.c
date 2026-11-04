@@ -7,6 +7,7 @@
 
 #include <vanta/gui.h>
 #include <vanta/theme.h>
+#include <vanta/design.h>
 
 #define DEFAULT_NOTES_PATH "/HOME/USER/NOTES.TXT"
 #define TEXT_CAPACITY 4096U
@@ -38,6 +39,7 @@ static uint32_t window_id;
 static uint32_t command_count;
 static vanta_gui_draw_command_t commands[VANTA_GUI_MAX_COMMANDS];
 static vanta_theme_t theme;
+static vanta_design_t design;
 
 static size_t text_length(const char* text)
 {
@@ -116,26 +118,30 @@ static void set_status(const char* message, uint32_t color)
 static void add_rect(int32_t x, int32_t y, int32_t width,
                      int32_t height, uint32_t color)
 {
-    if (command_count >= VANTA_GUI_MAX_COMMANDS || width <= 0 || height <= 0)
-        return;
-    commands[command_count++] = (vanta_gui_draw_command_t){
-        .type = VANTA_GUI_DRAW_FILL_RECT, .x = x, .y = y,
-        .width = width, .height = height, .color = color, .scale = 1U
-    };
+    design.count = command_count;
+    if (vanta_design_rect(&design, x, y, width, height, color))
+        command_count = (uint32_t)design.count;
+}
+
+static void add_panel(int32_t x, int32_t y, int32_t width, int32_t height)
+{
+    design.count = command_count;
+    if (vanta_design_panel(&design, x, y, width, height))
+        command_count = (uint32_t)design.count;
+}
+
+static void add_separator(int32_t x, int32_t y, int32_t width)
+{
+    design.count = command_count;
+    if (vanta_design_separator(&design, x, y, width))
+        command_count = (uint32_t)design.count;
 }
 
 static void add_text(int32_t x, int32_t y, const char* text, uint32_t color)
 {
-    size_t length = text_length(text);
-    if (command_count >= VANTA_GUI_MAX_COMMANDS || length == 0U ||
-        length > VANTA_GUI_TEXT_MAX)
-        return;
-    vanta_gui_draw_command_t* command = &commands[command_count++];
-    *command = (vanta_gui_draw_command_t){
-        .type = VANTA_GUI_DRAW_TEXT, .x = x, .y = y,
-        .color = color, .scale = 1U
-    };
-    for (size_t i = 0U; i <= length; ++i) command->text[i] = text[i];
+    design.count = command_count;
+    if (vanta_design_text(&design, x, y, text, color, 1U))
+        command_count = (uint32_t)design.count;
 }
 
 static void ordered_selection(size_t* begin, size_t* end)
@@ -202,11 +208,12 @@ static int is_selected(size_t offset, size_t begin, size_t end)
 static void render(void)
 {
     command_count = 0U;
+    vanta_design_init(&design, commands, VANTA_GUI_MAX_COMMANDS, &theme);
     /* Keep every command inside the kernel-validated client rectangle. */
-    add_rect(8, 8, 712, 394, vanta_theme_surface_color(&theme));
+    add_panel(8, 8, 712, 394);
     add_rect(8, 8, 712, 2, vanta_theme_accent_color(&theme));
     add_text(16, 16, "Notes editor | Ctrl+S saves", vanta_theme_text_color(&theme));
-    add_rect(12, 40, 700, 1, vanta_theme_border_color(&theme));
+    add_separator(12, 40, 700);
 
     size_t selected_begin = 0U, selected_end = 0U;
     ordered_selection(&selected_begin, &selected_end);
@@ -251,7 +258,7 @@ static void render(void)
         if (start == document_length) break;
     }
 
-    add_rect(12, 346, 700, 1, vanta_theme_border_color(&theme));
+    add_separator(12, 346, 700);
     add_text(16, 354, status, status_color ? status_color :
              vanta_theme_muted_color(&theme));
     add_text(16, 370, "Ctrl+S Save | Ctrl+A Select all | Ctrl+C Copy | Ctrl+V Paste",

@@ -7,6 +7,7 @@
 
 #include <vanta/gui.h>
 #include <vanta/theme.h>
+#include <vanta/design.h>
 #include <stdint.h>
 #include <stddef.h>
 
@@ -23,6 +24,7 @@ static uint32_t window_id;
 static uint32_t command_count;
 static vanta_gui_draw_command_t commands[VANTA_GUI_MAX_COMMANDS];
 static vanta_theme_t theme;
+static vanta_design_t design;
 static const char *parse_cursor;
 static int parse_failed;
 
@@ -48,26 +50,41 @@ static void copy_text(char *destination, size_t capacity, const char *source)
 static void add_rect(int32_t x, int32_t y, int32_t width, int32_t height,
                      uint32_t color)
 {
-    if (command_count >= VANTA_GUI_MAX_COMMANDS || width <= 0 || height <= 0)
-        return;
-    commands[command_count++] = (vanta_gui_draw_command_t){
-        .type = VANTA_GUI_DRAW_FILL_RECT, .x = x, .y = y,
-        .width = width, .height = height, .color = color, .scale = 1U
-    };
+    design.count = command_count;
+    if (vanta_design_rect(&design, x, y, width, height, color))
+        command_count = (uint32_t)design.count;
+}
+
+static void add_panel(int32_t x, int32_t y, int32_t width, int32_t height)
+{
+    design.count = command_count;
+    if (vanta_design_panel(&design, x, y, width, height))
+        command_count = (uint32_t)design.count;
+}
+
+static void add_squircle(int32_t x, int32_t y, int32_t width, int32_t height,
+                         uint32_t radius, uint32_t color)
+{
+    design.count = command_count;
+    if (vanta_design_squircle_rect(&design, x, y, width, height, radius, color))
+        command_count = (uint32_t)design.count;
 }
 
 static void add_text(int32_t x, int32_t y, const char *text, uint32_t color)
 {
-    size_t length = text_length(text);
-    if (command_count >= VANTA_GUI_MAX_COMMANDS || length == 0U ||
-        length > VANTA_GUI_TEXT_MAX)
-        return;
-    vanta_gui_draw_command_t *command = &commands[command_count++];
-    *command = (vanta_gui_draw_command_t){
-        .type = VANTA_GUI_DRAW_TEXT, .x = x, .y = y,
-        .color = color, .scale = 1U
-    };
-    for (size_t i = 0U; i <= length; ++i) command->text[i] = text[i];
+    design.count = command_count;
+    if (vanta_design_text(&design, x, y, text, color, 1U))
+        command_count = (uint32_t)design.count;
+}
+
+static void visible_expression(char output[58])
+{
+    size_t length = text_length(expression);
+    size_t start = length > 57U ? length - 57U : 0U;
+    size_t count = length - start;
+    for (size_t i = 0U; i < count; ++i)
+        output[i] = expression[start + i];
+    output[count] = '\0';
 }
 
 static void set_status(const char *text, uint32_t color)
@@ -231,15 +248,20 @@ static void calculate(void)
 static void render(void)
 {
     command_count = 0U;
+    vanta_design_init(&design, commands, VANTA_GUI_MAX_COMMANDS, &theme);
     /* Draw commands are client-relative; leave room for window chrome. */
-    add_rect(8, 8, 488, 214, vanta_theme_surface_color(&theme));
+    add_panel(8, 8, 488, 214);
     add_rect(8, 8, 488, 2, vanta_theme_accent_color(&theme));
     add_text(20, 12, "Calculator", vanta_theme_text_color(&theme));
     add_text(20, 32, "INTEGER MODE  |  PRECEDENCE AND PARENTHESES",
              vanta_theme_muted_color(&theme));
-    add_rect(16, 50, 472, 40, vanta_theme_surface_color(&theme));
-    add_rect(16, 50, 472, 1, vanta_theme_border_color(&theme));
-    add_text(26, 62, expression_length ? expression : "0",
+    char display_expression[58];
+    visible_expression(display_expression);
+    add_squircle(16, 50, 472, 40, VANTA_DESIGN_RADIUS_CONTROL,
+                 vanta_theme_border_color(&theme));
+    add_squircle(17, 51, 470, 38, VANTA_DESIGN_RADIUS_CONTROL - 1U,
+                 vanta_theme_surface_color(&theme));
+    add_text(26, 62, expression_length ? display_expression : "0",
              vanta_theme_text_color(&theme));
     add_text(20, 100, "RESULT", vanta_theme_muted_color(&theme));
     add_text(20, 120, result_text, vanta_theme_text_color(&theme));

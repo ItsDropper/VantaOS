@@ -106,7 +106,7 @@ uint32_t desktop_theme_color(unsigned int role)
 
     uint32_t accent = theme_accent == 1U ? 0x0014B8A6U :
         theme_accent == 2U ? 0x00D97706U :
-        theme_accent == 3U ? 0x008B5CF6U : 0x004B9CFFU;
+        theme_accent == 3U ? 0x00936CF0U : 0x004B9CFFU;
 
     if (theme_contrast)
     {

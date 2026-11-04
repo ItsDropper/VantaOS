@@ -545,7 +545,7 @@ static void render(void)
          * selected = accent-filled, idle = neutral outlined. This avoids a
          * Settings-only button treatment drifting from the shared system.
          */
-        add_button(18, nav_y[i], 136, 36, nav_labels[i],
+        add_button(18, nav_y[i], 140, 36, nav_labels[i],
                    selected_page == i ? VANTA_DESIGN_STATE_SELECTED :
                                          VANTA_DESIGN_STATE_DEFAULT,
                    selected_page != i);

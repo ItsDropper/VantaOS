@@ -82,3 +82,14 @@ Use a restrained hierarchy:
 - Keep text scale within the existing 1–2x bitmap-font contract.
 
 VDS helpers only append validated-shape commands to an application-owned bounded buffer; the kernel remains authoritative for final validation and rendering. No alpha blending, blur, shadows, font metrics, or accessibility tree is implied by this API.
+
+
+## VDS component contracts
+
+The header-only VDS layer now provides:
+- Atomic three-command buttons (border, fill, label), including outline style and explicit visual states.
+- Theme-derived panels, badges, separators, switches and text-field surfaces.
+- A bounded draw-list capacity check before compound controls append any commands.
+- A YIQ foreground heuristic for filled accent controls. This improves the default foreground choice but is not a substitute for measured WCAG contrast ratios; applications must still support the persisted high-contrast palette.
+
+Visual components do not implement input behavior. Each application remains responsible for keyboard/pointer events, focus ownership, state changes and hitboxes. Generic rectangle drawing remains square by default; applications opt into squircle geometry only for controls and surfaces where it supports the hierarchy.

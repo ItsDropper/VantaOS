@@ -180,44 +180,230 @@ static inline int vanta_design_panel(vanta_design_t* design,
                                    surface);
 }
 
+static inline uint32_t vanta_design_success_color(void)
+{
+    return 0x0022C55EU;
+}
+
+static inline uint32_t vanta_design_warning_color(void)
+{
+    return 0x00D97706U;
+}
+
+static inline uint32_t vanta_design_danger_color(void)
+{
+    return 0x00EF4444U;
+}
+
+/*
+ * Fast YIQ foreground selection for filled controls. This is a readability
+ * heuristic, not a WCAG contrast-ratio certification.
+ */
+static inline uint32_t vanta_design_on_color(uint32_t background)
+{
+    uint32_t red = (background >> 16) & 0xFFU;
+    uint32_t green = (background >> 8) & 0xFFU;
+    uint32_t blue = background & 0xFFU;
+    uint32_t luma = (299U * red + 587U * green + 114U * blue) / 1000U;
+    return luma >= 128U ? 0x00101820U : 0x00FFFFFFU;
+}
+
+static inline int vanta_design_has_capacity(const vanta_design_t* design,
+                                            size_t required)
+{
+    return design && design->commands && required <= design->capacity &&
+        design->count <= design->capacity - required &&
+        design->count <= VANTA_GUI_MAX_COMMANDS - required;
+}
+
+static inline int vanta_design_button_impl(vanta_design_t* design,
+                                           int32_t x, int32_t y,
+                                           int32_t width, int32_t height,
+                                           const char* label, uint32_t state,
+                                           int outlined)
+{
+    if (!design || !label || width <= 0 || height < 16)
+        return 0;
+
+    size_t length = 0U;
+    while (label[length] && length <= VANTA_GUI_TEXT_MAX)
+        length++;
+    if (length == 0U || length > VANTA_GUI_TEXT_MAX ||
+        (int64_t)length * 6 + 12 > width ||
+        !vanta_design_has_capacity(design, 3U))
+        return 0;
+
+    uint32_t fill = vanta_design_surface_color(design);
+    uint32_t foreground = vanta_design_text_color(design);
+    uint32_t border = vanta_design_border_color(design);
+    if (state == VANTA_DESIGN_STATE_HOVER)
+        fill = vanta_theme_row_color(&design->theme);
+    else if (state == VANTA_DESIGN_STATE_SELECTED)
+    {
+        fill = vanta_design_accent_color(design);
+        foreground = vanta_design_on_color(fill);
+    }
+    else if (state == VANTA_DESIGN_STATE_DISABLED)
+        foreground = vanta_design_muted_color(design);
+    else if (state == VANTA_DESIGN_STATE_DANGER)
+    {
+        fill = vanta_design_danger_color();
+        foreground = 0x00FFFFFFU;
+    }
+    else if (state != VANTA_DESIGN_STATE_DEFAULT)
+        return 0;
+
+    uint32_t radius = vanta_design_radius(width, height,
+                                          VANTA_DESIGN_RADIUS_CONTROL);
+    if (!vanta_design_squircle_rect(design, x, y, width, height,
+                                    radius, border))
+        return 0;
+    if (!vanta_design_squircle_rect(design, x + 1, y + 1,
+                                    width - 2, height - 2,
+                                    radius > 0U ? radius - 1U : 0U,
+                                    outlined ? fill :
+                                        (state == VANTA_DESIGN_STATE_SELECTED ||
+                                         state == VANTA_DESIGN_STATE_DANGER ?
+                                         fill : fill)))
+        return 0;
+
+    int32_t text_x = x + (width - (int32_t)(length * 6U)) / 2;
+    int32_t text_y = y + (height - 16) / 2;
+    return vanta_design_text(design, text_x, text_y, label, foreground, 1U);
+}
+
 static inline int vanta_design_button(vanta_design_t* design,
                                       int32_t x, int32_t y,
                                       int32_t width, int32_t height,
                                       const char* label, uint32_t state)
 {
-    if (!design || !label || width <= 0 || height <= 0)
-        return 0;
-    uint32_t fill = vanta_design_surface_color(design);
-    uint32_t text = vanta_design_text_color(design);
-    if (state == VANTA_DESIGN_STATE_HOVER)
-        fill = vanta_design_border_color(design);
-    else if (state == VANTA_DESIGN_STATE_SELECTED)
-    {
-        fill = vanta_design_accent_color(design);
-        text = 0x00FFFFFFU;
-    }
-    else if (state == VANTA_DESIGN_STATE_DISABLED)
-        text = vanta_design_muted_color(design);
-    else if (state == VANTA_DESIGN_STATE_DANGER)
-    {
-        fill = 0x007F1D1DU;
-        text = 0x00FFFFFFU;
-    }
+    return vanta_design_button_impl(design, x, y, width, height,
+                                    label, state, 0);
+}
 
-    if (!vanta_design_squircle_rect(design, x, y, width, height,
-                                 VANTA_DESIGN_RADIUS_CONTROL, fill))
+static inline int vanta_design_outline_button(vanta_design_t* design,
+                                              int32_t x, int32_t y,
+                                              int32_t width, int32_t height,
+                                              const char* label,
+                                              uint32_t state)
+{
+    return vanta_design_button_impl(design, x, y, width, height,
+                                    label, state, 1);
+}
+
+static inline int vanta_design_separator(vanta_design_t* design,
+                                         int32_t x, int32_t y,
+                                         int32_t width)
+{
+    if (width <= 0)
+        return 0;
+    return vanta_design_rect(design, x, y, width, 1,
+                             vanta_design_border_color(design));
+}
+
+static inline int vanta_design_badge(vanta_design_t* design,
+                                     int32_t x, int32_t y,
+                                     const char* label, uint32_t state)
+{
+    if (!design || !label)
         return 0;
     size_t length = 0U;
     while (label[length] && length <= VANTA_GUI_TEXT_MAX)
         length++;
     if (length == 0U || length > VANTA_GUI_TEXT_MAX ||
-        height < 16 || width < (int32_t)(length * 8U + 8U))
+        !vanta_design_has_capacity(design, 2U))
+        return 0;
+
+    uint32_t fill = vanta_theme_row_color(&design->theme);
+    uint32_t foreground = vanta_design_muted_color(design);
+    if (state == VANTA_DESIGN_STATE_SELECTED)
+    {
+        fill = vanta_design_accent_color(design);
+        foreground = vanta_design_on_color(fill);
+    }
+    else if (state == VANTA_DESIGN_STATE_DANGER)
+    {
+        fill = vanta_design_danger_color();
+        foreground = 0x00FFFFFFU;
+    }
+    else if (state == VANTA_DESIGN_STATE_DISABLED)
+        foreground = vanta_design_muted_color(design);
+    else if (state != VANTA_DESIGN_STATE_DEFAULT &&
+             state != VANTA_DESIGN_STATE_HOVER)
+        return 0;
+
+    int32_t width = (int32_t)(length * 6U) + 16;
+    const int32_t height = 20;
+    if (!vanta_design_squircle_rect(design, x, y, width, height,
+                                    height / 2U, fill))
+        return 0;
+    return vanta_design_text(design, x + 8, y + 2, label, foreground, 1U);
+}
+
+static inline int vanta_design_switch(vanta_design_t* design,
+                                      int32_t x, int32_t y,
+                                      int32_t width, int32_t height,
+                                      int enabled, uint32_t state)
+{
+    if (!design || width < 36 || height < 20 ||
+        !vanta_design_has_capacity(design, 2U) ||
+        (state != VANTA_DESIGN_STATE_DEFAULT &&
+         state != VANTA_DESIGN_STATE_DISABLED))
+        return 0;
+    uint32_t track = enabled ? vanta_design_accent_color(design) :
+                               vanta_design_border_color(design);
+    if (state == VANTA_DESIGN_STATE_DISABLED)
+        track = vanta_theme_row_color(&design->theme);
+    uint32_t radius = (uint32_t)height / 2U;
+    if (!vanta_design_squircle_rect(design, x, y, width, height,
+                                    radius, track))
+        return 0;
+    int32_t inset = 3;
+    int32_t diameter = height - inset * 2;
+    int32_t thumb_x = enabled ? x + width - diameter - inset : x + inset;
+    return vanta_design_squircle_rect(design, thumb_x, y + inset,
+                                      diameter, diameter,
+                                      (uint32_t)diameter / 2U,
+                                      state == VANTA_DESIGN_STATE_DISABLED ?
+                                      vanta_design_muted_color(design) :
+                                      vanta_design_on_color(track));
+}
+
+static inline int vanta_design_text_field(vanta_design_t* design,
+                                          int32_t x, int32_t y,
+                                          int32_t width, int32_t height,
+                                          const char* value, int focused,
+                                          int disabled)
+{
+    if (!design || width < 24 || height < 20 ||
+        !vanta_design_has_capacity(design, 3U))
+        return 0;
+    size_t length = 0U;
+    if (value)
+        while (value[length] && length <= VANTA_GUI_TEXT_MAX)
+            length++;
+    if (length > VANTA_GUI_TEXT_MAX ||
+        (int64_t)length * 8 + 16 > width)
+        return 0;
+
+    uint32_t border = focused ? vanta_design_accent_color(design) :
+                                vanta_design_border_color(design);
+    uint32_t surface = disabled ? vanta_theme_row_color(&design->theme) :
+                                  vanta_design_surface_color(design);
+    if (!vanta_design_squircle_rect(design, x, y, width, height,
+                                    VANTA_DESIGN_RADIUS_CONTROL, border) ||
+        !vanta_design_squircle_rect(design, x + 1, y + 1, width - 2,
+                                    height - 2,
+                                    VANTA_DESIGN_RADIUS_CONTROL - 1U,
+                                    surface))
+        return 0;
+    if (length == 0U)
         return 1;
-    int32_t text_x = x + (width - (int32_t)(length * 6U)) / 2;
-    int32_t text_y = y + (height - 7) / 2;
-    if (text_x < x + 4) text_x = x + 4;
-    if (text_y < y) text_y = y;
-    return vanta_design_text(design, text_x, text_y, label, text, 1U);
+    return vanta_design_text(design, x + 8, y + (height - 16) / 2,
+                             value,
+                             disabled ? vanta_design_muted_color(design) :
+                                        vanta_design_text_color(design),
+                             1U);
 }
 
 #endif

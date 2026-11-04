@@ -33,6 +33,7 @@
 #define COLOR_LIGHT_BACKGROUND 0x00F7F9FCU
 
 static vanta_gui_draw_command_t commands[VANTA_GUI_MAX_COMMANDS];
+static vanta_design_t design;
 static uint32_t command_count;
 static uint32_t window_id;
 static uint32_t accent;
@@ -139,19 +140,33 @@ static const char* accent_name(void)
 static void add_rect(int32_t x, int32_t y, int32_t width,
                      int32_t height, uint32_t color)
 {
-    if (command_count >= VANTA_GUI_MAX_COMMANDS)
-        return;
-    vanta_design_t design = {
-        .commands = commands,
-        .count = command_count,
-        .capacity = VANTA_GUI_MAX_COMMANDS
-    };
-    int added;
-    if (width >= 8 && height >= 8)
-        added = vanta_design_squircle_rect(&design, x, y, width, height,
-                                        VANTA_DESIGN_RADIUS_CONTROL, color);
-    else
-        added = vanta_design_rect(&design, x, y, width, height, color);
+    design.count = command_count;
+    if (vanta_design_rect(&design, x, y, width, height, color))
+        command_count = (uint32_t)design.count;
+}
+
+static void add_squircle(int32_t x, int32_t y, int32_t width,
+                         int32_t height, uint32_t radius, uint32_t color)
+{
+    design.count = command_count;
+    if (vanta_design_squircle_rect(&design, x, y, width, height, radius, color))
+        command_count = (uint32_t)design.count;
+}
+
+static void add_panel(int32_t x, int32_t y, int32_t width, int32_t height)
+{
+    design.count = command_count;
+    if (vanta_design_panel(&design, x, y, width, height))
+        command_count = (uint32_t)design.count;
+}
+
+static void add_button(int32_t x, int32_t y, int32_t width, int32_t height,
+                       const char* label, uint32_t state, int outlined)
+{
+    design.count = command_count;
+    int added = outlined ?
+        vanta_design_outline_button(&design, x, y, width, height, label, state) :
+        vanta_design_button(&design, x, y, width, height, label, state);
     if (added)
         command_count = (uint32_t)design.count;
 }
@@ -159,18 +174,9 @@ static void add_rect(int32_t x, int32_t y, int32_t width,
 static void add_text_scaled(int32_t x, int32_t y, const char* text,
                             uint32_t color, uint32_t scale)
 {
-    size_t length = text_length(text);
-    if (command_count >= VANTA_GUI_MAX_COMMANDS || length == 0U ||
-        length > VANTA_GUI_TEXT_MAX)
-        return;
-    vanta_gui_draw_command_t* command = &commands[command_count++];
-    *command = (vanta_gui_draw_command_t){
-        .type = VANTA_GUI_DRAW_TEXT,
-        .x = x, .y = y, .color = color,
-        .scale = scale
-    };
-    for (size_t i = 0U; i <= length; i++)
-        command->text[i] = text[i];
+    design.count = command_count;
+    if (vanta_design_text(&design, x, y, text, color, scale))
+        command_count = (uint32_t)design.count;
 }
 
 static void add_text(int32_t x, int32_t y, const char* text, uint32_t color)
@@ -496,6 +502,11 @@ static void bluetooth_cancel_selected(void)
 static void render(void)
 {
     command_count = 0U;
+    vanta_theme_t active_theme = {
+        .accent = accent, .light = light_theme,
+        .contrast = high_contrast, .compact = compact_rows
+    };
+    vanta_design_init(&design, commands, VANTA_GUI_MAX_COMMANDS, &active_theme);
     uint32_t text = color_text();
     uint32_t muted = color_muted();
     uint32_t surface = color_surface();
@@ -506,21 +517,21 @@ static void render(void)
     add_text(16, 30, "Personalize how VantaOS looks and feels.", muted);
 
     /* Persistent navigation keeps the three settings areas easy to scan. */
-    add_rect(12, 56, 148, 294, surface);
+    add_panel(12, 56, 148, 294);
     add_text(24, 66, "CATEGORIES", muted);
     const int nav_y[4] = { 88, 132, 176, 220 };
     const char* nav_labels[4] = { "Appearance", "Accessibility", "About", "Bluetooth" };
     for (uint32_t i = 0U; i < 4U; i++)
     {
         if (selected_page == i)
-            add_rect(18, nav_y[i], 136, 36, selected);
+            add_squircle(18, nav_y[i], 136, 36, VANTA_DESIGN_RADIUS_CONTROL, selected);
         if (selected_page == i)
             add_rect(18, nav_y[i], 3, 36, accent_value);
         add_text(28, nav_y[i] + 10, nav_labels[i],
                  selected_page == i ? text : muted);
     }
 
-    add_rect(172, 56, 436, 294, surface);
+    add_panel(172, 56, 436, 294);
     if (selected_page == 0U)
     {
         add_text(190, 68, "Appearance", text);
@@ -534,8 +545,8 @@ static void render(void)
         for (uint32_t i = 0U; i < 3U; i++)
         {
             uint32_t setting = i;
-            add_rect(184, row_y[i], 412, 44,
-                     selected_setting == setting ? selected : color_surface());
+            add_squircle(184, row_y[i], 412, 44, VANTA_DESIGN_RADIUS_CONTROL,
+                         selected_setting == setting ? selected : color_surface());
             add_text(196, row_y[i] + 7, labels[i], text);
             add_text(196, row_y[i] + 25, "Select to cycle option", muted);
             add_text(464, row_y[i] + 15, values[i],
@@ -583,7 +594,7 @@ static void render(void)
         bluetooth_refresh();
         if (bluetooth_port == 0U)
         {
-            add_rect(188, 112, 408, 76, selected);
+            add_squircle(188, 112, 408, 76, VANTA_DESIGN_RADIUS_SURFACE, selected);
             add_text(202, 126, "No USB Bluetooth adapter detected", text);
             add_text(202, 150, "Connect a supported USB adapter, then scan.", muted);
         }
@@ -620,8 +631,8 @@ static void render(void)
                         bluetooth_port, device_index, &device) <= 0)
                     continue;
                 int y = 154 + (int)i * 42;
-                add_rect(188, y, 408, 36,
-                         selected_device == device_index ? selected : color_surface());
+                add_squircle(188, y, 408, 36, VANTA_DESIGN_RADIUS_CONTROL,
+                             selected_device == device_index ? selected : color_surface());
                 char address[18];
                 bluetooth_format_address(device.address, address);
                 add_text(198, y + 10, address, text);
@@ -639,11 +650,12 @@ static void render(void)
         }
     }
 
-    add_rect(172, 365, 202, 38, accent_value);
-    add_text(190, 377, selected_page == 3U ? "Scan devices" : "Save changes",
-             0x00FFFFFFU);
-    add_rect(384, 365, 224, 38, color_selected());
-    add_text(402, 377, selected_page == 3U ? "Connect selected" : "Restore defaults", text);
+    add_button(172, 365, 202, 38,
+               selected_page == 3U ? "Scan devices" : "Save changes",
+               VANTA_DESIGN_STATE_SELECTED, 0);
+    add_button(384, 365, 224, 38,
+               selected_page == 3U ? "Connect selected" : "Restore defaults",
+               VANTA_DESIGN_STATE_DEFAULT, 1);
     add_text(16, 414, status_buffer, status_color);
     add_text(16, 436, selected_page == 3U ? "Select device; S scan, X cancel scan, C cancel connect, Q close." : "Click a category or setting; S saves, R resets, B opens Bluetooth, Q closes.", muted);
     (void)vanta_gui_draw(window_id, commands, command_count);

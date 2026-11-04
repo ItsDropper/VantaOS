@@ -37,6 +37,8 @@
 #define VANTA_DESIGN_STATE_SELECTED 2U
 #define VANTA_DESIGN_STATE_DISABLED 3U
 #define VANTA_DESIGN_STATE_DANGER 4U
+#define VANTA_DESIGN_STATE_SUCCESS 5U
+#define VANTA_DESIGN_STATE_WARNING 6U
 
 typedef struct
 {
@@ -348,6 +350,16 @@ static inline int vanta_design_badge(vanta_design_t* design,
     {
         fill = vanta_design_danger_color();
         foreground = 0x00FFFFFFU;
+    }
+    else if (state == VANTA_DESIGN_STATE_SUCCESS)
+    {
+        fill = vanta_design_success_color();
+        foreground = vanta_design_on_color(fill);
+    }
+    else if (state == VANTA_DESIGN_STATE_WARNING)
+    {
+        fill = vanta_design_warning_color();
+        foreground = vanta_design_on_color(fill);
     }
     else if (state == VANTA_DESIGN_STATE_DISABLED)
         foreground = vanta_design_muted_color(design);

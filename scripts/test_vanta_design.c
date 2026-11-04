@@ -87,6 +87,17 @@ int main(void)
                        &design, 0, 0, "Ready",
                        VANTA_DESIGN_STATE_SELECTED),
                        "badge uses theme accent");
+    failures += expect(vanta_design_badge(
+                       &design, 0, 0, "Connected",
+                       VANTA_DESIGN_STATE_SUCCESS),
+                       "success badge uses semantic success color");
+    failures += expect(commands[design.count - 2U].color ==
+                       vanta_design_success_color(),
+                       "success badge color token");
+    failures += expect(vanta_design_badge(
+                       &design, 0, 0, "Pending",
+                       VANTA_DESIGN_STATE_WARNING),
+                       "warning badge uses semantic warning color");
     failures += expect(vanta_design_switch(
                        &design, 0, 0, 42, 22, 1,
                        VANTA_DESIGN_STATE_DEFAULT),
@@ -106,6 +117,10 @@ int main(void)
                        "compound button refuses partial draw-list writes");
     failures += expect(tiny.count == 0U,
                        "failed compound control leaves draw list unchanged");
+    failures += expect(!vanta_design_panel(&tiny, 0, 0, 40, 20),
+                       "panel refuses insufficient command capacity");
+    failures += expect(tiny.count == 0U,
+                       "failed panel leaves draw list unchanged");
     if (failures)
         return 1;
     puts("VANTAOS_DESIGN_SYSTEM_OK");

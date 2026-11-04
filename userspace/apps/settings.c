@@ -171,6 +171,22 @@ static void add_button(int32_t x, int32_t y, int32_t width, int32_t height,
         command_count = (uint32_t)design.count;
 }
 
+static void add_switch(int32_t x, int32_t y, int32_t width, int32_t height,
+                       int enabled)
+{
+    design.count = command_count;
+    if (vanta_design_switch(&design, x, y, width, height, enabled,
+                            VANTA_DESIGN_STATE_DEFAULT))
+        command_count = (uint32_t)design.count;
+}
+
+static void add_badge(int32_t x, int32_t y, const char* label, uint32_t state)
+{
+    design.count = command_count;
+    if (vanta_design_badge(&design, x, y, label, state))
+        command_count = (uint32_t)design.count;
+}
+
 static void add_text_scaled(int32_t x, int32_t y, const char* text,
                             uint32_t color, uint32_t scale)
 {
@@ -549,8 +565,12 @@ static void render(void)
                          selected_setting == setting ? selected : color_surface());
             add_text(196, row_y[i] + 7, labels[i], text);
             add_text(196, row_y[i] + 25, "Select to cycle option", muted);
-            add_text(464, row_y[i] + 15, values[i],
-                     setting == 0U ? accent_value : text);
+            if (setting == 1U)
+                add_switch(548, row_y[i] + 11, 36, 22, light_theme);
+            else if (setting == 2U)
+                add_switch(548, row_y[i] + 11, 36, 22, compact_rows);
+            else
+                add_text(464, row_y[i] + 15, values[i], accent_value);
         }
     }
     else if (selected_page == 1U)
@@ -570,7 +590,10 @@ static void render(void)
                      selected_setting == setting ? selected : color_surface());
             add_text(196, row_y[i] + 7, labels[i], text);
             add_text(196, row_y[i] + 25, "Select to toggle option", muted);
-            add_text(500, row_y[i] + 15, values[i], text);
+            if (setting == 4U)
+                add_switch(548, row_y[i] + 11, 36, 22, high_contrast);
+            else
+                add_text(500, row_y[i] + 15, values[i], text);
         }
         add_text(190, 236, "Text size currently affects Settings only.", muted);
     }
@@ -600,7 +623,8 @@ static void render(void)
         }
         else
         {
-            add_text(190, 108, "Adapter detected", COLOR_SUCCESS);
+            add_badge(190, 104, "Adapter detected",
+                      VANTA_DESIGN_STATE_SUCCESS);
             add_text(330, 108, "USB port", muted);
             char port_text[12];
             uint32_t value = bluetooth_port;
@@ -641,9 +665,10 @@ static void render(void)
                     bluetooth_port, device.address, &handle);
                 const char* state = peer == 1 ? "Connected" :
                     peer == 2 ? "Connecting" : "Found";
-                add_text(476, y + 10, state,
-                         peer == 1 ? COLOR_SUCCESS :
-                         peer == 2 ? COLOR_AMBER : muted);
+                add_badge(468, y + 7, state,
+                          peer == 1 ? VANTA_DESIGN_STATE_SUCCESS :
+                          peer == 2 ? VANTA_DESIGN_STATE_WARNING :
+                                      VANTA_DESIGN_STATE_DEFAULT);
             }
             if (bluetooth_device_count > 4U)
                 add_text(190, 326, "Use Up/Down to select additional results.", muted);

@@ -107,6 +107,8 @@ int main(void)
                        &design, 0, 0, 112, 28, "Cancel",
                        VANTA_DESIGN_STATE_DEFAULT),
                        "outline button appends atomically");
+    failures += expect(design.count == before_controls + 3U,
+                       "outline button emits border, surface and label");
     size_t outlined_start = design.count;
     failures += expect(vanta_design_outline_button(
                        &design, 0, 0, 112, 28, "Selected",
@@ -127,8 +129,6 @@ int main(void)
                        commands[outlined_start + 2U].color ==
                        vanta_design_text_color(&design),
                        "danger outline preserves readable text color");
-    failures += expect(design.count == before_controls + 3U,
-                       "outline button emits border, surface and label");
     failures += expect(commands[before_controls].color ==
                        vanta_design_border_color(&design) &&
                        commands[before_controls + 1U].color ==

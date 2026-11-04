@@ -7,6 +7,7 @@
 
 #include <vanta/gui.h>
 #include <vanta/theme.h>
+#include <vanta/design.h>
 #include <vanta/path.h>
 
 #define PROCESS_USER_MAX_ARGS 16U
@@ -22,6 +23,7 @@
 #define WINDOW_HEIGHT 460U
 
 static vanta_theme_t current_theme;
+static vanta_design_t design;
 #define COLOR_TEXT vanta_theme_text_color(&current_theme)
 #define COLOR_MUTED vanta_theme_muted_color(&current_theme)
 #define COLOR_SURFACE vanta_theme_surface_color(&current_theme)
@@ -192,30 +194,34 @@ static void write_bytes(const char* text, size_t length)
 static void render_add_rect(int32_t x, int32_t y, int32_t width,
                             int32_t height, uint32_t color)
 {
-    if (command_count >= VANTA_GUI_MAX_COMMANDS)
-        return;
-    vanta_gui_draw_command_t* command = &commands[command_count++];
-    *command = (vanta_gui_draw_command_t){
-        .type = VANTA_GUI_DRAW_FILL_RECT,
-        .x = x, .y = y, .width = width, .height = height,
-        .color = color, .scale = 1U
-    };
+    design.count = command_count;
+    if (vanta_design_rect(&design, x, y, width, height, color))
+        command_count = (uint32_t)design.count;
+}
+
+static void render_add_panel(int32_t x, int32_t y, int32_t width, int32_t height)
+{
+    design.count = command_count;
+    if (vanta_design_panel(&design, x, y, width, height))
+        command_count = (uint32_t)design.count;
+}
+
+static void render_add_squircle(int32_t x, int32_t y, int32_t width,
+                                int32_t height, uint32_t radius,
+                                uint32_t color)
+{
+    design.count = command_count;
+    if (vanta_design_squircle_rect(&design, x, y, width, height,
+                                   radius, color))
+        command_count = (uint32_t)design.count;
 }
 
 static void render_add_text(int32_t x, int32_t y, const char* text,
                             uint32_t color)
 {
-    size_t length = string_length(text);
-    if (command_count >= VANTA_GUI_MAX_COMMANDS || length == 0U ||
-        length > VANTA_GUI_TEXT_MAX)
-        return;
-    vanta_gui_draw_command_t* command = &commands[command_count++];
-    *command = (vanta_gui_draw_command_t){
-        .type = VANTA_GUI_DRAW_TEXT,
-        .x = x, .y = y, .color = color, .scale = 1U
-    };
-    for (size_t i = 0U; i <= length; i++)
-        command->text[i] = text[i];
+    design.count = command_count;
+    if (vanta_design_text(&design, x, y, text, color, 1U))
+        command_count = (uint32_t)design.count;
 }
 
 static void render_line_with_selection(size_t logical_line, int y)
@@ -252,9 +258,9 @@ static void render_line_with_selection(size_t logical_line, int y)
     if (end < begin) end = begin;
     size_t selected_end = end;
     if (selected_end > begin)
-        render_add_rect(16 + (int32_t)begin * 8, y,
-                        (int32_t)(selected_end - begin) * 8, 16,
-                        0x003B82F6U);
+        render_add_squircle(16 + (int32_t)begin * 8, y,
+                            (int32_t)(selected_end - begin) * 8, 16,
+                            VANTA_DESIGN_RADIUS_SMALL, 0x003B82F6U);
     if (begin > 0U)
     {
         char part[OUTPUT_COLUMNS];
@@ -401,7 +407,8 @@ static void terminal_paste_clipboard(void)
 static void render(void)
 {
     command_count = 0U;
-    render_add_rect(8, 8, 720, 330, COLOR_SURFACE);
+    vanta_design_init(&design, commands, VANTA_GUI_MAX_COMMANDS, &current_theme);
+    render_add_panel(8, 8, 720, 330);
     render_add_rect(8, 8, 720, 2, COLOR_ACCENT);
     render_add_text(16, 16, "VantaOS Terminal | user + kernel shell", COLOR_TEXT);
 

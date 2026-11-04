@@ -210,7 +210,8 @@ static inline int vanta_design_button(vanta_design_t* design,
     size_t length = 0U;
     while (label[length] && length <= VANTA_GUI_TEXT_MAX)
         length++;
-    if (length == 0U || length > VANTA_GUI_TEXT_MAX)
+    if (length == 0U || length > VANTA_GUI_TEXT_MAX ||
+        height < 16 || width < (int32_t)(length * 8U + 8U))
         return 1;
     int32_t text_x = x + (width - (int32_t)(length * 6U)) / 2;
     int32_t text_y = y + (height - 7) / 2;

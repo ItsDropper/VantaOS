@@ -392,6 +392,12 @@ jobs:
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_gui_event_queue.c -o /tmp/vantaos-gui-event-queue-test
           /tmp/vantaos-gui-event-queue-test
 
+      - name: Test Vanta Design System draw-list and geometry helpers
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude -Iuserspace/include \
+            scripts/test_vanta_design.c -o /tmp/vantaos-design-test
+          /tmp/vantaos-design-test
+
       - name: Test compositor damage rectangle clipping
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_graphics_damage.c -o /tmp/vantaos-graphics-damage-test

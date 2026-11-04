@@ -81,20 +81,25 @@ int main(void)
                                vanta_design_weighted_cell(
                                &source, weights, 3U, 2U, 5, 1, &right),
                                "weighted row resolves every track");
-            failures += expect(left.width == 22 && center.width == 45 &&
-                               right.width == 24 && left.x == 10 &&
-                               center.x == 37 && right.x == 87 &&
+            failures += expect(left.width == 22 && center.width == 46 &&
+                               right.width == 23 && left.x == 10 &&
+                               center.x == 37 && right.x == 88 &&
                                right.x + right.width == 111,
                                "weighted row preserves ratio and exact remainder");
             vanta_design_bounds_t top, bottom;
             failures += expect(vanta_design_weighted_cell(
                                &source, weights, 2U, 0U, 3, 0, &top) == 0,
                                "weighted layout rejects a zero-weight track");
+            const uint32_t zero_weights[] = { 1U, 0U };
             const uint32_t vertical_weights[] = { 1U, 2U };
+            failures += expect(!vanta_design_weighted_cell(
+                               &source, zero_weights, 2U, 0U,
+                               3, 0, &bottom),
+                               "weighted layout rejects zero-weight tracks");
             failures += expect(vanta_design_weighted_cell(
                                &source, vertical_weights, 2U, 1U,
                                3, 0, &bottom) &&
-                               bottom.y == 48 && bottom.height == 33 &&
+                               bottom.y == 42 && bottom.height == 39 &&
                                bottom.x == source.x &&
                                bottom.width == source.width,
                                "weighted column preserves untouched axis");

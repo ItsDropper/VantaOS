@@ -1405,22 +1405,49 @@ static void render(void)
     add_text(8, 8, preview_active ? "File preview" : "File Explorer", COLOR_TEXT);
     add_text(152, 8, "Ctrl+click multi-select  |  Right-click for actions", COLOR_MUTED);
 
-    add_squircle(8, 30, 448, 24, VANTA_DESIGN_RADIUS_CONTROL, COLOR_ROW);
-    add_rect(8, 53, 448, 1, input_mode == INPUT_PATH ? COLOR_ACCENT : COLOR_BORDER);
+    const vanta_design_bounds_t input_row = {
+        .x = 8, .y = 30, .width = 728, .height = 24
+    };
+    const uint32_t input_weights[] = { 5U, 3U };
+    vanta_design_bounds_t path_bounds = input_row;
+    vanta_design_bounds_t search_bounds = input_row;
+    if (!vanta_design_weighted_cell(&input_row, input_weights, 2U, 0U,
+                                    10, 1, &path_bounds) ||
+        !vanta_design_weighted_cell(&input_row, input_weights, 2U, 1U,
+                                    10, 1, &search_bounds))
+    {
+        path_bounds.x = 8; path_bounds.y = 30;
+        path_bounds.width = 448; path_bounds.height = 24;
+        search_bounds.x = 466; search_bounds.y = 30;
+        search_bounds.width = 270; search_bounds.height = 24;
+    }
+    add_squircle(path_bounds.x, path_bounds.y, path_bounds.width,
+                 path_bounds.height, VANTA_DESIGN_RADIUS_CONTROL, COLOR_ROW);
+    add_rect(path_bounds.x, path_bounds.y + path_bounds.height - 1,
+             path_bounds.width, 1,
+             input_mode == INPUT_PATH ? COLOR_ACCENT : COLOR_BORDER);
     if (input_mode == INPUT_PATH)
-        add_text_tail(14, 34, input_buffer, COLOR_TEXT, 54U);
+        add_text_tail(path_bounds.x + 6, path_bounds.y + 4,
+                      input_buffer, COLOR_TEXT, 54U);
     else
-        add_text_tail(14, 34, current_path, COLOR_TEXT, 54U);
+        add_text_tail(path_bounds.x + 6, path_bounds.y + 4,
+                      current_path, COLOR_TEXT, 54U);
 
-    add_squircle(466, 30, 270, 24, VANTA_DESIGN_RADIUS_CONTROL, COLOR_ROW);
-    add_rect(466, 53, 270, 1, input_mode == INPUT_SEARCH ? COLOR_ACCENT : COLOR_BORDER);
-    add_text(472, 34, "Find:", COLOR_MUTED);
+    add_squircle(search_bounds.x, search_bounds.y, search_bounds.width,
+                 search_bounds.height, VANTA_DESIGN_RADIUS_CONTROL, COLOR_ROW);
+    add_rect(search_bounds.x, search_bounds.y + search_bounds.height - 1,
+             search_bounds.width, 1,
+             input_mode == INPUT_SEARCH ? COLOR_ACCENT : COLOR_BORDER);
+    add_text(search_bounds.x + 6, search_bounds.y + 4, "Find:", COLOR_MUTED);
     if (input_mode == INPUT_SEARCH)
-        add_text_tail(520, 34, input_buffer, COLOR_TEXT, 25U);
+        add_text_tail(search_bounds.x + 54, search_bounds.y + 4,
+                      input_buffer, COLOR_TEXT, 25U);
     else if (search_query[0])
-        add_text_tail(520, 34, search_query, COLOR_TEXT, 25U);
+        add_text_tail(search_bounds.x + 54, search_bounds.y + 4,
+                      search_query, COLOR_TEXT, 25U);
     else
-        add_text(520, 34, "search this folder", COLOR_MUTED);
+        add_text(search_bounds.x + 54, search_bounds.y + 4,
+                 "search this folder", COLOR_MUTED);
 
     static const char* button_labels[8] = {
         "New File [N]", "New Folder [D]", "Rename [R]", "Delete [Del]",

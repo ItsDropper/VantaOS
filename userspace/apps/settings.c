@@ -6,6 +6,7 @@
  */
 
 #include <vanta/gui.h>
+#include <vanta/design.h>
 #include <vanta/bluetooth.h>
 
 #define SETTINGS_PATH "/SYSTEM/VANTASET.CFG"
@@ -140,12 +141,19 @@ static void add_rect(int32_t x, int32_t y, int32_t width,
 {
     if (command_count >= VANTA_GUI_MAX_COMMANDS)
         return;
-    vanta_gui_draw_command_t* command = &commands[command_count++];
-    *command = (vanta_gui_draw_command_t){
-        .type = VANTA_GUI_DRAW_FILL_RECT,
-        .x = x, .y = y, .width = width, .height = height,
-        .color = color, .scale = 1U
+    vanta_design_t design = {
+        .commands = commands,
+        .count = command_count,
+        .capacity = VANTA_GUI_MAX_COMMANDS
     };
+    int added;
+    if (width >= 8 && height >= 8)
+        added = vanta_design_round_rect(&design, x, y, width, height,
+                                        VANTA_DESIGN_RADIUS_CONTROL, color);
+    else
+        added = vanta_design_rect(&design, x, y, width, height, color);
+    if (added)
+        command_count = (uint32_t)design.count;
 }
 
 static void add_text_scaled(int32_t x, int32_t y, const char* text,

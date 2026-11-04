@@ -540,12 +540,15 @@ static void render(void)
     const char* nav_labels[4] = { "Appearance", "Accessibility", "About", "Bluetooth" };
     for (uint32_t i = 0U; i < 4U; i++)
     {
-        if (selected_page == i)
-            add_squircle(18, nav_y[i], 136, 36, VANTA_DESIGN_RADIUS_CONTROL, selected);
-        if (selected_page == i)
-            add_rect(18, nav_y[i], 3, 36, accent_value);
-        add_text(28, nav_y[i] + 10, nav_labels[i],
-                 selected_page == i ? text : muted);
+        /*
+         * Navigation uses the same semantic control as every other VDS app:
+         * selected = accent-filled, idle = neutral outlined. This avoids a
+         * Settings-only button treatment drifting from the shared system.
+         */
+        add_button(18, nav_y[i], 136, 36, nav_labels[i],
+                   selected_page == i ? VANTA_DESIGN_STATE_SELECTED :
+                                         VANTA_DESIGN_STATE_DEFAULT,
+                   selected_page != i);
     }
 
     add_panel(172, 56, 432, 294);

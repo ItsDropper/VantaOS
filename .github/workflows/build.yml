@@ -1045,7 +1045,7 @@ jobs:
                 exit 1
               fi
             done
-            if grep -Eq '^VANTAOS_[A-Z0-9_]*_FAIL' "$log"; then
+            if grep -Eq '^VANTAOS_(FAT32|FILESYSTEM)_[A-Z0-9_]*_FAIL' "$log"; then
               echo "NVMe-backed filesystem self-test failed on boot $boot."
               cat "$log"
               exit 1

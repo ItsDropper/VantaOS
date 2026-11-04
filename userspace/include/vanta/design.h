@@ -323,6 +323,26 @@ static inline int vanta_design_text_align(
     return 1;
 }
 
+/*
+ * Append text positioned within a client-local box. Resolve and validate the
+ * complete placement before touching the draw list, so rejected text never
+ * leaves a partially updated UI frame.
+ */
+static inline int vanta_design_text_box(
+    vanta_design_t* design, const vanta_design_bounds_t* bounds,
+    const char* text, uint32_t color, uint32_t scale,
+    uint32_t horizontal, uint32_t vertical)
+{
+    if (!design || !vanta_design_has_capacity(design, 1U))
+        return 0;
+    int32_t x = 0;
+    int32_t y = 0;
+    if (!vanta_design_text_align(bounds, text, scale, horizontal, vertical,
+                                 &x, &y))
+        return 0;
+    return vanta_design_text(design, x, y, text, color, scale);
+}
+
 static inline int vanta_design_heading(vanta_design_t* design,
                                        int32_t x, int32_t y,
                                        const char* text)

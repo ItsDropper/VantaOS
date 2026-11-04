@@ -205,6 +205,19 @@ static void add_text(int32_t x, int32_t y, const char* text, uint32_t color)
     add_text_scaled(x, y, text, color, 1U);
 }
 
+static void add_text_box(int32_t x, int32_t y, int32_t width, int32_t height,
+                         const char* text, uint32_t color,
+                         uint32_t horizontal, uint32_t vertical)
+{
+    const vanta_design_bounds_t bounds = {
+        .x = x, .y = y, .width = width, .height = height
+    };
+    design.count = command_count;
+    if (vanta_design_text_box(&design, &bounds, text, color, 1U,
+                              horizontal, vertical))
+        command_count = (uint32_t)design.count;
+}
+
 static void reset_defaults(void)
 {
     accent = 0U;
@@ -687,7 +700,8 @@ static void render(void)
     add_button(384, 365, 220, 38,
                selected_page == 3U ? "Connect selected" : "Restore defaults",
                VANTA_DESIGN_STATE_DEFAULT, 1);
-    add_text(16, 414, status_buffer, status_color);
+    add_text_box(16, 414, 588, 16, status_buffer, status_color,
+                 VANTA_DESIGN_ALIGN_START, VANTA_DESIGN_ALIGN_CENTER);
     add_text(16, 436, selected_page == 3U ? "Select device; S scan, X cancel scan, C cancel connect, Q close." : "Click a category or setting; S saves, R resets, B opens Bluetooth, Q closes.", muted);
     (void)vanta_gui_draw(window_id, commands, command_count);
 }

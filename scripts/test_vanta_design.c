@@ -147,6 +147,25 @@ int main(void)
                            VANTA_DESIGN_ALIGN_CENTER,
                            VANTA_DESIGN_ALIGN_CENTER, &text_x, &text_y),
                            "text alignment rejects scaled width overflow");
+        size_t before_box = design.count;
+        failures += expect(vanta_design_text_box(
+                           &design, &text_bounds, "Vanta", 0x00FFFFFFU, 1U,
+                           VANTA_DESIGN_ALIGN_CENTER,
+                           VANTA_DESIGN_ALIGN_CENTER),
+                           "text box appends aligned text");
+        failures += expect(design.count == before_box + 1U &&
+                           commands[before_box].type == VANTA_GUI_DRAW_TEXT &&
+                           commands[before_box].x == 40 &&
+                           commands[before_box].y == 32,
+                           "text box emits the resolved position");
+        before_box = design.count;
+        failures += expect(!vanta_design_text_box(
+                           &design, &narrow_bounds, "Vanta", 0x00FFFFFFU, 2U,
+                           VANTA_DESIGN_ALIGN_CENTER,
+                           VANTA_DESIGN_ALIGN_CENTER),
+                           "text box rejects content that does not fit");
+        failures += expect(design.count == before_box,
+                           "rejected text box leaves draw list unchanged");
         failures += expect(!vanta_design_text_align(
                            &text_bounds, "Vanta", 1U, 3U,
                            VANTA_DESIGN_ALIGN_CENTER, &text_x, &text_y),

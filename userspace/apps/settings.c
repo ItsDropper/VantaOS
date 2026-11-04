@@ -608,13 +608,15 @@ static void render(void)
         add_text(190, 174, "Preferences are stored in:", muted);
         add_text(190, 196, "/SYSTEM/VANTASET.CFG", text);
         add_text(190, 224, "Theme changes are applied when saved.", muted);
-        add_text(190, 248, "Time zone is saved by Setup but not applied to the clock.", muted);
-        add_text(190, 272, "Language and keyboard integration is not implemented yet.", muted);
+        add_text(190, 248, "Time zone is saved by Setup, but", muted);
+        add_text(190, 268, "clock integration is not implemented.", muted);
+        add_text(190, 292, "Language and keyboard setup are not", muted);
+        add_text(190, 312, "implemented yet.", muted);
     }
     else
     {
         add_text(190, 68, "Bluetooth", text);
-        add_text(190, 88, "Discover and connect to nearby Classic Bluetooth devices.", muted);
+        add_text(190, 88, "Discover nearby Classic Bluetooth devices.", muted);
         bluetooth_refresh();
         if (bluetooth_port == 0U)
         {

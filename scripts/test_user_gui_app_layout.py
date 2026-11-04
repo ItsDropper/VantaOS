@@ -10,7 +10,7 @@ APPS = {
     "notes": ("userspace/apps/notes.c", 760, 460),
     "calculator": ("userspace/apps/calculator.c", 536, 280),
     "explorer": ("userspace/apps/explorer.c", 760, 460),
-    "settings": ("userspace/apps/settings.c", 620, 470),
+    "settings": ("userspace/apps/settings.c", 620, 510),
     "terminal": ("userspace/apps/terminal.c", 760, 460),
 }
 INSET_X = 8

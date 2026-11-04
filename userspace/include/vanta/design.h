@@ -226,7 +226,12 @@ static inline int vanta_design_button_impl(vanta_design_t* design,
     while (label[length] && length <= VANTA_GUI_TEXT_MAX)
         length++;
     if (length == 0U || length > VANTA_GUI_TEXT_MAX ||
-        (int64_t)length * 6 + 12 > width ||
+        /*
+         * The kernel's ABI validator reserves 8 pixels per glyph even though
+         * the bitmap renderer advances the pen by 6. Keep the visual label
+         * centered, but guarantee the conservative ABI bound as well.
+         */
+        (int64_t)length * 10 + 8 > width ||
         !vanta_design_has_capacity(design, 3U))
         return 0;
 
@@ -360,7 +365,8 @@ static inline int vanta_design_badge(vanta_design_t* design,
              state != VANTA_DESIGN_STATE_HOVER)
         return 0;
 
-    int32_t width = (int32_t)(length * 6U) + 16;
+    /* The text command is validated at 8 pixels per glyph by the ABI. */
+    int32_t width = (int32_t)(length * 8U) + 16;
     const int32_t height = 20;
     if (!vanta_design_squircle_rect(design, x, y, width, height,
                                     height / 2U, fill))

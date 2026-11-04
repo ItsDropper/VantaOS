@@ -16,21 +16,6 @@
 #define WINDOW_HEIGHT 470U
 #define SETTING_COUNT 5U
 
-#define COLOR_TEXT 0x00F1F5F9U
-#define COLOR_MUTED 0x0094A3B8U
-#define COLOR_SURFACE 0x00212D3BU
-#define COLOR_SURFACE_HI 0x00313F50U
-#define COLOR_BLUE 0x003B82F6U
-#define COLOR_TEAL 0x000D9488U
-#define COLOR_AMBER 0x00C56A05U
-#define COLOR_VIOLET 0x00936CF0U
-#define COLOR_SUCCESS 0x0022C55EU
-#define COLOR_ERROR 0x00F87171U
-#define COLOR_LIGHT_TEXT 0x00182735U
-#define COLOR_LIGHT_MUTED 0x00556678U
-#define COLOR_LIGHT_SURFACE 0x00E8EEF5U
-#define COLOR_LIGHT_SELECTED 0x00D8E4F2U
-#define COLOR_LIGHT_BACKGROUND 0x00F7F9FCU
 
 static vanta_gui_draw_command_t commands[VANTA_GUI_MAX_COMMANDS];
 static vanta_design_t design;
@@ -97,36 +82,56 @@ static void set_status(const char* status, uint32_t color)
     status_color = color;
 }
 
+static vanta_theme_t settings_theme(void)
+{
+    return (vanta_theme_t){
+        .accent = accent,
+        .light = light_theme,
+        .contrast = high_contrast,
+        .compact = compact_rows
+    };
+}
+
 static uint32_t color_text(void)
 {
-    if (high_contrast)
-        return light_theme ? 0x00000000U : 0x00FFFFFFU;
-    return light_theme ? COLOR_LIGHT_TEXT : COLOR_TEXT;
+    vanta_theme_t theme = settings_theme();
+    return vanta_theme_text_color(&theme);
 }
 
 static uint32_t color_muted(void)
 {
-    if (high_contrast)
-        return color_text();
-    return light_theme ? COLOR_LIGHT_MUTED : COLOR_MUTED;
+    vanta_theme_t theme = settings_theme();
+    return vanta_theme_muted_color(&theme);
 }
 
 static uint32_t color_surface(void)
 {
-    return light_theme ? COLOR_LIGHT_SURFACE : COLOR_SURFACE;
+    vanta_theme_t theme = settings_theme();
+    return vanta_theme_surface_color(&theme);
 }
 
 static uint32_t color_selected(void)
 {
-    return light_theme ? COLOR_LIGHT_SELECTED : COLOR_SURFACE_HI;
+    vanta_theme_t theme = settings_theme();
+    return vanta_theme_selection_color(&theme);
 }
 
 static uint32_t accent_color(void)
 {
-    if (accent == 1U) return COLOR_TEAL;
-    if (accent == 2U) return COLOR_AMBER;
-    if (accent == 3U) return COLOR_VIOLET;
-    return COLOR_BLUE;
+    vanta_theme_t theme = settings_theme();
+    return vanta_theme_accent_color(&theme);
+}
+
+static uint32_t color_success(void)
+{
+    vanta_theme_t theme = settings_theme();
+    return vanta_theme_success_color(&theme);
+}
+
+static uint32_t color_error(void)
+{
+    vanta_theme_t theme = settings_theme();
+    return vanta_theme_danger_color(&theme);
 }
 
 static const char* accent_name(void)
@@ -437,27 +442,27 @@ static void bluetooth_scan(void)
     bluetooth_refresh();
     if (bluetooth_port == 0U)
     {
-        set_status("No USB Bluetooth adapter detected", COLOR_ERROR);
+        set_status("No USB Bluetooth adapter detected", color_error());
         return;
     }
     long result = vanta_bluetooth_scan(bluetooth_port);
     if (result > 0)
-        set_status("Scan started; list updates as devices appear", COLOR_SUCCESS);
+        set_status("Scan started; list updates as devices appear", color_success());
     else
-        set_status("Scan could not start; check adapter/controller", COLOR_ERROR);
+        set_status("Scan could not start; check adapter/controller", color_error());
 }
 
 static void bluetooth_cancel_scan(void)
 {
     if (bluetooth_port == 0U)
     {
-        set_status("No Bluetooth adapter available", COLOR_ERROR);
+        set_status("No Bluetooth adapter available", color_error());
         return;
     }
     if (vanta_bluetooth_cancel_scan(bluetooth_port) > 0)
-        set_status("Scan cancellation requested", COLOR_MUTED);
+        set_status("Scan cancellation requested", color_muted());
     else
-        set_status("No active scan or cancellation failed", COLOR_ERROR);
+        set_status("No active scan or cancellation failed", color_error());
 }
 
 static void bluetooth_connect_selected(void)
@@ -465,14 +470,14 @@ static void bluetooth_connect_selected(void)
     bluetooth_refresh();
     if (bluetooth_port == 0U)
     {
-        set_status("Connect a USB Bluetooth adapter first", COLOR_ERROR);
+        set_status("Connect a USB Bluetooth adapter first", color_error());
         return;
     }
     usb_bluetooth_inquiry_result_t result = {0};
     if (vanta_bluetooth_discovered_get(
             bluetooth_port, selected_device, &result) <= 0)
     {
-        set_status("Select a discovered device first", COLOR_ERROR);
+        set_status("Select a discovered device first", color_error());
         return;
     }
     uint16_t handle = 0U;
@@ -480,48 +485,45 @@ static void bluetooth_connect_selected(void)
         bluetooth_port, result.address, &handle);
     if (state == 1)
     {
-        set_status("Device is already connected", COLOR_SUCCESS);
+        set_status("Device is already connected", color_success());
         return;
     }
     if (state == 2)
     {
-        set_status("Connection attempt already in progress", COLOR_MUTED);
+        set_status("Connection attempt already in progress", color_muted());
         return;
     }
     long connected = vanta_bluetooth_connect(bluetooth_port, &result);
     if (connected > 0)
-        set_status("Connection requested; waiting for controller", COLOR_SUCCESS);
+        set_status("Connection requested; waiting for controller", color_success());
     else
-        set_status("Connect failed; device may be out of range", COLOR_ERROR);
+        set_status("Connect failed; device may be out of range", color_error());
 }
 
 static void bluetooth_cancel_selected(void)
 {
     if (bluetooth_port == 0U || bluetooth_device_count == 0U)
     {
-        set_status("No selected Bluetooth device", COLOR_ERROR);
+        set_status("No selected Bluetooth device", color_error());
         return;
     }
     usb_bluetooth_inquiry_result_t result = {0};
     if (vanta_bluetooth_discovered_get(
             bluetooth_port, selected_device, &result) <= 0)
     {
-        set_status("Selected device is no longer available", COLOR_ERROR);
+        set_status("Selected device is no longer available", color_error());
         return;
     }
     if (vanta_bluetooth_cancel_connection(bluetooth_port, result.address) > 0)
-        set_status("Connection cancellation requested", COLOR_MUTED);
+        set_status("Connection cancellation requested", color_muted());
     else
-        set_status("No cancellable connection attempt", COLOR_ERROR);
+        set_status("No cancellable connection attempt", color_error());
 }
 
 static void render(void)
 {
     command_count = 0U;
-    vanta_theme_t active_theme = {
-        .accent = accent, .light = light_theme,
-        .contrast = high_contrast, .compact = compact_rows
-    };
+    vanta_theme_t active_theme = settings_theme();
     vanta_design_init(&design, commands, VANTA_GUI_MAX_COMMANDS, &active_theme);
     uint32_t text = color_text();
     uint32_t muted = color_muted();
@@ -714,22 +716,22 @@ static void cycle_setting(uint32_t setting)
 static void save_and_report(void)
 {
     if (save_config())
-        set_status("Saved /SYSTEM/VANTASET.CFG", COLOR_SUCCESS);
+        set_status("Saved /SYSTEM/VANTASET.CFG", color_success());
     else
-        set_status("Save failed: check disk space and filesystem", COLOR_ERROR);
+        set_status("Save failed: check disk space and filesystem", color_error());
 }
 
 int main(int argc, char** argv)
 {
     reset_defaults();
-    status_color = COLOR_MUTED;
+    status_color = color_muted();
     if (argc == 2 && text_equals(argv[1], "--self-test"))
         vanta_exit(run_storage_self_test());
     if (argc != 1)
         vanta_exit(2);
 
     if (load_config())
-        set_status("Loaded saved preferences", COLOR_SUCCESS);
+        set_status("Loaded saved preferences", color_success());
     load_installed_device_name();
 
     vanta_gui_window_request_t request = {

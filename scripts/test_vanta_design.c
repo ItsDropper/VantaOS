@@ -140,6 +140,13 @@ int main(void)
                        &design, 0, 0, 112, 28, "Cancel",
                        VANTA_DESIGN_STATE_DEFAULT),
                        "outline button appends atomically");
+    size_t before_narrow = design.count;
+    failures += expect(!vanta_design_button(
+                       &design, 0, 0, 72, 24, "ABCDEFGHIJ",
+                       VANTA_DESIGN_STATE_DEFAULT),
+                       "button rejects label outside the ABI text bound");
+    failures += expect(design.count == before_narrow,
+                       "rejected button leaves draw list unchanged");
     failures += expect(design.count == before_controls + 3U,
                        "outline button emits border, surface and label");
     size_t outlined_start = design.count;
@@ -167,10 +174,15 @@ int main(void)
                        commands[before_controls + 1U].color ==
                        vanta_design_surface_color(&design),
                        "outline button uses border and neutral fill");
+    size_t badge_start = design.count;
     failures += expect(vanta_design_badge(
                        &design, 0, 0, "Ready",
                        VANTA_DESIGN_STATE_SELECTED),
                        "badge uses theme accent");
+    failures += expect(commands[badge_start].width >= 8 * 5 + 16 &&
+                       commands[badge_start + 1U].x + 8 * 5 <=
+                       commands[badge_start].width,
+                       "badge text fits conservative GUI ABI bounds");
     failures += expect(vanta_design_badge(
                        &design, 0, 0, "Connected",
                        VANTA_DESIGN_STATE_SUCCESS),

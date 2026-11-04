@@ -32,6 +32,8 @@ int main(void)
                        "radius clamps to half the smaller dimension");
     failures += expect(vanta_design_radius(100, 80, 40U) == 32U,
                        "radius has a bounded raster cost");
+    failures += expect(vanta_design_radius(4, 4, 10U) == 1U,
+                       "radius avoids overlapping corners on tiny surfaces");
 
     failures += expect(vanta_design_squircle_rect(
         &design, 0, 0, 100, 60, VANTA_DESIGN_RADIUS_SURFACE, 0x00112233U),

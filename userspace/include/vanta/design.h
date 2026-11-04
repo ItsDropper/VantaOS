@@ -95,7 +95,8 @@ static inline uint32_t vanta_design_radius(int32_t width, int32_t height,
 {
     if (width <= 0 || height <= 0)
         return 0U;
-    uint32_t limit = (uint32_t)(width < height ? width : height) / 2U;
+    uint32_t minimum = (uint32_t)(width < height ? width : height);
+    uint32_t limit = minimum > 0U ? (minimum - 1U) / 2U : 0U;
     if (limit > 32U)
         limit = 32U;
     return preferred < limit ? preferred : limit;

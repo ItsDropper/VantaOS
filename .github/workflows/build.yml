@@ -116,6 +116,12 @@ jobs:
             scripts/test_vanta_design.c -o /tmp/vantaos-design-test
           /tmp/vantaos-design-test
 
+      - name: Test exponent-4 squircle raster geometry
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_graphics_squircle_math.c -o /tmp/vantaos-squircle-math-test
+          /tmp/vantaos-squircle-math-test
+
       - name: Test kernel watchdog state machine
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iscripts/test_stubs -Iinclude \

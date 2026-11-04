@@ -6,6 +6,7 @@
  */
 
 #include "graphics_internal.h"
+#include "graphics_squircle.h"
 #include "paging.h"
 #include "pci.h"
 #include "mouse.h"
@@ -800,6 +801,33 @@ void graphics_fill_rect(
  * than circular rounded corners. Radius is capped to keep integer arithmetic
  * bounded and to prevent corner overlap.
  */
+static void graphics_fill_squircle_span(int64_t left, int64_t right,
+                                         int64_t y, uint32_t packed)
+{
+    if (y < 0 || y >= (int64_t)framebuffer_height)
+        return;
+    if (left < 0) left = 0;
+    if (right > (int64_t)framebuffer_width)
+        right = (int64_t)framebuffer_width;
+    if (left >= right)
+        return;
+
+    volatile uint32_t* row = (volatile uint32_t*)(
+        framebuffer + (size_t)y * framebuffer_pitch);
+    int first = -1;
+    int last = -1;
+    for (int64_t x = left; x < right; ++x)
+    {
+        if (row[x] == packed)
+            continue;
+        row[x] = packed;
+        if (first < 0) first = (int)x;
+        last = (int)x;
+    }
+    if (first >= 0)
+        graphics_mark_damage(first, (int)y, last - first + 1, 1);
+}
+
 void graphics_fill_squircle_rect(
     int x, int y, int width, int height, int radius, uint32_t color)
 {
@@ -810,50 +838,47 @@ void graphics_fill_squircle_rect(
         graphics_fill_rect(x, y, width, height, color);
         return;
     }
+
     if (radius > 32) radius = 32;
-    if (radius * 2 > width) radius = width / 2;
-    if (radius * 2 > height) radius = height / 2;
+    int max_radius = (width - 1) / 2;
+    int max_height_radius = (height - 1) / 2;
+    if (radius > max_radius) radius = max_radius;
+    if (radius > max_height_radius) radius = max_height_radius;
     if (radius <= 0)
     {
         graphics_fill_rect(x, y, width, height, color);
         return;
     }
 
-    uint32_t packed = graphics_pack_color(color);
-    int x0 = x < 0 ? 0 : x;
-    int y0 = y < 0 ? 0 : y;
-    int x1 = x + width;
-    int y1 = y + height;
-    if (x1 > (int)framebuffer_width) x1 = (int)framebuffer_width;
-    if (y1 > (int)framebuffer_height) y1 = (int)framebuffer_height;
-    int radius2 = radius * radius;
-    int radius4 = radius2 * radius2;
+    /*
+     * The center and side regions are guaranteed to be fully covered. Fill
+     * those as rectangles, then evaluate only the four radius-by-radius
+     * corner regions. This changes the expensive work from O(width*height)
+     * to O((width+height)*radius + radius^2), with radius capped at 32.
+     */
+    graphics_fill_rect(x + radius, y, width - radius * 2, height, color);
+    graphics_fill_rect(x, y + radius, radius, height - radius * 2, color);
+    graphics_fill_rect(x + width - radius, y + radius,
+                       radius, height - radius * 2, color);
 
-    for (int py = y0; py < y1; py++)
+    uint32_t packed = graphics_pack_color(color);
+    int64_t left_center = (int64_t)x + radius;
+    int64_t right_center = (int64_t)x + width - radius - 1;
+    for (int row = 0; row < radius; ++row)
     {
-        volatile uint32_t* row =
-            (volatile uint32_t*)(framebuffer + py * framebuffer_pitch);
-        int first = -1;
-        int last = -1;
-        for (int px = x0; px < x1; px++)
-        {
-            int cx = px < x + radius ? x + radius :
-                (px >= x + width - radius ? x + width - radius - 1 : px);
-            int cy = py < y + radius ? y + radius :
-                (py >= y + height - radius ? y + height - radius - 1 : py);
-            int dx = px - cx;
-            int dy = py - cy;
-            int dx2 = dx * dx;
-            int dy2 = dy * dy;
-            if (dx2 * dx2 + dy2 * dy2 <= radius4 && row[px] != packed)
-            {
-                row[px] = packed;
-                if (first < 0) first = px;
-                last = px;
-            }
-        }
-        if (first >= 0)
-            graphics_mark_damage(first, py, last - first + 1, 1);
+        int top_extent = graphics_squircle_extent(radius, radius - row);
+        int bottom_extent = graphics_squircle_extent(radius, row + 1);
+        int64_t top_y = (int64_t)y + row;
+        int64_t bottom_y = (int64_t)y + height - radius + row;
+
+        graphics_fill_squircle_span(left_center - top_extent,
+            left_center + 1, top_y, packed);
+        graphics_fill_squircle_span(right_center,
+            right_center + top_extent + 1, top_y, packed);
+        graphics_fill_squircle_span(left_center - bottom_extent,
+            left_center + 1, bottom_y, packed);
+        graphics_fill_squircle_span(right_center,
+            right_center + bottom_extent + 1, bottom_y, packed);
     }
 }
 

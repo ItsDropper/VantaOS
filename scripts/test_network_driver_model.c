@@ -69,7 +69,7 @@ static int failed_remove(const struct pci_device* pci)
 }
 
 static const net_pci_id_t test_ids[] = {
-    {0xFFFFU, 0xFFFFU, 0x02U, 0x00U, 0x00U}
+    {0x1234U, 0x5678U, 0x02U, 0x00U, 0x00U}
 };
 static const net_pci_driver_t test_driver = {
     .name = "test-net",
@@ -112,7 +112,11 @@ int main(void)
     test_pci.prog_if = 0x00U;
     test_pci.core.bus = DEVICE_BUS_PCI;
     test_pci.core.bus_data = &test_pci;
+    test_pci.core.vendor_id = test_pci.vendor_id;
+    test_pci.core.device_id = test_pci.device_id;
     test_pci.core.class_code = test_pci.class_code;
+    test_pci.core.subclass = test_pci.subclass;
+    test_pci.core.prog_if = test_pci.prog_if;
     test_pci.core.name[0] = 'n';
     test_pci.core.name[1] = 'e';
     test_pci.core.name[2] = 't';
@@ -124,7 +128,11 @@ int main(void)
     failed_remove_pci.class_code = 0x02U;
     failed_remove_pci.core.bus = DEVICE_BUS_PCI;
     failed_remove_pci.core.bus_data = &failed_remove_pci;
+    failed_remove_pci.core.vendor_id = failed_remove_pci.vendor_id;
+    failed_remove_pci.core.device_id = failed_remove_pci.device_id;
     failed_remove_pci.core.class_code = failed_remove_pci.class_code;
+    failed_remove_pci.core.subclass = failed_remove_pci.subclass;
+    failed_remove_pci.core.prog_if = failed_remove_pci.prog_if;
     failed_remove_pci.core.name[0] = 'n';
     failed_remove_pci.core.name[1] = 'e';
     failed_remove_pci.core.name[2] = 't';

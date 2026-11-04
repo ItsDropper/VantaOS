@@ -43,7 +43,7 @@ def check_app(name: str, path: str, window_width: int, window_height: int) -> li
     errors = []
 
     rect_pattern = re.compile(
-        r"\b(add_rect|add_squircle|add_panel|add_button|add_outline)\s*"
+        r"\b(?:render_)?(add_rect|add_squircle|add_panel|add_button|add_outline)\s*"
         r"\(\s*(-?\d+)\s*,\s*(-?\d+)\s*,"
         r"\s*(-?\d+)\s*,\s*(-?\d+)"
     )
@@ -57,7 +57,7 @@ def check_app(name: str, path: str, window_width: int, window_height: int) -> li
             )
 
     text_pattern = re.compile(
-        r"\badd_text\s*\(\s*(-?\d+)\s*,\s*(-?\d+)\s*,\s*"
+        r"\b(?:render_)?add_text\s*\(\s*(-?\d+)\s*,\s*(-?\d+)\s*,\s*"
         r'"((?:\\.|[^"\\])*)"'
     )
     for match in text_pattern.finditer(body):

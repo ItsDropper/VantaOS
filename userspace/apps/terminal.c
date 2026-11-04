@@ -417,7 +417,10 @@ static void render(void)
     size_t end = output_count - output_scroll_offset;
     size_t first = end > DISPLAY_LINES ? end - DISPLAY_LINES : 0U;
     int y = 42;
-    for (size_t i = first; i < end && y < 416; i++)
+    /* Client height is WINDOW_HEIGHT - GUI titlebar and bottom inset:
+     * 460 - 50 - 8 = 402. Keep every 16px text line inside that bound.
+     */
+    for (size_t i = first; i < end && y + 16 <= 402; i++)
     {
         if (output_line(i)[0])
             render_line_with_selection(i, y);

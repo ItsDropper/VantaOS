@@ -172,6 +172,28 @@ int main(void)
                            light_danger,
                            "high contrast theme changes semantic status colors");
     }
+    {
+        const vanta_theme_t palette_modes[] = {
+            { .accent = 0U, .light = 0, .contrast = 0, .compact = 0 },
+            { .accent = 0U, .light = 1, .contrast = 0, .compact = 0 },
+            { .accent = 0U, .light = 0, .contrast = 1, .compact = 0 },
+            { .accent = 0U, .light = 1, .contrast = 1, .compact = 0 }
+        };
+        for (size_t i = 0U; i < sizeof(palette_modes) /
+             sizeof(palette_modes[0]); ++i)
+        {
+            design.theme = palette_modes[i];
+            uint32_t surface = vanta_theme_surface_color(&design.theme);
+            uint32_t primary = vanta_theme_text_color(&design.theme);
+            uint32_t secondary = vanta_theme_muted_color(&design.theme);
+            failures += expect(vanta_design_contrast_ratio_milli(
+                               primary, surface) >= 4500U,
+                               "primary theme text meets WCAG AA contrast");
+            failures += expect(vanta_design_contrast_ratio_milli(
+                               secondary, surface) >= 4500U,
+                               "muted theme text meets WCAG AA contrast");
+        }
+    }
     const uint32_t accent_swatches[] = {
         0x003B82F6U, 0x000D9488U, 0x00C56A05U, 0x00936CF0U,
         0x0022C55EU, 0x00EF4444U

@@ -93,3 +93,10 @@ The header-only VDS layer now provides:
 - A YIQ foreground heuristic for filled accent controls. This improves the default foreground choice but is not a substitute for measured WCAG contrast ratios; applications must still support the persisted high-contrast palette.
 
 Visual components do not implement input behavior. Each application remains responsible for keyboard/pointer events, focus ownership, state changes and hitboxes. Generic rectangle drawing remains square by default; applications opt into squircle geometry only for controls and surfaces where it supports the hierarchy.
+
+
+## Shared kernel and userspace appearance tokens
+
+The kernel desktop theme now exposes semantic roles for subtle borders, selected surfaces and warning indicators in addition to its existing surface/text/accent roles. Built-in window chrome, desktop cards, taskbar tiles and kernel-rendered page components resolve these roles from the same persisted settings as ring-3 applications. Both layers use the exponent-4 squircle rasterizer for rectangular interface surfaces; purely circular indicators and decorative wallpaper remain circular.
+
+Accent swatches are tuned as interface colors rather than merely decorative hues. The userspace theme, Settings preview and kernel theme use the same blue, teal, amber and violet values. The VDS contrast helper compares the actual contrast ratio of its supported foreground colors; kernel status and selection roles remain distinct from the primary accent role so borders, fills and text do not silently reuse one color for every purpose.

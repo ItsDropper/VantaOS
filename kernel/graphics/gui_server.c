@@ -683,7 +683,7 @@ void gui_server_draw_windows(void)
             graphics_fill_rect(x + 16, y + GUI_TITLEBAR_HEIGHT - 2,
                                48, 2,
                                desktop_theme_color(VANTA_UI_ROLE_ACCENT));
-        graphics_fill_rounded_rect(x + 2, y + GUI_TITLEBAR_HEIGHT,
+        graphics_fill_squircle_rect(x + 2, y + GUI_TITLEBAR_HEIGHT,
                                    (int)width - 4,
                                    (int)height - GUI_TITLEBAR_HEIGHT - 2,
                                    6, VANTA_UI_DESKTOP);
@@ -733,7 +733,7 @@ void gui_server_draw_windows(void)
         {
             int gx = x + (int)width - 14;
             int gy = y + (int)height - 14;
-            uint32_t grip = window->focused ? 0x005DA9FFU : 0x00334455U;
+            uint32_t grip = window->focused ? VANTA_UI_ACCENT : VANTA_UI_BORDER_SUBTLE;
             graphics_fill_rect(gx + 7, gy + 5, 2, 2, grip);
             graphics_fill_rect(gx + 4, gy + 8, 5, 2, grip);
             graphics_fill_rect(gx + 1, gy + 11, 8, 2, grip);
@@ -1210,9 +1210,9 @@ void gui_server_draw_taskbar_items(int taskbar_y, int screen_width)
         int focused = items[i].focused;
         uint32_t fill = focused ? 0x00253648U
                       : items[i].minimized ? 0x00131D29U : 0x00192533U;
-        graphics_fill_rounded_rect(slot_x, taskbar_y, button_width, 42, 7, fill);
+        graphics_fill_squircle_rect(slot_x, taskbar_y, button_width, 42, 7, fill);
         graphics_fill_rect(slot_x + 1, taskbar_y + 1, button_width - 2, 1,
-                           focused ? 0x005DA9FFU : 0x00334455U);
+                           focused ? VANTA_UI_ACCENT : VANTA_UI_BORDER_SUBTLE);
         int icon_size = button_width >= 48 ? 18 : 12;
         graphics_draw_vanta_logo(slot_x + 4, taskbar_y + (42 - icon_size) / 2,
                                  icon_size);
@@ -1233,7 +1233,7 @@ void gui_server_draw_taskbar_items(int taskbar_y, int screen_width)
         }
         if (focused)
             graphics_fill_rounded_rect(slot_x + button_width / 2 - 12,
-                                       taskbar_y + 38, 24, 2, 1, 0x005DA9FFU);
+                                       taskbar_y + 38, 24, 2, 1, VANTA_UI_ACCENT);
         slot_x += slot_width;
     }
 }

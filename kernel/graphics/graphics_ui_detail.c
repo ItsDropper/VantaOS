@@ -10,23 +10,22 @@
 #include "filesystem.h"
 #include "process.h"
 
-/* Native, software-rendered desktop design system. */
-#define UI_INK 0x000A111B
-#define UI_INK_SOFT 0x000E1723
-#define UI_SURFACE_0 0x00131D29
-#define UI_SURFACE_1 0x00192533
-#define UI_SURFACE_2 0x00202F3F
-#define UI_EDGE 0x00334455
-#define UI_EDGE_SOFT 0x00233140
-#define UI_WHITE 0x00F3F6FA
-#define UI_MUTED 0x009AAABD
-#define UI_QUIET 0x006E8296
-#define UI_BLUE 0x005DA9FF
-#define UI_BLUE_BRIGHT 0x0078B8FF
-#define UI_BLUE_DARK 0x00234162
-#define UI_MINT 0x0069D6AE
-#define UI_AMBER 0x00E6BD78
-#define UI_RED 0x00E17F89
+/* Built-in controls consume the same persisted semantic palette as ring-3 apps. */
+#define UI_INK_SOFT VANTA_UI_SURFACE
+#define UI_SURFACE_0 VANTA_UI_SURFACE
+#define UI_SURFACE_1 VANTA_UI_TITLEBAR
+#define UI_SURFACE_2 VANTA_UI_ROW
+#define UI_EDGE VANTA_UI_BORDER
+#define UI_EDGE_SOFT VANTA_UI_BORDER_SUBTLE
+#define UI_WHITE VANTA_UI_TEXT
+#define UI_MUTED VANTA_UI_TEXT_SECONDARY
+#define UI_QUIET VANTA_UI_TEXT_SECONDARY
+#define UI_BLUE VANTA_UI_ACCENT
+#define UI_BLUE_BRIGHT VANTA_UI_ACCENT
+#define UI_BLUE_DARK VANTA_UI_SELECTION
+#define UI_MINT VANTA_UI_SUCCESS
+#define UI_AMBER VANTA_UI_WARNING
+#define UI_RED VANTA_UI_DANGER
 
 static int ui_min(int a, int b) { return a < b ? a : b; }
 static int ui_max(int a, int b) { return a > b ? a : b; }
@@ -48,14 +47,10 @@ static void ui_surface(int x, int y, int w, int h, int r,
                        uint32_t fill, uint32_t edge)
 {
     if (w <= 0 || h <= 0) return;
-    graphics_fill_rounded_rect(x, y, w, h, r, fill);
-    if (edge != 0)
-    {
-        ui_line(x + r, y, w - r * 2, edge);
-        ui_line(x + r, y + h - 1, w - r * 2, edge);
-        graphics_fill_rect(x, y + r, 1, h - r * 2, edge);
-        graphics_fill_rect(x + w - 1, y + r, 1, h - r * 2, edge);
-    }
+    graphics_fill_squircle_rect(x, y, w, h, r, edge != 0 ? edge : fill);
+    if (edge != 0 && w > 2 && h > 2)
+        graphics_fill_squircle_rect(x + 1, y + 1, w - 2, h - 2,
+                                    r > 0 ? r - 1 : 0, fill);
 }
 static void ui_label(int x, int y, const char* s)
 {
@@ -93,13 +88,13 @@ static void ui_icon_terminal(int x, int y, int s, uint32_t tint)
 static void ui_icon_folder(int x, int y, int s, uint32_t tint)
 {
     ui_surface(x, y, s, s, 7, UI_SURFACE_2, UI_EDGE);
-    graphics_fill_rounded_rect(x + 7, y + s / 2 - 3, s - 14, s / 3, 3, tint);
-    graphics_fill_rounded_rect(x + 8, y + s / 2 - 7, s / 3, 6, 2, tint);
+    graphics_fill_squircle_rect(x + 7, y + s / 2 - 3, s - 14, s / 3, 3, tint);
+    graphics_fill_squircle_rect(x + 8, y + s / 2 - 7, s / 3, 6, 2, tint);
 }
 static void ui_icon_system(int x, int y, int s, uint32_t tint)
 {
     ui_surface(x, y, s, s, 7, UI_SURFACE_2, UI_EDGE);
-    graphics_fill_rounded_rect(x + s / 3, y + s / 3, s / 3, s / 3, 4, tint);
+    graphics_fill_squircle_rect(x + s / 3, y + s / 3, s / 3, s / 3, 4, tint);
     ui_vline(x + s / 2, y + 5, 3, tint);
     ui_vline(x + s / 2, y + s - 8, 3, tint);
     ui_line(x + 5, y + s / 2, 3, tint);
@@ -108,7 +103,7 @@ static void ui_icon_system(int x, int y, int s, uint32_t tint)
 static void ui_icon_settings(int x, int y, int s, uint32_t tint)
 {
     ui_surface(x, y, s, s, 7, UI_SURFACE_2, UI_EDGE);
-    graphics_fill_rounded_rect(x + s / 3, y + s / 3, s / 3, s / 3, 3, tint);
+    graphics_fill_squircle_rect(x + s / 3, y + s / 3, s / 3, s / 3, 3, tint);
     ui_vline(x + s / 2, y + 5, 3, tint);
     ui_vline(x + s / 2, y + s - 8, 3, tint);
     ui_line(x + 5, y + s / 2, 3, tint);
@@ -117,7 +112,7 @@ static void ui_icon_settings(int x, int y, int s, uint32_t tint)
 static void ui_icon_chip(int x, int y, int s, uint32_t tint)
 {
     ui_surface(x, y, s, s, 7, UI_SURFACE_2, UI_EDGE);
-    graphics_fill_rounded_rect(x + 9, y + 9, s - 18, s - 18, 3, tint);
+    graphics_fill_squircle_rect(x + 9, y + 9, s - 18, s - 18, 3, tint);
     for (int i = 0; i < 3; ++i)
     {
         int o = 8 + i * 7;
@@ -130,7 +125,7 @@ static void ui_icon_chip(int x, int y, int s, uint32_t tint)
 static void ui_icon_memory(int x, int y, int s, uint32_t tint)
 {
     ui_surface(x, y, s, s, 7, UI_SURFACE_2, UI_EDGE);
-    graphics_fill_rounded_rect(x + 7, y + s / 3, s - 14, s / 3, 3, tint);
+    graphics_fill_squircle_rect(x + 7, y + s / 3, s - 14, s / 3, 3, tint);
     for (int i = 0; i < 3; ++i)
         graphics_fill_rect(x + 11 + i * 7, y + s / 3 + 3, 3,
                            s / 3 - 6, UI_SURFACE_2);
@@ -446,9 +441,9 @@ void graphics_draw_start_menu_detail(int width, int height)
     int my = height - mh - 8;
     if (mw < 280 || mh < 360) return;
 
-    graphics_fill_rounded_rect(mx + 8, my + 10, mw, mh, 16, 0x0006090F);
+    graphics_fill_squircle_rect(mx + 8, my + 10, mw, mh, 16, 0x0006090F);
     ui_surface(mx, my, mw, mh, 14, UI_SURFACE_0, UI_EDGE);
-    graphics_fill_rounded_rect(mx + 1, my + 1, mw - 2, 54, 13,
+    graphics_fill_squircle_rect(mx + 1, my + 1, mw - 2, 54, 13,
                                UI_SURFACE_1);
     ui_line(mx + 1, my + 53, mw - 2, UI_EDGE_SOFT);
 

@@ -46,9 +46,9 @@ int graphics_files_window_y(void)
 void graphics_draw_panel(int x, int y, int w, int h)
 {
     /* Modern, low-contrast window surface with a restrained blue edge. */
-    graphics_fill_rounded_rect(x + 7, y + 9, w, h, 12, 0x0006090F);
-    graphics_fill_rounded_rect(x, y, w, h, 12, 0x00151B25);
-    graphics_fill_rounded_rect(x, y, w, 46, 12, 0x001D2633);
+    graphics_fill_squircle_rect(x + 7, y + 9, w, h, 12, 0x0006090F);
+    graphics_fill_squircle_rect(x, y, w, h, 12, 0x00151B25);
+    graphics_fill_squircle_rect(x, y, w, 46, 12, 0x001D2633);
     graphics_fill_rect(x + 1, y + 45, w - 2, 1, 0x00293443);
     graphics_fill_rect(x + 18, y + 45, 44, 2, VANTA_UI_ACCENT);
 }
@@ -60,12 +60,12 @@ void graphics_draw_window_frame(int x, int y, int w, int h, const char* title, i
         return;
 
     /* Shared desktop window chrome: one border, one titlebar, one control grid. */
-    graphics_fill_rounded_rect(x + 5, y + 7, w, h, 10, 0x0005080D);
-    graphics_fill_rounded_rect(x, y, w, h, 10, VANTA_UI_SURFACE);
-    graphics_fill_rounded_rect(x + 1, y + 1, w - 2, 45, 9, VANTA_UI_TITLEBAR);
+    graphics_fill_squircle_rect(x + 5, y + 7, w, h, 10, 0x0005080D);
+    graphics_fill_squircle_rect(x, y, w, h, 10, VANTA_UI_SURFACE);
+    graphics_fill_squircle_rect(x + 1, y + 1, w - 2, 45, 9, VANTA_UI_TITLEBAR);
     graphics_fill_rect(x + 1, y + 45, w - 2, 1, VANTA_UI_BORDER);
 
-    graphics_fill_rounded_rect(x + 14, y + 10, 24, 24, 6, 0x00253648);
+    graphics_fill_squircle_rect(x + 14, y + 10, 24, 24, 6, VANTA_UI_ROW);
     graphics_draw_vanta_logo(x + 21, y + 14, 15);
     /* Keep long titles clear of the control hitboxes on narrow windows. */
     char visible_title[32];
@@ -194,12 +194,12 @@ void graphics_draw_taskbar(int taskbar_y, int width)
     graphics_fill_rect(0, taskbar_y + 1, width, 1, VANTA_UI_SURFACE);
 
     /* Start */
-    graphics_fill_rounded_rect(center - 108, taskbar_y + 10, 42, 42, 8,
+    graphics_fill_squircle_rect(center - 108, taskbar_y + 10, 42, 42, 8,
         start_menu_open ? VANTA_UI_HOVER : VANTA_UI_TOPBAR);
     graphics_draw_vanta_logo(center - 97, taskbar_y + 20, 22);
 
     /* Search is styled like a native taskbar affordance; intentionally inert. */
-    graphics_fill_rounded_rect(center - 58, taskbar_y + 10, 66, 42, 9,
+    graphics_fill_squircle_rect(center - 58, taskbar_y + 10, 66, 42, 9,
                                 VANTA_UI_SURFACE);
     graphics_fill_rounded_rect(center - 44, taskbar_y + 21, 12, 12, 6,
                                 VANTA_UI_TEXT_SECONDARY);
@@ -207,20 +207,20 @@ void graphics_draw_taskbar(int taskbar_y, int width)
     graphics_draw_text(center - 26, taskbar_y + 27, "Search", VANTA_UI_TEXT_SECONDARY, 1);
 
     /* File Explorer: folder with a proper tab and body. */
-    graphics_fill_rounded_rect(center + 18, taskbar_y + 10, 42, 42, 8,
+    graphics_fill_squircle_rect(center + 18, taskbar_y + 10, 42, 42, 8,
         active_panel == 2 ? VANTA_UI_HOVER : VANTA_UI_TOPBAR);
-    graphics_fill_rounded_rect(center + 27, taskbar_y + 24, 25, 16, 3,
+    graphics_fill_squircle_rect(center + 27, taskbar_y + 24, 25, 16, 3,
                                 0x00E9B94F);
-    graphics_fill_rounded_rect(center + 28, taskbar_y + 20, 12, 6, 2,
+    graphics_fill_squircle_rect(center + 28, taskbar_y + 20, 12, 6, 2,
                                 0x00F5D77C);
     if (active_panel == 2)
         graphics_fill_rounded_rect(center + 29, taskbar_y + 49, 20, 2, 1,
                                     VANTA_UI_ACCENT);
 
     /* Terminal */
-    graphics_fill_rounded_rect(center + 66, taskbar_y + 10, 42, 42, 8,
+    graphics_fill_squircle_rect(center + 66, taskbar_y + 10, 42, 42, 8,
         active_panel == 3 ? VANTA_UI_HOVER : VANTA_UI_TOPBAR);
-    graphics_fill_rounded_rect(center + 74, taskbar_y + 20, 26, 22, 5,
+    graphics_fill_squircle_rect(center + 74, taskbar_y + 20, 26, 22, 5,
                                 VANTA_UI_TITLEBAR);
     graphics_draw_text(center + 78, taskbar_y + 27, ">_", VANTA_UI_TEXT, 1);
     if (terminal_running)
@@ -236,7 +236,7 @@ void graphics_draw_taskbar(int taskbar_y, int width)
     /* Retained GUI windows get taskbar entries, including minimized windows. */
     gui_server_draw_taskbar_items(taskbar_y + 10, width);
 
-    graphics_fill_rounded_rect(clock_x, taskbar_y + 6, width - clock_x - 8,
+    graphics_fill_squircle_rect(clock_x, taskbar_y + 6, width - clock_x - 8,
                                 52, 8, VANTA_UI_SURFACE);
     graphics_fill_rect(clock_x + 7, taskbar_y + 8, 1, 48, VANTA_UI_BORDER);
     graphics_draw_text(clock_x + 15, taskbar_y + 17, clock, VANTA_UI_TEXT, 1);

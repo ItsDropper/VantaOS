@@ -333,7 +333,9 @@ static inline int vanta_design_text_box(
     const char* text, uint32_t color, uint32_t scale,
     uint32_t horizontal, uint32_t vertical)
 {
-    if (!design || !vanta_design_has_capacity(design, 1U))
+    if (!design || !design->commands ||
+        design->count >= design->capacity ||
+        design->count >= VANTA_GUI_MAX_COMMANDS)
         return 0;
     int32_t x = 0;
     int32_t y = 0;

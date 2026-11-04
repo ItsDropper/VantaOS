@@ -70,8 +70,10 @@ int main(void)
 
     failures += expect(vanta_design_on_color(0x00D97706U) == 0x00101820U,
                        "bright amber uses dark foreground");
-    failures += expect(vanta_design_on_color(0x004B9CFFU) == 0x00FFFFFFU,
-                       "blue accent uses light foreground");
+    failures += expect(vanta_design_on_color(0x004B9CFFU) == 0x00101820U,
+                       "bright blue accent uses dark foreground");
+    failures += expect(vanta_design_on_color(0x00102030U) == 0x00FFFFFFU,
+                       "dark surfaces use light foreground");
 
     size_t before_controls = design.count;
     failures += expect(vanta_design_outline_button(

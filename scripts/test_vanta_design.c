@@ -217,6 +217,20 @@ int main(void)
                        &design, 0, 0, 112, 28, "Cancel",
                        VANTA_DESIGN_STATE_DEFAULT),
                        "outline button appends atomically");
+    {
+        vanta_gui_draw_command_t navigation_commands[3];
+        vanta_design_t navigation;
+        vanta_design_init(&navigation, navigation_commands, 3U, &theme);
+        failures += expect(vanta_design_button(
+                           &navigation, 0, 0, 140, 36, "Accessibility",
+                           VANTA_DESIGN_STATE_SELECTED),
+                           "longest Settings category fits shared control");
+        vanta_design_init(&navigation, navigation_commands, 3U, &theme);
+        failures += expect(!vanta_design_button(
+                           &navigation, 0, 0, 136, 36, "Accessibility",
+                           VANTA_DESIGN_STATE_SELECTED),
+                           "Settings category rejects undersized control");
+    }
     size_t before_narrow = design.count;
     failures += expect(!vanta_design_button(
                        &design, 0, 0, 72, 24, "ABCDEFGHIJ",

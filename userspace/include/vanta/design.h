@@ -150,6 +150,64 @@ static inline int vanta_design_grid_cell(
     return 1;
 }
 
+/*
+ * Divide one axis into weighted tracks. Cumulative integer boundaries make
+ * the final track absorb rounding remainder without gaps or overlaps.
+ * horizontal != 0 selects x/width; zero selects y/height.
+ */
+static inline int vanta_design_weighted_cell(
+    const vanta_design_bounds_t* bounds, const uint32_t* weights,
+    uint32_t count, uint32_t index, int32_t gap, int horizontal,
+    vanta_design_bounds_t* result)
+{
+    if (!bounds || !weights || !result || count == 0U || index >= count ||
+        gap < 0 || bounds->width <= 0 || bounds->height <= 0)
+        return 0;
+
+    int64_t extent = horizontal ? bounds->width : bounds->height;
+    int64_t origin = horizontal ? bounds->x : bounds->y;
+    int64_t gaps = (int64_t)(count - 1U) * gap;
+    if (gaps >= extent)
+        return 0;
+    int64_t usable = extent - gaps;
+    uint64_t total_weight = 0U;
+    uint64_t prefix_weight = 0U;
+    uint64_t track_weight = 0U;
+    for (uint32_t i = 0U; i < count; ++i)
+    {
+        if (weights[i] == 0U ||
+            total_weight > UINT32_MAX - (uint64_t)weights[i])
+            return 0;
+        if (i < index)
+            prefix_weight += weights[i];
+        if (i == index)
+            track_weight = weights[i];
+        total_weight += weights[i];
+    }
+
+    uint64_t start = ((uint64_t)usable * prefix_weight) / total_weight;
+    uint64_t end = ((uint64_t)usable *
+                    (prefix_weight + track_weight)) / total_weight;
+    int64_t position = origin + (int64_t)start + (int64_t)index * gap;
+    int64_t size = (int64_t)(end - start);
+    if (size <= 0 || position < INT32_MIN || position > INT32_MAX ||
+        position + size > INT32_MAX)
+        return 0;
+
+    *result = *bounds;
+    if (horizontal)
+    {
+        result->x = (int32_t)position;
+        result->width = (int32_t)size;
+    }
+    else
+    {
+        result->y = (int32_t)position;
+        result->height = (int32_t)size;
+    }
+    return 1;
+}
+
 static inline void vanta_design_init(vanta_design_t* design,
                                      vanta_gui_draw_command_t* commands,
                                      size_t capacity,

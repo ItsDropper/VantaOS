@@ -71,6 +71,40 @@ int main(void)
         failures += expect(!vanta_design_grid_cell(
                            &source, 102U, 1U, 0U, 0U, 0, 0, &first),
                            "grid rejects zero-width cells");
+        {
+            const uint32_t weights[] = { 1U, 2U, 1U };
+            vanta_design_bounds_t left, center, right;
+            failures += expect(vanta_design_weighted_cell(
+                               &source, weights, 3U, 0U, 5, 1, &left) &&
+                               vanta_design_weighted_cell(
+                               &source, weights, 3U, 1U, 5, 1, &center) &&
+                               vanta_design_weighted_cell(
+                               &source, weights, 3U, 2U, 5, 1, &right),
+                               "weighted row resolves every track");
+            failures += expect(left.width == 22 && center.width == 45 &&
+                               right.width == 24 && left.x == 10 &&
+                               center.x == 37 && right.x == 87 &&
+                               right.x + right.width == 111,
+                               "weighted row preserves ratio and exact remainder");
+            vanta_design_bounds_t top, bottom;
+            failures += expect(vanta_design_weighted_cell(
+                               &source, weights, 2U, 0U, 3, 0, &top) == 0,
+                               "weighted layout rejects a zero-weight track");
+            const uint32_t vertical_weights[] = { 1U, 2U };
+            failures += expect(vanta_design_weighted_cell(
+                               &source, vertical_weights, 2U, 1U,
+                               3, 0, &bottom) &&
+                               bottom.y == 48 && bottom.height == 33 &&
+                               bottom.x == source.x &&
+                               bottom.width == source.width,
+                               "weighted column preserves untouched axis");
+            failures += expect(!vanta_design_weighted_cell(
+                               &source, weights, 3U, 3U, 0, 1, &left),
+                               "weighted layout rejects invalid track index");
+            failures += expect(!vanta_design_weighted_cell(
+                               &source, weights, 3U, 0U, 100, 1, &left),
+                               "weighted layout rejects exhausted gap space");
+        }
         vanta_design_bounds_t extreme = {
             .x = INT32_MAX - 4, .y = 0, .width = 8, .height = 20
         };

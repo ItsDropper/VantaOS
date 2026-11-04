@@ -49,6 +49,101 @@ typedef struct
     vanta_theme_t theme;
 } vanta_design_t;
 
+typedef struct
+{
+    int32_t x;
+    int32_t y;
+    int32_t width;
+    int32_t height;
+} vanta_design_bounds_t;
+
+/* Apply symmetric padding without producing negative or overflowing bounds. */
+static inline int vanta_design_inset_bounds(
+    const vanta_design_bounds_t* bounds, int32_t padding,
+    vanta_design_bounds_t* result)
+{
+    if (!bounds || !result || bounds->width <= 0 || bounds->height <= 0 ||
+        padding < 0)
+        return 0;
+    int64_t doubled = (int64_t)padding * 2;
+    int64_t x = (int64_t)bounds->x + padding;
+    int64_t y = (int64_t)bounds->y + padding;
+    int64_t width = (int64_t)bounds->width - doubled;
+    int64_t height = (int64_t)bounds->height - doubled;
+    if (width <= 0 || height <= 0 ||
+        x < INT32_MIN || x > INT32_MAX ||
+        y < INT32_MIN || y > INT32_MAX)
+        return 0;
+    *result = (vanta_design_bounds_t){
+        .x = (int32_t)x, .y = (int32_t)y,
+        .width = (int32_t)width, .height = (int32_t)height
+    };
+    return 1;
+}
+
+/*
+ * Divide a rectangle into a gap-separated grid. Remainder pixels are assigned
+ * to the earliest columns/rows, so every cell is deterministic and the last
+ * cell always remains inside the original bounds.
+ */
+static inline int vanta_design_grid_cell(
+    const vanta_design_bounds_t* bounds,
+    uint32_t columns, uint32_t rows,
+    uint32_t column, uint32_t row,
+    int32_t gap_x, int32_t gap_y,
+    vanta_design_bounds_t* result)
+{
+    if (!bounds || !result || bounds->width <= 0 || bounds->height <= 0 ||
+        columns == 0U || rows == 0U ||
+        column >= columns || row >= rows || gap_x < 0 || gap_y < 0)
+        return 0;
+
+    int64_t width = bounds->width;
+    int64_t height = bounds->height;
+    int64_t horizontal_gaps = 0;
+    int64_t vertical_gaps = 0;
+    if (columns > 1U)
+    {
+        if ((int64_t)gap_x > (width - 1) / (int64_t)(columns - 1U))
+            return 0;
+        horizontal_gaps = (int64_t)(columns - 1U) * gap_x;
+    }
+    if (rows > 1U)
+    {
+        if ((int64_t)gap_y > (height - 1) / (int64_t)(rows - 1U))
+            return 0;
+        vertical_gaps = (int64_t)(rows - 1U) * gap_y;
+    }
+
+    int64_t usable_width = width - horizontal_gaps;
+    int64_t usable_height = height - vertical_gaps;
+    int64_t base_width = usable_width / columns;
+    int64_t base_height = usable_height / rows;
+    int64_t extra_width = usable_width % columns;
+    int64_t extra_height = usable_height % rows;
+    int64_t cell_width = base_width + (column < (uint32_t)extra_width);
+    int64_t cell_height = base_height + (row < (uint32_t)extra_height);
+    int64_t x_offset = (int64_t)column * base_width +
+        (column < (uint32_t)extra_width ? column : extra_width) +
+        (int64_t)column * gap_x;
+    int64_t y_offset = (int64_t)row * base_height +
+        (row < (uint32_t)extra_height ? row : extra_height) +
+        (int64_t)row * gap_y;
+    int64_t x = (int64_t)bounds->x + x_offset;
+    int64_t y = (int64_t)bounds->y + y_offset;
+    if (cell_width <= 0 || cell_height <= 0 ||
+        x < INT32_MIN || x > INT32_MAX ||
+        y < INT32_MIN || y > INT32_MAX)
+        return 0;
+
+    *result = (vanta_design_bounds_t){
+        .x = (int32_t)x, .y = (int32_t)y,
+        .width = (int32_t)cell_width,
+        .height = (int32_t)cell_height
+    };
+    return 1;
+}
+
 static inline void vanta_design_init(vanta_design_t* design,
                                      vanta_gui_draw_command_t* commands,
                                      size_t capacity,

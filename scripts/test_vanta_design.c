@@ -32,6 +32,46 @@ int main(void)
                        "radius clamps to half the smaller dimension");
     failures += expect(vanta_design_radius(100, 80, 40U) == 32U,
                        "radius has a bounded raster cost");
+    {
+        vanta_design_bounds_t source = {
+            .x = 10, .y = 20, .width = 101, .height = 61
+        };
+        vanta_design_bounds_t inset;
+        failures += expect(vanta_design_inset_bounds(&source, 4, &inset),
+                           "inset helper accepts valid padding");
+        failures += expect(inset.x == 14 && inset.y == 24 &&
+                           inset.width == 93 && inset.height == 53,
+                           "inset helper returns exact inner bounds");
+        failures += expect(!vanta_design_inset_bounds(&source, 31, &inset),
+                           "inset helper rejects empty inner bounds");
+
+        vanta_design_bounds_t first, middle, last;
+        failures += expect(vanta_design_grid_cell(
+                           &source, 3U, 2U, 0U, 0U, 4, 2, &first),
+                           "grid helper computes first cell");
+        failures += expect(vanta_design_grid_cell(
+                           &source, 3U, 2U, 1U, 0U, 4, 2, &middle),
+                           "grid helper computes middle cell");
+        failures += expect(vanta_design_grid_cell(
+                           &source, 3U, 2U, 2U, 1U, 4, 2, &last),
+                           "grid helper computes last cell");
+        failures += expect(first.width == 31 && middle.width == 31 &&
+                           last.width == 31 &&
+                           first.height == 30 && last.height == 29,
+                           "grid distributes remainders deterministically");
+        failures += expect(first.x == 10 && middle.x == 45 &&
+                           last.x == 80 && last.y + last.height == 81,
+                           "grid cell positions and final bounds are exact");
+        failures += expect(!vanta_design_grid_cell(
+                           &source, 0U, 1U, 0U, 0U, 0, 0, &first),
+                           "grid rejects zero columns");
+        failures += expect(!vanta_design_grid_cell(
+                           &source, 20U, 1U, 0U, 0U, 6, 0, &first),
+                           "grid rejects gaps that leave no cell width");
+        failures += expect(!vanta_design_grid_cell(
+                           &source, 2U, 2U, 2U, 0U, 0, 0, &first),
+                           "grid rejects out-of-range cell indices");
+    }
     failures += expect(vanta_design_radius(4, 4, 10U) == 1U,
                        "radius avoids overlapping corners on tiny surfaces");
 

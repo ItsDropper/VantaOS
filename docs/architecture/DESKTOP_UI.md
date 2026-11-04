@@ -100,3 +100,8 @@ Visual components do not implement input behavior. Each application remains resp
 The kernel desktop theme now exposes semantic roles for subtle borders, selected surfaces and warning indicators in addition to its existing surface/text/accent roles. Built-in window chrome, desktop cards, taskbar tiles and kernel-rendered page components resolve these roles from the same persisted settings as ring-3 applications. Both layers use the exponent-4 squircle rasterizer for rectangular interface surfaces; purely circular indicators and decorative wallpaper remain circular.
 
 Accent swatches are tuned as interface colors rather than merely decorative hues. The userspace theme, Settings preview and kernel theme use the same blue, teal, amber and violet values. The VDS contrast helper compares the actual contrast ratio of its supported foreground colors; kernel status and selection roles remain distinct from the primary accent role so borders, fills and text do not silently reuse one color for every purpose.
+
+
+## VDS deterministic layout primitives
+
+The header-only design library exposes inset bounds and equal-cell grids. Grid division uses integer arithmetic and distributes remainder pixels to the first rows/columns, avoiding fractional coordinates and cumulative rounding drift. Invalid dimensions, negative gaps, oversized gaps and out-of-range cells are rejected instead of returning partially valid geometry. Text measurement follows the kernel GUI ABI's conservative 8-pixel glyph advance and 16-pixel base line bound, not the narrower visible glyph advance.

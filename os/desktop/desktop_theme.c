@@ -104,9 +104,9 @@ uint32_t desktop_theme_color(unsigned int role)
     if (!theme_initialized)
         (void)desktop_theme_reload();
 
-    uint32_t accent = theme_accent == 1U ? 0x0014B8A6U :
-        theme_accent == 2U ? 0x00D97706U :
-        theme_accent == 3U ? 0x00936CF0U : 0x004B9CFFU;
+    uint32_t accent = theme_accent == 1U ? 0x000D9488U :
+        theme_accent == 2U ? 0x00C56A05U :
+        theme_accent == 3U ? 0x00936CF0U : 0x003B82F6U;
 
     if (theme_contrast)
     {
@@ -121,6 +121,9 @@ uint32_t desktop_theme_color(unsigned int role)
             case VANTA_UI_ROLE_HOVER:
                 return theme_light ? 0x00FFFFFFU : 0x00000000U;
             case VANTA_UI_ROLE_BORDER: return theme_light ? 0x00000000U : 0x00FFFFFFU;
+            case VANTA_UI_ROLE_BORDER_SUBTLE: return theme_light ? 0x00000000U : 0x00FFFFFFU;
+            case VANTA_UI_ROLE_SELECTION: return theme_light ? 0x00CDE4FFU : 0x00143A5CU;
+            case VANTA_UI_ROLE_WARNING: return theme_light ? 0x00704000U : 0x00FFFF00U;
             case VANTA_UI_ROLE_TEXT: return theme_light ? 0x00000000U : 0x00FFFFFFU;
             case VANTA_UI_ROLE_TEXT_SECONDARY: return theme_light ? 0x00000000U : 0x00FFFFFFU;
             case VANTA_UI_ROLE_ACCENT: return accent;
@@ -142,10 +145,13 @@ uint32_t desktop_theme_color(unsigned int role)
             case VANTA_UI_ROLE_ROW: return 0x00E8EEF5U;
             case VANTA_UI_ROLE_HOVER: return 0x00DCE6F1U;
             case VANTA_UI_ROLE_BORDER: return 0x00C4CFDCU;
+            case VANTA_UI_ROLE_BORDER_SUBTLE: return 0x00D8E0E9U;
+            case VANTA_UI_ROLE_SELECTION: return 0x00DCEBFAU;
+            case VANTA_UI_ROLE_WARNING: return 0x008A4B00U;
             case VANTA_UI_ROLE_TEXT: return 0x00182735U;
             case VANTA_UI_ROLE_TEXT_SECONDARY: return 0x00556678U;
             case VANTA_UI_ROLE_ACCENT: return accent;
-            case VANTA_UI_ROLE_SUCCESS: return 0x002A8C60U;
+            case VANTA_UI_ROLE_SUCCESS: return 0x0021794FU;
             case VANTA_UI_ROLE_DANGER: return 0x00B83C49U;
             default: return 0x00FFFFFFU;
         }
@@ -161,6 +167,9 @@ uint32_t desktop_theme_color(unsigned int role)
         case VANTA_UI_ROLE_ROW: return 0x001D2835U;
         case VANTA_UI_ROLE_HOVER: return 0x00232F3DU;
         case VANTA_UI_ROLE_BORDER: return 0x002A3746U;
+        case VANTA_UI_ROLE_BORDER_SUBTLE: return 0x00233140U;
+        case VANTA_UI_ROLE_SELECTION: return 0x00253D56U;
+        case VANTA_UI_ROLE_WARNING: return 0x00E6BD78U;
         case VANTA_UI_ROLE_TEXT: return 0x00E8EDF4U;
         case VANTA_UI_ROLE_TEXT_SECONDARY: return 0x008D9BACU;
         case VANTA_UI_ROLE_ACCENT: return accent;

@@ -69,10 +69,10 @@ static inline vanta_theme_t vanta_theme_load(void)
 
 static inline uint32_t vanta_theme_accent_color(const vanta_theme_t* theme)
 {
-    if (theme && theme->accent == 1U) return 0x0014B8A6U;
-    if (theme && theme->accent == 2U) return 0x00D97706U;
+    if (theme && theme->accent == 1U) return 0x000D9488U;
+    if (theme && theme->accent == 2U) return 0x00C56A05U;
     if (theme && theme->accent == 3U) return 0x00936CF0U;
-    return 0x004B9CFFU;
+    return 0x003B82F6U;
 }
 
 static inline uint32_t vanta_theme_text_color(const vanta_theme_t* theme)

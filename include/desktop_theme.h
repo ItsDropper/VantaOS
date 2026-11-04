@@ -24,6 +24,9 @@
 #define VANTA_UI_ROLE_ACCENT         10U
 #define VANTA_UI_ROLE_SUCCESS        11U
 #define VANTA_UI_ROLE_DANGER         12U
+#define VANTA_UI_ROLE_BORDER_SUBTLE  13U
+#define VANTA_UI_ROLE_WARNING        14U
+#define VANTA_UI_ROLE_SELECTION      15U
 
 uint32_t desktop_theme_color(unsigned int role);
 int desktop_theme_compact_rows(void);
@@ -42,5 +45,8 @@ int desktop_theme_reload(void);
 #define VANTA_UI_ACCENT         desktop_theme_color(VANTA_UI_ROLE_ACCENT)
 #define VANTA_UI_SUCCESS        desktop_theme_color(VANTA_UI_ROLE_SUCCESS)
 #define VANTA_UI_DANGER         desktop_theme_color(VANTA_UI_ROLE_DANGER)
+#define VANTA_UI_BORDER_SUBTLE  desktop_theme_color(VANTA_UI_ROLE_BORDER_SUBTLE)
+#define VANTA_UI_WARNING        desktop_theme_color(VANTA_UI_ROLE_WARNING)
+#define VANTA_UI_SELECTION      desktop_theme_color(VANTA_UI_ROLE_SELECTION)
 
 #endif

@@ -54,7 +54,7 @@ int main(void)
                        VANTA_GUI_DRAW_TEXT,
                        "button label is emitted as text");
 
-    failures += expect(vanta_design_accent_color(&design) == 0x0014B8A6U,
+    failures += expect(vanta_design_accent_color(&design) == 0x000D9488U,
                        "theme accent resolves through shared tokens");
     failures += expect(!vanta_design_squircle_rect(
                        &design, 0, 0, 0, 10, 4U, 0U),
@@ -81,7 +81,7 @@ int main(void)
     failures += expect(vanta_design_on_color(0x00102030U) == 0x00FFFFFFU,
                        "dark surfaces use light foreground");
     const uint32_t accent_swatches[] = {
-        0x004B9CFFU, 0x0014B8A6U, 0x00D97706U, 0x00936CF0U,
+        0x003B82F6U, 0x000D9488U, 0x00C56A05U, 0x00936CF0U,
         0x0022C55EU, 0x00EF4444U
     };
     for (size_t i = 0U; i < sizeof(accent_swatches) /

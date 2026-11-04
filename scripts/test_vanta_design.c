@@ -80,6 +80,39 @@ int main(void)
                        "blue accent selects the stronger foreground");
     failures += expect(vanta_design_on_color(0x00102030U) == 0x00FFFFFFU,
                        "dark surfaces use light foreground");
+
+    {
+        vanta_theme_t light_theme = {
+            .accent = 0U, .light = 1, .contrast = 0, .compact = 0
+        };
+        vanta_theme_t high_contrast_theme = {
+            .accent = 0U, .light = 1, .contrast = 1, .compact = 0
+        };
+        design.theme = light_theme;
+        uint32_t light_success = vanta_design_success_color(&design);
+        uint32_t light_warning = vanta_design_warning_color(&design);
+        uint32_t light_danger = vanta_design_danger_color(&design);
+        failures += expect(vanta_design_contrast_ratio_milli(
+                           vanta_design_on_color(light_success),
+                           light_success) >= 4500U,
+                           "light success badge has readable foreground");
+        failures += expect(vanta_design_contrast_ratio_milli(
+                           vanta_design_on_color(light_warning),
+                           light_warning) >= 4500U,
+                           "light warning badge has readable foreground");
+        failures += expect(vanta_design_contrast_ratio_milli(
+                           vanta_design_on_color(light_danger),
+                           light_danger) >= 4500U,
+                           "light danger badge has readable foreground");
+        design.theme = high_contrast_theme;
+        failures += expect(vanta_design_success_color(&design) !=
+                           light_success &&
+                           vanta_design_warning_color(&design) !=
+                           light_warning &&
+                           vanta_design_danger_color(&design) !=
+                           light_danger,
+                           "high contrast theme changes semantic status colors");
+    }
     const uint32_t accent_swatches[] = {
         0x003B82F6U, 0x000D9488U, 0x00C56A05U, 0x00936CF0U,
         0x0022C55EU, 0x00EF4444U
@@ -143,7 +176,7 @@ int main(void)
                        VANTA_DESIGN_STATE_SUCCESS),
                        "success badge uses semantic success color");
     failures += expect(commands[design.count - 2U].color ==
-                       vanta_design_success_color(),
+                       vanta_design_success_color(&design),
                        "success badge color token");
     failures += expect(vanta_design_badge(
                        &design, 0, 0, "Pending",

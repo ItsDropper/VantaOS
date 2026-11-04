@@ -157,7 +157,7 @@ static inline uint32_t vanta_design_surface_color(const vanta_design_t* design)
 
 static inline uint32_t vanta_design_border_color(const vanta_design_t* design)
 {
-    return vanta_theme_border_color(design ? &design->theme : 0);
+    return vanta_theme_border_subtle_color(design ? &design->theme : 0);
 }
 
 static inline uint32_t vanta_design_accent_color(const vanta_design_t* design)
@@ -174,7 +174,7 @@ static inline int vanta_design_panel(vanta_design_t* design,
         design->capacity - design->count < 2U ||
         design->count > VANTA_GUI_MAX_COMMANDS - 2U)
         return 0;
-    uint32_t border = vanta_design_border_color(design);
+    uint32_t border = vanta_theme_border_subtle_color(&design->theme);
     uint32_t surface = vanta_design_surface_color(design);
     if (!vanta_design_squircle_rect(design, x, y, width, height,
                                  VANTA_DESIGN_RADIUS_SURFACE, border))
@@ -187,19 +187,22 @@ static inline int vanta_design_panel(vanta_design_t* design,
                                    surface);
 }
 
-static inline uint32_t vanta_design_success_color(void)
+static inline uint32_t vanta_design_success_color(
+    const vanta_design_t* design)
 {
-    return 0x0022C55EU;
+    return vanta_theme_success_color(design ? &design->theme : 0);
 }
 
-static inline uint32_t vanta_design_warning_color(void)
+static inline uint32_t vanta_design_warning_color(
+    const vanta_design_t* design)
 {
-    return 0x00D97706U;
+    return vanta_theme_warning_color(design ? &design->theme : 0);
 }
 
-static inline uint32_t vanta_design_danger_color(void)
+static inline uint32_t vanta_design_danger_color(
+    const vanta_design_t* design)
 {
-    return 0x00EF4444U;
+    return vanta_theme_danger_color(design ? &design->theme : 0);
 }
 
 static inline int vanta_design_has_capacity(const vanta_design_t* design,
@@ -246,7 +249,7 @@ static inline int vanta_design_button_impl(vanta_design_t* design,
         else if (state == VANTA_DESIGN_STATE_DANGER)
         {
             /* Danger remains an outline treatment, not red-on-surface text. */
-            border = vanta_design_danger_color();
+            border = vanta_design_danger_color(design);
         }
         else if (state != VANTA_DESIGN_STATE_DEFAULT)
             return 0;
@@ -343,12 +346,12 @@ static inline int vanta_design_badge(vanta_design_t* design,
     }
     else if (state == VANTA_DESIGN_STATE_SUCCESS)
     {
-        fill = vanta_design_success_color();
+        fill = vanta_design_success_color(design);
         foreground = vanta_design_on_color(fill);
     }
     else if (state == VANTA_DESIGN_STATE_WARNING)
     {
-        fill = vanta_design_warning_color();
+        fill = vanta_design_warning_color(design);
         foreground = vanta_design_on_color(fill);
     }
     else if (state == VANTA_DESIGN_STATE_DISABLED)

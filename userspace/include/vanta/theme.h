@@ -110,4 +110,40 @@ static inline uint32_t vanta_theme_border_color(const vanta_theme_t* theme)
     return theme && theme->light ? 0x00C4CFDCU : 0x002A3746U;
 }
 
+static inline uint32_t vanta_theme_border_subtle_color(
+    const vanta_theme_t* theme)
+{
+    if (theme && theme->contrast)
+        return vanta_theme_border_color(theme);
+    return theme && theme->light ? 0x00D8E0E9U : 0x00233140U;
+}
+
+static inline uint32_t vanta_theme_selection_color(const vanta_theme_t* theme)
+{
+    if (theme && theme->contrast)
+        return theme->light ? 0x00CDE4FFU : 0x00143A5CU;
+    return theme && theme->light ? 0x00DCEBFAU : 0x00253D56U;
+}
+
+static inline uint32_t vanta_theme_success_color(const vanta_theme_t* theme)
+{
+    if (theme && theme->contrast)
+        return theme->light ? 0x00006000U : 0x0000FF66U;
+    return theme && theme->light ? 0x001B743EU : 0x0057B77EU;
+}
+
+static inline uint32_t vanta_theme_warning_color(const vanta_theme_t* theme)
+{
+    if (theme && theme->contrast)
+        return theme->light ? 0x00704000U : 0x00FFFF00U;
+    return theme && theme->light ? 0x008A4B00U : 0x00E6BD78U;
+}
+
+static inline uint32_t vanta_theme_danger_color(const vanta_theme_t* theme)
+{
+    if (theme && theme->contrast)
+        return theme->light ? 0x00C00000U : 0x00FF6B6BU;
+    return theme && theme->light ? 0x00B83C49U : 0x00D56A70U;
+}
+
 #endif

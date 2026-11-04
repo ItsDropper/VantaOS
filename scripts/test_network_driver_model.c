@@ -129,7 +129,7 @@ int main(void)
     failed_remove_pci.core.name[1] = 'e';
     failed_remove_pci.core.name[2] = 't';
     failed_remove_pci.core.name[3] = '1';
-    failed_remove_pci.core.name[4] = '\\0';
+    failed_remove_pci.core.name[4] = '\0';
 
     assert(device_register(&test_pci.core));
     assert(device_register(&failed_remove_pci.core));

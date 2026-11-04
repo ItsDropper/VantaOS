@@ -77,6 +77,19 @@ static void add_text(int32_t x, int32_t y, const char *text, uint32_t color)
         command_count = (uint32_t)design.count;
 }
 
+static void add_text_box(int32_t x, int32_t y, int32_t width, int32_t height,
+                         const char *text, uint32_t color,
+                         uint32_t horizontal, uint32_t vertical)
+{
+    const vanta_design_bounds_t bounds = {
+        .x = x, .y = y, .width = width, .height = height
+    };
+    design.count = command_count;
+    if (vanta_design_text_box(&design, &bounds, text, color, 1U,
+                              horizontal, vertical))
+        command_count = (uint32_t)design.count;
+}
+
 static void visible_expression(char output[58])
 {
     size_t length = text_length(expression);
@@ -264,10 +277,13 @@ static void render(void)
     add_text(26, 62, expression_length ? display_expression : "0",
              vanta_theme_text_color(&theme));
     add_text(20, 100, "RESULT", vanta_theme_muted_color(&theme));
-    add_text(20, 120, result_text, vanta_theme_text_color(&theme));
+    add_text_box(20, 116, 468, 20, result_text,
+                 vanta_theme_text_color(&theme),
+                 VANTA_DESIGN_ALIGN_START, VANTA_DESIGN_ALIGN_CENTER);
     add_rect(16, 148, 472, 1, vanta_theme_border_color(&theme));
-    add_text(20, 158, status_text, status_color ? status_color :
-             vanta_theme_muted_color(&theme));
+    add_text_box(20, 154, 468, 20, status_text,
+                 status_color ? status_color : vanta_theme_muted_color(&theme),
+                 VANTA_DESIGN_ALIGN_START, VANTA_DESIGN_ALIGN_CENTER);
     add_text(20, 180, "Enter: calculate   Backspace: edit   Esc: clear",
              vanta_theme_muted_color(&theme));
     add_text(20, 198, "Keys: + - * / % ( ) and digits | Ctrl+A clears",

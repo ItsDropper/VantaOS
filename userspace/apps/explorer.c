@@ -1491,8 +1491,9 @@ static void render(void)
         char display_name[VANTA_GUI_TEXT_MAX + 1U];
         size_t name_length = text_length(entries[index]);
         size_t shown = name_length > 52U ? 52U : name_length;
+        size_t start = name_length - shown;
         for (size_t j = 0U; j < shown; ++j)
-            display_name[j] = entries[index][j];
+            display_name[j] = entries[index][start + j];
         display_name[shown] = '\0';
         add_text_box(164, y - 2, 428, 20, display_name, COLOR_TEXT);
         add_text_box(600, y - 2, 128, 20,

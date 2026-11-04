@@ -38,8 +38,8 @@ static vanta_design_t design;
 #define COLOR_ROW vanta_theme_row_color(&current_theme)
 #define COLOR_ACCENT vanta_theme_accent_color(&current_theme)
 #define COLOR_BORDER vanta_theme_border_color(&current_theme)
-#define COLOR_SELECTED (current_theme.light ? 0x00DCEBFAU : 0x00253D56U)
-#define COLOR_ERROR (current_theme.light ? 0x00B83C49U : 0x00F87171U)
+#define COLOR_SELECTED vanta_theme_selection_color(&current_theme)
+#define COLOR_ERROR vanta_theme_danger_color(&current_theme)
 
 static char current_path[PATH_CAPACITY] = "/";
 static char list_buffer[LIST_CAPACITY];
@@ -1852,7 +1852,7 @@ int main(int argc, char** argv)
         vanta_exit(3);
     window_id = (uint32_t)created;
     current_theme = vanta_theme_load();
-    status_color = COLOR_MUTED;
+    status_color = vanta_theme_muted_color(&current_theme);
     (void)load_directory();
     render();
 
@@ -1872,6 +1872,7 @@ int main(int argc, char** argv)
         if (event.type == VANTA_GUI_EVENT_THEME_CHANGED)
         {
             current_theme = vanta_theme_load();
+            status_color = vanta_theme_muted_color(&current_theme);
             render();
             continue;
         }

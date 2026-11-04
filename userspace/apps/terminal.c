@@ -24,6 +24,8 @@
 
 static vanta_theme_t current_theme;
 static vanta_design_t design;
+#define COLOR_SELECTION vanta_theme_selection_color(&current_theme)
+#define COLOR_SELECTION_TEXT vanta_design_on_color(COLOR_SELECTION)
 #define COLOR_TEXT vanta_theme_text_color(&current_theme)
 #define COLOR_MUTED vanta_theme_muted_color(&current_theme)
 #define COLOR_SURFACE vanta_theme_surface_color(&current_theme)
@@ -260,7 +262,7 @@ static void render_line_with_selection(size_t logical_line, int y)
     if (selected_end > begin)
         render_add_squircle(16 + (int32_t)begin * 8, y,
                             (int32_t)(selected_end - begin) * 8, 16,
-                            VANTA_DESIGN_RADIUS_SMALL, 0x003B82F6U);
+                            VANTA_DESIGN_RADIUS_SMALL, COLOR_SELECTION);
     if (begin > 0U)
     {
         char part[OUTPUT_COLUMNS];
@@ -274,7 +276,7 @@ static void render_line_with_selection(size_t logical_line, int y)
         size_t count = end - begin;
         for (size_t i = 0U; i < count; ++i) part[i] = text[begin + i];
         part[count] = '\0';
-        render_add_text(16 + (int32_t)begin * 8, y, part, 0x00FFFFFFU);
+        render_add_text(16 + (int32_t)begin * 8, y, part, COLOR_SELECTION_TEXT);
     }
     if (length > end)
         render_add_text(16 + (int32_t)end * 8, y, text + end, COLOR_TEXT);

@@ -12,8 +12,8 @@
 #include <stddef.h>
 
 #define INPUT_CAPACITY 64U
-#define COLOR_ERROR 0x00F87171U
-#define COLOR_SUCCESS 0x0022C55EU
+#define COLOR_ERROR vanta_theme_danger_color(&theme)
+#define COLOR_SUCCESS vanta_theme_success_color(&theme)
 
 static char expression[INPUT_CAPACITY];
 static size_t expression_length;
@@ -308,6 +308,7 @@ int main(int argc, char **argv)
         if (event.type == VANTA_GUI_EVENT_THEME_CHANGED)
         {
             theme = vanta_theme_load();
+            status_color = vanta_theme_muted_color(&theme);
             render();
             continue;
         }

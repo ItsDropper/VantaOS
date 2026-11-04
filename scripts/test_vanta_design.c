@@ -124,6 +124,24 @@ int main(void)
         failures += expect(vanta_design_contrast_ratio_milli(
                            foreground, accent_swatches[i]) >= 4500U,
                            "accent foreground reaches at least 4.5:1 contrast");
+    {
+        vanta_theme_t selection_themes[] = {
+            { .accent = 0U, .light = 0, .contrast = 0, .compact = 0 },
+            { .accent = 0U, .light = 1, .contrast = 0, .compact = 0 },
+            { .accent = 0U, .light = 0, .contrast = 1, .compact = 0 },
+            { .accent = 0U, .light = 1, .contrast = 1, .compact = 0 }
+        };
+        for (size_t i = 0U; i < sizeof(selection_themes) /
+             sizeof(selection_themes[0]); ++i)
+        {
+            design.theme = selection_themes[i];
+            uint32_t selection = vanta_theme_selection_color(&design.theme);
+            uint32_t foreground = vanta_design_on_color(selection);
+            failures += expect(vanta_design_contrast_ratio_milli(
+                               foreground, selection) >= 4500U,
+                               "selection text meets contrast in every theme");
+        }
+    }
         uint32_t dark_ratio = vanta_design_contrast_ratio_milli(
             0x00101820U, accent_swatches[i]);
         uint32_t light_ratio = vanta_design_contrast_ratio_milli(

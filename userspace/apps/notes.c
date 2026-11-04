@@ -15,10 +15,10 @@
 #define VISIBLE_ROWS 15U
 #define WINDOW_WIDTH 760U
 #define WINDOW_HEIGHT 460U
-#define COLOR_SELECTED 0x003B82F6U
-#define COLOR_WHITE 0x00FFFFFFU
-#define COLOR_ERROR 0x00F87171U
-#define COLOR_SUCCESS 0x0022C55EU
+#define COLOR_SELECTED vanta_theme_selection_color(&theme)
+#define COLOR_SELECTED_TEXT vanta_design_on_color(COLOR_SELECTED)
+#define COLOR_ERROR vanta_theme_danger_color(&theme)
+#define COLOR_SUCCESS vanta_theme_success_color(&theme)
 
 static char document_path[256] = DEFAULT_NOTES_PATH;
 static int document_writable = 1;
@@ -246,7 +246,7 @@ static void render(void)
                 add_rect(16 + (int32_t)(segment - start) * 8, y - 1,
                          (int32_t)count * 8, 17, COLOR_SELECTED);
             add_text(16 + (int32_t)(segment - start) * 8, y, run,
-                     selected ? COLOR_WHITE : vanta_theme_text_color(&theme));
+                     selected ? COLOR_SELECTED_TEXT : vanta_theme_text_color(&theme));
             segment = run_end;
         }
         if (cursor >= start && cursor <= end)
@@ -568,6 +568,7 @@ static void close_app(void)
 int main(int argc, char** argv)
 {
     theme = vanta_theme_load();
+    status_color = vanta_theme_muted_color(&theme);
     if (argc > 1 && argv && argv[1] && argv[1][0] == '/')
     {
         size_t length = text_length(argv[1]);
@@ -713,6 +714,7 @@ int main(int argc, char** argv)
         if (event.type == VANTA_GUI_EVENT_THEME_CHANGED)
         {
             theme = vanta_theme_load();
+            status_color = vanta_theme_muted_color(&theme);
             render();
             continue;
         }

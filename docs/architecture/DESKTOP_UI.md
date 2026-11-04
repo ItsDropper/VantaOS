@@ -65,3 +65,20 @@ A click raises the topmost window under the pointer. The three titlebar controls
 Rendering snapshots and taskbar labels are copied under the GUI lock, then painted after releasing it. Built-in callbacks also run outside the input/window lock. The software compositor remains the display backend until NVX execution and presentation are verified.
 
 Remaining architectural work is explicit: the manager uses a bounded draw-command ABI instead of per-window pixel surfaces; alpha composition, per-window damage tracking, modal/transient relationships, workspaces, and a separate userspace window server are not implemented. This is not yet a Wayland/X11 replacement, but there is no separate legacy window-chrome path for the four built-in desktop applications.
+
+
+## Vanta Design System (VDS)
+
+Ring-3 applications should prefer `userspace/include/vanta/design.h` over local color and geometry constants. VDS centralizes spacing, corner-radius tiers, semantic theme colors, bounded draw-list construction, panels, and button visual states. It does not own input dispatch: applications must continue pairing visual controls with their own event/hitbox logic.
+
+The GUI draw ABI includes a rounded-rectangle command. Its corner radius is carried in the existing `scale` field for that command type, preserving the command structure layout and ABI version. The kernel validates dimensions, radius, and client bounds before rasterizing. The current renderer uses circular corner masks, so the design language is intentionally described as squircle-inspired rather than claiming exact continuous-superellipse geometry.
+
+Use a restrained hierarchy:
+- 4 px base spacing rhythm, composed into 8/12/16/24/32 px steps.
+- 4/6/10/14 px corner-radius tiers for compact controls, controls, surfaces, and dialogs.
+- Semantic theme colors instead of app-local palette duplication.
+- Accent color for selected/actionable states, not decoration.
+- Visible borders only where they improve grouping or control affordance.
+- Keep text scale within the existing 1–2x bitmap-font contract.
+
+VDS helpers only append validated-shape commands to an application-owned bounded buffer; the kernel remains authoritative for final validation and rendering. No alpha blending, blur, shadows, font metrics, or accessibility tree is implied by this API.

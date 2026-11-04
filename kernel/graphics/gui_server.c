@@ -286,6 +286,21 @@ static int gui_command_valid(const vanta_gui_draw_command_t* command,
         return 1;
     }
 
+    if (command->type == VANTA_GUI_DRAW_FILL_ROUNDED_RECT)
+    {
+        if (command->width <= 0 || command->height <= 0 ||
+            command->scale > 32U)
+            return 0;
+        int32_t max_radius = command->width < command->height ?
+            command->width / 2 : command->height / 2;
+        if ((int32_t)command->scale > max_radius)
+            return 0;
+        if ((int64_t)command->x + command->width > client_width ||
+            (int64_t)command->y + command->height > client_height)
+            return 0;
+        return 1;
+    }
+
     if (command->type == VANTA_GUI_DRAW_TEXT)
     {
         if (command->scale < 1U || command->scale > 2U)
@@ -678,7 +693,14 @@ void gui_server_draw_windows(void)
             const vanta_gui_draw_command_t* command = &window->commands[j];
             int cx = x + GUI_CLIENT_INSET_X + command->x;
             int cy = y + GUI_CLIENT_INSET_Y + command->y;
-            if (command->type == VANTA_GUI_DRAW_FILL_RECT)
+            if (command->type == VANTA_GUI_DRAW_FILL_ROUNDED_RECT &&
+                gui_command_valid(command, width, height))
+            {
+                graphics_fill_rounded_rect(cx, cy, command->width,
+                    command->height, (int)command->scale,
+                    command->color & 0x00FFFFFFU);
+            }
+            else if (command->type == VANTA_GUI_DRAW_FILL_RECT)
             {
                 int max_w = (int)width - 2 * GUI_CLIENT_INSET_X;
                 int max_h = (int)height - GUI_CLIENT_INSET_Y - 8;

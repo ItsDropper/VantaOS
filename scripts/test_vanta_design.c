@@ -108,9 +108,9 @@ int main(void)
     failures += expect(vanta_design_separator(&design, 0, 0, 40),
                        "separator uses semantic border color");
 
-    vanta_gui_draw_command_t tiny_commands[2];
+    vanta_gui_draw_command_t tiny_commands[1];
     vanta_design_t tiny;
-    vanta_design_init(&tiny, tiny_commands, 2U, &theme);
+    vanta_design_init(&tiny, tiny_commands, 1U, &theme);
     failures += expect(!vanta_design_button(
                        &tiny, 0, 0, 100, 24, "OK",
                        VANTA_DESIGN_STATE_DEFAULT),

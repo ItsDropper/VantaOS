@@ -110,6 +110,12 @@ jobs:
       - name: Test built-in GUI app client-area layouts
         run: python3 scripts/test_user_gui_app_layout.py
 
+      - name: Test Vanta Design System draw-list and geometry helpers
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude -Iuserspace/include \
+            scripts/test_vanta_design.c -o /tmp/vantaos-design-test
+          /tmp/vantaos-design-test
+
       - name: Test kernel watchdog state machine
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iscripts/test_stubs -Iinclude \
@@ -392,11 +398,6 @@ jobs:
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_gui_event_queue.c -o /tmp/vantaos-gui-event-queue-test
           /tmp/vantaos-gui-event-queue-test
 
-      - name: Test Vanta Design System draw-list and geometry helpers
-        run: |
-          gcc -std=c11 -Wall -Wextra -Werror -Iinclude -Iuserspace/include \
-            scripts/test_vanta_design.c -o /tmp/vantaos-design-test
-          /tmp/vantaos-design-test
 
       - name: Test compositor damage rectangle clipping
         run: |

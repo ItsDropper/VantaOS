@@ -68,12 +68,30 @@ int main(void)
     failures += expect(!vanta_design_rect(&one, 0, 0, 1, 1, 0U),
                        "draw-list capacity is enforced");
 
+    failures += expect(vanta_design_contrast_ratio_milli(
+                       0x00FFFFFFU, 0x00000000U) == 21000U,
+                       "black and white achieve a 21:1 contrast ratio");
+    failures += expect(vanta_design_contrast_ratio_milli(
+                       0x00000000U, 0x00FFFFFFU) == 21000U,
+                       "contrast ratio is symmetric");
     failures += expect(vanta_design_on_color(0x00D97706U) == 0x00101820U,
-                       "bright amber uses dark foreground");
+                       "amber accent selects the stronger foreground");
     failures += expect(vanta_design_on_color(0x004B9CFFU) == 0x00101820U,
-                       "bright blue accent uses dark foreground");
+                       "blue accent selects the stronger foreground");
     failures += expect(vanta_design_on_color(0x00102030U) == 0x00FFFFFFU,
                        "dark surfaces use light foreground");
+    const uint32_t accent_swatches[] = {
+        0x004B9CFFU, 0x0014B8A6U, 0x00D97706U, 0x008B5CF6U,
+        0x0022C55EU, 0x00EF4444U
+    };
+    for (size_t i = 0U; i < sizeof(accent_swatches) /
+         sizeof(accent_swatches[0]); ++i)
+    {
+        uint32_t foreground = vanta_design_on_color(accent_swatches[i]);
+        failures += expect(vanta_design_contrast_ratio_milli(
+                           foreground, accent_swatches[i]) >= 4500U,
+                           "accent foreground reaches at least 4.5:1 contrast");
+    }
 
     size_t before_controls = design.count;
     failures += expect(vanta_design_outline_button(

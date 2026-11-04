@@ -19,6 +19,7 @@
 #include <stdint.h>
 #include <vanta/gui.h>
 #include <vanta/theme.h>
+#include <vanta/design_color.h>
 
 #define VANTA_DESIGN_SPACE_1 4
 #define VANTA_DESIGN_SPACE_2 8
@@ -201,19 +202,6 @@ static inline uint32_t vanta_design_danger_color(void)
     return 0x00EF4444U;
 }
 
-/*
- * Fast YIQ foreground selection for filled controls. This is a readability
- * heuristic, not a WCAG contrast-ratio certification.
- */
-static inline uint32_t vanta_design_on_color(uint32_t background)
-{
-    uint32_t red = (background >> 16) & 0xFFU;
-    uint32_t green = (background >> 8) & 0xFFU;
-    uint32_t blue = background & 0xFFU;
-    uint32_t luma = (299U * red + 587U * green + 114U * blue) / 1000U;
-    return luma >= 128U ? 0x00101820U : 0x00FFFFFFU;
-}
-
 static inline int vanta_design_has_capacity(const vanta_design_t* design,
                                             size_t required)
 {
@@ -276,7 +264,7 @@ static inline int vanta_design_button_impl(vanta_design_t* design,
         else if (state == VANTA_DESIGN_STATE_DANGER)
         {
             fill = vanta_design_danger_color();
-            foreground = 0x00FFFFFFU;
+            foreground = vanta_design_on_color(fill);
         }
         else if (state != VANTA_DESIGN_STATE_DEFAULT)
             return 0;
@@ -350,7 +338,7 @@ static inline int vanta_design_badge(vanta_design_t* design,
     else if (state == VANTA_DESIGN_STATE_DANGER)
     {
         fill = vanta_design_danger_color();
-        foreground = 0x00FFFFFFU;
+        foreground = vanta_design_on_color(fill);
     }
     else if (state == VANTA_DESIGN_STATE_SUCCESS)
     {

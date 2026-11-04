@@ -548,7 +548,7 @@ static void render(void)
                  selected_page == i ? text : muted);
     }
 
-    add_panel(172, 56, 436, 294);
+    add_panel(172, 56, 432, 294);
     if (selected_page == 0U)
     {
         add_text(190, 68, "Appearance", text);
@@ -679,7 +679,7 @@ static void render(void)
     add_button(172, 365, 202, 38,
                selected_page == 3U ? "Scan devices" : "Save changes",
                VANTA_DESIGN_STATE_SELECTED, 0);
-    add_button(384, 365, 224, 38,
+    add_button(384, 365, 220, 38,
                selected_page == 3U ? "Connect selected" : "Restore defaults",
                VANTA_DESIGN_STATE_DEFAULT, 1);
     add_text(16, 414, status_buffer, status_color);

@@ -10,6 +10,8 @@ APPS = {
     "notes": ("userspace/apps/notes.c", 760, 460),
     "calculator": ("userspace/apps/calculator.c", 536, 280),
     "explorer": ("userspace/apps/explorer.c", 760, 460),
+    "settings": ("userspace/apps/settings.c", 620, 470),
+    "terminal": ("userspace/apps/terminal.c", 760, 460),
 }
 INSET_X = 8
 INSET_Y = 50
@@ -35,7 +37,7 @@ def render_body(source: str) -> str:
 
 def check_app(name: str, path: str, window_width: int, window_height: int) -> list[str]:
     source = (ROOT / path).read_text(encoding="utf-8")
-    body = render_body(source)
+    body = source
     client_width = window_width - 2 * INSET_X
     client_height = window_height - INSET_Y - 8
     errors = []

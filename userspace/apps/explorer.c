@@ -7,6 +7,7 @@
 
 #include <vanta/gui.h>
 #include <vanta/theme.h>
+#include <vanta/design.h>
 
 #define PATH_CAPACITY 256U
 #define LIST_CAPACITY 4096U
@@ -30,6 +31,7 @@
 #define CONTEXT_MENU_HEIGHT 190
 
 static vanta_theme_t current_theme;
+static vanta_design_t design;
 #define COLOR_TEXT vanta_theme_text_color(&current_theme)
 #define COLOR_MUTED vanta_theme_muted_color(&current_theme)
 #define COLOR_SURFACE vanta_theme_surface_color(&current_theme)
@@ -198,13 +200,32 @@ static void set_status(const char* text, uint32_t color)
 static void add_rect(int32_t x, int32_t y, int32_t width,
                      int32_t height, uint32_t color)
 {
-    if (command_count >= VANTA_GUI_MAX_COMMANDS || width <= 0 || height <= 0)
-        return;
-    vanta_gui_draw_command_t* command = &commands[command_count++];
-    *command = (vanta_gui_draw_command_t){
-        .type = VANTA_GUI_DRAW_FILL_RECT, .x = x, .y = y,
-        .width = width, .height = height, .color = color, .scale = 1U
-    };
+    design.count = command_count;
+    if (vanta_design_rect(&design, x, y, width, height, color))
+        command_count = (uint32_t)design.count;
+}
+
+static void add_squircle(int32_t x, int32_t y, int32_t width,
+                         int32_t height, uint32_t radius, uint32_t color)
+{
+    design.count = command_count;
+    if (vanta_design_squircle_rect(&design, x, y, width, height, radius, color))
+        command_count = (uint32_t)design.count;
+}
+
+static void add_panel(int32_t x, int32_t y, int32_t width, int32_t height)
+{
+    design.count = command_count;
+    if (vanta_design_panel(&design, x, y, width, height))
+        command_count = (uint32_t)design.count;
+}
+
+static void add_button(int32_t x, int32_t y, int32_t width, int32_t height,
+                       const char* label, uint32_t state)
+{
+    design.count = command_count;
+    if (vanta_design_button(&design, x, y, width, height, label, state))
+        command_count = (uint32_t)design.count;
 }
 
 static void add_outline(int32_t x, int32_t y, int32_t width,
@@ -218,17 +239,9 @@ static void add_outline(int32_t x, int32_t y, int32_t width,
 
 static void add_text(int32_t x, int32_t y, const char* text, uint32_t color)
 {
-    size_t length = text_length(text);
-    if (command_count >= VANTA_GUI_MAX_COMMANDS || length == 0U ||
-        length > VANTA_GUI_TEXT_MAX)
-        return;
-    vanta_gui_draw_command_t* command = &commands[command_count++];
-    *command = (vanta_gui_draw_command_t){
-        .type = VANTA_GUI_DRAW_TEXT, .x = x, .y = y,
-        .color = color, .scale = 1U
-    };
-    for (size_t i = 0; i <= length; i++)
-        command->text[i] = text[i];
+    design.count = command_count;
+    if (vanta_design_text(&design, x, y, text, color, 1U))
+        command_count = (uint32_t)design.count;
 }
 
 static void add_text_tail(int32_t x, int32_t y, const char* text,
@@ -1372,20 +1385,21 @@ static void handle_input_key(uint32_t key)
 static void render(void)
 {
     command_count = 0U;
+    vanta_design_init(&design, commands, VANTA_GUI_MAX_COMMANDS, &current_theme);
     build_visible();
-    add_rect(0, 0, 744, 402, COLOR_SURFACE);
+    add_panel(0, 0, 744, 402);
     add_rect(0, 0, 744, 3, COLOR_ACCENT);
     add_text(8, 8, preview_active ? "File preview" : "File Explorer", COLOR_TEXT);
     add_text(152, 8, "Ctrl+click multi-select  |  Right-click for actions", COLOR_MUTED);
 
-    add_rect(8, 30, 448, 24, COLOR_ROW);
+    add_squircle(8, 30, 448, 24, VANTA_DESIGN_RADIUS_CONTROL, COLOR_ROW);
     add_rect(8, 53, 448, 1, input_mode == INPUT_PATH ? COLOR_ACCENT : COLOR_BORDER);
     if (input_mode == INPUT_PATH)
         add_text_tail(14, 34, input_buffer, COLOR_TEXT, 54U);
     else
         add_text_tail(14, 34, current_path, COLOR_TEXT, 54U);
 
-    add_rect(466, 30, 270, 24, COLOR_ROW);
+    add_squircle(466, 30, 270, 24, VANTA_DESIGN_RADIUS_CONTROL, COLOR_ROW);
     add_rect(466, 53, 270, 1, input_mode == INPUT_SEARCH ? COLOR_ACCENT : COLOR_BORDER);
     add_text(472, 34, "Find:", COLOR_MUTED);
     if (input_mode == INPUT_SEARCH)
@@ -1405,11 +1419,11 @@ static void render(void)
         int col = i % 4U;
         int x = 8 + (int)col * 162;
         int y = 60 + row * 24;
-        add_rect(x, y, 154, 20, COLOR_ROW);
-        add_text(x + 6, y + 2, button_labels[i], COLOR_TEXT);
+        add_button(x, y, 154, 20, button_labels[i],
+                   VANTA_DESIGN_STATE_DEFAULT);
     }
 
-    add_rect(8, 112, 136, 236, COLOR_ROW);
+    add_panel(8, 112, 136, 236);
     static const char* sidebar_labels[6] = {
         "Computer /", "System", "Home", "Config (/etc)", "Drivers", "Devices"
     };
@@ -1433,7 +1447,7 @@ static void render(void)
         int active = active_sidebar == (int)i;
         if (active)
         {
-            add_rect(12, y - 2, 128, 23, COLOR_SELECTED);
+            add_squircle(12, y - 2, 128, 23, VANTA_DESIGN_RADIUS_CONTROL, COLOR_SELECTED);
             add_rect(12, y + 20, 128, 1, COLOR_ACCENT);
         }
         add_text(18, y + 1, sidebar_labels[i],
@@ -1442,7 +1456,7 @@ static void render(void)
     add_text(14, 300, "Current folder", COLOR_MUTED);
     add_text_tail(14, 320, current_path, COLOR_TEXT, 15U);
 
-    add_rect(152, 112, 584, 236, COLOR_ROW);
+    add_panel(152, 112, 584, 236);
     if (!context_menu)
     {
         add_text(160, 114, "Name", COLOR_MUTED);
@@ -1458,7 +1472,7 @@ static void render(void)
         int y = 132 + (int)row * ROW_HEIGHT;
         if (entry_selected[index])
         {
-            add_rect(156, y - 2, 576, 19, COLOR_SELECTED);
+            add_squircle(156, y - 2, 576, 19, VANTA_DESIGN_RADIUS_SMALL, COLOR_SELECTED);
             add_outline(156, y - 2, 576, 19, COLOR_ACCENT);
         }
         add_text_tail(164, y, entries[index], COLOR_TEXT, 52U);
@@ -1507,7 +1521,7 @@ static void render(void)
         if (y > 402 - CONTEXT_MENU_HEIGHT) y = 402 - CONTEXT_MENU_HEIGHT;
         context_x = x;
         context_y = y;
-        add_rect(x, y, 180, CONTEXT_MENU_HEIGHT, COLOR_SURFACE);
+        add_panel(x, y, 180, CONTEXT_MENU_HEIGHT);
         add_rect(x, y + CONTEXT_MENU_HEIGHT - 1, 180, 1, COLOR_ACCENT);
         static const char* menu[8] = {"Open", "Properties", "Rename", "Copy",
                                       "Cut / Move", "Delete", "Compress", "Extract"};
@@ -1517,11 +1531,11 @@ static void render(void)
 
     if (open_with_active)
     {
-        add_rect(164, 118, 420, 230, COLOR_SURFACE);
+        add_panel(164, 118, 420, 230);
         add_rect(164, 347, 420, 1, COLOR_ACCENT);
         add_text(180, 132, "Open with", COLOR_TEXT);
         add_text_tail(180, 158, open_with_path, COLOR_MUTED, 52U);
-        add_rect(180, 190, 388, 36, COLOR_ROW);
+        add_squircle(180, 190, 388, 36, VANTA_DESIGN_RADIUS_CONTROL, COLOR_ROW);
         add_outline(180, 190, 388, 36, COLOR_ACCENT);
         add_text(194, 201, "Notes - view file contents", COLOR_TEXT);
         add_rect(180, 238, 112, 28, COLOR_ROW);
@@ -1533,7 +1547,7 @@ static void render(void)
 
     if (input_mode == INPUT_DIALOG)
     {
-        add_rect(170, 140, 404, 106, COLOR_SURFACE);
+        add_panel(170, 140, 404, 106);
         add_rect(170, 245, 404, 1, COLOR_ACCENT);
         const char* prompt = dialog_mode == DIALOG_CREATE_FILE ? "Create file name:" :
             dialog_mode == DIALOG_CREATE_DIRECTORY ? "Create folder name:" :
@@ -1544,7 +1558,7 @@ static void render(void)
             add_text(184, 178, input_buffer, COLOR_ERROR);
         else
         {
-            add_rect(182, 178, 380, 24, COLOR_ROW);
+            add_squircle(182, 178, 380, 24, VANTA_DESIGN_RADIUS_CONTROL, COLOR_ROW);
             add_rect(182, 201, 380, 1, COLOR_BORDER);
             add_text_tail(188, 182, input_buffer, COLOR_TEXT, 46U);
         }
@@ -1553,7 +1567,7 @@ static void render(void)
 
     if (properties_active)
     {
-        add_rect(164, 118, 420, 230, COLOR_SURFACE);
+        add_panel(164, 118, 420, 230);
         add_rect(164, 347, 420, 1, COLOR_ACCENT);
         add_text(178, 128, "File properties", COLOR_TEXT);
         add_text_tail(178, 154, properties_info.name, COLOR_ACCENT, 60U);

@@ -122,6 +122,23 @@ jobs:
             scripts/test_graphics_squircle_math.c -o /tmp/vantaos-squircle-math-test
           /tmp/vantaos-squircle-math-test
 
+      - name: Compile all ring-3 desktop applications with strict warnings
+        run: |
+          set -euo pipefail
+          common_flags=(
+            -m64 -mcmodel=large -ffreestanding -fno-pie
+            -fno-stack-protector -mno-red-zone -fno-builtin -nostdlib
+            -Wall -Wextra -Werror -Iuserspace/include -Iinclude
+          )
+          for app in terminal settings explorer notes calculator; do
+            gcc "${common_flags[@]}" -c "userspace/apps/${app}.c" \
+              -o "/tmp/vantaos-${app}.o"
+          done
+          gcc "${common_flags[@]}" -DVANTAOS_EXPLORER_E2E_TEST \
+            -c userspace/apps/explorer.c -o /tmp/vantaos-explorer-e2e.o
+          gcc "${common_flags[@]}" -DVANTAOS_NOTES_E2E_TEST \
+            -c userspace/apps/notes.c -o /tmp/vantaos-notes-e2e.o
+
       - name: Test kernel watchdog state machine
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iscripts/test_stubs -Iinclude \

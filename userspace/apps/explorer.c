@@ -263,6 +263,19 @@ static void add_text_tail(int32_t x, int32_t y, const char* text,
     add_text(x, y, clipped, color);
 }
 
+static void add_text_box(int32_t x, int32_t y, int32_t width,
+                          int32_t height, const char* text, uint32_t color)
+{
+    vanta_design_bounds_t bounds = {
+        .x = x, .y = y, .width = width, .height = height
+    };
+    design.count = command_count;
+    if (vanta_design_text_box(&design, &bounds, text, color, 1U,
+                              VANTA_DESIGN_ALIGN_START,
+                              VANTA_DESIGN_ALIGN_CENTER))
+        command_count = (uint32_t)design.count;
+}
+
 static size_t selected_count(void)
 {
     size_t count = 0U;
@@ -1501,10 +1514,10 @@ static void render(void)
         digits[pos] = '\0';
         copy_text(status, sizeof(status), digits);
         (void)append_text(status, sizeof(status), " selected");
-        add_text(12, 360, status, COLOR_ACCENT);
+        add_text_box(12, 356, 724, 20, status, COLOR_ACCENT);
     }
     else
-        add_text(12, 360, status_text, status_color);
+        add_text_box(12, 356, 724, 20, status_text, status_color);
     add_text(12, 382, "Enter=open Ctrl+C=copy Ctrl+X=cut Ctrl+V=paste Del=delete",
              COLOR_MUTED);
 

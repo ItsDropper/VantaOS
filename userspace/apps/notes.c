@@ -144,6 +144,19 @@ static void add_text(int32_t x, int32_t y, const char* text, uint32_t color)
         command_count = (uint32_t)design.count;
 }
 
+static void add_text_box(int32_t x, int32_t y, int32_t width,
+                          int32_t height, const char* text, uint32_t color)
+{
+    vanta_design_bounds_t bounds = {
+        .x = x, .y = y, .width = width, .height = height
+    };
+    design.count = command_count;
+    if (vanta_design_text_box(&design, &bounds, text, color, 1U,
+                              VANTA_DESIGN_ALIGN_START,
+                              VANTA_DESIGN_ALIGN_CENTER))
+        command_count = (uint32_t)design.count;
+}
+
 static void ordered_selection(size_t* begin, size_t* end)
 {
     *begin = selection_anchor < selection_end ? selection_anchor : selection_end;
@@ -259,8 +272,8 @@ static void render(void)
     }
 
     add_separator(12, 346, 700);
-    add_text(16, 354, status, status_color ? status_color :
-             vanta_theme_muted_color(&theme));
+    add_text_box(16, 352, 688, 20, status, status_color ? status_color :
+                 vanta_theme_muted_color(&theme));
     add_text(16, 370, "Ctrl+S Save | Ctrl+A Select all | Ctrl+C Copy | Ctrl+V Paste",
              vanta_theme_muted_color(&theme));
     add_text(16, 386, "Mouse drag selects text; double-click selects a word",

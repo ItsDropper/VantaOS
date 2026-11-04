@@ -852,9 +852,10 @@ void graphics_fill_squircle_rect(
 
     /*
      * The center and side regions are guaranteed to be fully covered. Fill
-     * those as rectangles, then evaluate only the four radius-by-radius
-     * corner regions. This changes the expensive work from O(width*height)
-     * to O((width+height)*radius + radius^2), with radius capped at 32.
+     * those with the fast rectangle primitive, then evaluate only the four
+     * radius-by-radius corner regions. Framebuffer writes remain O(width*height)
+     * because every pixel must be filled; superellipse math is reduced to
+     * O(radius^2), with radius capped at 32.
      */
     graphics_fill_rect(x + radius, y, width - radius * 2, height, color);
     graphics_fill_rect(x, y + radius, radius, height - radius * 2, color);

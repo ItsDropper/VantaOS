@@ -525,7 +525,6 @@ static void render(void)
     vanta_design_init(&design, commands, VANTA_GUI_MAX_COMMANDS, &active_theme);
     uint32_t text = color_text();
     uint32_t muted = color_muted();
-    uint32_t surface = color_surface();
     uint32_t selected = color_selected();
     uint32_t accent_value = accent_color();
 

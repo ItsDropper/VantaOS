@@ -69,6 +69,14 @@ int main(void)
                            &source, 20U, 1U, 0U, 0U, 6, 0, &first),
                            "grid rejects gaps that leave no cell width");
         failures += expect(!vanta_design_grid_cell(
+                           &source, 102U, 1U, 0U, 0U, 0, 0, &first),
+                           "grid rejects zero-width cells");
+        vanta_design_bounds_t extreme = {
+            .x = INT32_MAX - 4, .y = 0, .width = 8, .height = 20
+        };
+        failures += expect(!vanta_design_inset_bounds(&extreme, 1, &inset),
+                           "inset rejects coordinate-end overflow");
+        failures += expect(!vanta_design_grid_cell(
                            &source, 2U, 2U, 2U, 0U, 0, 0, &first),
                            "grid rejects out-of-range cell indices");
     }

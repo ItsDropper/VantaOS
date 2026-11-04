@@ -72,7 +72,8 @@ static inline int vanta_design_inset_bounds(
     int64_t height = (int64_t)bounds->height - doubled;
     if (width <= 0 || height <= 0 ||
         x < INT32_MIN || x > INT32_MAX ||
-        y < INT32_MIN || y > INT32_MAX)
+        y < INT32_MIN || y > INT32_MAX ||
+        x + width > INT32_MAX || y + height > INT32_MAX)
         return 0;
     *result = (vanta_design_bounds_t){
         .x = (int32_t)x, .y = (int32_t)y,
@@ -117,6 +118,9 @@ static inline int vanta_design_grid_cell(
 
     int64_t usable_width = width - horizontal_gaps;
     int64_t usable_height = height - vertical_gaps;
+    if (usable_width < (int64_t)columns ||
+        usable_height < (int64_t)rows)
+        return 0;
     int64_t base_width = usable_width / columns;
     int64_t base_height = usable_height / rows;
     int64_t extra_width = usable_width % columns;
@@ -133,7 +137,9 @@ static inline int vanta_design_grid_cell(
     int64_t y = (int64_t)bounds->y + y_offset;
     if (cell_width <= 0 || cell_height <= 0 ||
         x < INT32_MIN || x > INT32_MAX ||
-        y < INT32_MIN || y > INT32_MAX)
+        y < INT32_MIN || y > INT32_MAX ||
+        x + cell_width > INT32_MAX ||
+        y + cell_height > INT32_MAX)
         return 0;
 
     *result = (vanta_design_bounds_t){

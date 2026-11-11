@@ -13,6 +13,7 @@
 #include <stdint.h>
 
 #define ACPI_IDENTITY_LIMIT 0x40000000ULL
+#define ACPI_MAX_TABLE_SIZE (16U * 1024U * 1024U)
 #define ACPI_RSDP_VALID_FLAG (1U << 3)
 
 typedef struct __attribute__((packed))
@@ -104,6 +105,7 @@ static int table_valid(const acpi_sdt_header_t* table,
 {
     if (!table || !signature_is(table->signature, signature) ||
         table->length < sizeof(acpi_sdt_header_t) ||
+        table->length > ACPI_MAX_TABLE_SIZE ||
         !physical_range((uint64_t)(uintptr_t)table, table->length))
         return 0;
     return checksum8(table, table->length) == 0;

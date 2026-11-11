@@ -51,6 +51,10 @@ int main(void)
     assert(acpi_discover_tables(&info) && info.dsdt_address==0x103000U);
     dsdt[9U]^=0x80U; assert(!acpi_discover_tables(&info)); dsdt[9U]^=0x80U;
     rsdt[9U]^=1U; assert(!acpi_discover_tables(&info));
+    rsdt[9U]^=1U;
+    /* Oversized firmware lengths are rejected before checksum traversal. */
+    *(uint32_t*)(rsdt+4U)=16U*1024U*1024U+1U;
+    assert(!acpi_discover_tables(&info));
     assert(!acpi_discover_tables(NULL));
     assert(munmap(mem,0x80000U)==0);
     puts("ACPI table discovery tests passed");

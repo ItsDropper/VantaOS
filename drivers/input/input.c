@@ -268,6 +268,37 @@ bool input_get_device(uint32_t index, input_device_info_t *out)
     return false;
 }
 
+static bool input_evict_oldest_motion_locked(void)
+{
+    for (uint32_t offset = 0; offset < event_count; ++offset)
+    {
+        uint32_t index = (event_read + offset) % INPUT_EVENT_QUEUE_CAPACITY;
+        if (events[index].type != INPUT_EVENT_RELATIVE_MOTION)
+            continue;
+
+        /*
+         * A motion sample may be discarded under pressure; a key/button/wheel
+         * edge must not be displaced by pointer history. Compact the bounded
+         * ring in-place while preserving the order of every retained event.
+         */
+        for (uint32_t move = offset; move + 1U < event_count; ++move)
+        {
+            uint32_t destination =
+                (event_read + move) % INPUT_EVENT_QUEUE_CAPACITY;
+            uint32_t source =
+                (event_read + move + 1U) % INPUT_EVENT_QUEUE_CAPACITY;
+            events[destination] = events[source];
+        }
+
+        event_write = (event_write + INPUT_EVENT_QUEUE_CAPACITY - 1U) %
+                      INPUT_EVENT_QUEUE_CAPACITY;
+        --event_count;
+        return true;
+    }
+
+    return false;
+}
+
 bool input_report_event(const input_event_t *event)
 {
     if (!event || event->type <= INPUT_EVENT_NONE ||
@@ -322,6 +353,13 @@ bool input_report_event(const input_event_t *event)
             spinlock_unlock_irqrestore(&input_lock, flags);
             return true;
         }
+    }
+
+    if (event_count == INPUT_EVENT_QUEUE_CAPACITY &&
+        (event->type == INPUT_EVENT_BUTTON || event->type == INPUT_EVENT_KEY ||
+         event->type == INPUT_EVENT_TEXT || event->type == INPUT_EVENT_WHEEL))
+    {
+        (void)input_evict_oldest_motion_locked();
     }
 
     if (event_count == INPUT_EVENT_QUEUE_CAPACITY)

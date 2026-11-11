@@ -630,16 +630,24 @@ jobs:
           }
           trap cleanup EXIT
           for attempt in $(seq 1 200); do
-            count=$(grep -c '^VANTAOS_PARTITION_OK' "$log" 2>/dev/null || true)
-            if [ "$count" -ge 2 ]; then break; fi
+            count=0
+            if [ -f "$log" ]; then
+              count=$(grep -c '^VANTAOS_PARTITION_OK' "$log" || true)
+            fi
+            if [[ "$count" =~ ^[0-9]+$ ]] && [ "$count" -ge 2 ]; then break; fi
             if ! kill -0 "$qemu_pid" 2>/dev/null; then
               cat "$log" /tmp/vantaos-partition-qemu.log 2>/dev/null || true
               exit 1
             fi
             sleep 0.1
           done
-          count=$(grep -c '^VANTAOS_PARTITION_OK' "$log" 2>/dev/null || true)
-          if [ "$count" -ne 2 ] || grep -q '^VANTAOS_PARTITION_FAIL' "$log"; then
+          count=0
+          if [ -f "$log" ]; then
+            count=$(grep -c '^VANTAOS_PARTITION_OK' "$log" || true)
+          fi
+          if ! [[ "$count" =~ ^[0-9]+$ ]] ||
+             [ "$count" -ne 2 ] ||
+             { [ -f "$log" ] && grep -q '^VANTAOS_PARTITION_FAIL' "$log"; }; then
             echo "GPT partition discovery did not register exactly two partitions."
             cat "$log" /tmp/vantaos-partition-qemu.log 2>/dev/null || true
             exit 1

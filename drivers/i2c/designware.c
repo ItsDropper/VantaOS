@@ -85,14 +85,26 @@ static int dw_wait_idle(const i2c_dw_bus_t *bus)
     return 0;
 }
 
-static void dw_restore_controller(i2c_dw_bus_t *bus, uint32_t old_con,
-                                  uint32_t old_enable)
+static int dw_restore_controller(i2c_dw_bus_t *bus,uint32_t old_con,
+                                 uint32_t old_enable)
 {
-    dw_write(bus, DW_IC_ENABLE, 0U);
-    (void)dw_wait_enabled(bus, 0U);
-    dw_write(bus, DW_IC_CON, old_con);
-    dw_write(bus, DW_IC_ENABLE, old_enable & 1U);
-    (void)dw_wait_enabled(bus, old_enable & 1U);
+    dw_write(bus,DW_IC_ENABLE,0U);
+    if(!dw_wait_enabled(bus,0U)) return 0;
+    dw_write(bus,DW_IC_CON,old_con);
+    dw_write(bus,DW_IC_ENABLE,old_enable&1U);
+    return dw_wait_enabled(bus,old_enable&1U);
+}
+
+static int dw_drain_rx(const i2c_dw_bus_t *bus)
+{
+    for(uint32_t i=0U;i<bus->rx_fifo_depth;++i)
+    {
+        uint32_t status=dw_read(bus,DW_IC_STATUS);
+        if(status==UINT32_MAX) return 0;
+        if((status&DW_STATUS_RFNE)==0U) return 1;
+        (void)dw_read(bus,DW_IC_DATA_CMD);
+    }
+    return (dw_read(bus,DW_IC_STATUS)&DW_STATUS_RFNE)==0U;
 }
 
 int i2c_dw_initialize(i2c_dw_bus_t *bus)
@@ -140,9 +152,13 @@ int i2c_dw_initialize(i2c_dw_bus_t *bus)
     dw_write(bus, DW_IC_INTR_MASK, 0U);
     if (old_enable & 1U)
     {
-        dw_write(bus, DW_IC_ENABLE, 0U);
-        if (!dw_wait_enabled(bus, 0U))
+        dw_write(bus,DW_IC_ENABLE,0U);
+        if(!dw_wait_enabled(bus,0U))
+        {
+            if(!dw_restore_controller(bus,old_con,old_enable))
+                bus->ready=0U;
             return 0;
+        }
     }
 
     /* Keep firmware timing counts intact; reject a speed with no timing data. */
@@ -158,11 +174,12 @@ int i2c_dw_initialize(i2c_dw_bus_t *bus)
            DW_CON_RESTART_EN | DW_CON_SLAVE_DISABLE;
     dw_write(bus, DW_IC_CON, con);
     dw_write(bus, DW_IC_ENABLE, 1U);
-    if (!dw_wait_enabled(bus, 1U))
+    if(!dw_wait_enabled(bus,1U))
     {
-        dw_restore_controller(bus, old_con, old_enable);
-        bus->standard_speed_valid = 0U;
-        bus->fast_speed_valid = 0U;
+        if(!dw_restore_controller(bus,old_con,old_enable))
+            bus->ready=0U;
+        bus->standard_speed_valid=0U;
+        bus->fast_speed_valid=0U;
         return 0;
     }
     bus->ready = 1U;
@@ -192,16 +209,28 @@ static int dw_set_speed(i2c_dw_bus_t *bus, uint32_t speed_hz)
         return 0;
     if ((con & DW_CON_SPEED_MASK) != mode)
     {
-        if (!dw_wait_idle(bus))
+        uint32_t old_enable=dw_read(bus,DW_IC_ENABLE);
+        if(old_enable==UINT32_MAX||(old_enable&1U)==0U||
+           !dw_wait_idle(bus))
             return 0;
-        dw_write(bus, DW_IC_ENABLE, 0U);
-        if (!dw_wait_enabled(bus, 0U))
+        dw_write(bus,DW_IC_ENABLE,0U);
+        if(!dw_wait_enabled(bus,0U))
+        {
+            bus->ready=0U;
             return 0;
-        con = (con & ~DW_CON_SPEED_MASK) | mode;
-        dw_write(bus, DW_IC_CON, con);
-        dw_write(bus, DW_IC_ENABLE, 1U);
-        if (!dw_wait_enabled(bus, 1U))
+        }
+        con=(con&~DW_CON_SPEED_MASK)|mode;
+        dw_write(bus,DW_IC_CON,con);
+        dw_write(bus,DW_IC_ENABLE,1U);
+        if(!dw_wait_enabled(bus,1U))
+        {
+            if(!dw_restore_controller(bus,con&~DW_CON_SPEED_MASK|
+                                      (mode==DW_CON_SPEED_FAST?
+                                       DW_CON_SPEED_STANDARD:DW_CON_SPEED_FAST),
+                                      old_enable))
+                bus->ready=0U;
             return 0;
+        }
     }
     return 1;
 }
@@ -233,17 +262,23 @@ int i2c_dw_transfer(i2c_dw_bus_t *bus, uint16_t address,
         (write_length == 0U && read_length == 0U) ||
         write_length > I2C_DW_MAX_WRITE || read_length > I2C_DW_MAX_READ)
         return 0;
-    if (!dw_wait_idle(bus) || !dw_set_speed(bus, speed_hz))
+    if(!dw_wait_idle(bus)||!dw_drain_rx(bus)||!dw_set_speed(bus,speed_hz))
         return 0;
 
-    dw_write(bus, DW_IC_TAR, address);
+    if(dw_read(bus,DW_IC_ENABLE_STATUS)!=1U)
+    {bus->ready=0U;return 0;}
+    dw_write(bus,DW_IC_TAR,address);
     (void)dw_read(bus, 0x40U); /* Clear accumulated controller interrupts. */
 
     timeout = bus->timeout_spins;
     while (timeout-- != 0U)
     {
-        if (dw_check_abort(bus) != 0)
+        if(dw_check_abort(bus)!=0)
+        {
+            if(!dw_wait_idle(bus)||!dw_drain_rx(bus))
+                bus->ready=0U;
             return 0;
+        }
 
         uint32_t status = dw_read(bus, DW_IC_STATUS);
         uint32_t tx_level = dw_read(bus, DW_IC_TXFLR);
@@ -297,16 +332,19 @@ int i2c_dw_transfer(i2c_dw_bus_t *bus, uint16_t address,
 
         if (read_length == 0U && write_sent == write_length)
         {
-            if (dw_wait_idle(bus))
+            if(dw_wait_idle(bus)&&dw_drain_rx(bus))
                 return 1;
         }
-        else if (read_length != 0U && read_received == read_length &&
-                 read_queued == read_length && dw_wait_idle(bus))
+        else if(read_length!=0U&&read_received==read_length&&
+                read_queued==read_length&&dw_wait_idle(bus)&&
+                dw_drain_rx(bus))
             return 1;
 
         __asm__ volatile ("pause" ::: "memory");
     }
 
     /* A timed-out command is not safe to reuse until the master is quiescent. */
+    if(!dw_wait_idle(bus)||!dw_drain_rx(bus))
+        bus->ready=0U;
     return 0;
 }

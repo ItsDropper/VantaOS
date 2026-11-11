@@ -26,6 +26,9 @@ void desktop_process_main(void)
 {
     serial_write("VANTAOS_DESKTOP_INPUT_LOOP_ONLINE\n");
     uint32_t last_network_tick = interrupts_get_ticks();
+    /* The HID power/reset handshake needs timer interrupts and input is now
+     * initialized; discover controllers before entering the polling loop. */
+    i2c_initialize();
     while (1)
     {
         /*

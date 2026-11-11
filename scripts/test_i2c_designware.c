@@ -118,6 +118,9 @@ int main(void)
     assert(mock.writes[0]==0x20U);
     assert(mock.writes[1]==(0x00U|(1U<<9U)));
 
+    /* A stale RX byte from an interrupted transfer is discarded before the
+     * next transaction rather than being mistaken for its first response. */
+    mock.rx[mock.rx_write++%FIFO_CAPACITY]=0xEEU;
     mock.write_count=0U;
     uint8_t received[4]={0};
     assert(i2c_dw_transfer(&bus,0x15U,400000U,address_register,
@@ -128,9 +131,14 @@ int main(void)
     assert(mock.writes[2]==((1U<<8U)|(1U<<10U)));
     assert(mock.writes[5]==((1U<<8U)|(1U<<9U)));
     for(uint32_t i=0U;i<4U;++i) assert(received[i]!=0U);
+    assert(mock.rx_read==mock.rx_write);
 
     assert(!i2c_dw_transfer(&bus,0U,100000U,address_register,2U,NULL,0U));
     assert(!i2c_dw_transfer(&bus,0x80U,100000U,address_register,2U,NULL,0U));
+    mock.abort=1U;
+    assert(!i2c_dw_transfer(&bus,0x15U,100000U,address_register,2U,NULL,0U));
+    assert(mock.abort==0U);
+    assert(i2c_dw_transfer(&bus,0x15U,100000U,address_register,2U,NULL,0U));
     assert(!i2c_dw_transfer(&bus,0x15U,1000000U,address_register,2U,NULL,0U));
     assert(!i2c_dw_transfer(&bus,0x15U,100000U,NULL,1U,NULL,0U));
 

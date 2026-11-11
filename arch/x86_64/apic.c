@@ -232,6 +232,11 @@ int apic_initialize(void)
             return 0;
         }
         lapic = (volatile uint32_t*)(uintptr_t)APIC_MMIO_VIRTUAL;
+        if (base & APIC_BASE_ENABLE)
+        {
+            base &= ~APIC_BASE_ENABLE;
+            write_msr(IA32_APIC_BASE_MSR, base);
+        }
         base &= ~0x0000000FFFFFF000ULL;
         base |= (platform_info.local_apic_address & 0x0000000FFFFF000ULL) |
                 APIC_BASE_ENABLE;
@@ -254,6 +259,14 @@ int apic_initialize(void)
     }
     ioapic = (volatile uint32_t*)(uintptr_t)IOAPIC_MMIO_VIRTUAL;
 
+    base = read_msr(IA32_APIC_BASE_MSR);
+    if ((base & APIC_BASE_ENABLE) == 0U ||
+        (x2apic_mode && (base & APIC_BASE_X2APIC) == 0U))
+    {
+        serial_write("VANTAOS_APIC_MODE_VERIFY_FAIL\\n");
+        return 0;
+    }
+
     lapic_write(LAPIC_TPR, 0);
     lapic_write(LAPIC_SVR, (1U << 8) | LAPIC_SPURIOUS_VECTOR);
     uint32_t bsp_id = lapic_id();
@@ -269,6 +282,13 @@ int apic_initialize(void)
         {
             serial_write("VANTAOS_APIC_DESTINATION_UNSUPPORTED\n");
             return 0;
+        }
+        uint32_t ioapic_version = ioapic_read(IOAPIC_REG_VERSION);
+        uint32_t maximum_redirection = (ioapic_version >> 16U) & 0xFFU;
+        for (uint32_t i = 0; i <= maximum_redirection && i <= 119U; ++i)
+        {
+            uint8_t reg = (uint8_t)(IOAPIC_REG_REDIR + i * 2U);
+            ioapic_write(reg, ioapic_read(reg) | IOAPIC_REDIR_MASK);
         }
         lapic_write(LAPIC_LVT_LINT0, 7U << 8U);
         lapic_write(LAPIC_LVT_LINT1, 1U << 16);
@@ -410,12 +430,21 @@ int apic_initialize_cpu(uint32_t expected_apic_id)
             return 0;
         base |= APIC_BASE_ENABLE | APIC_BASE_X2APIC;
         write_msr(IA32_APIC_BASE_MSR, base);
+        base = read_msr(IA32_APIC_BASE_MSR);
+        if ((base & (APIC_BASE_ENABLE | APIC_BASE_X2APIC)) !=
+            (APIC_BASE_ENABLE | APIC_BASE_X2APIC))
+            return 0;
     }
     else
     {
         if (platform_info.local_apic_address >= 0x100000000ULL ||
             (base & APIC_BASE_X2APIC))
             return 0;
+        if (base & APIC_BASE_ENABLE)
+        {
+            base &= ~APIC_BASE_ENABLE;
+            write_msr(IA32_APIC_BASE_MSR, base);
+        }
         base &= ~0x0000000FFFFFF000ULL;
         base |= (platform_info.local_apic_address & 0x0000000FFFFF000ULL) |
                 APIC_BASE_ENABLE;
@@ -457,6 +486,7 @@ static int apic_send_ipi(uint32_t destination, uint32_t command)
                               :: "r"(saved_flags) : "memory", "cc");
             return 0;
         }
+        __asm__ volatile ("mfence" ::: "memory");
         write_msr(APIC_X2APIC_MSR_ICR,
                   apic_x2apic_encode_icr(destination, command));
         timeout = 1000000U;
@@ -498,7 +528,7 @@ static int apic_send_ipi(uint32_t destination, uint32_t command)
 
 int apic_send_nmi_all(void)
 {
-    /* Fixed xAPIC ICR: NMI delivery, shorthand = all excluding self. */
+    /* Fixed APIC ICR: NMI delivery, shorthand = all excluding self. */
     return apic_send_ipi(0U, 0x000C0400U);
 }
 

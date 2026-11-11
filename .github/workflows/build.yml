@@ -114,6 +114,13 @@ jobs:
             -o /tmp/vantaos-input-queue-test
           /tmp/vantaos-input-queue-test
 
+      - name: Test bounded SMBIOS firmware inventory
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_smbios_inventory.c arch/x86_64/smbios.c \
+            -o /tmp/vantaos-smbios-inventory-test
+          /tmp/vantaos-smbios-inventory-test
+
       - name: Install build dependencies
         run: sudo apt-get update && sudo apt-get install --yes build-essential nasm grub-pc-bin xorriso mtools dosfstools qemu-system-x86 gnu-efi ovmf gdisk xvfb socat imagemagick tesseract-ocr
 

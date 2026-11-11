@@ -69,7 +69,7 @@ if [ "$qemu_cpus" -lt 1 ] || [ "$qemu_cpus" -gt 32 ]; then
     exit 2
 fi
 
-printf 'VantaOS QEMU: accel=%s cpu=%s cpus=%s memory=%s\\n' \
+printf 'VantaOS QEMU: accel=%s cpu=%s cpus=%s memory=%s\n' \
     "$qemu_accel" "$qemu_cpu" "$qemu_cpus" "${VANTAOS_MEMORY:-512M}"
 
 exec qemu-system-x86_64 \

@@ -1080,7 +1080,7 @@ static void bluetooth_l2cap_queue_data(
             &bluetooth_l2cap_data_queues[slot], handle, channel->local_cid,
             l2cap.payload, l2cap.payload_length);
         if (queued == -11 && ++bluetooth_l2cap_data_dropped[slot] == 1U)
-            serial_write("VANTAOS_BLUETOOTH_L2CAP_DATA_QUEUE_FULL\\n");
+            serial_write("VANTAOS_BLUETOOTH_L2CAP_DATA_QUEUE_FULL\n");
         return;
     }
 }
@@ -1372,7 +1372,7 @@ static int usb_enumerate_port(uint32_t port)
     usb_log_hex8(identity.protocol);
     serial_write(" revision=");
     usb_log_hex8(identity.revision);
-    serial_write("\\n");
+    serial_write("\n");
 
     if (!usb_device_register_interfaces(slot, configuration_buffer,
                                          configuration_length)) {
@@ -1722,7 +1722,7 @@ void usb_poll(void)
                     if (bluetooth_l2cap_table_for_handle(
                             slot, connected_handle, 1) == NULL)
                         serial_write(
-                            "VANTAOS_BLUETOOTH_L2CAP_OWNER_TABLE_FULL\\n");
+                            "VANTAOS_BLUETOOTH_L2CAP_OWNER_TABLE_FULL\n");
                 }
                 if (bluetooth_event_buffer[0] == 0x05U &&
                     event_length == 6U && bluetooth_event_buffer[2] == 0U &&

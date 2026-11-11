@@ -690,6 +690,117 @@ int user_mode_process_smoke_test_start(void)
         return 0;
     }
 
+    /* Distinct real ring-3 fault classes must be contained independently. */
+    uint8_t write_protect_image[] = {
+        0x48, 0xB8, 0,0,0,0,0,0,0,0, 0xC6,0x00,0xCC
+    };
+    uint8_t unmapped_read_image[] = {
+        0x48, 0xB8, 0,0,0,0,0,0,0,0, 0x8A,0x00
+    };
+    const uint64_t write_target = PAGING_USER_BASE;
+    const uint64_t unmapped_target = PAGING_USER_BASE + 2U * PAGE_SIZE;
+    for (uint32_t i = 0U; i < 8U; ++i)
+    {
+        write_protect_image[2U + i] = (uint8_t)(write_target >> (i * 8U));
+        unmapped_read_image[2U + i] =
+            (uint8_t)(unmapped_target >> (i * 8U));
+    }
+    static const uint8_t invalid_opcode_image[] = { 0x0F, 0x0B };
+    if (process_create_user("ring3-write-protect-fault",
+                            process_current_pid(), write_protect_image,
+                            sizeof(write_protect_image)) <= 0 ||
+        process_create_user("ring3-unmapped-read-fault",
+                            process_current_pid(), unmapped_read_image,
+                            sizeof(unmapped_read_image)) <= 0 ||
+        process_create_user("ring3-invalid-opcode-fault",
+                            process_current_pid(), invalid_opcode_image,
+                            sizeof(invalid_opcode_image)) <= 0)
+    {
+        serial_write("VANTAOS_USER_FAULT_MATRIX_CREATE_FAIL\n");
+        return 0;
+    }
+
+    /*
+     * Verify syscall input/output checks, including an output range that
+     * crosses from the RX code page into the RW stack page.
+     */
+    uint8_t pointer_guard_image[160] = {0};
+    size_t code_size = 0U;
+    size_t failure_branches[3] = {0U};
+    size_t failure_branch_count = 0U;
+#define EMIT_BYTE(value) do { pointer_guard_image[code_size++] = (uint8_t)(value); } while (0)
+#define EMIT_U32(value) do { \
+    uint32_t emit_value = (uint32_t)(value); \
+    for (uint32_t emit_i = 0U; emit_i < 4U; ++emit_i) \
+        EMIT_BYTE(emit_value >> (emit_i * 8U)); \
+} while (0)
+#define EMIT_U64(value) do { \
+    uint64_t emit_value = (uint64_t)(value); \
+    for (uint32_t emit_i = 0U; emit_i < 8U; ++emit_i) \
+        EMIT_BYTE(emit_value >> (emit_i * 8U)); \
+} while (0)
+#define EMIT_EFAULT_CHECK(number, address, length) do { \
+    EMIT_BYTE(0xB8); EMIT_U32(number); \
+    EMIT_BYTE(0x48); EMIT_BYTE(0xBF); EMIT_U64(address); \
+    EMIT_BYTE(0xBE); EMIT_U32(length); \
+    EMIT_BYTE(0xCD); EMIT_BYTE(0x80); \
+    EMIT_BYTE(0x48); EMIT_BYTE(0x83); EMIT_BYTE(0xF8); EMIT_BYTE(0xF2); \
+    EMIT_BYTE(0x75); failure_branches[failure_branch_count++] = code_size; \
+    EMIT_BYTE(0); \
+} while (0)
+
+    const uintptr_t unmapped_user_address =
+        PAGING_USER_BASE + 2U * PAGE_SIZE;
+    EMIT_EFAULT_CHECK(40U, unmapped_user_address, 1U);
+    EMIT_EFAULT_CHECK(41U, unmapped_user_address, 1U);
+    EMIT_EFAULT_CHECK(41U, PAGING_USER_BASE + PAGE_SIZE - 1U, 2U);
+
+    EMIT_BYTE(0xB8); EMIT_U32(1U);
+    EMIT_BYTE(0x48); EMIT_BYTE(0xBF);
+    const size_t success_message_pointer_offset = code_size;
+    EMIT_U64(0U);
+    static const char success_message[] =
+        "VANTAOS_SYSCALL_POINTER_GUARDS_OK\\n";
+    EMIT_BYTE(0xBE); EMIT_U32(sizeof(success_message) - 1U);
+    EMIT_BYTE(0xCD); EMIT_BYTE(0x80);
+    EMIT_BYTE(0xB8); EMIT_U32(0U);
+    EMIT_BYTE(0xCD); EMIT_BYTE(0x80);
+
+    const size_t failure_target = code_size;
+    EMIT_BYTE(0xB8); EMIT_U32(99U);
+    EMIT_BYTE(0xCD); EMIT_BYTE(0x80);
+    const size_t message_offset = code_size;
+    for (size_t i = 0U; i < sizeof(success_message) - 1U; ++i)
+        EMIT_BYTE(success_message[i]);
+
+    const uint64_t message_address = PAGING_USER_BASE + message_offset;
+    for (uint32_t i = 0U; i < 8U; ++i)
+        pointer_guard_image[success_message_pointer_offset + i] =
+            (uint8_t)(message_address >> (i * 8U));
+    for (size_t i = 0U; i < failure_branch_count; ++i)
+    {
+        const size_t displacement = failure_target -
+            (failure_branches[i] + 1U);
+        if (displacement > 127U)
+        {
+            serial_write("VANTAOS_SYSCALL_POINTER_GUARDS_BUILD_FAIL\\n");
+            return 0;
+        }
+        pointer_guard_image[failure_branches[i]] = (uint8_t)displacement;
+    }
+#undef EMIT_EFAULT_CHECK
+#undef EMIT_U64
+#undef EMIT_U32
+#undef EMIT_BYTE
+
+    if (process_create_user("ring3-syscall-pointer-guards",
+                            process_current_pid(), pointer_guard_image,
+                            code_size) <= 0)
+    {
+        serial_write("VANTAOS_SYSCALL_POINTER_GUARDS_CREATE_FAIL\\n");
+        return 0;
+    }
+
     static const uint8_t invalid_elf[64] = {0};
     if (process_create_user_elf("invalid-elf", process_current_pid(),
                                 invalid_elf, sizeof(invalid_elf)) != -1)

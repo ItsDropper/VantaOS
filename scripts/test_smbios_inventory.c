@@ -53,7 +53,7 @@ int main(void)
 
     uint8_t* table = (uint8_t*)table_address;
     const uint8_t system_info[] = {
-        1U, 8U, 0U, 0U, 1U, 2U, 3U, 0U,
+        1U, 8U, 0U, 0U, 1U, 2U, 3U, 4U,
         'L','e','n','o','v','o',0U,
         'I','d','e','a','P','a','d',' ','5','3','0','S',0U,
         'R','e','v','1',0U,

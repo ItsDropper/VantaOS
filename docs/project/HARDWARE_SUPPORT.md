@@ -31,6 +31,7 @@ The serial log uses stable `VANTAOS_HW_*` markers:
 - `VANTAOS_HW_PCI` reports BDF, vendor/device IDs, revision, header type, subsystem IDs for type-0 functions, and class/programming interface.
 - `VANTAOS_HW_USB_DEVICE` reports enumerated root-port USB device IDs and class information.
 - Existing CPU and GPU diagnostics report processor capabilities and discovered display controllers. Intel UHD 620 (8086:5917) is identified as Gen9.5, but is deliberately not passed to the Skylake Gen9 execution backend.
+- `VANTAOS_HW_NETWORK_CONTROLLER` reports PCI network-class functions (class 02), including candidate laptop Wi-Fi PCIe adapters.
 - `VANTAOS_HW_AUDIO_HDA_CANDIDATE` reports PCI High Definition Audio functions (class 04:03); this is discovery only, not an audio driver.
 - `VANTAOS_HW_I2C_SERIAL_IO_CANDIDATE` reports PCI class 0C:80 serial-bus candidates. This class is not sufficient to prove an I2C controller or discover a touchpad; ACPI namespace evaluation and I2C-HID support remain required.
 

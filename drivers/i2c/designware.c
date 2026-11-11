@@ -224,10 +224,10 @@ static int dw_set_speed(i2c_dw_bus_t *bus, uint32_t speed_hz)
         dw_write(bus,DW_IC_ENABLE,1U);
         if(!dw_wait_enabled(bus,1U))
         {
-            if(!dw_restore_controller(bus,con&~DW_CON_SPEED_MASK|
-                                      (mode==DW_CON_SPEED_FAST?
-                                       DW_CON_SPEED_STANDARD:DW_CON_SPEED_FAST),
-                                      old_enable))
+            uint32_t previous_con=(con&~DW_CON_SPEED_MASK)|
+                (mode==DW_CON_SPEED_FAST?DW_CON_SPEED_STANDARD:
+                                         DW_CON_SPEED_FAST);
+            if(!dw_restore_controller(bus,previous_con,old_enable))
                 bus->ready=0U;
             return 0;
         }

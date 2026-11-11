@@ -552,16 +552,28 @@ static int aml_parse_cids(acpi_aml_device_t* device,
     return 1;
 }
 
+static int aml_name_equals(const char* left, const char* right)
+{
+    while (*left != '\0' && *right != '\0')
+    {
+        if (*left != *right)
+            return 0;
+        ++left;
+        ++right;
+    }
+    return *left == *right;
+}
+
 static int aml_handle_name(acpi_aml_device_t* device, const char* name,
                            const aml_value_t* value, const char* scope)
 {
     if (!device)
         return 1;
-    if (strcmp(name, "_HID") == 0)
+    if (aml_name_equals(name, "_HID"))
         aml_store_id(device->hid, value);
-    else if (strcmp(name, "_CID") == 0 && value->kind == AML_VALUE_PACKAGE)
+    else if (aml_name_equals(name, "_CID") && value->kind == AML_VALUE_PACKAGE)
         return aml_parse_cids(device, value, scope);
-    else if (strcmp(name, "_UID") == 0)
+    else if (aml_name_equals(name, "_UID"))
     {
         if (value->kind == AML_VALUE_INTEGER)
         {
@@ -577,13 +589,13 @@ static int aml_handle_name(acpi_aml_device_t* device, const char* name,
             device->uid_is_string = 1U;
         }
     }
-    else if (strcmp(name, "_STA") == 0 &&
+    else if (aml_name_equals(name, "_STA") &&
              value->kind == AML_VALUE_INTEGER)
     {
         device->sta = (uint32_t)value->integer;
         device->sta_valid = 1U;
     }
-    else if (strcmp(name, "_CRS") == 0 &&
+    else if (aml_name_equals(name, "_CRS") &&
              value->kind == AML_VALUE_BUFFER)
         return aml_parse_resources(device, value->bytes, value->length);
     return 1;

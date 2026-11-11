@@ -74,6 +74,17 @@ int main(void)
     assert(!hid_report_parse(NULL, 1U, &layout));
     assert(!hid_report_parse(keyboard, 0U, &layout));
     assert(!hid_report_parse(keyboard, sizeof(keyboard), NULL));
+
+    /* A 32-bit Usage item embeds the Usage Page in its upper 16 bits. */
+    static const uint8_t embedded_page[] = {
+        0x0B,0x06,0x00,0x01,0x00, 0xA1,0x01,
+        0x05,0x07, 0x19,0xE0, 0x29,0xE7,
+        0x15,0x00, 0x25,0x01, 0x75,0x01, 0x95,0x08, 0x81,0x02,
+        0xC0
+    };
+    assert(hid_report_parse(embedded_page,sizeof(embedded_page),&layout));
+    assert(layout.has_keyboard==1U);
+    assert(layout.fields[0].usage_page==0x07U);
     puts("HID report descriptor sizing tests passed");
     return 0;
 }

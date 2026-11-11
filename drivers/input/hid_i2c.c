@@ -266,7 +266,7 @@ static void hid_decode_pointer(hid_i2c_device_t *device,uint8_t report_id,
 {
     int32_t x=0,y=0,wheel=0;
     uint8_t buttons=device->buttons;
-    uint8_t have_x=0U,have_y=0U;
+    uint8_t have_x=0U,have_y=0U,have_contact=0U;
     for(uint32_t f=0U;f<device->layout.field_count;++f)
     {
         const hid_input_field_t *field=&device->layout.fields[f];
@@ -282,16 +282,17 @@ static void hid_decode_pointer(hid_i2c_device_t *device,uint8_t report_id,
                 uint8_t mask=(uint8_t)(1U<<(usage-1U));
                 if(raw) buttons|=mask; else buttons&=(uint8_t)~mask;
             }
-            else if(field->usage_page==0x0DU&&usage==0x42U)
+            else if(field->usage_page==0x0DU&&usage==0x42U&&!have_contact)
             {
                 if(raw) buttons|=1U; else buttons&=(uint8_t)~1U;
+                have_contact=1U;
             }
-            else if(field->usage_page==0x01U&&usage==0x30U)
+            else if(field->usage_page==0x01U&&usage==0x30U&&!have_x)
             {
                 x=hid_signed_value(raw,field->bit_size,field->logical_min);
                 have_x=1U;
             }
-            else if(field->usage_page==0x01U&&usage==0x31U)
+            else if(field->usage_page==0x01U&&usage==0x31U&&!have_y)
             {
                 y=hid_signed_value(raw,field->bit_size,field->logical_min);
                 have_y=1U;
@@ -406,10 +407,45 @@ int hid_i2c_attach(i2c_bus_t *bus,uint16_t address,uint32_t speed_hz,
             largest_report=candidate.layout.reports[i].input_bytes;
     if((uint32_t)largest_report+2U>max_input)
         return 0;
-    candidate.has_keyboard=candidate.layout.has_keyboard;
-    candidate.has_pointer=(uint8_t)(candidate.layout.has_mouse||
-                                    candidate.layout.has_touchpad);
-    candidate.touchpad=candidate.layout.has_touchpad;
+    uint8_t keyboard_fields=0U;
+    uint8_t relative_x=0U,relative_y=0U;
+    uint8_t absolute_x=0U,absolute_y=0U;
+    uint8_t contact_switch=0U,buttons_present=0U,wheel_present=0U;
+    for(uint32_t i=0U;i<candidate.layout.field_count;++i)
+    {
+        const hid_input_field_t *field=&candidate.layout.fields[i];
+        if((field->flags&1U)!=0U) continue;
+        if(field->usage_page==0x07U&&field->usage_max>=1U)
+            keyboard_fields=1U;
+        if(field->usage_page==0x09U&&field->usage_min<=5U&&
+           field->usage_max>=1U)
+            buttons_present=1U;
+        if(field->usage_page==0x0DU&&field->usage_min<=0x42U&&
+           field->usage_max>=0x42U)
+        {contact_switch=1U;buttons_present=1U;}
+        if(field->usage_page==0x01U&&field->usage_min<=0x30U&&
+           field->usage_max>=0x30U)
+        {
+            if(field->logical_min<0) relative_x=1U;
+            else absolute_x=1U;
+        }
+        if(field->usage_page==0x01U&&field->usage_min<=0x31U&&
+           field->usage_max>=0x31U)
+        {
+            if(field->logical_min<0) relative_y=1U;
+            else absolute_y=1U;
+        }
+        if(field->usage_page==0x01U&&field->usage_min<=0x38U&&
+           field->usage_max>=0x38U)
+            wheel_present=1U;
+    }
+    candidate.has_keyboard=(uint8_t)(candidate.layout.has_keyboard&&
+                                     keyboard_fields);
+    candidate.touchpad=(uint8_t)(candidate.layout.has_touchpad&&
+                                 absolute_x&&absolute_y&&contact_switch);
+    candidate.has_pointer=(uint8_t)(
+        (candidate.layout.has_mouse&&relative_x&&relative_y)||
+        candidate.touchpad);
     if(!candidate.has_keyboard&&!candidate.has_pointer)
     {
         serial_write("VANTAOS_I2C_HID_UNSUPPORTED_REPORT_COLLECTION\n");
@@ -442,7 +478,8 @@ int hid_i2c_attach(i2c_bus_t *bus,uint16_t address,uint32_t speed_hz,
         input_device_descriptor_t input={.name=pointer_names[slot],
             .bus=INPUT_BUS_I2C,.kind=INPUT_DEVICE_MOUSE,
             .capabilities=INPUT_CAP_MOUSE_RELATIVE|
-                          INPUT_CAP_MOUSE_BUTTONS|INPUT_CAP_MOUSE_WHEEL};
+                          (buttons_present?INPUT_CAP_MOUSE_BUTTONS:0U)|
+                          (wheel_present?INPUT_CAP_MOUSE_WHEEL:0U)};
         if(!input_register_device(&input,&candidate.pointer_id))
         {
             if(candidate.keyboard_id) (void)input_unregister_device(candidate.keyboard_id);

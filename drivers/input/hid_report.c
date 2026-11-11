@@ -28,6 +28,8 @@ typedef struct
     uint16_t minimum;
     uint16_t maximum;
     uint8_t range_valid;
+    uint16_t usage_page;
+    uint8_t usage_page_valid;
 } hid_local_state_t;
 
 static uint32_t read_item_value(const uint8_t* bytes, uint32_t size)
@@ -45,10 +47,33 @@ static int32_t read_signed_item(const uint8_t* bytes, uint32_t size)
     return (int32_t)value;
 }
 
-static uint16_t local_usage(uint32_t value, uint16_t current_page)
+static int local_set_usage(hid_local_state_t *local,uint32_t tag,
+                           uint32_t value,uint16_t global_page)
 {
-    (void)current_page;
-    return (uint16_t)(value > 0xFFFFU ? value & 0xFFFFU : value);
+    uint16_t page=value>0xFFFFU?(uint16_t)(value>>16U):
+                 local->usage_page_valid?local->usage_page:global_page;
+    if(local->usage_page_valid&&value>0xFFFFU&&
+       local->usage_page!=page)
+        return 0;
+    local->usage_page=page;
+    local->usage_page_valid=1U;
+    uint16_t usage=(uint16_t)value;
+    if(tag==0U)
+    {
+        local->usage=usage;
+        local->valid=1U;
+    }
+    else if(tag==1U)
+    {
+        local->minimum=usage;
+        local->range_valid=1U;
+    }
+    else if(tag==2U)
+    {
+        local->maximum=usage;
+        local->range_valid=1U;
+    }
+    return 1;
 }
 
 static int add_input_bits(uint32_t bits[256], uint8_t seen[256],
@@ -71,7 +96,7 @@ int hid_report_parse(const uint8_t* descriptor,size_t length,
     uint8_t input_seen[256]={0};
     hid_global_state_t globals={0U,0U,0U,0,0U};
     hid_global_state_t global_stack[HID_GLOBAL_STACK_DEPTH];
-    hid_local_state_t local={0U,0U,0U,0U,0U};
+    hid_local_state_t local={0U,0U,0U,0U,0U,0U,0U};
     uint32_t stack_depth=0U,collection_depth=0U;
     int numbered_input=0,unnumbered_input=0;
     hid_report_layout_t parsed;
@@ -137,16 +162,11 @@ int hid_report_parse(const uint8_t* descriptor,size_t length,
             switch(item_tag)
             {
                 case 0U:
-                    local.usage=local_usage(value,globals.usage_page);
-                    local.valid=1U;
-                    break;
                 case 1U:
-                    local.minimum=local_usage(value,globals.usage_page);
-                    local.range_valid=1U;
-                    break;
                 case 2U:
-                    local.maximum=local_usage(value,globals.usage_page);
-                    local.range_valid=1U;
+                    if(!local_set_usage(&local,item_tag,value,
+                                        globals.usage_page))
+                        return 0;
                     break;
                 default: break;
             }
@@ -157,18 +177,20 @@ int hid_report_parse(const uint8_t* descriptor,size_t length,
             {
                 if(item_size==0U||collection_depth>=HID_COLLECTION_DEPTH)
                     return 0;
+                uint16_t collection_page=local.usage_page_valid?
+                                         local.usage_page:globals.usage_page;
                 if(collection_depth==0U&&local.valid)
                 {
                     if(parsed.top_usage==0U)
                     {
-                        parsed.top_usage_page=globals.usage_page;
+                        parsed.top_usage_page=collection_page;
                         parsed.top_usage=local.usage;
                     }
-                    if(globals.usage_page==0x01U&&local.usage==0x06U)
+                    if(collection_page==0x01U&&local.usage==0x06U)
                         parsed.has_keyboard=1U;
-                    if(globals.usage_page==0x01U&&local.usage==0x02U)
+                    if(collection_page==0x01U&&local.usage==0x02U)
                         parsed.has_mouse=1U;
-                    if(globals.usage_page==0x0DU&&
+                    if(collection_page==0x0DU&&
                        (local.usage==0x04U||local.usage==0x05U))
                         parsed.has_touchpad=1U;
                 }
@@ -193,11 +215,14 @@ int hid_report_parse(const uint8_t* descriptor,size_t length,
                     if(offset>UINT16_MAX||globals.report_count>UINT16_MAX||
                        parsed.field_count>=HID_REPORT_MAX_FIELDS)
                         return 0;
+                    if(local.range_valid&&local.minimum>local.maximum)
+                        return 0;
                     if((value&1U)==0U)
                     {
                         hid_input_field_t* field=&parsed.fields[parsed.field_count++];
                         field->report_id=globals.report_id;
-                        field->usage_page=globals.usage_page;
+                        field->usage_page=local.usage_page_valid?
+                                          local.usage_page:globals.usage_page;
                         field->usage_min=local.range_valid?local.minimum:
                                          local.valid?local.usage:0U;
                         field->usage_max=local.range_valid?local.maximum:

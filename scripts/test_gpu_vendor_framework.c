@@ -226,10 +226,23 @@ int main(void)
         .vendor_id = 0x1234U, .device_id = 0x9999U,
         .class_code = 0x03U, .subclass = 0x00U
     };
+    const struct pci_device intel_uhd620 = {
+        .vendor_id = 0x8086U, .device_id = 0x5917U,
+        .class_code = 0x03U, .subclass = 0x00U, .revision = 0x07U
+    };
     gpu_pci_match_t match = {0};
     gpu_device_t device;
     intel_gpu_descriptor_t intel_desc;
     amd_gpu_descriptor_t amd_desc;
+
+    assert(gpu_classify_pci_function(&intel_uhd620, &match));
+    assert(match.vendor == GPU_VENDOR_INTEL);
+    assert(match.architecture == GPU_ARCH_INTEL_GEN9_5);
+    assert(match.is_known_device_id == 1U);
+    assert(intel_gpu_match(&intel_uhd620));
+    assert(intel_gpu_describe(&intel_uhd620, &intel_desc));
+    assert(intel_desc.gen9_profile_status == INTEL_GEN9_UNSUPPORTED_DEVICE);
+    assert(intel_desc.acceleration_ready == 0U);
 
     assert(gpu_classify_pci_function(&intel, &match));
     assert(match.vendor == GPU_VENDOR_INTEL);

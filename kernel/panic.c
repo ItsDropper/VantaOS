@@ -266,10 +266,11 @@ void exception_handler(
      * exceptions. Their origin may be CPL3, but the condition is system-wide
      * and must never be hidden by the user-process fault-containment path.
      */
-    if (exception_number == 8U || exception_number == 18U)
-        goto fatal_exception;
+    const int fatal_machine_exception =
+        exception_number == 8U || exception_number == 18U;
 
-    if (user_mode_selftest_handle_exception(exception_number, frame))
+    if (!fatal_machine_exception &&
+        user_mode_selftest_handle_exception(exception_number, frame))
         return;
 
     /*
@@ -278,7 +279,8 @@ void exception_handler(
      * address space only after switching CR3 and RSP. NMI is excluded because
      * it is asynchronous and must not be attributed to the interrupted task.
      */
-    if (exception_number != 2U && frame && (frame->cs & 3U) == 3U)
+    if (!fatal_machine_exception && exception_number != 2U &&
+        frame && (frame->cs & 3U) == 3U)
     {
         process_t process;
         if (process_snapshot_try(process_current_pid(), &process) &&
@@ -303,7 +305,6 @@ void exception_handler(
         has_fault_address = 1;
     }
 
-fatal_exception:
     kernel_panic(
         exception_number < 31 ?
             panic_format_exception_name(exception_number) :

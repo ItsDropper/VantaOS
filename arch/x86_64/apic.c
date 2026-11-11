@@ -245,15 +245,26 @@ int apic_initialize(void)
             return 0;
         }
         lapic = (volatile uint32_t*)(uintptr_t)APIC_MMIO_VIRTUAL;
-        if (base & APIC_BASE_ENABLE)
-        {
-            base &= ~APIC_BASE_ENABLE;
-            write_msr(IA32_APIC_BASE_MSR, base);
-        }
+        /*
+         * Program the physical base while the local APIC is disabled, then
+         * enable it in a separate MSR write. Keeping the transition explicit
+         * avoids relying on a combined base+enable update when firmware left
+         * IA32_APIC_BASE disabled (as SeaBIOS does in the 256 MiB CI boot).
+         */
+        base &= ~APIC_BASE_ENABLE;
         base &= ~0x0000000FFFFFF000ULL;
-        base |= (platform_info.local_apic_address & 0x0000000FFFFF000ULL) |
-                APIC_BASE_ENABLE;
+        base |= platform_info.local_apic_address & 0x0000000FFFFF000ULL;
         write_msr(IA32_APIC_BASE_MSR, base);
+        base |= APIC_BASE_ENABLE;
+        write_msr(IA32_APIC_BASE_MSR, base);
+        base = read_msr(IA32_APIC_BASE_MSR);
+        if ((base & APIC_BASE_ENABLE) == 0U)
+        {
+            serial_write("VANTAOS_APIC_ENABLE_FAIL base=0x");
+            serial_write_hex64(base);
+            serial_write("\n");
+            return 0;
+        }
     }
     else
     {

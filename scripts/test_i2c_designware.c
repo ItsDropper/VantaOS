@@ -74,7 +74,10 @@ static void mock_write(void *context, uint32_t offset, uint32_t value)
     {
         if(mock->write_count<128U) mock->writes[mock->write_count++]=value;
         if(value&(1U<<8U))
-            mock->rx[mock->rx_write++%FIFO_CAPACITY]=(uint8_t)(0xA0U+mock->rx_write);
+        {
+            uint32_t index=mock->rx_write++;
+            mock->rx[index%FIFO_CAPACITY]=(uint8_t)(0xA0U+index);
+        }
     }
     if(offset==REG_ENABLE) mock->regs[offset/4U]=value&1U;
     else if(offset/4U<64U) mock->regs[offset/4U]=value;

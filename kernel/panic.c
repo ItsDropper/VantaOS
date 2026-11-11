@@ -288,17 +288,17 @@ void exception_handler(
             process.address_space == paging_get_current_address_space() &&
             process_terminate_current_try_with_status(-1))
         {
-              serial_write("VANTAOS_USER_PROCESS_FAULT\\n");
+            serial_write("VANTAOS_USER_PROCESS_FAULT\n");
             if (exception_number == 6U)
-                serial_write("VANTAOS_USER_PROCESS_FAULT_UD\\n");
+                serial_write("VANTAOS_USER_PROCESS_FAULT_UD\n");
             else if (exception_number == 14U)
             {
                 if ((frame->error_code & 0x10U) != 0U)
-                    serial_write("VANTAOS_USER_PROCESS_FAULT_NX\\n");
+                    serial_write("VANTAOS_USER_PROCESS_FAULT_NX\n");
                 else if ((frame->error_code & 0x7U) == 0x7U)
-                    serial_write("VANTAOS_USER_PROCESS_FAULT_WRITE_PROTECT\\n");
+                    serial_write("VANTAOS_USER_PROCESS_FAULT_WRITE_PROTECT\n");
                 else if ((frame->error_code & 0x5U) == 0x4U)
-                    serial_write("VANTAOS_USER_PROCESS_FAULT_UNMAPPED\\n");
+                    serial_write("VANTAOS_USER_PROCESS_FAULT_UNMAPPED\n");
             }
             return;
         }

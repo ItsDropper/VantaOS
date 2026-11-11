@@ -109,9 +109,9 @@ static void write_hex8(uint8_t value)
 
 /* SMBIOS strings are untrusted firmware data; emit printable ASCII only. */
 static void write_string(const uint8_t* structure, uint8_t structure_length,
-                         uint8_t string_index)
+                         const uint8_t* table_end, uint8_t string_index)
 {
-    if (string_index == 0U || structure_length < 4U)
+    if (string_index == 0U || structure_length < 4U || !table_end)
     {
         serial_write("unknown");
         return;
@@ -120,7 +120,7 @@ static void write_string(const uint8_t* structure, uint8_t structure_length,
     const uint8_t* cursor = structure + structure_length;
     for (uint32_t current = 1U; current <= string_index; ++current)
     {
-        if (*cursor == 0U)
+        if (cursor >= table_end || *cursor == 0U)
         {
             serial_write("unknown");
             return;
@@ -128,7 +128,7 @@ static void write_string(const uint8_t* structure, uint8_t structure_length,
         if (current == string_index)
         {
             uint32_t emitted = 0U;
-            while (*cursor != 0U && emitted < 96U)
+            while (cursor < table_end && *cursor != 0U && emitted < 96U)
             {
                 char character = (*cursor >= 0x20U && *cursor <= 0x7EU) ?
                     (char)*cursor : '?';
@@ -136,12 +136,17 @@ static void write_string(const uint8_t* structure, uint8_t structure_length,
                 ++cursor;
                 ++emitted;
             }
-            if (*cursor != 0U)
+            if (cursor < table_end && *cursor != 0U)
                 serial_write("...");
             return;
         }
-        while (*cursor != 0U)
+        while (cursor < table_end && *cursor != 0U)
             ++cursor;
+        if (cursor >= table_end)
+        {
+            serial_write("unknown");
+            return;
+        }
         ++cursor;
     }
     serial_write("unknown");
@@ -217,17 +222,25 @@ static uint32_t memory_device_mib(const uint8_t* structure,
         return 0U;
     uint16_t size = (uint16_t)structure[12] |
                     ((uint16_t)structure[13] << 8U);
-    if (size == 0U || size == 0xFFFFU || size == 0x7FFFU)
+    if (size == 0U || size == 0xFFFFU)
         return 0U;
-    if (size == 0x7FFFU && length >= 32U)
-        return 0U;
+    if (size == 0x7FFFU)
+    {
+        if (length < 32U)
+            return 0U;
+        return (uint32_t)structure[28] |
+               ((uint32_t)structure[29] << 8U) |
+               ((uint32_t)structure[30] << 16U) |
+               ((uint32_t)structure[31] << 24U);
+    }
     if ((size & 0x8000U) != 0U)
-        return (uint32_t)(size & 0x7FFFU);
+        return (uint32_t)(size & 0x7FFFU) / 1024U;
     return size;
 }
 
 static void inventory_structure(const uint8_t* structure,
-                                uint8_t length, uint32_t* memory_mib,
+                                uint8_t length, const uint8_t* table_end,
+                                uint32_t* memory_mib,
                                 uint32_t* memory_devices)
 {
     switch (structure[0])
@@ -236,9 +249,9 @@ static void inventory_structure(const uint8_t* structure,
             if (length >= 6U)
             {
                 serial_write("VANTAOS_HW_SMBIOS_BIOS vendor=");
-                write_string(structure, length, structure[4]);
+                write_string(structure, length, table_end, structure[4]);
                 serial_write(" version=");
-                write_string(structure, length, structure[5]);
+                write_string(structure, length, table_end, structure[5]);
                 serial_write("\n");
             }
             break;
@@ -246,11 +259,11 @@ static void inventory_structure(const uint8_t* structure,
             if (length >= 8U)
             {
                 serial_write("VANTAOS_HW_SMBIOS_SYSTEM manufacturer=");
-                write_string(structure, length, structure[4]);
+                write_string(structure, length, table_end, structure[4]);
                 serial_write(" product=");
-                write_string(structure, length, structure[5]);
+                write_string(structure, length, table_end, structure[5]);
                 serial_write(" version=");
-                write_string(structure, length, structure[6]);
+                write_string(structure, length, table_end, structure[6]);
                 serial_write("\n");
             }
             break;
@@ -258,11 +271,11 @@ static void inventory_structure(const uint8_t* structure,
             if (length >= 8U)
             {
                 serial_write("VANTAOS_HW_SMBIOS_BOARD manufacturer=");
-                write_string(structure, length, structure[4]);
+                write_string(structure, length, table_end, structure[4]);
                 serial_write(" product=");
-                write_string(structure, length, structure[5]);
+                write_string(structure, length, table_end, structure[5]);
                 serial_write(" version=");
-                write_string(structure, length, structure[6]);
+                write_string(structure, length, table_end, structure[6]);
                 serial_write("\n");
             }
             break;
@@ -270,9 +283,9 @@ static void inventory_structure(const uint8_t* structure,
             if (length >= 17U)
             {
                 serial_write("VANTAOS_HW_SMBIOS_CPU manufacturer=");
-                write_string(structure, length, structure[7]);
+                write_string(structure, length, table_end, structure[7]);
                 serial_write(" model=");
-                write_string(structure, length, structure[16]);
+                write_string(structure, length, table_end, structure[16]);
                 serial_write("\n");
             }
             break;
@@ -346,8 +359,8 @@ void smbios_inventory_initialize(void)
             break;
         }
 
-        inventory_structure(structure, length, &memory_mib,
-                            &memory_devices);
+        inventory_structure(structure, length, table + location.table_length,
+                            &memory_mib, &memory_devices);
         ++structures;
         offset = next;
         if (structure[0] == 127U)

@@ -14,6 +14,7 @@
 #include "intel_gpu.h"
 #include "amd_gpu.h"
 #include "serial.h"
+#include "pci.h"
 #include <stddef.h>
 #include "gpu_core.h"
 #include "storage_init.h"
@@ -66,6 +67,83 @@ void gpu_initialize(void)
     }
 }
 
+static void hardware_write_hex8(uint8_t value)
+{
+    static const char digits[] = "0123456789ABCDEF";
+    char buffer[2] = {
+        digits[(value >> 4U) & 0x0FU],
+        digits[value & 0x0FU]
+    };
+    serial_write_bytes(buffer, sizeof(buffer));
+}
+
+static void hardware_write_hex16(uint16_t value)
+{
+    hardware_write_hex8((uint8_t)(value >> 8U));
+    hardware_write_hex8((uint8_t)value);
+}
+
+/*
+ * Report enumerated PCI functions before subsystem-specific startup.
+ * This is deliberately an inventory, not a claim that a matching driver
+ * exists or that a device has been initialized. It is useful on physical
+ * machines where the exact chipset/NIC/audio/touchpad controller is unknown.
+ */
+static void hardware_inventory_initialize(void)
+{
+    int count = pci_get_device_count();
+    if (count < 0) {
+        serial_write("VANTAOS_HW_PCI_INVENTORY_UNAVAILABLE\\n");
+        return;
+    }
+
+    serial_write("VANTAOS_HW_PCI_DEVICE_COUNT=");
+    /* Decimal count, bounded by the PCI subsystem's fixed device table. */
+    {
+        char digits[10];
+        size_t length = 0U;
+        unsigned int value = (unsigned int)count;
+        do {
+            digits[length++] = (char)('0' + (value % 10U));
+            value /= 10U;
+        } while (value != 0U && length < sizeof(digits));
+        while (length != 0U) {
+            char digit = digits[--length];
+            serial_write_bytes(&digit, 1U);
+        }
+    }
+    serial_write("\\n");
+
+    for (int index = 0; index < count; ++index) {
+        const struct pci_device *device = pci_get_device(index);
+        if (device == NULL)
+            continue;
+
+        serial_write("VANTAOS_HW_PCI bdf=");
+        hardware_write_hex8(device->bus);
+        serial_write(":");
+        hardware_write_hex8(device->slot);
+        serial_write(".");
+        hardware_write_hex8(device->function);
+        serial_write(" id=");
+        hardware_write_hex16(device->vendor_id);
+        serial_write(":");
+        hardware_write_hex16(device->device_id);
+        serial_write(" class=");
+        hardware_write_hex8(device->class_code);
+        serial_write(":");
+        hardware_write_hex8(device->subclass);
+        serial_write(":");
+        hardware_write_hex8(device->prog_if);
+        serial_write(" name=");
+        serial_write(pci_get_class_name(device->class_code,
+                                        device->subclass));
+        serial_write(" vendor=");
+        serial_write(pci_get_vendor_name(device->vendor_id));
+        serial_write("\\n");
+    }
+}
+
 /*
  * Cross-bus orchestration lives here. Each subsystem owns the concrete
  * driver/protocol registration sequence behind its own initializer.
@@ -73,6 +151,7 @@ void gpu_initialize(void)
  */
 void drivers_initialize(void)
 {
+    hardware_inventory_initialize();
     net_stack_initialize();
     usb_host_controller_initialize();
     storage_initialize();

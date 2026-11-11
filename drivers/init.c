@@ -56,7 +56,8 @@ void gpu_initialize(void)
 
         /* Route known vendors through the common fail-closed lifecycle. */
         const gpu_driver_descriptor_t *driver = NULL;
-        if (devices[i].vendor == GPU_VENDOR_INTEL)
+        if (devices[i].vendor == GPU_VENDOR_INTEL &&
+            devices[i].architecture == GPU_ARCH_INTEL_GEN9)
             driver = intel_gpu_driver();
         else if (devices[i].vendor == GPU_VENDOR_AMD)
             driver = amd_gpu_driver();

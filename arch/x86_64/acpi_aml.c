@@ -462,10 +462,14 @@ static int aml_parse_resources(acpi_aml_device_t* device,
                         resource->type_flags = aml_u16(payload + 4U);
                         resource->connection_speed_hz = aml_u32(payload + 9U);
                         resource->slave_address = aml_u16(payload + 13U);
+                        uint32_t source_length = 0U;
+                        while (source_offset + source_length < item_length &&
+                               payload[source_offset + source_length] != 0U)
+                            ++source_length;
                         aml_copy_ascii(resource->resource_source,
                                        sizeof(resource->resource_source),
                                        payload + source_offset,
-                                       item_length - source_offset);
+                                       source_length);
                         ++device->i2c_count;
                     }
                 }

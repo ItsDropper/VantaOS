@@ -14,6 +14,7 @@
 #include "terminal_process.h"
 #include "file_explorer_process.h"
 #include "usb.h"
+#include "hid_i2c.h"
 #include "net.h"
 #include "serial.h"
 #include "interrupts.h"
@@ -35,6 +36,7 @@ void desktop_process_main(void)
          * USB and networking are polled with bounded work after the UI step.
          * The network stack gets at most one unit of work per timer tick.
          */
+        hid_i2c_poll();
         mouse_process_events();
         terminal_process_set_input_enabled(graphics_get_active_panel() == 3);
         desktop_update();

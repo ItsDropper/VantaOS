@@ -144,8 +144,8 @@ static void hid_decode_keyboard(hid_i2c_device_t *device,uint8_t report_id,
     {
         const hid_input_field_t *field=&device->layout.fields[f];
         if(field->report_id!=report_id||field->usage_page!=0x07U||
-           (field->flags&1U)!=0U||field->usage_min==0U||
-           field->usage_max<field->usage_min)
+           (field->flags&1U)!=0U||field->usage_max<field->usage_min||
+           (field->usage_min==0U&&field->usage_max==0U))
             continue;
         uint32_t base=field->bit_offset;
         if(field->report_count>256U) return;
@@ -165,7 +165,8 @@ static void hid_decode_keyboard(hid_i2c_device_t *device,uint8_t report_id,
         {
             uint32_t maximum=field->usage_max;
             if(maximum>255U) maximum=255U;
-            for(uint32_t usage=field->usage_min;usage<=maximum;++usage)
+            uint32_t minimum=field->usage_min==0U?1U:field->usage_min;
+            for(uint32_t usage=minimum;usage<=maximum;++usage)
             {
                 managed[usage]=1U;
                 next[usage]=0U;
@@ -235,17 +236,21 @@ static void hid_decode_pointer(hid_i2c_device_t *device,uint8_t report_id,
     {
         if(have_x&&have_y)
         {
+            int32_t absolute_x=x,absolute_y=y;
             if(device->last_xy_valid)
             {
-                int64_t dx=(int64_t)x-device->last_x;
-                int64_t dy=(int64_t)y-device->last_y;
-                if(dx>4096) dx=4096; if(dx< -4096) dx= -4096;
-                if(dy>4096) dy=4096; if(dy< -4096) dy= -4096;
-                x=(int32_t)dx; y=(int32_t)dy;
+                int64_t dx=(int64_t)absolute_x-device->last_x;
+                int64_t dy=(int64_t)absolute_y-device->last_y;
+                if(dx>4096) dx=4096;
+                if(dx< -4096) dx= -4096;
+                if(dy>4096) dy=4096;
+                if(dy< -4096) dy= -4096;
+                x=(int32_t)dx;
+                y=(int32_t)dy;
             }
             else x=y=0;
-            device->last_x=have_x? (device->last_xy_valid?device->last_x+x:x):0;
-            device->last_y=have_y? (device->last_xy_valid?device->last_y+y:y):0;
+            device->last_x=absolute_x;
+            device->last_y=absolute_y;
             device->last_xy_valid=1U;
         }
         else have_x=have_y=0U;

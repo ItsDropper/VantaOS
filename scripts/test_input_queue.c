@@ -111,6 +111,20 @@ int main(void)
 
     assert(input_unregister_device(mouse_id));
     assert(!input_next_event(&event));
+
+    input_device_descriptor_t i2c_keyboard = {
+        .name = "test I2C keyboard", .bus = INPUT_BUS_I2C,
+        .kind = INPUT_DEVICE_KEYBOARD,
+        .capabilities = INPUT_CAP_KEYBOARD_KEYS
+    };
+    uint32_t i2c_id = 0U;
+    assert(input_register_device(&i2c_keyboard, &i2c_id));
+    input_event_t i2c_key = {.device_id=i2c_id,.type=INPUT_EVENT_KEY,
+                             .code=0x04,.value=1,.value2=0};
+    assert(input_report_event(&i2c_key));
+    assert(input_next_event(&event));
+    assert(event.device_id==i2c_id&&event.code==0x04&&event.value==1);
+    assert(input_unregister_device(i2c_id));
     puts("normalized input queue tests passed");
     return 0;
 }

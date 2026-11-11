@@ -22,6 +22,7 @@
 #include "storage_init.h"
 #include "usb_init.h"
 #include "hda.h"
+#include "i2c.h"
 
 static void gpu_write_hex16(uint16_t value)
 {
@@ -291,6 +292,7 @@ void drivers_initialize(void)
     acpi_log_table_inventory();
     smbios_inventory_initialize();
     hardware_inventory_initialize();
+    i2c_initialize();
     net_stack_initialize();
     usb_host_controller_initialize();
     storage_initialize();

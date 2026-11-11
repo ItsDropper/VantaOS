@@ -35,6 +35,7 @@ typedef struct
     uint32_t injected_count;
     uint8_t online;
     uint8_t reset_ack_pending;
+    uint8_t fail_input_reads;
     uint32_t power_on_commands;
     uint32_t reset_commands;
 } hid_test_state_t;
@@ -81,6 +82,7 @@ static int fake_transfer(void *context,uint16_t address,uint32_t speed,
     if(reg==0x40U)
     {
         assert(read_length==10U);
+        if(s->fail_input_reads) return 0;
         if(s->reset_ack_pending)
         {
             s->reset_ack_pending=0U;
@@ -141,6 +143,7 @@ int main(void)
                    .transfer=fake_transfer,.ready=1U};
     assert(hid_i2c_attach(&bus,0x15U,100000U,0x20U,"PNP0C50"));
     assert(state.registered_count==1U);
+    state.online=1U;
     assert(state.transfer_count==6U);
     assert(state.power_on_commands==2U&&state.reset_commands==1U);
     assert(!hid_i2c_attach(&bus,0x15U,100000U,0x20U,"PNP0C50"));
@@ -162,6 +165,36 @@ int main(void)
     assert(state.injected_count==4U);
     assert(state.injected_pressed[2]==0U&&state.injected_pressed[3]==0U);
     assert(state.events[2].type==INPUT_EVENT_KEY&&state.events[2].value==0);
-    puts("HID-over-I2C descriptor and keyboard transport tests passed");
+
+    /* A persistent bus failure must release held keys and take the device
+       offline, then bounded retries must restore it when the bus recovers. */
+    state.input_report[2U]=0x02U;
+    state.input_report[4U]=0x04U;
+    state.tick=3U;
+    hid_i2c_poll();
+    assert(state.injected_count==6U);
+    assert(state.injected_pressed[4U]==1U&&state.injected_pressed[5U]==1U);
+    state.fail_input_reads=1U;
+    for(uint32_t i=0U;i<10U;++i)
+    {
+        ++state.tick;
+        hid_i2c_poll();
+    }
+    assert(state.online==0U);
+    assert(state.injected_count==8U);
+    assert(state.injected_pressed[6U]==0U&&state.injected_pressed[7U]==0U);
+
+    state.fail_input_reads=0U;
+    state.tick+=10U;
+    hid_i2c_poll();
+    assert(state.online==1U);
+
+    state.input_report[2U]=0U;
+    state.input_report[4U]=0x04U;
+    ++state.tick;
+    hid_i2c_poll();
+    assert(state.injected_count==10U);
+    assert(state.injected_pressed[8U]==0U&&state.injected_pressed[9U]==1U);
+    puts("HID-over-I2C descriptor, keyboard, and recovery tests passed");
     return 0;
 }

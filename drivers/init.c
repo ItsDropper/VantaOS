@@ -153,6 +153,9 @@ static void hardware_inventory_initialize(void)
                                         device->subclass));
         serial_write(" vendor=");
         serial_write(pci_get_vendor_name(device->vendor_id));
+        serial_write(" device_name=");
+        serial_write(pci_get_device_name(device->vendor_id,
+                                         device->device_id));
         serial_write("\n");
     }
 }

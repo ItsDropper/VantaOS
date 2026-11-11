@@ -189,12 +189,12 @@ int main(void)
     hid_i2c_poll();
     assert(state.online==1U);
 
-    state.input_report[2U]=0U;
+    state.input_report[2U]=0x02U;
     state.input_report[4U]=0x04U;
     ++state.tick;
     hid_i2c_poll();
     assert(state.injected_count==10U);
-    assert(state.injected_pressed[8U]==0U&&state.injected_pressed[9U]==1U);
+    assert(state.injected_pressed[8U]==1U&&state.injected_pressed[9U]==1U);
     puts("HID-over-I2C descriptor, keyboard, and recovery tests passed");
     return 0;
 }

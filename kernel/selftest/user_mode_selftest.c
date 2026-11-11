@@ -521,7 +521,8 @@ int user_mode_process_smoke_test_start(void)
     struct test_elf_header* bad_header =
         (struct test_elf_header*)malformed_elf;
     struct test_elf_program_header* bad_ph =
-        (struct test_elf_program_header*)(malformed_elf + ELF_PAYLOAD_OFFSET);
+        (struct test_elf_program_header*)(malformed_elf +
+            sizeof(struct test_elf_header));
     uint32_t elf_validation_cases = 0U;
     int elf_validation_ok = 1;
 #define RESET_MALFORMED_ELF() do { \
@@ -543,23 +544,23 @@ int user_mode_process_smoke_test_start(void)
 } while (0)
 
     RESET_MALFORMED_ELF();
-    bad_header->program_header_offset = 0U;
+    bad_header->phoff = 0U;
     EXPECT_MALFORMED_ELF();
 
     RESET_MALFORMED_ELF();
-    bad_header->program_header_offset = 65U;
+    bad_header->phoff = 65U;
     EXPECT_MALFORMED_ELF();
 
     RESET_MALFORMED_ELF();
-    bad_header->program_header_count = 0U;
+    bad_header->phnum = 0U;
     EXPECT_MALFORMED_ELF();
 
     RESET_MALFORMED_ELF();
-    bad_header->program_header_count = 17U;
+    bad_header->phnum = 17U;
     EXPECT_MALFORMED_ELF();
 
     RESET_MALFORMED_ELF();
-    bad_header->program_header_entry_size--;
+    bad_header->phentsize--;
     EXPECT_MALFORMED_ELF();
 
     RESET_MALFORMED_ELF();
@@ -579,7 +580,7 @@ int user_mode_process_smoke_test_start(void)
     EXPECT_MALFORMED_ELF();
 
     RESET_MALFORMED_ELF();
-    bad_ph->file_size = bad_ph->memory_size + 1U;
+    bad_ph->filesz = bad_ph->memsz + 1U;
     EXPECT_MALFORMED_ELF();
 
     RESET_MALFORMED_ELF();
@@ -587,16 +588,16 @@ int user_mode_process_smoke_test_start(void)
     EXPECT_MALFORMED_ELF();
 
     RESET_MALFORMED_ELF();
-    bad_ph->memory_size = 0U;
+    bad_ph->memsz = 0U;
     EXPECT_MALFORMED_ELF();
 
     RESET_MALFORMED_ELF();
-    bad_ph->alignment = 3U;
+    bad_ph->align = 3U;
     EXPECT_MALFORMED_ELF();
 
     RESET_MALFORMED_ELF();
-    bad_ph->alignment = 8192U;
-    bad_ph->virtual_address += PAGE_SIZE;
+    bad_ph->align = 8192U;
+    bad_ph->vaddr += PAGE_SIZE;
     EXPECT_MALFORMED_ELF();
 
     /* This rejection occurs after a load page has already been allocated. */
@@ -605,22 +606,22 @@ int user_mode_process_smoke_test_start(void)
     EXPECT_MALFORMED_ELF();
 
     RESET_MALFORMED_ELF();
-    bad_ph->virtual_address =
+    bad_ph->vaddr =
         PAGING_USER_END + 1U - PAGE_SIZE + ELF_PAYLOAD_OFFSET;
-    bad_ph->file_size = 0U;
-    bad_ph->memory_size = PAGE_SIZE;
-    bad_ph->alignment = 1U;
-    bad_header->entry = bad_ph->virtual_address;
+    bad_ph->filesz = 0U;
+    bad_ph->memsz = PAGE_SIZE;
+    bad_ph->align = 1U;
+    bad_header->entry = bad_ph->vaddr;
     EXPECT_MALFORMED_ELF();
 
     RESET_MALFORMED_ELF();
-    bad_ph->virtual_address =
+    bad_ph->vaddr =
         PAGING_USER_END + 1U - 4U * PAGE_SIZE;
     bad_ph->offset = 0U;
-    bad_ph->file_size = 0U;
-    bad_ph->memory_size = 1U;
-    bad_ph->alignment = 1U;
-    bad_header->entry = bad_ph->virtual_address;
+    bad_ph->filesz = 0U;
+    bad_ph->memsz = 1U;
+    bad_ph->align = 1U;
+    bad_header->entry = bad_ph->vaddr;
     EXPECT_MALFORMED_ELF();
 
     /*
@@ -628,12 +629,12 @@ int user_mode_process_smoke_test_start(void)
      * loader must unwind every data frame and every intermediate page table.
      */
     RESET_MALFORMED_ELF();
-    bad_ph->virtual_address = PAGING_USER_BASE + 0x10000U;
+    bad_ph->vaddr = PAGING_USER_BASE + 0x10000U;
     bad_ph->offset = 0U;
-    bad_ph->file_size = 0U;
-    bad_ph->memory_size = 61U * PAGE_SIZE;
-    bad_ph->alignment = PAGE_SIZE;
-    bad_header->entry = bad_ph->virtual_address;
+    bad_ph->filesz = 0U;
+    bad_ph->memsz = 61U * PAGE_SIZE;
+    bad_ph->align = PAGE_SIZE;
+    bad_header->entry = bad_ph->vaddr;
     EXPECT_MALFORMED_ELF();
 
     const char* one_argument[] = { "probe" };

@@ -93,7 +93,7 @@ static void hardware_inventory_initialize(void)
 {
     int count = pci_get_device_count();
     if (count < 0) {
-        serial_write("VANTAOS_HW_PCI_INVENTORY_UNAVAILABLE\\n");
+        serial_write("VANTAOS_HW_PCI_INVENTORY_UNAVAILABLE\n");
         return;
     }
 
@@ -112,7 +112,7 @@ static void hardware_inventory_initialize(void)
             serial_write_bytes(&digit, 1U);
         }
     }
-    serial_write("\\n");
+    serial_write("\n");
 
     for (int index = 0; index < count; ++index) {
         const struct pci_device *device = pci_get_device(index);
@@ -140,7 +140,7 @@ static void hardware_inventory_initialize(void)
                                         device->subclass));
         serial_write(" vendor=");
         serial_write(pci_get_vendor_name(device->vendor_id));
-        serial_write("\\n");
+        serial_write("\n");
     }
 }
 

@@ -90,10 +90,29 @@ int main(void)
     assert(strstr(log_buffer, "product=IdeaPad 530S") != NULL);
     assert(strstr(log_buffer, "DO_NOT_LOG_THIS_SERIAL") == NULL);
 
+    /* Exercise the SMBIOS 3.x 64-bit entrypoint as well. */
+    log_length = 0U;
+    log_buffer[0] = '\0';
+    memset(entry, 0, 31U);
+    memcpy(entry, "_SM3_", 5U);
+    entry[6] = 24U;
+    entry[7] = 3U;
+    entry[8] = 5U;
+    entry[12] = 0x00U;
+    entry[13] = 0x10U;
+    entry[16] = (uint8_t)table_address;
+    entry[17] = (uint8_t)(table_address >> 8U);
+    entry[18] = (uint8_t)(table_address >> 16U);
+    entry[19] = (uint8_t)(table_address >> 24U);
+    entry[5] = checksum(entry, 24U);
+    smbios_inventory_initialize();
+    assert(strstr(log_buffer, "VANTAOS_HW_SMBIOS_VERSION=3.5") != NULL);
+    assert(strstr(log_buffer, "product=IdeaPad 530S") != NULL);
+
     /* A corrupt entrypoint must fail closed rather than dereference a table. */
     log_length = 0U;
     log_buffer[0] = '\0';
-    entry[4] ^= 0x80U;
+    entry[5] ^= 0x80U;
     smbios_inventory_initialize();
     assert(strstr(log_buffer, "VANTAOS_HW_SMBIOS_UNAVAILABLE") != NULL);
 

@@ -242,6 +242,32 @@ void graphics_draw_taskbar(int taskbar_y, int width)
     graphics_draw_text(clock_x + 15, taskbar_y + 17, clock, VANTA_UI_TEXT, 1);
     graphics_draw_text(clock_x + 15, taskbar_y + 34, date, VANTA_UI_TEXT_SECONDARY, 1);
 }
+
+/* Refresh only the RTC clock/date surface; leave app icons and taskbar items alone. */
+void graphics_draw_taskbar_clock_only(void)
+{
+    if (!initialized || framebuffer_width < 240U || framebuffer_height < 64U)
+        return;
+
+    int width = (int)framebuffer_width;
+    int taskbar_y = (int)framebuffer_height - 64;
+    int center = width / 2;
+    int clock_x = width - 116;
+    if (clock_x < center + 116)
+        clock_x = center + 116;
+    if (clock_x < 0 || clock_x + 8 >= width)
+        return;
+
+    char clock[6], date[11];
+    ui_clock_text(clock, date);
+    graphics_fill_rounded_rect(clock_x, taskbar_y + 6, width - clock_x - 8,
+                                52, 8, VANTA_UI_SURFACE);
+    graphics_fill_rect(clock_x + 7, taskbar_y + 8, 1, 48, VANTA_UI_BORDER);
+    graphics_draw_text(clock_x + 15, taskbar_y + 17, clock, VANTA_UI_TEXT, 1);
+    graphics_draw_text(clock_x + 15, taskbar_y + 34, date,
+                       VANTA_UI_TEXT_SECONDARY, 1);
+}
+
 void graphics_draw_start_menu_overlay(void)
 {
     if (initialized && start_menu_open)

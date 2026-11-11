@@ -77,6 +77,8 @@ void network_framework_selftest(void) {
     ok=net_device_count()==baseline_devices&&ok;
     ok=!net_receive_frame(&d,frame,sizeof(frame))&&ok;
     ok=!net_device_get_ipv4(&d,&address,&mask,&gateway)&&ok;
+    if (!ok)
+        serial_write("VANTAOS_NETWORK_FRAMEWORK_STAGE_FAIL\n");
     serial_write(ok?"VANTAOS_NETWORK_FRAMEWORK_OK\n":"VANTAOS_NETWORK_FRAMEWORK_FAIL\n");
 }
 #endif /* VANTAOS_SELF_TEST */

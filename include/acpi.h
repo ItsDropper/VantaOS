@@ -43,6 +43,8 @@ typedef struct
 
 /* Parses ACPI RSDP and MADT; returns zero if no valid APIC topology is found. */
 int acpi_discover_platform(acpi_platform_info_t* info);
+/* Emits checksummed root-table metadata for hardware diagnostics. */
+void acpi_log_table_inventory(void);
 /* Returns the number of validated PCIe ECAM regions copied to the output. */
 uint32_t acpi_discover_pci_mcfg(acpi_mcfg_region_t* regions,
                                 uint32_t capacity);

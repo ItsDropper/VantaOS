@@ -130,6 +130,7 @@ static void write_string(const uint8_t* structure, uint8_t structure_length,
                 serial_write("...");
             return;
         }
+
         while (cursor < table_end && *cursor != 0U)
             ++cursor;
         if (cursor >= table_end)
@@ -138,6 +139,12 @@ static void write_string(const uint8_t* structure, uint8_t structure_length,
             return;
         }
         ++cursor;
+        /* A second NUL ends this structure's string-set. Never walk onward. */
+        if (cursor >= table_end || *cursor == 0U)
+        {
+            serial_write("unknown");
+            return;
+        }
     }
     serial_write("unknown");
 }

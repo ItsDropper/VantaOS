@@ -123,7 +123,7 @@ jobs:
 
       - name: Test passive HDA controller and codec inventory
         run: |
-          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude -Idrivers/audio \
             scripts/test_hda_probe.c drivers/audio/hda.c \
             -o /tmp/vantaos-hda-probe-test
           /tmp/vantaos-hda-probe-test

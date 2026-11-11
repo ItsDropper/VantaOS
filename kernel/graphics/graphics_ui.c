@@ -63,9 +63,11 @@ void graphics_draw_window_frame(int x, int y, int w, int h, const char* title, i
     graphics_fill_squircle_rect(x + 5, y + 7, w, h, 10, 0x0005080D);
     graphics_fill_squircle_rect(x, y, w, h, 10, VANTA_UI_SURFACE & 0x00FFFFFFU);
     graphics_fill_squircle_rect(x + 1, y + 1, w - 2, 45, 9, VANTA_UI_TITLEBAR & 0x00FFFFFFU);
-    graphics_fill_rect(x + 1, y + 45, w - 2, 1, VANTA_UI_BORDER);
+    graphics_fill_rect(x + 1, y + 45, w - 2, 1,
+                       VANTA_UI_BORDER & 0x00FFFFFFU);
 
-    graphics_fill_squircle_rect(x + 14, y + 10, 24, 24, 6, VANTA_UI_ROW);
+    graphics_fill_squircle_rect(x + 14, y + 10, 24, 24, 6,
+                                VANTA_UI_ROW & 0x00FFFFFFU);
     graphics_draw_vanta_logo(x + 21, y + 14, 15);
     /* Keep long titles clear of the control hitboxes on narrow windows. */
     char visible_title[32];
@@ -89,7 +91,8 @@ void graphics_draw_window_frame(int x, int y, int w, int h, const char* title, i
         for (int i = 0; i < 3; i++)
         {
             int bx = controls_x + i * 46;
-            graphics_fill_rect(bx, y + 1, 1, 44, VANTA_UI_BORDER);
+            graphics_fill_rect(bx, y + 1, 1, 44,
+                               VANTA_UI_BORDER & 0x00FFFFFFU);
         }
         /* Draw crisp native-size control glyphs instead of font approximations. */
         uint32_t control_ink = VANTA_UI_TEXT_SECONDARY;

@@ -200,6 +200,10 @@ int apic_initialize(void)
     for (uint32_t i = 0; i < platform_info.cpu_count; ++i)
         if (apic_id_requires_x2apic(platform_info.cpu_apic_ids[i]))
             topology_needs_x2apic = 1;
+#ifdef VANTAOS_FORCE_X2APIC_TEST
+    /* CI-only switch: exercise x2APIC mode and ICR delivery on low APIC IDs. */
+    topology_needs_x2apic = 1;
+#endif
 
     uint64_t base = read_msr(IA32_APIC_BASE_MSR);
     x2apic_mode = (base & APIC_BASE_X2APIC) != 0U;

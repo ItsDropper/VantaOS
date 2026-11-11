@@ -1535,3 +1535,54 @@ jobs:
 
           echo "Could not update media/desktop.png after 5 attempts."
           exit 1
+
+      - name: Exercise x2APIC mode and SMP startup in QEMU
+        if: steps.scope.outputs.full == '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp isodir/boot/kernel.bin /tmp/vantaos-kernel-normal.bin
+          make OBJDIR=build/obj-x2apic VANTAOS_SELF_TEST=1 \
+            VANTAOS_FORCE_X2APIC_TEST=1 kernel.bin
+          cp kernel.bin isodir/boot/kernel.bin
+          grub-mkrescue -o VantaOS-x2apic.iso isodir
+          cp /tmp/vantaos-kernel-normal.bin isodir/boot/kernel.bin
+          cp nvme-fat32-template.img x2apic-test.img
+
+          log=x2apic-qemu.log
+          set +e
+          timeout 35s qemu-system-x86_64 \
+            -machine pc -cpu max -smp 4 -m 512M \
+            -drive file=VantaOS-x2apic.iso,media=cdrom,format=raw \
+            -drive file=x2apic-test.img,if=ide,format=raw \
+            -boot order=d -display none -serial "file:$log" \
+            -monitor none -no-reboot
+          result=$?
+          set -e
+          if [ "$result" -ne 124 ]; then
+            echo "x2APIC QEMU boot exited before the smoke-test timeout ($result)."
+            cat "$log" 2>/dev/null || true
+            exit 1
+          fi
+          sleep 1
+          if grep -Eq '^VANTAOS_[A-Z0-9_]*_FAIL' "$log"; then
+            echo "x2APIC QEMU boot emitted a failure marker."
+            cat "$log"
+            exit 1
+          fi
+          for marker in \
+            VANTAOS_APIC_X2APIC_LOCAL_OK \
+            VANTAOS_SMP_TOPOLOGY_OK \
+            VANTAOS_SMP_AP_START_OK \
+            VANTAOS_SMP_WORK_OK \
+            VANTAOS_SMP_LOCAL_TIMER_OK \
+            VANTAOS_SMP_RESCHEDULE_IPI_OK \
+            VANTAOS_SMP_IDLE_CONTEXTS_OK \
+            VANTAOS_BOOT_OK; do
+            if ! grep -q "$marker" "$log"; then
+              echo "Missing x2APIC QEMU marker: $marker"
+              cat "$log"
+              exit 1
+            fi
+          done
+          echo "x2APIC mode, AP startup, timer and IPI path passed in QEMU."

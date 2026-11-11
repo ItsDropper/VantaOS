@@ -30,6 +30,10 @@ ifneq ($(VANTAOS_BOOT_LOG_TO_FAT32),)
 CFLAGS += -DVANTAOS_BOOT_LOG_TO_FAT32
 endif
 
+ifneq ($(VANTAOS_FORCE_X2APIC_TEST),)
+CFLAGS += -DVANTAOS_FORCE_X2APIC_TEST
+endif
+
 include arch/x86_64/boot/Makefile
 include arch/Makefile
 include kernel/Makefile

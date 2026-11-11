@@ -33,9 +33,11 @@ void network_framework_selftest(void) {
     mock_tx_count=0;received_type=0;received_header=received_length=0;
     /* Live NICs are registered before this self-test; preserve the baseline. */
     uint32_t baseline_devices=net_device_count();
+    const char *failure_stage = NULL;
     int ok=net_device_register(&d);
     ok=ok&&net_device_count()==baseline_devices+1U&&
        net_device_get(baseline_devices)==&d;
+    if (!ok) failure_stage = "register";
     ok=ok&&net_device_configure_ipv4(&d,0xC0A80102U,0xFFFFFF00U,0xC0A80101U);
     uint32_t address=0,mask=0,gateway=0;
     ok=ok&&net_device_get_ipv4(&d,&address,&mask,&gateway);
@@ -46,8 +48,10 @@ void network_framework_selftest(void) {
     ok=!net_device_configure_ipv4(&d,0xC0A80102U,0xFFFFFF00U,0xC0A80102U)&&ok;
     ok=net_device_get_ipv4(&d,&address,&mask,&gateway)&&ok;
     ok=address==0xC0A80102U&&mask==0xFFFFFF00U&&gateway==0xC0A80101U&&ok;
+    if (!ok && !failure_stage) failure_stage = "ipv4-validation";
     ok=ok&&net_ethernet_handler_register(0x88B5U,mock_handler,0);
     ok=ok&&net_device_transmit(&d,frame,sizeof(frame))&&mock_tx_count==1;
+    if (!ok && !failure_stage) failure_stage = "handler-or-transmit";
     ok=net_device_set_link(&d,0)&&ok;
     ok=!net_device_transmit(&d,frame,sizeof(frame))&&ok;
     ok=net_device_set_link(&d,1)&&ok;
@@ -57,12 +61,15 @@ void network_framework_selftest(void) {
     attempt_unregister_during_dispatch=0;
     ok=unregister_during_dispatch_result==0&&ok;
     ok=received_type==0x88B5U&&received_header==NET_ETHERNET_HEADER_SIZE&&received_length==sizeof(frame)&&ok;
+    if (!ok && !failure_stage) failure_stage = "receive-dispatch";
     ok=net_receive_frame(&d,vlan,sizeof(vlan))&&ok;
     ok=net_poll(1)==1&&ok;
     ok=received_type==0x88B5U&&received_header==NET_ETHERNET_VLAN_HEADER_SIZE&&received_length==sizeof(vlan)&&ok;
+    if (!ok && !failure_stage) failure_stage = "vlan-dispatch";
     ok=!net_receive_frame(&d,short_frame,sizeof(short_frame))&&ok;
     for(uint32_t i=0;i<NET_RX_QUEUE_CAPACITY;i++)ok=net_receive_frame(&d,frame,sizeof(frame))&&ok;
     ok=!net_receive_frame(&d,frame,sizeof(frame))&&ok; /* bounded queue reports overflow */
+    if (!ok && !failure_stage) failure_stage = "rx-queue-bounds";
     net_device_stats_t stats;
     ok=net_device_get_stats(&d,&stats)&&ok;
     /*
@@ -72,9 +79,11 @@ void network_framework_selftest(void) {
     ok=mock_tx_count==1&&stats.tx_frames==1&&stats.tx_errors==1&&
        stats.rx_frames==2+NET_RX_QUEUE_CAPACITY&&stats.rx_dropped==1&&
        stats.rx_malformed==1&&ok;
+    if (!ok && !failure_stage) failure_stage = "statistics";
     ok=net_ethernet_handler_unregister(0x88B5U,mock_handler,0)&&ok;
     ok=net_device_unregister(&d)&&ok;
     ok=net_device_count()==baseline_devices&&ok;
+    if (!ok && !failure_stage) failure_stage = "unregister";
     ok=!net_receive_frame(&d,frame,sizeof(frame))&&ok;
     ok=!net_device_get_ipv4(&d,&address,&mask,&gateway)&&ok;
     if (!ok)

@@ -188,6 +188,8 @@ int process_create_user_elf_args(const char* name, uint32_t parent_pid,
         header->version != EV_CURRENT ||
         header->header_size != sizeof(elf64_header_t) ||
         header->program_header_entry_size != sizeof(elf64_program_header_t) ||
+        header->program_header_offset < header->header_size ||
+        (header->program_header_offset & 7U) != 0U ||
         header->program_header_count == 0U ||
         header->program_header_count > ELF_PHDR_MAX ||
         !range_in_image(header->program_header_offset,
@@ -222,6 +224,7 @@ int process_create_user_elf_args(const char* name, uint32_t parent_pid,
             ph->memory_size >
                 (uint64_t)PAGING_USER_END - ph->virtual_address + 1U ||
             (ph->flags & (PF_W | PF_X)) == (PF_W | PF_X) ||
+            (ph->flags & ~7U) != 0U ||
             (ph->virtual_address & (PAGE_SIZE - 1U)) !=
                 (ph->offset & (PAGE_SIZE - 1U)) ||
             (ph->alignment > 1U &&

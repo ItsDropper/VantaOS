@@ -210,6 +210,78 @@ static int run_user_probe(unsigned int mode,
            __atomic_load_n(&user_test_unexpected, __ATOMIC_ACQUIRE) == 0U;
 }
 
+
+static int user_address_space_isolation_probe(void)
+{
+    const uint32_t free_before = pmm_get_free_blocks();
+    paging_address_space_t* first = paging_create_address_space();
+    paging_address_space_t* second = paging_create_address_space();
+    void* first_frame = pmm_alloc_block();
+    void* second_frame = pmm_alloc_block();
+    const uintptr_t probe_address = PAGING_USER_BASE + 0x00200000U;
+    int first_mapped = 0;
+    int second_mapped = 0;
+    int ok = first && second && first_frame && second_frame &&
+        (uintptr_t)first_frame < IDENTITY_MAP_LIMIT &&
+        (uintptr_t)second_frame < IDENTITY_MAP_LIMIT;
+
+    if (ok)
+    {
+        *(volatile uint8_t*)first_frame = 0xA5U;
+        *(volatile uint8_t*)second_frame = 0x5AU;
+        first_mapped = paging_map_user_page_ex(
+            first, probe_address, (uintptr_t)first_frame, 0, 1);
+        second_mapped = paging_map_user_page_ex(
+            second, probe_address, (uintptr_t)second_frame, 1, 0);
+        ok = first_mapped && second_mapped;
+    }
+
+    if (ok)
+    {
+        paging_switch_address_space(first);
+        uint64_t first_flags = paging_get_page_flags(probe_address);
+        ok = paging_get_current_address_space() == first &&
+            paging_get_physical(probe_address) == (uintptr_t)first_frame &&
+            *(volatile uint8_t*)paging_get_physical(probe_address) == 0xA5U &&
+            (first_flags & PAGE_USER) != 0U &&
+            (first_flags & PAGE_WRITE) == 0U &&
+            (first_flags & PAGE_NX) == 0U &&
+            paging_user_range_valid(first, probe_address, 1U, 0) &&
+            !paging_user_range_valid(first, probe_address, 1U, 1) &&
+            !paging_user_range_valid(first, probe_address + PAGE_SIZE, 1U, 0);
+    }
+
+    if (ok)
+    {
+        paging_switch_address_space(second);
+        uint64_t second_flags = paging_get_page_flags(probe_address);
+        ok = paging_get_current_address_space() == second &&
+            paging_get_physical(probe_address) == (uintptr_t)second_frame &&
+            *(volatile uint8_t*)paging_get_physical(probe_address) == 0x5AU &&
+            (second_flags & PAGE_USER) != 0U &&
+            (second_flags & PAGE_WRITE) != 0U &&
+            (second_flags & PAGE_NX) != 0U &&
+            paging_user_range_valid(second, probe_address, 1U, 1);
+    }
+
+    paging_switch_address_space(paging_get_kernel_address_space());
+    int first_destroyed = !first || paging_destroy_address_space(first);
+    int second_destroyed = !second || paging_destroy_address_space(second);
+
+    /* A mapped frame is freed only after its address space is retired. */
+    if (first_frame && (!first_mapped || first_destroyed))
+        pmm_free_block(first_frame);
+    if (second_frame && (!second_mapped || second_destroyed))
+        pmm_free_block(second_frame);
+
+    ok = ok && first_destroyed && second_destroyed &&
+         pmm_get_free_blocks() == free_before;
+    serial_write(ok ?
+        "VANTAOS_USER_ADDRESS_SPACE_ISOLATION_OK\n" :
+        "VANTAOS_USER_ADDRESS_SPACE_ISOLATION_FAIL\n");
+    return ok;
+}
+
 int user_mode_selftest_run(void)
 {
     serial_write("VANTAOS_RING3_TEST_START\n");
@@ -221,7 +293,9 @@ int user_mode_selftest_run(void)
     int syscall_ok = 0;
     int isolation_ok = 0;
     int gs_ok = 0;
-    int ok = space != NULL && code_frame != NULL && stack_frame != NULL;
+    int address_space_ok = user_address_space_isolation_probe();
+    int ok = space != NULL && code_frame != NULL && stack_frame != NULL &&
+             address_space_ok;
     const uint32_t cpu_id = process_current_cpu_id();
 
     if (!ok || cpu_id >= CPU_LOCAL_MAX ||
@@ -330,7 +404,7 @@ int user_mode_selftest_run(void)
     serial_write(gs_ok ?
         "VANTAOS_RING3_GS_ISOLATION_OK\n" :
         "VANTAOS_RING3_GS_ISOLATION_FAIL\n");
-    return ok;
+    return ok && address_space_ok;
 }
 
 
@@ -429,6 +503,167 @@ int user_mode_process_smoke_test_start(void)
         serial_write("VANTAOS_ELF_USER_PROCESS_CREATE_FAIL\n");
         return 0;
     }
+
+
+    /*
+     * Exercise malformed ELF metadata and late loader failures against the
+     * production loader. Every rejected image must return all temporary PMM
+     * frames, including page-table frames allocated before the rejection.
+     */
+    static uint8_t malformed_elf[sizeof(elf_image)];
+    struct test_elf_header* bad_header =
+        (struct test_elf_header*)malformed_elf;
+    struct test_elf_program_header* bad_ph =
+        (struct test_elf_program_header*)(malformed_elf + ELF_PAYLOAD_OFFSET);
+    uint32_t elf_validation_cases = 0U;
+    int elf_validation_ok = 1;
+#define RESET_MALFORMED_ELF() do { \
+    copy_bytes(malformed_elf, elf_image, sizeof(elf_image)); \
+    bad_header = (struct test_elf_header*)malformed_elf; \
+    bad_ph = (struct test_elf_program_header*)(malformed_elf + \
+        sizeof(struct test_elf_header)); \
+} while (0)
+#define EXPECT_MALFORMED_ELF() do { \
+    uint32_t free_before_case = pmm_get_free_blocks(); \
+    int rejected_pid = process_create_user_elf( \
+        "malformed-elf-probe", process_current_pid(), \
+        malformed_elf, sizeof(elf_image)); \
+    if (rejected_pid != -1 || \
+        pmm_get_free_blocks() != free_before_case) \
+        elf_validation_ok = 0; \
+    else \
+        elf_validation_cases++; \
+} while (0)
+
+    RESET_MALFORMED_ELF();
+    bad_header->program_header_offset = 0U;
+    EXPECT_MALFORMED_ELF();
+
+    RESET_MALFORMED_ELF();
+    bad_header->program_header_offset = 65U;
+    EXPECT_MALFORMED_ELF();
+
+    RESET_MALFORMED_ELF();
+    bad_header->program_header_count = 0U;
+    EXPECT_MALFORMED_ELF();
+
+    RESET_MALFORMED_ELF();
+    bad_header->program_header_count = 17U;
+    EXPECT_MALFORMED_ELF();
+
+    RESET_MALFORMED_ELF();
+    bad_header->program_header_entry_size--;
+    EXPECT_MALFORMED_ELF();
+
+    RESET_MALFORMED_ELF();
+    bad_header->machine = 3U;
+    EXPECT_MALFORMED_ELF();
+
+    RESET_MALFORMED_ELF();
+    bad_header->type = 3U;
+    EXPECT_MALFORMED_ELF();
+
+    RESET_MALFORMED_ELF();
+    bad_ph->flags = 7U;
+    EXPECT_MALFORMED_ELF();
+
+    RESET_MALFORMED_ELF();
+    bad_ph->flags = 0x100U;
+    EXPECT_MALFORMED_ELF();
+
+    RESET_MALFORMED_ELF();
+    bad_ph->file_size = bad_ph->memory_size + 1U;
+    EXPECT_MALFORMED_ELF();
+
+    RESET_MALFORMED_ELF();
+    bad_ph->offset = UINT64_MAX;
+    EXPECT_MALFORMED_ELF();
+
+    RESET_MALFORMED_ELF();
+    bad_ph->memory_size = 0U;
+    EXPECT_MALFORMED_ELF();
+
+    RESET_MALFORMED_ELF();
+    bad_ph->alignment = 3U;
+    EXPECT_MALFORMED_ELF();
+
+    RESET_MALFORMED_ELF();
+    bad_ph->alignment = 8192U;
+    bad_ph->virtual_address += PAGE_SIZE;
+    EXPECT_MALFORMED_ELF();
+
+    /* This rejection occurs after a load page has already been allocated. */
+    RESET_MALFORMED_ELF();
+    bad_header->entry = PAGING_USER_BASE + 0x2000U;
+    EXPECT_MALFORMED_ELF();
+
+    RESET_MALFORMED_ELF();
+    bad_ph->virtual_address =
+        PAGING_USER_END + 1U - PAGE_SIZE + ELF_PAYLOAD_OFFSET;
+    bad_ph->file_size = 0U;
+    bad_ph->memory_size = PAGE_SIZE;
+    bad_ph->alignment = 1U;
+    bad_header->entry = bad_ph->virtual_address;
+    EXPECT_MALFORMED_ELF();
+
+    RESET_MALFORMED_ELF();
+    bad_ph->virtual_address =
+        PAGING_USER_END + 1U - 4U * PAGE_SIZE;
+    bad_ph->offset = 0U;
+    bad_ph->file_size = 0U;
+    bad_ph->memory_size = 1U;
+    bad_ph->alignment = 1U;
+    bad_header->entry = bad_ph->virtual_address;
+    EXPECT_MALFORMED_ELF();
+
+    /*
+     * Force the page budget check after allocating 61 image pages. The
+     * loader must unwind every data frame and every intermediate page table.
+     */
+    RESET_MALFORMED_ELF();
+    bad_ph->virtual_address = PAGING_USER_BASE + 0x10000U;
+    bad_ph->offset = 0U;
+    bad_ph->file_size = 0U;
+    bad_ph->memory_size = 61U * PAGE_SIZE;
+    bad_ph->alignment = PAGE_SIZE;
+    bad_header->entry = bad_ph->virtual_address;
+    EXPECT_MALFORMED_ELF();
+
+    const char* one_argument[] = { "probe" };
+    const char* empty_argument[] = { "" };
+    char oversized_argument[PROCESS_USER_ARG_BYTES_MAX + 1U];
+    for (size_t i = 0; i < PROCESS_USER_ARG_BYTES_MAX; i++)
+        oversized_argument[i] = 'x';
+    oversized_argument[PROCESS_USER_ARG_BYTES_MAX] = '\0';
+    const char* oversized_arguments[] = { oversized_argument };
+    uint32_t free_before_args = pmm_get_free_blocks();
+    if (process_create_user_elf_args(
+            "bad-args", process_current_pid(), elf_image,
+            sizeof(elf_image), PROCESS_USER_MAX_ARGS + 1U,
+            one_argument) != -1 ||
+        process_create_user_elf_args(
+            "bad-args", process_current_pid(), elf_image,
+            sizeof(elf_image), 1U, NULL) != -1 ||
+        process_create_user_elf_args(
+            "bad-args", process_current_pid(), elf_image,
+            sizeof(elf_image), 1U, empty_argument) != -1 ||
+        process_create_user_elf_args(
+            "bad-args", process_current_pid(), elf_image,
+            sizeof(elf_image), 1U, oversized_arguments) != -1 ||
+        pmm_get_free_blocks() != free_before_args)
+        elf_validation_ok = 0;
+    else
+        elf_validation_cases += 4U;
+
+#undef RESET_MALFORMED_ELF
+#undef EXPECT_MALFORMED_ELF
+
+    if (!elf_validation_ok || elf_validation_cases < 20U)
+    {
+        serial_write("VANTAOS_ELF_VALIDATION_MATRIX_FAIL\n");
+        return 0;
+    }
+    serial_write("VANTAOS_ELF_VALIDATION_MATRIX_OK\n");
 
     /*
      * Attempt to execute from the writable stack. NX must fault the process,

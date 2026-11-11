@@ -76,7 +76,9 @@ CI compiles the same URL parser, response-header parser, and body-framing state 
 | `VANTAOS_GUI_DEAD_OWNER_CLEANUP_OK` | A window owned by a terminated probe process is removed and its stale ID is rejected. |
 | `VANTAOS_VFS_HANDLE_GUARDS_OK` | Invalid VFS read/write/close handles are rejected. |
 | `VANTAOS_ARGV_STACK_OK` | The ring-3 smoke executable sees the expected argument count and validates `argv[1] = alpha` and `argv[2] = two words` from its initial stack. |
-| `VANTAOS_ELF_VALIDATION_OK` | A zero-filled 64-byte buffer is rejected as an ELF image. This is a narrow invalid-magic smoke test, not comprehensive malformed-ELF coverage. |
+| `VANTAOS_USER_ADDRESS_SPACE_ISOLATION_OK` | Two simultaneously allocated address spaces map the same user virtual address to different physical frames; switching CR3 resolves the correct private contents, read-only versus writable permissions are distinguished, NX is observable through the page-flags API, unmapped holes are rejected, and all test frames/page tables are reclaimed. |
+| `VANTAOS_ELF_VALIDATION_OK` | A zero-filled 64-byte buffer is rejected as an ELF image. |
+| `VANTAOS_ELF_VALIDATION_MATRIX_OK` | The production ELF loader rejects malformed ELF header/table metadata, unsupported machine/type, invalid segment flags and ranges, bad alignment, invalid entry points, stack collisions, argument-vector violations, and an over-budget image after allocating 61 pages; every rejection must restore PMM free-frame accounting. |
 | `VANTAOS_USER_PROCESS_FAULT` | The expected ring-3 fault path was reached and handled as a user-process fault rather than a kernel panic; this marker alone does not prove arbitrary-fault containment. |
 | `VANTAOS_FILESYSTEM_EXEC_OK` | The FAT32-loaded user ELF reaches ring 3, performs the tested output calls, and reaches its expected completion marker. |
 | `VANTAOS_SCHEDULER_PROBE_OK` | The scheduler runs the dedicated kernel-mode probe entry. |
@@ -116,8 +118,8 @@ This test does not yet establish physical-hardware compatibility or complete rem
 ## What is not yet covered
 
 - Exhaustive process-state combinations, sustained preemption stress, race conditions, or long-duration stability.
-- Exhaustive page-table permission tests, invalid syscall-pointer fuzzing, fault containment for arbitrary user programs, and adversarial process-to-process isolation tests.
-- Comprehensive malformed ELF program-header cases, overlapping segments, integer-boundary cases, and loader allocation-failure cleanup.
+- Invalid syscall-pointer fuzzing, fault containment for arbitrary user programs, and adversarial process-to-process isolation tests beyond the deterministic two-address-space regression.
+- Exhaustive malformed ELF program-header combinations, overlapping-segment cases, integer-boundary fuzzing, and injected allocator-failure coverage.
 - Physical-memory-map malformed-entry/overflow fuzzing, allocator fragmentation, allocation-failure recovery, and long-duration memory-pressure tests.
 - Exhaustive filesystem corruption and power-loss recovery; the CI persistence marker covers only the tested disposable-image round trip.
 - Pixel-level desktop correctness, end-to-end scripted mouse/keyboard interaction with the ring-3 apps, display modes, and full visual regression tests.

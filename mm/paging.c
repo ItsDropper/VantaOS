@@ -277,7 +277,7 @@ uint64_t paging_get_page_flags(uintptr_t virtual_address)
     {
         uint64_t* entry = paging_user_leaf_entry(paging_current(),
                                           virtual_address, 0);
-        flags = entry ? (*entry & 0xFFFU) : 0;
+        flags = entry ? (*entry & (0xFFFU | PAGE_NX)) : 0;
     }
     else
     {
@@ -285,7 +285,7 @@ uint64_t paging_get_page_flags(uintptr_t virtual_address)
         if (table)
         {
             uint32_t index = (uint32_t)((virtual_address >> 12) & 0x1FFU);
-            flags = table[index] & 0xFFFU;
+            flags = table[index] & (0xFFFU | PAGE_NX);
         }
     }
 

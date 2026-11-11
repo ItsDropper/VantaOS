@@ -158,6 +158,36 @@ static void hardware_inventory_initialize(void)
         serial_write(pci_get_device_name(device->vendor_id,
                                          device->device_id));
         serial_write("\n");
+        if (device->class_code == 0x04U &&
+            device->subclass == 0x03U)
+        {
+            serial_write("VANTAOS_HW_AUDIO_HDA_CANDIDATE id=");
+            hardware_write_hex16(device->vendor_id);
+            serial_write(":");
+            hardware_write_hex16(device->device_id);
+            serial_write(" bdf=");
+            hardware_write_hex8(device->bus);
+            serial_write(":");
+            hardware_write_hex8(device->slot);
+            serial_write(".");
+            hardware_write_hex8(device->function);
+            serial_write("\n");
+        }
+        if (device->class_code == 0x0CU &&
+            device->subclass == 0x80U)
+        {
+            serial_write("VANTAOS_HW_I2C_SERIAL_IO_CANDIDATE id=");
+            hardware_write_hex16(device->vendor_id);
+            serial_write(":");
+            hardware_write_hex16(device->device_id);
+            serial_write(" bdf=");
+            hardware_write_hex8(device->bus);
+            serial_write(":");
+            hardware_write_hex8(device->slot);
+            serial_write(".");
+            hardware_write_hex8(device->function);
+            serial_write("\n");
+        }
     }
 }
 

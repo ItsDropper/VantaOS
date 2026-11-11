@@ -90,6 +90,14 @@ int main(void)
     assert(strstr(log_buffer, "product=IdeaPad 530S") != NULL);
     assert(strstr(log_buffer, "DO_NOT_LOG_THIS_SERIAL") == NULL);
 
+    /* Invalid string indexes must stop at this structure's double-NUL. */
+    log_length = 0U;
+    log_buffer[0] = '\0';
+    table[6] = 99U;
+    smbios_inventory_initialize();
+    assert(strstr(log_buffer, "version=unknown") != NULL);
+    table[6] = 3U;
+
     /* Exercise the SMBIOS 3.x 64-bit entrypoint as well. */
     log_length = 0U;
     log_buffer[0] = '\0';

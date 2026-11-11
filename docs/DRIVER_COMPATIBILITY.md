@@ -5,6 +5,8 @@ Copyright (c) 2026 ItsDropper
 ## Current driver surface
 
 - PCI discovery and a registered PCI network-driver framework.
+- Intel UHD 620 (PCI 8086:5917) is identified as Kaby Lake Gen9.5. The current Intel execution backend is Skylake Gen9-only, so UHD 620 is inventory-only and never enters that runtime.
+- PCI inventory emits High Definition Audio (04:03) and serial-bus (0C:80) controller candidates. No HDA codec driver, I2C controller driver, or I2C-HID touchpad stack is implemented by this discovery path.
 - Wired network drivers: Intel E1000, Realtek RTL8139, and virtio-net.
 - USB host support through xHCI; HID boot keyboard and mouse enumeration.
 - USB Wi-Fi work for Realtek RTL8188EU. See RTL8188EU_WIFI.md for the exact limitations; firmware readiness is not proof of association or Internet access.

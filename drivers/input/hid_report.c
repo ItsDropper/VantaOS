@@ -47,6 +47,7 @@ static int32_t read_signed_item(const uint8_t* bytes, uint32_t size)
 
 static uint16_t local_usage(uint32_t value, uint16_t current_page)
 {
+    (void)current_page;
     return (uint16_t)(value > 0xFFFFU ? value & 0xFFFFU : value);
 }
 

@@ -121,6 +121,13 @@ jobs:
             -o /tmp/vantaos-i2c-designware-test
           /tmp/vantaos-i2c-designware-test
 
+      - name: Test HID-over-I2C descriptor and keyboard transport
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_hid_i2c.c drivers/input/hid_i2c.c \
+            drivers/input/hid_report.c -o /tmp/vantaos-hid-i2c-test
+          /tmp/vantaos-hid-i2c-test
+
       - name: Test bounded HID report descriptor sizing
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \

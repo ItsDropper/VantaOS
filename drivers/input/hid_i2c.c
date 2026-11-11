@@ -31,6 +31,7 @@ typedef struct
     uint8_t buttons;
     uint8_t errors;
     uint16_t address;
+    uint16_t descriptor_register;
     uint16_t input_register;
     uint16_t max_input_length;
     uint32_t speed_hz;
@@ -299,7 +300,13 @@ int hid_i2c_attach(i2c_bus_t *bus,uint16_t address,uint32_t speed_hz,
         return 0;
     uint32_t slot=HID_I2C_MAX_DEVICES;
     for(uint32_t i=0U;i<HID_I2C_MAX_DEVICES;++i)
-        if(!devices[i].active){slot=i;break;}
+    {
+        if(devices[i].active&&devices[i].bus==bus&&
+           devices[i].address==address&&
+           devices[i].descriptor_register==hid_descriptor_register)
+            return 0;
+        if(!devices[i].active&&slot==HID_I2C_MAX_DEVICES) slot=i;
+    }
     if(slot==HID_I2C_MAX_DEVICES) return 0;
 
     uint8_t descriptor[HID_I2C_DESC_BYTES];
@@ -321,6 +328,12 @@ int hid_i2c_attach(i2c_bus_t *bus,uint16_t address,uint32_t speed_hz,
     if(!hid_report_parse(report_descriptors[slot],report_length,
                          &candidate.layout))
         return 0;
+    uint16_t largest_report=0U;
+    for(uint32_t i=0U;i<candidate.layout.report_count;++i)
+        if(candidate.layout.reports[i].input_bytes>largest_report)
+            largest_report=candidate.layout.reports[i].input_bytes;
+    if((uint32_t)largest_report+2U>max_input)
+        return 0;
     candidate.has_keyboard=candidate.layout.has_keyboard;
     candidate.has_pointer=(uint8_t)(candidate.layout.has_mouse||
                                     candidate.layout.has_touchpad);
@@ -332,6 +345,7 @@ int hid_i2c_attach(i2c_bus_t *bus,uint16_t address,uint32_t speed_hz,
     }
     candidate.bus=bus;
     candidate.address=address;
+    candidate.descriptor_register=hid_descriptor_register;
     candidate.speed_hz=speed_hz;
     candidate.input_register=input_register;
     candidate.max_input_length=max_input;
@@ -371,6 +385,26 @@ int hid_i2c_attach(i2c_bus_t *bus,uint16_t address,uint32_t speed_hz,
     return 1;
 }
 
+static void hid_release_all(hid_i2c_device_t *device)
+{
+    if(device->keyboard_id)
+        for(uint32_t usage=1U;usage<256U;++usage)
+            if(device->keys[usage])
+                hid_emit_key(device,(uint16_t)usage,0);
+    memset(device->keys,0,sizeof(device->keys));
+    if(device->pointer_id)
+        for(uint32_t button=0U;button<5U;++button)
+            if(device->buttons&(1U<<button))
+            {
+                input_event_t event={.device_id=device->pointer_id,
+                    .type=INPUT_EVENT_BUTTON,.code=(int32_t)button,
+                    .value=0,.value2=0};
+                (void)input_report_event(&event);
+            }
+    device->buttons=0U;
+    device->last_xy_valid=0U;
+}
+
 static void hid_poll_device(hid_i2c_device_t *device)
 {
     uint8_t report[HID_I2C_MAX_REPORT];
@@ -381,6 +415,7 @@ static void hid_poll_device(hid_i2c_device_t *device)
         if(device->errors<HID_I2C_ERROR_LIMIT) ++device->errors;
         if(device->errors==HID_I2C_ERROR_LIMIT)
         {
+            hid_release_all(device);
             if(device->keyboard_id) (void)input_set_device_online(device->keyboard_id,false);
             if(device->pointer_id) (void)input_set_device_online(device->pointer_id,false);
             serial_write("VANTAOS_I2C_HID_TRANSPORT_OFFLINE\n");

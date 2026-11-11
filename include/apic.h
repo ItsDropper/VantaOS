@@ -19,6 +19,9 @@ int apic_timer_initialize(uint8_t vector, uint32_t initial_count);
 int apic_timer_calibrate(uint8_t vector, uint32_t target_hz,
                          uint32_t* count_per_tick);
 int apic_is_enabled(void);
+int apic_is_x2apic(void);
+/* True when legacy 8259 IRQs use LAPIC LINT0 ExtINT routing. */
+int apic_uses_legacy_pic(void);
 void apic_send_eoi(void);
 uint32_t apic_get_bsp_id(void);
 int apic_send_init_all(void);

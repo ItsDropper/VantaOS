@@ -37,7 +37,7 @@ void pic_remap(void)
 
 void pic_send_eoi(unsigned int irq)
 {
-    if (apic_is_enabled())
+    if (apic_is_enabled() && !apic_uses_legacy_pic())
     {
         apic_send_eoi();
         return;

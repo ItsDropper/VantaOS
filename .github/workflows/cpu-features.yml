@@ -28,3 +28,9 @@ jobs:
             -ffreestanding -fno-pie -fno-stack-protector -mno-red-zone \
             -mgeneral-regs-only -nostdlib -Iinclude \
             -c arch/x86_64/cpu_features.c -o /tmp/vantaos-cpu-features.o
+
+      - name: Test x2APIC register mapping and ICR encoding
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_apic_x2apic.c -o /tmp/vantaos-apic-x2apic-test
+          /tmp/vantaos-apic-x2apic-test

@@ -10,6 +10,7 @@
 #include "acpi.h"
 #include "cpu_local.h"
 #include "apic.h"
+#include "apic_x2apic.h"
 #include "gdt.h"
 #include "idt.h"
 #include "paging.h"
@@ -90,7 +91,7 @@ static smp_topology_status_t smp_validate_topology(
     for (uint32_t i = 0; i < info->cpu_count; i++)
     {
         uint32_t apic_id = info->cpu_apic_ids[i];
-        if (apic_id > 255U)
+        if (apic_id_requires_x2apic(apic_id) && !apic_is_x2apic())
             return SMP_TOPOLOGY_UNSUPPORTED_APIC_ID;
 
         for (uint32_t j = 0; j < i; j++)
@@ -132,8 +133,14 @@ static int smp_topology_validation_probe(void)
         goto fail;
 
     test.cpu_apic_ids[1] = 256U;
-    if (smp_validate_topology(&test, 1U, &bsp_index) !=
-        SMP_TOPOLOGY_UNSUPPORTED_APIC_ID)
+    if (apic_is_x2apic())
+    {
+        if (smp_validate_topology(&test, 1U, &bsp_index) !=
+            SMP_TOPOLOGY_VALID)
+            goto fail;
+    }
+    else if (smp_validate_topology(&test, 1U, &bsp_index) !=
+             SMP_TOPOLOGY_UNSUPPORTED_APIC_ID)
         goto fail;
 
     test.cpu_count = ACPI_MAX_CPUS + 1U;

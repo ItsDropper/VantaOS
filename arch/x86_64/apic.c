@@ -6,6 +6,7 @@
  */
 
 #include "apic.h"
+#include "apic_x2apic.h"
 
 #include "paging.h"
 #include "pic.h"
@@ -50,6 +51,8 @@ static acpi_platform_info_t platform_info;
 static volatile uint32_t* lapic;
 static volatile uint32_t* ioapic;
 static int enabled;
+static int x2apic_mode;
+static int legacy_pic_routing;
 
 static uint64_t read_msr(uint32_t msr)
 {
@@ -87,12 +90,38 @@ static void outb(uint16_t port, uint8_t value)
 
 static uint32_t lapic_read(uint32_t offset)
 {
+    if (x2apic_mode)
+        return (uint32_t)read_msr(apic_x2apic_msr_for_offset(offset));
     return lapic[offset / sizeof(uint32_t)];
 }
 
 static void lapic_write(uint32_t offset, uint32_t value)
 {
-    lapic[offset / sizeof(uint32_t)] = value;
+    if (x2apic_mode)
+        write_msr(apic_x2apic_msr_for_offset(offset), value);
+    else
+        lapic[offset / sizeof(uint32_t)] = value;
+}
+
+static uint32_t lapic_id(void)
+{
+    return x2apic_mode ? lapic_read(LAPIC_ID) :
+                         (lapic_read(LAPIC_ID) >> 24U);
+}
+
+static int local_apic_ready(void)
+{
+    return enabled && (x2apic_mode || lapic != NULL);
+}
+
+static int cpu_has_x2apic(void)
+{
+    uint32_t eax = 1U, ebx, ecx, edx;
+    __asm__ volatile ("cpuid"
+                      : "+a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx));
+    (void)ebx;
+    (void)edx;
+    return (ecx & (1U << 21U)) != 0U;
 }
 
 static uint32_t ioapic_read(uint8_t reg)
@@ -154,11 +183,12 @@ static int route_isa_irq(uint8_t irq, uint8_t vector, uint8_t destination,
 int apic_initialize(void)
 {
     enabled = 0;
+    x2apic_mode = 0;
+    legacy_pic_routing = 0;
     lapic = NULL;
     ioapic = NULL;
 
-    if (!cpu_has_apic() ||
-        !acpi_discover_platform(&platform_info) ||
+    if (!cpu_has_apic() || !acpi_discover_platform(&platform_info) ||
         platform_info.local_apic_address >= 0x100000000ULL ||
         platform_info.io_apic_address >= 0x100000000ULL)
     {
@@ -166,47 +196,95 @@ int apic_initialize(void)
         return 0;
     }
 
-    if (!paging_map_mmio_page((uintptr_t)APIC_MMIO_VIRTUAL,
-                              (uintptr_t)platform_info.local_apic_address))
+    int topology_needs_x2apic = 0;
+    for (uint32_t i = 0; i < platform_info.cpu_count; ++i)
+        if (apic_id_requires_x2apic(platform_info.cpu_apic_ids[i]))
+            topology_needs_x2apic = 1;
+
+    uint64_t base = read_msr(IA32_APIC_BASE_MSR);
+    x2apic_mode = (base & APIC_BASE_X2APIC) != 0U;
+    if ((x2apic_mode || topology_needs_x2apic) && !cpu_has_x2apic())
     {
-        serial_write("VANTAOS_APIC_MMIO_MAP_FAIL\n");
+        serial_write("VANTAOS_APIC_X2APIC_UNSUPPORTED\n");
         return 0;
     }
+
+    if (topology_needs_x2apic && !x2apic_mode)
+    {
+        /* Preserve the firmware APIC base while enabling x2APIC mode. */
+        base |= APIC_BASE_ENABLE;
+        write_msr(IA32_APIC_BASE_MSR, base);
+        base |= APIC_BASE_X2APIC;
+        write_msr(IA32_APIC_BASE_MSR, base);
+        x2apic_mode = 1;
+        if ((read_msr(IA32_APIC_BASE_MSR) & APIC_BASE_X2APIC) == 0U)
+        {
+            serial_write("VANTAOS_APIC_X2APIC_ENABLE_FAIL\n");
+            return 0;
+        }
+    }
+    else if (!x2apic_mode)
+    {
+        if (!paging_map_mmio_page((uintptr_t)APIC_MMIO_VIRTUAL,
+                                  (uintptr_t)platform_info.local_apic_address))
+        {
+            serial_write("VANTAOS_APIC_MMIO_MAP_FAIL\n");
+            return 0;
+        }
+        lapic = (volatile uint32_t*)(uintptr_t)APIC_MMIO_VIRTUAL;
+        base &= ~0x0000000FFFFFF000ULL;
+        base |= (platform_info.local_apic_address & 0x0000000FFFFF000ULL) |
+                APIC_BASE_ENABLE;
+        write_msr(IA32_APIC_BASE_MSR, base);
+    }
+    else
+    {
+        base |= APIC_BASE_ENABLE;
+        write_msr(IA32_APIC_BASE_MSR, base);
+    }
+
     if (!paging_map_mmio_page((uintptr_t)IOAPIC_MMIO_VIRTUAL,
                               (uintptr_t)platform_info.io_apic_address))
     {
-        paging_unmap_page((uintptr_t)APIC_MMIO_VIRTUAL);
+        if (lapic)
+            paging_unmap_page((uintptr_t)APIC_MMIO_VIRTUAL);
+        lapic = NULL;
         serial_write("VANTAOS_APIC_MMIO_MAP_FAIL\n");
         return 0;
     }
-
-    lapic = (volatile uint32_t*)(uintptr_t)APIC_MMIO_VIRTUAL;
     ioapic = (volatile uint32_t*)(uintptr_t)IOAPIC_MMIO_VIRTUAL;
 
-    uint64_t base = read_msr(IA32_APIC_BASE_MSR);
-    if (base & APIC_BASE_ENABLE)
-    {
-        base &= ~APIC_BASE_ENABLE;
-        write_msr(IA32_APIC_BASE_MSR, base);
-    }
-    base &= ~(APIC_BASE_X2APIC | 0x0000000FFFFFF000ULL);
-    base |= (platform_info.local_apic_address & 0x0000000FFFFF000ULL) |
-            APIC_BASE_ENABLE | (read_msr(IA32_APIC_BASE_MSR) & APIC_BASE_BSP);
-    write_msr(IA32_APIC_BASE_MSR, base);
-
-    /* Enable the local APIC and establish a valid spurious-interrupt vector. */
     lapic_write(LAPIC_TPR, 0);
     lapic_write(LAPIC_SVR, (1U << 8) | LAPIC_SPURIOUS_VECTOR);
+    uint32_t bsp_id = lapic_id();
+
+    /*
+     * IOAPIC physical destinations are 8-bit without interrupt remapping.
+     * Do not truncate a high x2APIC BSP ID: retain the 8259 -> LINT0 ExtINT
+     * route for legacy keyboard/timer interrupts instead.
+     */
+    if (bsp_id > 255U)
+    {
+        if (!x2apic_mode)
+        {
+            serial_write("VANTAOS_APIC_DESTINATION_UNSUPPORTED\n");
+            return 0;
+        }
+        lapic_write(LAPIC_LVT_LINT0, 7U << 8U);
+        lapic_write(LAPIC_LVT_LINT1, 1U << 16);
+        legacy_pic_routing = 1;
+        enabled = 1;
+        serial_write("VANTAOS_APIC_X2APIC_PIC_FALLBACK_OK\n");
+        return 1;
+    }
 
     uint32_t version = ioapic_read(IOAPIC_REG_VERSION);
     uint32_t maximum_redirection = (version >> 16) & 0xFFU;
-    uint8_t destination = (uint8_t)(lapic_read(LAPIC_ID) >> 24);
-
+    uint8_t destination = (uint8_t)bsp_id;
     if (!route_isa_irq(0, 32, destination, maximum_redirection) ||
         !route_isa_irq(1, 33, destination, maximum_redirection) ||
         !route_isa_irq(12, 44, destination, maximum_redirection))
     {
-        /* Undo partial IOAPIC routing; keep firmware's legacy PIC path intact. */
         for (uint32_t i = 0; i <= maximum_redirection && i <= 119U; i++)
         {
             uint8_t reg = (uint8_t)(IOAPIC_REG_REDIR + i * 2U);
@@ -217,18 +295,18 @@ int apic_initialize(void)
         return 0;
     }
 
-    /* Once all required lines are routed, disable legacy PIC delivery to the CPU. */
     lapic_write(LAPIC_LVT_LINT0, 1U << 16);
     lapic_write(LAPIC_LVT_LINT1, 1U << 16);
     pic_mask_all();
     enabled = 1;
-    serial_write("VANTAOS_APIC_LOCAL_OK\n");
+    serial_write(x2apic_mode ? "VANTAOS_APIC_X2APIC_LOCAL_OK\n" :
+                               "VANTAOS_APIC_LOCAL_OK\n");
     return 1;
 }
 
 int apic_timer_initialize(uint8_t vector, uint32_t initial_count)
 {
-    if (!enabled || !lapic || vector < 0x10U || vector == 0xFFU ||
+    if (!local_apic_ready() || vector < 0x10U || vector == 0xFFU ||
         initial_count == 0U)
         return 0;
 
@@ -272,7 +350,7 @@ static int pit_channel2_wait_period(uint8_t original_port)
 int apic_timer_calibrate(uint8_t vector, uint32_t target_hz,
                          uint32_t* count_per_tick)
 {
-    if (!enabled || !lapic || vector < 0x10U || vector == 0xFFU ||
+    if (!local_apic_ready() || vector < 0x10U || vector == 0xFFU ||
         target_hz == 0U || !count_per_tick)
         return 0;
 
@@ -322,32 +400,33 @@ int apic_timer_calibrate(uint8_t vector, uint32_t target_hz,
 
 int apic_initialize_cpu(uint32_t expected_apic_id)
 {
-    if (!enabled || !lapic || !cpu_has_apic() ||
-        platform_info.local_apic_address >= 0x100000000ULL)
+    if (!enabled || !cpu_has_apic())
         return 0;
 
-    /*
-     * IA32_APIC_BASE is per logical processor. The BSP's setup does not
-     * configure the AP's MSR, so repeat the local enable on every AP.
-     */
     uint64_t base = read_msr(IA32_APIC_BASE_MSR);
-    if (base & APIC_BASE_ENABLE)
+    if (x2apic_mode)
     {
-        base &= ~APIC_BASE_ENABLE;
+        if (!cpu_has_x2apic())
+            return 0;
+        base |= APIC_BASE_ENABLE | APIC_BASE_X2APIC;
         write_msr(IA32_APIC_BASE_MSR, base);
     }
-
-    base &= ~(APIC_BASE_X2APIC | 0x0000000FFFFFF000ULL);
-    base |= (platform_info.local_apic_address & 0x0000000FFFFF000ULL) |
-            APIC_BASE_ENABLE;
-    write_msr(IA32_APIC_BASE_MSR, base);
+    else
+    {
+        if (platform_info.local_apic_address >= 0x100000000ULL ||
+            (base & APIC_BASE_X2APIC))
+            return 0;
+        base &= ~0x0000000FFFFFF000ULL;
+        base |= (platform_info.local_apic_address & 0x0000000FFFFF000ULL) |
+                APIC_BASE_ENABLE;
+        write_msr(IA32_APIC_BASE_MSR, base);
+    }
 
     lapic_write(LAPIC_TPR, 0);
     lapic_write(LAPIC_SVR, (1U << 8) | LAPIC_SPURIOUS_VECTOR);
     lapic_write(LAPIC_LVT_LINT0, 1U << 16);
     lapic_write(LAPIC_LVT_LINT1, 1U << 16);
-
-    return (lapic_read(LAPIC_ID) >> 24) == expected_apic_id;
+    return lapic_id() == expected_apic_id;
 }
 
 static void apic_delay(volatile uint32_t iterations)
@@ -358,47 +437,62 @@ static void apic_delay(volatile uint32_t iterations)
 
 static int apic_send_ipi(uint32_t destination, uint32_t command)
 {
-    if (!enabled || !lapic || destination > 255U)
+    if (!local_apic_ready() || (!x2apic_mode && destination > 255U))
         return 0;
 
-    /*
-     * The ICR belongs to the calling CPU's local APIC, so CPUs do not share
-     * one ICR lock. Interrupts must nevertheless stay disabled across the
-     * ICR-high/ICR-low pair: a nested local interrupt must not overwrite the
-     * destination between those two writes. Preserve the caller's IF state.
-     */
+    /* The ICR is local to the sending CPU; preserve the caller's IF state. */
     uint64_t saved_flags;
     __asm__ volatile ("pushfq; popq %0; cli"
                       : "=r"(saved_flags) :: "memory", "cc");
-
     uint32_t timeout = 1000000U;
+
+    if (x2apic_mode)
+    {
+        while ((read_msr(APIC_X2APIC_MSR_ICR) & (1ULL << 12U)) != 0U &&
+               timeout-- != 0U)
+            __asm__ volatile ("pause" ::: "memory");
+        if ((read_msr(APIC_X2APIC_MSR_ICR) & (1ULL << 12U)) != 0U)
+        {
+            __asm__ volatile ("pushq %0; popfq"
+                              :: "r"(saved_flags) : "memory", "cc");
+            return 0;
+        }
+        write_msr(APIC_X2APIC_MSR_ICR,
+                  apic_x2apic_encode_icr(destination, command));
+        timeout = 1000000U;
+        while ((read_msr(APIC_X2APIC_MSR_ICR) & (1ULL << 12U)) != 0U &&
+               timeout-- != 0U)
+            __asm__ volatile ("pause" ::: "memory");
+        int delivered =
+            (read_msr(APIC_X2APIC_MSR_ICR) & (1ULL << 12U)) == 0U;
+        __asm__ volatile ("pushq %0; popfq"
+                          :: "r"(saved_flags) : "memory", "cc");
+        return delivered;
+    }
+
     while ((lapic_read(0x300U) & (1U << 12)) != 0U && timeout > 0U)
     {
         timeout--;
         __asm__ volatile ("pause" ::: "memory");
     }
-
     if ((lapic_read(0x300U) & (1U << 12)) != 0U)
     {
         __asm__ volatile ("pushq %0; popfq"
                           :: "r"(saved_flags) : "memory", "cc");
         return 0;
     }
-
-    lapic_write(0x310U, destination << 24);
+    lapic_write(0x310U, destination << 24U);
     __asm__ volatile ("" ::: "memory");
     lapic_write(0x300U, command);
-
     timeout = 1000000U;
     while ((lapic_read(0x300U) & (1U << 12)) != 0U && timeout > 0U)
     {
         timeout--;
         __asm__ volatile ("pause" ::: "memory");
     }
-
     int delivered = (lapic_read(0x300U) & (1U << 12)) == 0U;
-    __asm__ volatile ("pushq %0; popfq"
-                      :: "r"(saved_flags) : "memory", "cc");
+    __asm__ volatile ("pushq %0; popq %1"
+                      : "=r"(saved_flags) : "r"(saved_flags) : "memory", "cc");
     return delivered;
 }
 
@@ -410,12 +504,12 @@ int apic_send_nmi_all(void)
 
 uint32_t apic_get_bsp_id(void)
 {
-    return enabled && lapic ? lapic_read(LAPIC_ID) >> 24 : 0U;
+    return local_apic_ready() ? lapic_id() : 0U;
 }
 
 int apic_send_init_all(void)
 {
-    if (!enabled || !lapic)
+    if (!local_apic_ready())
         return 0;
 
     /*
@@ -434,7 +528,8 @@ int apic_send_init_all(void)
 
 int apic_send_sipi(uint32_t apic_id, uint8_t startup_vector)
 {
-    if (!enabled || startup_vector == 0 || apic_id > 255U)
+    if (!local_apic_ready() || startup_vector == 0 ||
+        (!x2apic_mode && apic_id > 255U))
         return 0;
 
     if (!apic_send_ipi(apic_id, 0x00000600U | startup_vector))
@@ -460,9 +555,19 @@ int apic_is_enabled(void)
     return enabled;
 }
 
+int apic_is_x2apic(void)
+{
+    return enabled && x2apic_mode;
+}
+
+int apic_uses_legacy_pic(void)
+{
+    return enabled && legacy_pic_routing;
+}
+
 void apic_send_eoi(void)
 {
-    if (enabled && lapic)
+    if (local_apic_ready())
         lapic_write(LAPIC_EOI, 0);
 }
 

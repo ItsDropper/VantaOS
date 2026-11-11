@@ -39,7 +39,7 @@ int main(void)
 {
     const uintptr_t scan_address = 0xF0000U;
     const uintptr_t table_address = 0x100000U;
-    const size_t mapping_size = 0x3000U;
+    const size_t mapping_size = 0x11000U;
     uint8_t* memory = mmap((void*)scan_address, mapping_size,
                            PROT_READ | PROT_WRITE,
                            MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE,

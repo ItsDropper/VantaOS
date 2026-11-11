@@ -46,6 +46,8 @@ typedef struct
     char uid_string[ACPI_AML_ID_MAX];
     uint8_t sta_valid;
     uint32_t sta;
+    uint8_t hid_descriptor_address_valid;
+    uint16_t hid_descriptor_address;
     uint32_t resource_count;
     uint32_t resource_total;
     uint32_t i2c_count;

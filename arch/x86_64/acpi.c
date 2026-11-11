@@ -483,6 +483,19 @@ static void acpi_aml_log_device(const acpi_aml_device_t* device, void* context)
     }
     else
         serial_write("dynamic-or-absent");
+    serial_write(" hid_desc=");
+    if (device->hid_descriptor_address_valid)
+    {
+        static const char hex[] = "0123456789ABCDEF";
+        char digits[4];
+        for (uint32_t i = 0U; i < 4U; ++i)
+            digits[i] = hex[(device->hid_descriptor_address >>
+                             ((3U - i) * 4U)) & 0x0FU];
+        serial_write("0x");
+        serial_write_bytes(digits, sizeof(digits));
+    }
+    else
+        serial_write("unknown");
     serial_write(" i2c=");
     {
         char digits[3];

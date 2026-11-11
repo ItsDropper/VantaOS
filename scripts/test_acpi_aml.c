@@ -20,7 +20,7 @@ static void capture(const acpi_aml_device_t* device, void* context)
 static void append(uint8_t* out, uint32_t* length,
                    const uint8_t* bytes, uint32_t count)
 {
-    assert(*length <= 512U && count <= 512U - *length);
+    assert(*length <= 1024U && count <= 1024U - *length);
     memcpy(out + *length, bytes, count);
     *length += count;
 }
@@ -58,7 +58,7 @@ static void append_package(uint8_t* out, uint32_t* length,
 }
 int main(void)
 {
-    uint8_t aml[512], device_body[256], scope_body[300], cid_body[64];
+    uint8_t aml[1024], device_body[512], scope_body[768], cid_body[64];
     uint8_t crs_body[64], buffer_body[64];
     uint32_t n=0U, device_n=0U, scope_n=0U, cid_n=0U, crs_n=0U, buffer_n=0U;
 
@@ -86,6 +86,40 @@ int main(void)
     append(device_body,&device_n,cid_package,cid_package_n);
     append(device_body,&device_n,uid,sizeof(uid));
     append(device_body,&device_n,sta,sizeof(sta));
+
+    /* _DSD standard Device Properties package with hid-descr-addr. */
+    const uint8_t uuid_bytes[]={0x14U,0xD8U,0xFFU,0xDAU,0xBAU,0x6EU,
+        0x8CU,0x4DU,0x8AU,0x91U,0xBCU,0x9BU,0xBFU,0x4AU,0xA3U,0x01U};
+    uint8_t dsd_buffer_body[32], dsd_buffer[48];
+    uint32_t dsd_buffer_body_n=0U, dsd_buffer_n=0U;
+    const uint8_t dsd_buffer_size[]={0x0AU,0x10U};
+    append(dsd_buffer_body,&dsd_buffer_body_n,dsd_buffer_size,sizeof(dsd_buffer_size));
+    append(dsd_buffer_body,&dsd_buffer_body_n,uuid_bytes,sizeof(uuid_bytes));
+    const uint8_t buffer_op[]={0x11U};
+    append_package(dsd_buffer,&dsd_buffer_n,buffer_op,sizeof(buffer_op),
+                   dsd_buffer_body,dsd_buffer_body_n);
+    uint8_t property_body[64], property_package[80];
+    uint32_t property_body_n=0U, property_package_n=0U;
+    const uint8_t property_count[]={0x02U};
+    const uint8_t property_name[]={0x0DU,'h','i','d','-','d','e','s','c','r','-','a','d','d','r',0x00U};
+    const uint8_t property_value[]={0x0BU,0x20U,0x00U};
+    append(property_body,&property_body_n,property_count,sizeof(property_count));
+    append(property_body,&property_body_n,property_name,sizeof(property_name));
+    append(property_body,&property_body_n,property_value,sizeof(property_value));
+    const uint8_t package_op[]={0x12U};
+    append_package(property_package,&property_package_n,package_op,sizeof(package_op),
+                   property_body,property_body_n);
+    uint8_t dsd_body[160], dsd_package[192];
+    uint32_t dsd_body_n=0U, dsd_package_n=0U;
+    const uint8_t dsd_count[]={0x02U};
+    append(dsd_body,&dsd_body_n,dsd_count,sizeof(dsd_count));
+    append(dsd_body,&dsd_body_n,dsd_buffer,dsd_buffer_n);
+    append(dsd_body,&dsd_body_n,property_package,property_package_n);
+    append_package(dsd_package,&dsd_package_n,package_op,sizeof(package_op),
+                   dsd_body,dsd_body_n);
+    const uint8_t dsd_name[]={0x08U,'_','D','S','D'};
+    append(device_body,&device_n,dsd_name,sizeof(dsd_name));
+    append(device_body,&device_n,dsd_package,dsd_package_n);
 
     /* I2C descriptor: 100 kHz, 7-bit slave 0x15, source \\_SB_. */
     const uint8_t i2c_descriptor[]={
@@ -142,6 +176,8 @@ int main(void)
     assert(captured[0].uid_valid && captured[0].uid==3U);
     assert(captured[0].sta_valid && captured[0].sta==0x0FU);
     assert(captured[0].i2c_count==1U);
+    assert(captured[0].hid_descriptor_address_valid==1U);
+    assert(captured[0].hid_descriptor_address==0x0020U);
     assert(captured[0].resource_total==2U && captured[0].resource_count==2U);
     assert(captured[0].resources[0].resource_type==4U);
     assert(captured[0].resources[0].serial_bus_type==1U);

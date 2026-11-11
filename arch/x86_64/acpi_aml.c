@@ -564,6 +564,69 @@ static int aml_name_equals(const char* left, const char* right)
     return *left == *right;
 }
 
+static int aml_string_equals(const aml_value_t* value,
+                              const char* expected)
+{
+    if (value->kind != AML_VALUE_STRING)
+        return 0;
+    size_t length = strlen(expected);
+    if (value->length != length)
+        return 0;
+    for (size_t i = 0U; i < length; ++i)
+        if ((char)value->bytes[i] != expected[i])
+            return 0;
+    return 1;
+}
+
+/* ACPI Device Properties UUID: daffd814-6eba-4d8c-8a91-bc9bbf4aa301. */
+static int aml_parse_dsd(acpi_aml_device_t* device,
+                         const aml_value_t* package, const char* scope)
+{
+    static const uint8_t device_properties_uuid[16] = {
+        0x14U, 0xD8U, 0xFFU, 0xDAU, 0xBAU, 0x6EU, 0x8CU, 0x4DU,
+        0x8AU, 0x91U, 0xBCU, 0x9BU, 0xBFU, 0x4AU, 0xA3U, 0x01U
+    };
+    if (!device || package->kind != AML_VALUE_PACKAGE ||
+        package->package_count != 2U)
+        return 1;
+
+    const uint8_t* cursor = package->package_begin;
+    aml_value_t uuid, properties;
+    if (!aml_read_value(&cursor, package->package_end, scope, &uuid))
+        return 0;
+    if (uuid.kind != AML_VALUE_BUFFER || uuid.length != sizeof(device_properties_uuid))
+        return 1; /* Other _DSD GUIDs are outside this parser's scope. */
+    for (uint32_t i = 0U; i < sizeof(device_properties_uuid); ++i)
+        if (uuid.bytes[i] != device_properties_uuid[i])
+            return 1;
+
+    if (!aml_read_value(&cursor, package->package_end, scope, &properties) ||
+        properties.kind != AML_VALUE_PACKAGE || cursor != package->package_end ||
+        (properties.package_count & 1U) != 0U)
+        return 0;
+
+    cursor = properties.package_begin;
+    for (uint32_t i = 0U; i < properties.package_count; i += 2U)
+    {
+        aml_value_t key, value;
+        if (!aml_read_value(&cursor, properties.package_end, scope, &key) ||
+            !aml_read_value(&cursor, properties.package_end, scope, &value))
+            return 0;
+        if (!aml_string_equals(&key, "hid-descr-addr"))
+            continue;
+        if (value.kind != AML_VALUE_INTEGER || value.integer == 0U ||
+            value.integer > UINT16_MAX)
+            return 0;
+        uint16_t address = (uint16_t)value.integer;
+        if (device->hid_descriptor_address_valid &&
+            device->hid_descriptor_address != address)
+            return 0;
+        device->hid_descriptor_address = address;
+        device->hid_descriptor_address_valid = 1U;
+    }
+    return cursor == properties.package_end;
+}
+
 static int aml_handle_name(acpi_aml_device_t* device, const char* name,
                            const aml_value_t* value, const char* scope)
 {
@@ -598,6 +661,9 @@ static int aml_handle_name(acpi_aml_device_t* device, const char* name,
     else if (aml_name_equals(name, "_CRS") &&
              value->kind == AML_VALUE_BUFFER)
         return aml_parse_resources(device, value->bytes, value->length);
+    else if (aml_name_equals(name, "_DSD") &&
+             value->kind == AML_VALUE_PACKAGE)
+        return aml_parse_dsd(device, value, scope);
     return 1;
 }
 

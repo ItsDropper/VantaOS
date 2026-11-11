@@ -74,3 +74,18 @@ for later power-management work. This is read-only table discovery: AML is
 not interpreted and firmware control methods are never executed. Host tests
 cover valid tables, extended-pointer fallback, corrupt checksums, malformed
 roots and null arguments.
+
+## Non-executing AML namespace subset
+
+The kernel now has a bounded AML table walker for common Scope and Device
+objects and static Name values. It extracts _HID, static _CID package entries,
+_UID, static _STA, and I2C SerialBus descriptors from a static _CRS Buffer.
+The I2C descriptor reports bus speed, slave address, flags, and resource
+source path. Device/method packages, AML recursion, device count, identifiers,
+and resource counts are bounded. Methods and conditional/control-flow
+packages are skipped and never evaluated. This is deliberately not a full AML
+interpreter: dynamic _STA/_CRS methods, arbitrary AML expressions, namespace
+alias resolution, and resource-source path resolution are not supported.
+Unknown term opcodes fail the table parse rather than scanning opaque bytes.
+Host tests cover namespace paths, static IDs, I2C descriptor decoding, and
+malformed package lengths. No I2C controller is activated by this inventory.

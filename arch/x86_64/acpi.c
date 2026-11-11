@@ -6,6 +6,7 @@
  */
 
 #include "acpi.h"
+#include "acpi_aml.h"
 #include "vanta_boot_info.h"
 #include "serial.h"
 
@@ -448,6 +449,132 @@ int acpi_discover_tables(acpi_table_inventory_t* inventory)
 }
 
 
+
+static void acpi_aml_log_device(const acpi_aml_device_t* device, void* context)
+{
+    (void)context;
+    serial_write("VANTAOS_HW_ACPI_DEVICE path=");
+    serial_write(device->path);
+    serial_write(" hid=");
+    serial_write(device->hid[0] ? device->hid : "unknown");
+    serial_write(" uid=");
+    if (device->uid_valid && !device->uid_is_string)
+    {
+        char digits[20];
+        uint32_t count = 0U;
+        uint64_t value = device->uid;
+        do { digits[count++] = (char)('0' + value % 10U); value /= 10U; }
+        while (value && count < sizeof(digits));
+        while (count) { char c = digits[--count]; serial_write_bytes(&c, 1U); }
+    }
+    else if (device->uid_valid)
+        serial_write(device->uid_string);
+    else
+        serial_write("unknown");
+    serial_write(" sta=");
+    if (device->sta_valid)
+    {
+        static const char hex[] = "0123456789ABCDEF";
+        char digits[8];
+        for (uint32_t i = 0U; i < 8U; ++i)
+            digits[i] = hex[(device->sta >> ((7U - i) * 4U)) & 0x0FU];
+        serial_write("0x");
+        serial_write_bytes(digits, sizeof(digits));
+    }
+    else
+        serial_write("dynamic-or-absent");
+    serial_write(" i2c=");
+    {
+        char digits[3];
+        uint32_t value = device->i2c_count, count = 0U;
+        do { digits[count++] = (char)('0' + value % 10U); value /= 10U; }
+        while (value && count < sizeof(digits));
+        while (count) { char c = digits[--count]; serial_write_bytes(&c, 1U); }
+    }
+    for (uint32_t i = 0U; i < device->resource_count; ++i)
+    {
+        const acpi_aml_resource_t* resource = &device->resources[i];
+        if (resource->descriptor_tag != 0x8EU)
+            continue;
+        serial_write(" i2c_hz=");
+        {
+            char digits[10];
+            uint32_t value = resource->connection_speed_hz, count = 0U;
+            do { digits[count++] = (char)('0' + value % 10U); value /= 10U; }
+            while (value && count < sizeof(digits));
+            while (count) { char c = digits[--count]; serial_write_bytes(&c, 1U); }
+        }
+        serial_write(" addr=0x");
+        {
+            static const char hex[] = "0123456789ABCDEF";
+            char digits[4];
+            for (uint32_t j = 0U; j < 4U; ++j)
+                digits[j] = hex[(resource->slave_address >> ((3U-j)*4U))&0x0FU];
+            serial_write_bytes(digits, sizeof(digits));
+        }
+        serial_write(" source=");
+        serial_write(resource->resource_source[0] ?
+                     resource->resource_source : "unknown");
+    }
+    serial_write("\n");
+}
+
+static void acpi_aml_log_inventory(const acpi_table_inventory_t* tables)
+{
+    uint32_t total_devices = 0U;
+    uint32_t parsed_tables = 0U;
+    uint32_t failed_tables = 0U;
+    uint64_t addresses[ACPI_MAX_SSDT + 1U];
+    uint32_t lengths[ACPI_MAX_SSDT + 1U];
+    addresses[0] = tables->dsdt_address;
+    lengths[0] = tables->dsdt_length;
+    for (uint32_t i = 0U; i < tables->ssdt_count; ++i)
+    {
+        addresses[i + 1U] = tables->ssdt_addresses[i];
+        lengths[i + 1U] = tables->ssdt_lengths[i];
+    }
+    for (uint32_t i = 0U; i <= tables->ssdt_count; ++i)
+    {
+        if (lengths[i] < 36U)
+        {
+            ++failed_tables;
+            continue;
+        }
+        const uint8_t* table = (const uint8_t*)(uintptr_t)addresses[i];
+        uint32_t found = 0U;
+        if (acpi_aml_parse_table(table + 36U, lengths[i] - 36U,
+                                 acpi_aml_log_device, NULL, &found))
+        {
+            ++parsed_tables;
+            total_devices += found;
+        }
+        else
+            ++failed_tables;
+    }
+    serial_write("VANTAOS_HW_ACPI_AML parsed_tables=");
+    {
+        char digits[5]; uint32_t value=parsed_tables,n=0U;
+        do { digits[n++]=(char)('0'+value%10U); value/=10U; }
+        while(value && n<sizeof(digits));
+        while(n){char c=digits[--n];serial_write_bytes(&c,1U);}
+    }
+    serial_write(" failed_tables=");
+    {
+        char digits[5]; uint32_t value=failed_tables,n=0U;
+        do { digits[n++]=(char)('0'+value%10U); value/=10U; }
+        while(value && n<sizeof(digits));
+        while(n){char c=digits[--n];serial_write_bytes(&c,1U);}
+    }
+    serial_write(" devices=");
+    {
+        char digits[5]; uint32_t value=total_devices,n=0U;
+        do { digits[n++]=(char)('0'+value%10U); value/=10U; }
+        while(value && n<sizeof(digits));
+        while(n){char c=digits[--n];serial_write_bytes(&c,1U);}
+    }
+    serial_write("\n");
+}
+
 /*
  * Read-only firmware table inventory for physical bring-up. Every table is
  * range-checked and checksum-validated before any OEM metadata is emitted.
@@ -604,6 +731,7 @@ void acpi_log_table_inventory(void)
             while (n) { char c = digits[--n]; serial_write_bytes(&c, 1U); }
         }
         serial_write("\n");
+        acpi_aml_log_inventory(&namespace_tables);
     }
     else
         serial_write("VANTAOS_HW_ACPI_NAMESPACE_TABLES_UNAVAILABLE\n");

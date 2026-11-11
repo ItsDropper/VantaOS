@@ -128,6 +128,13 @@ jobs:
             -o /tmp/vantaos-acpi-tables-test
           /tmp/vantaos-acpi-tables-test
 
+      - name: Test bounded non-executing ACPI AML namespace and resources
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_acpi_aml.c arch/x86_64/acpi_aml.c \
+            -o /tmp/vantaos-acpi-aml-test
+          /tmp/vantaos-acpi-aml-test
+
       - name: Test passive HDA controller and codec inventory
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude -Idrivers/audio \

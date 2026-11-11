@@ -491,8 +491,8 @@ static int apic_send_ipi(uint32_t destination, uint32_t command)
         __asm__ volatile ("pause" ::: "memory");
     }
     int delivered = (lapic_read(0x300U) & (1U << 12)) == 0U;
-    __asm__ volatile ("pushq %0; popq %1"
-                      : "=r"(saved_flags) : "r"(saved_flags) : "memory", "cc");
+    __asm__ volatile ("pushq %0; popfq"
+                      :: "r"(saved_flags) : "memory", "cc");
     return delivered;
 }
 

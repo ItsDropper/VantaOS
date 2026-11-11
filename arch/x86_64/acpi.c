@@ -7,6 +7,7 @@
 
 #include "acpi.h"
 #include "vanta_boot_info.h"
+#include "serial.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -344,3 +345,125 @@ uint32_t acpi_discover_pci_mcfg(acpi_mcfg_region_t* regions,
     return 0U;
 }
 
+
+/*
+ * Read-only firmware table inventory for physical bring-up. Every table is
+ * range-checked and checksum-validated before any OEM metadata is emitted.
+ */
+void acpi_log_table_inventory(void)
+{
+    unsigned int entry_size = 0U;
+    const acpi_sdt_header_t* root = acpi_get_root_table(&entry_size);
+    if (!root)
+    {
+        serial_write("VANTAOS_HW_ACPI_UNAVAILABLE\\n");
+        return;
+    }
+
+    serial_write("VANTAOS_HW_ACPI_ROOT=");
+    serial_write(entry_size == sizeof(uint64_t) ? "XSDT" : "RSDT");
+    serial_write(" revision=");
+    {
+        char digits[3];
+        uint32_t value = root->revision;
+        uint32_t count = 0U;
+        do
+        {
+            digits[count++] = (char)('0' + value % 10U);
+            value /= 10U;
+        } while (value != 0U && count < sizeof(digits));
+        while (count != 0U)
+        {
+            char digit = digits[--count];
+            serial_write_bytes(&digit, 1U);
+        }
+    }
+    serial_write(" oem=");
+    for (uint32_t i = 0U; i < sizeof(root->oem_id); ++i)
+    {
+        char character = (root->oem_id[i] >= 0x20 &&
+                          root->oem_id[i] <= 0x7E) ?
+                         root->oem_id[i] : '?';
+        serial_write_bytes(&character, 1U);
+    }
+    serial_write("\\n");
+
+    uint32_t entries = (root->length - sizeof(*root)) / entry_size;
+    const uint8_t* table_entries = (const uint8_t*)root + sizeof(*root);
+    uint32_t valid = 0U;
+    for (uint32_t i = 0U; i < entries; ++i)
+    {
+        uint64_t address = entry_size == sizeof(uint64_t) ?
+            *(const uint64_t*)(table_entries + i * entry_size) :
+            *(const uint32_t*)(table_entries + i * entry_size);
+        if (!physical_range(address, sizeof(acpi_sdt_header_t)))
+            continue;
+        const acpi_sdt_header_t* table =
+            (const acpi_sdt_header_t*)(uintptr_t)address;
+        if (table->length < sizeof(*table) ||
+            !physical_range(address, table->length) ||
+            checksum8(table, table->length) != 0U)
+            continue;
+
+        serial_write("VANTAOS_HW_ACPI_TABLE signature=");
+        for (uint32_t j = 0U; j < sizeof(table->signature); ++j)
+        {
+            char character = (table->signature[j] >= 0x20 &&
+                              table->signature[j] <= 0x7E) ?
+                             table->signature[j] : '?';
+            serial_write_bytes(&character, 1U);
+        }
+        serial_write(" length=");
+        {
+            char digits[10];
+            uint32_t value = table->length;
+            uint32_t count = 0U;
+            do
+            {
+                digits[count++] = (char)('0' + value % 10U);
+                value /= 10U;
+            } while (value != 0U && count < sizeof(digits));
+            while (count != 0U)
+            {
+                char digit = digits[--count];
+                serial_write_bytes(&digit, 1U);
+            }
+        }
+        serial_write(" oem=");
+        for (uint32_t j = 0U; j < sizeof(table->oem_id); ++j)
+        {
+            char character = (table->oem_id[j] >= 0x20 &&
+                              table->oem_id[j] <= 0x7E) ?
+                             table->oem_id[j] : '?';
+            serial_write_bytes(&character, 1U);
+        }
+        serial_write(" table_id=");
+        for (uint32_t j = 0U; j < sizeof(table->oem_table_id); ++j)
+        {
+            char character = (table->oem_table_id[j] >= 0x20 &&
+                              table->oem_table_id[j] <= 0x7E) ?
+                             table->oem_table_id[j] : '?';
+            serial_write_bytes(&character, 1U);
+        }
+        serial_write("\\n");
+        ++valid;
+    }
+
+    serial_write("VANTAOS_HW_ACPI_TABLE_COUNT=");
+    {
+        char digits[10];
+        uint32_t value = valid;
+        uint32_t count = 0U;
+        do
+        {
+            digits[count++] = (char)('0' + value % 10U);
+            value /= 10U;
+        } while (value != 0U && count < sizeof(digits));
+        while (count != 0U)
+        {
+            char digit = digits[--count];
+            serial_write_bytes(&digit, 1U);
+        }
+    }
+    serial_write("\\n");
+}

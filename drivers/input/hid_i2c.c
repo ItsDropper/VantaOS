@@ -31,6 +31,9 @@ typedef struct
     uint8_t last_xy_valid;
     uint8_t buttons;
     uint8_t errors;
+    uint8_t online;
+    uint32_t retry_after_tick;
+    uint32_t retry_delay_ticks;
     uint16_t address;
     uint16_t descriptor_register;
     uint16_t input_register;
@@ -458,6 +461,8 @@ int hid_i2c_attach(i2c_bus_t *bus,uint16_t address,uint32_t speed_hz,
     candidate.input_register=input_register;
     candidate.command_register=command_register;
     candidate.max_input_length=max_input;
+    candidate.online=1U;
+    candidate.retry_delay_ticks=10U;
     if(firmware_id)
     {
         size_t n=strlen(firmware_id);
@@ -515,7 +520,7 @@ static void hid_release_all(hid_i2c_device_t *device)
     device->last_xy_valid=0U;
 }
 
-static void hid_poll_device(hid_i2c_device_t *device)
+static void hid_poll_device(hid_i2c_device_t *device,uint32_t tick)
 {
     uint8_t report[HID_I2C_MAX_REPORT];
     if(!hid_register_read(device->bus,device->address,device->speed_hz,
@@ -523,17 +528,45 @@ static void hid_poll_device(hid_i2c_device_t *device)
                           device->max_input_length))
     {
         if(device->errors<HID_I2C_ERROR_LIMIT) ++device->errors;
-        if(device->errors==HID_I2C_ERROR_LIMIT)
+        if(device->errors>=HID_I2C_ERROR_LIMIT)
         {
-            hid_release_all(device);
-            if(device->keyboard_id) (void)input_set_device_online(device->keyboard_id,false);
-            if(device->pointer_id) (void)input_set_device_online(device->pointer_id,false);
-            serial_write("VANTAOS_I2C_HID_TRANSPORT_OFFLINE\n");
-            ++device->errors;
+            if(device->online)
+            {
+                hid_release_all(device);
+                if(device->keyboard_id)
+                    (void)input_set_device_online(device->keyboard_id,false);
+                if(device->pointer_id)
+                    (void)input_set_device_online(device->pointer_id,false);
+                device->online=0U;
+                device->retry_delay_ticks=10U;
+                serial_write("VANTAOS_I2C_HID_TRANSPORT_OFFLINE\n");
+            }
+            else if(device->retry_delay_ticks<200U)
+            {
+                device->retry_delay_ticks*=2U;
+                if(device->retry_delay_ticks>200U)
+                    device->retry_delay_ticks=200U;
+            }
+            device->retry_after_tick=tick+device->retry_delay_ticks;
         }
         return;
     }
     device->errors=0U;
+    device->retry_delay_ticks=10U;
+    if(!device->online)
+    {
+        int restored=1;
+        if(device->keyboard_id)
+            restored=input_set_device_online(device->keyboard_id,true)&&restored;
+        if(device->pointer_id)
+            restored=input_set_device_online(device->pointer_id,true)&&restored;
+        if(!restored) return;
+        device->online=1U;
+        device->last_xy_valid=0U;
+        device->buttons=0U;
+        memset(device->keys,0,sizeof(device->keys));
+        serial_write("VANTAOS_I2C_HID_TRANSPORT_RESTORED\n");
+    }
     uint16_t total=hid_u16(report);
     if(total==0U||total==0xFFFFU) return;
     if(total<2U||total>device->max_input_length) return;
@@ -570,9 +603,12 @@ void hid_i2c_poll(void)
     {
         uint32_t slot=poll_cursor++%HID_I2C_MAX_DEVICES;
         ++scanned;
-        if(!devices[slot].active||devices[slot].errors>HID_I2C_ERROR_LIMIT)
+        if(!devices[slot].active)
             continue;
-        hid_poll_device(&devices[slot]);
+        if(!devices[slot].online&&
+           (int32_t)(tick-devices[slot].retry_after_tick)<0)
+            continue;
+        hid_poll_device(&devices[slot],tick);
         ++visited;
     }
 }

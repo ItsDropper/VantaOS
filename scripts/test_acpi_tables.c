@@ -31,7 +31,7 @@ int main(void)
     uint8_t* ssdt=(uint8_t*)0x104000U;
     table(rsdt,"RSDT",44U); *(uint32_t*)(rsdt+36U)=0x102000U;
     *(uint32_t*)(rsdt+40U)=0x104000U; checksum(rsdt,44U,9U);
-    table(fadt,"FACP",148U); *(uint32_t*)(fadt+40U)=0x103000U;
+    table(fadt,"FACP",148U); fadt[8U]=6U; *(uint32_t*)(fadt+40U)=0x103000U;
     *(uint16_t*)(fadt+46U)=9U; *(uint64_t*)(fadt+140U)=0x103000U;
     checksum(fadt,148U,9U);
     table(dsdt,"DSDT",40U); checksum(dsdt,40U,9U);

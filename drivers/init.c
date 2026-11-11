@@ -86,6 +86,74 @@ static void hardware_write_hex16(uint16_t value)
     hardware_write_hex8((uint8_t)value);
 }
 
+static void hardware_write_hex64(uint64_t value)
+{
+    hardware_write_hex16((uint16_t)(value >> 48U));
+    hardware_write_hex16((uint16_t)(value >> 32U));
+    hardware_write_hex16((uint16_t)(value >> 16U));
+    hardware_write_hex16((uint16_t)value);
+}
+
+static void hardware_log_pci_resources(const struct pci_device *device)
+{
+    uint16_t command;
+    int relevant;
+
+    if (device == NULL)
+        return;
+
+    relevant = device->class_code == 0x02U ||
+               device->class_code == 0x03U ||
+               device->class_code == 0x04U ||
+               device->class_code == 0x0CU;
+    if (!relevant)
+        return;
+
+    command = pci_read_config16(device, 0x04U);
+    serial_write("VANTAOS_HW_PCI_RESOURCES bdf=");
+    hardware_write_hex8(device->bus);
+    serial_write(":");
+    hardware_write_hex8(device->slot);
+    serial_write(".");
+    hardware_write_hex8(device->function);
+    serial_write(" command=");
+    hardware_write_hex16(command);
+    serial_write(" irq_line=");
+    hardware_write_hex8(device->interrupt_line);
+    serial_write(" irq_pin=");
+    hardware_write_hex8(device->interrupt_pin);
+    serial_write("\n");
+
+    /*
+     * Read only firmware-assigned BAR values. BAR sizing writes all-ones
+     * into live config space and is intentionally excluded from inventory.
+     */
+    for (uint8_t bar = 0U; bar < 6U; ++bar) {
+        uint64_t address = 0U;
+        int is_io = 0;
+        int is_64bit = 0;
+
+        if (!pci_get_bar(device, bar, &address, &is_io, &is_64bit))
+            continue;
+
+        serial_write("VANTAOS_HW_PCI_BAR bdf=");
+        hardware_write_hex8(device->bus);
+        serial_write(":");
+        hardware_write_hex8(device->slot);
+        serial_write(".");
+        hardware_write_hex8(device->function);
+        serial_write(" index=");
+        hardware_write_hex8(bar);
+        serial_write(" type=");
+        serial_write(is_io ? "IO" : "MMIO");
+        serial_write(" width=");
+        serial_write(is_64bit ? "64" : "32");
+        serial_write(" base=0x");
+        hardware_write_hex64(address);
+        serial_write("\n");
+    }
+}
+
 /*
  * Report enumerated PCI functions before subsystem-specific startup.
  * This is deliberately an inventory, not a claim that a matching driver
@@ -208,6 +276,7 @@ static void hardware_inventory_initialize(void)
             hardware_write_hex8(device->function);
             serial_write("\n");
         }
+        hardware_log_pci_resources(device);
     }
 }
 

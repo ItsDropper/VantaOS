@@ -15,6 +15,8 @@
 #include "amd_gpu.h"
 #include "serial.h"
 #include "pci.h"
+#include "acpi.h"
+#include "smbios.h"
 #include <stddef.h>
 #include "gpu_core.h"
 #include "storage_init.h"
@@ -129,6 +131,17 @@ static void hardware_inventory_initialize(void)
         hardware_write_hex16(device->vendor_id);
         serial_write(":");
         hardware_write_hex16(device->device_id);
+        serial_write(" rev=");
+        hardware_write_hex8(device->revision);
+        serial_write(" header=");
+        hardware_write_hex8(device->header_type);
+        if ((device->header_type & 0x7FU) == 0U)
+        {
+            serial_write(" subsystem=");
+            hardware_write_hex16(pci_read_config16(device, 0x2CU));
+            serial_write(":");
+            hardware_write_hex16(pci_read_config16(device, 0x2EU));
+        }
         serial_write(" class=");
         hardware_write_hex8(device->class_code);
         serial_write(":");
@@ -151,6 +164,8 @@ static void hardware_inventory_initialize(void)
  */
 void drivers_initialize(void)
 {
+    acpi_log_table_inventory();
+    smbios_inventory_initialize();
     hardware_inventory_initialize();
     net_stack_initialize();
     usb_host_controller_initialize();

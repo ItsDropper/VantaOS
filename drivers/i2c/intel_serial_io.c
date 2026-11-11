@@ -232,6 +232,8 @@ static void aml_commit_staging(void)
             if(!aml_merge_device(&aml_devices[existing],source))
                 aml_devices[existing].invalid=1U;
         }
+        else if(aml_device_count<AML_DEVICE_LIMIT)
+            aml_devices[aml_device_count++]=*source;
         else
             aml_namespace_overflow=1U;
     }
@@ -283,7 +285,8 @@ static const acpi_aml_device_t *aml_find_controller(
         const acpi_aml_device_t *root=NULL;
         for(uint32_t j=0U;j<aml_device_count;++j)
             if(path_equal(aml_devices[j].path,controller->parent_path)&&
-               aml_is_pci_root(&aml_devices[j]))
+               aml_is_pci_root(&aml_devices[j])&&
+               aml_device_usable(&aml_devices[j]))
             {root=&aml_devices[j];break;}
         if(!root) continue;
         uint64_t adr=controller->adr;

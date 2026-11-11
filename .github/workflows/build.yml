@@ -121,6 +121,13 @@ jobs:
             -o /tmp/vantaos-smbios-inventory-test
           /tmp/vantaos-smbios-inventory-test
 
+      - name: Test validated ACPI FADT, DSDT and SSDT discovery
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_acpi_tables.c arch/x86_64/acpi.c \
+            -o /tmp/vantaos-acpi-tables-test
+          /tmp/vantaos-acpi-tables-test
+
       - name: Test passive HDA controller and codec inventory
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude -Idrivers/audio \

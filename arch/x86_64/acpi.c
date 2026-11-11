@@ -346,6 +346,106 @@ uint32_t acpi_discover_pci_mcfg(acpi_mcfg_region_t* regions,
 }
 
 
+
+static uint16_t acpi_read16(const uint8_t* p)
+{
+    return (uint16_t)((uint16_t)p[0] | ((uint16_t)p[1] << 8U));
+}
+static uint32_t acpi_read32(const uint8_t* p)
+{
+    return (uint32_t)p[0] | ((uint32_t)p[1] << 8U) |
+           ((uint32_t)p[2] << 16U) | ((uint32_t)p[3] << 24U);
+}
+static uint64_t acpi_read64(const uint8_t* p)
+{
+    return (uint64_t)acpi_read32(p) |
+           ((uint64_t)acpi_read32(p + 4U) << 32U);
+}
+static const acpi_sdt_header_t* acpi_validated_table(
+    uint64_t address, const char* signature)
+{
+    if (!physical_range(address, sizeof(acpi_sdt_header_t)))
+        return NULL;
+    const acpi_sdt_header_t* table =
+        (const acpi_sdt_header_t*)(uintptr_t)address;
+    return table_valid(table, signature) ? table : NULL;
+}
+
+int acpi_discover_tables(acpi_table_inventory_t* inventory)
+{
+    if (!inventory)
+        return 0;
+    uint8_t* out = (uint8_t*)inventory;
+    for (size_t i = 0U; i < sizeof(*inventory); ++i)
+        out[i] = 0U;
+
+    unsigned int entry_size = 0U;
+    const acpi_sdt_header_t* root = acpi_get_root_table(&entry_size);
+    if (!root)
+        return 0;
+    const uint8_t* entries = (const uint8_t*)root + sizeof(*root);
+    uint32_t count = (root->length - (uint32_t)sizeof(*root)) / entry_size;
+    const acpi_sdt_header_t* fadt = NULL;
+
+    for (uint32_t i = 0U; i < count; ++i)
+    {
+        uint64_t address = entry_size == sizeof(uint64_t) ?
+            acpi_read64(entries + i * entry_size) :
+            acpi_read32(entries + i * entry_size);
+        if (!physical_range(address, sizeof(acpi_sdt_header_t)))
+            continue;
+        const acpi_sdt_header_t* table =
+            (const acpi_sdt_header_t*)(uintptr_t)address;
+        if (!table_valid(table, table->signature))
+            continue;
+        if (signature_is(table->signature, "FACP"))
+        {
+            if (!fadt)
+                fadt = table;
+        }
+        else if (signature_is(table->signature, "SSDT"))
+        {
+            if (inventory->ssdt_total != UINT32_MAX)
+                ++inventory->ssdt_total;
+            if (inventory->ssdt_count < ACPI_MAX_SSDT)
+            {
+                uint32_t slot = inventory->ssdt_count++;
+                inventory->ssdt_addresses[slot] = address;
+                inventory->ssdt_lengths[slot] = table->length;
+            }
+        }
+    }
+
+    /* SCI_INT and DSDT are present in the ACPI 1.0 FADT layout. */
+    if (!fadt || fadt->length < 48U)
+        return 0;
+    const uint8_t* bytes = (const uint8_t*)fadt;
+    inventory->fadt_revision = fadt->revision;
+    inventory->sci_interrupt = acpi_read16(bytes + 46U);
+
+    uint64_t legacy_dsdt = acpi_read32(bytes + 40U);
+    uint64_t dsdt_address = legacy_dsdt;
+    if (fadt->length >= 148U)
+    {
+        uint64_t extended_dsdt = acpi_read64(bytes + 140U);
+        if (physical_range(extended_dsdt, sizeof(acpi_sdt_header_t)))
+            dsdt_address = extended_dsdt;
+    }
+    const acpi_sdt_header_t* dsdt =
+        acpi_validated_table(dsdt_address, "DSDT");
+    if (!dsdt && dsdt_address != legacy_dsdt)
+    {
+        dsdt_address = legacy_dsdt;
+        dsdt = acpi_validated_table(dsdt_address, "DSDT");
+    }
+    if (!dsdt)
+        return 0;
+    inventory->dsdt_address = dsdt_address;
+    inventory->dsdt_length = dsdt->length;
+    return 1;
+}
+
+
 /*
  * Read-only firmware table inventory for physical bring-up. Every table is
  * range-checked and checksum-validated before any OEM metadata is emitted.
@@ -467,4 +567,42 @@ void acpi_log_table_inventory(void)
         }
     }
     serial_write("\n");
+
+    acpi_table_inventory_t namespace_tables;
+    if (acpi_discover_tables(&namespace_tables))
+    {
+        serial_write("VANTAOS_HW_ACPI_DSDT address=0x");
+        char hex[16];
+        for (uint32_t i = 0U; i < 16U; ++i)
+            hex[i] = "0123456789ABCDEF"[(namespace_tables.dsdt_address >>
+                         ((15U - i) * 4U)) & 0x0FU];
+        serial_write_bytes(hex, sizeof(hex));
+        serial_write(" length=");
+        {
+            char digits[10];
+            uint32_t value = namespace_tables.dsdt_length, n = 0U;
+            do { digits[n++] = (char)('0' + value % 10U); value /= 10U; }
+            while (value && n < sizeof(digits));
+            while (n) { char c = digits[--n]; serial_write_bytes(&c, 1U); }
+        }
+        serial_write(" sci=");
+        {
+            char digits[5];
+            uint32_t value = namespace_tables.sci_interrupt, n = 0U;
+            do { digits[n++] = (char)('0' + value % 10U); value /= 10U; }
+            while (value && n < sizeof(digits));
+            while (n) { char c = digits[--n]; serial_write_bytes(&c, 1U); }
+        }
+        serial_write(" ssdt=");
+        {
+            char digits[5];
+            uint32_t value = namespace_tables.ssdt_total, n = 0U;
+            do { digits[n++] = (char)('0' + value % 10U); value /= 10U; }
+            while (value && n < sizeof(digits));
+            while (n) { char c = digits[--n]; serial_write_bytes(&c, 1U); }
+        }
+        serial_write("\n");
+    }
+    else
+        serial_write("VANTAOS_HW_ACPI_NAMESPACE_TABLES_UNAVAILABLE\n");
 }

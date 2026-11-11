@@ -14,6 +14,24 @@
 #define ACPI_MAX_ISO 16U
 #define ACPI_MAX_MCFG_REGIONS 8U
 
+
+#define ACPI_MAX_SSDT 16U
+typedef struct
+{
+    uint64_t dsdt_address;
+    uint32_t dsdt_length;
+    uint64_t ssdt_addresses[ACPI_MAX_SSDT];
+    uint32_t ssdt_lengths[ACPI_MAX_SSDT];
+    uint32_t ssdt_count;
+    uint32_t ssdt_total;
+    uint16_t sci_interrupt;
+    uint8_t fadt_revision;
+    uint8_t reserved;
+} acpi_table_inventory_t;
+
+/* Read-only, checksum-validated FADT/DSDT/SSDT discovery. No AML execution. */
+int acpi_discover_tables(acpi_table_inventory_t* inventory);
+
 typedef struct
 {
     uint8_t source_irq;

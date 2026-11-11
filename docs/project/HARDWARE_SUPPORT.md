@@ -64,3 +64,13 @@ A set STATESTS bit only indicates a codec address reported by the controller;
 it does not establish valid pin configuration, jack detection, or PCM output.
 Controllers with disabled MMIO decode or invalid resources are skipped without
 modifying device state.
+
+## ACPI namespace table discovery
+
+The inventory validates FADT, resolves X_DSDT with a checked fallback to the
+legacy DSDT pointer, and collects checksum-valid SSDTs in a bounded array
+while retaining the total count. FADT revision and SCI interrupt are exposed
+for later power-management work. This is read-only table discovery: AML is
+not interpreted and firmware control methods are never executed. Host tests
+cover valid tables, extended-pointer fallback, corrupt checksums, malformed
+roots and null arguments.

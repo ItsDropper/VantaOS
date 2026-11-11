@@ -191,9 +191,9 @@ void graphics_draw_taskbar(int taskbar_y, int width)
     /* Floating translucent dock; launcher hitboxes remain unchanged. */
     /* Restore the fixed wallpaper strip before alpha-compositing the dock. */
     graphics_fill_rect(0, taskbar_y, width, 64, 0x0013171EU);
-    graphics_fill_squircle_rect(center - 130, taskbar_y + 4, 260, 56, 20,
+    graphics_fill_squircle_rect(center - 112, taskbar_y + 4, 224, 56, 20,
                                 0x805E6873U);
-    graphics_fill_squircle_rect(center - 128, taskbar_y + 6, 256, 52, 18,
+    graphics_fill_squircle_rect(center - 110, taskbar_y + 6, 220, 52, 18,
                                 0xD01B2027U);
     graphics_fill_squircle_rect(center - 108, taskbar_y + 10, 42, 42, 11,
         start_menu_open ? 0xC047535FU : 0x70404A55U);

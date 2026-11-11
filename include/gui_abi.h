@@ -65,6 +65,7 @@ typedef struct
     int32_t y;
     int32_t width;
     int32_t height;
+    /* 0xAARRGGBB; alpha 0 preserves legacy opaque RGB, 255 is opaque. */
     uint32_t color;
     uint32_t scale;
     char text[VANTA_GUI_TEXT_MAX + 1U];

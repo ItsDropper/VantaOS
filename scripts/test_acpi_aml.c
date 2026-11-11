@@ -97,7 +97,7 @@ int main(void)
         0x79U,0x00U
     };
     append(crs_body,&crs_n,i2c_descriptor,sizeof(i2c_descriptor));
-    const uint8_t buffer_size[]={0x0AU,0x1AU};
+    const uint8_t buffer_size[]={0x0AU,0x1DU};
     append(buffer_body,&buffer_n,buffer_size,sizeof(buffer_size));
     append(buffer_body,&buffer_n,crs_body,crs_n);
     const uint8_t buffer_op[]={0x11U};

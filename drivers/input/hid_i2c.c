@@ -10,6 +10,7 @@
 #include "keyboard.h"
 #include "interrupts.h"
 #include "serial.h"
+#include "timer.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -33,6 +34,7 @@ typedef struct
     uint16_t address;
     uint16_t descriptor_register;
     uint16_t input_register;
+    uint16_t command_register;
     uint16_t max_input_length;
     uint32_t speed_hz;
     uint32_t keyboard_id;
@@ -74,6 +76,66 @@ static int hid_register_read(i2c_bus_t *bus,uint16_t address,
                          data,length);
 }
 
+static int hid_register_write(i2c_bus_t *bus,uint16_t address,
+                              uint32_t speed,uint16_t reg,
+                              const uint8_t *data,size_t length)
+{
+    uint8_t command[8];
+    if(!bus||!bus->ready||!bus->transfer||!data||length==0U||
+       length>sizeof(command)-2U) return 0;
+    command[0]=(uint8_t)reg;
+    command[1]=(uint8_t)(reg>>8U);
+    memcpy(command+2U,data,length);
+    return bus->transfer(bus->context,address,speed,command,length+2U,NULL,0U);
+}
+
+static int hid_set_power(i2c_bus_t *bus,uint16_t address,uint32_t speed,
+                         uint16_t command_register,uint8_t power_state)
+{
+    const uint8_t command[]={0x00U,0x08U,power_state};
+    return hid_register_write(bus,address,speed,command_register,
+                              command,sizeof(command));
+}
+
+static int hid_reset_device(i2c_bus_t *bus,uint16_t address,uint32_t speed,
+                            uint16_t command_register,uint16_t input_register,
+                            uint16_t max_input_length)
+{
+    if(!hid_set_power(bus,address,speed,command_register,0U))
+        return 0;
+    sleep_ms(60U);
+    const uint8_t reset_command[]={0x00U,0x01U};
+    if(!hid_register_write(bus,address,speed,command_register,
+                           reset_command,sizeof(reset_command)))
+    {
+        (void)hid_set_power(bus,address,speed,command_register,1U);
+        return 0;
+    }
+
+    uint8_t response[HID_I2C_MAX_REPORT];
+    int acknowledged=0;
+    for(uint32_t elapsed=0U;elapsed<1000U;elapsed+=10U)
+    {
+        sleep_ms(10U);
+        if(!hid_register_read(bus,address,speed,input_register,response,
+                              max_input_length))
+            continue;
+        uint16_t response_length=hid_u16(response);
+        if(response_length==0U||
+           (response_length>=2U&&response_length<=max_input_length))
+        {
+            acknowledged=1;
+            break;
+        }
+    }
+    if(!acknowledged)
+        serial_write("VANTAOS_I2C_HID_RESET_ACK_TIMEOUT_CONTINUING\n");
+    if(!hid_set_power(bus,address,speed,command_register,0U))
+        return 0;
+    sleep_ms(60U);
+    return 1;
+}
+
 static int hid_descriptor_valid(const uint8_t *d)
 {
     uint16_t descriptor_length=hid_u16(d);
@@ -86,7 +148,8 @@ static int hid_descriptor_valid(const uint8_t *d)
            version>=0x0100U&&version<=0x0101U&&
            report_length!=0U&&report_length<=HID_I2C_MAX_REPORT&&
            report_register!=0U&&input_register!=0U&&
-           max_input>=3U&&max_input<=HID_I2C_MAX_REPORT;
+           hid_u16(d+16U)!=0U&&max_input>=3U&&
+           max_input<=HID_I2C_MAX_REPORT;
 }
 
 static uint32_t hid_extract_bits(const uint8_t *bytes,size_t length,
@@ -185,8 +248,13 @@ static void hid_decode_keyboard(hid_i2c_device_t *device,uint8_t report_id,
         }
     }
 
+    /* Apply modifiers first so same-report key presses observe Shift/Ctrl. */
+    for(uint32_t usage=0xE0U;usage<=0xE7U;++usage)
+        if(managed[usage]&&next[usage]!=device->keys[usage])
+            hid_emit_key(device,(uint16_t)usage,next[usage]);
     for(uint32_t usage=1U;usage<256U;++usage)
     {
+        if(usage>=0xE0U&&usage<=0xE7U) continue;
         if(!managed[usage]||next[usage]==device->keys[usage]) continue;
         hid_emit_key(device,(uint16_t)usage,next[usage]);
     }
@@ -318,7 +386,11 @@ int hid_i2c_attach(i2c_bus_t *bus,uint16_t address,uint32_t speed_hz,
     uint16_t report_register=hid_u16(descriptor+6U);
     uint16_t input_register=hid_u16(descriptor+8U);
     uint16_t max_input=hid_u16(descriptor+10U);
+    uint16_t command_register=hid_u16(descriptor+16U);
     static uint8_t report_descriptors[HID_I2C_MAX_DEVICES][HID_I2C_MAX_REPORT];
+    if(!hid_reset_device(bus,address,speed_hz,command_register,
+                         input_register,max_input))
+        return 0;
     if(!hid_register_read(bus,address,speed_hz,report_register,
                           report_descriptors[slot],report_length))
         return 0;
@@ -348,6 +420,7 @@ int hid_i2c_attach(i2c_bus_t *bus,uint16_t address,uint32_t speed_hz,
     candidate.descriptor_register=hid_descriptor_register;
     candidate.speed_hz=speed_hz;
     candidate.input_register=input_register;
+    candidate.command_register=command_register;
     candidate.max_input_length=max_input;
     if(firmware_id)
     {

@@ -34,6 +34,9 @@ typedef struct
     uint8_t injected_pressed[32];
     uint32_t injected_count;
     uint8_t online;
+    uint8_t reset_ack_pending;
+    uint32_t power_on_commands;
+    uint32_t reset_commands;
 } hid_test_state_t;
 
 static hid_test_state_t state;
@@ -46,10 +49,23 @@ static int fake_transfer(void *context,uint16_t address,uint32_t speed,
                          uint8_t *read_data,size_t read_length)
 {
     hid_test_state_t *s=(hid_test_state_t*)context;
-    assert(address==0x15U&&speed==100000U&&write_length==2U);
+    assert(address==0x15U&&speed==100000U&&write_length>=2U);
     uint16_t reg=(uint16_t)(write_data[0]|((uint16_t)write_data[1]<<8U));
     ++s->transfer_count;
-    memset(read_data,0,read_length);
+    if(read_length!=0U) memset(read_data,0,read_length);
+    if(reg==0x60U&&read_length==0U&&write_length==5U&&
+       write_data[2]==0U&&write_data[3]==0x08U)
+    {
+        if(write_data[4]==0U) ++s->power_on_commands;
+        return 1;
+    }
+    if(reg==0x60U&&read_length==0U&&write_length==4U&&
+       write_data[2]==0U&&write_data[3]==0x01U)
+    {
+        ++s->reset_commands;
+        s->reset_ack_pending=1U;
+        return 1;
+    }
     if(reg==0x20U)
     {
         assert(read_length==30U);
@@ -65,6 +81,11 @@ static int fake_transfer(void *context,uint16_t address,uint32_t speed,
     if(reg==0x40U)
     {
         assert(read_length==10U);
+        if(s->reset_ack_pending)
+        {
+            s->reset_ack_pending=0U;
+            return 1;
+        }
         memcpy(read_data,s->input_report,10U);
         return 1;
     }
@@ -96,6 +117,7 @@ void keyboard_inject_hid_usage(uint16_t usage,bool pressed)
     ++state.injected_count;
 }
 uint32_t interrupts_get_ticks(void){return state.tick;}
+void sleep_ms(uint32_t milliseconds){(void)milliseconds;}
 void serial_write(const char *message){(void)message;}
 
 int main(void)
@@ -119,7 +141,8 @@ int main(void)
                    .transfer=fake_transfer,.ready=1U};
     assert(hid_i2c_attach(&bus,0x15U,100000U,0x20U,"PNP0C50"));
     assert(state.registered_count==1U);
-    assert(state.transfer_count==2U);
+    assert(state.transfer_count==6U);
+    assert(state.power_on_commands==2U&&state.reset_commands==1U);
     assert(!hid_i2c_attach(&bus,0x15U,100000U,0x20U,"PNP0C50"));
 
     put16(state.input_report,10U);

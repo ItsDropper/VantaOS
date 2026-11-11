@@ -15,6 +15,7 @@
 #include "file_explorer_process.h"
 #include "usb.h"
 #include "hid_i2c.h"
+#include "i2c.h"
 #include "net.h"
 #include "serial.h"
 #include "interrupts.h"

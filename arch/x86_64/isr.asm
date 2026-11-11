@@ -86,6 +86,15 @@ process_entry_trampoline:
 ; Test-only ring-3 entry. The caller's stack and flags are restored by the
 ; return trampoline after the test syscall or expected user-mode page fault.
 user_mode_test_enter:
+    ; This is a C-callable function: preserve every SysV callee-saved GPR.
+    ; The syscall stub uses R12 as its saved interrupt-frame pointer, so it
+    ; must not leak that temporary into the suspended kernel caller.
+    push rbx
+    push rbp
+    push r12
+    push r13
+    push r14
+    push r15
     mov [rel user_mode_test_saved_rsp], rsp
     pushfq
     pop rax
@@ -103,6 +112,12 @@ user_mode_test_enter:
 
 user_mode_test_return_trampoline:
     mov rsp, [rel user_mode_test_saved_rsp]
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbp
+    pop rbx
     mov rax, [rel user_mode_test_saved_rflags]
     push rax
     popfq

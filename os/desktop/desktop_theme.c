@@ -137,7 +137,7 @@ uint32_t desktop_theme_color(unsigned int role)
     {
         switch (role)
         {
-            case VANTA_UI_ROLE_DESKTOP: return 0x00F3F6FAU;
+            case VANTA_UI_ROLE_DESKTOP: return 0x00EEF1F4U;
             case VANTA_UI_ROLE_TOPBAR: return 0xD8E5E8ECU;
             case VANTA_UI_ROLE_SURFACE: return 0xDCE6E9EDU;
             case VANTA_UI_ROLE_TITLEBAR: return 0xE0D9DEE4U;

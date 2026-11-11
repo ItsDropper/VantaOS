@@ -61,8 +61,8 @@ void graphics_draw_window_frame(int x, int y, int w, int h, const char* title, i
 
     /* Shared desktop window chrome: one border, one titlebar, one control grid. */
     graphics_fill_squircle_rect(x + 5, y + 7, w, h, 10, 0x0005080D);
-    graphics_fill_squircle_rect(x, y, w, h, 10, VANTA_UI_SURFACE);
-    graphics_fill_squircle_rect(x + 1, y + 1, w - 2, 45, 9, VANTA_UI_TITLEBAR);
+    graphics_fill_squircle_rect(x, y, w, h, 10, VANTA_UI_SURFACE & 0x00FFFFFFU);
+    graphics_fill_squircle_rect(x + 1, y + 1, w - 2, 45, 9, VANTA_UI_TITLEBAR & 0x00FFFFFFU);
     graphics_fill_rect(x + 1, y + 45, w - 2, 1, VANTA_UI_BORDER);
 
     graphics_fill_squircle_rect(x + 14, y + 10, 24, 24, 6, VANTA_UI_ROW);
@@ -189,6 +189,8 @@ void graphics_draw_taskbar(int taskbar_y, int width)
     ui_clock_text(clock, date);
 
     /* Floating translucent dock; launcher hitboxes remain unchanged. */
+    /* Restore the fixed wallpaper strip before alpha-compositing the dock. */
+    graphics_fill_rect(0, taskbar_y, width, 64, 0x0013171EU);
     graphics_fill_squircle_rect(center - 130, taskbar_y + 4, 260, 56, 20,
                                 0x805E6873U);
     graphics_fill_squircle_rect(center - 128, taskbar_y + 6, 256, 52, 18,

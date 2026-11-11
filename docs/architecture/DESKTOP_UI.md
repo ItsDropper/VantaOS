@@ -29,7 +29,7 @@ The shared window manager now owns the geometry, chrome, focus, stacking, and in
 
 ## Desktop composition refresh
 
-The desktop layout is composed by `kernel/graphics/graphics_ui_detail.c` into the compositor's shadow surface. This is a native framebuffer layout layer, not a userspace toolkit. The renderer uses opaque fills and integer geometry; blur, alpha transparency, and GPU acceleration are not available. VBlank-gated page flips are attempted only on a supported Bochs VBE path and are not guaranteed on GOP or physical hardware.
+The desktop layout is composed by `kernel/graphics/graphics_ui_detail.c` into the compositor's shadow surface. This is a native framebuffer layout layer, not a userspace toolkit. The renderer uses integer geometry and supports source-over alpha on rectangle, rounded-rectangle, squircle, and GUI draw-command fills. The shadow framebuffer is persistent: taskbar composition restores its wallpaper strip before blending, window chrome remains opaque, and each window client area is reset before replaying its draw list. Blur and GPU acceleration are not available. VBlank-gated page flips are attempted only on a supported Bochs VBE path and are not guaranteed on GOP or physical hardware.
 
 ### Visual hierarchy
 
@@ -64,7 +64,7 @@ A click raises the topmost window under the pointer. The three titlebar controls
 
 Rendering snapshots and taskbar labels are copied under the GUI lock, then painted after releasing it. Built-in callbacks also run outside the input/window lock. The software compositor remains the display backend until NVX execution and presentation are verified.
 
-Remaining architectural work is explicit: the manager uses a bounded draw-command ABI instead of per-window pixel surfaces; alpha composition, per-window damage tracking, modal/transient relationships, workspaces, and a separate userspace window server are not implemented. This is not yet a Wayland/X11 replacement, but there is no separate legacy window-chrome path for the four built-in desktop applications.
+Remaining architectural work is explicit: the manager uses a bounded draw-command ABI instead of per-window pixel surfaces; per-window damage tracking, modal/transient relationships, workspaces, and a separate userspace window server are not implemented. This is not yet a Wayland/X11 replacement, but there is no separate legacy window-chrome path for the four built-in desktop applications.
 
 
 ## Vanta Design System (VDS)
@@ -81,7 +81,7 @@ Use a restrained hierarchy:
 - Visible borders only where they improve grouping or control affordance.
 - Keep text scale within the existing 1–2x bitmap-font contract.
 
-VDS helpers only append validated-shape commands to an application-owned bounded buffer; the kernel remains authoritative for final validation and rendering. No alpha blending, blur, shadows, font metrics, or accessibility tree is implied by this API.
+VDS helpers only append validated-shape commands to an application-owned bounded buffer; the kernel remains authoritative for final validation and rendering. Source-over alpha is supported by the kernel rasterizer for fill commands; it does not imply blur, GPU composition, font metrics, shadows, or an accessibility tree.
 
 
 ## VDS component contracts

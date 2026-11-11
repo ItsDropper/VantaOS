@@ -348,6 +348,32 @@ static void aml_store_id(char output[ACPI_AML_ID_MAX],
         (void)aml_eisa_id(value->integer, output);
 }
 
+static acpi_aml_resource_t* aml_new_resource(
+    acpi_aml_device_t* device, uint8_t tag, uint32_t descriptor_length)
+{
+    ++device->resource_total;
+    if (device->resource_count >= ACPI_AML_MAX_RESOURCES)
+        return NULL;
+    acpi_aml_resource_t* resource =
+        &device->resources[device->resource_count++];
+    memset(resource, 0, sizeof(*resource));
+    resource->descriptor_tag = tag;
+    resource->descriptor_length = (uint16_t)descriptor_length;
+    return resource;
+}
+
+static uint64_t aml_read_width(const uint8_t* p, uint32_t width)
+{
+    if (width == 2U)
+        return aml_u16(p);
+    if (width == 4U)
+        return aml_u32(p);
+    if (width == 8U)
+        return (uint64_t)aml_u32(p) |
+               ((uint64_t)aml_u32(p + 4U) << 32U);
+    return 0U;
+}
+
 static int aml_parse_resources(acpi_aml_device_t* device,
                                const uint8_t* bytes, uint32_t length)
 {
@@ -370,15 +396,31 @@ static int aml_parse_resources(acpi_aml_device_t* device,
                 cursor += item_length + 1U;
                 break;
             }
-            if (item_type == 0x04U && item_length >= 2U &&
-                device->resource_count < ACPI_AML_MAX_RESOURCES)
+            acpi_aml_resource_t* resource =
+                aml_new_resource(device, tag, item_length);
+            if (resource && item_type == 0x04U && item_length >= 2U)
             {
-                acpi_aml_resource_t* resource =
-                    &device->resources[device->resource_count++];
-                memset(resource, 0, sizeof(*resource));
-                resource->descriptor_tag = tag;
-                resource->descriptor_length = (uint16_t)item_length;
-                resource->slave_address = aml_u16(bytes + cursor + 1U);
+                resource->resource_type = 3U;
+                resource->irq_mask = aml_u16(bytes + cursor + 1U);
+                if (item_length >= 3U)
+                    resource->flags = bytes[cursor + 3U];
+            }
+            else if (resource && item_type == 0x08U && item_length == 7U)
+            {
+                resource->resource_type = 2U;
+                resource->flags = bytes[cursor + 1U];
+                resource->minimum = aml_u16(bytes + cursor + 2U);
+                resource->maximum = aml_u16(bytes + cursor + 4U);
+                resource->address = resource->minimum;
+                resource->length = bytes[cursor + 7U];
+            }
+            else if (resource && item_type == 0x09U && item_length == 3U)
+            {
+                resource->resource_type = 2U;
+                resource->address = aml_u16(bytes + cursor + 1U);
+                resource->minimum = resource->address;
+                resource->maximum = resource->address;
+                resource->length = bytes[cursor + 3U];
             }
             cursor += item_length + 1U;
         }
@@ -390,44 +432,88 @@ static int aml_parse_resources(acpi_aml_device_t* device,
             if (item_length > length - cursor - 3U)
                 return 0;
             const uint8_t* payload = bytes + cursor + 3U;
-            if (tag == 0x8EU && item_length >= 16U &&
-                device->resource_count < ACPI_AML_MAX_RESOURCES)
+            acpi_aml_resource_t* resource =
+                aml_new_resource(device, tag, item_length);
+            if (resource)
             {
-                uint16_t type_data_length = aml_u16(payload + 7U);
-                uint32_t source_offset = 9U + type_data_length;
-                int source_terminated = 0;
-                if (source_offset < item_length)
-                    for (uint32_t j = source_offset; j < item_length; ++j)
-                        if (payload[j] == 0U) { source_terminated = 1; break; }
-                if (payload[0U] == 1U && payload[2U] == 1U &&
-                    payload[6U] == 1U && type_data_length >= 6U &&
-                    source_offset < item_length && source_terminated)
+                if (tag == 0x8EU)
                 {
-                    acpi_aml_resource_t* resource =
-                        &device->resources[device->resource_count++];
-                    memset(resource, 0, sizeof(*resource));
-                    resource->descriptor_tag = tag;
-                    resource->descriptor_length = (uint16_t)item_length;
-                    resource->serial_bus_type = payload[2U];
-                    resource->general_flags = payload[3U];
-                    resource->type_flags = aml_u16(payload + 4U);
-                    resource->connection_speed_hz = aml_u32(payload + 9U);
-                    resource->slave_address = aml_u16(payload + 13U);
-                    aml_copy_ascii(resource->resource_source,
-                                   sizeof(resource->resource_source),
-                                   payload + source_offset,
-                                   item_length - source_offset);
-                    if (device->i2c_count < ACPI_AML_MAX_I2C_RESOURCES)
+                    if (item_length < 9U)
+                        return 0;
+                    if (payload[2U] == 1U)
+                    {
+                        uint16_t type_data_length = aml_u16(payload + 7U);
+                        uint32_t source_offset = 9U + type_data_length;
+                        int source_terminated = 0;
+                        if (source_offset < item_length)
+                            for (uint32_t j = source_offset; j < item_length; ++j)
+                                if (payload[j] == 0U)
+                                {
+                                    source_terminated = 1;
+                                    break;
+                                }
+                        if ((payload[0U] != 1U && payload[0U] != 2U) ||
+                            payload[6U] != 1U || type_data_length < 6U ||
+                            source_offset >= item_length || !source_terminated)
+                            return 0;
+                        resource->resource_type = 4U;
+                        resource->serial_bus_type = payload[2U];
+                        resource->general_flags = payload[3U];
+                        resource->type_flags = aml_u16(payload + 4U);
+                        resource->connection_speed_hz = aml_u32(payload + 9U);
+                        resource->slave_address = aml_u16(payload + 13U);
+                        aml_copy_ascii(resource->resource_source,
+                                       sizeof(resource->resource_source),
+                                       payload + source_offset,
+                                       item_length - source_offset);
                         ++device->i2c_count;
+                    }
                 }
-            }
-            else if (device->resource_count < ACPI_AML_MAX_RESOURCES)
-            {
-                acpi_aml_resource_t* resource =
-                    &device->resources[device->resource_count++];
-                memset(resource, 0, sizeof(*resource));
-                resource->descriptor_tag = tag;
-                resource->descriptor_length = (uint16_t)item_length;
+                else if (tag == 0x86U && item_length == 9U)
+                {
+                    resource->resource_type = 1U;
+                    resource->flags = payload[0U];
+                    resource->address = aml_u32(payload + 1U);
+                    resource->minimum = resource->address;
+                    resource->maximum = resource->address;
+                    resource->length = aml_u32(payload + 5U);
+                }
+                else if (tag == 0x85U && item_length == 17U)
+                {
+                    resource->resource_type = 1U;
+                    resource->flags = payload[0U];
+                    resource->minimum = aml_u32(payload + 1U);
+                    resource->maximum = aml_u32(payload + 5U);
+                    resource->address = resource->minimum;
+                    resource->length = aml_u32(payload + 13U);
+                }
+                else if (tag == 0x89U)
+                {
+                    if (item_length < 2U ||
+                        payload[1U] > (item_length - 2U) / 4U)
+                        return 0;
+                    resource->resource_type = 3U;
+                    resource->flags = payload[0U];
+                    if (payload[1U] != 0U)
+                        resource->irq = aml_u32(payload + 2U);
+                }
+                else if (tag == 0x87U || tag == 0x88U || tag == 0x8AU)
+                {
+                    uint32_t width = tag == 0x88U ? 2U :
+                                     tag == 0x87U ? 4U : 8U;
+                    if (item_length != 3U + width * 5U)
+                        return 0;
+                    resource->resource_type = payload[0U] == 0U ? 1U :
+                                              payload[0U] == 1U ? 2U : 5U;
+                    resource->flags = payload[1U];
+                    resource->minimum = aml_read_width(payload + 3U + width,
+                                                       width);
+                    resource->maximum = aml_read_width(
+                        payload + 3U + width * 2U, width);
+                    resource->address = resource->minimum;
+                    resource->length = aml_read_width(
+                        payload + 3U + width * 4U, width);
+                }
             }
             cursor += item_length + 3U;
         }

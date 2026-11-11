@@ -93,6 +93,7 @@ int main(void)
         0x01U,0x00U,0x01U,0x00U,0x00U,0x00U,0x01U,0x06U,0x00U,
         0xA0U,0x86U,0x01U,0x00U,0x15U,0x00U,
         '\\','_','S','B','_',0x00U,
+        0x22U,0x02U,0x00U,
         0x79U,0x00U
     };
     append(crs_body,&crs_n,i2c_descriptor,sizeof(i2c_descriptor));
@@ -141,10 +142,14 @@ int main(void)
     assert(captured[0].uid_valid && captured[0].uid==3U);
     assert(captured[0].sta_valid && captured[0].sta==0x0FU);
     assert(captured[0].i2c_count==1U);
+    assert(captured[0].resource_total==2U && captured[0].resource_count==2U);
+    assert(captured[0].resources[0].resource_type==4U);
     assert(captured[0].resources[0].serial_bus_type==1U);
     assert(captured[0].resources[0].connection_speed_hz==100000U);
     assert(captured[0].resources[0].slave_address==0x15U);
     assert(strcmp(captured[0].resources[0].resource_source,"\\_SB_")==0);
+    assert(captured[0].resources[1].resource_type==3U);
+    assert(captured[0].resources[1].irq_mask==2U);
     assert(strcmp(captured[1].path,"\\_SB_.DEV0")==0);
     assert(strcmp(captured[1].hid,"PNP0A03")==0);
 

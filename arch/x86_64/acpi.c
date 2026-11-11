@@ -494,7 +494,7 @@ static void acpi_aml_log_device(const acpi_aml_device_t* device, void* context)
     for (uint32_t i = 0U; i < device->resource_count; ++i)
     {
         const acpi_aml_resource_t* resource = &device->resources[i];
-        if (resource->descriptor_tag != 0x8EU)
+        if (resource->resource_type != 4U)
             continue;
         serial_write(" i2c_hz=");
         {

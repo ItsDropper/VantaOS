@@ -11,13 +11,21 @@
 #define ACPI_AML_PATH_MAX 64U
 #define ACPI_AML_ID_MAX 16U
 #define ACPI_AML_MAX_CIDS 4U
-#define ACPI_AML_MAX_RESOURCES 16U
+#define ACPI_AML_MAX_RESOURCES 8U
 #define ACPI_AML_MAX_I2C_RESOURCES 4U
 
 typedef struct
 {
     uint8_t descriptor_tag;
     uint16_t descriptor_length;
+    uint8_t resource_type;
+    uint8_t flags;
+    uint64_t minimum;
+    uint64_t maximum;
+    uint64_t address;
+    uint64_t length;
+    uint32_t irq_mask;
+    uint32_t irq;
     uint8_t serial_bus_type;
     uint8_t general_flags;
     uint16_t type_flags;
@@ -39,8 +47,9 @@ typedef struct
     uint8_t sta_valid;
     uint32_t sta;
     uint32_t resource_count;
+    uint32_t resource_total;
     uint32_t i2c_count;
-    acpi_aml_resource_t resources[ACPI_AML_MAX_I2C_RESOURCES];
+    acpi_aml_resource_t resources[ACPI_AML_MAX_RESOURCES];
 } acpi_aml_device_t;
 
 typedef void (*acpi_aml_device_callback_t)(

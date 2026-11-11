@@ -22,7 +22,7 @@ VantaOS uses a small GNU Make system inspired by subsystem-oriented kernel build
 
 ## Input driver architecture
 
-Transport-specific drivers register stable device IDs, bus/type metadata, and capability flags with the shared input core. Drivers publish normalized key, text, relative-motion, button-transition, and wheel events through input_report_event(); consumers drain the bounded FIFO with input_next_event().
+Transport-specific drivers register stable device IDs, bus/type metadata, and capability flags with the shared input core. Drivers publish normalized key, text, relative-motion, button-transition, and wheel events through input_report_event(); the desktop drains the bounded FIFO through input_next_event(). Mouse motion reports from the same device are merged only when adjacent at the queue tail, preserving ordering around button transitions while reducing high-rate pointer traffic. The desktop applies pointer movement and button transitions outside interrupt context. Keyboard input continues through the existing keyboard buffer/event path.
 
 The registry and event queue use the kernel spinlock with IRQ save/restore and require no heap allocation. Registry capacity is fixed at 16 devices and the event queue holds 128 events. Queue overflow drops the newest event and increments input_dropped_event_count(). Unregistering a device removes its queued events. Device descriptors and their name strings must outlive registration.
 

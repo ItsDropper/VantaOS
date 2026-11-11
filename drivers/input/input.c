@@ -297,6 +297,33 @@ bool input_report_event(const input_event_t *event)
         return false;
     }
 
+    /*
+     * Relative motion is state, not a history: merge adjacent reports from
+     * the same device. Keeping the merge at the queue tail preserves ordering
+     * around button/key transitions while preventing high-rate mice from
+     * exhausting the bounded queue between desktop iterations.
+     */
+    if (event->type == INPUT_EVENT_RELATIVE_MOTION && event_count != 0U)
+    {
+        uint32_t last_index = (event_write + INPUT_EVENT_QUEUE_CAPACITY - 1U) %
+                              INPUT_EVENT_QUEUE_CAPACITY;
+        input_event_t *last = &events[last_index];
+        if (last->type == INPUT_EVENT_RELATIVE_MOTION &&
+            last->device_id == event->device_id)
+        {
+            int64_t value = (int64_t)last->value + event->value;
+            int64_t value2 = (int64_t)last->value2 + event->value2;
+            if (value > INT32_MAX) value = INT32_MAX;
+            if (value < INT32_MIN) value = INT32_MIN;
+            if (value2 > INT32_MAX) value2 = INT32_MAX;
+            if (value2 < INT32_MIN) value2 = INT32_MIN;
+            last->value = (int32_t)value;
+            last->value2 = (int32_t)value2;
+            spinlock_unlock_irqrestore(&input_lock, flags);
+            return true;
+        }
+    }
+
     if (event_count == INPUT_EVENT_QUEUE_CAPACITY)
     {
         ++dropped_events;

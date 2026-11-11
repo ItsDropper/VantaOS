@@ -139,6 +139,13 @@ jobs:
           gcc "${common_flags[@]}" -DVANTAOS_NOTES_E2E_TEST \
             -c userspace/apps/notes.c -o /tmp/vantaos-notes-e2e.o
 
+      - name: Test normalized input queue and motion coalescing
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iscripts/test_stubs -Iinclude \
+            scripts/test_input_queue.c drivers/input/input.c \
+            -o /tmp/vantaos-input-queue-test
+          /tmp/vantaos-input-queue-test
+
       - name: Test kernel watchdog state machine
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iscripts/test_stubs -Iinclude \

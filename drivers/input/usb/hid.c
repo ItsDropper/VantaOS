@@ -8,7 +8,6 @@
 #include "hid.h"
 #include "input.h"
 #include "keyboard.h"
-#include "mouse.h"
 #include <stdbool.h>
 
 /*
@@ -231,6 +230,23 @@ void usb_hid_mouse_report(uint32_t handle, const uint8_t *report, uint32_t lengt
         return;
 
     uint8_t buttons = report[0] & 0x1FU;
+    int32_t dx = (int8_t)report[1];
+    int32_t dy = (int8_t)report[2];
+    int wheel_delta = length >= 4 ? (int8_t)report[3] : 0;
+
+    /* Apply movement before button edges from the same hardware report. */
+    if (dx || dy)
+    {
+        input_event_t motion = {
+            .device_id = mouse->device_id,
+            .type = INPUT_EVENT_RELATIVE_MOTION,
+            .code = 0,
+            .value = dx,
+            .value2 = dy
+        };
+        (void)input_report_event(&motion);
+    }
+
     for (uint32_t bit = 0; bit < 5; ++bit)
     {
         uint8_t mask = (uint8_t)(1U << bit);
@@ -246,22 +262,6 @@ void usb_hid_mouse_report(uint32_t handle, const uint8_t *report, uint32_t lengt
         (void)input_report_event(&event);
     }
     mouse->buttons = buttons;
-
-    int32_t dx = (int8_t)report[1];
-    int32_t dy = (int8_t)report[2];
-    int wheel_delta = length >= 4 ? (int8_t)report[3] : 0;
-    mouse_inject_usb_report(dx, dy, buttons, wheel_delta);
-    if (dx || dy)
-    {
-        input_event_t motion = {
-            .device_id = mouse->device_id,
-            .type = INPUT_EVENT_RELATIVE_MOTION,
-            .code = 0,
-            .value = dx,
-            .value2 = dy
-        };
-        (void)input_report_event(&motion);
-    }
 
     if (length >= 4 && (int8_t)report[3] != 0)
     {

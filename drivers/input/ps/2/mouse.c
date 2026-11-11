@@ -34,15 +34,7 @@ static unsigned int mouse_packet_size = 3;
 static volatile int mouse_wheel_delta = 0;
 static volatile int mouse_moved = 0;
 static volatile int mouse_clicked = 0;
-static volatile int mouse_pending_dx = 0;
-static volatile int mouse_pending_dy = 0;
-static volatile int mouse_pending_press = 0;
-static volatile int mouse_pending_release = 0;
-static volatile int mouse_pending_right_press = 0;
-static unsigned char mouse_left_down = 0;
 static unsigned char mouse_reported_buttons = 0;
-static unsigned char usb_mouse_buttons;
-static unsigned char mouse_right_down = 0;
 static uint32_t mouse_scale_x = 1024;
 static uint32_t mouse_scale_y = 768;
 
@@ -209,15 +201,7 @@ void mouse_initialize(void)
     mouse_wheel_delta = 0;
     mouse_moved = 0;
     mouse_clicked = 0;
-    mouse_pending_dx = 0;
-    mouse_pending_dy = 0;
-    mouse_pending_press = 0;
-    mouse_pending_release = 0;
-    mouse_pending_right_press = 0;
-    mouse_left_down = 0;
-    mouse_right_down = 0;
     mouse_reported_buttons = 0;
-    usb_mouse_buttons = 0;
     mouse_scale_x = 1024;
     mouse_scale_y = 768;
 
@@ -303,42 +287,18 @@ void mouse_handle_interrupt(void)
         delta_y -= 0x100;
 
     if (!(mouse_packet[0] & 0x40) &&
-        !(mouse_packet[0] & 0x80))
+        !(mouse_packet[0] & 0x80) &&
+        (delta_x != 0 || delta_y != 0))
     {
-        if (delta_x != 0 || delta_y != 0)
-        {
-            int scaled_x = (delta_x * (int)mouse_scale_x) / 1024;
-            int scaled_y = (delta_y * (int)mouse_scale_y) / 768;
-
-            if (scaled_x == 0 && delta_x != 0) scaled_x = delta_x > 0 ? 1 : -1;
-            if (scaled_y == 0 && delta_y != 0) scaled_y = delta_y > 0 ? 1 : -1;
-
-            __atomic_fetch_add(&mouse_pending_dx, scaled_x, __ATOMIC_RELAXED);
-            __atomic_fetch_add(&mouse_pending_dy, scaled_y, __ATOMIC_RELAXED);
-            __atomic_store_n(&mouse_moved, 1, __ATOMIC_RELEASE);
-        }
+        input_event_t motion_event = {
+            .device_id = ps2_input_mouse_id(),
+            .type = INPUT_EVENT_RELATIVE_MOTION,
+            .code = 0,
+            .value = delta_x,
+            .value2 = delta_y
+        };
+        (void)input_report_event(&motion_event);
     }
-
-    unsigned char left_down =
-        mouse_packet[0] & 0x01;
-
-    if (left_down && !mouse_left_down)
-    {
-        __atomic_store_n(&mouse_pending_press, 1, __ATOMIC_RELEASE);
-        __atomic_store_n(&mouse_clicked, 1, __ATOMIC_RELEASE);
-    }
-
-    if (!left_down && mouse_left_down)
-        __atomic_store_n(&mouse_pending_release, 1, __ATOMIC_RELEASE);
-    mouse_left_down = left_down;
-
-    unsigned char right_down = (mouse_packet[0] & 0x02U) != 0U;
-    if (right_down && !mouse_right_down)
-    {
-        __atomic_store_n(&mouse_pending_right_press, 1, __ATOMIC_RELEASE);
-        __atomic_store_n(&mouse_clicked, 1, __ATOMIC_RELEASE);
-    }
-    mouse_right_down = right_down;
 
     unsigned char buttons = (unsigned char)(mouse_packet[0] & 0x07U);
     unsigned char changed_buttons = (unsigned char)(buttons ^ mouse_reported_buttons);
@@ -358,18 +318,6 @@ void mouse_handle_interrupt(void)
     }
     mouse_reported_buttons = buttons;
 
-    if (delta_x != 0 || delta_y != 0)
-    {
-        input_event_t motion_event = {
-            .device_id = ps2_input_mouse_id(),
-            .type = INPUT_EVENT_RELATIVE_MOTION,
-            .code = 0,
-            .value = delta_x,
-            .value2 = delta_y
-        };
-        (void)input_report_event(&motion_event);
-    }
-
     if (mouse_packet_size == 4)
     {
         int wheel = (int)(mouse_packet[3] & 0x0F);
@@ -377,7 +325,6 @@ void mouse_handle_interrupt(void)
             wheel -= 16;
         if (wheel != 0)
         {
-            __atomic_fetch_add(&mouse_wheel_delta, wheel, __ATOMIC_RELAXED);
             input_event_t wheel_event = {
                 .device_id = ps2_input_mouse_id(),
                 .type = INPUT_EVENT_WHEEL,
@@ -390,38 +337,6 @@ void mouse_handle_interrupt(void)
     }
 }
 
-
-void mouse_inject_usb_report(int delta_x, int delta_y,
-                             unsigned char buttons, int wheel)
-{
-    int scaled_x = (delta_x * (int)mouse_scale_x) / 1024;
-    int scaled_y = (delta_y * (int)mouse_scale_y) / 768;
-    if (scaled_x == 0 && delta_x != 0)
-        scaled_x = delta_x > 0 ? 1 : -1;
-    if (scaled_y == 0 && delta_y != 0)
-        scaled_y = delta_y > 0 ? 1 : -1;
-    if (scaled_x != 0 || scaled_y != 0) {
-        __atomic_fetch_add(&mouse_pending_dx, scaled_x, __ATOMIC_RELAXED);
-        __atomic_fetch_add(&mouse_pending_dy, scaled_y, __ATOMIC_RELAXED);
-        __atomic_store_n(&mouse_moved, 1, __ATOMIC_RELEASE);
-    }
-
-    unsigned char left = buttons & 1U;
-    unsigned char right = buttons & 2U;
-    if (left && !(usb_mouse_buttons & 1U)) {
-        __atomic_store_n(&mouse_pending_press, 1, __ATOMIC_RELEASE);
-        __atomic_store_n(&mouse_clicked, 1, __ATOMIC_RELEASE);
-    } else if (!left && (usb_mouse_buttons & 1U)) {
-        __atomic_store_n(&mouse_pending_release, 1, __ATOMIC_RELEASE);
-    }
-    if (right && !(usb_mouse_buttons & 2U)) {
-        __atomic_store_n(&mouse_pending_right_press, 1, __ATOMIC_RELEASE);
-        __atomic_store_n(&mouse_clicked, 1, __ATOMIC_RELEASE);
-    }
-    usb_mouse_buttons = buttons;
-    if (wheel != 0)
-        __atomic_fetch_add(&mouse_wheel_delta, wheel, __ATOMIC_RELAXED);
-}
 
 bool mouse_has_event(void)
 {
@@ -456,30 +371,74 @@ int mouse_get_wheel_delta(void)
     return __atomic_exchange_n(&mouse_wheel_delta, 0, __ATOMIC_ACQ_REL);
 }
 
+static int mouse_scale_delta(int delta, uint32_t scale,
+                               uint32_t baseline)
+{
+    int64_t scaled = ((int64_t)delta * (int64_t)scale) /
+                     (int64_t)baseline;
+    if (scaled == 0 && delta != 0)
+        scaled = delta > 0 ? 1 : -1;
+    if (scaled > INT32_MAX) scaled = INT32_MAX;
+    if (scaled < INT32_MIN) scaled = INT32_MIN;
+    return (int)scaled;
+}
+
 void mouse_process_events(void)
 {
     /*
-     * The PS/2 IRQ producer and desktop consumer may run on different CPUs.
-     * Atomic exchanges prevent lost deltas and button edges while draining
-     * the event queue, which otherwise makes pointer motion feel sticky.
+     * The desktop is the single consumer of normalized input events.
+     * Drivers publish complete transitions; motion is coalesced by the input
+     * core, then applied here outside interrupt context.
      */
-    int dx = __atomic_exchange_n(&mouse_pending_dx, 0, __ATOMIC_ACQ_REL);
-    int dy = __atomic_exchange_n(&mouse_pending_dy, 0, __ATOMIC_ACQ_REL);
-    int press = __atomic_exchange_n(&mouse_pending_press, 0, __ATOMIC_ACQ_REL);
-    int release = __atomic_exchange_n(&mouse_pending_release, 0, __ATOMIC_ACQ_REL);
-    int right_press = __atomic_exchange_n(&mouse_pending_right_press, 0, __ATOMIC_ACQ_REL);
+    input_event_t event;
+    while (input_next_event(&event))
+    {
+        switch (event.type)
+        {
+            case INPUT_EVENT_RELATIVE_MOTION:
+            {
+                int dx = mouse_scale_delta(event.value, mouse_scale_x, 1024U);
+                int dy = mouse_scale_delta(event.value2, mouse_scale_y, 768U);
+                if (dx != 0 || dy != 0)
+                {
+                    graphics_mouse_move(dx, dy);
+                    __atomic_store_n(&mouse_moved, 1, __ATOMIC_RELEASE);
+                }
+                break;
+            }
 
-    if (dx != 0 || dy != 0)
-        graphics_mouse_move(dx, dy);
+            case INPUT_EVENT_BUTTON:
+                if (event.code == 0)
+                {
+                    if (event.value)
+                    {
+                        __atomic_store_n(&mouse_clicked, 1, __ATOMIC_RELEASE);
+                        graphics_mouse_click(1);
+                    }
+                    else
+                    {
+                        graphics_mouse_release(1);
+                    }
+                }
+                else if (event.code == 1 && event.value)
+                {
+                    __atomic_store_n(&mouse_clicked, 1, __ATOMIC_RELEASE);
+                    graphics_mouse_click(3);
+                }
+                break;
 
-    if (press)
-        graphics_mouse_click(1);
-    if (right_press)
-        graphics_mouse_click(3);
+            case INPUT_EVENT_WHEEL:
+                __atomic_fetch_add(&mouse_wheel_delta, event.value,
+                                   __ATOMIC_RELAXED);
+                break;
 
-    if (release)
-        graphics_mouse_release(1);
+            default:
+                /* Keyboard events are consumed by the legacy keyboard path. */
+                break;
+        }
+    }
 }
+
 
 void mouse_set_resolution_scale(uint32_t width, uint32_t height)
 {

@@ -104,6 +104,16 @@ jobs:
             echo "Running complete regression suite (conservative fallback)."
           fi
 
+      - name: Validate local QEMU runner shell syntax
+        run: bash -n run.sh
+
+      - name: Test normalized input queue and motion coalescing
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iscripts/test_stubs -Iinclude \
+            scripts/test_input_queue.c drivers/input/input.c \
+            -o /tmp/vantaos-input-queue-test
+          /tmp/vantaos-input-queue-test
+
       - name: Install build dependencies
         run: sudo apt-get update && sudo apt-get install --yes build-essential nasm grub-pc-bin xorriso mtools dosfstools qemu-system-x86 gnu-efi ovmf gdisk xvfb socat imagemagick tesseract-ocr
 
@@ -138,13 +148,6 @@ jobs:
             -c userspace/apps/explorer.c -o /tmp/vantaos-explorer-e2e.o
           gcc "${common_flags[@]}" -DVANTAOS_NOTES_E2E_TEST \
             -c userspace/apps/notes.c -o /tmp/vantaos-notes-e2e.o
-
-      - name: Test normalized input queue and motion coalescing
-        run: |
-          gcc -std=c11 -Wall -Wextra -Werror -Iscripts/test_stubs -Iinclude \
-            scripts/test_input_queue.c drivers/input/input.c \
-            -o /tmp/vantaos-input-queue-test
-          /tmp/vantaos-input-queue-test
 
       - name: Test kernel watchdog state machine
         run: |

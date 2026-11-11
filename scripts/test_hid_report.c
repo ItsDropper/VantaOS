@@ -27,6 +27,10 @@ int main(void)
     assert(layout.report_count == 1U);
     assert(layout.reports[0].report_id == 0U);
     assert(layout.reports[0].input_bytes == 8U);
+    assert(layout.has_keyboard == 1U);
+    assert(layout.fields[0].usage_page == 0x07U);
+    assert(layout.fields[0].usage_min == 0xE0U);
+    assert(layout.fields[0].usage_max == 0xE7U);
 
     /* Report ID 3 adds one byte to the 8-byte payload. */
     static const uint8_t numbered[] = {

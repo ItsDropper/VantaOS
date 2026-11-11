@@ -234,7 +234,14 @@ static void hid_decode_pointer(hid_i2c_device_t *device,uint8_t report_id,
 
     if(device->touchpad)
     {
-        if(have_x&&have_y)
+        /* Touch coordinates are absolute. Only move while the first contact
+         * is active, and reset the baseline between contacts to avoid jumps. */
+        if((buttons&1U)==0U)
+        {
+            device->last_xy_valid=0U;
+            have_x=have_y=0U;
+        }
+        else if(have_x&&have_y)
         {
             int32_t absolute_x=x,absolute_y=y;
             if(device->last_xy_valid)
@@ -253,7 +260,8 @@ static void hid_decode_pointer(hid_i2c_device_t *device,uint8_t report_id,
             device->last_y=absolute_y;
             device->last_xy_valid=1U;
         }
-        else have_x=have_y=0U;
+        else
+            have_x=have_y=0U;
     }
 
     if(have_x||have_y)

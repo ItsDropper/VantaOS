@@ -771,8 +771,21 @@ static int aml_parse_terms(aml_parser_t* parser, const uint8_t* cursor,
                 return 0;
             cursor = package_end;
         }
-        else if (op == 0x14U || op == 0xA0U || op == 0xA1U ||
-                 op == 0xA2U) /* Method / If / Else / While */
+        else if (op == 0x14U) /* MethodOp: record dynamic status, never execute. */
+        {
+            const uint8_t* body;
+            const uint8_t* package_end;
+            char path[ACPI_AML_PATH_MAX], name[5];
+            if (!aml_read_package(&cursor, end, &body, &package_end) ||
+                !aml_read_name(&body, package_end, scope, path, name) ||
+                body >= package_end)
+                return 0;
+            if (device && aml_name_equals(name, "_STA"))
+                device->sta_dynamic = 1U;
+            cursor = package_end;
+        }
+        else if (op == 0xA0U || op == 0xA1U ||
+                 op == 0xA2U) /* If / Else / While: skip without execution. */
         {
             if (!aml_skip_package(&cursor, end))
                 return 0;

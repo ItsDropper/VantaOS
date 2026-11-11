@@ -147,7 +147,9 @@ int main(void)
     prepare(&mock,&bus);
     mock.stuck_tfnf=1U;
     assert(i2c_dw_initialize(&bus));
+    assert((mock_read(&mock,REG_STATUS)&(1U<<1U))==0U);
     assert(!i2c_dw_transfer(&bus,0x15U,100000U,address_register,2U,NULL,0U));
+    assert(mock.write_count==0U);
     puts("DesignWare I2C PIO transfer tests passed");
     return 0;
 }

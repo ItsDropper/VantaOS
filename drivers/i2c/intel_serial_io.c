@@ -60,14 +60,33 @@ static void dw_mmio_write(void *context,uint32_t offset,uint32_t value)
 static int path_equal(const char *a,const char *b)
 {
     if(!a||!b) return 0;
-    while(*a&&*b)
+    if(*a=='\\') ++a;
+    if(*b=='\\') ++b;
+    for(;;)
     {
-        char ca=*a++,cb=*b++;
-        if(ca>='a'&&ca<='z') ca=(char)(ca-'a'+'A');
-        if(cb>='a'&&cb<='z') cb=(char)(cb-'a'+'A');
-        if(ca!=cb) return 0;
+        while(*a=='_'&&a[1]=='_'&&a[2]=='_'&&a[3]=='_'&&a[4]=='.')
+            a+=4;
+        while(*b=='_'&&b[1]=='_'&&b[2]=='_'&&b[3]=='_'&&b[4]=='.')
+            b+=4;
+        const char *a_end=a,*b_end=b;
+        while(*a_end&&*a_end!='.') ++a_end;
+        while(*b_end&&*b_end!='.') ++b_end;
+        while(a_end>a&&a_end[-1]=='_') --a_end;
+        while(b_end>b&&b_end[-1]=='_') --b_end;
+        size_t a_length=(size_t)(a_end-a),b_length=(size_t)(b_end-b);
+        if(a_length!=b_length) return 0;
+        for(size_t i=0U;i<a_length;++i)
+        {
+            char ca=a[i],cb=b[i];
+            if(ca>='a'&&ca<='z') ca=(char)(ca-'a'+'A');
+            if(cb>='a'&&cb<='z') cb=(char)(cb-'a'+'A');
+            if(ca!=cb) return 0;
+        }
+        int a_done=*a_end=='\\0',b_done=*b_end=='\\0';
+        if(a_done||b_done) return a_done&&b_done;
+        a=a_end+1;
+        b=b_end+1;
     }
-    return *a==*b;
 }
 
 static int id_equal(const char *a,const char *b)
@@ -87,6 +106,8 @@ static int aml_is_pci_root(const acpi_aml_device_t *device)
 
 static int aml_device_usable(const acpi_aml_device_t *device)
 {
+    if(device->sta_dynamic)
+        return 0; /* Do not bind while firmware-only _STA evaluation is required. */
     if(device->sta_valid)
         return (device->sta&0x03U)==0x03U&&(device->sta&0x08U)!=0U;
     return 1; /* _STA absent or method-backed: ACPI's default is present/enabled. */
@@ -156,6 +177,7 @@ static int aml_merge_device(acpi_aml_device_t *destination,
     }
     destination->resource_total+=source->resource_total;
     destination->i2c_count+=source->i2c_count;
+    destination->sta_dynamic|=source->sta_dynamic;
     return 1;
 }
 

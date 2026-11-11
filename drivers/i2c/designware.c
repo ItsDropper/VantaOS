@@ -34,7 +34,9 @@
 #define DW_CMD_READ           (1U << 8U)
 #define DW_CMD_STOP           (1U << 9U)
 #define DW_CMD_RESTART        (1U << 10U)
-#define DW_STATUS_ACTIVITY    (1U << 5U)
+#define DW_STATUS_ACTIVITY    (1U << 0U)
+#define DW_STATUS_MASTER_ACTIVITY (1U << 5U)
+#define DW_STATUS_SLAVE_ACTIVITY  (1U << 6U)
 #define DW_STATUS_TFNF        (1U << 1U)
 #define DW_STATUS_TFE         (1U << 2U)
 #define DW_STATUS_RFNE        (1U << 3U)
@@ -75,7 +77,8 @@ static int dw_wait_idle(const i2c_dw_bus_t *bus)
         uint32_t tx_level = dw_read(bus, DW_IC_TXFLR);
         if (status == UINT32_MAX || tx_level == UINT32_MAX)
             return 0;
-        if ((status & DW_STATUS_ACTIVITY) == 0U && tx_level == 0U)
+        if ((status & (DW_STATUS_ACTIVITY | DW_STATUS_MASTER_ACTIVITY |
+                       DW_STATUS_SLAVE_ACTIVITY)) == 0U && tx_level == 0U)
             return 1;
         __asm__ volatile ("pause" ::: "memory");
     }
@@ -130,7 +133,8 @@ int i2c_dw_initialize(i2c_dw_bus_t *bus)
         return 0;
 
     /* Never seize a controller while a master transaction is active. */
-    if ((dw_read(bus, DW_IC_STATUS) & DW_STATUS_ACTIVITY) != 0U)
+    if ((dw_read(bus, DW_IC_STATUS) & (DW_STATUS_ACTIVITY |
+        DW_STATUS_MASTER_ACTIVITY | DW_STATUS_SLAVE_ACTIVITY)) != 0U)
         return 0;
 
     dw_write(bus, DW_IC_INTR_MASK, 0U);
@@ -283,11 +287,12 @@ int i2c_dw_transfer(i2c_dw_bus_t *bus, uint16_t address,
             }
         }
 
-        while ((dw_read(bus, DW_IC_STATUS) & DW_STATUS_RFNE) != 0U &&
-               read_received < read_length)
+        while (read_received < read_length)
         {
-            read_data[read_received++] =
-                (uint8_t)dw_read(bus, DW_IC_DATA_CMD);
+            uint32_t current_status=dw_read(bus,DW_IC_STATUS);
+            if(current_status==UINT32_MAX) return 0;
+            if((current_status&DW_STATUS_RFNE)==0U) break;
+            read_data[read_received++]=(uint8_t)dw_read(bus,DW_IC_DATA_CMD);
         }
 
         if (read_length == 0U && write_sent == write_length)

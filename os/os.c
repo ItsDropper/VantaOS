@@ -24,6 +24,7 @@
 #include "terminal.h"
 #include "terminal_process.h"
 #include "usb.h"
+#include "i2c.h"
 #include "vfs.h"
 
 extern void shell_set_multiboot_info(multiboot_info_t* mbd);
@@ -65,6 +66,7 @@ void os_initialize(multiboot_info_t* mbd)
 
     input_initialize();
     keyboard_initialize();
+    i2c_initialize();
     boot_keyboard = read_tsc();
 
     int graphics_ready =

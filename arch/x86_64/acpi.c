@@ -356,7 +356,7 @@ void acpi_log_table_inventory(void)
     const acpi_sdt_header_t* root = acpi_get_root_table(&entry_size);
     if (!root)
     {
-        serial_write("VANTAOS_HW_ACPI_UNAVAILABLE\\n");
+        serial_write("VANTAOS_HW_ACPI_UNAVAILABLE\n");
         return;
     }
 
@@ -386,7 +386,7 @@ void acpi_log_table_inventory(void)
                          root->oem_id[i] : '?';
         serial_write_bytes(&character, 1U);
     }
-    serial_write("\\n");
+    serial_write("\n");
 
     uint32_t entries = (root->length - sizeof(*root)) / entry_size;
     const uint8_t* table_entries = (const uint8_t*)root + sizeof(*root);
@@ -445,7 +445,7 @@ void acpi_log_table_inventory(void)
                              table->oem_table_id[j] : '?';
             serial_write_bytes(&character, 1U);
         }
-        serial_write("\\n");
+        serial_write("\n");
         ++valid;
     }
 
@@ -465,5 +465,5 @@ void acpi_log_table_inventory(void)
             serial_write_bytes(&digit, 1U);
         }
     }
-    serial_write("\\n");
+    serial_write("\n");
 }

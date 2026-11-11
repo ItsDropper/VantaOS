@@ -11,6 +11,7 @@ VantaOS is an experimental x86-64 OS. Source code for a driver is not proof that
 | Timer/interrupt path | PIT frequency bounds, tick wrap arithmetic, scheduler probe and process reaping are covered by regression tests | Narrow path tested; not exhaustive |
 | Kernel watchdog | Fixed-size watchdog registry, heartbeat API, latched expiry, stale-handle rejection and tick-wrap behavior have host regression tests wired into CI | No production subsystem client or safe recovery observer is registered yet; software expiry only, no hardware watchdog |
 | Graphics/framebuffer | Initialization code exists and boot logs report framebuffer details | Pixel correctness and broad firmware support unverified |
+| Intel UHD 620 identification | Intel PCI ID 8086:5917 is classified as Kaby Lake Gen9.5; the Skylake-only Gen9 runtime is explicitly not started for this device | Read-only identity only; no UHD 620 display modesetting, acceleration, power management, or physical validation |
 | Keyboard/mouse | Driver code exists | Device compatibility and full interaction unverified |
 | AHCI/SATA groundwork | Host-tested PRDT builder and ABAR validator; read-only PCI discovery probes CAP/PI only for controllers whose I/O decode, memory decode, and bus mastering are disabled | Not hardware support; active-controller handoff, HBA startup, DMA command engine, interrupts, recovery, and block-device integration remain unimplemented |
 | PCI/legacy ATA PIO | IDE-compatible primary/secondary channel probing, bounded LBA28 reads/writes, and shared host-tested request-range validation | Physical controller compatibility and broad error-recovery behavior unverified; this is not an AHCI/SATA driver |
@@ -29,7 +30,9 @@ The serial log uses stable `VANTAOS_HW_*` markers:
 - `VANTAOS_HW_SMBIOS_*` reports firmware, system product, baseboard, processor, and installed memory information. System UUIDs and serial-number fields are deliberately never emitted.
 - `VANTAOS_HW_PCI` reports BDF, vendor/device IDs, revision, header type, subsystem IDs for type-0 functions, and class/programming interface.
 - `VANTAOS_HW_USB_DEVICE` reports enumerated root-port USB device IDs and class information.
-- Existing CPU and GPU diagnostics report processor capabilities and discovered display controllers.
+- Existing CPU and GPU diagnostics report processor capabilities and discovered display controllers. Intel UHD 620 (8086:5917) is identified as Gen9.5, but is deliberately not passed to the Skylake Gen9 execution backend.
+- `VANTAOS_HW_AUDIO_HDA_CANDIDATE` reports PCI High Definition Audio functions (class 04:03); this is discovery only, not an audio driver.
+- `VANTAOS_HW_I2C_SERIAL_IO_CANDIDATE` reports PCI class 0C:80 serial-bus candidates. This class is not sufficient to prove an I2C controller or discover a touchpad; ACPI namespace evaluation and I2C-HID support remain required.
 
 These are identification records, not driver-binding or functionality claims. SMBIOS and ACPI parsing are bounded and fail closed on invalid checksums, ranges, or structure lengths. The current SMBIOS reader only dereferences firmware tables within the kernel's existing low-memory identity-mapped window. ACPI inventory currently lists validated root-table records; AML namespace evaluation and per-device _HID/_CID discovery are not implemented yet.
 

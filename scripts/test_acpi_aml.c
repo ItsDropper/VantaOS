@@ -28,11 +28,18 @@ static void append_package(uint8_t* out, uint32_t* length,
                            const uint8_t* prefix, uint32_t prefix_length,
                            const uint8_t* body, uint32_t body_length)
 {
-    uint32_t package_length = body_length + 1U;
     uint32_t follow = 0U;
-    while (package_length > (follow == 0U ? 0x3FU :
-                             (1U << (4U + follow * 8U)) - 1U))
-        ++follow;
+    uint32_t package_length = 0U;
+    for (;;)
+    {
+        package_length = body_length + follow + 1U;
+        uint32_t required = package_length <= 0x3FU ? 0U :
+                            package_length <= 0x0FFFU ? 1U :
+                            package_length <= 0x0FFFFFU ? 2U : 3U;
+        if (required == follow)
+            break;
+        follow = required;
+    }
     assert(follow <= 3U);
     append(out, length, prefix, prefix_length);
     uint8_t encoded[4];

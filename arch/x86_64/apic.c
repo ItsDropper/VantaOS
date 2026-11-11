@@ -263,7 +263,7 @@ int apic_initialize(void)
     if ((base & APIC_BASE_ENABLE) == 0U ||
         (x2apic_mode && (base & APIC_BASE_X2APIC) == 0U))
     {
-        serial_write("VANTAOS_APIC_MODE_VERIFY_FAIL\\n");
+        serial_write("VANTAOS_APIC_MODE_VERIFY_FAIL\n");
         return 0;
     }
 

@@ -32,7 +32,7 @@ The serial log uses stable `VANTAOS_HW_*` markers:
 - `VANTAOS_HW_USB_DEVICE` reports enumerated root-port USB device IDs and class information.
 - Existing CPU and GPU diagnostics report processor capabilities and discovered display controllers. Intel UHD 620 (8086:5917) is identified as Gen9.5, but is deliberately not passed to the Skylake Gen9 execution backend.
 - `VANTAOS_HW_NETWORK_CONTROLLER` reports PCI network-class functions (class 02), including candidate laptop Wi-Fi PCIe adapters.
-- `VANTAOS_HW_AUDIO_HDA_CANDIDATE` reports PCI High Definition Audio functions (class 04:03); this is discovery only, not an audio driver.
+- `VANTAOS_HW_AUDIO_HDA_CANDIDATE` reports PCI High Definition Audio functions (class 04:03). `VANTAOS_HW_HDA_CONTROLLER` passively reads GCAP, version, GCTL and STATESTS and reports codec-presence bits without resetting the controller, clearing write-one-to-clear status, changing PCI decode, or starting DMA. This is controller/codec discovery, not PCM playback or codec-widget support.
 - `VANTAOS_HW_I2C_SERIAL_IO_CANDIDATE` reports PCI class 0C:80 serial-bus candidates. This class is not sufficient to prove an I2C controller or discover a touchpad; ACPI namespace evaluation and I2C-HID support remain required.
 - `VANTAOS_HW_PCI_RESOURCES` reports PCI command and firmware-programmed interrupt line/pin for display, audio, network, and serial-bus controllers. `VANTAOS_HW_PCI_BAR` reports only already-assigned BAR base/type/width; inventory never sizes or rewrites a BAR. These records support later driver matching and MMIO validation, not permission to map or activate a device.
 
@@ -51,3 +51,16 @@ These are identification records, not driver-binding or functionality claims. SM
 Record the device model/revision, firmware settings, boot method, kernel commit, exact test steps, expected result, actual result, serial/panic logs, and whether the test was repeated. Redact serial numbers, UUIDs, MAC addresses, usernames, and other personal identifiers before publishing logs.
 
 A useful support claim is specific, e.g. “boots to the desktop in QEMU with 256 MiB RAM under this workflow.” A claim such as “supports all PCs” is not justified by the current evidence.
+
+
+## High Definition Audio (HDA) bring-up boundary
+
+The HDA probe accepts only PCI class 04:03 programming interface 00 with an
+assigned, page-aligned BAR0 and firmware-enabled memory decoding. It maps the
+first 4 KiB of the HDA register aperture and reads GCAP, VMIN/VMAJ, GCTL and
+STATESTS. It never changes PCI command state, writes HDA registers, resets the
+controller, starts CORB/RIRB or stream DMA, or claims that a codec is usable.
+A set STATESTS bit only indicates a codec address reported by the controller;
+it does not establish valid pin configuration, jack detection, or PCM output.
+Controllers with disabled MMIO decode or invalid resources are skipped without
+modifying device state.

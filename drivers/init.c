@@ -21,6 +21,7 @@
 #include "gpu_core.h"
 #include "storage_init.h"
 #include "usb_init.h"
+#include "hda.h"
 
 static void gpu_write_hex16(uint16_t value)
 {
@@ -294,6 +295,7 @@ void drivers_initialize(void)
     usb_host_controller_initialize();
     storage_initialize();
     gpu_initialize();
+    hda_initialize();
 
     /* Read-only inventory; never makes boot depend on NVIDIA hardware. */
     (void)nvx_pci_discover();

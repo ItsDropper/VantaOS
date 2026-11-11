@@ -121,6 +121,13 @@ jobs:
             -o /tmp/vantaos-smbios-inventory-test
           /tmp/vantaos-smbios-inventory-test
 
+      - name: Test passive HDA controller and codec inventory
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_hda_probe.c drivers/audio/hda.c \
+            -o /tmp/vantaos-hda-probe-test
+          /tmp/vantaos-hda-probe-test
+
       - name: Test Intel UHD 620 identification and safe GPU backend gating
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \

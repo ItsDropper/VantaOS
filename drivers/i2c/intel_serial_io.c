@@ -43,6 +43,7 @@ static acpi_aml_device_t aml_staging[AML_STAGING_LIMIT];
 static uint32_t aml_device_count;
 static uint32_t aml_staging_count;
 static uint8_t aml_staging_overflow;
+static uint8_t aml_namespace_overflow;
 static uint8_t initialized;
 
 static uint32_t dw_mmio_read(void *context,uint32_t offset)
@@ -100,6 +101,7 @@ static int id_equal(const char *a,const char *b)
 
 static int aml_is_pci_root(const acpi_aml_device_t *device)
 {
+    if(device->invalid) return 0;
     if(id_equal(device->hid,"PNP0A03")||id_equal(device->hid,"PNP0A08"))
         return 1;
     for(uint32_t i=0U;i<device->cid_count;++i)
@@ -110,27 +112,37 @@ static int aml_is_pci_root(const acpi_aml_device_t *device)
 
 static int aml_device_usable(const acpi_aml_device_t *device)
 {
-    if(device->sta_dynamic)
-        return 0; /* Do not bind while firmware-only _STA evaluation is required. */
+    if(device->invalid||device->sta_dynamic)
+        return 0; /* Do not bind ambiguous or method-dependent ACPI objects. */
     if(device->sta_valid)
         return (device->sta&0x03U)==0x03U&&(device->sta&0x08U)!=0U;
     return 1; /* _STA absent or method-backed: ACPI's default is present/enabled. */
 }
 
+static int aml_resource_identity_equal(const acpi_aml_resource_t *a,
+                                       const acpi_aml_resource_t *b)
+{
+    return a->descriptor_tag==b->descriptor_tag&&
+           a->resource_type==b->resource_type&&
+           a->serial_bus_type==b->serial_bus_type&&
+           a->slave_address==b->slave_address&&
+           path_equal(a->resource_source,b->resource_source);
+}
+
 static int aml_resource_equal(const acpi_aml_resource_t *a,
                               const acpi_aml_resource_t *b)
 {
-    return a->descriptor_tag==b->descriptor_tag&&
-           a->serial_bus_type==b->serial_bus_type&&
+    return aml_resource_identity_equal(a,b)&&
            a->connection_speed_hz==b->connection_speed_hz&&
-           a->slave_address==b->slave_address&&
-           path_equal(a->resource_source,b->resource_source);
+           a->general_flags==b->general_flags&&
+           a->type_flags==b->type_flags;
 }
 
 static int aml_merge_device(acpi_aml_device_t *destination,
                             const acpi_aml_device_t *source)
 {
-    if(!path_equal(destination->parent_path,source->parent_path)) return 0;
+    if(destination->invalid||source->invalid||
+       !path_equal(destination->parent_path,source->parent_path)) return 0;
     if(destination->hid[0]&&source->hid[0]&&
        !id_equal(destination->hid,source->hid)) return 0;
     if(!destination->hid[0]&&source->hid[0])
@@ -166,18 +178,32 @@ static int aml_merge_device(acpi_aml_device_t *destination,
         uint32_t j=0U;
         for(;j<destination->cid_count;++j)
             if(id_equal(destination->cids[j],source->cids[i])) break;
-        if(j==destination->cid_count&&destination->cid_count<ACPI_AML_MAX_CIDS)
+        if(j==destination->cid_count)
+        {
+            if(destination->cid_count>=ACPI_AML_MAX_CIDS) return 0;
             memcpy(destination->cids[destination->cid_count++],source->cids[i],
                    ACPI_AML_ID_MAX);
+        }
     }
     for(uint32_t i=0U;i<source->resource_count;++i)
     {
         int duplicate=0;
         for(uint32_t j=0U;j<destination->resource_count;++j)
-            if(aml_resource_equal(&destination->resources[j],&source->resources[i]))
-                duplicate=1;
-        if(!duplicate&&destination->resource_count<ACPI_AML_MAX_RESOURCES)
+        {
+            if(!aml_resource_identity_equal(&destination->resources[j],
+                                            &source->resources[i]))
+                continue;
+            if(!aml_resource_equal(&destination->resources[j],
+                                   &source->resources[i]))
+                return 0;
+            duplicate=1;
+            break;
+        }
+        if(!duplicate)
+        {
+            if(destination->resource_count>=ACPI_AML_MAX_RESOURCES) return 0;
             destination->resources[destination->resource_count++]=source->resources[i];
+        }
     }
     destination->resource_total+=source->resource_total;
     destination->i2c_count+=source->i2c_count;
@@ -204,10 +230,10 @@ static void aml_commit_staging(void)
         if(existing<aml_device_count)
         {
             if(!aml_merge_device(&aml_devices[existing],source))
-                memset(&aml_devices[existing],0,sizeof(aml_devices[existing]));
+                aml_devices[existing].invalid=1U;
         }
-        else if(aml_device_count<AML_DEVICE_LIMIT)
-            aml_devices[aml_device_count++]=*source;
+        else
+            aml_namespace_overflow=1U;
     }
 }
 
@@ -229,6 +255,8 @@ static void aml_discover_namespace(void)
                                 aml_collect_staging,NULL,NULL)&&
            !aml_staging_overflow)
             aml_commit_staging();
+        else if(aml_staging_overflow)
+            aml_namespace_overflow=1U;
     }
 }
 
@@ -250,7 +278,8 @@ static const acpi_aml_device_t *aml_find_controller(
     for(uint32_t i=0U;i<aml_device_count;++i)
     {
         const acpi_aml_device_t *controller=&aml_devices[i];
-        if(!controller->adr_valid||!aml_device_usable(controller)) continue;
+        if(controller->invalid||!controller->adr_valid||
+           !aml_device_usable(controller)) continue;
         const acpi_aml_device_t *root=NULL;
         for(uint32_t j=0U;j<aml_device_count;++j)
             if(path_equal(aml_devices[j].path,controller->parent_path)&&
@@ -258,6 +287,7 @@ static const acpi_aml_device_t *aml_find_controller(
             {root=&aml_devices[j];break;}
         if(!root) continue;
         uint64_t adr=controller->adr;
+        if(adr>UINT32_MAX) continue;
         uint32_t slot=(uint32_t)((adr>>16U)&0xFFFFU);
         uint32_t function=(uint32_t)(adr&0xFFFFU);
         uint8_t bus=root->bbn_valid?root->bbn:0U;
@@ -361,6 +391,11 @@ void i2c_initialize(void)
     if(initialized) return;
     initialized=1U;
     aml_discover_namespace();
+    if(aml_namespace_overflow)
+    {
+        serial_write("VANTAOS_I2C_ACPI_NAMESPACE_INCOMPLETE\n");
+        return;
+    }
     uint32_t controller_count=0U;
     int index=-1;
     while((index=pci_find_class(I2C_PCI_CLASS,I2C_PCI_SUBCLASS,-1,index+1))>=0)

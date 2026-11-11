@@ -158,6 +158,26 @@ static void hardware_inventory_initialize(void)
         serial_write(pci_get_device_name(device->vendor_id,
                                          device->device_id));
         serial_write("\n");
+        if (device->class_code == 0x02U)
+        {
+            serial_write("VANTAOS_HW_NETWORK_CONTROLLER id=");
+            hardware_write_hex16(device->vendor_id);
+            serial_write(":");
+            hardware_write_hex16(device->device_id);
+            serial_write(" class=");
+            hardware_write_hex8(device->class_code);
+            serial_write(":");
+            hardware_write_hex8(device->subclass);
+            serial_write(":");
+            hardware_write_hex8(device->prog_if);
+            serial_write(" bdf=");
+            hardware_write_hex8(device->bus);
+            serial_write(":");
+            hardware_write_hex8(device->slot);
+            serial_write(".");
+            hardware_write_hex8(device->function);
+            serial_write("\n");
+        }
         if (device->class_code == 0x04U &&
             device->subclass == 0x03U)
         {

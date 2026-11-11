@@ -74,10 +74,39 @@ ap_long_entry:
     xor rbp, rbp
     push qword 0
 
+    ; Prefer architectural topology leaves, which return the full
+    ; x2APIC ID in EDX. Leaf 1's EBX[31:24] is only the legacy 8-bit ID.
+    xor eax, eax
+    cpuid
+    mov esi, eax
+    cmp esi, 0x1F
+    jb .try_topology_v1
+    mov eax, 0x1F
+    xor ecx, ecx
+    cpuid
+    test ebx, ebx
+    jnz .topology_id_ready
+
+.try_topology_v1:
+    cmp esi, 0x0B
+    jb .legacy_apic_id
+    mov eax, 0x0B
+    xor ecx, ecx
+    cpuid
+    test ebx, ebx
+    jnz .topology_id_ready
+
+.legacy_apic_id:
     mov eax, 1
     cpuid
     shr ebx, 24
     mov edi, ebx
+    jmp .apic_id_ready
+
+.topology_id_ready:
+    mov edi, edx
+
+.apic_id_ready:
     mov rax, [abs 0x7008]
     jmp rax
 

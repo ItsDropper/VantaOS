@@ -98,6 +98,50 @@ static void write_u32(uint32_t value)
     }
 }
 
+static void write_string(const uint8_t* structure, uint8_t structure_length,
+                         const uint8_t* table_end, uint8_t string_index)
+{
+    if (string_index == 0U || structure_length < 4U || !table_end)
+    {
+        serial_write("unknown");
+        return;
+    }
+
+    const uint8_t* cursor = structure + structure_length;
+    for (uint32_t current = 1U; current <= string_index; ++current)
+    {
+        if (cursor >= table_end || *cursor == 0U)
+        {
+            serial_write("unknown");
+            return;
+        }
+        if (current == string_index)
+        {
+            uint32_t emitted = 0U;
+            while (cursor < table_end && *cursor != 0U && emitted < 96U)
+            {
+                char character = (*cursor >= 0x20U && *cursor <= 0x7EU) ?
+                    (char)*cursor : '?';
+                serial_write_bytes(&character, 1U);
+                ++cursor;
+                ++emitted;
+            }
+            if (cursor < table_end && *cursor != 0U)
+                serial_write("...");
+            return;
+        }
+        while (cursor < table_end && *cursor != 0U)
+            ++cursor;
+        if (cursor >= table_end)
+        {
+            serial_write("unknown");
+            return;
+        }
+        ++cursor;
+    }
+    serial_write("unknown");
+}
+
 static int find_entrypoint(smbios_location_t* location)
 {
     if (!location)

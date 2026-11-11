@@ -57,7 +57,7 @@ int main(void)
         0x85,0x01,0x81,0x02
     };
     static const uint8_t huge_report[] = {
-        0x75,0x20,0x96,0xFF,0x03,0x81,0x02
+        0x75,0x20,0x96,0x01,0x04,0x81,0x02
     };
     assert(!hid_report_parse(truncated_short, sizeof(truncated_short), &layout));
     assert(!hid_report_parse(truncated_long, sizeof(truncated_long), &layout));

@@ -1208,9 +1208,9 @@ void gui_server_draw_taskbar_items(int taskbar_y, int screen_width)
         int button_width = slot_width - 4;
         if (button_width < 16) button_width = 16;
         int focused = items[i].focused;
-        uint32_t fill = focused ? 0x00253648U
-                      : items[i].minimized ? 0x00131D29U : 0x00192533U;
-        graphics_fill_squircle_rect(slot_x, taskbar_y, button_width, 42, 7, fill);
+        uint32_t fill = focused ? 0xC046505BU
+                      : items[i].minimized ? 0x80333B45U : 0xA52B333DU;
+        graphics_fill_squircle_rect(slot_x, taskbar_y, button_width, 42, 10, fill);
         graphics_fill_rect(slot_x + 1, taskbar_y + 1, button_width - 2, 1,
                            focused ? VANTA_UI_ACCENT : VANTA_UI_BORDER_SUBTLE);
         int icon_size = button_width >= 48 ? 18 : 12;
@@ -1229,7 +1229,7 @@ void gui_server_draw_taskbar_items(int taskbar_y, int screen_width)
             }
             label[n] = '\0';
             graphics_draw_text(slot_x + 26, taskbar_y + 17, label,
-                               items[i].minimized ? 0x009AAABD : 0x00F3F6FA, 1);
+                               items[i].minimized ? VANTA_UI_TEXT_SECONDARY : VANTA_UI_TEXT, 1);
         }
         if (focused)
             graphics_fill_rounded_rect(slot_x + button_width / 2 - 12,

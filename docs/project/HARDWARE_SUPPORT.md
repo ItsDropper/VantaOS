@@ -15,10 +15,23 @@ VantaOS is an experimental x86-64 OS. Source code for a driver is not proof that
 | AHCI/SATA groundwork | Host-tested PRDT builder and ABAR validator; read-only PCI discovery probes CAP/PI only for controllers whose I/O decode, memory decode, and bus mastering are disabled | Not hardware support; active-controller handoff, HBA startup, DMA command engine, interrupts, recovery, and block-device integration remain unimplemented |
 | PCI/legacy ATA PIO | IDE-compatible primary/secondary channel probing, bounded LBA28 reads/writes, and shared host-tested request-range validation | Physical controller compatibility and broad error-recovery behavior unverified; this is not an AHCI/SATA driver |
 | PCIe extended configuration | ACPI MCFG region validation and read-only extended-capability traversal are implemented; malformed links are host-tested | Real ECAM firmware tables and physical PCIe devices are not yet hardware-validated |
+| Hardware identification | CPU capability/topology reporting, PCI BDF/vendor/device/class/revision/subsystem inventory, checksummed ACPI root-table inventory, SMBIOS 2.x/3.x system/board/BIOS/CPU/memory inventory, and USB device VID:PID/class logging | Software paths and synthetic SMBIOS parser tests; physical firmware tables and laptop USB devices still require device testing. SMBIOS tables above the current 1 GiB identity-map window are intentionally not dereferenced |
 | FAT32 | Mount validates BPB geometry against partition bounds; cluster and FAT accesses are volume-bounded; ATA PIO sector-write primitive is implemented | Persistent allocation, directory updates, and file write/create remain unimplemented; write path is not end-to-end tested |
 | USB | xHCI host path and USB HID support have QEMU regression coverage; Bluetooth HCI command state has a bounded software watchdog; RTL8188EU USB Wi-Fi driver code has host tests | Physical device compatibility and end-to-end Bluetooth/Wi-Fi networking are not established |
 | Other Wi-Fi adapters / router hardware | No additional chipset-specific drivers validated | Not supported by evidence; router firmware is outside the current OS-driver scope |
 | NVIDIA GA10x (NVX) | Bounded VBIOS/FWSEC and booter parsers; FWSEC interface command-window parser; synthetic BAR0 tests for Falcon reset, DMA, BROM, launch, mailbox and ownership sequencing; CI host tests | Firmware parsing and software sequencing are host-tested; physical SEC2 secure boot, authenticated WPR placement, GSP RISC-V activation, first GSP-RM RPC, and acceleration remain unverified |
+
+## Hardware inventory diagnostics
+
+The serial log uses stable `VANTAOS_HW_*` markers:
+
+- `VANTAOS_HW_ACPI_ROOT` and `VANTAOS_HW_ACPI_TABLE` report the validated ACPI root and checksum-valid root tables.
+- `VANTAOS_HW_SMBIOS_*` reports firmware, system product, baseboard, processor, and installed memory information. System UUIDs and serial-number fields are deliberately never emitted.
+- `VANTAOS_HW_PCI` reports BDF, vendor/device IDs, revision, header type, subsystem IDs for type-0 functions, and class/programming interface.
+- `VANTAOS_HW_USB_DEVICE` reports enumerated root-port USB device IDs and class information.
+- Existing CPU and GPU diagnostics report processor capabilities and discovered display controllers.
+
+These are identification records, not driver-binding or functionality claims. SMBIOS and ACPI parsing are bounded and fail closed on invalid checksums, ranges, or structure lengths. The current SMBIOS reader only dereferences firmware tables within the kernel's existing low-memory identity-mapped window.
 
 ## Safe testing rules
 

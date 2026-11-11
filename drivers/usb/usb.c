@@ -170,6 +170,26 @@ static uint8_t usb_pending_slot_disable[USB_MAX_XHCI_SLOTS + 1U];
 static uint8_t keyboard_input_observed;
 static uint8_t mouse_input_observed;
 
+static void usb_log_hex16(uint16_t value)
+{
+    static const char digits[] = "0123456789ABCDEF";
+    char output[4];
+    for (uint32_t i = 0U; i < sizeof(output); ++i)
+    {
+        uint32_t shift = (uint32_t)((sizeof(output) - 1U - i) * 4U);
+        output[i] = digits[(value >> shift) & 0x0FU];
+    }
+    serial_write_bytes(output, sizeof(output));
+}
+
+static void usb_log_hex8(uint8_t value)
+{
+    static const char digits[] = "0123456789ABCDEF";
+    char output[2] = {digits[(value >> 4U) & 0x0FU],
+                      digits[value & 0x0FU]};
+    serial_write_bytes(output, sizeof(output));
+}
+
 static int usb_control(uint32_t slot, uint8_t request_type, uint8_t request,
                        uint16_t value, uint16_t index, void* data,
                        uint16_t length)
@@ -1335,6 +1355,25 @@ static int usb_enumerate_port(uint32_t port)
     };
     if (!usb_device_register(slot, port, xhci_controller_device(), &identity))
         goto cleanup;
+
+    serial_write("VANTAOS_HW_USB_DEVICE slot=");
+    usb_log_hex8((uint8_t)slot);
+    serial_write(" port=");
+    usb_log_hex8((uint8_t)port);
+    serial_write(" id=");
+    usb_log_hex16(identity.vendor_id);
+    serial_write(":");
+    usb_log_hex16(identity.product_id);
+    serial_write(" class=");
+    usb_log_hex8(identity.class_code);
+    serial_write(":");
+    usb_log_hex8(identity.subclass);
+    serial_write(":");
+    usb_log_hex8(identity.protocol);
+    serial_write(" revision=");
+    usb_log_hex8(identity.revision);
+    serial_write("\\n");
+
     if (!usb_device_register_interfaces(slot, configuration_buffer,
                                          configuration_length)) {
         (void)usb_device_unregister(slot);

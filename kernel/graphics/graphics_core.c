@@ -280,6 +280,30 @@ int graphics_display_present_damage(
     return 1;
 }
 
+/* Non-zero alpha bytes opt into source-over compositing. Zero remains
+ * legacy opaque RGB so existing kernel drawing calls keep their behavior. */
+static uint32_t graphics_composite_pixel(uint32_t destination, uint32_t color)
+{
+    uint32_t alpha = color >> 24;
+    if (alpha == 0U || alpha == 255U) return graphics_pack_color(color);
+    const uint8_t shifts[3] = { red_position, green_position, blue_position };
+    const uint8_t sizes[3] = { red_mask_size, green_mask_size, blue_mask_size };
+    const uint8_t source_shifts[3] = { 16U, 8U, 0U };
+    uint32_t result = 0U;
+    for (unsigned int channel = 0U; channel < 3U; ++channel)
+    {
+        uint32_t bits = sizes[channel];
+        if (bits == 0U || bits > 8U || shifts[channel] >= 32U) continue;
+        uint32_t maximum = (1U << bits) - 1U;
+        uint32_t source = ((color >> source_shifts[channel]) & 0xFFU);
+        source = (source * maximum + 127U) / 255U;
+        uint32_t target = (destination >> shifts[channel]) & maximum;
+        uint32_t blended = (source * alpha + target * (255U - alpha) + 127U) / 255U;
+        result |= blended << shifts[channel];
+    }
+    return result;
+}
+
 uint32_t graphics_pack_color(uint32_t color)
 {
     uint32_t red=(color>>16)&0xFF, green=(color>>8)&0xFF, blue=color&0xFF;
@@ -774,6 +798,7 @@ void graphics_fill_rect(
         return;
 
     uint32_t packed = graphics_pack_color(color);
+    uint32_t alpha = color >> 24;
 
     for (int py = y0; py < y1; py++)
     {
@@ -783,9 +808,11 @@ void graphics_fill_rect(
         int last = -1;
         for (int px = x0; px < x1; px++)
         {
-            if (row[px] != packed)
+            uint32_t pixel = (alpha != 0U && alpha != 255U) ?
+                    graphics_composite_pixel(row[px], color) : packed;
+            if (row[px] != pixel)
             {
-                row[px] = packed;
+                row[px] = pixel;
                 if (first < 0) first = px;
                 last = px;
             }
@@ -802,7 +829,7 @@ void graphics_fill_rect(
  * bounded and to prevent corner overlap.
  */
 static void graphics_fill_squircle_span(int64_t left, int64_t right,
-                                         int64_t y, uint32_t packed)
+                                         int64_t y, uint32_t color)
 {
     if (y < 0 || y >= (int64_t)framebuffer_height)
         return;
@@ -816,11 +843,15 @@ static void graphics_fill_squircle_span(int64_t left, int64_t right,
         framebuffer + (size_t)y * framebuffer_pitch);
     int first = -1;
     int last = -1;
+    uint32_t packed = graphics_pack_color(color);
+    uint32_t alpha = color >> 24;
     for (int64_t x = left; x < right; ++x)
     {
-        if (row[x] == packed)
+        uint32_t pixel = (alpha != 0U && alpha != 255U) ?
+            graphics_composite_pixel(row[x], color) : packed;
+        if (row[x] == pixel)
             continue;
-        row[x] = packed;
+        row[x] = pixel;
         if (first < 0) first = (int)x;
         last = (int)x;
     }
@@ -862,7 +893,6 @@ void graphics_fill_squircle_rect(
     graphics_fill_rect(x + width - radius, y + radius,
                        radius, height - radius * 2, color);
 
-    uint32_t packed = graphics_pack_color(color);
     int64_t left_center = (int64_t)x + radius;
     int64_t right_center = (int64_t)x + width - radius - 1;
     for (int row = 0; row < radius; ++row)
@@ -873,13 +903,13 @@ void graphics_fill_squircle_rect(
         int64_t bottom_y = (int64_t)y + height - radius + row;
 
         graphics_fill_squircle_span(left_center - top_extent,
-            left_center + 1, top_y, packed);
+            left_center + 1, top_y, color);
         graphics_fill_squircle_span(right_center,
-            right_center + top_extent + 1, top_y, packed);
+            right_center + top_extent + 1, top_y, color);
         graphics_fill_squircle_span(left_center - bottom_extent,
-            left_center + 1, bottom_y, packed);
+            left_center + 1, bottom_y, color);
         graphics_fill_squircle_span(right_center,
-            right_center + bottom_extent + 1, bottom_y, packed);
+            right_center + bottom_extent + 1, bottom_y, color);
     }
 }
 
@@ -908,6 +938,7 @@ void graphics_fill_rounded_rect(
         radius = height / 2;
 
     uint32_t packed = graphics_pack_color(color);
+    uint32_t alpha = color >> 24;
 
     int x0 = x < 0 ? 0 : x;
     int y0 = y < 0 ? 0 : y;
@@ -947,9 +978,11 @@ void graphics_fill_rounded_rect(
             int dx = px - cx;
             int dy = py - cy;
 
-            if (dx * dx + dy * dy <= r2 && row[px] != packed)
+            uint32_t pixel = (alpha != 0U && alpha != 255U) ?
+                graphics_composite_pixel(row[px], color) : packed;
+            if (dx * dx + dy * dy <= r2 && row[px] != pixel)
             {
-                row[px] = packed;
+                row[px] = pixel;
                 if (first < 0) first = px;
                 last = px;
             }

@@ -138,15 +138,15 @@ uint32_t desktop_theme_color(unsigned int role)
         switch (role)
         {
             case VANTA_UI_ROLE_DESKTOP: return 0x00F3F6FAU;
-            case VANTA_UI_ROLE_TOPBAR: return 0x00FFFFFFU;
-            case VANTA_UI_ROLE_SURFACE: return 0x00FFFFFFU;
-            case VANTA_UI_ROLE_TITLEBAR: return 0x00E5EBF2U;
-            case VANTA_UI_ROLE_TOOLBAR: return 0x00EEF2F7U;
-            case VANTA_UI_ROLE_ROW: return 0x00E8EEF5U;
-            case VANTA_UI_ROLE_HOVER: return 0x00DCE6F1U;
-            case VANTA_UI_ROLE_BORDER: return 0x00C4CFDCU;
-            case VANTA_UI_ROLE_BORDER_SUBTLE: return 0x00D8E0E9U;
-            case VANTA_UI_ROLE_SELECTION: return 0x00DCEBFAU;
+            case VANTA_UI_ROLE_TOPBAR: return 0xD8E5E8ECU;
+            case VANTA_UI_ROLE_SURFACE: return 0xDCE6E9EDU;
+            case VANTA_UI_ROLE_TITLEBAR: return 0xE0D9DEE4U;
+            case VANTA_UI_ROLE_TOOLBAR: return 0xC8DDE2E7U;
+            case VANTA_UI_ROLE_ROW: return 0xA8D4DCE4U;
+            case VANTA_UI_ROLE_HOVER: return 0xD0C7D0D9U;
+            case VANTA_UI_ROLE_BORDER: return 0x905B6672U;
+            case VANTA_UI_ROLE_BORDER_SUBTLE: return 0x704B5662U;
+            case VANTA_UI_ROLE_SELECTION: return 0xB8AEBCCAU;
             case VANTA_UI_ROLE_WARNING: return 0x008A4B00U;
             case VANTA_UI_ROLE_TEXT: return 0x00182735U;
             case VANTA_UI_ROLE_TEXT_SECONDARY: return 0x00556678U;
@@ -159,16 +159,16 @@ uint32_t desktop_theme_color(unsigned int role)
 
     switch (role)
     {
-        case VANTA_UI_ROLE_DESKTOP: return 0x000C1119U;
-        case VANTA_UI_ROLE_TOPBAR: return 0x00151C26U;
-        case VANTA_UI_ROLE_SURFACE: return 0x000F151EU;
-        case VANTA_UI_ROLE_TITLEBAR: return 0x001A2430U;
-        case VANTA_UI_ROLE_TOOLBAR: return 0x0017202BU;
-        case VANTA_UI_ROLE_ROW: return 0x001D2835U;
-        case VANTA_UI_ROLE_HOVER: return 0x00232F3DU;
-        case VANTA_UI_ROLE_BORDER: return 0x002A3746U;
-        case VANTA_UI_ROLE_BORDER_SUBTLE: return 0x00233140U;
-        case VANTA_UI_ROLE_SELECTION: return 0x00253D56U;
+        case VANTA_UI_ROLE_DESKTOP: return 0x0014181FU;
+        case VANTA_UI_ROLE_TOPBAR: return 0xC51B2027U;
+        case VANTA_UI_ROLE_SURFACE: return 0xD01D232AU;
+        case VANTA_UI_ROLE_TITLEBAR: return 0xD8262D36U;
+        case VANTA_UI_ROLE_TOOLBAR: return 0xC1272E37U;
+        case VANTA_UI_ROLE_ROW: return 0xA8323943U;
+        case VANTA_UI_ROLE_HOVER: return 0xC03A434EU;
+        case VANTA_UI_ROLE_BORDER: return 0x90505B67U;
+        case VANTA_UI_ROLE_BORDER_SUBTLE: return 0x70434D58U;
+        case VANTA_UI_ROLE_SELECTION: return 0xB3475565U;
         case VANTA_UI_ROLE_WARNING: return 0x00E6BD78U;
         case VANTA_UI_ROLE_TEXT: return 0x00E8EDF4U;
         case VANTA_UI_ROLE_TEXT_SECONDARY: return 0x008D9BACU;

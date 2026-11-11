@@ -72,7 +72,7 @@ static inline uint32_t vanta_theme_accent_color(const vanta_theme_t* theme)
     if (theme && theme->accent == 1U) return 0x000D9488U;
     if (theme && theme->accent == 2U) return 0x00C56A05U;
     if (theme && theme->accent == 3U) return 0x00936CF0U;
-    return 0x003B82F6U;
+    return 0x007C9CC4U;
 }
 
 static inline uint32_t vanta_theme_text_color(const vanta_theme_t* theme)
@@ -93,21 +93,21 @@ static inline uint32_t vanta_theme_surface_color(const vanta_theme_t* theme)
 {
     if (theme && theme->contrast)
         return theme->light ? 0x00FFFFFFU : 0x00000000U;
-    return theme && theme->light ? 0x00F7F9FCU : 0x000C1119U;
+    return theme && theme->light ? 0xD8E2E6EAU : 0xC51D232AU;
 }
 
 static inline uint32_t vanta_theme_row_color(const vanta_theme_t* theme)
 {
     if (theme && theme->contrast)
         return vanta_theme_surface_color(theme);
-    return theme && theme->light ? 0x00E8EEF5U : 0x001D2835U;
+    return theme && theme->light ? 0xA8D4DCE4U : 0xA8323943U;
 }
 
 static inline uint32_t vanta_theme_border_color(const vanta_theme_t* theme)
 {
     if (theme && theme->contrast)
         return theme->light ? 0x00000000U : 0x00FFFFFFU;
-    return theme && theme->light ? 0x00C4CFDCU : 0x002A3746U;
+    return theme && theme->light ? 0x905B6672U : 0x90505B67U;
 }
 
 static inline uint32_t vanta_theme_border_subtle_color(
@@ -115,14 +115,14 @@ static inline uint32_t vanta_theme_border_subtle_color(
 {
     if (theme && theme->contrast)
         return vanta_theme_border_color(theme);
-    return theme && theme->light ? 0x00D8E0E9U : 0x00233140U;
+    return theme && theme->light ? 0x704B5662U : 0x70434D58U;
 }
 
 static inline uint32_t vanta_theme_selection_color(const vanta_theme_t* theme)
 {
     if (theme && theme->contrast)
         return theme->light ? 0x00CDE4FFU : 0x00143A5CU;
-    return theme && theme->light ? 0x00DCEBFAU : 0x00253D56U;
+    return theme && theme->light ? 0xB8AEBCCAU : 0xB3475565U;
 }
 
 static inline uint32_t vanta_theme_success_color(const vanta_theme_t* theme)

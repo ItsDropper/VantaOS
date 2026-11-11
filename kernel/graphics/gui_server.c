@@ -698,7 +698,7 @@ void gui_server_draw_windows(void)
             {
                 graphics_fill_squircle_rect(cx, cy, command->width,
                     command->height, (int)command->scale,
-                    command->color & 0x00FFFFFFU);
+                    command->color);
             }
             else if (command->type == VANTA_GUI_DRAW_FILL_RECT)
             {
@@ -715,13 +715,13 @@ void gui_server_draw_windows(void)
                         draw_h = max_h - command->y;
                     if (draw_w > 0 && draw_h > 0)
                         graphics_fill_rect(cx, cy, draw_w, draw_h,
-                                           command->color & 0x00FFFFFFU);
+                                           command->color);
                 }
             }
             else if (command->type == VANTA_GUI_DRAW_TEXT &&
                      gui_command_valid(command, width, height))
                 graphics_draw_text(cx, cy, command->text,
-                                   command->color & 0x00FFFFFFU,
+                                   command->color,
                                    command->scale);
         }
 

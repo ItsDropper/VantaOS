@@ -18,15 +18,15 @@ void graphics_draw_start_menu_detail(int width, int height);
 
 void graphics_draw_vanta_logo(int x, int y, int size)
 {
-    /* Compact electric-blue V mark; intentionally distinct from the Windows panes. */
+    /* Restrained accent mark for the Vanta dock and window identity. */
     int steps = size / 2;
     if (steps < 2) steps = 2;
     for (int i = 0; i < steps; ++i)
     {
         int yy = y + i * 2;
         int inset = i * size / (steps * 2);
-        uint32_t left = (i & 1) ? 0x005AA9E6U : 0x003B82F6U;
-        uint32_t right = (i & 1) ? 0x0048A8FFU : 0x0067C5FFU;
+        uint32_t left = VANTA_UI_ACCENT;
+        uint32_t right = VANTA_UI_TEXT_SECONDARY;
         graphics_fill_rect(x + inset, yy, 3, 2, left);
         graphics_fill_rect(x + size - inset - 3, yy, 3, 2, right);
     }
@@ -92,7 +92,7 @@ void graphics_draw_window_frame(int x, int y, int w, int h, const char* title, i
             graphics_fill_rect(bx, y + 1, 1, 44, VANTA_UI_BORDER);
         }
         /* Draw crisp native-size control glyphs instead of font approximations. */
-        uint32_t control_ink = 0x00AAB8C8U;
+        uint32_t control_ink = VANTA_UI_TEXT_SECONDARY;
         graphics_fill_rect(controls_x + 17, y + 25, 12, 2, control_ink);
 
         int maximize_x = controls_x + 46 + 17;
@@ -102,7 +102,7 @@ void graphics_draw_window_frame(int x, int y, int w, int h, const char* title, i
         graphics_fill_rect(maximize_x + 10, y + 14, 2, 12, control_ink);
 
         int close_x = controls_x + 2 * 46 + 23;
-        uint32_t close_ink = 0x00DCE4ECU;
+        uint32_t close_ink = VANTA_UI_TEXT;
         for (int i = 0; i < 8; i++)
         {
             graphics_fill_rect(close_x - 3 + i, y + 15 + i, 2, 2, close_ink);
@@ -188,60 +188,44 @@ void graphics_draw_taskbar(int taskbar_y, int width)
     char clock[6], date[11];
     ui_clock_text(clock, date);
 
-    /* Windows 11-style taskbar: one quiet full-width surface and centered apps. */
-    graphics_fill_rect(0, taskbar_y, width, 64, VANTA_UI_TOPBAR);
-    graphics_fill_rect(0, taskbar_y, width, 1, VANTA_UI_BORDER);
-    graphics_fill_rect(0, taskbar_y + 1, width, 1, VANTA_UI_SURFACE);
-
-    /* Start */
-    graphics_fill_squircle_rect(center - 108, taskbar_y + 10, 42, 42, 8,
-        start_menu_open ? VANTA_UI_HOVER : VANTA_UI_TOPBAR);
+    /* Floating translucent dock; launcher hitboxes remain unchanged. */
+    graphics_fill_squircle_rect(center - 130, taskbar_y + 4, 260, 56, 20,
+                                0x805E6873U);
+    graphics_fill_squircle_rect(center - 128, taskbar_y + 6, 256, 52, 18,
+                                0xD01B2027U);
+    graphics_fill_squircle_rect(center - 108, taskbar_y + 10, 42, 42, 11,
+        start_menu_open ? 0xC047535FU : 0x70404A55U);
     graphics_draw_vanta_logo(center - 97, taskbar_y + 20, 22);
-
-    /* Search is styled like a native taskbar affordance; intentionally inert. */
-    graphics_fill_squircle_rect(center - 58, taskbar_y + 10, 66, 42, 9,
-                                VANTA_UI_SURFACE);
-    graphics_fill_rounded_rect(center - 44, taskbar_y + 21, 12, 12, 6,
-                                VANTA_UI_TEXT_SECONDARY);
-    graphics_fill_rect(center - 34, taskbar_y + 31, 5, 2, VANTA_UI_TEXT_SECONDARY);
-    graphics_draw_text(center - 26, taskbar_y + 27, "Search", VANTA_UI_TEXT_SECONDARY, 1);
-
-    /* File Explorer: folder with a proper tab and body. */
-    graphics_fill_squircle_rect(center + 18, taskbar_y + 10, 42, 42, 8,
-        active_panel == 2 ? VANTA_UI_HOVER : VANTA_UI_TOPBAR);
-    graphics_fill_squircle_rect(center + 27, taskbar_y + 24, 25, 16, 3,
-                                0x00E9B94F);
-    graphics_fill_squircle_rect(center + 28, taskbar_y + 20, 12, 6, 2,
-                                0x00F5D77C);
+    graphics_fill_squircle_rect(center + 18, taskbar_y + 10, 42, 42, 11,
+        active_panel == 2 ? 0xC047535FU : 0x70404A55U);
+    graphics_fill_squircle_rect(center + 27, taskbar_y + 24, 25, 16, 5,
+                                0x00C7CDD3U);
+    graphics_fill_squircle_rect(center + 28, taskbar_y + 20, 12, 6, 3,
+                                0x00E0E4E8U);
     if (active_panel == 2)
         graphics_fill_rounded_rect(center + 29, taskbar_y + 49, 20, 2, 1,
                                     VANTA_UI_ACCENT);
-
-    /* Terminal */
-    graphics_fill_squircle_rect(center + 66, taskbar_y + 10, 42, 42, 8,
-        active_panel == 3 ? VANTA_UI_HOVER : VANTA_UI_TOPBAR);
-    graphics_fill_squircle_rect(center + 74, taskbar_y + 20, 26, 22, 5,
-                                VANTA_UI_TITLEBAR);
+    graphics_fill_squircle_rect(center + 66, taskbar_y + 10, 42, 42, 11,
+        active_panel == 3 ? 0xC047535FU : 0x70404A55U);
+    graphics_fill_squircle_rect(center + 74, taskbar_y + 20, 26, 22, 6,
+                                0x00303740U);
     graphics_draw_text(center + 78, taskbar_y + 27, ">_", VANTA_UI_TEXT, 1);
     if (terminal_running)
         graphics_fill_rounded_rect(center + 74, taskbar_y + 49, 26, 2, 1,
                                     VANTA_UI_ACCENT);
 
-    /* Give the clock its own high-contrast, padded region so both lines remain
-       legible and inside the framebuffer at the 1024px CI screenshot width. */
     int clock_x = width - 116;
-    if (clock_x < center + 116)
-        clock_x = center + 116;
-
-    /* Retained GUI windows get taskbar entries, including minimized windows. */
+    if (clock_x < center + 136) clock_x = center + 136;
     gui_server_draw_taskbar_items(taskbar_y + 10, width);
-
-    graphics_fill_squircle_rect(clock_x, taskbar_y + 6, width - clock_x - 8,
-                                52, 8, VANTA_UI_SURFACE);
-    graphics_fill_rect(clock_x + 7, taskbar_y + 8, 1, 48, VANTA_UI_BORDER);
+    graphics_fill_squircle_rect(clock_x, taskbar_y + 6,
+                                width - clock_x - 8, 52, 12, 0xC51B2027U);
+    graphics_fill_rect(clock_x + 7, taskbar_y + 13, 1, 38,
+                       VANTA_UI_BORDER_SUBTLE);
     graphics_draw_text(clock_x + 15, taskbar_y + 17, clock, VANTA_UI_TEXT, 1);
-    graphics_draw_text(clock_x + 15, taskbar_y + 34, date, VANTA_UI_TEXT_SECONDARY, 1);
+    graphics_draw_text(clock_x + 15, taskbar_y + 34, date,
+                       VANTA_UI_TEXT_SECONDARY, 1);
 }
+
 void graphics_draw_start_menu_overlay(void)
 {
     if (initialized && start_menu_open)

@@ -174,21 +174,14 @@ static void ui_app_tile(int x, int y, int w, int h, const char* name,
  * support alpha compositing, blur, or GPU acceleration. */
 static void ui_wallpaper(int w, int h)
 {
-    /* Windows-inspired blue bloom: broad folded ribbons, no debug grid. */
-    graphics_fill_rect(0, 0, w, h, 0x0007132B);
-    graphics_fill_rounded_rect(w / 2 - 170, h / 2 - 210,
-                               w / 2 + 420, h / 2 + 310, 150, 0x000B2B58);
-    graphics_fill_rounded_rect(w / 2 - 70, h / 2 - 150,
-                               w / 2 + 360, h / 2 + 260, 130, 0x00104482);
-    graphics_fill_rounded_rect(w / 2 + 40, h / 2 - 95,
-                               w / 2 + 250, h / 2 + 190, 110, 0x001B66AD);
-    graphics_fill_rounded_rect(w / 2 + 120, h / 2 - 65,
-                               w / 2 + 170, h / 2 + 145, 90, 0x00278DD2);
-    graphics_fill_rounded_rect(w / 2 + 175, h / 2 - 25,
-                               w / 2 + 100, h / 2 + 100, 60, 0x0039A7EA);
-    /* Darken the left side so desktop labels remain readable. */
-    graphics_fill_rect(0, 0, w / 3, h, 0x00091725);
-    graphics_fill_rect(0, h - 64, w, 64, 0x00DDE7F4);
+    /* Quiet graphite wallpaper with a restrained central tonal shift. */
+    graphics_fill_rect(0, 0, w, h, 0x0014181FU);
+    graphics_fill_rect(0, 0, w, h / 3, 0x00191E25U);
+    graphics_fill_rect(0, h / 3, w, h / 3, 0x00161B22U);
+    graphics_fill_rect(0, (h * 2) / 3, w, h - (h * 2) / 3,
+                       0x0013171EU);
+    graphics_fill_rounded_rect(w / 2 - w / 4, h / 2 - h / 3,
+                               w / 2, h / 2, 120, 0x184B5560U);
 }
 static void ui_topbar(int w)
 {
@@ -198,15 +191,15 @@ static void ui_topbar(int w)
 static void ui_shortcuts(void)
 {
     /* These bounds intentionally stay in sync with graphics_input.c. */
-    ui_surface(24, 58, 88, 72, 10,
+    ui_surface(24, 58, 88, 72, 12,
         active_panel == 1 ? UI_SURFACE_2 : UI_SURFACE_0, UI_EDGE_SOFT);
     ui_icon_system(49, 70, 38, UI_BLUE);
     graphics_draw_text(43, 114, "System", UI_WHITE, 1);
-    ui_surface(120, 58, 88, 72, 10,
+    ui_surface(120, 58, 88, 72, 12,
         active_panel == 2 ? UI_SURFACE_2 : UI_SURFACE_0, UI_EDGE_SOFT);
     ui_icon_folder(145, 70, 38, UI_MINT);
     graphics_draw_text(150, 114, "Files", UI_WHITE, 1);
-    ui_surface(216, 58, 88, 72, 10,
+    ui_surface(216, 58, 88, 72, 12,
         active_panel == 3 ? UI_SURFACE_2 : UI_SURFACE_0, UI_EDGE_SOFT);
     ui_icon_terminal(241, 70, 38, UI_BLUE_BRIGHT);
     graphics_draw_text(228, 114, "Terminal", UI_WHITE, 1);
@@ -458,38 +451,38 @@ void graphics_draw_start_menu_detail(int width, int height)
     ui_label(mx + mw - 112, my + 76, "CORE APPS");
 
     ui_surface(mx + 24, my + 110, mw - 48, 44, 9,
-               0x00202F3F, UI_EDGE_SOFT);
+               UI_SURFACE_2, UI_EDGE_SOFT);
     ui_icon_terminal(mx + 36, my + 117, 30, UI_BLUE_BRIGHT);
     graphics_draw_text(mx + 78, my + 119, "Terminal", UI_WHITE, 1);
     graphics_draw_text(mx + 78, my + 135, "Run shell commands", UI_MUTED, 1);
     ui_dot(mx + mw - 42, my + 134, UI_MINT);
 
     ui_surface(mx + 24, my + 156, mw - 48, 44, 9,
-               0x001A2633, UI_EDGE_SOFT);
+               UI_SURFACE_1, UI_EDGE_SOFT);
     ui_icon_folder(mx + 36, my + 163, 30, UI_MINT);
     graphics_draw_text(mx + 78, my + 165, "Files", UI_WHITE, 1);
     graphics_draw_text(mx + 78, my + 181, "Browse system paths", UI_MUTED, 1);
 
     ui_surface(mx + 24, my + 202, mw - 48, 44, 9,
-               0x001A2633, UI_EDGE_SOFT);
+               UI_SURFACE_1, UI_EDGE_SOFT);
     ui_icon_system(mx + 36, my + 209, 30, UI_BLUE);
     graphics_draw_text(mx + 78, my + 211, "System", UI_WHITE, 1);
     graphics_draw_text(mx + 78, my + 227, "Kernel and service status", UI_MUTED, 1);
 
     ui_surface(mx + 24, my + 248, mw - 48, 44, 9,
-               0x001A2633, UI_EDGE_SOFT);
+               UI_SURFACE_1, UI_EDGE_SOFT);
     ui_icon_settings(mx + 36, my + 255, 30, UI_AMBER);
     graphics_draw_text(mx + 78, my + 257, "Settings", UI_WHITE, 1);
     graphics_draw_text(mx + 78, my + 273, "Display configuration", UI_MUTED, 1);
 
     ui_surface(mx + 24, my + 294, mw - 48, 44, 9,
-               0x001A2633, UI_EDGE_SOFT);
+               UI_SURFACE_1, UI_EDGE_SOFT);
     ui_icon_settings(mx + 36, my + 301, 30, UI_MINT);
     graphics_draw_text(mx + 78, my + 303, "Notes", UI_WHITE, 1);
     graphics_draw_text(mx + 78, my + 319, "Edit and save text files", UI_MUTED, 1);
 
     ui_surface(mx + 24, my + 340, mw - 48, 44, 9,
-               0x001A2633, UI_EDGE_SOFT);
+               UI_SURFACE_1, UI_EDGE_SOFT);
     ui_icon_system(mx + 36, my + 347, 30, UI_BLUE);
     graphics_draw_text(mx + 78, my + 349, "Calculator", UI_WHITE, 1);
     graphics_draw_text(mx + 78, my + 365, "Integer arithmetic", UI_MUTED, 1);

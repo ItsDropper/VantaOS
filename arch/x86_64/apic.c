@@ -61,6 +61,15 @@ static uint64_t read_msr(uint32_t msr)
     return ((uint64_t)high << 32) | low;
 }
 
+static void serial_write_hex64(uint64_t value)
+{
+    static const char hex[] = "0123456789ABCDEF";
+    char digits[16];
+    for (uint32_t i = 0U; i < 16U; ++i)
+        digits[i] = hex[(value >> ((15U - i) * 4U)) & 0x0FU];
+    serial_write_bytes(digits, sizeof(digits));
+}
+
 static void write_msr(uint32_t msr, uint64_t value)
 {
     uint32_t low = (uint32_t)value;
@@ -267,7 +276,9 @@ int apic_initialize(void)
     if ((base & APIC_BASE_ENABLE) == 0U ||
         (x2apic_mode && (base & APIC_BASE_X2APIC) == 0U))
     {
-        serial_write("VANTAOS_APIC_MODE_VERIFY_FAIL\n");
+        serial_write("VANTAOS_APIC_MODE_VERIFY_FAIL base=0x");
+        serial_write_hex64(base);
+        serial_write(x2apic_mode ? " x2apic=1\n" : " x2apic=0\n");
         return 0;
     }
 

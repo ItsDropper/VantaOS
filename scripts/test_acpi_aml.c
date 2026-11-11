@@ -95,8 +95,8 @@ int main(void)
     const uint8_t dsd_buffer_size[]={0x0AU,0x10U};
     append(dsd_buffer_body,&dsd_buffer_body_n,dsd_buffer_size,sizeof(dsd_buffer_size));
     append(dsd_buffer_body,&dsd_buffer_body_n,uuid_bytes,sizeof(uuid_bytes));
-    const uint8_t buffer_op[]={0x11U};
-    append_package(dsd_buffer,&dsd_buffer_n,buffer_op,sizeof(buffer_op),
+    const uint8_t dsd_buffer_op[]={0x11U};
+    append_package(dsd_buffer,&dsd_buffer_n,dsd_buffer_op,sizeof(dsd_buffer_op),
                    dsd_buffer_body,dsd_buffer_body_n);
     uint8_t property_body[64], property_package[80];
     uint32_t property_body_n=0U, property_package_n=0U;
@@ -106,8 +106,8 @@ int main(void)
     append(property_body,&property_body_n,property_count,sizeof(property_count));
     append(property_body,&property_body_n,property_name,sizeof(property_name));
     append(property_body,&property_body_n,property_value,sizeof(property_value));
-    const uint8_t package_op[]={0x12U};
-    append_package(property_package,&property_package_n,package_op,sizeof(package_op),
+    const uint8_t dsd_package_op[]={0x12U};
+    append_package(property_package,&property_package_n,dsd_package_op,sizeof(dsd_package_op),
                    property_body,property_body_n);
     uint8_t dsd_body[160], dsd_package[192];
     uint32_t dsd_body_n=0U, dsd_package_n=0U;
@@ -115,7 +115,7 @@ int main(void)
     append(dsd_body,&dsd_body_n,dsd_count,sizeof(dsd_count));
     append(dsd_body,&dsd_body_n,dsd_buffer,dsd_buffer_n);
     append(dsd_body,&dsd_body_n,property_package,property_package_n);
-    append_package(dsd_package,&dsd_package_n,package_op,sizeof(package_op),
+    append_package(dsd_package,&dsd_package_n,dsd_package_op,sizeof(dsd_package_op),
                    dsd_body,dsd_body_n);
     const uint8_t dsd_name[]={0x08U,'_','D','S','D'};
     append(device_body,&device_n,dsd_name,sizeof(dsd_name));

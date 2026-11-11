@@ -658,6 +658,19 @@ static int aml_handle_name(acpi_aml_device_t* device, const char* name,
         device->sta = (uint32_t)value->integer;
         device->sta_valid = 1U;
     }
+    else if (aml_name_equals(name, "_ADR") &&
+             value->kind == AML_VALUE_INTEGER)
+    {
+        device->adr = value->integer;
+        device->adr_valid = 1U;
+    }
+    else if (aml_name_equals(name, "_BBN") &&
+             value->kind == AML_VALUE_INTEGER &&
+             value->integer <= UINT8_MAX)
+    {
+        device->bbn = (uint8_t)value->integer;
+        device->bbn_valid = 1U;
+    }
     else if (aml_name_equals(name, "_CRS") &&
              value->kind == AML_VALUE_BUFFER)
         return aml_parse_resources(device, value->bytes, value->length);
@@ -685,6 +698,9 @@ static int aml_parse_device(aml_parser_t* parser, const uint8_t** cursor,
     acpi_aml_device_t device;
     memset(&device, 0, sizeof(device));
     memcpy(device.path, path, strlen(path) + 1U);
+    if (strlen(scope) >= sizeof(device.parent_path))
+        return 0;
+    memcpy(device.parent_path, scope, strlen(scope) + 1U);
     if (!aml_parse_terms(parser, body, package_end, path, &device, depth + 1U))
         return 0;
     if (parser->devices_found >= AML_MAX_DEVICES)

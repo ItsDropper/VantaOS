@@ -37,6 +37,11 @@ typedef struct
 typedef struct
 {
     char path[ACPI_AML_PATH_MAX];
+    char parent_path[ACPI_AML_PATH_MAX];
+    uint64_t adr;
+    uint8_t adr_valid;
+    uint8_t bbn;
+    uint8_t bbn_valid;
     char hid[ACPI_AML_ID_MAX];
     char cids[ACPI_AML_MAX_CIDS][ACPI_AML_ID_MAX];
     uint32_t cid_count;

@@ -67,6 +67,8 @@ int main(void)
         'P','N','P','0','C','5','0',0x00U};
     const uint8_t uid[]={0x08U,'_','U','I','D',0x0AU,0x03U};
     const uint8_t sta[]={0x08U,'_','S','T','A',0x0AU,0x0FU};
+    const uint8_t adr[]={0x08U,'_','A','D','R',0x0CU,
+        0x01U,0x00U,0x15U,0x00U};
     const uint8_t device_name[]={'T','P','0','_'};
     const uint8_t cid_name[]={0x08U,'_','C','I','D'};
     const uint8_t crs_name[]={0x08U,'_','C','R','S'};
@@ -86,6 +88,7 @@ int main(void)
     append(device_body,&device_n,cid_package,cid_package_n);
     append(device_body,&device_n,uid,sizeof(uid));
     append(device_body,&device_n,sta,sizeof(sta));
+    append(device_body,&device_n,adr,sizeof(adr));
 
     /* _DSD standard Device Properties package with hid-descr-addr. */
     const uint8_t uuid_bytes[]={0x14U,0xD8U,0xFFU,0xDAU,0xBAU,0x6EU,
@@ -170,6 +173,8 @@ int main(void)
     assert(acpi_aml_parse_table(aml,n,capture,NULL,&found));
     assert(found==2U && callbacks==2U);
     assert(strcmp(captured[0].path,"\\_SB_.TP0_")==0);
+    assert(strcmp(captured[0].parent_path,"\\_SB_")==0);
+    assert(captured[0].adr_valid && captured[0].adr==0x00150001U);
     assert(strcmp(captured[0].hid,"PNP0C50")==0);
     assert(captured[0].cid_count==2U);
     assert(strcmp(captured[0].cids[0],"ACPI001")==0);

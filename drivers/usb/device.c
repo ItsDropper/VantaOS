@@ -112,7 +112,7 @@ int usb_device_register(uint32_t slot, uint32_t port, device_t* parent,
     usb_inventory_hex8(identity->protocol);
     serial_write(" revision=");
     usb_inventory_hex8(identity->revision);
-    serial_write("\\n");
+    serial_write("\n");
     return 1;
 }
 

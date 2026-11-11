@@ -11,7 +11,7 @@
 #include <stdint.h>
 #define INPUT_MAX_DEVICES 16
 #define INPUT_EVENT_QUEUE_CAPACITY 128
-typedef enum { INPUT_BUS_NONE = 0, INPUT_BUS_PS2, INPUT_BUS_USB } input_bus_t;
+typedef enum { INPUT_BUS_NONE = 0, INPUT_BUS_PS2, INPUT_BUS_USB, INPUT_BUS_I2C } input_bus_t;
 typedef enum { INPUT_DEVICE_NONE = 0, INPUT_DEVICE_KEYBOARD, INPUT_DEVICE_MOUSE } input_device_kind_t;
 enum {
     INPUT_CAP_KEYBOARD_TEXT = 1U << 0, INPUT_CAP_KEYBOARD_KEYS = 1U << 1,

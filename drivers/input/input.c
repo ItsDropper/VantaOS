@@ -50,7 +50,8 @@ static bool input_descriptor_valid(const input_device_descriptor_t *descriptor)
 
     if (!descriptor || !descriptor->name || descriptor->name[0] == '\0')
         return false;
-    if (descriptor->bus != INPUT_BUS_PS2 && descriptor->bus != INPUT_BUS_USB)
+    if (descriptor->bus != INPUT_BUS_PS2 && descriptor->bus != INPUT_BUS_USB &&
+        descriptor->bus != INPUT_BUS_I2C)
         return false;
     if (descriptor->capabilities == 0 ||
         (descriptor->capabilities & ~known_caps) != 0)

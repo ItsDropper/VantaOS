@@ -671,6 +671,13 @@ static int aml_handle_name(acpi_aml_device_t* device, const char* name,
         device->bbn = (uint8_t)value->integer;
         device->bbn_valid = 1U;
     }
+    else if (aml_name_equals(name, "_SEG") &&
+             value->kind == AML_VALUE_INTEGER &&
+             value->integer <= UINT16_MAX)
+    {
+        device->segment = (uint16_t)value->integer;
+        device->segment_valid = 1U;
+    }
     else if (aml_name_equals(name, "_CRS") &&
              value->kind == AML_VALUE_BUFFER)
         return aml_parse_resources(device, value->bytes, value->length);

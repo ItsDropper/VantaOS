@@ -57,6 +57,39 @@ static volatile uint32_t ap_online[ACPI_MAX_CPUS];
 static volatile uint32_t work_probe_start;
 static volatile uint32_t work_probe_done[ACPI_MAX_CPUS];
 
+static int initialize_single_cpu_fallback(void)
+{
+    cpu_local_t* current = cpu_local_current();
+    if (current && current->self == current && current->online != 0U)
+    {
+        discovered_cpu_count = 1U;
+        bsp_logical_id = current->logical_id;
+        return 1;
+    }
+
+    /* CPUID.01H:EBX[31:24] is the initial local APIC ID. */
+    uint32_t eax = 1U;
+    uint32_t ebx = 0U;
+    uint32_t ecx = 0U;
+    uint32_t edx = 0U;
+    __asm__ volatile ("cpuid"
+                      : "+a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx));
+    (void)ecx;
+    (void)edx;
+    uint32_t apic_id = (ebx >> 24U) & 0xFFU;
+
+    if (!cpu_local_initialize(0U, apic_id))
+    {
+        serial_write("VANTAOS_SMP_SINGLE_CPU_LOCAL_FAIL\n");
+        return 0;
+    }
+
+    discovered_cpu_count = 1U;
+    bsp_logical_id = 0U;
+    serial_write("VANTAOS_SMP_SINGLE_CPU_FALLBACK_OK\n");
+    return 1;
+}
+
 static int find_cpu_index(const acpi_platform_info_t* info, uint32_t apic_id)
 {
     for (uint32_t i = 0; i < info->cpu_count; i++)
@@ -560,6 +593,14 @@ smp_init_result_t smp_initialize(void)
      */
     if (!apic_is_enabled())
     {
+        /*
+         * Ring-3 entry, syscall GS handling, and address-space accounting
+         * require a valid BSP CPU-local area even when LAPIC/SMP is absent.
+         * Keep the uniprocessor fallback fully initialized instead of
+         * leaving GS:0 and TSS.RSP0 unset.
+         */
+        if (!initialize_single_cpu_fallback())
+            return SMP_INIT_FAILED;
         serial_write("VANTAOS_SMP_AP_START_SKIPPED\n");
         return SMP_INIT_UNAVAILABLE;
     }

@@ -99,6 +99,7 @@ const char *gpu_architecture_name(gpu_architecture_t architecture)
 {
     switch (architecture) {
         case GPU_ARCH_INTEL_GEN9: return "Intel Gen9";
+        case GPU_ARCH_INTEL_GEN9_5: return "Intel Gen9.5 (Kaby Lake)";
         case GPU_ARCH_INTEL_GEN11: return "Intel Gen11";
         case GPU_ARCH_INTEL_XE_LP: return "Intel Xe-LP";
         case GPU_ARCH_INTEL_XE_HPG: return "Intel Xe-HPG";

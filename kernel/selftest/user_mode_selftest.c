@@ -760,7 +760,7 @@ int user_mode_process_smoke_test_start(void)
     const size_t success_message_pointer_offset = code_size;
     EMIT_U64(0U);
     static const char success_message[] =
-        "VANTAOS_SYSCALL_POINTER_GUARDS_OK\\n";
+        "VANTAOS_SYSCALL_POINTER_GUARDS_OK\n";
     EMIT_BYTE(0xBE); EMIT_U32(sizeof(success_message) - 1U);
     EMIT_BYTE(0xCD); EMIT_BYTE(0x80);
     EMIT_BYTE(0xB8); EMIT_U32(0U);
@@ -783,7 +783,7 @@ int user_mode_process_smoke_test_start(void)
             (failure_branches[i] + 1U);
         if (displacement > 127U)
         {
-            serial_write("VANTAOS_SYSCALL_POINTER_GUARDS_BUILD_FAIL\\n");
+            serial_write("VANTAOS_SYSCALL_POINTER_GUARDS_BUILD_FAIL\n");
             return 0;
         }
         pointer_guard_image[failure_branches[i]] = (uint8_t)displacement;
@@ -797,7 +797,7 @@ int user_mode_process_smoke_test_start(void)
                             process_current_pid(), pointer_guard_image,
                             code_size) <= 0)
     {
-        serial_write("VANTAOS_SYSCALL_POINTER_GUARDS_CREATE_FAIL\\n");
+        serial_write("VANTAOS_SYSCALL_POINTER_GUARDS_CREATE_FAIL\n");
         return 0;
     }
 

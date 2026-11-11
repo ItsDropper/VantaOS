@@ -9,7 +9,6 @@
 #define ACPI_H
 
 #include <stdint.h>
-#include "acpi_aml.h"
 
 #define ACPI_MAX_CPUS 32U
 #define ACPI_MAX_ISO 16U

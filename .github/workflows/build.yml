@@ -125,6 +125,7 @@ jobs:
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
             scripts/test_acpi_tables.c arch/x86_64/acpi.c \
+            arch/x86_64/acpi_aml.c \
             -o /tmp/vantaos-acpi-tables-test
           /tmp/vantaos-acpi-tables-test
 

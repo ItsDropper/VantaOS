@@ -310,6 +310,11 @@ static void aml_copy_ascii(char* output, size_t capacity,
 
 static int aml_eisa_id(uint64_t value, char output[ACPI_AML_ID_MAX])
 {
+    uint32_t encoded = (uint32_t)value;
+    value = ((encoded & 0x000000FFU) << 24U) |
+            ((encoded & 0x0000FF00U) << 8U) |
+            ((encoded & 0x00FF0000U) >> 8U) |
+            ((encoded & 0xFF000000U) >> 24U);
     uint16_t manufacturer = (uint16_t)(value >> 16U);
     if (manufacturer == 0U || manufacturer == 0xFFFFU)
         return 0;
@@ -385,13 +390,18 @@ static int aml_parse_resources(acpi_aml_device_t* device,
             if (item_length > length - cursor - 3U)
                 return 0;
             const uint8_t* payload = bytes + cursor + 3U;
-            if (tag == 0x8EU && item_length >= 18U &&
+            if (tag == 0x8EU && item_length >= 16U &&
                 device->resource_count < ACPI_AML_MAX_RESOURCES)
             {
                 uint16_t type_data_length = aml_u16(payload + 7U);
                 uint32_t source_offset = 9U + type_data_length;
-                if (payload[2U] == 1U && type_data_length >= 6U &&
-                    source_offset < item_length)
+                int source_terminated = 0;
+                if (source_offset < item_length)
+                    for (uint32_t j = source_offset; j < item_length; ++j)
+                        if (payload[j] == 0U) { source_terminated = 1; break; }
+                if (payload[0U] == 1U && payload[2U] == 1U &&
+                    payload[6U] == 1U && type_data_length >= 6U &&
+                    source_offset < item_length && source_terminated)
                 {
                     acpi_aml_resource_t* resource =
                         &device->resources[device->resource_count++];
@@ -506,7 +516,7 @@ static int aml_parse_device(aml_parser_t* parser, const uint8_t** cursor,
         return 0;
     acpi_aml_device_t device;
     memset(&device, 0, sizeof(device));
-    memcpy(device.path, path, sizeof(device.path));
+    memcpy(device.path, path, strlen(path) + 1U);
     if (!aml_parse_terms(parser, body, package_end, path, &device, depth + 1U))
         return 0;
     if (parser->devices_found >= AML_MAX_DEVICES)

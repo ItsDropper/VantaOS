@@ -261,15 +261,24 @@ void exception_handler(
         __atomic_load_n(&panic_broadcast_active, __ATOMIC_ACQUIRE) != 0U)
         panic_halt();
 
+    /*
+     * NMI, double fault, and machine check are not recoverable application
+     * exceptions. Their origin may be CPL3, but the condition is system-wide
+     * and must never be hidden by the user-process fault-containment path.
+     */
+    if (exception_number == 8U || exception_number == 18U)
+        goto fatal_exception;
+
     if (user_mode_selftest_handle_exception(exception_number, frame))
         return;
 
     /*
      * A fault in CPL3 belongs to the process, not the kernel. The assembly
      * return path detects the user CS, schedules away, and reclaims this
-     * address space only after switching CR3 and RSP.
+     * address space only after switching CR3 and RSP. NMI is excluded because
+     * it is asynchronous and must not be attributed to the interrupted task.
      */
-    if (frame && (frame->cs & 3U) == 3U)
+    if (exception_number != 2U && frame && (frame->cs & 3U) == 3U)
     {
         process_t process;
         if (process_snapshot_try(process_current_pid(), &process) &&
@@ -294,6 +303,7 @@ void exception_handler(
         has_fault_address = 1;
     }
 
+fatal_exception:
     kernel_panic(
         exception_number < 31 ?
             panic_format_exception_name(exception_number) :

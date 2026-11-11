@@ -28,6 +28,8 @@ typedef enum gpu_vendor {
 typedef enum gpu_architecture {
     GPU_ARCH_UNKNOWN = 0,
     GPU_ARCH_INTEL_GEN9,
+    /* Kaby Lake / Kaby Lake Refresh Gen9.5; inventory only. */
+    GPU_ARCH_INTEL_GEN9_5,
     GPU_ARCH_INTEL_GEN11,
     GPU_ARCH_INTEL_XE_LP,
     GPU_ARCH_INTEL_XE_HPG,

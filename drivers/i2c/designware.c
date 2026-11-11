@@ -300,7 +300,7 @@ int i2c_dw_transfer(i2c_dw_bus_t *bus, uint16_t address,
             if (dw_wait_idle(bus))
                 return 1;
         }
-        else if (read_received == read_length &&
+        else if (read_length != 0U && read_received == read_length &&
                  read_queued == read_length && dw_wait_idle(bus))
             return 1;
 

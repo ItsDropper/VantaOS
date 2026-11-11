@@ -64,10 +64,6 @@ static int path_equal(const char *a,const char *b)
     if(*b=='\\') ++b;
     for(;;)
     {
-        while(*a=='_'&&a[1]=='_'&&a[2]=='_'&&a[3]=='_'&&a[4]=='.')
-            a+=4;
-        while(*b=='_'&&b[1]=='_'&&b[2]=='_'&&b[3]=='_'&&b[4]=='.')
-            b+=4;
         const char *a_end=a,*b_end=b;
         while(*a_end&&*a_end!='.') ++a_end;
         while(*b_end&&*b_end!='.') ++b_end;
@@ -91,7 +87,15 @@ static int path_equal(const char *a,const char *b)
 
 static int id_equal(const char *a,const char *b)
 {
-    return a&&b&&strcmp(a,b)==0;
+    if(!a||!b) return 0;
+    while(*a&&*b)
+    {
+        char ca=*a++,cb=*b++;
+        if(ca>='a'&&ca<='z') ca=(char)(ca-'a'+'A');
+        if(cb>='a'&&cb<='z') cb=(char)(cb-'a'+'A');
+        if(ca!=cb) return 0;
+    }
+    return *a==*b;
 }
 
 static int aml_is_pci_root(const acpi_aml_device_t *device)

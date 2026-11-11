@@ -6,29 +6,8 @@
  */
 
 #include "usb_device.h"
-#include "serial.h"
 
 #include <stddef.h>
-
-static void usb_inventory_hex16(uint16_t value)
-{
-    static const char digits[] = "0123456789ABCDEF";
-    char output[4];
-    for (size_t i = 0U; i < sizeof(output); ++i)
-    {
-        unsigned int shift = (unsigned int)((sizeof(output) - 1U - i) * 4U);
-        output[i] = digits[(value >> shift) & 0x0FU];
-    }
-    serial_write_bytes(output, sizeof(output));
-}
-
-static void usb_inventory_hex8(uint8_t value)
-{
-    static const char digits[] = "0123456789ABCDEF";
-    char output[2] = {digits[(value >> 4U) & 0x0FU],
-                      digits[value & 0x0FU]};
-    serial_write_bytes(output, sizeof(output));
-}
 
 #define USB_DEVICE_INTERFACE_MAX 16U
 
@@ -96,23 +75,6 @@ int usb_device_register(uint32_t slot, uint32_t port, device_t* parent,
     entry->active = 1U;
     ++registered_count;
 
-    serial_write("VANTAOS_HW_USB_DEVICE slot=");
-    usb_inventory_hex8((uint8_t)slot);
-    serial_write(" port=");
-    usb_inventory_hex8((uint8_t)port);
-    serial_write(" id=");
-    usb_inventory_hex16(identity->vendor_id);
-    serial_write(":");
-    usb_inventory_hex16(identity->product_id);
-    serial_write(" class=");
-    usb_inventory_hex8(identity->class_code);
-    serial_write(":");
-    usb_inventory_hex8(identity->subclass);
-    serial_write(":");
-    usb_inventory_hex8(identity->protocol);
-    serial_write(" revision=");
-    usb_inventory_hex8(identity->revision);
-    serial_write("\n");
     return 1;
 }
 

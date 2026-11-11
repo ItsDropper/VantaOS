@@ -112,6 +112,13 @@ void user_mode_selftest_syscall_dispatch(struct exception_frame* frame)
 int user_mode_selftest_handle_exception(unsigned int number,
                                         struct exception_frame* frame)
 {
+    /*
+     * Asynchronous NMI and architecturally fatal machine exceptions must
+     * reach the kernel's fatal path even while a ring-3 probe is active.
+     */
+    if (number == 2U || number == 8U || number == 18U)
+        return 0;
+
     if (!frame ||
         __atomic_load_n(&user_test_active, __ATOMIC_ACQUIRE) == 0U ||
         !user_test_owned_by_current_cpu())

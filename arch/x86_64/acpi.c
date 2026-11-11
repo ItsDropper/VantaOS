@@ -401,6 +401,7 @@ void acpi_log_table_inventory(void)
         const acpi_sdt_header_t* table =
             (const acpi_sdt_header_t*)(uintptr_t)address;
         if (table->length < sizeof(*table) ||
+            table->length > (16U * 1024U * 1024U) ||
             !physical_range(address, table->length) ||
             checksum8(table, table->length) != 0U)
             continue;

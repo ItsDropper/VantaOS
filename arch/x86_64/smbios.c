@@ -6,6 +6,7 @@
  */
 
 #include "serial.h"
+#include "smbios.h"
 
 #include <stddef.h>
 #include <stdint.h>

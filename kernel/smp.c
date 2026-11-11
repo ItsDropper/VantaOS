@@ -75,8 +75,8 @@ typedef enum
 } smp_topology_status_t;
 
 /*
- * Validate the complete topology before sending INIT/SIPI. x2APIC is not
- * implemented, so reject IDs that this xAPIC startup path cannot address.
+ * Validate the complete topology before sending INIT/SIPI. xAPIC uses an
+ * 8-bit destination ID; x2APIC uses the full 32-bit architectural ID.
  */
 static smp_topology_status_t smp_validate_topology(
     const acpi_platform_info_t* info, uint32_t bsp_apic_id,

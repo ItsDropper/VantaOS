@@ -114,6 +114,13 @@ jobs:
             -o /tmp/vantaos-input-queue-test
           /tmp/vantaos-input-queue-test
 
+      - name: Test bounded HID report descriptor sizing
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_hid_report.c drivers/input/hid_report.c \
+            -o /tmp/vantaos-hid-report-test
+          /tmp/vantaos-hid-report-test
+
       - name: Test bounded SMBIOS firmware inventory
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \

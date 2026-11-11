@@ -87,7 +87,11 @@ void network_framework_selftest(void) {
     ok=!net_receive_frame(&d,frame,sizeof(frame))&&ok;
     ok=!net_device_get_ipv4(&d,&address,&mask,&gateway)&&ok;
     if (!ok)
-        serial_write("VANTAOS_NETWORK_FRAMEWORK_STAGE_FAIL\n");
+    {
+        serial_write("VANTAOS_NETWORK_FRAMEWORK_FAIL_STAGE=");
+        serial_write(failure_stage ? failure_stage : "post-unregister");
+        serial_write("\n");
+    }
     serial_write(ok?"VANTAOS_NETWORK_FRAMEWORK_OK\n":"VANTAOS_NETWORK_FRAMEWORK_FAIL\n");
 }
 #endif /* VANTAOS_SELF_TEST */

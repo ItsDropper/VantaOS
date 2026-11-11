@@ -31,7 +31,7 @@ The serial log uses stable `VANTAOS_HW_*` markers:
 - `VANTAOS_HW_USB_DEVICE` reports enumerated root-port USB device IDs and class information.
 - Existing CPU and GPU diagnostics report processor capabilities and discovered display controllers.
 
-These are identification records, not driver-binding or functionality claims. SMBIOS and ACPI parsing are bounded and fail closed on invalid checksums, ranges, or structure lengths. The current SMBIOS reader only dereferences firmware tables within the kernel's existing low-memory identity-mapped window.
+These are identification records, not driver-binding or functionality claims. SMBIOS and ACPI parsing are bounded and fail closed on invalid checksums, ranges, or structure lengths. The current SMBIOS reader only dereferences firmware tables within the kernel's existing low-memory identity-mapped window. ACPI inventory currently lists validated root-table records; AML namespace evaluation and per-device _HID/_CID discovery are not implemented yet.
 
 ## Safe testing rules
 

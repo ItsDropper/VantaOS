@@ -87,15 +87,11 @@ int main(void)
                                right.x + right.width == 111,
                                "weighted row preserves ratio and exact remainder");
             vanta_design_bounds_t top, bottom;
-            failures += expect(vanta_design_weighted_cell(
-                               &source, weights, 2U, 0U, 3, 0, &top) == 0,
-                               "weighted layout rejects a zero-weight track");
             const uint32_t zero_weights[] = { 1U, 0U };
+            failures += expect(vanta_design_weighted_cell(
+                               &source, zero_weights, 2U, 0U, 3, 0, &top) == 0,
+                               "weighted layout rejects a zero-weight track");
             const uint32_t vertical_weights[] = { 1U, 2U };
-            failures += expect(!vanta_design_weighted_cell(
-                               &source, zero_weights, 2U, 0U,
-                               3, 0, &bottom),
-                               "weighted layout rejects zero-weight tracks");
             failures += expect(vanta_design_weighted_cell(
                                &source, vertical_weights, 2U, 1U,
                                3, 0, &bottom) &&

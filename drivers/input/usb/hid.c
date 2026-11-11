@@ -232,7 +232,6 @@ void usb_hid_mouse_report(uint32_t handle, const uint8_t *report, uint32_t lengt
     uint8_t buttons = report[0] & 0x1FU;
     int32_t dx = (int8_t)report[1];
     int32_t dy = (int8_t)report[2];
-    int wheel_delta = length >= 4 ? (int8_t)report[3] : 0;
 
     /* Apply movement before button edges from the same hardware report. */
     if (dx || dy)

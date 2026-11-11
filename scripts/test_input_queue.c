@@ -76,7 +76,7 @@ int main(void)
     assert(event.value == INT32_MAX && event.value2 == INT32_MIN);
 
     /* Discrete transitions displace stale motion rather than being lost. */
-    for (uint32_t i = 0; i + 1U < INPUT_EVENT_QUEUE_CAPACITY; ++i)
+    for (uint32_t i = 0; i < INPUT_EVENT_QUEUE_CAPACITY / 2U; ++i)
     {
         button.value = (int32_t)(i & 1U);
         assert(input_report_event(&button));
@@ -84,6 +84,12 @@ int main(void)
     motion.value = 9;
     motion.value2 = -4;
     assert(input_report_event(&motion));
+    for (uint32_t i = INPUT_EVENT_QUEUE_CAPACITY / 2U;
+         i + 1U < INPUT_EVENT_QUEUE_CAPACITY; ++i)
+    {
+        button.value = (int32_t)(i & 1U);
+        assert(input_report_event(&button));
+    }
     button.value = 1;
     assert(input_report_event(&button));
     uint32_t retained = 0U;

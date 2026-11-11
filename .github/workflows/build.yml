@@ -114,7 +114,1539 @@ jobs:
             -o /tmp/vantaos-input-queue-test
           /tmp/vantaos-input-queue-test
 
+      - name: Test DesignWare I2C controller PIO engine
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Idrivers/i2c \
+            scripts/test_i2c_designware.c drivers/i2c/designware.c \
+            -o /tmp/vantaos-i2c-designware-test
+          /tmp/vantaos-i2c-designware-test
+
       - name: Test bounded HID report descriptor sizing
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_hid_report.c drivers/input/hid_report.c \
+            -o /tmp/vantaos-hid-report-test
+          /tmp/vantaos-hid-report-test
+
+      - name: Test bounded SMBIOS firmware inventory
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_smbios_inventory.c arch/x86_64/smbios.c \
+            -o /tmp/vantaos-smbios-inventory-test
+          /tmp/vantaos-smbios-inventory-test
+
+      - name: Test validated ACPI FADT, DSDT and SSDT discovery
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_acpi_tables.c arch/x86_64/acpi.c \
+            arch/x86_64/acpi_aml.c \
+            -o /tmp/vantaos-acpi-tables-test
+          /tmp/vantaos-acpi-tables-test
+
+      - name: Test bounded non-executing ACPI AML namespace and resources
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_acpi_aml.c arch/x86_64/acpi_aml.c \
+            -o /tmp/vantaos-acpi-aml-test
+          /tmp/vantaos-acpi-aml-test
+
+      - name: Test passive HDA controller and codec inventory
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude -Idrivers/audio \
+            scripts/test_hda_probe.c drivers/audio/hda.c \
+            -o /tmp/vantaos-hda-probe-test
+          /tmp/vantaos-hda-probe-test
+
+      - name: Test Intel UHD 620 identification and safe GPU backend gating
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_gpu_vendor_framework.c drivers/gpu/core/gpu_vendor.c \
+            drivers/gpu/core/gpu_core.c drivers/gpu/core/gpu_pci_resources.c \
+            drivers/gpu/intel/intel_gpu.c drivers/gpu/intel/intel_gen9.c \
+            drivers/gpu/amd/amd_gpu.c drivers/gpu/amd/amd_polaris.c \
+            -o /tmp/vantaos-gpu-vendor-framework-test
+          /tmp/vantaos-gpu-vendor-framework-test
+
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install --yes build-essential nasm grub-pc-bin xorriso mtools dosfstools qemu-system-x86 gnu-efi ovmf gdisk xvfb socat imagemagick tesseract-ocr
+
+      - name: Test built-in GUI app client-area layouts
+        run: python3 scripts/test_user_gui_app_layout.py
+
+      - name: Test Vanta Design System draw-list and geometry helpers
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude -Iuserspace/include \
+            scripts/test_vanta_design.c -o /tmp/vantaos-design-test
+          /tmp/vantaos-design-test
+
+      - name: Test exponent-4 squircle raster geometry
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_graphics_squircle_math.c -o /tmp/vantaos-squircle-math-test
+          /tmp/vantaos-squircle-math-test
+
+      - name: Compile all ring-3 desktop applications with strict warnings
+        run: |
+          set -euo pipefail
+          common_flags=(
+            -m64 -mcmodel=large -ffreestanding -fno-pie
+            -fno-stack-protector -mno-red-zone -fno-builtin -nostdlib
+            -Wall -Wextra -Werror -Iuserspace/include -Iinclude
+          )
+          for app in terminal settings explorer notes calculator; do
+            gcc "${common_flags[@]}" -c "userspace/apps/${app}.c" \
+              -o "/tmp/vantaos-${app}.o"
+          done
+          gcc "${common_flags[@]}" -DVANTAOS_EXPLORER_E2E_TEST \
+            -c userspace/apps/explorer.c -o /tmp/vantaos-explorer-e2e.o
+          gcc "${common_flags[@]}" -DVANTAOS_NOTES_E2E_TEST \
+            -c userspace/apps/notes.c -o /tmp/vantaos-notes-e2e.o
+
+      - name: Test kernel watchdog state machine
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iscripts/test_stubs -Iinclude \
+            scripts/test_kernel_watchdog.c kernel/watchdog.c \
+            -o /tmp/vantaos-kernel-watchdog-test
+          /tmp/vantaos-kernel-watchdog-test
+
+      - name: Test timer math and wraparound
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_timer_math.c -o /tmp/vantaos-timer-math-test
+          /tmp/vantaos-timer-math-test
+
+      - name: Test physical memory allocator contiguous and next-fit allocation
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_pmm_contiguous.c mm/pmm.c \
+            -o /tmp/vantaos-pmm-contiguous-test
+          /tmp/vantaos-pmm-contiguous-test
+      - name: Test DMA device address-mask contract
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_dma_contract.c mm/dma.c \
+            -o /tmp/vantaos-dma-contract-test
+          /tmp/vantaos-dma-contract-test
+
+      - name: Test kernel mutex API contract
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_mutex_api.c -o /tmp/vantaos-mutex-api-test
+          /tmp/vantaos-mutex-api-test
+
+      - name: Test kernel semaphore API contract
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_semaphore_api.c -o /tmp/vantaos-semaphore-api-test
+          /tmp/vantaos-semaphore-api-test
+      - name: Test kernel event API contract
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_event_api.c -o /tmp/vantaos-event-api-test
+          /tmp/vantaos-event-api-test
+      - name: Test kernel barrier API contract
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_barrier_api.c -o /tmp/vantaos-barrier-api-test
+          /tmp/vantaos-barrier-api-test
+
+      - name: Test AHCI PRDT descriptor builder
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_ahci_prdt.c -o /tmp/vantaos-ahci-prdt-test
+          /tmp/vantaos-ahci-prdt-test
+
+      - name: Test AHCI PCI BAR validation
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_ahci_pci.c -o /tmp/vantaos-ahci-pci-test
+          /tmp/vantaos-ahci-pci-test
+
+      - name: Test safe AHCI PCI discovery lifecycle
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_ahci_discovery.c drivers/storage/ahci.c \
+            -o /tmp/vantaos-ahci-discovery-test
+          /tmp/vantaos-ahci-discovery-test
+          gcc -std=c11 -Wall -Wextra -Werror -DAHCI_TEST_UNSAFE -Iinclude \
+            scripts/test_ahci_discovery.c drivers/storage/ahci.c \
+            -o /tmp/vantaos-ahci-discovery-unsafe-test
+          /tmp/vantaos-ahci-discovery-unsafe-test
+          gcc -std=c11 -Wall -Wextra -Werror -DAHCI_TEST_BAD_CAP -Iinclude \
+            scripts/test_ahci_discovery.c drivers/storage/ahci.c \
+            -o /tmp/vantaos-ahci-discovery-bad-cap-test
+          /tmp/vantaos-ahci-discovery-bad-cap-test
+          gcc -std=c11 -Wall -Wextra -Werror -DAHCI_TEST_BAD_GHC -Iinclude \
+            scripts/test_ahci_discovery.c drivers/storage/ahci.c \
+            -o /tmp/vantaos-ahci-discovery-bad-ghc-test
+          /tmp/vantaos-ahci-discovery-bad-ghc-test
+          gcc -std=c11 -Wall -Wextra -Werror -DAHCI_TEST_MAP_FAIL -Iinclude \
+            scripts/test_ahci_discovery.c drivers/storage/ahci.c \
+            -o /tmp/vantaos-ahci-discovery-map-fail-test
+          /tmp/vantaos-ahci-discovery-map-fail-test
+          gcc -std=c11 -Wall -Wextra -Werror -DAHCI_TEST_RESTORE_FAIL -Iinclude \
+            scripts/test_ahci_discovery.c drivers/storage/ahci.c \
+            -o /tmp/vantaos-ahci-discovery-restore-fail-test
+          /tmp/vantaos-ahci-discovery-restore-fail-test
+          gcc -std=c11 -Wall -Wextra -Werror -DAHCI_TEST_UNMAP_FAIL -Iinclude \
+            scripts/test_ahci_discovery.c drivers/storage/ahci.c \
+            -o /tmp/vantaos-ahci-discovery-unmap-fail-test
+          /tmp/vantaos-ahci-discovery-unmap-fail-test
+          gcc -std=c11 -Wall -Wextra -Werror -DAHCI_TEST_SMALL_BAR -Iinclude scripts/test_ahci_discovery.c drivers/storage/ahci.c -o /tmp/vantaos-ahci-discovery-small-bar-test
+          /tmp/vantaos-ahci-discovery-small-bar-test
+
+      - name: Test common device registry and driver lifecycle
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iscripts/test_stubs -Iinclude \
+            scripts/test_device_model.c kernel/device.c \
+            -o /tmp/vantaos-device-model-test
+          /tmp/vantaos-device-model-test
+
+      - name: Test storage drivers through the common device model
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iscripts/test_stubs -Iinclude \
+            scripts/test_storage_driver_model.c drivers/storage/storage_driver.c \
+            kernel/device.c -o /tmp/vantaos-storage-driver-model-test
+          /tmp/vantaos-storage-driver-model-test
+
+      - name: Test network drivers through the common device model
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iscripts/test_stubs -Iinclude \
+            scripts/test_network_driver_model.c drivers/network/driver.c \
+            kernel/device.c -o /tmp/vantaos-network-driver-model-test
+          /tmp/vantaos-network-driver-model-test
+
+      - name: Test network stack initialization is idempotent
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iscripts/test_stubs -Iinclude \
+            scripts/test_network_stack_init.c net/init.c \
+            -o /tmp/vantaos-network-stack-init-test
+          /tmp/vantaos-network-stack-init-test
+
+      - name: Test network interface device-tree lifecycle
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iscripts/test_stubs -Iinclude \
+            scripts/test_network_device_tree.c net/core.c kernel/device.c \
+            -o /tmp/vantaos-network-device-tree-test
+          /tmp/vantaos-network-device-tree-test
+
+      - name: Test network protocol and UDP validation lifetimes
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iscripts/test_stubs -Iinclude \
+            scripts/test_network_handler_lifecycle.c net/core.c net/udp.c \
+            kernel/device.c -o /tmp/vantaos-network-handler-lifecycle-test
+          /tmp/vantaos-network-handler-lifecycle-test
+
+      - name: Test USB peripheral device-tree lifecycle
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iscripts/test_stubs -Iinclude \
+            scripts/test_usb_device_model.c drivers/usb/device.c kernel/device.c \
+            -o /tmp/vantaos-usb-device-model-test
+          /tmp/vantaos-usb-device-model-test
+
+      - name: Test block device registry and I/O contracts
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iscripts/test_stubs -Iinclude \
+            scripts/test_block_device.c drivers/storage/block_device.c \
+            kernel/device.c -o /tmp/vantaos-block-device-test
+          /tmp/vantaos-block-device-test
+
+      - name: Test ATA LBA28 request bounds
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_ata_lba28.c -o /tmp/vantaos-ata-lba28-test
+          /tmp/vantaos-ata-lba28-test
+
+      - name: Test Calculator expression parser
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -ffunction-sections -fdata-sections \
+            -Iuserspace/include -Iinclude scripts/test_calculator_parser.c \
+            -Wl,--gc-sections -o /tmp/vantaos-calculator-parser-test
+          /tmp/vantaos-calculator-parser-test
+
+      - name: Test userspace path resolver
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iuserspace/include \
+            scripts/test_user_path.c -o /tmp/vantaos-user-path-test
+          /tmp/vantaos-user-path-test
+
+      - name: Test HTTP URL parser
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_http_url.c os/terminal/http_url.c \
+            -o /tmp/vantaos-http-url-test
+          /tmp/vantaos-http-url-test
+
+      - name: Test HTTP response framing parser
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Ios/terminal \
+            scripts/test_http_response.c os/terminal/http_response.c \
+            -o /tmp/vantaos-http-response-test
+          /tmp/vantaos-http-response-test
+
+      - name: Test HTTP body framing state machine
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Ios/terminal \
+            scripts/test_http_body.c os/terminal/http_body.c \
+            -o /tmp/vantaos-http-body-test
+          /tmp/vantaos-http-body-test
+
+      - name: Verify modular source manifests
+        run: |
+          make list-sources
+          test -f arch/x86_64/Makefile
+          test -f kernel/boot/Makefile
+          test -f mm/Makefile
+          test -f drivers/Makefile
+          test -f drivers/network/e1000.c
+          test -f drivers/network/virtio_net.c
+          test -f drivers/network/virtio_net_modern.c
+          grep -q 'net/tcp.c' net/Makefile
+          ! grep -q 'net/tls.c' net/Makefile
+          grep -q 'drivers/network/e1000.c' drivers/network/Makefile
+          grep -q 'drivers/network/virtio_net.c' drivers/network/Makefile
+          grep -q 'drivers/network/virtio_net_modern.c' drivers/network/Makefile
+          test -f fs/Makefile
+
+      - name: Enforce architecture boundaries
+        run: python3 scripts/check_architecture.py
+
+      - name: Check public and kernel syscall ABI consistency
+        run: python3 scripts/check_syscall_abi.py
+
+      - name: Test partition device scan result caching
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iscripts/test_stubs -Iinclude \
+            scripts/test_partition_device.c drivers/storage/partition_device.c \
+            drivers/storage/partition_scan.c drivers/storage/block_device.c \
+            kernel/device.c -o /tmp/vantaos-partition-device-test
+          /tmp/vantaos-partition-device-test
+
+      - name: Compile strict partition scanner host tests
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_partition_scan.c drivers/storage/partition_scan.c \
+            -o /tmp/vantaos-partition-scan-test
+          /tmp/vantaos-partition-scan-test
+
+      - name: Test PCI BAR sizing safety and restoration
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -DPCI_TEST -Iscripts/test_stubs -Iinclude \
+            scripts/test_pci_bar.c drivers/pci/pci.c kernel/device.c \
+            -o /tmp/vantaos-pci-bar-test
+          /tmp/vantaos-pci-bar-test
+
+      - name: Test PCI BAR sizing edge cases
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -DPCI_TEST -Iscripts/test_stubs -Iinclude \
+            scripts/test_pci_bar_size.c drivers/pci/pci.c kernel/device.c \
+            -o /tmp/vantaos-pci-bar-size-test
+          /tmp/vantaos-pci-bar-size-test
+
+      - name: Test PCI conventional and extended capability traversal
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -DPCI_TEST -Iscripts/test_stubs -Iinclude scripts/test_pci_capability.c drivers/pci/pci.c kernel/device.c -o /tmp/vantaos-pci-capability-test
+          /tmp/vantaos-pci-capability-test
+      - name: Test PCI bridge topology discovery
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -DPCI_TEST -Iscripts/test_stubs -Iinclude \
+            scripts/test_pci_topology.c drivers/pci/pci.c kernel/device.c \
+            -o /tmp/vantaos-pci-topology-test
+          /tmp/vantaos-pci-topology-test
+      - name: Compile strict panic formatting host tests
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_panic_format.c -o /tmp/vantaos-panic-format-test
+          /tmp/vantaos-panic-format-test
+
+      - name: Compile strict FAT32 long-filename host tests
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude -Ifs \
+            scripts/test_fat32_lfn_host.c fs/fat32_lfn.c \
+            -o /tmp/vantaos-fat32-lfn-test
+          /tmp/vantaos-fat32-lfn-test
+
+      - name: Compile strict serial log ring tests
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_serial_log.c kernel/serial_log.c \
+            -o /tmp/vantaos-serial-log-test
+          /tmp/vantaos-serial-log-test
+
+      - name: Compile optional FAT32 boot-log path
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -m64 -march=x86-64 -ffreestanding \
+            -fno-pie -fno-stack-protector -mno-red-zone -mgeneral-regs-only \
+            -nostdlib -Iinclude -DVANTAOS_BOOT_LOG_TO_FAT32 \
+            -c kernel/serial.c -o /tmp/vantaos-serial-bootlog.o
+      - name: Test GUI event queue coalescing and semantic ordering
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_gui_event_queue.c -o /tmp/vantaos-gui-event-queue-test
+          /tmp/vantaos-gui-event-queue-test
+
+
+      - name: Test compositor damage rectangle clipping
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_graphics_damage.c -o /tmp/vantaos-graphics-damage-test
+          /tmp/vantaos-graphics-damage-test
+
+      - name: Test direct shadow-buffer text rasterization
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude -Ikernel/graphics \
+            scripts/test_graphics_text.c kernel/graphics/graphics_text.c \
+            -o /tmp/vantaos-graphics-text-test
+          /tmp/vantaos-graphics-text-test
+
+      - name: Test RTL8139 transmit status semantics
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_rtl8139_status.c -o /tmp/vantaos-rtl8139-status-test
+          /tmp/vantaos-rtl8139-status-test
+
+      - name: Test IPv4 outbound MTU bounds
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_ipv4_mtu.c -o /tmp/vantaos-ipv4-mtu-test
+          /tmp/vantaos-ipv4-mtu-test
+
+      - name: Test DHCP client negotiation and malformed replies
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_dhcp_client.c net/dhcp.c -o /tmp/vantaos-dhcp-client-test
+          /tmp/vantaos-dhcp-client-test
+
+      - name: Test DNS response validation
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_dns_client.c net/dns.c -o /tmp/vantaos-dns-client-test
+          /tmp/vantaos-dns-client-test
+
+      - name: Test IPv6 RA, SLAAC, DAD, and ICMPv6
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_ipv6.c net/ipv6.c -o /tmp/vantaos-ipv6-test
+          /tmp/vantaos-ipv6-test
+
+      - name: Test TCP client state machine
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_tcp_client.c net/tcp.c -o /tmp/vantaos-tcp-client-test
+          /tmp/vantaos-tcp-client-test
+
+      - name: Test Wi-Fi control API validation and state transitions
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_wifi_api.c net/wifi.c -o /tmp/vantaos-wifi-api-test
+          /tmp/vantaos-wifi-api-test
+
+      - name: Test Wi-Fi PBKDF2-HMAC-SHA1 known-answer vectors
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_wifi_crypto.c net/wifi_crypto.c -o /tmp/vantaos-wifi-crypto-test
+          /tmp/vantaos-wifi-crypto-test
+
+      - name: Test Wi-Fi AES-CCM known-answer and tamper handling
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_wifi_ccmp.c net/wifi_ccmp.c -o /tmp/vantaos-wifi-ccmp-test
+          /tmp/vantaos-wifi-ccmp-test
+
+      - name: Test WPA2 HMAC, PRF-512, and RFC 3394 key unwrap
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_wifi_wpa2_primitives.c net/wifi_crypto.c net/wifi_ccmp.c -o /tmp/vantaos-wifi-wpa2-primitives-test
+          /tmp/vantaos-wifi-wpa2-primitives-test
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_wifi_wpa2_supplicant.c net/wifi_wpa2.c net/wifi_crypto.c net/wifi_ccmp.c -o /tmp/vantaos-wifi-wpa2-supplicant-test
+          /tmp/vantaos-wifi-wpa2-supplicant-test
+
+
+      - name: Test bounded IEEE 802.11 scan-frame and RSN parsing
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_wifi_80211.c net/wifi_80211.c -o /tmp/vantaos-wifi-80211-test
+          /tmp/vantaos-wifi-80211-test
+
+      - name: Test USB Bluetooth HCI, ACL, and L2CAP validation
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_usb_bluetooth_descriptors.c drivers/usb/bluetooth.c \
+            -o /tmp/vantaos-usb-bluetooth-test
+          /tmp/vantaos-usb-bluetooth-test
+
+      - name: Test RTL8188EU USB descriptor binding
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_rtl8188eu.c drivers/usb/rtl8188eu.c net/wifi_80211.c net/wifi_wpa2.c net/wifi_crypto.c net/wifi_ccmp.c kernel/crypto_rng.c -o /tmp/vantaos-rtl8188eu-test
+          /tmp/vantaos-rtl8188eu-test
+
+      - name: Test RTL8188EU hardware-log validator
+        run: python3 scripts/test_rtl8188eu_hardware_log.py --self-test
+
+      - name: Test fail-closed RTL8188EU hardware evidence verifier
+        run: python3 scripts/test_rtl8188eu_hardware_verifier.py
+
+      - name: Test TLS hostname validation policy
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_tls_hostname.c -o /tmp/vantaos-tls-hostname-test
+          /tmp/vantaos-tls-hostname-test
+
+      - name: Test bounded IPC queue, capability permissions, and owner cleanup
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Itests/ipc_host -Iuserspace/include -Iinclude scripts/test_ipc.c -o /tmp/vantaos-ipc-test
+          /tmp/vantaos-ipc-test
+
+      - name: Compile normalized userspace IPC message ABI
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -ffreestanding -Iuserspace/include -Iinclude \
+            -c tests/user/ipc_abi_compile.c -o /tmp/vantaos-ipc-abi.o
+          test -s /tmp/vantaos-ipc-abi.o
+
+      - name: Test hardware crypto entropy source
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_crypto_rng.c kernel/crypto_rng.c -o /tmp/vantaos-crypto-rng-test
+          /tmp/vantaos-crypto-rng-test
+
+      - name: Build kernel, ISO, and FAT32 image with self-tests
+        run: chmod +x build.sh && VANTAOS_SELF_TEST=1 ./build.sh
+
+      - name: Verify build artifacts
+        run: test -s kernel.bin && test -s VantaOS.iso && test -s vantaos.img && test -s VantaOS-Setup.img
+
+      - name: Upload bootable OS and setup images
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vantaos-install-media
+          path: |
+            VantaOS-Setup.img
+            VantaOS.iso
+            kernel.bin
+            vantaos.img
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Compile the public freestanding userspace ABI
+        run: |
+          gcc -m64 -march=x86-64 -ffreestanding -fno-pie -fno-stack-protector -mno-red-zone -nostdlib -Wall -Wextra -Werror -Iuserspace/include -Iinclude -c tests/user/abi_compile.c -o /tmp/vantaos-user-abi.o
+          test -s /tmp/vantaos-user-abi.o
+
+      - name: Build and install the FAT32-backed ELF64 smoke program
+        run: |
+          gcc -m64 -ffreestanding -fno-pie -fno-stack-protector -c tests/user/hello.S -o /tmp/vantaos-user-hello.o
+          ld -m elf_x86_64 -static -nostdlib -Ttext-segment=0x8000000000 -e _start -o /tmp/vantaos-user-hello.elf /tmp/vantaos-user-hello.o
+          gcc -m64 -ffreestanding -fno-pie -fno-stack-protector -mno-red-zone -c userspace/crt/crt0.S -o /tmp/vantaos-user-crt0.o
+          gcc -m64 -mcmodel=large -ffreestanding -fno-pie -fno-stack-protector -mno-red-zone -fno-builtin -Iuserspace/include -Iinclude -c tests/user/child.c -o /tmp/vantaos-user-child.o
+          ld -m elf_x86_64 -static -nostdlib -Ttext-segment=0x8000000000 -e _start -o /tmp/vantaos-user-child.elf /tmp/vantaos-user-crt0.o /tmp/vantaos-user-child.o
+          test -s /tmp/vantaos-user-hello.elf
+          test -s /tmp/vantaos-user-child.elf
+          mcopy -i vantaos.img /tmp/vantaos-user-hello.elf ::/HELLO.ELF
+          mcopy -i vantaos.img /tmp/vantaos-user-child.elf ::/CHILD.ELF
+          printf 'VANTAOS_USER_FILE_FIXTURE\n' > /tmp/vantaos-user-file.txt
+          mcopy -i vantaos.img /tmp/vantaos-user-file.txt ::/USERDATA.TXT
+          # Keep a pristine template before QEMU regression steps mutate vantaos.img.
+          cp vantaos.img nvme-fat32-template.img
+
+      - name: GPT two-partition discovery QEMU smoke test
+        if: steps.scope.outputs.full == '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          truncate -s 160M partition-qemu.img
+          sgdisk --clear \
+            --new=1:2048:133119 --typecode=1:0700 --change-name=1:BOOTVOL \
+            --new=2:135168:266239 --typecode=2:0700 --change-name=2:DATAVOL \
+            partition-qemu.img
+          truncate -s 64M partition-one.img
+          truncate -s 64M partition-two.img
+          mkfs.fat -F32 -n BOOTVOL partition-one.img
+          mkfs.fat -F32 -n DATAVOL partition-two.img
+          dd if=partition-one.img of=partition-qemu.img bs=512 seek=2048 conv=notrunc status=none
+          dd if=partition-two.img of=partition-qemu.img bs=512 seek=135168 conv=notrunc status=none
+
+          log=partition-qemu.log
+          rm -f "$log"
+          qemu-system-x86_64 \
+            -machine pc -m 256M -smp 2 -vga std \
+            -drive file=VantaOS.iso,media=cdrom,format=raw \
+            -drive file=partition-qemu.img,if=ide,format=raw \
+            -boot order=d -display none -serial "file:$log" -monitor none \
+            -no-reboot >/tmp/vantaos-partition-qemu.log 2>&1 &
+          qemu_pid=$!
+          cleanup() {
+            kill "$qemu_pid" 2>/dev/null || true
+            wait "$qemu_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+          for attempt in $(seq 1 200); do
+            count=0
+            if [ -f "$log" ]; then
+              count=$(grep -c '^VANTAOS_PARTITION_OK' "$log" || true)
+            fi
+            if [[ "$count" =~ ^[0-9]+$ ]] && [ "$count" -ge 2 ]; then break; fi
+            if ! kill -0 "$qemu_pid" 2>/dev/null; then
+              cat "$log" /tmp/vantaos-partition-qemu.log 2>/dev/null || true
+              exit 1
+            fi
+            sleep 0.1
+          done
+          count=0
+          if [ -f "$log" ]; then
+            count=$(grep -c '^VANTAOS_PARTITION_OK' "$log" || true)
+          fi
+          if ! [[ "$count" =~ ^[0-9]+$ ]] ||
+             [ "$count" -ne 2 ] ||
+             { [ -f "$log" ] && grep -q '^VANTAOS_PARTITION_FAIL' "$log"; }; then
+            echo "GPT partition discovery did not register exactly two partitions."
+            cat "$log" /tmp/vantaos-partition-qemu.log 2>/dev/null || true
+            exit 1
+          fi
+          echo "QEMU registered both GPT partition handles."
+
+      - name: E1000 QEMU transmit end-to-end test
+        if: steps.scope.outputs.full == '1' || steps.scope.outputs.e1000 == '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          log="e1000-boot.log"
+          rm -f "$log" qemu-e1000-stderr.log e1000-network.img
+          cp nvme-fat32-template.img e1000-network.img
+          stdbuf -o0 timeout 45s qemu-system-x86_64 \
+            -machine pc \
+            -nodefaults \
+            -device VGA,id=video0 \
+            -m 256M \
+            -device e1000,netdev=net0 \
+            -netdev socket,id=net0,listen=127.0.0.1:1234 \
+            -drive file=VantaOS.iso,media=cdrom,format=raw \
+            -drive file=e1000-network.img,if=ide,format=raw \
+            -boot order=d \
+            -display vnc=127.0.0.1:1 \
+            -serial stdio \
+            -no-reboot >"$log" 2>qemu-e1000-stderr.log &
+          qemu_pid=$!
+          cleanup() {
+            kill "$qemu_pid" 2>/dev/null || true
+            wait "$qemu_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+          for attempt in $(seq 1 300); do
+            if grep -q 'VANTAOS_E1000_TX_SELFTEST_OK' "$log" 2>/dev/null && grep -q 'VANTAOS_BOOT_OK' "$log" 2>/dev/null; then break; fi
+            if grep -q 'VANTAOS_E1000_TX_SELFTEST_FAIL' "$log" 2>/dev/null; then
+              cat "$log" qemu-e1000-stderr.log
+              exit 1
+            fi
+            if ! kill -0 "$qemu_pid" 2>/dev/null; then
+              echo "QEMU exited before the E1000 transmit test completed."
+              cat "$log" qemu-e1000-stderr.log
+              exit 1
+            fi
+            sleep 0.1
+          done
+          grep -q 'VANTAOS_BOOT_OK' "$log"
+          grep -q 'VANTAOS_E1000_INITIALIZED' "$log"
+          grep -q 'VANTAOS_E1000_TX_SELFTEST_OK' "$log"
+          python3 scripts/test_e1000_network.py || {
+            cat "$log" qemu-e1000-stderr.log
+            exit 1
+          }
+          for attempt in $(seq 1 100); do
+            grep -q 'VANTAOS_UDP_RX_SELFTEST_OK' "$log" && break
+            sleep 0.1
+          done
+          grep -q 'VANTAOS_UDP_RX_SELFTEST_OK' "$log"
+          test "$(grep -c 'VANTAOS_UDP_RX_SELFTEST_OK' "$log")" -eq 1
+          for attempt in $(seq 1 100); do
+            if grep -q 'VANTAOS_E1000_RX_SELFTEST_OK' "$log" 2>/dev/null; then break; fi
+            if ! kill -0 "$qemu_pid" 2>/dev/null; then
+              echo "QEMU exited before the E1000 receive test completed."
+              cat "$log" qemu-e1000-stderr.log
+              exit 1
+            fi
+            sleep 0.1
+          done
+          if ! grep -q 'VANTAOS_E1000_RX_SELFTEST_OK' "$log" ||
+             ! grep -q 'VANTAOS_ARP_REPLY_OK' "$log" ||
+             ! grep -q 'VANTAOS_ICMP_ECHO_REPLY_OK' "$log"; then
+            cat "$log" qemu-e1000-stderr.log
+            exit 1
+          fi
+
+
+      - name: Modern-only VirtIO PCI Ethernet end-to-end test
+        if: steps.scope.outputs.full == '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          log="virtio-modern-boot.log"
+          rm -f "$log" qemu-virtio-modern-stderr.log virtio-modern-network.img
+          cp nvme-fat32-template.img virtio-modern-network.img
+          stdbuf -o0 timeout 90s qemu-system-x86_64 \
+            -machine pc \
+            -nodefaults \
+            -device VGA,id=video0 \
+            -m 256M \
+            -device virtio-net-pci,disable-legacy=on,netdev=net0 \
+            -netdev socket,id=net0,listen=127.0.0.1:1235 \
+            -drive file=VantaOS.iso,media=cdrom,format=raw \
+            -drive file=virtio-modern-network.img,if=ide,format=raw \
+            -boot order=d \
+            -display vnc=127.0.0.1:1 \
+            -serial stdio \
+            -no-reboot >"$log" 2>qemu-virtio-modern-stderr.log &
+          qemu_pid=$!
+          cleanup() { kill "$qemu_pid" 2>/dev/null || true; wait "$qemu_pid" 2>/dev/null || true; }
+          trap cleanup EXIT
+          for attempt in $(seq 1 700); do
+            if grep -q 'VANTAOS_VIRTIO_NET_MODERN_TX_SELFTEST_OK' "$log" 2>/dev/null && grep -q 'VANTAOS_BOOT_OK' "$log" 2>/dev/null; then break; fi
+            if grep -q 'VANTAOS_VIRTIO_NET_MODERN_TX_SELFTEST_FAIL' "$log" 2>/dev/null ||
+               grep -Eq 'VANTAOS_(VIRTIO_NET_MODERN_(CAP_|MAP_|FAIL_)|PCI_BAR_ALLOC_)' "$log" 2>/dev/null; then
+              cat "$log" qemu-virtio-modern-stderr.log
+              exit 1
+            fi
+            if ! kill -0 "$qemu_pid" 2>/dev/null; then cat "$log" qemu-virtio-modern-stderr.log; exit 1; fi
+            sleep 0.1
+          done
+          if ! grep -q 'VANTAOS_BOOT_OK' "$log" || ! grep -q 'VANTAOS_VIRTIO_NET_MODERN_INITIALIZED' "$log" || ! grep -q 'VANTAOS_VIRTIO_NET_MODERN_TX_SELFTEST_OK' "$log"; then
+            echo 'Modern VirtIO probe or transmit self-test did not complete; guest serial log follows.'
+            cat "$log" qemu-virtio-modern-stderr.log
+            exit 1
+          fi
+          VANTAOS_TEST_PORT=1235 python3 scripts/test_e1000_network.py || { status=$?; echo 'Modern VirtIO socket integration failed; guest serial log follows:'; cat "$log" qemu-virtio-modern-stderr.log; exit "$status"; }
+          for attempt in $(seq 1 100); do grep -q 'VANTAOS_VIRTIO_NET_MODERN_RX_SELFTEST_OK' "$log" && break; sleep 0.1; done
+          grep -q 'VANTAOS_VIRTIO_NET_MODERN_RX_SELFTEST_OK' "$log"
+
+      - name: RTL8139 QEMU Ethernet end-to-end test
+        if: steps.scope.outputs.full == '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          log="rtl8139-boot.log"
+          rm -f "$log" qemu-rtl8139-stderr.log rtl8139-network.img
+          cp nvme-fat32-template.img rtl8139-network.img
+          stdbuf -o0 timeout 45s qemu-system-x86_64 \
+            -machine pc \
+            -nodefaults \
+            -device VGA,id=video0 \
+            -m 256M \
+            -device rtl8139,netdev=net0 \
+            -netdev socket,id=net0,listen=127.0.0.1:1234 \
+            -drive file=VantaOS.iso,media=cdrom,format=raw \
+            -drive file=rtl8139-network.img,if=ide,format=raw \
+            -boot order=d \
+            -display vnc=127.0.0.1:1 \
+            -serial stdio \
+            -no-reboot >"$log" 2>qemu-rtl8139-stderr.log &
+          qemu_pid=$!
+          cleanup() {
+            kill "$qemu_pid" 2>/dev/null || true
+            wait "$qemu_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+          for attempt in $(seq 1 300); do
+            if grep -q 'VANTAOS_RTL8139_TX_SELFTEST_OK' "$log" 2>/dev/null && grep -q 'VANTAOS_BOOT_OK' "$log" 2>/dev/null; then break; fi
+            if grep -q 'VANTAOS_RTL8139_TX_SELFTEST_FAIL' "$log" 2>/dev/null; then
+              cat "$log" qemu-rtl8139-stderr.log
+              exit 1
+            fi
+            if ! kill -0 "$qemu_pid" 2>/dev/null; then
+              echo "QEMU exited before the RTL8139 transmit test completed."
+              cat "$log" qemu-rtl8139-stderr.log
+              exit 1
+            fi
+            sleep 0.1
+          done
+          grep -q 'VANTAOS_BOOT_OK' "$log"
+          grep -q 'VANTAOS_RTL8139_INITIALIZED' "$log"
+          grep -q 'VANTAOS_RTL8139_TX_SELFTEST_OK' "$log"
+          python3 scripts/test_e1000_network.py || {
+            cat "$log" qemu-rtl8139-stderr.log
+            exit 1
+          }
+          for attempt in $(seq 1 100); do
+            grep -q 'VANTAOS_UDP_RX_SELFTEST_OK' "$log" && break
+            sleep 0.1
+          done
+          grep -q 'VANTAOS_UDP_RX_SELFTEST_OK' "$log"
+          test "$(grep -c 'VANTAOS_UDP_RX_SELFTEST_OK' "$log")" -eq 1
+          for attempt in $(seq 1 100); do
+            if grep -q 'VANTAOS_RTL8139_RX_SELFTEST_OK' "$log" 2>/dev/null; then break; fi
+            if ! kill -0 "$qemu_pid" 2>/dev/null; then
+              echo "QEMU exited before the RTL8139 receive test completed."
+              cat "$log" qemu-rtl8139-stderr.log
+              exit 1
+            fi
+            sleep 0.1
+          done
+          if ! grep -q 'VANTAOS_RTL8139_RX_SELFTEST_OK' "$log" ||
+             ! grep -q 'VANTAOS_ARP_REPLY_OK' "$log" ||
+             ! grep -q 'VANTAOS_ICMP_ECHO_REPLY_OK' "$log"; then
+            cat "$log" qemu-rtl8139-stderr.log
+            exit 1
+          fi
+      - name: VirtIO legacy network device QEMU RX and TX integration
+        if: steps.scope.outputs.full == '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          log="virtio-boot.log"
+          rm -f "$log" qemu-virtio-stderr.log virtio-network.img
+          cp nvme-fat32-template.img virtio-network.img
+          stdbuf -o0 timeout 35s qemu-system-x86_64 \
+            -machine pc \
+            -nodefaults \
+            -device VGA,id=video0 \
+            -m 256M \
+            -device virtio-net-pci,disable-modern=on,netdev=net0 \
+            -netdev socket,id=net0,listen=127.0.0.1:1236 \
+            -drive file=VantaOS.iso,media=cdrom,format=raw \
+            -drive file=virtio-network.img,if=ide,format=raw \
+            -boot order=d \
+            -display none \
+            -serial file:"$log" \
+            -no-reboot >/dev/null 2>qemu-virtio-stderr.log &
+          qemu_pid=$!
+          cleanup() {
+            kill "$qemu_pid" 2>/dev/null || true
+            wait "$qemu_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+          for attempt in $(seq 1 300); do
+            if grep -q 'VANTAOS_VIRTIO_NET_TX_SELFTEST_OK' "$log" 2>/dev/null && grep -q 'VANTAOS_BOOT_OK' "$log" 2>/dev/null; then break; fi
+            if grep -q 'VANTAOS_VIRTIO_NET_TX_SELFTEST_FAIL' "$log" 2>/dev/null; then
+              cat "$log" qemu-virtio-stderr.log
+              exit 1
+            fi
+            if ! kill -0 "$qemu_pid" 2>/dev/null; then
+              echo "QEMU exited before the VirtIO network TX test completed."
+              cat "$log" qemu-virtio-stderr.log
+              exit 1
+            fi
+            sleep 0.1
+          done
+          grep -q 'VANTAOS_BOOT_OK' "$log"
+          grep -q 'VANTAOS_VIRTIO_NET_INITIALIZED' "$log"
+          grep -q 'VANTAOS_VIRTIO_NET_TX_SELFTEST_OK' "$log"
+          VANTAOS_TEST_PORT=1236 python3 scripts/test_e1000_network.py || {
+            cat "$log" qemu-virtio-stderr.log
+            exit 1
+          }
+          for attempt in $(seq 1 100); do
+            grep -q 'VANTAOS_VIRTIO_NET_RX_SELFTEST_OK' "$log" && break
+            sleep 0.1
+          done
+          for marker in VANTAOS_VIRTIO_NET_RX_SELFTEST_OK VANTAOS_ARP_REPLY_OK VANTAOS_ICMP_ECHO_REPLY_OK VANTAOS_UDP_RX_SELFTEST_OK; do
+            if ! grep -q "$marker" "$log"; then
+              echo "Missing legacy VirtIO receive/network marker: $marker"
+              cat "$log" qemu-virtio-stderr.log
+              exit 1
+            fi
+          done
+          test "$(grep -c 'VANTAOS_VIRTIO_NET_RX_SELFTEST_OK' "$log")" -eq 1
+
+      - name: USB HID xHCI input end-to-end test
+        if: steps.scope.outputs.full == '1' || steps.scope.outputs.usb == '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          log="usb-xhci-boot.log"
+          monitor="/tmp/vantaos-usb-monitor.sock"
+          rm -f "$monitor" "$log" qemu-usb-stderr.log qemu-usb-debug.log
+
+          # Keep QEMU's serial output unbuffered so the readiness and input
+          # assertions inspect live kernel output, not data flushed at shutdown.
+          stdbuf -o0 timeout 45s qemu-system-x86_64 \
+            -machine pc \
+            -nodefaults \
+            -device VGA,id=video0 \
+            -smp 1 \
+            -m 256M \
+            -device qemu-xhci,id=xhci \
+            -device usb-kbd,bus=xhci.0 \
+            -device usb-mouse,bus=xhci.0 \
+            -drive file=VantaOS.iso,media=cdrom,format=raw \
+            -drive file=vantaos.img,if=ide,format=raw \
+            -boot order=d \
+            -display vnc=127.0.0.1:0 \
+            -serial stdio \
+            -monitor "unix:$monitor,server=on,wait=off" \
+            -d guest_errors,unimp -D qemu-usb-debug.log \
+            -no-reboot >"$log" 2>qemu-usb-stderr.log &
+          qemu_pid=$!
+          cleanup() {
+            kill "$qemu_pid" 2>/dev/null || true
+            wait "$qemu_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          for attempt in $(seq 1 300); do
+            if grep -q 'VANTAOS_BOOT_OK' "$log" 2>/dev/null; then break; fi
+            if ! kill -0 "$qemu_pid" 2>/dev/null; then
+              echo "QEMU exited before VANTAOS_BOOT_OK."
+              cat "$log" qemu-usb-stderr.log qemu-usb-debug.log 2>/dev/null || true
+              exit 1
+            fi
+            sleep 0.1
+          done
+          if ! grep -q 'VANTAOS_BOOT_OK' "$log"; then
+            echo "Timed out waiting for VANTAOS_BOOT_OK in the live serial log."
+            cat "$log" qemu-usb-stderr.log qemu-usb-debug.log 2>/dev/null || true
+            exit 1
+          fi
+
+          usb_ready=0
+          for attempt in $(seq 1 300); do
+            if grep -q 'VANTAOS_XHCI_CONTROLLER_ONLINE' "$log" &&
+               grep -q 'VANTAOS_USB_HID_KEYBOARD_ONLINE' "$log" &&
+               grep -q 'VANTAOS_USB_HID_MOUSE_ONLINE' "$log" &&
+               grep -q 'VANTAOS_DESKTOP_INPUT_LOOP_ONLINE' "$log"; then
+              usb_ready=1
+              break
+            fi
+            if ! kill -0 "$qemu_pid" 2>/dev/null; then
+              echo "QEMU exited before xHCI and both HID devices became ready."
+              cat "$log" qemu-usb-stderr.log qemu-usb-debug.log 2>/dev/null || true
+              exit 1
+            fi
+            sleep 0.1
+          done
+          if [ "$usb_ready" -ne 1 ]; then
+            echo "Timed out waiting for xHCI, USB keyboard, and USB mouse enumeration."
+            cat "$log" qemu-usb-stderr.log qemu-usb-debug.log 2>/dev/null || true
+            exit 1
+          fi
+
+          for attempt in $(seq 1 30); do
+            test -S "$monitor" && break
+            sleep 0.1
+          done
+          test -S "$monitor"
+
+          # With a VNC display backend active, use QEMU's monitor input commands
+          # to generate keyboard and mouse events for the emulated USB devices.
+          {
+            printf 'info mice\nmouse_set 4\nsendkey a 250\n'
+            sleep 0.3
+            printf 'mouse_move 80 60\nmouse_button 1\nmouse_button 0\n'
+          } | timeout 4s socat -T 1 - "UNIX-CONNECT:$monitor"
+
+          for attempt in $(seq 1 100); do
+            keyboard_seen=0
+            mouse_seen=0
+            grep -q 'VANTAOS_USB_HID_KEYBOARD_INPUT_OK' "$log" && keyboard_seen=1
+            grep -q 'VANTAOS_USB_HID_MOUSE_INPUT_OK' "$log" && mouse_seen=1
+            if [ "$keyboard_seen" -eq 1 ] && [ "$mouse_seen" -eq 1 ]; then
+              echo "USB keyboard and mouse reports reached VantaOS through xHCI."
+              exit 0
+            fi
+            sleep 0.1
+          done
+          echo "USB HID input did not reach the kernel input path."
+          cat "$log" qemu-usb-stderr.log qemu-usb-debug.log 2>/dev/null || true
+          exit 1
+
+      - name: NVMe controller and namespace I/O end-to-end test
+        if: steps.scope.outputs.full == '1' || steps.scope.outputs.nvme == '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # This is a disposable scratch namespace; the OS boot disk remains IDE.
+          truncate -s 16M nvme-test.img
+          log=nvme-boot.log
+          set +e
+          timeout 30s qemu-system-x86_64 \
+            -machine pc \
+            -smp 2 \
+            -m 512M \
+            -drive file=VantaOS.iso,media=cdrom,format=raw \
+            -drive file=vantaos.img,if=ide,format=raw \
+            -drive file=nvme-test.img,if=none,id=nvmestore,format=raw \
+            -device nvme,drive=nvmestore,serial=VANTAOSNVME0001 \
+            -boot order=d \
+            -display none \
+            -serial "file:${log}" \
+            -monitor none \
+            -no-reboot
+          result=$?
+          set -e
+          if [ "$result" -ne 124 ]; then
+            echo "QEMU exited before the NVMe smoke-test timeout (exit code $result)."
+            cat "$log" 2>/dev/null || true
+            exit 1
+          fi
+          sleep 1
+          for marker in VANTAOS_NVME_NAMESPACE_OK VANTAOS_NVME_CONTROLLER_OK VANTAOS_NVME_DIRECT_DMA_OK VANTAOS_NVME_IO_SELFTEST_OK VANTAOS_FAT32_BACKEND_ATA_OK; do
+            if ! grep -q "$marker" "$log"; then
+              echo "Missing NVMe end-to-end marker: $marker"
+              cat "$log" 2>/dev/null || true
+              exit 1
+            fi
+          done
+          if grep -q "VANTAOS_NVME_.*_FAIL" "$log"; then
+            echo "NVMe driver reported a failure."
+            cat "$log"
+            exit 1
+          fi
+
+      - name: NVMe-only FAT32 filesystem integration and reboot persistence
+        if: steps.scope.outputs.full == '1' || steps.scope.outputs.nvme == '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Start from the disposable CI FAT32 image, but expose it only via
+          # NVMe. No IDE data disk is attached, so ATA cannot satisfy this test.
+          cp nvme-fat32-template.img nvme-fat32.img
+          for boot in 1 2; do
+            log="nvme-fat32-boot-${boot}.log"
+            set +e
+            timeout 35s qemu-system-x86_64 \
+              -machine pc \
+              -smp 2 \
+              -m 512M \
+              -drive file=VantaOS.iso,media=cdrom,format=raw \
+              -drive file=nvme-fat32.img,if=none,id=nvmefs,format=raw \
+              -device nvme,drive=nvmefs,serial=VANTAFS000001 \
+              -boot order=d \
+              -display none \
+              -serial "file:${log}" \
+              -monitor none \
+              -no-reboot
+            result=$?
+            set -e
+            if [ "$result" -ne 124 ]; then
+              echo "NVMe-only filesystem QEMU exited early (boot $boot, exit $result)."
+              cat "$log" 2>/dev/null || true
+              exit 1
+            fi
+            sleep 1
+            for marker in VANTAOS_NVME_NAMESPACE_OK VANTAOS_NVME_IO_SELFTEST_OK \
+                          VANTAOS_FAT32_BACKEND_NVME_OK VANTAOS_FAT32_BLOCK_DEVICE_MOUNT_OK \
+                          VANTAOS_FILESYSTEM_NAMESPACE_OK VANTAOS_FAT32_WRITE_READBACK_OK \
+                          VANTAOS_FAT32_MULTICLUSTER_IO_OK VANTAOS_FILESYSTEM_MUTATION_OK; do
+              if ! grep -q "$marker" "$log"; then
+                echo "Missing NVMe-backed filesystem assertion '$marker' on boot $boot."
+                cat "$log" 2>/dev/null || true
+                exit 1
+              fi
+            done
+            if grep -Eq '^VANTAOS_(FAT32|FILESYSTEM)_[A-Z0-9_]*_FAIL' "$log"; then
+              echo "NVMe-backed filesystem self-test failed on boot $boot."
+              cat "$log"
+              exit 1
+            fi
+            if [ "$boot" -eq 2 ] && ! grep -q 'VANTAOS_FAT32_REBOOT_PERSIST_OK' "$log"; then
+              echo "File written through NVMe-backed FAT32 did not survive reboot."
+              cat "$log"
+              exit 1
+            fi
+          done
+          mcopy -i nvme-fat32.img ::/VNTTEST.TXT /tmp/nvme-fat32-persisted.txt
+          grep -qx 'VANTAOS_FAT32_WRITE_OK' /tmp/nvme-fat32-persisted.txt
+          echo "NVMe-only FAT32 operations and reboot persistence passed."
+
+      - name: Missing-storage and malformed-partition fallback tests
+        if: steps.scope.outputs.full == '1' || steps.scope.outputs.nvme == '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # No data disk: VFS must keep its in-memory namespace alive.
+          set +e
+          timeout 30s qemu-system-x86_64 \
+            -machine pc -smp 1 -m 256M \
+            -drive file=VantaOS.iso,media=cdrom,format=raw \
+            -boot order=d -display none -serial file:no-storage.log \
+            -monitor none -no-reboot
+          result=$?
+          set -e
+          if [ "$result" -ne 124 ]; then
+            echo "No-storage QEMU exited unexpectedly: $result"
+            cat no-storage.log 2>/dev/null || true
+            exit 1
+          fi
+          grep -q 'VANTAOS_FAT32_NO_USABLE_VOLUME' no-storage.log
+          grep -q 'VANTAOS_FILESYSTEM_NAMESPACE_OK' no-storage.log
+          grep -q 'VANTAOS_FAT32_WRITE_SKIPPED_NO_VOLUME' no-storage.log
+
+          # Disposable NVMe image with a signed MBR whose FAT32 partition
+          # extends beyond the namespace. It must not be mounted.
+          python3 - <<'PY'
+          image = bytearray(16 * 1024 * 1024)
+          entry = 446
+          image[entry + 4] = 0x0C
+          image[entry + 8:entry + 12] = (32760).to_bytes(4, "little")
+          image[entry + 12:entry + 16] = (64).to_bytes(4, "little")
+          image[510:512] = b"\x55\xaa"
+          with open("nvme-invalid-partition.img", "wb") as f:
+              f.write(image)
+          PY
+          set +e
+          timeout 30s qemu-system-x86_64 \
+            -machine pc -smp 1 -m 256M \
+            -drive file=VantaOS.iso,media=cdrom,format=raw \
+            -drive file=nvme-invalid-partition.img,if=none,id=badnvme,format=raw \
+            -device nvme,drive=badnvme,serial=VANTABAD00001 \
+            -boot order=d -display none -serial file:invalid-partition.log \
+            -monitor none -no-reboot
+          result=$?
+          set -e
+          if [ "$result" -ne 124 ]; then
+            echo "Invalid-partition QEMU exited unexpectedly: $result"
+            cat invalid-partition.log 2>/dev/null || true
+            exit 1
+          fi
+          grep -q 'VANTAOS_FAT32_NO_USABLE_VOLUME' invalid-partition.log
+          grep -q 'VANTAOS_FILESYSTEM_NAMESPACE_OK' invalid-partition.log
+          if grep -q 'VANTAOS_FAT32_BLOCK_DEVICE_MOUNT_OK' invalid-partition.log; then
+            echo "FAT32 mounted an invalid out-of-range partition."
+            cat invalid-partition.log
+            exit 1
+          fi
+          if grep -Eq '^VANTAOS_(FAT32|FILESYSTEM|PARTITION)_[A-Z0-9_]*_FAIL' invalid-partition.log; then
+            echo "Malformed-partition fallback emitted a storage/partition self-test failure."
+            cat invalid-partition.log
+            exit 1
+          fi
+
+      - name: Refuse ambiguous FAT32 volumes across ATA and NVMe
+        if: steps.scope.outputs.full == '1' || steps.scope.outputs.nvme == '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp nvme-fat32-template.img ambiguous-ata.img
+          cp nvme-fat32-template.img ambiguous-nvme.img
+          set +e
+          timeout 30s qemu-system-x86_64 \
+            -machine pc -smp 1 -m 256M \
+            -drive file=VantaOS.iso,media=cdrom,format=raw \
+            -drive file=ambiguous-ata.img,if=ide,format=raw \
+            -drive file=ambiguous-nvme.img,if=none,id=ambiguousnvme,format=raw \
+            -device nvme,drive=ambiguousnvme,serial=VANTAAMBIG0001 \
+            -boot order=d -display none -serial file:ambiguous-volumes.log \
+            -monitor none -no-reboot
+          result=$?
+          set -e
+          if [ "$result" -ne 124 ]; then
+            echo "Ambiguous-volume QEMU exited unexpectedly: $result"
+            cat ambiguous-volumes.log 2>/dev/null || true
+            exit 1
+          fi
+          grep -q 'VANTAOS_FAT32_AMBIGUOUS_DEVICES' ambiguous-volumes.log
+          grep -q 'VANTAOS_FILESYSTEM_NAMESPACE_OK' ambiguous-volumes.log
+          if grep -q 'VANTAOS_FAT32_BACKEND_.*_OK' ambiguous-volumes.log; then
+            echo "FAT32 selected one of two valid volumes without an explicit policy."
+            cat ambiguous-volumes.log
+            exit 1
+          fi
+
+      - name: QEMU boot and regression tests at multiple memory sizes
+        if: steps.scope.outputs.full == '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          required_markers=(
+            VANTAOS_BOOT_OK
+            VANTAOS_BOOT_INFO_READY
+            VANTAOS_APIC_LOCAL_OK
+            VANTAOS_SMP_TOPOLOGY_OK
+            VANTAOS_SMP_TOPOLOGY_VALIDATION_OK
+            VANTAOS_SMP_TIMER_CALIBRATION_OK
+            VANTAOS_SMP_AP_START_OK
+            VANTAOS_SMP_CPU_LOCAL_OK
+            VANTAOS_SMP_WORK_OK
+            VANTAOS_SMP_LOCAL_TIMER_OK
+            VANTAOS_SMP_RESCHEDULE_IPI_OK
+            VANTAOS_SMP_RESCHEDULE_PENDING_OK
+            VANTAOS_SMP_IDLE_CONTEXTS_OK
+            VANTAOS_TLB_SHOOTDOWN_OK
+            VANTAOS_KERNEL_MAPPING_GUARDS_OK
+            VANTAOS_NETWORK_FRAMEWORK_OK
+            VANTAOS_BOOT_INFO_ADAPTER_OK
+            VANTAOS_PMM_BOOT_INFO_OK
+            VANTAOS_PMM_ALLOCATOR_OK
+            VANTAOS_HEAP_ALLOCATOR_OK
+            VANTAOS_USER_MAPPING_OK
+            VANTAOS_UNPUBLISHED_IMAGE_CLEANUP_OK
+            VANTAOS_RING3_SYSCALL_OK
+            VANTAOS_RING3_KERNEL_ISOLATION_OK
+            VANTAOS_RING3_GS_ISOLATION_OK
+            VANTAOS_USER_ADDRESS_SPACE_ISOLATION_OK
+            VANTAOS_USER_PROGRAM_OK
+            VANTAOS_ELF_USER_PROGRAM_OK
+            VANTAOS_ELF_VALIDATION_OK
+            VANTAOS_ELF_VALIDATION_MATRIX_OK
+            VANTAOS_FILESYSTEM_EXEC_OK
+            VANTAOS_USER_FILE_IO_OK
+            VANTAOS_USER_FILE_WRITE_OK
+            VANTAOS_USER_SPAWN_OK
+            VANTAOS_USER_CHILD_PROGRAM_OK
+            VANTAOS_IPC_RING3_SYSCALL_OK
+            VANTAOS_IPC_CROSS_PROCESS_OK
+            VANTAOS_USER_FILE_RANGE_IO_OK
+            VANTAOS_EXPLORER_E2E_OK
+            VANTAOS_NOTES_FILE_LOAD_OK
+            VANTAOS_NOTES_SAVE_ATOMIC_OK
+            VANTAOS_USER_GUI_SYSCALL_OK
+            VANTAOS_SETTINGS_STORAGE_OK
+            VANTAOS_GUI_INPUT_REGRESSION_OK
+            VANTAOS_GUI_DEAD_OWNER_CLEANUP_OK
+            VANTAOS_USER_DIRECTORY_LIST_OK
+            VANTAOS_USER_WAITPID_OK
+            VANTAOS_ARGV_STACK_OK
+            VANTAOS_USER_PROCESS_REAP_OK
+            VANTAOS_USER_PROCESS_FAULT
+            VANTAOS_USER_PROCESS_FAULT_NX
+            VANTAOS_USER_PROCESS_FAULT_WRITE_PROTECT
+            VANTAOS_USER_PROCESS_FAULT_UNMAPPED
+            VANTAOS_USER_PROCESS_FAULT_UD
+            VANTAOS_SYSCALL_POINTER_GUARDS_OK
+            VANTAOS_PER_CPU_ADDRESS_SPACE_OK
+            VANTAOS_PROCESS_API_GUARDS_OK
+            VANTAOS_IDLE_PROCESS_LIFECYCLE_OK
+            VANTAOS_PROCESS_NAME_OK
+            VANTAOS_PROCESS_STATE_TRANSITIONS_OK
+            VANTAOS_PROCESS_DEFERRED_SWITCH_OK
+            VANTAOS_SCHEDULER_RESCHEDULE_REQUEST_OK
+            VANTAOS_PROCESS_OWNED_REUSE_OK
+            VANTAOS_FILESYSTEM_NAMESPACE_OK
+            VANTAOS_FAT32_BACKEND_ATA_OK
+            VANTAOS_FAT32_WRITE_READBACK_OK
+            VANTAOS_FAT32_MULTICLUSTER_IO_OK
+            VANTAOS_FILESYSTEM_MUTATION_OK
+            VANTAOS_FILESYSTEM_RENAME_NO_OVERWRITE_OK
+            VANTAOS_FAT32_NAME_GUARDS_OK
+            VANTAOS_VFS_HANDLE_GUARDS_OK
+            VANTAOS_SCHEDULER_PROBE_OK
+            VANTAOS_SCHEDULER_REAP_OK
+          )
+
+          # Earlier device tests boot and mutate vantaos.img. Start this matrix from the pristine fixture.
+          cp nvme-fat32-template.img vantaos-regression.img
+
+          for config in "256 1" "512 2" "512 4"; do
+            read -r memory cpus <<< "$config"
+            log="boot-${memory}m-${cpus}cpu.log"
+            echo "Booting VantaOS in QEMU with ${memory} MiB RAM and ${cpus} CPU(s)..."
+            set +e
+            timeout 30s qemu-system-x86_64 \
+              -machine pc \
+              -cpu max \
+              -smp "${cpus}" \
+              -m "${memory}M" \
+              -drive file=VantaOS.iso,media=cdrom,format=raw \
+              -drive file=vantaos-regression.img,if=ide,format=raw \
+              -boot order=d \
+              -display none \
+              -serial "file:${log}" \
+              -monitor none \
+              -no-reboot
+            result=$?
+            set -e
+
+            if [ "$result" -ne 124 ]; then
+              echo "QEMU exited before the smoke-test timeout (exit code $result)."
+              cat "$log" 2>/dev/null || true
+              exit 1
+            fi
+
+            # Allow QEMU's serial file to flush after timeout sends SIGTERM.
+            sleep 1
+
+            if grep -Eq '^VANTAOS_[A-Z0-9_]*_FAIL' "$log"; then
+              echo "A kernel self-test emitted a failure marker at ${memory} MiB."
+              cat "$log"
+              exit 1
+            fi
+
+            for marker in "${required_markers[@]}"; do
+              # Serial output from different CPUs can interleave on a line.
+              if ! grep -q "${marker}" "$log"; then
+                echo "Missing required marker '${marker}' at ${memory} MiB."
+                cat "$log" 2>/dev/null || true
+                exit 1
+              fi
+            done
+            if [ "$cpus" -gt 1 ] && ! grep -q "^VANTAOS_SMP_SCHEDULER_STRESS_OK" "$log"; then
+              echo "Cross-CPU scheduler stress did not pass at ${memory} MiB."
+              cat "$log"
+              exit 1
+            fi
+            if [ "$cpus" -gt 1 ] && ! grep -q "^VANTAOS_SMP_REMOTE_WAKE_OK" "$log"; then
+              echo "Remote process wakeup did not pass at ${memory} MiB."
+              cat "$log"
+              exit 1
+            fi
+            if [ "$cpus" -gt 1 ] && ! grep -q "^VANTAOS_SMP_MIGRATION_OK" "$log"; then
+              echo "Cross-CPU process migration did not pass at ${memory} MiB."
+              cat "$log"
+              exit 1
+            fi
+            echo "All required markers passed at ${memory} MiB."
+          done
+
+          # The second boot reuses the first boot's writable disk image.
+          grep -q '^VANTAOS_FAT32_REBOOT_PERSIST_OK' boot-512m-2cpu.log
+          grep -q 'VANTAOS_SETTINGS_PERSIST_OK' boot-512m-2cpu.log
+          grep -q 'VANTAOS_DESKTOP_THEME_CONFIG_OK' boot-512m-2cpu.log
+
+      - name: Build the UEFI boot manager and EFI system image
+        if: steps.scope.outputs.full == '1'
+        run: make uefi
+
+      - name: UEFI/OVMF boot and kernel handoff regression test
+        if: steps.scope.outputs.full == '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          code_firmware=""
+          vars_template=""
+          for suffix in "" "_4M"; do
+            code_candidate="/usr/share/OVMF/OVMF_CODE${suffix}.fd"
+            vars_candidate="/usr/share/OVMF/OVMF_VARS${suffix}.fd"
+            if [ -s "$code_candidate" ] && [ -s "$vars_candidate" ]; then
+              code_firmware="$code_candidate"
+              vars_template="$vars_candidate"
+              break
+            fi
+          done
+          if [ -z "$code_firmware" ]; then
+            code_firmware="$(find /usr/share -maxdepth 4 -name 'OVMF_CODE*.fd' -print -quit)"
+            vars_template="${code_firmware/OVMF_CODE/OVMF_VARS}"
+          fi
+          test -n "$code_firmware" && test -s "$code_firmware"
+          test -n "$vars_template" && test -s "$vars_template"
+          echo "Using OVMF firmware: $code_firmware"
+          test -s VantaOS-UEFI.img
+          cp "$vars_template" OVMF_VARS.fd
+
+          log=uefi-boot.log
+          set +e
+          timeout 20s qemu-system-x86_64 \
+            -machine pc \
+            -m 512M \
+            -drive if=pflash,format=raw,readonly=on,file="$code_firmware" \
+            -drive if=pflash,format=raw,file=OVMF_VARS.fd \
+            -drive file=VantaOS-UEFI.img,format=raw,if=ide,index=0 \
+            -drive file=vantaos.img,format=raw,if=ide,index=1 \
+            -display none \
+            -serial "file:$log" \
+            -monitor none \
+            -no-reboot
+          result=$?
+          set -e
+
+          if [ "$result" -ne 124 ]; then
+            echo "UEFI QEMU exited before the smoke-test timeout (exit code $result)."
+            cat "$log" 2>/dev/null || true
+            exit 1
+          fi
+
+          sleep 1
+          if grep -Eq '^VANTAOS_[A-Z0-9_]*_FAIL' "$log"; then
+            echo "A UEFI/kernel self-test emitted a failure marker."
+            cat "$log"
+            exit 1
+          fi
+
+          required_uefi_markers=(
+            VANTAOS_UEFI_LOADER_START
+            VANTAOS_UEFI_ELF_LOADED
+            VANTAOS_UEFI_EXIT_BOOT_SERVICES_OK
+            VANTAOS_UEFI_KERNEL_HANDOFF
+            VANTAOS_UEFI_KERNEL_ENTRY
+            VANTAOS_UEFI_BOOT_INFO_READY
+            VANTAOS_APIC_LOCAL_OK
+            VANTAOS_SMP_TOPOLOGY_OK
+            VANTAOS_SMP_TOPOLOGY_VALIDATION_OK
+            VANTAOS_SMP_TIMER_CALIBRATION_OK
+            VANTAOS_SMP_AP_START_OK
+            VANTAOS_SMP_LOCAL_TIMER_OK
+            VANTAOS_SMP_RESCHEDULE_IPI_OK
+            VANTAOS_SMP_RESCHEDULE_PENDING_OK
+            VANTAOS_SMP_IDLE_CONTEXTS_OK
+            VANTAOS_TLB_SHOOTDOWN_OK
+            VANTAOS_PMM_BOOT_INFO_OK
+            VANTAOS_BOOT_OK
+          )
+          for marker in "${required_uefi_markers[@]}"; do
+            if ! grep -q "^${marker}" "$log"; then
+              echo "Missing required UEFI marker '${marker}'."
+              cat "$log" 2>/dev/null || true
+              exit 1
+            fi
+          done
+          echo "UEFI loader reached the VantaOS kernel under OVMF."
+
+      - name: Capture graphical desktop after boot
+        if: steps.scope.outputs.full == '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p media
+          rm -f /tmp/vantaos-monitor.sock /tmp/vantaos-desktop.ppm
+          xvfb-run -a qemu-system-x86_64 \
+            -machine pc \
+            -m 512M \
+            -smp 2 \
+            -vga std \
+            -drive file=VantaOS.iso,media=cdrom,format=raw \
+            -drive file=vantaos-regression.img,if=ide,format=raw \
+            -boot order=d \
+            -display sdl \
+            -serial file:desktop-boot.log \
+            -monitor unix:/tmp/vantaos-monitor.sock,server,nowait \
+            -no-reboot >/tmp/vantaos-desktop-qemu.log 2>&1 &
+          qemu_pid=$!
+          cleanup() {
+            kill "$qemu_pid" 2>/dev/null || true
+            wait "$qemu_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          booted=0
+          for attempt in $(seq 1 60); do
+            if grep -q '^VANTAOS_BOOT_OK' desktop-boot.log 2>/dev/null; then
+              booted=1
+              break
+            fi
+            if ! kill -0 "$qemu_pid" 2>/dev/null; then
+              cat /tmp/vantaos-desktop-qemu.log
+              cat desktop-boot.log 2>/dev/null || true
+              exit 1
+            fi
+            sleep 1
+          done
+          if [ "$booted" -ne 1 ]; then
+            echo "QEMU did not reach VANTAOS_BOOT_OK for the desktop screenshot."
+            cat desktop-boot.log 2>/dev/null || true
+            cat /tmp/vantaos-desktop-qemu.log
+            exit 1
+          fi
+
+          # The default boot path must not enter the optional recovery UI.
+          ! grep -q "VANTAOS_RECOVERY_ENTER" desktop-boot.log
+
+          # Give the desktop renderer a moment to draw its first complete frame.
+          sleep 3
+          # The QEMU monitor stays connected; bound the client lifetime after
+          # sending the one screendump command rather than waiting for EOF.
+          printf 'screendump /tmp/vantaos-desktop.ppm\n' |
+            timeout 5s socat -T 1 - UNIX-CONNECT:/tmp/vantaos-monitor.sock || true
+          for attempt in $(seq 1 10); do
+            test -s /tmp/vantaos-desktop.ppm && break
+            sleep 1
+          done
+          test -s /tmp/vantaos-desktop.ppm
+          convert /tmp/vantaos-desktop.ppm -strip media/desktop.png
+          test -s media/desktop.png
+          identify media/desktop.png
+
+      - name: Upload recovery screenshot artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vantaos-recovery-screenshot
+          path: media/recovery.png
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload boot screenshot artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vantaos-desktop-screenshot
+          path: media/desktop.png
+          if-no-files-found: ignore
+          retention-days: 14
+
+  refresh-screenshot:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master' && !contains(github.event.head_commit.message, '[skip ci]')
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Check out master
+        uses: actions/checkout@v4
+
+      - name: Download freshly captured desktop screenshot
+        uses: actions/download-artifact@v4
+        with:
+          name: vantaos-desktop-screenshot
+          path: /tmp/vantaos-screenshot
+
+      - name: Replace tracked desktop screenshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s /tmp/vantaos-screenshot/desktop.png
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Other merges can update master while the screenshot job is running.
+          # Rebase the replacement onto the newest master on every retry instead
+          # of letting a perfectly good screenshot update lose a push race.
+          for attempt in 1 2 3 4 5; do
+            echo "Refreshing desktop screenshot (attempt $attempt/5)..."
+            git fetch origin master
+            git reset --hard origin/master
+            cp /tmp/vantaos-screenshot/desktop.png media/desktop.png
+            test -s media/desktop.png
+            git add media/desktop.png
+
+            if git diff --cached --quiet; then
+              echo "The tracked desktop screenshot is already current."
+              exit 0
+            fi
+
+            git commit -m "ci: refresh desktop screenshot [skip ci]"
+            if git push origin HEAD:master; then
+              echo "Updated media/desktop.png on master."
+              exit 0
+            fi
+            echo "master moved during the push; retrying against its latest commit."
+          done
+
+          echo "Could not update media/desktop.png after 5 attempts."
+          exit 1
+
+      - name: Exercise x2APIC mode and SMP startup in QEMU
+        if: steps.scope.outputs.full == '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp isodir/boot/kernel.bin /tmp/vantaos-kernel-normal.bin
+          make OBJDIR=build/obj-x2apic VANTAOS_SELF_TEST=1 \
+            VANTAOS_FORCE_X2APIC_TEST=1 kernel.bin
+          cp kernel.bin isodir/boot/kernel.bin
+          grub-mkrescue -o VantaOS-x2apic.iso isodir
+          cp /tmp/vantaos-kernel-normal.bin isodir/boot/kernel.bin
+          cp nvme-fat32-template.img x2apic-test.img
+
+          log=x2apic-qemu.log
+          set +e
+          timeout 35s qemu-system-x86_64 \
+            -machine pc -cpu max -smp 4 -m 512M \
+            -drive file=VantaOS-x2apic.iso,media=cdrom,format=raw \
+            -drive file=x2apic-test.img,if=ide,format=raw \
+            -boot order=d -display none -serial "file:$log" \
+            -monitor none -no-reboot
+          result=$?
+          set -e
+          if [ "$result" -ne 124 ]; then
+            echo "x2APIC QEMU boot exited before the smoke-test timeout ($result)."
+            cat "$log" 2>/dev/null || true
+            exit 1
+          fi
+          sleep 1
+          if grep -Eq '^VANTAOS_[A-Z0-9_]*_FAIL' "$log"; then
+            echo "x2APIC QEMU boot emitted a failure marker."
+            cat "$log"
+            exit 1
+          fi
+          for marker in \
+            VANTAOS_APIC_X2APIC_LOCAL_OK \
+            VANTAOS_SMP_TOPOLOGY_OK \
+            VANTAOS_SMP_AP_START_OK \
+            VANTAOS_SMP_WORK_OK \
+            VANTAOS_SMP_LOCAL_TIMER_OK \
+            VANTAOS_SMP_RESCHEDULE_IPI_OK \
+            VANTAOS_SMP_IDLE_CONTEXTS_OK \
+            VANTAOS_BOOT_OK; do
+            if ! grep -q "$marker" "$log"; then
+              echo "Missing x2APIC QEMU marker: $marker"
+              cat "$log"
+              exit 1
+            fi
+          done
+          echo "x2APIC mode, AP startup, timer and IPI path passed in QEMU."
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
             scripts/test_hid_report.c drivers/input/hid_report.c \

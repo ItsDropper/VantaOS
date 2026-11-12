@@ -91,7 +91,9 @@ jobs:
             -machine pc -cpu max -m 512M -smp 2 \
             -drive if=pflash,format=raw,readonly=on,file="$code_firmware" \
             -drive if=pflash,format=raw,file=OVMF_VARS.fd \
-            -drive file=uefi-qemu-test.img,format=raw,if=ide,index=0 \
+            -device qemu-xhci,id=xhci \
+            -drive if=none,id=usbdisk,format=raw,file=uefi-qemu-test.img \
+            -device usb-storage,drive=usbdisk,bootindex=1 \
             -display none -serial file:uefi-hardware-test.log \
             -monitor none -no-reboot
           result=$?

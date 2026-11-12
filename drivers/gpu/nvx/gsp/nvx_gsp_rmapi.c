@@ -49,13 +49,15 @@ static nvx_gsp_rmapi_status_t submit(
 {
     nvx_gsp_rpc_handle_t handle={0};
     nvx_gsp_rpc_status_t status;
-    if(out) *out=(nvx_gsp_rmapi_result_t){0};
     if(!manager||!request||!request_size||!scratch||!out||
        !response||response_capacity<minimum_response||
+       overlaps(out,sizeof(*out),manager,sizeof(*manager))||
        overlaps(out,sizeof(*out),request,request_size)||
+       overlaps(out,sizeof(*out),scratch,scratch_size)||
        overlaps(out,sizeof(*out),response,response_capacity)||
        overlaps(scratch,scratch_size,response,response_capacity))
         return NVX_GSP_RMAPI_INVALID_ARGUMENT;
+    *out=(nvx_gsp_rmapi_result_t){0};
     status=nvx_gsp_rpc_submit(manager,NVX_GSP_RPC_HEADER_VERSION_R535,
         NVX_GSP_RPC_SIGNATURE_R535,function,function,request,request_size,
         scratch,scratch_size,response,response_capacity,&handle);
@@ -130,6 +132,10 @@ nvx_gsp_rmapi_status_t nvx_gsp_rmapi_wait(
     uint32_t elapsed=0U;
     if(!manager||!operation||!operation->handle.valid||!scratch||!response||
        !timeout_ms||!poll_interval_ms||!delay_ms||
+       overlaps(operation,sizeof(*operation),manager,sizeof(*manager))||
+       overlaps(operation,sizeof(*operation),scratch,scratch_size)||
+       overlaps(operation,sizeof(*operation),response,response_capacity)||
+       overlaps(manager,sizeof(*manager),scratch,scratch_size)||
        overlaps(scratch,scratch_size,response,response_capacity))
         return NVX_GSP_RMAPI_INVALID_ARGUMENT;
     for(;;) {
@@ -207,10 +213,13 @@ nvx_gsp_rmapi_status_t nvx_gsp_rm_map_memory_dma_result(
     const uint8_t *p=(const uint8_t *)response;
     uint32_t status;
     nvx_gsp_rmapi_status_t decoded;
-    if(out_dma_offset)*out_dma_offset=0U;
     if(!operation||!response||!out_dma_offset||
-       operation->function!=NVX_GSP_RPC_FN_MAP_MEMORY_DMA)
+       operation->function!=NVX_GSP_RPC_FN_MAP_MEMORY_DMA||
+       overlaps(out_dma_offset,sizeof(*out_dma_offset),operation,
+                sizeof(*operation))||
+       overlaps(out_dma_offset,sizeof(*out_dma_offset),response,response_size))
         return NVX_GSP_RMAPI_INVALID_ARGUMENT;
+    *out_dma_offset=0U;
     if(response_size<60U)return NVX_GSP_RMAPI_RESPONSE_TOO_SMALL;
     decoded=nvx_gsp_rmapi_decode_status(operation,response,response_size,&status);
     if(decoded!=NVX_GSP_RMAPI_OK)return decoded;
@@ -528,8 +537,11 @@ nvx_gsp_rmapi_status_t nvx_gsp_rmapi_decode_status(
 {
     const uint8_t *p=(const uint8_t *)response;
     size_t offset;
-    if(out_status)*out_status=UINT32_MAX;
-    if(!op||!response||!out_status) return NVX_GSP_RMAPI_INVALID_ARGUMENT;
+    if(!op||!response||!out_status||
+       overlaps(out_status,sizeof(*out_status),op,sizeof(*op))||
+       overlaps(out_status,sizeof(*out_status),response,response_size))
+        return NVX_GSP_RMAPI_INVALID_ARGUMENT;
+    *out_status=UINT32_MAX;
     if(op->function==NVX_GSP_RPC_FN_RM_ALLOC) {
         if(response_size<ALLOC_HEADER_BYTES)return NVX_GSP_RMAPI_RESPONSE_TOO_SMALL;
         offset=16U;

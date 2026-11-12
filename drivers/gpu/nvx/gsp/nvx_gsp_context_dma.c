@@ -15,13 +15,25 @@ _Static_assert(offsetof(nvx_gsp_context_dma_params_t, offset) == 16U,
 _Static_assert(offsetof(nvx_gsp_context_dma_params_t, limit) == 24U,
     "NV_CONTEXT_DMA_ALLOCATION_PARAMS.limit ABI mismatch");
 
+static void clear_owner(nvx_gsp_context_dma_t *object)
+{
+    object->client_handle = 0U;
+    object->device_handle = 0U;
+    object->context_dma_handle = 0U;
+    object->params = (nvx_gsp_context_dma_params_t){0};
+}
+
 static int state_valid(const nvx_gsp_context_dma_t *object)
 {
     if (!object || object->stage > NVX_GSP_CONTEXT_DMA_FREE_RELEASE_PENDING)
         return 0;
     switch ((nvx_gsp_context_dma_stage_t)object->stage) {
     case NVX_GSP_CONTEXT_DMA_IDLE:
-        return !object->operation.handle.valid;
+        return !object->operation.handle.valid && !object->client_handle &&
+            !object->device_handle && !object->context_dma_handle &&
+            !object->params.h_subdevice && !object->params.flags &&
+            !object->params.h_memory && !object->params.reserved &&
+            !object->params.offset && !object->params.limit;
     case NVX_GSP_CONTEXT_DMA_ALLOC_PENDING:
     case NVX_GSP_CONTEXT_DMA_ALLOC_RELEASE_PENDING:
         return object->operation.handle.valid &&
@@ -47,11 +59,19 @@ static nvx_gsp_rmapi_status_t finish_release(
         return NVX_GSP_RMAPI_RPC_ERROR;
 
     if (object->stage == NVX_GSP_CONTEXT_DMA_ALLOC_RELEASE_PENDING) {
-        object->stage = object->completed_status == NVX_GSP_RMAPI_OK ?
-            NVX_GSP_CONTEXT_DMA_CREATED : NVX_GSP_CONTEXT_DMA_IDLE;
+        if (object->completed_status == NVX_GSP_RMAPI_OK) {
+            object->stage = NVX_GSP_CONTEXT_DMA_CREATED;
+        } else {
+            object->stage = NVX_GSP_CONTEXT_DMA_IDLE;
+            clear_owner(object);
+        }
     } else if (object->stage == NVX_GSP_CONTEXT_DMA_FREE_RELEASE_PENDING) {
-        object->stage = object->completed_status == NVX_GSP_RMAPI_OK ?
-            NVX_GSP_CONTEXT_DMA_IDLE : NVX_GSP_CONTEXT_DMA_CREATED;
+        if (object->completed_status == NVX_GSP_RMAPI_OK) {
+            object->stage = NVX_GSP_CONTEXT_DMA_IDLE;
+            clear_owner(object);
+        } else {
+            object->stage = NVX_GSP_CONTEXT_DMA_CREATED;
+        }
     } else {
         return NVX_GSP_RMAPI_INVALID_ARGUMENT;
     }
@@ -102,18 +122,6 @@ nvx_gsp_rmapi_status_t nvx_gsp_context_dma_create(
         !timeout_ms || !poll_interval_ms || !delay_ms || offset > limit ||
         !state_valid(object) || object->stage != NVX_GSP_CONTEXT_DMA_IDLE)
         return NVX_GSP_RMAPI_INVALID_ARGUMENT;
-
-    if (object->context_dma_handle != 0U) {
-        if (object->client_handle == client_handle &&
-            object->device_handle == device_handle &&
-            object->context_dma_handle == context_dma_handle &&
-            object->params.h_memory == memory_handle &&
-            object->params.h_subdevice == subdevice_handle &&
-            object->params.flags == flags &&
-            object->params.offset == offset && object->params.limit == limit)
-            return NVX_GSP_RMAPI_OK;
-        return NVX_GSP_RMAPI_INVALID_ARGUMENT;
-    }
 
     params.h_subdevice = subdevice_handle;
     params.flags = flags;
@@ -193,12 +201,5 @@ nvx_gsp_rmapi_status_t nvx_gsp_context_dma_recover(
     nvx_gsp_rmapi_status_t status = wait_operation(manager, object, scratch,
         scratch_size, response, response_capacity, timeout_ms,
         poll_interval_ms, delay_ms, delay_context);
-    if (status == NVX_GSP_RMAPI_OK &&
-        object->stage == NVX_GSP_CONTEXT_DMA_IDLE) {
-        object->client_handle = 0U;
-        object->device_handle = 0U;
-        object->context_dma_handle = 0U;
-        object->params = (nvx_gsp_context_dma_params_t){0};
-    }
     return status;
 }

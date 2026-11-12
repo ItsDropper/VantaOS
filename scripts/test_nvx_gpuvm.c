@@ -150,6 +150,20 @@ int main(void)
            NVX_GPUVM_ALREADY_MAPPED);
     assert(nvx_gpuvm_validate(&vm) == NVX_GPUVM_OK);
 
+    /* Contiguous OS-descriptor backing maps without a temporary PFN array. */
+    nvx_gpuvm_mapping_t contiguous = {0};
+    assert(nvx_gpuvm_reserve(&vm, 8192U, NVX_GPUVM_PAGE_SIZE, 0U,
+                             &contiguous) == NVX_GPUVM_OK);
+    assert(nvx_gpuvm_map_contiguous(&vm, &contiguous, 0x34000000ULL,
+                                    8192U, NVX_GPUVM_ACCESS_READ |
+                                    NVX_GPUVM_ACCESS_WRITE) == NVX_GPUVM_OK);
+    assert(contiguous.mapped);
+    assert(nvx_gpuvm_map_contiguous(&vm, &contiguous, 0x34000000ULL,
+                                    8192U, NVX_GPUVM_ACCESS_READ) ==
+           NVX_GPUVM_ALREADY_MAPPED);
+    assert(nvx_gpuvm_release(&vm, &contiguous) == NVX_GPUVM_OK);
+
+
     /*
      * Force PDE slots 0 and 1 in the same level-1 table to be populated.
      * The validator must use the same 8-byte descriptor stride as the writer;

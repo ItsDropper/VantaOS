@@ -1458,6 +1458,8 @@ jobs:
           set +e
           timeout 20s qemu-system-x86_64 \
             -machine pc \
+            -cpu max \
+            -smp 2 \
             -m 512M \
             -drive if=pflash,format=raw,readonly=on,file="$code_firmware" \
             -drive if=pflash,format=raw,file=OVMF_VARS.fd \

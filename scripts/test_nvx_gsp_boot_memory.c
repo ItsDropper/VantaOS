@@ -374,6 +374,49 @@ int main(void)
         assert(release_calls == 6U);
     }
 
+    /* Failures after allocation unwind both SYSRAM DMA and provider leases. */
+    {
+        nvx_firmware_provider_t provider = {
+            .request = provider_request,
+            .verify = provider_verify,
+            .release = provider_release
+        };
+        nvx_gsp_boot_package_t package = {0};
+        nvx_gsp_wpr_layout_t platform_layout = planned_layout();
+        nvx_gsp_wpr_layout_t prepared_layout = {0};
+        nvx_mmio_region_t package_bar0 = {
+            .base = (volatile uint8_t *)(void *)fake_bar,
+            .length = sizeof(fake_bar)
+        };
+
+        allocation_calls = 0U;
+        release_calls = 0U;
+        provider_release_calls = 0U;
+        fail_booter_stage = 1;
+        assert(nvx_gsp_boot_package_prepare(&provider, "ga106", "1.0",
+            &package_bar0, &platform_layout, &package, &prepared_layout) ==
+            NVX_GSP_BOOT_PACKAGE_BOOTER_STAGE_FAILED);
+        assert(!package.prepared && !package.firmware.acquired &&
+               !package.memory.acquired);
+        assert(release_calls == 6U);
+        assert(provider_release_calls == NVX_GSP_COMPONENT_COUNT);
+        fail_booter_stage = 0;
+
+        allocation_calls = 0U;
+        release_calls = 0U;
+        provider_release_calls = 0U;
+        package = (nvx_gsp_boot_package_t){0};
+        platform_layout = planned_layout();
+        platform_layout.framebuffer_size = 0U;
+        assert(nvx_gsp_boot_package_prepare(&provider, "ga106", "1.0",
+            &package_bar0, &platform_layout, &package, &prepared_layout) ==
+            NVX_GSP_BOOT_PACKAGE_WPR_FAILED);
+        assert(!package.prepared && !package.firmware.acquired &&
+               !package.memory.acquired);
+        assert(release_calls == 6U);
+        assert(provider_release_calls == NVX_GSP_COMPONENT_COUNT);
+    }
+
     /* Invalid platform inputs fail before requesting any firmware component. */
     {
         nvx_firmware_provider_t provider = {

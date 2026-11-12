@@ -94,3 +94,84 @@ nvx_gsp_ce_status_t nvx_gsp_ce_build_copy(
     *out_bytes=NVX_GSP_CE_COPY_COMMAND_BYTES;
     return NVX_GSP_CE_OK;
 }
+
+nvx_gsp_ce_runtime_status_t nvx_gsp_ce_copy_submit_and_wait(
+    nvx_gsp_gpfifo_channel_t *channel,
+    volatile uint32_t *command_buffer,size_t command_capacity_bytes,
+    uint64_t command_gpu_va,uint32_t copy_class,uint32_t subchannel,
+    uint64_t source_gpu_va,uint64_t destination_gpu_va,
+    uint64_t completion_gpu_va,volatile uint32_t *completion_cpu_word,
+    uint32_t bytes,uint32_t completion_value,
+    uint32_t timeout_ms,uint32_t poll_interval_ms,
+    nvx_gsp_gpfifo_delay_fn delay_ms,void *context,
+    size_t *out_command_bytes,uint32_t *out_put_index,
+    nvx_gsp_gpfifo_status_t *out_fifo_status)
+{
+    nvx_gsp_ce_status_t build_status;
+    nvx_gsp_gpfifo_status_t fifo_status;
+    size_t command_bytes=0U;
+
+    if(!channel||!command_buffer||!completion_cpu_word||
+       !out_command_bytes||!out_put_index||!timeout_ms||
+       !poll_interval_ms||!delay_ms||
+       ((uintptr_t)command_buffer&3U)!=0U||
+       ((uintptr_t)completion_cpu_word&3U)!=0U||
+       overlaps(command_buffer,command_capacity_bytes,
+                completion_cpu_word,sizeof(*completion_cpu_word))||
+       overlaps(out_command_bytes,sizeof(*out_command_bytes),
+                out_put_index,sizeof(*out_put_index))||
+       overlaps(out_command_bytes,sizeof(*out_command_bytes),
+                channel,sizeof(*channel))||
+       overlaps(out_put_index,sizeof(*out_put_index),
+                channel,sizeof(*channel))||
+       overlaps(out_command_bytes,sizeof(*out_command_bytes),
+                command_buffer,command_capacity_bytes)||
+       overlaps(out_put_index,sizeof(*out_put_index),
+                command_buffer,command_capacity_bytes)||
+       overlaps(out_command_bytes,sizeof(*out_command_bytes),
+                completion_cpu_word,sizeof(*completion_cpu_word))||
+       overlaps(out_put_index,sizeof(*out_put_index),
+                completion_cpu_word,sizeof(*completion_cpu_word))||
+       (out_fifo_status&&
+        (overlaps(out_fifo_status,sizeof(*out_fifo_status),
+                  out_command_bytes,sizeof(*out_command_bytes))||
+         overlaps(out_fifo_status,sizeof(*out_fifo_status),
+                  out_put_index,sizeof(*out_put_index))||
+         overlaps(out_fifo_status,sizeof(*out_fifo_status),channel,
+                  sizeof(*channel))||
+         overlaps(out_fifo_status,sizeof(*out_fifo_status),command_buffer,
+                  command_capacity_bytes)||
+         overlaps(out_fifo_status,sizeof(*out_fifo_status),
+                  completion_cpu_word,sizeof(*completion_cpu_word))))
+        return NVX_GSP_CE_RUNTIME_INVALID_ARGUMENT;
+
+    *out_command_bytes=0U;
+    *out_put_index=0U;
+    if(out_fifo_status)*out_fifo_status=NVX_GSP_GPFIFO_INVALID_ARGUMENT;
+
+    /*
+     * Requiring a fresh completion value prevents a stale semaphore from
+     * satisfying the wait before this transaction's command has executed.
+     * The caller owns cache maintenance and must choose a unique value.
+     */
+    if(__atomic_load_n(completion_cpu_word,__ATOMIC_ACQUIRE)==completion_value)
+        return NVX_GSP_CE_RUNTIME_STALE_COMPLETION;
+
+    build_status=nvx_gsp_ce_build_copy(command_buffer,command_capacity_bytes,
+        copy_class,subchannel,source_gpu_va,destination_gpu_va,
+        completion_gpu_va,bytes,completion_value,&command_bytes);
+    if(build_status!=NVX_GSP_CE_OK)
+        return NVX_GSP_CE_RUNTIME_BUILD_FAILED;
+
+    *out_command_bytes=command_bytes;
+    __atomic_thread_fence(__ATOMIC_SEQ_CST);
+    fifo_status=nvx_gsp_gpfifo_submit_and_wait(channel,command_gpu_va,
+        command_bytes,completion_cpu_word,completion_value,timeout_ms,
+        poll_interval_ms,delay_ms,context,out_put_index);
+    if(out_fifo_status)*out_fifo_status=fifo_status;
+    if(fifo_status==NVX_GSP_GPFIFO_OK)
+        return NVX_GSP_CE_RUNTIME_OK;
+    if(fifo_status==NVX_GSP_GPFIFO_TIMEOUT)
+        return NVX_GSP_CE_RUNTIME_TIMEOUT;
+    return NVX_GSP_CE_RUNTIME_SUBMIT_FAILED;
+}

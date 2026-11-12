@@ -170,12 +170,12 @@ int main(void)
     assert(nvx_submit_release_after_fence(&manager, &lease, &timeline,
         &fence) == NVX_SUBMIT_FENCE_PENDING);
     assert(lease.active && manager.slots[command.slot].active_users == 1U);
+    assert(nvx_sync_signal(&timeline, fence.value) == NVX_SYNC_OK);
     lease.handles[1].token++;
-    assert(nvx_submit_release_batch(&manager, &lease) ==
-           NVX_SUBMIT_MEMORY_ERROR);
+    assert(nvx_submit_release_after_fence(&manager, &lease, &timeline,
+        &fence) == NVX_SUBMIT_MEMORY_ERROR);
     assert(lease.active && lease.release_index == 2U);
     lease.handles[1] = target;
-    assert(nvx_sync_signal(&timeline, fence.value) == NVX_SYNC_OK);
     assert(nvx_submit_release_after_fence(&manager, &lease, &timeline,
         &fence) == NVX_SUBMIT_OK);
     assert(!lease.active && lease.count == 0U);

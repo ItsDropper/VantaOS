@@ -333,7 +333,14 @@ nvx_memory_status_t nvx_memory_validate(nvx_memory_manager_t *m)
                 spinlock_unlock(&m->lock);
                 return NVX_MEMORY_CORRUPT_STATE;
             }
-        } else if (s->state != NVX_MEMORY_SLOT_FREE || s->active_users != 0U) {
+        } else if (s->state == NVX_MEMORY_SLOT_FREE) {
+            if (s->token || s->requested_size || s->generation ||
+                s->active_users || s->kind || s->access ||
+                s->dma.acquired || s->mapping.valid) {
+                spinlock_unlock(&m->lock);
+                return NVX_MEMORY_CORRUPT_STATE;
+            }
+        } else {
             spinlock_unlock(&m->lock);
             return NVX_MEMORY_CORRUPT_STATE;
         }

@@ -92,12 +92,13 @@ static int decode_allocation_result(
     uint64_t requested_size, uint64_t *actual_size, uint64_t *limit)
 {
     nvx_gsp_memory_allocation_params_t returned;
-    const uint8_t *payload = (const uint8_t *)response +
-        NVX_GSP_MEMORY_ALLOC_RESPONSE_HEADER_SIZE;
+    const uint8_t *payload;
     if (!response || !actual_size || !limit ||
         response_size < NVX_GSP_MEMORY_ALLOC_RESPONSE_HEADER_SIZE +
             sizeof(returned))
         return 0;
+    payload = (const uint8_t *)response +
+        NVX_GSP_MEMORY_ALLOC_RESPONSE_HEADER_SIZE;
     memcpy(&returned, payload, sizeof(returned));
     if (returned.size < requested_size || !returned.size ||
         returned.limit < requested_size - 1U ||
@@ -188,6 +189,9 @@ nvx_gsp_rmapi_status_t nvx_gsp_memory_object_create(
         params->offset || params->internal_flags ||
         ((params->range_lo || params->range_hi) &&
          params->range_lo > params->range_hi) ||
+        response_capacity < NVX_GSP_MEMORY_ALLOC_RESPONSE_HEADER_SIZE +
+            sizeof(*params) ||
+        ranges_overlap(manager, sizeof(*manager), object, sizeof(*object)) ||
         ranges_overlap(object, sizeof(*object), params, sizeof(*params)) ||
         ranges_overlap(object, sizeof(*object), scratch, scratch_size) ||
         ranges_overlap(object, sizeof(*object), response, response_capacity) ||

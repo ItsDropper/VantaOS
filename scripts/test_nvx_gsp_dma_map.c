@@ -86,7 +86,8 @@ int main(void)
     assert(mapping.stage==NVX_GSP_DMA_MAP_IDLE&&mapping.dma_offset==0U);
     assert(last_unmap.client==request.client&&last_unmap.device==request.device&&
            last_unmap.dma==request.dma&&last_unmap.memory==request.memory&&
-           last_unmap.dma_offset==mapped_offset&&last_unmap.size==request.length);
+           last_unmap.flags==0U&&last_unmap.dma_offset==mapped_offset&&
+           last_unmap.size==request.length);
     assert(unmap_calls==1U&&release_calls==2U);
 
     /* A valid RM mapping may have DMA offset zero; it must still unmap. */

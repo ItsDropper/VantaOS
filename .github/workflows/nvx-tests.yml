@@ -490,6 +490,19 @@ jobs:
       - name: Test NVX copy submission, fresh completion, queue failure and in-flight timeout semantics
         run: /tmp/vantaos-nvx-gsp-ce-runtime-test
 
+      - name: Compile pinned CE workload lease tests with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_ce_workload.c \
+            drivers/gpu/nvx/execution/nvx_gsp_ce_workload.c \
+            drivers/gpu/nvx/execution/nvx_gsp_ce.c \
+            drivers/gpu/nvx/execution/nvx_gsp_gpfifo.c \
+            drivers/gpu/nvx/memory/nvx_dma_sync.c \
+            -o /tmp/vantaos-nvx-gsp-ce-workload-test
+
+      - name: Test pinned CE resources, DMA ownership and timeout recovery
+        run: /tmp/vantaos-nvx-gsp-ce-workload-test
+
       - name: Compile GSP startup orchestration with strict warnings
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude -c \

@@ -45,6 +45,8 @@ void gui_server_mouse_wheel(int delta);
 void gui_server_mouse_release(int button);
 char gui_server_read_terminal_char(void);
 int gui_server_take_redraw_request(void);
+int gui_server_take_window_redraw_request(void);
+int gui_server_is_window_dragging(void);
 void gui_server_cleanup_dead_windows(void);
 
 #endif

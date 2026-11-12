@@ -1,8 +1,32 @@
 # NVX GA10x GSP Falcon bring-up notes
 
-This note records the next hardware boundary for Ampere GA10x (including the
-RTX 3060 GA106 family). It separates register observations from claims about
-firmware execution.
+This guide covers the RTX 3060 GA106 / Ampere GA10x path. It distinguishes
+implemented software transactions from physical hardware evidence.
+
+## Current composed startup path (2026-11-12)
+
+A callable, multi-stage startup transaction now exists:
+
+1. `nvx_gsp_ga10x_start_and_init_rm_from_pci()` validates the supported
+   RTX 3060 profile, collects/encodes PCI and system facts, then invokes the
+   standard GA10x startup routine.
+2. `nvx_gsp_ga10x_start_and_init_rm()` prepares the GA10x MSGQ command queue
+   and calls `nvx_gsp_ga10x_bootstrap_traced()`.
+3. The bootstrap transaction executes FWSEC/FRTS, prepares the RISC-V boot
+   artifacts, performs the SEC2 Booter Load transaction, and waits for the GSP
+   RISC-V active indication.
+4. Startup links the MSGQ status queue, initializes GMCAPI, performs the GSP-RM
+   initialization RPC, then initializes the MSGQ RPC transport and RPC manager.
+
+This is a **callable software composition**, not a demonstrated hardware boot.
+The caller must provide correctly sourced VBIOS/FWSEC data, staged and
+version-matched firmware, DMA buffers, prepared WPR metadata and framebuffer
+offsets, a valid shared-queue layout, trusted platform facts, BAR mapping, and
+bounded delay/scratch resources. The current `nvx status`, `nvx vbios`, and
+`nvx fw` shell commands do not call this startup API; boot only performs
+read-only PCI discovery. There is no dedicated end-to-end startup test and no
+physical GA106 result. Do not report GSP-RM initialized on real hardware until
+the complete path has been run and its outputs independently verified there.
 
 ## Independently checked register facts
 
@@ -104,22 +128,44 @@ DMA upload/boot sequence are still missing.
 
 ## What this does not mean
 
-A readable Falcon register window does not mean the GSP is running. NVX now has
-low-level reset/scrub, 256-byte Falcon DMA upload, BROM-parameter, BOOTVEC/STARTCPU,
-and mailbox-completion primitives for SEC2/GSP. They are independently bounded
-and host-tested, but they are not yet wired into one secure-boot transaction.
-NVX still does not authenticate NVIDIA's signed firmware cryptographically,
-extract FWSEC from a physical VBIOS image or execute the prepared FWSEC-FRTS commands,
-allocate/write the actual WPR in VRAM, validate firmware-specific mailbox status,
-activate the GSP RISC-V runtime, or complete a genuine GSP-RM initialization RPC.
-The queue and DMA tests use fake BAR memory; they cannot prove physical GPU support.
+A readable Falcon register window does not mean the GSP is running. The
+important change is that the former collection of disconnected low-level
+helpers has now been composed into `nvx_gsp_ga10x_bootstrap_traced()` and the
+higher-level `nvx_gsp_ga10x_start_and_init_rm()` transaction.
 
-The FWSEC interface parser and pure SB/FRTS command-record builder are now implemented and host-tested. The next implementation step is to bind that profile to a verified firmware identity, reconstruct command-result/scratch-register semantics, then connect the records to a fail-closed SEC2 transaction with verified signing rules, DMA ownership, WPR metadata, and bounded hardware polling. Do not substitute guessed register writes or
-a fake "boot succeeded" flag for these requirements. NVIDIA's open kernel
-module and Linux Nova are research references. Their relevant files have MIT
-or GPL licensing depending on the source; verify each file's license before
-adapting any implementation rather than assuming all reference code is GPL.
+The bootstrap path now calls the FWSEC/FRTS executor, prepares the RISC-V
+handoff, executes the SEC2 Booter Load transaction, and waits for the RISC-V
+active indication. The startup wrapper then links the MSGQ status queue,
+initializes GMCAPI, issues the GSP-RM initialization RPC, and creates the
+MSGQ RPC transport/manager. The PCI-facing wrapper also collects and encodes
+system information before entering this sequence.
 
+Important boundaries remain:
+
+- These APIs are not called by the current boot path or by the manual
+  `nvx status`, `nvx vbios`, or `nvx fw` commands.
+- The current shell firmware command only acquires five files, verifies them
+  against a locally pinned SHA-256 manifest, and runs structural preflight.
+  That is not NVIDIA cryptographic signature verification.
+- The startup API requires platform-provided VBIOS/FWSEC information, fuse
+  version, DMA allocations, WPR metadata, framebuffer offsets, queue layout,
+  system facts, MMIO mapping and delay callbacks. The repository does not yet
+  provide a complete production coordinator that obtains and validates all
+  these inputs from a live RTX 3060.
+- No dedicated test runs the entire startup transaction end to end. Its
+  constituent parsers, state machines, secure-boot stages, queues, GMCAPI and
+  RPC managers have separate host tests.
+- No physical GA106 has yet demonstrated authenticated firmware, RISC-V
+  readiness, a successful GSP-RM RPC, or GPU-produced work.
+
+The FWSEC interface parser, SB/FRTS command builder/validator and hardware-facing
+SEC2 transaction are implemented and host-tested. The remaining work is to
+complete the real platform-resource handoff, add end-to-end fault-injected tests
+for the composed transaction, connect it to the device lifecycle, and validate
+the exact sequence on physical GA106 hardware. Do not substitute a synthetic
+completion flag or a successful host test for those requirements. NVIDIA's Open
+GPU Kernel Modules and Linux Nova remain research references; check the license
+of any reference file before adapting code.
 
 ## Runtime ELF materialization (host-verified, not hardware boot)
 
@@ -191,14 +237,22 @@ NVX now has `nvx_gsp_ga10x_program_brom()` for the GA102+ Falcon BROM parameter 
 
 The write order matches Nova's GA102 HAL: parameter address, engine mask, ucode ID, RSA-3K selector. NVX validates the complete register window before writing, checks the PRIV-lock pattern, and refuses to program a Falcon unless CPUCTL reports it halted. Strict-warning host tests assert the exact written values and reject invalid engine masks, ucode IDs, alignment, active-engine state, locked PRIV access, and truncated BAR mappings.
 
-This is a **real register-programming primitive**, not a completed secure-boot transaction. It does not upload FWSEC or GSP firmware, authenticate the image, select/reset the correct SEC2 versus GSP Falcon, program WPR/VRAM, set the boot vector, trigger the secure boot ROM, or establish that the firmware is executing. The higher-level boot path must call it only with parameters extracted from the matching validated firmware image and after the platform has completed the preceding load steps. No physical GA10x device was available to validate these writes.
+This helper remains a register-programming primitive rather than a complete
+transaction by itself. The composed GA10x bootstrap path now calls the relevant
+SEC2/FWSEC and Falcon helpers in sequence, using caller-supplied validated
+inputs. No physical GA10x device has been used to validate these writes or the
+resulting firmware state.
 
 
 ## Guarded Falcon launch primitive
 
 `nvx_gsp_ga10x_start_falcon()` now performs the GA102 Falcon launch register sequence for an image that the caller has already loaded and authenticated: it validates a complete BOOTVEC/CPUCTL mapping, checks the PRIV-lock signature and halted state, writes BOOTVEC, then issues STARTCPU. Host tests verify register order/results and reject misaligned entry points, running Falcon state, locked access, and truncated mappings.
 
-This primitive does **not** load or authenticate FWSEC, configure SEC2, select the RISC-V core, create the framebuffer WPR, or prove a boot succeeded. The engine-aware `nvx_ga10x_falcon_start()` and `nvx_ga10x_falcon_boot()` APIs now support both SEC2 and GSP register windows; the GSP-named start API remains a wrapper. The full secure firmware path is still not connected.
+This primitive does **not** perform those operations by itself. The
+engine-aware `nvx_ga10x_falcon_start()` and `nvx_ga10x_falcon_boot()` APIs
+support both SEC2 and GSP register windows, and the composed bootstrap
+transaction uses the appropriate helpers. Physical firmware acceptance and
+boot remain unverified.
 
 
 ## SEC2 and GSP engine-specific boot register paths
@@ -207,7 +261,10 @@ The BROM and Falcon launch helpers now support both documented GA102 engine wind
 - GSP Falcon: `0x110000`, second Falcon window `0x111000`, GSP engine mask `0x0400`.
 - SEC2 Falcon: `0x840000`, second Falcon window `0x841000`, SEC2 engine mask `0x0001`.
 
-The engine-aware API rejects mismatched base pairs and engine masks instead of allowing a SEC2 descriptor to be programmed into GSP registers (or vice versa). Host tests exercise both sets of real BAR0 offsets. This enables the SEC2/FWSEC stage to use the correct register window, but it still does not implement SEC2 firmware parsing/loading, the FWSEC handshake, WPR writes, or a verified GSP boot.
+The engine-aware API rejects mismatched base pairs and engine masks instead of allowing a SEC2 descriptor to be programmed into GSP registers (or vice versa). Host tests exercise both sets of real BAR0 offsets. The composed bootstrap now uses these engine-specific paths for SEC2/FWSEC and
+subsequent GSP startup. The platform still has to provide valid WPR/VRAM
+placement and all hardware-derived inputs; no physical boot has verified the
+sequence.
 
 
 ## Usable framebuffer size input
@@ -228,7 +285,10 @@ The caller must still parse the signed firmware descriptor into exact IMEM/DMEM 
 
 Added `nvx_ga10x_falcon_reset()` for SEC2 and GSP. It checks the PRIV lock, asserts the documented engine-reset bit, waits 1 ms (conservatively longer than the 10 µs hardware reset pulse used by OpenRM/Nova), deasserts reset, then polls HWCFG2's memory-scrubbing bit with a bounded timeout. The implementation does not treat RESET_READY as mandatory because NVIDIA's GA102 reset path documents it as advisory. Host tests verify reset deassertion, scrub completion, and timeout behavior.
 
-This is now the reset primitive needed before the DMA uploader. It still needs a verified platform transaction that orders SEC2 FWSEC loading, WPR/FRTS preparation, GSP booter load, RISC-V launch, and RPC initialization.
+The composed `nvx_gsp_ga10x_bootstrap_traced()` now orders the SEC2/FWSEC,
+WPR/FRTS, booter-load and RISC-V launch stages; `nvx_gsp_ga10x_start_and_init_rm()`
+continues through queue linking and GSP-RM initialization. The sequence remains
+unverified on physical hardware.
 
 
 ## Falcon boot completion and mailbox handshake

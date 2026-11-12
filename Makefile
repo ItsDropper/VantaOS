@@ -70,8 +70,8 @@ $(UEFI_OBJDIR)/loader.o: boot/uefi/loader.c include/vanta_boot_info.h
 BOOTX64.EFI: $(UEFI_OBJDIR)/loader.o
 	$(LD) -nostdlib -znocombreloc -T $(EFI_LDSCRIPT) -shared -Bsymbolic \
 		$(EFI_CRT) $< -L$(EFI_LIBDIR) -lefi -lgnuefi -o $(UEFI_OBJDIR)/loader.so
-	$(OBJCOPY) -j .text -j .sdata -j .data -j .dynamic -j .dynsym \
-		-j .rel -j .rela -j .reloc --target=efi-app-x86_64 $(UEFI_OBJDIR)/loader.so $@
+	$(OBJCOPY) -I elf64-x86-64 -j .text -j .sdata -j .data -j .dynamic -j .dynsym \
+		-j .rel -j .rela -j .reloc -O efi-app-x86_64 $(UEFI_OBJDIR)/loader.so $@
 
 $(UEFI_OBJDIR)/setup.o: boot/uefi/setup.c include/vanta_installer_fat32.h include/vanta_installer_gpt.h include/vanta_setup_config.h
 	@test -n "$(EFI_CRT)" -a -n "$(EFI_LDSCRIPT)" || (echo "gnu-efi is required (install gnu-efi)."; exit 1)

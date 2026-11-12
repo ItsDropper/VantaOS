@@ -24,6 +24,21 @@ int dma_page_is_valid(const dma_page_t *p)
     return p != NULL && p->virtual_address != NULL && p->size == 4096U &&
            p->physical_address == 0x200000U;
 }
+
+/* Host allocator double for gpu_dma.c's device-aware DMA contract. */
+int dma_page_is_valid_for_device(const dma_device_t *device,
+                                 const dma_page_t *page)
+{
+    (void)device;
+    return dma_page_is_valid(page);
+}
+
+int dma_alloc_contiguous_for_device(const dma_device_t *device,
+                                    dma_page_t *pages,size_t count)
+{
+    (void)device;
+    return dma_alloc_contiguous(pages,count);
+}
 int dma_alloc_contiguous(dma_page_t *pages, size_t count)
 {
     if (pages == NULL || count != 1U) return 0;

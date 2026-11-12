@@ -330,8 +330,8 @@ nvx_gsp_platform_status_t nvx_gsp_platform_start(
 
     /*
      * PCI IDs only select a broad GA10x candidate. Never trust a caller's
-     * "ga106" string alone: require the extended PMC chip ID read from BAR0
-     * to match the platform's independently sourced exact chip profile.
+     * "ga106" string alone: require PMC_BOOT_42 to report the pinned GA106
+     * chipset ID (0x176), rather than merely another Ampere architecture.
      */
     if (!session->device.registers.extended_revision_valid ||
         session->device.registers.identity_mismatch ||

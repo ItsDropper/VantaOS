@@ -9,6 +9,15 @@ static int add_u64(uint64_t a,uint64_t b,uint64_t *out)
     *out=a+b;
     return 1;
 }
+static int gpu_ranges_overlap(uint64_t a,uint64_t a_bytes,
+                               uint64_t b,uint64_t b_bytes)
+{
+    uint64_t a_end,b_end;
+    if(!a_bytes||!b_bytes)return 0;
+    if(!add_u64(a,a_bytes,&a_end)||!add_u64(b,b_bytes,&b_end))
+        return 1;
+    return a<b_end&&b<a_end;
+}
 static int overlaps(const volatile void *a,size_t an,const volatile void *b,size_t bn)
 {
     uintptr_t x=(uintptr_t)a,y=(uintptr_t)b;
@@ -109,6 +118,7 @@ nvx_gsp_ce_runtime_status_t nvx_gsp_ce_copy_submit_and_wait(
 {
     nvx_gsp_ce_status_t build_status;
     nvx_gsp_gpfifo_status_t fifo_status;
+    uint64_t command_end;
     size_t command_bytes=0U;
 
     if(!channel||!command_buffer||!completion_cpu_word||
@@ -154,6 +164,16 @@ nvx_gsp_ce_runtime_status_t nvx_gsp_ce_copy_submit_and_wait(
     if(out_fifo_status)*out_fifo_status=NVX_GSP_GPFIFO_INVALID_ARGUMENT;
 
     /*
+     * The pushbuffer fetcher has a 40-bit address window. Check the entire
+     * fixed-size command range before building or publishing any work.
+     */
+    if(command_gpu_va>=NVX_GSP_GPFIFO_ADDRESS_LIMIT||
+       (command_gpu_va&3U)!=0U||
+       !add_u64(command_gpu_va,NVX_GSP_CE_COPY_COMMAND_BYTES,&command_end)||
+       command_end>NVX_GSP_GPFIFO_ADDRESS_LIMIT)
+        return NVX_GSP_CE_RUNTIME_BAD_GPU_RANGE;
+
+    /*
      * Requiring a fresh completion value prevents a stale semaphore from
      * satisfying the wait before this transaction's command has executed.
      * The caller owns cache maintenance and must choose a unique value.
@@ -166,6 +186,18 @@ nvx_gsp_ce_runtime_status_t nvx_gsp_ce_copy_submit_and_wait(
         completion_gpu_va,bytes,completion_value,&command_bytes);
     if(build_status!=NVX_GSP_CE_OK)
         return NVX_GSP_CE_RUNTIME_BUILD_FAILED;
+
+    /*
+     * The command stream must not alias any payload or semaphore it references:
+     * the GPU fetcher could otherwise read bytes while the CE overwrites them.
+     * The builder has already range-checked all payload intervals.
+     */
+    if(gpu_ranges_overlap(command_gpu_va,command_bytes,source_gpu_va,bytes)||
+       gpu_ranges_overlap(command_gpu_va,command_bytes,
+                          destination_gpu_va,bytes)||
+       gpu_ranges_overlap(command_gpu_va,command_bytes,
+                          completion_gpu_va,sizeof(uint32_t)))
+        return NVX_GSP_CE_RUNTIME_BAD_GPU_RANGE;
 
     *out_command_bytes=command_bytes;
     __atomic_thread_fence(__ATOMIC_SEQ_CST);

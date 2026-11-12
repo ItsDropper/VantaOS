@@ -12,6 +12,8 @@
 #include "nvx_gpuvm.h"
 #include "spinlock.h"
 #define NVX_MEMORY_MAX_OBJECTS 64U
+#define NVX_MEMORY_ACCESS_READ NVX_GPUVM_ACCESS_READ
+#define NVX_MEMORY_ACCESS_WRITE NVX_GPUVM_ACCESS_WRITE
 typedef enum nvx_memory_status {
     NVX_MEMORY_OK = 0, NVX_MEMORY_INVALID_ARGUMENT, NVX_MEMORY_NOT_INITIALIZED,
     NVX_MEMORY_OUT_OF_OBJECTS, NVX_MEMORY_ALLOCATION_FAILED,
@@ -35,13 +37,14 @@ typedef struct nvx_memory_slot {
     uint64_t token, requested_size;
     uint32_t generation;
     uint32_t active_users;
-    uint8_t kind, state;
+    uint8_t kind, state, access;
 } nvx_memory_slot_t;
 typedef struct nvx_memory_info {
     void *cpu_address;
     uint64_t gpu_virtual_address;
     uint64_t size;
     nvx_memory_kind_t kind;
+    unsigned access;
 } nvx_memory_info_t;
 /*
  * Allocate this manager in static/long-lived storage; it is intentionally large.
@@ -58,6 +61,8 @@ typedef struct nvx_memory_manager {
     uint8_t initialized;
 } nvx_memory_manager_t;
 nvx_memory_status_t nvx_memory_init(nvx_memory_manager_t *, nvx_gpuvm_t *, unsigned);
+nvx_memory_status_t nvx_memory_alloc_access(nvx_memory_manager_t *, size_t,
+    nvx_memory_kind_t, unsigned access, nvx_memory_handle_t *);
 nvx_memory_status_t nvx_memory_alloc(nvx_memory_manager_t *, size_t, nvx_memory_kind_t, nvx_memory_handle_t *);
 nvx_memory_status_t nvx_memory_get_info(nvx_memory_manager_t *, const nvx_memory_handle_t *, nvx_memory_info_t *);
 nvx_memory_status_t nvx_memory_cpu_address(nvx_memory_manager_t *, const nvx_memory_handle_t *, void **);

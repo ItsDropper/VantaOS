@@ -213,6 +213,12 @@ int main(void)
     assert(nvx_memory_release(&manager, &readonly) == NVX_MEMORY_OK);
     assert(alloc_calls == 4U && free_calls == 4U);
 
+    manager.slots[NVX_MEMORY_MAX_OBJECTS - 1U].access =
+        NVX_MEMORY_ACCESS_READ;
+    assert(nvx_memory_validate(&manager) == NVX_MEMORY_CORRUPT_STATE);
+    manager.slots[NVX_MEMORY_MAX_OBJECTS - 1U].access = 0U;
+    assert(nvx_memory_validate(&manager) == NVX_MEMORY_OK);
+
     assert(nvx_gpuvm_destroy(&gpuvm) == NVX_GPUVM_OK);
     memset(&manager, 0, sizeof(manager));
     init_gpuvm();

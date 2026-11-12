@@ -408,6 +408,10 @@ ipc_receive_retry:
 ipc_receive_done:
     cmp $8, %rax
     jne file_fail
+    mov $1, %eax
+    lea ipc_parent_received(%rip), %rdi
+    mov $(ipc_parent_received_end - ipc_parent_received), %esi
+    int $0x80
     mov child_endpoint_token(%rip), %rdi
     test %rdi, %rdi
     jle file_fail
@@ -417,6 +421,10 @@ ipc_receive_done:
     int $0x80
     test %rax, %rax
     jne file_fail
+    mov $1, %eax
+    lea ipc_parent_ack_sent(%rip), %rdi
+    mov $(ipc_parent_ack_sent_end - ipc_parent_ack_sent), %esi
+    int $0x80
 ipc_exchange_skipped:
 
     /* Block until the child exits and verify the kernel preserved its status. */
@@ -564,6 +572,12 @@ missing_path:
 ipc_reply:
     .ascii "ack"
 ipc_reply_end:
+ipc_parent_received:
+    .ascii "VANTAOS_IPC_PARENT_RECEIVED_CHILD\\n"
+ipc_parent_received_end:
+ipc_parent_ack_sent:
+    .ascii "VANTAOS_IPC_PARENT_ACK_SENT\\n"
+ipc_parent_ack_sent_end:
 fixture:
     .ascii "VANTAOS_USER_FILE_FIXTURE\n"
 fixture_end:

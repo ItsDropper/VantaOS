@@ -468,6 +468,29 @@ waitpid_result_fail:
     int $0x80
     jmp file_fail
 waitpid_status_fail:
+    /* Emit the exact child status so CI distinguishes lost status from a
+       child-side test failure without relying on a debugger-only build. */
+    mov child_status(%rip), %eax
+    lea waitpid_status_hex+7(%rip), %rdi
+    mov $8, %ecx
+waitpid_status_hex_loop:
+    mov %eax, %edx
+    and $0x0f, %edx
+    cmp $10, %edx
+    jb waitpid_status_hex_digit
+    add $55, %edx
+    jmp waitpid_status_hex_store
+waitpid_status_hex_digit:
+    add $48, %edx
+waitpid_status_hex_store:
+    mov %dl, (%rdi)
+    dec %rdi
+    shr $4, %eax
+    loop waitpid_status_hex_loop
+    mov $1, %eax
+    lea waitpid_status_prefix(%rip), %rdi
+    mov $(waitpid_status_hex_end - waitpid_status_prefix), %esi
+    int $0x80
     mov $1, %eax
     lea waitpid_status_failure(%rip), %rdi
     mov $(waitpid_status_failure_end - waitpid_status_failure), %esi
@@ -551,6 +574,11 @@ waitpid_result_failure_end:
 waitpid_status_failure:
     .ascii "VANTAOS_WAITPID_STATUS_FAIL\n"
 waitpid_status_failure_end:
+waitpid_status_prefix:
+    .ascii "VANTAOS_WAITPID_STATUS=0x"
+waitpid_status_hex:
+    .ascii "00000000\n"
+waitpid_status_hex_end:
 waitpid_ipc_failure:
     .ascii "VANTAOS_WAITPID_IPC_CLEANUP_FAIL\n"
 waitpid_ipc_failure_end:

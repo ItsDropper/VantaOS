@@ -153,7 +153,7 @@ VantaOS-Setup.img: VANTASETUP.EFI BOOTX64.EFI kernel-uefi.elf vantaos.img
 
 VantaOS-UEFI.img: BOOTX64.EFI kernel-uefi.elf
 	@command -v mkfs.fat >/dev/null && command -v mmd >/dev/null && command -v mcopy >/dev/null && command -v sfdisk >/dev/null || \
-		(echo "dosfstools, mtools, and gdisk are required to build the UEFI image."; exit 1)
+		(echo "dosfstools, mtools, and util-linux (sfdisk) are required to build the UEFI image."; exit 1)
 	rm -f $@
 	truncate -s 1024M $@
 	printf 'label: dos\nunit: sectors\n\nstart=2048, type=ef\n' | sfdisk $@

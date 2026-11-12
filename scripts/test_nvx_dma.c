@@ -73,9 +73,6 @@ int dma_page_is_valid(const dma_page_t *page)
            ((page->physical_address & (NVX_DMA_PAGE_SIZE - 1U)) == 0U);
 }
 
-/* gpu_dma.c consumes the device-aware backend API. These host tests deliberately
- * model the same deterministic allocator above, while gpu_dma_alloc performs
- * its own address-width check after receiving the synthetic page list. */
 int dma_page_is_valid_for_device(const dma_device_t *device,
                                  const dma_page_t *page)
 {
@@ -84,10 +81,10 @@ int dma_page_is_valid_for_device(const dma_device_t *device,
 }
 
 int dma_alloc_contiguous_for_device(const dma_device_t *device,
-                                     dma_page_t *pages,size_t count)
+                                     dma_page_t *pages, size_t count)
 {
     (void)device;
-    return dma_alloc_contiguous(pages,count);
+    return dma_alloc_contiguous(pages, count);
 }
 
 void dma_free_contiguous(dma_page_t *pages, size_t count)
@@ -139,22 +136,21 @@ int main(void)
     assert(free_calls == 2U && !buffer.acquired);
     noncontiguous = 0;
 
+    /*
+     * The host kernel identity map ends at 1 GiB. A 64-bit device mask does
+     * not make a 4 GiB physical address dereferenceable by the CPU.
+     */
     high_address = 1;
     assert(nvx_dma_alloc(4096U, 32U, &buffer) ==
            NVX_DMA_ADDRESS_RANGE_INVALID);
     assert(free_calls == 3U && !buffer.acquired);
-    assert(nvx_dma_alloc(4096U, 64U, &buffer) == NVX_DMA_OK);
-    assert(buffer.acquired && buffer.page_count == 1U);
-    assert(buffer.size == 4096U && buffer.allocated_size == 4096U);
-    assert(buffer.gpu_address == 0x100000000ULL);
-    nvx_dma_release(&buffer);
-    assert(!buffer.acquired && buffer.cpu_address == 0 &&
-           buffer.page_count == 0U);
-    assert(free_calls == 4U);
-    nvx_dma_release(&buffer);
-    assert(free_calls == 4U);
-
+    assert(nvx_dma_alloc(4096U, 64U, &buffer) ==
+           NVX_DMA_ADDRESS_RANGE_INVALID);
+    assert(free_calls == 4U && !buffer.acquired);
+    assert(buffer.pages == 0 && buffer.cpu_address == 0 &&
+           buffer.gpu_address == 0U);
     high_address = 0;
+
     assert(nvx_dma_alloc(4097U, 32U, &buffer) == NVX_DMA_OK);
     assert(buffer.page_count == 2U && buffer.size == 4097U &&
            buffer.allocated_size == 8192U);

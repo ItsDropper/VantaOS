@@ -14,6 +14,7 @@ on:
       - "scripts/test_gpu_dma_sync.c"
       - "scripts/test_gpu_engine_runtime.c"
       - "scripts/test_gpu_vm.c"
+      - "scripts/test_nvx_object_memory.c"
       - ".github/workflows/nvx-tests.yml"
   pull_request:
     paths:
@@ -27,6 +28,7 @@ on:
       - "scripts/test_gpu_dma_sync.c"
       - "scripts/test_gpu_engine_runtime.c"
       - "scripts/test_gpu_vm.c"
+      - "scripts/test_nvx_object_memory.c"
       - "include/nvx_gsp_secure_boot.h"
       - "include/nvx_gsp_pci_rom.h"
       - "include/nvx_gsp_fwsec_interface.h"

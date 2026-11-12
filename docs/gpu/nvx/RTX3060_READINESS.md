@@ -87,6 +87,19 @@ This is software lifecycle verification only: no physical GSP/RM channel has
 yet been created on a GA106, and the current channel memory descriptors still
 must be backed by real RM-visible mappings before submission.
 
+## Per-object GPU memory access policy
+
+The NVX memory-object allocator now accepts explicit read or read/write
+access. Read-only allocations are encoded through the GPUVM PTE read-only
+bit; the legacy allocation entry point remains read/write for compatibility.
+Write-only mappings are rejected because the current V2 PTE policy does not
+represent a safe write-only mapping. Memory metadata reports the effective
+access mode, and validation rejects corrupt access state.
+
+Host tests cover invalid write-only requests and read-only allocation
+ownership. Hardware enforcement and actual page-fault behavior remain
+unverified on GA106.
+
 ## Fence-gated submission leases
 
 The submission validator now has a lease layer in

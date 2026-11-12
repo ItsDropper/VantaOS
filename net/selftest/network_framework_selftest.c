@@ -35,7 +35,7 @@ static void net_selftest_write_stats(const char* name,
     net_selftest_write_hex64(stats->rx_dropped);
     serial_write(" rx_malformed=");
     net_selftest_write_hex64(stats->rx_malformed);
-    serial_write("\\n");
+    serial_write("\n");
 }
 
 static uint32_t mock_tx_count;
@@ -137,7 +137,7 @@ void network_framework_selftest(void) {
         net_selftest_write_hex64(queued);
         serial_write(" mock_tx_count=");
         net_selftest_write_hex64(mock_tx_count);
-        serial_write("\\n");
+        serial_write("\n");
         net_selftest_write_stats("VANTAOS_NETWORK_FRAMEWORK_STATS_BEFORE",
                                  &before_queue);
         net_selftest_write_stats("VANTAOS_NETWORK_FRAMEWORK_STATS_AFTER",
@@ -146,7 +146,7 @@ void network_framework_selftest(void) {
         net_selftest_write_hex64((uint64_t)before_stats_valid);
         serial_write(" after=");
         net_selftest_write_hex64((uint64_t)stats_valid);
-        serial_write("\\n");
+        serial_write("\n");
     }
     ok=stats_ok&&ok;
     if (!ok && !failure_stage) failure_stage = "statistics";

@@ -7,6 +7,7 @@
 #define VANTA_NVX_GSP_USERD_H
 
 #include "nvx_gsp_channel.h"
+#include "nvx_gsp_gpfifo.h"
 #include "nvx_gsp_os_memory.h"
 
 /*
@@ -48,9 +49,17 @@ nvx_gsp_userd_status_t nvx_gsp_userd_view_init(
 nvx_gsp_userd_status_t nvx_gsp_channel_params_init_ampere(
     nvx_gsp_channel_alloc_params_t *out,
     uint32_t client_handle, uint32_t device_handle,
-    uint32_t vaspace_handle, uint32_t channel_handle,
+    uint32_t vaspace_handle, uint32_t channel_id,
     uint32_t engine_type, uint32_t subdevice_mask,
     uint64_t gpfifo_gpu_va, uint32_t gpfifo_entries,
     const nvx_gsp_os_memory_t *userd_memory, uint64_t userd_offset);
+
+/* Initialize the host-side GPFIFO view from the validated USERD mapping. */
+nvx_gsp_userd_status_t nvx_gsp_userd_channel_init(
+    const nvx_gsp_os_memory_t *userd_memory, uint64_t userd_offset,
+    size_t userd_bytes, nvx_gsp_gpfifo_channel_t *channel,
+    volatile uint32_t *entries, size_t entries_mapping_bytes,
+    volatile uint32_t *doorbell, uint32_t doorbell_token,
+    uint32_t entry_count, nvx_gsp_userd_view_t *out_view);
 
 #endif

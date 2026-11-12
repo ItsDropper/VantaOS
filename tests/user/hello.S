@@ -425,10 +425,10 @@ ipc_exchange_skipped:
     lea child_status(%rip), %rsi
     int $0x80
     cmp %r14, %rax
-    jne file_fail
+    jne waitpid_result_fail
     mov child_status(%rip), %eax
     cmp $23, %eax
-    jne file_fail
+    jne waitpid_status_fail
 
     /* Process exit must invalidate its still-open IPC endpoint. */
     test %r15, %r15
@@ -439,7 +439,7 @@ ipc_exchange_skipped:
     mov $1, %edx
     int $0x80
     cmp $-9, %rax
-    jne file_fail
+    jne waitpid_ipc_cleanup_fail
 ipc_cleanup_verified:
 
     /* A collected child must no longer be waitable. */
@@ -448,7 +448,7 @@ ipc_cleanup_verified:
     xor %esi, %esi
     int $0x80
     cmp $-10, %rax
-    jne file_fail
+    jne waitpid_reap_fail
 
     mov $1, %eax
     lea wait_success(%rip), %rdi
@@ -460,6 +460,31 @@ ipc_cleanup_verified:
     xor %eax, %eax
     int $0x80
     ud2
+
+waitpid_result_fail:
+    mov $1, %eax
+    lea waitpid_result_failure(%rip), %rdi
+    mov $(waitpid_result_failure_end - waitpid_result_failure), %esi
+    int $0x80
+    jmp file_fail
+waitpid_status_fail:
+    mov $1, %eax
+    lea waitpid_status_failure(%rip), %rdi
+    mov $(waitpid_status_failure_end - waitpid_status_failure), %esi
+    int $0x80
+    jmp file_fail
+waitpid_ipc_cleanup_fail:
+    mov $1, %eax
+    lea waitpid_ipc_failure(%rip), %rdi
+    mov $(waitpid_ipc_failure_end - waitpid_ipc_failure), %esi
+    int $0x80
+    jmp file_fail
+waitpid_reap_fail:
+    mov $1, %eax
+    lea waitpid_reap_failure(%rip), %rdi
+    mov $(waitpid_reap_failure_end - waitpid_reap_failure), %esi
+    int $0x80
+    jmp file_fail
 
 file_fail:
     mov $1, %eax
@@ -520,6 +545,18 @@ write_success_end:
 file_success:
     .ascii "VANTAOS_USER_FILE_IO_OK\n"
 file_success_end:
+waitpid_result_failure:
+    .ascii "VANTAOS_WAITPID_RESULT_FAIL\n"
+waitpid_result_failure_end:
+waitpid_status_failure:
+    .ascii "VANTAOS_WAITPID_STATUS_FAIL\n"
+waitpid_status_failure_end:
+waitpid_ipc_failure:
+    .ascii "VANTAOS_WAITPID_IPC_CLEANUP_FAIL\n"
+waitpid_ipc_failure_end:
+waitpid_reap_failure:
+    .ascii "VANTAOS_WAITPID_REAP_FAIL\n"
+waitpid_reap_failure_end:
 file_failure:
     .ascii "VANTAOS_USER_FILE_IO_FAIL\n"
 file_failure_end:

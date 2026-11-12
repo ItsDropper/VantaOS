@@ -87,10 +87,11 @@ nvx_gsp_rpc_status_t nvx_gsp_rpc_submit(
         if(remote_status) {
             size_t status_offset=request_function==NVX_GSP_RPC_FN_RM_ALLOC?16U:12U;
             if(status_offset+4U<=response_capacity) {
-                response[status_offset]=(uint8_t)remote_status;
-                response[status_offset+1U]=(uint8_t)(remote_status>>8U);
-                response[status_offset+2U]=(uint8_t)(remote_status>>16U);
-                response[status_offset+3U]=(uint8_t)(remote_status>>24U);
+                uint8_t *response_bytes=(uint8_t *)response;
+                response_bytes[status_offset]=(uint8_t)remote_status;
+                response_bytes[status_offset+1U]=(uint8_t)(remote_status>>8U);
+                response_bytes[status_offset+2U]=(uint8_t)(remote_status>>16U);
+                response_bytes[status_offset+3U]=(uint8_t)(remote_status>>24U);
             }
         }
     }

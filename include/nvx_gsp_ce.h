@@ -8,6 +8,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include "nvx_gsp_gpfifo.h"
 
 #define NVX_GSP_CE_COPY_COMMAND_DWORDS 16U
 #define NVX_GSP_CE_COPY_COMMAND_BYTES (NVX_GSP_CE_COPY_COMMAND_DWORDS * 4U)
@@ -32,6 +33,15 @@ typedef enum nvx_gsp_ce_status {
     NVX_GSP_CE_BAD_GPU_ADDRESS
 } nvx_gsp_ce_status_t;
 
+typedef enum nvx_gsp_ce_runtime_status {
+    NVX_GSP_CE_RUNTIME_OK = 0,
+    NVX_GSP_CE_RUNTIME_INVALID_ARGUMENT,
+    NVX_GSP_CE_RUNTIME_STALE_COMPLETION,
+    NVX_GSP_CE_RUNTIME_BUILD_FAILED,
+    NVX_GSP_CE_RUNTIME_SUBMIT_FAILED,
+    NVX_GSP_CE_RUNTIME_TIMEOUT
+} nvx_gsp_ce_runtime_status_t;
+
 /*
  * Build a one-dimensional DMA-copy pushbuffer using the public NVC5B5/NVC6B5/
  * NVC7B5 method ABI. It copies bytes from source_gpu_va to destination_gpu_va
@@ -55,5 +65,36 @@ nvx_gsp_ce_status_t nvx_gsp_ce_build_copy(
     uint64_t source_gpu_va, uint64_t destination_gpu_va,
     uint64_t completion_gpu_va, uint32_t bytes,
     uint32_t completion_value, size_t *out_command_bytes);
+
+/*
+ * Compose command construction, GPFIFO publication, fetch consumption and
+ * GPU-written completion into one bounded CE copy transaction.
+ *
+ * Preconditions:
+ * - command_buffer is CPU-mapped and GPU-visible at command_gpu_va;
+ * - source, destination and completion GPUVAs are valid mappings in this
+ *   channel's address space, with the required CE permissions;
+ * - completion_cpu_word maps completion_gpu_va and is coherent for CPU reads;
+ * - the caller has initialized completion_cpu_word to a value different from
+ *   completion_value and performed any required cache synchronization;
+ * - all referenced memory remains allocated until completion or independently
+ *   proven GPU quiescence. A timeout is NOT cancellation.
+ *
+ * out_command_bytes and out_put_index are zeroed before validation. If a
+ * submission succeeds but a wait times out, both retain the submitted values
+ * so the caller can identify in-flight work and must not free its resources.
+ * out_fifo_status preserves the lower-level GPFIFO result when provided.
+ */
+nvx_gsp_ce_runtime_status_t nvx_gsp_ce_copy_submit_and_wait(
+    nvx_gsp_gpfifo_channel_t *channel,
+    volatile uint32_t *command_buffer, size_t command_capacity_bytes,
+    uint64_t command_gpu_va, uint32_t copy_class, uint32_t subchannel,
+    uint64_t source_gpu_va, uint64_t destination_gpu_va,
+    uint64_t completion_gpu_va, volatile uint32_t *completion_cpu_word,
+    uint32_t bytes, uint32_t completion_value,
+    uint32_t timeout_ms, uint32_t poll_interval_ms,
+    nvx_gsp_gpfifo_delay_fn delay_ms, void *context,
+    size_t *out_command_bytes, uint32_t *out_put_index,
+    nvx_gsp_gpfifo_status_t *out_fifo_status);
 
 #endif

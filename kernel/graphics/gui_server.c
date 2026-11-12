@@ -73,6 +73,7 @@ static int32_t resize_start_y;
 static uint32_t resize_start_width;
 static uint32_t resize_start_height;
 static int redraw_pending;
+static int window_redraw_pending;
 
 /*
  * Rendering is deliberately performed from a snapshot outside gui_lock.
@@ -493,7 +494,7 @@ int gui_server_submit_draw(uint32_t pid, uint32_t id,
     for (uint32_t i = 0; i < count; i++)
         window->commands[i] = commands[i];
     window->command_count = count;
-    redraw_pending = 1;
+    window_redraw_pending = 1;
     spinlock_unlock_irqrestore(&gui_lock, flags);
     return (int)count;
 }
@@ -994,7 +995,6 @@ void gui_server_mouse_wheel(int delta)
             0U
         };
         gui_queue_event_locked(target, &event);
-        redraw_pending = 1;
     }
     spinlock_unlock_irqrestore(&gui_lock, flags);
 }
@@ -1368,6 +1368,23 @@ int gui_server_take_redraw_request(void)
     redraw_pending = 0;
     spinlock_unlock_irqrestore(&gui_lock, flags);
     return pending;
+}
+
+int gui_server_take_window_redraw_request(void)
+{
+    uint64_t flags = spinlock_lock_irqsave(&gui_lock);
+    int pending = window_redraw_pending;
+    window_redraw_pending = 0;
+    spinlock_unlock_irqrestore(&gui_lock, flags);
+    return pending;
+}
+
+int gui_server_is_window_dragging(void)
+{
+    uint64_t flags = spinlock_lock_irqsave(&gui_lock);
+    int dragging = dragging_window_id != 0U || resizing_window_id != 0U;
+    spinlock_unlock_irqrestore(&gui_lock, flags);
+    return dragging;
 }
 
 void gui_server_cleanup_dead_windows(void)

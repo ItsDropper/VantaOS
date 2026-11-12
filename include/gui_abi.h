@@ -31,6 +31,7 @@
 #define VANTA_GUI_EVENT_THEME_CHANGED  7U
 #define VANTA_GUI_EVENT_RESIZE         8U
 #define VANTA_GUI_EVENT_POINTER_UP      9U
+#define VANTA_GUI_EVENT_POINTER_WHEEL  10U
 
 #define VANTA_GUI_MOD_CTRL 0x01U
 
@@ -49,7 +50,8 @@
  * represents a special key such as Page Up, arrows, Home, End, or Delete.
  * KEY reserved contains VANTA_GUI_MOD_* flags. POINTER_MOVE value is 1 while
  * the primary button is held; POINTER_UP carries the release position.
- * For RESIZE events, x and y contain the new outer window width and height. */
+ * For RESIZE events, x and y contain the new outer window width and height.
+ * For POINTER_WHEEL events, value is a signed wheel delta. */
 
 typedef struct
 {

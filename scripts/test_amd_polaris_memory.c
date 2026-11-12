@@ -56,6 +56,38 @@ int dma_page_is_valid(const dma_page_t *page)
         ((page->physical_address & (GPU_DMA_PAGE_SIZE - 1U)) == 0U);
 }
 
+int dma_page_is_valid_for_device(const dma_device_t *device,
+                                 const dma_page_t *page)
+{
+    return device != NULL && dma_page_is_valid(page) &&
+        page->physical_address <= device->dma_mask &&
+        page->size - 1U <= device->dma_mask - page->physical_address;
+}
+
+int dma_alloc_contiguous_for_device(const dma_device_t *device,
+                                    dma_page_t *pages, size_t count)
+{
+    uint64_t first_physical;
+    uint64_t bytes;
+    if (device == NULL || pages == NULL || count == 0U ||
+        count > GPU_DMA_MAX_PAGES ||
+        count > UINT64_MAX / GPU_DMA_PAGE_SIZE)
+        return 0;
+    first_physical = 0x20000000ULL + dma_offset;
+    bytes = (uint64_t)count * GPU_DMA_PAGE_SIZE;
+    if (first_physical > device->dma_mask ||
+        bytes - 1U > device->dma_mask - first_physical ||
+        !dma_alloc_contiguous(pages, count))
+        return 0;
+    for (size_t i = 0U; i < count; ++i) {
+        if (!dma_page_is_valid_for_device(device, &pages[i])) {
+            dma_free_contiguous(pages, count);
+            return 0;
+        }
+    }
+    return 1;
+}
+
 void dma_free_contiguous(dma_page_t *pages, size_t count)
 {
     assert(pages != NULL && count != 0U);

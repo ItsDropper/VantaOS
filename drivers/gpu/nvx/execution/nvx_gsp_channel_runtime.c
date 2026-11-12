@@ -7,6 +7,33 @@
 
 #include <string.h>
 
+static nvx_gsp_rmapi_status_t release_ring_reference(
+    nvx_gsp_channel_runtime_t *runtime)
+{
+    nvx_gsp_rmapi_status_t status;
+    if (!runtime->ring_reference_held)
+        return NVX_GSP_RMAPI_OK;
+    status = nvx_gsp_channel_ring_release(runtime->ring);
+    if (status != NVX_GSP_RMAPI_OK)
+        return NVX_GSP_RMAPI_CLEANUP_FAILED;
+    runtime->ring_reference_held = 0U;
+    runtime->ring = NULL;
+    return NVX_GSP_RMAPI_OK;
+}
+
+static nvx_gsp_rmapi_status_t release_runtime_references(
+    nvx_gsp_channel_runtime_t *runtime)
+{
+    nvx_gsp_rmapi_status_t status;
+    if (runtime->userd_reference_held) {
+        status = nvx_gsp_os_memory_release(runtime->userd_memory);
+        if (status != NVX_GSP_RMAPI_OK)
+            return NVX_GSP_RMAPI_CLEANUP_FAILED;
+        runtime->userd_reference_held = 0U;
+    }
+    return release_ring_reference(runtime);
+}
+
 static nvx_gsp_rmapi_status_t bind_fifo(nvx_gsp_channel_runtime_t *runtime)
 {
     nvx_gsp_userd_status_t status = nvx_gsp_userd_channel_init(
@@ -84,6 +111,49 @@ nvx_gsp_rmapi_status_t nvx_gsp_channel_runtime_create(
     return bind_fifo(runtime);
 }
 
+
+nvx_gsp_rmapi_status_t nvx_gsp_channel_runtime_create_managed(
+    nvx_gsp_rpc_manager_t *manager, nvx_gsp_channel_runtime_t *runtime,
+    uint32_t client, uint32_t device, uint32_t channel, uint32_t vaspace,
+    uint32_t channel_id, uint32_t subdevice_mask,
+    nvx_gsp_channel_ring_t *ring, nvx_gsp_os_memory_t *userd_memory,
+    uint64_t userd_offset, size_t userd_bytes,
+    volatile uint32_t *doorbell, uint32_t doorbell_token,
+    void *scratch, size_t scratch_size, void *response, size_t response_size,
+    uint32_t timeout_ms, uint32_t poll_ms,
+    nvx_gsp_rmapi_delay_fn delay_ms, void *delay_context)
+{
+    nvx_gsp_rmapi_status_t status;
+    if (!manager || !runtime || !ring || !userd_memory || !doorbell ||
+        ring->stage != NVX_GSP_CHANNEL_RING_READY ||
+        ring->client_handle != client || ring->device_handle != device ||
+        !ring->entries || !ring->gpu_virtual_address ||
+        ring->bytes < (size_t)ring->entry_count * 8U ||
+        runtime->stage != NVX_GSP_CHANNEL_RUNTIME_IDLE ||
+        runtime->rm.stage != NVX_GSP_CHANNEL_IDLE)
+        return NVX_GSP_RMAPI_INVALID_ARGUMENT;
+
+    status = nvx_gsp_channel_ring_acquire(ring);
+    if (status != NVX_GSP_RMAPI_OK)
+        return status;
+
+    status = nvx_gsp_channel_runtime_create(manager, runtime, client, device,
+        channel, vaspace, channel_id, subdevice_mask,
+        ring->gpu_virtual_address, ring->entry_count, userd_memory,
+        userd_offset, userd_bytes, ring->entries, ring->bytes, doorbell,
+        doorbell_token, scratch, scratch_size, response, response_size,
+        timeout_ms, poll_ms, delay_ms, delay_context);
+
+    if (runtime->rm.allocated || runtime->rm.stage != NVX_GSP_CHANNEL_IDLE ||
+        runtime->stage != NVX_GSP_CHANNEL_RUNTIME_IDLE) {
+        runtime->ring = ring;
+        runtime->ring_reference_held = 1U;
+    } else {
+        (void)nvx_gsp_channel_ring_release(ring);
+    }
+    return status;
+}
+
 nvx_gsp_rmapi_status_t nvx_gsp_channel_runtime_recover(
     nvx_gsp_rpc_manager_t *manager, nvx_gsp_channel_runtime_t *runtime,
     void *scratch, size_t scratch_size, void *response,
@@ -113,11 +183,9 @@ nvx_gsp_rmapi_status_t nvx_gsp_channel_runtime_recover(
 
     if (!runtime->rm.allocated &&
         runtime->rm.stage == NVX_GSP_CHANNEL_IDLE) {
-        if (runtime->userd_reference_held) {
-            status = nvx_gsp_os_memory_release(runtime->userd_memory);
-            if (status != NVX_GSP_RMAPI_OK)
-                return NVX_GSP_RMAPI_CLEANUP_FAILED;
-        }
+        status = release_runtime_references(runtime);
+        if (status != NVX_GSP_RMAPI_OK)
+            return status;
         memset(runtime, 0, sizeof(*runtime));
         return NVX_GSP_RMAPI_OK;
     }
@@ -163,11 +231,9 @@ nvx_gsp_rmapi_status_t nvx_gsp_channel_runtime_stop(
 
     if (runtime->stage == NVX_GSP_CHANNEL_RUNTIME_CREATE_PENDING &&
         !runtime->rm.allocated) {
-        if (runtime->userd_reference_held) {
-            status = nvx_gsp_os_memory_release(runtime->userd_memory);
-            if (status != NVX_GSP_RMAPI_OK)
-                return NVX_GSP_RMAPI_CLEANUP_FAILED;
-        }
+        status = release_runtime_references(runtime);
+        if (status != NVX_GSP_RMAPI_OK)
+            return status;
         memset(runtime, 0, sizeof(*runtime));
         return NVX_GSP_RMAPI_OK;
     }
@@ -180,11 +246,9 @@ nvx_gsp_rmapi_status_t nvx_gsp_channel_runtime_stop(
     if (status != NVX_GSP_RMAPI_OK)
         return status;
 
-    if (runtime->userd_reference_held) {
-        status = nvx_gsp_os_memory_release(runtime->userd_memory);
-        if (status != NVX_GSP_RMAPI_OK)
-            return NVX_GSP_RMAPI_CLEANUP_FAILED;
-    }
+    status = release_runtime_references(runtime);
+    if (status != NVX_GSP_RMAPI_OK)
+        return status;
     memset(runtime, 0, sizeof(*runtime));
     return NVX_GSP_RMAPI_OK;
 }

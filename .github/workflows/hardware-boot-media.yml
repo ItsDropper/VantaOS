@@ -35,7 +35,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --yes build-essential nasm grub-pc-bin xorriso \
-            mtools dosfstools qemu-system-x86 gnu-efi ovmf gdisk
+            mtools dosfstools qemu-system-x86 gnu-efi ovmf gdisk util-linux
 
       - name: Build normal release kernel and UEFI test image
         run: |

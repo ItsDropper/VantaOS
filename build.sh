@@ -14,6 +14,7 @@ echo "==> Building kernel..."
 make
 
 echo "==> Building the ring-3 Terminal ELF..."
+# Ring-3 code stays on the x86-64 baseline until the kernel enables XSAVE/AVX state.
 gcc -m64 -march=x86-64 -mtune=generic -mcmodel=large -ffreestanding -fno-pie -fno-stack-protector \
     -mno-red-zone -fno-builtin -nostdlib -Wall -Wextra -Werror \
     -Iuserspace/include -c userspace/crt/crt0.S -o /tmp/vantaos-terminal-crt0.o

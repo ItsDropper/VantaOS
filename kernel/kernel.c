@@ -69,6 +69,8 @@ void kernel_main(multiboot_info_t* mbd)
  */
 void kernel_main_uefi(vanta_boot_info_t* boot_info)
 {
+    /* Emit before UART setup so the first C-entry transition is observable. */
+    serial_write("VANTAOS_UEFI_KERNEL_C_ENTRY\n");
     serial_initialize();
     serial_write("VANTAOS_UEFI_KERNEL_ENTRY\n");
 

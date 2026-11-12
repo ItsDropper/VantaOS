@@ -9,11 +9,12 @@ implemented PCI identification from hardware functionality.
 **Status snapshot (2026-11-12):** NVX has a substantial GA10x software
 implementation: PCI identity and attach/probe, firmware bundle parsing and
 preflight, SEC2/FWSEC transaction code, GSP RISC-V startup, MSGQ/GMCAPI
-initialization, RPC transport, RM object wrappers, GPUVA/GPUVM and copy-engine
-submission components. The complete startup sequence is exposed as a callable
-API, but is not invoked by boot or the current `nvx status`, `nvx vbios`, or
-`nvx fw` shell commands. There is no physical GA106/RTX 3060 verification, no
-end-to-end startup test, and no verified GPU-produced copy or rendered frame.
+initialization, RPC transport, RM object wrappers, GPUVA/GPUVM, copy-engine
+submission components, and a new platform coordinator that composes the
+preparation and startup stages. The coordinator is callable but has no boot or
+shell caller. CI tests its control flow with hardware-service mocks; there is
+still no real-register end-to-end startup test, physical GA106 verification, or
+verified GPU-produced copy/rendered frame.
 NVX is therefore advanced, host-tested bring-up software—not a hardware-working
 accelerated driver.
 

@@ -34,6 +34,7 @@ typedef struct nvx_memory_slot {
     nvx_gpuvm_mapping_t mapping;
     uint64_t token, requested_size;
     uint32_t generation;
+    uint32_t active_users;
     uint8_t kind, state;
 } nvx_memory_slot_t;
 typedef struct nvx_memory_info {
@@ -42,7 +43,11 @@ typedef struct nvx_memory_info {
     uint64_t size;
     nvx_memory_kind_t kind;
 } nvx_memory_info_t;
-/* Allocate this manager in static/long-lived storage; it is intentionally large. */
+/*
+ * Allocate this manager in static/long-lived storage; it is intentionally large.
+ * get_info() returns a borrowed CPU pointer: pin the handle while accessing it
+ * or while a GPU may access its mapping, and unpin only after completion.
+ */
 typedef struct nvx_memory_manager {
     spinlock_t lock;
     nvx_gpuvm_t *gpuvm;
@@ -56,6 +61,12 @@ nvx_memory_status_t nvx_memory_init(nvx_memory_manager_t *, nvx_gpuvm_t *, unsig
 nvx_memory_status_t nvx_memory_alloc(nvx_memory_manager_t *, size_t, nvx_memory_kind_t, nvx_memory_handle_t *);
 nvx_memory_status_t nvx_memory_get_info(nvx_memory_manager_t *, const nvx_memory_handle_t *, nvx_memory_info_t *);
 nvx_memory_status_t nvx_memory_cpu_address(nvx_memory_manager_t *, const nvx_memory_handle_t *, void **);
+/*
+ * Pin an object across GPU submission/execution. Release returns BUSY while
+ * pinned; unpin only after the GPU fence completes or the engine is quiesced.
+ */
+nvx_memory_status_t nvx_memory_pin(nvx_memory_manager_t *, const nvx_memory_handle_t *);
+nvx_memory_status_t nvx_memory_unpin(nvx_memory_manager_t *, const nvx_memory_handle_t *);
 nvx_memory_status_t nvx_memory_release(nvx_memory_manager_t *, nvx_memory_handle_t *);
 nvx_memory_status_t nvx_memory_validate(nvx_memory_manager_t *);
 #endif

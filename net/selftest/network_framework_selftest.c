@@ -12,6 +12,32 @@
 #include <stddef.h>
 
 #ifdef VANTAOS_SELF_TEST
+static void net_selftest_write_hex64(uint64_t value)
+{
+    static const char digits[] = "0123456789ABCDEF";
+    char output[16];
+    for (uint32_t i = 0U; i < 16U; ++i)
+        output[i] = digits[(value >> ((15U - i) * 4U)) & 0x0FU];
+    serial_write_bytes(output, sizeof(output));
+}
+
+static void net_selftest_write_stats(const char* name,
+                                     const net_device_stats_t* stats)
+{
+    serial_write(name);
+    serial_write(" tx_frames=");
+    net_selftest_write_hex64(stats->tx_frames);
+    serial_write(" tx_errors=");
+    net_selftest_write_hex64(stats->tx_errors);
+    serial_write(" rx_frames=");
+    net_selftest_write_hex64(stats->rx_frames);
+    serial_write(" rx_dropped=");
+    net_selftest_write_hex64(stats->rx_dropped);
+    serial_write(" rx_malformed=");
+    net_selftest_write_hex64(stats->rx_malformed);
+    serial_write("\\n");
+}
+
 static uint32_t mock_tx_count;
 static uint16_t received_type;
 static size_t received_header,received_length;
@@ -72,8 +98,9 @@ void network_framework_selftest(void) {
      * already occupy slots, so measure this interface's accepted frames rather
      * than assuming the global queue starts empty.
      */
-    net_device_stats_t before_queue;
-    ok=net_device_get_stats(&d,&before_queue)&&ok;
+    net_device_stats_t before_queue = {0};
+    int before_stats_valid = net_device_get_stats(&d,&before_queue);
+    ok=before_stats_valid&&ok;
     uint32_t queued=0U;
     int queue_full=0;
     /*
@@ -92,17 +119,36 @@ void network_framework_selftest(void) {
     }
     ok=queue_full&&ok; /* bounded queue must reject under sustained pressure */
     if (!ok && !failure_stage) failure_stage = "rx-queue-bounds";
-    net_device_stats_t stats;
-    ok=net_device_get_stats(&d,&stats)&&ok;
+    net_device_stats_t stats = {0};
+    int stats_valid = net_device_get_stats(&d,&stats);
     /*
      * Compare deltas: this remains deterministic even when a real interface
      * queued packets before the self-test began.
      */
-    ok=mock_tx_count==1&&stats.tx_frames==1&&stats.tx_errors==1&&
-       stats.rx_frames>=before_queue.rx_frames&&
-       stats.rx_frames-before_queue.rx_frames==queued&&
-       stats.rx_dropped>before_queue.rx_dropped&&
-       stats.rx_malformed==before_queue.rx_malformed&&ok;
+    int stats_ok = before_stats_valid && stats_valid &&
+        mock_tx_count==1U && stats.tx_frames==1U && stats.tx_errors==1U &&
+        stats.rx_frames>=before_queue.rx_frames &&
+        stats.rx_frames-before_queue.rx_frames==queued &&
+        stats.rx_dropped>before_queue.rx_dropped &&
+        stats.rx_malformed==before_queue.rx_malformed;
+    if (!stats_ok)
+    {
+        serial_write("VANTAOS_NETWORK_FRAMEWORK_STATS_DIAGNOSTIC queued=");
+        net_selftest_write_hex64(queued);
+        serial_write(" mock_tx_count=");
+        net_selftest_write_hex64(mock_tx_count);
+        serial_write("\\n");
+        net_selftest_write_stats("VANTAOS_NETWORK_FRAMEWORK_STATS_BEFORE",
+                                 &before_queue);
+        net_selftest_write_stats("VANTAOS_NETWORK_FRAMEWORK_STATS_AFTER",
+                                 &stats);
+        serial_write("VANTAOS_NETWORK_FRAMEWORK_STATS_VALID before=");
+        net_selftest_write_hex64((uint64_t)before_stats_valid);
+        serial_write(" after=");
+        net_selftest_write_hex64((uint64_t)stats_valid);
+        serial_write("\\n");
+    }
+    ok=stats_ok&&ok;
     if (!ok && !failure_stage) failure_stage = "statistics";
     ok=net_ethernet_handler_unregister(0x88B5U,mock_handler,0)&&ok;
     ok=net_device_unregister(&d)&&ok;

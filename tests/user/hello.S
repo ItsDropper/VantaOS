@@ -415,6 +415,8 @@ ipc_receive_done:
     lea ipc_parent_received(%rip), %rdi
     mov $(ipc_parent_received_end - ipc_parent_received), %esi
     int $0x80
+    /* syscall_write consumes RDI; restore the child's capability for send. */
+    mov child_endpoint_token(%rip), %rdi
     mov $27, %eax
     lea ipc_reply(%rip), %rsi
     mov $(ipc_reply_end - ipc_reply), %edx
@@ -573,10 +575,10 @@ ipc_reply:
     .ascii "ack"
 ipc_reply_end:
 ipc_parent_received:
-    .ascii "VANTAOS_IPC_PARENT_RECEIVED_CHILD\\n"
+    .ascii "VANTAOS_IPC_PARENT_RECEIVED_CHILD\n"
 ipc_parent_received_end:
 ipc_parent_ack_sent:
-    .ascii "VANTAOS_IPC_PARENT_ACK_SENT\\n"
+    .ascii "VANTAOS_IPC_PARENT_ACK_SENT\n"
 ipc_parent_ack_sent_end:
 fixture:
     .ascii "VANTAOS_USER_FILE_FIXTURE\n"

@@ -131,6 +131,7 @@ nvx_gsp_rmapi_status_t nvx_gsp_os_memory_create(
 {
     nvx_gsp_os_memory_params_t p = {0};
     nvx_gsp_rmapi_status_t status;
+    nvx_dma_status_t dma_status;
 
     if (!manager || !m || !client || !device || !memory || !size ||
         size > NVX_DMA_MAX_BYTES || !scratch || !scratch_size || !response ||
@@ -142,8 +143,8 @@ nvx_gsp_rmapi_status_t nvx_gsp_os_memory_create(
         !idle_valid(m))
         return NVX_GSP_RMAPI_INVALID_ARGUMENT;
 
-    status = nvx_dma_alloc_identity_mapped(size, &m->backing);
-    if (status != NVX_DMA_OK) return NVX_GSP_RMAPI_NO_SPACE;
+    dma_status = nvx_dma_alloc_identity_mapped(size, &m->backing);
+    if (dma_status != NVX_DMA_OK) return NVX_GSP_RMAPI_NO_SPACE;
 
     if (!gpu_dma_buffer_is_valid(&m->backing) ||
         m->backing.allocated_size < size || !m->backing.allocated_size ||

@@ -21,7 +21,7 @@ This document is a release gate, not a claim that the driver is ready. A phase m
 | SEC2 signed Booter Load transaction | Implemented as a hardware-facing sequence with synthetic MMIO tests | Real VBIOS/workspace and framebuffer inputs; correct WPR/FRTS policy; authenticated SEC2 completion on GA106 |
 | GSP RISC-V launch and readiness | Partial primitives; end-to-end boot not established | Real firmware launch, stable ready state, mailbox/RPC initialization and version-compatible cached init ABI |
 | GSP-RM RPC and RM objects | Protocol, core/channel/CTXDMA and system-memory object lifecycle primitives exist; host-tested | Successful first real RPC and object create/control/free round-trip on GA106 |
-| GPU memory / GPUVM | Software reservation, DMA/page-table primitives and RM system-memory allocation lifecycle exist; host-tested | CPU mapping, CTXDMA/NVOS46 mapping, hardware-correct page tables, translation controls, TLB invalidation, real VRAM accounting and proven mapping visibility |
+| GPU memory / GPUVM | Software reservation, DMA/page-table primitives, RM system-memory allocation, CTXDMA and NVOS46/NVOS47 lifecycle wrappers exist; host-tested | CPU mapping, first real GA106 RM mapping/visibility result, hardware-correct page tables, translation controls, TLB invalidation and real VRAM accounting |
 | GPFIFO / channel / synchronization | Layout and validation primitives exist | Hardware channel provisioning, real mapped GPFIFO/USERD/fence resources and GPU-produced completion |
 | Copy engine | Command builder and bounded GPFIFO submit/wait transaction implemented, host-tested; hardware provisioning unverified | A real CE submission copying known bytes between distinct GPU-visible buffers, followed by independent CPU verification |
 | Graphics engine | No verified working 3D path | Engine context, graphics channel, shader/program execution, render target, completion and CPU-verified output |
@@ -87,6 +87,13 @@ This is software lifecycle verification only: no physical GSP/RM channel has
 yet been created on a GA106, and the current channel memory descriptors still
 must be backed by real RM-visible mappings before submission.
 
+The copy-channel lifecycle also treats an RPC transport error as an
+uncertain in-flight operation when the RPC manager still owns a valid handle.
+Allocation, bind, schedule, disable and free stages preserve that handle and
+require recovery before response storage or channel ownership can be reused.
+Host tests cover uncertain allocation and free outcomes, including repeated
+transport errors during recovery; no operation is silently abandoned.
+
 ## Per-object GPU memory access policy
 
 The NVX memory-object allocator now accepts explicit read or read/write
@@ -148,7 +155,11 @@ path documents that this class does not allow DMA mappings.
 
 The wrapper submits the RM allocation, waits for its completion, decodes the
 returned size and inclusive limit from the complete allocation response, and
-tracks free/recovery ownership. If RM reports allocation success but the
+tracks free/recovery ownership. Its standard initializer explicitly requests
+NVIDIA's `NVOS32_ALLOC_FLAGS_ALIGNMENT_FORCE` for the 4 KiB alignment field.
+The response is accepted only when the inclusive limit is exactly `size - 1`;
+`nvx_gsp_memory_object_get_range()` exposes the extent only after that invariant
+and the completed-object state have both been validated. If RM reports allocation success but the
 returned parameter payload is truncated or malformed, NVX retains the remote
 object in a destroyable state rather than discarding the handle. Timeouts and
 transport errors preserve the in-flight RPC handle; failed frees preserve the
@@ -156,8 +167,9 @@ created memory object. The caller supplies version-matched NVOS32 flags and
 attributes rather than relying on guessed placement or cache-policy values.
 
 Strict-warning host tests cover ABI offsets, successful allocation/free,
-invalid alignment, timeout and transport recovery, malformed-result ownership,
-remote free failure, and retryable local RPC-handle release.
+forced-alignment encoding, invalid alignment, timeout and transport recovery,
+truncated and out-of-range result ownership, validated-range access, remote
+free failure, and retryable local RPC-handle release.
 
 **This is an RM object lifecycle milestone, not yet CPU/GPU memory visibility.**
 The API does not yet establish a CPU mapping, prove the returned allocation is
@@ -182,9 +194,9 @@ the parent memory object alive until context-DMA teardown completes.
 
 Host tests cover the class ID and parameter layout, parent/child handles,
 allocation and free, timeout recovery, transport errors, remote failure,
-retryable handle release, handle aliasing, and in-flight buffer overlap.
-This still does not allocate the backing RM memory object or prove a real
-CTXDMA object can be created on GA106.
+retryable handle release, handle aliasing, and in-flight buffer overlap. The
+caller must still create and retain the backing RM memory object; no real
+CTXDMA object has been created on GA106.
 
 ## RM DMA mapping lifecycle software milestone
 
@@ -206,12 +218,13 @@ The NVOS46 request preserves its input dmaOffset: NVIDIA's ABI makes that field 
 
 The host test covers successful map/unmap, map and unmap timeout recovery,
 response decode failure, request-range overflow, retryable RPC-handle release,
-and the guarantee that recovery does not submit a duplicate operation.
-This is lifecycle verification only. It does not audit the NVOS46/NVOS47 wire
-layout, create the underlying RM memory/DMA objects, or prove that the
-returned offset is usable on GA106. The RM system-memory object ABI and NVOS46/NVOS47 wire layouts are now
-implemented and host-tested, but the first real allocation, CPU mapping, and
-actual GSP-RM DMA mapping round-trip remain explicit hardware-readiness gates.
+and the guarantee that recovery does not submit a duplicate operation. The
+wire layout is audited against NVIDIA's public headers, and separate
+host-tested wrappers now exist for the RM system-memory and CTXDMA objects.
+These pieces are not yet composed into a CPU-visible buffer, and no GA106
+allocation, CTXDMA creation, or GSP-RM DMA mapping round-trip has been verified.
+The first physical allocation, CPU mapping, and independently verified GPU
+visibility remain explicit hardware-readiness gates.
 
 ## Mandatory first hardware experiment
 

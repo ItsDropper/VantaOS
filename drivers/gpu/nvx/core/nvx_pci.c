@@ -8,6 +8,9 @@
 #include "nvx_device.h"
 #include "pci.h"
 #include "serial.h"
+#include "mmio.h"
+#include "nvx_generation.h"
+#include "nvx_probe.h"
 
 #include <stdint.h>
 
@@ -82,6 +85,71 @@ static void nvx_log_bar0(const struct pci_device *device)
     }
 }
 
+/*
+ * MX130/MX150 use the shared NVX bounded BAR/MMIO probe for a read-only
+ * PMC_BOOT_0/1 identity check. Only the first two dwords are mapped; no
+ * PCI command bits, bus mastering, firmware, or engine state are changed.
+ */
+static void nvx_probe_mobile_identity(const struct pci_device *device)
+{
+    const nvx_generation_descriptor_t *generation =
+        nvx_generation_for_pci(device->device_id);
+    uint16_t command;
+    uint64_t base = 0U;
+    int is_io = 0, is_64bit = 0;
+    void *mapping;
+    nvx_register_snapshot_t snapshot;
+    nvx_probe_status_t status;
+    int unmapped;
+
+    if (generation == NULL ||
+        generation->boot_sequence != NVX_BOOT_SEQUENCE_UNSUPPORTED ||
+        (generation->family != NVX_FAMILY_MAXWELL &&
+         generation->family != NVX_FAMILY_PASCAL))
+        return;
+
+    serial_write("[NVX] mobile PMC identity: ");
+    command = pci_read_config16(device, 0x04U);
+    if (command == 0xFFFFU ||
+        (command & NVX_PCI_COMMAND_MEMORY_SPACE) == 0U) {
+        serial_write("skipped (memory decode disabled)\n");
+        return;
+    }
+    if (!pci_get_bar(device, 0U, &base, &is_io, &is_64bit) ||
+        is_io != 0 || base == 0U || (base & 0x0FU) != 0U ||
+        base > UINT64_MAX - 7U) {
+        serial_write("skipped (invalid BAR0)\n");
+        return;
+    }
+
+    mapping = mmio_map_region(base, 8U);
+    if (mapping == NULL) {
+        serial_write("skipped (MMIO mapping unavailable)\n");
+        return;
+    }
+    status = nvx_probe_mapped_bar0(device, (volatile uint32_t *)mapping,
+                                   8U, &snapshot);
+    unmapped = mmio_unmap_region(mapping, 8U);
+    if (!unmapped) {
+        serial_write("failed (MMIO unmap failed)\n");
+        return;
+    }
+    if (status != NVX_PROBE_OK || snapshot.identity_mismatch ||
+        snapshot.identified_family != generation->family ||
+        snapshot.identified_profile != generation->profile) {
+        serial_write("failed (PCI/PMC identity did not agree)\n");
+        return;
+    }
+
+    serial_write("verified family=");
+    serial_write(nvx_family_name(snapshot.identified_family));
+    serial_write(" profile=");
+    serial_write(nvx_profile_name(snapshot.identified_profile));
+    serial_write(" architecture=0x");
+    nvx_write_hex(snapshot.architecture, 2U);
+    serial_write("\n");
+}
+
 static void nvx_log_identity(const struct pci_device *device)
 {
     nvx_device_descriptor_t descriptor;
@@ -138,6 +206,7 @@ static void nvx_log_identity(const struct pci_device *device)
             ? " bus-master=enabled\n"
             : " bus-master=disabled\n");
         nvx_log_bar0(device);
+        nvx_probe_mobile_identity(device);
     }
     else
     {

@@ -20,8 +20,8 @@ This document is a release gate, not a claim that the driver is ready. A phase m
 | GA10x firmware parsing and preflight | Implemented, host-tested | Validate the exact firmware files supplied by a legitimate platform provider; record hashes, versions and verifier policy |
 | SEC2 signed Booter Load transaction | Implemented as a hardware-facing sequence with synthetic MMIO tests | Real VBIOS/workspace and framebuffer inputs; correct WPR/FRTS policy; authenticated SEC2 completion on GA106 |
 | GSP RISC-V launch and readiness | Partial primitives; end-to-end boot not established | Real firmware launch, stable ready state, mailbox/RPC initialization and version-compatible cached init ABI |
-| GSP-RM RPC and RM objects | Protocol/object primitives exist | Successful first real RPC, object create/control/free round-trip and error-path recovery |
-| GPU memory / GPUVM | Software reservation, DMA and page-table primitives exist | Hardware-correct page-table format, translation controls, TLB invalidation, real VRAM accounting and proven mapping visibility |
+| GSP-RM RPC and RM objects | Protocol, core/channel/CTXDMA and system-memory object lifecycle primitives exist; host-tested | Successful first real RPC and object create/control/free round-trip on GA106 |
+| GPU memory / GPUVM | Software reservation, DMA/page-table primitives and RM system-memory allocation lifecycle exist; host-tested | CPU mapping, CTXDMA/NVOS46 mapping, hardware-correct page tables, translation controls, TLB invalidation, real VRAM accounting and proven mapping visibility |
 | GPFIFO / channel / synchronization | Layout and validation primitives exist | Hardware channel provisioning, real mapped GPFIFO/USERD/fence resources and GPU-produced completion |
 | Copy engine | Command builder and bounded GPFIFO submit/wait transaction implemented, host-tested; hardware provisioning unverified | A real CE submission copying known bytes between distinct GPU-visible buffers, followed by independent CPU verification |
 | Graphics engine | No verified working 3D path | Engine context, graphics channel, shader/program execution, render target, completion and CPU-verified output |

@@ -334,8 +334,13 @@ static EFI_STATUS load_elf64(
     UINT64 image_bytes = image_end - image_start;
     UINTN pages = (UINTN)(image_bytes / EFI_PAGE_SIZE);
     EFI_PHYSICAL_ADDRESS allocation = image_start;
+    /*
+     * The kernel entry point is executed directly after ExitBootServices.
+     * Request loader-code memory so firmware does not classify the image
+     * as non-executable loader data (which can fault on the first fetch).
+     */
     EFI_STATUS status = uefi_call_wrapper(
-        BS->AllocatePages, 4, AllocateAddress, EfiLoaderData, pages,
+        BS->AllocatePages, 4, AllocateAddress, EfiLoaderCode, pages,
         &allocation
     );
     if (EFI_ERROR(status) || allocation != image_start) {

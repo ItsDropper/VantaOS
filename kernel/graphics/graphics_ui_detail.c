@@ -323,7 +323,7 @@ void graphics_draw_settings_page_detail(int x, int y, int w, int h)
     if (w < 500 || h < 350) return;
     int inner_w = w - 48;
     ui_window_heading(x + 24, y + 66, inner_w, "PERSONALIZATION",
-        "Display settings", "Changes apply only when the graphics backend supports them.");
+        "Display settings", "Choose a resolution supported by this display adapter.");
     ui_surface(x + 24, y + 128, inner_w, 104, 10, UI_SURFACE_0, UI_EDGE_SOFT);
     graphics_draw_text(x + 42, y + 137, "Resolution", UI_WHITE, 1);
     graphics_draw_text(x + 42, y + 151, "Select a framebuffer mode", UI_MUTED, 1);

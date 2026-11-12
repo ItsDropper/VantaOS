@@ -110,7 +110,7 @@ nvx_gsp_rmapi_status_t nvx_gsp_dma_unmap(
     if (!manager || !mapping || !scratch || !response || !timeout_ms ||
         !poll_interval_ms || !delay_ms ||
         mapping->stage != NVX_GSP_DMA_MAP_MAPPED ||
-        !mapping->request.length || !mapping->dma_offset ||
+        !mapping->request.length ||
         mapping->operation.handle.valid)
         return NVX_GSP_RMAPI_INVALID_ARGUMENT;
 

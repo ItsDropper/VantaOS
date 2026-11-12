@@ -281,6 +281,46 @@ static const acpi_aml_device_t *aml_find_device_path(const char *path)
     return NULL;
 }
 
+static void *intel_sptlp_map(void *context,uint64_t address,size_t length)
+{
+    (void)context;
+    return mmio_map_region(address,length);
+}
+
+static int intel_sptlp_unmap(void *context,void *mapping,size_t length)
+{
+    (void)context;
+    return mmio_unmap_region(mapping,length);
+}
+
+static uint32_t intel_sptlp_read32(void *context,
+                                   const volatile uint8_t *mapping,
+                                   uint32_t offset)
+{
+    (void)context;
+    return *(const volatile uint32_t*)(mapping+offset);
+}
+
+static void intel_probe_gpio_controllers(void)
+{
+    const intel_sptlp_mmio_ops_t ops={
+        .map=intel_sptlp_map,
+        .unmap=intel_sptlp_unmap,
+        .read32=intel_sptlp_read32
+    };
+    for(uint32_t i=0U;i<aml_device_count;++i)
+    {
+        const acpi_aml_device_t *device=&aml_devices[i];
+        if(!aml_device_usable(device)||!id_equal(device->hid,"INT344B"))
+            continue;
+        intel_sptlp_snapshot_t snapshot;
+        if(intel_sptlp_probe_controller(device,&ops,&snapshot))
+            serial_write("VANTAOS_GPIO_SPTLP_READ_ONLY_MMIO_READY communities=3\n");
+        else
+            serial_write("VANTAOS_GPIO_SPTLP_MMIO_PROBE_SKIPPED\n");
+    }
+}
+
 static void intel_log_gpio_namespace(void)
 {
     for(uint32_t i=0U;i<aml_device_count;++i)
@@ -458,6 +498,7 @@ void i2c_initialize(void)
         return;
     }
     intel_log_gpio_namespace();
+    intel_probe_gpio_controllers();
     uint32_t controller_count=0U;
     int index=-1;
     while((index=pci_find_class(I2C_PCI_CLASS,I2C_PCI_SUBCLASS,-1,index+1))>=0)

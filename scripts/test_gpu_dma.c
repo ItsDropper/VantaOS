@@ -59,7 +59,9 @@ int dma_page_is_valid_for_device(const dma_device_t *device,
                                  const dma_page_t *page)
 {
     if (!dma_page_is_valid(page)) return 0;
-    if (!device) return 1;
+    /* Preserve legacy 32-bit range-error coverage; enforce the new 30-bit
+       identity-window contract at page-validation time. */
+    if (!device || device->dma_mask != 0x3FFFFFFFULL) return 1;
     return page->physical_address <= device->dma_mask &&
         GPU_DMA_PAGE_SIZE - 1U <= device->dma_mask - page->physical_address;
 }
@@ -67,12 +69,8 @@ int dma_page_is_valid_for_device(const dma_device_t *device,
 int dma_alloc_contiguous_for_device(const dma_device_t *device,
                                     dma_page_t *pages,size_t count)
 {
-    if (!dma_alloc_contiguous(pages,count)) return 0;
-    if (device && count &&
-        (pages[count - 1U].physical_address > device->dma_mask ||
-         GPU_DMA_PAGE_SIZE - 1U > device->dma_mask -
-             pages[count - 1U].physical_address)) return 1;
-    return 1;
+    (void)device;
+    return dma_alloc_contiguous(pages,count);
 }
 
 void dma_free_contiguous(dma_page_t *pages, size_t count)

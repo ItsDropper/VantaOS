@@ -381,6 +381,7 @@ nvx_gsp_startup_status_t nvx_gsp_ga10x_start_and_init_rm_from_pci(
     assert(static_info && static_capacity && out_static_size);
     assert(scratch && scratch_size && timeout && poll && delay);
     assert(runtime && gmcapi && rpc_transport && rpc_manager && result);
+    (void)context;
     if (fail_startup) return NVX_GSP_STARTUP_GSP_INIT_FAILED;
     *out_static_size = 128U;
     result->static_info_size = 128U;

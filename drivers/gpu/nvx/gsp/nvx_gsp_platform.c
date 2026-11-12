@@ -345,6 +345,15 @@ nvx_gsp_platform_status_t nvx_gsp_platform_start(
      * is permitted to issue host-memory transactions.
      */
     if (!pci_enable_bus_mastering(config->pci_device)) {
+        /*
+         * The config write may have succeeded even if readback failed. Prove
+         * bus mastering is disabled before freeing any DMA allocations.
+         */
+        if (!pci_disable_bus_mastering(config->pci_device)) {
+            session->bus_master_enabled = 1U;
+            session->recovery_required = 1U;
+            return NVX_GSP_PLATFORM_BUSY;
+        }
         if (!release_unstarted_session(session))
             return NVX_GSP_PLATFORM_BUSY;
         return NVX_GSP_PLATFORM_BUS_MASTER_FAILED;

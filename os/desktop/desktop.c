@@ -177,6 +177,8 @@ static void desktop_gui_present_windows_fast(void)
 {
     (void)gui_server_take_window_redraw_request();
     gui_server_sync_active_panel();
+    if (gui_server_is_window_dragging())
+        return;
     if (!graphics_can_redraw_windows_incrementally())
     {
         desktop_gui_present();

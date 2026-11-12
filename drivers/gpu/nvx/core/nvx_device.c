@@ -48,9 +48,13 @@ int nvx_identify_architecture(uint8_t architecture,
         return 0;
 
     switch (architecture) {
-    case 0x11U: /* Maxwell GM100 */
-    case 0x12U: /* Maxwell GM200 */
-    case 0x13U: /* Pascal GP100 */
+    case 0x11U: /* Maxwell GM10x, including GM108 */
+    case 0x12U: /* Maxwell GM20x */
+        *out_family = NVX_FAMILY_MAXWELL;
+        return 1;
+    case 0x13U: /* Pascal GP10x, including GP108 */
+        *out_family = NVX_FAMILY_PASCAL;
+        return 1;
     case 0x14U: /* Volta GV100 */
     case 0x15U: /* Volta GV110 */
         *out_family = NVX_FAMILY_LEGACY;

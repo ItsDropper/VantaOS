@@ -1,10 +1,20 @@
 name: NVX PCI, resource and lifecycle tests
 
 on:
+  push:
+    branches:
+      - master
+    paths:
+      - "drivers/gpu/nvx/**"
+      - "include/nvx_gsp_ce.h"
+      - "scripts/test_nvx_gsp_ce_runtime.c"
+      - ".github/workflows/nvx-tests.yml"
   pull_request:
     paths:
       - "drivers/gpu/nvx/**"
       - "include/nvx_gsp_boot_memory.h"
+      - "include/nvx_gsp_ce.h"
+      - "scripts/test_nvx_gsp_ce_runtime.c"
       - "include/nvx_gsp_secure_boot.h"
       - "include/nvx_gsp_pci_rom.h"
       - "include/nvx_gsp_fwsec_interface.h"

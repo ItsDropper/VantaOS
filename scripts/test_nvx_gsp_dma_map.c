@@ -89,6 +89,18 @@ int main(void)
            last_unmap.dma_offset==mapped_offset&&last_unmap.size==request.length);
     assert(unmap_calls==1U&&release_calls==2U);
 
+    /* A valid RM mapping may have DMA offset zero; it must still unmap. */
+    mapped_offset=0U;
+    request.flags=NVX_GSP_DMA_MAP_FLAG_OFFSET_FIXED;
+    assert(nvx_gsp_dma_map(&manager,&mapping,&request,scratch,sizeof(scratch),
+        response,sizeof(response),100U,1U,delay,NULL)==NVX_GSP_RMAPI_OK);
+    assert(mapping.stage==NVX_GSP_DMA_MAP_MAPPED&&mapping.dma_offset==0U);
+    assert(nvx_gsp_dma_unmap(&manager,&mapping,scratch,sizeof(scratch),
+        response,sizeof(response),100U,1U,delay,NULL)==NVX_GSP_RMAPI_OK);
+    assert(mapping.stage==NVX_GSP_DMA_MAP_IDLE);
+    mapped_offset=0x12345000ULL;
+    request.flags=0x10U;
+
     memset(&mapping,0,sizeof(mapping));wait_status=NVX_GSP_RMAPI_TIMEOUT;
     assert(nvx_gsp_dma_map(&manager,&mapping,&request,scratch,sizeof(scratch),
         response,sizeof(response),10U,1U,delay,NULL)==NVX_GSP_RMAPI_TIMEOUT);

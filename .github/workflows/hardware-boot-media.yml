@@ -76,7 +76,7 @@ jobs:
           assert bps == 512, f"unexpected FAT sector size {bps}"
           assert hidden == start, f"FAT hidden-sector field {hidden} != partition start {start}"
           assert 0 < total <= size, f"FAT volume sectors {total} exceed partition sectors {size}"
-          assert boot[510:512] == b"\\x55\\xaa", "missing FAT boot signature"
+          assert boot[510] == 0x55 and boot[511] == 0xAA, "missing FAT boot signature"
           print(f"EFI FAT32 BPB valid: start={start} sectors={total}/{size} hidden={hidden}")
           PY
           mcopy -i VantaOS-UEFI.img@@1048576 ::/EFI/BOOT/BOOTX64.EFI /tmp/BOOTX64.EFI

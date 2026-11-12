@@ -100,6 +100,11 @@ nvx_gsp_rmapi_status_t nvx_gsp_memory_object_create(
     size_t response_capacity, uint32_t timeout_ms, uint32_t poll_interval_ms,
     nvx_gsp_rmapi_delay_fn delay_ms, void *delay_context);
 
+/* Return a validated allocation extent suitable for CTXDMA/GPUVM setup. */
+nvx_gsp_rmapi_status_t nvx_gsp_memory_object_get_range(
+    const nvx_gsp_memory_object_t *object, uint64_t *out_size,
+    uint64_t *out_inclusive_limit);
+
 nvx_gsp_rmapi_status_t nvx_gsp_memory_object_destroy(
     nvx_gsp_rpc_manager_t *manager, nvx_gsp_memory_object_t *object,
     void *scratch, size_t scratch_size, void *response,

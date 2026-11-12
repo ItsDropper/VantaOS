@@ -252,6 +252,27 @@ nvx_gsp_rmapi_status_t nvx_gsp_memory_object_create(
         delay_context);
 }
 
+
+nvx_gsp_rmapi_status_t nvx_gsp_memory_object_get_range(
+    const nvx_gsp_memory_object_t *object, uint64_t *out_size,
+    uint64_t *out_inclusive_limit)
+{
+    if (!object || !out_size || !out_inclusive_limit ||
+        ranges_overlap(object, sizeof(*object), out_size, sizeof(*out_size)) ||
+        ranges_overlap(object, sizeof(*object), out_inclusive_limit,
+            sizeof(*out_inclusive_limit)) ||
+        ranges_overlap(out_size, sizeof(*out_size), out_inclusive_limit,
+            sizeof(*out_inclusive_limit)) ||
+        !state_valid(object) || object->stage != NVX_GSP_MEMORY_CREATED ||
+        !object->result_valid || !object->actual_size ||
+        object->limit != object->actual_size - 1U)
+        return NVX_GSP_RMAPI_INVALID_ARGUMENT;
+
+    *out_size = object->actual_size;
+    *out_inclusive_limit = object->limit;
+    return NVX_GSP_RMAPI_OK;
+}
+
 nvx_gsp_rmapi_status_t nvx_gsp_memory_object_destroy(
     nvx_gsp_rpc_manager_t *manager, nvx_gsp_memory_object_t *object,
     void *scratch, size_t scratch_size, void *response,

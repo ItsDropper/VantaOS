@@ -114,6 +114,7 @@ int main(void)
     nvx_gsp_memory_object_t object = {0};
     nvx_gsp_memory_allocation_params_t p = params();
     uint8_t scratch[512], response[512];
+    uint64_t validated_size = 0U, validated_limit = 0U;
 
     alloc_submit_status = free_submit_status = wait_status =
         NVX_GSP_RMAPI_OK;
@@ -139,6 +140,11 @@ int main(void)
     assert(object.stage == NVX_GSP_MEMORY_CREATED);
     assert(object.remote_created && object.result_valid);
     assert(object.actual_size == 20480U && object.limit == 20479U);
+    assert(nvx_gsp_memory_object_get_range(&object, &validated_size,
+        &validated_limit) == NVX_GSP_RMAPI_OK);
+    assert(validated_size == 20480U && validated_limit == 20479U);
+    assert(nvx_gsp_memory_object_get_range(&object, &validated_size,
+        &validated_size) == NVX_GSP_RMAPI_INVALID_ARGUMENT);
     assert(allocated_class == NVX_GSP_RM_CLASS_MEMORY_SYSTEM);
     assert(allocated_parent == 2U && allocated_object == 3U);
     assert(captured_params.owner == p.owner && captured_params.size == p.size);
@@ -190,6 +196,8 @@ int main(void)
         delay, NULL) == NVX_GSP_RMAPI_MALFORMED_RESPONSE);
     assert(object.stage == NVX_GSP_MEMORY_CREATED && object.remote_created &&
         !object.result_valid);
+    assert(nvx_gsp_memory_object_get_range(&object, &validated_size,
+        &validated_limit) == NVX_GSP_RMAPI_INVALID_ARGUMENT);
     truncate_alloc_response = 0;
     wait_status = NVX_GSP_RMAPI_OK;
     assert(nvx_gsp_memory_object_destroy(&manager, &object, scratch,
@@ -206,6 +214,8 @@ int main(void)
         delay, NULL) == NVX_GSP_RMAPI_MALFORMED_RESPONSE);
     assert(object.stage == NVX_GSP_MEMORY_CREATED && object.remote_created &&
         !object.result_valid);
+    assert(nvx_gsp_memory_object_get_range(&object, &validated_size,
+        &validated_limit) == NVX_GSP_RMAPI_INVALID_ARGUMENT);
     returned_limit_delta = 0U;
     assert(nvx_gsp_memory_object_destroy(&manager, &object, scratch,
         sizeof(scratch), response, sizeof(response), 100U, 1U, delay, NULL)

@@ -329,7 +329,7 @@ nvx_memory_status_t nvx_memory_validate(nvx_memory_manager_t *m)
         } else if (s->state == NVX_MEMORY_SLOT_QUARANTINED) {
             ++quarantined;
             if (!s->token || !s->dma.acquired || !s->mapping.valid ||
-                s->active_users != 0U) {
+                !valid_access(s->access) || s->active_users != 0U) {
                 spinlock_unlock(&m->lock);
                 return NVX_MEMORY_CORRUPT_STATE;
             }

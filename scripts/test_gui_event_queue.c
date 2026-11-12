@@ -21,6 +21,13 @@ int main(void)
  assert(push(q,&h,&n,VANTA_GUI_EVENT_POINTER_MOVE,10,0));
  assert(n==3&&at(q,h,1).type==VANTA_GUI_EVENT_POINTER_DOWN&&at(q,h,2).x==10);
  h=0;n=0;
+ assert(push(q,&h,&n,VANTA_GUI_EVENT_POINTER_WHEEL,12,1));
+ assert(push(q,&h,&n,VANTA_GUI_EVENT_POINTER_WHEEL,16,2));
+ assert(n==1&&at(q,h,0).type==VANTA_GUI_EVENT_POINTER_WHEEL);
+ assert(at(q,h,0).x==16&&(int32_t)at(q,h,0).value==3);
+ assert(push(q,&h,&n,VANTA_GUI_EVENT_POINTER_WHEEL,20,(uint32_t)-4));
+ assert(n==1&&at(q,h,0).x==20&&(int32_t)at(q,h,0).value==-1);
+ h=0;n=0;
  assert(push(q,&h,&n,VANTA_GUI_EVENT_KEY,0,11));
  assert(push(q,&h,&n,VANTA_GUI_EVENT_POINTER_DOWN,2,1));
  assert(push(q,&h,&n,VANTA_GUI_EVENT_FOCUS_GAINED,0,0));

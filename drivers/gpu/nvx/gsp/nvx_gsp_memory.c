@@ -219,10 +219,6 @@ nvx_gsp_rmapi_status_t nvx_gsp_memory_object_create(
 
     wire = *params;
     /* These are RM outputs, never caller-provided input values. */
-    wire.pitch = params->pitch;
-    wire.format = params->format;
-    wire.compr_covg = params->compr_covg;
-    wire.zcull_covg = params->zcull_covg;
     wire.limit = 0U;
     wire.address = 0U;
     object->client_handle = client_handle;

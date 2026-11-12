@@ -132,7 +132,7 @@ jobs:
           # EFI boot image. The raw GPT/FAT32 USB image is validated above;
           # OVMF on hosted runners does not reliably enumerate its raw-disk
           # fallback path, so this isolates loader and kernel handoff testing.
-          mkdir -p uefi-iso-root
+          mkdir -p uefi-iso-root/EFI/BOOT uefi-iso-root/EFI/VANTA
           truncate -s 64M uefi-boot-esp.img
           mkfs.fat -F 32 uefi-boot-esp.img >/dev/null
           mmd -i uefi-boot-esp.img ::/EFI
@@ -141,7 +141,11 @@ jobs:
           mcopy -i uefi-boot-esp.img BOOTX64.EFI ::/EFI/BOOT/BOOTX64.EFI
           mcopy -i uefi-boot-esp.img kernel-uefi.elf ::/EFI/VANTA/KERNEL.ELF
           cp uefi-boot-esp.img uefi-iso-root/efiboot.img
-          xorriso -as mkisofs -R -J -V VANTAOS_UEFI_TEST \
+          # Mirror the EFI tree into the ISO filesystem for tools that inspect
+          # ISO9660/Joliet paths instead of the El Torito EFI System Partition.
+          cp BOOTX64.EFI uefi-iso-root/EFI/BOOT/BOOTX64.EFI
+          cp kernel-uefi.elf uefi-iso-root/EFI/VANTA/KERNEL.ELF
+          xorriso -as mkisofs -R -J -V VANTAOSUEFI \
             -eltorito-alt-boot -e efiboot.img -no-emul-boot \
             -o uefi-smoke.iso uefi-iso-root
 

@@ -75,6 +75,8 @@ int intel_sptlp_validate_gpio_resource(
     const acpi_aml_resource_t *resource)
 {
     if(!controller||!resource||controller->invalid||controller->sta_dynamic||
+       (controller->sta_valid&&
+        ((controller->sta&0x03U)!=0x03U||(controller->sta&0x08U)==0U))||
        !id_equal(controller->hid,"INT344B")||
        resource->resource_type!=5U||
        resource->gpio_connection_type>1U||

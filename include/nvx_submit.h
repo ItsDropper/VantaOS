@@ -57,6 +57,21 @@ typedef struct nvx_submit_report {
     uint64_t command_bytes;
 } nvx_submit_report_t;
 
+#define NVX_SUBMIT_MAX_PINNED_OBJECTS (NVX_SUBMIT_MAX_RELOCATIONS + 1U)
+
+/*
+ * Caller-owned, long-lived lease. It pins the command buffer and every unique
+ * relocation target until release_batch() is called after GPU completion or
+ * verified engine quiescence. The lease is intentionally large; do not put it
+ * on a small kernel stack.
+ */
+typedef struct nvx_submit_lease {
+    nvx_memory_handle_t handles[NVX_SUBMIT_MAX_PINNED_OBJECTS];
+    uint32_t count;
+    uint32_t release_index;
+    uint8_t active;
+} nvx_submit_lease_t;
+
 /*
  * Validates an opaque command buffer and its relocation metadata. NVIDIA
  * opcodes are intentionally not decoded or patched here: engine-specific

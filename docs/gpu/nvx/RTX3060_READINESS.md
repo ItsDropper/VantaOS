@@ -87,6 +87,20 @@ This is software lifecycle verification only: no physical GSP/RM channel has
 yet been created on a GA106, and the current channel memory descriptors still
 must be backed by real RM-visible mappings before submission.
 
+## GPU memory lifetime pinning milestone
+
+The NVX GPU memory-object manager now supports explicit per-object lifetime
+pins. Submission code can pin a memory handle before handing its GPUVA to an
+engine and unpin only after a completion fence or verified engine quiescence.
+Release refuses to unmap/free a pinned object, and pin-count overflow or
+underflow is rejected. This closes a class of use-after-free hazards in which
+a command buffer, source, destination or semaphore could otherwise be released
+while hardware still references it.
+
+Host tests cover multiple pins, release exclusion, balanced unpin, underflow,
+and overflow. The API is a lifetime primitive; it does not itself submit work,
+observe a GPU fence, or prove quiescence. Callers must enforce that contract.
+
 ## RM DMA mapping lifecycle software milestone
 
 `include/nvx_gsp_dma_map.h` and

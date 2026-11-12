@@ -41,17 +41,43 @@ def send_frame(sock, frame):
     sock.sendall(struct.pack("!I", len(frame)) + frame)
 
 
+def describe_pending_frame(pending):
+    if len(pending) < 4:
+        return f"partial stream prefix ({len(pending)} bytes)"
+    size = struct.unpack("!I", pending[:4])[0]
+    if size < 14 or size > 1518:
+        return f"invalid frame length {size}"
+    if len(pending) < 4 + size:
+        return f"partial Ethernet frame ({len(pending) - 4}/{size} bytes)"
+    frame = pending[4:4 + size]
+    ethertype = struct.unpack_from("!H", frame, 12)[0]
+    details = [f"length={size}", f"ethertype=0x{ethertype:04x}",
+               f"src={frame[6:12].hex(':')}", f"dst={frame[:6].hex(':')}"]
+    if ethertype == 0x0800 and len(frame) >= 34:
+        packet = frame[14:]
+        ihl = (packet[0] & 0x0F) * 4
+        details.append(f"ipv4_protocol={packet[9]}")
+        details.append(f"ipv4_src={socket.inet_ntoa(packet[12:16])}")
+        details.append(f"ipv4_dst={socket.inet_ntoa(packet[16:20])}")
+        if packet[9] == 17 and ihl >= 20 and len(packet) >= ihl + 8:
+            source_port, destination_port = struct.unpack_from("!HH", packet, ihl)
+            details.append(f"udp_ports={source_port}->{destination_port}")
+    return ", ".join(details)
+
+
 def assert_no_frame(sock, description):
     previous_timeout = sock.gettimeout()
     sock.settimeout(0.5)
     try:
         try:
-            pending = sock.recv(1, socket.MSG_PEEK)
+            pending = sock.recv(4 + 1518, socket.MSG_PEEK)
         except socket.timeout:
             return
         if not pending:
             raise RuntimeError("QEMU closed the Ethernet socket")
-        raise RuntimeError(f"Unexpected Ethernet response after {description}")
+        details = describe_pending_frame(pending)
+        raise RuntimeError(
+            f"Unexpected Ethernet response after {description}: {details}")
     finally:
         sock.settimeout(previous_timeout)
 

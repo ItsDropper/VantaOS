@@ -457,7 +457,20 @@ jobs:
 
       - name: Test USERD GP_GET/GP_PUT offsets and channel parameter bounds
         run: /tmp/vantaos-nvx-gsp-userd-test
-\n      - name: Compile Ampere RM channel runtime ownership tests\n        run: |\n          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \\\n            scripts/test_nvx_gsp_channel_runtime.c \\\n            drivers/gpu/nvx/execution/nvx_gsp_channel_runtime.c \\\n            drivers/gpu/nvx/gsp/nvx_gsp_channel.c \\\n            drivers/gpu/nvx/execution/nvx_gsp_userd.c \\\n            drivers/gpu/nvx/execution/nvx_gsp_gpfifo.c \\\n            -o /tmp/vantaos-nvx-gsp-channel-runtime-test\n\n      - name: Test USERD lifetime, channel recovery and workload-gated teardown\n        run: /tmp/vantaos-nvx-gsp-channel-runtime-test\n
+
+      - name: Compile Ampere RM channel runtime ownership tests
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_channel_runtime.c \
+            drivers/gpu/nvx/execution/nvx_gsp_channel_runtime.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_channel.c \
+            drivers/gpu/nvx/execution/nvx_gsp_userd.c \
+            drivers/gpu/nvx/execution/nvx_gsp_gpfifo.c \
+            -o /tmp/vantaos-nvx-gsp-channel-runtime-test
+
+      - name: Test USERD lifetime, channel recovery and workload-gated teardown
+        run: /tmp/vantaos-nvx-gsp-channel-runtime-test
+
       - name: Compile NVIDIA hardware-ABI conformance pins with strict warnings
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \

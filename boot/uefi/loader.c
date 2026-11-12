@@ -71,6 +71,107 @@ static void serial_write_hex64(UINT64 value)
         serial_write((char[2]){ digits[(value >> shift) & 0x0FU], '\0' });
 }
 
+static UINT64 read_cr3(void)
+{
+    UINT64 value;
+    __asm__ volatile ("mov %%cr3, %0" : "=r"(value));
+    return value;
+}
+
+static UINT64 read_cr4(void)
+{
+    UINT64 value;
+    __asm__ volatile ("mov %%cr4, %0" : "=r"(value));
+    return value;
+}
+
+static UINT64 read_efer(void)
+{
+    UINT32 low, high;
+    __asm__ volatile (
+        "rdmsr"
+        : "=a"(low), "=d"(high)
+        : "c"(0xC0000080U)
+    );
+    return ((UINT64)high << 32) | low;
+}
+
+static void serial_write_hex8(UINT8 value)
+{
+    static const char digits[] = "0123456789ABCDEF";
+    char output[3] = {
+        digits[value >> 4],
+        digits[value & 0x0FU],
+        '\0'
+    };
+    serial_write(output);
+}
+
+/* Inspect the active firmware translation for the kernel entry before handoff. */
+static void diagnose_kernel_entry_mapping(UINT64 address)
+{
+    const UINT64 address_mask = 0x000FFFFFFFFFF000ULL;
+    UINT64 cr3 = read_cr3();
+    UINT64 cr4 = read_cr4();
+    UINT64 efer = read_efer();
+    UINT64 table = cr3 & address_mask;
+    UINT64 effective_nx = 0;
+    int levels = (cr4 & (1ULL << 12)) ? 5 : 4;
+    int mapped = 1;
+
+    serial_write("VANTAOS_UEFI_HANDOFF_CR3=");
+    serial_write_hex64(cr3);
+    serial_write("\nVANTAOS_UEFI_HANDOFF_CR4=");
+    serial_write_hex64(cr4);
+    serial_write("\nVANTAOS_UEFI_HANDOFF_EFER=");
+    serial_write_hex64(efer);
+    serial_write("\nVANTAOS_UEFI_HANDOFF_PAGING_LEVELS=");
+    serial_write(levels == 5 ? "5\n" : "4\n");
+
+    for (int level = levels; level >= 1; --level)
+    {
+        UINTN shift = 12U + 9U * (UINTN)(level - 1);
+        UINTN index = (UINTN)((address >> shift) & 0x1FFU);
+        volatile UINT64* entries = (volatile UINT64*)(UINTN)table;
+        UINT64 entry = entries[index];
+
+        serial_write("VANTAOS_UEFI_HANDOFF_L");
+        serial_write(level == 5 ? "5" : level == 4 ? "4" :
+                     level == 3 ? "3" : level == 2 ? "2" : "1");
+        serial_write("E=");
+        serial_write_hex64(entry);
+        serial_write("\n");
+
+        if (!(entry & 1ULL))
+        {
+            mapped = 0;
+            break;
+        }
+
+        effective_nx |= entry & (1ULL << 63);
+        if ((level == 3 || level == 2) && (entry & (1ULL << 7)))
+            break;
+
+        table = entry & address_mask;
+    }
+
+    if (!mapped)
+        serial_write("VANTAOS_UEFI_ENTRY_PAGE_NOT_PRESENT\n");
+    else if ((efer & (1ULL << 11)) && effective_nx)
+        serial_write("VANTAOS_UEFI_ENTRY_PAGE_NX\n");
+    else
+    {
+        serial_write("VANTAOS_UEFI_ENTRY_PAGE_EXECUTABLE\n");
+        serial_write("VANTAOS_UEFI_ENTRY_BYTES=");
+        const volatile UINT8* bytes = (const volatile UINT8*)(UINTN)address;
+        for (UINTN i = 0; i < 8U; ++i)
+        {
+            serial_write_hex8(bytes[i]);
+            serial_write(i == 7U ? "\n" : " ");
+        }
+    }
+}
+
 static void zero_bytes(void* destination, UINTN length)
 {
     UINT8* bytes = (UINT8*)destination;
@@ -667,6 +768,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* system_tab
     serial_write_hex64(entry_address);
     serial_write("\n");
     serial_write("VANTAOS_UEFI_KERNEL_HANDOFF\n");
+    diagnose_kernel_entry_mapping(entry_address);
 
     /*
      * Transfer control with a tail jump, not a C indirect call. The kernel

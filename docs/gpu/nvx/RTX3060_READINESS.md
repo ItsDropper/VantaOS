@@ -23,7 +23,7 @@ This document is a release gate, not a claim that the driver is ready. A phase m
 | GSP-RM RPC and RM objects | Protocol/object primitives exist | Successful first real RPC, object create/control/free round-trip and error-path recovery |
 | GPU memory / GPUVM | Software reservation, DMA and page-table primitives exist | Hardware-correct page-table format, translation controls, TLB invalidation, real VRAM accounting and proven mapping visibility |
 | GPFIFO / channel / synchronization | Layout and validation primitives exist | Hardware channel provisioning, real mapped GPFIFO/USERD/fence resources and GPU-produced completion |
-| Copy engine | Command construction exists | A real CE submission copying known bytes between distinct GPU-visible buffers, followed by independent CPU verification |
+| Copy engine | Command builder and bounded GPFIFO submit/wait transaction implemented, host-tested; hardware provisioning unverified | A real CE submission copying known bytes between distinct GPU-visible buffers, followed by independent CPU verification |
 | Graphics engine | No verified working 3D path | Engine context, graphics channel, shader/program execution, render target, completion and CPU-verified output |
 | Display/presentation | Software display path exists independently | Explicit synchronization and scanout integration; GPU rendering alone does not prove page flipping or VSync |
 | Vulkan or other game API | Not established | Kernel/userspace ABI, memory/sync semantics, shader compiler/codegen, pipelines/descriptors, presentation and conformance tests |
@@ -53,6 +53,22 @@ Both defects would only have appeared on real hardware as a channel that silentl
 USERD `GP_GET`/`GP_PUT` offsets and the usermode doorbell (NVX takes borrowed pointers and does not hardcode them), `NVOS46`/`NVOS47` map-memory layouts, the RM memory-allocation parameter structs, and the GSP message-queue and init-argument layouts, which depend on the exact firmware release. Audit these against the headers matching the firmware you load before trusting them.
 
 Do not add a per-SKU source file merely to record an identity. Shared GA10x/Ampere policy belongs in common code unless a documented hardware difference requires a backend.
+
+## Current software execution milestone
+
+`nvx_gsp_ce_copy_submit_and_wait()` now composes the existing Ampere CE
+pushbuffer builder with GPFIFO publication, USERD fetch-consumption polling,
+and a separate GPU-written completion semaphore check. It rejects a completion
+word that already contains the requested value, preserves the submitted PUT
+index when a wait times out, and reports the lower-level GPFIFO result.
+
+Strict-warning CI host tests cover the success path, stale completion,
+invalid copy ranges, queue-full rejection, and timeout ownership semantics.
+These tests use a simulated producer/consumer and completion callback. They do
+not establish that a physical GA106 accepts the class, pushbuffer, semaphore,
+channel mappings, or command packet. The caller must still provide a real
+RM-created CE object and channel, valid GPUVA mappings, cache/DMA synchronization,
+and safe resource retention until completion or proven quiescence.
 
 ## Mandatory first hardware experiment
 

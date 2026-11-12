@@ -32,8 +32,6 @@ static int nvx_transition_allowed(nvx_lifecycle_state_t current,
             return next == NVX_STATE_QUIESCING;
         case NVX_STATE_QUIESCING:
             return next == NVX_STATE_STOPPED;
-        case NVX_STATE_FAILED:
-            return next == NVX_STATE_QUIESCING;
         case NVX_STATE_STOPPED:
         default:
             return 0;
@@ -79,5 +77,20 @@ int nvx_lifecycle_set_capabilities(nvx_lifecycle_t *lifecycle,
          lifecycle->state != NVX_STATE_RUNNING))
         return 0;
     lifecycle->verified_capabilities = verified_capabilities;
+    return 1;
+}
+
+/*
+ * A failed device may own DMA memory. Do not make FAILED a generally
+ * transitionable state: only the teardown path that has independently
+ * established hardware quiescence may move it to QUIESCING.
+ */
+int nvx_lifecycle_recover_quiesced(nvx_lifecycle_t *lifecycle,
+                                   int quiescence_confirmed)
+{
+    if (!lifecycle || !quiescence_confirmed ||
+        lifecycle->state != NVX_STATE_FAILED)
+        return 0;
+    lifecycle->state = NVX_STATE_QUIESCING;
     return 1;
 }

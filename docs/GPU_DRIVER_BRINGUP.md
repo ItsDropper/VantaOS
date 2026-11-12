@@ -39,15 +39,27 @@ PCI profile discovery remains read-only. Both Intel Gen9 and AMD Polaris now hav
 
 ### NVIDIA / NVX
 
-The GA10x path includes PCI matching, BAR validation/mapping, PMC probing,
-firmware bundle parsing, GSP boot-memory staging, WPR metadata planning, and a
-SEC2 signed Booter Load sequence with synthetic-MMIO tests. The secure boot path
-has not been validated on physical hardware.
+The GA10x path includes PCI matching, bounded BAR mapping, PMC identity
+probing, firmware bundle parsing, GSP boot-memory staging, WPR metadata
+planning, and a SEC2 signed Booter Load sequence with synthetic-MMIO tests.
+Boot-time NVX discovery now performs one deliberately read-only operation on
+the audited RTX 3060 profile: when PCI memory decode is already enabled, it
+maps only the PMC register span (through PMC_BOOT_42), checks PMC_BOOT_0/1/42
+against the PCI profile, and unmaps it. It does not alter PCI command bits,
+enable bus mastering, reset a Falcon, load firmware, or submit work. Mapping,
+identity, or unmap failures are logged and skipped; they do not fail OS boot.
+Maxwell/Pascal mobile profiles retain their smaller PMC_BOOT_0/1 read.
+
+This is a first live register interaction, **not GPU initialization or
+acceleration**. The SEC2/GSP secure boot path and its readiness gates have not
+been validated on physical hardware.
 
 Next gates: authoritative WPR input discovery/policy, real DMA/coherency
 validation, GSP RISC-V launch/readiness, GSP-RM RPC initialization, then channel
-and command submission. Hardware acceleration must remain unpublished until
-each relevant path is verified.
+and command submission. The first useful driver milestone remains a verified
+hardware-backed operation (preferably a minimal CE copy with CPU byte-for-byte
+verification). Hardware acceleration must remain unpublished until that path
+is demonstrated on a physical GA106 device.
 
 ### Intel
 

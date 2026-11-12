@@ -41,6 +41,31 @@ typedef struct
     uint32_t bit_mask;
 } intel_sptlp_irq_location_t;
 
+
+typedef enum
+{
+    INTEL_SPTLP_GPIO_IRQ_LEVEL=0,
+    INTEL_SPTLP_GPIO_IRQ_EDGE=1
+} intel_sptlp_gpio_irq_trigger_t;
+
+typedef enum
+{
+    INTEL_SPTLP_GPIO_IRQ_ACTIVE_HIGH=0,
+    INTEL_SPTLP_GPIO_IRQ_ACTIVE_LOW=1,
+    INTEL_SPTLP_GPIO_IRQ_BOTH_EDGES=2
+} intel_sptlp_gpio_irq_polarity_t;
+
+typedef struct
+{
+    uint16_t pins[ACPI_AML_MAX_GPIO_PINS];
+    intel_sptlp_irq_location_t locations[ACPI_AML_MAX_GPIO_PINS];
+    uint8_t pin_count;
+    uint8_t trigger;
+    uint8_t polarity;
+    uint8_t shared;
+    uint8_t wake_capable;
+} intel_sptlp_gpio_irq_request_t;
+
 typedef struct
 {
     void *context;
@@ -89,5 +114,17 @@ int intel_sptlp_probe_controller(const acpi_aml_device_t *controller,
 int intel_sptlp_validate_gpio_resource(
     const acpi_aml_device_t *controller,
     const acpi_aml_resource_t *resource);
+
+/* Decode ACPI GPIO interrupt trigger/polarity/share/wake metadata only. */
+int intel_sptlp_decode_gpio_irq(
+    const acpi_aml_device_t *controller,
+    const acpi_aml_resource_t *resource,
+    intel_sptlp_gpio_irq_request_t *request);
+
+/* Interpret a captured GPI_IS/GPI_IE snapshot without MMIO writes. */
+int intel_sptlp_irq_snapshot_state(
+    const intel_sptlp_snapshot_t *snapshot,
+    const intel_sptlp_gpio_irq_request_t *request,
+    uint8_t *pending_mask,uint8_t *enabled_mask);
 
 #endif

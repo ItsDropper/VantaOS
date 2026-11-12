@@ -301,6 +301,68 @@ static uint32_t intel_sptlp_read32(void *context,
     return *(const volatile uint32_t*)(mapping+offset);
 }
 
+
+static void intel_write_hex8(uint8_t value)
+{
+    static const char digits[]="0123456789ABCDEF";
+    serial_write_bytes(&digits[(value>>4U)&0x0FU],1U);
+    serial_write_bytes(&digits[value&0x0FU],1U);
+}
+
+static void intel_log_gpio_irq_metadata(
+    const acpi_aml_device_t *controller,
+    const intel_sptlp_snapshot_t *snapshot)
+{
+    for(uint32_t i=0U;i<aml_device_count;++i)
+    {
+        const acpi_aml_device_t *child=&aml_devices[i];
+        if(!aml_device_usable(child)) continue;
+        for(uint32_t r=0U;r<child->resource_count;++r)
+        {
+            const acpi_aml_resource_t *resource=&child->resources[r];
+            if(resource->resource_type!=5U||
+               !path_equal(resource->resource_source,controller->path))
+                continue;
+            intel_sptlp_gpio_irq_request_t request;
+            if(!intel_sptlp_decode_gpio_irq(controller,resource,&request))
+                continue;
+            uint8_t pending=0U,enabled=0U;
+            if(!intel_sptlp_irq_snapshot_state(snapshot,&request,
+                                                &pending,&enabled))
+                continue;
+            serial_write("VANTAOS_GPIO_SPTLP_IRQ_METADATA path=");
+            serial_write(child->path);
+            serial_write(" trigger=");
+            serial_write(request.trigger==INTEL_SPTLP_GPIO_IRQ_EDGE?
+                         "edge":"level");
+            serial_write(" polarity=");
+            serial_write(request.polarity==INTEL_SPTLP_GPIO_IRQ_ACTIVE_HIGH?
+                         "high":request.polarity==INTEL_SPTLP_GPIO_IRQ_ACTIVE_LOW?
+                         "low":"both");
+            serial_write(" shared=");
+            serial_write(request.shared?"yes":"no");
+            serial_write(" wake=");
+            serial_write(request.wake_capable?"yes":"no");
+            serial_write(" pins=");
+            for(uint32_t pin=0U;pin<request.pin_count;++pin)
+            {
+                char digits[5];
+                uint16_t value=request.pins[pin];
+                uint32_t count=0U;
+                do {digits[count++]=(char)('0'+(value%10U));value/=10U;}
+                while(value!=0U&&count<sizeof(digits));
+                while(count!=0U) serial_write_bytes(&digits[--count],1U);
+                if(pin+1U<request.pin_count) serial_write(",");
+            }
+            serial_write(" pending=0x");
+            intel_write_hex8(pending);
+            serial_write(" enabled=0x");
+            intel_write_hex8(enabled);
+            serial_write("\n");
+        }
+    }
+}
+
 static void intel_probe_gpio_controllers(void)
 {
     const intel_sptlp_mmio_ops_t ops={
@@ -315,7 +377,10 @@ static void intel_probe_gpio_controllers(void)
             continue;
         intel_sptlp_snapshot_t snapshot;
         if(intel_sptlp_probe_controller(device,&ops,&snapshot))
+        {
             serial_write("VANTAOS_GPIO_SPTLP_READ_ONLY_MMIO_READY communities=3 groups=7\n");
+            intel_log_gpio_irq_metadata(device,&snapshot);
+        }
         else
             serial_write("VANTAOS_GPIO_SPTLP_MMIO_PROBE_SKIPPED\n");
     }

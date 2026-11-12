@@ -137,6 +137,7 @@ int main(void)
     uint8_t gpio_descriptor[37]={0};
     gpio_descriptor[0]=0x8CU; gpio_descriptor[1]=34U;
     gpio_descriptor[3]=1U; gpio_descriptor[4]=0U; gpio_descriptor[5]=1U;
+    gpio_descriptor[7]=0x1BU;
     gpio_descriptor[14]=23U; gpio_descriptor[17]=27U;
     gpio_descriptor[19]=37U;
     gpio_descriptor[23]=7U; gpio_descriptor[25]=8U;
@@ -205,6 +206,7 @@ int main(void)
     assert(captured[0].resources[2].resource_type==5U);
     assert(captured[0].resources[2].gpio_connection_type==0U);
     assert(captured[0].resources[2].gpio_general_flags==1U);
+    assert(captured[0].resources[2].gpio_interrupt_flags==0x001BU);
     assert(captured[0].resources[2].gpio_pin_count==2U);
     assert(captured[0].resources[2].gpio_pins[0]==7U);
     assert(captured[0].resources[2].gpio_pins[1]==8U);

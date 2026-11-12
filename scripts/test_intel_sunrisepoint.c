@@ -84,6 +84,87 @@ static void test_pin_irq_locations(void)
     assert(!intel_sptlp_pin_irq_location(0U,NULL));
 }
 
+
+static void test_gpio_irq_request_decode(void)
+{
+    acpi_aml_device_t controller={0};
+    acpi_aml_resource_t resource={0};
+    strcpy(controller.path,"\\_SB_.GPIO");
+    strcpy(controller.hid,"INT344B");
+    controller.sta_valid=1U;
+    controller.sta=0x0FU;
+    resource.resource_type=5U;
+    resource.gpio_connection_type=0U;
+    resource.gpio_general_flags=1U;
+    resource.gpio_pin_count=2U;
+    resource.gpio_pins[0]=7U;
+    resource.gpio_pins[1]=151U;
+    strcpy(resource.resource_source,"\\_SB_.GPIO");
+    intel_sptlp_gpio_irq_request_t request={0};
+    resource.gpio_interrupt_flags=0x001BU;
+    assert(intel_sptlp_decode_gpio_irq(&controller,&resource,&request));
+    assert(request.pin_count==2U&&request.trigger==INTEL_SPTLP_GPIO_IRQ_EDGE);
+    assert(request.polarity==INTEL_SPTLP_GPIO_IRQ_ACTIVE_LOW);
+    assert(request.shared==1U&&request.wake_capable==1U);
+    assert(request.pins[0]==7U&&request.locations[0].group==0U&&
+           request.locations[0].bit==7U);
+    assert(request.pins[1]==151U&&request.locations[1].community==2U&&
+           request.locations[1].group==1U&&request.locations[1].bit==7U);
+
+    resource.gpio_interrupt_flags=0x0000U;
+    assert(intel_sptlp_decode_gpio_irq(&controller,&resource,&request));
+    assert(request.trigger==INTEL_SPTLP_GPIO_IRQ_LEVEL&&
+           request.polarity==INTEL_SPTLP_GPIO_IRQ_ACTIVE_HIGH&&
+           request.shared==0U&&request.wake_capable==0U);
+    resource.gpio_interrupt_flags=0x0005U;
+    assert(intel_sptlp_decode_gpio_irq(&controller,&resource,&request));
+    assert(request.trigger==INTEL_SPTLP_GPIO_IRQ_EDGE&&
+           request.polarity==INTEL_SPTLP_GPIO_IRQ_BOTH_EDGES);
+    resource.gpio_interrupt_flags=0x0004U;
+    assert(!intel_sptlp_decode_gpio_irq(&controller,&resource,&request));
+    resource.gpio_interrupt_flags=0x0006U;
+    assert(!intel_sptlp_decode_gpio_irq(&controller,&resource,&request));
+    resource.gpio_interrupt_flags=0x0020U;
+    assert(!intel_sptlp_decode_gpio_irq(&controller,&resource,&request));
+    resource.gpio_interrupt_flags=0x0000U;
+    resource.gpio_general_flags=0U;
+    assert(!intel_sptlp_decode_gpio_irq(&controller,&resource,&request));
+    resource.gpio_general_flags=1U;
+    resource.gpio_connection_type=1U;
+    assert(!intel_sptlp_decode_gpio_irq(&controller,&resource,&request));
+    resource.gpio_connection_type=0U;
+    strcpy(resource.resource_source,"\\_SB_.OTHER");
+    assert(!intel_sptlp_decode_gpio_irq(&controller,&resource,&request));
+}
+
+static void test_gpio_irq_snapshot_state(void)
+{
+    intel_sptlp_snapshot_t snapshot={0};
+    intel_sptlp_gpio_irq_request_t request={0};
+    request.pin_count=2U;
+    request.pins[0]=7U;
+    request.pins[1]=151U;
+    assert(intel_sptlp_pin_irq_location(7U,&request.locations[0]));
+    assert(intel_sptlp_pin_irq_location(151U,&request.locations[1]));
+    snapshot.communities[0].group_count=2U;
+    snapshot.communities[2].group_count=2U;
+    snapshot.communities[0].interrupt_status[0]=0x80U;
+    snapshot.communities[0].interrupt_enable[0]=0x80U;
+    snapshot.communities[2].interrupt_status[1]=0x80U;
+    snapshot.communities[2].interrupt_enable[1]=0U;
+    uint8_t pending=0xAAU,enabled=0x55U;
+    assert(intel_sptlp_irq_snapshot_state(&snapshot,&request,&pending,&enabled));
+    assert(pending==0x03U&&enabled==0x01U);
+
+    snapshot.communities[2].group_count=1U;
+    pending=0xAAU;enabled=0x55U;
+    assert(!intel_sptlp_irq_snapshot_state(&snapshot,&request,&pending,&enabled));
+    assert(pending==0xAAU&&enabled==0x55U);
+    request.locations[1].bit_mask=0U;
+    snapshot.communities[2].group_count=2U;
+    assert(!intel_sptlp_irq_snapshot_state(&snapshot,&request,&pending,&enabled));
+}
+
 static void test_gpio_resource_validation(void)
 {
     acpi_aml_device_t controller={0};
@@ -274,6 +355,8 @@ int main(void)
     test_community_boundaries();
     test_pin_irq_locations();
     test_gpio_resource_validation();
+    test_gpio_irq_request_decode();
+    test_gpio_irq_snapshot_state();
     test_read_only_mmio_probe();
     puts("Intel Sunrise Point-LP GPIO metadata tests passed");
     return 0;

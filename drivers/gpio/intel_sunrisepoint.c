@@ -209,6 +209,83 @@ int intel_sptlp_pin_irq_location(uint16_t pin,
     return 0;
 }
 
+
+int intel_sptlp_decode_gpio_irq(
+    const acpi_aml_device_t *controller,
+    const acpi_aml_resource_t *resource,
+    intel_sptlp_gpio_irq_request_t *request)
+{
+    if(!request||!intel_sptlp_validate_gpio_resource(controller,resource)||
+       resource->gpio_connection_type!=0U||
+       resource->gpio_general_flags!=1U||
+       (resource->gpio_interrupt_flags&0xFFE0U)!=0U)
+        return 0;
+
+    uint16_t flags=resource->gpio_interrupt_flags;
+    uint8_t trigger=(flags&0x0001U)!=0U?
+        INTEL_SPTLP_GPIO_IRQ_EDGE:INTEL_SPTLP_GPIO_IRQ_LEVEL;
+    uint8_t polarity=(uint8_t)((flags>>1U)&0x03U);
+    if(polarity>INTEL_SPTLP_GPIO_IRQ_BOTH_EDGES||
+       (trigger==INTEL_SPTLP_GPIO_IRQ_LEVEL&&
+        polarity==INTEL_SPTLP_GPIO_IRQ_BOTH_EDGES))
+        return 0;
+
+    intel_sptlp_gpio_irq_request_t candidate={0};
+    candidate.pin_count=(uint8_t)resource->gpio_pin_count;
+    candidate.trigger=trigger;
+    candidate.polarity=polarity;
+    candidate.shared=(uint8_t)((flags&0x0008U)!=0U);
+    candidate.wake_capable=(uint8_t)((flags&0x0010U)!=0U);
+    for(uint32_t i=0U;i<resource->gpio_pin_count;++i)
+    {
+        candidate.pins[i]=resource->gpio_pins[i];
+        if(!intel_sptlp_pin_irq_location(resource->gpio_pins[i],
+                                         &candidate.locations[i]))
+            return 0;
+    }
+    *request=candidate;
+    return 1;
+}
+
+int intel_sptlp_irq_snapshot_state(
+    const intel_sptlp_snapshot_t *snapshot,
+    const intel_sptlp_gpio_irq_request_t *request,
+    uint8_t *pending_mask,uint8_t *enabled_mask)
+{
+    if(!snapshot||!request||!pending_mask||!enabled_mask||
+       request->pin_count==0U||request->pin_count>ACPI_AML_MAX_GPIO_PINS)
+        return 0;
+
+    uint8_t pending=0U,enabled=0U;
+    for(uint32_t i=0U;i<request->pin_count;++i)
+    {
+        intel_sptlp_irq_location_t expected;
+        if(!intel_sptlp_pin_irq_location(request->pins[i],&expected))
+            return 0;
+        const intel_sptlp_irq_location_t *location=&request->locations[i];
+        if(location->community!=expected.community||
+           location->group!=expected.group||location->bit!=expected.bit||
+           location->interrupt_status_offset!=expected.interrupt_status_offset||
+           location->interrupt_enable_offset!=expected.interrupt_enable_offset||
+           location->bit_mask!=expected.bit_mask||
+           location->community>=INTEL_SPTLP_COMMUNITY_COUNT)
+            return 0;
+        const intel_sptlp_community_snapshot_t *community=
+            &snapshot->communities[location->community];
+        if(location->group>=community->group_count||
+           location->group>=INTEL_SPTLP_MAX_GPP_GROUPS)
+            return 0;
+        uint8_t bit=(uint8_t)(1U<<i);
+        if((community->interrupt_status[location->group]&
+            location->bit_mask)!=0U) pending|=bit;
+        if((community->interrupt_enable[location->group]&
+            location->bit_mask)!=0U) enabled|=bit;
+    }
+    *pending_mask=pending;
+    *enabled_mask=enabled;
+    return 1;
+}
+
 int intel_sptlp_validate_gpio_resource(
     const acpi_aml_device_t *controller,
     const acpi_aml_resource_t *resource)

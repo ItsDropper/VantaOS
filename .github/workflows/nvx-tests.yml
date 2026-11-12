@@ -21,6 +21,10 @@ on:
       - "include/nvx_gsp_ce.h"
       - "include/nvx_gsp_dma_map.h"
       - "include/nvx_gsp_context_dma.h"
+      - "include/nvx_gsp_memory.h"
+      - "scripts/test_nvx_gsp_memory.c"
+      - "include/nvx_gsp_memory.h"
+      - "scripts/test_nvx_gsp_memory.c"
       - "include/nvx_submit.h"
       - "scripts/test_nvx_gsp_ce_runtime.c"
       - "scripts/test_nvx_dma.c"
@@ -362,6 +366,15 @@ jobs:
 
       - name: Test NVX copy-channel provisioning, timeout recovery and teardown
         run: /tmp/vantaos-nvx-gsp-channel-test
+
+      - name: Compile NVX RM system-memory lifecycle tests with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_memory.c drivers/gpu/nvx/gsp/nvx_gsp_memory.c \
+            -o /tmp/vantaos-nvx-gsp-memory-test
+
+      - name: Test NVX RM system-memory allocation, recovery and teardown
+        run: /tmp/vantaos-nvx-gsp-memory-test
 
       - name: Compile NVX context-DMA RM lifecycle tests with strict warnings
         run: |

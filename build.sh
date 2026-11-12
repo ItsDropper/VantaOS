@@ -14,22 +14,22 @@ echo "==> Building kernel..."
 make
 
 echo "==> Building the ring-3 Terminal ELF..."
-gcc -m64 -mcmodel=large -ffreestanding -fno-pie -fno-stack-protector \
+gcc -m64 -march=x86-64 -mtune=generic -mcmodel=large -ffreestanding -fno-pie -fno-stack-protector \
     -mno-red-zone -fno-builtin -nostdlib -Wall -Wextra -Werror \
     -Iuserspace/include -c userspace/crt/crt0.S -o /tmp/vantaos-terminal-crt0.o
-gcc -m64 -mcmodel=large -ffreestanding -fno-pie -fno-stack-protector \
+gcc -m64 -march=x86-64 -mtune=generic -mcmodel=large -ffreestanding -fno-pie -fno-stack-protector \
     -mno-red-zone -fno-builtin -nostdlib -Wall -Wextra -Werror \
     -Iuserspace/include -Iinclude -c userspace/apps/terminal.c -o /tmp/vantaos-terminal.o
 ld -m elf_x86_64 -static -nostdlib -Ttext-segment=0x8000000000 \
     -e _start -o /tmp/vantaos-terminal.elf \
     /tmp/vantaos-terminal-crt0.o /tmp/vantaos-terminal.o
-gcc -m64 -mcmodel=large -ffreestanding -fno-pie -fno-stack-protector \
+gcc -m64 -march=x86-64 -mtune=generic -mcmodel=large -ffreestanding -fno-pie -fno-stack-protector \
     -mno-red-zone -fno-builtin -nostdlib -Wall -Wextra -Werror \
     -Iuserspace/include -Iinclude -c userspace/apps/settings.c -o /tmp/vantaos-settings.o
 ld -m elf_x86_64 -static -nostdlib -Ttext-segment=0x8000000000 \
     -e _start -o /tmp/vantaos-settings.elf \
     /tmp/vantaos-terminal-crt0.o /tmp/vantaos-settings.o
-gcc -m64 -mcmodel=large -ffreestanding -fno-pie -fno-stack-protector \
+gcc -m64 -march=x86-64 -mtune=generic -mcmodel=large -ffreestanding -fno-pie -fno-stack-protector \
     -mno-red-zone -fno-builtin -nostdlib -Wall -Wextra -Werror \
     -Iuserspace/include -Iinclude -c userspace/apps/explorer.c -o /tmp/vantaos-explorer.o
 ld -m elf_x86_64 -static -nostdlib -Ttext-segment=0x8000000000 \
@@ -37,7 +37,7 @@ ld -m elf_x86_64 -static -nostdlib -Ttext-segment=0x8000000000 \
     /tmp/vantaos-terminal-crt0.o /tmp/vantaos-explorer.o
 
 echo "==> Building the ring-3 Notes editor ELF..."
-gcc -m64 -mcmodel=large -ffreestanding -fno-pie -fno-stack-protector \
+gcc -m64 -march=x86-64 -mtune=generic -mcmodel=large -ffreestanding -fno-pie -fno-stack-protector \
     -mno-red-zone -fno-builtin -nostdlib -Wall -Wextra -Werror \
     -Iuserspace/include -Iinclude -c userspace/apps/notes.c -o /tmp/vantaos-notes.o
 ld -m elf_x86_64 -static -nostdlib -Ttext-segment=0x8000000000 \
@@ -45,14 +45,14 @@ ld -m elf_x86_64 -static -nostdlib -Ttext-segment=0x8000000000 \
     /tmp/vantaos-terminal-crt0.o /tmp/vantaos-notes.o
 
 echo "==> Building the ring-3 Calculator application ELF..."
-gcc -m64 -mcmodel=large -ffreestanding -fno-pie -fno-stack-protector \
+gcc -m64 -march=x86-64 -mtune=generic -mcmodel=large -ffreestanding -fno-pie -fno-stack-protector \
     -mno-red-zone -fno-builtin -nostdlib -Wall -Wextra -Werror \
     -Iuserspace/include -Iinclude -c userspace/apps/calculator.c -o /tmp/vantaos-calculator.o
 ld -m elf_x86_64 -static -nostdlib -Ttext-segment=0x8000000000 \
     -e _start -o /tmp/vantaos-calculator.elf \
     /tmp/vantaos-terminal-crt0.o /tmp/vantaos-calculator.o
 echo "==> Building the ring-3 Explorer end-to-end test ELF..."
-gcc -m64 -mcmodel=large -ffreestanding -fno-pie -fno-stack-protector \
+gcc -m64 -march=x86-64 -mtune=generic -mcmodel=large -ffreestanding -fno-pie -fno-stack-protector \
     -mno-red-zone -fno-builtin -nostdlib -Wall -Wextra -Werror \
     -DVANTAOS_EXPLORER_E2E_TEST -Iuserspace/include -Iinclude \
     -c userspace/apps/explorer.c -o /tmp/vantaos-explorer-e2e.o
@@ -61,7 +61,7 @@ ld -m elf_x86_64 -static -nostdlib -Ttext-segment=0x8000000000 \
     /tmp/vantaos-terminal-crt0.o /tmp/vantaos-explorer-e2e.o
 
 echo "==> Building the ring-3 Notes file-load end-to-end test ELF..."
-gcc -m64 -mcmodel=large -ffreestanding -fno-pie -fno-stack-protector \
+gcc -m64 -march=x86-64 -mtune=generic -mcmodel=large -ffreestanding -fno-pie -fno-stack-protector \
     -mno-red-zone -fno-builtin -nostdlib -Wall -Wextra -Werror \
     -DVANTAOS_NOTES_E2E_TEST -Iuserspace/include -Iinclude \
     -c userspace/apps/notes.c -o /tmp/vantaos-notes-e2e.o

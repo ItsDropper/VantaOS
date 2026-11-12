@@ -360,6 +360,15 @@ jobs:
       - name: Test NVX copy-channel provisioning, timeout recovery and teardown
         run: /tmp/vantaos-nvx-gsp-channel-test
 
+      - name: Compile NVX RM DMA mapping lifecycle tests with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_dma_map.c drivers/gpu/nvx/gsp/nvx_gsp_dma_map.c \
+            -o /tmp/vantaos-nvx-gsp-dma-map-test
+
+      - name: Test RM DMA map, unmap, timeout recovery and handle release
+        run: /tmp/vantaos-nvx-gsp-dma-map-test
+
       - name: Compile GSP RMAPI request tests with strict warnings
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \

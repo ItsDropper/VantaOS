@@ -53,6 +53,10 @@ nvx_gsp_rmapi_status_t nvx_gsp_channel_runtime_create(
     if (userd_status != NVX_GSP_USERD_OK)
         return NVX_GSP_RMAPI_INVALID_ARGUMENT;
 
+    status = nvx_gsp_os_memory_acquire(userd_memory);
+    if (status != NVX_GSP_RMAPI_OK)
+        return status;
+    runtime->userd_reference_held = 1U;
     runtime->userd_memory = userd_memory;
     runtime->entries = entries;
     runtime->entries_mapping_bytes = entries_bytes;
@@ -68,8 +72,13 @@ nvx_gsp_rmapi_status_t nvx_gsp_channel_runtime_create(
         response_size, timeout_ms, poll_ms, delay_ms, delay_context);
     if (status != NVX_GSP_RMAPI_OK) {
         if (runtime->rm.stage == NVX_GSP_CHANNEL_IDLE &&
-            !runtime->rm.allocated)
+            !runtime->rm.allocated) {
+            nvx_gsp_rmapi_status_t release_status =
+                nvx_gsp_os_memory_release(userd_memory);
+            if (release_status != NVX_GSP_RMAPI_OK)
+                return NVX_GSP_RMAPI_CLEANUP_FAILED;
             memset(runtime, 0, sizeof(*runtime));
+        }
         return status;
     }
     return bind_fifo(runtime);
@@ -104,6 +113,11 @@ nvx_gsp_rmapi_status_t nvx_gsp_channel_runtime_recover(
 
     if (!runtime->rm.allocated &&
         runtime->rm.stage == NVX_GSP_CHANNEL_IDLE) {
+        if (runtime->userd_reference_held) {
+            status = nvx_gsp_os_memory_release(runtime->userd_memory);
+            if (status != NVX_GSP_RMAPI_OK)
+                return NVX_GSP_RMAPI_CLEANUP_FAILED;
+        }
         memset(runtime, 0, sizeof(*runtime));
         return NVX_GSP_RMAPI_OK;
     }
@@ -155,6 +169,11 @@ nvx_gsp_rmapi_status_t nvx_gsp_channel_runtime_stop(
     if (status != NVX_GSP_RMAPI_OK)
         return status;
 
+    if (runtime->userd_reference_held) {
+        status = nvx_gsp_os_memory_release(runtime->userd_memory);
+        if (status != NVX_GSP_RMAPI_OK)
+            return NVX_GSP_RMAPI_CLEANUP_FAILED;
+    }
     memset(runtime, 0, sizeof(*runtime));
     return NVX_GSP_RMAPI_OK;
 }

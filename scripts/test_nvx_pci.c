@@ -114,7 +114,7 @@ void *mmio_map_region(uint64_t physical_address, size_t length)
 int mmio_unmap_region(void *virtual_address, size_t length)
 {
     assert(virtual_address == (void *)(uintptr_t)fake_registers);
-    assert(length == 8U || length == TEST_BAR0_SIZE);
+    assert(length == 8U);
     ++unmap_calls;
     return !unmap_failure;
 }

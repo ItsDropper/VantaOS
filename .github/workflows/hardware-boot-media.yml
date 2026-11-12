@@ -119,11 +119,14 @@ jobs:
             -machine pc -cpu max -m 512M -smp 2 \
             -drive if=pflash,format=raw,readonly=on,file="$code_firmware" \
             -drive if=pflash,format=raw,file=OVMF_VARS.fd \
-            -device qemu-xhci,id=xhci \
-            -drive if=none,id=usbdisk,format=raw,file=uefi-qemu-test.img \
-            -device usb-storage,drive=usbdisk,bootindex=1 \
+            -drive if=none,id=bootdisk,format=raw,file=uefi-qemu-test.img \
+            -device ide-hd,drive=bootdisk,bootindex=1 \
+            -boot order=c \
             -display none -serial file:uefi-hardware-test.log \
-            -debugcon file:uefi-debug.log -global isa-debugcon.iobase=0xe9 \
+            -chardev file,id=ovmfdebug,path=ovmf-debug.log \
+            -device isa-debugcon,iobase=0x402,chardev=ovmfdebug \
+            -chardev file,id=vantadebug,path=uefi-debug.log \
+            -device isa-debugcon,iobase=0xe9,chardev=vantadebug \
             -monitor none -no-reboot
           result=$?
           set -e
@@ -150,6 +153,8 @@ jobs:
             grep -q "$marker" uefi-debug.log || {
               echo "Missing required marker: $marker"
               cat uefi-debug.log
+              cat ovmf-debug.log 2>/dev/null || true
+              cat uefi-hardware-test.log 2>/dev/null || true
               exit 1
             }
           done
@@ -166,5 +171,6 @@ jobs:
             SHA256SUMS.txt
             uefi-hardware-test.log
             uefi-debug.log
+            ovmf-debug.log
           if-no-files-found: error
           retention-days: 30

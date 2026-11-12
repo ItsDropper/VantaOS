@@ -18,8 +18,10 @@ static int auto_complete;
 static nvx_gsp_rpc_status_t fake_state=NVX_GSP_RPC_PENDING;
 static void *fake_response;
 static size_t fake_response_capacity,fake_response_size;
-static size_t history_size[16];
-static uint8_t history[16][4096];
+static size_t history_size[32];
+static unsigned fail_submission;
+static uint32_t injected_remote_status;
+static uint8_t history[32][4096];
 
 nvx_gsp_rpc_status_t nvx_gsp_rpc_pump(
     nvx_gsp_rpc_manager_t *manager,void *scratch,size_t scratch_size,
@@ -68,12 +70,24 @@ nvx_gsp_rpc_status_t nvx_gsp_rpc_submit(
     assert(response_function==expected_function);
     assert(payload_size<=sizeof(captured));
     memcpy(captured,payload,payload_size);captured_size=payload_size;
-    if(submissions<16U){history_size[submissions]=payload_size;
+    if(submissions<32U){history_size[submissions]=payload_size;
         memcpy(history[submissions],payload,payload_size);}
     submissions++;
     fake_response=response;fake_response_capacity=response_capacity;
     fake_response_size=payload_size;
-    if(auto_complete&&response&&response_capacity)memset(response,0,response_capacity);
+    if(auto_complete&&response&&response_capacity) {
+        memset(response,0,response_capacity);
+        if(submissions==fail_submission) {
+            size_t status_offset=request_function==NVX_GSP_RPC_FN_RM_ALLOC?16U:
+                (request_function==NVX_GSP_RPC_FN_FREE?12U:12U);
+            if(status_offset+4U<=response_capacity) {
+                response[status_offset]=(uint8_t)injected_remote_status;
+                response[status_offset+1U]=(uint8_t)(injected_remote_status>>8U);
+                response[status_offset+2U]=(uint8_t)(injected_remote_status>>16U);
+                response[status_offset+3U]=(uint8_t)(injected_remote_status>>24U);
+            }
+        }
+    }
     fake_state=auto_complete?NVX_GSP_RPC_COMPLETE:NVX_GSP_RPC_PENDING;
     *out_handle=(nvx_gsp_rpc_handle_t){.generation=7U,.slot=2U,.valid=1U};
     return NVX_GSP_RPC_OK;
@@ -298,6 +312,41 @@ int main(void)
             assert(le32(history[10]+60U)==0x30U);
             assert(le32(history[10]+168U)==0x17U);
         }
+        /* Successful teardown frees children before parents and is idempotent. */
+        expected_function=NVX_GSP_RPC_FN_FREE;
+        assert(nvx_gsp_rm_destroy_core_objects(&manager,&objects,scratch,
+            sizeof(scratch),response,sizeof(response),20U,1U,no_delay,NULL)==
+            NVX_GSP_RMAPI_OK);
+        assert(!objects.vaspace_created&&!objects.device_created&&
+               !objects.client_created);
+        assert(history_size[11]==16U&&le32(history[11]+4U)==0x20U&&
+               le32(history[11]+8U)==0x30U);
+        assert(history_size[12]==16U&&le32(history[12]+4U)==0x10U&&
+               le32(history[12]+8U)==0x20U);
+        assert(history_size[13]==16U&&le32(history[13]+4U)==0U&&
+               le32(history[13]+8U)==0x10U);
+        assert(nvx_gsp_rm_destroy_core_objects(&manager,&objects,scratch,
+            sizeof(scratch),response,sizeof(response),20U,1U,no_delay,NULL)==
+            NVX_GSP_RMAPI_OK);
+
+        /* If a child free fails, its parent must not be freed. */
+        objects=(nvx_gsp_rm_core_objects_t){
+            .client_handle=0x10U,.device_handle=0x20U,.vaspace_handle=0x30U,
+            .client_created=1U,.device_created=1U,.vaspace_created=1U};
+        fail_submission=submissions+1U;
+        injected_remote_status=0x17U;
+        assert(nvx_gsp_rm_destroy_core_objects(&manager,&objects,scratch,
+            sizeof(scratch),response,sizeof(response),20U,1U,no_delay,NULL)==
+            NVX_GSP_RMAPI_REMOTE_ERROR);
+        assert(objects.vaspace_created&&objects.device_created&&
+               objects.client_created);
+        assert(le32(captured+4U)==0x20U&&le32(captured+8U)==0x30U);
+        fail_submission=0U;
+        assert(nvx_gsp_rm_destroy_core_objects(&manager,&objects,scratch,
+            sizeof(scratch),response,sizeof(response),20U,1U,no_delay,NULL)==
+            NVX_GSP_RMAPI_OK);
+        assert(!objects.vaspace_created&&!objects.device_created&&
+               !objects.client_created);
         auto_complete=0;
     }
     return 0;

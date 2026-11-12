@@ -161,6 +161,32 @@ int intel_sptlp_pin_community(uint16_t pin,uint8_t *community)
     return 0;
 }
 
+int intel_sptlp_pin_irq_location(uint16_t pin,
+                                 intel_sptlp_irq_location_t *location)
+{
+    if(!location) return 0;
+    for(uint32_t i=0U;i<INTEL_SPTLP_COMMUNITY_COUNT;++i)
+    {
+        if(pin<communities[i].first_pin||pin>communities[i].last_pin)
+            continue;
+        uint16_t local=(uint16_t)(pin-communities[i].first_pin);
+        uint8_t group=(uint8_t)(local/INTEL_SPTLP_GPP_SIZE);
+        uint8_t bit=(uint8_t)(local%INTEL_SPTLP_GPP_SIZE);
+        intel_sptlp_irq_location_t candidate={
+            .community=communities[i].index,
+            .group=group,
+            .bit=bit,
+            .interrupt_status_offset=INTEL_SPTLP_GPI_IS_OFFSET+
+                                     (uint32_t)group*4U,
+            .interrupt_enable_offset=INTEL_SPTLP_GPI_IE_OFFSET+
+                                     (uint32_t)group*4U
+        };
+        *location=candidate;
+        return 1;
+    }
+    return 0;
+}
+
 int intel_sptlp_validate_gpio_resource(
     const acpi_aml_device_t *controller,
     const acpi_aml_resource_t *resource)

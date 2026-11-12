@@ -37,9 +37,9 @@ int main(void)
     volatile uint32_t doorbell = 0U;
     const uint64_t ring_va = UINT64_C(0x12340000);
 
-    assert(sizeof(nvx_gsp_channel_alloc_params_t) == 368U);
-    assert(offsetof(nvx_gsp_channel_alloc_params_t, h_userd_memory) == 32U);
-    assert(offsetof(nvx_gsp_channel_alloc_params_t, userd_offset) == 64U);
+    assert(sizeof(nvx_gsp_channel_alloc_params_t) == 376U);
+    assert(offsetof(nvx_gsp_channel_alloc_params_t, h_userd_memory) == 36U);
+    assert(offsetof(nvx_gsp_channel_alloc_params_t, userd_offset) == 72U);
     assert(nvx_gsp_userd_view_init(&memory, 0x1000U, 0x100U, &view) ==
         NVX_GSP_USERD_OK);
     assert(view.base == backing + 0x1000U);

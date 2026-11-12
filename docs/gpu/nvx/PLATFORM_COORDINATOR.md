@@ -52,6 +52,8 @@ The coordinator owns the firmware bundle, boot-memory artifacts, VBIOS DMA,
 init-argument DMA, shared-queue DMA and all runtime queue/RPC objects in
 `nvx_gsp_platform_session_t`. That session must live in static or other
 long-lived kernel storage; it must not be allocated on a transient stack.
+Use exactly one session per PCI function and serialize start/shutdown calls;
+the coordinator does not provide a global per-device concurrency lock.
 
 ## Platform inputs that must be supplied
 

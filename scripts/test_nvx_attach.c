@@ -108,9 +108,24 @@ int main(void)
     assert(nvx_device_attach(&unsupported_nvidia, &bar0, &device) ==
            NVX_ATTACH_INVALID_ARGUMENT);
     assert(map_calls == maps_before_unsupported);
-    assert(nvx_device_attach(&mx130,&bar0,&device)==NVX_ATTACH_INVALID_ARGUMENT);
-    assert(nvx_device_attach(&mx150,&bar0,&device)==NVX_ATTACH_INVALID_ARGUMENT);
-    assert(map_calls==maps_before_unsupported);
+    assert(nvx_device_attach(&mx130,&bar0,&device)==NVX_ATTACH_OK);
+    assert(device.lifecycle.state==NVX_STATE_PROBED);
+    assert(device.lifecycle.verified_capabilities==0U);
+    assert(device.registers.identified_family==NVX_FAMILY_MAXWELL);
+    assert(device.registers.identified_profile==NVX_PROFILE_GEFORCE_MX130);
+    assert(nvx_device_detach(&device)==NVX_ATTACH_OK);
+
+    fake_registers[0]=0x13000000U; /* Pascal GP108 */
+    assert(nvx_device_attach(&mx150,&bar0,&device)==NVX_ATTACH_OK);
+    assert(device.lifecycle.state==NVX_STATE_PROBED);
+    assert(device.lifecycle.verified_capabilities==0U);
+    assert(device.registers.identified_family==NVX_FAMILY_PASCAL);
+    assert(device.registers.identified_profile==NVX_PROFILE_GEFORCE_MX150);
+    assert(nvx_device_detach(&device)==NVX_ATTACH_OK);
+
+    fake_registers[0]=0x17000000U;
+    assert(map_calls==maps_before_unsupported+2U);
+    assert(unmap_calls==3U);
 
     /* A matching PCI ID is insufficient when live PMC architecture disagrees. */
     fake_registers[0] = 0x16000000U; /* Turing architecture, not Ampere. */
@@ -130,23 +145,26 @@ int main(void)
 
     device = (nvx_attached_device_t){0};
     mock_command = 0;
+    unsigned maps_before_decode_disabled=map_calls;
     assert(nvx_device_attach(&gpu, &bar0, &device) == NVX_ATTACH_MAPPING_ERROR);
-    assert(map_calls == 2U);
+    assert(map_calls==maps_before_decode_disabled);
     mock_command = NVX_PCI_COMMAND_MEMORY_SPACE;
 
     device = (nvx_attached_device_t){0};
     map_failure = 1;
+    unsigned maps_before_map_failure=map_calls;
     assert(nvx_device_attach(&gpu, &bar0, &device) == NVX_ATTACH_MAPPING_ERROR);
     assert(device.bar0_mapping == 0 && device.attached == 0U);
-    assert(map_calls == 3U);
+    assert(map_calls==maps_before_map_failure+1U);
     map_failure = 0;
 
     device = (nvx_attached_device_t){0};
+    unsigned unmaps_before_bad_registers=unmap_calls;
     fake_registers[0] = 0xFFFFFFFFU;
     fake_registers[1] = 0xFFFFFFFFU;
     assert(nvx_device_attach(&gpu, &bar0, &device) == NVX_ATTACH_PROBE_ERROR);
     assert(device.bar0_mapping == 0 && device.attached == 0U);
     assert(device.lifecycle.state == NVX_STATE_FAILED);
-    assert(unmap_calls == 3U);
+    assert(unmap_calls==unmaps_before_bad_registers+1U);
     return 0;
 }

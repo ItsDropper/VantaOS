@@ -52,7 +52,7 @@ static void mock_handler(net_device_t* d,const uint8_t* frame,size_t len,uint16_
 }
 void network_framework_selftest(void) {
     static const net_device_ops_t ops={.transmit=mock_transmit};
-    net_device_t d={.name="nettest0",.mac={0x02,0,0,0,0,1},.mtu=NET_MTU_DEFAULT,.link_up=1,.ops=&ops};
+    net_device_t d={.name="nettest0",.mac={0x02,0,0,0,0,1},.mtu=NET_MTU_DEFAULT,.link_up=0,.ops=&ops};
     uint8_t frame[NET_ETHERNET_HEADER_SIZE+4]={0x02,0,0,0,0,2,0x02,0,0,0,0,1,0x88,0xB5,0x56,0x41,0x4E,0x54};
     uint8_t vlan[NET_ETHERNET_VLAN_HEADER_SIZE+4]={0x02,0,0,0,0,2,0x02,0,0,0,0,1,0x81,0x00,0,1,0x88,0xB5,0x56,0x41,0x4E,0x54};
     uint8_t short_frame[13]={0};
@@ -75,12 +75,20 @@ void network_framework_selftest(void) {
     ok=net_device_get_ipv4(&d,&address,&mask,&gateway)&&ok;
     ok=address==0xC0A80102U&&mask==0xFFFFFF00U&&gateway==0xC0A80101U&&ok;
     if (!ok && !failure_stage) failure_stage = "ipv4-validation";
+    /*
+     * The interface is globally visible to the live network stack while
+     * registered. Keep it down during address validation, then clear the
+     * address before briefly enabling it for this test's explicit transmit.
+     * Otherwise ARP/IPv4 background work can transmit through the mock NIC
+     * and invalidate exact per-device TX counter assertions.
+     */
+    ok=net_device_clear_ipv4(&d)&&ok;
     ok=ok&&net_ethernet_handler_register(0x88B5U,mock_handler,0);
+    ok=net_device_set_link(&d,1)&&ok;
     ok=ok&&net_device_transmit(&d,frame,sizeof(frame))&&mock_tx_count==1;
     if (!ok && !failure_stage) failure_stage = "handler-or-transmit";
     ok=net_device_set_link(&d,0)&&ok;
     ok=!net_device_transmit(&d,frame,sizeof(frame))&&ok;
-    ok=net_device_set_link(&d,1)&&ok;
     attempt_unregister_during_dispatch=1;unregister_during_dispatch_result=1;
     ok=net_receive_frame(&d,frame,sizeof(frame))&&ok;
     ok=net_poll(1)==1&&ok;

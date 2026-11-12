@@ -46,6 +46,7 @@ typedef struct nvx_gsp_os_memory {
     nvx_dma_buffer_t backing;
     nvx_gsp_rmapi_result_t operation;
     nvx_gsp_rmapi_status_t completed_status;
+    uint32_t lifetime_state; /* high bit closes new leases; low bits count leases */
     uint8_t remote_created, stage;
 } nvx_gsp_os_memory_t;
 
@@ -62,6 +63,10 @@ nvx_gsp_rmapi_status_t nvx_gsp_os_memory_recover(
     void *scratch, size_t scratch_size, void *response,
     size_t response_capacity, uint32_t timeout_ms, uint32_t poll_interval_ms,
     nvx_gsp_rmapi_delay_fn delay_ms, void *delay_context);
+
+/* Hold/release a lifetime lease; destroy returns BUSY while any lease exists. */
+nvx_gsp_rmapi_status_t nvx_gsp_os_memory_acquire(nvx_gsp_os_memory_t *);
+nvx_gsp_rmapi_status_t nvx_gsp_os_memory_release(nvx_gsp_os_memory_t *);
 
 nvx_gsp_rmapi_status_t nvx_gsp_os_memory_destroy(
     nvx_gsp_rpc_manager_t *, nvx_gsp_os_memory_t *,

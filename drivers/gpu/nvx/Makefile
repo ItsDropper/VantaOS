@@ -9,6 +9,8 @@ VANTAOS_NVX_C := \
     drivers/gpu/nvx/core/nvx_probe.c \
     drivers/gpu/nvx/core/nvx_attach.c \
     drivers/gpu/nvx/firmware/nvx_firmware.c \
+    drivers/gpu/nvx/firmware/nvx_fw_manifest.c \
+    drivers/gpu/nvx/core/nvx_bringup.c \
     drivers/gpu/nvx/firmware/nvx_gsp_bundle.c \
     drivers/gpu/nvx/firmware/nvx_gsp_image.c \
     drivers/gpu/nvx/firmware/nvx_gsp_preflight.c \

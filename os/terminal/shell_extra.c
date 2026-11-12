@@ -17,6 +17,7 @@
 #include "http_url.h"
 #include "http_response.h"
 #include "http_body.h"
+#include "nvx_bringup.h"
 #include <stdint.h>
 #include <stddef.h>
 
@@ -865,6 +866,32 @@ static int command_http_url(const char *url, const char *output_argument,
     return 1;
 }
 
+static void nvx_io_text(const char *s, void *ctx)
+{
+    (void)ctx;
+    terminal_write(s);
+}
+
+/* Manual opt-in GPU bring-up. Never runs at boot. */
+static int command_nvx(uint32_t argc, char **argv)
+{
+    nvx_bringup_io_t io = { nvx_io_text, 0 };
+    terminal_write("\n");
+    if (argc >= 2U && shell_string_equals(argv[1], "status")) {
+        (void)nvx_bringup_status(&io);
+        return 1;
+    }
+    if (argc == 3U && shell_string_equals(argv[1], "fw")) {
+        nvx_firmware_provider_t p = nvx_bringup_vfs_provider();
+        (void)nvx_bringup_firmware(&io, &p, "ga106", argv[2]);
+        return 1;
+    }
+    terminal_write("Usage: nvx status         read-only RTX 3060 probe (no engine started)\n");
+    terminal_write("       nvx fw <version>     load+verify GSP firmware from /nvidia/ga106/gsp\n");
+    terminal_write("GSP start, channels and compute are not wired to this command yet.\n");
+    return 1;
+}
+
 static int command_net(uint32_t argc, char **argv)
 {
     if (argc == 1U || (argc == 2U && shell_string_equals(argv[1], "status"))) {
@@ -1152,5 +1179,6 @@ int shell_execute_extended(const char *command_line)
         shell_string_equals(argv[1], "-o"))
         return command_http_url(argv[3], argv[2], 1);
     if (shell_string_equals(argv[0], "net")) return command_net(argc, argv);
+    if (shell_string_equals(argv[0], "nvx")) return command_nvx(argc, argv);
     return 0;
 }

@@ -8,6 +8,7 @@ on:
       - "drivers/gpu/nvx/**"
       - "include/nvx_gsp_ce.h"
       - "scripts/test_nvx_gsp_ce_runtime.c"
+      - "scripts/test_nvx_dma.c"
       - ".github/workflows/nvx-tests.yml"
   pull_request:
     paths:
@@ -15,6 +16,7 @@ on:
       - "include/nvx_gsp_boot_memory.h"
       - "include/nvx_gsp_ce.h"
       - "scripts/test_nvx_gsp_ce_runtime.c"
+      - "scripts/test_nvx_dma.c"
       - "include/nvx_gsp_secure_boot.h"
       - "include/nvx_gsp_pci_rom.h"
       - "include/nvx_gsp_fwsec_interface.h"

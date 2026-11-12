@@ -132,7 +132,8 @@ int main(void)
     assert(nvx_pci_discover() == 5);
     assert(bar_queries == 7U); /* Four inventory reads plus three profile probes. */
     assert(map_calls == 3U && unmap_calls == 3U);
-    assert(mapped_lengths[0] == 8U);
+    assert(mapped_lengths[0] == 8U && mapped_lengths[1] == 8U &&
+           mapped_lengths[2] == 8U);
     assert(mapped_lengths[1] == 8U && mapped_lengths[2] == 8U);
 
     assert(strstr(log_buffer, "vendor=0x10DE device=0x2503") != NULL);

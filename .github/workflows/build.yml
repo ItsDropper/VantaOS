@@ -640,6 +640,12 @@ jobs:
           gcc -m64 -ffreestanding -fno-pie -fno-stack-protector -mno-red-zone -c userspace/crt/crt0.S -o /tmp/vantaos-user-crt0.o
           gcc -m64 -mcmodel=large -ffreestanding -fno-pie -fno-stack-protector -mno-red-zone -fno-builtin -Iuserspace/include -Iinclude -c tests/user/child.c -o /tmp/vantaos-user-child.o
           ld -m elf_x86_64 -static -nostdlib -Ttext-segment=0x8000000000 -e _start -o /tmp/vantaos-user-child.elf /tmp/vantaos-user-crt0.o /tmp/vantaos-user-child.o
+          echo "Child ELF symbols and program headers:"
+          nm -n /tmp/vantaos-user-child.elf | tail -n 24
+          readelf -l /tmp/vantaos-user-child.elf
+          echo "Child ELF instructions near observed user fault offsets:"
+          objdump -d --start-address=0x8000000000 --stop-address=0x8000000120 /tmp/vantaos-user-child.elf
+          objdump -d --start-address=0x80000060c0 --stop-address=0x8000006110 /tmp/vantaos-user-child.elf
           test -s /tmp/vantaos-user-hello.elf
           test -s /tmp/vantaos-user-child.elf
           mcopy -i vantaos.img /tmp/vantaos-user-hello.elf ::/HELLO.ELF

@@ -8,6 +8,7 @@
 #include "block_device.h"
 #include "device.h"
 #include "spinlock.h"
+#include "vanta_boot_info.h"
 
 static block_device_t* devices[BLOCK_DEVICE_MAX];
 static uint32_t device_count_value;
@@ -140,6 +141,11 @@ block_status_t block_device_register_disk(block_device_t* device)
     if (device->core.state != DEVICE_STATE_UNREGISTERED ||
         device->core.driver)
         return BLOCK_STATUS_BUSY;
+
+    const vanta_boot_info_t* boot_info = kernel_get_boot_info();
+    if (boot_info && boot_info->source == VANTA_BOOT_SOURCE_UEFI &&
+        (boot_info->flags & VANTA_BOOT_FLAG_STORAGE_READ_ONLY))
+        device->flags |= BLOCK_DEVICE_READ_ONLY;
 
     uint64_t flags = spinlock_lock_irqsave(&registry_lock);
     if (find_device_locked(device) >= 0)

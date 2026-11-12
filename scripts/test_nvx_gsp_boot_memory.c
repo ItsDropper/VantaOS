@@ -347,7 +347,7 @@ int main(void)
         release_calls = 0U;
         provider_release_calls = 0U;
         fail_allocation_at = 0U;
-        assert(nvx_gsp_boot_package_prepare(&provider, "ga102", "1.0",
+        assert(nvx_gsp_boot_package_prepare(&provider, "ga106", "1.0",
             &package_bar0, &platform_layout, &package, &prepared_layout) ==
             NVX_GSP_BOOT_PACKAGE_OK);
         assert(package.prepared == 1U && package.firmware.acquired == 1U);

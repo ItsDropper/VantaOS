@@ -33,6 +33,8 @@ static UINT8 port_in8(UINT16 port)
     return value;
 }
 
+static int serial_available;
+
 static void serial_initialize(void)
 {
     port_out8(0x3F9, 0x00);
@@ -42,14 +44,23 @@ static void serial_initialize(void)
     port_out8(0x3FB, 0x03);
     port_out8(0x3FA, 0xC7);
     port_out8(0x3FC, 0x0B);
+    /* Probe the 16550 scratch register so absent legacy UARTs never stall boot. */
+    port_out8(0x3FF, 0x5A);
+    serial_available = port_in8(0x3FF) == 0x5A;
 }
 
 static void serial_write(const char* text)
 {
+    if (!serial_available || !text)
+        return;
     while (*text)
     {
-        while ((port_in8(0x3FD) & 0x20U) == 0)
-            ;
+        UINTN spin;
+        for (spin = 0; spin < 100000U; ++spin)
+            if (port_in8(0x3FD) & 0x20U)
+                break;
+        if (spin == 100000U)
+            return;
         port_out8(0x3F8, (UINT8)*text++);
     }
 }

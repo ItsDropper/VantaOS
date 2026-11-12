@@ -7,6 +7,7 @@
 #include "nvx_gsp_ring.h"
 
 #include <assert.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <string.h>
 
@@ -107,6 +108,17 @@ static void no_delay(uint32_t ms,void *context)
 
 int main(void)
 {
+    assert(sizeof(nvx_gsp_map_memory_dma_t) == 56U);
+    assert(offsetof(nvx_gsp_map_memory_dma_t, offset) == 16U);
+    assert(offsetof(nvx_gsp_map_memory_dma_t, length) == 24U);
+    assert(offsetof(nvx_gsp_map_memory_dma_t, flags) == 32U);
+    assert(offsetof(nvx_gsp_map_memory_dma_t, dma_offset) == 48U);
+    assert(sizeof(nvx_gsp_unmap_memory_dma_t) == 40U);
+    assert(offsetof(nvx_gsp_unmap_memory_dma_t, flags) == 16U);
+    assert(offsetof(nvx_gsp_unmap_memory_dma_t, dma_offset) == 24U);
+    assert(offsetof(nvx_gsp_unmap_memory_dma_t, size) == 32U);
+    assert(NVX_GSP_DMA_MAP_FLAG_OFFSET_FIXED == UINT32_C(0x00008000));
+
     nvx_gsp_rpc_manager_t manager={0};
     nvx_gsp_rmapi_result_t op={0};
     uint8_t scratch[4096],response[4096];
@@ -174,6 +186,12 @@ int main(void)
         memset(response,0,sizeof(response));
         response[48U]=0x78U;response[49U]=0x56U;response[50U]=0x34U;response[51U]=0x12U;
         op.function=NVX_GSP_RPC_FN_MAP_MEMORY_DMA;
+        assert(nvx_gsp_rmapi_decode_status(&op,response,
+            NVX_GSP_RM_MAP_MEMORY_DMA_RESPONSE_BYTES,&status)==NVX_GSP_RMAPI_OK);
+        response[NVX_GSP_RM_MAP_MEMORY_DMA_STATUS_OFFSET]=1U;
+        assert(nvx_gsp_rmapi_decode_status(&op,response,
+            NVX_GSP_RM_MAP_MEMORY_DMA_RESPONSE_BYTES,&status)==NVX_GSP_RMAPI_REMOTE_ERROR);
+        response[NVX_GSP_RM_MAP_MEMORY_DMA_STATUS_OFFSET]=0U;
         assert(nvx_gsp_rm_map_memory_dma_result(&op,response,60U,&mapped_offset)==NVX_GSP_RMAPI_OK);
         assert(mapped_offset==UINT64_C(0x12345678));
 
@@ -186,7 +204,11 @@ int main(void)
         assert(le32(captured+24U)==0x1000U && le32(captured+32U)==0x2000U);
         op.function=NVX_GSP_RPC_FN_UNMAP_MEMORY_DMA;
         memset(response,0,sizeof(response));
-        assert(nvx_gsp_rmapi_decode_status(&op,response,44U,&status)==NVX_GSP_RMAPI_OK);
+        assert(nvx_gsp_rmapi_decode_status(&op,response,
+            NVX_GSP_RM_UNMAP_MEMORY_DMA_RESPONSE_BYTES,&status)==NVX_GSP_RMAPI_OK);
+        response[NVX_GSP_RM_UNMAP_MEMORY_DMA_STATUS_OFFSET]=1U;
+        assert(nvx_gsp_rmapi_decode_status(&op,response,
+            NVX_GSP_RM_UNMAP_MEMORY_DMA_RESPONSE_BYTES,&status)==NVX_GSP_RMAPI_REMOTE_ERROR);
     }
     assert(submissions==5U);
 

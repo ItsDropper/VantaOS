@@ -112,8 +112,8 @@ nvx_gsp_rmapi_status_t nvx_gsp_dma_map(
         mapping->stage != NVX_GSP_DMA_MAP_IDLE)
         return NVX_GSP_RMAPI_INVALID_ARGUMENT;
 
+    /* dmaOffset is an input when OFFSET_FIXED is set (and for non-CTXDMA). */
     wire = *request;
-    wire.dma_offset = 0U;
     mapping->request = wire;
     mapping->completed_dma_offset = 0U;
     mapping->completed_status = NVX_GSP_RMAPI_OK;

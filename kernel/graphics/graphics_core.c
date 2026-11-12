@@ -677,6 +677,11 @@ int graphics_set_resolution(uint32_t width, uint32_t height)
                         (uint16_t)(old_height * (old_pageflip ? 2U : 1U)));
         bochs_vbe_write(BOCHS_VBE_INDEX_Y_OFFSET, 0U);
         bochs_vbe_write(BOCHS_VBE_INDEX_ENABLE, BOCHS_VBE_ENABLE_LFB);
+        framebuffer = graphics_scanout_base;
+        graphics_scanout_page_index = 0U;
+        graphics_pageflip_seeded = 0;
+        graphics_reset_backbuffer();
+        graphics_invalidate_scene();
         return 0;
     }
 

@@ -15,6 +15,7 @@ typedef struct nvx_gsp_channel_runtime {
  uint32_t doorbell_token,entry_count;
  uint64_t userd_offset;
  uint8_t stage;
+ uint8_t userd_reference_held;
 } nvx_gsp_channel_runtime_t;
 /* ring_gpu_va must already map entries in vaspace; zero-init runtime first. */
 nvx_gsp_rmapi_status_t nvx_gsp_channel_runtime_create(nvx_gsp_rpc_manager_t*,nvx_gsp_channel_runtime_t*,uint32_t,uint32_t,uint32_t,uint32_t,uint32_t,uint32_t,uint64_t,uint32_t,nvx_gsp_os_memory_t*,uint64_t,size_t,volatile uint32_t*,size_t,volatile uint32_t*,uint32_t,void*,size_t,void*,size_t,uint32_t,uint32_t,nvx_gsp_rmapi_delay_fn,void*);

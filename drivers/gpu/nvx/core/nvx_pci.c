@@ -102,19 +102,10 @@ static void nvx_probe_candidate_identity(const struct pci_device *device)
     nvx_register_snapshot_t snapshot;
     nvx_probe_status_t status;
     int unmapped;
-    size_t probe_bytes = 8U;
+    const size_t probe_bytes = 8U;
 
     if (generation == NULL)
         return;
-    if (generation->pmc_boot_42_offset != UINT32_MAX) {
-        if ((uint64_t)generation->pmc_boot_42_offset >
-            (uint64_t)SIZE_MAX - sizeof(uint32_t)) {
-            serial_write("[NVX] PMC identity: skipped (invalid register extent)\n");
-            return;
-        }
-        probe_bytes = (size_t)generation->pmc_boot_42_offset +
-                      sizeof(uint32_t);
-    }
 
     serial_write("[NVX] PMC identity: ");
     command = pci_read_config16(device, 0x04U);

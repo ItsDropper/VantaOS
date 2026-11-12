@@ -111,6 +111,14 @@ int main(void)
     assert(nvx_gsp_os_memory_get_physical_range(&m,&phys,&bytes)==
         NVX_GSP_RMAPI_OK && phys==captured.descriptor && bytes==12288);
 
+    assert(nvx_gsp_os_memory_acquire(&m) == NVX_GSP_RMAPI_OK);
+    assert(m.lifetime_state == 1U);
+    assert(nvx_gsp_os_memory_destroy(&manager,&m,scratch,sizeof(scratch),
+        response,sizeof(response),100,1,delay,NULL) == NVX_GSP_RMAPI_BUSY);
+    assert(m.stage == NVX_GSP_OS_MEMORY_CREATED && free_calls == 0U);
+    assert(nvx_gsp_os_memory_release(&m) == NVX_GSP_RMAPI_OK);
+    assert(m.lifetime_state == 0U);
+
     wait_status=NVX_GSP_RMAPI_TIMEOUT;
     assert(nvx_gsp_os_memory_destroy(&manager,&m,scratch,sizeof(scratch),
         response,sizeof(response),100,1,delay,NULL)==NVX_GSP_RMAPI_TIMEOUT);

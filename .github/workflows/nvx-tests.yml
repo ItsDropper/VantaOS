@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+      - main
     paths:
       - "drivers/gpu/nvx/**"
       - "docs/gpu/nvx/RTX3060_READINESS.md"

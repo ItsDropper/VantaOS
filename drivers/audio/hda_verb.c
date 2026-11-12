@@ -48,7 +48,7 @@ hda_verb_status_t hda_codec_get_parameter(const hda_verb_ops_t *ops,
   if((status&HDA_ICIS_BUSY)==0U&&(status&HDA_ICIS_VALID)!=0U)
   {
    uint32_t value=ops->read32(ops->context,HDA_IC_REG_ICII);
-   ops->write32(ops->context,HDA_IC_REG_ICIS,HDA_ICIS_VALID);
+   ops->write16(ops->context,HDA_IC_REG_ICIS,HDA_ICIS_VALID);
    if(value==UINT32_MAX)return HDA_VERB_REGISTER_FAULT;
    *response=value;
    return HDA_VERB_OK;

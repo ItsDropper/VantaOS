@@ -104,7 +104,7 @@ int main(void)
     device.device_id = 0x1D10U;
     assert(nvx_gsp_platform_validate_config(&config) ==
            NVX_GSP_PLATFORM_UNSUPPORTED_DEVICE);
-    device.device_id = 0x2503U;
+    device.device_id = 0x1D10U;
 
     config.firmware_chip = "ga104";
     assert(nvx_gsp_platform_validate_config(&config) ==

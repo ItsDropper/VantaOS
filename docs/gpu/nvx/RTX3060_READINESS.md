@@ -197,7 +197,10 @@ unmap. A local RPC-handle release failure is separately retryable. Failed
 unmaps retain the mapped state so callers cannot accidentally treat memory as
 detached.
 
-The NVOS46/NVOS47 wire layout is now audited against NVIDIA's public\n[`nvos.h`](https://github.com/NVIDIA/open-gpu-kernel-modules/blob/e6a2e01579fbbd1ca2ed43fef2ee2589e9bd8bd9/src/common/sdk/nvidia/inc/nvos.h). NVX's map input fields occupy 56 bytes with the aligned dmaOffset at byte 48; the serialized request is 64 bytes including the zeroed status/padding tail, and the response status is at byte 56. The unmap input fields occupy 40 bytes with dmaOffset at byte 24 and size at byte 32; its serialized request is 48 bytes and response status is at byte 40. Compile-time field-offset assertions and independent response-status tests pin these values.\n\nThe NVOS47 unmap request uses its own flag field and currently defaults to immediate invalidation; NVOS46 map flags are never forwarded into the different NVOS47 bit layout.
+The NVOS46/NVOS47 wire layout is now audited against NVIDIA's public
+[`nvos.h`](https://github.com/NVIDIA/open-gpu-kernel-modules/blob/e6a2e01579fbbd1ca2ed43fef2ee2589e9bd8bd9/src/common/sdk/nvidia/inc/nvos.h). NVX's map input fields occupy 56 bytes with the aligned dmaOffset at byte 48; the serialized request is 64 bytes including the zeroed status/padding tail, and the response status is at byte 56. The unmap input fields occupy 40 bytes with dmaOffset at byte 24 and size at byte 32; its serialized request is 48 bytes and response status is at byte 40. Compile-time field-offset assertions and independent response-status tests pin these values.
+
+The NVOS47 unmap request uses its own flag field and currently defaults to immediate invalidation; NVOS46 map flags are never forwarded into the different NVOS47 bit layout.
 
 The NVOS46 request preserves its input dmaOffset: NVIDIA's ABI makes that field an input when fixed-offset mapping is requested (and for DMA objects that are not CTXDMA handles), otherwise it is an output. A returned offset of zero is valid and remains unmap-able. Host tests cover both the fixed-input and zero-result cases.
 

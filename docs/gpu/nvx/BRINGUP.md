@@ -1,7 +1,9 @@
 # NVX manual bring-up (RTX 3060)
 
-Nothing here runs at boot. Boot only does read-only PCI discovery
-(`nvx_pci_discover`). Everything below is a shell command you type.
+No firmware or GSP startup runs at boot. Boot performs read-only NVX PCI
+discovery and a bounded PMC identity probe on the supported profile; it does
+not reset a Falcon, load firmware, enable bus mastering, or submit GPU work.
+The commands below are manual shell diagnostics.
 
 | Command | What it does | Touches GPU |
 | --- | --- | --- |

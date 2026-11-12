@@ -179,6 +179,19 @@ static void zero_bytes(void* destination, UINTN length)
         bytes[i] = 0;
 }
 
+/*
+ * These helpers use the compiler's SysV ABI. Do not call gnu-efi's
+ * SetMem/CopyMem entry points here: those library routines use EFIAPI
+ * (Microsoft x64 ABI), while this loader's internal helpers do not.
+ */
+static void copy_bytes(void* destination, const void* source, UINTN length)
+{
+    UINT8* output = (UINT8*)destination;
+    const UINT8* input = (const UINT8*)source;
+    for (UINTN i = 0; i < length; ++i)
+        output[i] = input[i];
+}
+
 static int guid_equal(const EFI_GUID* a, const EFI_GUID* b)
 {
     if (!a || !b || a->Data1 != b->Data1 ||
@@ -456,7 +469,7 @@ static EFI_STATUS load_elf64(
         return EFI_OUT_OF_RESOURCES;
     }
 
-    SetMem((void*)(UINTN)image_start, (UINTN)image_bytes, 0);
+    zero_bytes((void*)(UINTN)image_start, (UINTN)image_bytes);
 
     for (UINTN i = 0; i < header->e_phnum; i++)
     {
@@ -464,9 +477,9 @@ static EFI_STATUS load_elf64(
         if (ph->p_type != PT_LOAD || ph->p_filesz == 0)
             continue;
 
-        CopyMem(
+        copy_bytes(
             (void*)(UINTN)ph->p_paddr,
-            (void*)(file + (UINTN)ph->p_offset),
+            (const void*)(file + (UINTN)ph->p_offset),
             (UINTN)ph->p_filesz
         );
     }

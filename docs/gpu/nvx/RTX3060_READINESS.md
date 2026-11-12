@@ -112,6 +112,8 @@ unmap. A local RPC-handle release failure is separately retryable. Failed
 unmaps retain the mapped state so callers cannot accidentally treat memory as
 detached.
 
+The NVOS46 request preserves its input dmaOffset: NVIDIA's ABI makes that field an input when fixed-offset mapping is requested (and for DMA objects that are not CTXDMA handles), otherwise it is an output. A returned offset of zero is valid and remains unmap-able. Host tests cover both the fixed-input and zero-result cases.
+
 The host test covers successful map/unmap, map and unmap timeout recovery,
 response decode failure, request-range overflow, retryable RPC-handle release,
 and the guarantee that recovery does not submit a duplicate operation.

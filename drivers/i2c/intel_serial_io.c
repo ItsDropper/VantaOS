@@ -9,6 +9,7 @@
 #include "acpi_aml.h"
 #include "designware.h"
 #include "hid_i2c.h"
+#include "intel_sunrisepoint.h"
 #include "mmio.h"
 #include "pci.h"
 #include "serial.h"
@@ -272,6 +273,48 @@ static void aml_discover_namespace(void)
     }
 }
 
+static const acpi_aml_device_t *aml_find_device_path(const char *path)
+{
+    for(uint32_t i=0U;i<aml_device_count;++i)
+        if(!aml_devices[i].invalid&&path_equal(aml_devices[i].path,path))
+            return &aml_devices[i];
+    return NULL;
+}
+
+static void intel_log_gpio_connections(const acpi_aml_device_t *child)
+{
+    for(uint32_t r=0U;r<child->resource_count;++r)
+    {
+        const acpi_aml_resource_t *resource=&child->resources[r];
+        if(resource->resource_type!=5U) continue;
+        const acpi_aml_device_t *gpio=
+            aml_find_device_path(resource->resource_source);
+        if(!gpio||!aml_device_usable(gpio)||
+           !intel_sptlp_validate_gpio_resource(gpio,resource))
+        {
+            serial_write("VANTAOS_GPIO_ACPI_CONNECTION_UNRESOLVED path=");
+            serial_write(resource->resource_source);
+            serial_write("\\n");
+            continue;
+        }
+        serial_write("VANTAOS_GPIO_SPTLP_CONNECTION_VALID path=");
+        serial_write(child->path);
+        serial_write(resource->gpio_connection_type==0U?
+                     " mode=interrupt pins=":" mode=io pins=");
+        for(uint32_t pin=0U;pin<resource->gpio_pin_count;++pin)
+        {
+            char digits[5];
+            uint16_t value=resource->gpio_pins[pin];
+            uint32_t count=0U;
+            do {digits[count++]=(char)('0'+(value%10U));value/=10U;}
+            while(value!=0U&&count<sizeof(digits));
+            while(count!=0U) serial_write_bytes(&digits[--count],1U);
+            if(pin+1U<resource->gpio_pin_count) serial_write(",");
+        }
+        serial_write("\\n");
+    }
+}
+
 static int intel_dw_device_id(uint16_t id)
 {
     /* Intel Serial IO I2C functions with the DesignWare register interface. */
@@ -377,8 +420,9 @@ static void intel_attach_children(intel_i2c_controller_t *controller)
     for(uint32_t i=0U;i<aml_device_count;++i)
     {
         const acpi_aml_device_t *child=&aml_devices[i];
-        if(!aml_device_usable(child)||!child->hid_descriptor_address_valid)
-            continue;
+        if(!aml_device_usable(child)) continue;
+        intel_log_gpio_connections(child);
+        if(!child->hid_descriptor_address_valid) continue;
         for(uint32_t r=0U;r<child->resource_count;++r)
         {
             const acpi_aml_resource_t *resource=&child->resources[r];

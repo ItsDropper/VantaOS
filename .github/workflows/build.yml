@@ -115,6 +115,13 @@ jobs:
             -o /tmp/vantaos-input-queue-test
           /tmp/vantaos-input-queue-test
 
+      - name: Test Intel Sunrise Point-LP GPIO metadata and pin communities
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_intel_sunrisepoint.c drivers/gpio/intel_sunrisepoint.c \
+            -o /tmp/vantaos-intel-sunrisepoint-test
+          /tmp/vantaos-intel-sunrisepoint-test
+
       - name: Test DesignWare I2C controller PIO engine
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Idrivers/i2c \

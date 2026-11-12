@@ -1,4 +1,5 @@
 include drivers/input/Makefile
+include drivers/gpio/Makefile
 include drivers/i2c/Makefile
 include drivers/pci/Makefile
 include drivers/storage/Makefile
@@ -6,4 +7,4 @@ include drivers/network/Makefile
 include drivers/usb/Makefile
 include drivers/gpu/Makefile
 include drivers/audio/Makefile
-VANTAOS_DRIVER_C := drivers/init.c $(VANTAOS_INPUT_C) $(VANTAOS_I2C_C) $(VANTAOS_PCI_C) $(VANTAOS_USB_C) $(VANTAOS_BLOCK_C) $(VANTAOS_GPU_C) $(VANTAOS_AUDIO_C)
+VANTAOS_DRIVER_C := drivers/init.c $(VANTAOS_INPUT_C) $(VANTAOS_GPIO_C) $(VANTAOS_I2C_C) $(VANTAOS_PCI_C) $(VANTAOS_USB_C) $(VANTAOS_BLOCK_C) $(VANTAOS_GPU_C) $(VANTAOS_AUDIO_C)

@@ -52,4 +52,39 @@ nvx_gsp_rmapi_status_t nvx_gsp_memory_dma_unmap(
     size_t response_capacity, uint32_t timeout_ms, uint32_t poll_interval_ms,
     nvx_gsp_rmapi_delay_fn delay_ms, void *delay_context);
 
+
+/*
+ * Equivalent mapping path for NV01_MEMORY_SYSTEM_OS_DESCRIPTOR backing.
+ * Keep the OS descriptor and CTXDMA objects alive through NVOS47 unmap.
+ */
+nvx_gsp_rmapi_status_t nvx_gsp_os_memory_dma_map(
+    nvx_gsp_rpc_manager_t *manager,
+    const nvx_gsp_os_memory_t *memory,
+    const nvx_gsp_context_dma_t *context_dma,
+    nvx_gsp_dma_mapping_t *mapping,
+    uint64_t offset, uint64_t length,
+    uint32_t flags, uint32_t flags2, uint32_t kind_override,
+    uint64_t dma_offset,
+    void *scratch, size_t scratch_size, void *response,
+    size_t response_capacity, uint32_t timeout_ms, uint32_t poll_interval_ms,
+    nvx_gsp_rmapi_delay_fn delay_ms, void *delay_context);
+
+nvx_gsp_rmapi_status_t nvx_gsp_os_memory_dma_recover(
+    nvx_gsp_rpc_manager_t *manager,
+    const nvx_gsp_os_memory_t *memory,
+    const nvx_gsp_context_dma_t *context_dma,
+    nvx_gsp_dma_mapping_t *mapping,
+    void *scratch, size_t scratch_size, void *response,
+    size_t response_capacity, uint32_t timeout_ms, uint32_t poll_interval_ms,
+    nvx_gsp_rmapi_delay_fn delay_ms, void *delay_context);
+
+nvx_gsp_rmapi_status_t nvx_gsp_os_memory_dma_unmap(
+    nvx_gsp_rpc_manager_t *manager,
+    const nvx_gsp_os_memory_t *memory,
+    const nvx_gsp_context_dma_t *context_dma,
+    nvx_gsp_dma_mapping_t *mapping,
+    void *scratch, size_t scratch_size, void *response,
+    size_t response_capacity, uint32_t timeout_ms, uint32_t poll_interval_ms,
+    nvx_gsp_rmapi_delay_fn delay_ms, void *delay_context);
+
 #endif

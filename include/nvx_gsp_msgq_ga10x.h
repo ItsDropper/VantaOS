@@ -16,10 +16,18 @@
  */
 #define NVX_GSP_GA10X_RM_QUEUE_INDEX 0U
 #define NVX_GSP_GA10X_QUEUE_COUNT 8U
+#ifndef NVX_GSP_GA10X_QUEUE_HEAD
 #define NVX_GSP_GA10X_QUEUE_HEAD(i) (0x110C00U + (uint32_t)(i) * 8U)
+#endif
+#ifndef NVX_GSP_GA10X_QUEUE_TAIL
 #define NVX_GSP_GA10X_QUEUE_TAIL(i) (0x110C04U + (uint32_t)(i) * 8U)
+#endif
+#ifndef NVX_GSP_GA10X_MSGQ_HEAD
 #define NVX_GSP_GA10X_MSGQ_HEAD(i)  (0x110C80U + (uint32_t)(i) * 8U)
+#endif
+#ifndef NVX_GSP_GA10X_MSGQ_TAIL
 #define NVX_GSP_GA10X_MSGQ_TAIL(i)  (0x110C84U + (uint32_t)(i) * 8U)
+#endif
 
 typedef enum nvx_gsp_msgq_ga10x_status {
     NVX_GSP_MSGQ_GA10X_OK = 0,

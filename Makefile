@@ -18,6 +18,11 @@ CFLAGS   := -m64 -march=x86-64 -mtune=generic -ffreestanding -fno-pie \
 ASFLAGS  := -f elf64
 LDFLAGS  := -m elf_x86_64 --no-warn-rwx-segments -T build/linker.ld
 
+ifneq ($(VANTAOS_DEBUG_PORT),)
+CFLAGS += -DVANTAOS_DEBUG_PORT
+UEFI_DEBUG_FLAGS := -DVANTAOS_DEBUG_PORT
+endif
+
 ifneq ($(VANTAOS_SELF_TEST),)
 CFLAGS += -DVANTAOS_SELF_TEST
 endif
@@ -65,7 +70,7 @@ $(UEFI_OBJDIR)/loader.o: boot/uefi/loader.c include/vanta_boot_info.h include/gr
 	@mkdir -p $(@D)
 	$(CC) -Iinclude -I/usr/include/efi -I/usr/include/efi/x86_64 -I/usr/include/efi/protocol \
 		-fpic -fshort-wchar -mno-red-zone -fno-stack-protector -fno-strict-aliasing \
-		-fno-builtin -DEFI_FUNCTION_WRAPPER -c $< -o $@
+		-fno-builtin -DEFI_FUNCTION_WRAPPER $(UEFI_DEBUG_FLAGS) -c $< -o $@
 
 BOOTX64.EFI: $(UEFI_OBJDIR)/loader.o
 	$(LD) -nostdlib -znocombreloc -T $(EFI_LDSCRIPT) -shared -Bsymbolic \

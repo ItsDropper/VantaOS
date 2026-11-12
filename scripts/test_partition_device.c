@@ -7,9 +7,13 @@
 
 #include "block_device.h"
 #include "partition_device.h"
+#include "vanta_boot_info.h"
 
 #include <assert.h>
 #include <string.h>
+
+static vanta_boot_info_t test_boot_info;
+const vanta_boot_info_t* kernel_get_boot_info(void) { return &test_boot_info; }
 
 static unsigned read_calls;
 

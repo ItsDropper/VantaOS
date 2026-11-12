@@ -50,6 +50,9 @@ static void serial_write(const char* text)
         return;
     while (*text)
     {
+#ifdef VANTAOS_DEBUG_PORT
+        port_out8(0x00E9, (UINT8)*text);
+#endif
         UINTN spin;
         for (spin = 0; spin < 4096U; ++spin)
             if (port_in8(0x3FD) & 0x20U)

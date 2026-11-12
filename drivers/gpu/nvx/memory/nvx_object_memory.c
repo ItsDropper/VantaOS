@@ -59,6 +59,7 @@ nvx_memory_status_t nvx_memory_init(nvx_memory_manager_t *m,
         m->slots[i].state = NVX_MEMORY_SLOT_FREE;
         m->slots[i].token = m->slots[i].requested_size = 0U;
         m->slots[i].generation = 0U;
+        m->slots[i].active_users = 0U;
         m->slots[i].kind = 0U;
         m->slots[i].mapping.valid = 0U;
         m->slots[i].dma.acquired = 0U;
@@ -95,6 +96,7 @@ nvx_memory_status_t nvx_memory_alloc(nvx_memory_manager_t *m, size_t size,
             m->slots[i].state = NVX_MEMORY_SLOT_RESERVED;
             m->slots[i].token = m->next_token++;
             m->slots[i].generation = m->generation;
+            m->slots[i].active_users = 0U;
             m->slots[i].requested_size = size;
             m->slots[i].kind = (uint8_t)kind;
             break;
@@ -207,6 +209,46 @@ nvx_memory_status_t nvx_memory_cpu_address(nvx_memory_manager_t *m,
     return s;
 }
 
+nvx_memory_status_t nvx_memory_pin(nvx_memory_manager_t *m,
+                                    const nvx_memory_handle_t *h)
+{
+    if (!m || !h) return NVX_MEMORY_INVALID_ARGUMENT;
+    if (!m->initialized) return NVX_MEMORY_NOT_INITIALIZED;
+    spinlock_lock(&m->lock);
+    nvx_memory_slot_t *slot = (nvx_memory_slot_t *)match_handle(m, h);
+    if (!slot) {
+        spinlock_unlock(&m->lock);
+        return NVX_MEMORY_STALE_HANDLE;
+    }
+    if (slot->active_users == UINT32_MAX) {
+        spinlock_unlock(&m->lock);
+        return NVX_MEMORY_CORRUPT_STATE;
+    }
+    ++slot->active_users;
+    spinlock_unlock(&m->lock);
+    return NVX_MEMORY_OK;
+}
+
+nvx_memory_status_t nvx_memory_unpin(nvx_memory_manager_t *m,
+                                      const nvx_memory_handle_t *h)
+{
+    if (!m || !h) return NVX_MEMORY_INVALID_ARGUMENT;
+    if (!m->initialized) return NVX_MEMORY_NOT_INITIALIZED;
+    spinlock_lock(&m->lock);
+    nvx_memory_slot_t *slot = (nvx_memory_slot_t *)match_handle(m, h);
+    if (!slot) {
+        spinlock_unlock(&m->lock);
+        return NVX_MEMORY_STALE_HANDLE;
+    }
+    if (!slot->active_users) {
+        spinlock_unlock(&m->lock);
+        return NVX_MEMORY_CORRUPT_STATE;
+    }
+    --slot->active_users;
+    spinlock_unlock(&m->lock);
+    return NVX_MEMORY_OK;
+}
+
 nvx_memory_status_t nvx_memory_release(nvx_memory_manager_t *m,
                                        nvx_memory_handle_t *h)
 {
@@ -218,6 +260,10 @@ nvx_memory_status_t nvx_memory_release(nvx_memory_manager_t *m,
         return NVX_MEMORY_STALE_HANDLE;
     }
     nvx_memory_slot_t *slot = &m->slots[h->slot];
+    if (slot->active_users != 0U) {
+        spinlock_unlock(&m->lock);
+        return NVX_MEMORY_BUSY;
+    }
     slot->state = NVX_MEMORY_SLOT_RELEASING;
     nvx_gpuvm_mapping_t *mapping = &slot->mapping;
     nvx_dma_buffer_t *dma = &slot->dma;
@@ -235,6 +281,7 @@ nvx_memory_status_t nvx_memory_release(nvx_memory_manager_t *m,
     spinlock_lock(&m->lock);
     slot->token = slot->requested_size = 0U;
     slot->generation = 0U;
+    slot->active_users = 0U;
     slot->kind = 0U;
     slot->state = NVX_MEMORY_SLOT_FREE;
     spinlock_unlock(&m->lock);

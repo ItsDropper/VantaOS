@@ -538,6 +538,7 @@ nvx_gsp_rmapi_status_t nvx_gsp_rmapi_decode_status(
     const uint8_t *p=(const uint8_t *)response;
     size_t offset;
     if(!op||!response||!out_status||
+       overlaps(op,sizeof(*op),response,response_size)||
        overlaps(out_status,sizeof(*out_status),op,sizeof(*op))||
        overlaps(out_status,sizeof(*out_status),response,response_size))
         return NVX_GSP_RMAPI_INVALID_ARGUMENT;

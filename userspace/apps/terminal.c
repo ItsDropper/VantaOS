@@ -967,7 +967,7 @@ static int command_requires_kernel_prefix(const char* command)
            command_word_is(command, "kill");
 }
 
-static int command_is_kernel_read_only(const char* command)
+static int command_is_kernel_passthrough(const char* command)
 {
     return command_word_is(command, "ps") ||
            command_word_is(command, "specs") ||
@@ -1033,7 +1033,7 @@ static void execute_line(char* command)
     else if (starts_with(command, "kernel "))
         command_kernel(command + 7);
     else if (starts_with(command, "curl ") || starts_with(command, "net ") ||
-             command_is_kernel_read_only(command))
+             command_is_kernel_passthrough(command))
         command_kernel(command);
     else if (string_equals(command, "clear"))
     {
@@ -1113,7 +1113,7 @@ int main(int argc, char** argv)
             if (event.x >= 16 && event.x < 728 &&
                 event.y >= 42 && event.y < 330)
             {
-                int32_t delta = (int32_t)event.value;
+                int64_t delta = (int32_t)event.value;
                 size_t amount = (size_t)(delta > 0 ? delta : -delta) * 3U;
                 size_t maximum = output_count > DISPLAY_LINES ?
                     output_count - DISPLAY_LINES : 0U;

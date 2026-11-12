@@ -131,7 +131,9 @@ nvx_gsp_platform_status_t nvx_gsp_platform_validate_config(
         return NVX_GSP_PLATFORM_UNSUPPORTED_DEVICE;
 
     if (nvx_bar_resource_validate(c->trusted_bar0) != NVX_RESOURCE_OK ||
-        c->trusted_bar0->size < NVX_GSP_GA10X_REQUIRED_BAR_BYTES)
+        c->trusted_bar0->size < NVX_GSP_GA10X_REQUIRED_BAR_BYTES ||
+        c->trusted_bar0->size <
+            (uint64_t)NVX_VBIOS_PROM_BASE + NVX_VBIOS_PROM_MAX_SIZE)
         return NVX_GSP_PLATFORM_BAR_INVALID;
 
     if (!c->firmware_provider->request || !c->firmware_provider->verify ||

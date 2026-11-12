@@ -42,8 +42,9 @@ linking, GMCAPI/RPC behavior, and timeout/recovery paths.
   acquisition, SEC2 booter staging, WPR planning/materialization, queue/PTE and
   init-argument allocation, bus-master gating, and invocation of the composed
   startup transaction. It still requires a platform-supplied trusted BAR
-  resource, exact PMC_BOOT_42 chip-ID mapping, trusted firmware provider,
-  firmware-compatible NVKV facts, queue sizing and delay callback. No boot or
+  resource, trusted firmware provider, firmware-compatible NVKV facts, queue
+  sizing and delay callback. The coordinator itself pins GA106 to PMC_BOOT_42
+  chip ID `0x176` and rejects other Ampere chips. No boot or
   shell path currently supplies those inputs.
 - **BAR handoff is unresolved:** the generic BAR sizing path refuses to probe
   while PCI decode or bus mastering is enabled. A live firmware-driven GPU
@@ -64,8 +65,7 @@ linking, GMCAPI/RPC behavior, and timeout/recovery paths.
 ## Required next milestone
 
 Build the platform adapter around the coordinator: obtain BAR0 extent from the
-trusted PCI/firmware resource manager; map the observed PMC_BOOT_42 chip ID to
-GA106 using an independently verified hardware table; provide a firmware
+trusted PCI/firmware resource manager; provide a firmware
 provider whose verification callback enforces the platform trust policy; and
 populate only NVKV facts actually collected for the selected GSP ABI. Implement
 a real SEC2/GSP quiesce operation rather than treating a timeout as proof of

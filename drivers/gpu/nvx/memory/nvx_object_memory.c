@@ -12,6 +12,12 @@ static void clear_handle(nvx_memory_handle_t *h)
     h->token = h->gpu_virtual_address = h->size = 0U;
     h->slot = h->generation = 0U;
 }
+static int valid_access(unsigned access)
+{
+    return (access & NVX_MEMORY_ACCESS_READ) != 0U &&
+        (access & ~(NVX_MEMORY_ACCESS_READ | NVX_MEMORY_ACCESS_WRITE)) == 0U;
+}
+
 static int valid_kind(nvx_memory_kind_t k)
 {
     return k == NVX_MEMORY_STAGING || k == NVX_MEMORY_FIRMWARE_IMAGE ||
@@ -38,6 +44,7 @@ static void release_slot_reservation(nvx_memory_manager_t *m, size_t i)
     m->slots[i].token = m->slots[i].requested_size = 0U;
     m->slots[i].generation = 0U;
     m->slots[i].kind = 0U;
+    m->slots[i].access = 0U;
     spinlock_unlock(&m->lock);
 }
 
@@ -61,6 +68,7 @@ nvx_memory_status_t nvx_memory_init(nvx_memory_manager_t *m,
         m->slots[i].generation = 0U;
         m->slots[i].active_users = 0U;
         m->slots[i].kind = 0U;
+        m->slots[i].access = 0U;
         m->slots[i].mapping.valid = 0U;
         m->slots[i].dma.acquired = 0U;
         m->slots[i].dma.page_count = 0U;
@@ -69,9 +77,10 @@ nvx_memory_status_t nvx_memory_init(nvx_memory_manager_t *m,
     return NVX_MEMORY_OK;
 }
 
-nvx_memory_status_t nvx_memory_alloc(nvx_memory_manager_t *m, size_t size,
-                                     nvx_memory_kind_t kind,
-                                     nvx_memory_handle_t *out)
+nvx_memory_status_t nvx_memory_alloc_access(nvx_memory_manager_t *m, size_t size,
+                                            nvx_memory_kind_t kind,
+                                            unsigned access,
+                                            nvx_memory_handle_t *out)
 {
     size_t index = NVX_MEMORY_MAX_OBJECTS;
     uint64_t token;
@@ -82,7 +91,8 @@ nvx_memory_status_t nvx_memory_alloc(nvx_memory_manager_t *m, size_t size,
     if (!m || !out) return NVX_MEMORY_INVALID_ARGUMENT;
     clear_handle(out);
     if (!m->initialized) return NVX_MEMORY_NOT_INITIALIZED;
-    if (!size || size > NVX_DMA_MAX_BYTES || !valid_kind(kind))
+    if (!size || size > NVX_DMA_MAX_BYTES || !valid_kind(kind) ||
+        !valid_access(access))
         return NVX_MEMORY_INVALID_ARGUMENT;
 
     spinlock_lock(&m->lock);
@@ -97,6 +107,7 @@ nvx_memory_status_t nvx_memory_alloc(nvx_memory_manager_t *m, size_t size,
             m->slots[i].token = m->next_token++;
             m->slots[i].generation = m->generation;
             m->slots[i].active_users = 0U;
+            m->slots[i].access = (uint8_t)access;
             m->slots[i].requested_size = size;
             m->slots[i].kind = (uint8_t)kind;
             break;
@@ -138,7 +149,7 @@ nvx_memory_status_t nvx_memory_alloc(nvx_memory_manager_t *m, size_t size,
         physical[i] = dma.pages[i].physical_address;
 
     vs = nvx_gpuvm_map_pages(m->gpuvm, &mapping, physical, dma.page_count,
-                             NVX_GPUVM_ACCESS_READ | NVX_GPUVM_ACCESS_WRITE);
+                             access);
     kfree(physical);
     physical = 0;
     if (vs != NVX_GPUVM_OK) {
@@ -193,6 +204,7 @@ nvx_memory_status_t nvx_memory_get_info(nvx_memory_manager_t *m,
     out->gpu_virtual_address = s->mapping.base;
     out->size = s->requested_size;
     out->kind = (nvx_memory_kind_t)s->kind;
+    out->access = s->access;
     spinlock_unlock(&m->lock);
     return NVX_MEMORY_OK;
 }
@@ -283,6 +295,7 @@ nvx_memory_status_t nvx_memory_release(nvx_memory_manager_t *m,
     slot->generation = 0U;
     slot->active_users = 0U;
     slot->kind = 0U;
+    slot->access = 0U;
     slot->state = NVX_MEMORY_SLOT_FREE;
     spinlock_unlock(&m->lock);
     clear_handle(h);
@@ -301,6 +314,7 @@ nvx_memory_status_t nvx_memory_validate(nvx_memory_manager_t *m)
             if (!s->token || s->generation != m->generation ||
                 !s->mapping.valid || !s->mapping.mapped ||
                 !s->dma.acquired || !s->requested_size ||
+                !valid_access(s->access) ||
                 s->dma.size != s->requested_size) {
                 spinlock_unlock(&m->lock);
                 return NVX_MEMORY_CORRUPT_STATE;
@@ -328,4 +342,12 @@ nvx_memory_status_t nvx_memory_validate(nvx_memory_manager_t *m)
     if (nvx_gpuvm_validate(m->gpuvm) != NVX_GPUVM_OK)
         return NVX_MEMORY_CORRUPT_STATE;
     return quarantined ? NVX_MEMORY_GPUVM_FAILED : NVX_MEMORY_OK;
+}
+
+nvx_memory_status_t nvx_memory_alloc(nvx_memory_manager_t *m, size_t size,
+                                     nvx_memory_kind_t kind,
+                                     nvx_memory_handle_t *out)
+{
+    return nvx_memory_alloc_access(m, size, kind,
+        NVX_MEMORY_ACCESS_READ | NVX_MEMORY_ACCESS_WRITE, out);
 }

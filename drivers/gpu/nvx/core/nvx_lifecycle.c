@@ -32,8 +32,9 @@ static int nvx_transition_allowed(nvx_lifecycle_state_t current,
             return next == NVX_STATE_QUIESCING;
         case NVX_STATE_QUIESCING:
             return next == NVX_STATE_STOPPED;
-        case NVX_STATE_STOPPED:
         case NVX_STATE_FAILED:
+            return next == NVX_STATE_QUIESCING;
+        case NVX_STATE_STOPPED:
         default:
             return 0;
     }

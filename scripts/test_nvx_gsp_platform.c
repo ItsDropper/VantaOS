@@ -126,6 +126,9 @@ int main(void)
     bar.size = 0x1000U;
     assert(nvx_gsp_platform_validate_config(&config) ==
            NVX_GSP_PLATFORM_BAR_INVALID);
+    bar.size = UINT64_C(0x00200000); /* Does not cover the PROM window. */
+    assert(nvx_gsp_platform_validate_config(&config) ==
+           NVX_GSP_PLATFORM_BAR_INVALID);
     bar.size = UINT64_C(0x01000000);
 
     provider.verify = 0;

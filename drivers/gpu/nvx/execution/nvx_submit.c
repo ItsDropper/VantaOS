@@ -193,3 +193,26 @@ nvx_submit_status_t nvx_submit_acquire_batch(
     }
     return NVX_SUBMIT_OK;
 }
+
+nvx_submit_status_t nvx_submit_release_after_fence(
+    nvx_memory_manager_t *memory, nvx_submit_lease_t *lease,
+    nvx_sync_timeline_t *timeline, const nvx_fence_t *fence)
+{
+    nvx_fence_state_t state = NVX_FENCE_FAILED;
+    nvx_sync_status_t sync_status;
+    if (!memory || !lease || !timeline || !fence)
+        return NVX_SUBMIT_INVALID_ARGUMENT;
+
+    sync_status = nvx_sync_query(timeline, fence, &state);
+    if (sync_status == NVX_SYNC_STALE_FENCE)
+        return NVX_SUBMIT_STALE_FENCE;
+    if (sync_status == NVX_SYNC_DEVICE_LOST)
+        return NVX_SUBMIT_DEVICE_LOST;
+    if (sync_status != NVX_SYNC_OK)
+        return NVX_SUBMIT_INVALID_ARGUMENT;
+    if (state == NVX_FENCE_PENDING)
+        return NVX_SUBMIT_FENCE_PENDING;
+    if (state == NVX_FENCE_FAILED)
+        return NVX_SUBMIT_DEVICE_LOST;
+    return nvx_submit_release_batch(memory, lease);
+}

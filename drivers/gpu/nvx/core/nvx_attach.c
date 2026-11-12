@@ -7,6 +7,7 @@
 #include "nvx_attach.h"
 
 #include "nvx_mmio.h"
+#include "nvx_generation.h"
 
 #include <stdint.h>
 #include <string.h>
@@ -48,11 +49,27 @@ nvx_attach_status_t nvx_device_attach(
      * This implementation has an audited profile for RTX 3060 IDs only.
      * Never map an unknown NVIDIA device until its profile is implemented.
      */
-    nvx_generation_family_t family;
-    nvx_device_profile_t profile;
-    if (!nvx_identify_pci_device(pci_device->device_id, &family, &profile) ||
-        family != NVX_FAMILY_AMPERE ||
-        profile != NVX_PROFILE_GEFORCE_RTX_3060)
+    const nvx_generation_descriptor_t *generation =
+        nvx_generation_for_pci(pci_device->device_id);
+    if (generation == 0)
+        return NVX_ATTACH_INVALID_ARGUMENT;
+
+    /*
+     * GA10x is the only executable backend. Maxwell/Pascal mobile profiles
+     * may attach solely for the shared read-only PMC identity probe; their
+     * unsupported boot_sequence prevents accidental GSP/SEC2 reuse.
+     */
+    int ga10x_profile =
+        generation->boot_sequence == NVX_BOOT_SEQUENCE_GA10X_SEC2_GSP &&
+        generation->family == NVX_FAMILY_AMPERE &&
+        generation->profile == NVX_PROFILE_GEFORCE_RTX_3060;
+    int legacy_mobile_profile =
+        generation->boot_sequence == NVX_BOOT_SEQUENCE_UNSUPPORTED &&
+        ((generation->family == NVX_FAMILY_MAXWELL &&
+          generation->profile == NVX_PROFILE_GEFORCE_MX130) ||
+         (generation->family == NVX_FAMILY_PASCAL &&
+          generation->profile == NVX_PROFILE_GEFORCE_MX150));
+    if (!ga10x_profile && !legacy_mobile_profile)
         return NVX_ATTACH_INVALID_ARGUMENT;
 
     if (!nvx_lifecycle_transition(&out_device->lifecycle, NVX_STATE_PROBING))
@@ -107,7 +124,7 @@ nvx_attach_status_t nvx_device_attach(
     nvx_generation_family_t hardware_family = NVX_FAMILY_UNKNOWN;
     if (!nvx_identify_architecture(out_device->registers.architecture,
                                    &hardware_family) ||
-        hardware_family != NVX_FAMILY_AMPERE ||
+        hardware_family != generation->family ||
         out_device->registers.identity_mismatch) {
         nvx_bar_mmio_unmap(trusted_bar0, out_device->bar0_mapping);
         out_device->bar0_mapping = 0;

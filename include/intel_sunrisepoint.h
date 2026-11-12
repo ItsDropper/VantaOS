@@ -8,10 +8,17 @@
 
 #include "acpi_aml.h"
 
+#include <stddef.h>
 #include <stdint.h>
 
 #define INTEL_SPTLP_PIN_COUNT 152U
 #define INTEL_SPTLP_COMMUNITY_COUNT 3U
+#define INTEL_SPTLP_PAD_OWN_OFFSET 0x020U
+#define INTEL_SPTLP_PADCFGLOCK_OFFSET 0x0A0U
+#define INTEL_SPTLP_HOSTSW_OWN_OFFSET 0x0D0U
+#define INTEL_SPTLP_GPI_IE_OFFSET 0x120U
+#define INTEL_SPTLP_MMIO_MIN_LENGTH 0x124U
+#define INTEL_SPTLP_MMIO_MAX_LENGTH 0x10000U
 
 typedef struct
 {
@@ -20,8 +27,41 @@ typedef struct
     uint8_t index;
 } intel_sptlp_community_t;
 
+typedef struct
+{
+    void *context;
+    void *(*map)(void *context,uint64_t physical_address,size_t length);
+    int (*unmap)(void *context,void *mapping,size_t length);
+    uint32_t (*read32)(void *context,const volatile uint8_t *mapping,
+                       uint32_t offset);
+} intel_sptlp_mmio_ops_t;
+
+typedef struct
+{
+    uint64_t base;
+    uint64_t length;
+    uint32_t pad_ownership;
+    uint32_t pad_config_lock;
+    uint32_t host_software_ownership;
+    uint32_t interrupt_enable;
+} intel_sptlp_community_snapshot_t;
+
+typedef struct
+{
+    intel_sptlp_community_snapshot_t communities[INTEL_SPTLP_COMMUNITY_COUNT];
+} intel_sptlp_snapshot_t;
+
 /* Return the Sunrise Point-LP community containing a global GPIO number. */
 int intel_sptlp_pin_community(uint16_t pin, uint8_t *community);
+
+/*
+ * Map the three ACPI-assigned community windows and take a bounded read-only
+ * register snapshot. All mappings are released before returning; no register
+ * is written and no pin configuration or interrupt state is changed.
+ */
+int intel_sptlp_probe_controller(const acpi_aml_device_t *controller,
+                                 const intel_sptlp_mmio_ops_t *ops,
+                                 intel_sptlp_snapshot_t *snapshot);
 
 /*
  * Validate an ACPI GPIO connection against its resolved INT344B controller.

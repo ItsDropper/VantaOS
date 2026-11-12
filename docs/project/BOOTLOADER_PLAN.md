@@ -42,6 +42,6 @@ The custom loader must own the handoff to the kernel; it must not quietly chain 
 2. [x] Introduce the versioned boot-info header and a Multiboot-to-boot-info adapter without changing the existing boot path; require automated QEMU regression checks.
 3. [x] Add a separate UEFI entry, validated ELF64 loader, normalized memory-map/GOP/ACPI handoff, and EFI system image.
 4. [x] Add OVMF/QEMU CI while preserving the GRUB fallback.
-5. Validate the first CI run, fix any firmware/loader issues, then expand malformed-ELF tests before considering the custom loader the default.
+5. [x] Add a separate non-installing UEFI test-media workflow with GPT/FAT32 validation, OVMF smoke boot, SHA-256 manifest, and downloadable artifact.\n6. [x] Enforce a UEFI live-boot read-only block-device policy and test that the common block API rejects writes.\n7. Run the dedicated workflow and then perform the first physical test using the procedure in `docs/project/FIRST_HARDWARE_BOOT.md`.
 
 This sequence deliberately avoids mixing a new firmware handoff with untested memory-management changes in one risky switch.

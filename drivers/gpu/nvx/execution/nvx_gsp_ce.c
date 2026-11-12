@@ -118,6 +118,10 @@ nvx_gsp_ce_runtime_status_t nvx_gsp_ce_copy_submit_and_wait(
        ((uintptr_t)completion_cpu_word&3U)!=0U||
        overlaps(command_buffer,command_capacity_bytes,
                 completion_cpu_word,sizeof(*completion_cpu_word))||
+       overlaps(command_buffer,command_capacity_bytes,channel,
+                sizeof(*channel))||
+       overlaps(completion_cpu_word,sizeof(*completion_cpu_word),channel,
+                sizeof(*channel))||
        overlaps(out_command_bytes,sizeof(*out_command_bytes),
                 out_put_index,sizeof(*out_put_index))||
        overlaps(out_command_bytes,sizeof(*out_command_bytes),

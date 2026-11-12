@@ -378,6 +378,15 @@ jobs:
       - name: Test NVX RM system-memory allocation, recovery and teardown
         run: /tmp/vantaos-nvx-gsp-memory-test
 
+      - name: Compile NVX OS-descriptor backing-memory lifecycle tests
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_os_memory.c drivers/gpu/nvx/gsp/nvx_gsp_os_memory.c \
+            -o /tmp/vantaos-nvx-gsp-os-memory-test
+
+      - name: Test NVX OS physical-memory import, recovery and backing lifetime
+        run: /tmp/vantaos-nvx-gsp-os-memory-test
+
       - name: Compile NVX context-DMA RM lifecycle tests with strict warnings
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \

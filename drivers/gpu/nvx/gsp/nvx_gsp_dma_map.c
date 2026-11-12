@@ -153,7 +153,8 @@ nvx_gsp_rmapi_status_t nvx_gsp_dma_unmap(
     request.device = mapping->request.device;
     request.dma = mapping->request.dma;
     request.memory = mapping->request.memory;
-    request.flags = mapping->request.flags;
+    /* NVOS47 has its own flag ABI; never forward NVOS46 flags. */
+    request.flags = 0U;
     request.dma_offset = mapping->dma_offset;
     request.size = mapping->request.length;
     status = nvx_gsp_rm_unmap_memory_dma_submit(manager, &request, scratch,

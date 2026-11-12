@@ -10,6 +10,7 @@
 #include "nvx_gsp_boot_memory.h"
 #include "nvx_gsp_ga10x.h"
 #include "nvx_gsp_rpc.h"
+#include "nvx_gsp_ring.h"
 #include "nvx_gsp_startup.h"
 #include "nvx_gsp_wpr_policy.h"
 
@@ -42,6 +43,7 @@ typedef struct nvx_gsp_platform_config {
     const struct pci_device *pci_device;
     /* BAR0 size must come from firmware/PCI resource ownership, not live probing. */
     const nvx_bar_resource_t *trusted_bar0;
+    /* Provider callbacks and their context must remain valid through shutdown. */
     const nvx_firmware_provider_t *firmware_provider;
     const char *firmware_chip;       /* GA106 for the supported RTX 3060 profile. */
     const char *firmware_version;    /* Exact version shared by all five components. */
@@ -95,7 +97,6 @@ typedef struct nvx_gsp_platform_session {
     uint8_t encoded_system_info[NVX_GSP_PLATFORM_SYSTEM_INFO_CAPACITY];
     uint8_t static_info[NVX_GSP_PLATFORM_WORK_CAPACITY];
     uint8_t scratch[NVX_GSP_PLATFORM_WORK_CAPACITY];
-    size_t encoded_system_info_size;
     size_t static_info_size;
     uint64_t wpr_metadata_phys;
     uint32_t fuse_version;

@@ -45,6 +45,9 @@ chip identity, firmware trust, framebuffer size, or shutdown success.
     initialization report success. No 3D, compute, display or copy-engine
     capability is published by this coordinator.
 
+The firmware provider's context must remain valid until session shutdown,
+because its release callback is invoked during teardown.
+
 The coordinator owns the firmware bundle, boot-memory artifacts, VBIOS DMA,
 init-argument DMA, shared-queue DMA and all runtime queue/RPC objects in
 `nvx_gsp_platform_session_t`. That session must live in static or other
@@ -54,7 +57,7 @@ long-lived kernel storage; it must not be allocated on a transient stack.
 
 | Input | Required source / constraint |
 | --- | --- |
-| `trusted_bar0` | PCI/firmware resource manager with a known BAR extent. Do not size a live BAR by destructive probing while decode or bus mastering is active. |
+| `trusted_bar0` | PCI/firmware resource manager with a known BAR extent large enough for the Falcon/GSP registers and the complete 1 MiB VBIOS PROM window. Do not size a live BAR by destructive probing while decode or bus mastering is active. |
 | `expected_extended_chip_id` | Exact 10-bit PMC_BOOT_42 chip ID from a trusted hardware profile, independently mapped to GA106. No guessed fallback is accepted. |
 | `firmware_provider` | Request, verify and release callbacks for the five exact-version firmware components. |
 | Firmware verification | The provider's `verify` callback must enforce the platform's trust policy. A local SHA-256 manifest detects file drift but is not NVIDIA signature authentication. |
@@ -79,7 +82,9 @@ the register reads or WPR planner reject the inputs.
 - `nvx_gsp_platform_shutdown()` requires a platform quiesce callback after
   startup. That callback must stop both SEC2 and GSP and prove that neither can
   issue further DMA. Only then does NVX reclaim DMA ownership, disable bus
-  mastering, detach BAR0 and release allocations.
+  mastering, detach BAR0 through `nvx_device_detach_quiesced()`, and release
+  allocations. Generic lifecycle transitions cannot move `FAILED` to
+  `QUIESCING`; the explicit recovery API requires the quiescence proof.
 - The repository does not yet contain a universal GA10x SEC2/GSP stop and
   quiescence implementation. The callback is an explicit integration boundary,
   not a fake built-in shutdown.

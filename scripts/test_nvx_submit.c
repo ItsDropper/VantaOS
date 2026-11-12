@@ -84,6 +84,20 @@ int dma_page_is_valid(const dma_page_t *page)
            ((page->physical_address & (NVX_DMA_PAGE_SIZE - 1U)) == 0U);
 }
 
+int dma_page_is_valid_for_device(const dma_device_t *device,
+                                 const dma_page_t *page)
+{
+    (void)device;
+    return dma_page_is_valid(page);
+}
+
+int dma_alloc_contiguous_for_device(const dma_device_t *device,
+                                    dma_page_t *pages,size_t count)
+{
+    (void)device;
+    return dma_alloc_contiguous(pages,count);
+}
+
 void dma_free_contiguous(dma_page_t *pages, size_t count)
 {
     assert(pages != 0 && count > 0U && count <= NVX_DMA_MAX_PAGES);

@@ -36,8 +36,8 @@ typedef struct nvx_gsp_channel_ring {
     nvx_gsp_os_memory_t memory;
     nvx_gsp_context_dma_t context_dma;
     nvx_gsp_dma_mapping_t mapping;
-    uint32_t client_handle, device_handle, context_dma_handle;
-    uint32_t subdevice_handle, entry_count, references;
+    uint32_t client_handle, device_handle, memory_handle, context_dma_handle;
+    uint32_t subdevice_handle, entry_count, reference_state;
     size_t bytes;
     volatile uint32_t *entries;
     uint64_t gpu_virtual_address;
@@ -46,8 +46,8 @@ typedef struct nvx_gsp_channel_ring {
 
 nvx_gsp_rmapi_status_t nvx_gsp_channel_ring_create(
     nvx_gsp_rpc_manager_t *, nvx_gsp_channel_ring_t *,
-    uint32_t client, uint32_t device, uint32_t context_dma,
-    uint32_t subdevice, uint32_t entry_count,
+    uint32_t client, uint32_t device, uint32_t memory,
+    uint32_t context_dma, uint32_t subdevice, uint32_t entry_count,
     void *scratch, size_t scratch_size, void *response, size_t response_size,
     uint32_t timeout_ms, uint32_t poll_ms,
     nvx_gsp_rmapi_delay_fn, void *delay_context);

@@ -7,12 +7,32 @@
 #include "nvx_gsp_ring.h"
 
 #include <string.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <limits.h>
 
 #define ALLOC_HEADER_BYTES 32U
 #define CONTROL_HEADER_BYTES 40U
 #define FREE_HEADER_BYTES 16U
+
+_Static_assert(sizeof(nvx_gsp_map_memory_dma_t) == 56U,
+    "NVOS46 input fields must match the public 64-bit ABI");
+_Static_assert(offsetof(nvx_gsp_map_memory_dma_t, offset) == 16U,
+    "NVOS46.offset ABI mismatch");
+_Static_assert(offsetof(nvx_gsp_map_memory_dma_t, length) == 24U,
+    "NVOS46.length ABI mismatch");
+_Static_assert(offsetof(nvx_gsp_map_memory_dma_t, flags) == 32U,
+    "NVOS46.flags ABI mismatch");
+_Static_assert(offsetof(nvx_gsp_map_memory_dma_t, dma_offset) == 48U,
+    "NVOS46.dmaOffset ABI mismatch");
+_Static_assert(sizeof(nvx_gsp_unmap_memory_dma_t) == 40U,
+    "NVOS47 input fields must match the public 64-bit ABI");
+_Static_assert(offsetof(nvx_gsp_unmap_memory_dma_t, flags) == 16U,
+    "NVOS47.flags ABI mismatch");
+_Static_assert(offsetof(nvx_gsp_unmap_memory_dma_t, dma_offset) == 24U,
+    "NVOS47.dmaOffset ABI mismatch");
+_Static_assert(offsetof(nvx_gsp_unmap_memory_dma_t, size) == 32U,
+    "NVOS47.size ABI mismatch");
 
 static void put32(uint8_t *p, uint32_t v)
 {
@@ -178,7 +198,7 @@ nvx_gsp_rmapi_status_t nvx_gsp_rm_map_memory_dma_submit(
     void *scratch,size_t scratch_size,void *response,size_t response_capacity,
     nvx_gsp_rmapi_result_t *out)
 {
-    uint8_t request[64]={0};
+    uint8_t request[NVX_GSP_RM_MAP_MEMORY_DMA_REQUEST_BYTES]={0};
     if(!m)return NVX_GSP_RMAPI_INVALID_ARGUMENT;
     /* NVOS46_PARAMETERS: offsets follow the public 64-bit-aligned ABI. */
     put32(request+0U,m->client);put32(request+4U,m->device);
@@ -187,7 +207,8 @@ nvx_gsp_rmapi_status_t nvx_gsp_rm_map_memory_dma_submit(
     put32(request+32U,m->flags);put32(request+36U,m->flags2);
     put32(request+40U,m->kind_override);put64(request+48U,m->dma_offset);
     return submit(manager,NVX_GSP_RPC_FN_MAP_MEMORY_DMA,request,sizeof(request),
-        scratch,scratch_size,response,response_capacity,60U,out);
+        scratch,scratch_size,response,response_capacity,
+        NVX_GSP_RM_MAP_MEMORY_DMA_RESPONSE_BYTES,out);
 }
 
 nvx_gsp_rmapi_status_t nvx_gsp_rm_unmap_memory_dma_submit(
@@ -195,7 +216,7 @@ nvx_gsp_rmapi_status_t nvx_gsp_rm_unmap_memory_dma_submit(
     void *scratch,size_t scratch_size,void *response,size_t response_capacity,
     nvx_gsp_rmapi_result_t *out)
 {
-    uint8_t request[48]={0};
+    uint8_t request[NVX_GSP_RM_UNMAP_MEMORY_DMA_REQUEST_BYTES]={0};
     if(!m)return NVX_GSP_RMAPI_INVALID_ARGUMENT;
     /* NVOS47_PARAMETERS includes alignment before dmaOffset and size. */
     put32(request+0U,m->client);put32(request+4U,m->device);
@@ -203,7 +224,8 @@ nvx_gsp_rmapi_status_t nvx_gsp_rm_unmap_memory_dma_submit(
     put32(request+16U,m->flags);put64(request+24U,m->dma_offset);
     put64(request+32U,m->size);
     return submit(manager,NVX_GSP_RPC_FN_UNMAP_MEMORY_DMA,request,sizeof(request),
-        scratch,scratch_size,response,response_capacity,44U,out);
+        scratch,scratch_size,response,response_capacity,
+        NVX_GSP_RM_UNMAP_MEMORY_DMA_RESPONSE_BYTES,out);
 }
 
 nvx_gsp_rmapi_status_t nvx_gsp_rm_map_memory_dma_result(
@@ -220,10 +242,12 @@ nvx_gsp_rmapi_status_t nvx_gsp_rm_map_memory_dma_result(
        overlaps(out_dma_offset,sizeof(*out_dma_offset),response,response_size))
         return NVX_GSP_RMAPI_INVALID_ARGUMENT;
     *out_dma_offset=0U;
-    if(response_size<60U)return NVX_GSP_RMAPI_RESPONSE_TOO_SMALL;
+    if(response_size<NVX_GSP_RM_MAP_MEMORY_DMA_RESPONSE_BYTES)
+        return NVX_GSP_RMAPI_RESPONSE_TOO_SMALL;
     decoded=nvx_gsp_rmapi_decode_status(operation,response,response_size,&status);
     if(decoded!=NVX_GSP_RMAPI_OK)return decoded;
-    *out_dma_offset=(uint64_t)get32(p+48U)|((uint64_t)get32(p+52U)<<32U);
+    *out_dma_offset=(uint64_t)get32(p+NVX_GSP_RM_MAP_MEMORY_DMA_OFFSET_OFFSET)|
+        ((uint64_t)get32(p+NVX_GSP_RM_MAP_MEMORY_DMA_OFFSET_OFFSET+4U)<<32U);
     return NVX_GSP_RMAPI_OK;
 }
 
@@ -594,11 +618,13 @@ nvx_gsp_rmapi_status_t nvx_gsp_rmapi_decode_status(
         if(response_size<FREE_HEADER_BYTES)return NVX_GSP_RMAPI_RESPONSE_TOO_SMALL;
         offset=12U;
     } else if(op->function==NVX_GSP_RPC_FN_MAP_MEMORY_DMA) {
-        if(response_size<60U)return NVX_GSP_RMAPI_RESPONSE_TOO_SMALL;
-        offset=56U;
+        if(response_size<NVX_GSP_RM_MAP_MEMORY_DMA_RESPONSE_BYTES)
+        return NVX_GSP_RMAPI_RESPONSE_TOO_SMALL;
+        offset=NVX_GSP_RM_MAP_MEMORY_DMA_STATUS_OFFSET;
     } else if(op->function==NVX_GSP_RPC_FN_UNMAP_MEMORY_DMA) {
-        if(response_size<44U)return NVX_GSP_RMAPI_RESPONSE_TOO_SMALL;
-        offset=40U;
+        if(response_size<NVX_GSP_RM_UNMAP_MEMORY_DMA_RESPONSE_BYTES)
+            return NVX_GSP_RMAPI_RESPONSE_TOO_SMALL;
+        offset=NVX_GSP_RM_UNMAP_MEMORY_DMA_STATUS_OFFSET;
     } else return NVX_GSP_RMAPI_INVALID_ARGUMENT;
     *out_status=get32(p+offset);
     return *out_status==0U?NVX_GSP_RMAPI_OK:NVX_GSP_RMAPI_REMOTE_ERROR;

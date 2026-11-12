@@ -1,28 +1,158 @@
+/*
+ * Copyright (c) 2026 ItsDropper
+ * This file is part of VantaOS and is licensed under the MIT License.
+ * See the LICENSE file in the project root for the full license text.
+ */
 #include "nvx_gsp_channel_runtime.h"
+
 #include <string.h>
-static nvx_gsp_rmapi_status_t bind_fifo(nvx_gsp_channel_runtime_t*r){
- if(nvx_gsp_userd_channel_init(r->userd_memory,r->userd_offset,r->userd_bytes,&r->fifo,r->entries,r->entries_mapping_bytes,r->doorbell,r->doorbell_token,r->entry_count,&r->userd)!=NVX_GSP_USERD_OK)return NVX_GSP_RMAPI_INVALID_ARGUMENT;
- r->stage=NVX_GSP_CHANNEL_RUNTIME_READY;return NVX_GSP_RMAPI_OK;
+
+static nvx_gsp_rmapi_status_t bind_fifo(nvx_gsp_channel_runtime_t *runtime)
+{
+    nvx_gsp_userd_status_t status = nvx_gsp_userd_channel_init(
+        runtime->userd_memory, runtime->userd_offset, runtime->userd_bytes,
+        &runtime->fifo, runtime->entries, runtime->entries_mapping_bytes,
+        runtime->doorbell, runtime->doorbell_token, runtime->entry_count,
+        &runtime->userd);
+    if (status != NVX_GSP_USERD_OK)
+        return NVX_GSP_RMAPI_INVALID_ARGUMENT;
+
+    runtime->stage = NVX_GSP_CHANNEL_RUNTIME_READY;
+    return NVX_GSP_RMAPI_OK;
 }
-nvx_gsp_rmapi_status_t nvx_gsp_channel_runtime_create(nvx_gsp_rpc_manager_t*m,nvx_gsp_channel_runtime_t*r,uint32_t c,uint32_t d,uint32_t h,uint32_t va,uint32_t cid,uint32_t sub,uint64_t ring,uint32_t count,nvx_gsp_os_memory_t*u,uint64_t uoff,size_t ubytes,volatile uint32_t*entries,size_t ebytes,volatile uint32_t*door,uint32_t token,void*s,size_t ss,void*resp,size_t rs,uint32_t timeout,uint32_t poll,nvx_gsp_rmapi_delay_fn delay,void*ctx){
- nvx_gsp_userd_status_t us;nvx_gsp_rmapi_status_t st;
- if(!m||!r||r->stage||r->rm.stage||!u||!entries||!door||!s||!resp||!timeout||!poll||!delay)return NVX_GSP_RMAPI_INVALID_ARGUMENT;
- memset(r,0,sizeof(*r));us=nvx_gsp_userd_view_init(u,uoff,ubytes,&r->userd);if(us!=NVX_GSP_USERD_OK)return NVX_GSP_RMAPI_INVALID_ARGUMENT;
- us=nvx_gsp_channel_params_init_ampere(&r->params,c,d,va,cid,NVX_GSP_RM_ENGINE_TYPE_COPY0,sub,ring,count,u,uoff);if(us!=NVX_GSP_USERD_OK)return NVX_GSP_RMAPI_INVALID_ARGUMENT;
- r->userd_memory=u;r->entries=entries;r->entries_mapping_bytes=ebytes;r->doorbell=door;r->doorbell_token=token;r->entry_count=count;r->userd_offset=uoff;r->userd_bytes=ubytes;r->stage=NVX_GSP_CHANNEL_RUNTIME_CREATE_PENDING;
- st=nvx_gsp_copy_channel_create(m,&r->rm,c,d,h,&r->params,s,ss,resp,rs,timeout,poll,delay,ctx);
- if(st!=NVX_GSP_RMAPI_OK){if(r->rm.stage==NVX_GSP_CHANNEL_IDLE&&!r->rm.allocated)memset(r,0,sizeof(*r));return st;}return bind_fifo(r);
+
+nvx_gsp_rmapi_status_t nvx_gsp_channel_runtime_create(
+    nvx_gsp_rpc_manager_t *manager, nvx_gsp_channel_runtime_t *runtime,
+    uint32_t client, uint32_t device, uint32_t channel, uint32_t vaspace,
+    uint32_t channel_id, uint32_t subdevice_mask, uint64_t ring_gpu_va,
+    uint32_t entry_count, nvx_gsp_os_memory_t *userd_memory,
+    uint64_t userd_offset, size_t userd_bytes, volatile uint32_t *entries,
+    size_t entries_bytes, volatile uint32_t *doorbell, uint32_t doorbell_token,
+    void *scratch, size_t scratch_size, void *response, size_t response_size,
+    uint32_t timeout_ms, uint32_t poll_ms,
+    nvx_gsp_rmapi_delay_fn delay_ms, void *delay_context)
+{
+    nvx_gsp_userd_status_t userd_status;
+    nvx_gsp_rmapi_status_t status;
+
+    if (!manager || !runtime || runtime->stage != NVX_GSP_CHANNEL_RUNTIME_IDLE ||
+        runtime->rm.stage != NVX_GSP_CHANNEL_IDLE || !userd_memory ||
+        !entries || !doorbell || !scratch || !response || !timeout_ms ||
+        !poll_ms || !delay_ms)
+        return NVX_GSP_RMAPI_INVALID_ARGUMENT;
+
+    memset(runtime, 0, sizeof(*runtime));
+    userd_status = nvx_gsp_userd_view_init(userd_memory, userd_offset,
+        userd_bytes, &runtime->userd);
+    if (userd_status != NVX_GSP_USERD_OK)
+        return NVX_GSP_RMAPI_INVALID_ARGUMENT;
+
+    userd_status = nvx_gsp_channel_params_init_ampere(&runtime->params,
+        client, device, vaspace, channel_id, NVX_GSP_RM_ENGINE_TYPE_COPY0,
+        subdevice_mask, ring_gpu_va, entry_count, userd_memory, userd_offset);
+    if (userd_status != NVX_GSP_USERD_OK)
+        return NVX_GSP_RMAPI_INVALID_ARGUMENT;
+
+    runtime->userd_memory = userd_memory;
+    runtime->entries = entries;
+    runtime->entries_mapping_bytes = entries_bytes;
+    runtime->doorbell = doorbell;
+    runtime->doorbell_token = doorbell_token;
+    runtime->entry_count = entry_count;
+    runtime->userd_offset = userd_offset;
+    runtime->userd_bytes = userd_bytes;
+    runtime->stage = NVX_GSP_CHANNEL_RUNTIME_CREATE_PENDING;
+
+    status = nvx_gsp_copy_channel_create(manager, &runtime->rm, client,
+        device, channel, &runtime->params, scratch, scratch_size, response,
+        response_size, timeout_ms, poll_ms, delay_ms, delay_context);
+    if (status != NVX_GSP_RMAPI_OK) {
+        if (runtime->rm.stage == NVX_GSP_CHANNEL_IDLE &&
+            !runtime->rm.allocated)
+            memset(runtime, 0, sizeof(*runtime));
+        return status;
+    }
+    return bind_fifo(runtime);
 }
-nvx_gsp_rmapi_status_t nvx_gsp_channel_runtime_recover(nvx_gsp_rpc_manager_t*m,nvx_gsp_channel_runtime_t*r,void*s,size_t ss,void*resp,size_t rs,uint32_t timeout,uint32_t poll,nvx_gsp_rmapi_delay_fn delay,void*ctx){
- nvx_gsp_rmapi_status_t st;if(!m||!r||!s||!resp||!timeout||!poll||!delay||(r->stage!=NVX_GSP_CHANNEL_RUNTIME_CREATE_PENDING&&r->stage!=NVX_GSP_CHANNEL_RUNTIME_DESTROY_PENDING))return NVX_GSP_RMAPI_INVALID_ARGUMENT;
- if(r->rm.stage){st=nvx_gsp_copy_channel_recover(m,&r->rm,s,ss,resp,rs,timeout,poll,delay,ctx);if(st!=NVX_GSP_RMAPI_OK)return st;}
- if(r->stage==NVX_GSP_CHANNEL_RUNTIME_DESTROY_PENDING){if(r->rm.allocated)return NVX_GSP_RMAPI_INVALID_ARGUMENT;memset(r,0,sizeof(*r));return NVX_GSP_RMAPI_OK;}
- if(!r->rm.allocated&&!r->rm.stage){memset(r,0,sizeof(*r));return NVX_GSP_RMAPI_OK;}
- if(!r->rm.allocated||!r->rm.bound||!r->rm.scheduled)return NVX_GSP_RMAPI_INVALID_ARGUMENT;return bind_fifo(r);
+
+nvx_gsp_rmapi_status_t nvx_gsp_channel_runtime_recover(
+    nvx_gsp_rpc_manager_t *manager, nvx_gsp_channel_runtime_t *runtime,
+    void *scratch, size_t scratch_size, void *response,
+    size_t response_size, uint32_t timeout_ms, uint32_t poll_ms,
+    nvx_gsp_rmapi_delay_fn delay_ms, void *delay_context)
+{
+    nvx_gsp_rmapi_status_t status;
+
+    if (!manager || !runtime || !scratch || !response || !timeout_ms ||
+        !poll_ms || !delay_ms ||
+        (runtime->stage != NVX_GSP_CHANNEL_RUNTIME_CREATE_PENDING &&
+         runtime->stage != NVX_GSP_CHANNEL_RUNTIME_DESTROY_PENDING))
+        return NVX_GSP_RMAPI_INVALID_ARGUMENT;
+
+    if (runtime->rm.stage != NVX_GSP_CHANNEL_IDLE) {
+        status = nvx_gsp_copy_channel_recover(manager, &runtime->rm,
+            scratch, scratch_size, response, response_size, timeout_ms,
+            poll_ms, delay_ms, delay_context);
+        if (status != NVX_GSP_RMAPI_OK)
+            return status;
+    }
+
+    if (runtime->stage == NVX_GSP_CHANNEL_RUNTIME_DESTROY_PENDING) {
+        if (runtime->rm.allocated)
+            return NVX_GSP_RMAPI_BUSY;
+        memset(runtime, 0, sizeof(*runtime));
+        return NVX_GSP_RMAPI_OK;
+    }
+
+    if (!runtime->rm.allocated &&
+        runtime->rm.stage == NVX_GSP_CHANNEL_IDLE) {
+        memset(runtime, 0, sizeof(*runtime));
+        return NVX_GSP_RMAPI_OK;
+    }
+    if (!runtime->rm.allocated || !runtime->rm.bound ||
+        !runtime->rm.scheduled)
+        return NVX_GSP_RMAPI_BUSY;
+
+    return bind_fifo(runtime);
 }
-nvx_gsp_rmapi_status_t nvx_gsp_channel_runtime_stop(nvx_gsp_rpc_manager_t*m,nvx_gsp_channel_runtime_t*r,const nvx_gsp_ce_workload_t*w,void*s,size_t ss,void*resp,size_t rs,uint32_t timeout,uint32_t poll,nvx_gsp_rmapi_delay_fn delay,void*ctx){
- nvx_gsp_rmapi_status_t st;if(!m||!r||!s||!resp||!timeout||!poll||!delay||(r->stage!=NVX_GSP_CHANNEL_RUNTIME_READY&&r->stage!=NVX_GSP_CHANNEL_RUNTIME_CREATE_PENDING&&r->stage!=NVX_GSP_CHANNEL_RUNTIME_DESTROY_PENDING))return NVX_GSP_RMAPI_INVALID_ARGUMENT;
- if(w&&(w->stage!=NVX_GSP_CE_WORKLOAD_IDLE||w->pinned_count))return NVX_GSP_RMAPI_INVALID_ARGUMENT;
- if(r->stage==NVX_GSP_CHANNEL_RUNTIME_CREATE_PENDING){st=nvx_gsp_channel_runtime_recover(m,r,s,ss,resp,rs,timeout,poll,delay,ctx);if(st!=NVX_GSP_RMAPI_OK)return st;if(!r->stage)return NVX_GSP_RMAPI_OK;}
- r->stage=NVX_GSP_CHANNEL_RUNTIME_DESTROY_PENDING;st=nvx_gsp_copy_channel_destroy(m,&r->rm,s,ss,resp,rs,timeout,poll,delay,ctx);if(st!=NVX_GSP_RMAPI_OK)return st;memset(r,0,sizeof(*r));return NVX_GSP_RMAPI_OK;
+
+nvx_gsp_rmapi_status_t nvx_gsp_channel_runtime_stop(
+    nvx_gsp_rpc_manager_t *manager, nvx_gsp_channel_runtime_t *runtime,
+    const nvx_gsp_ce_workload_t *workload, void *scratch,
+    size_t scratch_size, void *response, size_t response_size,
+    uint32_t timeout_ms, uint32_t poll_ms,
+    nvx_gsp_rmapi_delay_fn delay_ms, void *delay_context)
+{
+    nvx_gsp_rmapi_status_t status;
+
+    if (!manager || !runtime || !scratch || !response || !timeout_ms ||
+        !poll_ms || !delay_ms ||
+        (runtime->stage != NVX_GSP_CHANNEL_RUNTIME_READY &&
+         runtime->stage != NVX_GSP_CHANNEL_RUNTIME_CREATE_PENDING &&
+         runtime->stage != NVX_GSP_CHANNEL_RUNTIME_DESTROY_PENDING))
+        return NVX_GSP_RMAPI_INVALID_ARGUMENT;
+
+    if (workload && (workload->stage != NVX_GSP_CE_WORKLOAD_IDLE ||
+                     workload->pinned_count != 0U))
+        return NVX_GSP_RMAPI_BUSY;
+
+    if (runtime->stage == NVX_GSP_CHANNEL_RUNTIME_CREATE_PENDING) {
+        status = nvx_gsp_channel_runtime_recover(manager, runtime, scratch,
+            scratch_size, response, response_size, timeout_ms, poll_ms,
+            delay_ms, delay_context);
+        if (status != NVX_GSP_RMAPI_OK)
+            return status;
+        if (runtime->stage == NVX_GSP_CHANNEL_RUNTIME_IDLE)
+            return NVX_GSP_RMAPI_OK;
+    }
+
+    runtime->stage = NVX_GSP_CHANNEL_RUNTIME_DESTROY_PENDING;
+    status = nvx_gsp_copy_channel_destroy(manager, &runtime->rm, scratch,
+        scratch_size, response, response_size, timeout_ms, poll_ms,
+        delay_ms, delay_context);
+    if (status != NVX_GSP_RMAPI_OK)
+        return status;
+
+    memset(runtime, 0, sizeof(*runtime));
+    return NVX_GSP_RMAPI_OK;
 }

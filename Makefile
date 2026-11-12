@@ -150,9 +150,9 @@ VantaOS-UEFI.img: BOOTX64.EFI kernel-uefi.elf
 	@command -v mkfs.fat >/dev/null && command -v mmd >/dev/null && command -v mcopy >/dev/null && command -v sgdisk >/dev/null || \
 		(echo "dosfstools, mtools, and gdisk are required to build the UEFI image."; exit 1)
 	rm -f $@
-	truncate -s 128M $@
+	truncate -s 1024M $@
 	sgdisk --clear --new=1:2048:0 --typecode=1:EF00 --change-name=1:VANTAESP $@
-	mkfs.fat -F 32 -s 1 --offset=2048 $@ >/dev/null
+	mkfs.fat -F 32 -s 8 --offset=2048 $@ >/dev/null
 	mmd -i $@@@1048576 ::/EFI
 	mmd -i $@@@1048576 ::/EFI/BOOT
 	mmd -i $@@@1048576 ::/EFI/VANTA

@@ -37,6 +37,9 @@ typedef gpu_dma_buffer_t nvx_dma_buffer_t;
 /* Zero-initialize buffer before first use; release it before reuse. */
 nvx_dma_status_t nvx_dma_alloc(size_t size, unsigned address_bits,
                                nvx_dma_buffer_t *out_buffer);
+/* Allocate below the kernel's 1 GiB identity-mapped physical window. */
+nvx_dma_status_t nvx_dma_alloc_identity_mapped(
+    size_t size, nvx_dma_buffer_t *out_buffer);
 void nvx_dma_release(nvx_dma_buffer_t *buffer);
 
 #endif

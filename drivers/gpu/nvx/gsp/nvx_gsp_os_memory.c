@@ -142,7 +142,7 @@ nvx_gsp_rmapi_status_t nvx_gsp_os_memory_create(
         !idle_valid(m))
         return NVX_GSP_RMAPI_INVALID_ARGUMENT;
 
-    status = nvx_dma_alloc(size, 32U, &m->backing);
+    status = nvx_dma_alloc_identity_mapped(size, &m->backing);
     if (status != NVX_DMA_OK) return NVX_GSP_RMAPI_NO_SPACE;
 
     if (!gpu_dma_buffer_is_valid(&m->backing) ||

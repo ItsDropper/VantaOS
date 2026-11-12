@@ -13,9 +13,8 @@ static nvx_gsp_rmapi_status_t wait_status = NVX_GSP_RMAPI_OK;
 static unsigned alloc_calls, free_calls, release_calls, dma_free_calls;
 static uint64_t next_phys = 0x02000000U;
 
-nvx_dma_status_t nvx_dma_alloc(size_t size, unsigned bits, nvx_dma_buffer_t *b)
+nvx_dma_status_t nvx_dma_alloc_identity_mapped(size_t size, nvx_dma_buffer_t *b)
 {
-    assert(bits == 32U);
     memset(b, 0, sizeof(*b));
     b->cpu_address = (void *)(uintptr_t)next_phys;
     b->gpu_address = next_phys;

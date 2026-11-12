@@ -36,14 +36,16 @@ int gpu_dma_buffer_is_valid(const gpu_dma_buffer_t *buffer)
         buffer->gpu_address != buffer->pages[0].physical_address ||
         buffer->cpu_address != buffer->pages[0].virtual_address ||
         buffer->allocation_id == 0U ||
-        (buffer->address_bits != 32U && buffer->address_bits != 64U) ||
+        (buffer->address_bits != 30U && buffer->address_bits != 32U &&
+         buffer->address_bits != 64U) ||
         buffer->gpu_address > UINT64_MAX - (buffer->allocated_size - 1U) ||
         (uintptr_t)buffer->cpu_address >
             UINTPTR_MAX - (buffer->allocated_size - 1U))
         return 0;
 
     const dma_device_t dma_device = {
-        .dma_mask = buffer->address_bits == 32U ? UINT32_MAX : UINT64_MAX
+        .dma_mask = buffer->address_bits == 64U ? UINT64_MAX :
+            ((UINT64_C(1) << buffer->address_bits) - 1U)
     };
     for (size_t i = 0U; i < buffer->page_count; ++i) {
         const dma_page_t *page = &buffer->pages[i];
@@ -70,8 +72,9 @@ int gpu_dma_buffer_is_valid(const gpu_dma_buffer_t *buffer)
     return 1;
 }
 
-gpu_dma_status_t gpu_dma_alloc(size_t size, unsigned address_bits,
-                               gpu_dma_buffer_t *out_buffer)
+static gpu_dma_status_t gpu_dma_alloc_internal(
+    size_t size, unsigned address_bits, gpu_dma_buffer_t *out_buffer,
+    int allow_identity_window)
 {
     size_t page_count, allocated_size;
 
@@ -84,7 +87,8 @@ gpu_dma_status_t gpu_dma_alloc(size_t size, unsigned address_bits,
     gpu_dma_clear(out_buffer);
     if (size == 0U)
         return GPU_DMA_INVALID_ARGUMENT;
-    if (address_bits != 32U && address_bits != 64U)
+    if (address_bits != 32U && address_bits != 64U &&
+        !(allow_identity_window && address_bits == 30U))
         return GPU_DMA_ADDRESS_WIDTH_UNSUPPORTED;
     if (size > GPU_DMA_MAX_BYTES)
         return GPU_DMA_TOO_LARGE;
@@ -104,7 +108,8 @@ gpu_dma_status_t gpu_dma_alloc(size_t size, unsigned address_bits,
     }
     memset(out_buffer->pages, 0, page_count * sizeof(dma_page_t));
     const dma_device_t dma_device = {
-        .dma_mask = address_bits == 32U ? UINT32_MAX : UINT64_MAX
+        .dma_mask = address_bits == 64U ? UINT64_MAX :
+            ((UINT64_C(1) << address_bits) - 1U)
     };
     if (!dma_alloc_contiguous_for_device(&dma_device,
                                          out_buffer->pages, page_count)) {
@@ -144,10 +149,9 @@ gpu_dma_status_t gpu_dma_alloc(size_t size, unsigned address_bits,
 
     if (out_buffer->gpu_address >
             UINT64_MAX - ((uint64_t)allocated_size - 1U) ||
-        (address_bits == 32U &&
-         (out_buffer->gpu_address > UINT32_MAX ||
-          (uint64_t)allocated_size - 1U >
-              UINT32_MAX - out_buffer->gpu_address))) {
+        out_buffer->gpu_address > dma_device.dma_mask ||
+        (uint64_t)allocated_size - 1U >
+            dma_device.dma_mask - out_buffer->gpu_address) {
         dma_free_contiguous(out_buffer->pages, page_count);
         kfree(out_buffer->pages);
         gpu_dma_clear(out_buffer);
@@ -184,4 +188,17 @@ void gpu_dma_release(gpu_dma_buffer_t *buffer)
         kfree(buffer->pages);
     }
     gpu_dma_clear(buffer);
+}
+
+gpu_dma_status_t gpu_dma_alloc(size_t size, unsigned address_bits,
+                               gpu_dma_buffer_t *out_buffer)
+{
+    return gpu_dma_alloc_internal(size, address_bits, out_buffer, 0);
+}
+
+gpu_dma_status_t gpu_dma_alloc_identity_mapped(
+    size_t size, gpu_dma_buffer_t *out_buffer)
+{
+    /* paging_initialize currently identity maps physical memory below 1 GiB. */
+    return gpu_dma_alloc_internal(size, 30U, out_buffer, 1);
 }

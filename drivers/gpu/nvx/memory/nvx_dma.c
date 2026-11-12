@@ -31,6 +31,13 @@ nvx_dma_status_t nvx_dma_alloc(size_t size, unsigned address_bits,
         gpu_dma_alloc(size, address_bits, (gpu_dma_buffer_t *)out_buffer));
 }
 
+nvx_dma_status_t nvx_dma_alloc_identity_mapped(
+    size_t size, nvx_dma_buffer_t *out_buffer)
+{
+    return nvx_dma_translate_status(gpu_dma_alloc_identity_mapped(
+        size, (gpu_dma_buffer_t *)out_buffer));
+}
+
 void nvx_dma_release(nvx_dma_buffer_t *buffer)
 {
     gpu_dma_release((gpu_dma_buffer_t *)buffer);

@@ -58,15 +58,21 @@ int dma_page_is_valid(const dma_page_t *page)
 int dma_page_is_valid_for_device(const dma_device_t *device,
                                  const dma_page_t *page)
 {
-    (void)device;
-    return dma_page_is_valid(page);
+    if (!dma_page_is_valid(page)) return 0;
+    if (!device) return 1;
+    return page->physical_address <= device->dma_mask &&
+        GPU_DMA_PAGE_SIZE - 1U <= device->dma_mask - page->physical_address;
 }
 
 int dma_alloc_contiguous_for_device(const dma_device_t *device,
                                     dma_page_t *pages,size_t count)
 {
-    (void)device;
-    return dma_alloc_contiguous(pages,count);
+    if (!dma_alloc_contiguous(pages,count)) return 0;
+    if (device && count &&
+        (pages[count - 1U].physical_address > device->dma_mask ||
+         GPU_DMA_PAGE_SIZE - 1U > device->dma_mask -
+             pages[count - 1U].physical_address)) return 1;
+    return 1;
 }
 
 void dma_free_contiguous(dma_page_t *pages, size_t count)
@@ -110,6 +116,13 @@ int main(void)
     gpu_dma_release(&buffer);
     assert(!buffer.acquired && buffer.pages == NULL);
     assert(free_count == 4U);
+    high_address = 0;
+    assert(gpu_dma_alloc_identity_mapped(4097U, &buffer) == GPU_DMA_OK);
+    assert(buffer.address_bits == 30U && buffer.gpu_address < 0x40000000ULL);
+    gpu_dma_release(&buffer);
+    high_address = 1;
+    assert(gpu_dma_alloc_identity_mapped(4096U, &buffer) ==
+           GPU_DMA_INVALID_PAGE);
     high_address = 0;
     assert(gpu_dma_alloc(4097U, 32U, &buffer) == GPU_DMA_OK);
     assert(buffer.page_count == 2U && buffer.allocated_size == 8192U);

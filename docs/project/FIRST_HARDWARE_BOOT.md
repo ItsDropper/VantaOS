@@ -11,7 +11,7 @@ The maintained GitHub Actions workflow is `.github/workflows/hardware-boot-media
 3. Download the artifact named `VantaOS-UEFI-hardware-test-<commit>`.
 4. Verify the image against `SHA256SUMS.txt` before writing it to removable media.
 
-The image is a GPT disk image containing one FAT32 EFI System Partition with:
+The image is an MBR disk image containing one FAT32 EFI System Partition (partition type `0xEF`) with:
 
 - `EFI/BOOT/BOOTX64.EFI`: VantaOS UEFI loader.
 - `EFI/VANTA/KERNEL.ELF`: UEFI kernel image.

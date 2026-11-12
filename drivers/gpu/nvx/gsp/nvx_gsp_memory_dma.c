@@ -147,3 +147,134 @@ nvx_gsp_rmapi_status_t nvx_gsp_memory_dma_unmap(
         scratch, scratch_size, response, response_capacity,
         timeout_ms, poll_interval_ms, delay_ms, delay_context);
 }
+
+
+static nvx_gsp_rmapi_status_t validate_os_owners(
+    const nvx_gsp_os_memory_t *memory,
+    const nvx_gsp_context_dma_t *context_dma,
+    uint64_t *allocation_size)
+{
+    uint64_t base, size;
+    nvx_gsp_rmapi_status_t status;
+
+    if (!memory || !context_dma || !allocation_size ||
+        memory->stage != NVX_GSP_OS_MEMORY_CREATED ||
+        !memory->remote_created || !memory->backing.acquired ||
+        context_dma->stage != NVX_GSP_CONTEXT_DMA_CREATED ||
+        context_dma->client_handle != memory->client_handle ||
+        context_dma->params.h_memory != memory->memory_handle ||
+        context_dma->device_handle != memory->device_handle ||
+        context_dma->params.reserved != 0U ||
+        context_dma->params.offset > context_dma->params.limit)
+        return NVX_GSP_RMAPI_INVALID_ARGUMENT;
+
+    status = nvx_gsp_os_memory_get_physical_range(memory, &base, &size);
+    if (status != NVX_GSP_RMAPI_OK || !size ||
+        size - 1U > UINT64_MAX - base)
+        return status == NVX_GSP_RMAPI_OK ?
+            NVX_GSP_RMAPI_INVALID_ARGUMENT : status;
+    if (context_dma->params.limit >= size)
+        return NVX_GSP_RMAPI_INVALID_ARGUMENT;
+    *allocation_size = size;
+    return NVX_GSP_RMAPI_OK;
+}
+
+static int os_mapping_matches_owners(
+    const nvx_gsp_dma_mapping_t *mapping,
+    const nvx_gsp_os_memory_t *memory,
+    const nvx_gsp_context_dma_t *context_dma)
+{
+    return mapping && memory && context_dma &&
+        mapping->request.client == memory->client_handle &&
+        mapping->request.device == context_dma->device_handle &&
+        mapping->request.dma == context_dma->context_dma_handle &&
+        mapping->request.memory == memory->memory_handle;
+}
+
+nvx_gsp_rmapi_status_t nvx_gsp_os_memory_dma_map(
+    nvx_gsp_rpc_manager_t *manager,
+    const nvx_gsp_os_memory_t *memory,
+    const nvx_gsp_context_dma_t *context_dma,
+    nvx_gsp_dma_mapping_t *mapping,
+    uint64_t offset, uint64_t length,
+    uint32_t flags, uint32_t flags2, uint32_t kind_override,
+    uint64_t dma_offset,
+    void *scratch, size_t scratch_size, void *response,
+    size_t response_capacity, uint32_t timeout_ms, uint32_t poll_interval_ms,
+    nvx_gsp_rmapi_delay_fn delay_ms, void *delay_context)
+{
+    nvx_gsp_map_memory_dma_t request = {0};
+    uint64_t allocation_size, end;
+    nvx_gsp_rmapi_status_t status;
+
+    if (!manager || !mapping || !scratch || !response || !length ||
+        offset > UINT64_MAX - length)
+        return NVX_GSP_RMAPI_INVALID_ARGUMENT;
+    status = validate_os_owners(memory, context_dma, &allocation_size);
+    if (status != NVX_GSP_RMAPI_OK)
+        return status;
+    end = offset + length;
+    if (end > allocation_size || offset < context_dma->params.offset ||
+        end - 1U > context_dma->params.limit)
+        return NVX_GSP_RMAPI_INVALID_ARGUMENT;
+
+    request.client = memory->client_handle;
+    request.device = context_dma->device_handle;
+    request.dma = context_dma->context_dma_handle;
+    request.memory = memory->memory_handle;
+    request.offset = offset;
+    request.length = length;
+    request.flags = flags;
+    request.flags2 = flags2;
+    request.kind_override = kind_override;
+    request.dma_offset = dma_offset;
+    return nvx_gsp_dma_map(manager, mapping, &request,
+        scratch, scratch_size, response, response_capacity,
+        timeout_ms, poll_interval_ms, delay_ms, delay_context);
+}
+
+nvx_gsp_rmapi_status_t nvx_gsp_os_memory_dma_recover(
+    nvx_gsp_rpc_manager_t *manager,
+    const nvx_gsp_os_memory_t *memory,
+    const nvx_gsp_context_dma_t *context_dma,
+    nvx_gsp_dma_mapping_t *mapping,
+    void *scratch, size_t scratch_size, void *response,
+    size_t response_capacity, uint32_t timeout_ms, uint32_t poll_interval_ms,
+    nvx_gsp_rmapi_delay_fn delay_ms, void *delay_context)
+{
+    uint64_t allocation_size;
+    nvx_gsp_rmapi_status_t status;
+    if (!manager || !mapping || !scratch || !response)
+        return NVX_GSP_RMAPI_INVALID_ARGUMENT;
+    status = validate_os_owners(memory, context_dma, &allocation_size);
+    if (status != NVX_GSP_RMAPI_OK ||
+        !os_mapping_matches_owners(mapping, memory, context_dma))
+        return status == NVX_GSP_RMAPI_OK ?
+            NVX_GSP_RMAPI_INVALID_ARGUMENT : status;
+    return nvx_gsp_dma_map_recover(manager, mapping, scratch, scratch_size,
+        response, response_capacity, timeout_ms, poll_interval_ms,
+        delay_ms, delay_context);
+}
+
+nvx_gsp_rmapi_status_t nvx_gsp_os_memory_dma_unmap(
+    nvx_gsp_rpc_manager_t *manager,
+    const nvx_gsp_os_memory_t *memory,
+    const nvx_gsp_context_dma_t *context_dma,
+    nvx_gsp_dma_mapping_t *mapping,
+    void *scratch, size_t scratch_size, void *response,
+    size_t response_capacity, uint32_t timeout_ms, uint32_t poll_interval_ms,
+    nvx_gsp_rmapi_delay_fn delay_ms, void *delay_context)
+{
+    uint64_t allocation_size;
+    nvx_gsp_rmapi_status_t status;
+    if (!manager || !mapping || !scratch || !response)
+        return NVX_GSP_RMAPI_INVALID_ARGUMENT;
+    status = validate_os_owners(memory, context_dma, &allocation_size);
+    if (status != NVX_GSP_RMAPI_OK ||
+        !os_mapping_matches_owners(mapping, memory, context_dma))
+        return status == NVX_GSP_RMAPI_OK ?
+            NVX_GSP_RMAPI_INVALID_ARGUMENT : status;
+    return nvx_gsp_dma_unmap(manager, mapping, scratch, scratch_size,
+        response, response_capacity, timeout_ms, poll_interval_ms,
+        delay_ms, delay_context);
+}

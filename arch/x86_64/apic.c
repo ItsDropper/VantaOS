@@ -264,25 +264,25 @@ int apic_initialize(void)
             (platform_info.local_apic_address & 0x0000000FFFFFF000ULL);
         serial_write("VANTAOS_APIC_BASE_INITIAL=0x");
         serial_write_hex64(base);
-        serial_write("\\n");
+        serial_write("\n");
         serial_write("VANTAOS_APIC_BASE_REQUESTED=0x");
         serial_write_hex64(requested_base | APIC_BASE_ENABLE);
-        serial_write("\\n");
+        serial_write("\n");
         write_msr(IA32_APIC_BASE_MSR, requested_base);
         uint64_t disabled_readback = read_msr(IA32_APIC_BASE_MSR);
         serial_write("VANTAOS_APIC_BASE_DISABLED_READBACK=0x");
         serial_write_hex64(disabled_readback);
-        serial_write("\\n");
+        serial_write("\n");
         write_msr(IA32_APIC_BASE_MSR, requested_base | APIC_BASE_ENABLE);
         base = read_msr(IA32_APIC_BASE_MSR);
         serial_write("VANTAOS_APIC_BASE_ENABLED_READBACK=0x");
         serial_write_hex64(base);
-        serial_write("\\n");
+        serial_write("\n");
         if ((base & APIC_BASE_ENABLE) == 0U)
         {
             serial_write("VANTAOS_APIC_ENABLE_FAIL base=0x");
             serial_write_hex64(base);
-            serial_write("\\n");
+            serial_write("\n");
             return 0;
         }
     }

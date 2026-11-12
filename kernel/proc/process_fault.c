@@ -41,6 +41,36 @@ int process_terminate_current_user_try_with_status(
     return terminated;
 }
 
+int process_terminate_current_user_try_with_status(
+    paging_address_space_t* expected_address_space, int32_t exit_status)
+{
+    if (!expected_address_space || !process_initialized_state)
+        return 0;
+
+    uint64_t flags;
+    if (!spinlock_try_lock_irqsave(&process_table_lock, &flags))
+        return 0;
+
+    uint32_t current_pid = process_current_slot();
+    int terminated = 0;
+    if (current_pid != 0U && current_pid < PROCESS_MAX &&
+        !process_is_idle_locked(current_pid))
+    {
+        process_t* current = &process_table_records[current_pid];
+        if (current->state == PROCESS_RUNNING && current->is_user &&
+            current->owner_cpu == process_current_cpu_id() &&
+            current->address_space == expected_address_space)
+        {
+            current->state = PROCESS_TERMINATED;
+            current->exit_status = exit_status;
+            terminated = 1;
+        }
+    }
+
+    process_table_lock_release(flags);
+    return terminated;
+}
+
 int process_terminate_current_try_with_status(int32_t exit_status)
 {
     if (!process_initialized_state)

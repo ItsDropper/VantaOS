@@ -203,6 +203,7 @@ on:
       - "include/nvx_gsp_platform.h"
       - "drivers/gpu/nvx/gsp/nvx_gsp_platform.c"
       - "scripts/test_nvx_gsp_platform.c"
+      - "scripts/test_nvx_gsp_platform_runtime.c"
       - "include/nvx_gsp_msgq_rpc.h"
       - "include/nvx_gsp_init_args.h"
       - "include/nvx_gsp_ga10x.h"
@@ -1267,3 +1268,13 @@ jobs:
 
       - name: Test NVX platform profile, BAR, firmware, topology and queue preflight
         run: /tmp/vantaos-nvx-gsp-platform-test
+
+      - name: Compile NVX platform startup and recovery integration tests
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_platform_runtime.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_platform.c \
+            -o /tmp/vantaos-nvx-gsp-platform-runtime-test
+
+      - name: Test NVX startup ownership, rollback, and quiesce-gated teardown
+        run: /tmp/vantaos-nvx-gsp-platform-runtime-test

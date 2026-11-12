@@ -87,6 +87,25 @@ This is software lifecycle verification only: no physical GSP/RM channel has
 yet been created on a GA106, and the current channel memory descriptors still
 must be backed by real RM-visible mappings before submission.
 
+## RM DMA mapping lifecycle software milestone
+
+`include/nvx_gsp_dma_map.h` and
+`drivers/gpu/nvx/gsp/nvx_gsp_dma_map.c` add a reusable owner for the existing
+NVOS46/NVOS47 map/unmap RPCs. It records the request, returned DMA offset,
+in-flight operation and completion stage. Timeouts retain the RPC handle;
+recovery can finish the operation without submitting a duplicate map or
+unmap. A local RPC-handle release failure is separately retryable. Failed
+unmaps retain the mapped state so callers cannot accidentally treat memory as
+detached.
+
+The host test covers successful map/unmap, map and unmap timeout recovery,
+response decode failure, request-range overflow, retryable RPC-handle release,
+and the guarantee that recovery does not submit a duplicate operation.
+This is lifecycle verification only. It does not audit the NVOS46/NVOS47 wire
+layout, create the underlying RM memory/DMA objects, or prove that the
+returned offset is usable on GA106. The RM object allocation ABI and actual
+GSP-RM mapping round-trip remain explicit hardware-readiness gates.
+
 ## Mandatory first hardware experiment
 
 The first hardware milestone should be a bounded copy-engine operation, not a 3D demo. It isolates memory visibility, channel provisioning, submission, completion and recovery before shader execution adds further unknowns.

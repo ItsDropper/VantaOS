@@ -127,7 +127,7 @@ int main(void)
     request.offset=0x2000U;request.length=0x6000U;
 
     /* A local handle-release failure is retryable and must not remap. */
-    release_status=NVX_GSP_RPC_ERROR;
+    release_status=NVX_GSP_RPC_TRANSPORT_ERROR;
     assert(nvx_gsp_dma_map(&manager,&mapping,&request,scratch,sizeof(scratch),
         response,sizeof(response),10U,1U,delay,NULL)==NVX_GSP_RMAPI_RPC_ERROR);
     assert(mapping.stage==NVX_GSP_DMA_MAP_MAP_RELEASE_PENDING&&

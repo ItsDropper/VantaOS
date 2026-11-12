@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+      - main
       - work/kernel-reliability-2026-10-15
       - work/comprehensive-tests-docs-2026-10-15
       - work/modular-kbuild-layout-2026-10-15

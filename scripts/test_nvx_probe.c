@@ -99,8 +99,22 @@ int main(void)
     assert(nvx_probe_mapped_bar0(&gpu, registers, sizeof(registers), &snapshot)
            == NVX_PROBE_UNRESPONSIVE_REGISTERS);
 
-    registers[0] = 0x17000000U;
-    registers[1] = 1U;
+    gpu.device_id=0x174DU; /* Maxwell GM108 / GeForce MX130 */
+    registers[0]=0x11000000U; registers[1]=1U;
+    assert(nvx_probe_mapped_bar0(&gpu,registers,8U,&snapshot)==NVX_PROBE_OK);
+    assert(snapshot.identified_family==NVX_FAMILY_MAXWELL);
+    assert(snapshot.identified_profile==NVX_PROFILE_GEFORCE_MX130);
+    assert(snapshot.architecture==0x11U&&snapshot.extended_revision_valid==0U);
+
+    gpu.device_id=0x1D12U; /* Pascal GP108 / GeForce MX150 low-power PCI ID */
+    registers[0]=0x13000000U;
+    assert(nvx_probe_mapped_bar0(&gpu,registers,8U,&snapshot)==NVX_PROBE_OK);
+    assert(snapshot.identified_family==NVX_FAMILY_PASCAL);
+    assert(snapshot.identified_profile==NVX_PROFILE_GEFORCE_MX150);
+    assert(snapshot.architecture==0x13U&&snapshot.extended_revision_valid==0U);
+
+    gpu.device_id=0x2503U;
+    registers[0]=0x17000000U; registers[1]=1U;
     assert(nvx_probe_mapped_bar0(&gpu, registers, 4U, &snapshot)
            == NVX_PROBE_BAR_TOO_SMALL);
     assert(nvx_probe_mapped_bar0(&gpu,

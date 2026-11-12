@@ -141,6 +141,12 @@ nvx_gsp_bootloader_status_t nvx_gsp_bootloader_prepare(
 
 
 static unsigned provider_release_calls;
+static const uint8_t *provider_runtime, *provider_ucodes;
+static const uint8_t *provider_booter_load, *provider_booter_unload;
+static const uint8_t *provider_bootloader;
+static size_t provider_runtime_size, provider_ucodes_size;
+static size_t provider_booter_load_size, provider_booter_unload_size;
+static size_t provider_bootloader_size;
 static int provider_request(const char *name, nvx_firmware_blob_t *out,
                             void *context)
 {
@@ -148,20 +154,20 @@ static int provider_request(const char *name, nvx_firmware_blob_t *out,
     if (!name || !out)
         return 0;
     if (strstr(name, "/gsp/gsp-") != 0) {
-        out->data = runtime;
-        out->size = sizeof(runtime);
+        out->data = provider_runtime;
+        out->size = provider_runtime_size;
     } else if (strstr(name, "/gsp/ucodes-") != 0) {
-        out->data = bootloader_blob;
-        out->size = sizeof(bootloader_blob);
+        out->data = provider_ucodes;
+        out->size = provider_ucodes_size;
     } else if (strstr(name, "/gsp/booter_load-") != 0) {
-        out->data = booter_load_blob;
-        out->size = sizeof(booter_load_blob);
+        out->data = provider_booter_load;
+        out->size = provider_booter_load_size;
     } else if (strstr(name, "/gsp/booter_unload-") != 0) {
-        out->data = booter_unload_blob;
-        out->size = sizeof(booter_unload_blob);
+        out->data = provider_booter_unload;
+        out->size = provider_booter_unload_size;
     } else if (strstr(name, "/gsp/bootloader-") != 0) {
-        out->data = bootloader_blob;
-        out->size = sizeof(bootloader_blob);
+        out->data = provider_bootloader;
+        out->size = provider_bootloader_size;
     } else {
         return 0;
     }
@@ -332,6 +338,11 @@ int main(void)
             .length = sizeof(fake_bar)
         };
 
+        provider_runtime = runtime; provider_runtime_size = sizeof(runtime);
+        provider_ucodes = bootloader_blob; provider_ucodes_size = sizeof(bootloader_blob);
+        provider_booter_load = booter_load_blob; provider_booter_load_size = sizeof(booter_load_blob);
+        provider_booter_unload = booter_unload_blob; provider_booter_unload_size = sizeof(booter_unload_blob);
+        provider_bootloader = bootloader_blob; provider_bootloader_size = sizeof(bootloader_blob);
         allocation_calls = 0U;
         release_calls = 0U;
         provider_release_calls = 0U;

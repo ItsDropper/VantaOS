@@ -116,9 +116,13 @@ static int decode_allocation_result(
     payload = (const uint8_t *)response +
         NVX_GSP_MEMORY_ALLOC_RESPONSE_HEADER_SIZE;
     memcpy(&returned, payload, sizeof(returned));
-    if (returned.size < requested_size || !returned.size ||
-        returned.limit < requested_size - 1U ||
-        returned.limit == UINT64_MAX)
+    /*
+     * This allocation is created at offset zero. NVIDIA defines limit as the
+     * inclusive final byte, so accepting a larger value would let a later
+     * CTXDMA object expose memory beyond the allocation's actual extent.
+     */
+    if (!returned.size || returned.size < requested_size ||
+        returned.limit != returned.size - 1U)
         return 0;
     *actual_size = returned.size;
     *limit = returned.limit;

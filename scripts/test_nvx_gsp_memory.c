@@ -16,6 +16,7 @@ static nvx_gsp_rmapi_status_t alloc_submit_status, free_submit_status,
 static nvx_gsp_rpc_status_t release_status;
 static int alloc_handle_valid = 1, free_handle_valid = 1;
 static int truncate_alloc_response;
+static uint64_t returned_limit_delta;
 static unsigned alloc_calls, free_calls, wait_calls, release_calls;
 static uint32_t allocated_class, allocated_parent, allocated_object;
 static nvx_gsp_memory_allocation_params_t captured_params;
@@ -68,7 +69,7 @@ nvx_gsp_rmapi_status_t nvx_gsp_rmapi_wait(
         wait_status == NVX_GSP_RMAPI_OK) {
         nvx_gsp_memory_allocation_params_t returned = captured_params;
         returned.size = captured_params.size + 4096U;
-        returned.limit = returned.size - 1U;
+        returned.limit = returned.size - 1U + returned_limit_delta;
         returned.address = 0U;
         if (truncate_alloc_response) {
             operation->response_size = RESPONSE_HEADER;
@@ -190,6 +191,21 @@ int main(void)
         !object.result_valid);
     truncate_alloc_response = 0;
     wait_status = NVX_GSP_RMAPI_OK;
+
+    /*
+     * An inclusive limit that extends beyond the returned allocation is not
+     * safe to pass to CTXDMA. Keep ownership so the malformed object is freed.
+     */
+    returned_limit_delta = 1U;
+    assert(nvx_gsp_memory_object_create(&manager, &object, 1U, 2U, 3U, &p,
+        scratch, sizeof(scratch), response, sizeof(response), 10U, 1U,
+        delay, NULL) == NVX_GSP_RMAPI_MALFORMED_RESPONSE);
+    assert(object.stage == NVX_GSP_MEMORY_CREATED && object.remote_created &&
+        !object.result_valid);
+    returned_limit_delta = 0U;
+    assert(nvx_gsp_memory_object_destroy(&manager, &object, scratch,
+        sizeof(scratch), response, sizeof(response), 100U, 1U, delay, NULL)
+        == NVX_GSP_RMAPI_OK);
 
     /* Free failure preserves the object; a later free can safely retry. */
     assert(nvx_gsp_memory_object_destroy(&manager, &object, scratch,

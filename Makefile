@@ -156,7 +156,7 @@ VantaOS-UEFI.img: BOOTX64.EFI kernel-uefi.elf
 		(echo "dosfstools, mtools, and util-linux (sfdisk) are required to build the UEFI image."; exit 1)
 	rm -f $@
 	truncate -s 1024M $@
-	printf 'label: gpt\nunit: sectors\n\nstart=2048, type=U\n' | sfdisk $@
+	printf 'label: dos\nunit: sectors\n\nstart=2048, type=ef, bootable\n' | sfdisk $@
 	# mkfs.fat's block count is in 1024-byte units; cap it at the GPT ESP size
 	# so the FAT volume cannot overwrite the backup GPT header/table.
 	mkfs.fat -F 32 -s 8 --offset=2048 $@ `python3 -c 'import json,subprocess,sys; p=json.loads(subprocess.check_output(["sfdisk", "--json", sys.argv[1]], text=True))["partitiontable"]["partitions"][0]; print(int(p["size"]) // 2)' "$@"` >/dev/null

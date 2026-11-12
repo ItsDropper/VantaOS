@@ -190,7 +190,7 @@ nvx_gsp_rmapi_status_t nvx_gsp_channel_ring_create(
         return NVX_GSP_RMAPI_INVALID_ARGUMENT;
     allocation_bytes = (bytes + NVX_GSP_MEMORY_PAGE_SIZE - 1U) &
         ~(NVX_GSP_MEMORY_PAGE_SIZE - 1U);
-    if (allocation_bytes > SIZE_MAX || allocation_bytes > UINT32_MAX)
+    if (allocation_bytes > UINT32_MAX)
         return NVX_GSP_RMAPI_INVALID_ARGUMENT;
 
     clear_ring(ring);
@@ -406,6 +406,9 @@ nvx_gsp_rmapi_status_t nvx_gsp_channel_ring_destroy(
     if (!manager || !ring || !scratch || !response || !timeout_ms ||
         !poll_ms || !delay_ms)
         return NVX_GSP_RMAPI_INVALID_ARGUMENT;
+    if (ring->stage == NVX_GSP_CHANNEL_RING_IDLE)
+        return NVX_GSP_RMAPI_OK;
+
     status = close_references(ring);
     if (status != NVX_GSP_RMAPI_OK)
         return status;

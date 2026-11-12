@@ -23,12 +23,16 @@ typedef enum nvx_generation_family {
     NVX_FAMILY_ADA,
     NVX_FAMILY_HOPPER,
     NVX_FAMILY_BLACKWELL,
-    NVX_FAMILY_RUBIN
+    NVX_FAMILY_RUBIN,
+    NVX_FAMILY_MAXWELL,
+    NVX_FAMILY_PASCAL
 } nvx_generation_family_t;
 
 typedef enum nvx_device_profile {
     NVX_PROFILE_UNKNOWN = 0,
-    NVX_PROFILE_GEFORCE_RTX_3060
+    NVX_PROFILE_GEFORCE_RTX_3060,
+    NVX_PROFILE_GEFORCE_MX130,
+    NVX_PROFILE_GEFORCE_MX150
 } nvx_device_profile_t;
 
 typedef struct nvx_device_descriptor {

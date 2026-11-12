@@ -100,6 +100,8 @@ Host tests cover invalid write-only requests and read-only allocation
 ownership. Hardware enforcement and actual page-fault behavior remain
 unverified on GA106.
 
+Submission validation also checks each relocation's requested read/write access against the target object's GPUVM permissions. A command cannot request a writable relocation to a read-only allocation; the validator reports a distinct target-access failure before a batch lease is acquired. This is host-tested and does not replace hardware-side protection verification.
+
 ## Fence-gated submission leases
 
 The submission validator now has a lease layer in

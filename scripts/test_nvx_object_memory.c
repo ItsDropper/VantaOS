@@ -134,7 +134,7 @@ static void init_gpuvm(void)
 
 int main(void)
 {
-    nvx_memory_handle_t a = {0}, b = {0}, forged;
+    nvx_memory_handle_t a = {0}, b = {0}, forged, readonly = {0};
     nvx_memory_info_t info;
     void *cpu = (void *)(uintptr_t)1U;
     uint64_t free_before = 0U, free_after = 0U;
@@ -201,6 +201,17 @@ int main(void)
     assert(nvx_memory_release(&manager, &large) == NVX_MEMORY_OK);
     assert(nvx_memory_validate(&manager) == NVX_MEMORY_OK);
     assert(alloc_calls == 3U && free_calls == 3U);
+
+    assert(nvx_memory_alloc_access(&manager, 4096U, NVX_MEMORY_STAGING,
+        NVX_MEMORY_ACCESS_WRITE, &readonly) == NVX_MEMORY_INVALID_ARGUMENT);
+    assert(nvx_memory_alloc_access(&manager, 4096U, NVX_MEMORY_STAGING,
+        NVX_MEMORY_ACCESS_READ, &readonly) == NVX_MEMORY_OK);
+    assert(nvx_memory_get_info(&manager, &readonly, &info) == NVX_MEMORY_OK);
+    assert(info.access == NVX_MEMORY_ACCESS_READ);
+    assert(manager.slots[readonly.slot].access == NVX_MEMORY_ACCESS_READ);
+    assert(nvx_memory_validate(&manager) == NVX_MEMORY_OK);
+    assert(nvx_memory_release(&manager, &readonly) == NVX_MEMORY_OK);
+    assert(alloc_calls == 4U && free_calls == 4U);
 
     assert(nvx_gpuvm_destroy(&gpuvm) == NVX_GPUVM_OK);
     memset(&manager, 0, sizeof(manager));

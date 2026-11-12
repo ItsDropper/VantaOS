@@ -37,12 +37,14 @@ linking, GMCAPI/RPC behavior, and timeout/recovery paths.
   declaration and definition, but no boot-time or shell-command call site.
   `nvx status`, `nvx vbios`, and `nvx fw` remain diagnostic/preflight
   commands; the firmware command explicitly reports that it has not started GSP.
-- **No complete platform coordinator:** the caller must supply a live supported
-  PCI device, trusted GPU facts, mapped BAR0, staged VBIOS/FWSEC descriptor,
-  hardware fuse version, DMA-backed boot artifacts, initialized ownership
-  trackers, WPR metadata, framebuffer offset, init arguments, shared queue
-  memory/layout, scratch buffers and scheduler-delay callback. The repository
-  does not yet gather and validate all of these as one production operation.
+- **No platform adapter/caller:** `nvx_gsp_platform_start()` now implements
+  the orchestration core, including VBIOS extraction, five-component firmware
+  acquisition, SEC2 booter staging, WPR planning/materialization, queue/PTE and
+  init-argument allocation, bus-master gating, and invocation of the composed
+  startup transaction. It still requires a platform-supplied trusted BAR
+  resource, exact PMC_BOOT_42 chip-ID mapping, trusted firmware provider,
+  firmware-compatible NVKV facts, queue sizing and delay callback. No boot or
+  shell path currently supplies those inputs.
 - **BAR handoff is unresolved:** the generic BAR sizing path refuses to probe
   while PCI decode or bus mastering is enabled. A live firmware-driven GPU
   therefore needs a trusted resource-size/handoff contract; current automatic
@@ -61,12 +63,19 @@ linking, GMCAPI/RPC behavior, and timeout/recovery paths.
 
 ## Required next milestone
 
-Build one production platform coordinator that obtains the VBIOS/FWSEC and
-version-matched firmware, establishes trusted BAR and framebuffer/WPR resources,
-allocates and maps all DMA-visible memory, and invokes the existing startup
-transaction. Add a dedicated host integration test around that coordinator and
-the composed startup API, injecting failure at each stage and checking that
-queue use stops and device-owned memory is retained until quiescence is proven.
+Build the platform adapter around the coordinator: obtain BAR0 extent from the
+trusted PCI/firmware resource manager; map the observed PMC_BOOT_42 chip ID to
+GA106 using an independently verified hardware table; provide a firmware
+provider whose verification callback enforces the platform trust policy; and
+populate only NVKV facts actually collected for the selected GSP ABI. Implement
+a real SEC2/GSP quiesce operation rather than treating a timeout as proof of
+shutdown.
+
+The coordinator now has mocked CI coverage for successful orchestration,
+pre-start rollback, startup failure retention and quiesce-gated teardown. The
+remaining host-test gap is a dedicated integration test of the real composed
+startup transaction with register/firmware fault injection and complete
+rollback checks.
 
 After that passes, perform the first bounded physical GA106 experiment. Record
 device identity, firmware hashes/versions, every startup phase, SEC2/FWSEC

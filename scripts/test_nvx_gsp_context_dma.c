@@ -11,6 +11,7 @@
 static nvx_gsp_rmapi_status_t alloc_submit_status, free_submit_status,
     wait_status;
 static nvx_gsp_rpc_status_t release_status;
+static int alloc_handle_valid=1, free_handle_valid=1;
 static unsigned alloc_calls, free_calls, wait_calls, release_calls;
 static uint32_t allocated_class, allocated_parent, allocated_object;
 static nvx_gsp_context_dma_params_t captured_params;
@@ -27,7 +28,7 @@ nvx_gsp_rmapi_status_t nvx_gsp_rm_alloc_submit(
     memcpy(&captured_params,params,sizeof(captured_params));
     allocated_parent=parent;allocated_object=object;allocated_class=class_id;
     alloc_calls++;out->function=NVX_GSP_RPC_FN_RM_ALLOC;
-    out->response_size=20U;out->handle.valid=1U;
+    out->response_size=20U;out->handle.valid=(uint8_t)alloc_handle_valid;
     return alloc_submit_status;
 }
 nvx_gsp_rmapi_status_t nvx_gsp_rm_free_submit(
@@ -39,7 +40,7 @@ nvx_gsp_rmapi_status_t nvx_gsp_rm_free_submit(
     (void)response;(void)response_capacity;
     assert(parent==2U&&object==3U);free_calls++;
     out->function=NVX_GSP_RPC_FN_FREE;out->response_size=16U;
-    out->handle.valid=1U;return free_submit_status;
+    out->handle.valid=(uint8_t)free_handle_valid;return free_submit_status;
 }
 nvx_gsp_rmapi_status_t nvx_gsp_rmapi_wait(
     nvx_gsp_rpc_manager_t *manager,nvx_gsp_rmapi_result_t *operation,
@@ -106,7 +107,25 @@ int main(void)
         response,sizeof(response),10U,1U,delay,NULL)==NVX_GSP_RMAPI_OK);
     assert(object.stage==NVX_GSP_CONTEXT_DMA_CREATED);
 
+    /* Free timeouts and transport errors retain the live object and RPC. */
+    wait_status=NVX_GSP_RMAPI_TIMEOUT;
+    assert(nvx_gsp_context_dma_destroy(&manager,&object,scratch,sizeof(scratch),
+        response,sizeof(response),10U,1U,delay,NULL)==NVX_GSP_RMAPI_TIMEOUT);
+    assert(object.stage==NVX_GSP_CONTEXT_DMA_FREE_PENDING);
+    assert(nvx_gsp_context_dma_recover(&manager,&object,scratch,sizeof(scratch),
+        response,sizeof(response),10U,1U,delay,NULL)==NVX_GSP_RMAPI_TIMEOUT);
+    wait_status=NVX_GSP_RMAPI_RPC_ERROR;
+    assert(nvx_gsp_context_dma_recover(&manager,&object,scratch,sizeof(scratch),
+        response,sizeof(response),10U,1U,delay,NULL)==NVX_GSP_RMAPI_RPC_ERROR);
+    wait_status=NVX_GSP_RMAPI_OK;
+    assert(nvx_gsp_context_dma_recover(&manager,&object,scratch,sizeof(scratch),
+        response,sizeof(response),10U,1U,delay,NULL)==NVX_GSP_RMAPI_OK);
+    assert(object.stage==NVX_GSP_CONTEXT_DMA_IDLE);
+
     /* A remote free failure preserves the object and allows a safe retry. */
+    assert(nvx_gsp_context_dma_create(&manager,&object,1U,2U,3U,4U,0U,
+        0U,0U,0xFFFU,scratch,sizeof(scratch),response,sizeof(response),
+        10U,1U,delay,NULL)==NVX_GSP_RMAPI_OK);
     wait_status=NVX_GSP_RMAPI_REMOTE_ERROR;
     assert(nvx_gsp_context_dma_destroy(&manager,&object,scratch,sizeof(scratch),
         response,sizeof(response),10U,1U,delay,NULL)==
@@ -139,6 +158,31 @@ int main(void)
         0U,0U,0xFFFU,scratch,sizeof(scratch),response,sizeof(response),
         10U,1U,delay,NULL)==NVX_GSP_RMAPI_OK);
     assert(object.stage==NVX_GSP_CONTEXT_DMA_CREATED);
+    assert(nvx_gsp_context_dma_destroy(&manager,&object,scratch,sizeof(scratch),
+        response,sizeof(response),10U,1U,delay,NULL)==NVX_GSP_RMAPI_OK);
+
+    /* A submit failure with no operation handle leaves no phantom object. */
+    memset(&object,0,sizeof(object));
+    alloc_submit_status=NVX_GSP_RMAPI_RPC_ERROR;
+    alloc_handle_valid=0;
+    assert(nvx_gsp_context_dma_create(&manager,&object,1U,2U,3U,4U,0U,
+        0U,0U,0xFFFU,scratch,sizeof(scratch),response,sizeof(response),
+        10U,1U,delay,NULL)==NVX_GSP_RMAPI_RPC_ERROR);
+    assert(object.stage==NVX_GSP_CONTEXT_DMA_IDLE&&
+           object.context_dma_handle==0U);
+    alloc_submit_status=NVX_GSP_RMAPI_OK;
+    alloc_handle_valid=1;
+
+    assert(nvx_gsp_context_dma_create(&manager,&object,1U,2U,3U,4U,0U,
+        0U,0U,0xFFFU,scratch,sizeof(scratch),response,sizeof(response),
+        10U,1U,delay,NULL)==NVX_GSP_RMAPI_OK);
+    free_submit_status=NVX_GSP_RMAPI_RPC_ERROR;
+    free_handle_valid=0;
+    assert(nvx_gsp_context_dma_destroy(&manager,&object,scratch,sizeof(scratch),
+        response,sizeof(response),10U,1U,delay,NULL)==NVX_GSP_RMAPI_RPC_ERROR);
+    assert(object.stage==NVX_GSP_CONTEXT_DMA_CREATED);
+    free_submit_status=NVX_GSP_RMAPI_OK;
+    free_handle_valid=1;
     assert(nvx_gsp_context_dma_destroy(&manager,&object,scratch,sizeof(scratch),
         response,sizeof(response),10U,1U,delay,NULL)==NVX_GSP_RMAPI_OK);
 

@@ -396,6 +396,17 @@ jobs:
       - name: Test copy-engine methods, semaphore release, and GPUVA bounds
         run: /tmp/vantaos-nvx-gsp-ce-test
 
+      - name: Compile NVX copy-engine runtime transaction tests with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_ce_runtime.c \
+            drivers/gpu/nvx/execution/nvx_gsp_ce.c \
+            drivers/gpu/nvx/execution/nvx_gsp_gpfifo.c \
+            -o /tmp/vantaos-nvx-gsp-ce-runtime-test
+
+      - name: Test NVX copy submission, fresh completion, queue failure and in-flight timeout semantics
+        run: /tmp/vantaos-nvx-gsp-ce-runtime-test
+
       - name: Compile GSP startup orchestration with strict warnings
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude -c \
@@ -1053,15 +1064,4 @@ jobs:
 
       - name: Test Polaris device boot, VMID-1 allocations, fenced work and safe teardown
         run: /tmp/vantaos-amd-polaris-device-runtime-test
-
-      - name: Compile NVX copy-engine runtime transaction tests with strict warnings
-        run: |
-          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
-            scripts/test_nvx_gsp_ce_runtime.c \
-            drivers/gpu/nvx/execution/nvx_gsp_ce.c \
-            drivers/gpu/nvx/execution/nvx_gsp_gpfifo.c \
-            -o /tmp/vantaos-nvx-gsp-ce-runtime-test
-
-      - name: Test NVX copy submission, fresh completion, queue failure and in-flight timeout semantics
-        run: /tmp/vantaos-nvx-gsp-ce-runtime-test
 

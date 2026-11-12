@@ -277,23 +277,13 @@ static void render_line_with_selection(size_t logical_line, int y)
         render_add_squircle(16 + (int32_t)begin * 8, y,
                             (int32_t)(selected_end - begin) * 8, 16,
                             VANTA_DESIGN_RADIUS_SMALL, COLOR_SELECTION);
-    if (begin > 0U)
-    {
-        char part[OUTPUT_COLUMNS];
-        for (size_t i = 0U; i < begin; ++i) part[i] = text[i];
-        part[begin] = '\0';
-        render_add_text(16, y, part, COLOR_TEXT);
-    }
-    if (end > begin)
-    {
-        char part[OUTPUT_COLUMNS];
-        size_t count = end - begin;
-        for (size_t i = 0U; i < count; ++i) part[i] = text[begin + i];
-        part[count] = '\0';
-        render_add_text(16 + (int32_t)begin * 8, y, part, COLOR_SELECTION_TEXT);
-    }
-    if (length > end)
-        render_add_text(16 + (int32_t)end * 8, y, text + end, COLOR_TEXT);
+
+    /*
+     * Keep the glyph run intact while selection changes. Splitting it into
+     * prefix/selected/suffix draw commands caused visible horizontal shifts
+     * as the selection endpoints moved; the highlight is a background layer.
+     */
+    render_add_text(16, y, text, COLOR_TEXT);
 }
 
 static void terminal_pointer_select(int32_t x, int32_t y, int extend)
@@ -1118,7 +1108,8 @@ int main(int argc, char** argv)
             if (event.x >= 16 && event.x < 728 &&
                 event.y >= 42 && event.y < 330)
             {
-                int64_t delta = (int32_t)event.value;
+                /* Match conventional desktop scrolling: wheel-up moves to newer output. */
+                int64_t delta = -(int64_t)(int32_t)event.value;
                 size_t amount = (size_t)(delta > 0 ? delta : -delta) * 3U;
                 size_t maximum = output_count > DISPLAY_LINES ?
                     output_count - DISPLAY_LINES : 0U;

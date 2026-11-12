@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+      - main
     paths:
       - "drivers/gpu/nvx/**"
       - "docs/gpu/nvx/RTX3060_READINESS.md"
@@ -798,6 +799,13 @@ jobs:
 
       - name: Test RPC correlation, failures and device loss over MSGQ
         run: /tmp/vantaos-nvx-gsp-rpc-msgq-test
+
+      - name: Compile RM memory-to-CTXDMA-to-NVOS46 mapping integration tests
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_memory_dma.c drivers/gpu/nvx/gsp/nvx_gsp_memory_dma.c \
+            -o /tmp/vantaos-nvx-gsp-memory-dma-test
+          /tmp/vantaos-nvx-gsp-memory-dma-test
 
       - name: Compile NVX DMA ownership and ordering tests
         run: |

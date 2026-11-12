@@ -150,5 +150,34 @@ int main(void)
     assert(block_device_unregister(partition) == BLOCK_STATUS_OK);
     assert(block_device_unregister(&disk3) == BLOCK_STATUS_OK);
     assert(device_count() == 0U);
+
+    /* UEFI live-boot protection propagates from the whole disk to partitions. */
+    block_device_t disk4;
+    memset(&disk4, 0, sizeof(disk4));
+    memset(valid_mbr, 0, sizeof(valid_mbr));
+    valid_mbr[510] = 0x55U;
+    valid_mbr[511] = 0xAAU;
+    valid_mbr[446U + 4U] = 0x0CU;
+    write_u32(valid_mbr + 446U + 8U, 1U);
+    write_u32(valid_mbr + 446U + 12U, 10U);
+    memcpy(disk4.name, "uefi-parent", sizeof("uefi-parent"));
+    disk4.sector_count = 128U;
+    disk4.sector_size = 512U;
+    disk4.ops = &valid_ops;
+    test_boot_info.source = VANTA_BOOT_SOURCE_UEFI;
+    test_boot_info.flags = VANTA_BOOT_FLAG_STORAGE_READ_ONLY;
+    assert(block_device_register_disk(&disk4) == BLOCK_STATUS_OK);
+    assert((disk4.flags & BLOCK_DEVICE_READ_ONLY) != 0U);
+    assert(partition_device_scan_disk(&disk4) == 1);
+    partition = block_device_find("disk0p1");
+    assert(partition != NULL);
+    assert((partition->flags & BLOCK_DEVICE_READ_ONLY) != 0U);
+    assert(block_device_write(partition, 0U, 1U, valid_mbr) ==
+           BLOCK_STATUS_READ_ONLY);
+    assert(block_device_unregister(partition) == BLOCK_STATUS_OK);
+    assert(block_device_unregister(&disk4) == BLOCK_STATUS_OK);
+    test_boot_info.source = VANTA_BOOT_SOURCE_MULTIBOOT1;
+    test_boot_info.flags = 0U;
+    assert(device_count() == 0U);
     return 0;
 }

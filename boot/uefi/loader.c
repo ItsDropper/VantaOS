@@ -668,11 +668,18 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* system_tab
     serial_write("\n");
     serial_write("VANTAOS_UEFI_KERNEL_HANDOFF\n");
 
-    /* The kernel entry uses SysV x86-64, unlike UEFI service calls. */
-    typedef void (*kernel_entry_t)(vanta_boot_info_t*);
-    kernel_entry_t kernel_entry = (kernel_entry_t)(UINTN)entry_address;
-    kernel_entry(boot_info);
-
-    serial_write("VANTAOS_UEFI_KERNEL_RETURNED_FAIL\n");
-    return EFI_ABORTED;
+    /*
+     * Transfer control with a tail jump, not a C indirect call. The kernel
+     * owns the machine from this point and never returns to the UEFI loader.
+     * Pin the SysV first argument in RDI and the target in RAX explicitly;
+     * do not depend on a compiler-generated call/return sequence or retain
+     * a firmware stack frame across the handoff.
+     */
+    __asm__ volatile (
+        "jmp *%%rax"
+        :
+        : "D"(boot_info), "a"(entry_address)
+        : "memory"
+    );
+    __builtin_unreachable();
 }

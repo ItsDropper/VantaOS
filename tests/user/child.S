@@ -49,6 +49,7 @@ parse_parent_token_accumulate:
     test %rax, %rax
     jle child_fail
     mov %rax, %r12
+    mov $1, %r11d
 
     mov $1, %eax
     lea parent_token_ok(%rip), %rdi
@@ -61,7 +62,7 @@ parse_parent_token_accumulate:
     test %rax, %rax
     jle child_fail
     mov %rax, %r13
-    mov $1, %r11d
+    mov $2, %r11d
     mov %r13, child_endpoint_token(%rip)
 
     mov $1, %eax
@@ -76,7 +77,7 @@ parse_parent_token_accumulate:
     int $0x80
     test %rax, %rax
     jne child_fail_close
-    mov $2, %r11d
+    mov $3, %r11d
 
     mov $1, %eax
     lea child_endpoint_sent(%rip), %rdi
@@ -111,7 +112,7 @@ child_receive_done:
     jne child_fail_close
     cmpb $'k', child_reply+2(%rip)
     jne child_fail_close
-    mov $3, %r11d
+    mov $4, %r11d
 
     mov $1, %eax
     lea child_ack_received(%rip), %rdi
@@ -168,7 +169,7 @@ child_fail_after_create:
 child_fail_after_send:
     mov $1, %eax
     lea child_endpoint_reply_fail(%rip), %rdi
-    mov $(child_endpoint_reply_fail_end - child_endpoint_reply), %esi
+    mov $(child_endpoint_reply_fail_end - child_endpoint_reply_fail), %esi
     int $0x80
 
 child_fail_message:

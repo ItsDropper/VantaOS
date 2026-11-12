@@ -382,6 +382,12 @@ nvx_gsp_startup_status_t nvx_gsp_ga10x_start_and_init_rm_from_pci(
     assert(scratch && scratch_size && timeout && poll && delay);
     assert(runtime && gmcapi && rpc_transport && rpc_manager && result);
     (void)context;
+    vbios_sync->owner = NVX_DMA_OWNER_DEVICE;
+    init_sync->owner = NVX_DMA_OWNER_DEVICE;
+    queue_sync->owner = NVX_DMA_OWNER_SHARED;
+    memory->radix3_elf_sync.initialized = 1U;
+    memory->radix3_elf_sync.owner = NVX_DMA_OWNER_DEVICE;
+    memory->radix3_elf_sync.size = 4096U;
     if (fail_startup) return NVX_GSP_STARTUP_GSP_INIT_FAILED;
     *out_static_size = 128U;
     result->static_info_size = 128U;
@@ -448,6 +454,10 @@ int main(void)
     assert(nvx_gsp_platform_shutdown(&session, quiesce, 0) ==
            NVX_GSP_PLATFORM_QUIESCE_FAILED);
     assert(live_allocations == 3U && bus_master_enabled);
+    assert(session.staged_vbios_sync.owner == NVX_DMA_OWNER_DEVICE);
+    assert(session.init_args_sync.owner == NVX_DMA_OWNER_DEVICE);
+    assert(session.shared_queue_sync.owner == NVX_DMA_OWNER_SHARED);
+    assert(session.boot_memory.radix3_elf_sync.owner == NVX_DMA_OWNER_DEVICE);
     quiesce_result = 1;
     assert(nvx_gsp_platform_shutdown(&session, quiesce, 0) == NVX_GSP_PLATFORM_OK);
     assert(live_allocations == 0U && !bus_master_enabled && !session.attached);
@@ -459,6 +469,8 @@ int main(void)
            NVX_GSP_PLATFORM_STARTUP_FAILED);
     assert(session.recovery_required && session.startup_attempted &&
            session.bus_master_enabled && live_allocations == 3U);
+    assert(session.staged_vbios_sync.owner == NVX_DMA_OWNER_DEVICE &&
+           session.shared_queue_sync.owner == NVX_DMA_OWNER_SHARED);
     assert(nvx_gsp_platform_shutdown(&session, 0, 0) ==
            NVX_GSP_PLATFORM_QUIESCE_FAILED);
     quiesce_result = 0;

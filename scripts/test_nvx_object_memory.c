@@ -240,6 +240,9 @@ int main(void)
     assert(free_after == free_before && allocations == 0U);
     assert(nvx_gpuvm_destroy(&gpuvm) == NVX_GPUVM_OK);
 
+    /* Restore the fake allocator to the CPU identity-mapped range. */
+    physical_base=0x10000000ULL;
+
     /* A failed live page-table flush must quarantine, never free, DMA pages. */
     memset(&manager, 0, sizeof(manager));
     init_gpuvm();

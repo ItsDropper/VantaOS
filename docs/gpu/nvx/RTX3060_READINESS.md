@@ -87,6 +87,26 @@ This is software lifecycle verification only: no physical GSP/RM channel has
 yet been created on a GA106, and the current channel memory descriptors still
 must be backed by real RM-visible mappings before submission.
 
+## Fence-gated submission leases
+
+The submission validator now has a lease layer in
+`include/nvx_submit.h` and `drivers/gpu/nvx/execution/nvx_submit.c`.
+It pins the command buffer and each unique relocation target before the caller
+hands the batch to an engine. Duplicate target references are pinned once.
+Release proceeds in reverse order and preserves its cursor after an unpin
+failure, so a retry does not double-release already completed pins.
+
+`nvx_submit_release_after_fence()` checks the CPU-side NVX timeline before
+releasing a lease: pending, stale, and failed fences retain all pins. The
+timeline itself is not a hardware semaphore; only a trusted completion path
+may signal it. Device loss alone is not proof that DMA has stopped. The caller
+must separately establish engine quiescence before using the lower-level
+release API for recovery.
+
+Strict-warning host tests cover duplicate-target handling, pending-fence
+retention, retry after partial release failure, partial-acquire rollback, and
+device-loss retention. No physical GPU completion source is connected yet.
+
 ## GPU memory lifetime pinning milestone
 
 The NVX GPU memory-object manager now supports explicit per-object lifetime

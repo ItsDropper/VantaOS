@@ -20,7 +20,9 @@ static void *fake_response;
 static size_t fake_response_capacity,fake_response_size;
 static size_t history_size[32];
 static unsigned fail_submission;
+static unsigned fail_submission_2;
 static uint32_t injected_remote_status;
+static uint32_t injected_remote_status_2;
 static uint8_t history[32][4096];
 
 nvx_gsp_rpc_status_t nvx_gsp_rpc_pump(
@@ -66,8 +68,10 @@ nvx_gsp_rpc_status_t nvx_gsp_rpc_submit(
     (void)manager;(void)scratch;(void)scratch_size;
     assert(version==NVX_GSP_RPC_HEADER_VERSION_R535);
     assert(signature==NVX_GSP_RPC_SIGNATURE_R535);
-    assert(request_function==expected_function);
-    assert(response_function==expected_function);
+    assert(request_function==expected_function||
+           (expected_function==NVX_GSP_RPC_FN_RM_ALLOC&&
+            request_function==NVX_GSP_RPC_FN_FREE));
+    assert(response_function==request_function);
     assert(payload_size<=sizeof(captured));
     memcpy(captured,payload,payload_size);captured_size=payload_size;
     if(submissions<32U){history_size[submissions]=payload_size;
@@ -77,14 +81,16 @@ nvx_gsp_rpc_status_t nvx_gsp_rpc_submit(
     fake_response_size=payload_size;
     if(auto_complete&&response&&response_capacity) {
         memset(response,0,response_capacity);
-        if(submissions==fail_submission) {
-            size_t status_offset=request_function==NVX_GSP_RPC_FN_RM_ALLOC?16U:
-                (request_function==NVX_GSP_RPC_FN_FREE?12U:12U);
+        uint32_t remote_status=0U;
+        if(submissions==fail_submission)remote_status=injected_remote_status;
+        if(submissions==fail_submission_2)remote_status=injected_remote_status_2;
+        if(remote_status) {
+            size_t status_offset=request_function==NVX_GSP_RPC_FN_RM_ALLOC?16U:12U;
             if(status_offset+4U<=response_capacity) {
-                response[status_offset]=(uint8_t)injected_remote_status;
-                response[status_offset+1U]=(uint8_t)(injected_remote_status>>8U);
-                response[status_offset+2U]=(uint8_t)(injected_remote_status>>16U);
-                response[status_offset+3U]=(uint8_t)(injected_remote_status>>24U);
+                response[status_offset]=(uint8_t)remote_status;
+                response[status_offset+1U]=(uint8_t)(remote_status>>8U);
+                response[status_offset+2U]=(uint8_t)(remote_status>>16U);
+                response[status_offset+3U]=(uint8_t)(remote_status>>24U);
             }
         }
     }
@@ -347,6 +353,49 @@ int main(void)
             NVX_GSP_RMAPI_OK);
         assert(!objects.vaspace_created&&!objects.device_created&&
                !objects.client_created);
+        /* Allocation failure rolls back only objects that were created. */
+        {
+            unsigned before=submissions;
+            nvx_gsp_rm_core_objects_t failed={0};
+            expected_function=NVX_GSP_RPC_FN_RM_ALLOC;
+            fail_submission=before+2U; /* device allocation returns an RM error */
+            injected_remote_status=0x17U;
+            assert(nvx_gsp_rm_create_core_objects(&manager,0x51U,0x52U,0x53U,
+                0U,UINT64_C(1)<<40U,(UINT64_C(1)<<48U)-1U,scratch,
+                sizeof(scratch),response,sizeof(response),20U,1U,no_delay,NULL,
+                &failed)==NVX_GSP_RMAPI_REMOTE_ERROR);
+            assert(!failed.client_created&&!failed.device_created&&
+                   !failed.vaspace_created&&failed.in_flight_stage==0U);
+            assert(submissions==before+3U); /* root alloc, failed device, free root */
+            assert(le32(history[before+2U]+4U)==0U&&
+                   le32(history[before+2U]+8U)==0x51U);
+            fail_submission=0U;
+        }
+        /* If rollback cannot free a child, retain its parent and report it. */
+        {
+            unsigned before=submissions;
+            nvx_gsp_rm_core_objects_t failed={0};
+            expected_function=NVX_GSP_RPC_FN_RM_ALLOC;
+            fail_submission=before+3U; /* VA-space allocation fails */
+            injected_remote_status=0x17U;
+            fail_submission_2=before+4U; /* device rollback fails */
+            injected_remote_status_2=0x18U;
+            assert(nvx_gsp_rm_create_core_objects(&manager,0x61U,0x62U,0x63U,
+                0U,UINT64_C(1)<<40U,(UINT64_C(1)<<48U)-1U,scratch,
+                sizeof(scratch),response,sizeof(response),20U,1U,no_delay,NULL,
+                &failed)==NVX_GSP_RMAPI_CLEANUP_FAILED);
+            assert(!failed.vaspace_created&&failed.device_created&&
+                   failed.client_created&&failed.in_flight_stage==0U);
+            assert(submissions==before+4U); /* no parent free after child failure */
+            assert(le32(history[before+3U]+4U)==0x61U&&
+                   le32(history[before+3U]+8U)==0x62U);
+            fail_submission=0U;fail_submission_2=0U;
+            expected_function=NVX_GSP_RPC_FN_FREE;
+            assert(nvx_gsp_rm_destroy_core_objects(&manager,&failed,scratch,
+                sizeof(scratch),response,sizeof(response),20U,1U,no_delay,NULL)==
+                NVX_GSP_RMAPI_OK);
+            assert(!failed.client_created&&!failed.device_created);
+        }
         auto_complete=0;
     }
     return 0;

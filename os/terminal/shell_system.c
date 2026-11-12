@@ -90,11 +90,11 @@ void shell_help(void)
     terminal_write("  boot     - Show boot timing information\n");
     terminal_write("  uptime   - Show system uptime\n");
     terminal_write("  mem      - Show physical memory status\n");
-    terminal_write("  heap     - Show kernel heap status and test allocation\n");
+    terminal_write("  kernel heap   - Run kernel heap diagnostics and test allocation\n");
     terminal_write("  history  - Show command history\n");
-    terminal_write("  fault    - Trigger a test page fault\n");
+    terminal_write("  kernel fault  - Trigger a test page fault (dangerous)\n");
     terminal_write("  echo     - Print text\n");
-    terminal_write("  reboot   - Reboot the system\n");
+    terminal_write("  kernel reboot - Reboot the system\n");
     terminal_write("  pwd      - Show current directory\n");
     terminal_write("  ls       - List files and directories\n");
     terminal_write("  cd       - Change directory\n");
@@ -109,7 +109,7 @@ void shell_help(void)
     terminal_write("  write    - Write text; -F permits overwriting non-empty files\n");
     terminal_write("  mkdir    - Create a directory; -F makes existing directories OK\n");
     terminal_write("  touch    - Create an empty file; -F makes existing files OK\n");
-    terminal_write("  kill     - Terminate a process; -F permits kernel-process termination\n");
+    terminal_write("  kernel kill - Terminate a process (privileged operation)\n");
     terminal_write("  net      - Show network devices, IPv4 config and counters\n");
     terminal_write("  net poll - Poll network receive queues\n");
     terminal_write("  net config <index> <ip> <mask> <gateway> - Set static IPv4\n");
@@ -117,7 +117,7 @@ void shell_help(void)
     terminal_write("  cp       - Copy a file; -F permits overwriting\n");
     terminal_write("  mv       - Rename/move a path; -F permits replacing a file\n");
     terminal_write("  rm       - Delete a path; -F permits deleting directories\n");
-    terminal_write("  kill     - Terminate a process; -F permits kernel-process termination\n");
+    terminal_write("  kernel kill - Terminate a process (privileged operation)\n");
     terminal_write("  net      - Show network devices, IPv4 config and counters\n");
     terminal_write("  net connect - Obtain DHCP IPv4/gateway/DNS automatically\n");
     terminal_write("  net dhcp  - Alias for net connect\n");

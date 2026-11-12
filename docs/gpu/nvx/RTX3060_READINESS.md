@@ -50,7 +50,7 @@ Both defects would only have appeared on real hardware as a channel that silentl
 
 ### Not yet audited
 
-USERD `GP_GET`/`GP_PUT` offsets and the usermode doorbell (NVX takes borrowed pointers and does not hardcode them), `NVOS46`/`NVOS47` map-memory layouts, the RM memory-allocation parameter structs, and the GSP message-queue and init-argument layouts, which depend on the exact firmware release. Audit these against the headers matching the firmware you load before trusting them.
+USERD `GP_GET`/`GP_PUT` offsets and the usermode doorbell (NVX takes borrowed pointers and does not hardcode them), plus the GSP message-queue and init-argument layouts, which depend on the exact firmware release. Audit these against the headers matching the firmware you load before trusting them.
 
 Do not add a per-SKU source file merely to record an identity. Shared GA10x/Ampere policy belongs in common code unless a documented hardware difference requires a backend.
 

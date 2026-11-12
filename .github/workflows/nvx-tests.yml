@@ -23,8 +23,6 @@ on:
       - "include/nvx_gsp_context_dma.h"
       - "include/nvx_gsp_memory.h"
       - "scripts/test_nvx_gsp_memory.c"
-      - "include/nvx_gsp_memory.h"
-      - "scripts/test_nvx_gsp_memory.c"
       - "include/nvx_submit.h"
       - "scripts/test_nvx_gsp_ce_runtime.c"
       - "scripts/test_nvx_dma.c"
@@ -39,6 +37,8 @@ on:
   pull_request:
     paths:
       - "drivers/gpu/nvx/**"
+      - "include/nvx_gsp_memory.h"
+      - "scripts/test_nvx_gsp_memory.c"
       - "include/nvx_gsp_boot_memory.h"
       - "include/nvx_gsp_ce.h"
       - "scripts/test_nvx_gsp_ce_runtime.c"

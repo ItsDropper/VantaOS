@@ -136,6 +136,36 @@ Host tests cover multiple pins, release exclusion, balanced unpin, underflow,
 and overflow. The API is a lifetime primitive; it does not itself submit work,
 observe a GPU fence, or prove quiescence. Callers must enforce that contract.
 
+## RM system-memory object lifecycle
+
+NVX now has a typed owner for NVIDIA's public `NV01_MEMORY_SYSTEM` class
+(`0x3e`) using the `NV_MEMORY_ALLOCATION_PARAMS` payload from the public
+64-bit `nvos.h` ABI. The structure is pinned by size and field-offset
+assertions, and the class/parameter pairing was checked against NVIDIA's
+`open-gpu-kernel-modules` source. This deliberately does not use
+`NV01_MEMORY_SYSTEM_DYNAMIC` (`0x70`): NVIDIA's own deprecated allocation
+path documents that this class does not allow DMA mappings.
+
+The wrapper submits the RM allocation, waits for its completion, decodes the
+returned size and inclusive limit from the complete allocation response, and
+tracks free/recovery ownership. If RM reports allocation success but the
+returned parameter payload is truncated or malformed, NVX retains the remote
+object in a destroyable state rather than discarding the handle. Timeouts and
+transport errors preserve the in-flight RPC handle; failed frees preserve the
+created memory object. The caller supplies version-matched NVOS32 flags and
+attributes rather than relying on guessed placement or cache-policy values.
+
+Strict-warning host tests cover ABI offsets, successful allocation/free,
+invalid alignment, timeout and transport recovery, malformed-result ownership,
+remote free failure, and retryable local RPC-handle release.
+
+**This is an RM object lifecycle milestone, not yet CPU/GPU memory visibility.**
+The API does not yet establish a CPU mapping, prove the returned allocation is
+usable by CE, or perform NVOS46 mapping. The next step is to add and audit the
+correct RM CPU-map path (where required), then create a CTXDMA object over this
+memory, map it into GPUVA, and use that memory for channel buffers and a real
+copy test. No GA106 hardware allocation has been verified.
+
 ## RM context-DMA object lifecycle
 
 NVX now has a typed wrapper for NVIDIA's public `NV01_CONTEXT_DMA` class
@@ -176,8 +206,9 @@ response decode failure, request-range overflow, retryable RPC-handle release,
 and the guarantee that recovery does not submit a duplicate operation.
 This is lifecycle verification only. It does not audit the NVOS46/NVOS47 wire
 layout, create the underlying RM memory/DMA objects, or prove that the
-returned offset is usable on GA106. The RM object allocation ABI and actual
-GSP-RM mapping round-trip remain explicit hardware-readiness gates.
+returned offset is usable on GA106. The RM system-memory object ABI is now implemented and host-tested, but its
+first real allocation, CPU mapping, and actual GSP-RM DMA mapping round-trip
+remain explicit hardware-readiness gates.
 
 ## Mandatory first hardware experiment
 
@@ -211,9 +242,9 @@ Do not mark a milestone complete from PCI detection, firmware parsing, a success
 
 1. Reconcile the physical firmware-provider contract and the remaining SEC2-to-GSP handoff inputs.
 2. Complete a version-matched GSP launch and first GSP-RM RPC on hardware.
-3. Validate actual GPUVM mapping and invalidation behavior.
-4. Provision a real channel and prove one copy-engine operation end to end.
-5. Only then begin graphics-engine context/shader/render-target work.
-6. Build the userspace graphics ABI and Vulkan path after execution, synchronization, memory, and presentation contracts are stable.
+3. Create an NV01_MEMORY_SYSTEM object, validate its returned size/limit, and establish a CPU mapping with the version-matched RM API.
+4. Create CTXDMA over that memory, perform NVOS46 GPU mapping, and validate actual GPUVM mapping and invalidation behavior.
+5. Back GPFIFO, USERD, fence and copy buffers with those mappings; prove one CPU-verified copy-engine operation end to end.
+6. Only then begin graphics-engine context/shader/render-target work and later the userspace graphics ABI/Vulkan path.
 
 Every change should identify the exact evidence level, cite public register/ABI references in the reverse-engineering notebook, and include strict-warning host tests for independently testable behavior.

@@ -280,6 +280,9 @@ int main(void)
     nvx_gsp_channel_ring_t ring = {0};
     uint8_t scratch[512], response[512];
 
+    assert(nvx_gsp_channel_ring_destroy(&manager, &ring, scratch,
+        sizeof(scratch), response, sizeof(response), 20U, 1U, delay, NULL) ==
+        NVX_GSP_RMAPI_OK);
     create_ring(&manager, &ring, scratch, response);
     assert(nvx_gsp_channel_ring_acquire(&ring) == NVX_GSP_RMAPI_OK);
     assert(nvx_gsp_channel_ring_destroy(&manager, &ring, scratch,

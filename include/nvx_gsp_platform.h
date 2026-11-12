@@ -93,12 +93,15 @@ typedef struct nvx_gsp_platform_session {
     uint8_t static_info[NVX_GSP_PLATFORM_WORK_CAPACITY];
     uint8_t scratch[NVX_GSP_PLATFORM_WORK_CAPACITY];
     size_t encoded_system_info_size;
+    size_t static_info_size;
+    uint64_t wpr_metadata_phys;
     uint32_t fuse_version;
     uint8_t attached;
     uint8_t bus_master_enabled;
     uint8_t startup_attempted;
     uint8_t gsp_rm_initialized;
     uint8_t recovery_required;
+    uint8_t quiesced;
 } nvx_gsp_platform_session_t;
 
 /* Validate all caller-supplied facts and sizing before touching PCI or hardware. */

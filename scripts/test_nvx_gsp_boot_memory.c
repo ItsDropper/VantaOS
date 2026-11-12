@@ -4,7 +4,7 @@
  * This file is part of VantaOS and is licensed under the MIT License.
  * See the LICENSE file in the project root for the full license text.
  */
-#include "nvx_gsp_boot_memory.h"
+#include "nvx_gsp_boot_package.h"
 
 #include <assert.h>
 #include <stdlib.h>
@@ -139,6 +139,52 @@ nvx_gsp_bootloader_status_t nvx_gsp_bootloader_prepare(
     return NVX_GSP_BOOTLOADER_OK;
 }
 
+
+static unsigned provider_release_calls;
+static int provider_request(const char *name, nvx_firmware_blob_t *out,
+                            void *context)
+{
+    (void)context;
+    if (!name || !out)
+        return 0;
+    if (strstr(name, "/gsp/gsp-") != 0) {
+        out->data = runtime;
+        out->size = sizeof(runtime);
+    } else if (strstr(name, "/gsp/ucodes-") != 0) {
+        out->data = bootloader_blob;
+        out->size = sizeof(bootloader_blob);
+    } else if (strstr(name, "/gsp/booter_load-") != 0) {
+        out->data = booter_load_blob;
+        out->size = sizeof(booter_load_blob);
+    } else if (strstr(name, "/gsp/booter_unload-") != 0) {
+        out->data = booter_unload_blob;
+        out->size = sizeof(booter_unload_blob);
+    } else if (strstr(name, "/gsp/bootloader-") != 0) {
+        out->data = bootloader_blob;
+        out->size = sizeof(bootloader_blob);
+    } else {
+        return 0;
+    }
+    out->release_context = 0;
+    return 1;
+}
+
+static int provider_verify(const char *name,
+                          const nvx_firmware_blob_t *blob, void *context)
+{
+    (void)context;
+    return name != 0 && blob != 0 && blob->data != 0 && blob->size != 0U;
+}
+
+static void provider_release(nvx_firmware_blob_t *blob, void *context)
+{
+    (void)context;
+    if (blob) {
+        ++provider_release_calls;
+        memset(blob, 0, sizeof(*blob));
+    }
+}
+
 static nvx_gsp_wpr_layout_t planned_layout(void)
 {
     return (nvx_gsp_wpr_layout_t){
@@ -270,5 +316,68 @@ int main(void)
     assert(!memory.radix3_elf.acquired && !memory.bootloader_payload.acquired &&
            !memory.signature.acquired && !memory.wpr_metadata.acquired);
     assert(release_calls == 5U);
+
+    /* One owner composes provider acquisition, SYSRAM staging and WPR metadata. */
+    {
+        nvx_firmware_provider_t provider = {
+            .request = provider_request,
+            .verify = provider_verify,
+            .release = provider_release
+        };
+        nvx_gsp_boot_package_t package = {0};
+        nvx_gsp_wpr_layout_t platform_layout = planned_layout();
+        nvx_gsp_wpr_layout_t prepared_layout = {0};
+        nvx_mmio_region_t package_bar0 = {
+            .base = (volatile uint8_t *)(void *)fake_bar,
+            .length = sizeof(fake_bar)
+        };
+
+        allocation_calls = 0U;
+        release_calls = 0U;
+        provider_release_calls = 0U;
+        fail_allocation_at = 0U;
+        assert(nvx_gsp_boot_package_prepare(&provider, "ga102", "1.0",
+            &package_bar0, &platform_layout, &package, &prepared_layout) ==
+            NVX_GSP_BOOT_PACKAGE_OK);
+        assert(package.prepared == 1U && package.firmware.acquired == 1U);
+        assert(package.memory.acquired == 1U && package.memory.booters_staged == 1U);
+        assert(package.wpr_metadata_phys == package.memory.wpr_metadata.gpu_address);
+        assert(prepared_layout.sysmem_radix3_addr ==
+               package.memory.radix3_elf.gpu_address);
+        assert(prepared_layout.sysmem_bootloader_addr ==
+               package.memory.bootloader_payload.gpu_address);
+        assert(nvx_gsp_wpr_meta_validate((const nvx_gsp_wpr_meta_v1_t *)
+            package.memory.wpr_metadata.cpu_address) == NVX_GSP_WPR_OK);
+
+        /* Uncertain device ownership retains every package allocation and firmware lease. */
+        assert(nvx_dma_sync_for_device(&package.memory.radix3_elf_sync, 0U,
+            package.memory.radix3_elf.size) == NVX_DMA_SYNC_OK);
+        assert(nvx_gsp_boot_package_release(&package) == NVX_GSP_BOOT_PACKAGE_BUSY);
+        assert(package.prepared == 1U && package.firmware.acquired == 1U);
+        assert(provider_release_calls == 0U && release_calls == 0U);
+        assert(nvx_dma_sync_for_cpu(&package.memory.radix3_elf_sync, 0U,
+            package.memory.radix3_elf.size) == NVX_DMA_SYNC_OK);
+        assert(nvx_gsp_boot_package_release(&package) == NVX_GSP_BOOT_PACKAGE_OK);
+        assert(package.prepared == 0U && package.firmware.acquired == 0U);
+        assert(provider_release_calls == NVX_GSP_COMPONENT_COUNT);
+        assert(release_calls == 6U);
+    }
+
+    /* Invalid platform inputs fail before requesting any firmware component. */
+    {
+        nvx_firmware_provider_t provider = {
+            .request = provider_request,
+            .verify = provider_verify,
+            .release = provider_release
+        };
+        nvx_gsp_boot_package_t package = {0};
+        nvx_gsp_wpr_layout_t platform_layout = planned_layout();
+        nvx_gsp_wpr_layout_t prepared_layout = {0};
+        unsigned before = provider_release_calls;
+        assert(nvx_gsp_boot_package_prepare(&provider, "ga102", "1.0",
+            &bar0, &platform_layout, &package, &platform_layout) ==
+            NVX_GSP_BOOT_PACKAGE_INVALID_ARGUMENT);
+        assert(provider_release_calls == before && !package.prepared);
+    }
     return 0;
 }

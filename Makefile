@@ -20,6 +20,7 @@ LDFLAGS  := -m elf_x86_64 --no-warn-rwx-segments -T build/linker.ld
 
 ifneq ($(VANTAOS_DEBUG_PORT),)
 CFLAGS += -DVANTAOS_DEBUG_PORT
+ASFLAGS += -D VANTAOS_DEBUG_PORT=1
 UEFI_DEBUG_FLAGS := -DVANTAOS_DEBUG_PORT
 endif
 

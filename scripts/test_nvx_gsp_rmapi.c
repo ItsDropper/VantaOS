@@ -203,6 +203,39 @@ int main(void)
         assert(mapped_offset==0U);
     }
 
+    /* Pending operations retain their handle on timeout and decode only
+       complete, bounded responses. */
+    {
+        auto_complete=0;
+        fake_state=NVX_GSP_RPC_PENDING;
+        fake_response_size=32U;
+        op.function=NVX_GSP_RPC_FN_RM_ALLOC;
+        op.handle.valid=1U;
+        op.response_size=0U;
+        memset(response,0,sizeof(response));
+        assert(nvx_gsp_rmapi_wait(&manager,&op,scratch,sizeof(scratch),
+            response,sizeof(response),2U,1U,no_delay,NULL)==
+            NVX_GSP_RMAPI_TIMEOUT);
+        assert(op.handle.valid&&op.response_size==0U);
+
+        auto_complete=1;
+        fake_state=NVX_GSP_RPC_COMPLETE;
+        response[16U]=0U;
+        assert(nvx_gsp_rmapi_wait(&manager,&op,scratch,sizeof(scratch),
+            response,sizeof(response),2U,1U,no_delay,NULL)==
+            NVX_GSP_RMAPI_OK);
+        assert(op.handle.valid&&op.response_size==32U);
+
+        response[16U]=5U;
+        assert(nvx_gsp_rmapi_wait(&manager,&op,scratch,sizeof(scratch),
+            response,sizeof(response),2U,1U,no_delay,NULL)==
+            NVX_GSP_RMAPI_REMOTE_ERROR);
+        fake_state=NVX_GSP_RPC_DEVICE_LOST;
+        assert(nvx_gsp_rmapi_wait(&manager,&op,scratch,sizeof(scratch),
+            response,sizeof(response),2U,1U,no_delay,NULL)==
+            NVX_GSP_RMAPI_RPC_ERROR);
+    }
+
     {
         nvx_gsp_rm_core_objects_t objects;
         auto_complete=1;

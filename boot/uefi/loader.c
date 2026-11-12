@@ -658,6 +658,9 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* system_tab
 
     __asm__ volatile ("cli");
     serial_write("VANTAOS_UEFI_EXIT_BOOT_SERVICES_OK\n");
+    serial_write("VANTAOS_UEFI_KERNEL_ENTRY_ADDRESS=");
+    serial_write_hex64(entry_address);
+    serial_write("\n");
     serial_write("VANTAOS_UEFI_KERNEL_HANDOFF\n");
 
     /* The kernel entry uses SysV x86-64, unlike UEFI service calls. */

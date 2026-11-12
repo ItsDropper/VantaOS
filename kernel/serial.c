@@ -22,6 +22,8 @@ static inline void serial_out8(uint16_t port, uint8_t value)
     __asm__ volatile ("outb %0, %1" : : "a"(value), "Nd"(port));
 }
 
+static int serial_available;
+
 static inline uint8_t serial_in8(uint16_t port)
 {
     uint8_t value;
@@ -38,10 +40,15 @@ void serial_initialize(void)
     serial_out8(SERIAL_COM1 + 3U, 0x03U);
     serial_out8(SERIAL_COM1 + 2U, 0xC7U);
     serial_out8(SERIAL_COM1 + 4U, 0x0BU);
+    /* Do not spend a spin budget per character when legacy COM1 is absent. */
+    serial_out8(SERIAL_COM1 + 7U, 0x5AU);
+    serial_available = serial_in8(SERIAL_COM1 + 7U) == 0x5AU;
 }
 
 static void serial_write_char(char value)
 {
+    if (!serial_available)
+        return;
     for (uint32_t spin = 0; spin < SERIAL_SPIN_LIMIT; spin++)
     {
         if (serial_in8(SERIAL_COM1 + 5U) & 0x20U)

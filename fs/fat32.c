@@ -341,23 +341,31 @@ static uint32_t fat32_allocate_one(void)
         uint32_t value;
         int entry_status = fat32_allocation_entry(cluster, &value);
         if (entry_status == 0)
+        {
+            FAT32_WRITE_DIAG("VANTAOS_FAT32_ALLOC_FAIL_FAT_READ");
             return 0;
+        }
         /* Do not allocate a cluster with inconsistent FAT mirrors, but keep
            searching: one damaged entry must not make the whole volume appear
            out of free space when later clusters are usable. */
         if (entry_status < 0 || value != 0U)
             continue;
         if (!fat32_set_raw_entry(cluster, FAT32_EOC_MIN))
+        {
+            FAT32_WRITE_DIAG("VANTAOS_FAT32_ALLOC_FAIL_FAT_WRITE");
             return 0;
+        }
         uint32_t base = cluster_lba(cluster);
         if (base == FAT32_INVALID_LBA)
         {
+            FAT32_WRITE_DIAG("VANTAOS_FAT32_ALLOC_FAIL_CLUSTER_LBA");
             (void)fat32_set_raw_entry(cluster, 0);
             return 0;
         }
         for (uint32_t s = 0; s < sectors_per_cluster; s++)
             if (!fat32_write_sector(base + s, zero))
             {
+                FAT32_WRITE_DIAG("VANTAOS_FAT32_ALLOC_FAIL_ZERO");
                 (void)fat32_set_raw_entry(cluster, 0);
                 return 0;
             }

@@ -142,8 +142,22 @@ int main(void)
     assert(nvx_gsp_context_dma_destroy(&manager,&object,scratch,sizeof(scratch),
         response,sizeof(response),10U,1U,delay,NULL)==NVX_GSP_RMAPI_OK);
 
-    /* Reject inverted limits and corrupted state without touching RM. */
+    /* Reject aliased RM handles and object/RPC-buffer overlap. */
     unsigned before=alloc_calls;
+    assert(nvx_gsp_context_dma_create(&manager,&object,1U,2U,3U,3U,0U,
+        0U,0U,0xFFFU,scratch,sizeof(scratch),response,sizeof(response),
+        10U,1U,delay,NULL)==NVX_GSP_RMAPI_INVALID_ARGUMENT);
+    union {
+        nvx_gsp_context_dma_t object;
+        uint8_t bytes[sizeof(nvx_gsp_context_dma_t)];
+    } alias;
+    memset(&alias,0,sizeof(alias));
+    assert(nvx_gsp_context_dma_create(&manager,&alias.object,1U,2U,3U,4U,0U,
+        0U,0U,0xFFFU,alias.bytes,sizeof(alias.bytes),response,sizeof(response),
+        10U,1U,delay,NULL)==NVX_GSP_RMAPI_INVALID_ARGUMENT);
+    assert(alloc_calls==before);
+
+    /* Reject inverted limits and corrupted state without touching RM. */
     assert(nvx_gsp_context_dma_create(&manager,&object,1U,2U,3U,4U,0U,
         0U,0x1000U,0xFFFU,scratch,sizeof(scratch),response,sizeof(response),
         10U,1U,delay,NULL)==NVX_GSP_RMAPI_INVALID_ARGUMENT);

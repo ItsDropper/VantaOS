@@ -47,7 +47,8 @@ typedef struct nvx_memory_info {
     unsigned access;
 } nvx_memory_info_t;
 /*
- * Allocate this manager in static/long-lived storage; it is intentionally large.
+ * Zero-initialize this manager before first use and keep it in static/long-lived
+ * storage; it is intentionally large.
  * get_info() returns a borrowed CPU pointer: pin the handle while accessing it
  * or while a GPU may access its mapping, and unpin only after completion.
  */
@@ -61,6 +62,7 @@ typedef struct nvx_memory_manager {
     uint8_t initialized;
 } nvx_memory_manager_t;
 nvx_memory_status_t nvx_memory_init(nvx_memory_manager_t *, nvx_gpuvm_t *, unsigned);
+/* Access must include READ; WRITE enables a read/write PTE. */
 nvx_memory_status_t nvx_memory_alloc_access(nvx_memory_manager_t *, size_t,
     nvx_memory_kind_t, unsigned access, nvx_memory_handle_t *);
 nvx_memory_status_t nvx_memory_alloc(nvx_memory_manager_t *, size_t, nvx_memory_kind_t, nvx_memory_handle_t *);

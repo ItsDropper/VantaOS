@@ -103,7 +103,7 @@ static nvx_gsp_memory_allocation_params_t params(void)
 {
     nvx_gsp_memory_allocation_params_t p = {0};
     p.owner = UINT32_C(0x7368696D); /* NVIDIA legacy shim owner tag. */
-    p.type = 1U; /* NVOS32_TYPE_IMAGE; caller may select another SDK type. */
+    p.type = 0U; /* NVOS32_TYPE_IMAGE from NVIDIA's public nvos.h. */
     p.size = 16384U;
     p.alignment = 4096U;
     return p;

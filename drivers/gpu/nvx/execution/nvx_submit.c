@@ -7,6 +7,7 @@
 #include "nvx_submit.h"
 
 #include <stdint.h>
+#include <string.h>
 
 static int nvx_submit_add_overflow(uint64_t a, uint64_t b, uint64_t *out)
 {
@@ -115,5 +116,80 @@ nvx_submit_status_t nvx_submit_validate_batch(
     }
 
     *out_report = report;
+    return NVX_SUBMIT_OK;
+}
+
+static int same_memory_handle(const nvx_memory_handle_t *a,
+                              const nvx_memory_handle_t *b)
+{
+    return a->token == b->token && a->slot == b->slot &&
+           a->generation == b->generation;
+}
+
+nvx_submit_status_t nvx_submit_release_batch(
+    nvx_memory_manager_t *memory, nvx_submit_lease_t *lease)
+{
+    if (!memory || !lease)
+        return NVX_SUBMIT_INVALID_ARGUMENT;
+    if (!lease->active || lease->release_index > lease->count ||
+        lease->count > NVX_SUBMIT_MAX_PINNED_OBJECTS)
+        return NVX_SUBMIT_INVALID_ARGUMENT;
+
+    while (lease->release_index != 0U) {
+        uint32_t index = lease->release_index - 1U;
+        if (nvx_memory_unpin(memory, &lease->handles[index]) != NVX_MEMORY_OK)
+            return NVX_SUBMIT_MEMORY_ERROR;
+        lease->release_index = index;
+    }
+    memset(lease, 0, sizeof(*lease));
+    return NVX_SUBMIT_OK;
+}
+
+nvx_submit_status_t nvx_submit_acquire_batch(
+    nvx_memory_manager_t *memory,
+    const nvx_memory_handle_t *command_buffer,
+    size_t command_bytes,
+    const nvx_relocation_t *relocations,
+    size_t relocation_count,
+    nvx_submit_lease_t *lease,
+    nvx_submit_report_t *out_report)
+{
+    nvx_submit_status_t status;
+    if (!lease || lease->active || lease->count != 0U ||
+        lease->release_index != 0U)
+        return NVX_SUBMIT_INVALID_ARGUMENT;
+
+    status = nvx_submit_validate_batch(memory, command_buffer, command_bytes,
+        relocations, relocation_count, out_report);
+    if (status != NVX_SUBMIT_OK)
+        return status;
+
+    status = nvx_memory_pin(memory, command_buffer) == NVX_MEMORY_OK ?
+        NVX_SUBMIT_OK : NVX_SUBMIT_MEMORY_ERROR;
+    if (status != NVX_SUBMIT_OK)
+        return status;
+    lease->handles[lease->count++] = *command_buffer;
+    lease->active = 1U;
+    lease->release_index = lease->count;
+
+    for (size_t i = 0U; i < relocation_count; ++i) {
+        const nvx_memory_handle_t *target = &relocations[i].target;
+        int duplicate = 0;
+        for (uint32_t j = 0U; j < lease->count; ++j) {
+            if (same_memory_handle(&lease->handles[j], target)) {
+                duplicate = 1;
+                break;
+            }
+        }
+        if (duplicate)
+            continue;
+        if (lease->count >= NVX_SUBMIT_MAX_PINNED_OBJECTS ||
+            nvx_memory_pin(memory, target) != NVX_MEMORY_OK) {
+            (void)nvx_submit_release_batch(memory, lease);
+            return NVX_SUBMIT_MEMORY_ERROR;
+        }
+        lease->handles[lease->count++] = *target;
+        lease->release_index = lease->count;
+    }
     return NVX_SUBMIT_OK;
 }

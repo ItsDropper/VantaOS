@@ -6,6 +6,7 @@
 #include "serial.h"
 static void put8(uint8_t v){static const char d[]="0123456789ABCDEF";char b[2]={d[v>>4],d[v&15U]};serial_write_bytes(b,2U);}
 static void put16(uint16_t v){put8((uint8_t)(v>>8));put8((uint8_t)v);}
+static void put32(uint32_t v){put16((uint16_t)(v>>16));put16((uint16_t)v);}
 static void put64(uint64_t v){put16((uint16_t)(v>>48));put16((uint16_t)(v>>32));put16((uint16_t)(v>>16));put16((uint16_t)v);}
 void hda_initialize(void)
 {
@@ -20,13 +21,29 @@ void hda_initialize(void)
    put8(d->bus);serial_write(":");put8(d->slot);serial_write(".");put8(d->function);
    serial_write(" status=");put8((uint8_t)status);serial_write("\n");continue;
   }
+  hda_probe_status_t query_status=hda_query_controller_codecs(d,&info);
+  if(query_status!=HDA_PROBE_OK)
+  {
+   serial_write("VANTAOS_HW_HDA_CODEC_QUERY_SKIPPED status=");
+   put8((uint8_t)query_status);
+   serial_write("\n");
+  }
   serial_write("VANTAOS_HW_HDA_CONTROLLER bdf=");
   put8(d->bus);serial_write(":");put8(d->slot);serial_write(".");put8(d->function);
   serial_write(" bar0=0x");put64(info.register_base);
   serial_write(" version=");put8(info.version_major);serial_write(".");put8(info.version_minor);
   serial_write(" gcap=0x");put16(info.capabilities);
   serial_write(" codec_mask=0x");put16(info.codec_presence);
+  serial_write(" codec_queries=0x");put16(info.codec_query_mask);
   serial_write(" reset=");serial_write(info.controller_in_reset?"yes":"no");
   serial_write("\n");
+  for(uint8_t codec=0U;codec<16U;++codec)
+  {
+   if((info.codec_query_mask&(uint16_t)(1U<<codec))==0U)continue;
+   serial_write("VANTAOS_HW_HDA_CODEC address=");put8(codec);
+   serial_write(" vendor=0x");put32(info.codec_vendor_id[codec]);
+   serial_write(" revision=0x");put32(info.codec_revision_id[codec]);
+   serial_write("\n");
+  }
  }
 }

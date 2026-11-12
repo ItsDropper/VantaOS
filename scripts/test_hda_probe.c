@@ -19,7 +19,9 @@ int main(void){
  reset();io=1;assert(hda_probe_controller(&d,&out)==HDA_PROBE_INVALID_BAR);assert(!maps);
  reset();map_fail=1;assert(hda_probe_controller(&d,&out)==HDA_PROBE_MAPPING_FAILED);assert(!unmaps);
  reset();regs[0]=regs[1]=0xFF;assert(hda_probe_controller(&d,&out)==HDA_PROBE_INVALID_REGISTERS);assert(unmaps==1);
- reset();assert(hda_probe_controller(&d,&out)==HDA_PROBE_OK);assert(out.register_base==bar&&out.capabilities==0x1234);assert(out.version_major==2&&out.version_minor==1);assert(out.codec_presence==5&&!out.controller_in_reset);assert(maps==1&&unmaps==1&&command==2);
+ reset();assert(hda_probe_controller(&d,&out)==HDA_PROBE_OK);assert(out.register_base==bar&&out.capabilities==0x1234);assert(out.version_major==2&&out.version_minor==1);assert(out.codec_presence==5&&!out.controller_in_reset);
+ assert(out.codec_query_mask==0U&&out.codec_vendor_id[0]==0U);
+ assert(*(uint32_t *)(regs+0x60U)==0U&&*(uint32_t *)(regs+0x68U)==0U);assert(maps==1&&unmaps==1&&command==2);
  reset();regs[8]=0;assert(hda_probe_controller(&d,&out)==HDA_PROBE_OK&&out.controller_in_reset);
  reset();unmap_fail=1;assert(hda_probe_controller(&d,&out)==HDA_PROBE_UNMAP_FAILED);assert(out.register_base==0);
  puts("HDA passive controller and codec inventory tests passed.");return 0;

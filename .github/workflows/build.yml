@@ -168,9 +168,16 @@ jobs:
       - name: Test passive HDA controller and codec inventory
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude -Idrivers/audio \
-            scripts/test_hda_probe.c drivers/audio/hda.c \
+            scripts/test_hda_probe.c drivers/audio/hda.c drivers/audio/hda_verb.c \
             -o /tmp/vantaos-hda-probe-test
           /tmp/vantaos-hda-probe-test
+
+      - name: Test bounded HDA immediate codec queries
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_hda_verb.c drivers/audio/hda_verb.c \
+            -o /tmp/vantaos-hda-verb-test
+          /tmp/vantaos-hda-verb-test
 
       - name: Test Intel UHD 620 identification and safe GPU backend gating
         run: |

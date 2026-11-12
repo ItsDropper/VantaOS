@@ -13,6 +13,7 @@ VantaOS is an experimental x86-64 OS. Source code for a driver is not proof that
 | Graphics/framebuffer | UEFI GOP and Multiboot framebuffer handoff validate 32-bit RGB layout, physical range, pitch, and mapping bounds; non-Bochs scanout uses uncached MMIO mappings and accepts framebuffer addresses below the architectural 52-bit physical limit | Software layout tests and CI boot/screenshot paths; high-address GOP hardware and physical UHD 620 scanout remain unverified |
 | Intel UHD 620 identification | Intel PCI ID 8086:5917 is classified as Kaby Lake Gen9.5; the Skylake-only Gen9 runtime is explicitly not started for this device | Read-only identity only; no UHD 620 display modesetting, acceleration, power management, or physical validation |
 | Keyboard/mouse | PS/2 and USB HID paths exist; bounded HID-over-I2C report transport supports standard keyboard, mouse, and absolute touchpad pointer movement and two-contact vertical scrolling | Host parser/PIO tests cover software paths; GPIO interrupt delivery is not implemented; physical Intel Serial IO compatibility, contacts beyond two, horizontal gestures, tap-to-click, and device-specific firmware remain unverified |
+| Audio (HDA) | Passive controller inventory plus bounded vendor/revision GET_PARAMETER queries when firmware has already left the controller active; no reset, DMA, bus-master changes, or stream setup | Host tests cover stale status, busy/response timeouts, and register faults; PCM streams, DMA rings, playback, and physical codec validation remain unimplemented |
 | AHCI/SATA groundwork | Host-tested PRDT builder and ABAR validator; read-only PCI discovery probes CAP/PI only for controllers whose I/O decode, memory decode, and bus mastering are disabled | Not hardware support; active-controller handoff, HBA startup, DMA command engine, interrupts, recovery, and block-device integration remain unimplemented |
 | PCI/legacy ATA PIO | IDE-compatible primary/secondary channel probing, bounded LBA28 reads/writes, and shared host-tested request-range validation | Physical controller compatibility and broad error-recovery behavior unverified; this is not an AHCI/SATA driver |
 | PCIe extended configuration | ACPI MCFG region validation and read-only extended-capability traversal are implemented; malformed links are host-tested | Real ECAM firmware tables and physical PCIe devices are not yet hardware-validated |
@@ -58,14 +59,16 @@ A useful support claim is specific, e.g. “boots to the desktop in QEMU with 25
 ## High Definition Audio (HDA) bring-up boundary
 
 The HDA probe accepts only PCI class 04:03 programming interface 00 with an
-assigned, page-aligned BAR0 and firmware-enabled memory decoding. It maps the
-first 4 KiB of the HDA register aperture and reads GCAP, VMIN/VMAJ, GCTL and
-STATESTS. It never changes PCI command state, writes HDA registers, resets the
-controller, starts CORB/RIRB or stream DMA, or claims that a codec is usable.
-A set STATESTS bit only indicates a codec address reported by the controller;
-it does not establish valid pin configuration, jack detection, or PCM output.
-Controllers with disabled MMIO decode or invalid resources are skipped without
-modifying device state.
+assigned, page-aligned BAR0 and firmware-enabled memory decoding. Its passive
+inventory maps the first 4 KiB and reads GCAP, VMIN/VMAJ, GCTL and STATESTS
+without writing registers. A separate bounded query path may issue HDA
+GET_PARAMETER verbs for vendor and revision IDs only when firmware has already
+left the controller out of reset. It does not reset the controller, change PCI
+command state, enable bus mastering, start CORB/RIRB or stream DMA, or configure
+codec widgets. A set STATESTS bit only indicates a codec address reported by
+the controller; a successful vendor query still does not establish valid pin
+configuration, jack detection, or PCM output. Controllers with disabled MMIO
+decode or invalid resources are skipped without modifying device state.
 
 ## ACPI namespace table discovery
 

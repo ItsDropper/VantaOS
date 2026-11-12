@@ -45,6 +45,20 @@ int pci_test_ecam_read32(uint16_t segment, uint8_t bus, uint8_t slot,
     return 0;
 }
 
+int pci_test_ecam_write32(uint16_t segment, uint8_t bus, uint8_t slot,
+                          uint8_t function, uint16_t offset,
+                          uint32_t value)
+{
+    (void)segment;
+    (void)bus;
+    (void)slot;
+    (void)function;
+    if ((offset & 3U) != 0U || offset > 0xFCU)
+        return 0;
+    config_space[offset / 4U] = value;
+    return 1;
+}
+
 void pci_test_outl(uint16_t port, uint32_t value)
 {
     if (port == CONFIG_ADDRESS_PORT) { selected_address = value; return; }

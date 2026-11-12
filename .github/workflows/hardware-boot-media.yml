@@ -161,7 +161,7 @@ jobs:
             -device isa-debugcon,iobase=0x402,chardev=ovmfdebug \
             -chardev file,id=vantadebug,path=uefi-debug.log \
             -device isa-debugcon,iobase=0xe9,chardev=vantadebug \
-            -monitor none -no-reboot
+            -monitor none -no-reboot -d int,cpu_reset -D qemu-int.log
           result=$?
           set -e
           if [ "$result" -ne 124 ]; then
@@ -209,5 +209,6 @@ jobs:
             uefi-hardware-test.log
             uefi-debug.log
             ovmf-debug.log
+            qemu-int.log
           if-no-files-found: warn
           retention-days: 30

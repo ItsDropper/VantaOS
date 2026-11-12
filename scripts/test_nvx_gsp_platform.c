@@ -62,7 +62,7 @@ static nvx_gsp_platform_config_t valid_config(struct pci_device *device,
     config.firmware_provider = provider;
     config.firmware_chip = "ga106";
     config.firmware_version = "535.129.03";
-        config.trusted_gpu_facts = facts;
+    config.trusted_gpu_facts = facts;
     config.command_queue_bytes = 64U * 1024U;
     config.status_queue_bytes = 64U * 1024U;
     config.timeout_ms = 5000U;
@@ -104,7 +104,7 @@ int main(void)
     device.device_id = 0x1D10U;
     assert(nvx_gsp_platform_validate_config(&config) ==
            NVX_GSP_PLATFORM_UNSUPPORTED_DEVICE);
-    device.device_id = 0x1D10U;
+    device.device_id = 0x2504U;
 
     config.firmware_chip = "ga104";
     assert(nvx_gsp_platform_validate_config(&config) ==

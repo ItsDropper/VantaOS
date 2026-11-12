@@ -47,7 +47,7 @@ jobs:
           test -s BOOTX64.EFI
           test -s kernel-uefi.elf
 
-      - name: Validate GPT, FAT32 ESP and required boot files
+      - name: Validate MBR, FAT32 ESP and required boot files
         run: |
           set -euo pipefail
           sfdisk --verify VantaOS-UEFI.img
@@ -61,16 +61,13 @@ jobs:
           table = json.loads(subprocess.check_output(
               ["sfdisk", "--json", image], text=True))
           part = table["partitiontable"]["partitions"][0]
-          assert table["partitiontable"]["label"] == "gpt", (
-              f"expected GPT partition table, got {table['partitiontable']['label']}"
+          assert table["partitiontable"]["label"] == "dos", (
+              f"expected MBR partition table, got {table['partitiontable']['label']}"
           )
           start = int(part["start"])
           size = int(part["size"])
-          ptype = part["type"].lower()
-          expected_esp = "c12a7328-f81f-11d2-ba4b-00a0c93ec93b"
-          assert ptype == expected_esp, (
-              f"expected EFI System Partition GUID {expected_esp}, got {ptype}"
-          )
+          ptype = part["type"].lower().removeprefix("0x")
+          assert ptype == "ef", f"expected MBR EFI type EF, got {ptype}"
           with open(image, "rb") as stream:
               stream.seek(start * 512)
               boot = stream.read(512)
@@ -83,7 +80,7 @@ jobs:
           assert hidden == 0, f"UEFI partition-relative FAT BPB must have hidden sectors 0, got {hidden}"
           assert 0 < total <= size, f"FAT volume sectors {total} exceed partition sectors {size}"
           assert boot[510] == 0x55 and boot[511] == 0xAA, "missing FAT boot signature"
-          print(f"GPT EFI FAT32 BPB valid: start={start} sectors={total}/{size} hidden={hidden}")
+          print(f"MBR EFI FAT32 BPB valid: start={start} sectors={total}/{size} hidden={hidden}")
           PY
           mcopy -i VantaOS-UEFI.img@@1048576 ::/EFI/BOOT/BOOTX64.EFI /tmp/BOOTX64.EFI
           mcopy -i VantaOS-UEFI.img@@1048576 ::/EFI/VANTA/KERNEL.ELF /tmp/KERNEL.ELF

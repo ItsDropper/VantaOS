@@ -179,8 +179,16 @@ nvx_gsp_ce_workload_status_t nvx_gsp_ce_copy_start(
     }
 
     for (size_t i = 0U; i < OBJECT_COUNT; ++i) {
-        if (nvx_dma_sync_for_device(&w->sync[i], 0U,
-                w->sync[i].size) != NVX_DMA_SYNC_OK) {
+        nvx_dma_sync_status_t sync_status;
+        if (i == COMPLETION_INDEX) {
+            /* CPU polls this GPU-written semaphore while the CE may update it. */
+            sync_status = nvx_dma_sync_for_shared(&w->sync[i], 0U,
+                w->sync[i].size);
+        } else {
+            sync_status = nvx_dma_sync_for_device(&w->sync[i], 0U,
+                w->sync[i].size);
+        }
+        if (sync_status != NVX_DMA_SYNC_OK) {
             status = NVX_GSP_CE_WORKLOAD_SYNC_ERROR;
             goto fail_before_submit;
         }

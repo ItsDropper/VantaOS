@@ -42,27 +42,38 @@ PCI profile discovery remains read-only. Both Intel Gen9 and AMD Polaris now hav
 
 ### NVIDIA / NVX
 
-The GA10x path includes PCI matching, bounded BAR mapping, PMC identity
-probing, firmware bundle parsing, GSP boot-memory staging, WPR metadata
-planning, and a SEC2 signed Booter Load sequence with synthetic-MMIO tests.
-Boot-time NVX discovery now performs one deliberately read-only operation on
-the audited RTX 3060 profile: when PCI memory decode is already enabled, it
-maps only the first 8 bytes of BAR0, reads PMC_BOOT_0 and PMC_BOOT_1,
-checks the live architecture against the PCI profile, and unmaps it. It does not alter PCI command bits,
-enable bus mastering, reset a Falcon, load firmware, or submit work. Mapping,
-identity, or unmap failures are logged and skipped; they do not fail OS boot.
-Maxwell/Pascal mobile profiles retain their smaller PMC_BOOT_0/1 read.
+The GA10x backend includes PCI matching and attach/probe, bounded BAR/MMIO
+access, PMC identity decoding, five-component GSP firmware bundle acquisition,
+structural preflight, booter staging, WPR metadata planning, SEC2/FWSEC/FRTS
+execution, a traced SEC2 Booter Load transaction, GSP RISC-V launch/readiness,
+MSGQ linking, GMCAPI initialization and a GSP-RM initialization RPC. The
+callable composition is exposed through
+`nvx_gsp_ga10x_start_and_init_rm_from_pci()`.
 
-This is a first live register interaction, **not GPU initialization or
-acceleration**. The SEC2/GSP secure boot path and its readiness gates have not
-been validated on physical hardware.
+That composition is **not yet a production boot path**. Repository search finds
+its declaration and definition but no boot-time or shell-command caller.
+Boot-time NVX discovery performs only a read-only PMC identity probe on the
+audited RTX 3060 profile. The current `nvx status`, `nvx vbios`, and
+`nvx fw` commands are diagnostics/preflight; `nvx fw` verifies five
+version-matched files against a locally pinned SHA-256 manifest and performs
+structural parsing, but does not start GSP. There is no dedicated end-to-end
+startup test and no physical GA106 validation.
 
-Next gates: authoritative WPR input discovery/policy, real DMA/coherency
-validation, GSP RISC-V launch/readiness, GSP-RM RPC initialization, then channel
-and command submission. The first useful driver milestone remains a verified
-hardware-backed operation (preferably a minimal CE copy with CPU byte-for-byte
-verification). Hardware acceleration must remain unpublished until that path
-is demonstrated on a physical GA106 device.
+The callable startup routine still depends on a platform coordinator to supply
+trusted BAR sizing/handoff, VBIOS/FWSEC and firmware identity, real framebuffer
+and WPR resources, DMA-visible allocations and ownership, init arguments,
+shared queue memory/layout, and version-correct platform facts. The PCI BAR
+sizing path refuses to probe while decode or bus mastering is enabled, so a
+safe handoff for a live firmware-driven GPU remains a key integration issue.
+The separate NVX lifecycle currently reaches `PROBED`; startup is not wired
+to advance it to `INITIALIZED` or publish capabilities.
+
+The next milestone is a production platform coordinator plus an end-to-end
+fault-injected host test for the composed startup transaction. Then validate
+authenticated SEC2/FWSEC, stable RISC-V readiness, a real GSP-RM RPC and a
+bounded copy-engine operation with CPU-verified output on physical GA106.
+Until then, NVX is advanced host-tested bring-up software, not verified GPU
+acceleration.
 
 ### Intel
 

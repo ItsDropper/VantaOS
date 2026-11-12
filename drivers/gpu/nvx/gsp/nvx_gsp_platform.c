@@ -15,6 +15,13 @@
 #include <stdint.h>
 #include <string.h>
 
+static int text_equals(const char *left, const char *right)
+{
+    if (!left || !right) return 0;
+    while (*left && *right && *left == *right) { ++left; ++right; }
+    return *left == *right;
+}
+
 static int session_has_resources(const nvx_gsp_platform_session_t *s)
 {
     return s->attached || s->device.attached || s->firmware.acquired ||
@@ -120,7 +127,7 @@ nvx_gsp_platform_status_t nvx_gsp_platform_validate_config(
         !nvx_identify_pci_device(c->pci_device->device_id, &family, &profile) ||
         family != NVX_FAMILY_AMPERE ||
         profile != NVX_PROFILE_GEFORCE_RTX_3060 ||
-        strcmp(c->firmware_chip, "ga106") != 0)
+        !text_equals(c->firmware_chip, "ga106"))
         return NVX_GSP_PLATFORM_UNSUPPORTED_DEVICE;
 
     if (nvx_bar_resource_validate(c->trusted_bar0) != NVX_RESOURCE_OK ||

@@ -125,8 +125,9 @@ jobs:
             -machine pc -cpu max -m 512M -smp 2 \
             -drive if=pflash,format=raw,readonly=on,file="$code_firmware" \
             -drive if=pflash,format=raw,file=OVMF_VARS.fd \
-            -drive if=none,id=bootdisk,format=raw,file=uefi-qemu-test.img \
-            -device ide-hd,drive=bootdisk,bootindex=1 \
+            -device piix3-usb-uhci,id=uhci \
+            -drive if=none,id=usbdisk,format=raw,file=uefi-qemu-test.img \
+            -device usb-storage,drive=usbdisk,bootindex=1,removable=on \
             -boot order=c \
             -display none -serial file:uefi-hardware-test.log \
             -chardev file,id=ovmfdebug,path=ovmf-debug.log \

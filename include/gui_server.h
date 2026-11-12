@@ -41,6 +41,7 @@ void gui_server_draw_taskbar_items(int taskbar_y, int screen_width);
 int gui_server_taskbar_click(int x, int y, int taskbar_y, int screen_width);
 int gui_server_mouse_click(int x, int y, int button);
 void gui_server_mouse_move(int x, int y);
+void gui_server_mouse_wheel(int delta);
 void gui_server_mouse_release(int button);
 char gui_server_read_terminal_char(void);
 int gui_server_take_redraw_request(void);

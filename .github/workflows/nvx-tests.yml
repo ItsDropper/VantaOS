@@ -131,6 +131,7 @@ on:
       - "include/nvx_gsp_gmcapi.h"
       - "scripts/test_nvx_gsp_static_info.c"
       - "scripts/test_nvx_gsp_gpfifo.c"
+      - "scripts/test_nvx_abi_conformance.c"
       - "scripts/test_nvx_gsp_ce.c"
       - "include/nvx_gsp_ce.h"
       - "include/nvx_gsp_gpfifo.h"
@@ -353,6 +354,17 @@ jobs:
 
       - name: Test GPFIFO address encoding, ring bounds, and completion polling
         run: /tmp/vantaos-nvx-gsp-gpfifo-test
+
+      - name: Compile NVIDIA hardware-ABI conformance pins with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_abi_conformance.c \
+            drivers/gpu/nvx/execution/nvx_gsp_ce.c \
+            drivers/gpu/nvx/execution/nvx_gsp_gpfifo.c \
+            -o /tmp/vantaos-nvx-abi-conformance-test
+
+      - name: Test class IDs, control commands, struct layout, CE and GPFIFO encodings
+        run: /tmp/vantaos-nvx-abi-conformance-test
 
       - name: Compile Ampere CE command-builder tests with strict warnings
         run: |

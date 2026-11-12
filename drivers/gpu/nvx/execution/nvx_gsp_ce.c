@@ -26,8 +26,15 @@ static void emit(volatile uint32_t *p,size_t *n,uint32_t v)
     ++*n;
 }
 
+static int supported_copy_class(uint32_t class_id)
+{
+    return class_id==NVX_GSP_CE_TURING_DMA_COPY_A_CLASS||
+           class_id==NVX_GSP_CE_AMPERE_DMA_COPY_A_CLASS||
+           class_id==NVX_GSP_CE_AMPERE_DMA_COPY_B_CLASS;
+}
+
 nvx_gsp_ce_status_t nvx_gsp_ce_build_copy(
-    volatile uint32_t *buffer,size_t capacity,uint32_t object,uint32_t subchannel,
+    volatile uint32_t *buffer,size_t capacity,uint32_t copy_class,uint32_t subchannel,
     uint64_t src,uint64_t dst,uint64_t completion,uint32_t bytes,
     uint32_t completion_value,size_t *out_bytes)
 {
@@ -35,7 +42,7 @@ nvx_gsp_ce_status_t nvx_gsp_ce_build_copy(
     size_t n=0U;
     const uint32_t launch_dma=NVX_GSP_CE_LAUNCH_DMA_FLAGS;
     if(out_bytes)*out_bytes=0U;
-    if(!buffer||!out_bytes||!object||subchannel>7U||
+    if(!buffer||!out_bytes||!supported_copy_class(copy_class)||subchannel>7U||
        ((uintptr_t)buffer&3U)!=0U)
         return NVX_GSP_CE_INVALID_ARGUMENT;
     if(capacity<NVX_GSP_CE_COPY_COMMAND_BYTES)return NVX_GSP_CE_NO_SPACE;
@@ -54,9 +61,13 @@ nvx_gsp_ce_status_t nvx_gsp_ce_build_copy(
     if(overlaps(buffer,NVX_GSP_CE_COPY_COMMAND_BYTES,out_bytes,sizeof(*out_bytes)))
         return NVX_GSP_CE_INVALID_ARGUMENT;
 
-    /* Select the allocated NVC5B5 copy-engine object on the requested subchannel. */
+    /*
+     * SET_OBJECT: NVCLASS (bits 15:0) is the copy-engine class ID and ENGINE
+     * (bits 20:16) is 0 for a normal engine class. The RM object handle is
+     * never placed in the pushbuffer.
+     */
     emit(buffer,&n,method_header(0x000U,1U,subchannel));
-    emit(buffer,&n,object);
+    emit(buffer,&n,copy_class&UINT32_C(0xFFFF));
 
     /* Configure one-word semaphore release, issued after the copy completes. */
     emit(buffer,&n,method_header(0x240U,3U,subchannel));
@@ -64,7 +75,7 @@ nvx_gsp_ce_status_t nvx_gsp_ce_build_copy(
     emit(buffer,&n,(uint32_t)completion);
     emit(buffer,&n,completion_value);
 
-    /* NVC5B5 source/destination address methods, 49-bit GPU virtual addresses. */
+    /* Source/destination address methods (NVC5B5/6B5/7B5 offsets are identical). */
     emit(buffer,&n,method_header(0x400U,4U,subchannel));
     emit(buffer,&n,(uint32_t)(src>>32U)&UINT32_C(0x1FFFF));
     emit(buffer,&n,(uint32_t)src);

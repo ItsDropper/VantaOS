@@ -98,8 +98,15 @@ nvx_gsp_gpfifo_status_t nvx_gsp_gpfifo_submit(
     }
 
     dwords=(uint32_t)(command_bytes/4U);
-    /* Public NVC56F GP_ENTRY0/1 fields: address>>2, high address, length>>2. */
-    entry0=(uint32_t)((command_va>>2U)&UINT64_C(0x3FFFFFFF));
+    /*
+     * Public NVC56F GP_ENTRY layout. ENTRY0.GET is bits 31:2 and holds
+     * VA[31:2] *in place* (the dword is the low address word with bits 1:0
+     * clear: FETCH=UNCONDITIONAL). ENTRY1.GET_HI (7:0) holds VA[39:32],
+     * LEVEL (9) and SYNC (31) stay 0 (main level, proceed), and LENGTH
+     * (30:10) is the pushbuffer size in dwords. command_va is 4-byte aligned
+     * (checked above), so the mask only documents that bits 1:0 are zero.
+     */
+    entry0=(uint32_t)(command_va&UINT64_C(0xFFFFFFFC));
     entry1=(uint32_t)((command_va>>32U)&UINT64_C(0xFF))|(dwords<<10U);
     slot=(size_t)c->put_index*NVX_GSP_GPFIFO_ENTRY_DWORDS;
     __atomic_store_n(&c->entries[slot],entry0,__ATOMIC_RELAXED);

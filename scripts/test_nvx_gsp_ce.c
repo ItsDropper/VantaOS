@@ -20,10 +20,13 @@ int main(void)
     const uint64_t src=UINT64_C(0x12345678000);
     const uint64_t dst=UINT64_C(0x12345679000);
     const uint64_t completion=UINT64_C(0x1234567A000);
-    assert(nvx_gsp_ce_build_copy(command,sizeof(command),0x77U,2U,src,dst,
+    /* GA106/GA10x copy class: SET_OBJECT must carry the class ID 0xC7B5. */
+    assert(NVX_GSP_CE_GA10X_COPY_CLASS==UINT32_C(0xC7B5));
+    assert(nvx_gsp_ce_build_copy(command,sizeof(command),
+        NVX_GSP_CE_GA10X_COPY_CLASS,2U,src,dst,
         completion,4096U,0x00C0FFEEU,&bytes)==NVX_GSP_CE_OK);
     assert(bytes==NVX_GSP_CE_COPY_COMMAND_BYTES);
-    assert(command[0]==header(0U,1U,2U)&&command[1]==0x77U);
+    assert(command[0]==header(0U,1U,2U)&&command[1]==UINT32_C(0xC7B5));
     assert(command[2]==header(0x240U,3U,2U));
     assert(command[3]==((completion>>32U)&UINT64_C(0x1FFFF)));
     assert(command[4]==(uint32_t)completion&&command[5]==0x00C0FFEEU);
@@ -37,17 +40,33 @@ int main(void)
     assert(command[14]==header(0x300U,1U,2U));
     assert(command[15]==0x18EU);
 
-    assert(nvx_gsp_ce_build_copy(command,sizeof(command),0x77U,8U,src,dst,
+    /* Older CE classes with identical methods are accepted... */
+    assert(nvx_gsp_ce_build_copy(command,sizeof(command),
+        NVX_GSP_CE_TURING_DMA_COPY_A_CLASS,0U,src,dst,completion,4096U,1U,
+        &bytes)==NVX_GSP_CE_OK&&command[1]==UINT32_C(0xC5B5));
+    assert(nvx_gsp_ce_build_copy(command,sizeof(command),
+        NVX_GSP_CE_AMPERE_DMA_COPY_A_CLASS,0U,src,dst,completion,4096U,1U,
+        &bytes)==NVX_GSP_CE_OK&&command[1]==UINT32_C(0xC6B5));
+    /* ...but an RM object handle (or any non-CE class) is rejected, because the
+     * GPU would interpret it as a class ID. */
+    assert(nvx_gsp_ce_build_copy(command,sizeof(command),0x77U,0U,src,dst,
         completion,4096U,1U,&bytes)==NVX_GSP_CE_INVALID_ARGUMENT);
-    assert(nvx_gsp_ce_build_copy(command,sizeof(command),0x77U,0U,
+    assert(nvx_gsp_ce_build_copy(command,sizeof(command),0U,0U,src,dst,
+        completion,4096U,1U,&bytes)==NVX_GSP_CE_INVALID_ARGUMENT);
+    assert(nvx_gsp_ce_build_copy(command,sizeof(command),UINT32_C(0xC56F),0U,
+        src,dst,completion,4096U,1U,&bytes)==NVX_GSP_CE_INVALID_ARGUMENT);
+    assert(nvx_gsp_ce_build_copy(command,sizeof(command),
+        NVX_GSP_CE_GA10X_COPY_CLASS,8U,src,dst,
+        completion,4096U,1U,&bytes)==NVX_GSP_CE_INVALID_ARGUMENT);
+    assert(nvx_gsp_ce_build_copy(command,sizeof(command),NVX_GSP_CE_GA10X_COPY_CLASS,0U,
         NVX_GSP_CE_GPUVA_LIMIT,dst,completion,4U,1U,&bytes)==NVX_GSP_CE_BAD_GPU_ADDRESS);
-    assert(nvx_gsp_ce_build_copy(command,sizeof(command),0x77U,0U,src,dst,
+    assert(nvx_gsp_ce_build_copy(command,sizeof(command),NVX_GSP_CE_GA10X_COPY_CLASS,0U,src,dst,
         completion,0U,1U,&bytes)==NVX_GSP_CE_BAD_GPU_ADDRESS);
-    assert(nvx_gsp_ce_build_copy(command,sizeof(command),0x77U,0U,src,
+    assert(nvx_gsp_ce_build_copy(command,sizeof(command),NVX_GSP_CE_GA10X_COPY_CLASS,0U,src,
         src+2048U,completion,4096U,1U,&bytes)==NVX_GSP_CE_BAD_GPU_ADDRESS);
-    assert(nvx_gsp_ce_build_copy(command,sizeof(command),0x77U,0U,src,dst,
+    assert(nvx_gsp_ce_build_copy(command,sizeof(command),NVX_GSP_CE_GA10X_COPY_CLASS,0U,src,dst,
         dst+4U,4096U,1U,&bytes)==NVX_GSP_CE_BAD_GPU_ADDRESS);
-    assert(nvx_gsp_ce_build_copy(command,16U,0x77U,0U,src,dst,
+    assert(nvx_gsp_ce_build_copy(command,16U,NVX_GSP_CE_GA10X_COPY_CLASS,0U,src,dst,
         completion,4U,1U,&bytes)==NVX_GSP_CE_NO_SPACE);
     return 0;
 }

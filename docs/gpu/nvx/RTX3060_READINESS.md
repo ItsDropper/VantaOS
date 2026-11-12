@@ -28,6 +28,30 @@ This document is a release gate, not a claim that the driver is ready. A phase m
 | Display/presentation | Software display path exists independently | Explicit synchronization and scanout integration; GPU rendering alone does not prove page flipping or VSync |
 | Vulkan or other game API | Not established | Kernel/userspace ABI, memory/sync semantics, shader compiler/codegen, pipelines/descriptors, presentation and conformance tests |
 
+## Hardware-ABI audit against NVIDIA's public headers
+
+Evidence level: **audited, host-tested.** The hardware-facing constants and encodings below were checked against NVIDIA's `open-gpu-kernel-modules` headers (git `e6a2e01`, `src/common/sdk/nvidia/inc` and `src/nvidia/generated/g_gpu_class_list.c`) by compiling NVIDIA's own definitions next to NVX's. [`scripts/test_nvx_abi_conformance.c`](../../../scripts/test_nvx_abi_conformance.c) pins the results in CI. This shows NVX matches the published ABI. It does **not** show that a GA106 accepted any of it.
+
+| Item | Result |
+| --- | --- |
+| `NV_CHANNEL_ALLOC_PARAMS` | Identical: 376 bytes and every field offset match (x86-64). |
+| RM class IDs (root, device, `NV01_MEMORY_VIRTUAL`, Turing/Ampere GPFIFO A) and engine type `COPY0` | Match. |
+| `NVA06F_CTRL_CMD_GPFIFO_SCHEDULE` / `_BIND` | Match (`0xA06F0103` / `0xA06F0104`). |
+| `NVC5B5` copy method offsets and `LAUNCH_DMA` bit fields | Match. `NVC6B5` and `NVC7B5` use identical offsets and fields for everything the builder emits. |
+| GPFIFO entry encoding | **Was wrong; fixed.** See below. |
+| Copy-engine class and `SET_OBJECT` payload | **Were wrong; fixed.** See below. |
+
+### Defects found and fixed
+
+1. **GPFIFO `GP_ENTRY0` was address/4.** `GP_ENTRY0.GET` is bits 31:2 and holds `VA[31:2]` in place, so the dword is the low address word with bits 1:0 clear. NVX stored `(VA >> 2)`, so the GPU would have fetched its command buffer from one quarter of the intended address. The old test computed its expected value with the same formula as the implementation, so both agreed and both were wrong. The test now uses literal vectors derived independently from NVIDIA's field definitions, and it fails against the old encoder.
+2. **Copy-engine class was Turing's, and `SET_OBJECT` was given a handle.** `NVX_GSP_CE_AMPERE_DMA_COPY_CLASS` was `0xC5B5` (`TURING_DMA_COPY_A`). NVIDIA's class list exposes `AMPERE_DMA_COPY_B` (`0xC7B5`) on GA106 CE0 to CE4. Separately, `SET_OBJECT` takes the class ID in bits 15:0, but the builder emitted whatever "object" it was given and its test passed an RM-handle-like value. The builder now takes `copy_class`, accepts only the known CE classes, and rejects anything else. The constants are `NVX_GSP_CE_{TURING_DMA_COPY_A,AMPERE_DMA_COPY_A,AMPERE_DMA_COPY_B}_CLASS` plus `NVX_GSP_CE_GA10X_COPY_CLASS`.
+
+Both defects would only have appeared on real hardware as a channel that silently never executed. Neither can be found by synthetic-MMIO tests, which is why the pins exist.
+
+### Not yet audited
+
+USERD `GP_GET`/`GP_PUT` offsets and the usermode doorbell (NVX takes borrowed pointers and does not hardcode them), `NVOS46`/`NVOS47` map-memory layouts, the RM memory-allocation parameter structs, and the GSP message-queue and init-argument layouts, which depend on the exact firmware release. Audit these against the headers matching the firmware you load before trusting them.
+
 Do not add a per-SKU source file merely to record an identity. Shared GA10x/Ampere policy belongs in common code unless a documented hardware difference requires a backend.
 
 ## Mandatory first hardware experiment

@@ -31,6 +31,7 @@ VANTAOS_NVX_C := \
     drivers/gpu/nvx/gsp/nvx_gsp_system_info.c \
     drivers/gpu/nvx/gsp/nvx_gsp_rmapi.c \
     drivers/gpu/nvx/gsp/nvx_gsp_channel.c \
+    drivers/gpu/nvx/execution/nvx_gsp_channel_runtime.c \
     drivers/gpu/nvx/gsp/nvx_gsp_dma_map.c \
     drivers/gpu/nvx/gsp/nvx_gsp_context_dma.c \
     drivers/gpu/nvx/gsp/nvx_gsp_memory.c \

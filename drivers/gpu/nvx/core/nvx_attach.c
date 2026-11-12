@@ -155,15 +155,22 @@ nvx_attach_status_t nvx_device_attach(
     return result;
 }
 
-nvx_attach_status_t nvx_device_detach(nvx_attached_device_t *device)
+static nvx_attach_status_t nvx_device_detach_internal(
+    nvx_attached_device_t *device, int quiescence_confirmed)
 {
     if (device == 0)
         return NVX_ATTACH_INVALID_ARGUMENT;
     if (!device->attached || device->bar0_mapping == 0)
         return NVX_ATTACH_INVALID_ARGUMENT;
 
-    if (!nvx_lifecycle_transition(&device->lifecycle, NVX_STATE_QUIESCING))
+    if (device->lifecycle.state == NVX_STATE_FAILED) {
+        if (!nvx_lifecycle_recover_quiesced(&device->lifecycle,
+                                             quiescence_confirmed))
+            return NVX_ATTACH_LIFECYCLE_ERROR;
+    } else if (!nvx_lifecycle_transition(&device->lifecycle,
+                                         NVX_STATE_QUIESCING)) {
         return NVX_ATTACH_LIFECYCLE_ERROR;
+    }
 
     nvx_bar_mmio_unmap(&device->bar0, device->bar0_mapping);
     device->bar0_mapping = 0;
@@ -172,4 +179,17 @@ nvx_attach_status_t nvx_device_detach(nvx_attached_device_t *device)
     if (!nvx_lifecycle_transition(&device->lifecycle, NVX_STATE_STOPPED))
         return NVX_ATTACH_LIFECYCLE_ERROR;
     return NVX_ATTACH_OK;
+}
+
+nvx_attach_status_t nvx_device_detach(nvx_attached_device_t *device)
+{
+    return nvx_device_detach_internal(device, 0);
+}
+
+nvx_attach_status_t nvx_device_detach_quiesced(
+    nvx_attached_device_t *device, int quiescence_confirmed)
+{
+    if (!quiescence_confirmed)
+        return NVX_ATTACH_INVALID_ARGUMENT;
+    return nvx_device_detach_internal(device, 1);
 }

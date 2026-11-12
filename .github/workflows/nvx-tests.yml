@@ -362,6 +362,15 @@ jobs:
       - name: Test NVX copy-channel provisioning, timeout recovery and teardown
         run: /tmp/vantaos-nvx-gsp-channel-test
 
+      - name: Compile NVX context-DMA RM lifecycle tests with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_context_dma.c drivers/gpu/nvx/gsp/nvx_gsp_context_dma.c \
+            -o /tmp/vantaos-nvx-context-dma-test
+
+      - name: Test NVX context-DMA allocation, free and timeout recovery
+        run: /tmp/vantaos-nvx-context-dma-test
+
       - name: Compile NVX RM DMA mapping lifecycle tests with strict warnings
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \

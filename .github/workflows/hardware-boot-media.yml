@@ -80,7 +80,7 @@ jobs:
           total = total16 or total32
           hidden = struct.unpack_from("<I", boot, 28)[0]
           assert bps == 512, f"unexpected FAT sector size {bps}"
-          assert hidden == start, f"FAT BPB hidden-sector count must match ESP start LBA {start}, got {hidden}"
+          assert hidden == 0, f"UEFI partition-relative FAT BPB must have hidden sectors 0, got {hidden}"
           assert 0 < total <= size, f"FAT volume sectors {total} exceed partition sectors {size}"
           assert boot[510] == 0x55 and boot[511] == 0xAA, "missing FAT boot signature"
           print(f"GPT EFI FAT32 BPB valid: start={start} sectors={total}/{size} hidden={hidden}")

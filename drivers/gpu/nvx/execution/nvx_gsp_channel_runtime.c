@@ -152,16 +152,27 @@ nvx_gsp_rmapi_status_t nvx_gsp_channel_runtime_stop(
                      workload->pinned_count != 0U))
         return NVX_GSP_RMAPI_BUSY;
 
-    if (runtime->stage == NVX_GSP_CHANNEL_RUNTIME_CREATE_PENDING) {
-        status = nvx_gsp_channel_runtime_recover(manager, runtime, scratch,
+    if (runtime->stage == NVX_GSP_CHANNEL_RUNTIME_CREATE_PENDING &&
+        runtime->rm.stage != NVX_GSP_CHANNEL_IDLE) {
+        status = nvx_gsp_copy_channel_recover(manager, &runtime->rm, scratch,
             scratch_size, response, response_size, timeout_ms, poll_ms,
             delay_ms, delay_context);
         if (status != NVX_GSP_RMAPI_OK)
             return status;
-        if (runtime->stage == NVX_GSP_CHANNEL_RUNTIME_IDLE)
-            return NVX_GSP_RMAPI_OK;
     }
 
+    if (runtime->stage == NVX_GSP_CHANNEL_RUNTIME_CREATE_PENDING &&
+        !runtime->rm.allocated) {
+        if (runtime->userd_reference_held) {
+            status = nvx_gsp_os_memory_release(runtime->userd_memory);
+            if (status != NVX_GSP_RMAPI_OK)
+                return NVX_GSP_RMAPI_CLEANUP_FAILED;
+        }
+        memset(runtime, 0, sizeof(*runtime));
+        return NVX_GSP_RMAPI_OK;
+    }
+
+    /* Abort an incomplete create without requiring the host FIFO view to bind. */
     runtime->stage = NVX_GSP_CHANNEL_RUNTIME_DESTROY_PENDING;
     status = nvx_gsp_copy_channel_destroy(manager, &runtime->rm, scratch,
         scratch_size, response, response_size, timeout_ms, poll_ms,

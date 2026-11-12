@@ -568,6 +568,8 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* system_tab
     boot_info->struct_size = sizeof(*boot_info);
     boot_info->version = VANTA_BOOT_INFO_VERSION;
     boot_info->source = VANTA_BOOT_SOURCE_UEFI;
+    boot_info->flags |= VANTA_BOOT_FLAG_STORAGE_READ_ONLY;
+    serial_write("VANTAOS_UEFI_STORAGE_POLICY_READ_ONLY\\n");
 
     UINT64 framebuffer_size = 0;
     status = collect_graphics(boot_info, &framebuffer_size);

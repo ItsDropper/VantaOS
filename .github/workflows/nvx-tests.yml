@@ -380,6 +380,7 @@ jobs:
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
             scripts/test_nvx_gsp_ce.c drivers/gpu/nvx/execution/nvx_gsp_ce.c \
+            drivers/gpu/nvx/execution/nvx_gsp_gpfifo.c \
             -o /tmp/vantaos-nvx-gsp-ce-test
 
       - name: Test copy-engine methods, semaphore release, and GPUVA bounds

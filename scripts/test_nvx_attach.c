@@ -167,5 +167,21 @@ int main(void)
     assert(device.bar0_mapping == 0 && device.attached == 0U);
     assert(device.lifecycle.state == NVX_STATE_FAILED);
     assert(unmap_calls==unmaps_before_bad_registers+1U);
+
+    /* A failed attached device cannot be unmapped until quiescence is proven. */
+    device = (nvx_attached_device_t){0};
+    device.pci_device = &gpu;
+    device.bar0 = bar0;
+    device.bar0_mapping = (void *)(uintptr_t)fake_registers;
+    device.attached = 1U;
+    device.lifecycle.state = NVX_STATE_FAILED;
+    unsigned unmaps_before_failed_detach = unmap_calls;
+    assert(nvx_device_detach(&device) == NVX_ATTACH_LIFECYCLE_ERROR);
+    assert(unmap_calls == unmaps_before_failed_detach);
+    assert(nvx_device_detach_quiesced(&device, 0) ==
+           NVX_ATTACH_INVALID_ARGUMENT);
+    assert(nvx_device_detach_quiesced(&device, 1) == NVX_ATTACH_OK);
+    assert(unmap_calls == unmaps_before_failed_detach + 1U);
+    assert(device.lifecycle.state == NVX_STATE_STOPPED);
     return 0;
 }

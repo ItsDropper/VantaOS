@@ -46,6 +46,9 @@ int nvx_lifecycle_transition(nvx_lifecycle_t *lifecycle,
                              nvx_lifecycle_state_t next_state);
 int nvx_lifecycle_fail(nvx_lifecycle_t *lifecycle,
                        nvx_lifecycle_error_t error);
+/* FAILED may enter QUIESCING only after an external hardware-quiescence proof. */
+int nvx_lifecycle_recover_quiesced(nvx_lifecycle_t *lifecycle,
+                                   int quiescence_confirmed);
 int nvx_lifecycle_set_capabilities(nvx_lifecycle_t *lifecycle,
                                    uint64_t verified_capabilities);
 

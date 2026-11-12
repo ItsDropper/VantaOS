@@ -20,6 +20,7 @@ on:
       - "kernel/device.c"
       - "include/nvx_gsp_ce.h"
       - "include/nvx_gsp_dma_map.h"
+      - "include/nvx_gsp_context_dma.h"
       - "include/nvx_submit.h"
       - "scripts/test_nvx_gsp_ce_runtime.c"
       - "scripts/test_nvx_dma.c"

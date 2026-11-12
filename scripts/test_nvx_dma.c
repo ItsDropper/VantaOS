@@ -53,7 +53,7 @@ int dma_alloc_contiguous(dma_page_t *pages, size_t count)
     for (size_t i = 0; i < count; ++i) {
         pages[i].virtual_address = memory + i * NVX_DMA_PAGE_SIZE;
         pages[i].physical_address =
-            (high_address ? 0x100000000ULL : 0x20000000ULL) +
+            (high_address ? 0x40000000ULL : 0x20000000ULL) +
             i * NVX_DMA_PAGE_SIZE;
         pages[i].size = NVX_DMA_PAGE_SIZE;
     }
@@ -138,7 +138,7 @@ int main(void)
 
     /*
      * The host kernel identity map ends at 1 GiB. A 64-bit device mask does
-     * not make a 4 GiB physical address dereferenceable by the CPU.
+     * not make an address at the 1 GiB identity-map boundary dereferenceable.
      */
     high_address = 1;
     assert(nvx_dma_alloc(4096U, 32U, &buffer) ==

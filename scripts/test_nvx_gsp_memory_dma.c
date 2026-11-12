@@ -14,6 +14,15 @@ static nvx_gsp_rmapi_status_t map_result = NVX_GSP_RMAPI_OK;
 static nvx_gsp_rmapi_status_t unmap_result = NVX_GSP_RMAPI_OK;
 static nvx_gsp_rmapi_status_t recover_result = NVX_GSP_RMAPI_OK;
 
+nvx_gsp_rmapi_status_t nvx_gsp_os_memory_get_physical_range(
+    const nvx_gsp_os_memory_t *memory, uint64_t *base, uint64_t *size)
+{
+    (void)memory;
+    if (base) *base = 0U;
+    if (size) *size = 0U;
+    return NVX_GSP_RMAPI_INVALID_ARGUMENT;
+}
+
 nvx_gsp_rmapi_status_t nvx_gsp_memory_object_get_range(
     const nvx_gsp_memory_object_t *object, uint64_t *size, uint64_t *limit)
 {

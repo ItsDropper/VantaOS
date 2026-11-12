@@ -134,13 +134,13 @@ int main(void)
     };
     append(crs_body,&crs_n,i2c_descriptor,sizeof(i2c_descriptor));
     /* GPIO interrupt connection: controller \\_SB_.GPIO, pins 7 and 8. */
-    uint8_t gpio_descriptor[38]={0};
-    gpio_descriptor[0]=0x8CU; gpio_descriptor[1]=35U;
+    uint8_t gpio_descriptor[37]={0};
+    gpio_descriptor[0]=0x8CU; gpio_descriptor[1]=34U;
     gpio_descriptor[3]=1U; gpio_descriptor[4]=0U; gpio_descriptor[5]=1U;
     gpio_descriptor[14]=23U; gpio_descriptor[17]=27U;
-    gpio_descriptor[19]=38U;
+    gpio_descriptor[19]=37U;
     gpio_descriptor[23]=7U; gpio_descriptor[25]=8U;
-    memcpy(gpio_descriptor+27U,"\\_SB_.GPIO",11U);
+    memcpy(gpio_descriptor+27U,"\\_SB_.GPIO",10U);
     append(crs_body,&crs_n,gpio_descriptor,sizeof(gpio_descriptor));
     const uint8_t end_tag[]={0x79U,0x00U};
     append(crs_body,&crs_n,end_tag,sizeof(end_tag));

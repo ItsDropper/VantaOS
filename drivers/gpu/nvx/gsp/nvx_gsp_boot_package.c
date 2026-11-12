@@ -32,6 +32,35 @@ static int package_is_empty(const nvx_gsp_boot_package_t *package)
         package->memory.wpr_metadata.acquired == 0U;
 }
 
+static int output_overlaps_owned_storage(
+    const nvx_gsp_boot_package_t *package, const nvx_gsp_wpr_layout_t *output,
+    const nvx_mmio_region_t *bar0)
+{
+    const nvx_gsp_boot_memory_t *m = &package->memory;
+    if (overlaps(output, sizeof(*output), (const void *)bar0->base,
+                 bar0->length))
+        return 1;
+    if (overlaps(output, sizeof(*output), m->radix3_elf.cpu_address,
+                 m->radix3_elf.allocated_size) ||
+        overlaps(output, sizeof(*output), m->bootloader_payload.cpu_address,
+                 m->bootloader_payload.allocated_size) ||
+        overlaps(output, sizeof(*output), m->signature.cpu_address,
+                 m->signature.allocated_size) ||
+        overlaps(output, sizeof(*output), m->booter_load.cpu_address,
+                 m->booter_load.allocated_size) ||
+        overlaps(output, sizeof(*output), m->booter_unload.cpu_address,
+                 m->booter_unload.allocated_size) ||
+        overlaps(output, sizeof(*output), m->wpr_metadata.cpu_address,
+                 m->wpr_metadata.allocated_size))
+        return 1;
+    for (size_t i = 0U; i < NVX_GSP_COMPONENT_COUNT; ++i) {
+        const nvx_firmware_blob_t *blob = &package->firmware.components[i].blob;
+        if (overlaps(output, sizeof(*output), blob->data, blob->size))
+            return 1;
+    }
+    return 0;
+}
+
 nvx_gsp_boot_package_status_t nvx_gsp_boot_package_release(
     nvx_gsp_boot_package_t *package)
 {
@@ -105,6 +134,11 @@ nvx_gsp_boot_package_status_t nvx_gsp_boot_package_prepare(
             platform_layout, &package->wpr_metadata_phys) !=
             NVX_GSP_BOOT_MEMORY_OK) {
         result = NVX_GSP_BOOT_PACKAGE_WPR_FAILED;
+        goto fail;
+    }
+
+    if (output_overlaps_owned_storage(package, out_layout, bar0)) {
+        result = NVX_GSP_BOOT_PACKAGE_INVALID_ARGUMENT;
         goto fail;
     }
 

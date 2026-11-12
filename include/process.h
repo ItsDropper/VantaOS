@@ -158,6 +158,9 @@ int process_terminate(uint32_t pid);
 void process_block_current(void);
 void process_terminate_current(void);
 void process_terminate_current_with_status(int32_t exit_status);
+/* Atomically validates and terminates the current user task from an exception. */
+int process_terminate_current_user_try_with_status(
+    paging_address_space_t* expected_address_space, int32_t exit_status);
 /* Non-blocking termination for exception paths; failure must fail closed. */
 int process_terminate_current_try_with_status(int32_t exit_status);
 /* Returns child PID when reaped, 0 when the parent was put to sleep, -1 if not a child. */

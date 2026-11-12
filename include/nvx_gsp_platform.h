@@ -20,6 +20,7 @@ typedef enum nvx_gsp_platform_status {
     NVX_GSP_PLATFORM_OK = 0,
     NVX_GSP_PLATFORM_INVALID_ARGUMENT,
     NVX_GSP_PLATFORM_UNSUPPORTED_DEVICE,
+    NVX_GSP_PLATFORM_CHIP_MISMATCH,
     NVX_GSP_PLATFORM_BAR_INVALID,
     NVX_GSP_PLATFORM_ATTACH_FAILED,
     NVX_GSP_PLATFORM_VBIOS_FAILED,
@@ -44,6 +45,8 @@ typedef struct nvx_gsp_platform_config {
     const nvx_firmware_provider_t *firmware_provider;
     const char *firmware_chip;       /* GA106 for the supported RTX 3060 profile. */
     const char *firmware_version;    /* Exact version shared by all five components. */
+    /* Exact 10-bit PMC_BOOT_42 chip ID from the trusted board/GPU profile. */
+    uint16_t expected_extended_chip_id;
     /* Only explicitly collected, firmware-compatible GPU/platform facts belong here. */
     const nvx_gsp_system_info_t *trusted_gpu_facts;
     uint64_t command_queue_bytes;

@@ -134,24 +134,20 @@ nvx_gsp_rmapi_status_t nvx_gsp_context_dma_create(
     object->params = params;
     object->completed_status = NVX_GSP_RMAPI_OK;
 
-    status = nvx_gsp_rm_alloc_sync(manager, client_handle, device_handle,
+    status = nvx_gsp_rm_alloc_submit(manager, client_handle, device_handle,
         context_dma_handle, NVX_GSP_RM_CLASS_CONTEXT_DMA, 0U, &params,
         sizeof(params), scratch, scratch_size, response, response_capacity,
-        timeout_ms, poll_interval_ms, delay_ms, delay_context,
         &object->operation);
-    if (status == NVX_GSP_RMAPI_TIMEOUT) {
-        object->stage = NVX_GSP_CONTEXT_DMA_ALLOC_PENDING;
+    if (status != NVX_GSP_RMAPI_OK && !object->operation.handle.valid) {
+        clear_owner(object);
         return status;
     }
-    if (status == NVX_GSP_RMAPI_OK) {
-        object->stage = NVX_GSP_CONTEXT_DMA_CREATED;
+    object->stage = NVX_GSP_CONTEXT_DMA_ALLOC_PENDING;
+    if (status != NVX_GSP_RMAPI_OK)
         return status;
-    }
-    object->client_handle = 0U;
-    object->device_handle = 0U;
-    object->context_dma_handle = 0U;
-    object->params = (nvx_gsp_context_dma_params_t){0};
-    return status;
+    return wait_operation(manager, object, scratch, scratch_size, response,
+        response_capacity, timeout_ms, poll_interval_ms, delay_ms,
+        delay_context);
 }
 
 nvx_gsp_rmapi_status_t nvx_gsp_context_dma_destroy(
@@ -166,22 +162,17 @@ nvx_gsp_rmapi_status_t nvx_gsp_context_dma_destroy(
         object->stage != NVX_GSP_CONTEXT_DMA_CREATED)
         return NVX_GSP_RMAPI_INVALID_ARGUMENT;
 
-    status = nvx_gsp_rm_free_sync(manager, object->client_handle,
+    status = nvx_gsp_rm_free_submit(manager, object->client_handle,
         object->device_handle, object->context_dma_handle, scratch,
-        scratch_size, response, response_capacity, timeout_ms,
-        poll_interval_ms, delay_ms, delay_context, &object->operation);
-    if (status == NVX_GSP_RMAPI_TIMEOUT) {
-        object->stage = NVX_GSP_CONTEXT_DMA_FREE_PENDING;
+        scratch_size, response, response_capacity, &object->operation);
+    if (status != NVX_GSP_RMAPI_OK && !object->operation.handle.valid)
         return status;
-    }
-    if (status == NVX_GSP_RMAPI_OK) {
-        object->stage = NVX_GSP_CONTEXT_DMA_IDLE;
-        object->client_handle = 0U;
-        object->device_handle = 0U;
-        object->context_dma_handle = 0U;
-        object->params = (nvx_gsp_context_dma_params_t){0};
-    }
-    return status;
+    object->stage = NVX_GSP_CONTEXT_DMA_FREE_PENDING;
+    if (status != NVX_GSP_RMAPI_OK)
+        return status;
+    return wait_operation(manager, object, scratch, scratch_size, response,
+        response_capacity, timeout_ms, poll_interval_ms, delay_ms,
+        delay_context);
 }
 
 nvx_gsp_rmapi_status_t nvx_gsp_context_dma_recover(

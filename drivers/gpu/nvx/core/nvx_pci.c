@@ -15,8 +15,9 @@
 #include <stdint.h>
 
 /*
- * PCI discovery and family identification only. No BAR mapping, PCI command
- * changes, device-register access, firmware loading, or engine initialization.
+ * PCI discovery and a bounded, read-only PMC identity probe for the three
+ * audited profiles. This path never changes PCI command bits, bus mastering,
+ * Falcon state, firmware, or engine state; it is safe to skip on any failure.
  */
 
 static void nvx_write_hex(uint32_t value, unsigned digits)
@@ -90,7 +91,7 @@ static void nvx_log_bar0(const struct pci_device *device)
  * PMC_BOOT_0/1 identity check. Only the first two dwords are mapped; no
  * PCI command bits, bus mastering, firmware, or engine state are changed.
  */
-static void nvx_probe_mobile_identity(const struct pci_device *device)
+static void nvx_probe_candidate_identity(const struct pci_device *device)
 {
     const nvx_generation_descriptor_t *generation =
         nvx_generation_for_pci(device->device_id);
@@ -101,14 +102,21 @@ static void nvx_probe_mobile_identity(const struct pci_device *device)
     nvx_register_snapshot_t snapshot;
     nvx_probe_status_t status;
     int unmapped;
+    size_t probe_bytes = 8U;
 
-    if (generation == NULL ||
-        generation->boot_sequence != NVX_BOOT_SEQUENCE_UNSUPPORTED ||
-        (generation->family != NVX_FAMILY_MAXWELL &&
-         generation->family != NVX_FAMILY_PASCAL))
+    if (generation == NULL)
         return;
+    if (generation->pmc_boot_42_offset != UINT32_MAX) {
+        if ((uint64_t)generation->pmc_boot_42_offset >
+            (uint64_t)SIZE_MAX - sizeof(uint32_t)) {
+            serial_write("[NVX] PMC identity: skipped (invalid register extent)\\n");
+            return;
+        }
+        probe_bytes = (size_t)generation->pmc_boot_42_offset +
+                      sizeof(uint32_t);
+    }
 
-    serial_write("[NVX] mobile PMC identity: ");
+    serial_write("[NVX] PMC identity: ");
     command = pci_read_config16(device, 0x04U);
     if (command == 0xFFFFU ||
         (command & NVX_PCI_COMMAND_MEMORY_SPACE) == 0U) {
@@ -117,18 +125,18 @@ static void nvx_probe_mobile_identity(const struct pci_device *device)
     }
     if (!pci_get_bar(device, 0U, &base, &is_io, &is_64bit) ||
         is_io != 0 || base == 0U || (base & 0x0FU) != 0U ||
-        base > UINT64_MAX - 7U) {
+        base > UINT64_MAX - (uint64_t)(probe_bytes - 1U)) {
         serial_write("skipped (invalid BAR0)\n");
         return;
     }
 
-    mapping = mmio_map_region(base, 8U);
+    mapping = mmio_map_region(base, probe_bytes);
     if (mapping == NULL) {
         serial_write("skipped (MMIO mapping unavailable)\n");
         return;
     }
     status = nvx_probe_mapped_bar0(device, (volatile uint32_t *)mapping,
-                                   8U, &snapshot);
+                                   probe_bytes, &snapshot);
     unmapped = mmio_unmap_region(mapping, 8U);
     if (!unmapped) {
         serial_write("failed (MMIO unmap failed)\n");
@@ -206,7 +214,7 @@ static void nvx_log_identity(const struct pci_device *device)
             ? " bus-master=enabled\n"
             : " bus-master=disabled\n");
         nvx_log_bar0(device);
-        nvx_probe_mobile_identity(device);
+        nvx_probe_candidate_identity(device);
     }
     else
     {

@@ -485,14 +485,15 @@ static nvx_gpuvm_status_t nvx_gpuvm_map_pages_common(
         return NVX_GPUVM_INVALID_RANGE;
     }
     for (size_t i = 0; i < page_count; ++i) {
-        uint64_t physical = contiguous ?
-            contiguous_base + (uint64_t)i * NVX_GPUVM_PAGE_SIZE :
-            physical_pages[i];
+        uint64_t physical;
         if (contiguous && (uint64_t)i >
             (UINT64_MAX - contiguous_base) / NVX_GPUVM_PAGE_SIZE) {
             spinlock_unlock(&vm->lock);
             return NVX_GPUVM_INVALID_RANGE;
         }
+        physical = contiguous ?
+            contiguous_base + (uint64_t)i * NVX_GPUVM_PAGE_SIZE :
+            physical_pages[i];
         if (physical == 0U ||
             (physical & (NVX_GPUVM_PAGE_SIZE - 1U)) != 0U) {
             spinlock_unlock(&vm->lock);
@@ -588,17 +589,20 @@ nvx_gpuvm_status_t nvx_gpuvm_map_contiguous(
     nvx_gpuvm_t *vm, nvx_gpuvm_mapping_t *mapping,
     uint64_t physical_base, uint64_t physical_size, unsigned access)
 {
-    uint64_t physical_end;
+    uint64_t physical_end, allocation_end;
     size_t page_count;
     if (!vm || !mapping || !mapping->valid ||
         !mapping->size || mapping->size > SIZE_MAX ||
         (mapping->size & (NVX_GPUVM_PAGE_SIZE - 1U)) ||
         !physical_size || physical_size < mapping->size ||
+        (physical_size & (NVX_GPUVM_PAGE_SIZE - 1U)) ||
         (physical_base & (NVX_GPUVM_PAGE_SIZE - 1U)) ||
-        nvx_gpuvm_add_overflow(physical_base, mapping->size, &physical_end))
+        nvx_gpuvm_add_overflow(physical_base, mapping->size, &physical_end) ||
+        nvx_gpuvm_add_overflow(physical_base, physical_size, &allocation_end))
         return NVX_GPUVM_INVALID_RANGE;
     if (physical_base == 0U ||
-        physical_end > (1ULL << NVX_GPUVM_PA_BITS))
+        physical_end > (1ULL << NVX_GPUVM_PA_BITS) ||
+        allocation_end > (1ULL << NVX_GPUVM_PA_BITS))
         return NVX_GPUVM_ADDRESS_WIDTH;
     page_count = (size_t)(mapping->size / NVX_GPUVM_PAGE_SIZE);
     return nvx_gpuvm_map_pages_common(vm, mapping, 0, physical_base,

@@ -113,6 +113,7 @@ int main(void)
     nvx_memory_handle_t command = {0}, target = {0};
     nvx_relocation_t relocations[2] = {{0}};
     nvx_submit_report_t report;
+    nvx_submit_lease_t lease = {0};
 
     nvx_gpuvm_hw_ops_t hw = {
         .context = 0,
@@ -151,6 +152,32 @@ int main(void)
     assert(report.read_relocation_count == 2U &&
            report.write_relocation_count == 1U);
     assert(report.command_gpu_address == command.gpu_virtual_address);
+
+    /* The command buffer and duplicate target references are pinned once. */
+    assert(nvx_submit_acquire_batch(&manager, &command, 64U, relocations,
+        2U, &lease, &report) == NVX_SUBMIT_OK);
+    assert(lease.active && lease.count == 2U && lease.release_index == 2U);
+    assert(manager.slots[command.slot].active_users == 1U);
+    assert(manager.slots[target.slot].active_users == 1U);
+    assert(nvx_memory_release(&manager, &command) == NVX_MEMORY_BUSY);
+    assert(nvx_memory_release(&manager, &target) == NVX_MEMORY_BUSY);
+    lease.handles[1].token++;
+    assert(nvx_submit_release_batch(&manager, &lease) ==
+           NVX_SUBMIT_MEMORY_ERROR);
+    assert(lease.active && lease.release_index == 2U);
+    lease.handles[1] = target;
+    assert(nvx_submit_release_batch(&manager, &lease) == NVX_SUBMIT_OK);
+    assert(!lease.active && lease.count == 0U);
+    assert(manager.slots[command.slot].active_users == 0U);
+    assert(manager.slots[target.slot].active_users == 0U);
+
+    /* A failed later pin rolls back earlier pins without leaking a lease. */
+    manager.slots[target.slot].active_users = UINT32_MAX;
+    assert(nvx_submit_acquire_batch(&manager, &command, 64U, relocations,
+        2U, &lease, &report) == NVX_SUBMIT_MEMORY_ERROR);
+    assert(!lease.active && lease.count == 0U);
+    assert(manager.slots[command.slot].active_users == 0U);
+    manager.slots[target.slot].active_users = 0U;
 
     /*
      * A failed batch must not leak partial success counters to callers.

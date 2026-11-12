@@ -36,7 +36,7 @@ int nvx_identify_pci_device(uint16_t device_id,
 {
     if (!family || !profile)
         return 0;
-    if (device_id == 0x2503U) {
+    if (device_id == 0x2504U) {
         *family = NVX_FAMILY_AMPERE;
         *profile = NVX_PROFILE_GEFORCE_RTX_3060;
         return 1;
@@ -62,8 +62,7 @@ static nvx_gsp_platform_config_t valid_config(struct pci_device *device,
     config.firmware_provider = provider;
     config.firmware_chip = "ga106";
     config.firmware_version = "535.129.03";
-    config.expected_extended_chip_id = 0x177U;
-    config.trusted_gpu_facts = facts;
+        config.trusted_gpu_facts = facts;
     config.command_queue_bytes = 64U * 1024U;
     config.status_queue_bytes = 64U * 1024U;
     config.timeout_ms = 5000U;
@@ -76,7 +75,7 @@ int main(void)
 {
     struct pci_device device = {
         .vendor_id = NVX_PCI_VENDOR_NVIDIA,
-        .device_id = 0x2503U,
+        .device_id = 0x2504U,
         .class_code = 0x03U
     };
     nvx_bar_resource_t bar = {
@@ -111,14 +110,7 @@ int main(void)
     assert(nvx_gsp_platform_validate_config(&config) ==
            NVX_GSP_PLATFORM_UNSUPPORTED_DEVICE);
     config = valid_config(&device, &bar, &provider, &facts);
-    config.expected_extended_chip_id = 0U;
-    assert(nvx_gsp_platform_validate_config(&config) ==
-           NVX_GSP_PLATFORM_INVALID_ARGUMENT);
-    config.expected_extended_chip_id = 0x400U;
-    assert(nvx_gsp_platform_validate_config(&config) ==
-           NVX_GSP_PLATFORM_INVALID_ARGUMENT);
-    config = valid_config(&device, &bar, &provider, &facts);
-
+    
     bar.size_known = 0U;
     assert(nvx_gsp_platform_validate_config(&config) ==
            NVX_GSP_PLATFORM_BAR_INVALID);

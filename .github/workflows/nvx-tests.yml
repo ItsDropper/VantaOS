@@ -832,9 +832,10 @@ jobs:
             scripts/test_nvx_submit.c drivers/gpu/nvx/execution/nvx_submit.c drivers/gpu/nvx/memory/nvx_gpuvm.c \
             drivers/gpu/nvx/memory/nvx_object_memory.c drivers/gpu/nvx/memory/nvx_gpuva.c \
             drivers/gpu/nvx/memory/nvx_dma.c drivers/gpu/core/gpu_dma.c \
-            drivers/gpu/core/gpu_va.c -o /tmp/vantaos-nvx-submit-test
+            drivers/gpu/core/gpu_va.c drivers/gpu/nvx/execution/nvx_sync.c \
+            -o /tmp/vantaos-nvx-submit-test
 
-      - name: Test command bounds, relocation overlap, target ranges and pinned batch lifetimes
+      - name: Test command bounds, relocation ranges, pinned lifetimes and fence-gated release
         run: /tmp/vantaos-nvx-submit-test
 
       - name: Compile NVX MSI/MSI-X capability tests with strict warnings

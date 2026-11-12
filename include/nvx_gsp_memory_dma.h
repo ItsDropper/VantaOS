@@ -9,6 +9,7 @@
 #include "nvx_gsp_memory.h"
 #include "nvx_gsp_context_dma.h"
 #include "nvx_gsp_dma_map.h"
+#include "nvx_gsp_os_memory.h"
 
 /*
  * Bind an already-created RM system-memory allocation to an already-created

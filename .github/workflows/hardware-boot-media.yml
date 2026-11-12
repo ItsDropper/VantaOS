@@ -60,7 +60,7 @@ jobs:
           sha256sum VantaOS-UEFI.img BOOTX64.EFI kernel-uefi.elf > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
-      - name: Boot UEFI test media in OVMF without any writable disk attached
+      - name: Boot UEFI test media in OVMF without a secondary disk attached
         shell: bash
         run: |
           set -euo pipefail
@@ -82,13 +82,16 @@ jobs:
           test -s "$code_firmware"
           test -s "$vars_template"
           cp "$vars_template" OVMF_VARS.fd
+          # OVMF may update FAT metadata while opening EFI files. Keep the
+          # published image pristine and boot a disposable writable copy.
+          cp VantaOS-UEFI.img uefi-qemu-test.img
 
           set +e
           timeout 25s qemu-system-x86_64 \
             -machine pc -cpu max -m 512M -smp 2 \
             -drive if=pflash,format=raw,readonly=on,file="$code_firmware" \
             -drive if=pflash,format=raw,file=OVMF_VARS.fd \
-            -drive file=VantaOS-UEFI.img,format=raw,if=ide,index=0,readonly=on \
+            -drive file=uefi-qemu-test.img,format=raw,if=ide,index=0 \
             -boot menu=on,order=c \
             -display none -serial file:uefi-hardware-test.log \
             -monitor none -no-reboot
@@ -120,7 +123,7 @@ jobs:
               exit 1
             }
           done
-          echo "UEFI live-media smoke test passed with no writable disks attached."
+          echo "UEFI live-media smoke test passed with no secondary disk attached; the kernel read-only policy is asserted by the block-device host test."
 
       - name: Upload verified UEFI hardware test media
         uses: actions/upload-artifact@v4

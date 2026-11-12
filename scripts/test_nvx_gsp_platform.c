@@ -111,6 +111,13 @@ int main(void)
     assert(nvx_gsp_platform_validate_config(&config) ==
            NVX_GSP_PLATFORM_UNSUPPORTED_DEVICE);
     config = valid_config(&device, &bar, &provider, &facts);
+    config.expected_extended_chip_id = 0U;
+    assert(nvx_gsp_platform_validate_config(&config) ==
+           NVX_GSP_PLATFORM_INVALID_ARGUMENT);
+    config.expected_extended_chip_id = 0x400U;
+    assert(nvx_gsp_platform_validate_config(&config) ==
+           NVX_GSP_PLATFORM_INVALID_ARGUMENT);
+    config = valid_config(&device, &bar, &provider, &facts);
 
     bar.size_known = 0U;
     assert(nvx_gsp_platform_validate_config(&config) ==

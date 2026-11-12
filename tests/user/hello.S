@@ -471,6 +471,7 @@ waitpid_status_fail:
     /* Emit the exact child status so CI distinguishes lost status from a
        child-side test failure without relying on a debugger-only build. */
     mov child_status(%rip), %eax
+    movb $10, waitpid_status_hex+8(%rip)
     lea waitpid_status_hex+7(%rip), %rdi
     mov $8, %ecx
 waitpid_status_hex_loop:
@@ -489,7 +490,7 @@ waitpid_status_hex_store:
     loop waitpid_status_hex_loop
     mov $1, %eax
     lea waitpid_status_prefix(%rip), %rdi
-    mov $(waitpid_status_hex_end - waitpid_status_prefix), %esi
+    mov $((waitpid_status_prefix_end - waitpid_status_prefix) + 9), %esi
     int $0x80
     mov $1, %eax
     lea waitpid_status_failure(%rip), %rdi
@@ -576,9 +577,7 @@ waitpid_status_failure:
 waitpid_status_failure_end:
 waitpid_status_prefix:
     .ascii "VANTAOS_WAITPID_STATUS=0x"
-waitpid_status_hex:
-    .ascii "00000000\n"
-waitpid_status_hex_end:
+waitpid_status_prefix_end:
 waitpid_ipc_failure:
     .ascii "VANTAOS_WAITPID_IPC_CLEANUP_FAIL\n"
 waitpid_ipc_failure_end:
@@ -599,6 +598,9 @@ parent_endpoint_string:
 .align 8
 child_endpoint_token:
     .skip 8
+.align 1
+waitpid_status_hex:
+    .skip 9
 .align 4
 child_status:
     .skip 4

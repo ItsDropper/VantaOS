@@ -68,7 +68,7 @@ nvx_submit_status_t nvx_submit_validate_batch(
         uint64_t target_address;
         uint64_t target_end;
         uint64_t field_end;
-        void *target_cpu = 0;
+        nvx_memory_info_t target_info;
         size_t width = reloc->width;
 
         if ((width != NVX_RELOC_ADDRESS32 && width != NVX_RELOC_ADDRESS64) ||
@@ -99,10 +99,15 @@ nvx_submit_status_t nvx_submit_validate_batch(
         if ((target_address & (width - 1U)) != 0U)
             return NVX_SUBMIT_INVALID_RELOCATION;
 
-        memory_status = nvx_memory_cpu_address(memory, &reloc->target,
-                                               &target_cpu);
-        if (memory_status != NVX_MEMORY_OK || target_cpu == 0)
+        memory_status = nvx_memory_get_info(memory, &reloc->target,
+                                            &target_info);
+        if (memory_status != NVX_MEMORY_OK || target_info.cpu_address == 0)
             return NVX_SUBMIT_TARGET_INVALID;
+        if (((reloc->access & NVX_RELOC_READ) != 0U &&
+             (target_info.access & NVX_MEMORY_ACCESS_READ) == 0U) ||
+            ((reloc->access & NVX_RELOC_WRITE) != 0U &&
+             (target_info.access & NVX_MEMORY_ACCESS_WRITE) == 0U))
+            return NVX_SUBMIT_TARGET_ACCESS;
         (void)target_end;
 
         if ((reloc->access & NVX_RELOC_READ) != 0U)

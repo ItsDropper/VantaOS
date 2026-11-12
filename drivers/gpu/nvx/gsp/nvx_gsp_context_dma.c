@@ -15,6 +15,19 @@ _Static_assert(offsetof(nvx_gsp_context_dma_params_t, offset) == 16U,
 _Static_assert(offsetof(nvx_gsp_context_dma_params_t, limit) == 24U,
     "NV_CONTEXT_DMA_ALLOCATION_PARAMS.limit ABI mismatch");
 
+static int ranges_overlap(const void *a, size_t a_size,
+                           const void *b, size_t b_size)
+{
+    uintptr_t ap, bp;
+    if (!a || !b || !a_size || !b_size)
+        return 0;
+    ap = (uintptr_t)a;
+    bp = (uintptr_t)b;
+    if (a_size > UINTPTR_MAX - ap || b_size > UINTPTR_MAX - bp)
+        return 1;
+    return ap < bp + b_size && bp < ap + a_size;
+}
+
 static void clear_owner(nvx_gsp_context_dma_t *object)
 {
     object->client_handle = 0U;
@@ -41,7 +54,8 @@ static int state_valid(const nvx_gsp_context_dma_t *object)
     case NVX_GSP_CONTEXT_DMA_CREATED:
         return !object->operation.handle.valid && object->client_handle &&
             object->device_handle && object->context_dma_handle &&
-            object->params.h_memory && object->params.limit >= object->params.offset;
+            object->params.h_memory && !object->params.reserved &&
+            object->params.limit >= object->params.offset;
     case NVX_GSP_CONTEXT_DMA_FREE_PENDING:
     case NVX_GSP_CONTEXT_DMA_FREE_RELEASE_PENDING:
         return object->operation.handle.valid &&
@@ -117,9 +131,12 @@ nvx_gsp_rmapi_status_t nvx_gsp_context_dma_create(
     nvx_gsp_rmapi_status_t status;
     if (!manager || !object || !client_handle || !device_handle ||
         !context_dma_handle || !memory_handle ||
+        context_dma_handle == memory_handle ||
         client_handle == device_handle || client_handle == context_dma_handle ||
         device_handle == context_dma_handle || !scratch || !response ||
         !timeout_ms || !poll_interval_ms || !delay_ms || offset > limit ||
+        ranges_overlap(object, sizeof(*object), scratch, scratch_size) ||
+        ranges_overlap(object, sizeof(*object), response, response_capacity) ||
         !state_valid(object) || object->stage != NVX_GSP_CONTEXT_DMA_IDLE)
         return NVX_GSP_RMAPI_INVALID_ARGUMENT;
 
@@ -158,8 +175,10 @@ nvx_gsp_rmapi_status_t nvx_gsp_context_dma_destroy(
 {
     nvx_gsp_rmapi_status_t status;
     if (!manager || !object || !scratch || !response || !timeout_ms ||
-        !poll_interval_ms || !delay_ms || !state_valid(object) ||
-        object->stage != NVX_GSP_CONTEXT_DMA_CREATED)
+        !poll_interval_ms || !delay_ms ||
+        ranges_overlap(object, sizeof(*object), scratch, scratch_size) ||
+        ranges_overlap(object, sizeof(*object), response, response_capacity) ||
+        !state_valid(object) || object->stage != NVX_GSP_CONTEXT_DMA_CREATED)
         return NVX_GSP_RMAPI_INVALID_ARGUMENT;
 
     status = nvx_gsp_rm_free_submit(manager, object->client_handle,
@@ -182,7 +201,10 @@ nvx_gsp_rmapi_status_t nvx_gsp_context_dma_recover(
     nvx_gsp_rmapi_delay_fn delay_ms, void *delay_context)
 {
     if (!manager || !object || !scratch || !response || !timeout_ms ||
-        !poll_interval_ms || !delay_ms || !state_valid(object) ||
+        !poll_interval_ms || !delay_ms ||
+        ranges_overlap(object, sizeof(*object), scratch, scratch_size) ||
+        ranges_overlap(object, sizeof(*object), response, response_capacity) ||
+        !state_valid(object) ||
         (object->stage != NVX_GSP_CONTEXT_DMA_ALLOC_PENDING &&
          object->stage != NVX_GSP_CONTEXT_DMA_ALLOC_RELEASE_PENDING &&
          object->stage != NVX_GSP_CONTEXT_DMA_FREE_PENDING &&

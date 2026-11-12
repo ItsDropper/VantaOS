@@ -828,7 +828,7 @@ jobs:
           gcc -DDEVICE_IRQ_TEST -DPCI_TEST -std=c11 -Wall -Wextra -Werror -Iinclude \
             scripts/test_nvx_irq_route.c drivers/gpu/nvx/interrupts/nvx_irq_route.c \
             drivers/gpu/nvx/interrupts/nvx_irq_caps.c arch/x86_64/device_irq.c \
-            drivers/pci/pci.c -o /tmp/vantaos-nvx-irq-route-test
+            drivers/pci/pci.c kernel/device.c -o /tmp/vantaos-nvx-irq-route-test
 
       - name: Test NVX interrupt route preparation and rollback
         run: /tmp/vantaos-nvx-irq-route-test

@@ -65,10 +65,12 @@ static int desktop_settings_click(int x, int y, int width, int height,
         int bx = x + 28 + i * (bw + gap);
         if (pointer_x >= bx && pointer_x < bx + bw)
         {
-            settings_resolution_index = i;
             if (graphics_set_resolution(settings_widths[i],
                                          settings_heights[i]))
+            {
+                settings_resolution_index = i;
                 gui_server_reflow_windows();
+            }
             return 1;
         }
     }
@@ -226,6 +228,15 @@ void desktop_initialize(multiboot_info_t* mbd)
     terminal_window_open = 0;
     desktop_last_clock_refresh = 0;
     (void)desktop_theme_reload();
+    for (int i = 0; i < 3; ++i)
+    {
+        if (graphics_get_width() == settings_widths[i] &&
+            graphics_get_height() == settings_heights[i])
+        {
+            settings_resolution_index = i;
+            break;
+        }
+    }
     desktop_register_builtin_windows();
 }
 

@@ -361,7 +361,7 @@ static EFI_STATUS load_elf64(
 
         CopyMem(
             (void*)(UINTN)ph->p_paddr,
-            (const void*)(file + (UINTN)ph->p_offset),
+            (void*)(file + (UINTN)ph->p_offset),
             (UINTN)ph->p_filesz
         );
     }

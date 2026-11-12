@@ -152,7 +152,7 @@ VantaOS-UEFI.img: BOOTX64.EFI kernel-uefi.elf
 	rm -f $@
 	truncate -s 128M $@
 	sgdisk --clear --new=1:2048:0 --typecode=1:EF00 --change-name=1:VANTAESP $@
-	mkfs.fat -F 32 --offset=2048 $@ >/dev/null
+	mkfs.fat -F 32 -s 1 --offset=2048 $@ >/dev/null
 	mmd -i $@@@1048576 ::/EFI
 	mmd -i $@@@1048576 ::/EFI/BOOT
 	mmd -i $@@@1048576 ::/EFI/VANTA

@@ -102,10 +102,8 @@ static void delay(uint32_t ms, void *context)
 static nvx_gsp_memory_allocation_params_t params(void)
 {
     nvx_gsp_memory_allocation_params_t p = {0};
-    p.owner = UINT32_C(0x7368696D); /* NVIDIA legacy shim owner tag. */
-    p.type = 0U; /* NVOS32_TYPE_IMAGE from NVIDIA's public nvos.h. */
-    p.size = 16384U;
-    p.alignment = 4096U;
+    assert(nvx_gsp_memory_params_init_system(&p, 16384U, 0x1234U) ==
+        NVX_GSP_RMAPI_OK);
     return p;
 }
 
@@ -120,6 +118,14 @@ int main(void)
         NVX_GSP_RMAPI_OK;
     release_status = NVX_GSP_RPC_OK;
 
+    assert(nvx_gsp_memory_params_init_system(&p, 0U, 0U) ==
+        NVX_GSP_RMAPI_INVALID_ARGUMENT);
+    p = params();
+    assert(p.owner == UINT32_C(0x7368696D));
+    assert(p.type == 0U);
+    assert(p.attr == UINT32_C(0x0A000000));
+    assert(p.attr2 == UINT32_C(0x00000008));
+    assert(p.flags == 0U && p.size == 16384U && p.alignment == 4096U);
     assert(sizeof(p) == 128U);
     assert(offsetof(nvx_gsp_memory_allocation_params_t, range_lo) == 48U);
     assert(offsetof(nvx_gsp_memory_allocation_params_t, size) == 64U);

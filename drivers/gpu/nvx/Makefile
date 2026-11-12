@@ -54,6 +54,7 @@ VANTAOS_NVX_C := \
     drivers/gpu/nvx/gsp/nvx_gsp_elf.c \
     drivers/gpu/nvx/gsp/nvx_gsp_elf_load.c \
     drivers/gpu/nvx/gsp/nvx_gsp_boot_memory.c \
+    drivers/gpu/nvx/gsp/nvx_gsp_boot_package.c \
     drivers/gpu/nvx/memory/nvx_dma.c \
     drivers/gpu/nvx/memory/nvx_dma_sync.c \
     drivers/gpu/nvx/memory/nvx_gpuva.c \

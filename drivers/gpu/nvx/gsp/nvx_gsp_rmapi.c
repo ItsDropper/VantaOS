@@ -330,11 +330,13 @@ nvx_gsp_rmapi_status_t nvx_gsp_rm_create_core_objects(
     if(s!=NVX_GSP_RMAPI_OK) {
         if(s==NVX_GSP_RMAPI_TIMEOUT)return s;
         out->in_flight_stage=0U;
-        if(free_core_object(manager,client,0U,client,
-           scratch,scratch_size,response,response_capacity,timeout_ms,
-           poll_interval_ms,delay_ms,delay_context)==NVX_GSP_RMAPI_OK)
-            out->client_created=0U;
-        return s;
+        {
+            nvx_gsp_rmapi_status_t cleanup=
+                nvx_gsp_rm_destroy_core_objects(manager,out,scratch,scratch_size,
+                    response,response_capacity,timeout_ms,poll_interval_ms,
+                    delay_ms,delay_context);
+            return cleanup==NVX_GSP_RMAPI_OK?s:NVX_GSP_RMAPI_CLEANUP_FAILED;
+        }
     }
     out->device_created=1U;out->in_flight_stage=0U;
 
@@ -353,17 +355,56 @@ nvx_gsp_rmapi_status_t nvx_gsp_rm_create_core_objects(
     if(s!=NVX_GSP_RMAPI_OK) {
         if(s==NVX_GSP_RMAPI_TIMEOUT)return s;
         out->in_flight_stage=0U;
-        if(free_core_object(manager,client,client,
-           device,scratch,scratch_size,response,response_capacity,timeout_ms,
-           poll_interval_ms,delay_ms,delay_context)==NVX_GSP_RMAPI_OK)
-            out->device_created=0U;
-        if(s!=NVX_GSP_RMAPI_TIMEOUT&&free_core_object(manager,client,0U,client,
-           scratch,scratch_size,response,response_capacity,timeout_ms,
-           poll_interval_ms,delay_ms,delay_context)==NVX_GSP_RMAPI_OK)
-            out->client_created=0U;
-        return s;
+        {
+            nvx_gsp_rmapi_status_t cleanup=
+                nvx_gsp_rm_destroy_core_objects(manager,out,scratch,scratch_size,
+                    response,response_capacity,timeout_ms,poll_interval_ms,
+                    delay_ms,delay_context);
+            return cleanup==NVX_GSP_RMAPI_OK?s:NVX_GSP_RMAPI_CLEANUP_FAILED;
+        }
     }
     out->vaspace_created=1U;out->in_flight_stage=0U;
+    return NVX_GSP_RMAPI_OK;
+}
+
+nvx_gsp_rmapi_status_t nvx_gsp_rm_destroy_core_objects(
+    nvx_gsp_rpc_manager_t *manager,nvx_gsp_rm_core_objects_t *objects,
+    void *scratch,size_t scratch_size,void *response,size_t response_capacity,
+    uint32_t timeout_ms,uint32_t poll_interval_ms,
+    nvx_gsp_rmapi_delay_fn delay_ms,void *delay_context)
+{
+    nvx_gsp_rmapi_status_t status;
+    if(!manager||!objects||!scratch||!response||!timeout_ms||
+       !poll_interval_ms||!delay_ms||objects->in_flight_stage!=0U||
+       overlaps(objects,sizeof(*objects),scratch,scratch_size)||
+       overlaps(objects,sizeof(*objects),response,response_capacity))
+        return NVX_GSP_RMAPI_INVALID_ARGUMENT;
+
+    /* RM objects form a parent/child tree: never free a parent while a child
+       remains live or has an uncertain outcome. Preserve flags on failure. */
+    if(objects->vaspace_created) {
+        status=free_core_object(manager,objects->client_handle,
+            objects->device_handle,objects->vaspace_handle,scratch,scratch_size,
+            response,response_capacity,timeout_ms,poll_interval_ms,
+            delay_ms,delay_context);
+        if(status!=NVX_GSP_RMAPI_OK)return status;
+        objects->vaspace_created=0U;
+    }
+    if(objects->device_created) {
+        status=free_core_object(manager,objects->client_handle,
+            objects->client_handle,objects->device_handle,scratch,scratch_size,
+            response,response_capacity,timeout_ms,poll_interval_ms,
+            delay_ms,delay_context);
+        if(status!=NVX_GSP_RMAPI_OK)return status;
+        objects->device_created=0U;
+    }
+    if(objects->client_created) {
+        status=free_core_object(manager,objects->client_handle,0U,
+            objects->client_handle,scratch,scratch_size,response,
+            response_capacity,timeout_ms,poll_interval_ms,delay_ms,delay_context);
+        if(status!=NVX_GSP_RMAPI_OK)return status;
+        objects->client_created=0U;
+    }
     return NVX_GSP_RMAPI_OK;
 }
 

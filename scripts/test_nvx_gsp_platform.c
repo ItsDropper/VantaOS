@@ -62,6 +62,7 @@ static nvx_gsp_platform_config_t valid_config(struct pci_device *device,
     config.firmware_provider = provider;
     config.firmware_chip = "ga106";
     config.firmware_version = "535.129.03";
+    config.expected_extended_chip_id = 0x177U;
     config.trusted_gpu_facts = facts;
     config.command_queue_bytes = 64U * 1024U;
     config.status_queue_bytes = 64U * 1024U;

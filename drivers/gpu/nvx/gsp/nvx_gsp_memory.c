@@ -21,6 +21,22 @@ _Static_assert(offsetof(nvx_gsp_memory_allocation_params_t, address) == 96U,
 _Static_assert(offsetof(nvx_gsp_memory_allocation_params_t, h_vaspace) == 108U,
     "NV_MEMORY_ALLOCATION_PARAMS hVASpace offset mismatch");
 
+nvx_gsp_rmapi_status_t nvx_gsp_memory_params_init_system(
+    nvx_gsp_memory_allocation_params_t *params, uint64_t size, uint32_t tag)
+{
+    if (!params || !size)
+        return NVX_GSP_RMAPI_INVALID_ARGUMENT;
+    *params = (nvx_gsp_memory_allocation_params_t){0};
+    params->owner = NVX_GSP_MEMORY_OWNER_LEGACY_SHIM;
+    params->type = NVX_GSP_MEMORY_TYPE_IMAGE;
+    params->attr = NVX_GSP_MEMORY_ATTR_SYSTEM_UNCACHED_NONCONTIGUOUS;
+    params->attr2 = NVX_GSP_MEMORY_ATTR2_GPU_CACHEABLE_NO;
+    params->size = size;
+    params->alignment = NVX_GSP_MEMORY_PAGE_SIZE;
+    params->tag = tag;
+    return NVX_GSP_RMAPI_OK;
+}
+
 static int ranges_overlap(const void *a, size_t a_size,
                           const void *b, size_t b_size)
 {

@@ -31,6 +31,7 @@ nvx_gsp_rmapi_status_t nvx_gsp_memory_params_init_system(
     params->type = NVX_GSP_MEMORY_TYPE_IMAGE;
     params->attr = NVX_GSP_MEMORY_ATTR_SYSTEM_UNCACHED_NONCONTIGUOUS;
     params->attr2 = NVX_GSP_MEMORY_ATTR2_GPU_CACHEABLE_NO;
+    params->flags = NVX_GSP_MEMORY_ALLOC_FLAG_ALIGNMENT_FORCE;
     params->size = size;
     params->alignment = NVX_GSP_MEMORY_PAGE_SIZE;
     params->tag = tag;

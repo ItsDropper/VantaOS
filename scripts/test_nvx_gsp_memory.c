@@ -126,7 +126,8 @@ int main(void)
     assert(p.type == 0U);
     assert(p.attr == UINT32_C(0x0A000000));
     assert(p.attr2 == UINT32_C(0x00000008));
-    assert(p.flags == 0U && p.size == 16384U && p.alignment == 4096U);
+    assert(p.flags == NVX_GSP_MEMORY_ALLOC_FLAG_ALIGNMENT_FORCE &&
+           p.size == 16384U && p.alignment == 4096U);
     assert(sizeof(p) == 128U);
     assert(offsetof(nvx_gsp_memory_allocation_params_t, range_lo) == 48U);
     assert(offsetof(nvx_gsp_memory_allocation_params_t, size) == 64U);

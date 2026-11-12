@@ -15,6 +15,8 @@
 #define NVX_GSP_MEMORY_ATTR_SYSTEM_UNCACHED_NONCONTIGUOUS UINT32_C(0x0A000000)
 #define NVX_GSP_MEMORY_ATTR2_GPU_CACHEABLE_NO UINT32_C(0x00000008)
 #define NVX_GSP_MEMORY_OWNER_LEGACY_SHIM UINT32_C(0x7368696D)
+/* NVOS32_ALLOC_FLAGS_ALIGNMENT_FORCE from NVIDIA's public nvos.h. */
+#define NVX_GSP_MEMORY_ALLOC_FLAG_ALIGNMENT_FORCE UINT32_C(0x00000100)
 #define NVX_GSP_MEMORY_ALLOC_RESPONSE_HEADER_SIZE 32U
 
 /*
@@ -72,7 +74,7 @@ typedef struct nvx_gsp_memory_object {
     uint8_t stage;
 } nvx_gsp_memory_object_t;
 
-/* Initialize a conservative 4 KiB-aligned system-memory allocation request. */
+/* Initialize a conservative system-memory request with forced 4 KiB alignment. */
 nvx_gsp_rmapi_status_t nvx_gsp_memory_params_init_system(
     nvx_gsp_memory_allocation_params_t *params, uint64_t size,
     uint32_t tag);

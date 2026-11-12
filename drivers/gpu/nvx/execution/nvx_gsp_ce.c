@@ -146,7 +146,7 @@ nvx_gsp_ce_runtime_status_t nvx_gsp_ce_copy_submit_and_wait(
          overlaps(out_fifo_status,sizeof(*out_fifo_status),command_buffer,
                   command_capacity_bytes)||
          overlaps(out_fifo_status,sizeof(*out_fifo_status),
-                  completion_cpu_word,sizeof(*completion_cpu_word))))
+                  completion_cpu_word,sizeof(*completion_cpu_word)))))
         return NVX_GSP_CE_RUNTIME_INVALID_ARGUMENT;
 
     *out_command_bytes=0U;

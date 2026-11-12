@@ -18,11 +18,13 @@ The image is a GPT disk image containing one FAT32 EFI System Partition (the sta
 
 It is deliberately separate from `VantaOS-Setup.img`. The setup image contains the destructive installer; **do not use that image for this first test**.
 
+CI validates the raw GPT/FAT32 image, its EFI System Partition, and the exact loader/kernel files. OVMF's loader smoke test uses a separate El Torito EFI image containing those same two binaries. That exercises the VantaOS EFI loader and kernel handoff, but it does **not** prove that a particular firmware can discover the raw USB disk's partition. The first physical USB boot remains the test of that firmware-specific path.
+
 ## Storage safety contract
 
 UEFI boot-info sets `VANTA_BOOT_FLAG_STORAGE_READ_ONLY`. The common block-device registration path applies `BLOCK_DEVICE_READ_ONLY` to every whole disk registered during a UEFI boot. Partition devices inherit the flag, and the common write API rejects writes before reaching a storage driver. Reads and inventory remain available.
 
-This protects disks exposed through VantaOS's block-device layer. It is not a substitute for keeping backups, and it does not make the prototype suitable for installation. The first test image is boot-only and does not include the setup application. Firmware may update filesystem metadata on the boot USB before VantaOS starts; the published image is kept pristine during CI by testing a disposable copy. Once VantaOS is running, every disk registered through its common block-device layer is read-only.
+This protects disks exposed through VantaOS's block-device layer. It is not a substitute for keeping backups, and it does not make the prototype suitable for installation. The first test image is boot-only and does not include the setup application. The raw USB image is not modified by the OVMF smoke test; OVMF boots the separate El Torito wrapper. Once VantaOS is running, every disk registered through its common block-device layer is read-only.
 
 ## Prepare the laptop
 
@@ -34,7 +36,7 @@ Before testing:
 - Keep a Windows recovery method available and ensure important files are backed up.
 - Disconnect other external storage devices so the test cannot confuse them with the boot USB.
 - Use the firmware's one-time boot menu to select the USB's UEFI entry. Do not change boot order permanently or change storage-controller mode.
-- **Secure Boot:** the current test loader is not signed by a key trusted by the laptop. If Secure Boot is enabled, firmware will normally reject it. Do not change Secure Boot settings unless the device owner approves, a Windows/device-encryption recovery key is available, and you understand how to restore the original setting. If those conditions are not met, do not attempt the physical boot yet; keep using the OVMF test. Restore the original Secure Boot setting after testing.
+- **Secure Boot:** the current test loader is not signed by a key trusted by the laptop. If Secure Boot is enabled, firmware will normally reject it. Do not change Secure Boot settings unless the device owner approves, a Windows/device-encryption recovery key is available, and you understand how to restore the original setting. If those conditions are not met, do not attempt the physical boot. The OVMF loader smoke test can still validate the EFI loader/kernel path, but it does not establish that laptop firmware will accept an unsigned image. Restore the original Secure Boot setting after testing.
 
 Use a trusted image-writing tool that supports raw disk images. Select only the intended USB device and verify its capacity/model in the tool before confirming. Never select the internal laptop drive.
 

@@ -33,7 +33,8 @@ Before testing:
 - Have a separate, empty USB drive for the test image. Writing the image erases that USB drive.
 - Keep a Windows recovery method available and ensure important files are backed up.
 - Disconnect other external storage devices so the test cannot confuse them with the boot USB.
-- Use the firmware's one-time boot menu to select the USB's UEFI entry. Do not change boot order permanently, disable Secure Boot, or change storage-controller mode for the first attempt.
+- Use the firmware's one-time boot menu to select the USB's UEFI entry. Do not change boot order permanently or change storage-controller mode.
+- **Secure Boot:** the current test loader is not signed by a key trusted by the laptop. If Secure Boot is enabled, firmware will normally reject it. Do not change Secure Boot settings unless the device owner approves, a Windows/device-encryption recovery key is available, and you understand how to restore the original setting. If those conditions are not met, do not attempt the physical boot yet; keep using the OVMF test. Restore the original Secure Boot setting after testing.
 
 Use a trusted image-writing tool that supports raw disk images. Select only the intended USB device and verify its capacity/model in the tool before confirming. Never select the internal laptop drive.
 
@@ -44,7 +45,7 @@ A successful first boot is deliberately modest:
 1. Firmware starts `EFI/BOOT/BOOTX64.EFI`.
 2. The UEFI loader validates and loads the kernel.
 3. GOP framebuffer handoff succeeds and the desktop appears.
-4. Serial diagnostics show `VANTAOS_UEFI_STORAGE_POLICY_READ_ONLY` and `VANTAOS_BOOT_OK`.
+4. The serial log (when a supported capture path is available) shows `VANTAOS_UEFI_STORAGE_POLICY_READ_ONLY` and `VANTAOS_BOOT_OK`; without serial capture, record the visible desktop/panic result and do not claim the marker was observed.
 5. CPU, SMBIOS, ACPI and PCI inventory are emitted without a panic or reboot.
 6. External USB keyboard/mouse work if the relevant xHCI/HID devices initialize.
 

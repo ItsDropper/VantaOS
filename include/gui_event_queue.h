@@ -16,11 +16,27 @@ static inline int gui_event_queue_push(vanta_gui_event_t* events,
     if (!events || capacity == 0U || !head || !count || !event ||
         *head >= capacity || *count > capacity)
         return 0;
-    if (event->type == VANTA_GUI_EVENT_POINTER_MOVE && *count != 0U)
+    if (*count != 0U)
     {
         uint32_t last = (*head + *count - 1U) % capacity;
-        if (events[last].type == VANTA_GUI_EVENT_POINTER_MOVE)
-        { events[last] = *event; return 1; }
+        if (event->type == VANTA_GUI_EVENT_POINTER_MOVE &&
+            events[last].type == VANTA_GUI_EVENT_POINTER_MOVE)
+        {
+            events[last] = *event;
+            return 1;
+        }
+        if (event->type == VANTA_GUI_EVENT_POINTER_WHEEL &&
+            events[last].type == VANTA_GUI_EVENT_POINTER_WHEEL)
+        {
+            int64_t combined = (int64_t)(int32_t)events[last].value +
+                               (int64_t)(int32_t)event->value;
+            if (combined > INT32_MAX) combined = INT32_MAX;
+            if (combined < INT32_MIN) combined = INT32_MIN;
+            events[last].x = event->x;
+            events[last].y = event->y;
+            events[last].value = (uint32_t)(int32_t)combined;
+            return 1;
+        }
     }
     if (*count == capacity)
     {

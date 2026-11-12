@@ -169,6 +169,40 @@ int main(void)
     }
     assert(submissions==5U);
 
+    /* Output objects must never alias the RPC scratch or response buffers. */
+    {
+        union {
+            nvx_gsp_rmapi_result_t result;
+            uint8_t bytes[4096];
+        } scratch_alias;
+        union {
+            nvx_gsp_rmapi_result_t result;
+            uint8_t bytes[4096];
+        } response_alias;
+        uint32_t decoded_status = 0U;
+        uint64_t mapped_offset = 0U;
+        memset(&scratch_alias, 0, sizeof(scratch_alias));
+        memset(&response_alias, 0, sizeof(response_alias));
+        expected_function = NVX_GSP_RPC_FN_RM_ALLOC;
+        assert(nvx_gsp_rm_alloc_submit(&manager,1U,2U,3U,4U,0U,params,
+            sizeof(params),scratch_alias.bytes,sizeof(scratch_alias.bytes),
+            response,sizeof(response),&scratch_alias.result)==
+            NVX_GSP_RMAPI_INVALID_ARGUMENT);
+        assert(submissions==5U);
+
+        op.function=NVX_GSP_RPC_FN_MAP_MEMORY_DMA;
+        op.handle.valid=1U;
+        assert(nvx_gsp_rmapi_wait(&manager,&op,scratch,sizeof(scratch),
+            &op,sizeof(op),1U,1U,no_delay,NULL)==
+            NVX_GSP_RMAPI_INVALID_ARGUMENT);
+        assert(nvx_gsp_rmapi_decode_status(&op,&op,sizeof(op),
+            &decoded_status)==NVX_GSP_RMAPI_INVALID_ARGUMENT);
+        assert(nvx_gsp_rm_map_memory_dma_result(&op,response_alias.bytes,
+            sizeof(response_alias.bytes),(uint64_t *)(void *)response_alias.bytes)==
+            NVX_GSP_RMAPI_INVALID_ARGUMENT);
+        assert(mapped_offset==0U);
+    }
+
     {
         nvx_gsp_rm_core_objects_t objects;
         auto_complete=1;

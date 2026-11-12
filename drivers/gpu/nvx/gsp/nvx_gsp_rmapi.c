@@ -24,6 +24,12 @@ _Static_assert(offsetof(nvx_gsp_map_memory_dma_t, length) == 24U,
 _Static_assert(offsetof(nvx_gsp_map_memory_dma_t, flags) == 32U,
     "NVOS46.flags ABI mismatch");
 _Static_assert(offsetof(nvx_gsp_map_memory_dma_t, dma_offset) == 48U,
+    "NVOS46.length ABI mismatch");
+_Static_assert(offsetof(nvx_gsp_map_memory_dma_t, flags2) == 36U,
+    "NVOS46.flags2 ABI mismatch");
+_Static_assert(offsetof(nvx_gsp_map_memory_dma_t, kind_override) == 40U,
+    "NVOS46.kindOverride ABI mismatch");
+_Static_assert(offsetof(nvx_gsp_map_memory_dma_t, dma_offset) == 48U,
     "NVOS46.dmaOffset ABI mismatch");
 _Static_assert(sizeof(nvx_gsp_unmap_memory_dma_t) == 40U,
     "NVOS47 input fields must match the public 64-bit ABI");
@@ -243,7 +249,7 @@ nvx_gsp_rmapi_status_t nvx_gsp_rm_map_memory_dma_result(
         return NVX_GSP_RMAPI_INVALID_ARGUMENT;
     *out_dma_offset=0U;
     if(response_size<NVX_GSP_RM_MAP_MEMORY_DMA_RESPONSE_BYTES)
-        return NVX_GSP_RMAPI_RESPONSE_TOO_SMALL;
+            return NVX_GSP_RMAPI_RESPONSE_TOO_SMALL;
     decoded=nvx_gsp_rmapi_decode_status(operation,response,response_size,&status);
     if(decoded!=NVX_GSP_RMAPI_OK)return decoded;
     *out_dma_offset=(uint64_t)get32(p+NVX_GSP_RM_MAP_MEMORY_DMA_OFFSET_OFFSET)|

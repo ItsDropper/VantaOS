@@ -139,16 +139,30 @@ static char* output_line(size_t logical_line)
 
 static void output_newline(void)
 {
-    output_scroll_offset = 0U;
     if (output_count < OUTPUT_LINES)
     {
         output_count++;
         clear_line(output_slot(output_count - 1U));
-        return;
+    }
+    else
+    {
+        /* Selection indices refer to logical history lines. Once the ring
+           drops its oldest row, discard a selection rather than copying a
+           different line under stale coordinates. */
+        selection_active = 0;
+        selection_dragging = 0;
+        output_start = (output_start + 1U) % OUTPUT_LINES;
+        clear_line(output_slot(output_count - 1U));
     }
 
-    output_start = (output_start + 1U) % OUTPUT_LINES;
-    clear_line(output_slot(output_count - 1U));
+    /* Keep the current viewport anchored while output arrives. */
+    if (output_scroll_offset != 0U)
+    {
+        size_t maximum = output_count > DISPLAY_LINES ?
+            output_count - DISPLAY_LINES : 0U;
+        if (output_scroll_offset < maximum)
+            output_scroll_offset++;
+    }
 }
 
 static void output_character(char value)
@@ -430,7 +444,7 @@ static void render(void)
     render_add_rect(8, 344, 720, 1, COLOR_BORDER);
     render_add_text(16, 350, "Drag to select | double-click word | Ctrl+C copy | Ctrl+V paste",
                     COLOR_MUTED);
-    render_add_text(16, 374, "PgUp/PgDn scrollback | type exit to close Terminal", COLOR_MUTED);
+    render_add_text(16, 374, "Mouse wheel / PgUp / PgDn scrollback | type exit to close", COLOR_MUTED);
     (void)vanta_gui_draw(window_id, commands, command_count);
 }
 
@@ -460,16 +474,33 @@ static void command_help(void)
     write_text("  exec <elf> [args...] Run a user ELF and wait for it\n");
     write_text("  curl <URL>           Fetch an HTTP URL and print its body\n");
     write_text("  curl -o <file> <URL> Download an HTTP response to a VFS file\n");
-    write_text("  net connect          Configure networking with DHCP\n");
     write_text("  net status           Show network interfaces and counters\n");
+    write_text("  net adapters         List detected PCI network adapters\n");
+    write_text("  net connect          Configure networking with DHCP\n");
+    write_text("  net dns/ping/ping6   Resolve names and test network reachability\n");
+    write_text("  net http <URL>       Fetch a plain-HTTP response\n");
+    write_text("  net config ...       Configure static IPv4\n");
+    write_text("  net poll             Poll network receive queues\n");
+    write_text("  ps                   List running processes\n");
+    write_text("  specs/boot/uptime    Show system and boot information\n");
+    write_text("  mem/storage          Show memory and storage status\n");
+    write_text("  history              Show recent shell commands\n");
+    write_text("  stat <path>          Show VFS metadata\n");
+    write_text("  write <path> <text>  Write a VFS file\n");
+    write_text("  parttool list        List detected block devices and partitions\n");
     write_text("  curl supports plain HTTP only; HTTPS/TLS is not implemented.\n");
-    write_text("  kernel <command>     Run a supported kernel-shell command\n");
+    write_text("  kernel fault         Trigger a test page fault (dangerous)\n");
+    write_text("  kernel heap          Run the kernel heap diagnostic\n");
+    write_text("  kernel reboot        Restart VantaOS\n");
+    write_text("  kernel kill ...      Terminate a process (privileged)\n");
+    write_text("  kernel <command>     Run other supported kernel-shell commands\n");
+    write_text("  Most system and network commands work without this prefix.\n");
+    write_text("  Only privileged or destructive operations require kernel.\n");
     write_text("  clear                Clear visible terminal history\n");
     write_text("  exit                 Close the terminal\n");
     write_text("  Up / Down            Recall the last 16 commands\n");
-    write_text("  PageUp / PageDown    Scroll retained output\n");
+    write_text("  Mouse wheel / PgUp   Scroll retained output\n");
     write_text("Paths refer to VantaOS, not files on the host computer.\n");
-    write_text("The kernel command interface is privileged; use it deliberately.\n");
 }
 
 static void command_list(const char* path)
@@ -926,6 +957,35 @@ static void history_recall(size_t position)
     render();
 }
 
+static int command_word_is(const char* command, const char* word)
+{
+    size_t length = string_length(word);
+    return starts_with(command, word) &&
+           (command[length] == '\0' || command[length] == ' ');
+}
+
+static int command_requires_kernel_prefix(const char* command)
+{
+    return command_word_is(command, "fault") ||
+           command_word_is(command, "heap") ||
+           command_word_is(command, "reboot") ||
+           command_word_is(command, "kill");
+}
+
+static int command_is_kernel_passthrough(const char* command)
+{
+    return command_word_is(command, "ps") ||
+           command_word_is(command, "specs") ||
+           command_word_is(command, "boot") ||
+           command_word_is(command, "uptime") ||
+           command_word_is(command, "mem") ||
+           command_word_is(command, "history") ||
+           command_word_is(command, "storage") ||
+           command_word_is(command, "stat") ||
+           command_word_is(command, "write") ||
+           string_equals(command, "parttool list");
+}
+
 static void execute_line(char* command)
 {
     while (*command == ' ')
@@ -969,11 +1029,16 @@ static void execute_line(char* command)
     }
     else if (starts_with(command, "exec "))
         command_exec(command + 5);
+    else if (command_requires_kernel_prefix(command))
+    {
+        write_text("This operation requires explicit kernel access. Use: kernel ");
+        write_text(command);
+        write_text("\n");
+    }
     else if (starts_with(command, "kernel "))
         command_kernel(command + 7);
-    else if (starts_with(command, "curl "))
-        command_kernel(command);
-    else if (starts_with(command, "net "))
+    else if (starts_with(command, "curl ") || starts_with(command, "net ") ||
+             command_is_kernel_passthrough(command))
         command_kernel(command);
     else if (string_equals(command, "clear"))
     {
@@ -982,6 +1047,8 @@ static void execute_line(char* command)
         output_start = 0U;
         output_count = 1U;
         output_scroll_offset = 0U;
+        selection_active = 0;
+        selection_dragging = 0;
         prompt_length = 0U;
         write_text("VantaOS Terminal - ring-3 shell\n");
     }
@@ -1046,6 +1113,34 @@ int main(int argc, char** argv)
             continue;
         }
 
+        if (event.type == VANTA_GUI_EVENT_POINTER_WHEEL)
+        {
+            if (event.x >= 16 && event.x < 728 &&
+                event.y >= 42 && event.y < 330)
+            {
+                int64_t delta = (int32_t)event.value;
+                size_t amount = (size_t)(delta > 0 ? delta : -delta) * 3U;
+                size_t maximum = output_count > DISPLAY_LINES ?
+                    output_count - DISPLAY_LINES : 0U;
+                if (output_scroll_offset > maximum)
+                    output_scroll_offset = maximum;
+                if (delta > 0)
+                {
+                    if (amount > maximum - output_scroll_offset)
+                        output_scroll_offset = maximum;
+                    else
+                        output_scroll_offset += amount;
+                }
+                else if (delta < 0)
+                {
+                    output_scroll_offset =
+                        output_scroll_offset > amount ?
+                        output_scroll_offset - amount : 0U;
+                }
+                render();
+            }
+            continue;
+        }
         if (event.type == VANTA_GUI_EVENT_POINTER_DOWN && event.value == 1U)
         {
             terminal_pointer_select(event.x, event.y, 0);

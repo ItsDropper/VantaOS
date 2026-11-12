@@ -168,6 +168,9 @@ int main(void)
     assert(nvx_memory_unpin(&manager, &a) == NVX_MEMORY_CORRUPT_STATE);
     assert(nvx_memory_pin(&manager, &a) == NVX_MEMORY_OK);
     assert(nvx_memory_unpin(&manager, &a) == NVX_MEMORY_OK);
+    manager.slots[a.slot].active_users = UINT32_MAX;
+    assert(nvx_memory_pin(&manager, &a) == NVX_MEMORY_CORRUPT_STATE);
+    manager.slots[a.slot].active_users = 0U;
     assert(nvx_memory_validate(&manager) == NVX_MEMORY_OK);
 
     forged = a;

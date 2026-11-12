@@ -22,7 +22,7 @@ It is deliberately separate from `VantaOS-Setup.img`. The setup image contains t
 
 UEFI boot-info sets `VANTA_BOOT_FLAG_STORAGE_READ_ONLY`. The common block-device registration path applies `BLOCK_DEVICE_READ_ONLY` to every whole disk registered during a UEFI boot. Partition devices inherit the flag, and the common write API rejects writes before reaching a storage driver. Reads and inventory remain available.
 
-This protects disks exposed through VantaOS's block-device layer. It is not a substitute for keeping backups, and it does not make the prototype suitable for installation. The first test image is boot-only and does not include the setup application.
+This protects disks exposed through VantaOS's block-device layer. It is not a substitute for keeping backups, and it does not make the prototype suitable for installation. The first test image is boot-only and does not include the setup application. Firmware may update filesystem metadata on the boot USB before VantaOS starts; the published image is kept pristine during CI by testing a disposable copy. Once VantaOS is running, every disk registered through its common block-device layer is read-only.
 
 ## Prepare the laptop
 

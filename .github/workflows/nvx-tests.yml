@@ -539,6 +539,7 @@ jobs:
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
             scripts/test_nvx_pci.c drivers/gpu/nvx/core/nvx_device.c \
             drivers/gpu/nvx/core/nvx_generation.c drivers/gpu/nvx/core/nvx_pci.c \
+            drivers/gpu/nvx/core/nvx_probe.c drivers/gpu/nvx/core/nvx_mmio.c \
             -o /tmp/vantaos-nvx-pci-test
 
       - name: Test PCI inventory diagnostics and auxiliary-function filtering

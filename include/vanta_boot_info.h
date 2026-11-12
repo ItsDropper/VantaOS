@@ -26,6 +26,8 @@
 #define VANTA_BOOT_FLAG_FRAMEBUFFER_VALID     (1U << 2)
 #define VANTA_BOOT_FLAG_ACPI_RSDP_VALID       (1U << 3)
 #define VANTA_BOOT_FLAG_LEGACY_INFO_PRESENT   (1U << 4)
+/* UEFI live boots must not write to any detected block device. */
+#define VANTA_BOOT_FLAG_STORAGE_READ_ONLY    (1U << 5)
 
 typedef enum vanta_boot_source
 {

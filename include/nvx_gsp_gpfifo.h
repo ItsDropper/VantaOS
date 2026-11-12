@@ -87,6 +87,14 @@ nvx_gsp_gpfifo_status_t nvx_gsp_gpfifo_submit_and_wait(
     uint32_t poll_interval_ms, nvx_gsp_gpfifo_delay_fn delay_ms,
     void *context, uint32_t *out_put_index);
 
+/* Same transaction with an explicit result indicating whether work was queued. */
+nvx_gsp_gpfifo_status_t nvx_gsp_gpfifo_submit_and_wait_ex(
+    nvx_gsp_gpfifo_channel_t *channel, uint64_t command_gpu_va,
+    size_t command_bytes, const volatile uint32_t *completion_word,
+    uint32_t expected_completion, uint32_t timeout_ms,
+    uint32_t poll_interval_ms, nvx_gsp_gpfifo_delay_fn delay_ms,
+    void *context, uint32_t *out_put_index, uint8_t *out_submitted);
+
 /* Wait until USERD GP_GET reaches or passes the submitted ring index. */
 nvx_gsp_gpfifo_status_t nvx_gsp_gpfifo_wait_get(
     nvx_gsp_gpfifo_channel_t *channel, uint32_t expected_get_index,

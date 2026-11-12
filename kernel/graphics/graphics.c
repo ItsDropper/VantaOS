@@ -309,7 +309,7 @@ int graphics_frame_is_active(void)
 
 int graphics_can_redraw_windows_incrementally(void)
 {
-    return initialized && !graphics_frame_active && active_panel == 3 &&
+    return initialized && !graphics_frame_active &&
            !start_menu_open && !terminal_dragging && !explorer_dragging;
 }
 

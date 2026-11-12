@@ -809,7 +809,7 @@ jobs:
         run: |
           gcc -DPCI_TEST -std=c11 -Wall -Wextra -Werror -Iinclude \
             scripts/test_nvx_irq_caps.c drivers/gpu/nvx/interrupts/nvx_irq_caps.c \
-            drivers/pci/pci.c -o /tmp/vantaos-nvx-irq-caps-test
+            drivers/pci/pci.c kernel/device.c -o /tmp/vantaos-nvx-irq-caps-test
 
       - name: Test read-only MSI/MSI-X metadata and BAR range validation
         run: /tmp/vantaos-nvx-irq-caps-test

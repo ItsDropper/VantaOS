@@ -108,7 +108,9 @@ against the packed signature array. NVX now follows this baseline-relative
 contract and rejects underflow/out-of-range selections before staging. Both
 implementations reject a nonzero `patch_sig` for this container format.
 
-The separate `bootloader-<version>.bin` is now parsed as the GA10x NVFW container too: version 1, a 24-byte outer header, an 84-byte descriptor, payload offset 108, and a 256-byte-aligned total size. Its payload can be copied into private staging, and the preflight report stores descriptor offsets rather than pointers that could outlive the verified bundle.\n\nNVX now implements that data path in `nvx_gsp_image_prepare()`: it copies only the
+The separate `bootloader-<version>.bin` is now parsed as the GA10x NVFW container too: version 1, a 24-byte outer header, an 84-byte descriptor, payload offset 108, and a 256-byte-aligned total size. Its payload can be copied into private staging, and the preflight report stores descriptor offsets rather than pointers that could outlive the verified bundle.
+
+NVX now implements that data path in `nvx_gsp_image_prepare()`: it copies only the
 firmware payload into private staging, selects the fuse-indexed signature, and
 patches it at the payload-relative location. The integrated
 `nvx_gsp_preflight_stage_booters()` path validates the whole bundle, prechecks
@@ -122,9 +124,12 @@ Research references:
 - https://github.com/NVIDIA/open-gpu-kernel-modules/blob/main/nouveau/extract-firmware-nouveau.py
 - https://github.com/NVIDIA/open-gpu-kernel-modules/blob/main/src/nvidia/src/kernel/gpu/gsp/kernel_gsp_booter.c
 
-The parser also enforces the actual v1 layout documented by NVIDIA's extraction script: signature array immediately after the secure-load header, patch metadata and count immediately after the signature array, exactly one application descriptor, and payload immediately after the descriptor. It rejects unsupported container versions, nonzero patch_sig, invalid app layout, and unaligned outer sizes.\n\nThis is signature **selection and placement**, not cryptographic authentication
-and not a firmware launch. The hardware SEC2/FWSEC fuse-version read and actual
-DMA upload/boot sequence are still missing.
+The parser also enforces the actual v1 layout documented by NVIDIA's extraction script: signature array immediately after the secure-load header, patch metadata and count immediately after the signature array, exactly one application descriptor, and payload immediately after the descriptor. It rejects unsupported container versions, nonzero patch_sig, invalid app layout, and unaligned outer sizes.
+
+This is signature **selection and placement**, not cryptographic authentication
+by the CPU parser. The composed startup transaction now consumes hardware fuse
+selection, FWSEC/FRTS execution and SEC2 boot helpers; successful physical
+authentication and boot on GA106 remain unverified.
 
 ## What this does not mean
 

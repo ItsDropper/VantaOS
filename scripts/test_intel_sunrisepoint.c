@@ -66,6 +66,12 @@ static void test_gpio_resource_validation(void)
     controller.invalid=0U;
     controller.sta_dynamic=1U;
     assert(!intel_sptlp_validate_gpio_resource(&controller,&resource));
+    controller.sta_dynamic=0U;
+    controller.sta_valid=1U;
+    controller.sta=0x0DU;
+    assert(!intel_sptlp_validate_gpio_resource(&controller,&resource));
+    controller.sta=0x0FU;
+    assert(intel_sptlp_validate_gpio_resource(&controller,&resource));
 }
 
 int main(void)

@@ -68,6 +68,8 @@ nvx_memory_status_t nvx_memory_alloc_access(nvx_memory_manager_t *, size_t,
 nvx_memory_status_t nvx_memory_alloc(nvx_memory_manager_t *, size_t, nvx_memory_kind_t, nvx_memory_handle_t *);
 nvx_memory_status_t nvx_memory_get_info(nvx_memory_manager_t *, const nvx_memory_handle_t *, nvx_memory_info_t *);
 nvx_memory_status_t nvx_memory_cpu_address(nvx_memory_manager_t *, const nvx_memory_handle_t *, void **);
+/* Borrow the underlying DMA buffer only while the handle is pinned. */
+nvx_memory_status_t nvx_memory_get_dma_buffer(nvx_memory_manager_t *, const nvx_memory_handle_t *, nvx_dma_buffer_t **);
 /*
  * Pin an object across GPU submission/execution. Release returns BUSY while
  * pinned; unpin only after the GPU fence completes or the engine is quiesced.

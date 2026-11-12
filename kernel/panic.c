@@ -287,6 +287,13 @@ void exception_handler(
         if (process_terminate_current_user_try_with_status(
                 fault_address_space, -1))
         {
+            serial_write("VANTAOS_USER_PROCESS_FAULT_PID=");
+            panic_serial_hex(process_current_pid());
+            serial_write(" RIP=");
+            panic_serial_hex(frame->rip);
+            serial_write(" EXCEPTION=");
+            panic_serial_hex(exception_number);
+            serial_write("\n");
             serial_write("VANTAOS_USER_PROCESS_FAULT\n");
             if (exception_number == 6U)
                 serial_write("VANTAOS_USER_PROCESS_FAULT_UD\n");

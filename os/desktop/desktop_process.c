@@ -19,6 +19,7 @@
 #include "net.h"
 #include "serial.h"
 #include "interrupts.h"
+#include "gui_server.h"
 
 static uint32_t desktop_pid;
 
@@ -42,6 +43,9 @@ void desktop_process_main(void)
          */
         hid_i2c_poll();
         mouse_process_events();
+        int wheel_delta = mouse_get_wheel_delta();
+        if (wheel_delta != 0)
+            gui_server_mouse_wheel(wheel_delta);
         terminal_process_set_input_enabled(graphics_get_active_panel() == 3);
         desktop_update();
         file_explorer_process_step();

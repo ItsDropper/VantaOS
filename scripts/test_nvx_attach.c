@@ -108,6 +108,7 @@ int main(void)
     assert(nvx_device_attach(&unsupported_nvidia, &bar0, &device) ==
            NVX_ATTACH_INVALID_ARGUMENT);
     assert(map_calls == maps_before_unsupported);
+    fake_registers[0]=0x11000000U; /* Maxwell GM108 */
     assert(nvx_device_attach(&mx130,&bar0,&device)==NVX_ATTACH_OK);
     assert(device.lifecycle.state==NVX_STATE_PROBED);
     assert(device.lifecycle.verified_capabilities==0U);

@@ -8,6 +8,9 @@
 
 #include "nvx_gsp_rmapi.h"
 
+/* NVOS46_FLAGS_DMA_OFFSET_FIXED is bit 15 in the flags word. */
+#define NVX_GSP_DMA_MAP_FLAG_OFFSET_FIXED (UINT32_C(1) << 15U)
+
 typedef enum nvx_gsp_dma_map_stage {
     NVX_GSP_DMA_MAP_IDLE = 0,
     NVX_GSP_DMA_MAP_MAPPING,

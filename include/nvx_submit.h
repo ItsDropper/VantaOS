@@ -10,6 +10,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "nvx_object_memory.h"
+#include "nvx_sync.h"
 
 #define NVX_SUBMIT_MAX_RELOCATIONS 1024U
 #define NVX_SUBMIT_MAX_COMMAND_BYTES NVX_DMA_MAX_BYTES
@@ -44,7 +45,10 @@ typedef enum nvx_submit_status {
     NVX_SUBMIT_TARGET_INVALID,
     NVX_SUBMIT_ADDRESS_OVERFLOW,
     NVX_SUBMIT_ADDRESS_WIDTH,
-    NVX_SUBMIT_MEMORY_ERROR
+    NVX_SUBMIT_MEMORY_ERROR,
+    NVX_SUBMIT_FENCE_PENDING,
+    NVX_SUBMIT_DEVICE_LOST,
+    NVX_SUBMIT_STALE_FENCE
 } nvx_submit_status_t;
 
 typedef struct nvx_submit_report {
@@ -84,5 +88,28 @@ nvx_submit_status_t nvx_submit_validate_batch(
     const nvx_relocation_t *relocations,
     size_t relocation_count,
     nvx_submit_report_t *out_report);
+
+/*
+ * Pin the command buffer and every unique relocation target. A partial
+ * acquisition that cannot be rolled back leaves lease.active set; release it.
+ */
+nvx_submit_status_t nvx_submit_acquire_batch(
+    nvx_memory_manager_t *memory, const nvx_memory_handle_t *command_buffer,
+    size_t command_bytes, const nvx_relocation_t *relocations,
+    size_t relocation_count, nvx_submit_lease_t *lease,
+    nvx_submit_report_t *out_report);
+
+/* Release pins in reverse order; retry after an unpin error. */
+nvx_submit_status_t nvx_submit_release_batch(
+    nvx_memory_manager_t *memory, nvx_submit_lease_t *lease);
+
+/*
+ * Release only after a trusted completion source signals the fence.
+ * Pending/failed/stale fences retain all pins. Device-loss cleanup requires
+ * separate proof that the engine can no longer access the memory.
+ */
+nvx_submit_status_t nvx_submit_release_after_fence(
+    nvx_memory_manager_t *memory, nvx_submit_lease_t *lease,
+    nvx_sync_timeline_t *timeline, const nvx_fence_t *fence);
 
 #endif

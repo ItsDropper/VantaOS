@@ -44,8 +44,8 @@ probing, firmware bundle parsing, GSP boot-memory staging, WPR metadata
 planning, and a SEC2 signed Booter Load sequence with synthetic-MMIO tests.
 Boot-time NVX discovery now performs one deliberately read-only operation on
 the audited RTX 3060 profile: when PCI memory decode is already enabled, it
-maps only the first 8 bytes of BAR0, reads PMC_BOOT_0/1
-against the PCI profile, and unmaps it. It does not alter PCI command bits,
+maps only the first 8 bytes of BAR0, reads PMC_BOOT_0 and PMC_BOOT_1,
+checks the live architecture against the PCI profile, and unmaps it. It does not alter PCI command bits,
 enable bus mastering, reset a Falcon, load firmware, or submit work. Mapping,
 identity, or unmap failures are logged and skipped; they do not fail OS boot.
 Maxwell/Pascal mobile profiles retain their smaller PMC_BOOT_0/1 read.

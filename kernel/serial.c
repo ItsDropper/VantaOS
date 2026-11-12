@@ -47,6 +47,9 @@ void serial_initialize(void)
 
 static void serial_write_char(char value)
 {
+#ifdef VANTAOS_DEBUG_PORT
+    serial_out8(0x00E9U, (uint8_t)value);
+#endif
     if (!serial_available)
         return;
     for (uint32_t spin = 0; spin < SERIAL_SPIN_LIMIT; spin++)

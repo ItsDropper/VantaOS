@@ -75,7 +75,7 @@ $(UEFI_OBJDIR)/loader.o: boot/uefi/loader.c include/vanta_boot_info.h include/gr
 BOOTX64.EFI: $(UEFI_OBJDIR)/loader.o
 	$(LD) -nostdlib -znocombreloc -T $(EFI_LDSCRIPT) -shared -Bsymbolic \
 		$(EFI_CRT) $< -L$(EFI_LIBDIR) -lefi -lgnuefi -o $(UEFI_OBJDIR)/loader.so
-	$(OBJCOPY) -I elf64-x86-64 -j .text -j .sdata -j .data -j .dynamic -j .dynsym \
+	$(OBJCOPY) -I elf64-x86-64 -j .text -j .rodata -j .sdata -j .data -j .dynamic -j .dynsym \
 		-j .rel -j .rela -j .reloc -O efi-app-x86_64 $(UEFI_OBJDIR)/loader.so $@
 
 $(UEFI_OBJDIR)/setup.o: boot/uefi/setup.c include/vanta_installer_fat32.h include/vanta_installer_gpt.h include/vanta_setup_config.h
@@ -106,7 +106,7 @@ VANTASETUP.EFI: $(UEFI_OBJDIR)/setup.o $(UEFI_OBJDIR)/installer-layout.o $(UEFI_
 		$(EFI_CRT) $(UEFI_OBJDIR)/setup.o $(UEFI_OBJDIR)/installer-layout.o \
 		$(UEFI_OBJDIR)/installer-gpt.o $(UEFI_OBJDIR)/installer-fat32.o \
 		$(UEFI_OBJDIR)/setup-config.o -L$(EFI_LIBDIR) -lefi -lgnuefi -o $(UEFI_OBJDIR)/setup.so
-	$(OBJCOPY) -I elf64-x86-64 -j .text -j .sdata -j .data -j .dynamic -j .dynsym \
+	$(OBJCOPY) -I elf64-x86-64 -j .text -j .rodata -j .sdata -j .data -j .dynamic -j .dynsym \
 		-j .rel -j .rela -j .reloc -O efi-app-x86_64 $(UEFI_OBJDIR)/setup.so $@
 
 VantaOS-Setup.img: VANTASETUP.EFI BOOTX64.EFI kernel-uefi.elf vantaos.img

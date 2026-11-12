@@ -125,9 +125,12 @@ jobs:
             -machine pc -cpu max -m 512M -smp 2 \
             -drive if=pflash,format=raw,readonly=on,file="$code_firmware" \
             -drive if=pflash,format=raw,file=OVMF_VARS.fd \
-            -device qemu-xhci,id=xhci \
-            -drive if=none,id=usbdisk,format=raw,file=uefi-qemu-test.img \
-            -device usb-storage,bus=xhci.0,drive=usbdisk,bootindex=1,removable=on \
+            # Present the exact raw GPT/FAT32 test image as a firmware-visible
+            # fixed disk. OVMF's USB mass-storage path is unreliable in the
+            # GitHub-hosted QEMU environment (it reports EFI_NOT_FOUND before
+            # loading BOOTX64.EFI), so this smoke test isolates UEFI media
+            # discovery and the VantaOS EFI loader from USB-controller quirks.
+            -drive if=ide,index=0,media=disk,format=raw,file=uefi-qemu-test.img \
             -boot order=c \
             -display none -serial file:uefi-hardware-test.log \
             -chardev file,id=ovmfdebug,path=ovmf-debug.log \

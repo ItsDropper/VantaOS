@@ -191,6 +191,9 @@ int main(void)
         !object.result_valid);
     truncate_alloc_response = 0;
     wait_status = NVX_GSP_RMAPI_OK;
+    assert(nvx_gsp_memory_object_destroy(&manager, &object, scratch,
+        sizeof(scratch), response, sizeof(response), 100U, 1U, delay, NULL)
+        == NVX_GSP_RMAPI_OK);
 
     /*
      * An inclusive limit that extends beyond the returned allocation is not
@@ -206,12 +209,9 @@ int main(void)
     assert(nvx_gsp_memory_object_destroy(&manager, &object, scratch,
         sizeof(scratch), response, sizeof(response), 100U, 1U, delay, NULL)
         == NVX_GSP_RMAPI_OK);
+    assert(object.stage == NVX_GSP_MEMORY_IDLE);
 
     /* Free failure preserves the object; a later free can safely retry. */
-    assert(nvx_gsp_memory_object_destroy(&manager, &object, scratch,
-        sizeof(scratch), response, sizeof(response), 100U, 1U, delay, NULL)
-        == NVX_GSP_RMAPI_OK);
-    assert(object.stage == NVX_GSP_MEMORY_IDLE);
 
     assert(nvx_gsp_memory_object_create(&manager, &object, 1U, 2U, 3U, &p,
         scratch, sizeof(scratch), response, sizeof(response), 100U, 1U,

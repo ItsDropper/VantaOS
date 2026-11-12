@@ -82,6 +82,9 @@ nvx_attach_status_t nvx_device_attach(const struct pci_device *pci,
     out->bar0 = *bar;
     out->bar0_mapping = fake_bar;
     out->lifecycle.state = NVX_STATE_PROBED;
+    out->registers.identified_family = NVX_FAMILY_AMPERE;
+    out->registers.extended_revision_valid = 1U;
+    out->registers.extended_chip_id = 0x177U;
     out->attached = 1U;
     return NVX_ATTACH_OK;
 }
@@ -404,6 +407,7 @@ static nvx_gsp_platform_config_t make_config(
     c.firmware_provider = provider;
     c.firmware_chip = "ga106";
     c.firmware_version = "535.129.03";
+    c.expected_extended_chip_id = 0x177U;
     c.trusted_gpu_facts = facts;
     c.command_queue_bytes = 64U * 1024U;
     c.status_queue_bytes = 64U * 1024U;
@@ -463,6 +467,14 @@ int main(void)
     assert(nvx_gsp_platform_shutdown(&session, quiesce, 0) ==
            NVX_GSP_PLATFORM_OK);
     assert(live_allocations == 0U && !bus_master_enabled);
+
+    reset_mocks();
+    config.expected_extended_chip_id = 0x176U;
+    assert(nvx_gsp_platform_start(&config, &session) ==
+           NVX_GSP_PLATFORM_CHIP_MISMATCH);
+    assert(!session.attached && live_allocations == 0U &&
+           !bus_master_enabled && detach_calls == 1U);
+    config.expected_extended_chip_id = 0x177U;
 
     reset_mocks();
     fail_prom = 1;

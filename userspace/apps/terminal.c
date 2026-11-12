@@ -491,6 +491,8 @@ static void command_help(void)
     write_text("  kernel reboot        Restart VantaOS\n");
     write_text("  kernel kill ...      Terminate a process (privileged)\n");
     write_text("  kernel <command>     Run other supported kernel-shell commands\n");
+    write_text("  Most system and network commands work without this prefix.\n");
+    write_text("  Only privileged or destructive operations require kernel.\n");
     write_text("  clear                Clear visible terminal history\n");
     write_text("  exit                 Close the terminal\n");
     write_text("  Up / Down            Recall the last 16 commands\n");

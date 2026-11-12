@@ -8,6 +8,30 @@
 #include <limits.h>
 #include <string.h>
 
+static int mapping_state_valid(const nvx_gsp_dma_mapping_t *mapping)
+{
+    if (!mapping || mapping->stage > NVX_GSP_DMA_MAP_UNMAP_RELEASE_PENDING)
+        return 0;
+    switch ((nvx_gsp_dma_map_stage_t)mapping->stage) {
+    case NVX_GSP_DMA_MAP_IDLE:
+        return !mapping->operation.handle.valid && mapping->dma_offset == 0U;
+    case NVX_GSP_DMA_MAP_MAPPING:
+    case NVX_GSP_DMA_MAP_MAP_RELEASE_PENDING:
+        return mapping->operation.handle.valid &&
+            mapping->operation.function == NVX_GSP_RPC_FN_MAP_MEMORY_DMA;
+    case NVX_GSP_DMA_MAP_MAPPED:
+        return !mapping->operation.handle.valid && mapping->request.client &&
+            mapping->request.device && mapping->request.dma &&
+            mapping->request.memory && mapping->request.length;
+    case NVX_GSP_DMA_MAP_UNMAPPING:
+    case NVX_GSP_DMA_MAP_UNMAP_RELEASE_PENDING:
+        return mapping->operation.handle.valid &&
+            mapping->operation.function == NVX_GSP_RPC_FN_UNMAP_MEMORY_DMA;
+    default:
+        return 0;
+    }
+}
+
 static nvx_gsp_rmapi_status_t finish_release(
     nvx_gsp_rpc_manager_t *manager, nvx_gsp_dma_mapping_t *mapping)
 {
@@ -49,7 +73,11 @@ static nvx_gsp_rmapi_status_t wait_and_release(
     status = nvx_gsp_rmapi_wait(manager, &mapping->operation, scratch,
         scratch_size, response, response_capacity, timeout_ms,
         poll_interval_ms, delay_ms, delay_context);
-    if (status == NVX_GSP_RMAPI_TIMEOUT)
+    /*
+     * A transport failure does not prove that firmware stopped using request
+     * or response storage. Preserve the operation handle just as for timeout.
+     */
+    if (status == NVX_GSP_RMAPI_TIMEOUT || status == NVX_GSP_RMAPI_RPC_ERROR)
         return status;
 
     mapping->completed_status = status;
@@ -80,8 +108,8 @@ nvx_gsp_rmapi_status_t nvx_gsp_dma_map(
         !request->client || !request->device || !request->dma ||
         !request->memory || !request->length ||
         request->offset > UINT64_MAX - request->length ||
-        mapping->stage != NVX_GSP_DMA_MAP_IDLE ||
-        mapping->operation.handle.valid)
+        !mapping_state_valid(mapping) ||
+        mapping->stage != NVX_GSP_DMA_MAP_IDLE)
         return NVX_GSP_RMAPI_INVALID_ARGUMENT;
 
     wire = *request;
@@ -109,6 +137,7 @@ nvx_gsp_rmapi_status_t nvx_gsp_dma_unmap(
     nvx_gsp_rmapi_status_t status;
     if (!manager || !mapping || !scratch || !response || !timeout_ms ||
         !poll_interval_ms || !delay_ms ||
+        !mapping_state_valid(mapping) ||
         mapping->stage != NVX_GSP_DMA_MAP_MAPPED ||
         !mapping->request.length ||
         mapping->operation.handle.valid)
@@ -140,6 +169,7 @@ nvx_gsp_rmapi_status_t nvx_gsp_dma_map_recover(
 {
     if (!manager || !mapping || !scratch || !response || !timeout_ms ||
         !poll_interval_ms || !delay_ms ||
+        !mapping_state_valid(mapping) ||
         (mapping->stage != NVX_GSP_DMA_MAP_MAPPING &&
          mapping->stage != NVX_GSP_DMA_MAP_MAP_RELEASE_PENDING &&
          mapping->stage != NVX_GSP_DMA_MAP_UNMAPPING &&

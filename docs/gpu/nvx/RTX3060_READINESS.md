@@ -136,6 +136,26 @@ Host tests cover multiple pins, release exclusion, balanced unpin, underflow,
 and overflow. The API is a lifetime primitive; it does not itself submit work,
 observe a GPU fence, or prove quiescence. Callers must enforce that contract.
 
+## RM context-DMA object lifecycle
+
+NVX now has a typed wrapper for NVIDIA's public `NV01_CONTEXT_DMA` class
+(`0x2`). It creates a context-DMA object over a caller-owned RM memory
+object using the documented 32-byte `NV_CONTEXT_DMA_ALLOCATION_PARAMS`
+layout, then frees it without releasing the underlying memory object. The
+ABI size and 64-bit field offsets are compile-time asserted.
+
+Allocation/free use explicit submit, wait, and local-handle release stages.
+Timeouts and transport errors retain the operation handle; completed RPC
+release failures can be retried without submitting a duplicate allocation or
+free. Failed remote frees preserve the created object. The caller must keep
+the parent memory object alive until context-DMA teardown completes.
+
+Host tests cover the class ID and parameter layout, parent/child handles,
+allocation and free, timeout recovery, transport errors, remote failure,
+retryable handle release, handle aliasing, and in-flight buffer overlap.
+This still does not allocate the backing RM memory object or prove a real
+CTXDMA object can be created on GA106.
+
 ## RM DMA mapping lifecycle software milestone
 
 `include/nvx_gsp_dma_map.h` and

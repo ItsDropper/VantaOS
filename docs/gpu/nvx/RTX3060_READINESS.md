@@ -14,15 +14,23 @@ This document is a release gate, not a claim that the driver is ready. A phase m
 
 ## Current subsystem status
 
+**CI evidence:** the NVX workflow passed on 2026-11-12 at commit
+`8451da6bcd7d73ab447da59be5852b2431558202`. The current `master` head is
+`b65f373b9545de635f4e410210944a83eb9811ab`; GitHub's compare result shows the
+only intervening file change is `.github/workflows/build.yml`, so NVX source
+and tests are unchanged since that successful NVX run. This is host CI evidence,
+not physical GPU validation. No dedicated whole-startup integration test is
+present.
+
 | Subsystem | Current state | Evidence still required |
 | --- | --- | --- |
 | PCI identity and BAR/resource discovery | Implemented, host-tested in parts | Record actual RTX 3060 identity, BARs, command bits and resource ownership from a physical boot |
 | GA10x firmware parsing and preflight | Implemented, host-tested | Validate the exact firmware files supplied by a legitimate platform provider; record hashes, versions and verifier policy |
 | SEC2 signed Booter Load transaction | Implemented as a hardware-facing sequence with synthetic MMIO tests | Real VBIOS/workspace and framebuffer inputs; correct WPR/FRTS policy; authenticated SEC2 completion on GA106 |
-| GSP RISC-V launch and readiness | Partial primitives; end-to-end boot not established | Real firmware launch, stable ready state, mailbox/RPC initialization and version-compatible cached init ABI |
+| GSP RISC-V launch and readiness | Callable composed startup transaction now sequences FWSEC/FRTS, RISC-V handoff, SEC2 Booter Load, RISC-V-active wait, MSGQ link and GSP-RM initialization; component tests exist, but no end-to-end startup test or production caller | Physical GA106 authentication, stable readiness, a real GSP-RM RPC response and integration with NVX device lifecycle |
 | GSP-RM RPC and RM objects | Protocol, core/channel/CTXDMA and system-memory object lifecycle primitives exist; host-tested | Successful first real RPC and object create/control/free round-trip on GA106 |
 | GPU memory / GPUVM | Software reservation, DMA/page-table primitives, RM system-memory allocation, CTXDMA and NVOS46/NVOS47 lifecycle wrappers exist; host-tested | CPU mapping, first real GA106 RM mapping/visibility result, hardware-correct page tables, translation controls, TLB invalidation and real VRAM accounting |
-| GPFIFO / channel / synchronization | Layout and validation primitives exist | Hardware channel provisioning, real mapped GPFIFO/USERD/fence resources and GPU-produced completion |
+| GPFIFO / channel / synchronization | RM-backed Ampere copy-channel lifecycle, GPFIFO/USERD layout and bounded submission/synchronization components exist; host-tested separately | Real mapped channel resources, validated USERD/doorbell ABI and GPU-produced completion on GA106 |
 | Copy engine | Command builder and bounded GPFIFO submit/wait transaction implemented, host-tested; hardware provisioning unverified | A real CE submission copying known bytes between distinct GPU-visible buffers, followed by independent CPU verification |
 | Graphics engine | No verified working 3D path | Engine context, graphics channel, shader/program execution, render target, completion and CPU-verified output |
 | Display/presentation | Software display path exists independently | Explicit synchronization and scanout integration; GPU rendering alone does not prove page flipping or VSync |
@@ -50,7 +58,9 @@ Both defects would only have appeared on real hardware as a channel that silentl
 
 ### Not yet audited
 
-USERD `GP_GET`/`GP_PUT` offsets and the usermode doorbell (NVX takes borrowed pointers and does not hardcode them), plus the GSP message-queue and init-argument layouts, which depend on the exact firmware release. Audit these against the headers matching the firmware you load before trusting them.
+USERD `GP_GET`/`GP_PUT` offsets and the usermode doorbell remain unaudited.
+MSGQ and init-argument code exists, but its exact firmware-version compatibility
+still needs to be pinned against the specific GSP release used for a hardware run.
 
 Do not add a per-SKU source file merely to record an identity. Shared GA10x/Ampere policy belongs in common code unless a documented hardware difference requires a backend.
 

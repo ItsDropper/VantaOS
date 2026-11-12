@@ -8,8 +8,6 @@
 #include <stddef.h>
 #include <string.h>
 
-#define NVX_GSP_RM_ALLOC_RESPONSE_HEADER_SIZE 32U
-
 _Static_assert(sizeof(nvx_gsp_memory_allocation_params_t) == 128U,
     "NV_MEMORY_ALLOCATION_PARAMS 64-bit ABI size mismatch");
 _Static_assert(offsetof(nvx_gsp_memory_allocation_params_t, range_lo) == 48U,
@@ -90,14 +88,12 @@ static int state_valid(const nvx_gsp_memory_object_t *object)
 }
 
 static int decode_allocation_result(
-    const nvx_gsp_gsp_memory_object_t *unused_object,
     const void *response, size_t response_size,
     uint64_t requested_size, uint64_t *actual_size, uint64_t *limit)
 {
     nvx_gsp_memory_allocation_params_t returned;
     const uint8_t *payload = (const uint8_t *)response +
         NVX_GSP_MEMORY_ALLOC_RESPONSE_HEADER_SIZE;
-    (void)unused_object;
     if (!response || !actual_size || !limit ||
         response_size < NVX_GSP_MEMORY_ALLOC_RESPONSE_HEADER_SIZE +
             sizeof(returned))
@@ -105,8 +101,7 @@ static int decode_allocation_result(
     memcpy(&returned, payload, sizeof(returned));
     if (returned.size < requested_size || !returned.size ||
         returned.limit < requested_size - 1U ||
-        returned.limit == UINT64_MAX ||
-        returned.address != 0U)
+        returned.limit == UINT64_MAX)
         return 0;
     *actual_size = returned.size;
     *limit = returned.limit;
@@ -163,7 +158,7 @@ static nvx_gsp_rmapi_status_t wait_operation(
         status == NVX_GSP_RMAPI_OK) {
         object->remote_created = 1U;
         object->result_valid = (uint8_t)decode_allocation_result(
-            object, response, object->operation.response_size,
+            response, object->operation.response_size,
             object->params.size, &object->actual_size, &object->limit);
         if (!object->result_valid)
             object->completed_status = NVX_GSP_RMAPI_MALFORMED_RESPONSE;
@@ -191,7 +186,8 @@ nvx_gsp_rmapi_status_t nvx_gsp_memory_object_create(
         params->alignment < NVX_GSP_MEMORY_PAGE_SIZE ||
         params->address || params->limit || params->h_vaspace ||
         params->offset || params->internal_flags ||
-        (params->range_hi && params->range_lo > params->range_hi) ||
+        ((params->range_lo || params->range_hi) &&
+         params->range_lo > params->range_hi) ||
         ranges_overlap(object, sizeof(*object), params, sizeof(*params)) ||
         ranges_overlap(object, sizeof(*object), scratch, scratch_size) ||
         ranges_overlap(object, sizeof(*object), response, response_capacity) ||

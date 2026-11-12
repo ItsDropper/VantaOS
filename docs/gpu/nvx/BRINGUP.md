@@ -35,10 +35,19 @@ recovery margin for retry boots.
 
 ## Not done yet
 
-`nvx start` (GSP launch) is intentionally not a command yet. VBIOS retrieval is
-now implemented (`nvx_gsp_vbios_prom`, tested against synthetic ROMs incl. IFR
-v1/v3 wrappers; whether the PROM window is readable on a real board is
-unproven). Still missing before launch can be wired honestly: the GSP
-system-info key set for the matching firmware release, and the
-init-args/shared-queue allocation glue. Nothing in this repo is
-hardware-verified; every result is host-tested or structural evidence.
+`nvx start` (GSP launch) is intentionally not a shell command yet. A callable
+API now exists:
+`nvx_gsp_ga10x_start_and_init_rm_from_pci()`. It composes the FWSEC/FRTS,
+SEC2 Booter Load, RISC-V readiness, MSGQ link and GSP-RM initialization stages,
+but no boot-time or shell path invokes it.
+
+The production coordinator is still missing. It must provide the trusted BAR
+handoff, VBIOS/FWSEC descriptor and fuse version, verified firmware identity,
+real framebuffer/WPR resources, DMA-backed boot artifacts, init arguments,
+shared queue allocation/layout, and firmware-version-correct platform facts.
+The current `nvx fw <version>` command only verifies the five firmware files
+against the locally pinned SHA-256 manifest and runs structural preflight; it
+does not start GSP or prove NVIDIA signature authentication.
+
+There is no dedicated end-to-end startup test and no physical GA106 validation.
+All current results are component-level host tests or structural evidence.

@@ -41,8 +41,8 @@ jobs:
         run: |
           set -euo pipefail
           chmod +x build.sh
-          ./build.sh
-          make uefi
+          VANTAOS_DEBUG_PORT=1 ./build.sh
+          VANTAOS_DEBUG_PORT=1 make uefi
           test -s VantaOS-UEFI.img
           test -s BOOTX64.EFI
           test -s kernel-uefi.elf
@@ -95,6 +95,7 @@ jobs:
             -drive if=none,id=usbdisk,format=raw,file=uefi-qemu-test.img \
             -device usb-storage,drive=usbdisk,bootindex=1 \
             -display none -serial file:uefi-hardware-test.log \
+            -debugcon file:uefi-debug.log -global isa-debugcon.iobase=0xe9 \
             -monitor none -no-reboot
           result=$?
           set -e
@@ -104,9 +105,9 @@ jobs:
             exit 1
           fi
           sleep 1
-          if grep -Eq '^VANTAOS_[A-Z0-9_]*_FAIL' uefi-hardware-test.log; then
+          if grep -Eq '^VANTAOS_[A-Z0-9_]*_FAIL' uefi-debug.log; then
             echo "UEFI test boot emitted a failure marker."
-            cat uefi-hardware-test.log
+            cat uefi-debug.log
             exit 1
           fi
           for marker in \
@@ -118,9 +119,9 @@ jobs:
             VANTAOS_UEFI_KERNEL_ENTRY \
             VANTAOS_UEFI_BOOT_INFO_READY \
             VANTAOS_BOOT_OK; do
-            grep -q "$marker" uefi-hardware-test.log || {
+            grep -q "$marker" uefi-debug.log || {
               echo "Missing required marker: $marker"
-              cat uefi-hardware-test.log
+              cat uefi-debug.log
               exit 1
             }
           done
@@ -136,5 +137,6 @@ jobs:
             kernel-uefi.elf
             SHA256SUMS.txt
             uefi-hardware-test.log
+            uefi-debug.log
           if-no-files-found: error
           retention-days: 30

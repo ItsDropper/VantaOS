@@ -175,7 +175,35 @@ int main(void)
     assert(nvx_gsp_dma_map_recover(&manager,&mapping,scratch,sizeof(scratch),
         response,sizeof(response),10U,1U,delay,NULL)==NVX_GSP_RMAPI_OK);
     assert(mapping.stage==NVX_GSP_DMA_MAP_MAPPED&&map_calls==before);
+    /* A failed remote unmap retains mapped ownership for a safe retry. */
+    wait_status=NVX_GSP_RMAPI_REMOTE_ERROR;
     assert(nvx_gsp_dma_unmap(&manager,&mapping,scratch,sizeof(scratch),
+        response,sizeof(response),10U,1U,delay,NULL)==
+        NVX_GSP_RMAPI_REMOTE_ERROR);
+    assert(mapping.stage==NVX_GSP_DMA_MAP_MAPPED&&
+           mapping.dma_offset==mapped_offset);
+    wait_status=NVX_GSP_RMAPI_OK;
+
+    /* A completed unmap whose local RPC handle cannot be released is retryable. */
+    release_status=NVX_GSP_RPC_TRANSPORT_ERROR;
+    assert(nvx_gsp_dma_unmap(&manager,&mapping,scratch,sizeof(scratch),
+        response,sizeof(response),10U,1U,delay,NULL)==NVX_GSP_RMAPI_RPC_ERROR);
+    assert(mapping.stage==NVX_GSP_DMA_MAP_UNMAP_RELEASE_PENDING&&
+           mapping.operation.handle.valid);
+    unsigned unmap_before_recover=unmap_calls;
+    release_status=NVX_GSP_RPC_OK;
+    assert(nvx_gsp_dma_map_recover(&manager,&mapping,scratch,sizeof(scratch),
         response,sizeof(response),10U,1U,delay,NULL)==NVX_GSP_RMAPI_OK);
+    assert(mapping.stage==NVX_GSP_DMA_MAP_IDLE&&
+           unmap_calls==unmap_before_recover);
+
+    /* Corrupt public state is rejected before issuing another RPC. */
+    memset(&mapping,0,sizeof(mapping));
+    mapping.stage=NVX_GSP_DMA_MAP_MAPPED;
+    unsigned unmap_before_corrupt=unmap_calls;
+    assert(nvx_gsp_dma_unmap(&manager,&mapping,scratch,sizeof(scratch),
+        response,sizeof(response),10U,1U,delay,NULL)==
+        NVX_GSP_RMAPI_INVALID_ARGUMENT);
+    assert(unmap_calls==unmap_before_corrupt);
     return 0;
 }

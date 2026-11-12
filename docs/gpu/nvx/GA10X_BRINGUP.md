@@ -18,6 +18,12 @@ A callable, multi-stage startup transaction now exists:
 4. Startup links the MSGQ status queue, initializes GMCAPI, performs the GSP-RM
    initialization RPC, then initializes the MSGQ RPC transport and RPC manager.
 
+The new higher-level `nvx_gsp_platform_start()` coordinator owns the
+preceding VBIOS/firmware/WPR/DMA preparation and calls the PCI-facing startup
+entry point after enabling bus mastering. It requires an exact expected
+PMC_BOOT_42 chip ID and retains all DMA memory after startup has been attempted
+until a caller-provided SEC2/GSP quiesce callback proves the engines stopped.
+
 This is a **callable software composition**, not a demonstrated hardware boot.
 The caller must provide correctly sourced VBIOS/FWSEC data, staged and
 version-matched firmware, DMA buffers, prepared WPR metadata and framebuffer

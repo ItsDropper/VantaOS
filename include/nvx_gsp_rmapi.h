@@ -88,6 +88,21 @@ typedef struct nvx_gsp_rmapi_result {
 
 typedef void (*nvx_gsp_rmapi_delay_fn)(uint32_t ms, void *context);
 
+/*
+ * NVIDIA public nvos.h NVOS46/NVOS47 wire sizes. The input C views omit the
+ * status field; request serializers emit its zeroed slot and response status
+ * occupies the documented final dword.
+ */
+#define NVX_GSP_RM_MAP_MEMORY_DMA_REQUEST_BYTES 64U
+#define NVX_GSP_RM_MAP_MEMORY_DMA_RESPONSE_BYTES 60U
+#define NVX_GSP_RM_MAP_MEMORY_DMA_OFFSET_OFFSET 48U
+#define NVX_GSP_RM_MAP_MEMORY_DMA_STATUS_OFFSET 56U
+#define NVX_GSP_RM_UNMAP_MEMORY_DMA_REQUEST_BYTES 48U
+#define NVX_GSP_RM_UNMAP_MEMORY_DMA_RESPONSE_BYTES 44U
+#define NVX_GSP_RM_UNMAP_MEMORY_DMA_OFFSET_OFFSET 24U
+#define NVX_GSP_RM_UNMAP_MEMORY_DMA_SIZE_OFFSET 32U
+#define NVX_GSP_RM_UNMAP_MEMORY_DMA_STATUS_OFFSET 40U
+
 /* NVOS46/NVOS47-compatible memory mapping RPCs (function IDs 14/15). */
 nvx_gsp_rmapi_status_t nvx_gsp_rm_map_memory_dma_submit(
     nvx_gsp_rpc_manager_t *manager, const nvx_gsp_map_memory_dma_t *mapping,

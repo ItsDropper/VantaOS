@@ -17,7 +17,8 @@
 #define INTEL_SPTLP_PADCFGLOCK_OFFSET 0x0A0U
 #define INTEL_SPTLP_HOSTSW_OWN_OFFSET 0x0D0U
 #define INTEL_SPTLP_GPI_IE_OFFSET 0x120U
-#define INTEL_SPTLP_MMIO_MIN_LENGTH 0x124U
+#define INTEL_SPTLP_MMIO_MIN_LENGTH 0x12CU
+#define INTEL_SPTLP_MAX_GPP_GROUPS 3U
 #define INTEL_SPTLP_GPP_SIZE 24U
 #define INTEL_SPTLP_GPI_IS_OFFSET 0x100U
 #define INTEL_SPTLP_MMIO_MAX_LENGTH 0x10000U
@@ -27,6 +28,7 @@ typedef struct
     uint16_t first_pin;
     uint16_t last_pin;
     uint8_t index;
+    uint8_t group_count;
 } intel_sptlp_community_t;
 
 typedef struct
@@ -36,6 +38,7 @@ typedef struct
     uint8_t bit;
     uint32_t interrupt_status_offset;
     uint32_t interrupt_enable_offset;
+    uint32_t bit_mask;
 } intel_sptlp_irq_location_t;
 
 typedef struct
@@ -54,7 +57,9 @@ typedef struct
     uint32_t pad_ownership;
     uint32_t pad_config_lock;
     uint32_t host_software_ownership;
-    uint32_t interrupt_enable;
+    uint8_t group_count;
+    uint32_t interrupt_status[INTEL_SPTLP_MAX_GPP_GROUPS];
+    uint32_t interrupt_enable[INTEL_SPTLP_MAX_GPP_GROUPS];
 } intel_sptlp_community_snapshot_t;
 
 typedef struct

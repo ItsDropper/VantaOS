@@ -315,7 +315,7 @@ static void intel_probe_gpio_controllers(void)
             continue;
         intel_sptlp_snapshot_t snapshot;
         if(intel_sptlp_probe_controller(device,&ops,&snapshot))
-            serial_write("VANTAOS_GPIO_SPTLP_READ_ONLY_MMIO_READY communities=3\n");
+            serial_write("VANTAOS_GPIO_SPTLP_READ_ONLY_MMIO_READY communities=3 groups=7\n");
         else
             serial_write("VANTAOS_GPIO_SPTLP_MMIO_PROBE_SKIPPED\n");
     }

@@ -14,6 +14,20 @@ static void test_community_boundaries(void)
     static const struct {uint16_t pin;uint8_t community;} cases[]={
         {0U,0U},{47U,0U},{48U,1U},{119U,1U},{120U,2U},{151U,2U}
     };
+    for(uint32_t pin=0U;pin<INTEL_SPTLP_PIN_COUNT;++pin)
+    {
+        intel_sptlp_irq_location_t location={0};
+        uint8_t community=0xFFU;
+        assert(intel_sptlp_pin_irq_location((uint16_t)pin,&location));
+        assert(intel_sptlp_pin_community((uint16_t)pin,&community));
+        assert(location.community==community);
+        assert(location.group<3U&&location.bit<INTEL_SPTLP_GPP_SIZE);
+        assert(location.bit_mask==(1U<<location.bit));
+        assert(location.interrupt_status_offset==
+               INTEL_SPTLP_GPI_IS_OFFSET+(uint32_t)location.group*4U);
+        assert(location.interrupt_enable_offset==
+               INTEL_SPTLP_GPI_IE_OFFSET+(uint32_t)location.group*4U);
+    }
     for(uint32_t i=0U;i<sizeof(cases)/sizeof(cases[0]);++i)
     {
         uint8_t community=0xFFU;
@@ -37,18 +51,19 @@ static void test_pin_irq_locations(void)
         uint8_t bit;
         uint32_t status_offset;
         uint32_t enable_offset;
+        uint32_t bit_mask;
     } cases[]={
-        {0U,0U,0U,0U,0x100U,0x120U},
-        {23U,0U,0U,23U,0x100U,0x120U},
-        {24U,0U,1U,0U,0x104U,0x124U},
-        {47U,0U,1U,23U,0x104U,0x124U},
-        {48U,1U,0U,0U,0x100U,0x120U},
-        {72U,1U,1U,0U,0x104U,0x124U},
-        {96U,1U,2U,0U,0x108U,0x128U},
-        {119U,1U,2U,23U,0x108U,0x128U},
-        {120U,2U,0U,0U,0x100U,0x120U},
-        {144U,2U,1U,0U,0x104U,0x124U},
-        {151U,2U,1U,7U,0x104U,0x124U}
+        {0U,0U,0U,0U,0x100U,0x120U,0x000001U},
+        {23U,0U,0U,23U,0x100U,0x120U,0x800000U},
+        {24U,0U,1U,0U,0x104U,0x124U,0x000001U},
+        {47U,0U,1U,23U,0x104U,0x124U,0x800000U},
+        {48U,1U,0U,0U,0x100U,0x120U,0x000001U},
+        {72U,1U,1U,0U,0x104U,0x124U,0x000001U},
+        {96U,1U,2U,0U,0x108U,0x128U,0x000001U},
+        {119U,1U,2U,23U,0x108U,0x128U,0x800000U},
+        {120U,2U,0U,0U,0x100U,0x120U,0x000001U},
+        {144U,2U,1U,0U,0x104U,0x124U,0x000001U},
+        {151U,2U,1U,7U,0x104U,0x124U,0x000080U}
     };
     for(uint32_t i=0U;i<sizeof(cases)/sizeof(cases[0]);++i)
     {
@@ -59,12 +74,13 @@ static void test_pin_irq_locations(void)
         assert(location.bit==cases[i].bit);
         assert(location.interrupt_status_offset==cases[i].status_offset);
         assert(location.interrupt_enable_offset==cases[i].enable_offset);
+        assert(location.bit_mask==cases[i].bit_mask);
     }
-    intel_sptlp_irq_location_t unchanged={9U,8U,7U,6U,5U};
+    intel_sptlp_irq_location_t unchanged={9U,8U,7U,6U,5U,4U};
     assert(!intel_sptlp_pin_irq_location(152U,&unchanged));
     assert(unchanged.community==9U&&unchanged.group==8U&&
            unchanged.bit==7U&&unchanged.interrupt_status_offset==6U&&
-           unchanged.interrupt_enable_offset==5U);
+           unchanged.interrupt_enable_offset==5U&&unchanged.bit_mask==4U);
     assert(!intel_sptlp_pin_irq_location(0U,NULL));
 }
 
@@ -181,19 +197,43 @@ static void test_read_only_mmio_probe(void)
         *(uint32_t*)(fake.windows[i]+INTEL_SPTLP_PAD_OWN_OFFSET)=0x10U+i;
         *(uint32_t*)(fake.windows[i]+INTEL_SPTLP_PADCFGLOCK_OFFSET)=0x20U+i;
         *(uint32_t*)(fake.windows[i]+INTEL_SPTLP_HOSTSW_OWN_OFFSET)=0x30U+i;
-        *(uint32_t*)(fake.windows[i]+INTEL_SPTLP_GPI_IE_OFFSET)=0x40U+i;
+        for(uint32_t group=0U;group<INTEL_SPTLP_MAX_GPP_GROUPS;++group)
+        {
+            *(uint32_t*)(fake.windows[i]+INTEL_SPTLP_GPI_IS_OFFSET+group*4U)=
+                0x50U+i*4U+group;
+            *(uint32_t*)(fake.windows[i]+INTEL_SPTLP_GPI_IE_OFFSET+group*4U)=
+                0x60U+i*4U+group;
+        }
     }
     controller.resources[3].resource_type=3U; /* Ignore the ACPI IRQ resource. */
     assert(intel_sptlp_probe_controller(&controller,&ops,&snapshot));
-    assert(fake.map_calls==3U&&fake.unmap_calls==3U&&fake.read_calls==12U);
+    assert(fake.map_calls==3U&&fake.unmap_calls==3U&&fake.read_calls==9U+2U*(2U+3U+2U));
     for(uint32_t i=0U;i<INTEL_SPTLP_COMMUNITY_COUNT;++i)
     {
         assert(snapshot.communities[i].base==fake.bases[i]);
         assert(snapshot.communities[i].pad_ownership==0x10U+i);
         assert(snapshot.communities[i].pad_config_lock==0x20U+i);
         assert(snapshot.communities[i].host_software_ownership==0x30U+i);
-        assert(snapshot.communities[i].interrupt_enable==0x40U+i);
+        static const uint8_t expected_groups[]={2U,3U,2U};
+        assert(snapshot.communities[i].group_count==expected_groups[i]);
+        for(uint32_t group=0U;group<expected_groups[i];++group)
+        {
+            assert(snapshot.communities[i].interrupt_status[group]==
+                   0x50U+i*4U+group);
+            assert(snapshot.communities[i].interrupt_enable[group]==
+                   0x60U+i*4U+group);
+        }
     }
+
+    memset(&fake,0,sizeof(fake));
+    fake.fail_map_at=-1;
+    for(uint32_t i=0U;i<INTEL_SPTLP_COMMUNITY_COUNT;++i)
+        fake.bases[i]=0x100000U+(uint64_t)i*0x2000U;
+    fake.fail_unmap=1;
+    memset(&snapshot,0x5A,sizeof(snapshot));
+    assert(!intel_sptlp_probe_controller(&controller,&ops,&snapshot));
+    assert(fake.map_calls==3U&&fake.unmap_calls==3U);
+    assert(snapshot.communities[0].base==UINT64_C(0x5A5A5A5A5A5A5A5A));
 
     memset(&fake,0,sizeof(fake));
     fake.fail_map_at=2;
@@ -217,6 +257,10 @@ static void test_read_only_mmio_probe(void)
     controller.resources[1].maximum=fake.bases[1];
     controller.resources[1].length=0x100U;
     assert(!intel_sptlp_probe_controller(&controller,&ops,&snapshot));
+    controller.resources[1].length=0x128U;
+    assert(!intel_sptlp_probe_controller(&controller,&ops,&snapshot));
+    controller.resources[1].length=INTEL_SPTLP_MMIO_MIN_LENGTH;
+    assert(intel_sptlp_probe_controller(&controller,&ops,&snapshot));
     controller.resources[1].length=0x1000U;
     controller.resources[2].address=UINT64_MAX-0x100U;
     controller.resources[2].minimum=controller.resources[2].address;

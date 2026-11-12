@@ -10,9 +10,9 @@
 #include <string.h>
 
 static const intel_sptlp_community_t communities[INTEL_SPTLP_COMMUNITY_COUNT]={
-    {0U,47U,0U},
-    {48U,119U,1U},
-    {120U,151U,2U}
+    {0U,47U,0U,2U},
+    {48U,119U,1U,3U},
+    {120U,151U,2U,2U}
 };
 
 static int id_equal(const char *left,const char *right)
@@ -131,8 +131,29 @@ int intel_sptlp_probe_controller(const acpi_aml_device_t *controller,
             ops->read32(ops->context,base,INTEL_SPTLP_PADCFGLOCK_OFFSET);
         candidate.communities[mapped].host_software_ownership=
             ops->read32(ops->context,base,INTEL_SPTLP_HOSTSW_OWN_OFFSET);
-        candidate.communities[mapped].interrupt_enable=
-            ops->read32(ops->context,base,INTEL_SPTLP_GPI_IE_OFFSET);
+        candidate.communities[mapped].group_count=
+            communities[mapped].group_count;
+        for(uint32_t group=0U;group<communities[mapped].group_count;++group)
+        {
+            uint32_t status_offset=INTEL_SPTLP_GPI_IS_OFFSET+group*4U;
+            uint32_t enable_offset=INTEL_SPTLP_GPI_IE_OFFSET+group*4U;
+            if(status_offset>length-sizeof(uint32_t)||
+               enable_offset>length-sizeof(uint32_t))
+            {
+                (void)ops->unmap(ops->context,mappings[mapped],length);
+                while(mapped!=0U)
+                {
+                    --mapped;
+                    (void)ops->unmap(ops->context,mappings[mapped],
+                                     (size_t)windows[mapped]->length);
+                }
+                return 0;
+            }
+            candidate.communities[mapped].interrupt_status[group]=
+                ops->read32(ops->context,base,status_offset);
+            candidate.communities[mapped].interrupt_enable[group]=
+                ops->read32(ops->context,base,enable_offset);
+        }
     }
 
     int success=mapped==INTEL_SPTLP_COMMUNITY_COUNT;
@@ -179,7 +200,8 @@ int intel_sptlp_pin_irq_location(uint16_t pin,
             .interrupt_status_offset=INTEL_SPTLP_GPI_IS_OFFSET+
                                      (uint32_t)group*4U,
             .interrupt_enable_offset=INTEL_SPTLP_GPI_IE_OFFSET+
-                                     (uint32_t)group*4U
+                                     (uint32_t)group*4U,
+            .bit_mask=1U<<bit
         };
         *location=candidate;
         return 1;

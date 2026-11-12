@@ -21,9 +21,9 @@ chip identity, firmware trust, framebuffer size, or shutdown success.
    side-effect-free preflight.
 2. Attach the PCI function using the caller's trusted BAR0 resource. The
    attach path maps BAR0 and performs the existing read-only PMC identity probe.
-3. Require a valid PMC_BOOT_42 extended chip ID matching
-   `expected_extended_chip_id`. A broad GA10x PCI profile alone is not enough
-   to select GA106 firmware.
+3. Require PMC_BOOT_42's exact GA106 chip ID (`0x176`). A broad GA10x PCI
+   profile alone is not enough to select GA106 firmware; GA107 (`0x177`) and
+   other Ampere chips are rejected.
 4. Read the VBIOS from the PROM window into a page-backed DMA allocation and
    parse the production FWSEC descriptor.
 5. Acquire all five same-version GA106 GSP components through the supplied
@@ -58,7 +58,7 @@ long-lived kernel storage; it must not be allocated on a transient stack.
 | Input | Required source / constraint |
 | --- | --- |
 | `trusted_bar0` | PCI/firmware resource manager with a known BAR extent large enough for the Falcon/GSP registers and the complete 1 MiB VBIOS PROM window. Do not size a live BAR by destructive probing while decode or bus mastering is active. |
-| `expected_extended_chip_id` | Exact 10-bit PMC_BOOT_42 chip ID from a trusted hardware profile, independently mapped to GA106. No guessed fallback is accepted. |
+| PMC chip identity | The coordinator pins GA106 to PMC_BOOT_42 chip ID `0x176` and rejects any other chip ID. The value follows the Linux Nova chipset table. |
 | `firmware_provider` | Request, verify and release callbacks for the five exact-version firmware components. |
 | Firmware verification | The provider's `verify` callback must enforce the platform's trust policy. A local SHA-256 manifest detects file drift but is not NVIDIA signature authentication. |
 | `trusted_gpu_facts` | Only values actually collected and known to match the GSP firmware branch's NVKV ABI. PCI identity and host facts are collected by NVX itself. |
@@ -101,8 +101,8 @@ not execute the composed startup against real SEC2/GSP registers and do not
 prove the firmware ABI or hardware sequence on a physical RTX 3060.
 
 There is still no boot-time or shell-command caller. The missing platform
-adapter must obtain the trusted BAR resource, map the exact PMC chip ID to
-GA106, provide a firmware trust source and truthful NVKV facts, and implement
+adapter must obtain the trusted BAR resource, provide a firmware trust source
+and truthful NVKV facts, and implement
 a real SEC2/GSP quiesce operation. Until that adapter and physical test exist,
 this is a production-oriented coordinator core, not a production-ready
 accelerated GPU driver.

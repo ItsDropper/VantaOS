@@ -507,8 +507,8 @@ static int aml_parse_resources(acpi_aml_device_t* device,
                     while (source_name_length < source_length &&
                            payload[source_begin + source_name_length] != 0U)
                         ++source_name_length;
-                    if (source_name_length == 0U ||
-                        source_name_length >= source_length)
+                    /* ACPI permits the Resource Source string without a NUL. */
+                    if (source_name_length == 0U)
                         return 0;
                     resource->resource_type = 5U;
                     resource->gpio_connection_type = payload[1U];

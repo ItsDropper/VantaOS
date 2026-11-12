@@ -490,7 +490,11 @@ waitpid_status_hex_store:
     loop waitpid_status_hex_loop
     mov $1, %eax
     lea waitpid_status_prefix(%rip), %rdi
-    mov $((waitpid_status_prefix_end - waitpid_status_prefix) + 9), %esi
+    mov $(waitpid_status_prefix_end - waitpid_status_prefix), %esi
+    int $0x80
+    mov $1, %eax
+    lea waitpid_status_hex(%rip), %rdi
+    mov $9, %esi
     int $0x80
     mov $1, %eax
     lea waitpid_status_failure(%rip), %rdi

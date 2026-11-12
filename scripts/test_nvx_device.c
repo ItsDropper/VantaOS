@@ -46,6 +46,8 @@ int main(void)
     static const uint16_t supported_ids[] = {
         0x2503U, 0x2504U, 0x2507U, 0x2508U, 0x2509U, 0x2544U, 0x2548U
     };
+    static const uint16_t mx130_ids[]={0x174DU};
+    static const uint16_t mx150_ids[]={0x1D10U,0x1D12U};
     for (unsigned i = 0U; i < sizeof(supported_ids) / sizeof(supported_ids[0]); ++i) {
         const nvx_generation_descriptor_t *generation =
             nvx_generation_for_pci(supported_ids[i]);
@@ -61,6 +63,18 @@ int main(void)
     assert(nvx_generation_for_pci(0x2C02U) == 0);
     assert(nvx_generation_for_pci(0x2C05U) == 0);
     assert(nvx_generation_for_pci(0x2C07U) == 0);
+    for(unsigned i=0U;i<sizeof(mx130_ids)/sizeof(mx130_ids[0]);++i) {
+        const nvx_generation_descriptor_t *g=nvx_generation_for_pci(mx130_ids[i]);
+        assert(g&&g->family==NVX_FAMILY_MAXWELL&&g->profile==NVX_PROFILE_GEFORCE_MX130);
+        assert(g->boot_sequence==NVX_BOOT_SEQUENCE_UNSUPPORTED&&g->pmc_boot_42_offset==UINT32_MAX);
+        assert(g->firmware_components==0&&g->firmware_component_count==0U);
+    }
+    for(unsigned i=0U;i<sizeof(mx150_ids)/sizeof(mx150_ids[0]);++i) {
+        const nvx_generation_descriptor_t *g=nvx_generation_for_pci(mx150_ids[i]);
+        assert(g&&g->family==NVX_FAMILY_PASCAL&&g->profile==NVX_PROFILE_GEFORCE_MX150);
+        assert(g->boot_sequence==NVX_BOOT_SEQUENCE_UNSUPPORTED&&g->pmc_boot_42_offset==UINT32_MAX);
+        assert(g->firmware_components==0&&g->firmware_component_count==0U);
+    }
     const nvx_generation_descriptor_t *ga106 =
         nvx_generation_for_firmware_chip("ga106");
     assert(ga106 != 0);
@@ -93,6 +107,12 @@ int main(void)
     assert(!nvx_describe_pci_device(0, &descriptor));
     assert(!nvx_describe_pci_device(&device, 0));
 
+    assert(nvx_identify_pci_device(0x174DU,&family,&profile));
+    assert(family==NVX_FAMILY_MAXWELL&&profile==NVX_PROFILE_GEFORCE_MX130);
+    assert(nvx_identify_pci_device(0x1D10U,&family,&profile));
+    assert(family==NVX_FAMILY_PASCAL&&profile==NVX_PROFILE_GEFORCE_MX150);
+    assert(nvx_identify_pci_device(0x1D12U,&family,&profile));
+    assert(family==NVX_FAMILY_PASCAL&&profile==NVX_PROFILE_GEFORCE_MX150);
     assert(nvx_identify_pci_device(0x2503U, &family, &profile));
     assert(family == NVX_FAMILY_AMPERE);
     assert(profile == NVX_PROFILE_GEFORCE_RTX_3060);
@@ -108,6 +128,11 @@ int main(void)
     assert(!nvx_identify_pci_device(0x2503U, 0, &profile));
     assert(!nvx_identify_pci_device(0x2503U, &family, 0));
 
+    assert(nvx_identify_architecture(0x11U,&family)&&family==NVX_FAMILY_MAXWELL);
+    assert(nvx_identify_architecture(0x12U,&family)&&family==NVX_FAMILY_MAXWELL);
+    assert(nvx_identify_architecture(0x13U,&family)&&family==NVX_FAMILY_PASCAL);
+    assert(nvx_identify_architecture(0x14U,&family)&&family==NVX_FAMILY_LEGACY);
+    assert(nvx_identify_architecture(0x15U,&family)&&family==NVX_FAMILY_LEGACY);
     assert(nvx_identify_architecture(0x16U, &family));
     assert(family == NVX_FAMILY_TURING);
     assert(nvx_identify_architecture(0x17U, &family));
@@ -149,6 +174,12 @@ int main(void)
     assert(descriptor.mmio_length == 0);
     assert(descriptor.is_64bit_bar == 0);
 
+    device.device_id=0x174D;
+    assert(nvx_describe_pci_device(&device,&descriptor));
+    assert(descriptor.family==NVX_FAMILY_MAXWELL&&descriptor.profile==NVX_PROFILE_GEFORCE_MX130);
+    device.device_id=0x1D12;
+    assert(nvx_describe_pci_device(&device,&descriptor));
+    assert(descriptor.family==NVX_FAMILY_PASCAL&&descriptor.profile==NVX_PROFILE_GEFORCE_MX150);
     device.device_id = 0x2503;
     assert(nvx_describe_pci_device(&device, &descriptor));
     assert(descriptor.family == NVX_FAMILY_AMPERE);

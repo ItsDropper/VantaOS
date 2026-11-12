@@ -63,7 +63,7 @@ Source presence is not proof of completion. This table summarizes what each area
 
 | Area | What works | Not established |
 | --- | --- | --- |
-| **Boot** | GRUB/Multiboot and a separate UEFI loader (OVMF) both reach the kernel through one normalized boot-info handoff. | Physical-firmware compatibility; a VantaOS-native bootloader. |
+| **Boot** | GRUB/Multiboot and the separate x86-64 UEFI loader both reach the kernel through one normalized boot-info handoff; OVMF smoke tests exercise the UEFI path. | Physical-firmware compatibility and a polished native boot manager. |
 | **Memory** | Physical memory manager, paging, heap, NX-protected user mappings, cross-CPU TLB shootdowns. | Demand paging, mature virtual-memory policy, exhaustive fault testing. |
 | **CPUs** | APIC/x2APIC, secondary-CPU startup, per-CPU scheduling and wakeups, QEMU regressions at 1, 2, and 4 vCPUs. | General race freedom and long-duration stability. |
 | **User mode** | Static ELF64 programs load from FAT32 into private address spaces and run at ring 3 over an `int 0x80` ABI (spawn/wait, bounded file descriptors, terminal input, GUI windows). | A stable ABI (today it is a bring-up interface), dynamic linking, broad adversarial isolation testing. |
@@ -146,9 +146,9 @@ gcc -std=gnu11 -O2 -Wall -Wextra -Werror -Iscripts/test_stubs_smp -Iinclude \
     scripts/test_vfs_handles.c fs/vfs.c -lpthread -o /tmp/vfs-test && /tmp/vfs-test
 ```
 
-GitHub Actions builds everything from a clean checkout, boots the ISO headless in QEMU at several RAM and CPU configurations, boots the UEFI image under OVMF, and requires serial success markers while rejecting any `VANTAOS_*_FAIL` marker. A passing marker means only that its listed assertions passed. [Testing](docs/build/TESTING.md) documents each check and its limits, including what is **not** covered.
+GitHub Actions builds everything from a clean checkout, boots the ISO headless in QEMU at several RAM and CPU configurations, and exercises the UEFI image under OVMF. The separate [safe UEFI hardware-test workflow](.github/workflows/hardware-boot-media.yml) validates a non-installing GPT/FAT32 test image, boots it with no writable disk attached, and publishes a SHA-256 manifest with the artifact. UEFI live boots also force all registered block devices read-only. A passing marker means only that its listed assertions passed. [Testing](docs/build/TESTING.md) documents each check and its limits, including what is **not** covered.
 
-## Installer (experimental)
+## First physical hardware test\n\nFor a non-installing UEFI boot from a separate USB device, use the [first controlled hardware boot procedure](docs/project/FIRST_HARDWARE_BOOT.md) and the **VantaOS safe UEFI hardware test media** Actions workflow. Use the `VantaOS-UEFI.img` artifact, not the installer image. The UEFI live-boot storage policy rejects writes to every disk exposed through the common block-device layer. Keep the internal Windows drive untouched; physical firmware compatibility has not yet been demonstrated.\n\n## Installer (experimental)
 
 The build also produces `VantaOS-Setup.img`, a **UEFI-only** installer medium (published by CI as the `vantaos-install-media` artifact). Its setup wizard preflights its payload, lets you choose a device name, EFI partition size (256 or 512 MiB), theme, accent color, Explorer density, text size, and high contrast, then shows a review screen and an exact target-disk preview. It excludes its own media from the target list and requires typing `INSTALL` before writing anything. It creates a GPT with an EFI System Partition and a FAT32 system partition, verifies the filesystem metadata, and copies the loader, kernel, apps, and settings.
 

@@ -78,6 +78,33 @@ int main(void)
     assert(command_bytes==0U&&submitted_put==0U);
     assert(put==1U&&fifo_status==NVX_GSP_GPFIFO_INVALID_ARGUMENT);
 
+    /* The command stream must not alias any memory the CE reads or writes. */
+    completion=0x11111111U;
+    assert(nvx_gsp_ce_copy_submit_and_wait(&channel,command,sizeof(command),
+        source_va,NVX_GSP_CE_GA10X_COPY_CLASS,2U,source_va,destination_va,
+        completion_va,&completion,4096U,gpu.completion_value,2U,1U,
+        no_progress,NULL,&command_bytes,&submitted_put,&fifo_status)==
+        NVX_GSP_CE_RUNTIME_BAD_GPU_RANGE);
+    assert(command_bytes==0U&&submitted_put==0U&&put==1U);
+    assert(nvx_gsp_ce_copy_submit_and_wait(&channel,command,sizeof(command),
+        destination_va-32U,NVX_GSP_CE_GA10X_COPY_CLASS,2U,source_va,
+        destination_va,completion_va,&completion,4096U,gpu.completion_value,
+        2U,1U,no_progress,NULL,&command_bytes,&submitted_put,&fifo_status)==
+        NVX_GSP_CE_RUNTIME_BAD_GPU_RANGE);
+    assert(command_bytes==0U&&submitted_put==0U&&put==1U);
+    assert(nvx_gsp_ce_copy_submit_and_wait(&channel,command,sizeof(command),
+        completion_va-32U,NVX_GSP_CE_GA10X_COPY_CLASS,2U,source_va,
+        destination_va,completion_va,&completion,4096U,gpu.completion_value,
+        2U,1U,no_progress,NULL,&command_bytes,&submitted_put,&fifo_status)==
+        NVX_GSP_CE_RUNTIME_BAD_GPU_RANGE);
+    assert(command_bytes==0U&&submitted_put==0U&&put==1U);
+    assert(nvx_gsp_ce_copy_submit_and_wait(&channel,command,sizeof(command),
+        NVX_GSP_GPFIFO_ADDRESS_LIMIT-32U,NVX_GSP_CE_GA10X_COPY_CLASS,2U,
+        source_va,destination_va,completion_va,&completion,4096U,
+        gpu.completion_value,2U,1U,no_progress,NULL,&command_bytes,
+        &submitted_put,&fifo_status)==NVX_GSP_CE_RUNTIME_BAD_GPU_RANGE);
+    assert(command_bytes==0U&&submitted_put==0U&&put==1U);
+
     /* Invalid copy ranges fail before the queue is modified. */
     completion=0x11111111U;
     assert(nvx_gsp_ce_copy_submit_and_wait(&channel,command,sizeof(command),

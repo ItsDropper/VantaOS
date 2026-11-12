@@ -122,7 +122,7 @@ VantaOS-Setup.img: VANTASETUP.EFI BOOTX64.EFI kernel-uefi.elf vantaos.img
 	rm -f $@
 	truncate -s 1024M $@
 	sgdisk --clear --new=1:2048:0 --typecode=1:EF00 --change-name=1:VANTA_SETUP_MEDIA $@
-	mkfs.fat -F 32 --offset=2048 $@ >/dev/null
+	mkfs.fat -F 32 -h 2048 --offset=2048 $@ >/dev/null
 	mmd -i $@@@1048576 ::/EFI
 	mmd -i $@@@1048576 ::/EFI/BOOT
 	mmd -i $@@@1048576 ::/EFI/VANTA
@@ -159,7 +159,7 @@ VantaOS-UEFI.img: BOOTX64.EFI kernel-uefi.elf
 	sgdisk --clear --new=1:2048:0 --typecode=1:EF00 --change-name=1:VANTA_UEFI_TEST $@
 	# Match the known-good setup-media FAT32 geometry; the offset keeps the
 	# filesystem inside the GPT EFI System Partition.
-	mkfs.fat -F 32 --offset=2048 $@ >/dev/null
+	mkfs.fat -F 32 -h 2048 --offset=2048 $@ >/dev/null
 	mmd -i $@@@1048576 ::/EFI
 	mmd -i $@@@1048576 ::/EFI/BOOT
 	mmd -i $@@@1048576 ::/EFI/VANTA

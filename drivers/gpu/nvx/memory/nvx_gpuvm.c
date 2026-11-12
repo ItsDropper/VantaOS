@@ -448,15 +448,15 @@ nvx_gpuvm_status_t nvx_gpuvm_reserve(nvx_gpuvm_t *vm, uint64_t size,
     return NVX_GPUVM_OK;
 }
 
-nvx_gpuvm_status_t nvx_gpuvm_map_pages(nvx_gpuvm_t *vm,
-                                       nvx_gpuvm_mapping_t *mapping,
-                                       const uint64_t *physical_pages,
-                                       size_t page_count, unsigned access)
+static nvx_gpuvm_status_t nvx_gpuvm_map_pages_common(
+    nvx_gpuvm_t *vm, nvx_gpuvm_mapping_t *mapping,
+    const uint64_t *physical_pages, uint64_t contiguous_base,
+    int contiguous, size_t page_count, unsigned access)
 {
     nvx_gpuvm_record_t *record;
     size_t mapped = 0U;
     nvx_gpuvm_status_t status = NVX_GPUVM_OK;
-    if (vm == 0 || mapping == 0 || physical_pages == 0)
+    if (vm == 0 || mapping == 0 || (!contiguous && physical_pages == 0))
         return NVX_GPUVM_INVALID_ARGUMENT;
     if (!vm->initialized)
         return NVX_GPUVM_NOT_INITIALIZED;
@@ -485,12 +485,20 @@ nvx_gpuvm_status_t nvx_gpuvm_map_pages(nvx_gpuvm_t *vm,
         return NVX_GPUVM_INVALID_RANGE;
     }
     for (size_t i = 0; i < page_count; ++i) {
-        if (physical_pages[i] == 0U ||
-            (physical_pages[i] & (NVX_GPUVM_PAGE_SIZE - 1U)) != 0U) {
+        uint64_t physical = contiguous ?
+            contiguous_base + (uint64_t)i * NVX_GPUVM_PAGE_SIZE :
+            physical_pages[i];
+        if (contiguous && (uint64_t)i >
+            (UINT64_MAX - contiguous_base) / NVX_GPUVM_PAGE_SIZE) {
+            spinlock_unlock(&vm->lock);
+            return NVX_GPUVM_INVALID_RANGE;
+        }
+        if (physical == 0U ||
+            (physical & (NVX_GPUVM_PAGE_SIZE - 1U)) != 0U) {
             spinlock_unlock(&vm->lock);
             return NVX_GPUVM_PAGE_INVALID;
         }
-        if (physical_pages[i] >= (1ULL << NVX_GPUVM_PA_BITS)) {
+        if (physical >= (1ULL << NVX_GPUVM_PA_BITS)) {
             spinlock_unlock(&vm->lock);
             return NVX_GPUVM_ADDRESS_WIDTH;
         }
@@ -509,7 +517,10 @@ nvx_gpuvm_status_t nvx_gpuvm_map_pages(nvx_gpuvm_t *vm,
                                 : NVX_GPUVM_ALREADY_MAPPED;
             break;
         }
-        __atomic_store_n(entry, nvx_gpuvm_pte_value(physical_pages[mapped], access),
+        uint64_t physical = contiguous ?
+            contiguous_base + (uint64_t)mapped * NVX_GPUVM_PAGE_SIZE :
+            physical_pages[mapped];
+        __atomic_store_n(entry, nvx_gpuvm_pte_value(physical, access),
                          __ATOMIC_RELEASE);
         ++vm->tables[leaf].entry_count;
     }
@@ -563,6 +574,35 @@ nvx_gpuvm_status_t nvx_gpuvm_map_pages(nvx_gpuvm_t *vm,
     }
     spinlock_unlock(&vm->lock);
     return NVX_GPUVM_OK;
+}
+
+nvx_gpuvm_status_t nvx_gpuvm_map_pages(
+    nvx_gpuvm_t *vm, nvx_gpuvm_mapping_t *mapping,
+    const uint64_t *physical_pages, size_t page_count, unsigned access)
+{
+    return nvx_gpuvm_map_pages_common(vm, mapping, physical_pages, 0U,
+        0, page_count, access);
+}
+
+nvx_gpuvm_status_t nvx_gpuvm_map_contiguous(
+    nvx_gpuvm_t *vm, nvx_gpuvm_mapping_t *mapping,
+    uint64_t physical_base, uint64_t physical_size, unsigned access)
+{
+    uint64_t physical_end;
+    size_t page_count;
+    if (!vm || !mapping || !mapping->valid ||
+        !mapping->size || mapping->size > SIZE_MAX ||
+        (mapping->size & (NVX_GPUVM_PAGE_SIZE - 1U)) ||
+        !physical_size || physical_size < mapping->size ||
+        (physical_base & (NVX_GPUVM_PAGE_SIZE - 1U)) ||
+        nvx_gpuvm_add_overflow(physical_base, mapping->size, &physical_end))
+        return NVX_GPUVM_INVALID_RANGE;
+    if (physical_base == 0U ||
+        physical_end > (1ULL << NVX_GPUVM_PA_BITS))
+        return NVX_GPUVM_ADDRESS_WIDTH;
+    page_count = (size_t)(mapping->size / NVX_GPUVM_PAGE_SIZE);
+    return nvx_gpuvm_map_pages_common(vm, mapping, 0, physical_base,
+        1, page_count, access);
 }
 
 nvx_gpuvm_status_t nvx_gpuvm_release(nvx_gpuvm_t *vm,

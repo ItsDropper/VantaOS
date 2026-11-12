@@ -12,12 +12,16 @@
 #define NVX_GSP_RM_CLASS_MEMORY_SYSTEM UINT32_C(0x0000003E)
 #define NVX_GSP_MEMORY_PAGE_SIZE UINT64_C(4096)
 #define NVX_GSP_MEMORY_TYPE_IMAGE UINT32_C(0)
+#define NVX_GSP_MEMORY_ATTR_SYSTEM_UNCACHED_NONCONTIGUOUS UINT32_C(0x0A000000)
+#define NVX_GSP_MEMORY_ATTR2_GPU_CACHEABLE_NO UINT32_C(0x00000008)
+#define NVX_GSP_MEMORY_OWNER_LEGACY_SHIM UINT32_C(0x7368696D)
 #define NVX_GSP_MEMORY_ALLOC_RESPONSE_HEADER_SIZE 32U
 
 /*
  * NVIDIA public nvos.h: NV_MEMORY_ALLOCATION_PARAMS (64-bit ABI).
- * Flags/attributes retain NVIDIA's NVOS32 encoding; callers must select
- * supported values for the target RM/firmware release.
+ * Flags/attributes retain NVIDIA's NVOS32 encoding. The system initializer
+ * below selects the conservative PCI/system-RAM, noncontiguous, uncached
+ * policy matching NVIDIA's deprecated NVOS02 conversion path.
  */
 typedef struct nvx_gsp_memory_allocation_params {
     uint32_t owner;
@@ -67,6 +71,11 @@ typedef struct nvx_gsp_memory_object {
     uint8_t result_valid;
     uint8_t stage;
 } nvx_gsp_memory_object_t;
+
+/* Initialize a conservative 4 KiB-aligned system-memory allocation request. */
+nvx_gsp_rmapi_status_t nvx_gsp_memory_params_init_system(
+    nvx_gsp_memory_allocation_params_t *params, uint64_t size,
+    uint32_t tag);
 
 /*
  * Allocate a real RM system-memory object. params->size is the requested

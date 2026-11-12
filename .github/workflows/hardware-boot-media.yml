@@ -1,0 +1,136 @@
+name: VantaOS safe UEFI hardware test media
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - "boot/uefi/loader.c"
+      - "kernel/**"
+      - "drivers/**"
+      - "arch/**"
+      - "mm/**"
+      - "fs/**"
+      - "include/**"
+      - "Makefile"
+      - "build.sh"
+      - ".github/workflows/hardware-boot-media.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vantaos-hardware-boot-media-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install UEFI build and OVMF dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes build-essential nasm grub-pc-bin xorriso \
+            mtools dosfstools qemu-system-x86 gnu-efi ovmf gdisk
+
+      - name: Build normal release kernel and UEFI test image
+        run: |
+          set -euo pipefail
+          chmod +x build.sh
+          ./build.sh
+          make uefi
+          test -s VantaOS-UEFI.img
+          test -s BOOTX64.EFI
+          test -s kernel-uefi.elf
+
+      - name: Validate GPT, FAT32 ESP and required boot files
+        run: |
+          set -euo pipefail
+          sgdisk --verify VantaOS-UEFI.img
+          mcopy -i VantaOS-UEFI.img@@1048576 ::/EFI/BOOT/BOOTX64.EFI /tmp/BOOTX64.EFI
+          mcopy -i VantaOS-UEFI.img@@1048576 ::/EFI/VANTA/KERNEL.ELF /tmp/KERNEL.ELF
+          cmp BOOTX64.EFI /tmp/BOOTX64.EFI
+          cmp kernel-uefi.elf /tmp/KERNEL.ELF
+          test -s /tmp/BOOTX64.EFI
+          test -s /tmp/KERNEL.ELF
+          sha256sum VantaOS-UEFI.img BOOTX64.EFI kernel-uefi.elf > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Boot UEFI test media in OVMF without any writable disk attached
+        shell: bash
+        run: |
+          set -euo pipefail
+          code_firmware=""
+          vars_template=""
+          for suffix in "" "_4M"; do
+            code_candidate="/usr/share/OVMF/OVMF_CODE${suffix}.fd"
+            vars_candidate="/usr/share/OVMF/OVMF_VARS${suffix}.fd"
+            if [ -s "$code_candidate" ] && [ -s "$vars_candidate" ]; then
+              code_firmware="$code_candidate"
+              vars_template="$vars_candidate"
+              break
+            fi
+          done
+          if [ -z "$code_firmware" ]; then
+            code_firmware="$(find /usr/share -maxdepth 4 -name 'OVMF_CODE*.fd' -print -quit)"
+            vars_template="${code_firmware/OVMF_CODE/OVMF_VARS}"
+          fi
+          test -s "$code_firmware"
+          test -s "$vars_template"
+          cp "$vars_template" OVMF_VARS.fd
+
+          set +e
+          timeout 25s qemu-system-x86_64 \
+            -machine q35 -cpu max -m 512M -smp 2 \
+            -drive if=pflash,format=raw,readonly=on,file="$code_firmware" \
+            -drive if=pflash,format=raw,file=OVMF_VARS.fd \
+            -drive file=VantaOS-UEFI.img,format=raw,if=virtio,readonly=on \
+            -boot menu=on,order=c \
+            -display none -serial file:uefi-hardware-test.log \
+            -monitor none -no-reboot
+          result=$?
+          set -e
+          if [ "$result" -ne 124 ]; then
+            echo "OVMF test did not remain in the kernel smoke test (exit $result)."
+            cat uefi-hardware-test.log 2>/dev/null || true
+            exit 1
+          fi
+          sleep 1
+          if grep -Eq '^VANTAOS_[A-Z0-9_]*_FAIL' uefi-hardware-test.log; then
+            echo "UEFI test boot emitted a failure marker."
+            cat uefi-hardware-test.log
+            exit 1
+          fi
+          for marker in \
+            VANTAOS_UEFI_LOADER_START \
+            VANTAOS_UEFI_ELF_LOADED \
+            VANTAOS_UEFI_STORAGE_POLICY_READ_ONLY \
+            VANTAOS_UEFI_EXIT_BOOT_SERVICES_OK \
+            VANTAOS_UEFI_KERNEL_HANDOFF \
+            VANTAOS_UEFI_KERNEL_ENTRY \
+            VANTAOS_UEFI_BOOT_INFO_READY \
+            VANTAOS_BOOT_OK; do
+            grep -q "$marker" uefi-hardware-test.log || {
+              echo "Missing required marker: $marker"
+              cat uefi-hardware-test.log
+              exit 1
+            }
+          done
+          echo "UEFI live-media smoke test passed with no writable disks attached."
+
+      - name: Upload verified UEFI hardware test media
+        uses: actions/upload-artifact@v4
+        with:
+          name: VantaOS-UEFI-hardware-test-${{ github.sha }}
+          path: |
+            VantaOS-UEFI.img
+            BOOTX64.EFI
+            kernel-uefi.elf
+            SHA256SUMS.txt
+            uefi-hardware-test.log
+          if-no-files-found: error
+          retention-days: 30

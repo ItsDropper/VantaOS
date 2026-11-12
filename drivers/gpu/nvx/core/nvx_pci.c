@@ -36,6 +36,8 @@ static const char *nvx_family_name(nvx_generation_family_t family)
     switch (family)
     {
         case NVX_FAMILY_LEGACY: return "LEGACY";
+        case NVX_FAMILY_MAXWELL: return "MAXWELL";
+        case NVX_FAMILY_PASCAL: return "PASCAL";
         case NVX_FAMILY_TURING: return "TURING";
         case NVX_FAMILY_AMPERE: return "AMPERE";
         case NVX_FAMILY_ADA: return "ADA";
@@ -50,6 +52,8 @@ static const char *nvx_profile_name(nvx_device_profile_t profile)
     switch (profile)
     {
         case NVX_PROFILE_GEFORCE_RTX_3060: return "GEFORCE-RTX-3060";
+        case NVX_PROFILE_GEFORCE_MX130: return "GEFORCE-MX130";
+        case NVX_PROFILE_GEFORCE_MX150: return "GEFORCE-MX150";
         case NVX_PROFILE_UNKNOWN:
         default: return "UNKNOWN";
     }

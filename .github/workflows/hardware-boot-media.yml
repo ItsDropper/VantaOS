@@ -92,7 +92,6 @@ jobs:
             -drive if=pflash,format=raw,readonly=on,file="$code_firmware" \
             -drive if=pflash,format=raw,file=OVMF_VARS.fd \
             -drive file=uefi-qemu-test.img,format=raw,if=ide,index=0 \
-            -boot menu=on,order=c \
             -display none -serial file:uefi-hardware-test.log \
             -monitor none -no-reboot
           result=$?

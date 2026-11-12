@@ -6,7 +6,7 @@ VantaOS is an experimental x86-64 OS. Source code for a driver is not proof that
 
 | Area | Current evidence | Status |
 | --- | --- | --- |
-| x86-64 boot path | Kernel/ISO build and headless QEMU boot in CI | Verified in the tested QEMU configuration |
+| x86-64 boot path | GRUB/Multiboot QEMU regressions plus a separate OVMF UEFI loader/kernel handoff workflow | Verified in tested QEMU/OVMF configurations; physical firmware still unverified |
 | Serial diagnostics | CI captures COM1 output and checks boot/test markers | Verified in QEMU |
 | Timer/interrupt path | PIT frequency bounds, tick wrap arithmetic, scheduler probe and process reaping are covered by regression tests | Narrow path tested; not exhaustive |
 | Kernel watchdog | Fixed-size watchdog registry, heartbeat API, latched expiry, stale-handle rejection and tick-wrap behavior have host regression tests wired into CI | No production subsystem client or safe recovery observer is registered yet; software expiry only, no hardware watchdog |
@@ -17,7 +17,7 @@ VantaOS is an experimental x86-64 OS. Source code for a driver is not proof that
 | PCI/legacy ATA PIO | IDE-compatible primary/secondary channel probing, bounded LBA28 reads/writes, and shared host-tested request-range validation | Physical controller compatibility and broad error-recovery behavior unverified; this is not an AHCI/SATA driver |
 | PCIe extended configuration | ACPI MCFG region validation and read-only extended-capability traversal are implemented; malformed links are host-tested | Real ECAM firmware tables and physical PCIe devices are not yet hardware-validated |
 | Hardware identification | CPU capability/topology reporting, PCI BDF/vendor/device/class/revision/subsystem inventory, checksummed ACPI root-table inventory, SMBIOS 2.x/3.x system/board/BIOS/CPU/memory inventory, and USB device VID:PID/class logging | Software paths and synthetic SMBIOS parser tests; physical firmware tables and laptop USB devices still require device testing. SMBIOS tables above the current 1 GiB identity-map window are intentionally not dereferenced |
-| FAT32 | Mount validates BPB geometry against partition bounds; cluster and FAT accesses are volume-bounded; ATA PIO sector-write primitive is implemented | Persistent allocation, directory updates, and file write/create remain unimplemented; write path is not end-to-end tested |
+| FAT32 | Mount validates BPB geometry against partition bounds; cluster and FAT accesses are volume-bounded; ATA PIO sector-write primitive and persistent file operations are tested in QEMU | UEFI hardware-test boots force all registered block devices read-only; physical storage and filesystem compatibility remain unverified |
 | USB | xHCI host path and USB HID support have QEMU regression coverage; Bluetooth HCI command state has a bounded software watchdog; RTL8188EU USB Wi-Fi driver code has host tests | Physical device compatibility and end-to-end Bluetooth/Wi-Fi networking are not established |
 | Other Wi-Fi adapters / router hardware | No additional chipset-specific drivers validated | Not supported by evidence; router firmware is outside the current OS-driver scope |
 | NVIDIA GA10x (NVX) | Bounded VBIOS/FWSEC and booter parsers; FWSEC interface command-window parser; synthetic BAR0 tests for Falcon reset, DMA, BROM, launch, mailbox and ownership sequencing; CI host tests | Firmware parsing and software sequencing are host-tested; physical SEC2 secure boot, authenticated WPR placement, GSP RISC-V activation, first GSP-RM RPC, and acceleration remain unverified |

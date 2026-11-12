@@ -27,8 +27,23 @@ static nvx_dma_status_t nvx_dma_translate_status(gpu_dma_status_t status)
 nvx_dma_status_t nvx_dma_alloc(size_t size, unsigned address_bits,
                                nvx_dma_buffer_t *out_buffer)
 {
-    return nvx_dma_translate_status(
-        gpu_dma_alloc(size, address_bits, (gpu_dma_buffer_t *)out_buffer));
+    /*
+     * The kernel currently identity-maps physical memory only below 1 GiB.
+     * gpu_dma_alloc() can allocate anywhere below the PMM's 4 GiB ceiling,
+     * but its CPU pointer is the physical address. Passing a >1 GiB result
+     * into firmware staging would dereference an unmapped kernel address.
+     *
+     * Keep the caller's device-width contract (32/64-bit) but conservatively
+     * allocate from the identity-mapped 30-bit window until NVX has an
+     * explicit high-memory CPU mapping backend.
+     */
+    if (!out_buffer)
+        return NVX_DMA_INVALID_ARGUMENT;
+    if (address_bits != 32U && address_bits != 64U)
+        return NVX_DMA_ADDRESS_WIDTH_UNSUPPORTED;
+
+    return nvx_dma_translate_status(gpu_dma_alloc_identity_mapped(
+        size, (gpu_dma_buffer_t *)out_buffer));
 }
 
 nvx_dma_status_t nvx_dma_alloc_identity_mapped(

@@ -110,7 +110,8 @@ nvx_gsp_platform_status_t nvx_gsp_platform_validate_config(
 
     if (!c || !c->pci_device || !c->trusted_bar0 ||
         !c->firmware_provider || !c->firmware_chip ||
-        !c->firmware_version || !c->trusted_gpu_facts ||
+        !c->firmware_version || !c->expected_extended_chip_id ||
+        c->expected_extended_chip_id > 0x03FFU || !c->trusted_gpu_facts ||
         !c->delay_ms || !c->timeout_ms || !c->poll_interval_ms ||
         c->poll_interval_ms > c->timeout_ms)
         return NVX_GSP_PLATFORM_INVALID_ARGUMENT;
@@ -316,6 +317,22 @@ nvx_gsp_platform_status_t nvx_gsp_platform_start(
                           &session->device) != NVX_ATTACH_OK)
         return NVX_GSP_PLATFORM_ATTACH_FAILED;
     session->attached = 1U;
+
+    /*
+     * PCI IDs only select a broad GA10x candidate. Never trust a caller's
+     * "ga106" string alone: require the extended PMC chip ID read from BAR0
+     * to match the platform's independently sourced exact chip profile.
+     */
+    if (!session->device.registers.extended_revision_valid ||
+        session->device.registers.identity_mismatch ||
+        session->device.registers.identified_family != NVX_FAMILY_AMPERE ||
+        session->device.registers.extended_chip_id !=
+            config->expected_extended_chip_id) {
+        if (nvx_device_detach(&session->device) != NVX_ATTACH_OK)
+            return NVX_GSP_PLATFORM_BUSY;
+        memset(session, 0, sizeof(*session));
+        return NVX_GSP_PLATFORM_CHIP_MISMATCH;
+    }
 
     bar0.base = (volatile uint8_t *)session->device.bar0_mapping;
     bar0.length = (size_t)session->device.bar0.size;

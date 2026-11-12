@@ -110,7 +110,7 @@ void dma_free_contiguous(dma_page_t *pages, size_t count)
 
 int main(void)
 {
-    nvx_memory_handle_t command = {0}, target = {0};
+    nvx_memory_handle_t command = {0}, target = {0}, readonly_target = {0};
     nvx_relocation_t relocations[2] = {{0}};
     nvx_submit_report_t report;
     nvx_submit_lease_t lease = {0};
@@ -202,6 +202,18 @@ int main(void)
     /* Test harness now asserts simulated engine quiescence. */
     assert(nvx_submit_release_batch(&manager, &lease) == NVX_SUBMIT_OK);
 
+    assert(nvx_memory_alloc_access(&manager, 4096U, NVX_MEMORY_STAGING,
+        NVX_MEMORY_ACCESS_READ, &readonly_target) == NVX_MEMORY_OK);
+    relocations[0].target = readonly_target;
+    relocations[0].access = NVX_RELOC_READ_WRITE;
+    assert(nvx_submit_validate_batch(&manager, &command, 64U, relocations,
+        2U, &report) == NVX_SUBMIT_TARGET_ACCESS);
+    relocations[0].access = NVX_RELOC_READ;
+    assert(nvx_submit_validate_batch(&manager, &command, 64U, relocations,
+        2U, &report) == NVX_SUBMIT_OK);
+    relocations[0].target = target;
+    relocations[0].access = NVX_RELOC_READ;
+
     /*
      * A failed batch must not leak partial success counters to callers.
      * This matters when callers use the report for diagnostics or recovery.
@@ -267,6 +279,7 @@ int main(void)
 
     assert(nvx_memory_release(&manager, &command) == NVX_MEMORY_OK);
     assert(nvx_memory_release(&manager, &target) == NVX_MEMORY_OK);
+    assert(nvx_memory_release(&manager, &readonly_target) == NVX_MEMORY_OK);
     assert(nvx_gpuvm_destroy(&gpuvm) == NVX_GPUVM_OK);
     return 0;
 }

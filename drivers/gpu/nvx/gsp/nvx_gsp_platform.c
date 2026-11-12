@@ -117,8 +117,7 @@ nvx_gsp_platform_status_t nvx_gsp_platform_validate_config(
 
     if (!c || !c->pci_device || !c->trusted_bar0 ||
         !c->firmware_provider || !c->firmware_chip ||
-        !c->firmware_version || !c->expected_extended_chip_id ||
-        c->expected_extended_chip_id > 0x03FFU || !c->trusted_gpu_facts ||
+        !c->firmware_version || !c->trusted_gpu_facts ||
         !c->delay_ms || !c->timeout_ms || !c->poll_interval_ms ||
         c->poll_interval_ms > c->timeout_ms)
         return NVX_GSP_PLATFORM_INVALID_ARGUMENT;
@@ -338,7 +337,7 @@ nvx_gsp_platform_status_t nvx_gsp_platform_start(
         session->device.registers.identity_mismatch ||
         session->device.registers.identified_family != NVX_FAMILY_AMPERE ||
         session->device.registers.extended_chip_id !=
-            config->expected_extended_chip_id) {
+            NVX_GSP_GA106_PMC_CHIP_ID) {
         if (nvx_device_detach(&session->device) != NVX_ATTACH_OK)
             return NVX_GSP_PLATFORM_BUSY;
         memset(session, 0, sizeof(*session));

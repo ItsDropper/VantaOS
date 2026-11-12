@@ -66,7 +66,7 @@ int main(void)
     nvx_gsp_dma_mapping_t mapping={0};
     nvx_gsp_map_memory_dma_t request={.client=1U,.device=2U,.dma=3U,
         .memory=4U,.offset=0x2000U,.length=0x6000U,.flags=0x10U,
-        .flags2=0x20U,.kind_override=7U,.dma_offset=UINT64_MAX};
+        .flags2=0x20U,.kind_override=7U,.dma_offset=0x5000U};
     uint8_t scratch[128],response[128];
 
     map_submit_status=unmap_submit_status=wait_status=result_status=
@@ -77,7 +77,7 @@ int main(void)
         response,sizeof(response),100U,1U,delay,NULL)==NVX_GSP_RMAPI_OK);
     assert(mapping.stage==NVX_GSP_DMA_MAP_MAPPED);
     assert(mapping.dma_offset==mapped_offset);
-    assert(last_map.dma_offset==0U&&last_map.offset==request.offset&&
+    assert(last_map.dma_offset==request.dma_offset&&last_map.offset==request.offset&&
            last_map.length==request.length&&last_map.flags2==request.flags2);
     assert(release_calls==1U&&map_calls==1U);
 

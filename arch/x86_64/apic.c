@@ -57,7 +57,11 @@ static int legacy_pic_routing;
 static uint64_t read_msr(uint32_t msr)
 {
     uint32_t low, high;
-    __asm__ volatile ("rdmsr" : "=a"(low), "=d"(high) : "c"(msr));
+    /*
+     * MSR accesses participate in CPU state transitions. Keep ordinary
+     * memory operations on either side from being hoisted across RDMSR.
+     */
+    __asm__ volatile ("rdmsr" : "=a"(low), "=d"(high) : "c"(msr) : "memory");
     return ((uint64_t)high << 32) | low;
 }
 
@@ -74,7 +78,11 @@ static void write_msr(uint32_t msr, uint64_t value)
 {
     uint32_t low = (uint32_t)value;
     uint32_t high = (uint32_t)(value >> 32);
-    __asm__ volatile ("wrmsr" : : "c"(msr), "a"(low), "d"(high));
+    /*
+     * WRMSR changes architectural CPU state. The compiler must not move
+     * MMIO or other memory operations across this transition.
+     */
+    __asm__ volatile ("wrmsr" : : "c"(msr), "a"(low), "d"(high) : "memory");
 }
 
 static int cpu_has_apic(void)

@@ -579,9 +579,9 @@ int gui_server_poll_event(uint32_t pid, uint32_t id,
     }
     if (window->event_count == 0U && focused_window_id == id)
     {
-        if (keyboard_has_event())
+        keyboard_event_t key = keyboard_get_event();
+        if (key != KEY_EVENT_NONE)
         {
-            keyboard_event_t key = keyboard_get_event();
             vanta_gui_event_t event = {
                 VANTA_GUI_EVENT_KEY, 0, 0, 0x100U + (uint32_t)key,
                 keyboard_ctrl_pressed() ? VANTA_GUI_MOD_CTRL : 0U
@@ -590,9 +590,9 @@ int gui_server_poll_event(uint32_t pid, uint32_t id,
             spinlock_unlock_irqrestore(&gui_lock, flags);
             return 1;
         }
-        if (keyboard_has_char())
+        char character = keyboard_get_char();
+        if (character != 0)
         {
-            char character = keyboard_get_char();
             vanta_gui_event_t event = {
                 VANTA_GUI_EVENT_KEY, 0, 0,
                 (uint32_t)(unsigned char)character,
@@ -962,6 +962,41 @@ int gui_server_mouse_click(int x, int y, int button)
         (void)builtin_click(builtin_x, builtin_y, builtin_w, builtin_h,
                             x, y, button);
     return 1;
+}
+
+void gui_server_mouse_wheel(int delta)
+{
+    if (delta == 0)
+        return;
+
+    uint64_t flags = spinlock_lock_irqsave(&gui_lock);
+    gui_window_t* target = 0;
+    for (unsigned int i = 0; i < VANTA_GUI_MAX_WINDOWS; ++i)
+    {
+        gui_window_t* candidate = &windows[i];
+        if (!candidate->used || !candidate->visible || candidate->builtin ||
+            pointer_x < candidate->x + GUI_CLIENT_INSET_X ||
+            pointer_y < candidate->y + GUI_CLIENT_INSET_Y ||
+            pointer_x >= candidate->x + (int32_t)candidate->width ||
+            pointer_y >= candidate->y + (int32_t)candidate->height)
+            continue;
+        if (!target || candidate->z_order > target->z_order)
+            target = candidate;
+    }
+
+    if (target)
+    {
+        vanta_gui_event_t event = {
+            VANTA_GUI_EVENT_POINTER_WHEEL,
+            pointer_x - target->x - GUI_CLIENT_INSET_X,
+            pointer_y - target->y - GUI_CLIENT_INSET_Y,
+            (uint32_t)(int32_t)delta,
+            0U
+        };
+        gui_queue_event_locked(target, &event);
+        redraw_pending = 1;
+    }
+    spinlock_unlock_irqrestore(&gui_lock, flags);
 }
 
 void gui_server_mouse_move(int x, int y)

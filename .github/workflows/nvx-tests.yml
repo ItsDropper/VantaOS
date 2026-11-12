@@ -816,6 +816,14 @@ jobs:
             -o /tmp/vantaos-nvx-gsp-memory-dma-test
           /tmp/vantaos-nvx-gsp-memory-dma-test
 
+      - name: Compile OS descriptor to CTXDMA and NVOS46 integration tests
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_os_memory_dma.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_memory_dma.c \
+            -o /tmp/vantaos-nvx-gsp-os-memory-dma-test
+          /tmp/vantaos-nvx-gsp-os-memory-dma-test
+
       - name: Compile NVX DMA ownership and ordering tests
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \

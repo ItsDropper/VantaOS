@@ -458,6 +458,16 @@ jobs:
       - name: Test USERD GP_GET/GP_PUT offsets and channel parameter bounds
         run: /tmp/vantaos-nvx-gsp-userd-test
 
+      - name: Compile RM-backed GPFIFO ring lifecycle tests
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_channel_ring.c \
+            drivers/gpu/nvx/execution/nvx_gsp_channel_ring.c \
+            -o /tmp/vantaos-nvx-gsp-channel-ring-test
+
+      - name: Test RM ring allocation, mapping, reference gating and reverse teardown
+        run: /tmp/vantaos-nvx-gsp-channel-ring-test
+
       - name: Compile Ampere RM channel runtime ownership tests
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \

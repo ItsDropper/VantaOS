@@ -9,6 +9,9 @@ on:
       - "include/nvx_gsp_ce.h"
       - "scripts/test_nvx_gsp_ce_runtime.c"
       - "scripts/test_nvx_dma.c"
+      - "scripts/test_gpu_dma.c"
+      - "scripts/test_gpu_dma_page_table.c"
+      - "scripts/test_gpu_dma_sync.c"
       - ".github/workflows/nvx-tests.yml"
   pull_request:
     paths:
@@ -17,6 +20,9 @@ on:
       - "include/nvx_gsp_ce.h"
       - "scripts/test_nvx_gsp_ce_runtime.c"
       - "scripts/test_nvx_dma.c"
+      - "scripts/test_gpu_dma.c"
+      - "scripts/test_gpu_dma_page_table.c"
+      - "scripts/test_gpu_dma_sync.c"
       - "include/nvx_gsp_secure_boot.h"
       - "include/nvx_gsp_pci_rom.h"
       - "include/nvx_gsp_fwsec_interface.h"

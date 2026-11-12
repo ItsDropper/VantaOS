@@ -50,7 +50,7 @@ jobs:
       - name: Validate GPT, FAT32 ESP and required boot files
         run: |
           set -euo pipefail
-          sgdisk --verify VantaOS-UEFI.img
+          sfdisk --verify VantaOS-UEFI.img
           mcopy -i VantaOS-UEFI.img@@1048576 ::/EFI/BOOT/BOOTX64.EFI /tmp/BOOTX64.EFI
           mcopy -i VantaOS-UEFI.img@@1048576 ::/EFI/VANTA/KERNEL.ELF /tmp/KERNEL.ELF
           cmp BOOTX64.EFI /tmp/BOOTX64.EFI

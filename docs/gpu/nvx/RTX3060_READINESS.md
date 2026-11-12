@@ -70,6 +70,23 @@ channel mappings, or command packet. The caller must still provide a real
 RM-created CE object and channel, valid GPUVA mappings, cache/DMA synchronization,
 and safe resource retention until completion or proven quiescence.
 
+## Copy-channel lifecycle software milestone
+
+NVX now has a reusable RM-backed Ampere copy-channel transaction in
+`include/nvx_gsp_channel.h` and `drivers/gpu/nvx/gsp/nvx_gsp_channel.c`.
+It allocates the GPFIFO channel, binds it to `COPY0`, schedules it, and
+tears it down in the reverse safe order. Timed-out stages retain their RPC
+handle and explicit stage; callers must recover the operation before reusing
+response storage or changing channel ownership. A failed bind/schedule rolls
+back the channel, and failed cleanup preserves the allocated state for retry.
+
+The host regression tests cover successful provisioning/teardown, allocation
+and schedule timeout recovery, failed bind rollback, failed disable refusal,
+free timeout recovery, handle alias rejection, and corrupted-state rejection.
+This is software lifecycle verification only: no physical GSP/RM channel has
+yet been created on a GA106, and the current channel memory descriptors still
+must be backed by real RM-visible mappings before submission.
+
 ## Mandatory first hardware experiment
 
 The first hardware milestone should be a bounded copy-engine operation, not a 3D demo. It isolates memory visibility, channel provisioning, submission, completion and recovery before shader execution adds further unknowns.

@@ -552,7 +552,7 @@ jobs:
             drivers/gpu/nvx/core/nvx_probe.c drivers/gpu/nvx/core/nvx_mmio.c \
             -o /tmp/vantaos-nvx-pci-test
 
-      - name: Test PCI inventory diagnostics and auxiliary-function filtering
+      - name: Test read-only GA10x PMC probe, identity checks and boot-safe failure handling
         run: /tmp/vantaos-nvx-pci-test
 
       - name: Compile NVX BAR resource tests with strict warnings

@@ -89,6 +89,11 @@ nvx_gsp_rmapi_status_t nvx_gsp_channel_runtime_recover(
          runtime->stage != NVX_GSP_CHANNEL_RUNTIME_DESTROY_PENDING))
         return NVX_GSP_RMAPI_INVALID_ARGUMENT;
 
+    if (runtime->stage == NVX_GSP_CHANNEL_RUNTIME_DESTROY_PENDING)
+        return nvx_gsp_channel_runtime_stop(manager, runtime, NULL, scratch,
+            scratch_size, response, response_size, timeout_ms, poll_ms,
+            delay_ms, delay_context);
+
     if (runtime->rm.stage != NVX_GSP_CHANNEL_IDLE) {
         status = nvx_gsp_copy_channel_recover(manager, &runtime->rm,
             scratch, scratch_size, response, response_size, timeout_ms,
@@ -97,22 +102,19 @@ nvx_gsp_rmapi_status_t nvx_gsp_channel_runtime_recover(
             return status;
     }
 
-    if (runtime->stage == NVX_GSP_CHANNEL_RUNTIME_DESTROY_PENDING) {
-        if (runtime->rm.allocated)
-            return NVX_GSP_RMAPI_BUSY;
-        memset(runtime, 0, sizeof(*runtime));
-        return NVX_GSP_RMAPI_OK;
-    }
-
     if (!runtime->rm.allocated &&
         runtime->rm.stage == NVX_GSP_CHANNEL_IDLE) {
         memset(runtime, 0, sizeof(*runtime));
         return NVX_GSP_RMAPI_OK;
     }
-    if (!runtime->rm.allocated || !runtime->rm.bound ||
-        !runtime->rm.scheduled)
-        return NVX_GSP_RMAPI_BUSY;
 
+    /* A recovered ALLOC/BIND/SCHEDULE RPC is only one stage of creation. */
+    status = nvx_gsp_copy_channel_create(manager, &runtime->rm,
+        runtime->rm.client_handle, runtime->rm.device_handle,
+        runtime->rm.channel_handle, &runtime->params, scratch, scratch_size,
+        response, response_size, timeout_ms, poll_ms, delay_ms, delay_context);
+    if (status != NVX_GSP_RMAPI_OK)
+        return status;
     return bind_fifo(runtime);
 }
 

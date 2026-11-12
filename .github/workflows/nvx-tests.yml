@@ -668,9 +668,11 @@ jobs:
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
             scripts/test_nvx_gsp_boot_memory.c drivers/gpu/nvx/gsp/nvx_gsp_boot_memory.c \
-            drivers/gpu/nvx/firmware/nvx_gsp_wpr_meta.c drivers/gpu/nvx/memory/nvx_dma_sync.c -o /tmp/vantaos-nvx-gsp-boot-memory-test
+            drivers/gpu/nvx/gsp/nvx_gsp_boot_package.c drivers/gpu/nvx/firmware/nvx_gsp_bundle.c \
+            drivers/gpu/nvx/core/nvx_generation.c drivers/gpu/nvx/firmware/nvx_gsp_wpr_meta.c \
+            drivers/gpu/nvx/memory/nvx_dma_sync.c -o /tmp/vantaos-nvx-gsp-boot-memory-test
 
-      - name: Test DMA artifact acquisition, WPR metadata handoff and rollback
+      - name: Test integrated firmware bundle, DMA staging, WPR handoff and ownership rollback
         run: /tmp/vantaos-nvx-gsp-boot-memory-test
 
       - name: Compile GA10x SEC2 secure-booter execution tests

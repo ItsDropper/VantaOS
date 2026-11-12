@@ -181,6 +181,9 @@ on:
       - "scripts/test_nvx_gsp_gpfifo.c"
       - "scripts/test_nvx_abi_conformance.c"
       - "scripts/test_nvx_wpr_policy.c"
+      - "scripts/test_nvx_vbios_prom.c"
+      - "include/nvx_gsp_vbios_prom.h"
+      - "drivers/gpu/nvx/firmware/nvx_gsp_vbios_prom.c"
       - "scripts/test_nvx_fw_manifest.c"
       - "include/nvx_gsp_wpr_policy.h"
       - "include/nvx_fw_manifest.h"
@@ -510,6 +513,17 @@ jobs:
 
       - name: Test WPR/FRTS/heap layout against NVIDIA-derived known answers
         run: /tmp/vantaos-nvx-wpr-policy-test
+
+      - name: Compile PROM VBIOS extraction tests with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_vbios_prom.c \
+            drivers/gpu/nvx/firmware/nvx_gsp_vbios_prom.c \
+            drivers/gpu/nvx/core/nvx_mmio.c \
+            -o /tmp/vantaos-nvx-vbios-prom-test
+
+      - name: Test IFR, ROM-chain and expansion-offset handling on synthetic PROMs
+        run: /tmp/vantaos-nvx-vbios-prom-test
 
       - name: Compile firmware manifest (SHA-256) tests with strict warnings
         run: |

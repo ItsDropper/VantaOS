@@ -18,6 +18,7 @@ VANTAOS_NVX_C := \
     drivers/gpu/nvx/firmware/nvx_gsp_secure_boot.c \
     drivers/gpu/nvx/firmware/nvx_gsp_vbios.c \
     drivers/gpu/nvx/firmware/nvx_gsp_pci_rom.c \
+    drivers/gpu/nvx/firmware/nvx_gsp_vbios_prom.c \
     drivers/gpu/nvx/firmware/nvx_gsp_fwsec_interface.c \
     drivers/gpu/nvx/firmware/nvx_gsp_fwsec_stage.c \
     drivers/gpu/nvx/firmware/nvx_gsp_fwsec_command.c \

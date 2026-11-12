@@ -8,6 +8,8 @@
 #include "nvx_fw_manifest.h"
 #include "nvx_gsp_bundle.h"
 #include "nvx_gsp_preflight.h"
+#include "nvx_gsp_vbios.h"
+#include "nvx_gsp_vbios_prom.h"
 #include "nvx_resource.h"
 #include "pci.h"
 #include "vfs.h"
@@ -34,31 +36,40 @@ static void out_hex(const nvx_bringup_io_t *io, const char *label, uint64_t v)
     out(io, label); out(io, b);
 }
 
-int nvx_bringup_status(const nvx_bringup_io_t *io)
+static int attach_first(const nvx_bringup_io_t *io, const char *tag, nvx_attached_device_t *dev)
 {
     const struct pci_device *found = NULL;
     for (int i = 0, n = pci_get_device_count(); i < n; i++) {
         const struct pci_device *d = pci_get_device(i);
         if (d && nvx_match_pci_device(d)) { found = d; break; }
     }
-    if (!found) { out(io, "nvx status: no supported NVIDIA GPU (RTX 3060) found on PCI.\n"); return 1; }
-    out_hex(io, "nvx status: PCI device id ", found->device_id);
+    char t[32]; size_t n = strlen(tag);
+    if (n + 3U > sizeof(t)) return 1;
+    memcpy(t, tag, n); memcpy(t + n, ": ", 3U);
+    if (!found) { out(io, t); out(io, "no supported NVIDIA GPU (RTX 3060) found on PCI.\n"); return 1; }
+    out(io, t); out_hex(io, "PCI device id ", found->device_id);
 
     nvx_bar_resource_t bar0;
     nvx_resource_status_t rs = nvx_bar_resource_read(found, 0U, &bar0);
     if (rs != NVX_RESOURCE_OK) {
-        out_hex(io, "nvx status: BAR0 unusable, resource status ", (uint64_t)rs);
+        out(io, t); out_hex(io, "BAR0 unusable, resource status ", (uint64_t)rs);
         return 1;
     }
-    out_hex(io, "nvx status: BAR0 base ", bar0.base);
-    out_hex(io, "nvx status: BAR0 size ", bar0.size);
-
-    nvx_attached_device_t dev; memset(&dev, 0, sizeof(dev));
-    nvx_attach_status_t as = nvx_device_attach(found, &bar0, &dev);
+    out(io, t); out_hex(io, "BAR0 base ", bar0.base);
+    out(io, t); out_hex(io, "BAR0 size ", bar0.size);
+    memset(dev, 0, sizeof(*dev));
+    nvx_attach_status_t as = nvx_device_attach(found, &bar0, dev);
     if (as != NVX_ATTACH_OK) {
-        out_hex(io, "nvx status: attach failed, status ", (uint64_t)as);
+        out(io, t); out_hex(io, "attach failed, status ", (uint64_t)as);
         return 1;
     }
+    return 0;
+}
+
+int nvx_bringup_status(const nvx_bringup_io_t *io)
+{
+    nvx_attached_device_t dev;
+    if (attach_first(io, "nvx status", &dev)) return 1;
     out_hex(io, "nvx status: PMC_BOOT_0  ", dev.registers.pmc_boot_0);
     out_hex(io, "nvx status: PMC_BOOT_42 ", dev.registers.pmc_boot_42);
     out_hex(io, "nvx status: chip id     ", dev.registers.extended_chip_id);
@@ -68,6 +79,43 @@ int nvx_bringup_status(const nvx_bringup_io_t *io)
     nvx_device_detach(&dev);
     out(io, "nvx status: OK (read-only; no engine was started).\n");
     return 0;
+}
+
+int nvx_bringup_vbios(const nvx_bringup_io_t *io)
+{
+    nvx_attached_device_t dev;
+    if (attach_first(io, "nvx vbios", &dev)) return 1;
+    uint8_t *image = kmalloc(NVX_VBIOS_PROM_MAX_SIZE);
+    if (!image) { nvx_device_detach(&dev); out(io, "nvx vbios: out of memory.\n"); return 1; }
+
+    nvx_mmio_region_t bar0 = { (volatile uint8_t *)dev.bar0_mapping, (size_t)dev.bar0.size };
+    size_t size = 0U, expansion = 0U;
+    nvx_gsp_vbios_prom_status_t ps = nvx_gsp_vbios_read_from_prom(
+        &bar0, image, NVX_VBIOS_PROM_MAX_SIZE, &size, &expansion);
+    int rc = 1;
+    if (ps != NVX_VBIOS_PROM_OK) {
+        out_hex(io, "nvx vbios: PROM read failed, status ", (uint64_t)ps);
+        out(io, "nvx vbios: the PROM window may be unreadable in this boot state; nothing was written.\n");
+    } else {
+        out_hex(io, "nvx vbios: image bytes ", size);
+        out_hex(io, "nvx vbios: expansion ROM offset ", expansion);
+        nvx_gsp_vbios_fwsec_info_t info;
+        memset(&info, 0, sizeof(info));
+        nvx_gsp_vbios_status_t vs = nvx_gsp_vbios_find_ga10x_fwsec(image, size, expansion, &info);
+        if (vs != NVX_GSP_VBIOS_OK) {
+            out_hex(io, "nvx vbios: FWSEC lookup failed, status ", (uint64_t)vs);
+        } else {
+            out_hex(io, "nvx vbios: FWSEC image offset ", info.image_offset);
+            out_hex(io, "nvx vbios: FWSEC image size   ", info.image_size);
+            out_hex(io, "nvx vbios: FWSEC ucode id     ", info.ucode_id);
+            out_hex(io, "nvx vbios: FWSEC signatures   ", info.signature_count);
+            out(io, "nvx vbios: OK. FWSEC located; it has NOT been executed.\n");
+            rc = 0;
+        }
+    }
+    kfree(image);
+    nvx_device_detach(&dev);
+    return rc;
 }
 
 /* ---- VFS provider -------------------------------------------------------- */

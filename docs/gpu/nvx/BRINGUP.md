@@ -6,6 +6,7 @@ Nothing here runs at boot. Boot only does read-only PCI discovery
 | Command | What it does | Touches GPU |
 | --- | --- | --- |
 | `nvx status` | Finds the RTX 3060, maps BAR0, reads PMC identity registers, detaches. | Read-only |
+| `nvx vbios` | Reads the VBIOS through the PROM window (BAR0+0x300000) using NVIDIA's IFR/PCI-ROM-chain logic, then locates the FWSEC image. FWSEC is not executed. | Read-only |
 | `nvx fw <version>` | Loads the five GSP files from `/nvidia/ga106/gsp/`, verifies each against a `SHA256SUMS` you pinned in that directory, runs structural preflight. | No |
 
 Put `gsp-<v>.bin`, `ucodes-<v>.bin`, `booter_load-<v>.bin`,
@@ -34,8 +35,10 @@ recovery margin for retry boots.
 
 ## Not done yet
 
-`nvx start` (GSP launch) is intentionally not a command yet. Still missing
-before it can be wired honestly: VBIOS retrieval (PCI ROM BAR sizing/mapping),
-the GSP system-info key set for the matching firmware release, and the
+`nvx start` (GSP launch) is intentionally not a command yet. VBIOS retrieval is
+now implemented (`nvx_gsp_vbios_prom`, tested against synthetic ROMs incl. IFR
+v1/v3 wrappers; whether the PROM window is readable on a real board is
+unproven). Still missing before launch can be wired honestly: the GSP
+system-info key set for the matching firmware release, and the
 init-args/shared-queue allocation glue. Nothing in this repo is
 hardware-verified; every result is host-tested or structural evidence.

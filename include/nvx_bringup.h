@@ -26,6 +26,12 @@ typedef struct nvx_bringup_io {
 int nvx_bringup_status(const nvx_bringup_io_t *io);
 
 /*
+ * Stage 1b: read the VBIOS through the GPU's PROM window (read-only) and locate
+ * the FWSEC image inside it. Does not execute FWSEC. Returns 0 on success.
+ */
+int nvx_bringup_vbios(const nvx_bringup_io_t *io);
+
+/*
  * Stage 2: acquire the five GA10x GSP firmware files through provider (which
  * must verify every file against a pinned manifest) and run structural
  * preflight. Does not touch the GPU. Returns 0 on success.

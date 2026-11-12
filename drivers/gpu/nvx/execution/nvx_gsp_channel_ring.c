@@ -24,10 +24,16 @@ static nvx_gsp_rmapi_status_t finish_map(
     nvx_gsp_channel_ring_t *ring)
 {
     uint64_t gpu_va = ring->mapping.dma_offset;
-    if (ring->mapping.stage != NVX_GSP_DMA_MAP_MAPPED)
-        return NVX_GSP_RMAPI_INVALID_ARGUMENT;
+    if (ring->mapping.stage != NVX_GSP_DMA_MAP_MAPPED ||
+        ring->mapping.request.client != ring->client_handle ||
+        ring->mapping.request.device != ring->device_handle ||
+        ring->mapping.request.dma != ring->context_dma_handle ||
+        ring->mapping.request.memory != ring->memory_handle ||
+        ring->mapping.request.offset != 0U ||
+        ring->mapping.request.length != ring->allocation_bytes)
+        return NVX_GSP_RMAPI_MALFORMED_RESPONSE;
     if ((gpu_va & 7U) != 0U || gpu_va >= NVX_GSP_USERD_GPUVA_LIMIT ||
-        (uint64_t)ring->bytes > NVX_GSP_USERD_GPUVA_LIMIT - gpu_va) {
+        (uint64_t)ring->allocation_bytes > NVX_GSP_USERD_GPUVA_LIMIT - gpu_va) {
         ring->stage = NVX_GSP_CHANNEL_RING_UNMAP_PENDING;
         return NVX_GSP_RMAPI_MALFORMED_RESPONSE;
     }
@@ -51,7 +57,7 @@ static nvx_gsp_rmapi_status_t begin_map(
 {
     nvx_gsp_rmapi_status_t status = nvx_gsp_os_memory_dma_map(manager,
         &ring->memory, &ring->context_dma, &ring->mapping, 0U,
-        (uint64_t)ring->bytes, 0U, 0U, 0U, 0U, scratch, scratch_size,
+        (uint64_t)ring->allocation_bytes, 0U, 0U, 0U, 0U, scratch, scratch_size,
         response, response_size, timeout_ms, poll_ms, delay_ms, delay_context);
     if (status != NVX_GSP_RMAPI_OK) {
         ring->stage = ring->mapping.stage == NVX_GSP_DMA_MAP_IDLE ?
@@ -71,7 +77,7 @@ static nvx_gsp_rmapi_status_t begin_context_create(
     nvx_gsp_rmapi_status_t status = nvx_gsp_context_dma_create(manager,
         &ring->context_dma, ring->client_handle, ring->device_handle,
         ring->context_dma_handle, ring->memory_handle,
-        ring->subdevice_handle, 0U, 0U, (uint64_t)ring->bytes - 1U,
+        ring->subdevice_handle, 0U, 0U, (uint64_t)ring->allocation_bytes - 1U,
         scratch, scratch_size, response, response_size, timeout_ms, poll_ms,
         delay_ms, delay_context);
     if (status != NVX_GSP_RMAPI_OK) {
@@ -169,7 +175,7 @@ nvx_gsp_rmapi_status_t nvx_gsp_channel_ring_create(
     nvx_gsp_rmapi_delay_fn delay_ms, void *delay_context)
 {
     nvx_gsp_rmapi_status_t status;
-    uint64_t bytes;
+    uint64_t bytes, allocation_bytes;
     if (!manager || !ring || ring->stage != NVX_GSP_CHANNEL_RING_IDLE ||
         !client || !device || !memory || !context_dma || client == device ||
         client == memory || client == context_dma || device == memory ||
@@ -180,7 +186,11 @@ nvx_gsp_rmapi_status_t nvx_gsp_channel_ring_create(
         return NVX_GSP_RMAPI_INVALID_ARGUMENT;
 
     bytes = (uint64_t)entry_count * 8U;
-    if (bytes > SIZE_MAX || bytes > UINT32_MAX)
+    if (bytes > UINT32_MAX - (NVX_GSP_MEMORY_PAGE_SIZE - 1U))
+        return NVX_GSP_RMAPI_INVALID_ARGUMENT;
+    allocation_bytes = (bytes + NVX_GSP_MEMORY_PAGE_SIZE - 1U) &
+        ~(NVX_GSP_MEMORY_PAGE_SIZE - 1U);
+    if (allocation_bytes > SIZE_MAX || allocation_bytes > UINT32_MAX)
         return NVX_GSP_RMAPI_INVALID_ARGUMENT;
 
     clear_ring(ring);
@@ -191,9 +201,10 @@ nvx_gsp_rmapi_status_t nvx_gsp_channel_ring_create(
     ring->subdevice_handle = subdevice;
     ring->entry_count = entry_count;
     ring->bytes = (size_t)bytes;
+    ring->allocation_bytes = (size_t)allocation_bytes;
 
     status = nvx_gsp_os_memory_create(manager, &ring->memory, client, device,
-        memory, ring->bytes, NVX_GSP_CHANNEL_RING_TAG, scratch, scratch_size,
+        memory, ring->allocation_bytes, NVX_GSP_CHANNEL_RING_TAG, scratch, scratch_size,
         response, response_size, timeout_ms, poll_ms, delay_ms, delay_context);
     if (status != NVX_GSP_RMAPI_OK) {
         if (ring->memory.stage == NVX_GSP_OS_MEMORY_ALLOC_PENDING) {

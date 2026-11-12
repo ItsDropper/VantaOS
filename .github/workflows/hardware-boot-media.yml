@@ -85,10 +85,10 @@ jobs:
 
           set +e
           timeout 25s qemu-system-x86_64 \
-            -machine q35 -cpu max -m 512M -smp 2 \
+            -machine pc -cpu max -m 512M -smp 2 \
             -drive if=pflash,format=raw,readonly=on,file="$code_firmware" \
             -drive if=pflash,format=raw,file=OVMF_VARS.fd \
-            -drive file=VantaOS-UEFI.img,format=raw,if=virtio,readonly=on \
+            -drive file=VantaOS-UEFI.img,format=raw,if=ide,index=0,readonly=on \
             -boot menu=on,order=c \
             -display none -serial file:uefi-hardware-test.log \
             -monitor none -no-reboot

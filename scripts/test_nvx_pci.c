@@ -13,7 +13,6 @@
 #include <stdint.h>
 #include <string.h>
 
-#define TEST_BAR0_SIZE 0xA04U
 static const struct pci_device devices[] = {
     {.bus=1,.slot=0,.function=0,.vendor_id=NVX_PCI_VENDOR_NVIDIA,.device_id=0x2503,.class_code=0x03,.subclass=0,.prog_if=0,.revision=1},
     {.bus=1,.slot=0,.function=1,.vendor_id=NVX_PCI_VENDOR_NVIDIA,.device_id=0x228B,.class_code=0x04,.subclass=0x03,.prog_if=0,.revision=1},
@@ -23,7 +22,7 @@ static const struct pci_device devices[] = {
     {.bus=5,.slot=0,.function=0,.vendor_id=NVX_PCI_VENDOR_NVIDIA,.device_id=0x1D12,.class_code=0x03,.subclass=0,.prog_if=0,.revision=1}
 };
 
-static volatile uint32_t fake_registers[TEST_BAR0_SIZE / sizeof(uint32_t)];
+static volatile uint32_t fake_registers[2U];
 static char log_buffer[8192];
 static size_t log_length;
 static unsigned bar_queries, map_calls, unmap_calls;
@@ -93,7 +92,6 @@ int pci_get_bar(const struct pci_device *device, uint8_t index,
     if (device->device_id == 0x2503U) {
         fake_registers[0] = bad_ampere_identity ? 0x16000000U : 0x17000000U;
         fake_registers[1] = 1U;
-        fake_registers[0xA00U / sizeof(uint32_t)] = 0x17000000U;
     } else if (device->device_id == 0x174DU) {
         fake_registers[0] = 0x11000000U;
         fake_registers[1] = 1U;
@@ -107,7 +105,7 @@ int pci_get_bar(const struct pci_device *device, uint8_t index,
 void *mmio_map_region(uint64_t physical_address, size_t length)
 {
     assert(physical_address == 0x00000012ABC00000ULL);
-    assert(length == 8U || length == TEST_BAR0_SIZE);
+    assert(length == 8U);
     assert(map_calls < sizeof(mapped_lengths) / sizeof(mapped_lengths[0]));
     mapped_lengths[map_calls++] = length;
     return map_failure ? NULL : (void *)(uintptr_t)fake_registers;

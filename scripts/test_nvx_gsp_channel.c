@@ -23,8 +23,8 @@ nvx_gsp_rmapi_status_t nvx_gsp_rmapi_alloc_ampere_channel_sync(
 {
     (void)m;(void)c;(void)d;(void)h;(void)p;(void)s;(void)ss;(void)r;
     (void)rs;(void)t;(void)pi;(void)delay;(void)ctx;record(1U);
-    if(alloc_status==NVX_GSP_RMAPI_TIMEOUT)
-        out->handle.valid=1U;
+    if(alloc_status==NVX_GSP_RMAPI_TIMEOUT||
+       alloc_status==NVX_GSP_RMAPI_RPC_ERROR)out->handle.valid=1U;
     return alloc_status;
 }
 nvx_gsp_rmapi_status_t nvx_gsp_rmapi_bind_channel_sync(
@@ -34,7 +34,8 @@ nvx_gsp_rmapi_status_t nvx_gsp_rmapi_bind_channel_sync(
 {
     (void)m;(void)c;(void)h;(void)s;(void)ss;(void)r;(void)rs;(void)t;
     (void)pi;(void)delay;(void)ctx;assert(e==NVX_GSP_RM_ENGINE_TYPE_COPY0);
-    record(2U);if(bind_status==NVX_GSP_RMAPI_TIMEOUT)out->handle.valid=1U;
+    record(2U);if(bind_status==NVX_GSP_RMAPI_TIMEOUT||
+       bind_status==NVX_GSP_RMAPI_RPC_ERROR)out->handle.valid=1U;
     return bind_status;
 }
 nvx_gsp_rmapi_status_t nvx_gsp_rmapi_schedule_channel_sync(
@@ -44,7 +45,8 @@ nvx_gsp_rmapi_status_t nvx_gsp_rmapi_schedule_channel_sync(
 {
     (void)m;(void)c;(void)h;(void)s;(void)ss;(void)r;(void)rs;(void)t;
     (void)pi;(void)delay;(void)ctx;record(enable?3U:4U);
-    if(schedule_status==NVX_GSP_RMAPI_TIMEOUT)out->handle.valid=1U;
+    if(schedule_status==NVX_GSP_RMAPI_TIMEOUT||
+       schedule_status==NVX_GSP_RMAPI_RPC_ERROR)out->handle.valid=1U;
     return schedule_status;
 }
 nvx_gsp_rmapi_status_t nvx_gsp_rm_free_sync(
@@ -54,7 +56,8 @@ nvx_gsp_rmapi_status_t nvx_gsp_rm_free_sync(
 {
     (void)m;(void)root;(void)s;(void)ss;(void)r;(void)rs;(void)t;(void)pi;
     (void)delay;(void)ctx;assert(parent==0x20U&&object==0x30U);
-    record(5U);if(free_status==NVX_GSP_RMAPI_TIMEOUT)out->handle.valid=1U;
+    record(5U);if(free_status==NVX_GSP_RMAPI_TIMEOUT||
+       free_status==NVX_GSP_RMAPI_RPC_ERROR)out->handle.valid=1U;
     return free_status;
 }
 nvx_gsp_rmapi_status_t nvx_gsp_rmapi_wait(

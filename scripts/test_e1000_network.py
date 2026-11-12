@@ -41,17 +41,11 @@ def send_frame(sock, frame):
     sock.sendall(struct.pack("!I", len(frame)) + frame)
 
 
-def describe_pending_frame(pending):
-    if len(pending) < 4:
-        return f"partial stream prefix ({len(pending)} bytes)"
-    size = struct.unpack("!I", pending[:4])[0]
-    if size < 14 or size > 1518:
-        return f"invalid frame length {size}"
-    if len(pending) < 4 + size:
-        return f"partial Ethernet frame ({len(pending) - 4}/{size} bytes)"
-    frame = pending[4:4 + size]
+def describe_frame(frame):
+    if len(frame) < 14:
+        return f"short Ethernet frame ({len(frame)} bytes)"
     ethertype = struct.unpack_from("!H", frame, 12)[0]
-    details = [f"length={size}", f"ethertype=0x{ethertype:04x}",
+    details = [f"length={len(frame)}", f"ethertype=0x{ethertype:04x}",
                f"src={frame[6:12].hex(':')}", f"dst={frame[:6].hex(':')}"]
     if ethertype == 0x0800 and len(frame) >= 34:
         packet = frame[14:]
@@ -62,22 +56,64 @@ def describe_pending_frame(pending):
         if packet[9] == 17 and ihl >= 20 and len(packet) >= ihl + 8:
             source_port, destination_port = struct.unpack_from("!HH", packet, ihl)
             details.append(f"udp_ports={source_port}->{destination_port}")
+    elif ethertype == 0x86DD and len(frame) >= 54:
+        packet = frame[14:]
+        details.append(f"ipv6_next_header={packet[6]}")
+        details.append(f"ipv6_src={socket.inet_ntop(socket.AF_INET6, packet[8:24])}")
+        details.append(f"ipv6_dst={socket.inet_ntop(socket.AF_INET6, packet[24:40])}")
+        if packet[6] == 58 and len(packet) >= 42:
+            details.append(f"icmpv6_type={packet[40]}")
+            details.append(f"icmpv6_code={packet[41]}")
     return ", ".join(details)
+
+
+def is_ipv6_router_solicitation(frame):
+    if len(frame) < 14 + 40 + 8:
+        return False
+    if struct.unpack_from("!H", frame, 12)[0] != 0x86DD:
+        return False
+    packet = frame[14:]
+    return (
+        (packet[0] >> 4) == 6
+        and packet[6] == 58
+        and packet[24:40] == bytes.fromhex("ff020000000000000000000000000002")
+        and packet[40] == 133
+        and packet[41] == 0
+    )
+
+
+def describe_pending_frame(pending):
+    if len(pending) < 4:
+        return f"partial stream prefix ({len(pending)} bytes)"
+    size = struct.unpack("!I", pending[:4])[0]
+    if size < 14 or size > 1518:
+        return f"invalid frame length {size}"
+    if len(pending) < 4 + size:
+        return f"partial Ethernet frame ({len(pending) - 4}/{size} bytes)"
+    return describe_frame(pending[4:4 + size])
 
 
 def assert_no_frame(sock, description):
     previous_timeout = sock.gettimeout()
-    sock.settimeout(0.5)
+    deadline = time.monotonic() + 0.5
     try:
-        try:
-            pending = sock.recv(4 + 1518, socket.MSG_PEEK)
-        except socket.timeout:
-            return
-        if not pending:
-            raise RuntimeError("QEMU closed the Ethernet socket")
-        details = describe_pending_frame(pending)
-        raise RuntimeError(
-            f"Unexpected Ethernet response after {description}: {details}")
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return
+            sock.settimeout(remaining)
+            try:
+                frame = recv_frame(sock)
+            except socket.timeout:
+                return
+            # QEMU's user-mode backend injects an unsolicited IPv6 router
+            # solicitation (ff02::2). It is inbound control traffic, not a
+            # response to the malformed IPv4/UDP frame under test.
+            if is_ipv6_router_solicitation(frame):
+                continue
+            raise RuntimeError(
+                f"Unexpected Ethernet response after {description}: "
+                f"{describe_frame(frame)}")
     finally:
         sock.settimeout(previous_timeout)
 

@@ -86,6 +86,10 @@ static nvx_gsp_rmapi_status_t wait_and_release(
         status = nvx_gsp_rm_map_memory_dma_result(&mapping->operation,
             response, mapping->operation.response_size,
             &mapping->completed_dma_offset);
+        if (status == NVX_GSP_RMAPI_OK &&
+            mapping->completed_dma_offset >
+                UINT64_MAX - mapping->request.length)
+            status = NVX_GSP_RMAPI_MALFORMED_RESPONSE;
         mapping->completed_status = status;
     }
     mapping->stage = mapping->stage == NVX_GSP_DMA_MAP_MAPPING ?
@@ -140,6 +144,7 @@ nvx_gsp_rmapi_status_t nvx_gsp_dma_unmap(
         !mapping_state_valid(mapping) ||
         mapping->stage != NVX_GSP_DMA_MAP_MAPPED ||
         !mapping->request.length ||
+        mapping->dma_offset > UINT64_MAX - mapping->request.length ||
         mapping->operation.handle.valid)
         return NVX_GSP_RMAPI_INVALID_ARGUMENT;
 

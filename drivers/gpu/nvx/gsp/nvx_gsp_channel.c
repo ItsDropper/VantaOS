@@ -7,6 +7,18 @@
 
 #include <string.h>
 
+static int channel_state_valid(const nvx_gsp_copy_channel_t *channel)
+{
+    if (!channel || channel->stage > NVX_GSP_CHANNEL_FREE_PENDING)
+        return 0;
+    if ((channel->bound && !channel->allocated) ||
+        (channel->scheduled && !channel->bound))
+        return 0;
+    if (channel->stage == NVX_GSP_CHANNEL_IDLE)
+        return !channel->operation.handle.valid;
+    return channel->operation.handle.valid != 0U;
+}
+
 static nvx_gsp_rmapi_status_t free_channel(
     nvx_gsp_rpc_manager_t *manager, nvx_gsp_copy_channel_t *channel,
     void *scratch, size_t scratch_size, void *response,
@@ -39,8 +51,10 @@ nvx_gsp_rmapi_status_t nvx_gsp_copy_channel_create(
 {
     nvx_gsp_rmapi_status_t status;
     if (!manager || !channel || !client_handle || !device_handle ||
-        !channel_handle || !params || !scratch || !response ||
-        !timeout_ms || !poll_interval_ms || !delay_ms)
+        !channel_handle || client_handle == device_handle ||
+        client_handle == channel_handle || device_handle == channel_handle ||
+        !params || !scratch || !response || !timeout_ms ||
+        !poll_interval_ms || !delay_ms || !channel_state_valid(channel))
         return NVX_GSP_RMAPI_INVALID_ARGUMENT;
 
     if (channel->stage != NVX_GSP_CHANNEL_IDLE)
@@ -122,8 +136,8 @@ nvx_gsp_rmapi_status_t nvx_gsp_copy_channel_recover(
     nvx_gsp_rmapi_status_t status;
     nvx_gsp_channel_stage_t stage;
     if (!manager || !channel || !scratch || !response || !timeout_ms ||
-        !poll_interval_ms || !delay_ms || channel->stage == NVX_GSP_CHANNEL_IDLE ||
-        !channel->operation.handle.valid)
+        !poll_interval_ms || !delay_ms || !channel_state_valid(channel) ||
+        channel->stage == NVX_GSP_CHANNEL_IDLE)
         return NVX_GSP_RMAPI_INVALID_ARGUMENT;
 
     stage = (nvx_gsp_channel_stage_t)channel->stage;
@@ -172,7 +186,7 @@ nvx_gsp_rmapi_status_t nvx_gsp_copy_channel_destroy(
 {
     nvx_gsp_rmapi_status_t status;
     if (!manager || !channel || !scratch || !response || !timeout_ms ||
-        !poll_interval_ms || !delay_ms)
+        !poll_interval_ms || !delay_ms || !channel_state_valid(channel))
         return NVX_GSP_RMAPI_INVALID_ARGUMENT;
 
     if (channel->stage != NVX_GSP_CHANNEL_IDLE) {

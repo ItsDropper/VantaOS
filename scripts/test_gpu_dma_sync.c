@@ -56,7 +56,7 @@ int main(void)
     gpu_dma_buffer_t buffer = {
         .pages = &page, .cpu_address = memory, .gpu_address = 0x200000U,
         .size = 3000U, .allocated_size = 4096U, .page_count = 1U,
-        .allocation_id = 9U, .acquired = 1U
+        .allocation_id = 9U, .address_bits = 32U, .acquired = 1U
     };
     gpu_dma_sync_t sync = {0};
 

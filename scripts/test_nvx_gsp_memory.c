@@ -15,6 +15,7 @@ static nvx_gsp_rmapi_status_t alloc_submit_status, free_submit_status,
     wait_status;
 static nvx_gsp_rpc_status_t release_status;
 static int alloc_handle_valid = 1, free_handle_valid = 1;
+static int truncate_alloc_response;
 static unsigned alloc_calls, free_calls, wait_calls, release_calls;
 static uint32_t allocated_class, allocated_parent, allocated_object;
 static nvx_gsp_memory_allocation_params_t captured_params;
@@ -69,10 +70,14 @@ nvx_gsp_rmapi_status_t nvx_gsp_rmapi_wait(
         returned.size = captured_params.size + 4096U;
         returned.limit = returned.size - 1U;
         returned.address = 0U;
-        assert(response_size >= RESPONSE_HEADER + sizeof(returned));
-        memcpy((uint8_t *)response + RESPONSE_HEADER, &returned,
-            sizeof(returned));
-        operation->response_size = RESPONSE_HEADER + sizeof(returned);
+        if (truncate_alloc_response) {
+            operation->response_size = RESPONSE_HEADER;
+        } else {
+            assert(response_size >= RESPONSE_HEADER + sizeof(returned));
+            memcpy((uint8_t *)response + RESPONSE_HEADER, &returned,
+                sizeof(returned));
+            operation->response_size = RESPONSE_HEADER + sizeof(returned);
+        }
     } else if (operation->function == NVX_GSP_RPC_FN_RM_ALLOC) {
         operation->response_size = RESPONSE_HEADER;
     }
@@ -171,7 +176,7 @@ int main(void)
     assert(nvx_gsp_memory_object_destroy(&manager, &object, scratch,
         sizeof(scratch), response, sizeof(response), 100U, 1U, delay, NULL)
         == NVX_GSP_RMAPI_OK);
-    wait_status = NVX_GSP_RMAPI_RESPONSE_TOO_SMALL;
+    truncate_alloc_response = 1;
     assert(nvx_gsp_memory_object_create(&manager, &object, 1U, 2U, 3U, &p,
         scratch, sizeof(scratch), response, sizeof(response), 10U, 1U,
         delay, NULL) == NVX_GSP_RMAPI_RESPONSE_TOO_SMALL);

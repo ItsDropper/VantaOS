@@ -106,3 +106,13 @@ and truthful NVKV facts, and implement
 a real SEC2/GSP quiesce operation. Until that adapter and physical test exist,
 this is a production-oriented coordinator core, not a production-ready
 accelerated GPU driver.
+
+
+## Hardware identity references
+
+The fixed chip ID comes from the Linux Nova chipset table: GA106 is `0x176`
+and GA107 is `0x177`
+([Linux Nova source](https://kernel.googlesource.com/pub/scm/linux/kernel/git/next/linux-next/+/61ad6a0d9b701566bd729de6da35f7f42eb95c3c/drivers/gpu/nova-core/gpu.rs)).
+NVIDIA's published reference header defines the PMC_BOOT_42 CHIP_ID field as
+bits 29:20
+([NVIDIA `nv_ref.h`](https://github.com/NVIDIA/open-gpu-kernel-modules/blob/main/src/common/inc/swref/published/nv_ref.h)).

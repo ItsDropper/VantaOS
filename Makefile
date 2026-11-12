@@ -156,7 +156,7 @@ VantaOS-UEFI.img: BOOTX64.EFI kernel-uefi.elf
 		(echo "dosfstools, mtools, and util-linux (sfdisk) are required to build the UEFI image."; exit 1)
 	rm -f $@
 	truncate -s 1024M $@
-	printf 'label: dos\nunit: sectors\n\nstart=2048, type=ef\n' | sfdisk $@
+	printf 'label: dos\nunit: sectors\n\nstart=2048, type=ef, bootable\n' | sfdisk $@
 	mkfs.fat -F 32 -s 8 -h 2048 --offset=2048 $@ >/dev/null
 	mmd -i $@@@1048576 ::/EFI
 	mmd -i $@@@1048576 ::/EFI/BOOT

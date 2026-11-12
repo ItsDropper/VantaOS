@@ -466,7 +466,10 @@ nvx_gsp_platform_status_t nvx_gsp_platform_shutdown(
         !release_dma_pair(&session->shared_queue, &session->shared_queue_sync))
         return NVX_GSP_PLATFORM_BUSY;
 
-    if (nvx_device_detach(&session->device) != NVX_ATTACH_OK)
+    nvx_attach_status_t detach_status = session->startup_attempted ?
+        nvx_device_detach_quiesced(&session->device, session->quiesced) :
+        nvx_device_detach(&session->device);
+    if (detach_status != NVX_ATTACH_OK)
         return NVX_GSP_PLATFORM_SHUTDOWN_FAILED;
 
     memset(session, 0, sizeof(*session));

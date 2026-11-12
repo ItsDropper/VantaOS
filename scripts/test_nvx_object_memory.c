@@ -159,6 +159,15 @@ int main(void)
     assert(info.gpu_virtual_address == a.gpu_virtual_address &&
            info.cpu_address == cpu);
     memset(cpu, 0xA5, 4096U);
+    assert(nvx_memory_pin(&manager, &a) == NVX_MEMORY_OK);
+    assert(nvx_memory_pin(&manager, &a) == NVX_MEMORY_OK);
+    assert(nvx_memory_release(&manager, &a) == NVX_MEMORY_BUSY);
+    assert(nvx_memory_unpin(&manager, &a) == NVX_MEMORY_OK);
+    assert(nvx_memory_release(&manager, &a) == NVX_MEMORY_BUSY);
+    assert(nvx_memory_unpin(&manager, &a) == NVX_MEMORY_OK);
+    assert(nvx_memory_unpin(&manager, &a) == NVX_MEMORY_CORRUPT_STATE);
+    assert(nvx_memory_pin(&manager, &a) == NVX_MEMORY_OK);
+    assert(nvx_memory_unpin(&manager, &a) == NVX_MEMORY_OK);
     assert(nvx_memory_validate(&manager) == NVX_MEMORY_OK);
 
     forged = a;

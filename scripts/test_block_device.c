@@ -6,11 +6,15 @@
  */
 
 #include "block_device.h"
+#include "vanta_boot_info.h"
 
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+
+static vanta_boot_info_t test_boot_info;
+const vanta_boot_info_t* kernel_get_boot_info(void) { return &test_boot_info; }
 
 static block_device_t device;
 static block_device_t duplicate;
@@ -171,6 +175,20 @@ int main(void)
     assert(device.online == 1U);
     assert(block_device_unregister(&device) == BLOCK_STATUS_OK);
     assert(device_unregister(&reserved_disk_name));
+
+    /* UEFI live policy must make every whole disk read-only before registration. */
+    test_boot_info.source = VANTA_BOOT_SOURCE_UEFI;
+    test_boot_info.flags = VANTA_BOOT_FLAG_STORAGE_READ_ONLY;
+    initialize_device(&device, "uefi-live-disk", &full_ops);
+    assert(block_device_register_disk(&device) == BLOCK_STATUS_OK);
+    assert((device.flags & BLOCK_DEVICE_READ_ONLY) != 0U);
+    unsigned writes_before_live_attempt = write_calls;
+    assert(block_device_write(&device, 0U, 1U, input) == BLOCK_STATUS_READ_ONLY);
+    assert(write_calls == writes_before_live_attempt);
+    assert(block_device_read(&device, 0U, 1U, output) == BLOCK_STATUS_OK);
+    assert(block_device_unregister(&device) == BLOCK_STATUS_OK);
+    test_boot_info.source = VANTA_BOOT_SOURCE_MULTIBOOT1;
+    test_boot_info.flags = 0U;
 
     /* Full registry must leave a rejected disk's caller-owned name untouched. */
     block_device_t occupied[BLOCK_DEVICE_MAX];

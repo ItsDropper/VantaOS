@@ -97,6 +97,11 @@ int main(void)
     assert(nvx_gsp_dma_map_recover(&manager,&mapping,scratch,sizeof(scratch),
         response,sizeof(response),10U,1U,delay,NULL)==NVX_GSP_RMAPI_TIMEOUT);
     assert(mapping.stage==NVX_GSP_DMA_MAP_MAPPING);
+    wait_status=NVX_GSP_RMAPI_RPC_ERROR;
+    assert(nvx_gsp_dma_map_recover(&manager,&mapping,scratch,sizeof(scratch),
+        response,sizeof(response),10U,1U,delay,NULL)==NVX_GSP_RMAPI_RPC_ERROR);
+    assert(mapping.stage==NVX_GSP_DMA_MAP_MAPPING&&
+           mapping.operation.handle.valid);
     wait_status=NVX_GSP_RMAPI_OK;
     assert(nvx_gsp_dma_map_recover(&manager,&mapping,scratch,sizeof(scratch),
         response,sizeof(response),10U,1U,delay,NULL)==NVX_GSP_RMAPI_OK);

@@ -7,7 +7,6 @@
 #define VANTA_NVX_GSP_BOOT_PACKAGE_H
 
 #include "nvx_gsp_boot_memory.h"
-#include "nvx_gsp_pci_rom.h"
 #include "nvx_firmware.h"
 
 typedef enum nvx_gsp_boot_package_status {

@@ -200,6 +200,9 @@ on:
       - "scripts/test_nvx_gsp_nvkv.c"
       - "include/nvx_gsp_nvkv.h"
       - "include/nvx_gsp_startup.h"
+      - "include/nvx_gsp_platform.h"
+      - "drivers/gpu/nvx/gsp/nvx_gsp_platform.c"
+      - "scripts/test_nvx_gsp_platform.c"
       - "include/nvx_gsp_msgq_rpc.h"
       - "include/nvx_gsp_init_args.h"
       - "include/nvx_gsp_ga10x.h"
@@ -1246,3 +1249,21 @@ jobs:
       - name: Test Polaris device boot, VMID-1 allocations, fenced work and safe teardown
         run: /tmp/vantaos-amd-polaris-device-runtime-test
 
+
+      - name: Compile NVX platform coordinator with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            -c drivers/gpu/nvx/gsp/nvx_gsp_platform.c \
+            -o /tmp/vantaos-nvx-gsp-platform.o
+
+      - name: Compile NVX platform coordinator preflight tests
+        run: |
+          gcc -ffunction-sections -fdata-sections -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_gsp_platform.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_platform.c \
+            drivers/gpu/nvx/gsp/nvx_gsp_init_args.c \
+            drivers/gpu/nvx/core/nvx_resource.c \
+            -Wl,--gc-sections -o /tmp/vantaos-nvx-gsp-platform-test
+
+      - name: Test NVX platform profile, BAR, firmware, topology and queue preflight
+        run: /tmp/vantaos-nvx-gsp-platform-test

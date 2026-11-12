@@ -26,7 +26,8 @@ typedef enum nvx_gsp_rmapi_status {
     NVX_GSP_RMAPI_RESPONSE_TOO_SMALL,
     NVX_GSP_RMAPI_MALFORMED_RESPONSE,
     NVX_GSP_RMAPI_REMOTE_ERROR,
-    NVX_GSP_RMAPI_TIMEOUT
+    NVX_GSP_RMAPI_TIMEOUT,
+    NVX_GSP_RMAPI_CLEANUP_FAILED
 } nvx_gsp_rmapi_status_t;
 
 /*
@@ -255,6 +256,15 @@ typedef struct nvx_gsp_rm_core_objects {
  * size/limit. On failure, completed allocations are freed in reverse order;
  * a timeout is returned without freeing potentially in-flight objects.
  */
+/* Free VA space, device, and client in reverse dependency order.
+ * Stops at the first failure and preserves all still-live ownership flags.
+ * Refuses cleanup while an allocation's outcome is uncertain. */
+nvx_gsp_rmapi_status_t nvx_gsp_rm_destroy_core_objects(
+    nvx_gsp_rpc_manager_t *manager, nvx_gsp_rm_core_objects_t *objects,
+    void *scratch, size_t scratch_size, void *response,
+    size_t response_capacity, uint32_t timeout_ms, uint32_t poll_interval_ms,
+    nvx_gsp_rmapi_delay_fn delay_ms, void *delay_context);
+
 nvx_gsp_rmapi_status_t nvx_gsp_rm_create_core_objects(
     nvx_gsp_rpc_manager_t *manager, uint32_t client_handle,
     uint32_t device_handle, uint32_t vaspace_handle,

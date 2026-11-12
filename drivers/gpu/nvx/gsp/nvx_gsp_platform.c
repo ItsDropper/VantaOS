@@ -203,7 +203,7 @@ static nvx_gsp_platform_status_t prepare_firmware_and_wpr(
         return NVX_GSP_PLATFORM_WPR_FAILED;
 
     memory_status = nvx_gsp_boot_memory_prepare_wpr_metadata(
-        &s->boot_memory, &s->wpr_layout, &s->boot_memory.wpr_metadata.gpu_address);
+        &s->boot_memory, &s->wpr_layout, &s->wpr_metadata_phys);
     if (memory_status != NVX_GSP_BOOT_MEMORY_OK ||
         !s->boot_memory.wpr_metadata_prepared)
         return NVX_GSP_PLATFORM_WPR_FAILED;
@@ -362,7 +362,7 @@ nvx_gsp_platform_status_t nvx_gsp_platform_start(
             &session->shared_queue, &session->shared_queue_sync,
             &session->queue_layout, &bar0, session->wpr_layout.frts_offset,
             session->static_info, sizeof(session->static_info),
-            &session->startup_result.static_info_size,
+            &session->static_info_size,
             session->scratch, sizeof(session->scratch),
             config->timeout_ms, config->poll_interval_ms,
             config->delay_ms, config->delay_context,
@@ -399,12 +399,13 @@ nvx_gsp_platform_status_t nvx_gsp_platform_shutdown(
     if (!session || !session->attached || !session->device.attached)
         return NVX_GSP_PLATFORM_INVALID_ARGUMENT;
 
-    if (session->startup_attempted) {
+    if (session->startup_attempted && !session->quiesced) {
         if (!quiesce)
             return NVX_GSP_PLATFORM_QUIESCE_FAILED;
         if (!quiesce(&session->device, &session->startup_result,
                      quiesce_context))
             return NVX_GSP_PLATFORM_QUIESCE_FAILED;
+        session->quiesced = 1U;
     }
 
     /*
@@ -423,9 +424,6 @@ nvx_gsp_platform_status_t nvx_gsp_platform_shutdown(
         session->bus_master_enabled = 0U;
     }
 
-    if (nvx_device_detach(&session->device) != NVX_ATTACH_OK)
-        return NVX_GSP_PLATFORM_SHUTDOWN_FAILED;
-
     if (!release_boot_memory(&session->boot_memory))
         return NVX_GSP_PLATFORM_BUSY;
     if (session->firmware.acquired)
@@ -434,6 +432,9 @@ nvx_gsp_platform_status_t nvx_gsp_platform_shutdown(
         !release_dma_pair(&session->init_args, &session->init_args_sync) ||
         !release_dma_pair(&session->shared_queue, &session->shared_queue_sync))
         return NVX_GSP_PLATFORM_BUSY;
+
+    if (nvx_device_detach(&session->device) != NVX_ATTACH_OK)
+        return NVX_GSP_PLATFORM_SHUTDOWN_FAILED;
 
     memset(session, 0, sizeof(*session));
     return NVX_GSP_PLATFORM_OK;

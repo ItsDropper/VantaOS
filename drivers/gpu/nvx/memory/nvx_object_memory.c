@@ -247,7 +247,7 @@ nvx_memory_status_t nvx_memory_unpin(nvx_memory_manager_t *m,
     if (!m || !h) return NVX_MEMORY_INVALID_ARGUMENT;
     if (!m->initialized) return NVX_MEMORY_NOT_INITIALIZED;
     spinlock_lock(&m->lock);
-    nvx_memory_slot_t *slot = (nvx_memory_slot_t *)match_handle(m, h);
+    nvx_memory_slot_t *slot = match_handle(m, h);
     if (!slot) {
         spinlock_unlock(&m->lock);
         return NVX_MEMORY_STALE_HANDLE;

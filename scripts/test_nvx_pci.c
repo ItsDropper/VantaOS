@@ -26,7 +26,7 @@ static volatile uint32_t fake_registers[2U];
 static char log_buffer[8192];
 static size_t log_length;
 static unsigned bar_queries, map_calls, unmap_calls;
-static size_t mapped_lengths[8];
+static size_t mapped_lengths[32];
 static uint16_t mock_command = NVX_PCI_COMMAND_MEMORY_SPACE;
 static int map_failure, bad_ampere_identity, unmap_failure;
 

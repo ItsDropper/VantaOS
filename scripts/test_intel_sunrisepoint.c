@@ -26,6 +26,48 @@ static void test_community_boundaries(void)
     assert(!intel_sptlp_pin_community(0U,NULL));
 }
 
+
+static void test_pin_irq_locations(void)
+{
+    static const struct
+    {
+        uint16_t pin;
+        uint8_t community;
+        uint8_t group;
+        uint8_t bit;
+        uint32_t status_offset;
+        uint32_t enable_offset;
+    } cases[]={
+        {0U,0U,0U,0U,0x100U,0x120U},
+        {23U,0U,0U,23U,0x100U,0x120U},
+        {24U,0U,1U,0U,0x104U,0x124U},
+        {47U,0U,1U,23U,0x104U,0x124U},
+        {48U,1U,0U,0U,0x100U,0x120U},
+        {72U,1U,1U,0U,0x104U,0x124U},
+        {96U,1U,2U,0U,0x108U,0x128U},
+        {119U,1U,2U,23U,0x108U,0x128U},
+        {120U,2U,0U,0U,0x100U,0x120U},
+        {144U,2U,1U,0U,0x104U,0x124U},
+        {151U,2U,1U,7U,0x104U,0x124U}
+    };
+    for(uint32_t i=0U;i<sizeof(cases)/sizeof(cases[0]);++i)
+    {
+        intel_sptlp_irq_location_t location={0};
+        assert(intel_sptlp_pin_irq_location(cases[i].pin,&location));
+        assert(location.community==cases[i].community);
+        assert(location.group==cases[i].group);
+        assert(location.bit==cases[i].bit);
+        assert(location.interrupt_status_offset==cases[i].status_offset);
+        assert(location.interrupt_enable_offset==cases[i].enable_offset);
+    }
+    intel_sptlp_irq_location_t unchanged={9U,8U,7U,6U,5U};
+    assert(!intel_sptlp_pin_irq_location(152U,&unchanged));
+    assert(unchanged.community==9U&&unchanged.group==8U&&
+           unchanged.bit==7U&&unchanged.interrupt_status_offset==6U&&
+           unchanged.interrupt_enable_offset==5U);
+    assert(!intel_sptlp_pin_irq_location(0U,NULL));
+}
+
 static void test_gpio_resource_validation(void)
 {
     acpi_aml_device_t controller={0};
@@ -186,6 +228,7 @@ static void test_read_only_mmio_probe(void)
 int main(void)
 {
     test_community_boundaries();
+    test_pin_irq_locations();
     test_gpio_resource_validation();
     test_read_only_mmio_probe();
     puts("Intel Sunrise Point-LP GPIO metadata tests passed");

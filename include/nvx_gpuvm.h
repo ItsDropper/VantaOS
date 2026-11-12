@@ -119,6 +119,10 @@ nvx_gpuvm_status_t nvx_gpuvm_map_pages(nvx_gpuvm_t *vm,
                                        nvx_gpuvm_mapping_t *mapping,
                                        const uint64_t *physical_pages,
                                        size_t page_count, unsigned access);
+/* Map a page-aligned physically contiguous backing range without a PFN array. */
+nvx_gpuvm_status_t nvx_gpuvm_map_contiguous(
+    nvx_gpuvm_t *vm, nvx_gpuvm_mapping_t *mapping,
+    uint64_t physical_base, uint64_t physical_size, unsigned access);
 nvx_gpuvm_status_t nvx_gpuvm_release(nvx_gpuvm_t *vm,
                                      nvx_gpuvm_mapping_t *mapping);
 nvx_gpuvm_status_t nvx_gpuvm_activate(nvx_gpuvm_t *vm);

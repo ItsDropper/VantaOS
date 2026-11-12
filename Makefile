@@ -101,8 +101,8 @@ VANTASETUP.EFI: $(UEFI_OBJDIR)/setup.o $(UEFI_OBJDIR)/installer-layout.o $(UEFI_
 		$(EFI_CRT) $(UEFI_OBJDIR)/setup.o $(UEFI_OBJDIR)/installer-layout.o \
 		$(UEFI_OBJDIR)/installer-gpt.o $(UEFI_OBJDIR)/installer-fat32.o \
 		$(UEFI_OBJDIR)/setup-config.o -L$(EFI_LIBDIR) -lefi -lgnuefi -o $(UEFI_OBJDIR)/setup.so
-	$(OBJCOPY) -j .text -j .sdata -j .data -j .dynamic -j .dynsym \
-		-j .rel -j .rela -j .reloc --target=efi-app-x86_64 $(UEFI_OBJDIR)/setup.so $@
+	$(OBJCOPY) -I elf64-x86-64 -j .text -j .sdata -j .data -j .dynamic -j .dynsym \
+		-j .rel -j .rela -j .reloc -O efi-app-x86_64 $(UEFI_OBJDIR)/setup.so $@
 
 VantaOS-Setup.img: VANTASETUP.EFI BOOTX64.EFI kernel-uefi.elf vantaos.img
 	@command -v mkfs.fat >/dev/null && command -v mmd >/dev/null && command -v mcopy >/dev/null && command -v sgdisk >/dev/null || \

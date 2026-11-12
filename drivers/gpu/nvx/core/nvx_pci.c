@@ -109,7 +109,7 @@ static void nvx_probe_candidate_identity(const struct pci_device *device)
     if (generation->pmc_boot_42_offset != UINT32_MAX) {
         if ((uint64_t)generation->pmc_boot_42_offset >
             (uint64_t)SIZE_MAX - sizeof(uint32_t)) {
-            serial_write("[NVX] PMC identity: skipped (invalid register extent)\\n");
+            serial_write("[NVX] PMC identity: skipped (invalid register extent)\n");
             return;
         }
         probe_bytes = (size_t)generation->pmc_boot_42_offset +
@@ -137,7 +137,7 @@ static void nvx_probe_candidate_identity(const struct pci_device *device)
     }
     status = nvx_probe_mapped_bar0(device, (volatile uint32_t *)mapping,
                                    probe_bytes, &snapshot);
-    unmapped = mmio_unmap_region(mapping, 8U);
+    unmapped = mmio_unmap_region(mapping, probe_bytes);
     if (!unmapped) {
         serial_write("failed (MMIO unmap failed)\n");
         return;

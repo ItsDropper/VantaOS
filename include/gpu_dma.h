@@ -41,6 +41,9 @@ typedef struct gpu_dma_buffer {
 /* Caller must zero-initialize the handle; allocations never enable bus mastering. */
 gpu_dma_status_t gpu_dma_alloc(size_t size, unsigned address_bits,
                                gpu_dma_buffer_t *out_buffer);
+/* Allocate only from physical memory covered by the kernel identity map. */
+gpu_dma_status_t gpu_dma_alloc_identity_mapped(
+    size_t size, gpu_dma_buffer_t *out_buffer);
 void gpu_dma_release(gpu_dma_buffer_t *buffer);
 int gpu_dma_buffer_is_valid(const gpu_dma_buffer_t *buffer);
 

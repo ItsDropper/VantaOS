@@ -21,7 +21,7 @@ nvx_dma_status_t nvx_dma_alloc_identity_mapped(size_t size, nvx_dma_buffer_t *b)
     b->size = size;
     b->allocated_size = (size + 4095U) & ~(size_t)4095U;
     b->page_count = b->allocated_size / 4096U;
-    b->address_bits = 32U;
+    b->address_bits = 30U;
     b->acquired = 1U;
     next_phys += b->allocated_size;
     return NVX_DMA_OK;

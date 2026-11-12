@@ -215,7 +215,9 @@ static nvx_gsp_platform_status_t prepare_firmware_and_wpr(
     memory_status = nvx_gsp_boot_memory_prepare_wpr_metadata(
         &s->boot_memory, &s->wpr_layout, &s->wpr_metadata_phys);
     if (memory_status != NVX_GSP_BOOT_MEMORY_OK ||
-        !s->boot_memory.wpr_metadata_prepared)
+        !s->boot_memory.wpr_metadata_prepared ||
+        !s->wpr_metadata_phys ||
+        s->wpr_metadata_phys != s->boot_memory.wpr_metadata.gpu_address)
         return NVX_GSP_PLATFORM_WPR_FAILED;
 
     ga10x_status = nvx_gsp_ga10x_read_ucode_fuse_version(
@@ -414,6 +416,8 @@ nvx_gsp_platform_status_t nvx_gsp_platform_start(
 
     if (!session->startup_result.gsp_rm_initialized ||
         !session->startup_result.rpc_initialized ||
+        session->static_info_size != session->startup_result.static_info_size ||
+        session->static_info_size > sizeof(session->static_info) ||
         !nvx_lifecycle_transition(&session->device.lifecycle,
                                   NVX_STATE_INITIALIZED)) {
         session->recovery_required = 1U;

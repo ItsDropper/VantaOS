@@ -180,6 +180,12 @@ on:
       - "scripts/test_nvx_gsp_static_info.c"
       - "scripts/test_nvx_gsp_gpfifo.c"
       - "scripts/test_nvx_abi_conformance.c"
+      - "scripts/test_nvx_wpr_policy.c"
+      - "scripts/test_nvx_fw_manifest.c"
+      - "include/nvx_gsp_wpr_policy.h"
+      - "include/nvx_fw_manifest.h"
+      - "drivers/gpu/nvx/firmware/nvx_gsp_wpr_policy.c"
+      - "drivers/gpu/nvx/firmware/nvx_fw_manifest.c"
       - "scripts/test_nvx_gsp_ce.c"
       - "include/nvx_gsp_ce.h"
       - "include/nvx_gsp_gpfifo.h"
@@ -492,6 +498,28 @@ jobs:
 
       - name: Test class IDs, control commands, struct layout, CE and GPFIFO encodings
         run: /tmp/vantaos-nvx-abi-conformance-test
+
+      - name: Compile GA10x WPR sizing policy tests with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_wpr_policy.c \
+            drivers/gpu/nvx/firmware/nvx_gsp_wpr_policy.c \
+            drivers/gpu/nvx/firmware/nvx_gsp_wpr_meta.c \
+            drivers/gpu/nvx/core/nvx_mmio.c \
+            -o /tmp/vantaos-nvx-wpr-policy-test
+
+      - name: Test WPR/FRTS/heap layout against NVIDIA-derived known answers
+        run: /tmp/vantaos-nvx-wpr-policy-test
+
+      - name: Compile firmware manifest (SHA-256) tests with strict warnings
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_fw_manifest.c \
+            drivers/gpu/nvx/firmware/nvx_fw_manifest.c \
+            -o /tmp/vantaos-nvx-fw-manifest-test
+
+      - name: Test SHA-256 vectors and fail-closed manifest verification
+        run: /tmp/vantaos-nvx-fw-manifest-test
 
       - name: Compile Ampere CE command-builder tests with strict warnings
         run: |

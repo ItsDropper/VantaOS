@@ -24,6 +24,7 @@ VANTAOS_NVX_C := \
     drivers/gpu/nvx/firmware/nvx_gsp_fwsec_result.c \
     drivers/gpu/nvx/firmware/nvx_gsp_fwsec_mmio.c \
     drivers/gpu/nvx/firmware/nvx_gsp_wpr_meta.c \
+    drivers/gpu/nvx/firmware/nvx_gsp_wpr_policy.c \
     drivers/gpu/nvx/gsp/nvx_gsp_ring.c \
     drivers/gpu/nvx/gsp/nvx_gsp_msgq.c \
     drivers/gpu/nvx/gsp/nvx_gsp_msgq_queue.c \

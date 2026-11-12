@@ -45,5 +45,11 @@ nvx_attach_status_t nvx_device_attach(
 
 /* Unmaps BAR0 and returns the handle to an empty, non-capable state. */
 nvx_attach_status_t nvx_device_detach(nvx_attached_device_t *device);
+/*
+ * Recovery teardown for a failed device. The caller must pass true only after
+ * proving that SEC2/GSP and all other DMA-capable engines are quiescent.
+ */
+nvx_attach_status_t nvx_device_detach_quiesced(
+    nvx_attached_device_t *device, int quiescence_confirmed);
 
 #endif

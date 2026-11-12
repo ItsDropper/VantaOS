@@ -16,6 +16,47 @@ _Static_assert(offsetof(nvx_gsp_os_memory_params_t, limit) == 24U,
 _Static_assert(offsetof(nvx_gsp_os_memory_params_t, descriptor_type) == 32U,
     "NV_OS_DESC_MEMORY descriptorType offset");
 
+
+#define NVX_GSP_OS_MEMORY_LEASE_CLOSED UINT32_C(0x80000000)
+#define NVX_GSP_OS_MEMORY_LEASE_COUNT_MASK UINT32_C(0x7FFFFFFF)
+
+nvx_gsp_rmapi_status_t nvx_gsp_os_memory_acquire(nvx_gsp_os_memory_t *m)
+{
+    uint32_t state;
+    if (!m || m->stage != NVX_GSP_OS_MEMORY_CREATED || !m->remote_created ||
+        !m->backing.acquired)
+        return NVX_GSP_RMAPI_INVALID_ARGUMENT;
+
+    state = __atomic_load_n(&m->lifetime_state, __ATOMIC_ACQUIRE);
+    for (;;) {
+        uint32_t desired;
+        if ((state & NVX_GSP_OS_MEMORY_LEASE_CLOSED) != 0U ||
+            (state & NVX_GSP_OS_MEMORY_LEASE_COUNT_MASK) ==
+                NVX_GSP_OS_MEMORY_LEASE_COUNT_MASK)
+            return NVX_GSP_RMAPI_BUSY;
+        desired = state + 1U;
+        if (__atomic_compare_exchange_n(&m->lifetime_state, &state, desired,
+                0, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
+            return NVX_GSP_RMAPI_OK;
+    }
+}
+
+nvx_gsp_rmapi_status_t nvx_gsp_os_memory_release(nvx_gsp_os_memory_t *m)
+{
+    uint32_t state;
+    if (!m)
+        return NVX_GSP_RMAPI_INVALID_ARGUMENT;
+    state = __atomic_load_n(&m->lifetime_state, __ATOMIC_ACQUIRE);
+    for (;;) {
+        if ((state & NVX_GSP_OS_MEMORY_LEASE_CLOSED) != 0U ||
+            (state & NVX_GSP_OS_MEMORY_LEASE_COUNT_MASK) == 0U)
+            return NVX_GSP_RMAPI_INVALID_ARGUMENT;
+        if (__atomic_compare_exchange_n(&m->lifetime_state, &state,
+                state - 1U, 0, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
+            return NVX_GSP_RMAPI_OK;
+    }
+}
+
 static int overlaps(const void *a, size_t an, const void *b, size_t bn)
 {
     uintptr_t ap, bp;
@@ -30,7 +71,8 @@ static int idle_valid(const nvx_gsp_os_memory_t *m)
     return m && m->stage == NVX_GSP_OS_MEMORY_IDLE &&
         !m->client_handle && !m->device_handle && !m->memory_handle &&
         !m->requested_size && !m->backing.acquired && !m->backing.pages &&
-        !m->operation.handle.valid && !m->remote_created;
+        !m->operation.handle.valid && !m->remote_created &&
+        m->lifetime_state == 0U;
 }
 
 static void clear_state(nvx_gsp_os_memory_t *m)
@@ -39,6 +81,7 @@ static void clear_state(nvx_gsp_os_memory_t *m)
     m->requested_size = 0U;
     m->operation = (nvx_gsp_rmapi_result_t){0};
     m->completed_status = NVX_GSP_RMAPI_OK;
+    m->lifetime_state = 0U;
     m->remote_created = 0U;
     m->stage = NVX_GSP_OS_MEMORY_IDLE;
 }
@@ -207,9 +250,14 @@ nvx_gsp_rmapi_status_t nvx_gsp_os_memory_recover(
         m->stage == NVX_GSP_OS_MEMORY_FREE_QUARANTINED)
         m->stage = m->stage == NVX_GSP_OS_MEMORY_ALLOC_QUARANTINED ?
             NVX_GSP_OS_MEMORY_ALLOC_PENDING : NVX_GSP_OS_MEMORY_FREE_PENDING;
-    return wait_operation(manager, m, scratch, scratch_size, response,
-        response_capacity, timeout_ms, poll_interval_ms, delay_ms,
-        delay_context);
+    {
+        nvx_gsp_rmapi_status_t status = wait_operation(manager, m, scratch,
+            scratch_size, response, response_capacity, timeout_ms,
+            poll_interval_ms, delay_ms, delay_context);
+        if (m->stage == NVX_GSP_OS_MEMORY_CREATED)
+            __atomic_store_n(&m->lifetime_state, 0U, __ATOMIC_RELEASE);
+        return status;
+    }
 }
 
 nvx_gsp_rmapi_status_t nvx_gsp_os_memory_destroy(
@@ -229,15 +277,28 @@ nvx_gsp_rmapi_status_t nvx_gsp_os_memory_destroy(
         overlaps(scratch, scratch_size, response, response_capacity))
         return NVX_GSP_RMAPI_INVALID_ARGUMENT;
 
+    {
+        uint32_t expected = 0U;
+        if (!__atomic_compare_exchange_n(&m->lifetime_state, &expected,
+                NVX_GSP_OS_MEMORY_LEASE_CLOSED, 0,
+                __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
+            return NVX_GSP_RMAPI_BUSY;
+    }
+
     status = nvx_gsp_rm_free_submit(manager, m->client_handle,
         m->device_handle, m->memory_handle, scratch, scratch_size, response,
         response_capacity, &m->operation);
-    if (status != NVX_GSP_RMAPI_OK && !m->operation.handle.valid)
+    if (status != NVX_GSP_RMAPI_OK && !m->operation.handle.valid) {
+        __atomic_store_n(&m->lifetime_state, 0U, __ATOMIC_RELEASE);
         return status;
+    }
     m->stage = NVX_GSP_OS_MEMORY_FREE_PENDING;
-    return wait_operation(manager, m, scratch, scratch_size, response,
+    status = wait_operation(manager, m, scratch, scratch_size, response,
         response_capacity, timeout_ms, poll_interval_ms, delay_ms,
         delay_context);
+    if (m->stage == NVX_GSP_OS_MEMORY_CREATED)
+        __atomic_store_n(&m->lifetime_state, 0U, __ATOMIC_RELEASE);
+    return status;
 }
 
 nvx_gsp_rmapi_status_t nvx_gsp_os_memory_get_cpu_address(

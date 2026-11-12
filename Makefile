@@ -60,7 +60,7 @@ all: kernel.bin
 kernel-uefi.elf: $(OBJECTS) build/uefi-linker.ld
 	$(LD) -m elf_x86_64 --no-warn-rwx-segments -T build/uefi-linker.ld -e uefi_kernel_entry $(OBJECTS) -o $@
 
-$(UEFI_OBJDIR)/loader.o: boot/uefi/loader.c include/vanta_boot_info.h
+$(UEFI_OBJDIR)/loader.o: boot/uefi/loader.c include/vanta_boot_info.h include/graphics_framebuffer.h
 	@test -n "$(EFI_CRT)" -a -n "$(EFI_LDSCRIPT)" || (echo "gnu-efi is required (install gnu-efi)."; exit 1)
 	@mkdir -p $(@D)
 	$(CC) -Iinclude -I/usr/include/efi -I/usr/include/efi/x86_64 -I/usr/include/efi/protocol \

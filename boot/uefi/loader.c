@@ -12,11 +12,14 @@
 #include <stddef.h>
 
 #include "vanta_boot_info.h"
+#include "graphics_framebuffer.h"
 
 #define UEFI_KERNEL_PATH L"\\EFI\\VANTA\\KERNEL.ELF"
 #define UEFI_MAX_KERNEL_SIZE (64U * 1024U * 1024U)
 #define UEFI_MAX_MEMORY_MAP_SIZE (256U * 1024U)
 #define UEFI_MAX_PHYSICAL_ADDRESS 0x100000000ULL
+#define UEFI_MAX_FRAMEBUFFER_SPAN (16ULL * 1024ULL * 1024ULL)
+#define UEFI_MAX_FRAMEBUFFER_PAGES 4096U
 
 static void port_out8(UINT16 port, UINT8 value)
 {
@@ -380,12 +383,16 @@ static EFI_STATUS collect_graphics(
         return EFI_UNSUPPORTED;
 
     UINT64 pitch = (UINT64)info->PixelsPerScanLine * 4ULL;
-    UINT64 bytes = pitch * info->VerticalResolution;
-    if (pitch > UINT32_MAX || bytes == 0 ||
-        gop->Mode->FrameBufferBase >= UEFI_MAX_PHYSICAL_ADDRESS ||
-        bytes > UEFI_MAX_PHYSICAL_ADDRESS - gop->Mode->FrameBufferBase ||
-        bytes > gop->Mode->FrameBufferSize)
+    graphics_framebuffer_layout_t layout;
+    if (pitch > UINT32_MAX ||
+        !graphics_framebuffer_layout_compute(
+            gop->Mode->FrameBufferBase,(UINT32)pitch,
+            info->HorizontalResolution,info->VerticalResolution,
+            32U,1U,UEFI_MAX_FRAMEBUFFER_SPAN,
+            UEFI_MAX_FRAMEBUFFER_PAGES,&layout) ||
+        layout.byte_length > gop->Mode->FrameBufferSize)
         return EFI_UNSUPPORTED;
+    UINT64 bytes=layout.byte_length;
 
     boot_info->framebuffer.address = gop->Mode->FrameBufferBase;
     boot_info->framebuffer.pitch = (UINT32)pitch;

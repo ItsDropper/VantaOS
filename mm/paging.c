@@ -26,8 +26,8 @@ static uint64_t kernel_pd[PAGING_TABLE_ENTRIES] __attribute__((aligned(4096)));
 static uint64_t heap_pd[PAGING_TABLE_ENTRIES] __attribute__((aligned(4096)));
 static uint64_t high_pd[PAGING_TABLE_ENTRIES] __attribute__((aligned(4096)));
 static uint64_t heap_pt[PAGING_TABLE_ENTRIES] __attribute__((aligned(4096)));
-/* Eight 4 KiB page tables cover the 16 MiB framebuffer window. */
-#define GRAPHICS_PT_COUNT 8U
+/* Sixteen 4 KiB page tables cover separate 16 MiB scanout/backbuffer areas. */
+#define GRAPHICS_PT_COUNT (PAGING_GRAPHICS_SIZE / PAGE_2M)
 static uint64_t graphics_pt[GRAPHICS_PT_COUNT][PAGING_TABLE_ENTRIES]
     __attribute__((aligned(4096)));
 #define MMIO_PT_COUNT (PAGING_MMIO_SIZE / PAGE_2M)
@@ -41,6 +41,7 @@ static paging_address_space_t address_spaces[ADDRESS_SPACE_MAX];
 static paging_address_space_t kernel_address_space;
 static paging_address_space_t* fallback_current_address_space;
 static volatile uint32_t nx_enabled;
+static uint64_t physical_address_limit=0x1000000000ULL;
 
 static spinlock_t paging_mutation_lock = SPINLOCK_INITIALIZER;
 
@@ -95,7 +96,7 @@ static uint64_t* table_for(uintptr_t virtual_address)
         return heap_pt;
 
     {
-        uint64_t first = (0xD0000000ULL >> 21) & 0x1FFU;
+        uint64_t first = (PAGING_GRAPHICS_BASE >> 21) & 0x1FFU;
         if (pd_index >= first && pd_index < first + GRAPHICS_PT_COUNT)
             return graphics_pt[pd_index - first];
     }
@@ -136,6 +137,26 @@ static void map_high_region(uint64_t* pd, uint64_t* pt, uint64_t virtual_base)
         pt[i] = 0;
 }
 
+static uint64_t paging_detect_physical_address_limit(void)
+{
+    uint32_t eax=0x80000000U,ebx=0U,ecx=0U,edx=0U;
+    __asm__ volatile("cpuid":"+a"(eax),"=b"(ebx),"=c"(ecx),"=d"(edx));
+    (void)ebx;(void)ecx;(void)edx;
+    if(eax<0x80000008U) return 1ULL<<36U;
+
+    eax=0x80000008U;
+    __asm__ volatile("cpuid":"+a"(eax),"=b"(ebx),"=c"(ecx),"=d"(edx));
+    (void)ebx;(void)ecx;(void)edx;
+    uint32_t bits=eax&0xFFU;
+    if(bits<36U||bits>52U) return 1ULL<<36U;
+    return 1ULL<<bits;
+}
+
+uint64_t paging_physical_address_limit(void)
+{
+    return __atomic_load_n(&physical_address_limit,__ATOMIC_ACQUIRE);
+}
+
 static int paging_enable_nx(void)
 {
     uint32_t eax = 0x80000000U, ebx, ecx, edx;
@@ -165,6 +186,8 @@ int paging_nx_available(void)
 
 void paging_initialize(void)
 {
+    __atomic_store_n(&physical_address_limit,
+                     paging_detect_physical_address_limit(),__ATOMIC_RELEASE);
     __atomic_store_n(&nx_enabled, paging_enable_nx() ? 1U : 0U,
                      __ATOMIC_RELEASE);
     for (uint32_t i = 0; i < PAGING_TABLE_ENTRIES; i++)
@@ -206,7 +229,7 @@ void paging_initialize(void)
     map_high_region(high_pd, heap_pt, 0xC0000000ULL);
     for (uint32_t t = 0; t < GRAPHICS_PT_COUNT; t++)
         map_high_region(high_pd, graphics_pt[t],
-                        0xD0000000ULL + (uint64_t)t * PAGE_2M);
+                        PAGING_GRAPHICS_BASE + (uint64_t)t * PAGE_2M);
     for (uint32_t t = 0; t < MMIO_PT_COUNT; t++)
         map_high_region(high_pd, mmio_pt[t],
                         PAGING_MMIO_BASE + (uint64_t)t * PAGE_2M);
@@ -298,8 +321,11 @@ int paging_map_mmio_page(uintptr_t virtual_address, uintptr_t physical_address)
     uint64_t saved_flags = paging_lock_acquire();
     if ((virtual_address & (PAGE_SIZE - 1U)) != 0 ||
         (physical_address & (PAGE_SIZE - 1U)) != 0 ||
-        virtual_address < PAGING_MMIO_BASE ||
-        virtual_address >= PAGING_MMIO_BASE + PAGING_MMIO_SIZE ||
+        (physical_address > paging_physical_address_limit()-PAGE_SIZE) ||
+        !((virtual_address >= PAGING_MMIO_BASE &&
+           virtual_address < PAGING_MMIO_BASE+PAGING_MMIO_SIZE) ||
+          (virtual_address >= PAGING_GRAPHICS_BASE &&
+           virtual_address < PAGING_GRAPHICS_BASE+PAGING_GRAPHICS_SCANOUT_SIZE)) ||
         paging_current() != &kernel_address_space)
     {
         paging_lock_release(saved_flags);

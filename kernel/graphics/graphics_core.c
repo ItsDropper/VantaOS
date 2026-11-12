@@ -7,6 +7,7 @@
 
 #include "graphics_internal.h"
 #include "graphics_squircle.h"
+#include "graphics_framebuffer.h"
 #include "paging.h"
 #include "pci.h"
 #include "mouse.h"
@@ -452,80 +453,84 @@ int graphics_initialize(multiboot_info_t* mbd)
     /*
      * GRUB framebuffer is a fallback for non-Bochs framebuffer boots.
      */
+    graphics_framebuffer_layout_t layout;
     if (mbd &&
         (mbd->flags & MULTIBOOT_INFO_FRAMEBUFFER) &&
-        mbd->framebuffer_addr <= 0xFFFFFFFFULL &&
-        mbd->framebuffer_type == 1 &&
-        mbd->framebuffer_bpp == 32 &&
-        mbd->framebuffer_width != 0 &&
-        mbd->framebuffer_height != 0 &&
-        mbd->framebuffer_pitch >= mbd->framebuffer_width * 4U)
+        graphics_framebuffer_layout_compute(
+            mbd->framebuffer_addr,mbd->framebuffer_pitch,
+            mbd->framebuffer_width,mbd->framebuffer_height,
+            mbd->framebuffer_bpp,mbd->framebuffer_type,
+            (uint64_t)GRAPHICS_SCANOUT_WINDOW_BYTES,
+            GRAPHICS_MAX_PAGES,&layout))
     {
-        uint32_t physical = (uint32_t)mbd->framebuffer_addr;
-        uint32_t offset = physical & 0xFFFU;
-        uint32_t first_page = physical & 0xFFFFF000U;
-        uint64_t bytes =
-            (uint64_t)mbd->framebuffer_pitch *
-            mbd->framebuffer_height;
+        uint64_t physical_limit=paging_physical_address_limit();
+        uint64_t mapped_span=(uint64_t)layout.page_count*PAGE_SIZE;
+        if(layout.page_base>physical_limit||
+           mapped_span>physical_limit-layout.page_base)
+            return 0;
 
-        uint32_t pages =
-            (uint32_t)((offset + bytes + 4095U) / 4096U);
-
-        if (pages != 0 && pages <= GRAPHICS_MAX_PAGES)
+        uint32_t mapped_pages=0U;
+        for(;mapped_pages<layout.page_count;++mapped_pages)
         {
-            uint32_t mapped_pages = 0U;
-            for (; mapped_pages < pages; ++mapped_pages)
+            uintptr_t virtual_page=(uintptr_t)GRAPHICS_VIRTUAL_BASE+
+                                   (uintptr_t)mapped_pages*PAGE_SIZE;
+            uintptr_t physical_page=(uintptr_t)(layout.page_base+
+                                   (uint64_t)mapped_pages*PAGE_SIZE);
+            if(!paging_map_mmio_page(virtual_page,physical_page))
             {
-                if (!paging_map_page(
-                        GRAPHICS_VIRTUAL_BASE + mapped_pages * 4096U,
-                        first_page + mapped_pages * 4096U))
+                while(mapped_pages!=0U)
                 {
-                    while (mapped_pages > 0U)
-                    {
-                        --mapped_pages;
-                        paging_unmap_page(GRAPHICS_VIRTUAL_BASE +
-                                          mapped_pages * 4096U);
-                    }
-                    return 0;
+                    --mapped_pages;
+                    paging_unmap_page((uintptr_t)GRAPHICS_VIRTUAL_BASE+
+                                      (uintptr_t)mapped_pages*PAGE_SIZE);
                 }
-            }
-
-            if (paging_get_physical(GRAPHICS_VIRTUAL_BASE) != first_page)
                 return 0;
-
-            framebuffer = (uint8_t*)(uintptr_t)(GRAPHICS_VIRTUAL_BASE + offset);
-            graphics_scanout_base = framebuffer;
-            graphics_scanout_page_bytes =
-                (uint64_t)mbd->framebuffer_pitch * mbd->framebuffer_height;
-            graphics_scanout_page_index = 0U;
-            graphics_bochs_mode = 0;
-            graphics_pageflip_enabled = 0;
-            graphics_pageflip_seeded = 0;
-            framebuffer_pitch = mbd->framebuffer_pitch;
-            framebuffer_width = mbd->framebuffer_width;
-            framebuffer_height = mbd->framebuffer_height;
-
-            red_position = mbd->framebuffer_red_position;
-            red_mask_size = mbd->framebuffer_red_mask_size;
-            green_position = mbd->framebuffer_green_position;
-            green_mask_size = mbd->framebuffer_green_mask_size;
-            blue_position = mbd->framebuffer_blue_position;
-            blue_mask_size = mbd->framebuffer_blue_mask_size;
-
-            cursor_x = (int)framebuffer_width / 2;
-            cursor_y = (int)framebuffer_height / 2;
-            terminal_x = (int)framebuffer_width / 2 - 440;
-            if (terminal_x < 10)
-                terminal_x = 10;
-            terminal_y = 64;
-            terminal_restore_x = terminal_x;
-            terminal_restore_y = terminal_y;
-            terminal_dragging = 0;
-            cursor_saved_valid = 0;
-
-            initialized = 1;
-            return 1;
+            }
         }
+
+        if(paging_get_physical(GRAPHICS_VIRTUAL_BASE)!=
+           (uintptr_t)layout.page_base)
+        {
+            while(mapped_pages!=0U)
+            {
+                --mapped_pages;
+                paging_unmap_page((uintptr_t)GRAPHICS_VIRTUAL_BASE+
+                                  (uintptr_t)mapped_pages*PAGE_SIZE);
+            }
+            return 0;
+        }
+
+        framebuffer=(uint8_t*)(uintptr_t)(
+            (uintptr_t)GRAPHICS_VIRTUAL_BASE+layout.page_offset);
+        graphics_scanout_base=framebuffer;
+        graphics_scanout_page_bytes=layout.byte_length;
+        graphics_scanout_page_index=0U;
+        graphics_bochs_mode=0;
+        graphics_pageflip_enabled=0;
+        graphics_pageflip_seeded=0;
+        framebuffer_pitch=mbd->framebuffer_pitch;
+        framebuffer_width=mbd->framebuffer_width;
+        framebuffer_height=mbd->framebuffer_height;
+
+        red_position=mbd->framebuffer_red_position;
+        red_mask_size=mbd->framebuffer_red_mask_size;
+        green_position=mbd->framebuffer_green_position;
+        green_mask_size=mbd->framebuffer_green_mask_size;
+        blue_position=mbd->framebuffer_blue_position;
+        blue_mask_size=mbd->framebuffer_blue_mask_size;
+
+        cursor_x=(int)framebuffer_width/2;
+        cursor_y=(int)framebuffer_height/2;
+        terminal_x=(int)framebuffer_width/2-440;
+        if(terminal_x<10) terminal_x=10;
+        terminal_y=64;
+        terminal_restore_x=terminal_x;
+        terminal_restore_y=terminal_y;
+        terminal_dragging=0;
+        cursor_saved_valid=0;
+
+        initialized=1;
+        return 1;
     }
 
     return 0;

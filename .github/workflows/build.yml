@@ -200,6 +200,12 @@ jobs:
             scripts/test_graphics_squircle_math.c -o /tmp/vantaos-squircle-math-test
           /tmp/vantaos-squircle-math-test
 
+      - name: Test high-address framebuffer layout validation
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_graphics_framebuffer.c -o /tmp/vantaos-framebuffer-layout-test
+          /tmp/vantaos-framebuffer-layout-test
+
       - name: Compile all ring-3 desktop applications with strict warnings
         run: |
           set -euo pipefail

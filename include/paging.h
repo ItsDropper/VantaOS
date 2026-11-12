@@ -17,6 +17,11 @@
 #define PAGE_USER    0x004U
 #define PAGE_NX      (1ULL << 63)
 
+/* Persistent uncached scanout and transient device-MMIO virtual windows. */
+#define PAGING_GRAPHICS_BASE 0xD0000000ULL
+#define PAGING_GRAPHICS_SCANOUT_SIZE (16ULL * 1024ULL * 1024ULL)
+#define PAGING_GRAPHICS_SIZE (2ULL * PAGING_GRAPHICS_SCANOUT_SIZE)
+
 /* Shared virtual window for uncached device MMIO mappings. */
 #define PAGING_MMIO_BASE 0xE0000000ULL
 #define PAGING_MMIO_SIZE (6ULL * 1024ULL * 1024ULL)
@@ -40,6 +45,8 @@ typedef struct paging_address_space
 } paging_address_space_t;
 
 void paging_initialize(void);
+/* CPU-reported physical address limit, initialized with paging. */
+uint64_t paging_physical_address_limit(void);
 int paging_map_mmio_page(uintptr_t virtual_address, uintptr_t physical_address);
 int paging_map_page(uintptr_t virtual_address, uintptr_t physical_address);
 int paging_map_user_page(paging_address_space_t* address_space,

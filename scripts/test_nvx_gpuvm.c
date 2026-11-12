@@ -210,6 +210,20 @@ int main(void)
                                NVX_GPUVM_ACCESS_WRITE) == NVX_GPUVM_OK);
     assert(nvx_gpuvm_validate(&vm) == NVX_GPUVM_OK);
 
+    /* Read/write mappings must clear the PTE read-only bit. */
+    leaf = vm.root_index;
+    for (uint8_t level = 4U; level > 0U; --level) {
+        uint16_t slot = test_index_for_level(second.base, level);
+        size_t child = test_find_child(leaf, slot);
+        assert(child < NVX_GPUVM_MAX_TABLES);
+        leaf = (uint16_t)child;
+    }
+    entry = (uint64_t *)((uintptr_t)vm.tables[leaf].backing.virtual_address +
+        (uintptr_t)test_index_for_level(second.base, 0U) * sizeof(uint64_t));
+    const uint64_t expected_rw_pte = (physical[0] >> 8U) | 1ULL |
+        (1ULL << 1U) | (1ULL << 32U) | (2ULL << 33U);
+    assert(*entry == expected_rw_pte);
+
     assert(nvx_gpuvm_release(&vm, &mapping) == NVX_GPUVM_OK);
     assert(!mapping.valid && !mapping.mapped);
     assert(nvx_gpuvm_release(&vm, &mapping) == NVX_GPUVM_STALE_HANDLE);

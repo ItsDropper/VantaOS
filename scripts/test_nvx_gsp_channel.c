@@ -143,5 +143,47 @@ int main(void)
         sizeof(scratch),response,sizeof(response),20U,1U,delay,NULL)==
         NVX_GSP_RMAPI_OK);
     assert(!channel.allocated&&!channel.scheduled);
+
+    /* Pending schedule and free operations retain ownership until recovered. */
+    memset(&channel,0,sizeof(channel));call_count=0U;
+    schedule_status=NVX_GSP_RMAPI_TIMEOUT;
+    assert(nvx_gsp_copy_channel_create(&manager,&channel,0x10U,0x20U,0x30U,
+        &params,scratch,sizeof(scratch),response,sizeof(response),20U,1U,
+        delay,NULL)==NVX_GSP_RMAPI_TIMEOUT);
+    assert(channel.stage==NVX_GSP_CHANNEL_SCHEDULE_PENDING&&
+           channel.allocated&&channel.bound&&!channel.scheduled);
+    wait_status=NVX_GSP_RMAPI_OK;schedule_status=NVX_GSP_RMAPI_OK;
+    assert(nvx_gsp_copy_channel_destroy(&manager,&channel,scratch,
+        sizeof(scratch),response,sizeof(response),20U,1U,delay,NULL)==
+        NVX_GSP_RMAPI_OK);
+    assert(!channel.allocated&&!channel.bound&&!channel.scheduled);
+
+    memset(&channel,0,sizeof(channel));call_count=0U;
+    assert(nvx_gsp_copy_channel_create(&manager,&channel,0x10U,0x20U,0x30U,
+        &params,scratch,sizeof(scratch),response,sizeof(response),20U,1U,
+        delay,NULL)==NVX_GSP_RMAPI_OK);
+    free_status=NVX_GSP_RMAPI_TIMEOUT;
+    assert(nvx_gsp_copy_channel_destroy(&manager,&channel,scratch,
+        sizeof(scratch),response,sizeof(response),20U,1U,delay,NULL)==
+        NVX_GSP_RMAPI_TIMEOUT);
+    assert(channel.stage==NVX_GSP_CHANNEL_FREE_PENDING&&
+           channel.allocated&&!channel.scheduled);
+    wait_status=NVX_GSP_RMAPI_OK;free_status=NVX_GSP_RMAPI_OK;
+    assert(nvx_gsp_copy_channel_recover(&manager,&channel,scratch,
+        sizeof(scratch),response,sizeof(response),20U,1U,delay,NULL)==
+        NVX_GSP_RMAPI_OK);
+    assert(!channel.allocated&&!channel.bound&&
+           channel.stage==NVX_GSP_CHANNEL_IDLE);
+
+    /* Reject aliased RM handles and corrupted public state before RPC. */
+    memset(&channel,0,sizeof(channel));call_count=0U;
+    assert(nvx_gsp_copy_channel_create(&manager,&channel,0x10U,0x10U,0x30U,
+        &params,scratch,sizeof(scratch),response,sizeof(response),20U,1U,
+        delay,NULL)==NVX_GSP_RMAPI_INVALID_ARGUMENT);
+    channel.allocated=0U;channel.bound=1U;
+    assert(nvx_gsp_copy_channel_destroy(&manager,&channel,scratch,
+        sizeof(scratch),response,sizeof(response),20U,1U,delay,NULL)==
+        NVX_GSP_RMAPI_INVALID_ARGUMENT);
+    assert(call_count==0U);
     return 0;
 }

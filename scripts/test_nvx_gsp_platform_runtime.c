@@ -97,6 +97,12 @@ nvx_attach_status_t nvx_device_detach(nvx_attached_device_t *device)
     device->lifecycle.state = NVX_STATE_STOPPED;
     return NVX_ATTACH_OK;
 }
+nvx_attach_status_t nvx_device_detach_quiesced(
+    nvx_attached_device_t *device, int confirmed)
+{
+    assert(confirmed);
+    return nvx_device_detach(device);
+}
 int nvx_lifecycle_transition(nvx_lifecycle_t *l, nvx_lifecycle_state_t next)
 {
     if (!l) return 0;

@@ -426,7 +426,6 @@ int main(void)
         };
         nvx_gsp_boot_package_t package = {0};
         nvx_gsp_wpr_layout_t platform_layout = planned_layout();
-        nvx_gsp_wpr_layout_t prepared_layout = {0};
         unsigned before = provider_release_calls;
         assert(nvx_gsp_boot_package_prepare(&provider, "ga102", "1.0",
             &bar0, &platform_layout, &package, &platform_layout) ==

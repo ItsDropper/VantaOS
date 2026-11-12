@@ -237,6 +237,7 @@ nvx_gsp_boot_memory_status_t nvx_gsp_boot_memory_acquire(
     memory->radix3_elf.size = 4096U;
     memory->bootloader_payload.size = 4096U;
     memory->signature.size = 384U;
+    memory->wpr_metadata.gpu_address = UINT64_C(0x100000);
     memory->monitor_code_offset = 0U;
     memory->monitor_data_offset = 16U;
     memory->manifest_offset = 32U;

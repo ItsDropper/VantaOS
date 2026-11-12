@@ -14,20 +14,22 @@ This document is a release gate, not a claim that the driver is ready. A phase m
 
 ## Current subsystem status
 
-**CI evidence:** the NVX workflow passed on 2026-11-12 at commit
-`8451da6bcd7d73ab447da59be5852b2431558202`. The current `master` head is
-`b65f373b9545de635f4e410210944a83eb9811ab`; GitHub's compare result shows the
-only intervening file change is `.github/workflows/build.yml`, so NVX source
-and tests are unchanged since that successful NVX run. This is host CI evidence,
-not physical GPU validation. No dedicated whole-startup integration test is
-present.
+**Coordinator status (2026-11-12):** `nvx_gsp_platform_start()` now owns the
+GA106 orchestration path from trusted PCI attach through firmware/VBIOS staging,
+WPR metadata, DMA queue/init-args preparation, bus-master gating and the
+composed GSP startup call. Its shutdown path requires a caller-provided SEC2/GSP
+quiesce proof before reclaiming memory. CI includes strict compilation,
+preflight tests and mocked success/failure/retention tests. This does not
+constitute physical hardware validation or an end-to-end test of real GSP
+register transactions. The platform adapter and hardware quiesce implementation
+remain missing.
 
 | Subsystem | Current state | Evidence still required |
 | --- | --- | --- |
 | PCI identity and BAR/resource discovery | Implemented, host-tested in parts | Record actual RTX 3060 identity, BARs, command bits and resource ownership from a physical boot |
 | GA10x firmware parsing and preflight | Implemented, host-tested | Validate the exact firmware files supplied by a legitimate platform provider; record hashes, versions and verifier policy |
 | SEC2 signed Booter Load transaction | Implemented as a hardware-facing sequence with synthetic MMIO tests | Real VBIOS/workspace and framebuffer inputs; correct WPR/FRTS policy; authenticated SEC2 completion on GA106 |
-| GSP RISC-V launch and readiness | Callable composed startup transaction now sequences FWSEC/FRTS, RISC-V handoff, SEC2 Booter Load, RISC-V-active wait, MSGQ link and GSP-RM initialization; component tests exist, but no end-to-end startup test or production caller | Physical GA106 authentication, stable readiness, a real GSP-RM RPC response and integration with NVX device lifecycle |
+| GSP RISC-V launch and readiness | Callable composed startup transaction plus platform coordinator; mocked orchestration CI, no production platform adapter or real startup integration test | Physical GA106 authentication, stable readiness, a real GSP-RM RPC response and integrated lifecycle |
 | GSP-RM RPC and RM objects | Protocol, core/channel/CTXDMA and system-memory object lifecycle primitives exist; host-tested | Successful first real RPC and object create/control/free round-trip on GA106 |
 | GPU memory / GPUVM | Software reservation, DMA/page-table primitives, RM system-memory allocation, CTXDMA and NVOS46/NVOS47 lifecycle wrappers exist; host-tested | CPU mapping, first real GA106 RM mapping/visibility result, hardware-correct page tables, translation controls, TLB invalidation and real VRAM accounting |
 | GPFIFO / channel / synchronization | RM-backed Ampere copy-channel lifecycle, GPFIFO/USERD layout and bounded submission/synchronization components exist; host-tested separately | Real mapped channel resources, validated USERD/doorbell ABI and GPU-produced completion on GA106 |

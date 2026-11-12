@@ -27,7 +27,8 @@ typedef enum nvx_gsp_rmapi_status {
     NVX_GSP_RMAPI_MALFORMED_RESPONSE,
     NVX_GSP_RMAPI_REMOTE_ERROR,
     NVX_GSP_RMAPI_TIMEOUT,
-    NVX_GSP_RMAPI_CLEANUP_FAILED
+    NVX_GSP_RMAPI_CLEANUP_FAILED,
+    NVX_GSP_RMAPI_BUSY
 } nvx_gsp_rmapi_status_t;
 
 /*

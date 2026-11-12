@@ -19,6 +19,8 @@ on:
       - "include/device_irq.h"
       - "kernel/device.c"
       - "include/nvx_gsp_ce.h"
+      - "include/nvx_gsp_dma_map.h"
+      - "include/nvx_submit.h"
       - "scripts/test_nvx_gsp_ce_runtime.c"
       - "scripts/test_nvx_dma.c"
       - "scripts/test_gpu_dma.c"
@@ -832,7 +834,7 @@ jobs:
             drivers/gpu/nvx/memory/nvx_dma.c drivers/gpu/core/gpu_dma.c \
             drivers/gpu/core/gpu_va.c -o /tmp/vantaos-nvx-submit-test
 
-      - name: Test command bounds, relocation overlap and target ranges
+      - name: Test command bounds, relocation overlap, target ranges and pinned batch lifetimes
         run: /tmp/vantaos-nvx-submit-test
 
       - name: Compile NVX MSI/MSI-X capability tests with strict warnings

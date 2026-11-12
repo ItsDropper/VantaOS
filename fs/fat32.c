@@ -1527,14 +1527,21 @@ static int fat32_next_for_write(uint32_t cluster, uint32_t* next)
 {
     uint32_t value;
     if (!next || !fat32_raw_entry(cluster, &value))
+    {
+        FAT32_WRITE_DIAG("VANTAOS_FAT32_CHAIN_FAIL_READ_ENTRY");
         return 0;
+    }
     if (value >= FAT32_EOC_MIN)
     {
         uint32_t allocated = fat32_allocate_one();
         if (!allocated)
+        {
+            FAT32_WRITE_DIAG("VANTAOS_FAT32_CHAIN_FAIL_ALLOCATE");
             return 0;
+        }
         if (!fat32_set_raw_entry(cluster, allocated))
         {
+            FAT32_WRITE_DIAG("VANTAOS_FAT32_CHAIN_FAIL_LINK");
             fat32_release_chain(allocated);
             return 0;
         }
@@ -1543,7 +1550,10 @@ static int fat32_next_for_write(uint32_t cluster, uint32_t* next)
     }
     if (value < 2U || value > cluster_count + 1U ||
         value == FAT32_BAD_CLUSTER)
+    {
+        FAT32_WRITE_DIAG("VANTAOS_FAT32_CHAIN_FAIL_INVALID_NEXT");
         return 0;
+    }
     *next = value;
     return 1;
 }

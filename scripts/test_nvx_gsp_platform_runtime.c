@@ -26,6 +26,7 @@ static int fail_bus_master;
 static int fail_startup;
 static int quiesce_result;
 static int bus_master_enabled;
+static uint16_t mock_extended_chip_id = NVX_GSP_GA106_PMC_CHIP_ID;
 static unsigned attach_calls;
 static unsigned detach_calls;
 
@@ -46,6 +47,7 @@ static void reset_mocks(void)
     fail_bundle = fail_prom = fail_bus_master = fail_startup = 0;
     quiesce_result = 1;
     bus_master_enabled = 0;
+    mock_extended_chip_id = NVX_GSP_GA106_PMC_CHIP_ID;
     attach_calls = detach_calls = 0U;
 }
 
@@ -58,7 +60,7 @@ int nvx_identify_pci_device(uint16_t id, nvx_generation_family_t *family,
                             nvx_device_profile_t *profile)
 {
     if (!family || !profile) return 0;
-    if (id != 0x2503U) {
+    if (id != 0x2504U) {
         *family = NVX_FAMILY_UNKNOWN;
         *profile = NVX_PROFILE_UNKNOWN;
         return 0;
@@ -84,7 +86,7 @@ nvx_attach_status_t nvx_device_attach(const struct pci_device *pci,
     out->lifecycle.state = NVX_STATE_PROBED;
     out->registers.identified_family = NVX_FAMILY_AMPERE;
     out->registers.extended_revision_valid = 1U;
-    out->registers.extended_chip_id = 0x177U;
+    out->registers.extended_chip_id = mock_extended_chip_id;
     out->attached = 1U;
     return NVX_ATTACH_OK;
 }
@@ -421,8 +423,7 @@ static nvx_gsp_platform_config_t make_config(
     c.firmware_provider = provider;
     c.firmware_chip = "ga106";
     c.firmware_version = "535.129.03";
-    c.expected_extended_chip_id = 0x177U;
-    c.trusted_gpu_facts = facts;
+        c.trusted_gpu_facts = facts;
     c.command_queue_bytes = 64U * 1024U;
     c.status_queue_bytes = 64U * 1024U;
     c.timeout_ms = 5000U;
@@ -434,7 +435,7 @@ static nvx_gsp_platform_config_t make_config(
 int main(void)
 {
     struct pci_device pci = {
-        .vendor_id = NVX_PCI_VENDOR_NVIDIA, .device_id = 0x2503U,
+        .vendor_id = NVX_PCI_VENDOR_NVIDIA, .device_id = 0x2504U,
         .class_code = 0x03U
     };
     nvx_bar_resource_t bar = {
@@ -489,13 +490,12 @@ int main(void)
     assert(live_allocations == 0U && !bus_master_enabled);
 
     reset_mocks();
-    config.expected_extended_chip_id = 0x176U;
+    mock_extended_chip_id = 0x177U; /* GA107, not GA106. */
     assert(nvx_gsp_platform_start(&config, &session) ==
            NVX_GSP_PLATFORM_CHIP_MISMATCH);
     assert(!session.attached && live_allocations == 0U &&
            !bus_master_enabled && detach_calls == 1U);
-    config.expected_extended_chip_id = 0x177U;
-
+    
     reset_mocks();
     fail_prom = 1;
     assert(nvx_gsp_platform_start(&config, &session) ==

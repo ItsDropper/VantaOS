@@ -209,6 +209,35 @@ nvx_memory_status_t nvx_memory_get_info(nvx_memory_manager_t *m,
     return NVX_MEMORY_OK;
 }
 
+nvx_memory_status_t nvx_memory_get_dma_buffer(
+    nvx_memory_manager_t *m, const nvx_memory_handle_t *h,
+    nvx_dma_buffer_t **out)
+{
+    if (out) *out = 0;
+    if (!m || !h || !out)
+        return NVX_MEMORY_INVALID_ARGUMENT;
+    if (!m->initialized)
+        return NVX_MEMORY_NOT_INITIALIZED;
+    spinlock_lock(&m->lock);
+    nvx_memory_slot_t *slot = match_handle(m, h);
+    if (!slot) {
+        spinlock_unlock(&m->lock);
+        return NVX_MEMORY_STALE_HANDLE;
+    }
+    if (slot->active_users == 0U) {
+        spinlock_unlock(&m->lock);
+        return NVX_MEMORY_BUSY;
+    }
+    if (!slot->dma.acquired || !slot->dma.cpu_address ||
+        !slot->dma.gpu_address || !slot->dma.allocation_id) {
+        spinlock_unlock(&m->lock);
+        return NVX_MEMORY_CORRUPT_STATE;
+    }
+    *out = &slot->dma;
+    spinlock_unlock(&m->lock);
+    return NVX_MEMORY_OK;
+}
+
 nvx_memory_status_t nvx_memory_cpu_address(nvx_memory_manager_t *m,
                                            const nvx_memory_handle_t *h,
                                            void **out)

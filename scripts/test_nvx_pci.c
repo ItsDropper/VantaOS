@@ -7,6 +7,7 @@
 
 #include "nvx_device.h"
 #include "serial.h"
+#include "mmio.h"
 
 #include <assert.h>
 #include <stddef.h>
@@ -33,8 +34,20 @@ static const struct pci_device devices[] = {
         .bus = 3, .slot = 0, .function = 0,
         .vendor_id = NVX_PCI_VENDOR_NVIDIA, .device_id = 0x9999,
         .class_code = 0x03, .subclass = 0x00, .prog_if = 0, .revision = 1
+    },
+    {
+        .bus = 4, .slot = 0, .function = 0,
+        .vendor_id = NVX_PCI_VENDOR_NVIDIA, .device_id = 0x174D,
+        .class_code = 0x03, .subclass = 0x00, .prog_if = 0, .revision = 1
+    },
+    {
+        .bus = 5, .slot = 0, .function = 0,
+        .vendor_id = NVX_PCI_VENDOR_NVIDIA, .device_id = 0x1D12,
+        .class_code = 0x03, .subclass = 0x00, .prog_if = 0, .revision = 1
     }
 };
+
+static volatile uint32_t fake_registers[2];
 
 static char log_buffer[4096];
 static size_t log_length;
@@ -98,14 +111,32 @@ int pci_get_bar(const struct pci_device *device, uint8_t index,
 
     *address = 0x00000012ABC00000ULL;
     *is_io = 0;
+    if (device->device_id == 0x174DU)
+        fake_registers[0] = 0x11000000U;
+    else if (device->device_id == 0x1D12U)
+        fake_registers[0] = 0x13000000U;
     *is_64bit = 1;
+    return 1;
+}
+
+void *mmio_map_region(uint64_t physical_address, size_t length)
+{
+    assert(physical_address == 0x00000012ABC00000ULL);
+    assert(length == 8U);
+    return (void *)(uintptr_t)fake_registers;
+}
+
+int mmio_unmap_region(void *virtual_address, size_t length)
+{
+    assert(virtual_address == (void *)(uintptr_t)fake_registers);
+    assert(length == 8U);
     return 1;
 }
 
 int main(void)
 {
-    assert(nvx_pci_discover() == 3);
-    assert(bar_queries == 2); /* Both display candidates; never the audio function. */
+    assert(nvx_pci_discover() == 5);
+    assert(bar_queries == 6); /* BAR inventory plus two bounded mobile probes. */
 
     assert(strstr(log_buffer, "vendor=0x10DE device=0x2503") != 0);
     assert(strstr(log_buffer, "role=GPU-candidate family=AMPERE profile=GEFORCE-RTX-3060 identification=PCI-ID-TABLE-ONLY pci-command=0x0002 memory-space=enabled bus-master=disabled") != 0);
@@ -114,6 +145,10 @@ int main(void)
     assert(strstr(log_buffer, "device=0x228B") != 0);
     assert(strstr(log_buffer, "role=non-GPU-NVIDIA-function") != 0);
     assert(strstr(log_buffer, "device=0x9999") != 0);
+    assert(strstr(log_buffer, "device=0x174D") != 0);
+    assert(strstr(log_buffer, "device=0x1D12") != 0);
+    assert(strstr(log_buffer, "mobile PMC identity: verified family=MAXWELL profile=GEFORCE-MX130 architecture=0x11") != 0);
+    assert(strstr(log_buffer, "mobile PMC identity: verified family=PASCAL profile=GEFORCE-MX150 architecture=0x13") != 0);
     assert(strstr(log_buffer, "family=UNKNOWN profile=UNKNOWN identification=UNRECOGNIZED-PCI-ID") != 0);
     assert(strstr(log_buffer, "state=DETECTED; initialization=NOT_ATTEMPTED; acceleration=UNAVAILABLE") != 0);
     assert(strstr(log_buffer, "vendor=0x8086") == 0);

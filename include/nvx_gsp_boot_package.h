@@ -34,7 +34,8 @@ typedef struct nvx_gsp_boot_package {
 /*
  * Acquire and verify all five GA10x firmware components, stage fuse-selected
  * SEC2 booters, bind allocated SYSRAM addresses into a platform-planned WPR
- * layout, and materialize WPR metadata. No GPU registers are touched.
+ * layout, and materialize WPR metadata. Only read-only fuse MMIO is performed to select
+ * the signed booter payload; this preparation does not start either Falcon.
  *
  * Zero-initialize package before first use. On failure, acquired resources are
  * unwound. out_layout receives the finalized layout only on success.

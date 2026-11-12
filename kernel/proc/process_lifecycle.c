@@ -8,6 +8,7 @@
 #include "process_internal.h"
 #include "apic.h"
 #include "scheduler.h"
+#include "serial.h"
 #include "../ipc.h"
 
 #include <stddef.h>
@@ -673,18 +674,23 @@ void process_terminate_current_with_status(int32_t exit_status)
 {
     if (!process_initialized_state)
         return;
-    uint32_t terminated_pid = 0U;
-    uint64_t flags = process_table_lock_acquire();
-    uint32_t current_pid = process_current_slot();
-    if (current_pid != 0 && current_pid < PROCESS_MAX &&
-        process_table_records[current_pid].state != PROCESS_UNUSED &&
-        !process_is_idle_locked(current_pid))
+    uint32_t terminated_pid=0U;
+    int rejected_idle_exit=0;
+    uint64_t flags=process_table_lock_acquire();
+    uint32_t current_pid=process_current_slot();
+    if(current_pid!=0U&&current_pid<PROCESS_MAX&&
+       process_table_records[current_pid].state!=PROCESS_UNUSED)
     {
-        process_table_records[current_pid].state = PROCESS_TERMINATED;
-        process_table_records[current_pid].sleep_deadline_ticks = 0U;
-        process_table_records[current_pid].wait_queue = NULL;
-        process_table_records[current_pid].exit_status = exit_status;
-        terminated_pid = current_pid;
+        if(process_is_idle_locked(current_pid))
+            rejected_idle_exit=1;
+        else
+        {
+            process_table_records[current_pid].state=PROCESS_TERMINATED;
+            process_table_records[current_pid].sleep_deadline_ticks=0U;
+            process_table_records[current_pid].wait_queue=NULL;
+            process_table_records[current_pid].exit_status=exit_status;
+            terminated_pid=current_pid;
+        }
     }
     process_table_lock_release(flags);
 
@@ -694,8 +700,13 @@ void process_terminate_current_with_status(int32_t exit_status)
      * accidentally erase capabilities created by a new process with the
      * same PID.
      */
-    if (terminated_pid != 0U)
+    if(terminated_pid!=0U)
+    {
         ipc_process_cleanup(terminated_pid);
+        serial_write("VANTAOS_PROCESS_EXIT_STATUS_SET\n");
+    }
+    else if(rejected_idle_exit)
+        serial_write("VANTAOS_PROCESS_EXIT_REJECTED_IDLE\n");
 }
 
 void process_save_stack(uint32_t pid, uint64_t stack_pointer)

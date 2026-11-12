@@ -18,6 +18,7 @@ typedef struct
     uint32_t report_count;
     uint16_t usage_page;
     int32_t logical_min;
+    int32_t logical_max;
     uint8_t report_id;
 } hid_global_state_t;
 
@@ -94,10 +95,12 @@ int hid_report_parse(const uint8_t* descriptor,size_t length,
 
     uint32_t input_bits[256]={0};
     uint8_t input_seen[256]={0};
-    hid_global_state_t globals={0U,0U,0U,0,0U};
+    hid_global_state_t globals={0U,0U,0U,0,0,0U};
     hid_global_state_t global_stack[HID_GLOBAL_STACK_DEPTH];
     hid_local_state_t local={0U,0U,0U,0U,0U,0U,0U};
     uint32_t stack_depth=0U,collection_depth=0U;
+    uint16_t collection_ids[HID_COLLECTION_DEPTH]={0U};
+    uint16_t next_collection_id=1U;
     int numbered_input=0,unnumbered_input=0;
     hid_report_layout_t parsed;
     memset(&parsed,0,sizeof(parsed));
@@ -133,6 +136,10 @@ int hid_report_parse(const uint8_t* descriptor,size_t length,
                     globals.usage_page=(uint16_t)value;
                     break;
                 case 1U: globals.logical_min=signed_value; break;
+                case 2U:
+                    globals.logical_max=globals.logical_min<0?signed_value:
+                        value>(uint32_t)INT32_MAX?INT32_MAX:(int32_t)value;
+                    break;
                 case 7U:
                     if(value==0U||value>32U) return 0;
                     globals.report_size=value;
@@ -194,6 +201,8 @@ int hid_report_parse(const uint8_t* descriptor,size_t length,
                        (local.usage==0x04U||local.usage==0x05U))
                         parsed.has_touchpad=1U;
                 }
+                if(next_collection_id==0U) return 0;
+                collection_ids[collection_depth]=next_collection_id++;
                 ++collection_depth;
                 memset(&local,0,sizeof(local));
             }
@@ -232,6 +241,9 @@ int hid_report_parse(const uint8_t* descriptor,size_t length,
                         field->report_count=(uint16_t)globals.report_count;
                         field->flags=(uint8_t)value;
                         field->logical_min=globals.logical_min;
+                        field->logical_max=globals.logical_max;
+                        field->collection_id=collection_depth!=0U?
+                            collection_ids[collection_depth-1U]:0U;
                     }
                     if(globals.report_id==0U) unnumbered_input=1;
                     else numbered_input=1;

@@ -85,6 +85,22 @@ int main(void)
     assert(hid_report_parse(embedded_page,sizeof(embedded_page),&layout));
     assert(layout.has_keyboard==1U);
     assert(layout.fields[0].usage_page==0x07U);
-    puts("HID report descriptor sizing tests passed");
+    static const uint8_t touch_collections[]={
+        0x05,0x0D,0x09,0x05,0xA1,0x01,
+        0x09,0x22,0xA1,0x02,
+        0x05,0x01,0x09,0x30,0x15,0x00,0x25,0x7F,
+        0x75,0x08,0x95,0x01,0x81,0x02,0xC0,
+        0x05,0x0D,0x09,0x22,0xA1,0x02,
+        0x05,0x01,0x09,0x30,0x15,0x00,0x25,0x7F,
+        0x75,0x08,0x95,0x01,0x81,0x02,0xC0,0xC0
+    };
+    assert(hid_report_parse(touch_collections,sizeof(touch_collections),&layout));
+    assert(layout.has_touchpad==1U&&layout.field_count==2U);
+    assert(layout.fields[0].collection_id!=0U);
+    assert(layout.fields[0].collection_id!=layout.fields[1].collection_id);
+    assert(layout.fields[0].logical_max==127);
+    assert(layout.fields[1].logical_max==127);
+
+    puts("HID report descriptor sizing and contact-collection tests passed");
     return 0;
 }

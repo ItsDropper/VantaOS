@@ -30,6 +30,8 @@ typedef struct
     uint8_t bit_size;
     uint8_t flags;
     int32_t logical_min;
+    int32_t logical_max;
+    uint16_t collection_id;
 } hid_input_field_t;
 
 typedef struct
@@ -47,7 +49,8 @@ typedef struct
 
 /*
  * Bounded HID short/long item parser. Produces input report lengths and the
- * usage/bit-field metadata needed by the conservative keyboard/pointer path.
+ * usage/bit-field metadata, including collection IDs and logical ranges,
+ * needed by the bounded keyboard and multi-contact pointer path.
  * It does not interpret arbitrary vendor-defined usages or output reports.
  */
 int hid_report_parse(const uint8_t* descriptor, size_t length,

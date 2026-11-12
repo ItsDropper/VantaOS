@@ -21,6 +21,7 @@
 #define HID_I2C_MAX_REPORT 4096U
 #define HID_I2C_POLL_BUDGET 2U
 #define HID_I2C_ERROR_LIMIT 10U
+#define HID_I2C_MAX_TOUCH_CONTACTS 8U
 
 typedef struct
 {
@@ -29,6 +30,8 @@ typedef struct
     uint8_t has_pointer;
     uint8_t touchpad;
     uint8_t last_xy_valid;
+    uint8_t last_touch_valid;
+    uint8_t last_contact_count;
     uint8_t buttons;
     uint8_t errors;
     uint8_t online;
@@ -44,6 +47,8 @@ typedef struct
     uint32_t pointer_id;
     int32_t last_x;
     int32_t last_y;
+    int32_t last_touch_y;
+    int32_t touch_scroll_remainder_y;
     uint8_t keys[256];
     i2c_bus_t *bus;
     hid_report_layout_t layout;
@@ -264,31 +269,120 @@ static void hid_decode_keyboard(hid_i2c_device_t *device,uint8_t report_id,
     memcpy(device->keys,next,sizeof(next));
 }
 
+typedef struct
+{
+    uint16_t collection_id;
+    uint8_t tip_switch_seen;
+    uint8_t tip_switch;
+    uint8_t have_x;
+    uint8_t have_y;
+    int32_t x;
+    int32_t y;
+    int32_t x_range;
+    int32_t y_range;
+} hid_touch_contact_t;
+
+static hid_touch_contact_t *hid_touch_contact_get(
+    hid_touch_contact_t contacts[HID_I2C_MAX_TOUCH_CONTACTS],
+    uint32_t *count,uint16_t collection_id)
+{
+    if(collection_id==0U) return NULL;
+    for(uint32_t i=0U;i<*count;++i)
+        if(contacts[i].collection_id==collection_id) return &contacts[i];
+    if(*count>=HID_I2C_MAX_TOUCH_CONTACTS) return NULL;
+    hid_touch_contact_t *contact=&contacts[(*count)++];
+    memset(contact,0,sizeof(*contact));
+    contact->collection_id=collection_id;
+    return contact;
+}
+
+static int32_t hid_clamp_delta(int64_t value)
+{
+    if(value>4096) return 4096;
+    if(value< -4096) return -4096;
+    return (int32_t)value;
+}
+
 static void hid_decode_pointer(hid_i2c_device_t *device,uint8_t report_id,
                                const uint8_t *payload,size_t payload_length)
 {
     int32_t x=0,y=0,wheel=0;
     uint8_t buttons=device->buttons;
-    uint8_t have_x=0U,have_y=0U,have_contact=0U;
+    uint8_t have_x=0U,have_y=0U;
+    uint8_t contact_switch_seen=0U;
+    uint8_t contact_count_hint=0U,contact_count_valid=0U;
+    hid_touch_contact_t contacts[HID_I2C_MAX_TOUCH_CONTACTS]={0};
+    uint32_t contact_slots=0U;
+
     for(uint32_t f=0U;f<device->layout.field_count;++f)
     {
         const hid_input_field_t *field=&device->layout.fields[f];
         if(field->report_id!=report_id||(field->flags&1U)!=0U||
-           (field->flags&2U)==0U) continue;
+           (field->flags&2U)==0U||field->usage_max<field->usage_min||
+           (field->usage_min==0U&&field->usage_max==0U))
+            continue;
         for(uint32_t i=0U;i<field->report_count;++i)
         {
             uint32_t usage=(uint32_t)field->usage_min+i;
             uint32_t raw=hid_extract_bits(payload,payload_length,
                 field->bit_offset+i*field->bit_size,field->bit_size,1U);
+
             if(field->usage_page==0x09U&&usage>=1U&&usage<=5U)
             {
                 uint8_t mask=(uint8_t)(1U<<(usage-1U));
                 if(raw) buttons|=mask; else buttons&=(uint8_t)~mask;
+                continue;
             }
-            else if(field->usage_page==0x0DU&&usage==0x42U&&!have_contact)
+
+            if(device->touchpad)
             {
-                if(raw) buttons|=1U; else buttons&=(uint8_t)~1U;
-                have_contact=1U;
+                if(field->usage_page==0x0DU&&usage==0x54U)
+                {
+                    contact_count_hint=(uint8_t)(raw>HID_I2C_MAX_TOUCH_CONTACTS?
+                        HID_I2C_MAX_TOUCH_CONTACTS:raw);
+                    contact_count_valid=1U;
+                    continue;
+                }
+                if(field->usage_page==0x0DU&&usage==0x42U)
+                {
+                    contact_switch_seen=1U;
+                    hid_touch_contact_t *contact=hid_touch_contact_get(
+                        contacts,&contact_slots,field->collection_id);
+                    if(contact)
+                    {
+                        contact->tip_switch_seen=1U;
+                        contact->tip_switch=(uint8_t)(raw!=0U);
+                    }
+                    continue;
+                }
+                if(field->usage_page==0x01U&&
+                   (usage==0x30U||usage==0x31U))
+                {
+                    hid_touch_contact_t *contact=hid_touch_contact_get(
+                        contacts,&contact_slots,field->collection_id);
+                    if(contact)
+                    {
+                        int32_t coordinate=hid_signed_value(
+                            raw,field->bit_size,field->logical_min);
+                        int64_t range=(int64_t)field->logical_max-
+                                      field->logical_min;
+                        if(usage==0x30U)
+                        {
+                            contact->x=coordinate;
+                            contact->have_x=1U;
+                            if(range>0&&range<=INT32_MAX)
+                                contact->x_range=(int32_t)range;
+                        }
+                        else
+                        {
+                            contact->y=coordinate;
+                            contact->have_y=1U;
+                            if(range>0&&range<=INT32_MAX)
+                                contact->y_range=(int32_t)range;
+                        }
+                    }
+                    continue;
+                }
             }
             else if(field->usage_page==0x01U&&usage==0x30U&&!have_x)
             {
@@ -300,48 +394,113 @@ static void hid_decode_pointer(hid_i2c_device_t *device,uint8_t report_id,
                 y=hid_signed_value(raw,field->bit_size,field->logical_min);
                 have_y=1U;
             }
-            else if(field->usage_page==0x01U&&usage==0x38U)
+
+            if(field->usage_page==0x01U&&usage==0x38U)
                 wheel=hid_signed_value(raw,field->bit_size,field->logical_min);
         }
     }
 
     if(device->touchpad)
     {
-        /* Touch coordinates are absolute. Only move while the first contact
-         * is active, and reset the baseline between contacts to avoid jumps. */
-        if((buttons&1U)==0U)
+        uint32_t active_contacts=0U;
+        int64_t sum_y=0;
+        int32_t primary_x=0,primary_y=0;
+        int32_t coordinate_range=0;
+        for(uint32_t i=0U;i<contact_slots;++i)
         {
-            device->last_xy_valid=0U;
-            have_x=have_y=0U;
-        }
-        else if(have_x&&have_y)
-        {
-            int32_t absolute_x=x,absolute_y=y;
-            if(device->last_xy_valid)
+            const hid_touch_contact_t *contact=&contacts[i];
+            if(!contact->tip_switch_seen||!contact->tip_switch||
+               !contact->have_x||!contact->have_y)
+                continue;
+            if(active_contacts==0U)
             {
-                int64_t dx=(int64_t)absolute_x-device->last_x;
-                int64_t dy=(int64_t)absolute_y-device->last_y;
-                if(dx>4096) dx=4096;
-                if(dx< -4096) dx= -4096;
-                if(dy>4096) dy=4096;
-                if(dy< -4096) dy= -4096;
-                x=(int32_t)dx;
-                y=(int32_t)dy;
+                primary_x=contact->x;
+                primary_y=contact->y;
             }
-            else x=y=0;
-            device->last_x=absolute_x;
-            device->last_y=absolute_y;
+            ++active_contacts;
+            sum_y+=contact->y;
+            if(contact->y_range>coordinate_range)
+                coordinate_range=contact->y_range;
+        }
+        if(!contact_switch_seen) active_contacts=0U;
+        if(contact_count_valid&&contact_count_hint!=active_contacts)
+            active_contacts=0U;
+
+        if(active_contacts==1U)
+        {
+            if(device->last_contact_count==1U&&device->last_xy_valid)
+            {
+                int64_t dx=(int64_t)primary_x-device->last_x;
+                int64_t dy=(int64_t)primary_y-device->last_y;
+                int32_t x_range=0,y_range=0;
+                for(uint32_t i=0U;i<contact_slots;++i)
+                {
+                    if(contacts[i].tip_switch_seen&&contacts[i].tip_switch)
+                    {
+                        x_range=contacts[i].x_range;
+                        y_range=contacts[i].y_range;
+                        break;
+                    }
+                }
+                if(x_range>0) dx=(dx*128)/x_range;
+                if(y_range>0) dy=(dy*128)/y_range;
+                x=hid_clamp_delta(dx);
+                y=hid_clamp_delta(dy);
+                have_x=1U;
+                have_y=1U;
+            }
+            device->last_x=primary_x;
+            device->last_y=primary_y;
             device->last_xy_valid=1U;
+            device->last_touch_valid=0U;
+            device->touch_scroll_remainder_y=0;
+        }
+        else if(active_contacts==2U)
+        {
+            int32_t centroid_y=(int32_t)(sum_y/2);
+            if(device->last_contact_count==2U&&device->last_touch_valid)
+            {
+                int64_t delta=(int64_t)centroid_y-device->last_touch_y;
+                if(delta>2048) delta=2048;
+                if(delta< -2048) delta= -2048;
+                int32_t threshold=coordinate_range>0?
+                    coordinate_range/100:64;
+                if(threshold<8) threshold=8;
+                if(threshold>1024) threshold=1024;
+                int64_t remainder=(int64_t)device->touch_scroll_remainder_y+
+                                  delta;
+                int64_t steps=remainder/threshold;
+                if(steps>20) steps=20;
+                if(steps< -20) steps= -20;
+                if(steps!=0)
+                {
+                    wheel=(int32_t)-steps;
+                    remainder-=steps*threshold;
+                }
+                if(remainder>INT32_MAX) remainder=INT32_MAX;
+                if(remainder<INT32_MIN) remainder=INT32_MIN;
+                device->touch_scroll_remainder_y=(int32_t)remainder;
+            }
+            else
+                device->touch_scroll_remainder_y=0;
+            device->last_touch_y=centroid_y;
+            device->last_touch_valid=1U;
+            device->last_xy_valid=0U;
         }
         else
-            have_x=have_y=0U;
+        {
+            device->last_xy_valid=0U;
+            device->last_touch_valid=0U;
+            device->touch_scroll_remainder_y=0;
+        }
+        device->last_contact_count=(uint8_t)active_contacts;
     }
 
     if(have_x||have_y)
     {
         input_event_t motion={.device_id=device->pointer_id,
             .type=INPUT_EVENT_RELATIVE_MOTION,.code=0,
-            .value=have_x?x:0,.value2=have_y?-y:0};
+            .value=have_x?x:0,.value2=have_y?y:0};
         if(motion.value!=0||motion.value2!=0)
             (void)input_report_event(&motion);
     }
@@ -425,7 +584,7 @@ int hid_i2c_attach(i2c_bus_t *bus,uint16_t address,uint32_t speed_hz,
             buttons_present=1U;
         if(field->usage_page==0x0DU&&field->usage_min<=0x42U&&
            field->usage_max>=0x42U)
-        {contact_switch=1U;buttons_present=1U;}
+        {contact_switch=1U;}
         if(field->usage_page==0x01U&&field->usage_min<=0x30U&&
            field->usage_max>=0x30U)
         {
@@ -484,7 +643,8 @@ int hid_i2c_attach(i2c_bus_t *bus,uint16_t address,uint32_t speed_hz,
             .bus=INPUT_BUS_I2C,.kind=INPUT_DEVICE_MOUSE,
             .capabilities=INPUT_CAP_MOUSE_RELATIVE|
                           (buttons_present?INPUT_CAP_MOUSE_BUTTONS:0U)|
-                          (wheel_present?INPUT_CAP_MOUSE_WHEEL:0U)};
+                          ((wheel_present||candidate.touchpad)?
+                           INPUT_CAP_MOUSE_WHEEL:0U)};
         if(!input_register_device(&input,&candidate.pointer_id))
         {
             if(candidate.keyboard_id) (void)input_unregister_device(candidate.keyboard_id);
@@ -518,6 +678,9 @@ static void hid_release_all(hid_i2c_device_t *device)
             }
     device->buttons=0U;
     device->last_xy_valid=0U;
+    device->last_touch_valid=0U;
+    device->last_contact_count=0U;
+    device->touch_scroll_remainder_y=0;
 }
 
 static void hid_poll_device(hid_i2c_device_t *device,uint32_t tick)
@@ -563,6 +726,9 @@ static void hid_poll_device(hid_i2c_device_t *device,uint32_t tick)
         if(!restored) return;
         device->online=1U;
         device->last_xy_valid=0U;
+        device->last_touch_valid=0U;
+        device->last_contact_count=0U;
+        device->touch_scroll_remainder_y=0;
         device->buttons=0U;
         memset(device->keys,0,sizeof(device->keys));
         serial_write("VANTAOS_I2C_HID_TRANSPORT_RESTORED\n");

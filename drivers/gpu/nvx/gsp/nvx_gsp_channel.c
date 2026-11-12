@@ -30,7 +30,9 @@ static nvx_gsp_rmapi_status_t free_channel(
         channel->device_handle, channel->channel_handle, scratch, scratch_size,
         response, response_capacity, timeout_ms, poll_interval_ms,
         delay_ms, delay_context, &channel->operation);
-    if (status == NVX_GSP_RMAPI_TIMEOUT) {
+    if ((status == NVX_GSP_RMAPI_TIMEOUT ||
+         status == NVX_GSP_RMAPI_RPC_ERROR) &&
+        channel->operation.handle.valid) {
         channel->stage = NVX_GSP_CHANNEL_FREE_PENDING;
         return status;
     }
@@ -76,7 +78,9 @@ nvx_gsp_rmapi_status_t nvx_gsp_copy_channel_create(
             client_handle, device_handle, channel_handle, params, scratch,
             scratch_size, response, response_capacity, timeout_ms,
             poll_interval_ms, delay_ms, delay_context, &channel->operation);
-        if (status == NVX_GSP_RMAPI_TIMEOUT) {
+        if ((status == NVX_GSP_RMAPI_TIMEOUT ||
+             status == NVX_GSP_RMAPI_RPC_ERROR) &&
+            channel->operation.handle.valid) {
             channel->stage = NVX_GSP_CHANNEL_ALLOC_PENDING;
             return status;
         }
@@ -90,7 +94,9 @@ nvx_gsp_rmapi_status_t nvx_gsp_copy_channel_create(
             channel_handle, NVX_GSP_RM_ENGINE_TYPE_COPY0, scratch, scratch_size,
             response, response_capacity, timeout_ms, poll_interval_ms,
             delay_ms, delay_context, &channel->operation);
-        if (status == NVX_GSP_RMAPI_TIMEOUT) {
+        if ((status == NVX_GSP_RMAPI_TIMEOUT ||
+             status == NVX_GSP_RMAPI_RPC_ERROR) &&
+            channel->operation.handle.valid) {
             channel->stage = NVX_GSP_CHANNEL_BIND_PENDING;
             return status;
         }
@@ -110,7 +116,9 @@ nvx_gsp_rmapi_status_t nvx_gsp_copy_channel_create(
             channel_handle, 1, scratch, scratch_size, response,
             response_capacity, timeout_ms, poll_interval_ms, delay_ms,
             delay_context, &channel->operation);
-        if (status == NVX_GSP_RMAPI_TIMEOUT) {
+        if ((status == NVX_GSP_RMAPI_TIMEOUT ||
+             status == NVX_GSP_RMAPI_RPC_ERROR) &&
+            channel->operation.handle.valid) {
             channel->stage = NVX_GSP_CHANNEL_SCHEDULE_PENDING;
             return status;
         }
@@ -144,7 +152,8 @@ nvx_gsp_rmapi_status_t nvx_gsp_copy_channel_recover(
     status = nvx_gsp_rmapi_wait(manager, &channel->operation, scratch,
         scratch_size, response, response_capacity, timeout_ms,
         poll_interval_ms, delay_ms, delay_context);
-    if (status == NVX_GSP_RMAPI_TIMEOUT)
+    /* A transport error leaves the remote operation outcome uncertain. */
+    if (status == NVX_GSP_RMAPI_TIMEOUT || status == NVX_GSP_RMAPI_RPC_ERROR)
         return status;
 
     if (nvx_gsp_rpc_release(manager, &channel->operation.handle) !=

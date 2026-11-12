@@ -175,6 +175,56 @@ int main(void)
     assert(!channel.allocated&&!channel.bound&&
            channel.stage==NVX_GSP_CHANNEL_IDLE);
 
+
+    /* Transport errors retain the in-flight allocation until recovery. */
+    memset(&channel,0,sizeof(channel));call_count=0U;
+    alloc_status=NVX_GSP_RMAPI_RPC_ERROR;
+    assert(nvx_gsp_copy_channel_create(&manager,&channel,0x10U,0x20U,0x30U,
+        &params,scratch,sizeof(scratch),response,sizeof(response),20U,1U,
+        delay,NULL)==NVX_GSP_RMAPI_RPC_ERROR);
+    assert(channel.stage==NVX_GSP_CHANNEL_ALLOC_PENDING&&
+           channel.operation.handle.valid&&!channel.allocated);
+    wait_status=NVX_GSP_RMAPI_RPC_ERROR;
+    assert(nvx_gsp_copy_channel_recover(&manager,&channel,scratch,
+        sizeof(scratch),response,sizeof(response),20U,1U,delay,NULL)==
+        NVX_GSP_RMAPI_RPC_ERROR);
+    assert(channel.stage==NVX_GSP_CHANNEL_ALLOC_PENDING&&
+           channel.operation.handle.valid);
+    wait_status=NVX_GSP_RMAPI_OK;alloc_status=NVX_GSP_RMAPI_OK;
+    assert(nvx_gsp_copy_channel_recover(&manager,&channel,scratch,
+        sizeof(scratch),response,sizeof(response),20U,1U,delay,NULL)==
+        NVX_GSP_RMAPI_OK);
+    assert(channel.allocated&&channel.stage==NVX_GSP_CHANNEL_IDLE);
+    assert(nvx_gsp_copy_channel_create(&manager,&channel,0x10U,0x20U,0x30U,
+        &params,scratch,sizeof(scratch),response,sizeof(response),20U,1U,
+        delay,NULL)==NVX_GSP_RMAPI_OK);
+    assert(nvx_gsp_copy_channel_destroy(&manager,&channel,scratch,
+        sizeof(scratch),response,sizeof(response),20U,1U,delay,NULL)==
+        NVX_GSP_RMAPI_OK);
+
+    /* An uncertain free must also retain its operation instead of orphaning it. */
+    memset(&channel,0,sizeof(channel));call_count=0U;
+    assert(nvx_gsp_copy_channel_create(&manager,&channel,0x10U,0x20U,0x30U,
+        &params,scratch,sizeof(scratch),response,sizeof(response),20U,1U,
+        delay,NULL)==NVX_GSP_RMAPI_OK);
+    free_status=NVX_GSP_RMAPI_RPC_ERROR;
+    assert(nvx_gsp_copy_channel_destroy(&manager,&channel,scratch,
+        sizeof(scratch),response,sizeof(response),20U,1U,delay,NULL)==
+        NVX_GSP_RMAPI_RPC_ERROR);
+    assert(channel.stage==NVX_GSP_CHANNEL_FREE_PENDING&&
+           channel.operation.handle.valid&&channel.allocated);
+    wait_status=NVX_GSP_RMAPI_RPC_ERROR;
+    assert(nvx_gsp_copy_channel_recover(&manager,&channel,scratch,
+        sizeof(scratch),response,sizeof(response),20U,1U,delay,NULL)==
+        NVX_GSP_RMAPI_RPC_ERROR);
+    assert(channel.stage==NVX_GSP_CHANNEL_FREE_PENDING&&
+           channel.operation.handle.valid);
+    wait_status=NVX_GSP_RMAPI_OK;free_status=NVX_GSP_RMAPI_OK;
+    assert(nvx_gsp_copy_channel_recover(&manager,&channel,scratch,
+        sizeof(scratch),response,sizeof(response),20U,1U,delay,NULL)==
+        NVX_GSP_RMAPI_OK);
+    assert(!channel.allocated&&channel.stage==NVX_GSP_CHANNEL_IDLE);
+
     /* Reject aliased RM handles and corrupted public state before RPC. */
     memset(&channel,0,sizeof(channel));call_count=0U;
     assert(nvx_gsp_copy_channel_create(&manager,&channel,0x10U,0x10U,0x30U,

@@ -89,8 +89,11 @@ jobs:
             -machine pc -m 512M -smp 2 \
             -drive if=pflash,format=raw,readonly=on,file="$code_firmware" \
             -drive if=pflash,format=raw,file=OVMF_INSTALL_VARS.fd \
-            -drive file=VantaOS-Setup.img,format=raw,if=ide,index=0 \
-            -drive file=install-target.img,format=raw,if=ide,index=1 \
+            -device piix3-usb-uhci,id=uhci \
+            -drive if=none,id=setupmedia,format=raw,file=VantaOS-Setup.img \
+            -device usb-storage,drive=setupmedia,bootindex=1,removable=on \
+            -boot order=c \
+            -drive file=install-target.img,format=raw,if=ide,index=0 \
             -display none -serial file:setup-install.log \
             -monitor unix:/tmp/vantaos-installer-monitor.sock,server,nowait \
             -no-reboot >/tmp/vantaos-installer-qemu.log 2>&1 &
@@ -273,7 +276,7 @@ jobs:
           test -s /tmp/installed-system.conf
           test -s /tmp/installed-terminal.vx
 
-      - name: Boot the installed disk under OVMF
+      - name: Boot the installed image through the UEFI removable-media fallback path
         shell: bash
         run: |
           set -euo pipefail
@@ -299,7 +302,10 @@ jobs:
             -machine pc -m 512M -smp 2 \
             -drive if=pflash,format=raw,readonly=on,file="$code_firmware" \
             -drive if=pflash,format=raw,file=OVMF_BOOT_VARS.fd \
-            -drive file=install-target.img,format=raw,if=ide,index=0 \
+            -device piix3-usb-uhci,id=uhci \
+            -drive if=none,id=installed,format=raw,file=install-target.img \
+            -device usb-storage,drive=installed,bootindex=1,removable=on \
+            -boot order=c \
             -display none -serial "file:$log" -monitor none -no-reboot
           result=$?
           set -e

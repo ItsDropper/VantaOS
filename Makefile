@@ -159,7 +159,7 @@ VantaOS-UEFI.img: BOOTX64.EFI kernel-uefi.elf
 	printf 'label: gpt\nunit: sectors\n\nstart=2048, type=U\n' | sfdisk $@
 	# mkfs.fat's block count is in 1024-byte units; cap it at the GPT ESP size
 	# so the FAT volume cannot overwrite the backup GPT header/table.
-	mkfs.fat -F 32 -s 8 -h 2048 --offset=2048 $@ `python3 -c 'import json,subprocess,sys; p=json.loads(subprocess.check_output(["sfdisk", "--json", sys.argv[1]], text=True))["partitiontable"]["partitions"][0]; print(int(p["size"]) // 2)' "$@"` >/dev/null
+	mkfs.fat -F 32 -s 8 --offset=2048 $@ `python3 -c 'import json,subprocess,sys; p=json.loads(subprocess.check_output(["sfdisk", "--json", sys.argv[1]], text=True))["partitiontable"]["partitions"][0]; print(int(p["size"]) // 2)' "$@"` >/dev/null
 	mmd -i $@@@1048576 ::/EFI
 	mmd -i $@@@1048576 ::/EFI/BOOT
 	mmd -i $@@@1048576 ::/EFI/VANTA

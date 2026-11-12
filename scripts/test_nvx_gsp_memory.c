@@ -179,9 +179,10 @@ int main(void)
     truncate_alloc_response = 1;
     assert(nvx_gsp_memory_object_create(&manager, &object, 1U, 2U, 3U, &p,
         scratch, sizeof(scratch), response, sizeof(response), 10U, 1U,
-        delay, NULL) == NVX_GSP_RMAPI_RESPONSE_TOO_SMALL);
+        delay, NULL) == NVX_GSP_RMAPI_MALFORMED_RESPONSE);
     assert(object.stage == NVX_GSP_MEMORY_CREATED && object.remote_created &&
         !object.result_valid);
+    truncate_alloc_response = 0;
     wait_status = NVX_GSP_RMAPI_OK;
 
     /* Free failure preserves the object; a later free can safely retry. */

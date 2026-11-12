@@ -91,6 +91,18 @@ jobs:
           cmp kernel-uefi.elf /tmp/KERNEL.ELF
           test -s /tmp/BOOTX64.EFI
           test -s /tmp/KERNEL.ELF
+          # EFI diagnostic strings must survive ELF-to-PE section conversion.
+          # Without .rodata, the firmware can enter the image but the loader
+          # reads missing string literals and never emits its startup marker.
+          for marker in \
+            VANTAOS_UEFI_LOADER_START \
+            VANTAOS_UEFI_ELF_LOADED \
+            VANTAOS_UEFI_KERNEL_FILE_OPEN_FAIL; do
+            grep -aFq "$marker" BOOTX64.EFI || {
+              echo "EFI application is missing required read-only data: $marker"
+              exit 1
+            }
+          done
           sha256sum VantaOS-UEFI.img BOOTX64.EFI kernel-uefi.elf > SHA256SUMS.txt
           cat SHA256SUMS.txt
 

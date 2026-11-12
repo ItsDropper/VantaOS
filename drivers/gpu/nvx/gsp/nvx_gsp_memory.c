@@ -180,7 +180,7 @@ nvx_gsp_rmapi_status_t nvx_gsp_memory_object_create(
     nvx_gsp_memory_allocation_params_t wire;
     nvx_gsp_rmapi_status_t status;
     if (!manager || !object || !params || !client_handle || !parent_handle ||
-        !memory_handle || !scratch || !response || !timeout_ms ||
+        !memory_handle || !scratch || !response || !scratch_size || !timeout_ms ||
         !poll_interval_ms || !delay_ms || !params->size ||
         !power_of_two_u64(params->alignment) ||
         params->alignment < NVX_GSP_MEMORY_PAGE_SIZE ||
@@ -238,7 +238,7 @@ nvx_gsp_rmapi_status_t nvx_gsp_memory_object_destroy(
     nvx_gsp_rmapi_delay_fn delay_ms, void *delay_context)
 {
     nvx_gsp_rmapi_status_t status;
-    if (!manager || !object || !scratch || !response || !timeout_ms ||
+    if (!manager || !object || !scratch || !response || !scratch_size || !timeout_ms ||
         !poll_interval_ms || !delay_ms ||
         ranges_overlap(object, sizeof(*object), scratch, scratch_size) ||
         ranges_overlap(object, sizeof(*object), response, response_capacity) ||

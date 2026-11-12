@@ -136,6 +136,26 @@ int main(void)
     assert(mapping.stage==NVX_GSP_DMA_MAP_IDLE&&mapping.dma_offset==0U);
     result_status=NVX_GSP_RMAPI_OK;
 
+    /* Reject an RM-returned DMA range that wraps the 64-bit address space. */
+    memset(&mapping,0,sizeof(mapping));
+    mapped_offset=UINT64_MAX-1U;
+    assert(nvx_gsp_dma_map(&manager,&mapping,&request,scratch,sizeof(scratch),
+        response,sizeof(response),10U,1U,delay,NULL)==
+        NVX_GSP_RMAPI_MALFORMED_RESPONSE);
+    assert(mapping.stage==NVX_GSP_DMA_MAP_IDLE);
+    mapped_offset=0x12345000ULL;
+
+    /* Refuse to send an unmap whose DMA range would wrap. */
+    memset(&mapping,0,sizeof(mapping));
+    mapping.request=request;
+    mapping.stage=NVX_GSP_DMA_MAP_MAPPED;
+    mapping.dma_offset=UINT64_MAX-1U;
+    unsigned unmaps_before_overflow=unmap_calls;
+    assert(nvx_gsp_dma_unmap(&manager,&mapping,scratch,sizeof(scratch),
+        response,sizeof(response),10U,1U,delay,NULL)==
+        NVX_GSP_RMAPI_INVALID_ARGUMENT);
+    assert(unmap_calls==unmaps_before_overflow);
+
     memset(&mapping,0,sizeof(mapping));
     request.offset=UINT64_MAX-3U;request.length=8U;
     assert(nvx_gsp_dma_map(&manager,&mapping,&request,scratch,sizeof(scratch),

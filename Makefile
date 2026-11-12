@@ -157,7 +157,7 @@ VantaOS-UEFI.img: BOOTX64.EFI kernel-uefi.elf
 	rm -f $@
 	truncate -s 1024M $@
 	printf 'label: dos\nunit: sectors\n\nstart=2048, type=ef\n' | sfdisk $@
-	mkfs.fat -F 32 -s 8 --offset=2048 $@ >/dev/null
+	mkfs.fat -F 32 -s 8 -h 2048 --offset=2048 $@ >/dev/null
 	mmd -i $@@@1048576 ::/EFI
 	mmd -i $@@@1048576 ::/EFI/BOOT
 	mmd -i $@@@1048576 ::/EFI/VANTA

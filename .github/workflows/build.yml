@@ -666,7 +666,7 @@ jobs:
           readelf -l /tmp/vantaos-user-child.elf
           echo "Child ELF instructions near observed user fault offsets:"
           objdump -d --start-address=0x8000000000 --stop-address=0x8000000120 /tmp/vantaos-user-child.elf
-          objdump -d --start-address=0x80000060c0 --stop-address=0x8000006110 /tmp/vantaos-user-child.elf
+          objdump -d --start-address=0x8000001e00 --stop-address=0x8000001e60 /tmp/vantaos-user-child.elf
           test -s /tmp/vantaos-user-hello.elf
           test -s /tmp/vantaos-user-child.elf
           mcopy -i vantaos.img /tmp/vantaos-user-hello.elf ::/HELLO.ELF

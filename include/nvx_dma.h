@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2026 ItsDropper
- *
  * This file is part of VantaOS and is licensed under the MIT License.
  * See the LICENSE file in the project root for the full license text.
  */
@@ -34,7 +33,12 @@ typedef enum nvx_dma_status {
  */
 typedef gpu_dma_buffer_t nvx_dma_buffer_t;
 
-/* Zero-initialize buffer before first use; release it before reuse. */
+/*
+ * Zero-initialize before first use. address_bits is the device's supported
+ * DMA width (32 or 64); NVX currently allocates below 1 GiB regardless because
+ * the kernel only identity-maps that physical window. This conservative cap
+ * is removed only when a real high-memory CPU mapping backend is provided.
+ */
 nvx_dma_status_t nvx_dma_alloc(size_t size, unsigned address_bits,
                                nvx_dma_buffer_t *out_buffer);
 /* Allocate below the kernel's 1 GiB identity-mapped physical window. */

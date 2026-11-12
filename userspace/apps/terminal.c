@@ -478,6 +478,9 @@ static void command_help(void)
     write_text("  net adapters         List detected PCI network adapters\n");
     write_text("  net connect          Configure networking with DHCP\n");
     write_text("  net dns/ping/ping6   Resolve names and test network reachability\n");
+    write_text("  net http <URL>       Fetch a plain-HTTP response\n");
+    write_text("  net config ...       Configure static IPv4\n");
+    write_text("  net poll             Poll network receive queues\n");
     write_text("  ps                   List running processes\n");
     write_text("  specs/boot/uptime    Show system and boot information\n");
     write_text("  mem/storage          Show memory and storage status\n");

@@ -1,64 +1,37 @@
+<div align="center">
+
 # VantaOS
 
-VantaOS is an experimental hobby operating system for x86-64, written in C and NASM. It is an engineering prototype, not a production operating system or a Windows replacement.
+**A from-scratch x86-64 operating system, written in C and NASM.**
 
-The project focuses on learning and validating operating-system fundamentals: boot and interrupt handling, memory management, kernel execution contexts, scheduling across CPUs, device discovery, a virtual filesystem, and a graphical shell. Its features have different maturity levels; see the documentation before assuming a capability is complete.
+[![Build](https://github.com/ItsDropper/VantaOS/actions/workflows/build.yml/badge.svg)](https://github.com/ItsDropper/VantaOS/actions/workflows/build.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![Target: x86-64](https://img.shields.io/badge/target-x86--64-informational)
+![Status: experimental](https://img.shields.io/badge/status-experimental-orange)
 
-## Vanta Launcher target
+<img src="media/desktop.png" alt="The VantaOS desktop running in QEMU" width="640">
 
-The existing JavaFX Vanta Launcher is not yet runnable on VantaOS. The current `curl` command is plain-HTTP-only and cannot download the launcher from its normal HTTPS release source. See [the compatibility milestones](docs/VANTA_LAUNCHER_COMPATIBILITY.md) for the required HTTPS, userspace runtime, Java/JavaFX, and Minecraft prerequisites.
+</div>
 
-## Project status
+VantaOS is a hobby operating system built to learn and validate OS fundamentals the hard way: boot and interrupt handling, memory management, scheduling across CPUs, ring-3 processes, a filesystem, and a graphical shell. It boots through GRUB or UEFI, runs on multiple CPUs, loads user programs as ELF binaries into private address spaces, and draws its own desktop.
 
-- **Target:** x86-64. The established GRUB/Multiboot path and a separate UEFI/OVMF path are exercised by CI.
-- **User-mode milestone:** VantaOS loads static ELF64 `ET_EXEC` programs from FAT32 into private address spaces and runs them at ring 3. The `int 0x80` ABI includes process spawn/wait, bounded file descriptors and I/O, directory listing, terminal input, file and directory creation, rename/delete, metadata queries, and process-owned GUI windows.
-- **Storage boundary:** bounded FAT32 regular-file create/write, ASCII long filenames, directory creation, rename/delete, and multi-cluster range I/O are implemented and exercised by QEMU regression tests. Crash-atomic replacement, Unicode filename creation, concurrent filesystem mutation, and broad corruption testing remain incomplete.
-- **GUI boundary:** the kernel retains framebuffer/compositor ownership; user processes can request windows, submit bounded text/rectangle draw lists, and poll input/focus/close events. Terminal's shell runs as a ring-3 ELF, and Settings is now a separate ring-3 ELF at `/SYSTEM/SETTINGS.ELF`. Terminal's visible window, rendering, input editing, and scrollback now run in ring 3; its shell includes `cd`, a current-directory-aware prompt, normalized relative paths, and file-oriented `mkdir`, `touch`, `rm`, `cp`, and `mv` commands, with copy/move refusing existing destinations and `cp` limited to regular files. These commands are early single-token-path utilities, not a POSIX-compatible shell (quoting, pipelines, permissions, and recursive terminal copy are not implemented). Settings persists four accent colors, light/dark surfaces, contrast, and compact Explorer rows, and reloads those desktop preferences when saved; text size currently applies to Settings labels only. File Explorer is a ring-3 app with path entry, current-folder search, sidebar location highlighting, multi-selection, right-click properties/actions, create/rename/delete, recursive copy/move, and per-file RLE compression/extraction using the Vanta `.VZA` format. Deleting non-empty folders is recursive but bounded; Explorer does not yet provide general document editing, Unicode filename creation, or crash-safe filesystem transactions. The GUI ABI is a project-specific bring-up interface, not a stable platform API.
-- **Still experimental:** process isolation needs broader fault and adversarial testing; demand paging, dynamic linking, networking, audio, modern GPU acceleration, and broad physical-hardware compatibility are not established. NVX has bounded GA10x firmware parsers and host-tested SEC2/GSP transaction primitives, but no physical RTX 3060 secure boot, GSP-RM initialization, or accelerated rendering has been verified; see [GPU driver status](docs/gpu/README.md).
-- **Quality rule:** source presence is not proof of completion. See [Testing](docs/build/TESTING.md) for the exact automated assertions and their limits.
+> **This is an engineering prototype, not a production OS or a Windows replacement.** Features differ a lot in maturity, and the project deliberately separates *implemented*, *tested*, *verified*, and *planned*. If a capability is not listed as exercised by CI, assume it is not proven. See [Status](#status).
 
-## Start here
+## Contents
 
-- [Documentation index](docs/README.md) — subsystem guides, build, testing, support, and plans.
-- [Architecture overview](docs/architecture/ARCHITECTURE.md) — boot flow and subsystem boundaries.
-- [User-space desktop applications](docs/architecture/USERSPACE_GUI.md) — current GUI syscall boundary and migration plan.
-- [User-mode programs](docs/architecture/user-mode-programs.md) — ELF loading, syscall ABI, and limitations.
-- [Engineering model](docs/architecture/ENGINEERING_MODEL.md) — verification levels, contracts, concurrency, and test layers.
-- [Architecture decision records](docs/decisions/README.md) — durable rationale for long-lived design choices.
-- [Build system](docs/build/BUILD_SYSTEM.md) — build targets and generated artifacts.
-- [Testing and verification](docs/build/TESTING.md) — CI checks and their limits.
-- [Recovery environment](docs/build/RECOVERY_SETUP.md) — optional GRUB entry, diagnostics, screenshot capture, and limitations.
-- [Hardware support](docs/project/HARDWARE_SUPPORT.md) — known constraints and unverified areas.
-- [GPU driver documentation](docs/gpu/README.md) — vendor-neutral framework and NVX NVIDIA bring-up/research notes.
-- [Development plan](docs/project/DEVELOPMENT_PLAN.md) — staged project priorities.
-- [Contributing](CONTRIBUTING.md) — engineering expectations and pull-request checklist.
-- [Security policy](SECURITY.md) — reporting security concerns.
+- [Quick start](#quick-start)
+- [Status](#status)
+- [What is inside](#what-is-inside)
+- [Architecture](#architecture)
+- [Repository layout](#repository-layout)
+- [Building, testing, and CI](#building-testing-and-ci)
+- [Installer (experimental)](#installer-experimental)
+- [Documentation](#documentation)
+- [Contributing](#contributing)
 
-## Repository layout
+## Quick start
 
-| Path | Responsibility |
-| --- | --- |
-| `arch/` | CPU-specific entry, interrupt, and architecture code. |
-| `boot/` | Boot-related assets and configuration. |
-| `kernel/` | Kernel boot orchestration, diagnostics, process lifecycle, scheduling, timer, and graphics. |
-| `kernel/selftest/` | Test-only boot-info, allocator, paging, and synchronization probes. |
-| `mm/` | Heap, physical-memory bookkeeping, and paging. |
-| `drivers/` | Keyboard, mouse, PCI, and ATA driver code. |
-| `fs/` | Filesystem namespace, FAT32 read path, and VFS. |
-| `os/` | Terminal, shell, desktop, and file-explorer UI. |
-| `include/` | Shared interfaces. |
-| `docs/` | Documentation index, decision records, and grouped documentation. |
-| `docs/architecture/` | OS architecture, UI, shell, and user-mode contracts. |
-| `docs/build/` | Build system and test/verification references. |
-| `docs/project/` | Roadmap, bootloader plan, and hardware support status. |
-| `docs/gpu/` | GPU framework and vendor-specific driver documentation. |
-| `docs/gpu/` | GPU framework status and vendor-specific driver documentation. |
-| `docs/gpu/nvx/` | NVIDIA GA10x firmware contracts, SEC2/GSP bring-up, and validation boundaries. |
-| `.github/` | CI workflows and contribution templates. |
-
-## Build and run in QEMU
-
-The automated build is tested in CI on Ubuntu Linux. Install the packages used by the workflow:
+Requires Linux (CI runs on Ubuntu). On Debian/Ubuntu:
 
 ```sh
 sudo apt-get update
@@ -67,33 +40,144 @@ sudo apt-get install --yes build-essential nasm grub-pc-bin xorriso mtools dosfs
 git clone https://github.com/ItsDropper/VantaOS.git
 cd VantaOS
 chmod +x build.sh run.sh
-./build.sh
-./run.sh
+./build.sh      # kernel.bin, VantaOS.iso, vantaos.img (128 MiB FAT32 disk)
+./run.sh        # boots the ISO in QEMU
 ```
 
-The build creates `kernel.bin`, `VantaOS.iso`, and a 128 MiB `vantaos.img` if the image does not already exist. Treat that image as disposable development data; do not store important files in it.
+`vantaos.img` is disposable development data; never keep anything important in it.
 
-The build also creates `VantaOS-Setup.img`, a **UEFI-only installer medium**. The setup wizard offers English/Finnish language preferences, US/Finnish keyboard preferences, and 36 validated IANA time-zone IDs across Europe, the Americas, Asia, and Oceania. It also lets users set a device name, choose a 256 or 512 MiB EFI partition, choose dark/light theme and one of four accent colors, select comfortable/compact Explorer rows, and set Settings text size and high contrast; these appearance/accessibility defaults are written to the real settings file consumed by Settings. The wizard preflights all required payload files before disk selection, retries invalid settings, supports Q to cancel disk selection, and shows a review screen plus an exact target-device/capacity and partition-size preview before destructive confirmation. The installer excludes its own media from eligible targets, shows disk capacity/device paths, and requires typing `INSTALL` before writing the selected disk. It creates a GPT EFI System Partition and a separate FAT32 system partition, verifies filesystem metadata, and copies the loader, kernel, applications, driver/device metadata, and setup preferences. Successful CI builds publish the images as the `vantaos-install-media` artifact.
+`run.sh` picks the fastest accelerator your host offers (KVM, HVF, WHPX, or software TCG) and can be tuned with environment variables:
 
-**Treat the installer as experimental and use only a disposable disk or QEMU image until you have verified it on your own hardware.** Preferences are persisted in `/SYSTEM/SETUP.CFG`. Language and keyboard selections are currently saved metadata only; they do not yet translate the running desktop or change its input map. The selected time-zone ID is stored for future time-service integration; the current kernel does not apply it to the active clock. The installer currently supports UEFI boot, not legacy BIOS setup.
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `VANTAOS_CPUS` | `4` | Virtual CPUs (1 to 32) |
+| `VANTAOS_MEMORY` | `512M` | Guest RAM |
+| `VANTAOS_ACCEL` | `auto` | `kvm`, `hvf`, `whpx`, or `tcg` |
+| `VANTAOS_CPU` | `host` / `max` | QEMU CPU model |
 
-Useful build commands:
+For example, `VANTAOS_CPUS=1 VANTAOS_MEMORY=256M ./run.sh` boots a small single-CPU guest.
+
+## Status
+
+Source presence is not proof of completion. This table summarizes what each area does today; the linked documents give the exact assertions and their limits.
+
+| Area | What works | Not established |
+| --- | --- | --- |
+| **Boot** | GRUB/Multiboot and a separate UEFI loader (OVMF) both reach the kernel through one normalized boot-info handoff. | Physical-firmware compatibility; a VantaOS-native bootloader. |
+| **Memory** | Physical memory manager, paging, heap, NX-protected user mappings, cross-CPU TLB shootdowns. | Demand paging, mature virtual-memory policy, exhaustive fault testing. |
+| **CPUs** | APIC/x2APIC, secondary-CPU startup, per-CPU scheduling and wakeups, QEMU regressions at 1, 2, and 4 vCPUs. | General race freedom and long-duration stability. |
+| **User mode** | Static ELF64 programs load from FAT32 into private address spaces and run at ring 3 over an `int 0x80` ABI (spawn/wait, bounded file descriptors, terminal input, GUI windows). | A stable ABI (today it is a bring-up interface), dynamic linking, broad adversarial isolation testing. |
+| **Storage** | VFS plus FAT32: bounded file create/write, ASCII long filenames, directories, rename/delete, multi-cluster I/O, all covered by QEMU regression tests. | Crash-atomic replacement, Unicode filename creation, concurrent mutation, corruption recovery. |
+| **Desktop** | Kernel-owned compositor; Terminal, Settings, and File Explorer run as ring-3 apps (Notes and Calculator ship as ELF apps too). Explorer has multi-select, search, recursive copy/move, and `.VZA` archive compression. | Pixel-level visual regression and scripted interaction tests. |
+| **Networking** | A network stack with Ethernet, ARP, IPv4/IPv6, UDP, DHCP, DNS, and TCP, plus a plain-HTTP `curl`. | HTTPS (so the Vanta Launcher cannot yet download itself), audio, broad NIC and Wi-Fi hardware coverage. |
+| **Drivers** | PCI, PS/2, xHCI/USB, ATA, AHCI, NVMe, and several NIC and Wi-Fi drivers are in the tree with host and QEMU tests. | Real-hardware validation varies by driver; see [Hardware support](docs/project/HARDWARE_SUPPORT.md). |
+| **GPU** | A vendor-neutral GPU framework and bounded NVIDIA (NVX) GA10x firmware parsers with host tests. | Any verified hardware bring-up or accelerated rendering. |
+
+Running the [Vanta Launcher](https://github.com/ItsDropper/Vanta) (the JavaFX Minecraft launcher) on VantaOS is a long-term target. It needs HTTPS, a larger userspace runtime, and a JVM first; see the [compatibility milestones](docs/VANTA_LAUNCHER_COMPATIBILITY.md).
+
+## What is inside
+
+- **Two boot paths** that converge on one handoff contract, both exercised in CI.
+- **Multi-CPU kernel** with per-CPU state, an ownership-checked process table, ticket spinlocks, wait queues, mutexes, semaphores, barriers, and kernel events.
+- **Ring-3 processes** with private page tables, a bounded syscall surface, and kernel-side validation of every user pointer.
+- **FAT32 on top of a VFS**, backed by an abstract block-device layer (ATA, AHCI, NVMe, partitions).
+- **A graphical desktop** with a taskbar, kernel-managed windows, themes, and ring-3 applications, plus a ring-3 terminal shell.
+- **Kernel diagnostics**: serial logging, a trace-event ring, a watchdog, a graphical panic screen, and an optional recovery environment.
+- **Machine-checked contracts**: CI scripts compare the public syscall table with the kernel's dispatch, and an architecture checker enforces subsystem ownership boundaries.
+
+## Architecture
+
+```mermaid
+flowchart TD
+    GRUB[GRUB / Multiboot] --> ENTRY[x86-64 kernel entry]
+    UEFI[UEFI loader / OVMF] --> HANDOFF[Normalized boot handoff]
+    ENTRY --> HANDOFF
+    HANDOFF --> INIT[Kernel initialization]
+    INIT --> ARCH[GDT, IDT, APIC, SMP]
+    INIT --> MM[Physical memory, paging, heap]
+    INIT --> PROC[Processes and scheduler]
+    INIT --> DEV[PCI and driver coordinators]
+    MM --> FS[VFS and FAT32]
+    PROC --> OS[OS services]
+    DEV --> OS
+    FS --> OS
+    OS --> UI[Compositor and desktop]
+    UI --> APPS[Ring-3 apps: Terminal, Settings, Explorer]
+```
+
+The diagram shows intended subsystem relationships, not independent protection domains. The [architecture overview](docs/architecture/ARCHITECTURE.md) walks through the boot sequence step by step, and the [decision records](docs/decisions/README.md) explain why the long-lived choices were made.
+
+## Repository layout
+
+| Path | Responsibility |
+| --- | --- |
+| `arch/x86_64/` | Long-mode entry, GDT/IDT, interrupts, APIC, ACPI/AML, SMP trampoline, CPU features. |
+| `arch/x86/` | Legacy 32-bit sources kept for audit; not linked. |
+| `boot/` | UEFI loader and boot-time configuration. |
+| `kernel/` | Boot orchestration, syscalls, IPC, SMP, tracing, watchdog; `proc/` (process lifecycle), `sched/`, `time/`, `graphics/` (compositor and GUI server), `selftest/`. |
+| `mm/` | Physical memory, paging, heap, user mappings, DMA/MMIO, TLB shootdowns. |
+| `drivers/` | Input, PCI, USB, storage, network, audio, and GPU drivers (`gpu/` holds the framework and the NVX, Intel, and AMD work). |
+| `net/` | Network device registry and protocol stack. |
+| `fs/` | Filesystem namespace, VFS handles, FAT32 and long-filename parsing. |
+| `os/` | In-kernel terminal and shell, desktop, file explorer, and test-only selftests. |
+| `userspace/` | Ring-3 C runtime, headers, and the Terminal, Settings, Explorer, Notes, and Calculator apps. |
+| `include/` | Shared kernel interfaces. |
+| `scripts/`, `tests/` | Host-side tests, stubs, CI helpers, and user-mode test programs. |
+| `docs/` | Architecture, build, testing, GPU, networking, and project documentation. |
+| `.github/` | CI workflows and contribution templates. |
+
+## Building, testing, and CI
 
 ```sh
-make
-make list-sources
+make                       # build the kernel
+make list-sources          # show the resolved source list
 make clean
-VANTAOS_SELF_TEST=1 ./build.sh
+VANTAOS_SELF_TEST=1 ./build.sh   # build with the in-kernel self-test probes enabled
 ```
 
-Generated objects and dependency files belong under `build/obj/`; see [Build system](docs/build/BUILD_SYSTEM.md).
+Objects and dependency files go under `build/obj/`; never edit generated files. See [Build system](docs/build/BUILD_SYSTEM.md).
 
-## Development standards
+Host-side tests compile single subsystems with the system GCC, for example:
 
-1. Work on a focused topic branch.
-2. Run the build and relevant regression tests before requesting review.
-3. Preserve diagnostic markers used by CI and emit success markers only after assertions pass.
-4. Document subsystem contracts when changing boot, memory, process, filesystem, or cross-CPU behavior.
-5. Separate implemented, tested, verified, and planned capabilities in documentation.
+```sh
+python3 scripts/check_architecture.py
+python3 scripts/check_syscall_abi.py
+gcc -std=gnu11 -O2 -Wall -Wextra -Werror -Iscripts/test_stubs_smp -Iinclude \
+    scripts/test_vfs_handles.c fs/vfs.c -lpthread -o /tmp/vfs-test && /tmp/vfs-test
+```
 
-See [Contributing](CONTRIBUTING.md) for the complete workflow and review checklist.
+GitHub Actions builds everything from a clean checkout, boots the ISO headless in QEMU at several RAM and CPU configurations, boots the UEFI image under OVMF, and requires serial success markers while rejecting any `VANTAOS_*_FAIL` marker. A passing marker means only that its listed assertions passed. [Testing](docs/build/TESTING.md) documents each check and its limits, including what is **not** covered.
+
+## Installer (experimental)
+
+The build also produces `VantaOS-Setup.img`, a **UEFI-only** installer medium (published by CI as the `vantaos-install-media` artifact). Its setup wizard preflights its payload, lets you choose a device name, EFI partition size (256 or 512 MiB), theme, accent color, Explorer density, text size, and high contrast, then shows a review screen and an exact target-disk preview. It excludes its own media from the target list and requires typing `INSTALL` before writing anything. It creates a GPT with an EFI System Partition and a FAT32 system partition, verifies the filesystem metadata, and copies the loader, kernel, apps, and settings.
+
+> **Use only a disposable disk or a QEMU image** until you have verified the installer on your own hardware.
+
+Current limits: language, keyboard, and time-zone choices are saved to `/SYSTEM/SETUP.CFG` as metadata only and do not yet change the running desktop, input map, or clock. Legacy BIOS setup is not supported.
+
+## Documentation
+
+Start at the [documentation index](docs/README.md).
+
+| Topic | Read |
+| --- | --- |
+| How the system fits together | [Architecture](docs/architecture/ARCHITECTURE.md), [engineering model](docs/architecture/ENGINEERING_MODEL.md), [decision records](docs/decisions/README.md) |
+| User mode and the desktop | [User-mode programs](docs/architecture/user-mode-programs.md), [User-space desktop apps](docs/architecture/USERSPACE_GUI.md), [Compositor](docs/architecture/COMPOSITOR.md) |
+| Building and verifying | [Build system](docs/build/BUILD_SYSTEM.md), [Testing](docs/build/TESTING.md), [Recovery environment](docs/build/RECOVERY_SETUP.md) |
+| Hardware and drivers | [Hardware support](docs/project/HARDWARE_SUPPORT.md), [GPU drivers](docs/gpu/README.md), [Networking](docs/NETWORKING.md) |
+| Plans and priorities | [Development plan](docs/project/DEVELOPMENT_PLAN.md), [Bootloader plan](docs/project/BOOTLOADER_PLAN.md) |
+
+## Contributing
+
+Contributions that improve a verifiable subsystem are welcome. In short:
+
+1. Work on a focused topic branch from an up-to-date `master`.
+2. Build and run the relevant regression tests before requesting review.
+3. Preserve the diagnostic markers CI depends on, and emit a success marker only after its assertions pass.
+4. Document subsystem contracts when you change boot, memory, process, filesystem, or cross-CPU behavior.
+5. Keep documentation honest: separate implemented, tested, verified, and planned.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full workflow and review checklist, [SECURITY.md](SECURITY.md) to report a vulnerability, and the [Code of Conduct](CODE_OF_CONDUCT.md).
+
+VantaOS is released under the [MIT License](LICENSE).

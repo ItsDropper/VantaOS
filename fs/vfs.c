@@ -6,9 +6,18 @@
  */
 
 #include "vfs.h"
+#include "spinlock.h"
 
 #define VFS_MAX_OPEN_FILES 32U
 
+/*
+ * open_files[] is global and shared by every CPU and every user process.
+ * All slot claims, releases, snapshots, and position updates run under
+ * open_files_lock so two CPUs can never be handed the same handle. The lock
+ * is always taken before (never inside) filesystem_lock and is never held
+ * across filesystem calls, so it cannot invert with the filesystem lock.
+ */
+static spinlock_t open_files_lock = SPINLOCK_INITIALIZER;
 static vfs_file_t open_files[VFS_MAX_OPEN_FILES];
 static int initialized;
 
@@ -18,15 +27,49 @@ static int vfs_node_path(
     unsigned int capacity
 );
 
+static void vfs_clear_slot_locked(unsigned int handle)
+{
+    open_files[handle].node_id = 0;
+    open_files[handle].position = 0;
+    open_files[handle].flags = 0;
+    open_files[handle].used = 0;
+}
+
+/* Copy a live handle that carries required_flag; fails if it is closed. */
+static int vfs_snapshot_handle(
+    int handle,
+    uint32_t required_flag,
+    vfs_file_t* out
+)
+{
+    uint64_t lock_flags = spinlock_lock_irqsave(&open_files_lock);
+    int ok = open_files[handle].used &&
+             (open_files[handle].flags & required_flag) != 0U;
+    if (ok)
+        *out = open_files[handle];
+    spinlock_unlock_irqrestore(&open_files_lock, lock_flags);
+    return ok;
+}
+
+/* Advance the position only if the same file is still open on the slot. */
+static void vfs_advance_position(
+    int handle,
+    uint32_t node_id,
+    uint32_t amount
+)
+{
+    uint64_t lock_flags = spinlock_lock_irqsave(&open_files_lock);
+    if (open_files[handle].used && open_files[handle].node_id == node_id)
+        open_files[handle].position += amount;
+    spinlock_unlock_irqrestore(&open_files_lock, lock_flags);
+}
+
 void vfs_initialize(void)
 {
+    uint64_t lock_flags = spinlock_lock_irqsave(&open_files_lock);
     for (unsigned int i = 0; i < VFS_MAX_OPEN_FILES; i++)
-    {
-        open_files[i].node_id = 0;
-        open_files[i].position = 0;
-        open_files[i].flags = 0;
-        open_files[i].used = 0;
-    }
+        vfs_clear_slot_locked(i);
+    spinlock_unlock_irqrestore(&open_files_lock, lock_flags);
 
     initialized = filesystem_is_initialized();
 }
@@ -94,6 +137,9 @@ int vfs_open(
          node->type != FS_NODE_VIRTUAL))
         return -1;
 
+    /* Claim a free slot atomically so concurrent opens get distinct handles. */
+    int slot = -1;
+    uint64_t lock_flags = spinlock_lock_irqsave(&open_files_lock);
     for (unsigned int i = 0; i < VFS_MAX_OPEN_FILES; i++)
     {
         if (open_files[i].used)
@@ -103,31 +149,36 @@ int vfs_open(
         open_files[i].position = 0;
         open_files[i].flags = flags;
         open_files[i].used = 1;
+        slot = (int)i;
+        break;
+    }
+    spinlock_unlock_irqrestore(&open_files_lock, lock_flags);
 
-        if (flags & VFS_OPEN_TRUNCATE)
+    if (slot < 0)
+        return -1;
+
+    if (flags & VFS_OPEN_TRUNCATE)
+    {
+        /*
+         * The slot is claimed but its handle has not been returned yet, so no
+         * other caller can reach it while the filesystem work runs unlocked.
+         */
+        char truncate_path[FS_PATH_MAX];
+        int truncated =
+            vfs_node_path((uint32_t)node_id, truncate_path,
+                          sizeof(truncate_path)) &&
+            filesystem_write_file(truncate_path, "") >= 0;
+
+        if (!truncated)
         {
-            char path[FS_PATH_MAX];
-
-            if (!vfs_node_path(
-                    (uint32_t)node_id,
-                    path,
-                    sizeof(path)))
-            {
-                open_files[i].used = 0;
-                return -1;
-            }
-
-            if (filesystem_write_file(path, "") < 0)
-            {
-                open_files[i].used = 0;
-                return -1;
-            }
+            lock_flags = spinlock_lock_irqsave(&open_files_lock);
+            vfs_clear_slot_locked((unsigned int)slot);
+            spinlock_unlock_irqrestore(&open_files_lock, lock_flags);
+            return -1;
         }
-
-        return (int)i;
     }
 
-    return -1;
+    return slot;
 }
 
 int vfs_read(
@@ -136,25 +187,24 @@ int vfs_read(
     unsigned int length
 )
 {
+    vfs_file_t file;
+
     if (!initialized || handle < 0 ||
         handle >= (int)VFS_MAX_OPEN_FILES || !buffer ||
-        !open_files[handle].used ||
-        !(open_files[handle].flags & VFS_OPEN_READ))
+        !vfs_snapshot_handle(handle, VFS_OPEN_READ, &file))
         return -1;
 
-    const fs_node_t* node =
-        filesystem_get_node(open_files[handle].node_id);
+    const fs_node_t* node = filesystem_get_node(file.node_id);
     if (!node || node->type != FS_NODE_FILE)
         return -1;
-    if (length == 0U || open_files[handle].position >= node->size)
+    if (length == 0U || file.position >= node->size)
         return 0;
 
-    int result = filesystem_read_range(node->id,
-                                       open_files[handle].position,
+    int result = filesystem_read_range(node->id, file.position,
                                        buffer, length);
     if (result < 0)
         return -1;
-    open_files[handle].position += (uint32_t)result;
+    vfs_advance_position(handle, file.node_id, (uint32_t)result);
     return result;
 }
 
@@ -235,31 +285,30 @@ int vfs_write(
     unsigned int length
 )
 {
+    vfs_file_t file;
+
     if (!initialized || handle < 0 ||
         handle >= (int)VFS_MAX_OPEN_FILES || !data ||
-        !open_files[handle].used ||
-        !(open_files[handle].flags & VFS_OPEN_WRITE))
+        !vfs_snapshot_handle(handle, VFS_OPEN_WRITE, &file))
         return -1;
     if (length == 0U)
         return 0;
 
-    const fs_node_t* node =
-        filesystem_get_node(open_files[handle].node_id);
+    const fs_node_t* node = filesystem_get_node(file.node_id);
     if (!node || node->type != FS_NODE_FILE ||
-        open_files[handle].position > node->size ||
-        length > UINT32_MAX - open_files[handle].position)
+        file.position > node->size ||
+        length > UINT32_MAX - file.position)
         return -1;
 
     char path[FS_PATH_MAX];
     if (!vfs_node_path(node->id, path, sizeof(path)))
         return -1;
 
-    int result = filesystem_write_file_range(path,
-                                              open_files[handle].position,
+    int result = filesystem_write_file_range(path, file.position,
                                               data, length);
     if (result < 0)
         return -1;
-    open_files[handle].position += (uint32_t)result;
+    vfs_advance_position(handle, file.node_id, (uint32_t)result);
     return result;
 }
 
@@ -267,16 +316,17 @@ int vfs_close(int handle)
 {
     if (!initialized ||
         handle < 0 ||
-        handle >= (int)VFS_MAX_OPEN_FILES ||
-        !open_files[handle].used)
+        handle >= (int)VFS_MAX_OPEN_FILES)
         return -1;
 
-    open_files[handle].used = 0;
-    open_files[handle].node_id = 0;
-    open_files[handle].position = 0;
-    open_files[handle].flags = 0;
+    /* Check-and-clear is one critical section so a double close is detected. */
+    uint64_t lock_flags = spinlock_lock_irqsave(&open_files_lock);
+    int was_open = open_files[handle].used;
+    if (was_open)
+        vfs_clear_slot_locked((unsigned int)handle);
+    spinlock_unlock_irqrestore(&open_files_lock, lock_flags);
 
-    return 0;
+    return was_open ? 0 : -1;
 }
 
 int vfs_create_file(const char* path)

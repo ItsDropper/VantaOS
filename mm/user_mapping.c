@@ -100,7 +100,9 @@ uint64_t* paging_user_leaf_entry(paging_address_space_t* space,
     }
     else
     {
-        if (!(pdpt[pdpt_index] & PAGE_USER))
+        /* A 1 GiB large page is not a page-directory pointer; never walk it. */
+        if (!(pdpt[pdpt_index] & PAGE_USER) ||
+            (pdpt[pdpt_index] & 0x080U))
             goto fail;
         pd = (uint64_t*)(uintptr_t)
             (pdpt[pdpt_index] & PAGE_ADDRESS_MASK);
@@ -168,7 +170,7 @@ void paging_release_user_page_tables(paging_address_space_t* space)
 
     for (uint32_t i = 0; i < PAGING_TABLE_ENTRIES; i++)
     {
-        if (!(pdpt[i] & PAGE_PRESENT))
+        if (!(pdpt[i] & PAGE_PRESENT) || (pdpt[i] & 0x080U))
             continue;
 
         uint64_t* pd = (uint64_t*)(uintptr_t)

@@ -134,10 +134,22 @@ static int syscall_console_write(struct exception_frame* frame,
         size_t count = (size_t)(length - offset);
         if (count > sizeof(chunk) - 1U)
             count = sizeof(chunk) - 1U;
+
+        /*
+         * terminal_write() takes a NUL-terminated string, so an embedded NUL
+         * would silently discard the rest of the chunk. Drop only the NUL
+         * bytes themselves and keep everything around them.
+         */
+        size_t kept = 0U;
         for (size_t i = 0; i < count; i++)
-            chunk[i] = ((const char*)address)[offset + i];
-        chunk[count] = '\0';
-        terminal_write(chunk);
+        {
+            char byte = ((const char*)address)[offset + i];
+            if (byte != '\0')
+                chunk[kept++] = byte;
+        }
+        chunk[kept] = '\0';
+        if (kept != 0U)
+            terminal_write(chunk);
         offset += count;
     }
     terminal_process_mark_redraw();

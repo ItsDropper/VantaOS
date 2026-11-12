@@ -37,6 +37,10 @@ On pushes to `master`, pull requests targeting the repository, and manual workfl
 8. Builds the separate UEFI system image and boots it with OVMF, requiring loader, `ExitBootServices`, kernel-handoff, and selected kernel/SMP markers.
 9. Compiles the static ring-3 Terminal, Settings, and File Explorer applications with `-Werror`, installs them in the FAT32 image, and captures a graphical boot screenshot artifact. A push to `master` refreshes tracked `media/desktop.png` from that screenshot.
 
+### VFS open-file table (host-side, multi-threaded)
+
+`scripts/test_vfs_handles.c` links the real `fs/vfs.c` against filesystem stubs and a ticket-lock shim (`scripts/test_stubs_smp/spinlock.h`). Four host threads open and close handles concurrently and the test fails if two openers are ever given the same handle, then checks handle exhaustion, double close, and read-position tracking single-threaded. It guards the `open_files_lock` that serializes the global handle table; before that lock existed, the same test failed on every run. This validates the table's locking contract on a host; it does not exercise kernel interrupt state or the QEMU SMP scheduler.
+
 ## Notes editor save safety
 
 Notes writes the full document to a sibling `.VANTA-TMP` file and checks all writes and close status before publishing it. When replacing an existing regular file, it first moves the original to `.VANTA-BAK`, publishes the completed temporary file, and restores the original if publication fails. Existing temporary/backup paths cause the save to stop rather than overwrite a possible recovery copy. This protects against ordinary write and rename failures; it is not a power-loss durability guarantee because the filesystem does not currently expose an fsync-style persistence contract. Save paths must stay below `/HOME/USER` and reject empty, `.`, and `..` path components.

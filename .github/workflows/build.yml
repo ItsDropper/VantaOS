@@ -351,6 +351,14 @@ jobs:
             -o /tmp/vantaos-usb-device-model-test
           /tmp/vantaos-usb-device-model-test
 
+      - name: Test VFS open-file table under concurrent open/close
+        run: |
+          gcc -std=gnu11 -O2 -Wall -Wextra -Werror \
+            -Iscripts/test_stubs_smp -Iinclude \
+            scripts/test_vfs_handles.c fs/vfs.c -lpthread \
+            -o /tmp/vantaos-vfs-handles-test
+          /tmp/vantaos-vfs-handles-test
+
       - name: Test block device registry and I/O contracts
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iscripts/test_stubs -Iinclude \

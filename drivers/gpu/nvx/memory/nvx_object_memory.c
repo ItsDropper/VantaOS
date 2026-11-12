@@ -17,13 +17,13 @@ static int valid_kind(nvx_memory_kind_t k)
     return k == NVX_MEMORY_STAGING || k == NVX_MEMORY_FIRMWARE_IMAGE ||
            k == NVX_MEMORY_COMMAND_STORAGE;
 }
-static const nvx_memory_slot_t *match_handle(const nvx_memory_manager_t *m,
+static nvx_memory_slot_t *match_handle(nvx_memory_manager_t *m,
                                               const nvx_memory_handle_t *h)
 {
     if (!h || !h->token || h->generation != m->generation ||
         h->slot >= NVX_MEMORY_MAX_OBJECTS)
         return 0;
-    const nvx_memory_slot_t *s = &m->slots[h->slot];
+    nvx_memory_slot_t *s = &m->slots[h->slot];
     if (s->state != NVX_MEMORY_SLOT_READY || s->token != h->token ||
         s->generation != h->generation ||
         s->mapping.base != h->gpu_virtual_address ||
@@ -184,7 +184,7 @@ nvx_memory_status_t nvx_memory_get_info(nvx_memory_manager_t *m,
     if (!m || !h || !out) return NVX_MEMORY_INVALID_ARGUMENT;
     if (!m->initialized) return NVX_MEMORY_NOT_INITIALIZED;
     spinlock_lock(&m->lock);
-    const nvx_memory_slot_t *s = match_handle(m, h);
+    nvx_memory_slot_t *s = match_handle(m, h);
     if (!s) {
         spinlock_unlock(&m->lock);
         return NVX_MEMORY_STALE_HANDLE;
@@ -215,7 +215,7 @@ nvx_memory_status_t nvx_memory_pin(nvx_memory_manager_t *m,
     if (!m || !h) return NVX_MEMORY_INVALID_ARGUMENT;
     if (!m->initialized) return NVX_MEMORY_NOT_INITIALIZED;
     spinlock_lock(&m->lock);
-    nvx_memory_slot_t *slot = (nvx_memory_slot_t *)match_handle(m, h);
+    nvx_memory_slot_t *slot = match_handle(m, h);
     if (!slot) {
         spinlock_unlock(&m->lock);
         return NVX_MEMORY_STALE_HANDLE;
@@ -307,14 +307,19 @@ nvx_memory_status_t nvx_memory_validate(nvx_memory_manager_t *m)
             }
         } else if (s->state == NVX_MEMORY_SLOT_RESERVED ||
                    s->state == NVX_MEMORY_SLOT_RELEASING) {
-            continue;
-        } else if (s->state == NVX_MEMORY_SLOT_QUARANTINED) {
-            ++quarantined;
-            if (!s->token || !s->dma.acquired || !s->mapping.valid) {
+            if (s->active_users != 0U) {
                 spinlock_unlock(&m->lock);
                 return NVX_MEMORY_CORRUPT_STATE;
             }
-        } else if (s->state != NVX_MEMORY_SLOT_FREE) {
+            continue;
+        } else if (s->state == NVX_MEMORY_SLOT_QUARANTINED) {
+            ++quarantined;
+            if (!s->token || !s->dma.acquired || !s->mapping.valid ||
+                s->active_users != 0U) {
+                spinlock_unlock(&m->lock);
+                return NVX_MEMORY_CORRUPT_STATE;
+            }
+        } else if (s->state != NVX_MEMORY_SLOT_FREE || s->active_users != 0U) {
             spinlock_unlock(&m->lock);
             return NVX_MEMORY_CORRUPT_STATE;
         }

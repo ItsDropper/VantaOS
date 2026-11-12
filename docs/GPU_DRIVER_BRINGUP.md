@@ -1,7 +1,10 @@
 # GPU driver bring-up status
 
-VantaOS has separate NVX (NVIDIA), Intel, and AMD driver backends over a shared
-PCI identity/lifecycle layer. These are bring-up stages, not yet complete
+VantaOS has vendor-neutral GPU classification/lifecycle contracts and separate
+NVX (NVIDIA), Intel, and AMD backends. NVX currently uses its own
+`nvx_lifecycle_t` for attach/probe; it does not use the generic
+`gpu_device_t` lifecycle. The common layer is not yet a single shared runtime
+lifecycle for all vendors. These are bring-up stages, not yet complete
 accelerated drivers.
 
 ## Implemented in this stage

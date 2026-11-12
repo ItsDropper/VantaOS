@@ -159,6 +159,13 @@ int main(void)
                                     NVX_GPUVM_ACCESS_WRITE) == NVX_GPUVM_OK);
     assert(contiguous.mapped);
     assert(nvx_gpuvm_map_contiguous(&vm, &contiguous, 0x34000000ULL,
+                                    4096U, NVX_GPUVM_ACCESS_READ) ==
+           NVX_GPUVM_INVALID_RANGE);
+    assert(nvx_gpuvm_map_contiguous(&vm, &contiguous,
+                                    (1ULL << NVX_GPUVM_PA_BITS) - 4096U,
+                                    8192U, NVX_GPUVM_ACCESS_READ) ==
+           NVX_GPUVM_ADDRESS_WIDTH);
+    assert(nvx_gpuvm_map_contiguous(&vm, &contiguous, 0x34000000ULL,
                                     8192U, NVX_GPUVM_ACCESS_READ) ==
            NVX_GPUVM_ALREADY_MAPPED);
     assert(nvx_gpuvm_release(&vm, &contiguous) == NVX_GPUVM_OK);

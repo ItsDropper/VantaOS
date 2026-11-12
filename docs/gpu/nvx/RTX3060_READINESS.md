@@ -197,7 +197,7 @@ unmap. A local RPC-handle release failure is separately retryable. Failed
 unmaps retain the mapped state so callers cannot accidentally treat memory as
 detached.
 
-The NVOS47 unmap request uses its own flag field and currently defaults to immediate invalidation; NVOS46 map flags are never forwarded into the different NVOS47 bit layout.
+The NVOS46/NVOS47 wire layout is now audited against NVIDIA's public\n[`nvos.h`](https://github.com/NVIDIA/open-gpu-kernel-modules/blob/e6a2e01579fbbd1ca2ed43fef2ee2589e9bd8bd9/src/common/sdk/nvidia/inc/nvos.h). NVX's map input fields occupy 56 bytes with the aligned dmaOffset at byte 48; the serialized request is 64 bytes including the zeroed status/padding tail, and the response status is at byte 56. The unmap input fields occupy 40 bytes with dmaOffset at byte 24 and size at byte 32; its serialized request is 48 bytes and response status is at byte 40. Compile-time field-offset assertions and independent response-status tests pin these values.\n\nThe NVOS47 unmap request uses its own flag field and currently defaults to immediate invalidation; NVOS46 map flags are never forwarded into the different NVOS47 bit layout.
 
 The NVOS46 request preserves its input dmaOffset: NVIDIA's ABI makes that field an input when fixed-offset mapping is requested (and for DMA objects that are not CTXDMA handles), otherwise it is an output. A returned offset of zero is valid and remains unmap-able. Host tests cover both the fixed-input and zero-result cases.
 
@@ -206,9 +206,9 @@ response decode failure, request-range overflow, retryable RPC-handle release,
 and the guarantee that recovery does not submit a duplicate operation.
 This is lifecycle verification only. It does not audit the NVOS46/NVOS47 wire
 layout, create the underlying RM memory/DMA objects, or prove that the
-returned offset is usable on GA106. The RM system-memory object ABI is now implemented and host-tested, but its
-first real allocation, CPU mapping, and actual GSP-RM DMA mapping round-trip
-remain explicit hardware-readiness gates.
+returned offset is usable on GA106. The RM system-memory object ABI and NVOS46/NVOS47 wire layouts are now
+implemented and host-tested, but the first real allocation, CPU mapping, and
+actual GSP-RM DMA mapping round-trip remain explicit hardware-readiness gates.
 
 ## Mandatory first hardware experiment
 

@@ -26,7 +26,17 @@
 
 static int terminal_window_open;
 static unsigned int desktop_last_clock_refresh;
+static uint32_t desktop_last_drag_present_tick;
 static void terminal_close_window(void);
+
+static int desktop_drag_present_due(void)
+{
+    uint32_t tick = interrupts_get_ticks();
+    if ((uint32_t)(tick - desktop_last_drag_present_tick) < 2U)
+        return 0;
+    desktop_last_drag_present_tick = tick;
+    return 1;
+}
 
 static int desktop_files_click(int x, int y, int width, int height,
                                int pointer_x, int pointer_y, int button)
@@ -163,8 +173,9 @@ static void desktop_gui_present_clock_only(void)
  * retained windows on the compositor's shadow surface and commit only their
  * damaged tiles. Never paint the terminal directly into the scanout buffer.
  */
-static void desktop_gui_present_terminal_fast(void)
+static void desktop_gui_present_windows_fast(void)
 {
+    (void)gui_server_take_window_redraw_request();
     gui_server_sync_active_panel();
     if (!graphics_can_redraw_windows_incrementally())
     {
@@ -293,7 +304,7 @@ void desktop_update(void)
         {
             if (terminal_process_consume_redraw())
             {
-                desktop_gui_present_terminal_fast();
+                desktop_gui_present_windows_fast();
             }
             /* The ring-3 terminal owns its cursor and redraws on input/output. */
         }
@@ -311,12 +322,21 @@ void desktop_update(void)
 
         if (graphics_is_initialized())
         {
-            if (graphics_terminal_is_dragging() ||
-                graphics_explorer_is_dragging() ||
-                click_event)
+            int builtin_dragging =
+                graphics_terminal_is_dragging() ||
+                graphics_explorer_is_dragging();
+            if (click_event)
             {
                 graphics_invalidate_scene();
                 desktop_gui_present();
+            }
+            else if (builtin_dragging)
+            {
+                if (desktop_drag_present_due())
+                {
+                    graphics_invalidate_scene();
+                    desktop_gui_present();
+                }
             }
             else if (mouse_has_move_event())
             {
@@ -332,9 +352,25 @@ void desktop_update(void)
         mouse_clear_event_flags();
     }
 
-    if (gui_server_take_redraw_request())
+    int window_dragging = gui_server_is_window_dragging();
+    if (!window_dragging || desktop_drag_present_due())
     {
-        graphics_invalidate_scene();
-        desktop_gui_present();
+        if (gui_server_take_redraw_request())
+        {
+            graphics_invalidate_scene();
+            desktop_gui_present();
+        }
+    }
+
+    if (gui_server_take_window_redraw_request())
+    {
+        if (graphics_can_redraw_windows_incrementally() &&
+            !gui_server_is_window_dragging())
+            desktop_gui_present_windows_fast();
+        else
+        {
+            graphics_invalidate_scene();
+            desktop_gui_present();
+        }
     }
 }

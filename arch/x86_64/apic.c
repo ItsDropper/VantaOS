@@ -280,7 +280,7 @@ int apic_initialize(void)
                 {
                     serial_write("VANTAOS_APIC_DISABLE_FAIL base=0x");
                     serial_write_hex64(base);
-                    serial_write("\\n");
+                    serial_write("\n");
                     return 0;
                 }
             }
@@ -292,7 +292,7 @@ int apic_initialize(void)
             {
                 serial_write("VANTAOS_APIC_BASE_PROGRAM_FAIL base=0x");
                 serial_write_hex64(base);
-                serial_write("\\n");
+                serial_write("\n");
                 return 0;
             }
 
@@ -304,7 +304,7 @@ int apic_initialize(void)
         {
             serial_write("VANTAOS_APIC_ENABLE_FAIL base=0x");
             serial_write_hex64(base);
-            serial_write("\\n");
+            serial_write("\n");
             return 0;
         }
     }

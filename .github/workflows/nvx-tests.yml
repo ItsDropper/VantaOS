@@ -6,6 +6,18 @@ on:
       - master
     paths:
       - "drivers/gpu/nvx/**"
+      - "drivers/gpu/**"
+      - "scripts/test_*gpu*.c"
+      - "scripts/test_nvx_*.c"
+      - "scripts/test_amd_*.c"
+      - "include/nvx_*.h"
+      - "include/gpu_*.h"
+      - "include/amd_*.h"
+      - "include/intel_*.h"
+      - "drivers/pci/**"
+      - "arch/x86_64/device_irq.c"
+      - "include/device_irq.h"
+      - "kernel/device.c"
       - "include/nvx_gsp_ce.h"
       - "scripts/test_nvx_gsp_ce_runtime.c"
       - "scripts/test_nvx_dma.c"

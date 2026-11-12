@@ -4,6 +4,7 @@
  * See the LICENSE file in the project root for the full license text.
  */
 #include "nvx_gsp_rmapi.h"
+#include "nvx_gsp_dma_map.h"
 #include "nvx_gsp_ring.h"
 
 #include <assert.h>

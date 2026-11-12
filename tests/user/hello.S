@@ -408,13 +408,13 @@ ipc_receive_retry:
 ipc_receive_done:
     cmp $8, %rax
     jne file_fail
+    mov child_endpoint_token(%rip), %rdi
+    test %rdi, %rdi
+    jle file_fail
     mov $1, %eax
     lea ipc_parent_received(%rip), %rdi
     mov $(ipc_parent_received_end - ipc_parent_received), %esi
     int $0x80
-    mov child_endpoint_token(%rip), %rdi
-    test %rdi, %rdi
-    jle file_fail
     mov $27, %eax
     lea ipc_reply(%rip), %rsi
     mov $(ipc_reply_end - ipc_reply), %edx

@@ -282,11 +282,10 @@ void exception_handler(
     if (!fatal_machine_exception && exception_number != 2U &&
         frame && (frame->cs & 3U) == 3U)
     {
-        process_t process;
-        if (process_snapshot_try(process_current_pid(), &process) &&
-            process.is_user &&
-            process.address_space == paging_get_current_address_space() &&
-            process_terminate_current_try_with_status(-1))
+        paging_address_space_t* fault_address_space =
+            paging_get_current_address_space();
+        if (process_terminate_current_user_try_with_status(
+                fault_address_space, -1))
         {
             serial_write("VANTAOS_USER_PROCESS_FAULT\n");
             if (exception_number == 6U)

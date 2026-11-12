@@ -50,9 +50,9 @@ extraction, five-component firmware acquisition, WPR planning, DMA queue and
 init-argument construction, and startup sequencing.
 
 The platform adapter is still missing. It must supply the trusted BAR handoff,
-an exact PMC_BOOT_42 chip-ID mapping for GA106, a firmware provider with the
-required trust policy, firmware-compatible NVKV facts, queue sizes and delay
-callback. Shutdown also requires a real SEC2/GSP quiesce implementation.
+a firmware provider with the required trust policy, firmware-compatible
+NVKV facts, queue sizes and delay callback. The coordinator itself checks the
+PMC_BOOT_42 GA106 chip ID (`0x176`) before selecting firmware. Shutdown also requires a real SEC2/GSP quiesce implementation.
 The current `nvx fw <version>` command only verifies the five firmware files
 against the locally pinned SHA-256 manifest and runs structural preflight; it
 does not start GSP or prove NVIDIA signature authentication.

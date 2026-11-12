@@ -116,22 +116,30 @@ jobs:
           test -s "$code_firmware"
           test -s "$vars_template"
           cp "$vars_template" OVMF_VARS.fd
-          # OVMF may update FAT metadata while opening EFI files. Keep the
-          # published image pristine and boot a disposable writable copy.
-          cp VantaOS-UEFI.img uefi-qemu-test.img
+          # Boot the exact loader and kernel payload through an El Torito
+          # EFI boot image. The raw GPT/FAT32 USB image is validated above;
+          # OVMF on hosted runners does not reliably enumerate its raw-disk
+          # fallback path, so this isolates loader and kernel handoff testing.
+          mkdir -p uefi-iso-root
+          truncate -s 64M uefi-boot-esp.img
+          mkfs.fat -F 32 uefi-boot-esp.img >/dev/null
+          mmd -i uefi-boot-esp.img ::/EFI
+          mmd -i uefi-boot-esp.img ::/EFI/BOOT
+          mmd -i uefi-boot-esp.img ::/EFI/VANTA
+          mcopy -i uefi-boot-esp.img BOOTX64.EFI ::/EFI/BOOT/BOOTX64.EFI
+          mcopy -i uefi-boot-esp.img kernel-uefi.elf ::/EFI/VANTA/KERNEL.ELF
+          cp uefi-boot-esp.img uefi-iso-root/efiboot.img
+          xorriso -as mkisofs -R -J -V VANTAOS_UEFI_TEST \
+            -eltorito-alt-boot -e efiboot.img -no-emul-boot \
+            -o uefi-smoke.iso uefi-iso-root
 
           set +e
-          # Present the exact raw GPT/FAT32 test image as a firmware-visible
-          # fixed disk. OVMF's USB mass-storage path is unreliable in the
-          # GitHub-hosted QEMU environment (it reports EFI_NOT_FOUND before
-          # loading BOOTX64.EFI), so this smoke test isolates UEFI media
-          # discovery and the VantaOS EFI loader from USB-controller quirks.
           timeout 25s qemu-system-x86_64 \
             -machine pc -cpu max -m 512M -smp 2 \
             -drive if=pflash,format=raw,readonly=on,file="$code_firmware" \
             -drive if=pflash,format=raw,file=OVMF_VARS.fd \
-            -drive if=ide,index=0,media=disk,format=raw,file=uefi-qemu-test.img \
-            -boot order=c \
+            -drive if=ide,index=0,media=cdrom,format=raw,file=uefi-smoke.iso \
+            -boot order=d \
             -display none -serial file:uefi-hardware-test.log \
             -chardev file,id=ovmfdebug,path=ovmf-debug.log \
             -device isa-debugcon,iobase=0x402,chardev=ovmfdebug \
@@ -179,6 +187,8 @@ jobs:
             VantaOS-UEFI.img
             BOOTX64.EFI
             kernel-uefi.elf
+            uefi-boot-esp.img
+            uefi-smoke.iso
             SHA256SUMS.txt
             uefi-hardware-test.log
             uefi-debug.log

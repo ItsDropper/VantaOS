@@ -10,17 +10,17 @@
 
 _Static_assert(sizeof(nvx_gsp_memory_desc_params_t) == 24U,
     "NV_MEMORY_DESC_PARAMS ABI mismatch");
-_Static_assert(sizeof(nvx_gsp_channel_alloc_params_t) == 368U,
+_Static_assert(sizeof(nvx_gsp_channel_alloc_params_t) == 376U,
     "NV_CHANNEL_ALLOC_PARAMS Ampere ABI size mismatch");
 _Static_assert(offsetof(nvx_gsp_channel_alloc_params_t, gpfifo_offset) == 8U,
     "NV_CHANNEL_ALLOC_PARAMS.gpFifoOffset ABI mismatch");
-_Static_assert(offsetof(nvx_gsp_channel_alloc_params_t, h_userd_memory) == 32U,
+_Static_assert(offsetof(nvx_gsp_channel_alloc_params_t, h_userd_memory) == 36U,
     "NV_CHANNEL_ALLOC_PARAMS.hUserdMemory ABI mismatch");
-_Static_assert(offsetof(nvx_gsp_channel_alloc_params_t, userd_offset) == 64U,
+_Static_assert(offsetof(nvx_gsp_channel_alloc_params_t, userd_offset) == 72U,
     "NV_CHANNEL_ALLOC_PARAMS.userdOffset ABI mismatch");
-_Static_assert(offsetof(nvx_gsp_channel_alloc_params_t, engine_type) == 128U,
+_Static_assert(offsetof(nvx_gsp_channel_alloc_params_t, engine_type) == 136U,
     "NV_CHANNEL_ALLOC_PARAMS.engineType ABI mismatch");
-_Static_assert(offsetof(nvx_gsp_channel_alloc_params_t, instance_mem) == 144U,
+_Static_assert(offsetof(nvx_gsp_channel_alloc_params_t, instance_mem) == 152U,
     "NV_CHANNEL_ALLOC_PARAMS.instanceMem ABI mismatch");
 
 static int add_u64(uint64_t a, uint64_t b, uint64_t *out)

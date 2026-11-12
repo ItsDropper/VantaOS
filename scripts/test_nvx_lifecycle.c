@@ -51,6 +51,14 @@ int main(void)
     assert(!nvx_lifecycle_fail(&lifecycle, NVX_ERROR_NONE));
     assert(!nvx_lifecycle_set_capabilities(&lifecycle, UINT64_MAX));
 
+    /* FAILED is terminal until an external hardware-quiescence proof exists. */
+    assert(!nvx_lifecycle_transition(&lifecycle, NVX_STATE_QUIESCING));
+    assert(!nvx_lifecycle_recover_quiesced(&lifecycle, 0));
+    assert(lifecycle.state == NVX_STATE_FAILED);
+    assert(nvx_lifecycle_recover_quiesced(&lifecycle, 1));
+    assert(lifecycle.state == NVX_STATE_QUIESCING);
+    assert(nvx_lifecycle_transition(&lifecycle, NVX_STATE_STOPPED));
+
     /* A late runtime failure must revoke previously verified capabilities. */
     nvx_lifecycle_init(&lifecycle);
     assert(nvx_lifecycle_transition(&lifecycle, NVX_STATE_PROBING));

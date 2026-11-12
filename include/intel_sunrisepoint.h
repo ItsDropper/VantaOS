@@ -18,6 +18,8 @@
 #define INTEL_SPTLP_HOSTSW_OWN_OFFSET 0x0D0U
 #define INTEL_SPTLP_GPI_IE_OFFSET 0x120U
 #define INTEL_SPTLP_MMIO_MIN_LENGTH 0x124U
+#define INTEL_SPTLP_GPP_SIZE 24U
+#define INTEL_SPTLP_GPI_IS_OFFSET 0x100U
 #define INTEL_SPTLP_MMIO_MAX_LENGTH 0x10000U
 
 typedef struct
@@ -26,6 +28,15 @@ typedef struct
     uint16_t last_pin;
     uint8_t index;
 } intel_sptlp_community_t;
+
+typedef struct
+{
+    uint8_t community;
+    uint8_t group;
+    uint8_t bit;
+    uint32_t interrupt_status_offset;
+    uint32_t interrupt_enable_offset;
+} intel_sptlp_irq_location_t;
 
 typedef struct
 {
@@ -53,6 +64,8 @@ typedef struct
 
 /* Return the Sunrise Point-LP community containing a global GPIO number. */
 int intel_sptlp_pin_community(uint16_t pin, uint8_t *community);
+int intel_sptlp_pin_irq_location(uint16_t pin,
+                                 intel_sptlp_irq_location_t *location);
 
 /*
  * Map the three ACPI-assigned community windows and take a bounded read-only

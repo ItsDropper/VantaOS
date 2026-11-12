@@ -38,7 +38,7 @@ typedef struct nvx_gsp_channel_ring {
     nvx_gsp_dma_mapping_t mapping;
     uint32_t client_handle, device_handle, memory_handle, context_dma_handle;
     uint32_t subdevice_handle, entry_count, reference_state;
-    size_t bytes;
+    size_t bytes, allocation_bytes;
     volatile uint32_t *entries;
     uint64_t gpu_virtual_address;
     uint8_t stage, memory_lease_held;

@@ -254,35 +254,57 @@ int apic_initialize(void)
         }
         lapic = (volatile uint32_t*)(uintptr_t)APIC_MMIO_VIRTUAL;
         /*
-         * Program the physical base while the local APIC is disabled, then
-         * enable it in a separate MSR write. Keeping the transition explicit
-         * avoids relying on a combined base+enable update when firmware left
-         * IA32_APIC_BASE disabled (as SeaBIOS does in the 256 MiB CI boot).
+         * Firmware commonly enters the kernel with the local APIC already
+         * enabled at the ACPI MADT address. Do not disable and re-enable an
+         * already-correct APIC: that transition is unnecessary and some
+         * virtual firmware/APIC implementations do not accept the subsequent
+         * enable write. Only reprogram IA32_APIC_BASE when the APIC is disabled
+         * or its physical base differs from the MADT address.
          */
+        const uint64_t address_mask = 0x0000000FFFFFF000ULL;
         uint64_t requested_base =
-            (base & ~(APIC_BASE_ENABLE | 0x0000000FFFFFF000ULL)) |
-            (platform_info.local_apic_address & 0x0000000FFFFFF000ULL);
-        serial_write("VANTAOS_APIC_BASE_INITIAL=0x");
-        serial_write_hex64(base);
-        serial_write("\n");
-        serial_write("VANTAOS_APIC_BASE_REQUESTED=0x");
-        serial_write_hex64(requested_base | APIC_BASE_ENABLE);
-        serial_write("\n");
-        write_msr(IA32_APIC_BASE_MSR, requested_base);
-        uint64_t disabled_readback = read_msr(IA32_APIC_BASE_MSR);
-        serial_write("VANTAOS_APIC_BASE_DISABLED_READBACK=0x");
-        serial_write_hex64(disabled_readback);
-        serial_write("\n");
-        write_msr(IA32_APIC_BASE_MSR, requested_base | APIC_BASE_ENABLE);
-        base = read_msr(IA32_APIC_BASE_MSR);
-        serial_write("VANTAOS_APIC_BASE_ENABLED_READBACK=0x");
-        serial_write_hex64(base);
-        serial_write("\n");
+            (base & ~address_mask) |
+            (platform_info.local_apic_address & address_mask);
+        int apic_already_configured =
+            (base & APIC_BASE_ENABLE) != 0U &&
+            (base & address_mask) ==
+                (platform_info.local_apic_address & address_mask);
+
+        if (!apic_already_configured)
+        {
+            if ((base & APIC_BASE_ENABLE) != 0U)
+            {
+                write_msr(IA32_APIC_BASE_MSR, base & ~APIC_BASE_ENABLE);
+                base = read_msr(IA32_APIC_BASE_MSR);
+                if ((base & APIC_BASE_ENABLE) != 0U)
+                {
+                    serial_write("VANTAOS_APIC_DISABLE_FAIL base=0x");
+                    serial_write_hex64(base);
+                    serial_write("\\n");
+                    return 0;
+                }
+            }
+
+            write_msr(IA32_APIC_BASE_MSR, requested_base);
+            base = read_msr(IA32_APIC_BASE_MSR);
+            if ((base & address_mask) !=
+                (platform_info.local_apic_address & address_mask))
+            {
+                serial_write("VANTAOS_APIC_BASE_PROGRAM_FAIL base=0x");
+                serial_write_hex64(base);
+                serial_write("\\n");
+                return 0;
+            }
+
+            write_msr(IA32_APIC_BASE_MSR, requested_base | APIC_BASE_ENABLE);
+            base = read_msr(IA32_APIC_BASE_MSR);
+        }
+
         if ((base & APIC_BASE_ENABLE) == 0U)
         {
             serial_write("VANTAOS_APIC_ENABLE_FAIL base=0x");
             serial_write_hex64(base);
-            serial_write("\n");
+            serial_write("\\n");
             return 0;
         }
     }

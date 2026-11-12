@@ -59,7 +59,7 @@ static void append_package(uint8_t* out, uint32_t* length,
 int main(void)
 {
     uint8_t aml[1024], device_body[512], scope_body[768], cid_body[64];
-    uint8_t crs_body[64], buffer_body[64];
+    uint8_t crs_body[128], buffer_body[160];
     uint32_t n=0U, device_n=0U, scope_n=0U, cid_n=0U, crs_n=0U, buffer_n=0U;
 
     /* Device(TP0_) static identity and I2C SerialBus(_CRS) descriptor. */
@@ -130,11 +130,22 @@ int main(void)
         0x01U,0x00U,0x01U,0x00U,0x00U,0x00U,0x01U,0x06U,0x00U,
         0xA0U,0x86U,0x01U,0x00U,0x15U,0x00U,
         '\\','_','S','B','_',0x00U,
-        0x22U,0x02U,0x00U,
-        0x79U,0x00U
+        0x22U,0x02U,0x00U
     };
     append(crs_body,&crs_n,i2c_descriptor,sizeof(i2c_descriptor));
-    const uint8_t buffer_size[]={0x0AU,0x1DU};
+    /* GPIO interrupt connection: controller \\_SB_.GPIO, pins 7 and 8. */
+    uint8_t gpio_descriptor[38]={0};
+    gpio_descriptor[0]=0x8CU; gpio_descriptor[1]=35U;
+    gpio_descriptor[3]=1U; gpio_descriptor[4]=0U; gpio_descriptor[5]=1U;
+    gpio_descriptor[14]=23U; gpio_descriptor[17]=27U;
+    gpio_descriptor[19]=38U;
+    gpio_descriptor[23]=7U; gpio_descriptor[25]=8U;
+    memcpy(gpio_descriptor+27U,"\\_SB_.GPIO",11U);
+    append(crs_body,&crs_n,gpio_descriptor,sizeof(gpio_descriptor));
+    const uint8_t end_tag[]={0x79U,0x00U};
+    append(crs_body,&crs_n,end_tag,sizeof(end_tag));
+    uint8_t buffer_size[]={0x0AU,0U};
+    buffer_size[1]=(uint8_t)crs_n;
     append(buffer_body,&buffer_n,buffer_size,sizeof(buffer_size));
     append(buffer_body,&buffer_n,crs_body,crs_n);
     const uint8_t buffer_op[]={0x11U};
@@ -183,7 +194,7 @@ int main(void)
     assert(captured[0].i2c_count==1U);
     assert(captured[0].hid_descriptor_address_valid==1U);
     assert(captured[0].hid_descriptor_address==0x0020U);
-    assert(captured[0].resource_total==2U && captured[0].resource_count==2U);
+    assert(captured[0].resource_total==3U && captured[0].resource_count==3U);
     assert(captured[0].resources[0].resource_type==4U);
     assert(captured[0].resources[0].serial_bus_type==1U);
     assert(captured[0].resources[0].connection_speed_hz==100000U);
@@ -191,6 +202,14 @@ int main(void)
     assert(strcmp(captured[0].resources[0].resource_source,"\\_SB_")==0);
     assert(captured[0].resources[1].resource_type==3U);
     assert(captured[0].resources[1].irq_mask==2U);
+    assert(captured[0].resources[2].resource_type==5U);
+    assert(captured[0].resources[2].gpio_connection_type==0U);
+    assert(captured[0].resources[2].gpio_general_flags==1U);
+    assert(captured[0].resources[2].gpio_pin_count==2U);
+    assert(captured[0].resources[2].gpio_pins[0]==7U);
+    assert(captured[0].resources[2].gpio_pins[1]==8U);
+    assert(strcmp(captured[0].resources[2].resource_source,
+                  "\\_SB_.GPIO")==0);
     assert(strcmp(captured[1].path,"\\_SB_.DEV0")==0);
     assert(strcmp(captured[1].hid,"PNP0A03")==0);
 

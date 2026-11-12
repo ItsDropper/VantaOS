@@ -122,11 +122,16 @@ static int aml_device_usable(const acpi_aml_device_t *device)
 static int aml_resource_identity_equal(const acpi_aml_resource_t *a,
                                        const acpi_aml_resource_t *b)
 {
-    return a->descriptor_tag==b->descriptor_tag&&
-           a->resource_type==b->resource_type&&
-           a->serial_bus_type==b->serial_bus_type&&
-           a->slave_address==b->slave_address&&
-           path_equal(a->resource_source,b->resource_source);
+    if(a->descriptor_tag!=b->descriptor_tag||
+       a->resource_type!=b->resource_type||
+       a->serial_bus_type!=b->serial_bus_type||
+       a->gpio_connection_type!=b->gpio_connection_type||
+       a->gpio_pin_count!=b->gpio_pin_count||
+       a->slave_address!=b->slave_address||
+       !path_equal(a->resource_source,b->resource_source)) return 0;
+    for(uint32_t i=0U;i<a->gpio_pin_count;++i)
+        if(a->gpio_pins[i]!=b->gpio_pins[i]) return 0;
+    return 1;
 }
 
 static int aml_resource_equal(const acpi_aml_resource_t *a,
@@ -135,7 +140,12 @@ static int aml_resource_equal(const acpi_aml_resource_t *a,
     return aml_resource_identity_equal(a,b)&&
            a->connection_speed_hz==b->connection_speed_hz&&
            a->general_flags==b->general_flags&&
-           a->type_flags==b->type_flags;
+           a->type_flags==b->type_flags&&
+           a->gpio_general_flags==b->gpio_general_flags&&
+           a->gpio_interrupt_flags==b->gpio_interrupt_flags&&
+           a->gpio_pin_configuration==b->gpio_pin_configuration&&
+           a->gpio_drive_strength==b->gpio_drive_strength&&
+           a->gpio_debounce_timeout==b->gpio_debounce_timeout;
 }
 
 static int aml_merge_device(acpi_aml_device_t *destination,

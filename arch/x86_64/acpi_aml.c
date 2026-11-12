@@ -473,6 +473,58 @@ static int aml_parse_resources(acpi_aml_device_t* device,
                         ++device->i2c_count;
                     }
                 }
+                else if (tag == 0x8CU)
+                {
+                    /* ACPI GPIO Connection Descriptor; offsets include its 3-byte header. */
+                    if (item_length < 22U || payload[0U] != 1U ||
+                        payload[1U] > 1U ||
+                        (aml_u16(payload + 2U) & 0xFFFEU) != 0U ||
+                        payload[13U] != 0U)
+                        return 0;
+                    uint16_t pin_offset = aml_u16(payload + 11U);
+                    uint16_t source_offset = aml_u16(payload + 14U);
+                    uint16_t vendor_offset = aml_u16(payload + 16U);
+                    uint16_t vendor_length = aml_u16(payload + 18U);
+                    uint32_t descriptor_length = item_length + 3U;
+                    if (pin_offset < 23U || source_offset <= pin_offset ||
+                        vendor_offset < source_offset ||
+                        vendor_offset > descriptor_length ||
+                        vendor_length > descriptor_length - vendor_offset)
+                        return 0;
+                    uint32_t pin_begin = (uint32_t)pin_offset - 3U;
+                    uint32_t source_begin = (uint32_t)source_offset - 3U;
+                    uint32_t vendor_begin = (uint32_t)vendor_offset - 3U;
+                    if (pin_begin < 20U || source_begin > item_length ||
+                        vendor_begin > item_length || source_begin < pin_begin ||
+                        ((source_begin - pin_begin) & 1U) != 0U)
+                        return 0;
+                    uint32_t pin_count = (source_begin - pin_begin) / 2U;
+                    if (pin_count == 0U || pin_count > ACPI_AML_MAX_GPIO_PINS ||
+                        vendor_begin <= source_begin)
+                        return 0;
+                    uint32_t source_length = vendor_begin - source_begin;
+                    uint32_t source_name_length = 0U;
+                    while (source_name_length < source_length &&
+                           payload[source_begin + source_name_length] != 0U)
+                        ++source_name_length;
+                    if (source_name_length == 0U ||
+                        source_name_length >= source_length)
+                        return 0;
+                    resource->resource_type = 5U;
+                    resource->gpio_connection_type = payload[1U];
+                    resource->gpio_general_flags = aml_u16(payload + 2U);
+                    resource->gpio_interrupt_flags = aml_u16(payload + 4U);
+                    resource->gpio_pin_configuration = payload[6U];
+                    resource->gpio_drive_strength = aml_u16(payload + 7U);
+                    resource->gpio_debounce_timeout = aml_u16(payload + 9U);
+                    resource->gpio_pin_count = (uint16_t)pin_count;
+                    for (uint32_t pin = 0U; pin < pin_count; ++pin)
+                        resource->gpio_pins[pin] =
+                            aml_u16(payload + pin_begin + pin * 2U);
+                    aml_copy_ascii(resource->resource_source,
+                                   sizeof(resource->resource_source),
+                                   payload + source_begin, source_name_length);
+                }
                 else if (tag == 0x86U && item_length == 9U)
                 {
                     resource->resource_type = 1U;

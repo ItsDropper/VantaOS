@@ -13,6 +13,7 @@
 #define ACPI_AML_MAX_CIDS 4U
 #define ACPI_AML_MAX_RESOURCES 8U
 #define ACPI_AML_MAX_I2C_RESOURCES 4U
+#define ACPI_AML_MAX_GPIO_PINS 8U
 
 typedef struct
 {
@@ -27,6 +28,14 @@ typedef struct
     uint32_t irq_mask;
     uint32_t irq;
     uint8_t serial_bus_type;
+    uint8_t gpio_connection_type;
+    uint8_t gpio_pin_configuration;
+    uint16_t gpio_general_flags;
+    uint16_t gpio_interrupt_flags;
+    uint16_t gpio_drive_strength;
+    uint16_t gpio_debounce_timeout;
+    uint16_t gpio_pin_count;
+    uint16_t gpio_pins[ACPI_AML_MAX_GPIO_PINS];
     uint8_t general_flags;
     uint16_t type_flags;
     uint32_t connection_speed_hz;

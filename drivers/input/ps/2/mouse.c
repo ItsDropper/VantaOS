@@ -10,6 +10,7 @@
 #include "ps2.h"
 #include "graphics.h"
 #include "terminal.h"
+#include "serial.h"
 
 #define PS2_DATA_PORT       0x60
 #define PS2_STATUS_PORT     0x64
@@ -196,6 +197,12 @@ static unsigned char mouse_enable_wheel(void)
 
 void mouse_initialize(void)
 {
+    if (!ps2_controller_is_ready())
+    {
+        serial_write("VANTAOS_PS2_MOUSE_SKIPPED_CONTROLLER_OFFLINE\\n");
+        return;
+    }
+
     mouse_packet_index = 0;
     mouse_packet_size = 3;
     mouse_wheel_delta = 0;

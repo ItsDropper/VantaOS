@@ -92,8 +92,9 @@ jobs:
             -device piix3-usb-uhci,id=uhci \
             -drive if=none,id=setupmedia,format=raw,file=VantaOS-Setup.img \
             -device usb-storage,drive=setupmedia,bootindex=1,removable=on \
+            -drive if=none,id=targetdisk,format=raw,file=install-target.img \
+            -device usb-storage,drive=targetdisk,bootindex=2,removable=off \
             -boot order=c \
-            -drive file=install-target.img,format=raw,if=ide,index=0 \
             -display none -serial file:setup-install.log \
             -monitor unix:/tmp/vantaos-installer-monitor.sock,server,nowait \
             -no-reboot >/tmp/vantaos-installer-qemu.log 2>&1 &

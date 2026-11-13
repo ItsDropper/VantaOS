@@ -320,7 +320,10 @@ static int fat32_set_raw_entry(uint32_t cluster, uint32_t value)
         uint32_t lba = fat_lba + copy * sectors_per_fat + offset / 512U;
         uint32_t at = offset % 512U;
         if (!read_sector(lba, sector_buffer))
+        {
+            FAT32_WRITE_DIAG("VANTAOS_FAT32_SET_ENTRY_READ_FAIL");
             return 0;
+        }
         uint32_t old = fat32(&sector_buffer[at]);
         uint32_t v = (old & 0xF0000000U) | value;
         sector_buffer[at] = (uint8_t)v;
@@ -328,7 +331,10 @@ static int fat32_set_raw_entry(uint32_t cluster, uint32_t value)
         sector_buffer[at + 2] = (uint8_t)(v >> 16);
         sector_buffer[at + 3] = (uint8_t)(v >> 24);
         if (!fat32_write_sector(lba, sector_buffer))
+        {
+            FAT32_WRITE_DIAG("VANTAOS_FAT32_SET_ENTRY_WRITE_FAIL");
             return 0;
+        }
     }
     return 1;
 }

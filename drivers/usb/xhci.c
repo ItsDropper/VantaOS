@@ -1465,6 +1465,27 @@ int xhci_controller_online(void)
     return controller_online;
 }
 
+void xhci_hid_diagnostic_counts(uint32_t *configured, uint32_t *submitted,
+                                uint32_t *completed, uint32_t *reports,
+                                uint32_t *mismatches, uint32_t *in_flight)
+{
+    uint32_t c = 0U, s = 0U, d = 0U, r = 0U, m = 0U, f = 0U;
+    for (uint32_t i = 0U; i < XHCI_MAX_SLOTS; ++i) {
+        if (interrupt_configured[i]) ++c;
+        if (hid_transfer_submitted[i]) ++s;
+        if (hid_completion_observed[i]) ++d;
+        if (hid_report_observed[i]) ++r;
+        if (hid_completion_mismatch_observed[i]) ++m;
+        if (interrupt_in_flight[i]) ++f;
+    }
+    if (configured) *configured = c;
+    if (submitted) *submitted = s;
+    if (completed) *completed = d;
+    if (reports) *reports = r;
+    if (mismatches) *mismatches = m;
+    if (in_flight) *in_flight = f;
+}
+
 device_t* xhci_controller_device(void)
 {
     return controller_online ? controller_device : NULL;

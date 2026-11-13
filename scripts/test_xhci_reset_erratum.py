@@ -7,7 +7,7 @@ source = Path("drivers/usb/xhci.c").read_text(encoding="utf-8")
 
 assert "static int xhci_pit_delay_ms(uint32_t milliseconds)" in source
 assert "if (xhci_reset_issued && !xhci_pit_delay_ms(120U))" in source
-assert "XHCI_PIT_MAX_CHUNK_MS  50U" in source
+assert "XHCI_PIT_MAX_CHUNK_MS  10U" in source
 
 reset = source.index(
     "mmio_write32(operational, XHCI_USBCMD, command | XHCI_CMD_RESET);"

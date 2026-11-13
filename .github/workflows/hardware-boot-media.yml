@@ -1,4 +1,5 @@
 name: VantaOS safe UEFI hardware test media
+run-name: Build UEFI USB image and run OVMF validation (${{ github.sha }})
 
 on:
   workflow_dispatch:

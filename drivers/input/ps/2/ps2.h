@@ -7,7 +7,10 @@
 
 #ifndef PS2_INPUT_H
 #define PS2_INPUT_H
+#include <stdbool.h>
 #include <stdint.h>
+bool ps2_controller_initialize(void);
+bool ps2_controller_is_ready(void);
 uint32_t ps2_input_keyboard_id(void);
 uint32_t ps2_input_mouse_id(void);
 #endif

@@ -18,6 +18,7 @@
 #include "http_response.h"
 #include "http_body.h"
 #include "nvx_bringup.h"
+#include "serial.h"
 #include <stdint.h>
 #include <stddef.h>
 
@@ -870,6 +871,7 @@ static void nvx_io_text(const char *s, void *ctx)
 {
     (void)ctx;
     terminal_write(s);
+    serial_write(s);   /* serial copy lets a host capture and analyze a run */
 }
 
 /* Manual opt-in GPU bring-up. Never runs at boot. */
@@ -879,6 +881,10 @@ static int command_nvx(uint32_t argc, char **argv)
     terminal_write("\n");
     if (argc >= 2U && shell_string_equals(argv[1], "status")) {
         (void)nvx_bringup_status(&io);
+        return 1;
+    }
+    if (argc == 2U && shell_string_equals(argv[1], "survey")) {
+        (void)nvx_bringup_survey(&io);
         return 1;
     }
     if (argc == 2U && shell_string_equals(argv[1], "vbios")) {
@@ -891,6 +897,7 @@ static int command_nvx(uint32_t argc, char **argv)
         return 1;
     }
     terminal_write("Usage: nvx status         read-only RTX 3060 probe (no engine started)\n");
+    terminal_write("       nvx survey           read-only register experiment (log to serial)\n");
     terminal_write("       nvx vbios            read VBIOS via PROM (read-only), locate FWSEC\n");
     terminal_write("       nvx fw <version>     load+verify GSP firmware from /nvidia/ga106/gsp\n");
     terminal_write("GSP start, channels and compute are not wired to this command yet.\n");

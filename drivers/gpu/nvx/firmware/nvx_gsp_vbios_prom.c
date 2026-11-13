@@ -7,7 +7,13 @@
 
 #include <string.h>
 
-/* Constants from NVIDIA pci_exp_table.h and tu102 dev_bus.h (open-gpu-kernel-modules). */
+/*
+ * PROVENANCE: the standard PCI ROM chain (0xAA55, PCIR, 512-byte blocks) is
+ * public-spec (NVX-F-0022). The IFR header, ROM directory and NPDE extension
+ * rules are NVIDIA-specific and were taken from NVIDIA's reference driver
+ * behavior (NVX-F-0021, NVX-F-0023: external-impl, unverified). Experiment E2
+ * (dump the PROM and parse it with independent tooling) must confirm them.
+ */
 #define ROM_SIG_AA55 0xAA55U
 #define ROM_SIG_NV   0x4E56U
 #define ROM_SIG_NV2  0xBB77U

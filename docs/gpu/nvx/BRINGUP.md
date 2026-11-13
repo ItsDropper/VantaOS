@@ -8,6 +8,7 @@ The commands below are manual shell diagnostics.
 | Command | What it does | Touches GPU |
 | --- | --- | --- |
 | `nvx status` | Finds the RTX 3060, maps BAR0, reads PMC identity registers, detaches. | Read-only |
+| `nvx survey` | Read-only register experiment; prints `NVXOBS` lines for `scripts/nvx_knowledge.py analyze` to confirm or contradict NVX's hardware facts. | Read-only |
 | `nvx vbios` | Reads the VBIOS through the PROM window (BAR0+0x300000) using NVIDIA's IFR/PCI-ROM-chain logic, then locates the FWSEC image. FWSEC is not executed. | Read-only |
 | `nvx fw <version>` | Loads the five GSP files from `/nvidia/ga106/gsp/`, verifies each against a `SHA256SUMS` you pinned in that directory, runs structural preflight. | No |
 
@@ -20,9 +21,12 @@ the signed images.
 
 ## GA10x WPR/FRTS/heap sizing (`nvx_gsp_wpr_policy`)
 
-The layout planner existed but its policy inputs did not. They are now
-transcribed from NVIDIA's open-gpu-kernel-modules and pinned by
-`scripts/test_nvx_wpr_policy.c` (expected values derived independently):
+The layout planner existed but its policy inputs did not. They now follow the
+policy of NVIDIA's reference driver and are pinned by
+`scripts/test_nvx_wpr_policy.c`. **This is a reference-informed hypothesis, not
+established NVX knowledge** (NVX-F-0050/0051/0052, see
+[INDEPENDENCE.md](INDEPENDENCE.md)); experiments E4/E5 must establish the real
+firmware requirements:
 
 - FRTS 1 MiB; first boot has no WPR end margin; non-WPR heap 1 MiB.
 - Heap = 7 MiB carveout + 8 MiB base + 96 KiB/GB + 96 MiB client + 55 MiB ucode

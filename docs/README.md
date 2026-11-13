@@ -42,6 +42,8 @@ When a document conflicts with actual code or CI, treat the implementation and r
 
 ## GPU driver framework
 
+- [NVX independence policy and hardware knowledge base](gpu/nvx/INDEPENDENCE.md) — how external drivers may be used as evidence, fact provenance and the `nvx survey` experiment.
+- [NVX manual bring-up commands](gpu/nvx/BRINGUP.md) — `nvx status|survey|vbios|fw`.
 - [GPU documentation index](gpu/README.md) — vendor-neutral GPU framework and NVX vendor-specific docs.
 - [NVX GA10x bring-up](gpu/nvx/GA10X_BRINGUP.md) — SEC2/GSP state, implemented primitives, and hardware blockers.
 - [NVX firmware reverse-engineering notebook](gpu/nvx/FIRMWARE_REVERSE_ENGINEERING.md) — public-source findings and independent parser contracts.

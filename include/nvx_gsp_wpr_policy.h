@@ -13,15 +13,23 @@
 
 /*
  * GA10x (GA102-GA107, baremetal, no heap override) framebuffer/WPR sizing
- * policy. Every constant is transcribed from NVIDIA's public
- * open-gpu-kernel-modules (kernel_gsp.c, kernel_gsp_tu102.c, gsp_fw_heap.h and
- * the generated HAL tables selecting the GA106 variants) and pinned by
- * scripts/test_nvx_wpr_policy.c. Source: docs/gpu/nvx/RTX3060_READINESS.md.
+ * policy.
+ *
+ * PROVENANCE: reference-informed hypothesis, NOT established NVX knowledge.
+ * The constants and formulas below follow the policy of NVIDIA's reference
+ * driver (NVX-F-0050, NVX-F-0051, NVX-F-0052; source class external-impl,
+ * status unverified, see docs/gpu/nvx/INDEPENDENCE.md). They are a reference
+ * driver's choices, not hardware facts. Experiments E4/E5 must establish the
+ * values the firmware really requires before this module drives a real boot;
+ * until then a different, independently derived policy may replace it.
+ * Register offsets used here are listed in docs/gpu/nvx/knowledge/facts.tsv
+ * (NVX-F-0011 to NVX-F-0014). scripts/test_nvx_wpr_policy.c proves internal
+ * consistency only.
  *
  * Deliberate gaps, all fail-closed rather than guessed:
  *  - gpuFuseSupportsDisplay() is not read. A VGA-workspace register that reads
  *    as a PRI error (0xBADFxxxx) is treated as "no display".
- *  - NV_PRAMIN size is taken as 1 MiB (not verifiable from the sparse headers).
+ *  - NV_PRAMIN size is taken as 1 MiB (not independently established).
  *  - Recovery margins (bootAttempts > 0) are not implemented; first boot only.
  */
 #define NVX_GA10X_FRTS_SIZE            (UINT64_C(1) << 20)

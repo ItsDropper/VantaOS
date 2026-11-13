@@ -4,6 +4,7 @@
  * See the LICENSE file in the project root for the full license text.
  */
 #include "nvx_bringup.h"
+#include "nvx_survey.h"
 #include "nvx_attach.h"
 #include "nvx_fw_manifest.h"
 #include "nvx_gsp_bundle.h"
@@ -116,6 +117,16 @@ int nvx_bringup_vbios(const nvx_bringup_io_t *io)
     kfree(image);
     nvx_device_detach(&dev);
     return rc;
+}
+
+int nvx_bringup_survey(const nvx_bringup_io_t *io)
+{
+    nvx_attached_device_t dev;
+    if (attach_first(io, "nvx survey", &dev)) return 1;
+    nvx_mmio_region_t bar0 = { (volatile uint8_t *)dev.bar0_mapping, (size_t)dev.bar0.size };
+    int n = nvx_survey_run(&bar0, dev.pci_device->vendor_id, dev.pci_device->device_id, io);
+    nvx_device_detach(&dev);
+    return n < 0 ? 1 : 0;
 }
 
 /* ---- VFS provider -------------------------------------------------------- */

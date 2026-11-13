@@ -181,6 +181,13 @@ on:
       - "scripts/test_nvx_gsp_gpfifo.c"
       - "scripts/test_nvx_abi_conformance.c"
       - "scripts/test_nvx_wpr_policy.c"
+      - "scripts/nvx_knowledge.py"
+      - "scripts/test_nvx_knowledge.py"
+      - "scripts/test_nvx_survey.c"
+      - "docs/gpu/nvx/knowledge/**"
+      - "include/nvx_survey.h"
+      - "include/nvx_survey_table.h"
+      - "drivers/gpu/nvx/core/nvx_survey.c"
       - "scripts/test_nvx_vbios_prom.c"
       - "include/nvx_gsp_vbios_prom.h"
       - "drivers/gpu/nvx/firmware/nvx_gsp_vbios_prom.c"
@@ -517,6 +524,25 @@ jobs:
 
       - name: Test WPR/FRTS/heap layout against NVIDIA-derived known answers
         run: /tmp/vantaos-nvx-wpr-policy-test
+
+      - name: Validate NVX hardware knowledge base and generated survey table
+        run: |
+          python3 scripts/nvx_knowledge.py check
+          python3 scripts/nvx_knowledge.py gen-survey --check
+          python3 scripts/test_nvx_knowledge.py
+          python3 scripts/nvx_knowledge.py report
+
+      - name: Compile and run the survey experiment against synthetic registers
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
+            scripts/test_nvx_survey.c drivers/gpu/nvx/core/nvx_survey.c \
+            drivers/gpu/nvx/core/nvx_mmio.c -o /tmp/vantaos-nvx-survey-test
+          /tmp/vantaos-nvx-survey-test good > /tmp/survey-good.log
+          python3 scripts/nvx_knowledge.py analyze /tmp/survey-good.log
+          /tmp/vantaos-nvx-survey-test bad > /tmp/survey-bad.log
+          if python3 scripts/nvx_knowledge.py analyze /tmp/survey-bad.log; then
+            echo "analyzer failed to flag contradicted facts"; exit 1
+          fi
 
       - name: Compile PROM VBIOS extraction tests with strict warnings
         run: |

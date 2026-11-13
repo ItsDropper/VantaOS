@@ -26,6 +26,13 @@ typedef struct nvx_bringup_io {
 int nvx_bringup_status(const nvx_bringup_io_t *io);
 
 /*
+ * Controlled experiment: read-only register survey whose output
+ * (scripts/nvx_knowledge.py analyze) confirms or contradicts the hardware facts
+ * NVX assumes. See docs/gpu/nvx/INDEPENDENCE.md. Returns 0 on success.
+ */
+int nvx_bringup_survey(const nvx_bringup_io_t *io);
+
+/*
  * Stage 1b: read the VBIOS through the GPU's PROM window (read-only) and locate
  * the FWSEC image inside it. Does not execute FWSEC. Returns 0 on success.
  */

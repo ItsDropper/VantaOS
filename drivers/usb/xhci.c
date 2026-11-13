@@ -272,9 +272,6 @@ static int wait_register(volatile uint8_t* base, uint32_t offset,
         if ((i & 0x3FFU) == 0U &&
             (uint32_t)(timer_get_ticks() - start_tick) >= timeout_ticks)
             return 0;
-        if ((i & 0x3FFU) == 0U &&
-            (uint32_t)(timer_get_ticks() - start_tick) >= timeout_ticks)
-            return 0;
         __asm__ volatile ("pause");
     }
     return 0;
@@ -1097,6 +1094,11 @@ int xhci_bulk_transfer(uint32_t slot_id, uint8_t endpoint_address,
             return 1;
         }
         if (mmio_read32(operational, XHCI_USBSTS) & XHCI_STS_HOST_ERROR) {
+            bulk_in_flight[index][direction] = 0U;
+            return 0;
+        }
+        if ((i & 0x3FFU) == 0U &&
+            (uint32_t)(timer_get_ticks() - start_tick) >= timeout_ticks) {
             bulk_in_flight[index][direction] = 0U;
             return 0;
         }

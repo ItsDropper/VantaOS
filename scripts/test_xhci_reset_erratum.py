@@ -8,6 +8,8 @@ source = Path("drivers/usb/xhci.c").read_text(encoding="utf-8")
 assert "static int xhci_pit_delay_ms(uint32_t milliseconds)" in source
 assert "if (xhci_reset_issued && !xhci_pit_delay_ms(120U))" in source
 assert "XHCI_PIT_MAX_CHUNK_MS  10U" in source
+assert "static uint32_t xhci_poll_timeout_ticks(void)" in source
+assert source.count("(uint32_t)(timer_get_ticks() - start_tick) >= timeout_ticks") == 5
 
 reset_statement = "mmio_write32(operational, XHCI_USBCMD, command | XHCI_CMD_RESET);"
 reset = source.index(reset_statement)
@@ -24,4 +26,16 @@ assert "mmio_read32(" not in quiet_window
 assert "mmio_write32(" not in quiet_window
 assert "sleep_ms(" not in quiet_window
 
+desktop = Path("os/desktop/desktop_process.c").read_text(encoding="utf-8")
+desktop_main = desktop.split("void desktop_process_main(void)", 1)[1].split(
+    "void desktop_process_initialize(void)", 1
+)[0]
+assert "i2c_initialize();" not in desktop_main
+assert "static void desktop_i2c_initialize_worker(void)" in desktop
+assert '"desktop-i2c-init"' in desktop
+assert '"desktop-watchdog"' in desktop
+assert "kernel_watchdog_register(500U)" in desktop
+
 print("VANTAOS_XHCI_RESET_ERRATUM_OK")
+print("VANTAOS_DESKTOP_STARTUP_ISOLATION_OK")
+print("VANTAOS_DESKTOP_WATCHDOG_WIRED_OK")

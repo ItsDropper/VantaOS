@@ -85,6 +85,8 @@ void desktop_process_main(void)
     __atomic_store_n(&desktop_watchdog_handle, watchdog, __ATOMIC_RELEASE);
     if (watchdog == 0U)
         serial_write("VANTAOS_DESKTOP_WATCHDOG_REGISTER_FAILED\n");
+    else
+        serial_write("VANTAOS_DESKTOP_WATCHDOG_REGISTERED\n");
     uint32_t last_network_tick = interrupts_get_ticks();
     uint32_t last_heartbeat_log = last_network_tick;
     while (1)

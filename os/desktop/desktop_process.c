@@ -27,12 +27,18 @@ static uint32_t desktop_pid;
 static volatile uint32_t desktop_heartbeat_tick;
 static volatile uint64_t desktop_watchdog_handle;
 
-static void desktop_i2c_initialize_worker(void)
+static void desktop_device_io_worker(void)
 {
-    serial_write("VANTAOS_I2C_INIT_WORKER_ONLINE\n");
+    serial_write("VANTAOS_DEVICE_IO_WORKER_ONLINE\n");
     i2c_initialize();
-    serial_write("VANTAOS_I2C_INIT_WORKER_COMPLETE\n");
-    process_terminate_current_with_status(0);
+    serial_write("VANTAOS_DEVICE_IO_WORKER_READY\n");
+    for (;;)
+    {
+        /* Keep potentially blocking polled bus transactions off the UI task. */
+        hid_i2c_poll();
+        usb_poll();
+        sleep_ms(10U);
+    }
 }
 
 /*
@@ -92,7 +98,6 @@ void desktop_process_main(void)
          * USB and networking are polled with bounded work after the UI step.
          * The network stack gets at most one unit of work per timer tick.
          */
-        hid_i2c_poll();
         mouse_process_events();
         int wheel_delta = mouse_get_wheel_delta();
         if (wheel_delta != 0)
@@ -101,7 +106,6 @@ void desktop_process_main(void)
         desktop_update();
         file_explorer_process_step();
 
-        usb_poll();
         uint32_t tick = interrupts_get_ticks();
         __atomic_store_n(&desktop_heartbeat_tick, tick, __ATOMIC_RELEASE);
         if (watchdog != 0U &&
@@ -151,10 +155,10 @@ int desktop_process_start(uint32_t parent_pid)
     __atomic_store_n(&desktop_heartbeat_tick, interrupts_get_ticks(),
                      __ATOMIC_RELEASE);
 
-    int i2c_pid = process_create_kernel(
-        "desktop-i2c-init", desktop_pid, desktop_i2c_initialize_worker);
-    if (i2c_pid < 0)
-        serial_write("VANTAOS_I2C_INIT_WORKER_CREATE_FAILED\n");
+    int device_io_pid = process_create_kernel(
+        "desktop-device-io", desktop_pid, desktop_device_io_worker);
+    if (device_io_pid < 0)
+        serial_write("VANTAOS_DEVICE_IO_WORKER_CREATE_FAILED\n");
 
     int watchdog_pid = process_create_kernel(
         "desktop-watchdog", desktop_pid, desktop_watchdog_worker);

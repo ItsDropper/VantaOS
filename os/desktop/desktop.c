@@ -77,6 +77,30 @@ static void desktop_draw_hardware_diagnostics(void)
     char hex[9];
     graphics_draw_text(24, 150, "ROOT PORTS (connected / enabled / status)",
                        0x00FFFFFFU, 1U);
+    uint32_t hid_configured = 0U, hid_submitted = 0U;
+    uint32_t hid_completed = 0U, hid_reports = 0U;
+    uint32_t hid_mismatches = 0U, hid_in_flight = 0U;
+    xhci_hid_diagnostic_counts(&hid_configured, &hid_submitted,
+                               &hid_completed, &hid_reports,
+                               &hid_mismatches, &hid_in_flight);
+    desktop_diagnostics_hex(hex, hid_configured, 2U);
+    graphics_draw_text(440, 126, "HID endpoints configured: 0x", 0x00C6D2E0U, 1U);
+    graphics_draw_text(664, 126, hex, 0x00FFFFFFU, 1U);
+    desktop_diagnostics_hex(hex, hid_submitted, 2U);
+    graphics_draw_text(440, 143, "Transfers submitted: 0x", 0x00C6D2E0U, 1U);
+    graphics_draw_text(624, 143, hex, 0x00FFFFFFU, 1U);
+    desktop_diagnostics_hex(hex, hid_completed, 2U);
+    graphics_draw_text(440, 160, "Completions matched: 0x", 0x00C6D2E0U, 1U);
+    graphics_draw_text(624, 160, hex, 0x00FFFFFFU, 1U);
+    desktop_diagnostics_hex(hex, hid_reports, 2U);
+    graphics_draw_text(440, 177, "Reports received: 0x", 0x00C6D2E0U, 1U);
+    graphics_draw_text(600, 177, hex, 0x00FFFFFFU, 1U);
+    desktop_diagnostics_hex(hex, hid_mismatches, 2U);
+    graphics_draw_text(440, 194, "Completion mismatches: 0x", 0x00C6D2E0U, 1U);
+    graphics_draw_text(640, 194, hex, 0x00FFFFFFU, 1U);
+    desktop_diagnostics_hex(hex, hid_in_flight, 2U);
+    graphics_draw_text(440, 211, "Transfers in flight: 0x", 0x00C6D2E0U, 1U);
+    graphics_draw_text(624, 211, hex, 0x00FFFFFFU, 1U);
     uint32_t visible_ports = ports > 16U ? 16U : ports;
     for (uint32_t port = 1U; port <= visible_ports; ++port) {
         uint32_t status = xhci_port_status(port);

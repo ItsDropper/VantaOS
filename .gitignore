@@ -9,3 +9,31 @@ isodir/boot/kernel.bin
 # OS/editor files
 *.swp
 *.tmp
+# Disk, firmware and boot images (disposable; never commit)
+*.img
+*.elf
+*.map
+*.d
+*.a
+*.log
+nvx-serial.log
+
+# Vendor firmware must never be committed (NVX loads it at runtime)
+/nvidia/
+
+# Python / host tooling
+__pycache__/
+*.pyc
+
+# Build trees and host test binaries
+/build/out/
+/tests/**/*.out
+*.exe
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swo
+*~

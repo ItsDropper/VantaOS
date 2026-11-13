@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/ItsDropper/VantaOS/blob/master/SECURITY.md
+    about: Report privately; do not open a public issue.
+  - name: Documentation and getting started
+    url: https://github.com/ItsDropper/VantaOS/blob/master/docs/README.md
+    about: Read the docs index before filing a question.

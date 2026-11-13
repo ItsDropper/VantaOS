@@ -1032,7 +1032,9 @@ jobs:
             if grep -q 'VANTAOS_XHCI_CONTROLLER_ONLINE' "$log" &&
                grep -q 'VANTAOS_USB_HID_KEYBOARD_ONLINE' "$log" &&
                grep -q 'VANTAOS_USB_HID_MOUSE_ONLINE' "$log" &&
-               grep -q 'VANTAOS_DESKTOP_INPUT_LOOP_ONLINE' "$log"; then
+               grep -q 'VANTAOS_DESKTOP_INPUT_LOOP_ONLINE' "$log" &&
+               grep -q 'VANTAOS_DEVICE_IO_WORKER_READY' "$log" &&
+               grep -q 'VANTAOS_DESKTOP_WATCHDOG_REGISTERED' "$log"; then
               usb_ready=1
               break
             fi

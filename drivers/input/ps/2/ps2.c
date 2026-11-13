@@ -136,11 +136,11 @@ bool ps2_controller_initialize(void)
     uint8_t config = ps2_in8(PS2_DATA_PORT);
 
     /*
-     * IRQ1 enabled, IRQ12 left disabled until the mouse driver requests it.
-     * Enable the first-port clock and controller translation: the keyboard
+     * IRQ1 enabled, IRQ12 and the auxiliary clock left disabled until the mouse
+     * driver requests them. Enable the first-port clock and translation: the keyboard
      * decoder consumes translated Set-1 scancodes.
      */
-    config = (uint8_t)((config | 0x41U) & (uint8_t)~0x32U);
+    config = (uint8_t)((config | 0x61U) & (uint8_t)~0x12U);
     if (!ps2_write_config((uint8_t)(config & (uint8_t)~0x01U)))
         goto timeout;
     if (!ps2_command(PS2_COMMAND_ENABLE_KEYBOARD))

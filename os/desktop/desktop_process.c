@@ -154,11 +154,11 @@ int desktop_process_start(uint32_t parent_pid)
     int i2c_pid = process_create_kernel(
         "desktop-i2c-init", desktop_pid, desktop_i2c_initialize_worker);
     if (i2c_pid < 0)
-        serial_write("VANTAOS_I2C_INIT_WORKER_CREATE_FAILED\\n");
+        serial_write("VANTAOS_I2C_INIT_WORKER_CREATE_FAILED\n");
 
     int watchdog_pid = process_create_kernel(
         "desktop-watchdog", desktop_pid, desktop_watchdog_worker);
     if (watchdog_pid < 0)
-        serial_write("VANTAOS_DESKTOP_WATCHDOG_CREATE_FAILED\\n");
+        serial_write("VANTAOS_DESKTOP_WATCHDOG_CREATE_FAILED\n");
     return pid;
 }

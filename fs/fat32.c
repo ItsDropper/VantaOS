@@ -459,10 +459,11 @@ void fat32_initialize(void)
     mounted = 0;
     active_device = 0;
 
-    /* Never pick a disk by registration order. Probe every writable,
-       512-byte-sector device and mount only when exactly one contains a
-       valid FAT32 volume. Multiple valid candidates are intentionally
-       ambiguous until an explicit boot-volume policy exists. */
+    /* Never pick a disk by registration order. Probe every readable,
+       512-byte-sector device, including UEFI-protected read-only media, and
+       mount only when exactly one contains a valid FAT32 volume. The block
+       layer still rejects writes to read-only devices. Multiple valid
+       candidates remain ambiguous until an explicit boot-volume policy exists. */
     block_device_t* selected = 0;
     uint32_t count = block_device_count();
     for (uint32_t i = 0; i < count; ++i)
@@ -470,7 +471,6 @@ void fat32_initialize(void)
         block_device_t* candidate = block_device_get(i);
         if (!candidate || candidate->sector_size != 512U ||
             candidate->sector_count == 0U ||
-            (candidate->flags & BLOCK_DEVICE_READ_ONLY) != 0U ||
             fat32_is_efi_system_partition(candidate))
             continue;
 

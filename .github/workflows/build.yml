@@ -105,6 +105,9 @@ jobs:
             echo "Running complete regression suite (conservative fallback)."
           fi
 
+      - name: Guard Intel xHCI reset erratum ordering
+        run: python3 scripts/test_xhci_reset_erratum.py
+
       - name: Validate local QEMU runner shell syntax
         run: bash -n run.sh
 

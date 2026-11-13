@@ -14,8 +14,8 @@ assert "PS2_COMMAND_DISABLE_AUX" in ps2
 assert "PS2_COMMAND_READ_CONFIG" in ps2
 assert "PS2_COMMAND_ENABLE_KEYBOARD" in ps2
 assert "PS2_WAIT_LIMIT" in ps2
-assert "config | 0x41U" in ps2  # IRQ1 + Set-1 translation
-assert "~0x32U" in ps2          # IRQ12 deferred; both clocks enabled
+assert "config | 0x61U" in ps2  # IRQ1 + AUX clock disabled + Set-1 translation
+assert "~0x12U" in ps2          # IRQ12 and keyboard clock-disable cleared
 assert "controller_ready = true;" in ps2
 assert "if (!controller_ready)" in ps2
 assert "VANTAOS_PS2_KEYBOARD_REGISTERED" in ps2

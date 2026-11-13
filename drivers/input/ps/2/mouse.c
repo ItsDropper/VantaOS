@@ -199,7 +199,7 @@ void mouse_initialize(void)
 {
     if (!ps2_controller_is_ready())
     {
-        serial_write("VANTAOS_PS2_MOUSE_SKIPPED_CONTROLLER_OFFLINE\\n");
+        serial_write("VANTAOS_PS2_MOUSE_SKIPPED_CONTROLLER_OFFLINE\n");
         return;
     }
 

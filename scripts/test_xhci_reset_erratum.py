@@ -31,8 +31,12 @@ desktop_main = desktop.split("void desktop_process_main(void)", 1)[1].split(
     "void desktop_process_initialize(void)", 1
 )[0]
 assert "i2c_initialize();" not in desktop_main
-assert "static void desktop_i2c_initialize_worker(void)" in desktop
-assert '"desktop-i2c-init"' in desktop
+assert "static void desktop_device_io_worker(void)" in desktop
+assert '"desktop-device-io"' in desktop
+assert "hid_i2c_poll();" not in desktop_main
+assert "usb_poll();" not in desktop_main
+assert "hid_i2c_poll();" in desktop.split("static void desktop_device_io_worker(void)", 1)[1]
+assert "usb_poll();" in desktop.split("static void desktop_device_io_worker(void)", 1)[1]
 assert '"desktop-watchdog"' in desktop
 assert "kernel_watchdog_register(500U)" in desktop
 

@@ -39,6 +39,7 @@ assert "hid_i2c_poll();" in desktop.split("static void desktop_device_io_worker(
 assert "usb_poll();" in desktop.split("static void desktop_device_io_worker(void)", 1)[1]
 assert '"desktop-watchdog"' in desktop
 assert "kernel_watchdog_register(500U)" in desktop
+assert "VANTAOS_DESKTOP_WATCHDOG_REGISTERED" in desktop
 
 print("VANTAOS_XHCI_RESET_ERRATUM_OK")
 print("VANTAOS_DESKTOP_STARTUP_ISOLATION_OK")

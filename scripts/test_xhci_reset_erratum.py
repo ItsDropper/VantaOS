@@ -34,6 +34,7 @@ desktop_main = desktop.split("void desktop_process_main(void)", 1)[1].split(
 assert "i2c_initialize();" not in desktop_main
 assert "static void desktop_device_io_worker(void)" in desktop
 assert '"desktop-device-io"' in desktop
+assert "desktop_start_background_workers(current_pid);" in desktop_main
 assert "hid_i2c_poll();" not in desktop_main
 assert "usb_poll();" not in desktop_main
 assert "hid_i2c_poll();" in desktop.split("static void desktop_device_io_worker(void)", 1)[1]

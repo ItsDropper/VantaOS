@@ -95,8 +95,9 @@ void desktop_process_main(void)
          * burst of RX work monopolize the desktop task, making both pointer
          * motion and keyboard interaction appear delayed in QEMU.
          *
-         * USB and networking are polled with bounded work after the UI step.
-         * The network stack gets at most one unit of work per timer tick.
+         * Device-bus polling runs in its own process so slow USB/I2C
+         * transactions do not hold up the compositor. Networking gets at
+         * most one unit of work per timer tick.
          */
         mouse_process_events();
         int wheel_delta = mouse_get_wheel_delta();

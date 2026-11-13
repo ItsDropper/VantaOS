@@ -111,6 +111,9 @@ jobs:
       - name: Validate local QEMU runner shell syntax
         run: bash -n run.sh
 
+      - name: Test legacy PS/2 keyboard controller initialization
+        run: python3 scripts/test_ps2_controller.py
+
       - name: Test normalized input queue and motion coalescing
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iscripts/test_stubs -Iinclude \

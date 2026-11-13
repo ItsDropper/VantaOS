@@ -457,13 +457,25 @@ void keyboard_initialize(void)
 
     caps_lock = false;
     extended_scancode = false;
+
+    /* The legacy decoder expects controller-translated Set-1 scancodes. */
+    (void)ps2_controller_initialize();
 }
 
 void keyboard_handle_interrupt(void)
 {
+    /* IRQ1 can be shared with stale/auxiliary output on imperfect firmware. */
+    uint8_t status;
+    __asm__ volatile (
+        "inb %1, %0"
+        : "=a"(status)
+        : "Nd"((uint16_t)0x64U)
+    );
+    if ((status & 0x01U) == 0U || (status & 0x20U) != 0U)
+        return;
+
     uint64_t flags = spinlock_lock_irqsave(&keyboard_lock);
-    uint8_t scancode =
-        keyboard_read_data();
+    uint8_t scancode = keyboard_read_data();
 
     /*
      * 0xE0 starts an extended Set 1 scancode.

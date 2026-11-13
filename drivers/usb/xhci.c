@@ -10,6 +10,7 @@
 #include "paging.h"
 #include "pci.h"
 #include "serial.h"
+#include "timer.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -254,12 +255,26 @@ static void mmio_write64(volatile uint8_t* base, uint32_t offset,
     mmio_write32(base, offset + 4U, (uint32_t)(value >> 32));
 }
 
+static uint32_t xhci_poll_timeout_ticks(void)
+{
+    uint32_t frequency = timer_get_frequency();
+    return frequency == 0U ? 100U : frequency;
+}
+
 static int wait_register(volatile uint8_t* base, uint32_t offset,
                          uint32_t mask, uint32_t expected)
 {
+    uint32_t start_tick = timer_get_ticks();
+    uint32_t timeout_ticks = xhci_poll_timeout_ticks();
     for (uint32_t i = 0; i < XHCI_POLL_LIMIT; ++i) {
         if ((mmio_read32(base, offset) & mask) == expected)
             return 1;
+        if ((i & 0x3FFU) == 0U &&
+            (uint32_t)(timer_get_ticks() - start_tick) >= timeout_ticks)
+            return 0;
+        if ((i & 0x3FFU) == 0U &&
+            (uint32_t)(timer_get_ticks() - start_tick) >= timeout_ticks)
+            return 0;
         __asm__ volatile ("pause");
     }
     return 0;
@@ -445,6 +460,8 @@ int xhci_submit_command(uint32_t type, uint64_t parameter,
     }
 
     mmio_write32(doorbells, 0, 0);
+    uint32_t start_tick = timer_get_ticks();
+    uint32_t timeout_ticks = xhci_poll_timeout_ticks();
     for (uint32_t i = 0; i < XHCI_POLL_LIMIT; ++i) {
         consume_event_ring();
         uint32_t sequence = __atomic_load_n(
@@ -458,6 +475,9 @@ int xhci_submit_command(uint32_t type, uint64_t parameter,
             return completed_command_code == 1U;
         }
         if (mmio_read32(operational, XHCI_USBSTS) & XHCI_STS_HOST_ERROR)
+            return 0;
+        if ((i & 0x3FFU) == 0U &&
+            (uint32_t)(timer_get_ticks() - start_tick) >= timeout_ticks)
             return 0;
         __asm__ volatile ("pause");
     }
@@ -607,6 +627,8 @@ int xhci_control_transfer(uint32_t slot_id, const uint8_t setup[8],
     uint32_t previous_sequence = __atomic_load_n(
         &transfer_completion_sequence, __ATOMIC_ACQUIRE);
     mmio_write32(doorbells, slot_id * 4U, 1U);
+    uint32_t start_tick = timer_get_ticks();
+    uint32_t timeout_ticks = xhci_poll_timeout_ticks();
     for (uint32_t i = 0; i < XHCI_POLL_LIMIT; ++i) {
         consume_event_ring();
         uint32_t sequence = __atomic_load_n(
@@ -616,6 +638,9 @@ int xhci_control_transfer(uint32_t slot_id, const uint8_t setup[8],
             completed_transfer_slot == slot_id)
             return completed_transfer_code == 1U;
         if (mmio_read32(operational, XHCI_USBSTS) & XHCI_STS_HOST_ERROR)
+            return 0;
+        if ((i & 0x3FFU) == 0U &&
+            (uint32_t)(timer_get_ticks() - start_tick) >= timeout_ticks)
             return 0;
         __asm__ volatile ("pause");
     }
@@ -1049,6 +1074,8 @@ int xhci_bulk_transfer(uint32_t slot_id, uint8_t endpoint_address,
     bulk_in_flight[index][direction] = 1U;
     __atomic_thread_fence(__ATOMIC_RELEASE);
     mmio_write32(doorbells, slot_id * 4U, bulk_dci[index][direction]);
+    uint32_t start_tick = timer_get_ticks();
+    uint32_t timeout_ticks = xhci_poll_timeout_ticks();
     for (uint32_t i = 0; i < XHCI_POLL_LIMIT; ++i) {
         consume_event_ring();
         if (bulk_done[index][direction]) {

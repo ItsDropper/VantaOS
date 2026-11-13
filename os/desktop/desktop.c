@@ -63,7 +63,7 @@ static void desktop_draw_hardware_diagnostics(void)
     graphics_fill_rect(0, 0, width, height, 0x00101824U);
     graphics_fill_rect(0, 0, width, 54, 0x001A2B43U);
     graphics_draw_text(24, 16, "VantaOS Hardware Diagnostics", 0x00FFFFFFU, 2U);
-    graphics_draw_text(24, 68, "Keyboard: Ctrl + Super toggles this screen",
+    graphics_draw_text(24, 68, "Keyboard: Ctrl + Shift + F9 toggles this screen",
                        0x009CB7D8U, 1U);
 
     graphics_draw_text(24, 104, "USB HOST CONTROLLER", 0x007DC4FFU, 1U);
@@ -411,21 +411,25 @@ void desktop_update(void)
     gui_server_cleanup_dead_windows();
     gui_server_sync_active_panel();
 
-    /* Ctrl+Super opens a keyboard-only hardware diagnostic view. */
+    /* Ctrl+Shift+F9 opens diagnostics; the existing Ctrl+Super toggle remains. */
+    int toggle_diagnostics = keyboard_take_f9_event() &&
+        keyboard_ctrl_pressed() && keyboard_shift_pressed();
     if (keyboard_take_super_event())
     {
         if (keyboard_ctrl_pressed())
-        {
-            desktop_hardware_diagnostics_active =
-                !desktop_hardware_diagnostics_active;
-            desktop_diagnostics_last_refresh = 0U;
-            graphics_invalidate_scene();
-        }
+            toggle_diagnostics = 1;
         else if (!desktop_hardware_diagnostics_active)
         {
             graphics_toggle_start_menu();
             desktop_gui_present();
         }
+    }
+    if (toggle_diagnostics)
+    {
+        desktop_hardware_diagnostics_active =
+            !desktop_hardware_diagnostics_active;
+        desktop_diagnostics_last_refresh = 0U;
+        graphics_invalidate_scene();
     }
     if (desktop_hardware_diagnostics_active)
     {

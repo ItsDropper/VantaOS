@@ -277,7 +277,7 @@ jobs:
           test -s /tmp/installed-system.conf
           test -s /tmp/installed-terminal.vx
 
-      - name: Boot the installed image through the UEFI removable-media fallback path
+      - name: Boot the installed image through the UEFI hard-disk fallback path
         shell: bash
         run: |
           set -euo pipefail
@@ -303,9 +303,8 @@ jobs:
             -machine pc -m 512M -smp 2 \
             -drive if=pflash,format=raw,readonly=on,file="$code_firmware" \
             -drive if=pflash,format=raw,file=OVMF_BOOT_VARS.fd \
-            -device piix3-usb-uhci,id=uhci \
             -drive if=none,id=installed,format=raw,file=install-target.img \
-            -device usb-storage,drive=installed,bootindex=1,removable=on \
+            -device ide-hd,drive=installed,bus=ide.0,bootindex=1 \
             -boot order=c \
             -display none -serial "file:$log" -monitor none -no-reboot
           result=$?

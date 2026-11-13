@@ -24,6 +24,8 @@
 #include "watchdog.h"
 
 static uint32_t desktop_pid;
+static uint32_t desktop_device_io_pid;
+static uint32_t desktop_watchdog_pid;
 static volatile uint32_t desktop_heartbeat_tick;
 static volatile uint64_t desktop_watchdog_handle;
 
@@ -78,8 +80,41 @@ static void desktop_watchdog_worker(void)
     }
 }
 
+static void desktop_start_background_workers(uint32_t parent_pid)
+{
+    if (parent_pid == 0U)
+    {
+        serial_write("VANTAOS_DESKTOP_WORKER_PARENT_INVALID\n");
+        return;
+    }
+
+    if (desktop_device_io_pid == 0U)
+    {
+        int pid = process_create_kernel(
+            "desktop-device-io", parent_pid, desktop_device_io_worker);
+        if (pid < 0)
+            serial_write("VANTAOS_DEVICE_IO_WORKER_CREATE_FAILED\n");
+        else
+            desktop_device_io_pid = (uint32_t)pid;
+    }
+
+    if (desktop_watchdog_pid == 0U)
+    {
+        int pid = process_create_kernel(
+            "desktop-watchdog", parent_pid, desktop_watchdog_worker);
+        if (pid < 0)
+            serial_write("VANTAOS_DESKTOP_WATCHDOG_CREATE_FAILED\n");
+        else
+            desktop_watchdog_pid = (uint32_t)pid;
+    }
+}
+
 void desktop_process_main(void)
 {
+    uint32_t current_pid = process_current_pid();
+    if (desktop_pid == 0U)
+        desktop_pid = current_pid;
+    desktop_start_background_workers(current_pid);
     serial_write("VANTAOS_DESKTOP_INPUT_LOOP_ONLINE\n");
     uint64_t watchdog = kernel_watchdog_register(500U);
     __atomic_store_n(&desktop_watchdog_handle, watchdog, __ATOMIC_RELEASE);
@@ -158,14 +193,6 @@ int desktop_process_start(uint32_t parent_pid)
     __atomic_store_n(&desktop_heartbeat_tick, interrupts_get_ticks(),
                      __ATOMIC_RELEASE);
 
-    int device_io_pid = process_create_kernel(
-        "desktop-device-io", desktop_pid, desktop_device_io_worker);
-    if (device_io_pid < 0)
-        serial_write("VANTAOS_DEVICE_IO_WORKER_CREATE_FAILED\n");
-
-    int watchdog_pid = process_create_kernel(
-        "desktop-watchdog", desktop_pid, desktop_watchdog_worker);
-    if (watchdog_pid < 0)
-        serial_write("VANTAOS_DESKTOP_WATCHDOG_CREATE_FAILED\n");
+    desktop_start_background_workers(desktop_pid);
     return pid;
 }

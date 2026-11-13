@@ -44,9 +44,27 @@ if (kernel_watchdog_status(h) == KERNEL_WATCHDOG_EXPIRED) {
 (void)kernel_watchdog_unregister(h);
 ```
 
-No production subsystem is registered as a watchdog client yet. Adding a client
-requires a real progress point and a timeout derived from measured worst-case
-latency; arbitrary periodic kicks would mask hangs rather than detect them.
+## Current production client
+
+The desktop compositor registers a 500-tick (5-second at the configured
+100 Hz PIT rate) watchdog after entering its main process. It kicks the handle
+only after completing a desktop iteration. A separate `desktop-watchdog` kernel
+process checks the latched status and emits
+`VANTAOS_DESKTOP_WATCHDOG_EXPIRED` if the compositor stops making progress.
+When the desktop heartbeat resumes, the observer reports recovery, replaces
+the expired handle, and the compositor resumes kicking the new handle.
+
+This is deliberately report-only: the observer does not terminate or restart
+the compositor because its GUI state and owned windows do not yet have a safe
+restart contract. It detects a blocked desktop task only while PIT interrupts
+and the scheduler continue to run. It cannot detect or recover a whole-machine
+lockup or a lost timer interrupt; that requires an independent hardware
+watchdog or another execution domain.
+
+The device-I/O worker is separate from the compositor and performs ACPI/I2C
+initialization plus USB and I2C HID polling. This keeps bounded but potentially
+slow bus transactions out of the frame/input task; the desktop watchdog is
+intentionally scoped to compositor progress rather than peripheral progress.
 
 ## Production-client acceptance criteria
 

@@ -6,6 +6,7 @@ from pathlib import Path
 source = Path("drivers/usb/xhci.c").read_text(encoding="utf-8")
 
 assert "static int xhci_pit_delay_ms(uint32_t milliseconds)" in source
+assert '"Nd"(port) : "memory"' in source
 assert "if (xhci_reset_issued && !xhci_pit_delay_ms(120U))" in source
 assert "XHCI_PIT_MAX_CHUNK_MS  10U" in source
 assert "static uint32_t xhci_poll_timeout_ticks(void)" in source

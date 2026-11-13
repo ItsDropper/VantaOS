@@ -123,6 +123,7 @@ static bool alt_pressed = false;
 static bool left_super_pressed = false;
 static bool right_super_pressed = false;
 static bool super_event_pending = false;
+static bool f9_event_pending = false;
 static bool caps_lock = false;
 
 static bool extended_scancode = false;
@@ -182,6 +183,13 @@ static char apply_ctrl(char c)
 
 static void handle_key_press(uint8_t scancode)
 {
+    /* Set 1 scancode 0x43 is F9. Keep it out of the character buffer. */
+    if (scancode == 0x43)
+    {
+        f9_event_pending = true;
+        return;
+    }
+
     if (scancode == SCANCODE_LEFT_SHIFT)
     {
         left_shift_pressed = true;
@@ -445,6 +453,7 @@ void keyboard_initialize(void)
     left_super_pressed = false;
     right_super_pressed = false;
     super_event_pending = false;
+    f9_event_pending = false;
 
     caps_lock = false;
     extended_scancode = false;
@@ -560,6 +569,7 @@ void keyboard_inject_hid_usage(uint16_t usage, bool pressed)
 {
     uint64_t flags = spinlock_lock_irqsave(&keyboard_lock);
     switch (usage) {
+        case 0x42: if (pressed) f9_event_pending = true; break; /* F9 */
         case 0xE0: case 0xE4: ctrl_pressed = pressed; break;
         case 0xE1: left_shift_pressed = pressed; break;
         case 0xE5: right_shift_pressed = pressed; break;
@@ -673,10 +683,27 @@ bool keyboard_take_super_event(void)
     return pending;
 }
 
+bool keyboard_take_f9_event(void)
+{
+    uint64_t flags = spinlock_lock_irqsave(&keyboard_lock);
+    bool pending = f9_event_pending;
+    f9_event_pending = false;
+    spinlock_unlock_irqrestore(&keyboard_lock, flags);
+    return pending;
+}
+
 bool keyboard_ctrl_pressed(void)
 {
     uint64_t flags = spinlock_lock_irqsave(&keyboard_lock);
     bool pressed = ctrl_pressed;
+    spinlock_unlock_irqrestore(&keyboard_lock, flags);
+    return pressed;
+}
+
+bool keyboard_shift_pressed(void)
+{
+    uint64_t flags = spinlock_lock_irqsave(&keyboard_lock);
+    bool pressed = left_shift_pressed || right_shift_pressed;
     spinlock_unlock_irqrestore(&keyboard_lock, flags);
     return pressed;
 }

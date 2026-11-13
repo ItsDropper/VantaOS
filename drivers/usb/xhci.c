@@ -11,8 +11,6 @@
 #include "pci.h"
 #include "serial.h"
 
-#include "timer.h"
-
 #include <stddef.h>
 #include <stdint.h>
 

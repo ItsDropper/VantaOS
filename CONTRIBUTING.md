@@ -4,8 +4,8 @@ VantaOS is an experimental x86-64 operating-system project. Contributions should
 
 ## Before changing code
 
-1. Read the [architecture overview](docs/ARCHITECTURE.md) and the document for the subsystem you intend to change.
-2. Check the [development plan](docs/DEVELOPMENT_PLAN.md) and recent pull requests to avoid duplicating or contradicting active work.
+1. Read the [architecture overview](docs/architecture/ARCHITECTURE.md) and the document for the subsystem you intend to change.
+2. Check the [development plan](docs/project/DEVELOPMENT_PLAN.md) and recent pull requests to avoid duplicating or contradicting active work.
 3. Identify invariants, ownership rules, interrupt-state assumptions, and failure paths before editing kernel code.
 4. Keep changes focused. Separate documentation, refactoring, and behavioral changes when that makes review safer.
 5. For changes to subsystem boundaries, boot handoff, process/memory ownership, or cross-CPU synchronization strategy, check [architecture decision records](docs/decisions/README.md) and add or update a record when the decision will be costly to reverse.
@@ -14,7 +14,7 @@ VantaOS is an experimental x86-64 operating-system project. Contributions should
 
 1. Start from an up-to-date `master` and create a topic branch.
 2. Make the smallest coherent change that addresses the stated problem.
-3. Build with `./build.sh`; run the relevant checks described in [Testing](docs/TESTING.md).
+3. Build with `./build.sh`; run the relevant checks described in [Testing](docs/build/TESTING.md).
 4. For boot, scheduler, memory, filesystem, or interrupt changes, run the relevant QEMU regressions. Changes to boot handoff or firmware paths must also pass the UEFI/OVMF regression.
 5. Inspect the final diff for unrelated changes, generated artifacts, stale comments, and claims not backed by tests.
 6. Open a pull request describing the problem, design, validation, limitations, and any follow-up work.

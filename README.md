@@ -25,7 +25,7 @@ VantaOS is a hobby operating system built to learn and validate OS fundamentals 
 - [Architecture](#architecture)
 - [Repository layout](#repository-layout)
 - [Building, testing, and CI](#building-testing-and-ci)
-- [Installer (experimental)](#installer-experimental)
+- [Installer](#installer-experimental)
 - [Documentation](#documentation)
 - [Contributing](#contributing)
 
@@ -148,7 +148,11 @@ gcc -std=gnu11 -O2 -Wall -Wextra -Werror -Iscripts/test_stubs_smp -Iinclude \
 
 GitHub Actions builds everything from a clean checkout, boots the ISO headless in QEMU at several RAM and CPU configurations, and exercises the UEFI image under OVMF. The separate [safe UEFI hardware-test workflow](.github/workflows/hardware-boot-media.yml) validates a non-installing GPT/FAT32 test image, boots it with no writable disk attached, and publishes a SHA-256 manifest with the artifact. UEFI live boots also force all registered block devices read-only. A passing marker means only that its listed assertions passed. [Testing](docs/build/TESTING.md) documents each check and its limits, including what is **not** covered.
 
-## First physical hardware test\n\nFor a non-installing UEFI boot from a separate USB device, use the [first controlled hardware boot procedure](docs/project/FIRST_HARDWARE_BOOT.md) and the **VantaOS safe UEFI hardware test media** Actions workflow. Use the `VantaOS-UEFI.img` artifact, not the installer image. The UEFI live-boot storage policy rejects writes to every disk exposed through the common block-device layer. Keep the internal Windows drive untouched; physical firmware compatibility has not yet been demonstrated.\n\n## Installer (experimental)
+## First physical hardware test
+
+For a non-installing UEFI boot from a separate USB device, use the [first controlled hardware boot procedure](docs/project/FIRST_HARDWARE_BOOT.md) and the **VantaOS safe UEFI hardware test media** Actions workflow. Use the `VantaOS-UEFI.img` artifact, not the installer image. The UEFI live-boot storage policy rejects writes to every disk exposed through the common block-device layer. Keep the internal Windows drive untouched; physical firmware compatibility has not yet been demonstrated.
+
+## Installer (experimental)
 
 The build also produces `VantaOS-Setup.img`, a **UEFI-only** installer medium (published by CI as the `vantaos-install-media` artifact). Its setup wizard preflights its payload, lets you choose a device name, EFI partition size (256 or 512 MiB), theme, accent color, Explorer density, text size, and high contrast, then shows a review screen and an exact target-disk preview. It excludes its own media from the target list and requires typing `INSTALL` before writing anything. It creates a GPT with an EFI System Partition and a FAT32 system partition, verifies the filesystem metadata, and copies the loader, kernel, apps, and settings.
 
@@ -158,14 +162,14 @@ Current limits: language, keyboard, and time-zone choices are saved to `/SYSTEM/
 
 ## Documentation
 
-Start at the [documentation index](docs/README.md).
+Start at the [documentation index](docs/README.md), or the [getting-started guide](docs/GETTING_STARTED.md) to build and boot. New to the vocabulary? See the [glossary](docs/GLOSSARY.md) and the [documentation style guide](docs/STYLE.md).
 
 | Topic | Read |
 | --- | --- |
 | How the system fits together | [Architecture](docs/architecture/ARCHITECTURE.md), [engineering model](docs/architecture/ENGINEERING_MODEL.md), [decision records](docs/decisions/README.md) |
 | User mode and the desktop | [User-mode programs](docs/architecture/user-mode-programs.md), [User-space desktop apps](docs/architecture/USERSPACE_GUI.md), [Compositor](docs/architecture/COMPOSITOR.md) |
 | Building and verifying | [Build system](docs/build/BUILD_SYSTEM.md), [Testing](docs/build/TESTING.md), [Recovery environment](docs/build/RECOVERY_SETUP.md) |
-| Hardware and drivers | [Hardware support](docs/project/HARDWARE_SUPPORT.md), [GPU drivers](docs/gpu/README.md), [Networking](docs/NETWORKING.md) |
+| Hardware and drivers | [Hardware support](docs/project/HARDWARE_SUPPORT.md), [GPU drivers](docs/gpu/README.md), [NVIDIA (NVX) overview](docs/gpu/nvx/OVERVIEW.md), [Testing NVX on a real GPU](docs/gpu/nvx/PASSTHROUGH_TESTING.md), [Networking](docs/NETWORKING.md) |
 | Plans and priorities | [Development plan](docs/project/DEVELOPMENT_PLAN.md), [Bootloader plan](docs/project/BOOTLOADER_PLAN.md) |
 
 ## Contributing

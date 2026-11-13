@@ -1,22 +1,38 @@
 # GPU driver documentation
 
-This directory documents the vendor-neutral GPU framework and vendor-specific bring-up. Claims are split by implementation, host-test evidence, and physical-hardware validation.
+Status: framework implemented and host-tested; vendor backends are at different
+maturity and **none is hardware-verified**. Last reviewed: 2026-11-13.
 
-## NVX — NVIDIA GA10x
+VantaOS has a vendor-neutral GPU framework (PCI classification, guarded
+lifecycle, capability publication) and independent NVIDIA (NVX), Intel and AMD
+backends. Intel and AMD are lifecycle/matching scaffolds with opt-in minimal
+execution paths; NVX is the deep effort.
 
-- [Independence policy and hardware knowledge base](nvx/INDEPENDENCE.md) — rules for using external implementations as evidence, fact provenance/status database, the `nvx survey` experiment and the experiment backlog.
-- [Manual bring-up commands](nvx/BRINGUP.md) — `nvx status|survey|vbios|fw` and what each proves.
+## Reading order by goal
 
-- [RTX 3060 readiness gates](nvx/RTX3060_READINESS.md) — evidence vocabulary, subsystem status, hardware copy-engine validation procedure, stop conditions, and dependency-aware next steps.
-- [GA10x GSP bring-up and implementation status](nvx/GA10X_BRINGUP.md) — current hardware-facing primitives, staged boot path, and blockers.
-- [GA10x firmware reverse-engineering notebook](nvx/FIRMWARE_REVERSE_ENGINEERING.md) — field layouts, address domains, signature-selection rules, source evidence, and next research tasks.
-- [SEC2 transaction trace](nvx/SEC2_TRANSACTION_TRACE.md) — phase-level execution evidence and recovery diagnostics.
-- [SEC2 DMA and recovery contract](nvx/SEC2_DMA_AND_RECOVERY.md) — address domains, DMA lifecycle, ownership invariants, fault injection, and hardware-validation gates.
-- [VBIOS FWSEC metadata research](nvx/VBIOS_FWSEC_RESEARCH.md) — parser-specific constraints and VBIOS pointer chain.
-- [VBIOS expansion-ROM chain research](nvx/VBIOS_ROM_CHAIN_RESEARCH.md) — bounded PCIR image traversal and expansion-ROM base selection.
-- [NVX source layout](nvx/SOURCE_LAYOUT.md) — subsystem folder ownership, canonical source list, and test integration.
-- [GPU framework and bring-up plan](FRAMEWORK.md) — generic GPU lifecycle and Intel/AMD/NVX maturity.
+| Goal | Read |
+| --- | --- |
+| Understand the GPU subsystem | [Framework](FRAMEWORK.md) |
+| Understand NVX at a glance | [NVX overview](nvx/OVERVIEW.md) |
+| Run NVX diagnostics on a real card | [Passthrough testing](nvx/PASSTHROUGH_TESTING.md), then [commands](nvx/BRINGUP.md) |
+| Know how hardware facts are established | [Independence policy and knowledge base](nvx/INDEPENDENCE.md) |
+| See what blocks "game ready" | [RTX 3060 readiness gates](nvx/RTX3060_READINESS.md), [GSP bootstrap gaps](nvx/GSP_BOOTSTRAP_GAPS.md) |
+| Work on the code | [Source layout](nvx/SOURCE_LAYOUT.md), [GA10x bring-up](nvx/GA10X_BRINGUP.md), [Platform coordinator](nvx/PLATFORM_COORDINATOR.md) |
 
-## Vendor-neutral framework
+## NVX reference documents
 
-The generic PCI classification and lifecycle framework is implemented separately from vendor firmware and execution engines. Intel and AMD backends remain lifecycle/matching scaffolds and do not advertise hardware acceleration. See [GPU framework status](FRAMEWORK.md) in the main documentation index.
+| Document | Contents |
+| --- | --- |
+| [GA10x bring-up](nvx/GA10X_BRINGUP.md) | Implemented primitives and staged boot path |
+| [Platform coordinator](nvx/PLATFORM_COORDINATOR.md) | Orchestration of VBIOS, firmware, WPR, DMA and startup |
+| [GSP bootstrap gaps](nvx/GSP_BOOTSTRAP_GAPS.md) | Remaining integration blockers |
+| [Firmware reverse-engineering notebook](nvx/FIRMWARE_REVERSE_ENGINEERING.md) | Field layouts, address domains, signature selection |
+| [VBIOS FWSEC research](nvx/VBIOS_FWSEC_RESEARCH.md) · [ROM chain research](nvx/VBIOS_ROM_CHAIN_RESEARCH.md) | Parser constraints |
+| [SEC2 DMA and recovery](nvx/SEC2_DMA_AND_RECOVERY.md) · [SEC2 transaction trace](nvx/SEC2_TRANSACTION_TRACE.md) | Ownership invariants, diagnostics |
+| [NVX architecture (design record)](../NVX_ARCHITECTURE.md) | Long-form design |
+
+## Verification boundary
+
+A PCI identity, an assigned BAR, a mapped MMIO window or a synthetic register
+test does not prove a GPU is initialized. No Intel, AMD or NVIDIA acceleration
+is claimed.

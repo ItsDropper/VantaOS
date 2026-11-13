@@ -1,13 +1,15 @@
 # NVX source organization and build ownership
 
+Status: current. Last reviewed: 2026-11-13.
+
 The NVX implementation was reorganized into subsystem folders under `drivers/gpu/nvx/`. This makes ownership visible in the tree without changing the public headers in `include/` or renaming public functions.
 
 ## Directory map
 
 | Directory | Primary responsibility | Representative code |
 |---|---|---|
-| `core/` | NVIDIA PCI identity, inventory, resources, lifecycle and attach | `nvx_device.c`, `nvx_pci.c`, `nvx_attach.c` |
-| `firmware/` | Firmware acquisition, parsing, preflight and secure startup orchestration | `nvx_gsp_secure_boot.c`, `nvx_gsp_vbios.c`, `nvx_gsp_fwsec_result.c` |
+| `core/` | NVIDIA PCI identity, inventory, resources, lifecycle and attach; manual diagnostics (`nvx_bringup.c`) and the read-only register survey (`nvx_survey.c`) | `nvx_device.c`, `nvx_pci.c`, `nvx_attach.c`, `nvx_bringup.c`, `nvx_survey.c` |
+| `firmware/` | Firmware acquisition and SHA-256 manifest verification, VBIOS/PROM reading and parsing, WPR layout policy, preflight and secure startup orchestration | `nvx_gsp_secure_boot.c`, `nvx_gsp_vbios.c`, `nvx_gsp_vbios_prom.c`, `nvx_gsp_wpr_policy.c`, `nvx_fw_manifest.c` |
 | `gsp/` | Falcon and GSP runtime protocol, queue/RPC transport, ELF loading and init/boot memory | `nvx_gsp_falcon.c`, `nvx_gsp_msgq_rpc.c`, `nvx_gsp_elf_load.c` |
 | `memory/` | DMA, GPU VA, GPU page tables and memory objects | `nvx_dma_sync.c`, `nvx_gpuvm.c`, `nvx_object_memory.c` |
 | `execution/` | Submission validation and software fence timelines | `nvx_submit.c`, `nvx_sync.c` |
@@ -18,6 +20,14 @@ The NVX implementation was reorganized into subsystem folders under `drivers/gpu
 `drivers/gpu/nvx/Makefile` is the single source list for the production build. It enumerates every NVX implementation under its new path, including the bounded PCI ROM parser. `.github/workflows/nvx-tests.yml` compiles individual source units directly for host tests; those paths were updated alongside the move. The workflow path filter covers `drivers/gpu/nvx/**`, so future subsystem files still trigger NVX CI.
 
 Public headers and tests remain in their established locations to avoid gratuitous include/API churn. A source move should not require consumers to include implementation files or alter public ABI declarations.
+
+## Tests and generated files
+
+| Item | Location | Notes |
+|---|---|---|
+| Host unit tests | `scripts/test_nvx_*.c`, `scripts/test_gpu_*.c` | Compiled directly from the sources by `.github/workflows/nvx-tests.yml` |
+| Hardware knowledge database | `docs/gpu/nvx/knowledge/facts.tsv` | Validated by `scripts/nvx_knowledge.py check` |
+| Generated survey table | `include/nvx_survey_table.h` | **Generated** from the database; regenerate with `scripts/nvx_knowledge.py gen-survey`, CI runs `--check` |
 
 ## Review checklist for future files
 

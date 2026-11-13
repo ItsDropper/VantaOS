@@ -14,7 +14,7 @@ The host regression test compiles the same `userspace/include/vanta/path.h` help
 
 ## Continuous integration
 
-Workflow: [`.github/workflows/build.yml`](../.github/workflows/build.yml)
+Workflow: [`.github/workflows/build.yml`](../../.github/workflows/build.yml)
 
 Before compiling, CI runs `scripts/check_architecture.py` and `scripts/check_syscall_abi.py`. The latter compares public userspace syscall-number definitions with the kernel constants and dispatch cases; it is a source-contract check, not a runtime security test.
 
@@ -89,6 +89,28 @@ CI compiles the same URL parser, response-header parser, and body-framing state 
 | `VANTAOS_SCHEDULER_REAP_OK` | The observer sees the completed probe process removed from the process table. |
 
 Kernel self-tests run inside the kernel. Separately, the workflow builds `tests/user/hello.S`, installs the ELF in the FAT32 image, and launches it through the shell's file-backed `exec` path. That user program checks its initial arguments, exercises serial/terminal output, and exits through the syscall path. These are deterministic smoke tests, not adversarial isolation tests or a general application compatibility suite.
+
+## NVX (NVIDIA GPU driver) checks
+
+Workflow: [`.github/workflows/nvx-tests.yml`](../../.github/workflows/nvx-tests.yml). Host-only; no GPU is involved.
+
+| Check | What it asserts | What it does not prove |
+| --- | --- | --- |
+| Strict-warning builds of NVX sources | Sources compile with `-std=c11 -Wall -Wextra -Werror` | Kernel link or runtime behavior |
+| `scripts/test_nvx_*.c`, `test_gpu_*.c` | Parsers, encoders, state machines and rollback paths against synthetic inputs and known answers | Real device behavior |
+| `scripts/test_nvx_fw_manifest.c` | SHA-256 against NIST vectors; manifest verification fails closed | NVIDIA signatures |
+| `scripts/test_nvx_vbios_prom.c` | IFR v1/v3 and PCI ROM chain parsing, failure modes | Any real VBIOS layout |
+| `scripts/test_nvx_wpr_policy.c` | WPR/heap policy arithmetic against independently derived answers | That the policy matches the firmware (hypothesis) |
+| `scripts/nvx_knowledge.py check` | Knowledge database is well-formed; every fact has provenance | Facts are true |
+| `scripts/nvx_knowledge.py gen-survey --check` | Generated `nvx_survey_table.h` is up to date | |
+| Survey analyzer good/bad logs | The analyzer confirms, contradicts and rejects truncated logs correctly | |
+
+## Documentation checks
+
+`python3 scripts/check_doc_links.py` verifies every relative Markdown link and
+in-page anchor under `docs/` and the repository root; CI runs it via
+[`.github/workflows/docs.yml`](../../.github/workflows/docs.yml). It does not
+fetch external URLs or judge accuracy.
 
 ## Run locally
 

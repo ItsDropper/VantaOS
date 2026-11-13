@@ -1,5 +1,7 @@
 # RTX 3060 readiness gates for NVX
 
+Status: software-only evidence; no hardware verification. Last reviewed: 2026-11-13. Overview: [NVX overview](OVERVIEW.md).
+
 **Target:** GeForce RTX 3060 12 GB (GA106, Ampere / GA10x).  
 **Current evidence level:** source-reviewed and host-tested primitives; physical initialization and GPU execution are unverified.
 

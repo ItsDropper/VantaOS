@@ -1,5 +1,7 @@
 # NVX GA10x GSP Falcon bring-up notes
 
+Status: software-only evidence; no hardware verification. Last reviewed: 2026-11-13. Overview: [NVX overview](OVERVIEW.md).
+
 This guide covers the RTX 3060 GA106 / Ampere GA10x path. It distinguishes
 implemented software transactions from physical hardware evidence.
 

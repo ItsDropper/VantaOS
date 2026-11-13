@@ -1,5 +1,8 @@
 # NVX manual bring-up (RTX 3060)
 
+Status: implemented and host-tested; never run on hardware. Last reviewed: 2026-11-13.
+To run these on a real card see [Passthrough testing](PASSTHROUGH_TESTING.md).
+
 No firmware or GSP startup runs at boot. Boot performs read-only NVX PCI
 discovery and a bounded PMC identity probe on the supported profile; it does
 not reset a Falcon, load firmware, enable bus mastering, or submit GPU work.
@@ -9,7 +12,7 @@ The commands below are manual shell diagnostics.
 | --- | --- | --- |
 | `nvx status` | Finds the RTX 3060, maps BAR0, reads PMC identity registers, detaches. | Read-only |
 | `nvx survey` | Read-only register experiment; prints `NVXOBS` lines for `scripts/nvx_knowledge.py analyze` to confirm or contradict NVX's hardware facts. | Read-only |
-| `nvx vbios` | Reads the VBIOS through the PROM window (BAR0+0x300000) using NVIDIA's IFR/PCI-ROM-chain logic, then locates the FWSEC image. FWSEC is not executed. | Read-only |
+| `nvx vbios` | Reads the VBIOS through the PROM window (BAR0+0x300000) through an IFR/PCI-ROM-chain parser (reference-informed; see [INDEPENDENCE.md](INDEPENDENCE.md)), then locates the FWSEC image. FWSEC is not executed. | Read-only |
 | `nvx fw <version>` | Loads the five GSP files from `/nvidia/ga106/gsp/`, verifies each against a `SHA256SUMS` you pinned in that directory, runs structural preflight. | No |
 
 Put `gsp-<v>.bin`, `ucodes-<v>.bin`, `booter_load-<v>.bin`,

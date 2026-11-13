@@ -54,7 +54,7 @@ The two boot paths are not interchangeable evidence: a successful GRUB boot does
 | `mm/paging_internal.h` | Private paging implementation contract shared by paging modules. |
 | `drivers/` | Input, PCI enumeration, USB, storage, and hardware-driver registries. |
 | `drivers/network/` | PCI network-driver matching and binding framework; concrete NIC drivers are not implemented yet. |
-| `net/` | Bounded network-device registry, receive queue, and Ethernet-II demultiplexer; see [Networking architecture](NETWORKING.md). |
+| `net/` | Bounded network-device registry, receive queue, and Ethernet-II demultiplexer; see [Networking architecture](../NETWORKING.md). |
 | `fs/` | Filesystem namespace, FAT32 read path, and VFS handles. |
 | `fs/fat32_lfn.c` | FAT32 long-filename sequence validation and UTF-16-to-UTF-8 decoding. |
 | `os/terminal/` | Terminal, shell, and commands. |
@@ -81,7 +81,7 @@ The filesystem builds an in-memory namespace such as `/system`, `/home/user`, an
 
 ## Networking foundation
 
-The initial networking core has a bounded device registry, synchronous TX contract, allocation-free bounded RX ingress queue, per-device counters, Ethernet-II EtherType dispatch, and PCI driver matching. It deliberately has no concrete NIC or IP protocol yet. See [Networking architecture](NETWORKING.md) for ownership and execution-context constraints.
+The initial networking core has a bounded device registry, synchronous TX contract, allocation-free bounded RX ingress queue, per-device counters, Ethernet-II EtherType dispatch, and PCI driver matching. It deliberately has no concrete NIC or IP protocol yet. See [Networking architecture](../NETWORKING.md) for ownership and execution-context constraints.
 
 ## Graphics and input
 
@@ -97,7 +97,7 @@ Changes that cross these boundaries should be reviewed together with their calle
 - **Filesystem handles:** invalid handles and unsupported operations must fail explicitly; namespace visibility is not equivalent to durable storage.
 - **Diagnostics:** serial markers are test interfaces. Emit a success marker only after its associated assertion passes.
 
-These are design constraints for review, not a claim that every edge case is already proven. See [Engineering model](../architecture/ENGINEERING_MODEL.md) for the review questions and [ADR-001](decisions/0001-subsystem-source-manifests-and-boot-coordinators.md) for the source-boundary rationale.
+These are design constraints for review, not a claim that every edge case is already proven. See [Engineering model](../architecture/ENGINEERING_MODEL.md) for the review questions and [ADR-001](../decisions/0001-subsystem-source-manifests-and-boot-coordinators.md) for the source-boundary rationale.
 
 ## Test-code boundaries
 

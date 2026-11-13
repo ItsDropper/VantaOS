@@ -11,6 +11,8 @@
 #include "pci.h"
 #include "serial.h"
 
+#include "timer.h"
+
 #include <stddef.h>
 #include <stdint.h>
 
@@ -164,6 +166,69 @@ static uint32_t bulk_completion_status[XHCI_MAX_SLOTS][2];
 static int controller_online;
 static device_t* controller_device;
 static int initialized;
+static uint8_t xhci_reset_issued;
+
+#define XHCI_PIT_COMMAND       0x43U
+#define XHCI_PIT_CHANNEL2      0x42U
+#define XHCI_PIT_SPEAKER       0x61U
+#define XHCI_PIT_FREQUENCY     1193182U
+#define XHCI_PIT_MAX_CHUNK_MS  50U
+#define XHCI_PIT_SPIN_LIMIT   5000000U
+
+static inline void xhci_outb(uint16_t port, uint8_t value)
+{
+    __asm__ volatile ("outb %0, %1" : : "a"(value), "Nd"(port));
+}
+
+static inline uint8_t xhci_inb(uint16_t port)
+{
+    uint8_t value;
+    __asm__ volatile ("inb %1, %0" : "=a"(value) : "Nd"(port));
+    return value;
+}
+
+/*
+ * Early-boot delay using PIT channel 2. Unlike sleep_ms(), this does not
+ * depend on scheduler state or timer interrupts, which is essential while
+ * satisfying the Intel xHCI reset erratum before touching xHCI MMIO again.
+ */
+static int xhci_pit_delay_ms(uint32_t milliseconds)
+{
+    uint8_t original_port = xhci_inb(XHCI_PIT_SPEAKER);
+    while (milliseconds != 0U)
+    {
+        uint32_t chunk = milliseconds > XHCI_PIT_MAX_CHUNK_MS ?
+                         XHCI_PIT_MAX_CHUNK_MS : milliseconds;
+        uint32_t divisor =
+            (XHCI_PIT_FREQUENCY * chunk + 999U) / 1000U;
+        if (divisor == 0U || divisor > 65535U)
+        {
+            xhci_outb(XHCI_PIT_SPEAKER, original_port);
+            return 0;
+        }
+
+        xhci_outb(XHCI_PIT_SPEAKER,
+                  original_port & (uint8_t)~0x03U);
+        xhci_outb(XHCI_PIT_COMMAND, 0xB0U);
+        xhci_outb(XHCI_PIT_CHANNEL2, (uint8_t)divisor);
+        xhci_outb(XHCI_PIT_CHANNEL2, (uint8_t)(divisor >> 8U));
+        xhci_outb(XHCI_PIT_SPEAKER,
+                  (original_port & (uint8_t)~0x02U) | 0x01U);
+
+        uint32_t spins = 0U;
+        while ((xhci_inb(XHCI_PIT_SPEAKER) & 0x20U) == 0U &&
+               spins++ < XHCI_PIT_SPIN_LIMIT)
+            __asm__ volatile ("pause" ::: "memory");
+        if ((xhci_inb(XHCI_PIT_SPEAKER) & 0x20U) == 0U)
+        {
+            xhci_outb(XHCI_PIT_SPEAKER, original_port);
+            return 0;
+        }
+        milliseconds -= chunk;
+    }
+    xhci_outb(XHCI_PIT_SPEAKER, original_port);
+    return 1;
+}
 
 static uint32_t mmio_read32(volatile uint8_t* base, uint32_t offset)
 {
@@ -1255,8 +1320,25 @@ static int controller_start(const struct pci_device* pci)
                        XHCI_STS_HALTED))
         return 0;
 
-    mmio_write32(operational, XHCI_USBCMD,
-                 mmio_read32(operational, XHCI_USBCMD) | XHCI_CMD_RESET);
+    /* Intel 100-series xHCI erratum 20: never access xHCI MMIO for at
+     * least 1 ms after asserting HCRST. If this controller is reset again,
+     * also enforce the 120 ms minimum interval between HCRST assertions. */
+    if (xhci_reset_issued && !xhci_pit_delay_ms(120U))
+    {
+        serial_write("VANTAOS_XHCI_RESET_INTERVAL_DELAY_FAILED\n");
+        return 0;
+    }
+    command = mmio_read32(operational, XHCI_USBCMD);
+    mmio_write32(operational, XHCI_USBCMD, command | XHCI_CMD_RESET);
+    xhci_reset_issued = 1U;
+    serial_write("VANTAOS_XHCI_RESET_ASSERTED\n");
+    /* PIT I/O only here: do not read or write any xHCI register yet. */
+    if (!xhci_pit_delay_ms(1U))
+    {
+        serial_write("VANTAOS_XHCI_RESET_QUIET_PERIOD_FAILED\n");
+        return 0;
+    }
+    serial_write("VANTAOS_XHCI_RESET_QUIET_PERIOD_COMPLETE\n");
     if (!wait_register(operational, XHCI_USBCMD, XHCI_CMD_RESET, 0))
         return 0;
     if (!wait_register(operational, XHCI_USBSTS, XHCI_STS_NOT_READY, 0))

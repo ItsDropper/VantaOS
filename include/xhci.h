@@ -50,6 +50,10 @@ int xhci_take_interrupt_report(uint32_t slot_id, uint8_t* output,
 
 /* True after controller reset, rings, and Run/Stop have completed. */
 int xhci_controller_online(void);
+/* Aggregate state for configured USB HID interrupt-IN endpoints. */
+void xhci_hid_diagnostic_counts(uint32_t *configured, uint32_t *submitted,
+                                uint32_t *completed, uint32_t *reports,
+                                uint32_t *mismatches, uint32_t *in_flight);
 /* Generic device node for the active host controller, if any. */
 device_t* xhci_controller_device(void);
 

@@ -20,6 +20,8 @@
 #include "graphics_internal.h"
 #include "gui_server.h"
 #include "usb.h"
+#include "input.h"
+#include "xhci.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -28,6 +30,162 @@ static int terminal_window_open;
 static unsigned int desktop_last_clock_refresh;
 static uint32_t desktop_last_drag_present_tick;
 static void terminal_close_window(void);
+
+static int desktop_hardware_diagnostics_active;
+static uint32_t desktop_diagnostics_last_refresh;
+
+static void desktop_diagnostics_hex(char *out, uint32_t value, unsigned int digits)
+{
+    static const char hex[] = "0123456789ABCDEF";
+    for (unsigned int i = 0; i < digits; ++i) {
+        unsigned int shift = (digits - 1U - i) * 4U;
+        out[i] = hex[(value >> shift) & 0x0FU];
+    }
+    out[digits] = '\\0';
+}
+
+static void desktop_draw_hardware_diagnostics(void)
+{
+    if (!graphics_is_initialized())
+        return;
+    uint32_t now = interrupts_get_ticks();
+    if (desktop_diagnostics_last_refresh != 0U &&
+        (uint32_t)(now - desktop_diagnostics_last_refresh) < 10U)
+        return;
+    desktop_diagnostics_last_refresh = now;
+
+    graphics_begin_frame();
+    if (!graphics_frame_is_active())
+        return;
+
+    const int width = (int)graphics_get_width();
+    const int height = (int)graphics_get_height();
+    graphics_fill_rect(0, 0, width, height, 0x00101824U);
+    graphics_fill_rect(0, 0, width, 54, 0x001A2B43U);
+    graphics_draw_text(24, 16, "VantaOS Hardware Diagnostics", 0x00FFFFFFU, 2U);
+    graphics_draw_text(24, 68, "Keyboard: Ctrl + Super toggles this screen",
+                       0x009CB7D8U, 1U);
+
+    graphics_draw_text(24, 104, "USB HOST CONTROLLER", 0x007DC4FFU, 1U);
+    graphics_draw_text(24, 126,
+        xhci_controller_online() ? "xHCI controller: ONLINE" :
+                                   "xHCI controller: OFFLINE",
+        xhci_controller_online() ? 0x007BE0A1U : 0x00FF8A8AU, 1U);
+
+    uint32_t ports = xhci_port_count();
+    char line[96];
+    char hex[9];
+    graphics_draw_text(24, 150, "ROOT PORTS (connected / enabled / status)",
+                       0x00FFFFFFU, 1U);
+    uint32_t visible_ports = ports > 16U ? 16U : ports;
+    for (uint32_t port = 1U; port <= visible_ports; ++port) {
+        uint32_t status = xhci_port_status(port);
+        desktop_diagnostics_hex(hex, status, 8U);
+        line[0] = 'P'; line[1] = '0' + (char)(port / 10U);
+        line[2] = '0' + (char)(port % 10U); line[3] = ' ';
+        const char *connected = (status & 1U) ? "connected" : "disconnected";
+        const char *enabled = (status & 2U) ? "enabled" : "disabled";
+        unsigned int at = 4U;
+        while (*connected) line[at++] = *connected++;
+        line[at++] = ' '; line[at++] = '/'; line[at++] = ' ';
+        while (*enabled) line[at++] = *enabled++;
+        line[at++] = ' '; line[at++] = '0'; line[at++] = 'x';
+        for (unsigned int i = 0; i < 8U; ++i) line[at++] = hex[i];
+        line[at] = '\\0';
+        graphics_draw_text(32, 172 + (int)(port - 1U) * 17, line,
+                           (status & 1U) ? 0x00B8D9C4U : 0x007D8B9BU, 1U);
+    }
+    if (ports == 0U)
+        graphics_draw_text(32, 172, "No xHCI root ports reported",
+                           0x00FF8A8AU, 1U);
+    else if (ports > visible_ports)
+        graphics_draw_text(32, 172 + (int)visible_ports * 17,
+                           "Additional ports omitted", 0x007D8B9BU, 1U);
+
+    int device_y = 172 + (int)(visible_ports ? visible_ports : 1U) * 17 + 12;
+    if (device_y > height - 130)
+        device_y = height - 130;
+    graphics_draw_text(24, device_y, "REGISTERED INPUT DEVICES",
+                       0x007DC4FFU, 1U);
+    uint32_t device_count = input_device_count();
+    uint32_t usb_keyboards = 0U, usb_mice = 0U;
+    uint32_t i2c_keyboards = 0U, i2c_pointers = 0U;
+    uint32_t ps2_keyboards = 0U, ps2_mice = 0U;
+    for (uint32_t i = 0U; i < device_count; ++i) {
+        input_device_info_t device;
+        if (!input_get_device(i, &device))
+            continue;
+        if (device.bus == INPUT_BUS_USB) {
+            if (device.kind == INPUT_DEVICE_KEYBOARD) ++usb_keyboards;
+            if (device.kind == INPUT_DEVICE_MOUSE) ++usb_mice;
+        } else if (device.bus == INPUT_BUS_I2C) {
+            if (device.kind == INPUT_DEVICE_KEYBOARD) ++i2c_keyboards;
+            if (device.kind == INPUT_DEVICE_MOUSE) ++i2c_pointers;
+        } else if (device.bus == INPUT_BUS_PS2) {
+            if (device.kind == INPUT_DEVICE_KEYBOARD) ++ps2_keyboards;
+            if (device.kind == INPUT_DEVICE_MOUSE) ++ps2_mice;
+        }
+    }
+    int row_y = device_y + 22;
+    graphics_draw_text(32, row_y, "USB:  keyboard devices / mouse devices",
+                       0x00C6D2E0U, 1U);
+    desktop_diagnostics_hex(hex, usb_keyboards, 2U);
+    line[0]=' '; line[1]=' '; line[2]=' '; line[3]=' '; line[4]=' ';
+    line[5]=' '; line[6]=' '; line[7]=' '; line[8]=' ';
+    line[9]=' '; line[10]=' '; line[11]=' '; line[12]=' ';
+    line[13]=' '; line[14]=' '; line[15]=' '; line[16]=' ';
+    line[17]=' '; line[18]=' '; line[19]=' ';
+    line[20]=' '; line[21]=' '; line[22]=' ';
+    line[23]=' '; line[24]=' '; line[25]=' ';
+    line[26]=' '; line[27]=' '; line[28]=' ';
+    line[29]=' '; line[30]=' '; line[31]=' ';
+    line[32]=' '; line[33]=' '; line[34]=' ';
+    line[35]=' '; line[36]=' '; line[37]=' ';
+    line[38]=' '; line[39]=' '; line[40]=' ';
+    line[41]=' '; line[42]=' '; line[43]=' ';
+    line[44]=' '; line[45]=' '; line[46]=' ';
+    line[47]=' '; line[48]=' '; line[49]=' ';
+    line[50]=' '; line[51]=' '; line[52]=' ';
+    line[53]=' '; line[54]=' '; line[55]=' ';
+    line[56]=' '; line[57]=' '; line[58]=' ';
+    line[59]=' '; line[60]=' '; line[61]=' ';
+    line[62]=' '; line[63]=' '; line[64]=' ';
+    line[65]=' '; line[66]=' '; line[67]=' ';
+    line[68]=' '; line[69]=' '; line[70]=' ';
+    line[71]=' '; line[72]=' '; line[73]=' ';
+    line[74]=' '; line[75]=' '; line[76]=' ';
+    line[77]=' '; line[78]=' '; line[79]=' ';
+    line[80]=' '; line[81]=' '; line[82]=' ';
+    line[83]=' '; line[84]=' '; line[85]=' ';
+    line[86]=' '; line[87]=' '; line[88]=' ';
+    line[89]=' '; line[90]=' '; line[91]=' ';
+    line[92]=' '; line[93]=' '; line[94]=' ';
+    line[95]='\\0';
+    /* Compact, explicit counts avoid relying on a terminal or serial console. */
+    graphics_draw_text(32, row_y + 18,
+        "USB keyboard and mouse counts are listed in hexadecimal below",
+        0x007D8B9BU, 1U);
+    desktop_diagnostics_hex(hex, usb_keyboards, 2U);
+    graphics_draw_text(32, row_y + 36, "USB keyboards: 0x", 0x00C6D2E0U, 1U);
+    graphics_draw_text(160, row_y + 36, hex, 0x00FFFFFFU, 1U);
+    desktop_diagnostics_hex(hex, usb_mice, 2U);
+    graphics_draw_text(32, row_y + 53, "USB mice: 0x", 0x00C6D2E0U, 1U);
+    graphics_draw_text(160, row_y + 53, hex, 0x00FFFFFFU, 1U);
+    desktop_diagnostics_hex(hex, i2c_pointers, 2U);
+    graphics_draw_text(32, row_y + 70, "I2C pointer devices: 0x", 0x00C6D2E0U, 1U);
+    graphics_draw_text(208, row_y + 70, hex, 0x00FFFFFFU, 1U);
+    desktop_diagnostics_hex(hex, ps2_keyboards, 2U);
+    graphics_draw_text(32, row_y + 87, "PS/2 keyboards: 0x", 0x00C6D2E0U, 1U);
+    graphics_draw_text(176, row_y + 87, hex, 0x00FFFFFFU, 1U);
+    desktop_diagnostics_hex(hex, ps2_mice, 2U);
+    graphics_draw_text(32, row_y + 104, "PS/2 mice: 0x", 0x00C6D2E0U, 1U);
+    graphics_draw_text(160, row_y + 104, hex, 0x00FFFFFFU, 1U);
+
+    graphics_draw_text(24, height - 42,
+        "If USB mouse count is 0, inspect root-port state above. If I2C pointer is 0, touchpad discovery failed.",
+        0x009CB7D8U, 1U);
+    graphics_end_frame();
+}
 
 static int desktop_drag_present_due(void)
 {
@@ -264,11 +422,26 @@ void desktop_update(void)
     gui_server_cleanup_dead_windows();
     gui_server_sync_active_panel();
 
-    /* The physical Super/GUI key is a desktop shortcut, not text input. */
+    /* Ctrl+Super opens a keyboard-only hardware diagnostic view. */
     if (keyboard_take_super_event())
     {
-        graphics_toggle_start_menu();
-        desktop_gui_present();
+        if (keyboard_ctrl_pressed())
+        {
+            desktop_hardware_diagnostics_active =
+                !desktop_hardware_diagnostics_active;
+            desktop_diagnostics_last_refresh = 0U;
+            graphics_invalidate_scene();
+        }
+        else if (!desktop_hardware_diagnostics_active)
+        {
+            graphics_toggle_start_menu();
+            desktop_gui_present();
+        }
+    }
+    if (desktop_hardware_diagnostics_active)
+    {
+        desktop_draw_hardware_diagnostics();
+        return;
     }
 
     /* Keep the RTC clock/date current even when the user is not moving the mouse. */

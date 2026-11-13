@@ -170,8 +170,8 @@ static uint8_t xhci_reset_issued;
 #define XHCI_PIT_CHANNEL2      0x42U
 #define XHCI_PIT_SPEAKER       0x61U
 #define XHCI_PIT_FREQUENCY     1193182U
-#define XHCI_PIT_MAX_CHUNK_MS  50U
-#define XHCI_PIT_SPIN_LIMIT   5000000U
+#define XHCI_PIT_MAX_CHUNK_MS  10U
+#define XHCI_PIT_SPIN_LIMIT   20000000U
 
 static inline void xhci_outb(uint16_t port, uint8_t value)
 {
@@ -214,10 +214,18 @@ static int xhci_pit_delay_ms(uint32_t milliseconds)
                   (original_port & (uint8_t)~0x02U) | 0x01U);
 
         uint32_t spins = 0U;
-        while ((xhci_inb(XHCI_PIT_SPEAKER) & 0x20U) == 0U &&
+        while ((xhci_inb(XHCI_PIT_SPEAKER) & 0x20U) != 0U &&
                spins++ < XHCI_PIT_SPIN_LIMIT)
             __asm__ volatile ("pause" ::: "memory");
-        if ((xhci_inb(XHCI_PIT_SPEAKER) & 0x20U) == 0U)
+        int output_went_low =
+            (xhci_inb(XHCI_PIT_SPEAKER) & 0x20U) == 0U;
+        while (output_went_low &&
+               (xhci_inb(XHCI_PIT_SPEAKER) & 0x20U) == 0U &&
+               spins++ < XHCI_PIT_SPIN_LIMIT)
+            __asm__ volatile ("pause" ::: "memory");
+        int elapsed = output_went_low &&
+            (xhci_inb(XHCI_PIT_SPEAKER) & 0x20U) != 0U;
+        if (!elapsed)
         {
             xhci_outb(XHCI_PIT_SPEAKER, original_port);
             return 0;

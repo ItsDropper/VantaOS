@@ -58,7 +58,9 @@ char keyboard_get_char(void);
  */
 bool keyboard_has_event(void);
 bool keyboard_take_super_event(void);
+bool keyboard_take_f9_event(void);
 bool keyboard_ctrl_pressed(void);
+bool keyboard_shift_pressed(void);
 
 /*
  * Get the next special keyboard event.

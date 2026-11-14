@@ -192,6 +192,14 @@ jobs:
           print(f"ESP geometry valid: start={start}, sectors={total}, clusters={clusters}, cluster={spc * bps} bytes")
           PY
           mkdir -p /tmp/vanta-esp-check
+          read -r esp_start esp_size < <(python3 - <<'PY'
+          import json, subprocess
+          p = json.loads(subprocess.check_output(["sfdisk", "--json", "VantaOS-UEFI.img"], text=True))["partitiontable"]["partitions"][0]
+          print(p["start"], p["size"])
+          PY
+          )
+          dd if=VantaOS-UEFI.img of=/tmp/vanta-esp-check/esp.img bs=512 skip="$esp_start" count="$esp_size" status=none
+          fsck.fat --no --verbose /tmp/vanta-esp-check/esp.img
           mdir -i VantaOS-UEFI.img@@1048576 ::/EFI
           mdir -i VantaOS-UEFI.img@@1048576 ::/EFI/BOOT
           mdir -i VantaOS-UEFI.img@@1048576 ::/EFI/VANTA

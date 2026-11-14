@@ -66,6 +66,22 @@ assert '"desktop-watchdog"' in desktop
 assert "kernel_watchdog_register(500U)" in desktop
 assert "VANTAOS_DESKTOP_WATCHDOG_REGISTERED" in desktop
 
+
+# Physical-controller diagnostics must distinguish PCI/MMIO/firmware/reset/run
+# failures and report a connected port that never completes reset.
+for marker in (
+    "VANTAOS_XHCI_PCI vendor=0x",
+    "VANTAOS_XHCI_BAR0_INVALID_OR_IO",
+    "VANTAOS_XHCI_MMIO_MAP_FAILED",
+    "VANTAOS_XHCI_FIRMWARE_HANDOFF_FAILED",
+    "VANTAOS_XHCI_RESET_CLEAR_TIMEOUT",
+    "VANTAOS_XHCI_RUN_TIMEOUT",
+    "VANTAOS_XHCI_PORT_RESET_TIMEOUT",
+    "VANTAOS_XHCI_PORT_NOT_ENABLED",
+):
+    assert marker in source
+assert "(void)wait_register(operational, offset, reset_bit, 0);" not in source
+
 print("VANTAOS_XHCI_RESET_ERRATUM_OK")
 print("VANTAOS_DESKTOP_STARTUP_ISOLATION_OK")
 print("VANTAOS_DESKTOP_WATCHDOG_WIRED_OK")

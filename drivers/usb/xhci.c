@@ -1406,14 +1406,48 @@ static int xhci_firmware_handoff(uint32_t hcc1)
     return 0;
 }
 
+static void xhci_log_hex32(uint32_t value)
+{
+    static const char digits[] = "0123456789ABCDEF";
+    for (int shift = 28; shift >= 0; shift -= 4)
+    {
+        char digit = digits[(value >> (uint32_t)shift) & 0x0FU];
+        serial_write_bytes(&digit, 1U);
+    }
+}
+
+static void xhci_log_pci_identity(const struct pci_device* pci)
+{
+    serial_write("VANTAOS_XHCI_PCI vendor=0x");
+    xhci_log_hex32(pci->vendor_id);
+    serial_write(" device=0x");
+    xhci_log_hex32(pci->device_id);
+    serial_write(" bdf=");
+    xhci_log_hex32(((uint32_t)pci->bus << 8U) |
+                   ((uint32_t)pci->slot << 3U) | pci->function);
+    serial_write("\n");
+}
+
 static int controller_start(const struct pci_device* pci)
 {
+    xhci_log_pci_identity(pci);
     uint64_t bar = 0;
     int is_io = 0, is_64bit = 0;
     if (!pci_get_bar(pci, 0, &bar, &is_io, &is_64bit) || is_io || bar == 0)
+    {
+        serial_write("VANTAOS_XHCI_BAR0_INVALID_OR_IO\n");
         return 0;
-    if (!pci_enable_memory_space(pci) || !map_controller_bar(bar))
+    }
+    if (!pci_enable_memory_space(pci))
+    {
+        serial_write("VANTAOS_XHCI_PCI_MEMORY_DECODE_FAILED\n");
         return 0;
+    }
+    if (!map_controller_bar(bar))
+    {
+        serial_write("VANTAOS_XHCI_MMIO_MAP_FAILED\n");
+        return 0;
+    }
 
     uint8_t cap_length = registers[XHCI_CAP_CAPLENGTH];
     uint32_t hcs1 = mmio_read32(registers, XHCI_CAP_HCSPARAMS1);
@@ -1424,7 +1458,10 @@ static int controller_start(const struct pci_device* pci)
 
     if (cap_length < 0x20U || doorbell_offset >= XHCI_MMIO_MAP_SIZE ||
         runtime_offset + 0x40U >= XHCI_MMIO_MAP_SIZE)
+    {
+        serial_write("VANTAOS_XHCI_CAPABILITY_LAYOUT_INVALID\n");
         return 0;
+    }
 
     operational = registers + cap_length;
     doorbells = registers + doorbell_offset;
@@ -1437,12 +1474,18 @@ static int controller_start(const struct pci_device* pci)
      * that ownership has transferred to the OS.
      */
     if (!xhci_firmware_handoff(hcc1))
+    {
+        serial_write("VANTAOS_XHCI_FIRMWARE_HANDOFF_FAILED\n");
         return 0;
+    }
 
     max_slots = hcs1 & 0xFFU;
     max_ports = (hcs1 >> 24) & 0xFFU;
     if (max_slots == 0 || max_ports == 0)
+    {
+        serial_write("VANTAOS_XHCI_CAPABILITY_COUNTS_INVALID\n");
         return 0;
+    }
     if (max_ports > XHCI_MAX_PORTS)
         max_ports = XHCI_MAX_PORTS;
 
@@ -1452,7 +1495,10 @@ static int controller_start(const struct pci_device* pci)
     mmio_write32(operational, XHCI_USBCMD, command);
     if (!wait_register(operational, XHCI_USBSTS, XHCI_STS_HALTED,
                        XHCI_STS_HALTED))
+    {
+        serial_write("VANTAOS_XHCI_STOP_TIMEOUT\n");
         return 0;
+    }
 
     /* Intel 100-series xHCI erratum 20: never access xHCI MMIO for at
      * least 1 ms after asserting HCRST. If this controller is reset again,
@@ -1474,9 +1520,15 @@ static int controller_start(const struct pci_device* pci)
     }
     serial_write("VANTAOS_XHCI_RESET_QUIET_PERIOD_COMPLETE\n");
     if (!wait_register(operational, XHCI_USBCMD, XHCI_CMD_RESET, 0))
+    {
+        serial_write("VANTAOS_XHCI_RESET_CLEAR_TIMEOUT\n");
         return 0;
+    }
     if (!wait_register(operational, XHCI_USBSTS, XHCI_STS_NOT_READY, 0))
+    {
+        serial_write("VANTAOS_XHCI_CONTROLLER_NOT_READY_TIMEOUT\n");
         return 0;
+    }
 
     /* Clear static DMA state after reset; all pointers remain below 4 GiB. */
     for (uint32_t i = 0; i < 256U; ++i)
@@ -1573,16 +1625,28 @@ static int controller_start(const struct pci_device* pci)
     mmio_write64(runtime, 0x38U, event_address);
 
     if (!pci_enable_bus_mastering(pci))
+    {
+        serial_write("VANTAOS_XHCI_BUS_MASTER_ENABLE_FAILED\n");
         return 0;
+    }
 
     command = mmio_read32(operational, XHCI_USBCMD);
     command &= ~XHCI_CMD_INTERRUPTS;
     command |= XHCI_CMD_RUN;
     mmio_write32(operational, XHCI_USBCMD, command);
     if (!wait_register(operational, XHCI_USBSTS, XHCI_STS_HALTED, 0))
+    {
+        serial_write("VANTAOS_XHCI_RUN_TIMEOUT\n");
         return 0;
-    if (mmio_read32(operational, XHCI_USBSTS) & XHCI_STS_HOST_ERROR)
+    }
+    uint32_t host_status = mmio_read32(operational, XHCI_USBSTS);
+    if (host_status & XHCI_STS_HOST_ERROR)
+    {
+        serial_write("VANTAOS_XHCI_HOST_SYSTEM_ERROR status=0x");
+        xhci_log_hex32(host_status);
+        serial_write("\n");
         return 0;
+    }
 
     /* Power and reset connected ports; device enumeration follows in the
        USB core and consumes port-status-change events from this ring. */
@@ -1606,7 +1670,26 @@ static int controller_start(const struct pci_device* pci)
                 ? XHCI_PORT_WARM_RESET : XHCI_PORT_RESET;
             writable |= reset_bit;
             mmio_write32(operational, offset, writable);
-            (void)wait_register(operational, offset, reset_bit, 0);
+            if (!wait_register(operational, offset, reset_bit, 0))
+            {
+                serial_write("VANTAOS_XHCI_PORT_RESET_TIMEOUT port=");
+                xhci_log_hex32(port);
+                serial_write(" portsc=0x");
+                xhci_log_hex32(mmio_read32(operational, offset));
+                serial_write("\n");
+            }
+            else
+            {
+                uint32_t final_portsc = mmio_read32(operational, offset);
+                if ((final_portsc & XHCI_PORT_ENABLED) == 0U)
+                {
+                    serial_write("VANTAOS_XHCI_PORT_NOT_ENABLED port=");
+                    xhci_log_hex32(port);
+                    serial_write(" portsc=0x");
+                    xhci_log_hex32(final_portsc);
+                    serial_write("\n");
+                }
+            }
         }
     }
 

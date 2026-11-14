@@ -187,7 +187,8 @@ void desktop_process_main(void)
             uint64_t poll_interval = frequency / 100U;
             if (poll_interval == 0U)
                 poll_interval = 1U;
-            if (now >= desktop_next_polled_device_tick)
+            if (timer_tsc_ticks_per_second() == 0U ||
+                now >= desktop_next_polled_device_tick)
             {
                 if (!desktop_polling_fallback_reported)
                 {

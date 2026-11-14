@@ -108,7 +108,92 @@ jobs:
           sha256sum VantaOS-UEFI.img BOOTX64.EFI kernel-uefi.elf > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
-      - name: Boot the exact GPT/FAT32 USB image in OVMF
+      - name: Validate UEFI executable and kernel ELF structure
+        shell: bash
+        run: |
+          set -euo pipefail
+          objdump -f BOOTX64.EFI
+          objdump -p BOOTX64.EFI | grep -E 'Magic[[:space:]]+020b|Subsystem[[:space:]]+0000000a'
+          readelf -h kernel-uefi.elf
+          readelf -lW kernel-uefi.elf
+          python3 - <<'PY'
+          import subprocess
+          import re
+
+          header = subprocess.check_output(["readelf", "-h", "kernel-uefi.elf"], text=True)
+          assert re.search(r"Class:\s+ELF64", header), "UEFI kernel is not ELF64"
+          assert re.search(r"Machine:\s+Advanced Micro Devices X86-64", header), "wrong kernel architecture"
+          assert re.search(r"Type:\s+EXEC", header), "UEFI kernel must be a static executable"
+          segments = subprocess.check_output(["readelf", "-lW", "kernel-uefi.elf"], text=True)
+          loads = [line for line in segments.splitlines() if line.lstrip().startswith("LOAD")]
+          assert loads, "kernel has no PT_LOAD segments"
+          assert any(" R E " in line or line.rstrip().endswith("R E") for line in loads), (
+              "kernel has no executable load segment"
+          )
+          print(f"ELF structure valid: {len(loads)} loadable segments")
+          PY
+
+      - name: Verify GPT integrity and FAT32 contents
+        shell: bash
+        run: |
+          set -euo pipefail
+          sgdisk --verify VantaOS-UEFI.img
+          sfdisk --verify VantaOS-UEFI.img
+          python3 - <<'PY'
+          import json
+          import struct
+          import subprocess
+
+          image = "VantaOS-UEFI.img"
+          table = json.loads(subprocess.check_output(
+              ["sfdisk", "--json", image], text=True))["partitiontable"]
+          assert table["label"] == "gpt", f"expected GPT, got {table['label']}"
+          assert len(table["partitions"]) == 1, (
+              f"expected one ESP partition, found {len(table['partitions'])}"
+          )
+          part = table["partitions"][0]
+          start, size = int(part["start"]), int(part["size"])
+          assert start == 2048, f"unexpected ESP start sector {start}"
+          assert part["type"].lower() == "c12a7328-f81f-11d2-ba4b-00a0c93ec93b"
+          image_sectors = __import__("os").path.getsize(image) // 512
+          assert start + size <= image_sectors - 33, "ESP overlaps backup GPT metadata"
+          with open(image, "rb") as stream:
+              stream.seek(start * 512)
+              boot = stream.read(512)
+          bps = struct.unpack_from("<H", boot, 11)[0]
+          spc = boot[13]
+          reserved = struct.unpack_from("<H", boot, 14)[0]
+          fats = boot[16]
+          total = struct.unpack_from("<I", boot, 32)[0] or struct.unpack_from("<H", boot, 19)[0]
+          fat_size = struct.unpack_from("<I", boot, 36)[0]
+          hidden = struct.unpack_from("<I", boot, 28)[0]
+          assert bps == 512 and spc in (1, 2, 4, 8, 16, 32, 64, 128)
+          assert reserved > 0 and fats == 2 and fat_size > 0
+          assert total > 0 and total <= size and hidden == 0
+          assert boot[510:512] == b"\x55\xaa", "missing FAT boot signature"
+          assert struct.unpack_from("<I", boot, 82)[0] == 0x41615252, "invalid FAT32 FSInfo lead signature"
+          print(f"ESP geometry valid: start={start}, sectors={total}, cluster={spc * bps} bytes")
+          PY
+          mkdir -p /tmp/vanta-esp-check
+          mdir -i VantaOS-UEFI.img@@1048576 ::/EFI
+          mdir -i VantaOS-UEFI.img@@1048576 ::/EFI/BOOT
+          mdir -i VantaOS-UEFI.img@@1048576 ::/EFI/VANTA
+          mcopy -i VantaOS-UEFI.img@@1048576 ::/EFI/BOOT/BOOTX64.EFI /tmp/vanta-esp-check/BOOTX64.EFI
+          mcopy -i VantaOS-UEFI.img@@1048576 ::/EFI/VANTA/KERNEL.ELF /tmp/vanta-esp-check/KERNEL.ELF
+          cmp BOOTX64.EFI /tmp/vanta-esp-check/BOOTX64.EFI
+          cmp kernel-uefi.elf /tmp/vanta-esp-check/KERNEL.ELF
+          sha256sum BOOTX64.EFI /tmp/vanta-esp-check/BOOTX64.EFI kernel-uefi.elf /tmp/vanta-esp-check/KERNEL.ELF
+          for marker in \
+            VANTAOS_UEFI_LOADER_START \
+            VANTAOS_UEFI_ELF_LOADED \
+            VANTAOS_UEFI_KERNEL_FILE_OPEN_FAIL; do
+            grep -aFq "$marker" BOOTX64.EFI || {
+              echo "EFI application is missing required diagnostic data: $marker"
+              exit 1
+            }
+          done
+
+      - name: Strict raw-image UEFI boot, timer, xHCI and USB input matrix
         shell: bash
         run: |
           set -euo pipefail
@@ -129,75 +214,8 @@ jobs:
           fi
           test -s "$code_firmware"
           test -s "$vars_template"
-          cp "$vars_template" OVMF_VARS.fd
-
-          # Attach the exact image produced by make uefi as USB mass storage.
-          # This exercises GPT discovery, the ESP FAT filesystem and the
-          # EFI/BOOT/BOOTX64.EFI fallback path without rebuilding an ISO.
-          set +e
-          timeout 35s qemu-system-x86_64 \
-            -machine pc -cpu max -m 512M -smp 2 \
-            -drive if=pflash,format=raw,readonly=on,file="$code_firmware" \
-            -drive if=pflash,format=raw,file=OVMF_VARS.fd \
-            -drive if=none,id=vantadisk,format=raw,file=VantaOS-UEFI.img \
-            -device qemu-xhci,id=xhci \
-            -device usb-storage,bus=xhci.0,drive=vantadisk,bootindex=1 \
-            -boot menu=on,strict=on \
-            -display none -serial file:uefi-hardware-test.log \
-            -chardev file,id=ovmfdebug,path=ovmf-debug.log \
-            -device isa-debugcon,iobase=0x402,chardev=ovmfdebug \
-            -chardev file,id=vantadebug,path=uefi-debug.log \
-            -device isa-debugcon,iobase=0xe9,chardev=vantadebug \
-            -monitor none -no-reboot -d int,cpu_reset -D qemu-int.log
-          result=$?
-          set -e
-          if [ "$result" -ne 124 ]; then
-            echo "OVMF did not remain in the raw USB image kernel smoke test (exit $result)."
-            cat uefi-hardware-test.log 2>/dev/null || true
-            cat uefi-debug.log 2>/dev/null || true
-            cat ovmf-debug.log 2>/dev/null || true
-            exit 1
-          fi
-          sleep 1
-          if grep -Eq '^VANTAOS_[A-Z0-9_]*_FAIL' uefi-debug.log; then
-            echo "UEFI test boot emitted a failure marker."
-            cat uefi-debug.log
-            exit 1
-          fi
-          for marker in \
-            VANTAOS_UEFI_LOADER_START \
-            VANTAOS_UEFI_ELF_LOADED \
-            VANTAOS_UEFI_STORAGE_POLICY_READ_ONLY \
-            VANTAOS_UEFI_EXIT_BOOT_SERVICES_OK \
-            VANTAOS_UEFI_KERNEL_HANDOFF \
-            VANTAOS_UEFI_KERNEL_ENTRY \
-            VANTAOS_UEFI_BOOT_INFO_READY \
-            VANTAOS_BOOT_OK \
-            VANTAOS_DEVICE_IO_WORKER_READY; do
-            grep -q "$marker" uefi-debug.log || {
-              echo "Missing required marker: $marker"
-              cat uefi-debug.log
-              cat ovmf-debug.log 2>/dev/null || true
-              cat uefi-hardware-test.log 2>/dev/null || true
-              exit 1
-            }
-          done
-          grep -Eq 'VANTAOS_IRQ_TIMER_(OK|RECOVERED_VIRTUAL_WIRE)' uefi-debug.log || {
-            echo "Missing timer interrupt health result."
-            cat uefi-debug.log
-            exit 1
-          }
-          grep -q 'VANTAOS_XHCI_CONTROLLER_ONLINE' uefi-debug.log || {
-            echo "Missing xHCI initialization result."
-            cat uefi-debug.log
-            exit 1
-          }
-          grep -Eq 'VANTAOS_XHCI_(OS_OWNERSHIP_ACQUIRED|LEGACY_CAP_ABSENT)' uefi-debug.log || {
-            echo "Missing successful xHCI firmware ownership result."
-            cat uefi-debug.log
-            exit 1
-          }
-          echo "Raw GPT/FAT32 UEFI USB image booted through OVMF; loader, kernel, timer and xHCI controller initialization passed."
+          python3 -m py_compile scripts/test_uefi_image_boot.py
+          python3 scripts/test_uefi_image_boot.py "$code_firmware" "$vars_template"
 
       - name: Upload UEFI hardware test diagnostics
         if: always()

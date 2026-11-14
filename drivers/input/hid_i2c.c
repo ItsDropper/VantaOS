@@ -8,7 +8,6 @@
 #include "hid_report.h"
 #include "input.h"
 #include "keyboard.h"
-#include "interrupts.h"
 #include "serial.h"
 #include "timer.h"
 
@@ -760,7 +759,8 @@ static void hid_poll_device(hid_i2c_device_t *device,uint32_t tick)
 
 void hid_i2c_poll(void)
 {
-    uint32_t tick=interrupts_get_ticks();
+    /* timer_get_ticks() remains monotonic from the calibrated TSC when IRQ0 is dead. */
+    uint32_t tick=timer_get_ticks();
     if(tick==last_poll_tick) return;
     last_poll_tick=tick;
     uint32_t visited=0U;

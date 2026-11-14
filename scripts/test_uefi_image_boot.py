@@ -209,7 +209,7 @@ def run_profile(name: str, cpus: int, memory: str,
                     fail(f"forbidden failure marker observed: {marker}", *logs)
             import re
             failure_markers = re.findall(
-                r"^VANTAOS_[A-Z0-9_]*(?:_FAIL|_FAILED|_TIMEOUT)(?:\\b|$)",
+                r"^VANTAOS_[A-Z0-9_]*(?:_FAIL|_FAILED|_TIMEOUT)(?:\b|$)",
                 output_text, re.MULTILINE
             )
             if failure_markers:

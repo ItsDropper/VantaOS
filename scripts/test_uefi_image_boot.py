@@ -31,12 +31,15 @@ REQUIRED = (
     "VANTAOS_UEFI_BOOT_INFO_READY",
     "VANTAOS_XHCI_CONTROLLER_ONLINE",
     "VANTAOS_XHCI_RESET_QUIET_PERIOD_COMPLETE",
+    "VANTAOS_XHCI_HID_COMPLETION_MATCHED",
+    "VANTAOS_XHCI_HID_REPORT_RECEIVED",
     "VANTAOS_USB_HID_KEYBOARD_ONLINE",
     "VANTAOS_USB_HID_MOUSE_ONLINE",
     "VANTAOS_DESKTOP_INPUT_LOOP_ONLINE",
     "VANTAOS_BOOT_OK",
     "VANTAOS_IRQ_TIMER_OK",
     "VANTAOS_DEVICE_IO_WORKER_READY",
+    "VANTAOS_DESKTOP_WATCHDOG_REGISTERED",
     "VANTAOS_USB_HID_KEYBOARD_INPUT_OK",
     "VANTAOS_USB_HID_MOUSE_INPUT_OK",
 )
@@ -208,6 +211,13 @@ def run_profile(name: str, cpus: int, memory: str,
             for marker in REQUIRED:
                 if marker not in output_lines:
                     fail(f"missing required standalone marker {marker}", *logs)
+            usb_devices = [line for line in output_lines if line.startswith("VANTAOS_HW_USB_DEVICE ")]
+            if len(usb_devices) < 3:
+                fail(f"expected USB mass-storage, keyboard and mouse enumeration; saw {len(usb_devices)} USB devices", *logs)
+            if output_lines.count("VANTAOS_XHCI_HID_COMPLETION_MATCHED") < 2:
+                fail("keyboard and mouse HID transfer completions were not both observed", *logs)
+            if output_lines.count("VANTAOS_XHCI_HID_REPORT_RECEIVED") < 2:
+                fail("keyboard and mouse HID reports were not both received", *logs)
             for marker in FORBIDDEN:
                 if marker in output_text:
                     fail(f"forbidden failure marker observed: {marker}", *logs)

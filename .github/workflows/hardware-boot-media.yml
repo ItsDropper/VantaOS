@@ -107,7 +107,7 @@ jobs:
           sha256sum VantaOS-UEFI.img BOOTX64.EFI kernel-uefi.elf > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
-      - name: Boot UEFI test media in OVMF without a secondary disk attached
+      - name: Boot the exact GPT/FAT32 USB image in OVMF
         shell: bash
         run: |
           set -euo pipefail
@@ -129,34 +129,19 @@ jobs:
           test -s "$code_firmware"
           test -s "$vars_template"
           cp "$vars_template" OVMF_VARS.fd
-          # Boot the exact loader and kernel payload through an El Torito
-          # EFI boot image. The raw GPT/FAT32 USB image is validated above;
-          # OVMF on hosted runners does not reliably enumerate its raw-disk
-          # fallback path, so this isolates loader and kernel handoff testing.
-          mkdir -p uefi-iso-root/EFI/BOOT uefi-iso-root/EFI/VANTA
-          truncate -s 64M uefi-boot-esp.img
-          mkfs.fat -F 32 uefi-boot-esp.img >/dev/null
-          mmd -i uefi-boot-esp.img ::/EFI
-          mmd -i uefi-boot-esp.img ::/EFI/BOOT
-          mmd -i uefi-boot-esp.img ::/EFI/VANTA
-          mcopy -i uefi-boot-esp.img BOOTX64.EFI ::/EFI/BOOT/BOOTX64.EFI
-          mcopy -i uefi-boot-esp.img kernel-uefi.elf ::/EFI/VANTA/KERNEL.ELF
-          cp uefi-boot-esp.img uefi-iso-root/efiboot.img
-          # Mirror the EFI tree into the ISO filesystem for tools that inspect
-          # ISO9660/Joliet paths instead of the El Torito EFI System Partition.
-          cp BOOTX64.EFI uefi-iso-root/EFI/BOOT/BOOTX64.EFI
-          cp kernel-uefi.elf uefi-iso-root/EFI/VANTA/KERNEL.ELF
-          xorriso -as mkisofs -R -J -V VANTAOSUEFI \
-            -eltorito-alt-boot -e efiboot.img -no-emul-boot \
-            -o uefi-smoke.iso uefi-iso-root
 
+          # Attach the exact image produced by make uefi as USB mass storage.
+          # This exercises GPT discovery, the ESP FAT filesystem and the
+          # EFI/BOOT/BOOTX64.EFI fallback path without rebuilding an ISO.
           set +e
-          timeout 25s qemu-system-x86_64 \
+          timeout 35s qemu-system-x86_64 \
             -machine pc -cpu max -m 512M -smp 2 \
             -drive if=pflash,format=raw,readonly=on,file="$code_firmware" \
             -drive if=pflash,format=raw,file=OVMF_VARS.fd \
-            -drive if=ide,index=0,media=cdrom,format=raw,file=uefi-smoke.iso \
-            -boot order=d \
+            -drive if=none,id=vantadisk,format=raw,file=VantaOS-UEFI.img \
+            -device qemu-xhci,id=xhci \
+            -device usb-storage,bus=xhci.0,drive=vantadisk,bootindex=1 \
+            -boot menu=on,strict=on \
             -display none -serial file:uefi-hardware-test.log \
             -chardev file,id=ovmfdebug,path=ovmf-debug.log \
             -device isa-debugcon,iobase=0x402,chardev=ovmfdebug \
@@ -166,8 +151,10 @@ jobs:
           result=$?
           set -e
           if [ "$result" -ne 124 ]; then
-            echo "OVMF test did not remain in the kernel smoke test (exit $result)."
+            echo "OVMF did not remain in the raw USB image kernel smoke test (exit $result)."
             cat uefi-hardware-test.log 2>/dev/null || true
+            cat uefi-debug.log 2>/dev/null || true
+            cat ovmf-debug.log 2>/dev/null || true
             exit 1
           fi
           sleep 1
@@ -184,7 +171,8 @@ jobs:
             VANTAOS_UEFI_KERNEL_HANDOFF \
             VANTAOS_UEFI_KERNEL_ENTRY \
             VANTAOS_UEFI_BOOT_INFO_READY \
-            VANTAOS_BOOT_OK; do
+            VANTAOS_BOOT_OK \
+            VANTAOS_DEVICE_IO_WORKER_READY; do
             grep -q "$marker" uefi-debug.log || {
               echo "Missing required marker: $marker"
               cat uefi-debug.log
@@ -193,7 +181,17 @@ jobs:
               exit 1
             }
           done
-          echo "UEFI live-media smoke test passed with no secondary disk attached; the kernel read-only policy is asserted by the block-device host test."
+          grep -Eq 'VANTAOS_IRQ_TIMER_(OK|RECOVERED_VIRTUAL_WIRE|DEAD_POLLING_MODE)' uefi-debug.log || {
+            echo "Missing timer interrupt health result."
+            cat uefi-debug.log
+            exit 1
+          }
+          grep -Eq 'VANTAOS_XHCI_(CONTROLLER_ONLINE|CONTROLLER_NOT_FOUND|CONTROLLER_INIT_FAILED)' uefi-debug.log || {
+            echo "Missing xHCI initialization result."
+            cat uefi-debug.log
+            exit 1
+          }
+          echo "Raw GPT/FAT32 UEFI USB image booted through OVMF; loader, kernel, runtime, timer and xHCI diagnostics were observed."
 
       - name: Upload UEFI hardware test diagnostics
         if: always()

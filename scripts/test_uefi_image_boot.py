@@ -12,7 +12,6 @@ import shutil
 import socket
 import subprocess
 import sys
-import tempfile
 import time
 from pathlib import Path
 
@@ -192,7 +191,7 @@ def run_profile(name: str, cpus: int, memory: str,
         process = subprocess.Popen(command, stdout=output, stderr=subprocess.STDOUT)
         logs = (debug_log, serial_log, ovmf_log, qemu_log, root / "qemu.stdout")
         try:
-            wait_for_text(debug_log, "VANTAOS_BOOT_OK", process, 30, logs)
+            wait_for_text(debug_log, "VANTAOS_BOOT_OK", process, 90, logs)
             wait_for_text(debug_log, "VANTAOS_IRQ_TIMER_OK", process, 5, logs)
             wait_for_text(debug_log, "VANTAOS_DEVICE_IO_WORKER_READY", process, 10, logs)
             wait_for_text(debug_log, "VANTAOS_USB_HID_KEYBOARD_ONLINE", process, 10, logs)

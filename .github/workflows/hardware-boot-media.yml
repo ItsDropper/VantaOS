@@ -199,7 +199,7 @@ jobs:
           PY
           )
           dd if=VantaOS-UEFI.img of=/tmp/vanta-esp-check/esp.img bs=512 skip="$esp_start" count="$esp_size" status=none
-          fsck.fat --no --verbose /tmp/vanta-esp-check/esp.img
+          fsck.fat -n -v /tmp/vanta-esp-check/esp.img
           mdir -i VantaOS-UEFI.img@@1048576 ::/EFI
           mdir -i VantaOS-UEFI.img@@1048576 ::/EFI/BOOT
           mdir -i VantaOS-UEFI.img@@1048576 ::/EFI/VANTA

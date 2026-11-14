@@ -8,7 +8,6 @@ xHCI health, enumerate USB keyboard/mouse devices, and process injected input.
 from __future__ import annotations
 
 import json
-import os
 import shutil
 import socket
 import subprocess
@@ -31,8 +30,8 @@ REQUIRED = (
     "VANTAOS_UEFI_KERNEL_HANDOFF",
     "VANTAOS_UEFI_KERNEL_ENTRY",
     "VANTAOS_UEFI_BOOT_INFO_READY",
-    "VANTAOS_XHCI_OS_OWNERSHIP_ACQUIRED",
     "VANTAOS_XHCI_CONTROLLER_ONLINE",
+    "VANTAOS_XHCI_RESET_QUIET_PERIOD_COMPLETE",
     "VANTAOS_USB_HID_KEYBOARD_ONLINE",
     "VANTAOS_USB_HID_MOUSE_ONLINE",
     "VANTAOS_DESKTOP_INPUT_LOOP_ONLINE",
@@ -150,84 +149,99 @@ def inject_input(qmp_path: Path) -> None:
 
 def run_profile(name: str, cpus: int, memory: str,
                 code: Path, vars_template: Path) -> None:
-    with tempfile.TemporaryDirectory(prefix=f"vanta-uefi-{name}-") as temp:
-        root = Path(temp)
-        vars_file = root / "OVMF_VARS.fd"
-        shutil.copyfile(vars_template, vars_file)
-        serial_log = root / "serial.log"
-        debug_log = root / "debugcon.log"
-        ovmf_log = root / "ovmf.log"
-        qemu_log = root / "qemu.log"
-        qmp_socket = root / "qmp.sock"
-        command = [
-            "qemu-system-x86_64",
-            "-machine", "q35,accel=tcg",
-            "-cpu", "max",
-            "-m", memory,
-            "-smp", str(cpus),
-            "-drive", f"if=pflash,format=raw,readonly=on,file={code}",
-            "-drive", f"if=pflash,format=raw,file={vars_file}",
-            "-drive", f"if=none,id=vantadisk,format=raw,file={IMAGE.resolve()}",
-            "-device", "qemu-xhci,id=xhci",
-            "-device", "usb-storage,bus=xhci.0,drive=vantadisk,bootindex=1",
-            "-device", "usb-kbd,bus=xhci.0",
-            "-device", "usb-mouse,bus=xhci.0",
-            "-boot", "menu=on,strict=on",
-            "-display", "none",
-            "-serial", f"file:{serial_log}",
-            "-chardev", f"file,id=ovmfdebug,path={ovmf_log}",
-            "-device", "isa-debugcon,iobase=0x402,chardev=ovmfdebug",
-            "-chardev", f"file,id=vantadebug,path={debug_log}",
-            "-device", "isa-debugcon,iobase=0xe9,chardev=vantadebug",
-            "-qmp", f"unix:{qmp_socket},server=on,wait=off",
-            "-monitor", "none",
-            "-no-reboot",
-            "-no-shutdown",
-            "-d", "guest_errors,cpu_reset",
-            "-D", str(qemu_log),
-        ]
-        print(f"[{name}] starting exact raw image ({cpus} CPU, {memory}, TCG)")
-        with open(root / "qemu.stdout", "wb") as output:
-            process = subprocess.Popen(command, stdout=output, stderr=subprocess.STDOUT)
-            logs = (debug_log, serial_log, ovmf_log, qemu_log, root / "qemu.stdout")
+    root = Path("uefi-test-logs") / name
+    if root.exists():
+        shutil.rmtree(root)
+    root.mkdir(parents=True)
+    vars_file = root / "OVMF_VARS.fd"
+    shutil.copyfile(vars_template, vars_file)
+    serial_log = root / "serial.log"
+    debug_log = root / "debugcon.log"
+    ovmf_log = root / "ovmf.log"
+    qemu_log = root / "qemu.log"
+    qmp_socket = root / "qmp.sock"
+    command = [
+        "qemu-system-x86_64",
+        "-machine", "q35,accel=tcg",
+        "-cpu", "max",
+        "-m", memory,
+        "-smp", str(cpus),
+        "-drive", f"if=pflash,format=raw,readonly=on,file={code}",
+        "-drive", f"if=pflash,format=raw,file={vars_file}",
+        "-drive", f"if=none,id=vantadisk,format=raw,file={IMAGE.resolve()}",
+        "-device", "qemu-xhci,id=xhci",
+        "-device", "usb-storage,bus=xhci.0,drive=vantadisk,bootindex=1",
+        "-device", "usb-kbd,bus=xhci.0",
+        "-device", "usb-mouse,bus=xhci.0",
+        "-boot", "menu=on,strict=on",
+        "-display", "none",
+        "-serial", f"file:{serial_log}",
+        "-chardev", f"file,id=ovmfdebug,path={ovmf_log}",
+        "-device", "isa-debugcon,iobase=0x402,chardev=ovmfdebug",
+        "-chardev", f"file,id=vantadebug,path={debug_log}",
+        "-device", "isa-debugcon,iobase=0xe9,chardev=vantadebug",
+        "-qmp", f"unix:{qmp_socket},server=on,wait=off",
+        "-monitor", "none",
+        "-no-reboot",
+        "-no-shutdown",
+        "-d", "guest_errors,cpu_reset",
+        "-D", str(qemu_log),
+    ]
+    print(f"[{name}] starting exact raw image ({cpus} CPU, {memory}, TCG)")
+    with open(root / "qemu.stdout", "wb") as output:
+        process = subprocess.Popen(command, stdout=output, stderr=subprocess.STDOUT)
+        logs = (debug_log, serial_log, ovmf_log, qemu_log, root / "qemu.stdout")
+        try:
+            wait_for_text(debug_log, "VANTAOS_BOOT_OK", process, 30, logs)
+            wait_for_text(debug_log, "VANTAOS_IRQ_TIMER_OK", process, 5, logs)
+            wait_for_text(debug_log, "VANTAOS_DEVICE_IO_WORKER_READY", process, 10, logs)
+            wait_for_text(debug_log, "VANTAOS_USB_HID_KEYBOARD_ONLINE", process, 10, logs)
+            wait_for_text(debug_log, "VANTAOS_USB_HID_MOUSE_ONLINE", process, 10, logs)
+            inject_input(qmp_socket)
+            wait_for_text(debug_log, "VANTAOS_USB_HID_KEYBOARD_INPUT_OK", process, 8, logs)
+            wait_for_text(debug_log, "VANTAOS_USB_HID_MOUSE_INPUT_OK", process, 8, logs)
+            time.sleep(1)
+            output_text = debug_log.read_text(errors="replace")
+            for marker in REQUIRED:
+                if marker not in output_text:
+                    fail(f"missing required marker {marker}", *logs)
+            for marker in FORBIDDEN:
+                if marker in output_text:
+                    fail(f"forbidden failure marker observed: {marker}", *logs)
+            import re
+            failure_markers = re.findall(
+                r"^VANTAOS_[A-Z0-9_]*(?:_FAIL|_FAILED|_TIMEOUT)(?:\\b|$)",
+                output_text, re.MULTILINE
+            )
+            if failure_markers:
+                fail(f"failure diagnostics observed: {failure_markers}", *logs)
+            ownership_ok = (
+                "VANTAOS_XHCI_OS_OWNERSHIP_ACQUIRED" in output_text or
+                "VANTAOS_XHCI_LEGACY_CAP_ABSENT" in output_text
+            )
+            if not ownership_ok:
+                fail("xHCI firmware ownership was neither acquired nor proven unnecessary", *logs)
+            positions = [output_text.index(marker) for marker in ORDERED]
+            if positions != sorted(positions):
+                fail("boot milestones appeared out of order", *logs)
+            if output_text.count("VANTAOS_BOOT_OK") != 1:
+                fail("boot completion marker was not emitted exactly once", *logs)
+            if output_text.count("VANTAOS_USB_HID_KEYBOARD_INPUT_OK") != 1:
+                fail("keyboard input proof was not exactly once", *logs)
+            if output_text.count("VANTAOS_USB_HID_MOUSE_INPUT_OK") != 1:
+                fail("mouse input proof was not exactly once", *logs)
+            if process.poll() is not None:
+                fail(f"QEMU exited after boot ({process.returncode})", *logs)
+            print(f"[{name}] PASS: boot, timer, xHCI, USB HID enumeration and injected keyboard/mouse input; logs: {root}")
+        except Exception as error:
+            fail(str(error), *logs)
+        finally:
+            process.terminate()
             try:
-                wait_for_text(debug_log, "VANTAOS_BOOT_OK", process, 30, logs)
-                wait_for_text(debug_log, "VANTAOS_IRQ_TIMER_OK", process, 5, logs)
-                wait_for_text(debug_log, "VANTAOS_DEVICE_IO_WORKER_READY", process, 10, logs)
-                wait_for_text(debug_log, "VANTAOS_USB_HID_KEYBOARD_ONLINE", process, 10, logs)
-                wait_for_text(debug_log, "VANTAOS_USB_HID_MOUSE_ONLINE", process, 10, logs)
-                inject_input(qmp_socket)
-                wait_for_text(debug_log, "VANTAOS_USB_HID_KEYBOARD_INPUT_OK", process, 8, logs)
-                wait_for_text(debug_log, "VANTAOS_USB_HID_MOUSE_INPUT_OK", process, 8, logs)
-                time.sleep(1)
-                output_text = debug_log.read_text(errors="replace")
-                for marker in REQUIRED:
-                    if marker not in output_text:
-                        fail(f"missing required marker {marker}", *logs)
-                for marker in FORBIDDEN:
-                    if marker in output_text:
-                        fail(f"forbidden failure marker observed: {marker}", *logs)
-                positions = [output_text.index(marker) for marker in ORDERED]
-                if positions != sorted(positions):
-                    fail("boot milestones appeared out of order", *logs)
-                if output_text.count("VANTAOS_BOOT_OK") != 1:
-                    fail("boot completion marker was not emitted exactly once", *logs)
-                if output_text.count("VANTAOS_USB_HID_KEYBOARD_INPUT_OK") != 1:
-                    fail("keyboard input proof was not exactly once", *logs)
-                if output_text.count("VANTAOS_USB_HID_MOUSE_INPUT_OK") != 1:
-                    fail("mouse input proof was not exactly once", *logs)
-                if process.poll() is not None:
-                    fail(f"QEMU exited after boot ({process.returncode})", *logs)
-                print(f"[{name}] PASS: boot, timer, xHCI, USB HID enumeration and injected keyboard/mouse input")
-            except Exception as error:
-                fail(str(error), *logs)
-            finally:
-                process.terminate()
-                try:
-                    process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    process.wait(timeout=5)
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=5)
 
 
 def main() -> None:

@@ -181,17 +181,22 @@ jobs:
               exit 1
             }
           done
-          grep -Eq 'VANTAOS_IRQ_TIMER_(OK|RECOVERED_VIRTUAL_WIRE|DEAD_POLLING_MODE)' uefi-debug.log || {
+          grep -Eq 'VANTAOS_IRQ_TIMER_(OK|RECOVERED_VIRTUAL_WIRE)' uefi-debug.log || {
             echo "Missing timer interrupt health result."
             cat uefi-debug.log
             exit 1
           }
-          grep -Eq 'VANTAOS_XHCI_(CONTROLLER_ONLINE|CONTROLLER_NOT_FOUND|CONTROLLER_INIT_FAILED)' uefi-debug.log || {
+          grep -q 'VANTAOS_XHCI_CONTROLLER_ONLINE' uefi-debug.log || {
             echo "Missing xHCI initialization result."
             cat uefi-debug.log
             exit 1
           }
-          echo "Raw GPT/FAT32 UEFI USB image booted through OVMF; loader, kernel, runtime, timer and xHCI diagnostics were observed."
+          grep -Eq 'VANTAOS_XHCI_(OS_OWNERSHIP_ACQUIRED|LEGACY_CAP_ABSENT)' uefi-debug.log || {
+            echo "Missing successful xHCI firmware ownership result."
+            cat uefi-debug.log
+            exit 1
+          }
+          echo "Raw GPT/FAT32 UEFI USB image booted through OVMF; loader, kernel, timer and xHCI controller initialization passed."
 
       - name: Upload UEFI hardware test diagnostics
         if: always()
@@ -202,8 +207,6 @@ jobs:
             VantaOS-UEFI.img
             BOOTX64.EFI
             kernel-uefi.elf
-            uefi-boot-esp.img
-            uefi-smoke.iso
             SHA256SUMS.txt
             uefi-hardware-test.log
             uefi-debug.log

@@ -1316,6 +1316,92 @@ int xhci_reset_port(uint32_t port)
     portsc = mmio_read32(operational, offset);
     return (portsc & XHCI_PORT_ENABLED) != 0U;
 }
+/*
+ * Complete the xHCI Extended Capability BIOS/OS ownership protocol before
+ * stopping or resetting a controller left running by UEFI firmware.
+ *
+ * HCCPARAMS1.xECP is a DWORD offset from the capability base. Each extended
+ * capability header contains an 8-bit ID and an 8-bit forward link measured
+ * in DWORDs. Bound both the walk and every MMIO access to the mapped BAR.
+ */
+static int xhci_firmware_handoff(uint32_t hcc1)
+{
+    uint32_t offset = ((hcc1 >> 16U) & 0xFFFFU) * 4U;
+    if (offset == 0U)
+    {
+        serial_write("VANTAOS_XHCI_LEGACY_CAP_ABSENT\n");
+        return 1;
+    }
+
+    for (uint32_t visited = 0U; visited < 256U; ++visited)
+    {
+        if ((offset & 3U) != 0U ||
+            offset > XHCI_MMIO_MAP_SIZE - 4U)
+        {
+            serial_write("VANTAOS_XHCI_EXT_CAP_CHAIN_INVALID\n");
+            return 0;
+        }
+
+        uint32_t header = mmio_read32(registers, offset);
+        if (header == 0U || header == UINT32_MAX)
+        {
+            serial_write("VANTAOS_XHCI_EXT_CAP_CHAIN_INVALID\n");
+            return 0;
+        }
+
+        uint8_t capability_id = (uint8_t)header;
+        uint8_t next = (uint8_t)(header >> 8U);
+        if (capability_id == 1U)
+        {
+            if (offset > XHCI_MMIO_MAP_SIZE - 8U)
+            {
+                serial_write("VANTAOS_XHCI_LEGACY_CAP_TRUNCATED\n");
+                return 0;
+            }
+
+            const uint32_t bios_owned = 1U << 16U;
+            const uint32_t os_owned = 1U << 24U;
+            uint32_t control = mmio_read32(registers, offset + 4U);
+            if (control == UINT32_MAX)
+            {
+                serial_write("VANTAOS_XHCI_LEGACY_CAP_READ_FAIL\n");
+                return 0;
+            }
+
+            if ((control & bios_owned) != 0U)
+                serial_write("VANTAOS_XHCI_BIOS_OWNERSHIP_REQUESTED\n");
+
+            /* Preserve BIOS-owned and all other status/control bits. */
+            mmio_write32(registers, offset + 4U, control | os_owned);
+            if (!wait_register(registers, offset + 4U, bios_owned, 0U))
+            {
+                serial_write("VANTAOS_XHCI_BIOS_OWNERSHIP_TIMEOUT\n");
+                return 0;
+            }
+
+            serial_write("VANTAOS_XHCI_OS_OWNERSHIP_ACQUIRED\n");
+            return 1;
+        }
+
+        if (next == 0U)
+        {
+            serial_write("VANTAOS_XHCI_LEGACY_CAP_ABSENT\n");
+            return 1;
+        }
+
+        uint32_t advance = (uint32_t)next * 4U;
+        if (advance > XHCI_MMIO_MAP_SIZE - offset)
+        {
+            serial_write("VANTAOS_XHCI_EXT_CAP_CHAIN_INVALID\n");
+            return 0;
+        }
+        offset += advance;
+    }
+
+    serial_write("VANTAOS_XHCI_EXT_CAP_CHAIN_TOO_LONG\n");
+    return 0;
+}
+
 static int controller_start(const struct pci_device* pci)
 {
     uint64_t bar = 0;
@@ -1340,6 +1426,15 @@ static int controller_start(const struct pci_device* pci)
     doorbells = registers + doorbell_offset;
     runtime = registers + runtime_offset;
     context_size = (hcc1 & (1U << 2)) ? 64U : 32U;
+
+    /*
+     * Firmware may still own this controller after ExitBootServices. Do not
+     * issue USBCMD writes or HCRST until the legacy-support semaphore agrees
+     * that ownership has transferred to the OS.
+     */
+    if (!xhci_firmware_handoff(hcc1))
+        return 0;
+
     max_slots = hcs1 & 0xFFU;
     max_ports = (hcs1 >> 24) & 0xFFU;
     if (max_slots == 0 || max_ports == 0)

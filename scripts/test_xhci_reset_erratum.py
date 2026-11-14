@@ -27,6 +27,12 @@ assert "mmio_read32(" not in quiet_window
 assert "mmio_write32(" not in quiet_window
 assert "sleep_ms(" not in quiet_window
 
+# The I2C-HID poll/retry clock must use timer_get_ticks(), which is TSC-backed
+# until IRQ0 becomes live. interrupts_get_ticks() remains frozen on that path.
+hid_i2c = Path("drivers/input/hid_i2c.c").read_text(encoding="utf-8")
+assert 'uint32_t tick=timer_get_ticks();' in hid_i2c
+assert "interrupts_get_ticks()" not in hid_i2c
+
 desktop = Path("os/desktop/desktop_process.c").read_text(encoding="utf-8")
 desktop_main = desktop.split("void desktop_process_main(void)", 1)[1].split(
     "void desktop_process_initialize(void)", 1

@@ -16,6 +16,7 @@ on:
       - "include/**"
       - "Makefile"
       - "build.sh"
+      - "scripts/test_uefi_image_boot.py"
       - ".github/workflows/hardware-boot-media.yml"
 
 permissions:
@@ -171,8 +172,24 @@ jobs:
           assert reserved > 0 and fats == 2 and fat_size > 0
           assert total > 0 and total <= size and hidden == 0
           assert boot[510:512] == b"\x55\xaa", "missing FAT boot signature"
-          assert struct.unpack_from("<I", boot, 82)[0] == 0x41615252, "invalid FAT32 FSInfo lead signature"
-          print(f"ESP geometry valid: start={start}, sectors={total}, cluster={spc * bps} bytes")
+          data_sectors = total - reserved - fats * fat_size
+          clusters = data_sectors // spc
+          assert clusters > 65525, f"volume is not FAT32 by cluster-count definition: {clusters}"
+          fsinfo_sector = struct.unpack_from("<H", boot, 48)[0]
+          backup_sector = struct.unpack_from("<H", boot, 50)[0]
+          assert 0 < fsinfo_sector < reserved, f"invalid FSInfo sector {fsinfo_sector}"
+          assert 0 < backup_sector < reserved, f"invalid backup boot sector {backup_sector}"
+          with open(image, "rb") as stream:
+              stream.seek(start * 512 + fsinfo_sector * 512)
+              fsinfo = stream.read(512)
+              stream.seek(start * 512 + backup_sector * 512)
+              backup_boot = stream.read(512)
+          assert struct.unpack_from("<I", fsinfo, 0)[0] == 0x41615252, "invalid FSInfo lead signature"
+          assert struct.unpack_from("<I", fsinfo, 484)[0] == 0x61417272, "invalid FSInfo structure signature"
+          assert struct.unpack_from("<I", fsinfo, 508)[0] == 0xAA550000, "invalid FSInfo trail signature"
+          assert backup_boot[510:512] == b"\x55\xaa", "invalid backup FAT boot signature"
+          assert backup_boot[:90] == boot[:90], "FAT32 backup boot sector differs from primary"
+          print(f"ESP geometry valid: start={start}, sectors={total}, clusters={clusters}, cluster={spc * bps} bytes")
           PY
           mkdir -p /tmp/vanta-esp-check
           mdir -i VantaOS-UEFI.img@@1048576 ::/EFI
@@ -231,5 +248,6 @@ jobs:
             uefi-debug.log
             ovmf-debug.log
             qemu-int.log
+            uefi-test-logs/**
           if-no-files-found: warn
           retention-days: 30

@@ -71,7 +71,10 @@ ORDERED = (
     "VANTAOS_USB_HID_MOUSE_ONLINE",
     "VANTAOS_BOOT_OK",
     "VANTAOS_IRQ_TIMER_OK",
+    "VANTAOS_DESKTOP_INPUT_LOOP_ONLINE",
     "VANTAOS_DEVICE_IO_WORKER_READY",
+    "VANTAOS_USB_HID_KEYBOARD_INPUT_OK",
+    "VANTAOS_USB_HID_MOUSE_INPUT_OK",
 )
 
 
@@ -201,9 +204,10 @@ def run_profile(name: str, cpus: int, memory: str,
             wait_for_text(debug_log, "VANTAOS_USB_HID_MOUSE_INPUT_OK", process, 8, logs)
             time.sleep(1)
             output_text = debug_log.read_text(errors="replace")
+            output_lines = [line.strip() for line in output_text.splitlines()]
             for marker in REQUIRED:
-                if marker not in output_text:
-                    fail(f"missing required marker {marker}", *logs)
+                if marker not in output_lines:
+                    fail(f"missing required standalone marker {marker}", *logs)
             for marker in FORBIDDEN:
                 if marker in output_text:
                     fail(f"forbidden failure marker observed: {marker}", *logs)
@@ -220,14 +224,14 @@ def run_profile(name: str, cpus: int, memory: str,
             )
             if not ownership_ok:
                 fail("xHCI firmware ownership was neither acquired nor proven unnecessary", *logs)
-            positions = [output_text.index(marker) for marker in ORDERED]
+            positions = [output_lines.index(marker) for marker in ORDERED]
             if positions != sorted(positions):
                 fail("boot milestones appeared out of order", *logs)
-            if output_text.count("VANTAOS_BOOT_OK") != 1:
+            if output_lines.count("VANTAOS_BOOT_OK") != 1:
                 fail("boot completion marker was not emitted exactly once", *logs)
-            if output_text.count("VANTAOS_USB_HID_KEYBOARD_INPUT_OK") != 1:
+            if output_lines.count("VANTAOS_USB_HID_KEYBOARD_INPUT_OK") != 1:
                 fail("keyboard input proof was not exactly once", *logs)
-            if output_text.count("VANTAOS_USB_HID_MOUSE_INPUT_OK") != 1:
+            if output_lines.count("VANTAOS_USB_HID_MOUSE_INPUT_OK") != 1:
                 fail("mouse input proof was not exactly once", *logs)
             if process.poll() is not None:
                 fail(f"QEMU exited after boot ({process.returncode})", *logs)

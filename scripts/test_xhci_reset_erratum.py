@@ -35,10 +35,27 @@ assert "i2c_initialize();" not in desktop_main
 assert "static void desktop_device_io_worker(void)" in desktop
 assert '"desktop-device-io"' in desktop
 assert "desktop_start_background_workers(current_pid);" in desktop_main
-assert "hid_i2c_poll();" not in desktop_main
-assert "usb_poll();" not in desktop_main
-assert "hid_i2c_poll();" in desktop.split("static void desktop_device_io_worker(void)", 1)[1]
-assert "usb_poll();" in desktop.split("static void desktop_device_io_worker(void)", 1)[1]
+fallback = desktop_main.split(
+    "if (interrupt_health_polling_required())", 1
+)[1].split("else", 1)[0]
+assert "hid_i2c_poll();" in fallback
+assert "usb_poll();" in fallback
+assert "timer_get_ticks64()" in fallback
+assert "timer_tsc_ticks_per_second() == 0U" in fallback
+worker = desktop.split("static void desktop_device_io_worker(void)", 1)[1]
+assert "hid_i2c_poll();" in worker
+assert "usb_poll();" in worker
+
+# UEFI may leave the xHCI controller under firmware ownership. The OS must
+# traverse xECP and acquire the legacy-support semaphore before touching HCRST.
+assert "static int xhci_firmware_handoff(uint32_t hcc1)" in source
+assert "((hcc1 >> 16U) & 0xFFFFU) * 4U" in source
+assert "const uint32_t bios_owned = 1U << 16U;" in source
+assert "const uint32_t os_owned = 1U << 24U;" in source
+assert "mmio_write32(registers, offset + 4U, os_owned);" in source
+handoff = source.index("if (!xhci_firmware_handoff(hcc1))")
+stop = source.index("command &= ~(XHCI_CMD_RUN | XHCI_CMD_INTERRUPTS);", handoff)
+assert handoff < stop
 assert '"desktop-watchdog"' in desktop
 assert "kernel_watchdog_register(500U)" in desktop
 assert "VANTAOS_DESKTOP_WATCHDOG_REGISTERED" in desktop

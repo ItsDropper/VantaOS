@@ -18,6 +18,21 @@ grouped under **Unreleased** until the first release.
 - Repository community files: changelog, support policy, code owners,
   Dependabot configuration, issue-template config.
 
+### Fixed
+- Real-hardware input and boot hangs (found by audit; verified under QEMU only):
+  firmware ACPI tables above the 1 GiB identity map are now mapped on demand,
+  so the MADT/IOAPIC are found; BSP LINT0 is programmed as ExtINT when IOAPIC
+  routing is unavailable; a silent timer interrupt triggers automatic fallback
+  to virtual-wire PIC delivery; IRQ stubs now EOI the correct controller;
+  spurious 8259 IRQ7/IRQ15 have IDT gates; the PS/2 keyboard is sent
+  set-defaults/enable-scanning; an unread auxiliary byte can no longer block
+  the keyboard; the 8042 is polled every desktop pass; a failed controller
+  config read is never written back; timeouts use a TSC-backed clock before
+  interrupts are enabled.
+- Literal `'\\0'` multi-character constants and `\\n` serial strings in the
+  desktop diagnostics, Intel serial I/O driver, scheduler, FAT32 and network
+  drivers.
+
 ### Changed
 - GPU bring-up status consolidated into `docs/gpu/FRAMEWORK.md`.
 - `.gitignore` covers disk images, logs, firmware and host-tool artifacts.

@@ -47,6 +47,11 @@ typedef struct paging_address_space
 void paging_initialize(void);
 /* CPU-reported physical address limit, initialized with paging. */
 uint64_t paging_physical_address_limit(void);
+/*
+ * Make a physical firmware-table range between 1 GiB and 3 GiB readable at the
+ * same virtual address (uncached). Returns 1 when the whole range is reachable.
+ */
+int paging_map_firmware_range(uint64_t physical_address, uint64_t length);
 int paging_map_mmio_page(uintptr_t virtual_address, uintptr_t physical_address);
 int paging_map_page(uintptr_t virtual_address, uintptr_t physical_address);
 int paging_map_user_page(paging_address_space_t* address_space,

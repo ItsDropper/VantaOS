@@ -11,9 +11,25 @@
 #include <stdint.h>
 #include <stdio.h>
 
+static void test_tsc_calibration(void)
+{
+    /* 3 GHz TSC over 11932 PIT counts (10 ms at 1,193,182 Hz). */
+    uint64_t delta = 3000000000ULL / 100U;
+    uint64_t per_tick = vanta_timer_tsc_per_tick(delta, 11932U, 100U);
+    assert(per_tick > 29990000U && per_tick < 30010000U);
+    assert(vanta_timer_tsc_to_ticks(per_tick * 250U, per_tick) == 250U);
+    assert(vanta_timer_tsc_to_ticks(per_tick - 1U, per_tick) == 0U);
+    assert(vanta_timer_tsc_to_ticks(12345U, 0U) == 0U);
+    assert(vanta_timer_tsc_per_tick(0U, 11932U, 100U) == 0U);
+    assert(vanta_timer_tsc_per_tick(delta, 0U, 100U) == 0U);
+    assert(vanta_timer_tsc_per_tick(delta, 11932U, 0U) == 0U);
+    assert(vanta_timer_tsc_per_tick(UINT64_MAX, 11932U, 100U) == 0U);
+}
+
 int main(void)
 {
     uint16_t divisor = 0U;
+    test_tsc_calibration();
     assert(vanta_timer_pit_divisor(100U, &divisor));
     assert(divisor == 11931U);
     assert(vanta_timer_pit_divisor(19U, &divisor));

@@ -6,6 +6,8 @@
  */
 
 #include "desktop.h"
+#include "timer.h"
+#include "interrupt_health.h"
 
 #include "graphics.h"
 #include "desktop_theme.h"
@@ -41,7 +43,7 @@ static void desktop_diagnostics_hex(char *out, uint32_t value, unsigned int digi
         unsigned int shift = (digits - 1U - i) * 4U;
         out[i] = hex[(value >> shift) & 0x0FU];
     }
-    out[digits] = '\\0';
+    out[digits] = '\0';
 }
 
 static void desktop_draw_hardware_diagnostics(void)
@@ -115,7 +117,7 @@ static void desktop_draw_hardware_diagnostics(void)
         while (*enabled) line[at++] = *enabled++;
         line[at++] = ' '; line[at++] = '0'; line[at++] = 'x';
         for (unsigned int i = 0; i < 8U; ++i) line[at++] = hex[i];
-        line[at] = '\\0';
+        line[at] = '\0';
         graphics_draw_text(32, 172 + (int)(port - 1U) * 17, line,
                            (status & 1U) ? 0x00B8D9C4U : 0x007D8B9BU, 1U);
     }
@@ -169,6 +171,32 @@ static void desktop_draw_hardware_diagnostics(void)
     desktop_diagnostics_hex(hex, ps2_mice, 2U);
     graphics_draw_text(32, row_y + 104, "PS/2 mice: 0x", 0x00C6D2E0U, 1U);
     graphics_draw_text(160, row_y + 104, hex, 0x00FFFFFFU, 1U);
+
+    graphics_draw_text(32, row_y + 132, "INTERRUPTS AND PS/2 INPUT", 0x007DC4FFU, 1U);
+    graphics_draw_text(32, row_y + 152, "IRQ route: ", 0x00C6D2E0U, 1U);
+    graphics_draw_text(144, row_y + 152, interrupt_health_route_name(),
+                       0x00FFFFFFU, 1U);
+    {
+        static const char *const health_names[] = {
+            "unchecked", "ok", "recovered (virtual wire)",
+            "DEAD - polling mode"
+        };
+        unsigned int state = (unsigned int)interrupt_health_state();
+        graphics_draw_text(32, row_y + 169, "Timer IRQ0: ", 0x00C6D2E0U, 1U);
+        graphics_draw_text(152, row_y + 169,
+                           health_names[state < 4U ? state : 0U],
+                           state == 3U ? 0x00FF7070U : 0x00FFFFFFU, 1U);
+    }
+    desktop_diagnostics_hex(hex, (uint32_t)timer_irq_ticks(), 8U);
+    graphics_draw_text(32, row_y + 186, "IRQ0 ticks: 0x", 0x00C6D2E0U, 1U);
+    graphics_draw_text(176, row_y + 186, hex, 0x00FFFFFFU, 1U);
+    graphics_draw_text(32, row_y + 203, "PS/2 keyboard scanning: ", 0x00C6D2E0U, 1U);
+    graphics_draw_text(232, row_y + 203,
+                       keyboard_scanning_enabled() ? "acknowledged" : "no ACK",
+                       0x00FFFFFFU, 1U);
+    desktop_diagnostics_hex(hex, keyboard_poll_serviced_bytes(), 8U);
+    graphics_draw_text(32, row_y + 220, "PS/2 bytes via polling: 0x", 0x00C6D2E0U, 1U);
+    graphics_draw_text(240, row_y + 220, hex, 0x00FFFFFFU, 1U);
 
     graphics_draw_text(24, height - 42,
         "If USB mouse count is 0, inspect root-port state above. If I2C pointer is 0, touchpad discovery failed.",

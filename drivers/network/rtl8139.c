@@ -235,7 +235,7 @@ static void rtl8139_rx_selftest_handler(net_device_t *device, const uint8_t *fra
         return;
     if (frame[header] == 0x56U && frame[header + 1U] == 0x41U &&
         frame[header + 2U] == 0x4EU && frame[header + 3U] == 0x54U)
-        serial_write("VANTAOS_RTL8139_RX_SELFTEST_OK\\n");
+        serial_write("VANTAOS_RTL8139_RX_SELFTEST_OK\n");
 }
 #endif
 
@@ -356,13 +356,13 @@ static int rtl8139_release(void)
         if (spin >= RTL8139_WAIT_LIMIT) {
             /* Still revoke PCI DMA, but never reclaim pages without reset. */
             (void)pci_disable_bus_mastering(state.pci);
-            serial_write("VANTAOS_RTL8139_RESET_TIMEOUT_DMA_RETAINED\\n");
+            serial_write("VANTAOS_RTL8139_RESET_TIMEOUT_DMA_RETAINED\n");
             return 0;
         }
     }
 
     if (state.pci && !pci_disable_bus_mastering(state.pci)) {
-        serial_write("VANTAOS_RTL8139_BUS_MASTER_ACTIVE_DMA_RETAINED\\n");
+        serial_write("VANTAOS_RTL8139_BUS_MASTER_ACTIVE_DMA_RETAINED\n");
         return 0;
     }
 
@@ -370,7 +370,7 @@ static int rtl8139_release(void)
     if (state.handler_registered) {
         if (!net_ethernet_handler_unregister(
                 0x88B5U, rtl8139_rx_selftest_handler, 0)) {
-            serial_write("VANTAOS_RTL8139_HANDLER_BUSY_RETAINED\\n");
+            serial_write("VANTAOS_RTL8139_HANDLER_BUSY_RETAINED\n");
             return 0;
         }
         state.handler_registered = 0U;
@@ -378,7 +378,7 @@ static int rtl8139_release(void)
 #endif
     if (state.registered) {
         if (!net_device_unregister(&state.netdev)) {
-            serial_write("VANTAOS_RTL8139_NETDEV_BUSY_RETAINED\\n");
+            serial_write("VANTAOS_RTL8139_NETDEV_BUSY_RETAINED\n");
             return 0;
         }
         state.registered = 0U;

@@ -6,6 +6,7 @@
  */
 
 #include "os.h"
+#include "interrupt_health.h"
 
 #include "desktop.h"
 #include "desktop_process.h"
@@ -194,6 +195,13 @@ void os_run(void)
     serial_write("VANTAOS_BOOT_OK\n");
     /* Publish boot completion before enabling timer-driven preemption. */
     __asm__ volatile ("sti");
+
+    /*
+     * Confirm the timer interrupt reaches the CPU and repair the routing if it
+     * does not; otherwise the idle loop would sleep in HLT with nothing to
+     * wake it.
+     */
+    interrupt_health_verify();
 
 #ifdef VANTAOS_SELF_TEST
     /* Test implementation lives outside the boot/run orchestration. */

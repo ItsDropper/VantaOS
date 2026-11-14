@@ -74,6 +74,31 @@ static inline uint64_t vanta_timer_ticks_to_ms(uint64_t ticks,
     return whole_ms + fractional_ms;
 }
 
+/*
+ * Convert a PIT channel-2 TSC measurement into TSC cycles per timer tick.
+ * The PIT counted pit_counts input clocks (VANTA_PIT_BASE_FREQUENCY Hz) while
+ * the TSC advanced by tsc_delta. Returns zero for inputs that cannot yield a
+ * usable, non-overflowing result.
+ */
+static inline uint64_t vanta_timer_tsc_per_tick(uint64_t tsc_delta,
+                                                uint32_t pit_counts,
+                                                uint32_t frequency)
+{
+    if (tsc_delta == 0U || pit_counts == 0U || frequency == 0U ||
+        tsc_delta > UINT64_MAX / VANTA_PIT_BASE_FREQUENCY)
+        return 0U;
+    uint64_t tsc_hz = tsc_delta * VANTA_PIT_BASE_FREQUENCY / pit_counts;
+    uint64_t per_tick = tsc_hz / frequency;
+    return per_tick;
+}
+
+/* TSC delta to timer ticks; zero when no calibration is available. */
+static inline uint64_t vanta_timer_tsc_to_ticks(uint64_t tsc_delta,
+                                                uint64_t tsc_per_tick)
+{
+    return tsc_per_tick == 0U ? 0U : tsc_delta / tsc_per_tick;
+}
+
 /* Saturating absolute deadline for monotonic 64-bit tick counters. */
 static inline uint64_t vanta_timer_deadline_after(uint64_t now,
                                                   uint64_t interval)

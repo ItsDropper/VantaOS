@@ -197,7 +197,7 @@ static int route_isa_irq(uint8_t irq, uint8_t vector, uint8_t destination,
     return 1;
 }
 
-int apic_initialize(void)
+static int apic_initialize_ioapic_mode(void)
 {
     enabled = 0;
     x2apic_mode = 0;
@@ -390,6 +390,88 @@ int apic_initialize(void)
     serial_write(x2apic_mode ? "VANTAOS_APIC_X2APIC_LOCAL_OK\n" :
                                "VANTAOS_APIC_LOCAL_OK\n");
     return 1;
+}
+
+/*
+ * Virtual-wire mode: the 8259 PIC drives the BSP through LINT0 as ExtINT.
+ * Real UEFI firmware frequently leaves LINT0 masked (it expects an APIC-aware
+ * OS), so simply unmasking the 8259 does not deliver the timer or keyboard.
+ * This does not need ACPI: the APIC base comes from IA32_APIC_BASE.
+ */
+static int virtual_wire_active;
+
+static int apic_program_virtual_wire(void)
+{
+    if (!cpu_has_apic())
+        return 0; /* No local APIC: the 8259 drives the CPU INTR pin directly. */
+    uint64_t base = read_msr(IA32_APIC_BASE_MSR);
+    if ((base & APIC_BASE_ENABLE) == 0U)
+        return 0; /* Hardware-disabled APIC also leaves INTR wired to the PIC. */
+    int x2 = (base & APIC_BASE_X2APIC) != 0U;
+    if (!x2 && lapic == NULL)
+    {
+        uint64_t physical = base & 0x000FFFFFFFFFF000ULL;
+        if (physical == 0U ||
+            !paging_map_mmio_page((uintptr_t)APIC_MMIO_VIRTUAL,
+                                  (uintptr_t)physical))
+            return 0;
+        lapic = (volatile uint32_t*)(uintptr_t)APIC_MMIO_VIRTUAL;
+    }
+    x2apic_mode = x2;
+    lapic_write(LAPIC_TPR, 0);
+    lapic_write(LAPIC_SVR, (1U << 8) | LAPIC_SPURIOUS_VECTOR);
+    lapic_write(LAPIC_LVT_LINT0, 7U << 8U); /* ExtINT, edge, unmasked */
+    return 1;
+}
+
+int apic_virtual_wire_enable(void)
+{
+    if (virtual_wire_active)
+        return 1;
+    if (!apic_program_virtual_wire())
+        return 0;
+    legacy_pic_routing = 1;
+    virtual_wire_active = 1;
+    return 1;
+}
+
+int apic_virtual_wire_active(void)
+{
+    return virtual_wire_active;
+}
+
+/*
+ * Runtime recovery for an IOAPIC route that never delivers (for example an
+ * ISA IRQ0 whose GSI the firmware's MADT does not describe). Mask every
+ * IOAPIC entry, reopen the 8259 and use virtual-wire ExtINT. EOIs then go to
+ * the PIC because apic_uses_legacy_pic() becomes true.
+ */
+int apic_fall_back_to_virtual_wire(void)
+{
+    if (!enabled || virtual_wire_active)
+        return virtual_wire_active;
+    uint64_t flags;
+    __asm__ volatile ("pushfq; pop %0; cli" : "=r"(flags) : : "memory");
+    if (ioapic)
+    {
+        uint32_t version = ioapic_read(IOAPIC_REG_VERSION);
+        uint32_t maximum = (version >> 16U) & 0xFFU;
+        for (uint32_t i = 0U; i <= maximum && i <= 119U; ++i)
+        {
+            uint8_t reg = (uint8_t)(IOAPIC_REG_REDIR + i * 2U);
+            ioapic_write(reg, ioapic_read(reg) | IOAPIC_REDIR_MASK);
+        }
+    }
+    int ok = apic_program_virtual_wire();
+    if (ok)
+    {
+        legacy_pic_routing = 1;
+        virtual_wire_active = 1;
+        pic_restore_default_masks();
+    }
+    if ((flags & (1ULL << 9)) != 0U)
+        __asm__ volatile ("sti" ::: "memory");
+    return ok;
 }
 
 int apic_timer_initialize(uint8_t vector, uint32_t initial_count)
@@ -648,6 +730,23 @@ int apic_send_reschedule_ipi(uint32_t apic_id)
     return apic_send_fixed_ipi(apic_id, APIC_RESCHEDULE_VECTOR);
 }
 
+int apic_initialize(void)
+{
+    virtual_wire_active = 0;
+    if (apic_initialize_ioapic_mode())
+        return 1;
+    /*
+     * IOAPIC routing is unavailable (no usable ACPI MADT, unsupported
+     * topology, ...). Do not leave the BSP with a masked LINT0: that silences
+     * the PIT and PS/2 keyboard completely.
+     */
+    if (apic_virtual_wire_enable())
+        serial_write("VANTAOS_APIC_VIRTUAL_WIRE_OK\n");
+    else
+        serial_write("VANTAOS_APIC_VIRTUAL_WIRE_UNAVAILABLE\n");
+    return 0;
+}
+
 int apic_is_enabled(void)
 {
     return enabled;
@@ -660,7 +759,7 @@ int apic_is_x2apic(void)
 
 int apic_uses_legacy_pic(void)
 {
-    return enabled && legacy_pic_routing;
+    return (enabled || virtual_wire_active) && legacy_pic_routing;
 }
 
 void apic_send_eoi(void)

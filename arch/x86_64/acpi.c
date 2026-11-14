@@ -13,7 +13,12 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define ACPI_IDENTITY_LIMIT 0x40000000ULL
+/*
+ * Firmware tables are read at their physical address. The first GiB is
+ * permanently identity-mapped; paging_map_firmware_range() maps the 1-3 GiB
+ * window on demand, where real UEFI firmware commonly places ACPI tables.
+ */
+#define ACPI_IDENTITY_LIMIT 0xC0000000ULL
 #define ACPI_MAX_TABLE_SIZE (16U * 1024U * 1024U)
 #define ACPI_RSDP_VALID_FLAG (1U << 3)
 
@@ -57,11 +62,14 @@ static uint8_t checksum8(const void* memory, uint32_t length)
     return sum;
 }
 
+int paging_map_firmware_range(uint64_t physical_address, uint64_t length);
+
 static int physical_range(uint64_t address, uint64_t length)
 {
     return address != 0 && length != 0 &&
            address < ACPI_IDENTITY_LIMIT &&
-           length <= ACPI_IDENTITY_LIMIT - address;
+           length <= ACPI_IDENTITY_LIMIT - address &&
+           paging_map_firmware_range(address, length);
 }
 
 static const acpi_rsdp_v1_t* scan_rsdp(void)

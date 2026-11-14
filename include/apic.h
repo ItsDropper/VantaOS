@@ -22,6 +22,11 @@ int apic_is_enabled(void);
 int apic_is_x2apic(void);
 /* True when legacy 8259 IRQs use LAPIC LINT0 ExtINT routing. */
 int apic_uses_legacy_pic(void);
+/* Route the 8259 through LINT0 (ExtINT) without needing ACPI; see apic.c. */
+int apic_virtual_wire_enable(void);
+int apic_virtual_wire_active(void);
+/* Abandon IOAPIC routing for virtual-wire PIC delivery at runtime. */
+int apic_fall_back_to_virtual_wire(void);
 void apic_send_eoi(void);
 uint32_t apic_get_bsp_id(void);
 int apic_send_init_all(void);

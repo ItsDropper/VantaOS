@@ -11,6 +11,8 @@
 #include "graphics.h"
 #include "process.h"
 #include "mouse.h"
+#include "keyboard.h"
+#include "interrupt_health.h"
 #include "terminal_process.h"
 #include "file_explorer_process.h"
 #include "usb.h"
@@ -164,7 +166,16 @@ void desktop_process_main(void)
             last_network_tick = tick;
             (void)net_poll(1U);
         }
-        __asm__ volatile ("hlt");
+        /*
+         * Drain the 8042 every pass so keyboard and touchpad input survive a
+         * lost or mis-routed IRQ1/IRQ12 (an unread auxiliary byte would block
+         * the keyboard behind it).
+         */
+        keyboard_poll_input();
+        if (interrupt_health_polling_required())
+            __asm__ volatile ("pause" ::: "memory"); /* nothing could wake HLT */
+        else
+            __asm__ volatile ("hlt");
     }
 }
 

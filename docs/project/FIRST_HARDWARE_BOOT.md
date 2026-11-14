@@ -70,3 +70,18 @@ Do not infer driver support from a successful boot. A boot with GOP proves firmw
 ## Recovery
 
 If the machine does not boot, remove the USB drive and use the normal Windows Boot Manager entry. The test procedure does not require installing to the internal disk, repartitioning it, or replacing its EFI boot files. If the machine hangs, power it off using the normal power button procedure and remove the test USB before retrying.
+
+## Troubleshooting: desktop visible but no input
+
+Open the diagnostics screen with **Ctrl + Shift + F9** (needs a working keyboard; if none works, use an external USB keyboard) and read the *Interrupts and PS/2 input* block:
+
+| Row | Meaning |
+| --- | --- |
+| IRQ route | `ioapic` (ACPI MADT found, normal), `virtual-wire` (8259 through LINT0, used when ACPI/IOAPIC is unusable), `pic` |
+| Timer IRQ0 | `ok`, `recovered (virtual wire)` (the IOAPIC route was silent and the kernel switched), or `DEAD - polling mode` (no timer interrupt at all; input still works by polling, scheduling does not) |
+| PS/2 keyboard scanning | `acknowledged` means the keyboard accepted *enable scanning*; `no ACK` points at the 8042/keyboard itself |
+| PS/2 bytes via polling | Nonzero while keys work but interrupts do not: IRQ1/IRQ12 delivery is broken on this machine |
+
+Serial markers (if captured): `VANTAOS_IRQ_TIMER_OK`, `VANTAOS_IRQ_TIMER_RECOVERED_VIRTUAL_WIRE`, `VANTAOS_IRQ_TIMER_DEAD_POLLING_MODE`, `VANTAOS_APIC_VIRTUAL_WIRE_OK`, `VANTAOS_PS2_KEYBOARD_SCANNING_ENABLED`.
+
+These recovery paths are verified only under QEMU. Report the screen contents for a real machine rather than assuming it works.

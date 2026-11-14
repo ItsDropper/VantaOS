@@ -41,6 +41,13 @@ DECLARE_EXCEPTION(24) DECLARE_EXCEPTION(25) DECLARE_EXCEPTION(26)
 DECLARE_EXCEPTION(27) DECLARE_EXCEPTION(28) DECLARE_EXCEPTION(29)
 DECLARE_EXCEPTION(30) DECLARE_EXCEPTION(31)
 
+#define PIC_UNEXPECTED_EXTERN(n) extern void pic_unexpected_stub_##n(void);
+PIC_UNEXPECTED_EXTERN(34) PIC_UNEXPECTED_EXTERN(35) PIC_UNEXPECTED_EXTERN(36)
+PIC_UNEXPECTED_EXTERN(37) PIC_UNEXPECTED_EXTERN(38) PIC_UNEXPECTED_EXTERN(39)
+PIC_UNEXPECTED_EXTERN(40) PIC_UNEXPECTED_EXTERN(41) PIC_UNEXPECTED_EXTERN(42)
+PIC_UNEXPECTED_EXTERN(43) PIC_UNEXPECTED_EXTERN(45) PIC_UNEXPECTED_EXTERN(46)
+PIC_UNEXPECTED_EXTERN(47)
+
 #define IRQ0_VECTOR 32
 #define IRQ1_VECTOR 33
 #define IRQ12_VECTOR 44
@@ -70,6 +77,23 @@ void interrupts_initialize(void)
     idt_set_gate(IRQ0_VECTOR, (uint64_t)(uintptr_t)irq0_stub, 0x08, 0x8E);
     idt_set_gate(IRQ1_VECTOR, (uint64_t)(uintptr_t)irq1_stub, 0x08, 0x8E);
     idt_set_gate(IRQ12_VECTOR, (uint64_t)(uintptr_t)irq12_stub, 0x08, 0x8E);
+    {
+        static void (* const pic_extra[])(void) = {
+            pic_unexpected_stub_34, pic_unexpected_stub_35,
+            pic_unexpected_stub_36, pic_unexpected_stub_37,
+            pic_unexpected_stub_38, pic_unexpected_stub_39,
+            pic_unexpected_stub_40, pic_unexpected_stub_41,
+            pic_unexpected_stub_42, pic_unexpected_stub_43,
+            pic_unexpected_stub_45, pic_unexpected_stub_46,
+            pic_unexpected_stub_47
+        };
+        static const uint8_t pic_extra_vector[] = {
+            34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 45, 46, 47
+        };
+        for (unsigned int i = 0; i < sizeof(pic_extra_vector); ++i)
+            idt_set_gate(pic_extra_vector[i],
+                         (uint64_t)(uintptr_t)pic_extra[i], 0x08, 0x8E);
+    }
     idt_set_gate(0xFF, (uint64_t)(uintptr_t)apic_spurious_stub, 0x08, 0x8E);
     idt_set_gate(0xF1, (uint64_t)(uintptr_t)smp_wakeup_stub, 0x08, 0x8E);
     idt_set_gate(0xF2, (uint64_t)(uintptr_t)lapic_timer_stub, 0x08, 0x8E);

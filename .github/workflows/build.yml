@@ -114,6 +114,9 @@ jobs:
       - name: Test legacy PS/2 keyboard controller initialization
         run: python3 scripts/test_ps2_controller.py
 
+      - name: Test real-hardware interrupt, firmware-table and input robustness
+        run: python3 scripts/test_hardware_input_robustness.py
+
       - name: Test normalized input queue and motion coalescing
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iscripts/test_stubs -Iinclude \

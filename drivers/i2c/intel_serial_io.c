@@ -80,7 +80,7 @@ static int path_equal(const char *a,const char *b)
             if(cb>='a'&&cb<='z') cb=(char)(cb-'a'+'A');
             if(ca!=cb) return 0;
         }
-        int a_done=*a_end=='\\0',b_done=*b_end=='\\0';
+        int a_done=*a_end=='\0',b_done=*b_end=='\0';
         if(a_done||b_done) return a_done&&b_done;
         a=a_end+1;
         b=b_end+1;

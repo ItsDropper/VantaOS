@@ -37,6 +37,12 @@ void keyboard_initialize(void);
  * Called by IRQ1 when the keyboard sends a scancode.
  */
 void keyboard_handle_interrupt(void);
+/* Drain the PS/2 controller by polling; safe even when IRQ1/IRQ12 never fire. */
+void keyboard_poll_input(void);
+/* Bytes serviced through polling rather than IRQ handlers (diagnostics). */
+uint32_t keyboard_poll_serviced_bytes(void);
+/* Nonzero when the keyboard acknowledged "enable scanning" during bring-up. */
+int keyboard_scanning_enabled(void);
 
 /* Inject a normalized USB HID Keyboard/Keypad usage transition. */
 void keyboard_inject_hid_usage(uint16_t usage, bool pressed);

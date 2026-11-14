@@ -469,7 +469,7 @@ static int cleanup(void)
     int bus_master_disabled =
         !state.pci || pci_disable_bus_mastering(state.pci);
     if (!reset_complete || !bus_master_disabled) {
-        serial_write("VANTAOS_VIRTIO_NET_MODERN_QUIESCE_FAILED_DMA_RETAINED\\n");
+        serial_write("VANTAOS_VIRTIO_NET_MODERN_QUIESCE_FAILED_DMA_RETAINED\n");
         return 0;
     }
 
@@ -493,7 +493,7 @@ static int cleanup(void)
     }
 
     if (state.registered || state.selftest_handler_registered) {
-        serial_write("VANTAOS_VIRTIO_NET_MODERN_UNREGISTER_BUSY_STATE_RETAINED\\n");
+        serial_write("VANTAOS_VIRTIO_NET_MODERN_UNREGISTER_BUSY_STATE_RETAINED\n");
         return 0;
     }
 
@@ -537,7 +537,7 @@ static net_pci_probe_result_t vnet_modern_probe(const struct pci_device *pci)
     const char *failure = "entry";
     if (!pci || state.ready || state.pci) return NET_PCI_PROBE_NOT_MINE;
     if (!pci_enable_memory_space(pci)) {
-        serial_write("VANTAOS_VIRTIO_NET_MODERN_FAIL_MEMORY_SPACE\\n");
+        serial_write("VANTAOS_VIRTIO_NET_MODERN_FAIL_MEMORY_SPACE\n");
         return NET_PCI_PROBE_FAILED;
     }
     state.pci = pci;
@@ -630,7 +630,7 @@ static net_pci_probe_result_t vnet_modern_probe(const struct pci_device *pci)
 fail:
     serial_write("VANTAOS_VIRTIO_NET_MODERN_FAIL_");
     serial_write(failure);
-    serial_write("\\n");
+    serial_write("\n");
     (void)cleanup();
     return NET_PCI_PROBE_FAILED;
 }

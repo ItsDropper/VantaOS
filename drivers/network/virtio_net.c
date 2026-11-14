@@ -176,7 +176,7 @@ static int vnet_release(void){
  int reset_complete=state.io_base?vnet_reset_device():1;
  int bus_master_disabled=!state.pci||pci_disable_bus_mastering(state.pci);
  if(!reset_complete||!bus_master_disabled){
-  serial_write("VANTAOS_VIRTIO_NET_QUIESCE_FAILED_DMA_RETAINED\\n");
+  serial_write("VANTAOS_VIRTIO_NET_QUIESCE_FAILED_DMA_RETAINED\n");
   return 0;
  }
 #ifdef VANTAOS_SELF_TEST
@@ -192,7 +192,7 @@ static int vnet_release(void){
   __asm__ volatile("pause");
  }
  if(state.registered||state.selftest_handler_registered){
-  serial_write("VANTAOS_VIRTIO_NET_UNREGISTER_BUSY_STATE_RETAINED\\n");
+  serial_write("VANTAOS_VIRTIO_NET_UNREGISTER_BUSY_STATE_RETAINED\n");
   return 0;
  }
 

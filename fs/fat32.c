@@ -512,10 +512,10 @@ void fat32_initialize(void)
     }
 #ifdef VANTAOS_SELF_TEST
     if (active_device->flags & BLOCK_DEVICE_TRANSPORT_NVME)
-        serial_write("VANTAOS_FAT32_BACKEND_NVME_OK\\n");
+        serial_write("VANTAOS_FAT32_BACKEND_NVME_OK\n");
     else if (active_device->flags & BLOCK_DEVICE_TRANSPORT_ATA)
-        serial_write("VANTAOS_FAT32_BACKEND_ATA_OK\\n");
-    serial_write("VANTAOS_FAT32_BLOCK_DEVICE_MOUNT_OK\\n");
+        serial_write("VANTAOS_FAT32_BACKEND_ATA_OK\n");
+    serial_write("VANTAOS_FAT32_BLOCK_DEVICE_MOUNT_OK\n");
 #endif
 }
 

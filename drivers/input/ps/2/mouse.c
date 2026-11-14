@@ -154,7 +154,7 @@ static void mouse_enable_reporting(void)
     (void)mouse_read_response();
 }
 
-static void mouse_enable_aux_irq(void)
+static int mouse_enable_aux_irq(void)
 {
     unsigned char config;
 
@@ -164,20 +164,32 @@ static void mouse_enable_aux_irq(void)
     ps2_wait_input_clear();
     ps2_write_command(PS2_COMMAND_READ_CONFIG);
 
-    config = mouse_read_response();
+    if (!ps2_wait_output_full())
+    {
+        /*
+         * No configuration byte came back. Writing back a guessed value
+         * (a failed read yields 0xFF) would set the keyboard-clock-disable
+         * bit and silence the keyboard, so leave the controller unchanged.
+         */
+        serial_write("VANTAOS_PS2_MOUSE_CONFIG_READ_TIMEOUT\n");
+        return 0;
+    }
+    config = ps2_read_data();
 
     /*
      * Bit 1 = enable IRQ12.
      * Bit 5 = disable mouse clock.
+     * Bit 4 (keyboard clock disable) is never set here.
      */
     config |= 0x02;
-    config &= (unsigned char)~0x20;
+    config &= (unsigned char)~0x30;
 
     ps2_wait_input_clear();
     ps2_write_command(PS2_COMMAND_WRITE_CONFIG);
 
     ps2_wait_input_clear();
     ps2_write_data(config);
+    return 1;
 }
 
 static unsigned char mouse_enable_wheel(void)
@@ -218,7 +230,8 @@ void mouse_initialize(void)
      */
     ps2_flush_output();
 
-    mouse_enable_aux_irq();
+    if (!mouse_enable_aux_irq())
+        return;
 
     unsigned char mouse_id = mouse_enable_wheel();
 
@@ -236,11 +249,15 @@ void mouse_initialize(void)
 
 void mouse_handle_interrupt(void)
 {
+    uint64_t io_flags = spinlock_lock_irqsave(&ps2_io_lock);
     unsigned char status =
         ps2_read_status();
 
     if (!(status & PS2_STATUS_OUTPUT_FULL))
+    {
+        spinlock_unlock_irqrestore(&ps2_io_lock, io_flags);
         return;
+    }
 
     /*
      * Status bit 5 means the byte came from
@@ -248,10 +265,14 @@ void mouse_handle_interrupt(void)
      * the keyboard.
      */
     if (!(status & 0x20))
+    {
+        spinlock_unlock_irqrestore(&ps2_io_lock, io_flags);
         return;
+    }
 
     unsigned char value =
         ps2_read_data();
+    spinlock_unlock_irqrestore(&ps2_io_lock, io_flags);
 
     /*
      * The first byte of a PS/2 mouse packet

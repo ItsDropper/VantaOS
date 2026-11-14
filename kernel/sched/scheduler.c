@@ -89,7 +89,7 @@ static uint64_t scheduler_switch_from_stack(uint64_t current_stack,
     if (__atomic_load_n(&pending_outgoing_pid[cpu_id], __ATOMIC_ACQUIRE) != 0U)
     {
         if (current_pid != 0U)
-            serial_write("VANTAOS_SCHED_PENDING_OUTGOING\\n");
+            serial_write("VANTAOS_SCHED_PENDING_OUTGOING\n");
         return current_stack;
     }
 
@@ -128,7 +128,7 @@ static uint64_t scheduler_switch_from_stack(uint64_t current_stack,
         process_t current;
         if (process_snapshot(current_pid, &current) &&
             current.state != PROCESS_RUNNING && current.state != PROCESS_READY)
-            serial_write("VANTAOS_SCHED_NO_RUNNABLE\\n");
+            serial_write("VANTAOS_SCHED_NO_RUNNABLE\n");
         return current_stack;
     }
 

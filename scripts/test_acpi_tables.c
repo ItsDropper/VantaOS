@@ -7,6 +7,15 @@
 #include <string.h>
 #include <sys/mman.h>
 const vanta_boot_info_t* kernel_get_boot_info(void) { return NULL; }
+/* Host model of the kernel's on-demand 1-3 GiB firmware-table window. */
+static int firmware_window_enabled = 1;
+static unsigned firmware_window_requests;
+int paging_map_firmware_range(uint64_t address, uint64_t length)
+{
+    if (length == 0U || address + length <= 0x40000000ULL) return 1;
+    ++firmware_window_requests;
+    return firmware_window_enabled;
+}
 void serial_write(const char* s) { (void)s; }
 void serial_write_bytes(const char* s, size_t n) { (void)s; (void)n; }
 static void checksum(uint8_t* p, size_t n, size_t at)
@@ -56,6 +65,29 @@ int main(void)
     *(uint32_t*)(rsdt+4U)=16U*1024U*1024U+1U;
     assert(!acpi_discover_tables(&info));
     assert(!acpi_discover_tables(NULL));
+
+    /* Tables above the permanent 1 GiB identity map need the firmware window. */
+    uint8_t* high = mmap((void*)0x70000000U, 0x10000U,
+        PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS |
+        MAP_FIXED_NOREPLACE, -1, 0);
+    if (high == MAP_FAILED) { perror("ACPI high mmap"); return 1; }
+    memset(high, 0, 0x10000U);
+    uint8_t* hrsdt=high+0x1000U, *hfadt=high+0x2000U, *hdsdt=high+0x3000U;
+    table(hrsdt,"RSDT",40U); *(uint32_t*)(hrsdt+36U)=0x70002000U;
+    checksum(hrsdt,40U,9U);
+    table(hfadt,"FACP",148U); hfadt[8U]=6U; *(uint32_t*)(hfadt+40U)=0x70003000U;
+    *(uint16_t*)(hfadt+46U)=9U; checksum(hfadt,148U,9U);
+    table(hdsdt,"DSDT",40U); checksum(hdsdt,40U,9U);
+    *(uint32_t*)(rsdp+16U)=0x70001000U; checksum(rsdp,20U,8U);
+    firmware_window_requests = 0U;
+    assert(acpi_discover_tables(&info));
+    assert(info.dsdt_address==0x70003000U && info.sci_interrupt==9U);
+    assert(firmware_window_requests > 0U);
+    /* If the window cannot be mapped, discovery fails closed. */
+    firmware_window_enabled = 0;
+    assert(!acpi_discover_tables(&info));
+    firmware_window_enabled = 1;
+    assert(munmap(high,0x10000U)==0);
     assert(munmap(mem,0x80000U)==0);
     puts("ACPI table discovery tests passed");
     return 0;

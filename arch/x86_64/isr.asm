@@ -53,6 +53,7 @@ global exception29_stub
 global exception30_stub
 global exception31_stub
 
+extern pic_handle_unexpected_irq
 extern exception_handler
 extern process_entry_dispatch
 extern timer_handle_interrupt
@@ -296,15 +297,9 @@ irq0_stub:
     cld
     SAVE_IRQ_ALL
     call timer_handle_interrupt
-    call apic_is_enabled
-    test eax, eax
-    jz .irq0_pic_eoi
-    call apic_send_eoi
-    jmp .irq0_eoi_done
-.irq0_pic_eoi:
+    ; pic_send_eoi picks LAPIC or 8259 EOI for the active routing mode.
     mov edi, 0
     call pic_send_eoi
-.irq0_eoi_done:
     mov rdi, rsp
     call scheduler_tick
     mov rsp, rax
@@ -319,15 +314,9 @@ irq1_stub:
     cld
     SAVE_IRQ_ALL
     call keyboard_handle_interrupt
-    call apic_is_enabled
-    test eax, eax
-    jz .irq1_pic_eoi
-    call apic_send_eoi
-    jmp .irq1_eoi_done
-.irq1_pic_eoi:
+    ; pic_send_eoi picks LAPIC or 8259 EOI for the active routing mode.
     mov edi, 1
     call pic_send_eoi
-.irq1_eoi_done:
     SWAPGS_IF_USER rsp, 136
     RESTORE_IRQ_ALL
     iretq
@@ -337,19 +326,40 @@ irq12_stub:
     cld
     SAVE_IRQ_ALL
     call mouse_handle_interrupt
-    call apic_is_enabled
-    test eax, eax
-    jz .irq12_pic_eoi
-    call apic_send_eoi
-    jmp .irq12_eoi_done
-.irq12_pic_eoi:
+    ; pic_send_eoi picks LAPIC or 8259 EOI for the active routing mode.
     mov edi, 12
     call pic_send_eoi
-.irq12_eoi_done:
     SWAPGS_IF_USER rsp, 136
     RESTORE_IRQ_ALL
     iretq
 
+
+; Legacy 8259 vectors with no dedicated handler (IRQ2-IRQ11 except the
+; keyboard/mouse path, IRQ13-IRQ15). A masked 8259 can still raise a spurious
+; IRQ7/IRQ15; without a gate that would be a fatal #NP.
+%macro PIC_UNEXPECTED_STUB 1
+global pic_unexpected_stub_%1
+pic_unexpected_stub_%1:
+    SWAPGS_IF_USER rsp, 8
+    cld
+    SAVE_IRQ_ALL
+    mov edi, %1
+    call pic_handle_unexpected_irq
+    SWAPGS_IF_USER rsp, 136
+    RESTORE_IRQ_ALL
+    iretq
+%endmacro
+
+%assign pic_vector 34
+%rep 10
+PIC_UNEXPECTED_STUB pic_vector
+%assign pic_vector pic_vector+1
+%endrep
+%assign pic_vector 45
+%rep 3
+PIC_UNEXPECTED_STUB pic_vector
+%assign pic_vector pic_vector+1
+%endrep
 
 ; Generic APIC/MSI device vectors. The device must be quiesced before
 ; unregistering its handler; each entry supplies its own vector number.

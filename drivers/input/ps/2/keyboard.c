@@ -8,6 +8,7 @@
 #include "keyboard.h"
 #include "input.h"
 #include "ps2.h"
+#include "mouse.h"
 
 #include <stdint.h>
 #include "spinlock.h"
@@ -466,16 +467,33 @@ void keyboard_handle_interrupt(void)
 {
     /* IRQ1 can be shared with stale/auxiliary output on imperfect firmware. */
     uint8_t status;
+    uint64_t io_flags = spinlock_lock_irqsave(&ps2_io_lock);
     __asm__ volatile (
         "inb %1, %0"
         : "=a"(status)
         : "Nd"((uint16_t)0x64U)
     );
-    if ((status & 0x01U) == 0U || (status & 0x20U) != 0U)
+    if ((status & 0x01U) == 0U)
+    {
+        spinlock_unlock_irqrestore(&ps2_io_lock, io_flags);
         return;
+    }
+    if ((status & 0x20U) != 0U)
+    {
+        /*
+         * Auxiliary-device byte. The 8042 has one output buffer, so leaving
+         * it unread would block every later keyboard byte. Hand it to the
+         * mouse path, which consumes it.
+         */
+        spinlock_unlock_irqrestore(&ps2_io_lock, io_flags);
+        mouse_handle_interrupt();
+        return;
+    }
+
+    uint8_t scancode = keyboard_read_data();
+    spinlock_unlock_irqrestore(&ps2_io_lock, io_flags);
 
     uint64_t flags = spinlock_lock_irqsave(&keyboard_lock);
-    uint8_t scancode = keyboard_read_data();
 
     /*
      * 0xE0 starts an extended Set 1 scancode.
@@ -718,4 +736,19 @@ bool keyboard_shift_pressed(void)
     bool pressed = left_shift_pressed || right_shift_pressed;
     spinlock_unlock_irqrestore(&keyboard_lock, flags);
     return pressed;
+}
+
+void keyboard_poll_input(void)
+{
+    ps2_poll_input();
+}
+
+uint32_t keyboard_poll_serviced_bytes(void)
+{
+    return ps2_poll_serviced_bytes();
+}
+
+int keyboard_scanning_enabled(void)
+{
+    return ps2_keyboard_is_scanning() ? 1 : 0;
 }

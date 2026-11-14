@@ -35,6 +35,15 @@ uint32_t timer_get_ticks(void);
 /** Returns the monotonic tick counter without the legacy 32-bit wrap. */
 uint64_t timer_get_ticks64(void);
 
+/**
+ * Returns IRQ0 ticks actually delivered. Zero after interrupts have been
+ * enabled for a while means the timer interrupt path is not reaching the CPU.
+ */
+uint64_t timer_irq_ticks(void);
+
+/** TSC rate measured against the PIT, or zero when calibration failed. */
+uint64_t timer_tsc_ticks_per_second(void);
+
 /** Returns the configured PIT frequency in ticks per second. */
 uint32_t timer_get_frequency(void);
 

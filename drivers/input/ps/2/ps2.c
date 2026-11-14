@@ -7,7 +7,10 @@
 
 #include "input.h"
 #include "ps2.h"
+#include "keyboard.h"
+#include "mouse.h"
 #include "serial.h"
+#include "spinlock.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -24,11 +27,24 @@
 #define PS2_COMMAND_READ_CONFIG      0x20U
 #define PS2_COMMAND_WRITE_CONFIG     0x60U
 #define PS2_WAIT_LIMIT               100000U
+#define PS2_KEYBOARD_ACK             0xFAU
+#define PS2_KEYBOARD_RESEND          0xFEU
+#define PS2_KEYBOARD_SET_DEFAULTS    0xF6U
+#define PS2_KEYBOARD_ENABLE_SCANNING 0xF4U
+#define PS2_POLL_BUDGET              16U
 
 static uint32_t keyboard_device_id;
 static uint32_t mouse_device_id;
 static bool controller_initialized;
 static bool controller_ready;
+static bool keyboard_scanning;
+
+/*
+ * Serializes the status-check/data-read pair. The 8042 has a single output
+ * buffer shared by the keyboard and auxiliary device, so an IRQ1 handler and
+ * a polling caller (possibly on another CPU) must not interleave.
+ */
+spinlock_t ps2_io_lock = SPINLOCK_INITIALIZER;
 
 static const input_device_descriptor_t ps2_keyboard = {
     .name = "PS/2 keyboard", .bus = INPUT_BUS_PS2,
@@ -99,6 +115,29 @@ static bool ps2_write_config(uint8_t config)
     return true;
 }
 
+/* Send one byte to the keyboard and wait for its ACK, retrying on RESEND. */
+static bool ps2_keyboard_command(uint8_t value)
+{
+    for (uint32_t attempt = 0U; attempt < 3U; ++attempt)
+    {
+        if (!ps2_wait_input_empty())
+            return false;
+        ps2_out8(PS2_DATA_PORT, value);
+        for (uint32_t reads = 0U; reads < 8U; ++reads)
+        {
+            if (!ps2_wait_output_full())
+                return false;
+            uint8_t reply = ps2_in8(PS2_DATA_PORT);
+            if (reply == PS2_KEYBOARD_ACK)
+                return true;
+            if (reply == PS2_KEYBOARD_RESEND)
+                break;
+            /* Anything else (for example a late self-test 0xAA) is skipped. */
+        }
+    }
+    return false;
+}
+
 bool ps2_controller_initialize(void)
 {
     if (controller_initialized)
@@ -145,6 +184,26 @@ bool ps2_controller_initialize(void)
         goto timeout;
     if (!ps2_command(PS2_COMMAND_ENABLE_KEYBOARD))
         goto timeout;
+
+    /*
+     * Firmware or a previous OS may have left the keyboard with scanning
+     * disabled or in a different scancode set; enabling the port alone then
+     * produces no key events. IRQ1 is still disabled here, so replies are read
+     * by polling without racing an interrupt handler.
+     */
+    for (uint32_t count = 0U; count < 32U; ++count)
+    {
+        status = ps2_in8(PS2_STATUS_PORT);
+        if (status == 0xFFU || (status & PS2_STATUS_OUTPUT) == 0U)
+            break;
+        (void)ps2_in8(PS2_DATA_PORT);
+    }
+    keyboard_scanning = ps2_keyboard_command(PS2_KEYBOARD_SET_DEFAULTS) &&
+                        ps2_keyboard_command(PS2_KEYBOARD_ENABLE_SCANNING);
+    serial_write(keyboard_scanning ?
+                 "VANTAOS_PS2_KEYBOARD_SCANNING_ENABLED\n" :
+                 "VANTAOS_PS2_KEYBOARD_NO_ACK\n");
+
     if (!ps2_write_config(config))
         goto timeout;
 
@@ -164,6 +223,41 @@ timeout:
 bool ps2_controller_is_ready(void)
 {
     return controller_ready;
+}
+
+bool ps2_keyboard_is_scanning(void)
+{
+    return keyboard_scanning;
+}
+
+static uint32_t poll_serviced_bytes;
+
+uint32_t ps2_poll_serviced_bytes(void)
+{
+    return __atomic_load_n(&poll_serviced_bytes, __ATOMIC_RELAXED);
+}
+
+/*
+ * Drain pending 8042 output without relying on IRQ1/IRQ12 delivery. The
+ * desktop loop calls this every pass, so input keeps working if the
+ * interrupt route is wrong on a particular machine, and a stuck output byte
+ * can never block the keyboard behind an unserviced auxiliary byte.
+ */
+void ps2_poll_input(void)
+{
+    if (!controller_ready)
+        return;
+    for (uint32_t i = 0U; i < PS2_POLL_BUDGET; ++i)
+    {
+        uint8_t status = ps2_in8(PS2_STATUS_PORT);
+        if (status == 0xFFU || (status & PS2_STATUS_OUTPUT) == 0U)
+            return;
+        __atomic_add_fetch(&poll_serviced_bytes, 1U, __ATOMIC_RELAXED);
+        if ((status & PS2_STATUS_AUX) != 0U)
+            mouse_handle_interrupt();
+        else
+            keyboard_handle_interrupt();
+    }
 }
 
 /* Static names outlive their registrations. Only expose devices when the

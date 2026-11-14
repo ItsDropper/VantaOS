@@ -10,4 +10,8 @@
 void pic_remap(void);
 void pic_send_eoi(unsigned int irq);
 void pic_mask_all(void);
+/* Re-enable the 8259 inputs unmasked by pic_remap() (timer, keyboard, mouse). */
+void pic_restore_default_masks(void);
+/* Handle 8259 vectors that have no dedicated handler (spurious IRQ7/IRQ15). */
+void pic_handle_unexpected_irq(unsigned int vector);
 #endif

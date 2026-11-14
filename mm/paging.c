@@ -25,6 +25,9 @@ static uint64_t kernel_pdpt[PAGING_TABLE_ENTRIES] __attribute__((aligned(4096)))
 static uint64_t kernel_pd[PAGING_TABLE_ENTRIES] __attribute__((aligned(4096)));
 static uint64_t heap_pd[PAGING_TABLE_ENTRIES] __attribute__((aligned(4096)));
 static uint64_t high_pd[PAGING_TABLE_ENTRIES] __attribute__((aligned(4096)));
+/* Identity windows for firmware tables between 1 GiB and 3 GiB (PDPT 1 and 2). */
+static uint64_t firmware_pd[2][PAGING_TABLE_ENTRIES]
+    __attribute__((aligned(4096)));
 static uint64_t heap_pt[PAGING_TABLE_ENTRIES] __attribute__((aligned(4096)));
 /* Sixteen 4 KiB page tables cover separate 16 MiB scanout/backbuffer areas. */
 #define GRAPHICS_PT_COUNT (PAGING_GRAPHICS_SIZE / PAGE_2M)
@@ -197,6 +200,8 @@ void paging_initialize(void)
         kernel_pd[i] = 0;
         heap_pd[i] = 0;
         high_pd[i] = 0;
+        firmware_pd[0][i] = 0;
+        firmware_pd[1][i] = 0;
         heap_pt[i] = 0;
         for (uint32_t t = 0; t < GRAPHICS_PT_COUNT; t++)
             graphics_pt[t][i] = 0;
@@ -355,6 +360,57 @@ int paging_map_mmio_page(uintptr_t virtual_address, uintptr_t physical_address)
     return 1;
 }
 
+/*
+ * Real UEFI firmware places ACPI and SMBIOS tables wherever its allocator
+ * chooses, commonly between 1 GiB and 3 GiB on machines with several GiB of
+ * RAM. The permanent identity map only covers the first GiB, so table readers
+ * ask for the specific 2 MiB windows they need. Mappings are uncached, read
+ * and write capable, identity (VA == PA), and live in PDPT slots 1 and 2,
+ * which the shared kernel PML4 entry makes visible in every address space.
+ * Addresses at or above 3 GiB are refused: that range holds the heap,
+ * framebuffer and device windows.
+ */
+int paging_map_firmware_range(uint64_t physical_address, uint64_t length)
+{
+    const uint64_t one_gib = 0x40000000ULL;
+    const uint64_t window_end = 0xC0000000ULL;
+
+    if (length == 0U || physical_address == 0U ||
+        physical_address >= window_end ||
+        length > window_end - physical_address)
+        return 0;
+    uint64_t end = physical_address + length;
+    if (end <= one_gib)
+        return 1; /* Already covered by the permanent identity map. */
+    if (end > paging_physical_address_limit())
+        return 0;
+
+    uint64_t chunk = physical_address < one_gib ? one_gib :
+                     (physical_address & ~(PAGE_2M - 1ULL));
+    uint64_t limit = (end + PAGE_2M - 1ULL) & ~(PAGE_2M - 1ULL);
+    uint64_t saved_flags = paging_lock_acquire();
+    if (kernel_pml4[0] == 0U)
+    {
+        paging_lock_release(saved_flags);
+        return 0;
+    }
+    uint64_t nx = __atomic_load_n(&nx_enabled, __ATOMIC_ACQUIRE) ? PAGE_NX : 0U;
+    for (; chunk < limit; chunk += PAGE_2M)
+    {
+        uint32_t gib = (uint32_t)(chunk >> 30); /* 1 or 2 */
+        uint32_t index = (uint32_t)((chunk >> 21) & 0x1FFU);
+        uint64_t* pd = firmware_pd[gib - 1U];
+        if ((kernel_pdpt[gib] & PAGE_PRESENT) == 0U)
+            kernel_pdpt[gib] = (uint64_t)(uintptr_t)pd |
+                               PAGE_PRESENT | PAGE_WRITE;
+        if ((pd[index] & PAGE_PRESENT) == 0U)
+            pd[index] = chunk | PAGE_PRESENT | PAGE_WRITE |
+                        0x080U /* PS */ | 0x018U /* PWT + PCD */ | nx;
+    }
+    paging_lock_release(saved_flags);
+    return 1;
+}
+
 void paging_unmap_page(uintptr_t virtual_address)
 {
     uint64_t saved_flags = paging_lock_acquire();
@@ -408,6 +464,14 @@ uintptr_t paging_get_physical(uintptr_t virtual_address)
         {
             /* Identity-mapped low memory. */
             physical = virtual_address;
+        }
+        else if (virtual_address < 0xC0000000ULL)
+        {
+            uint32_t gib = (uint32_t)(virtual_address >> 30);
+            uint32_t index = (uint32_t)((virtual_address >> 21) & 0x1FFU);
+            if ((kernel_pdpt[gib] & PAGE_PRESENT) &&
+                (firmware_pd[gib - 1U][index] & PAGE_PRESENT))
+                physical = virtual_address;
         }
     }
 

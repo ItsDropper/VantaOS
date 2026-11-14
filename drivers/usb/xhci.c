@@ -1371,8 +1371,12 @@ static int xhci_firmware_handoff(uint32_t hcc1)
             if ((control & bios_owned) != 0U)
                 serial_write("VANTAOS_XHCI_BIOS_OWNERSHIP_REQUESTED\n");
 
-            /* Preserve BIOS-owned and all other status/control bits. */
-            mmio_write32(registers, offset + 4U, control | os_owned);
+            /*
+             * Take OS ownership and disable legacy SMI enables. Write zero to
+             * the W1C status fields rather than echoing pending status bits
+             * read from the register.
+             */
+            mmio_write32(registers, offset + 4U, os_owned);
             if (!wait_register(registers, offset + 4U, bios_owned, 0U))
             {
                 serial_write("VANTAOS_XHCI_BIOS_OWNERSHIP_TIMEOUT\n");

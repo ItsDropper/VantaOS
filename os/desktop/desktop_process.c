@@ -30,6 +30,8 @@ static uint32_t desktop_device_io_pid;
 static uint32_t desktop_watchdog_pid;
 static volatile uint32_t desktop_heartbeat_tick;
 static volatile uint64_t desktop_watchdog_handle;
+static uint64_t desktop_next_polled_device_tick;
+static uint8_t desktop_polling_fallback_reported;
 
 static void desktop_device_io_worker(void)
 {
@@ -173,7 +175,31 @@ void desktop_process_main(void)
          */
         keyboard_poll_input();
         if (interrupt_health_polling_required())
+        {
+            /*
+             * With no timer IRQ, the scheduler cannot run the background
+             * device-I/O worker. Keep USB and I2C-HID alive from the active
+             * desktop task using the TSC-backed monotonic clock instead of
+             * sleeping on an interrupt that the health check proved absent.
+             */
+            uint64_t now = timer_get_ticks64();
+            uint32_t frequency = timer_get_frequency();
+            uint64_t poll_interval = frequency / 100U;
+            if (poll_interval == 0U)
+                poll_interval = 1U;
+            if (now >= desktop_next_polled_device_tick)
+            {
+                if (!desktop_polling_fallback_reported)
+                {
+                    serial_write("VANTAOS_DEVICE_IO_POLLING_FALLBACK\n");
+                    desktop_polling_fallback_reported = 1U;
+                }
+                hid_i2c_poll();
+                usb_poll();
+                desktop_next_polled_device_tick = now + poll_interval;
+            }
             __asm__ volatile ("pause" ::: "memory"); /* nothing could wake HLT */
+        }
         else
             __asm__ volatile ("hlt");
     }

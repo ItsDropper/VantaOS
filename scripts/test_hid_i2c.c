@@ -180,7 +180,7 @@ void keyboard_inject_hid_usage(uint16_t usage,bool pressed)
     state.injected_pressed[state.injected_count]=(uint8_t)pressed;
     ++state.injected_count;
 }
-uint32_t interrupts_get_ticks(void){return state.tick;}
+uint32_t timer_get_ticks(void){return state.tick;}
 void sleep_ms(uint32_t milliseconds){(void)milliseconds;}
 void serial_write(const char *message){(void)message;}
 

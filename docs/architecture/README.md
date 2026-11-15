@@ -3,6 +3,7 @@
 - [OS architecture](ARCHITECTURE.md) — boot flow, subsystem boundaries, memory, VFS, and diagnostics.
 - [Engineering model](ENGINEERING_MODEL.md) — contracts, verification levels, concurrency, and test layers.
 - [Desktop UI](DESKTOP_UI.md) and [user-space GUI](USERSPACE_GUI.md) — UI ownership and process boundaries.
+- [User virtual memory and demand paging](VIRTUAL_MEMORY.md) — regions, fault handling, reclamation, SMP reasoning, and limits.
 - [User-mode programs](user-mode-programs.md) — ELF loading and syscall ABI.
 - [Shell](SHELL.md) — terminal and shell behavior.
 

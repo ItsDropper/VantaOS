@@ -48,8 +48,12 @@ The separate [anti-cheat and Windows game compatibility plan](ANTI_CHEAT_COMPATI
 - [ ] Add bounds/overflow checks to mapping and frame calculations.
 - [x] Add the initial per-process user address-space path and bounded ELF page mappings with write/execute permissions.
 - [x] Validate user output buffers at the initial syscall boundary.
-- [ ] Expand page-fault diagnostics, invalid-mapping tests, allocation-failure cleanup, and adversarial isolation coverage.
-- [ ] Add demand paging and mature virtual-memory policy.
+- [x] Add per-process VM regions (ELF, anonymous, stack, guard) with canonical/alignment/overflow/user-kernel and W^X validation (host-tested).
+- [x] Add demand paging: lazy zero-fill frames for `.bss`, stack growth and anonymous regions, permission enforcement, recoverable-versus-protection fault classification, instruction restart, and out-of-memory containment (emulated: ring-3 QEMU suite at 1/2/4 vCPUs under GRUB and UEFI/OVMF). See [User virtual memory and demand paging](../architecture/VIRTUAL_MEMORY.md).
+- [x] Capture CR2 and the full error code, terminate only the faulting process, and reclaim its demand frames and page tables; kernel-mode faults still panic.
+- [x] Add page-fault diagnostics, invalid-mapping tests, allocation-failure cleanup, and concurrent-fault coverage.
+- [ ] Add file-backed lazy loading (needs a retained page cache), a user-visible `mmap`/`brk` interface, run-time region resize/removal, per-address-space page-table locking, and memory-pressure policy. Swapping and copy-on-write remain out of scope.
+- [ ] Exercise page-fault handling on real hardware; nothing here is hardware-verified.
 
 ### M4 — User mode and syscall boundary (early execution path implemented)
 - [x] Enter ring 3 from a loaded static ELF64 `ET_EXEC` image.
@@ -113,4 +117,5 @@ The separate [anti-cheat and Windows game compatibility plan](ANTI_CHEAT_COMPATI
 - Backup branch: `backup/pre-desktop-reliability-2026-10-15`.
 - Default branch: `master`.
 - Current user-mode status: static ELF64 execution, bounded process/file syscalls, an initial process-owned GUI ABI, and the standalone ring-3 Settings app are implemented. CI checks selected syscall, file-I/O, multi-cluster FAT32, GUI malformed-request, dead-window-cleanup, Settings storage readback, and second-boot persistence cases. Settings applies accent, light/dark, contrast, and compact-row preferences to the desktop; text size remains local to Settings. Terminal and the mutable ring-3 File Explorer UI run at ring 3, with create, rename, delete, recursive copy/move, properties, search, and Vanta RLE archive actions. The GUI ABI and storage layer remain intentionally limited. This remains an early bring-up environment, not a stable application platform.
-- Current next milestone: strengthen user-mode fault containment, add robust window geometry/event-wait semantics, and extend filesystem mutation APIs with tests. Date/time settings must wait for an explicit RTC policy and tested timezone conversion. See [User-space desktop applications](../architecture/USERSPACE_GUI.md).
+- Current memory status: demand-paged user virtual memory is implemented and QEMU-verified (see M3); it is not hardware-verified, and file-backed pages are still loaded eagerly.
+- Current next milestone: extend user-mode fault containment beyond page faults, add robust window geometry/event-wait semantics, and extend filesystem mutation APIs with tests. Date/time settings must wait for an explicit RTC policy and tested timezone conversion. See [User-space desktop applications](../architecture/USERSPACE_GUI.md).

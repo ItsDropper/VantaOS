@@ -48,7 +48,7 @@ The two boot paths are not interchangeable evidence: a successful GRUB boot does
 | `kernel/proc/` | `process.c` owns table initialization/creation; `process_context.c` owns atomic CPU claims and context-switch transitions; `process_lifecycle.c` owns wake/block/terminate/reap and snapshots. `process_internal.h` is private shared state, not a public API. |
 | `kernel/sched/` | Ready-process selection and scheduling. |
 | `kernel/time/` | Timer subsystem. |
-| `mm/` | Heap, physical-memory bookkeeping, address-space/page-table management, user mappings, and TLB shootdown coordination. |
+| `mm/` | Heap, physical-memory bookkeeping, address-space/page-table management, user mappings, TLB shootdown coordination, and user VM regions plus demand paging (`vm_region.c`, `vm_fault.c`). |
 | `mm/tlb_shootdown.c` | Serialized cross-CPU invalidation requests, acknowledgement handling, and fail-closed diagnostics. |
 | `mm/user_mapping.c` | User page-table allocation/walking and validated map/unmap lifecycle. |
 | `mm/paging_internal.h` | Private paging implementation contract shared by paging modules. |
@@ -73,7 +73,7 @@ This is an early protection boundary, not a claim of production-grade isolation.
 
 ## Memory and paging
 
-Paging establishes identity mappings for low memory and high virtual windows used by the heap/framebuffer. The physical memory manager consumes the versioned, normalized boot-info memory map and reserves the kernel image, legacy handoff metadata, and framebuffer. The user ELF path allocates/maps bounded user pages with write/execute permissions and a writable, non-executable stack; syscall output buffers are checked against the current process address space. Demand paging, mature virtual-memory policy, and exhaustive mapping/fault validation remain unimplemented.
+Paging establishes identity mappings for low memory and high virtual windows used by the heap/framebuffer. The physical memory manager consumes the versioned, normalized boot-info memory map and reserves the kernel image, legacy handoff metadata, and framebuffer. The user ELF path allocates/maps bounded user pages with write/execute permissions and a writable, non-executable stack; syscall buffers are checked against the current process address space. User address spaces carry a region table (ELF, anonymous, stack, guard) and a demand-paging fault handler that lazily allocates zero-filled frames for `.bss`, stack growth, and anonymous regions, enforces permissions, contains invalid user accesses, and reclaims frames on teardown; see [User virtual memory and demand paging](VIRTUAL_MEMORY.md). File-backed lazy loading, swapping, copy-on-write, and run-time `mmap` remain unimplemented.
 
 ## Filesystem and VFS
 

@@ -90,6 +90,12 @@ CI compiles the same URL parser, response-header parser, and body-framing state 
 
 Kernel self-tests run inside the kernel. Separately, the workflow builds `tests/user/hello.S`, installs the ELF in the FAT32 image, and launches it through the shell's file-backed `exec` path. That user program checks its initial arguments, exercises serial/terminal output, and exits through the syscall path. These are deterministic smoke tests, not adversarial isolation tests or a general application compatibility suite.
 
+## Demand-paging coverage
+
+- **Host:** `scripts/test_vm_region.c` (region validation, overlap/budget, fault classification, accounting, 8-thread concurrent insertion; compiled plain and with `-fsanitize=thread`) and `scripts/test_demand_paging_structure.py` (wiring invariants; also verifies the generated ring-3 program header is current — regenerate with `python3 scripts/gen_vm_selftest_programs.py os/selftest/vm_selftest_programs.h`, which needs `nasm`).
+- **QEMU:** `os/selftest/demand_paging_selftest.c` runs real ring-3 programs (`kernel/selftest/vm/*.asm`) and asserts per-process exit status, demand-fault count, last fault class/address/error code and frames reclaimed, read from the process exit log rather than from anything the program prints. It emits one `VANTAOS_VM_<CASE>_OK` marker per case and `VANTAOS_VM_DEMAND_PAGING_OK` only when all passed; the full set is required in the GRUB matrix (1/2/4 vCPUs) and the UEFI/OVMF run.
+- Allocation-failure injection (`vm_fault_inject_alloc_failures`) is test-only and scoped to a virtual-address window so unrelated processes cannot consume it.
+
 ## NVX (NVIDIA GPU driver) checks
 
 Workflow: [`.github/workflows/nvx-tests.yml`](../../.github/workflows/nvx-tests.yml). Host-only; no GPU is involved.

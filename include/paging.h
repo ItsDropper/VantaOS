@@ -10,6 +10,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include "vm_region.h"
 
 #define PAGE_SIZE 4096U
 #define PAGE_PRESENT 0x001U
@@ -42,7 +43,24 @@ typedef struct paging_address_space
     volatile uint32_t active_cpu_mask;
     /* Outstanding map/unmap shootdowns prevent page-table destruction. */
     volatile uint32_t pending_shootdowns;
+    /* Region table consulted by the demand-paging fault handler. */
+    vm_space_t vm;
 } paging_address_space_t;
+
+/*
+ * Software-defined PTE bit (ignored by hardware) marking a leaf whose frame
+ * was allocated by the demand-paging handler. Such frames are owned by the
+ * page tables themselves and are returned to the PMM when the address space
+ * is destroyed; eagerly mapped frames stay owned by their creator.
+ */
+#define PAGE_SOFT_DEMAND (1ULL << 9)
+
+typedef enum
+{
+    PAGING_DEMAND_FAILED = 0, /* invalid request or no memory for tables */
+    PAGING_DEMAND_MAPPED,     /* leaf installed by this call */
+    PAGING_DEMAND_EXISTS      /* leaf already present; nothing changed */
+} paging_demand_result_t;
 
 void paging_initialize(void);
 /* CPU-reported physical address limit, initialized with paging. */
@@ -62,6 +80,17 @@ int paging_map_user_page_ex(paging_address_space_t* address_space,
                             uintptr_t virtual_address,
                             uintptr_t physical_address,
                             int writable, int executable);
+/*
+ * Install a demand-allocated, non-executable user leaf. No TLB shootdown is
+ * needed: a not-present translation is never cached, and a process runs on at
+ * most one CPU at a time. Ownership of the frame passes to the page tables
+ * (PAGE_SOFT_DEMAND) only when PAGING_DEMAND_MAPPED is returned.
+ */
+paging_demand_result_t paging_map_user_page_demand(
+    paging_address_space_t* address_space, uintptr_t virtual_address,
+    uintptr_t physical_address, int writable);
+/* Lifetime counters for diagnostics and regression tests. */
+uint64_t paging_demand_frames_reclaimed(void);
 int paging_nx_available(void);
 int paging_unmap_user_page(paging_address_space_t* address_space,
                            uintptr_t virtual_address);
@@ -74,6 +103,9 @@ void paging_unmap_page(uintptr_t virtual_address);
 uintptr_t paging_get_physical(uintptr_t virtual_address);
 paging_address_space_t* paging_create_address_space(void);
 int paging_destroy_address_space(paging_address_space_t* address_space);
+/* Same, also reporting how many demand-allocated frames were reclaimed. */
+int paging_destroy_address_space_counted(
+    paging_address_space_t* address_space, uint32_t* demand_frames_out);
 void paging_switch_address_space(paging_address_space_t* address_space);
 /* Register a newly initialized CPU in its initial address space. */
 int paging_register_cpu(uint32_t logical_id,

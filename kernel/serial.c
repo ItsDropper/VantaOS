@@ -11,6 +11,8 @@
 #include "fat32.h"
 #endif
 
+#include "spinlock.h"
+
 #include <stdint.h>
 #include <stddef.h>
 
@@ -23,6 +25,40 @@ static inline void serial_out8(uint16_t port, uint8_t value)
 }
 
 static int serial_available;
+
+/*
+ * Keep one serial_write()/serial_write_bytes() call contiguous when several
+ * CPUs log at once; otherwise result markers get spliced together and any
+ * grep for them (CI, humans) fails intermittently. The lock is bounded: a CPU
+ * halted by a panic broadcast may die holding it, and diagnostics must still
+ * get out, so after the budget expires we write unlocked.
+ */
+#define SERIAL_LOCK_SPIN_BUDGET 200000U
+static spinlock_t serial_output_lock = SPINLOCK_INITIALIZER;
+
+static int serial_output_lock_acquire(uint64_t* flags_out)
+{
+    uint64_t flags;
+    __asm__ volatile ("pushfq; popq %0; cli" : "=r"(flags) :: "memory", "cc");
+    for (uint32_t spin = 0; spin < SERIAL_LOCK_SPIN_BUDGET; spin++)
+    {
+        if (spinlock_try_lock(&serial_output_lock))
+        {
+            *flags_out = flags;
+            return 1;
+        }
+        __asm__ volatile ("pause" ::: "memory");
+    }
+    *flags_out = flags;
+    return 0;
+}
+
+static void serial_output_lock_release(int held, uint64_t flags)
+{
+    if (held)
+        spinlock_unlock(&serial_output_lock);
+    __asm__ volatile ("pushq %0; popfq" :: "r"(flags) : "memory", "cc");
+}
 
 static inline uint8_t serial_in8(uint16_t port)
 {
@@ -72,6 +108,8 @@ void serial_write(const char* text)
     serial_log_append(text, log_length);
 #endif
 
+    uint64_t flags;
+    int held = serial_output_lock_acquire(&flags);
     while (*text)
     {
         if (*text == '\n')
@@ -79,6 +117,7 @@ void serial_write(const char* text)
 
         serial_write_char(*text++);
     }
+    serial_output_lock_release(held, flags);
 }
 
 
@@ -90,12 +129,15 @@ void serial_write_bytes(const char* data, size_t length)
     serial_log_append(data, length);
 #endif
 
+    uint64_t flags;
+    int held = serial_output_lock_acquire(&flags);
     for (size_t i = 0; i < length; i++)
     {
         if (data[i] == '\n')
             serial_write_char('\r');
         serial_write_char(data[i]);
     }
+    serial_output_lock_release(held, flags);
 }
 
 int serial_boot_log_flush(void)

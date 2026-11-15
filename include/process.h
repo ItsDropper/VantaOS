@@ -107,6 +107,19 @@ int process_create_kernel(const char* name, uint32_t parent_pid, process_entry_t
 /* Copies a single-page flat x86-64 image into an isolated ring-3 process. */
 int process_create_user(const char* name, uint32_t parent_pid,
                         const void* image, size_t image_size);
+/* Extra user regions reserved before a flat image is published. */
+typedef struct process_vm_region_spec
+{
+    uintptr_t start;
+    size_t length;
+    uint32_t prot;  /* VM_PROT_* */
+    uint32_t type;  /* VM_REGION_ANON or VM_REGION_GUARD */
+} process_vm_region_spec_t;
+/* Flat image plus additional demand-zero (anon) or guard regions. */
+int process_create_user_with_regions(const char* name, uint32_t parent_pid,
+                                     const void* image, size_t image_size,
+                                     const process_vm_region_spec_t* extra,
+                                     uint32_t extra_count);
 /* Load a validated static ELF64 executable into a private address space. */
 int process_create_user_elf(const char* name, uint32_t parent_pid,
                             const void* image, size_t image_size);
@@ -159,6 +172,9 @@ void process_block_current(void);
 void process_terminate_current(void);
 void process_terminate_current_with_status(int32_t exit_status);
 /* Atomically validates and terminates the current user task from an exception. */
+/* Blocking form for ring-3 faults (no kernel locks held by the caller). */
+int process_terminate_current_user_with_status(
+    paging_address_space_t* expected_address_space, int32_t exit_status);
 int process_terminate_current_user_try_with_status(
     paging_address_space_t* expected_address_space, int32_t exit_status);
 /* Non-blocking termination for exception paths; failure must fail closed. */

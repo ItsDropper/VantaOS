@@ -253,6 +253,21 @@ jobs:
             scripts/test_timer_math.c -o /tmp/vantaos-timer-math-test
           /tmp/vantaos-timer-math-test
 
+      - name: Test demand-paging region table, fault classifier and wiring
+        run: |
+          gcc -std=gnu11 -O2 -Wall -Wextra -Werror \
+            -Iscripts/test_stubs_smp -Iinclude \
+            scripts/test_vm_region.c mm/vm_region.c -lpthread \
+            -o /tmp/vantaos-vm-region-test
+          /tmp/vantaos-vm-region-test
+          gcc -std=gnu11 -g -fsanitize=thread \
+            -Iscripts/test_stubs_smp -Iinclude \
+            scripts/test_vm_region.c mm/vm_region.c -lpthread \
+            -o /tmp/vantaos-vm-region-tsan
+          /tmp/vantaos-vm-region-tsan
+          sudo apt-get install -y nasm >/dev/null
+          python3 scripts/test_demand_paging_structure.py
+
       - name: Test physical memory allocator contiguous and next-fit allocation
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude \
@@ -1346,6 +1361,24 @@ jobs:
             VANTAOS_USER_PROCESS_FAULT_UNMAPPED
             VANTAOS_USER_PROCESS_FAULT_UD
             VANTAOS_SYSCALL_POINTER_GUARDS_OK
+            VANTAOS_VM_LAZY_ZERO_RW_OK
+            VANTAOS_VM_EXEC_ANON_DENIED_OK
+            VANTAOS_VM_RO_WRITE_FIRST_DENIED_OK
+            VANTAOS_VM_RO_WRITE_PROTECTION_OK
+            VANTAOS_VM_GUARD_REGION_OK
+            VANTAOS_VM_UNRESERVED_ADDRESS_OK
+            VANTAOS_VM_KERNEL_READ_CONTAINED_OK
+            VANTAOS_VM_KERNEL_WRITE_CONTAINED_OK
+            VANTAOS_VM_KERNEL_HIGH_CONTAINED_OK
+            VANTAOS_VM_NONCANONICAL_CONTAINED_OK
+            VANTAOS_VM_SYSCALL_PREFAULT_OK
+            VANTAOS_VM_OOM_CONTAINED_OK
+            VANTAOS_VM_STACK_GROWTH_OK
+            VANTAOS_VM_STACK_GUARD_OK
+            VANTAOS_VM_ELF_LAZY_BSS_OK
+            VANTAOS_VM_REPEATED_ALLOC_RELEASE_OK
+            VANTAOS_VM_CONCURRENT_FAULTS_OK
+            VANTAOS_VM_DEMAND_PAGING_OK
             VANTAOS_PER_CPU_ADDRESS_SPACE_OK
             VANTAOS_PROCESS_API_GUARDS_OK
             VANTAOS_IDLE_PROCESS_LIFECYCLE_OK
@@ -1514,6 +1547,7 @@ jobs:
             VANTAOS_SMP_IDLE_CONTEXTS_OK
             VANTAOS_TLB_SHOOTDOWN_OK
             VANTAOS_PMM_BOOT_INFO_OK
+            VANTAOS_VM_DEMAND_PAGING_OK
             VANTAOS_BOOT_OK
           )
           for marker in "${required_uefi_markers[@]}"; do

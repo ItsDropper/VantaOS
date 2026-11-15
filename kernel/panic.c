@@ -15,6 +15,7 @@
 #include "terminal.h"
 #include "process.h"
 #include "paging.h"
+#include "vm_fault.h"
 #include "fault_trace.h"
 #include "apic.h"
 #include "serial.h"
@@ -250,7 +251,11 @@ void kernel_panic(
     panic_halt();
 }
 
-void exception_handler(
+/*
+ * Returns 1 when a user page fault was resolved and the faulting instruction
+ * must be restarted directly (no reschedule); 0 for every other outcome.
+ */
+int exception_handler(
     unsigned int exception_number,
     struct exception_frame* frame
 )
@@ -262,6 +267,14 @@ void exception_handler(
         panic_halt();
 
     /*
+     * Capture CR2 before anything that could itself fault or be preempted by
+     * another fault. Meaningful only for vector 14.
+     */
+    uintptr_t captured_cr2 = 0;
+    if (exception_number == 14U)
+        __asm__ volatile ("mov %%cr2, %0" : "=r"(captured_cr2));
+
+    /*
      * NMI, double fault, and machine check are not recoverable application
      * exceptions. Their origin may be CPL3, but the condition is system-wide
      * and must never be hidden by the user-process fault-containment path.
@@ -271,7 +284,7 @@ void exception_handler(
 
     if (!fatal_machine_exception &&
         user_mode_selftest_handle_exception(exception_number, frame))
-        return;
+        return 0;
 
     /*
      * A fault in CPL3 belongs to the process, not the kernel. The assembly
@@ -284,8 +297,32 @@ void exception_handler(
     {
         paging_address_space_t* fault_address_space =
             paging_get_current_address_space();
-        if (process_terminate_current_user_try_with_status(
-                fault_address_space, -1))
+        vm_fault_class_t fault_class = VM_FAULT_NO_REGION;
+        int fault_oom = 0;
+
+        if (exception_number == 14U)
+        {
+            /*
+             * Demand paging: a valid, non-present access inside a reserved
+             * region is satisfied here and the instruction is restarted.
+             * Everything else (no region, guard, protection violation,
+             * reserved bit) falls through to process termination.
+             */
+            vm_fault_result_t resolved = vm_handle_user_fault(
+                fault_address_space, captured_cr2, frame->error_code,
+                &fault_class);
+            if (resolved == VM_FAULT_RESOLVED)
+                return 1;
+            fault_oom = (resolved == VM_FAULT_OUT_OF_MEMORY);
+        }
+
+        /*
+         * A fault from ring 3 holds no kernel locks, so blocking on the
+         * process-table lock is safe and cannot be starved into a panic.
+         */
+        int terminated = process_terminate_current_user_with_status(
+            fault_address_space, fault_oom ? -12 : -1);
+        if (terminated)
         {
             serial_write("VANTAOS_USER_PROCESS_FAULT_PID=");
             panic_serial_hex(process_current_pid());
@@ -293,6 +330,15 @@ void exception_handler(
             panic_serial_hex(frame->rip);
             serial_write(" EXCEPTION=");
             panic_serial_hex(exception_number);
+            if (exception_number == 14U)
+            {
+                serial_write(" CR2=");
+                panic_serial_hex(captured_cr2);
+                serial_write(" ERR=");
+                panic_serial_hex(frame->error_code);
+                serial_write(" CLASS=");
+                serial_write(vm_fault_class_name(fault_class));
+            }
             serial_write("\n");
             serial_write("VANTAOS_USER_PROCESS_FAULT\n");
             if (exception_number == 6U)
@@ -305,8 +351,16 @@ void exception_handler(
                     serial_write("VANTAOS_USER_PROCESS_FAULT_WRITE_PROTECT\n");
                 else if ((frame->error_code & 0x5U) == 0x4U)
                     serial_write("VANTAOS_USER_PROCESS_FAULT_UNMAPPED\n");
+
+                if (fault_oom)
+                    serial_write("VANTAOS_USER_PROCESS_FAULT_OOM\n");
+                else if (fault_class == VM_FAULT_GUARD)
+                    serial_write("VANTAOS_USER_PROCESS_FAULT_STACK_GUARD\n");
+                else if (fault_class == VM_FAULT_NO_REGION &&
+                         captured_cr2 < PAGING_USER_BASE)
+                    serial_write("VANTAOS_USER_PROCESS_FAULT_KERNEL_ADDRESS\n");
             }
-            return;
+            return 0;
         }
     }
 

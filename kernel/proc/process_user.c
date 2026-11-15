@@ -6,6 +6,8 @@
  */
 
 #include "process_internal.h"
+#include "vm_region.h"
+#include "process_exit_log.h"
 #include "pmm.h"
 #include "serial.h"
 #include "vfs.h"
@@ -154,11 +156,14 @@ void process_release_unpublished_user_image(
         pmm_free_block(stack_frame);
 }
 
-int process_create_user(const char* name, uint32_t parent_pid,
-                        const void* image, size_t image_size)
+int process_create_user_with_regions(const char* name, uint32_t parent_pid,
+                                     const void* image, size_t image_size,
+                                     const process_vm_region_spec_t* extra,
+                                     uint32_t extra_count)
 {
     if (!process_initialized_state || !name || !name[0] || !image ||
-        image_size == 0U || image_size > PAGE_SIZE)
+        image_size == 0U || image_size > PAGE_SIZE ||
+        (extra_count != 0U && !extra))
         return -1;
 
     paging_address_space_t* space = paging_create_address_space();
@@ -177,6 +182,28 @@ int process_create_user(const char* name, uint32_t parent_pid,
         ((uint8_t*)stack_frame)[i] = 0U;
     uintptr_t initial_stack = initialize_initial_stack(
         stack_frame, USER_STACK_TOP);
+
+    /* Reserve the regions first so a conflicting spec fails before mapping. */
+    int regions_ok =
+        vm_space_add_region(&space->vm, USER_CODE_ADDRESS, PAGE_SIZE,
+                            VM_PROT_READ | VM_PROT_EXEC,
+                            VM_REGION_FLAT_IMAGE, VM_BACKING_POPULATED) &&
+        vm_space_add_region(&space->vm, USER_STACK_ADDRESS, PAGE_SIZE,
+                            VM_PROT_READ | VM_PROT_WRITE, VM_REGION_STACK,
+                            VM_BACKING_ZERO);
+    for (uint32_t i = 0U; regions_ok && i < extra_count; i++)
+    {
+        const vm_backing_t backing = extra[i].type == VM_REGION_GUARD ?
+            VM_BACKING_NONE : VM_BACKING_ZERO;
+        regions_ok = vm_space_add_region(&space->vm, extra[i].start,
+                                         extra[i].length, extra[i].prot,
+                                         extra[i].type, backing);
+    }
+    if (!regions_ok)
+    {
+        process_release_unpublished_user_image(space, code_frame, stack_frame);
+        return -1;
+    }
 
     if (!paging_map_user_page_ex(space, USER_CODE_ADDRESS,
                                  (uintptr_t)code_frame, 0, 1) ||
@@ -203,6 +230,13 @@ int process_create_user(const char* name, uint32_t parent_pid,
     return pid;
 }
 
+int process_create_user(const char* name, uint32_t parent_pid,
+                        const void* image, size_t image_size)
+{
+    return process_create_user_with_regions(name, parent_pid, image,
+                                            image_size, NULL, 0U);
+}
+
 int process_release_user_resources(process_t* process)
 {
     if (!process)
@@ -215,8 +249,25 @@ int process_release_user_resources(process_t* process)
         paging_get_current_address_space() == process->address_space)
         return 0;
 
-    if (!paging_destroy_address_space(process->address_space))
+    /* Read the accounting first: destroying the space clears its region table. */
+    process_exit_record_t record = {0};
+    record.pid = process->pid;
+    record.exit_status = process->exit_status;
+    record.demand_faults = process->address_space->vm.demand_faults;
+    record.resident_at_exit = process->address_space->vm.resident_pages;
+    record.fault_events = process->address_space->vm.fault_events;
+    record.last_fault_class = process->address_space->vm.last_fault_class;
+    record.last_fault_address = process->address_space->vm.last_fault_address;
+    record.last_fault_error = process->address_space->vm.last_fault_error;
+    for (unsigned int n = 0U; n < PROCESS_NAME_MAX; n++)
+        record.name[n] = process->name[n];
+
+    uint32_t reclaimed = 0U;
+    if (!paging_destroy_address_space_counted(process->address_space,
+                                              &reclaimed))
         return 0;
+    record.frames_reclaimed = reclaimed;
+    process_exit_log_record(&record);
 
     for (uint32_t i = 0; i < PROCESS_FD_COUNT; i++)
         if (process->file_descriptors[i] >= 0)

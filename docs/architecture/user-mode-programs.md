@@ -70,7 +70,7 @@ The extended syscall ABI adds nonblocking keyboard-character reads, an interrupt
 
 ## Loader and memory constraints
 
-The loader rejects malformed or out-of-image ELF headers/segments, unsupported ELF types, out-of-range load segments, writable-executable segments, and entry points outside executable segments. It requires CPU NX support. User image pages are subject to a fixed page budget, and the initial stack has a fixed size. These checks reduce obvious invalid inputs but do not substitute for exhaustive malformed-image, fault-containment, or security testing.
+The loader rejects malformed or out-of-image ELF headers/segments, unsupported ELF types, out-of-range load segments, writable-executable segments, and entry points outside executable segments. It requires CPU NX support. User image pages that hold file bytes are mapped eagerly and are subject to a fixed page budget. Pure `.bss` pages and most of the 64-page stack reserve are demand-zero: they are allocated on first touch, with a guard page below the stack. Invalid accesses terminate only the faulting process; see [User virtual memory and demand paging](VIRTUAL_MEMORY.md). These checks reduce obvious invalid inputs but do not substitute for exhaustive malformed-image, fault-containment, or security testing.
 
 ## Automated smoke test
 

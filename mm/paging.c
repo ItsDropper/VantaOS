@@ -501,6 +501,7 @@ paging_address_space_t* paging_create_address_space(void)
         pml4[0] = kernel_pml4[0];
         address_spaces[i].active_cpu_mask = 0;
         address_spaces[i].pending_shootdowns = 0;
+        vm_space_init(&address_spaces[i].vm);
         __atomic_store_n(&address_spaces[i].used, 1, __ATOMIC_RELEASE);
         paging_lock_release(saved_flags);
         return &address_spaces[i];
@@ -512,6 +513,14 @@ paging_address_space_t* paging_create_address_space(void)
 
 int paging_destroy_address_space(paging_address_space_t* address_space)
 {
+    return paging_destroy_address_space_counted(address_space, NULL);
+}
+
+int paging_destroy_address_space_counted(
+    paging_address_space_t* address_space, uint32_t* demand_frames_out)
+{
+    if (demand_frames_out)
+        *demand_frames_out = 0U;
     uint64_t saved_flags = paging_lock_acquire();
     if (!paging_owns_address_space(address_space) ||
         __atomic_load_n(&address_space->pending_shootdowns,
@@ -537,13 +546,24 @@ int paging_destroy_address_space(paging_address_space_t* address_space)
         return 0;
     }
 
-    paging_release_user_page_tables(address_space);
+    /*
+     * Detach the user table tree while serialized, then free it (and every
+     * demand-allocated leaf frame) after dropping the global paging lock: the
+     * tree is unreachable from any CPU here, and a large address space must
+     * not stall unrelated map/unmap/activation work while it is walked.
+     */
+    uint64_t detached = paging_detach_user_page_tables(address_space);
     for (uint32_t i = 0; i < PAGING_TABLE_ENTRIES; i++)
         address_space->directory[i] = 0;
 
+    vm_space_clear(&address_space->vm);
     address_space->active_cpu_mask = 0;
     __atomic_store_n(&address_space->used, 0, __ATOMIC_RELEASE);
     paging_lock_release(saved_flags);
+
+    uint32_t freed = paging_free_detached_user_tables(detached);
+    if (demand_frames_out)
+        *demand_frames_out = freed;
     return 1;
 }
 

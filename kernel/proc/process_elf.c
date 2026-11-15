@@ -7,6 +7,7 @@
 
 #include "process_internal.h"
 #include "pmm.h"
+#include "vm_region.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -20,9 +21,13 @@
 #define PF_X 1U
 #define PF_W 2U
 #define ELF_PHDR_MAX 16U
+/* Pages mapped eagerly at the top of the stack to hold argv and auxv. */
 #define USER_STACK_PAGES 4U
+/* Whole reserved stack range; pages below the eager ones fault in on demand. */
+#define USER_STACK_RESERVE_PAGES PROCESS_USER_MAX_PAGES
 #define USER_STACK_TOP ((uintptr_t)PAGING_USER_END + 1U)
 #define USER_STACK_SIZE (USER_STACK_PAGES * PAGE_SIZE)
+#define USER_STACK_RESERVE_SIZE ((uintptr_t)USER_STACK_RESERVE_PAGES * PAGE_SIZE)
 #define IDENTITY_MAP_LIMIT 0x40000000ULL
 
 typedef struct __attribute__((packed)) elf64_header
@@ -209,7 +214,11 @@ int process_create_user_elf_args(const char* name, uint32_t parent_pid,
         return -1;
 
     const uintptr_t stack_top = USER_STACK_TOP;
-    const uintptr_t stack_base = USER_STACK_TOP - USER_STACK_SIZE;
+    /* Reserved stack range; only the top USER_STACK_PAGES are mapped up front. */
+    const uintptr_t stack_base = USER_STACK_TOP - USER_STACK_RESERVE_SIZE;
+    const uintptr_t eager_stack_base = USER_STACK_TOP - USER_STACK_SIZE;
+    /* One inaccessible page below the stack turns overflow into a clean fault. */
+    const uintptr_t guard_base = stack_base - PAGE_SIZE;
 
     for (uint32_t i = 0; i < header->program_header_count; i++)
     {
@@ -244,7 +253,7 @@ int process_create_user_elf_args(const char* name, uint32_t parent_pid,
             (segment_end + PAGE_SIZE - 1U) &
             ~(uintptr_t)(PAGE_SIZE - 1U);
         if (segment_end < segment_start || page_end < segment_end ||
-            page_start < PAGING_USER_BASE || page_end > stack_base)
+            page_start < PAGING_USER_BASE || page_end > guard_base)
         {
             release_unpublished_image(space, pages, page_count);
             return -1;
@@ -252,7 +261,26 @@ int process_create_user_elf_args(const char* name, uint32_t parent_pid,
 
         const int writable = (ph->flags & PF_W) != 0U;
         const int executable = (ph->flags & PF_X) != 0U;
-        for (uintptr_t va = page_start; va < page_end; va += PAGE_SIZE)
+        const uint32_t prot = VM_PROT_READ |
+                              (writable ? VM_PROT_WRITE : 0U) |
+                              (executable ? VM_PROT_EXEC : 0U);
+
+        /*
+         * Pages that hold file bytes are populated now (the image buffer is
+         * not retained). Pure .bss pages beyond the file data stay lazy and
+         * are zero-filled on first touch; executable segments are always
+         * fully populated because demand-zero memory is never executable.
+         */
+        uintptr_t populated_end = page_end;
+        if (!executable)
+        {
+            uintptr_t file_end = segment_start + (uintptr_t)ph->file_size;
+            populated_end = ph->file_size == 0U ? page_start :
+                ((file_end + PAGE_SIZE - 1U) & ~(uintptr_t)(PAGE_SIZE - 1U));
+            if (populated_end > page_end)
+                populated_end = page_end;
+        }
+        for (uintptr_t va = page_start; va < populated_end; va += PAGE_SIZE)
         {
             if (!allocate_and_map_page(space, pages, &page_count, va,
                                        writable, executable))
@@ -260,6 +288,22 @@ int process_create_user_elf_args(const char* name, uint32_t parent_pid,
                 release_unpublished_image(space, pages, page_count);
                 return -1;
             }
+        }
+        if (populated_end > page_start &&
+            !vm_space_add_region(&space->vm, page_start,
+                                 populated_end - page_start, prot,
+                                 VM_REGION_ELF, VM_BACKING_POPULATED))
+        {
+            release_unpublished_image(space, pages, page_count);
+            return -1;
+        }
+        if (populated_end < page_end &&
+            !vm_space_add_region(&space->vm, populated_end,
+                                 page_end - populated_end, prot,
+                                 VM_REGION_ELF, VM_BACKING_ZERO))
+        {
+            release_unpublished_image(space, pages, page_count);
+            return -1;
         }
 
         for (uint64_t offset = 0; offset < ph->file_size; offset++)
@@ -293,12 +337,22 @@ int process_create_user_elf_args(const char* name, uint32_t parent_pid,
 
     for (uint32_t i = 0; i < USER_STACK_PAGES; i++)
     {
-        uintptr_t va = stack_base + (uintptr_t)i * PAGE_SIZE;
+        uintptr_t va = eager_stack_base + (uintptr_t)i * PAGE_SIZE;
         if (!allocate_and_map_page(space, pages, &page_count, va, 1, 0))
         {
             release_unpublished_image(space, pages, page_count);
             return -1;
         }
+    }
+
+    if (!vm_space_add_region(&space->vm, stack_base, USER_STACK_RESERVE_SIZE,
+                             VM_PROT_READ | VM_PROT_WRITE, VM_REGION_STACK,
+                             VM_BACKING_ZERO) ||
+        !vm_space_add_region(&space->vm, guard_base, PAGE_SIZE, 0U,
+                             VM_REGION_GUARD, VM_BACKING_NONE))
+    {
+        release_unpublished_image(space, pages, page_count);
+        return -1;
     }
 
     uintptr_t argument_addresses[PROCESS_USER_MAX_ARGS] = {0};
@@ -307,7 +361,7 @@ int process_create_user_elf_args(const char* name, uint32_t parent_pid,
     {
         uint32_t index = i - 1U;
         size_t length = argument_lengths[index] + 1U;
-        if (length > stack_pointer - stack_base)
+        if (length > stack_pointer - eager_stack_base)
         {
             release_unpublished_image(space, pages, page_count);
             return -1;
@@ -324,13 +378,13 @@ int process_create_user_elf_args(const char* name, uint32_t parent_pid,
 
     const size_t word_count = (size_t)argc + 5U;
     const size_t table_bytes = word_count * sizeof(uint64_t);
-    if (table_bytes > stack_pointer - stack_base)
+    if (table_bytes > stack_pointer - eager_stack_base)
     {
         release_unpublished_image(space, pages, page_count);
         return -1;
     }
     stack_pointer = (stack_pointer - table_bytes) & ~(uintptr_t)0xFU;
-    if (stack_pointer < stack_base ||
+    if (stack_pointer < eager_stack_base ||
         table_bytes > stack_top - stack_pointer)
     {
         release_unpublished_image(space, pages, page_count);

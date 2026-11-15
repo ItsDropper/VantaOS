@@ -22,7 +22,8 @@
 
 static uint64_t* allocate_user_table(void)
 {
-    void* frame = pmm_alloc_block();
+    /* Ask for a frame the kernel can address; a higher one would be wasted. */
+    void* frame = pmm_alloc_block_below(IDENTITY_MAP_LIMIT);
     if (!frame)
         return NULL;
 
@@ -155,18 +156,29 @@ fail:
     return NULL;
 }
 
-void paging_release_user_page_tables(paging_address_space_t* space)
+static volatile uint64_t demand_frames_reclaimed;
+
+uint64_t paging_demand_frames_reclaimed(void)
+{
+    return __atomic_load_n(&demand_frames_reclaimed, __ATOMIC_ACQUIRE);
+}
+
+uint64_t paging_detach_user_page_tables(paging_address_space_t* space)
 {
     if (!space || !space->directory)
-        return;
+        return 0U;
+    uint64_t entry = space->directory[USER_PML4_INDEX];
+    space->directory[USER_PML4_INDEX] = 0U;
+    return (entry & PAGE_PRESENT) ? entry : 0U;
+}
 
-    uint64_t* pml4 = space->directory;
-    uint64_t pml4_entry = pml4[USER_PML4_INDEX];
+uint32_t paging_free_detached_user_tables(uint64_t pml4_entry)
+{
     if (!(pml4_entry & PAGE_PRESENT))
-        return;
+        return 0U;
 
-    uint64_t* pdpt = (uint64_t*)(uintptr_t)
-        (pml4_entry & PAGE_ADDRESS_MASK);
+    uint32_t demand_freed = 0U;
+    uint64_t* pdpt = (uint64_t*)(uintptr_t)(pml4_entry & PAGE_ADDRESS_MASK);
 
     for (uint32_t i = 0; i < PAGING_TABLE_ENTRIES; i++)
     {
@@ -183,6 +195,15 @@ void paging_release_user_page_tables(paging_address_space_t* space)
 
             uint64_t* pt = (uint64_t*)(uintptr_t)
                 (pd[j] & PAGE_ADDRESS_MASK);
+            for (uint32_t k = 0; k < PAGING_TABLE_ENTRIES; k++)
+            {
+                if ((pt[k] & PAGE_PRESENT) && (pt[k] & PAGE_SOFT_DEMAND))
+                {
+                    pmm_free_block((void*)(uintptr_t)
+                                   (pt[k] & PAGE_ADDRESS_MASK));
+                    demand_freed++;
+                }
+            }
             pmm_free_block(pt);
         }
 
@@ -190,9 +211,48 @@ void paging_release_user_page_tables(paging_address_space_t* space)
     }
 
     pmm_free_block(pdpt);
-    pml4[USER_PML4_INDEX] = 0;
+    if (demand_freed != 0U)
+        __atomic_fetch_add(&demand_frames_reclaimed, demand_freed,
+                           __ATOMIC_ACQ_REL);
+    return demand_freed;
 }
 
+paging_demand_result_t paging_map_user_page_demand(
+    paging_address_space_t* address_space, uintptr_t virtual_address,
+    uintptr_t physical_address, int writable)
+{
+    if (!paging_nx_available())
+        return PAGING_DEMAND_FAILED;
+
+    uint64_t saved_flags = paging_lock_acquire();
+    if ((virtual_address & (PAGE_SIZE - 1U)) != 0 ||
+        (physical_address & (PAGE_SIZE - 1U)) != 0 ||
+        virtual_address < PAGING_USER_BASE ||
+        virtual_address > PAGING_USER_END ||
+        physical_address >= IDENTITY_MAP_LIMIT ||
+        !paging_owns_address_space(address_space))
+    {
+        paging_lock_release(saved_flags);
+        return PAGING_DEMAND_FAILED;
+    }
+
+    uint64_t* entry = paging_user_leaf_entry(address_space, virtual_address, 1);
+    if (!entry)
+    {
+        paging_lock_release(saved_flags);
+        return PAGING_DEMAND_FAILED;
+    }
+    if (*entry & PAGE_PRESENT)
+    {
+        paging_lock_release(saved_flags);
+        return PAGING_DEMAND_EXISTS;
+    }
+
+    *entry = ((uint64_t)physical_address) | PAGE_PRESENT | PAGE_USER |
+             PAGE_NX | PAGE_SOFT_DEMAND | (writable ? PAGE_WRITE : 0U);
+    paging_lock_release(saved_flags);
+    return PAGING_DEMAND_MAPPED;
+}
 
 int paging_map_user_page(paging_address_space_t* address_space,
                          uintptr_t virtual_address,
@@ -273,7 +333,12 @@ int paging_unmap_user_page(paging_address_space_t* address_space,
     __atomic_sub_fetch(&address_space->pending_shootdowns, 1U,
                        __ATOMIC_RELEASE);
 
-    /* The caller owns the unmapped physical frame and must free it separately. */
+    /*
+     * The caller owns the unmapped physical frame and must free it separately.
+     * Never use this on a PAGE_SOFT_DEMAND leaf: those frames are owned by the
+     * page tables and would leak; a future munmap must free the frame and
+     * adjust the region's resident count itself.
+     */
     return 1;
 }
 

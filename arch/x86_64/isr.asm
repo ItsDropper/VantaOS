@@ -1345,8 +1345,12 @@ exception%1_stub:
     call exception_handler
     cmp dword [rel user_mode_test_exit_requested], 0
     jne %%user_test_exit
+    ; eax == 1: demand fault resolved, restart the instruction directly.
+    cmp eax, 1
+    je %%resume
     test byte [r12 + 136], 3
     jnz %%schedule_user
+%%resume:
     SWAPGS_IF_USER r12, 136
     mov rsp, r12
     RESTORE_ALL
@@ -1371,8 +1375,12 @@ exception%1_stub:
     call exception_handler
     cmp dword [rel user_mode_test_exit_requested], 0
     jne %%user_test_exit
+    ; eax == 1: demand fault resolved, restart the instruction directly.
+    cmp eax, 1
+    je %%resume
     test byte [r12 + 136], 3
     jnz %%schedule_user
+%%resume:
     SWAPGS_IF_USER r12, 136
     mov rsp, r12
     RESTORE_ALL

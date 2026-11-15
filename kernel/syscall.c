@@ -5,6 +5,7 @@
  * See the LICENSE file in the project root for the full license text.
  */
 
+#include "vm_fault.h"
 #include "syscall.h"
 
 #include "paging.h"
@@ -92,7 +93,7 @@ static int syscall_write(struct exception_frame* frame,
         frame->rax = (uint64_t)(int64_t)-22;
         return 0;
     }
-    if (!paging_user_range_valid(process->address_space, address,
+    if (!vm_user_range_valid(process->address_space, address,
                                  (size_t)length, 0))
     {
         frame->rax = (uint64_t)(int64_t)-14;
@@ -120,7 +121,7 @@ static int syscall_console_write(struct exception_frame* frame,
         frame->rax = (uint64_t)(int64_t)-22;
         return 0;
     }
-    if (!paging_user_range_valid(process->address_space, address,
+    if (!vm_user_range_valid(process->address_space, address,
                                  (size_t)length, 0))
     {
         frame->rax = (uint64_t)(int64_t)-14;
@@ -176,7 +177,7 @@ static int syscall_open(struct exception_frame* frame, uint32_t pid,
     {
         uintptr_t current = address + length;
         if (current < address ||
-            !paging_user_range_valid(process->address_space, current, 1U, 0))
+            !vm_user_range_valid(process->address_space, current, 1U, 0))
         {
             frame->rax = (uint64_t)(int64_t)-14;
             return 0;
@@ -241,7 +242,7 @@ static int syscall_read(struct exception_frame* frame, uint32_t pid,
         frame->rax = 0U;
         return 0;
     }
-    if (!paging_user_range_valid(process->address_space, address,
+    if (!vm_user_range_valid(process->address_space, address,
                                  (size_t)length, 1))
     {
         frame->rax = (uint64_t)(int64_t)-14;
@@ -296,7 +297,7 @@ static int syscall_copy_user_string(char* destination, size_t capacity,
     {
         uintptr_t current = address + i;
         if (current < address ||
-            !paging_user_range_valid(process->address_space, current, 1U, 0))
+            !vm_user_range_valid(process->address_space, current, 1U, 0))
             return -14;
 
         destination[i] = *(const char*)current;
@@ -341,7 +342,7 @@ static int syscall_listdir(struct exception_frame* frame,
     }
 
     size_t capacity = (size_t)capacity_value;
-    if (!paging_user_range_valid(process->address_space, buffer_address,
+    if (!vm_user_range_valid(process->address_space, buffer_address,
                                  capacity, 1))
     {
         frame->rax = (uint64_t)(int64_t)-14;
@@ -470,7 +471,7 @@ static int syscall_spawn(struct exception_frame* frame,
     const uint32_t argc = (uint32_t)argc_value;
     const uintptr_t argv_address = (uintptr_t)frame->rsi;
     const size_t vector_size = (size_t)argc * sizeof(uintptr_t);
-    if (!paging_user_range_valid(process->address_space, argv_address,
+    if (!vm_user_range_valid(process->address_space, argv_address,
                                  vector_size, 0))
     {
         frame->rax = (uint64_t)(int64_t)-14;
@@ -527,7 +528,7 @@ static int syscall_waitpid(struct exception_frame* frame,
     }
 
     if (status_address != 0U &&
-        !paging_user_range_valid(process->address_space, status_address,
+        !vm_user_range_valid(process->address_space, status_address,
                                  sizeof(int32_t), 1))
     {
         frame->rax = (uint64_t)(int64_t)-14;
@@ -591,7 +592,7 @@ static int syscall_file_write(struct exception_frame* frame, uint32_t pid,
     }
 
     uintptr_t address = (uintptr_t)frame->rsi;
-    if (!paging_user_range_valid(process->address_space, address,
+    if (!vm_user_range_valid(process->address_space, address,
                                  (size_t)length, 0))
     {
         frame->rax = (uint64_t)(int64_t)-14;
@@ -696,7 +697,7 @@ static int syscall_stat_path(struct exception_frame* frame,
                              const process_t* process)
 {
     uintptr_t output_address = (uintptr_t)frame->rsi;
-    if (!paging_user_range_valid(process->address_space, output_address,
+    if (!vm_user_range_valid(process->address_space, output_address,
                                  sizeof(fs_path_info_t), 1))
     {
         frame->rax = (uint64_t)(int64_t)-14;
@@ -746,7 +747,7 @@ static int syscall_kernel_command(struct exception_frame* frame,
     uint64_t capacity = frame->rdx;
     uintptr_t output_address = (uintptr_t)frame->rsi;
     if (capacity == 0U || capacity > USER_MAX_KERNEL_COMMAND ||
-        !paging_user_range_valid(process->address_space, output_address,
+        !vm_user_range_valid(process->address_space, output_address,
                                  (size_t)capacity, 1))
     {
         frame->rax = (uint64_t)(int64_t)-22;
@@ -786,7 +787,7 @@ static int syscall_gui_create_window(struct exception_frame* frame,
                                      const process_t* process)
 {
     uintptr_t address = (uintptr_t)frame->rdi;
-    if (!paging_user_range_valid(process->address_space, address,
+    if (!vm_user_range_valid(process->address_space, address,
                                  sizeof(vanta_gui_window_request_t), 0))
     {
         frame->rax = (uint64_t)(int64_t)-14;
@@ -833,7 +834,7 @@ static int syscall_gui_draw(struct exception_frame* frame,
     if (count != 0U)
     {
         size_t bytes = (size_t)count * sizeof(commands[0]);
-        if (!paging_user_range_valid(process->address_space, address,
+        if (!vm_user_range_valid(process->address_space, address,
                                      bytes, 0))
         {
             frame->rax = (uint64_t)(int64_t)-14;
@@ -860,7 +861,7 @@ static int syscall_gui_poll_event(struct exception_frame* frame,
         return 0;
     }
     uintptr_t address = (uintptr_t)frame->rsi;
-    if (!paging_user_range_valid(process->address_space, address,
+    if (!vm_user_range_valid(process->address_space, address,
                                  sizeof(vanta_gui_event_t), 1))
     {
         frame->rax = (uint64_t)(int64_t)-14;
@@ -892,7 +893,7 @@ static int syscall_ipc_send(struct exception_frame* frame, const process_t* proc
     uint64_t length = frame->rdx;
     uintptr_t address = (uintptr_t)frame->rsi;
     if (length == 0U || length > IPC_MESSAGE_MAX) { frame->rax = (uint64_t)(int64_t)-22; return 0; }
-    if (!paging_user_range_valid(process->address_space, address, (size_t)length, 0)) { frame->rax = (uint64_t)(int64_t)-14; return 0; }
+    if (!vm_user_range_valid(process->address_space, address, (size_t)length, 0)) { frame->rax = (uint64_t)(int64_t)-14; return 0; }
     uint8_t message[IPC_MESSAGE_MAX]; const uint8_t *source = (const uint8_t *)address;
     for (size_t i=0;i<(size_t)length;i++) message[i]=source[i];
     frame->rax = (uint64_t)(int64_t)ipc_message_send(frame->rdi,process->pid,message,(size_t)length);
@@ -903,7 +904,7 @@ static int syscall_ipc_receive(struct exception_frame* frame, const process_t* p
 {
     uint64_t capacity=frame->rdx; uintptr_t address=(uintptr_t)frame->rsi;
     if (capacity==0U || capacity>IPC_MESSAGE_MAX) { frame->rax=(uint64_t)(int64_t)-22; return 0; }
-    if (!paging_user_range_valid(process->address_space,address,(size_t)capacity,1)) { frame->rax=(uint64_t)(int64_t)-14; return 0; }
+    if (!vm_user_range_valid(process->address_space,address,(size_t)capacity,1)) { frame->rax=(uint64_t)(int64_t)-14; return 0; }
     uint8_t message[IPC_MESSAGE_MAX]; int n=ipc_message_receive(frame->rdi,process->pid,message,(size_t)capacity);
     if(n>0){uint8_t *dst=(uint8_t*)address;for(int i=0;i<n;i++)dst[i]=message[i];}
     frame->rax=(uint64_t)(int64_t)n; return 0;
@@ -933,7 +934,7 @@ static int syscall_clipboard_set(struct exception_frame* frame,
         return 0;
     }
     if (length != 0U &&
-        !paging_user_range_valid(process->address_space, source,
+        !vm_user_range_valid(process->address_space, source,
                                  (size_t)length, 0))
     {
         frame->rax = (uint64_t)(int64_t)-14;
@@ -960,7 +961,7 @@ static int syscall_clipboard_get(struct exception_frame* frame,
         return 0;
     }
     if (capacity != 0U &&
-        !paging_user_range_valid(process->address_space, destination,
+        !vm_user_range_valid(process->address_space, destination,
                                  (size_t)capacity, 1))
     {
         frame->rax = (uint64_t)(int64_t)-14;
@@ -1061,7 +1062,7 @@ static int syscall_dispatch(struct exception_frame* frame)
         {
             uint32_t port = 0U;
             uintptr_t output = (uintptr_t)frame->rsi;
-            if (!paging_user_range_valid(process.address_space, output,
+            if (!vm_user_range_valid(process.address_space, output,
                                          sizeof(port), 1)) {
                 frame->rax = (uint64_t)(int64_t)-14;
                 return 0;
@@ -1092,7 +1093,7 @@ static int syscall_dispatch(struct exception_frame* frame)
         {
             usb_bluetooth_inquiry_result_t result = {0};
             uintptr_t output = (uintptr_t)frame->rdx;
-            if (!paging_user_range_valid(process.address_space, output,
+            if (!vm_user_range_valid(process.address_space, output,
                                          sizeof(result), 1)) {
                 frame->rax = (uint64_t)(int64_t)-14;
                 return 0;
@@ -1111,7 +1112,7 @@ static int syscall_dispatch(struct exception_frame* frame)
         {
             usb_bluetooth_inquiry_result_t result;
             uintptr_t input = (uintptr_t)frame->rsi;
-            if (!paging_user_range_valid(process.address_space, input,
+            if (!vm_user_range_valid(process.address_space, input,
                                          sizeof(result), 0)) {
                 frame->rax = (uint64_t)(int64_t)-14;
                 return 0;
@@ -1131,9 +1132,9 @@ static int syscall_dispatch(struct exception_frame* frame)
             uint16_t handle = 0U;
             uintptr_t input = (uintptr_t)frame->rsi;
             uintptr_t output = (uintptr_t)frame->rdx;
-            if (!paging_user_range_valid(process.address_space, input,
+            if (!vm_user_range_valid(process.address_space, input,
                                          sizeof(address), 0) ||
-                !paging_user_range_valid(process.address_space, output,
+                !vm_user_range_valid(process.address_space, output,
                                          sizeof(handle), 1)) {
                 frame->rax = (uint64_t)(int64_t)-14;
                 return 0;
@@ -1151,7 +1152,7 @@ static int syscall_dispatch(struct exception_frame* frame)
         {
             uint8_t address[6];
             uintptr_t input = (uintptr_t)frame->rsi;
-            if (!paging_user_range_valid(process.address_space, input,
+            if (!vm_user_range_valid(process.address_space, input,
                                          sizeof(address), 0)) {
                 frame->rax = (uint64_t)(int64_t)-14;
                 return 0;

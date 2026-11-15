@@ -22,7 +22,7 @@ void kernel_panic(
     int has_fault_address
 );
 
-void exception_handler(
+int exception_handler(
     unsigned int exception_number,
     struct exception_frame* frame
 );

@@ -8,6 +8,9 @@ grouped under **Unreleased** until the first release.
 ## [Unreleased]
 
 ### Added
+
+- Demand-paged user virtual memory: per-process VM regions (ELF, anonymous, stack, guard), lazy zero-fill frame allocation, permission enforcement, recoverable-versus-fatal page-fault classification with instruction restart, out-of-memory containment, and reclamation of demand frames on address-space teardown. A 64-page stack reserve with a guard page and lazy ELF `.bss` use it. See `docs/architecture/VIRTUAL_MEMORY.md`.
+- Ring-3 demand-paging regression suite (`os/selftest/demand_paging_selftest.c`, programs in `kernel/selftest/vm/`), host tests for the region table (`scripts/test_vm_region.c`, also run under TSan), structural wiring checks, and a bounded process exit log for kernel-side assertions.
 - NVX (NVIDIA GA10x) diagnostics: `nvx status|survey|vbios|fw`, VBIOS PROM
   reader, GSP firmware SHA-256 manifest verification, WPR sizing policy
   (reference-informed, unverified).
@@ -19,6 +22,9 @@ grouped under **Unreleased** until the first release.
   Dependabot configuration, issue-template config.
 
 ### Fixed
+
+- Serial output is now contiguous per `serial_write` call across CPUs, so result markers are no longer spliced together under SMP (the lock is bounded so a halted CPU cannot block panic output).
+- A contained user fault no longer panics the kernel when the process-table lock is briefly contended; termination is retried a bounded number of times.
 - Real-hardware input and boot hangs (found by audit; verified under QEMU only):
   firmware ACPI tables above the 1 GiB identity map are now mapped on demand,
   so the MADT/IOAPIC are found; BSP LINT0 is programmed as ExtINT when IOAPIC

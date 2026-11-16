@@ -126,3 +126,15 @@ The test does **not** simulate a real SEC2, BROM, firmware signature check, or p
 | First GSP-RM RPC | Firmware responds through the matching ABI with validated result | Full GPU acceleration |
 
 A row is complete only when its stated evidence exists. Build success and synthetic test success must not be promoted to a hardware pass.
+
+## SEC2/GSP quiesce implementation (host-tested, hardware NOT VERIFIED)
+
+`nvx_gsp_ga10x_quiesce()` implements `nvx_gsp_platform_quiesce_fn` by resetting
+GSP then SEC2 and requiring post-reset readback of the falcon start bit (and the
+GSP RISC-V active bit) to be clear. All-ones reads, PRIV-locked windows, scrub
+timeouts and MMIO errors all return "not quiesced" and leave DMA ownership with
+the session. The result is evidence about the SEC2/GSP cores only: a reset
+cannot be assumed to stop copy-engine or graphics work already scheduled via
+GSP-RM channels, so channel disable plus engine idle/reset must be established
+separately before reclaiming channel-reachable memory. Tests:
+`scripts/test_nvx_gsp_quiesce.c` (synthetic MMIO).

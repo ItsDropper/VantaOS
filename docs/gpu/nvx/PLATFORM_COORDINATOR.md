@@ -87,9 +87,19 @@ the register reads or WPR planner reject the inputs.
   mastering, detach BAR0 through `nvx_device_detach_quiesced()`, and release
   allocations. Generic lifecycle transitions cannot move `FAILED` to
   `QUIESCING`; the explicit recovery API requires the quiescence proof.
-- The repository does not yet contain a universal GA10x SEC2/GSP stop and
-  quiescence implementation. The callback is an explicit integration boundary,
-  not a fake built-in shutdown.
+- `nvx_gsp_ga10x_quiesce()` (`include/nvx_gsp_quiesce.h`,
+  `drivers/gpu/nvx/gsp/nvx_gsp_quiesce.c`) is the GA10x implementation of this
+  callback. For GSP, then SEC2, it rejects all-ones (device lost) and
+  PRIV-locked windows without writing, resets the engine, waits for scrub
+  completion, and requires post-reset readback showing FALCON CPUCTL.START
+  clear (and, for GSP, RISC-V CPUCTL.ACTIVE clear). It records raw before/after
+  register values per engine in `nvx_gsp_quiesce_context_t`. It returns
+  "not quiesced" on any failure, including device loss.
+  **Scope limit:** it stops only the SEC2 and GSP cores. It does not disable
+  channels or reset the copy/graphics engines, so memory reachable by channels
+  GSP-RM created must not be reclaimed on the strength of this callback alone.
+  Its reset sequence and post-reset register expectations are checked only
+  against synthetic MMIO in host tests; they are **not hardware-verified**.
 
 ## Current verification boundary
 

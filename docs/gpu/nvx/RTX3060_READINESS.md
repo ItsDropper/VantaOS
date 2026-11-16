@@ -23,8 +23,12 @@ composed GSP startup call. Its shutdown path requires a caller-provided SEC2/GSP
 quiesce proof before reclaiming memory. CI includes strict compilation,
 preflight tests and mocked success/failure/retention tests. This does not
 constitute physical hardware validation or an end-to-end test of real GSP
-register transactions. The platform adapter and hardware quiesce implementation
-remain missing.
+register transactions. A GA10x SEC2/GSP quiesce
+callback now exists (`nvx_gsp_ga10x_quiesce`, host-tested against synthetic MMIO
+only, NOT VERIFIED on hardware, and not covering CE/GR engines or channels).
+The production platform adapter (trusted BAR resource, firmware trust source,
+truthful NVKV facts, physical DMA/cache-coherency, boot-time caller) remains
+missing.
 
 | Subsystem | Current state | Evidence still required |
 | --- | --- | --- |

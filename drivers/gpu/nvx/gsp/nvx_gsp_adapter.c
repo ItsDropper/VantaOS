@@ -70,11 +70,29 @@ done:
 
 #ifndef NVX_GSP_ADAPTER_HOST_TEST
 
+/* Bounded, always-terminated copy; the freestanding kernel has no strncpy. */
+static void copy_text(char *dst, size_t cap, const char *src)
+{
+    size_t i = 0U;
+    if (!dst || cap == 0U)
+        return;
+    for (; src && src[i] && i + 1U < cap; ++i)
+        dst[i] = src[i];
+    dst[i] = '\0';
+}
+
 static nvx_gsp_platform_session_t g_session;      /* long-lived; one per function */
 static nvx_gsp_quiesce_context_t g_quiesce;
 static nvx_firmware_provider_t g_provider;
 static nvx_gsp_system_info_t g_facts;             /* intentionally empty */
 static uint8_t g_session_live;
+static nvx_gsp_adapter_progress_t g_progress;
+
+const nvx_gsp_adapter_progress_t *nvx_gsp_adapter_progress(void)
+{
+    g_progress.session_live = g_session_live;
+    return &g_progress;
+}
 
 static void adapter_delay(uint32_t ms, void *ctx)
 {
@@ -137,10 +155,17 @@ int nvx_gsp_adapter_start(const nvx_bringup_io_t *io, const char *firmware_versi
         say(io, "nvx gsp: a session already owns the device; run 'nvx gsp stop' first.\n");
         return 1;
     }
+    memset(&g_progress, 0, sizeof(g_progress));
+    copy_text(g_progress.firmware_version, sizeof(g_progress.firmware_version),
+              firmware_version);
     if (!(pci = find_gpu())) {
         say(io, "nvx gsp: no supported RTX 3060 found on PCI.\n");
         return 1;
     }
+    g_progress.pci_found = 1U;
+    g_progress.pci_vendor_id = pci->vendor_id;
+    g_progress.pci_device_id = pci->device_id;
+    g_progress.pci_revision = pci->revision;
     say_hex(io, "nvx gsp: stage 1 PCI device id ", pci->device_id);
 
     if (nvx_bar_resource_read(pci, 0U, &bar0_res) != NVX_RESOURCE_OK ||
@@ -148,6 +173,9 @@ int nvx_gsp_adapter_start(const nvx_bringup_io_t *io, const char *firmware_versi
         say(io, "nvx gsp: stage 2 BAR0 invalid or size unknown; refusing.\n");
         return 1;
     }
+    g_progress.bar_valid = 1U;
+    g_progress.bar0_base = bar0_res.base;
+    g_progress.bar0_size = bar0_res.size;
     say_hex(io, "nvx gsp: stage 2 BAR0 base ", bar0_res.base);
     say_hex(io, "nvx gsp: stage 2 BAR0 size ", bar0_res.size);
 
@@ -162,6 +190,8 @@ int nvx_gsp_adapter_start(const nvx_bringup_io_t *io, const char *firmware_versi
             &region, pci_read_config16(pci, PCI_COMMAND_OFFSET), &handoff);
     }
     nvx_bar_mmio_unmap(&bar0_res, mapping);
+    g_progress.handoff_ran = 1U;
+    g_progress.handoff = handoff;
     say_hex(io, "nvx gsp: stage 3 handoff result ", (uint64_t)handoff.result);
     say_hex(io, "nvx gsp: stage 3 pci command   ", handoff.pci_command);
     say_hex(io, "nvx gsp: stage 3 gsp hwcfg2    ", handoff.hwcfg2);
@@ -198,6 +228,21 @@ int nvx_gsp_adapter_start(const nvx_bringup_io_t *io, const char *firmware_versi
     }
 
     status = nvx_gsp_platform_start(&config, &g_session);
+    g_progress.start_attempted = 1U;
+    g_progress.coordinator_status = (uint32_t)status;
+    g_progress.startup_attempted = g_session.startup_attempted;
+    g_progress.bus_master_enabled = g_session.bus_master_enabled;
+    if (g_session.startup_attempted) {
+        const nvx_gsp_startup_result_t *r = &g_session.startup_result;
+        g_progress.startup_status = (uint32_t)r->status;
+        g_progress.bootstrap_status = (uint32_t)r->bootstrap_status;
+        g_progress.queue_status = (uint32_t)r->queue_status;
+        g_progress.gmcapi_status = (uint32_t)r->gmcapi_status;
+        g_progress.booter_mailbox1 = r->booter_mailbox1;
+        g_progress.gsp_init_remote_status = r->gsp_init_remote_status;
+        g_progress.gsp_rm_initialized = r->gsp_rm_initialized;
+        g_progress.rpc_initialized = r->rpc_initialized;
+    }
     say_hex(io, "nvx gsp: stage 5 coordinator status ", (uint64_t)status);
     if (g_session.startup_attempted || g_session.bus_master_enabled)
         g_session_live = 1U;   /* hardware may own DMA: stop must prove quiescence */
@@ -227,6 +272,10 @@ int nvx_gsp_adapter_stop(const nvx_bringup_io_t *io)
     g_quiesce.poll_interval_ms = ADAPTER_POLL_MS;
 
     status = nvx_gsp_platform_shutdown(&g_session, nvx_gsp_ga10x_quiesce, &g_quiesce);
+    g_progress.stop_attempted = 1U;
+    g_progress.shutdown_status = (uint32_t)status;
+    g_progress.quiesce_gsp = g_quiesce.gsp;
+    g_progress.quiesce_sec2 = g_quiesce.sec2;
     say_hex(io, "nvx gsp: gsp quiesce result  ", (uint64_t)g_quiesce.gsp.result);
     say_hex(io, "nvx gsp: sec2 quiesce result ", (uint64_t)g_quiesce.sec2.result);
     say_hex(io, "nvx gsp: shutdown status     ", (uint64_t)status);
@@ -235,6 +284,7 @@ int nvx_gsp_adapter_stop(const nvx_bringup_io_t *io)
         return 1;
     }
     g_session_live = 0U;
+    g_progress.stop_ok = 1U;
     say(io, "nvx gsp: SEC2/GSP quiesced and resources reclaimed.\n");
     return 0;
 }

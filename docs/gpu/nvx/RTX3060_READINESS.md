@@ -246,6 +246,14 @@ allocation, CTXDMA creation, or GSP-RM DMA mapping round-trip has been verified.
 The first physical allocation, CPU mapping, and independently verified GPU
 visibility remain explicit hardware-readiness gates.
 
+## Hardware validation harness
+
+The 12-stage sequence is implemented as an evidence-policy core plus a kernel runner
+(`nvx hwval <version>`); see [HARDWARE_VALIDATION.md](HARDWARE_VALIDATION.md). Stages 1-5
+and 12 are wired to the real adapter; stages 6-11 are reported **NOT_IMPLEMENTED**. Host
+tests use mock stages labelled `HOST_MOCK` and cannot yield `HARDWARE_VERIFIED`. No run on a
+physical RTX 3060 exists: **NOT VERIFIED**.
+
 ## Mandatory first hardware experiment
 
 The first hardware milestone should be a bounded copy-engine operation, not a 3D demo. It isolates memory visibility, channel provisioning, submission, completion and recovery before shader execution adds further unknowns.

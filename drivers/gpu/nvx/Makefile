@@ -53,6 +53,8 @@ VANTAOS_NVX_C := \
     drivers/gpu/nvx/gsp/nvx_gsp_platform.c \
     drivers/gpu/nvx/gsp/nvx_gsp_quiesce.c \
     drivers/gpu/nvx/gsp/nvx_gsp_adapter.c \
+    drivers/gpu/nvx/gsp/nvx_hwval_kernel.c \
+    drivers/gpu/nvx/core/nvx_hwval.c \
     drivers/gpu/nvx/gsp/nvx_gsp_msgq_rpc.c \
     drivers/gpu/nvx/gsp/nvx_gsp_init_args.c \
     drivers/gpu/nvx/gsp/nvx_gsp_ga10x.c \

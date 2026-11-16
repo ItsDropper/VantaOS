@@ -11,6 +11,7 @@
 
 #include "nvx_bringup.h"
 #include "nvx_gsp_falcon.h"
+#include "nvx_gsp_quiesce.h"
 #include "nvx_mmio.h"
 
 /*
@@ -54,6 +55,44 @@ typedef struct nvx_gsp_handoff_report {
 nvx_gsp_handoff_result_t nvx_gsp_adapter_check_handoff(
     const nvx_mmio_region_t *bar0, uint16_t pci_command,
     nvx_gsp_handoff_report_t *out_report);
+
+/*
+ * Raw record of what the last start/stop attempt actually did. The hardware
+ * validation harness derives per-stage evidence from this; nothing here is
+ * inferred. Zeroed at the beginning of each start.
+ */
+typedef struct nvx_gsp_adapter_progress {
+    uint8_t pci_found;
+    uint8_t bar_valid;
+    uint8_t handoff_ran;
+    uint8_t start_attempted;       /* coordinator was called */
+    uint8_t startup_attempted;     /* coordinator reached the SEC2/GSP transaction */
+    uint8_t bus_master_enabled;
+    uint8_t gsp_rm_initialized;
+    uint8_t rpc_initialized;
+    uint8_t session_live;          /* hardware may own DMA */
+    uint8_t stop_attempted;
+    uint8_t stop_ok;
+    uint8_t pci_revision;
+    uint16_t pci_vendor_id;
+    uint16_t pci_device_id;
+    uint64_t bar0_base;
+    uint64_t bar0_size;
+    nvx_gsp_handoff_report_t handoff;
+    uint32_t coordinator_status;
+    uint32_t startup_status;
+    uint32_t bootstrap_status;
+    uint32_t queue_status;
+    uint32_t gmcapi_status;
+    uint32_t booter_mailbox1;
+    uint32_t gsp_init_remote_status;
+    uint32_t shutdown_status;
+    nvx_gsp_quiesce_engine_report_t quiesce_gsp;
+    nvx_gsp_quiesce_engine_report_t quiesce_sec2;
+    char firmware_version[48];
+} nvx_gsp_adapter_progress_t;
+
+const nvx_gsp_adapter_progress_t *nvx_gsp_adapter_progress(void);
 
 /*
  * Discover the RTX 3060, run the handoff check, then run the coordinator start

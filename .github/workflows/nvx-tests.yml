@@ -222,6 +222,9 @@ on:
       - "scripts/test_nvx_gsp_falcon.c"
       - "scripts/test_nvx_gsp_quiesce.c"
       - "scripts/test_nvx_gsp_adapter.c"
+      - "scripts/test_nvx_hwval.c"
+      - "include/nvx_hwval.h"
+      - "include/nvx_hwval_kernel.h"
       - "include/nvx_gsp_adapter.h"
       - "include/nvx_gsp_quiesce.h"
       - "include/nvx_gsp_bootloader.h"
@@ -269,6 +272,9 @@ on:
       - "scripts/test_nvx_gsp_falcon.c"
       - "scripts/test_nvx_gsp_quiesce.c"
       - "scripts/test_nvx_gsp_adapter.c"
+      - "scripts/test_nvx_hwval.c"
+      - "include/nvx_hwval.h"
+      - "include/nvx_hwval_kernel.h"
       - "include/nvx_gsp_adapter.h"
       - "include/nvx_gsp_quiesce.h"
       - "drivers/gpu/nvx/firmware/nvx_gsp_bootloader.c"
@@ -755,6 +761,13 @@ jobs:
 
       - name: Test integrated firmware bundle, DMA staging, WPR handoff and ownership rollback
         run: /tmp/vantaos-nvx-gsp-boot-memory-test
+
+      - name: Compile and run hardware-validation policy host tests (mock stages, ASan/UBSan)
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude \
+            scripts/test_nvx_hwval.c drivers/gpu/nvx/core/nvx_hwval.c \
+            -o /tmp/vantaos-nvx-hwval-test
+          /tmp/vantaos-nvx-hwval-test
 
       - name: Compile and run GA10x platform adapter handoff-guard host tests (synthetic MMIO)
         run: |

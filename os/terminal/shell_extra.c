@@ -19,6 +19,7 @@
 #include "http_body.h"
 #include "nvx_bringup.h"
 #include "nvx_gsp_adapter.h"
+#include "nvx_hwval_kernel.h"
 #include "serial.h"
 #include <stdint.h>
 #include <stddef.h>
@@ -902,6 +903,10 @@ static int command_nvx(uint32_t argc, char **argv)
         (void)nvx_gsp_adapter_start(&io, argv[3]);
         return 1;
     }
+    if (argc == 3U && shell_string_equals(argv[1], "hwval")) {
+        (void)nvx_hwval_kernel_run(&io, argv[2]);
+        return 1;
+    }
     if (argc == 3U && shell_string_equals(argv[1], "gsp") &&
         shell_string_equals(argv[2], "stop")) {
         (void)nvx_gsp_adapter_stop(&io);
@@ -913,6 +918,7 @@ static int command_nvx(uint32_t argc, char **argv)
     terminal_write("       nvx fw <version>     load+verify GSP firmware from /nvidia/ga106/gsp\n");
     terminal_write("       nvx gsp start <ver>  EXPERIMENTAL: start SEC2/GSP-RM (refuses an active device)\n");
     terminal_write("       nvx gsp stop         quiesce SEC2/GSP and reclaim DMA only if proven\n");
+    terminal_write("       nvx hwval <ver>      12-stage hardware validation; NVXHW| evidence to serial\n");
     terminal_write("Channels and compute are not wired to this command yet.\n");
     return 1;
 }

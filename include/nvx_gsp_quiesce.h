@@ -11,6 +11,8 @@
 
 #include "nvx_attach.h"
 #include "nvx_gsp_falcon.h"
+/* ga10x.h must precede startup.h: msgq_ga10x.h defines the same macros. */
+#include "nvx_gsp_ga10x.h"
 #include "nvx_gsp_startup.h"
 
 /*

@@ -18,6 +18,7 @@
 #include "http_response.h"
 #include "http_body.h"
 #include "nvx_bringup.h"
+#include "nvx_gsp_adapter.h"
 #include "serial.h"
 #include <stdint.h>
 #include <stddef.h>
@@ -896,11 +897,23 @@ static int command_nvx(uint32_t argc, char **argv)
         (void)nvx_bringup_firmware(&io, &p, "ga106", argv[2]);
         return 1;
     }
+    if (argc == 4U && shell_string_equals(argv[1], "gsp") &&
+        shell_string_equals(argv[2], "start")) {
+        (void)nvx_gsp_adapter_start(&io, argv[3]);
+        return 1;
+    }
+    if (argc == 3U && shell_string_equals(argv[1], "gsp") &&
+        shell_string_equals(argv[2], "stop")) {
+        (void)nvx_gsp_adapter_stop(&io);
+        return 1;
+    }
     terminal_write("Usage: nvx status         read-only RTX 3060 probe (no engine started)\n");
     terminal_write("       nvx survey           read-only register experiment (log to serial)\n");
     terminal_write("       nvx vbios            read VBIOS via PROM (read-only), locate FWSEC\n");
     terminal_write("       nvx fw <version>     load+verify GSP firmware from /nvidia/ga106/gsp\n");
-    terminal_write("GSP start, channels and compute are not wired to this command yet.\n");
+    terminal_write("       nvx gsp start <ver>  EXPERIMENTAL: start SEC2/GSP-RM (refuses an active device)\n");
+    terminal_write("       nvx gsp stop         quiesce SEC2/GSP and reclaim DMA only if proven\n");
+    terminal_write("Channels and compute are not wired to this command yet.\n");
     return 1;
 }
 

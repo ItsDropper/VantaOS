@@ -221,6 +221,8 @@ on:
       - "drivers/gpu/nvx/gsp/nvx_gsp_startup.c"
       - "scripts/test_nvx_gsp_falcon.c"
       - "scripts/test_nvx_gsp_quiesce.c"
+      - "scripts/test_nvx_gsp_adapter.c"
+      - "include/nvx_gsp_adapter.h"
       - "include/nvx_gsp_quiesce.h"
       - "include/nvx_gsp_bootloader.h"
       - "include/nvx_gsp_rpc.h"
@@ -266,6 +268,8 @@ on:
       - "scripts/test_nvx_gsp_ga10x.c"
       - "scripts/test_nvx_gsp_falcon.c"
       - "scripts/test_nvx_gsp_quiesce.c"
+      - "scripts/test_nvx_gsp_adapter.c"
+      - "include/nvx_gsp_adapter.h"
       - "include/nvx_gsp_quiesce.h"
       - "drivers/gpu/nvx/firmware/nvx_gsp_bootloader.c"
       - "scripts/test_nvx_gsp_rpc.c"
@@ -751,6 +755,13 @@ jobs:
 
       - name: Test integrated firmware bundle, DMA staging, WPR handoff and ownership rollback
         run: /tmp/vantaos-nvx-gsp-boot-memory-test
+
+      - name: Compile and run GA10x platform adapter handoff-guard host tests (synthetic MMIO)
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -DNVX_GSP_ADAPTER_HOST_TEST -Iinclude \
+            scripts/test_nvx_gsp_adapter.c drivers/gpu/nvx/gsp/nvx_gsp_adapter.c \
+            drivers/gpu/nvx/core/nvx_mmio.c -o /tmp/vantaos-nvx-adapter-test
+          /tmp/vantaos-nvx-adapter-test
 
       - name: Compile and run GA10x SEC2/GSP quiesce host tests (synthetic MMIO)
         run: |

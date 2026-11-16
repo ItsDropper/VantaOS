@@ -128,3 +128,29 @@ and GA107 is `0x177`
 NVIDIA's published reference header defines the PMC_BOOT_42 CHIP_ID field as
 bits 29:20
 ([NVIDIA `nv_ref.h`](https://github.com/NVIDIA/open-gpu-kernel-modules/blob/main/src/common/inc/swref/published/nv_ref.h)).
+
+## Platform adapter (`nvx gsp start|stop`)
+
+`include/nvx_gsp_adapter.h` / `drivers/gpu/nvx/gsp/nvx_gsp_adapter.c` connect the
+coordinator to kernel services: PCI discovery, BAR0 resource validation, the
+VFS firmware provider (manifest-verified, fails closed without a pinned
+`SHA256SUMS`), `sleep_ms`, static session storage and `nvx_gsp_ga10x_quiesce`.
+It is manual and opt-in: `nvx gsp start <version>` and `nvx gsp stop`.
+
+Before any state-changing access it runs a **read-only handoff check** and
+refuses (changing nothing) if PCI bus mastering is already enabled, the GSP
+RISC-V / falcon / SEC2 start bits are already set, or the device reads as
+all-ones. There is no override: adopting an active device needs a validated
+handoff procedure that does not exist. The check is host-tested
+(`scripts/test_nvx_gsp_adapter.c`, synthetic MMIO).
+
+**Known gaps, not hidden:**
+- NVKV `trusted_gpu_facts` are passed **empty**; nothing is invented. Whether the
+  chosen GSP firmware branch requires additional keys is unresolved and may make
+  startup fail on hardware.
+- Queue sizes (64 KiB each) are the coordinator-valid default, not pinned to a
+  specific GSP release.
+- The firmware trust policy is the local SHA-256 manifest, which detects drift
+  but is not NVIDIA signature authentication.
+- Start/stop glue is compile-checked under kernel flags and linked into the
+  kernel, but **never executed** against hardware or an emulator. NOT VERIFIED.

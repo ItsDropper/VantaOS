@@ -26,9 +26,11 @@ constitute physical hardware validation or an end-to-end test of real GSP
 register transactions. A GA10x SEC2/GSP quiesce
 callback now exists (`nvx_gsp_ga10x_quiesce`, host-tested against synthetic MMIO
 only, NOT VERIFIED on hardware, and not covering CE/GR engines or channels).
-The production platform adapter (trusted BAR resource, firmware trust source,
-truthful NVKV facts, physical DMA/cache-coherency, boot-time caller) remains
-missing.
+A manual platform adapter (`nvx gsp start|stop`, see
+[PLATFORM_COORDINATOR.md](PLATFORM_COORDINATOR.md)) now wires PCI discovery, BAR0
+validation, VFS firmware, delay and quiesce to the coordinator behind a
+read-only handoff guard. It is NOT VERIFIED on hardware; NVKV facts are still
+empty and the firmware trust source is only a local hash manifest.
 
 | Subsystem | Current state | Evidence still required |
 | --- | --- | --- |

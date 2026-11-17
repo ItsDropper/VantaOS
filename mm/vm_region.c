@@ -31,6 +31,8 @@ void vm_space_init(vm_space_t* space)
     space->last_fault_error = 0U;
     space->brk_base = 0U;
     space->brk_cur = 0U;
+    space->image_backing = NULL;
+    space->image_backing_size = 0U;
     for (uint32_t i = 0U; i < VM_REGION_MAX; i++)
         space->regions[i] = (vm_region_t){0};
 }
@@ -45,6 +47,8 @@ void vm_space_clear(vm_space_t* space)
     space->resident_pages = 0U;
     space->brk_base = 0U;
     space->brk_cur = 0U;
+    space->image_backing = NULL;
+    space->image_backing_size = 0U;
     for (uint32_t i = 0U; i < VM_REGION_MAX; i++)
         space->regions[i] = (vm_region_t){0};
     spinlock_unlock_irqrestore(&space->lock, flags);
@@ -82,7 +86,7 @@ int vm_region_validate(uintptr_t start, size_t length, uint32_t prot,
         return backing == VM_BACKING_ZERO && prot != 0U &&
                (prot & VM_PROT_EXEC) == 0U;
     case VM_REGION_ELF:
-        if (backing == VM_BACKING_ZERO)
+        if (backing == VM_BACKING_ZERO || backing == VM_BACKING_FILE)
             return (prot & VM_PROT_EXEC) == 0U && prot != 0U;
         return backing == VM_BACKING_POPULATED && prot != 0U;
     case VM_REGION_FLAT_IMAGE:
@@ -128,6 +132,9 @@ static int add_locked(vm_space_t* space, uintptr_t start, size_t length,
     r->backing = (uint8_t)backing;
     r->flags = flags;
     r->resident_pages = 0U;
+    r->file_data = NULL;
+    r->file_offset = 0U;
+    r->file_bytes = 0U;
     space->reserved_bytes += charge;
     return 1;
 }
@@ -136,10 +143,51 @@ int vm_space_add_region(vm_space_t* space, uintptr_t start, size_t length,
                         uint32_t prot, vm_region_type_t type,
                         vm_backing_t backing)
 {
-    if (!space)
+    /* FILE regions require the image-range checks in vm_space_add_file_region. */
+    if (!space || backing == VM_BACKING_FILE)
         return 0;
     uint64_t flags = spinlock_lock_irqsave(&space->lock);
     int added = add_locked(space, start, length, prot, type, backing, 0U);
+    spinlock_unlock_irqrestore(&space->lock, flags);
+    return added;
+}
+
+int vm_space_set_image_backing(vm_space_t* space, const void* image,
+                               size_t image_size)
+{
+    if (!space || !image || image_size == 0U)
+        return 0;
+    uint64_t flags = spinlock_lock_irqsave(&space->lock);
+    int ok = space->image_backing == NULL && space->image_backing_size == 0U;
+    if (ok)
+    {
+        space->image_backing = (const uint8_t*)image;
+        space->image_backing_size = image_size;
+    }
+    spinlock_unlock_irqrestore(&space->lock, flags);
+    return ok;
+}
+
+int vm_space_add_file_region(vm_space_t* space, uintptr_t start,
+                             size_t length, uint32_t prot,
+                             uint64_t file_offset, uint64_t file_bytes)
+{
+    if (!space || file_bytes == 0U)
+        return 0;
+    uint64_t flags = spinlock_lock_irqsave(&space->lock);
+    int valid = space->image_backing != NULL &&
+                file_offset <= space->image_backing_size &&
+                file_bytes <= space->image_backing_size - file_offset &&
+                file_bytes <= length;
+    int added = valid && add_locked(space, start, length, prot,
+                                    VM_REGION_ELF, VM_BACKING_FILE, 0U);
+    if (added)
+    {
+        vm_region_t* region = &space->regions[space->region_count - 1U];
+        region->file_data = space->image_backing;
+        region->file_offset = file_offset;
+        region->file_bytes = file_bytes;
+    }
     spinlock_unlock_irqrestore(&space->lock, flags);
     return added;
 }
@@ -213,7 +261,8 @@ vm_fault_class_t vm_space_classify_fault(vm_space_t* space, uintptr_t address,
      * means the mapping was lost or never made, which must not be papered
      * over by inventing a zero page where file data belongs.
      */
-    if (region.backing != VM_BACKING_ZERO)
+    if (region.backing != VM_BACKING_ZERO &&
+        region.backing != VM_BACKING_FILE)
         return VM_FAULT_NOT_DEMAND;
 
     if (region_out)

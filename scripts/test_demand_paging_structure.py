@@ -113,6 +113,16 @@ check(range_release.rfind("paging_space_lock_release") >
 check("VM_PROT_WRITE | VM_PROT_EXEC" in region, "W^X check missing from region validation")
 check("VM_PF_RESERVED" in region and "VM_PF_USER" in region, "reserved-bit/user-bit checks missing")
 check("VM_FAULT_NOT_DEMAND" in region, "populated regions must not be demand-filled")
+check("VM_BACKING_FILE" in region and "vm_space_add_file_region" in region,
+      "file-backed regions must validate and retain bounded image ranges")
+check("VM_BACKING_FILE" in fault and "region->file_data" in fault and
+      fault.find("destination[i] = source[i]") < fault.find("paging_map_user_page_demand("),
+      "file-backed faults must copy into a zeroed private frame before mapping")
+check("vm_space_add_file_region" in elf and "retained_image" in elf,
+      "non-executable ELF data segments must use retained lazy backing")
+check("const void* image_backing = process->address_space->vm.image_backing" in read("kernel/proc/process_user.c") and
+      "kfree((void*)image_backing)" in read("kernel/proc/process_user.c"),
+      "retained ELF backing must be freed only after address-space teardown")
 check("region.type == VM_REGION_GUARD" in region, "guard regions must be rejected")
 check("pmm_alloc_block_below" in fault, "demand frames must come from the identity-mapped range")
 check("for (size_t i = 0U; i < PAGE_SIZE / sizeof(uint64_t); i++)" in fault and

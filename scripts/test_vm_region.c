@@ -113,6 +113,36 @@ static void test_table(void)
                               VM_REGION_GUARD, VM_BACKING_NONE));
 }
 
+static void test_file_backing(void)
+{
+    vm_space_t space;
+    uint8_t image[32];
+    for (size_t i = 0U; i < sizeof(image); i++)
+        image[i] = (uint8_t)(i + 1U);
+    vm_region_t region;
+
+    vm_space_init(&space);
+    CHECK(!vm_space_add_region(&space, B, P, RW, VM_REGION_ELF,
+                               VM_BACKING_FILE));
+    CHECK(vm_space_set_image_backing(&space, image, sizeof(image)));
+    CHECK(!vm_space_set_image_backing(&space, image, sizeof(image)));
+    CHECK(!vm_space_add_file_region(&space, B, P, RW, 30U, 4U));
+    CHECK(!vm_space_add_file_region(&space, B, P, VM_PROT_READ | VM_PROT_EXEC,
+                                    0U, 8U));
+    CHECK(vm_space_add_file_region(&space, B, P, RW, 4U, 16U));
+    CHECK(vm_space_find_region(&space, B, &region));
+    CHECK(region.backing == VM_BACKING_FILE && region.file_data == image &&
+          region.file_offset == 4U && region.file_bytes == 16U);
+    CHECK(vm_space_classify_fault(&space, B + 8U,
+                                  VM_PF_USER | VM_PF_WRITE, &region) ==
+          VM_FAULT_DEMAND_MAP);
+    CHECK(region.file_data[region.file_offset] == image[4]);
+    CHECK(!vm_space_add_file_region(&space, B, P, RW, 0U, 8U));
+    CHECK(space.region_count == 1U && space.reserved_bytes == P);
+    vm_space_clear(&space);
+    CHECK(space.image_backing == NULL && space.image_backing_size == 0U);
+}
+
 static void test_classification(void)
 {
     vm_space_t space;
@@ -540,6 +570,7 @@ int main(void)
 {
     test_validation();
     test_table();
+    test_file_backing();
     test_classification();
     test_accounting();
     test_concurrency();

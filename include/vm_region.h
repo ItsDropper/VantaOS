@@ -16,10 +16,10 @@
  * Per-address-space virtual memory regions.
  *
  * A region reserves a page-aligned user virtual range with fixed permissions.
- * Physical frames for VM_BACKING_ZERO regions are allocated lazily by the
- * page-fault handler (mm/vm_fault.c); VM_BACKING_POPULATED regions are mapped
- * eagerly by their creator, which also owns those frames. VM_BACKING_NONE
- * regions (guards) are never mapped and every access to them is fatal.
+ * VM_BACKING_ZERO regions allocate zero-filled frames lazily; VM_BACKING_FILE
+ * regions copy immutable retained ELF bytes into private frames on demand;
+ * VM_BACKING_POPULATED regions are mapped eagerly by their creator, which
+ * owns those frames. VM_BACKING_NONE regions (guards) are never mapped.
  *
  * The region table lives inside paging_address_space_t, so its lifetime is
  * exactly the address space's lifetime and the exception path can reach it
@@ -59,7 +59,8 @@ typedef enum
 {
     VM_BACKING_NONE = 0,
     VM_BACKING_POPULATED, /* mapped by the creator; frames owned by the process */
-    VM_BACKING_ZERO       /* demand-allocated, zero-filled frames */
+    VM_BACKING_ZERO,      /* demand-allocated, zero-filled frames */
+    VM_BACKING_FILE       /* private demand pages copied from retained ELF bytes */
 } vm_backing_t;
 
 typedef struct vm_region
@@ -71,6 +72,9 @@ typedef struct vm_region
     uint8_t backing;      /* vm_backing_t */
     uint8_t flags;        /* VM_REGION_FLAG_* */
     uint32_t resident_pages; /* demand-faulted pages currently mapped */
+    const uint8_t* file_data; /* immutable kernel-owned image backing, if FILE */
+    uint64_t file_offset;     /* first source byte corresponding to start */
+    uint64_t file_bytes;      /* source bytes; remainder of final page is zero */
 } vm_region_t;
 
 typedef struct vm_space
@@ -92,6 +96,8 @@ typedef struct vm_space
     /* brk heap. brk_base == 0 means "not yet initialized". */
     uintptr_t brk_base;          /* page aligned; first byte of the heap */
     uintptr_t brk_cur;           /* current program break, byte granular */
+    const uint8_t* image_backing; /* retained immutable ELF image, address-space owned */
+    uint64_t image_backing_size;
     vm_region_t regions[VM_REGION_MAX];
 } vm_space_t;
 
@@ -118,6 +124,9 @@ typedef enum
 void vm_space_init(vm_space_t* space);
 /* Remove every region; used when the owning address space is destroyed. */
 void vm_space_clear(vm_space_t* space);
+/* Attach one immutable image buffer whose lifetime is the address-space lifetime. */
+int vm_space_set_image_backing(vm_space_t* space, const void* image,
+                               size_t image_size);
 
 /*
  * Pure validation of a candidate region: alignment, overflow, user-range
@@ -131,6 +140,10 @@ int vm_region_validate(uintptr_t start, size_t length, uint32_t prot,
 int vm_space_add_region(vm_space_t* space, uintptr_t start, size_t length,
                         uint32_t prot, vm_region_type_t type,
                         vm_backing_t backing);
+/* Reserve ELF pages that are copied from the retained image on first touch. */
+int vm_space_add_file_region(vm_space_t* space, uintptr_t start,
+                             size_t length, uint32_t prot,
+                             uint64_t file_offset, uint64_t file_bytes);
 
 /* Copy out the region containing address. Returns 1 if one exists. */
 int vm_space_find_region(vm_space_t* space, uintptr_t address,

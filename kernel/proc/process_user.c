@@ -11,6 +11,7 @@
 #include "pmm.h"
 #include "serial.h"
 #include "vfs.h"
+#include "heap.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -262,10 +263,13 @@ int process_release_user_resources(process_t* process)
     for (unsigned int n = 0U; n < PROCESS_NAME_MAX; n++)
         record.name[n] = process->name[n];
 
+    const void* image_backing = process->address_space->vm.image_backing;
     uint32_t reclaimed = 0U;
     if (!paging_destroy_address_space_counted(process->address_space,
                                               &reclaimed))
         return 0;
+    if (image_backing)
+        kfree((void*)image_backing);
     record.frames_reclaimed = reclaimed;
     process_exit_log_record(&record);
 

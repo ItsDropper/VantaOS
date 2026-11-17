@@ -45,13 +45,14 @@ A region records a page-aligned half-open range, a type (`ELF`, `FLAT_IMAGE`, `A
 |---|---|
 | `POPULATED` | Mapped by the creator before the process runs; frames are owned by the process (`user_pages`). A non-present access is never papered over. |
 | `ZERO` | Frames are allocated and zeroed on first touch. |
+| `FILE` | Non-executable ELF bytes are copied from the retained immutable image into a private zeroed frame on first touch; bytes after the segment file extent remain zero. |
 | `NONE` | Guard; every access is fatal. |
 
 `vm_region_validate()` rejects unaligned or empty ranges, address overflow, any range outside the user window (including the kernel half), writable-and-executable permissions, executable demand-zero memory, and inconsistent type/backing/permission combinations. `vm_space_add_region()` additionally rejects overlap, a full table (`VM_REGION_MAX`), and exceeding the 256 MiB per-space reservation budget (guards are free).
 
 ### How images are laid out
 
-- **ELF:** Pages containing file bytes are mapped eagerly — the image buffer is not retained after loading. Pure `.bss` pages beyond the file data become a `ZERO` region. Executable segments are always fully populated.
+- **ELF:** Executable text pages are populated eagerly (the current demand-leaf API is NX-only). Non-executable `PT_LOAD` file pages are `FILE` regions and are copied into private frames on first access; the immutable ELF image is retained by the address space until teardown. Pure `.bss` pages beyond the file-backed extent remain `ZERO` regions. A partial final file page is zero-filled before its file bytes are copied.
 - **Stack:** 64 pages are reserved. The top four are mapped eagerly to hold `argc`/`argv`; the remaining 60 fault in as the stack grows. One `GUARD` page sits directly below, so overflow is a clean, classified fault.
 - **Flat images** (kernel-built test programs): one code page, one stack page, plus optional extra anonymous/guard regions via `process_create_user_with_regions()`.
 
@@ -123,7 +124,7 @@ Evidence: `scripts/test_vm_region.c` (region logic, a randomized model test agai
 
 ## Limits
 
-- **File-backed lazy loading is not implemented.** ELF file pages are populated eagerly because the source image is not retained. Only `.bss`, the stack, and anonymous regions are lazy.
+- **Shared file page cache and eviction are not implemented.** Non-executable ELF file pages are demand-loaded from an address-space-owned immutable image copy. Pages are private per process; repeated launches retain separate image copies and separate resident frames. Executable text remains eager until the demand mapping path can install executable leaves safely.
 - Run-time mapping is anonymous-only: no file-backed `mmap`, no address hints or `MAP_FIXED`, no `mprotect`/`mremap`, and `munmap` refuses ranges that are not wholly inside anonymous mappings (so holes in a range, the image, the stack and the `brk` heap are `EINVAL` rather than silently skipped). Not QEMU- or hardware-verified; see below.
 - Per-process region count (40), reservation (256 MiB) and a 64-page eager-page budget bound resource use. A syscall over a very large lazy buffer populates it page by page.
 - Resident demand pages are not reclaimed under memory pressure (no swapping); exhaustion terminates the faulting process.

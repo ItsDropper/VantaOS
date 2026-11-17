@@ -8,6 +8,7 @@
 #include "process_internal.h"
 #include "pmm.h"
 #include "vm_region.h"
+#include "heap.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -105,8 +106,11 @@ static void release_unpublished_image(paging_address_space_t* space,
                                       process_user_page_t* pages,
                                       uint32_t page_count)
 {
+    const void* image_backing = space ? space->vm.image_backing : NULL;
     if (space && !paging_destroy_address_space(space))
-        return; /* Keep frames alive if page tables could not be torn down. */
+        return; /* Keep frames and their source bytes alive if teardown failed. */
+    if (image_backing)
+        kfree((void*)image_backing);
 
     for (uint32_t i = 0; i < page_count; i++)
         if (pages[i].physical_frame)
@@ -202,6 +206,15 @@ int process_create_user_elf_args(const char* name, uint32_t parent_pid,
                 sizeof(elf64_program_header_t), image_size))
         return -1;
 
+    /* The caller may release its input as soon as this function returns.
+       Keep an immutable kernel-owned copy until the address space is retired. */
+    uint8_t* retained_image = (uint8_t*)kmalloc(image_size);
+    if (!retained_image)
+        return -1;
+    for (size_t i = 0U; i < image_size; i++)
+        retained_image[i] = bytes[i];
+    bytes = retained_image;
+    header = (const elf64_header_t*)bytes;
     const elf64_program_header_t* program_headers =
         (const elf64_program_header_t*)(bytes + header->program_header_offset);
     paging_address_space_t* space = paging_create_address_space();
@@ -211,7 +224,16 @@ int process_create_user_elf_args(const char* name, uint32_t parent_pid,
     int entry_is_executable = 0;
 
     if (!space)
+    {
+        kfree(retained_image);
         return -1;
+    }
+    if (!vm_space_set_image_backing(&space->vm, retained_image, image_size))
+    {
+        (void)paging_destroy_address_space(space);
+        kfree(retained_image);
+        return -1;
+    }
 
     const uintptr_t stack_top = USER_STACK_TOP;
     /* Reserved stack range; only the top USER_STACK_PAGES are mapped up front. */
@@ -266,10 +288,9 @@ int process_create_user_elf_args(const char* name, uint32_t parent_pid,
                               (executable ? VM_PROT_EXEC : 0U);
 
         /*
-         * Pages that hold file bytes are populated now (the image buffer is
-         * not retained). Pure .bss pages beyond the file data stay lazy and
-         * are zero-filled on first touch; executable segments are always
-         * fully populated because demand-zero memory is never executable.
+         * Executable text remains eager because the demand leaf API is NX-only.
+         * Non-executable PT_LOAD file bytes become private file-backed demand
+         * pages; pure .bss pages remain demand-zero. The image is immutable.
          */
         uintptr_t populated_end = page_end;
         if (!executable)
@@ -280,22 +301,37 @@ int process_create_user_elf_args(const char* name, uint32_t parent_pid,
             if (populated_end > page_end)
                 populated_end = page_end;
         }
-        for (uintptr_t va = page_start; va < populated_end; va += PAGE_SIZE)
+        if (executable)
         {
-            if (!allocate_and_map_page(space, pages, &page_count, va,
-                                       writable, executable))
+            for (uintptr_t va = page_start; va < populated_end; va += PAGE_SIZE)
+            {
+                if (!allocate_and_map_page(space, pages, &page_count, va,
+                                           writable, executable))
+                {
+                    release_unpublished_image(space, pages, page_count);
+                    return -1;
+                }
+            }
+            if (!vm_space_add_region(&space->vm, page_start,
+                                     populated_end - page_start, prot,
+                                     VM_REGION_ELF, VM_BACKING_POPULATED))
             {
                 release_unpublished_image(space, pages, page_count);
                 return -1;
             }
         }
-        if (populated_end > page_start &&
-            !vm_space_add_region(&space->vm, page_start,
-                                 populated_end - page_start, prot,
-                                 VM_REGION_ELF, VM_BACKING_POPULATED))
+        else if (populated_end > page_start)
         {
-            release_unpublished_image(space, pages, page_count);
-            return -1;
+            const uint64_t prefix = segment_start - page_start;
+            const uint64_t source_offset = ph->offset - prefix;
+            const uint64_t source_bytes = prefix + ph->file_size;
+            if (!vm_space_add_file_region(&space->vm, page_start,
+                                          populated_end - page_start, prot,
+                                          source_offset, source_bytes))
+            {
+                release_unpublished_image(space, pages, page_count);
+                return -1;
+            }
         }
         if (populated_end < page_end &&
             !vm_space_add_region(&space->vm, populated_end,
@@ -306,18 +342,21 @@ int process_create_user_elf_args(const char* name, uint32_t parent_pid,
             return -1;
         }
 
-        for (uint64_t offset = 0; offset < ph->file_size; offset++)
+        if (executable)
         {
-            uintptr_t target = segment_start + (uintptr_t)offset;
-            process_user_page_t* page =
-                find_page(pages, page_count, target);
-            if (!page)
+            for (uint64_t offset = 0; offset < ph->file_size; offset++)
             {
-                release_unpublished_image(space, pages, page_count);
-                return -1;
+                uintptr_t target = segment_start + (uintptr_t)offset;
+                process_user_page_t* page =
+                    find_page(pages, page_count, target);
+                if (!page)
+                {
+                    release_unpublished_image(space, pages, page_count);
+                    return -1;
+                }
+                ((uint8_t*)page->physical_frame)
+                    [target & (PAGE_SIZE - 1U)] = bytes[ph->offset + offset];
             }
-            ((uint8_t*)page->physical_frame)
-                [target & (PAGE_SIZE - 1U)] = bytes[ph->offset + offset];
         }
 
         if (executable && header->entry >= segment_start &&

@@ -97,10 +97,28 @@ static vm_fault_result_t populate_page(paging_address_space_t* space,
         return VM_FAULT_OUT_OF_MEMORY;
     }
 
-    /* Zero before publication: no CPU can observe stale data from the frame. */
+    /* Zero before publication: bytes outside the file-backed extent (including
+       a partial-page .bss tail) must never expose stale physical memory. */
     volatile uint64_t* words = (volatile uint64_t*)frame;
     for (size_t i = 0U; i < PAGE_SIZE / sizeof(uint64_t); i++)
         words[i] = 0U;
+    if (region->backing == VM_BACKING_FILE)
+    {
+        uintptr_t page_offset = page - region->start;
+        if (!region->file_data || page_offset >= region->file_bytes)
+        {
+            pmm_free_block(frame);
+            return VM_FAULT_FATAL;
+        }
+        uint64_t remaining = region->file_bytes - page_offset;
+        size_t copy_bytes = remaining < PAGE_SIZE ?
+                            (size_t)remaining : PAGE_SIZE;
+        const uint8_t* source = region->file_data +
+                                region->file_offset + page_offset;
+        uint8_t* destination = (uint8_t*)frame;
+        for (size_t i = 0U; i < copy_bytes; i++)
+            destination[i] = source[i];
+    }
     __atomic_thread_fence(__ATOMIC_RELEASE);
 
     switch (paging_map_user_page_demand(
@@ -179,7 +197,8 @@ int vm_user_range_ensure(paging_address_space_t* space, uintptr_t address,
         {
             vm_region_t region;
             if (!vm_space_find_region(&space->vm, page, &region) ||
-                region.backing != VM_BACKING_ZERO ||
+                (region.backing != VM_BACKING_ZERO &&
+                 region.backing != VM_BACKING_FILE) ||
                 (region.prot & (writable ? VM_PROT_WRITE : VM_PROT_READ)) == 0U ||
                 populate_page(space, page, &region) != VM_FAULT_RESOLVED)
                 return 0;

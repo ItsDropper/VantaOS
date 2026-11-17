@@ -719,9 +719,7 @@ smp_init_result_t smp_initialize(void)
         serial_write("VANTAOS_SMP_CPU_FEATURE_INTERSECTION_FAIL\n");
         return SMP_INIT_FAILED;
     }
-    serial_write("VANTAOS_SMP_CPU_FEATURE_COMMON=0x");
-    serial_write_hex64(common_cpu_features);
-    serial_write("\n");
+    serial_write("VANTAOS_SMP_CPU_FEATURE_COMMON_OK\n");
 
     serial_write("VANTAOS_SMP_CPU_LOCAL_OK\n");
     if (!smp_run_work_probe(info, (uint32_t)bsp_index))

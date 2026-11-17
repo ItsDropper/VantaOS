@@ -146,6 +146,9 @@ int vm_space_add_file_region(vm_space_t* space, uintptr_t start,
                              size_t length, uint32_t prot,
                              uint64_t file_offset, uint32_t file_prefix,
                              uint64_t file_bytes);
+/* Copy the source bytes intersecting one page; caller zeroes the destination. */
+int vm_region_copy_file_page(const vm_region_t* region, uintptr_t page,
+                             void* destination);
 
 /* Copy out the region containing address. Returns 1 if one exists. */
 int vm_space_find_region(vm_space_t* space, uintptr_t address,

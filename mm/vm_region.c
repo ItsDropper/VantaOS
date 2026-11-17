@@ -196,6 +196,38 @@ int vm_space_add_file_region(vm_space_t* space, uintptr_t start,
     return added;
 }
 
+int vm_region_copy_file_page(const vm_region_t* region, uintptr_t page,
+                             void* destination)
+{
+    if (!region || !destination || region->backing != VM_BACKING_FILE ||
+        !region->file_data || page < region->start || page >= region->end ||
+        (page & VM_PAGE_MASK) != 0U || region->file_prefix >= PAGE_SIZE)
+        return 0;
+
+    const uint64_t page_offset = (uint64_t)(page - region->start);
+    const uint64_t file_end = (uint64_t)region->file_prefix + region->file_bytes;
+    if (file_end > (uint64_t)(region->end - region->start) ||
+        page_offset >= file_end)
+        return 0;
+
+    const uint64_t copy_start = page_offset > region->file_prefix ?
+                                page_offset : region->file_prefix;
+    const uint64_t page_end = page_offset + PAGE_SIZE;
+    const uint64_t copy_end = file_end < page_end ? file_end : page_end;
+    const uint64_t relative_source = copy_start - region->file_prefix;
+    if (relative_source > UINT64_MAX - region->file_offset)
+        return 0;
+
+    const uint8_t* source = region->file_data +
+                            region->file_offset + relative_source;
+    uint8_t* output = (uint8_t*)destination;
+    const size_t output_offset = (size_t)(copy_start - page_offset);
+    const size_t copy_bytes = (size_t)(copy_end - copy_start);
+    for (size_t i = 0U; i < copy_bytes; i++)
+        output[output_offset + i] = source[i];
+    return 1;
+}
+
 static const vm_region_t* find_locked(const vm_space_t* space,
                                       uintptr_t address)
 {

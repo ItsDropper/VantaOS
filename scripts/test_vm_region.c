@@ -138,10 +138,42 @@ static void test_file_backing(void)
                                   VM_PF_USER | VM_PF_WRITE, &region) ==
           VM_FAULT_DEMAND_MAP);
     CHECK(region.file_data[region.file_offset] == image[8]);
+    CHECK(!vm_region_copy_file_page(&region, B + P, image));
     CHECK(!vm_space_add_file_region(&space, B, P, RW, 0U, 0U, 8U));
     CHECK(space.region_count == 1U && space.reserved_bytes == P);
     vm_space_clear(&space);
     CHECK(space.image_backing == NULL && space.image_backing_size == 0U);
+}
+
+static void test_file_page_copy(void)
+{
+    static uint8_t image[P + 32U];
+    uint8_t page[P];
+    vm_region_t region = {0};
+    for (size_t i = 0U; i < sizeof(image); i++)
+        image[i] = (uint8_t)((i * 17U + 3U) & 0xFFU);
+    region.start = B;
+    region.end = B + 2U * P;
+    region.backing = VM_BACKING_FILE;
+    region.file_data = image;
+    region.file_offset = 11U;
+    region.file_prefix = 7U;
+    region.file_bytes = P + 5U;
+
+    memset(page, 0, sizeof(page));
+    CHECK(vm_region_copy_file_page(&region, B, page));
+    for (size_t i = 0U; i < 7U; i++) CHECK(page[i] == 0U);
+    for (size_t i = 7U; i < P; i++)
+        CHECK(page[i] == image[11U + i - 7U]);
+
+    memset(page, 0, sizeof(page));
+    CHECK(vm_region_copy_file_page(&region, B + P, page));
+    for (size_t i = 0U; i < 12U; i++)
+        CHECK(page[i] == image[11U + P - 7U + i]);
+    for (size_t i = 12U; i < P; i++) CHECK(page[i] == 0U);
+
+    CHECK(!vm_region_copy_file_page(&region, B + 1U, page));
+    CHECK(!vm_region_copy_file_page(&region, B + 2U * P, page));
 }
 
 static void test_classification(void)
@@ -572,6 +604,7 @@ int main(void)
     test_validation();
     test_table();
     test_file_backing();
+    test_file_page_copy();
     test_classification();
     test_accounting();
     test_concurrency();

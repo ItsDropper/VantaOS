@@ -115,9 +115,8 @@ check("VM_PF_RESERVED" in region and "VM_PF_USER" in region, "reserved-bit/user-
 check("VM_FAULT_NOT_DEMAND" in region, "populated regions must not be demand-filled")
 check("VM_BACKING_FILE" in region and "vm_space_add_file_region" in region,
       "file-backed regions must validate and retain bounded image ranges")
-check("VM_BACKING_FILE" in fault and "region->file_data" in fault and
-      "destination_offset + i" in fault and
-      fault.find("destination[destination_offset + i] = source[i]") < fault.find("paging_map_user_page_demand("),
+check("VM_BACKING_FILE" in fault and "vm_region_copy_file_page" in fault and
+      fault.find("vm_region_copy_file_page") < fault.find("paging_map_user_page_demand("),
       "file-backed faults must copy into a zeroed private frame before mapping")
 check("vm_space_add_file_region" in elf and "retained_image" in elf,
       "non-executable ELF data segments must use retained lazy backing")

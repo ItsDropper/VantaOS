@@ -8,7 +8,7 @@ Implemented: per-address-space region tables, lazy zero-fill frame allocation, p
 
 Also implemented (host-tested only; see [Run-time mapping](#run-time-mapping-mmap-munmap-brk)): anonymous `mmap`, `munmap` (including partial and middle-punch unmaps) and `brk`.
 
-Not implemented, by design: swapping, copy-on-write, dynamic linking, memory-mapped files, file-backed `mmap`, and file-backed lazy loading (see [Limits](#limits)).
+Not implemented, by design: swapping, copy-on-write, dynamic linking, memory-mapped files, and file-backed `mmap` (see [Limits](#limits)).
 
 ## Address layout
 

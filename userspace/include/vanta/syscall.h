@@ -18,7 +18,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define VANTA_USER_ABI_VERSION 10U
+#define VANTA_USER_ABI_VERSION 11U
 
 #define VANTA_SYS_EXIT          0U
 #define VANTA_SYS_WRITE         1U
@@ -58,6 +58,13 @@
 #define VANTA_SYS_BLUETOOTH_CANCEL_CONNECTION 39U
 #define VANTA_SYS_CLIPBOARD_SET 40U
 #define VANTA_SYS_CLIPBOARD_GET 41U
+#define VANTA_SYS_MMAP          42U
+#define VANTA_SYS_MUNMAP        43U
+#define VANTA_SYS_BRK           44U
+
+/* mmap protection bits. Anonymous private memory only; never executable. */
+#define VANTA_PROT_READ  0x1U
+#define VANTA_PROT_WRITE 0x2U
 #define VANTA_CLIPBOARD_CAPACITY 4096U
 
 #define VANTA_OPEN_READ      1
@@ -260,6 +267,41 @@ static inline void vanta_exit(int status)
                          (uintptr_t)(intptr_t)status, 0U, 0U);
     for (;;)
         __asm__ volatile ("" : : : "memory");
+}
+
+
+/*
+ * Map zero-filled anonymous memory. Returns the address (a positive value) or
+ * a negative error: -VANTA_EINVAL for bad arguments, -VANTA_ENOMEM when no
+ * range, region slot or reservation budget is available. flags must be 0.
+ * Pages are allocated on first touch and zero-filled; the range is never
+ * executable. Callers must test for a negative result, not for a null pointer.
+ */
+static inline long vanta_mmap(size_t length, unsigned prot)
+{
+    return vanta_syscall3(VANTA_SYS_MMAP, (uintptr_t)length, (uintptr_t)prot, 0U);
+}
+
+/*
+ * Unmap [address, address + length). address must be page aligned and the
+ * whole range must lie inside anonymous mappings made by vanta_mmap (holes,
+ * the program image, the stack and the brk heap are refused with
+ * -VANTA_EINVAL). Partial unmaps and middle punches are supported.
+ */
+static inline long vanta_munmap(void* address, size_t length)
+{
+    return vanta_syscall3(VANTA_SYS_MUNMAP, (uintptr_t)address, (uintptr_t)length, 0U);
+}
+
+/*
+ * Query or move the program break. vanta_brk(0) returns the current break. A
+ * request that cannot be honoured returns the unchanged current break, so the
+ * caller compares the result with what it asked for. Returns -VANTA_ENOMEM if
+ * the program has no loadable image to anchor a heap to.
+ */
+static inline long vanta_brk(void* address)
+{
+    return vanta_syscall3(VANTA_SYS_BRK, (uintptr_t)address, 0U, 0U);
 }
 
 #endif

@@ -35,6 +35,16 @@
 /* Upper bound on reserved (not necessarily resident) bytes per space. */
 #define VM_SPACE_MAX_RESERVED_BYTES (256ULL * 1024ULL * 1024ULL)
 
+/* Region flags. */
+#define VM_REGION_FLAG_HEAP 0x1U /* the brk heap; munmap may not touch it */
+
+/*
+ * Anonymous mmap allocations are placed top-down inside
+ * [VM_MMAP_WINDOW_LOW, lowest stack/guard region), 64 GiB above the ELF load
+ * base, which keeps them clear of statically linked images and the brk heap.
+ */
+#define VM_MMAP_WINDOW_LOW ((uintptr_t)PAGING_USER_BASE + 0x1000000000ULL)
+
 typedef enum
 {
     VM_REGION_NONE = 0,
@@ -59,7 +69,7 @@ typedef struct vm_region
     uint8_t type;         /* vm_region_type_t */
     uint8_t prot;         /* VM_PROT_* */
     uint8_t backing;      /* vm_backing_t */
-    uint8_t reserved;
+    uint8_t flags;        /* VM_REGION_FLAG_* */
     uint32_t resident_pages; /* demand-faulted pages currently mapped */
 } vm_region_t;
 
@@ -79,6 +89,9 @@ typedef struct vm_space
     uint32_t last_fault_class;   /* vm_fault_class_t of the latest fault */
     uint64_t last_fault_address;
     uint64_t last_fault_error;
+    /* brk heap. brk_base == 0 means "not yet initialized". */
+    uintptr_t brk_base;          /* page aligned; first byte of the heap */
+    uintptr_t brk_cur;           /* current program break, byte granular */
     vm_region_t regions[VM_REGION_MAX];
 } vm_space_t;
 
@@ -135,6 +148,83 @@ vm_fault_class_t vm_space_classify_fault(vm_space_t* space, uintptr_t address,
 /* Account one demand page mapped into / reclaimed from address's region. */
 void vm_space_note_resident(vm_space_t* space, uintptr_t address,
                             int32_t delta);
+
+/* ---- Run-time mapping: mmap / munmap / brk ------------------------------ */
+
+/*
+ * Pick a free range for an anonymous mapping and reserve it, all under one
+ * lock hold. Returns 1 and sets *address_out on success; 0 if the request is
+ * invalid (length zero or unaligned after rounding, bad prot, W^X) or no gap,
+ * region slot or reservation budget is available. Nothing changes on failure.
+ */
+int vm_space_map_anon(vm_space_t* space, size_t length, uint32_t prot,
+                      uintptr_t* address_out);
+
+/*
+ * Unmapping is three phases because the page-table walk that frees demand
+ * frames lives outside this file:
+ *   1. vm_space_unmap_check   - pure; decides whether the whole range can be
+ *                               unmapped, with no partial effects possible.
+ *   2. vm_space_unmap_next    - describe the next affected region piece.
+ *   3. (caller) release the piece's demand frames and count the resident pages
+ *      left on each side, then vm_space_unmap_commit.
+ * The caller must be the only mutator of the space (a process only runs on
+ * one CPU at a time, and munmap is issued by that process itself).
+ */
+typedef enum
+{
+    VM_UNMAP_FULL = 1, /* whole region removed */
+    VM_UNMAP_FRONT,    /* [original.start, end) removed; tail remains */
+    VM_UNMAP_BACK,     /* [start, original.end) removed; head remains */
+    VM_UNMAP_SPLIT     /* middle removed; head and tail remain */
+} vm_unmap_kind_t;
+
+typedef struct vm_unmap_step
+{
+    vm_region_t original; /* snapshot of the affected region */
+    uintptr_t start;      /* removed portion, page aligned, inside original */
+    uintptr_t end;
+    uint8_t kind;         /* vm_unmap_kind_t */
+} vm_unmap_step_t;
+
+/*
+ * The range must be page aligned, inside the user window, and fully covered
+ * by VM_REGION_ANON regions that are not the heap (holes, ELF, stack, guard
+ * and heap regions are rejected), and a middle-punch must have a free slot.
+ */
+int vm_space_unmap_check(vm_space_t* space, uintptr_t start, size_t length);
+int vm_space_unmap_next(vm_space_t* space, uintptr_t start, uintptr_t end,
+                        vm_unmap_step_t* step);
+/*
+ * left/right_resident: resident demand pages remaining in the head/tail
+ * pieces after the caller released the removed portion (ignored when that
+ * piece does not exist). Returns 0 if the region table no longer matches
+ * step->original (nothing is changed).
+ */
+int vm_space_unmap_commit(vm_space_t* space, const vm_unmap_step_t* step,
+                          uint32_t left_resident, uint32_t right_resident);
+
+/*
+ * Program break. brk is lazily initialized to the end of the highest ELF or
+ * flat-image region. These calls only manage bookkeeping and regions; freeing
+ * pages on shrink uses the unmap phases above.
+ */
+int vm_space_brk_get(vm_space_t* space, uintptr_t* base_out,
+                     uintptr_t* current_out);
+/* Grow to `requested` (> current). 1 on success; 0 changes nothing. */
+int vm_space_brk_grow(vm_space_t* space, uintptr_t requested);
+/*
+ * Shrink: describe the page range to release for `requested` (< current).
+ * Returns 1 and sets *release_start/end (equal when no whole page goes away).
+ */
+int vm_space_brk_shrink_plan(vm_space_t* space, uintptr_t requested,
+                             uintptr_t* release_start, uintptr_t* release_end);
+/* After the release: set the break and the heap region's resident count. */
+int vm_space_brk_shrink_commit(vm_space_t* space, uintptr_t requested,
+                               uint32_t heap_resident);
+
+/* Heap cap: the break may not pass the mmap window or this many bytes. */
+#define VM_BRK_MAX_BYTES (128ULL * 1024ULL * 1024ULL)
 
 const char* vm_fault_class_name(vm_fault_class_t cls);
 

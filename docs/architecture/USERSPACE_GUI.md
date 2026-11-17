@@ -2,7 +2,7 @@
 
 ## Current state
 
-VantaOS has an initial user-mode GUI boundary and five standalone ring-3 desktop applications. The current userspace syscall ABI is version 10 and the GUI event ABI is version 2; both are VantaOS-specific, not POSIX, Win32, or Wayland compatible.
+VantaOS has an initial user-mode GUI boundary and five standalone ring-3 desktop applications. The current userspace syscall ABI is version 11 and the GUI event ABI is version 2; both are VantaOS-specific, not POSIX, Win32, or Wayland compatible.
 
 - Static ELF64 `ET_EXEC` programs can be loaded from FAT32 and run at CPL3 (ring 3) in a private address space.
 - The public freestanding header `userspace/include/vanta/syscall.h` exposes the current syscall wrappers; GUI structures live in `userspace/include/vanta/gui.h`.

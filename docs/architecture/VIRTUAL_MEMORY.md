@@ -6,7 +6,9 @@ This document describes the per-process virtual-memory regions and the demand-pa
 
 Implemented: per-address-space region tables, lazy zero-fill frame allocation, permission enforcement, recoverable-versus-fatal fault classification, instruction restart, out-of-memory containment, user-fault termination and reclamation, and page-table/frame teardown.
 
-Not implemented, by design: swapping, copy-on-write, dynamic linking, memory-mapped files, `mmap`/`munmap`-style syscalls, and file-backed lazy loading (see [Limits](#limits)).
+Also implemented (host-tested only; see [Run-time mapping](#run-time-mapping-mmap-munmap-brk)): anonymous `mmap`, `munmap` (including partial and middle-punch unmaps) and `brk`.
+
+Not implemented, by design: swapping, copy-on-write, dynamic linking, memory-mapped files, file-backed `mmap`, and file-backed lazy loading (see [Limits](#limits)).
 
 ## Address layout
 
@@ -108,14 +110,25 @@ The QEMU cases are: lazy zero-fill with read-first and write-first touches and p
 
 Run at 1, 2 and 4 vCPUs under GRUB and under UEFI/OVMF. See [Testing](../build/TESTING.md).
 
+## Run-time mapping (mmap, munmap, brk)
+
+Status: **host-tested; the kernel build links; NOT RUN under QEMU and not hardware-verified.** No ring-3 program has issued these syscalls yet.
+
+- `mmap(length, prot, 0)` reserves a top-down gap in `[VM_MMAP_WINDOW_LOW, lowest stack/guard)` (64 GiB above the ELF base) as an anonymous demand-zero region: readable, optionally writable, never executable. Length is rounded up to pages. The result is the address, always positive.
+- `munmap` is a three-phase operation: `vm_space_unmap_check` (pure; refuses the whole request if any part is not anonymous or a middle punch has no free region slot), then per affected region `vm_space_unmap_next`, `paging_release_user_demand_range` and `vm_space_unmap_commit`. The release walk clears each PTE, shoots the translation down on every CPU and only then returns the frame to the PMM. It refuses (before changing anything) if a present leaf in the range is not `PAGE_SOFT_DEMAND`, so frames the page tables do not own are never freed.
+- `brk` is lazily anchored to the end of the highest ELF/flat-image region, capped at 128 MiB and the mmap window, and backed by one region flagged `VM_REGION_FLAG_HEAP`. A request that cannot be honoured returns the unchanged break. Shrinking uses the same release walk.
+- A failure part-way through a multi-region `munmap` returns `-EIO` with the table coherent: earlier pieces stay unmapped, and the serial log carries `VANTAOS_MUNMAP_INCONSISTENT`.
+
+Evidence: `scripts/test_vm_region.c` (region logic, a randomized model test against a per-page shadow, 13 deliberate-mutation checks run by hand) and `scripts/test_syscall_vm.c` (syscall glue with a stubbed page-table layer, including injected release failures). The stub does **not** exercise the real page-table walk, TLB shootdown or PMM; those need a QEMU ring-3 test.
+
 ## Limits
 
 - **File-backed lazy loading is not implemented.** ELF file pages are populated eagerly because the source image is not retained. Only `.bss`, the stack, and anonymous regions are lazy.
-- There is no user-visible `mmap`/`brk` syscall; additional anonymous regions can currently only be created by the kernel at process creation. Regions cannot be resized or removed at run time.
+- Run-time mapping is anonymous-only: no file-backed `mmap`, no address hints or `MAP_FIXED`, no `mprotect`/`mremap`, and `munmap` refuses ranges that are not wholly inside anonymous mappings (so holes in a range, the image, the stack and the `brk` heap are `EINVAL` rather than silently skipped). Not QEMU- or hardware-verified; see below.
 - Per-process region count (40), reservation (256 MiB) and a 64-page eager-page budget bound resource use. A syscall over a very large lazy buffer populates it page by page.
 - Resident demand pages are not reclaimed under memory pressure (no swapping); exhaustion terminates the faulting process.
 - Prefaulting a very large lazy buffer in one syscall, and reclaiming a very large address space, run with interrupts disabled on that CPU; neither is capped or batched yet. There is also no global demand-frame cap or kernel reserve, so several processes can exhaust the below-1-GiB pool and cause OOM terminations of unrelated processes.
-- `paging_unmap_user_page()` must not be used on demand leaves (their frames are owned by the page tables); a future `munmap` must free the frame itself.
+- `paging_unmap_user_page()` must not be used on demand leaves (their frames are owned by the page tables); `munmap`/`brk` use `paging_release_user_demand_range()`, which frees the frame itself.
 - The paging lock is still global for table updates; per-address-space table locking is future work.
 - Page-fault handling on real hardware has not been exercised. QEMU's TCG reports a non-canonical access as `#PF` where hardware raises `#GP`; both are contained.
 - Kernel-mode accesses to unmapped user memory remain fatal by design; the kernel only touches user memory after `vm_user_range_valid()`.

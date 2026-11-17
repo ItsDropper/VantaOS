@@ -44,7 +44,7 @@ Routes A and B are complementary. A userspace compatibility runtime does not rep
 The repository currently provides an early foundation, not a stable Windows compatibility platform:
 
 - Static ELF64 ET_EXEC applications run at x86-64 ring 3 in private address spaces. The loader bounds load segments, zero-fills tails, rejects writable/executable segments and overlapping pages, and uses a non-executable user stack.
-- The public VantaOS syscall ABI is project-specific and currently versioned by VANTA_USER_ABI_VERSION (version 10). The docs explicitly say it is an initial ABI, not a stable long-term or POSIX contract.
+- The public VantaOS syscall ABI is project-specific and currently versioned by VANTA_USER_ABI_VERSION (version 11). The docs explicitly say it is an initial ABI, not a stable long-term or POSIX contract.
 - Process creation, child spawn/wait, bounded file descriptors, IPC, and a project-specific GUI boundary exist. The userspace environment remains freestanding: no complete libc, dynamic linker, ET_DYN, shared libraries, mature thread runtime, or POSIX process environment.
 - The kernel uses its own process and memory-management contracts. These are not Win32, NT, Linux, or Wine-compatible interfaces.
 - Signed boot artifacts, an enforced secure-boot chain, TPM-backed measurements/attestation, and vendor-approved EAC support are not established by this plan and must not be described as implemented.

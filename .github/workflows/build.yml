@@ -265,8 +265,22 @@ jobs:
             scripts/test_vm_region.c mm/vm_region.c -lpthread \
             -o /tmp/vantaos-vm-region-tsan
           /tmp/vantaos-vm-region-tsan
+          gcc -std=gnu11 -g -fsanitize=address,undefined \
+            -Iscripts/test_stubs_smp -Iinclude \
+            scripts/test_vm_region.c mm/vm_region.c -lpthread \
+            -o /tmp/vantaos-vm-region-asan
+          /tmp/vantaos-vm-region-asan
           sudo apt-get install -y nasm >/dev/null
           python3 scripts/test_demand_paging_structure.py
+
+      - name: Test mmap/munmap/brk syscall logic (stub page tables, ASan/UBSan)
+        run: |
+          gcc -std=gnu11 -O2 -Wall -Wextra -Werror -DVANTAOS_HOST_TEST \
+            -fsanitize=address,undefined \
+            -Iscripts/test_stubs_smp -Iinclude \
+            scripts/test_syscall_vm.c kernel/syscall_vm.c mm/vm_region.c \
+            -o /tmp/vantaos-syscall-vm-test
+          /tmp/vantaos-syscall-vm-test
 
       - name: Test physical memory allocator contiguous and next-fit allocation
         run: |

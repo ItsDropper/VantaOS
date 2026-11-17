@@ -5,6 +5,7 @@
  * See the LICENSE file in the project root for the full license text.
  */
 
+#include "syscall_vm.h"
 #include "vm_fault.h"
 #include "syscall.h"
 
@@ -68,6 +69,9 @@
 #define USER_SYSCALL_BLUETOOTH_CANCEL_CONNECTION 39U
 #define USER_SYSCALL_CLIPBOARD_SET 40U
 #define USER_SYSCALL_CLIPBOARD_GET 41U
+#define USER_SYSCALL_MMAP 42U
+#define USER_SYSCALL_MUNMAP 43U
+#define USER_SYSCALL_BRK 44U
 
 #define USER_CLIPBOARD_CAPACITY 4096U
 static uint8_t user_clipboard[USER_CLIPBOARD_CAPACITY];
@@ -1163,6 +1167,19 @@ static int syscall_dispatch(struct exception_frame* frame)
                 (uint32_t)frame->rdi, address);
             return 0;
         }
+        case USER_SYSCALL_MMAP:
+            frame->rax = (uint64_t)syscall_vm_mmap(process.address_space,
+                                                   frame->rdi, frame->rsi,
+                                                   frame->rdx);
+            return 0;
+        case USER_SYSCALL_MUNMAP:
+            frame->rax = (uint64_t)syscall_vm_munmap(process.address_space,
+                                                     frame->rdi, frame->rsi);
+            return 0;
+        case USER_SYSCALL_BRK:
+            frame->rax = (uint64_t)syscall_vm_brk(process.address_space,
+                                                  frame->rdi);
+            return 0;
         case USER_SYSCALL_CLIPBOARD_SET:
             return syscall_clipboard_set(frame, &process);
         case USER_SYSCALL_CLIPBOARD_GET:

@@ -343,6 +343,90 @@ int paging_unmap_user_page(paging_address_space_t* address_space,
 }
 
 
+static volatile uint64_t demand_frames_released;
+
+uint64_t paging_demand_frames_released(void)
+{
+    return __atomic_load_n(&demand_frames_released, __ATOMIC_ACQUIRE);
+}
+
+static int leaf_present(paging_address_space_t* space, uintptr_t va,
+                        uint64_t* entry_out)
+{
+    uint64_t* entry = paging_user_leaf_entry(space, va, 0);
+    if (!entry || !(*entry & PAGE_PRESENT))
+        return 0;
+    if (entry_out)
+        *entry_out = *entry;
+    return 1;
+}
+
+int paging_release_user_demand_range(paging_address_space_t* address_space,
+                                     uintptr_t head_start, uintptr_t start,
+                                     uintptr_t end, uintptr_t tail_end,
+                                     uint32_t* head_resident,
+                                     uint32_t* released,
+                                     uint32_t* tail_resident)
+{
+    const uintptr_t mask = PAGE_SIZE - 1U;
+    if (!address_space || !head_resident || !released || !tail_resident ||
+        ((head_start | start | end | tail_end) & mask) != 0U ||
+        !(head_start <= start && start < end && end <= tail_end) ||
+        head_start < PAGING_USER_BASE || tail_end - 1U > PAGING_USER_END ||
+        !paging_owns_address_space(address_space))
+        return 0;
+
+    /* Pass 1 (read-only): refuse before changing anything if the range holds
+     * a leaf whose frame the page tables do not own. */
+    for (uintptr_t va = start; va < end; va += PAGE_SIZE)
+    {
+        uint64_t entry;
+        if (leaf_present(address_space, va, &entry) &&
+            (entry & PAGE_SOFT_DEMAND) == 0U)
+            return 0;
+    }
+
+    uint32_t head = 0U, tail = 0U, freed = 0U;
+    for (uintptr_t va = head_start; va < start; va += PAGE_SIZE)
+        head += leaf_present(address_space, va, NULL) ? 1U : 0U;
+    for (uintptr_t va = end; va < tail_end; va += PAGE_SIZE)
+        tail += leaf_present(address_space, va, NULL) ? 1U : 0U;
+
+    /* Pass 2: clear, shoot down, then free. A frame must never be reused
+     * while another CPU can still hold a translation to it. */
+    for (uintptr_t va = start; va < end; va += PAGE_SIZE)
+    {
+        uint64_t saved_flags = paging_lock_acquire();
+        uint64_t* entry = paging_user_leaf_entry(address_space, va, 0);
+        if (!entry || !(*entry & PAGE_PRESENT) ||
+            (*entry & PAGE_SOFT_DEMAND) == 0U)
+        {
+            paging_lock_release(saved_flags);
+            continue;
+        }
+        uint64_t frame = *entry & PAGE_ADDRESS_MASK;
+        *entry = 0U;
+        __atomic_add_fetch(&address_space->pending_shootdowns, 1U,
+                           __ATOMIC_RELEASE);
+        paging_lock_release(saved_flags);
+
+        if (!paging_tlb_shootdown(address_space, va))
+            paging_tlb_failure();
+        __atomic_sub_fetch(&address_space->pending_shootdowns, 1U,
+                           __ATOMIC_RELEASE);
+
+        pmm_free_block((void*)(uintptr_t)frame);
+        freed++;
+    }
+
+    if (freed != 0U)
+        __atomic_fetch_add(&demand_frames_released, freed, __ATOMIC_ACQ_REL);
+    *head_resident = head;
+    *tail_resident = tail;
+    *released = freed;
+    return 1;
+}
+
 int paging_user_range_valid(paging_address_space_t* address_space,
                             uintptr_t virtual_address, size_t length,
                             int writable)

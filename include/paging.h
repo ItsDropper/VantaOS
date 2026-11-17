@@ -91,6 +91,29 @@ paging_demand_result_t paging_map_user_page_demand(
     uintptr_t physical_address, int writable);
 /* Lifetime counters for diagnostics and regression tests. */
 uint64_t paging_demand_frames_reclaimed(void);
+/* Frames freed by paging_release_user_demand_range (munmap/brk shrink). */
+uint64_t paging_demand_frames_released(void);
+/*
+ * Free the demand-allocated frames of [start, end) in a user address space and
+ * count the demand pages still resident in the neighbouring pieces
+ * [head_start, start) and [end, tail_end) (pass head_start == start or
+ * tail_end == end to skip a side). Every address must be page aligned and
+ * head_start <= start < end <= tail_end.
+ *
+ * Fails (returns 0, nothing changed) if any present leaf in [start, end) is
+ * not PAGE_SOFT_DEMAND: frames the page tables do not own are never freed
+ * here. For each demand leaf the PTE is cleared, the translation is shot down
+ * on every CPU, and only then is the frame returned to the PMM.
+ *
+ * The caller must be the only mutator of this address space's mappings (true
+ * for a process changing its own space from a syscall).
+ */
+int paging_release_user_demand_range(paging_address_space_t* address_space,
+                                     uintptr_t head_start, uintptr_t start,
+                                     uintptr_t end, uintptr_t tail_end,
+                                     uint32_t* head_resident,
+                                     uint32_t* released,
+                                     uint32_t* tail_resident);
 int paging_nx_available(void);
 int paging_unmap_user_page(paging_address_space_t* address_space,
                            uintptr_t virtual_address);

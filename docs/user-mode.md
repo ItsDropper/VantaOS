@@ -8,7 +8,7 @@ The scheduler enters user mode with `CS=0x23` and `SS=0x1B`. Each process has a 
 
 ## Freestanding C syscall interface
 
-Include `<vanta/syscall.h>` from `userspace/include`. It provides inline wrappers for the current syscall ABI and can be used without libc or a runtime startup object. The ABI version macro is `VANTA_USER_ABI_VERSION` (currently `10`).
+Include `<vanta/syscall.h>` from `userspace/include`. It provides inline wrappers for the current syscall ABI and can be used without libc or a runtime startup object. The ABI version macro is `VANTA_USER_ABI_VERSION` (currently `11`).
 
 ```c
 #include <vanta/syscall.h>
@@ -64,6 +64,9 @@ Userspace enters through `int 0x80`. The syscall number is in `RAX`, arguments a
 | 39 | `vanta_bluetooth_cancel_connection(port, address)` | RDI: port, RSI: 6-byte address | Cancellation command accepted or zero |
 | 40 | `vanta_clipboard_set(buffer, length)` | RDI: readable bytes, RSI: length (0–4096) | Bytes copied into the system clipboard |
 | 41 | `vanta_clipboard_get(buffer, capacity)` | RDI: writable buffer, RSI: capacity (0–4096) | Clipboard length; `-90` if capacity is too small |
+| 42 | `vanta_mmap(length, prot)` | RDI: length, RSI: `VANTA_PROT_READ`/`VANTA_PROT_WRITE`, RDX: flags (must be 0) | Address of zero-fill anonymous memory (always positive); `-22` bad arguments or exec requested, `-12` no range/slot/budget |
+| 43 | `vanta_munmap(address, length)` | RDI: page-aligned address, RSI: length (rounded up to pages) | `0`; `-22` if the range is not entirely inside anonymous mappings (holes, image, stack and heap are refused); `-5` if a multi-region unmap failed part-way |
+| 44 | `vanta_brk(address)` | RDI: requested break, `0` to query | The new break, or the unchanged current break if the request cannot be honoured; `-12` if the program has no image to anchor a heap to |
 | 26 | `vanta_ipc_endpoint_create()` | None | Random 64-bit endpoint capability or negative error |
 | 27 | `vanta_ipc_send(endpoint, message, length)` | RDI: endpoint capability, RSI: readable message, RDX: length | Zero or negative error |
 | 28 | `vanta_ipc_receive(endpoint, buffer, capacity)` | RDI: endpoint capability, RSI: writable buffer, RDX: capacity | Message length; `-11` if empty; `-90` if buffer too small |

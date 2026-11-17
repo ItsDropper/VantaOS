@@ -53,7 +53,7 @@ The separate [anti-cheat and Windows game compatibility plan](ANTI_CHEAT_COMPATI
 - [x] Capture CR2 and the full error code, terminate only the faulting process, and reclaim its demand frames and page tables; kernel-mode faults still panic.
 - [x] Add page-fault diagnostics, invalid-mapping tests, allocation-failure cleanup, and concurrent-fault coverage.
 - [x] Add anonymous `mmap`/`munmap`/`brk` with run-time region removal and demand-frame release (host-tested only; QEMU ring-3 coverage NOT RUN). See [User virtual memory and demand paging](../architecture/VIRTUAL_MEMORY.md).
-- [ ] Add a QEMU ring-3 test for `mmap`/`munmap`/`brk` (real page-table walk, TLB shootdown, frame accounting at 1/2/4 vCPUs).
+- [ ] Run the new ring-3 `mmap`/`munmap`/`brk` regression through CI (real page-table walk, TLB shootdown, frame reclamation at 1/2/4 vCPUs); test implementation and required CI marker are committed.
 - [ ] Add file-backed lazy loading (needs a retained page cache), file-backed `mmap`, `mprotect`/`mremap`, per-address-space page-table locking, and memory-pressure policy. Swapping and copy-on-write remain out of scope.
 - [ ] Exercise page-fault handling on real hardware; nothing here is hardware-verified.
 

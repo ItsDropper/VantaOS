@@ -382,6 +382,10 @@ int paging_release_user_demand_range(paging_address_space_t* address_space,
         !paging_owns_address_space(address_space))
         return 0;
 
+    uint64_t saved_flags;
+    if (!paging_space_lock_acquire(address_space, &saved_flags))
+        return 0;
+
     /* Pass 1 (read-only): refuse before changing anything if the range holds
      * a leaf whose frame the page tables do not own. */
     for (uintptr_t va = start; va < end; va += PAGE_SIZE)
@@ -389,7 +393,10 @@ int paging_release_user_demand_range(paging_address_space_t* address_space,
         uint64_t entry;
         if (leaf_present(address_space, va, &entry) &&
             (entry & PAGE_SOFT_DEMAND) == 0U)
+        {
+            paging_space_lock_release(address_space, saved_flags);
             return 0;
+        }
     }
 
     uint32_t head = 0U, tail = 0U, freed = 0U;
@@ -402,22 +409,16 @@ int paging_release_user_demand_range(paging_address_space_t* address_space,
      * while another CPU can still hold a translation to it. */
     for (uintptr_t va = start; va < end; va += PAGE_SIZE)
     {
-        uint64_t saved_flags;
-    if (!paging_space_lock_acquire(address_space, &saved_flags))
-        return 0;
         uint64_t* entry = paging_user_leaf_entry(address_space, va, 0);
         if (!entry || !(*entry & PAGE_PRESENT) ||
             (*entry & PAGE_SOFT_DEMAND) == 0U)
         {
-            paging_space_lock_release(address_space, saved_flags);
             continue;
         }
         uint64_t frame = *entry & PAGE_ADDRESS_MASK;
         *entry = 0U;
         __atomic_add_fetch(&address_space->pending_shootdowns, 1U,
                            __ATOMIC_RELEASE);
-        paging_space_lock_release(address_space, saved_flags);
-
         if (!paging_tlb_shootdown(address_space, va))
             paging_tlb_failure();
         __atomic_sub_fetch(&address_space->pending_shootdowns, 1U,
@@ -432,6 +433,7 @@ int paging_release_user_demand_range(paging_address_space_t* address_space,
     *head_resident = head;
     *tail_resident = tail;
     *released = freed;
+    paging_space_lock_release(address_space, saved_flags);
     return 1;
 }
 

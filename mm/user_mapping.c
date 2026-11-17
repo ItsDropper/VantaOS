@@ -419,6 +419,15 @@ int paging_release_user_demand_range(paging_address_space_t* address_space,
         *entry = 0U;
         __atomic_add_fetch(&address_space->pending_shootdowns, 1U,
                            __ATOMIC_RELEASE);
+
+        /*
+         * Keep the lifetime pin, but drop the PTE lock before waiting for
+         * remote CPUs. A target may need interrupts enabled to acknowledge
+         * an unrelated serialized shootdown; holding an irqsave lock here
+         * would make that wait unsafe.
+         */
+        spinlock_unlock_irqrestore(&address_space->page_table_lock,
+                                   saved_flags);
         if (!paging_tlb_shootdown(address_space, va))
             paging_tlb_failure();
         __atomic_sub_fetch(&address_space->pending_shootdowns, 1U,
@@ -426,6 +435,7 @@ int paging_release_user_demand_range(paging_address_space_t* address_space,
 
         pmm_free_block((void*)(uintptr_t)frame);
         freed++;
+        saved_flags = spinlock_lock_irqsave(&address_space->page_table_lock);
     }
 
     if (freed != 0U)

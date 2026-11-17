@@ -104,20 +104,28 @@ static vm_fault_result_t populate_page(paging_address_space_t* space,
         words[i] = 0U;
     if (region->backing == VM_BACKING_FILE)
     {
-        uintptr_t page_offset = page - region->start;
-        if (!region->file_data || page_offset >= region->file_bytes)
+        uint64_t page_offset = (uint64_t)(page - region->start);
+        uint64_t file_end = (uint64_t)region->file_prefix +
+                            region->file_bytes;
+        if (!region->file_data || region->file_prefix >= PAGE_SIZE ||
+            file_end > (uint64_t)(region->end - region->start) ||
+            page_offset >= file_end)
         {
             pmm_free_block(frame);
             return VM_FAULT_FATAL;
         }
-        uint64_t remaining = region->file_bytes - page_offset;
-        size_t copy_bytes = remaining < PAGE_SIZE ?
-                            (size_t)remaining : PAGE_SIZE;
-        const uint8_t* source = region->file_data +
-                                region->file_offset + page_offset;
+        uint64_t copy_start = page_offset > region->file_prefix ?
+                              page_offset : region->file_prefix;
+        uint64_t page_end = page_offset + PAGE_SIZE;
+        uint64_t copy_end = file_end < page_end ? file_end : page_end;
+        uint64_t source_offset = region->file_offset +
+                                (copy_start - region->file_prefix);
+        size_t copy_bytes = (size_t)(copy_end - copy_start);
+        size_t destination_offset = (size_t)(copy_start - page_offset);
+        const uint8_t* source = region->file_data + source_offset;
         uint8_t* destination = (uint8_t*)frame;
         for (size_t i = 0U; i < copy_bytes; i++)
-            destination[i] = source[i];
+            destination[destination_offset + i] = source[i];
     }
     __atomic_thread_fence(__ATOMIC_RELEASE);
 

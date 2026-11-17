@@ -52,7 +52,7 @@ A region records a page-aligned half-open range, a type (`ELF`, `FLAT_IMAGE`, `A
 
 ### How images are laid out
 
-- **ELF:** Executable text pages are populated eagerly (the current demand-leaf API is NX-only). Non-executable `PT_LOAD` file pages are `FILE` regions and are copied into private frames on first access; the immutable ELF image is retained by the address space until teardown. Pure `.bss` pages beyond the file-backed extent remain `ZERO` regions. A partial final file page is zero-filled before its file bytes are copied.
+- **ELF:** Executable text pages are populated eagerly (the current demand-leaf API is NX-only). Non-executable `PT_LOAD` file pages are `FILE` regions and are copied into private frames on first access; the immutable ELF image is retained by the address space until teardown. Pure `.bss` pages beyond the file-backed extent remain `ZERO` regions. Bytes preceding an unaligned segment start and following its file extent are zero-filled in each faulted page.
 - **Stack:** 64 pages are reserved. The top four are mapped eagerly to hold `argc`/`argv`; the remaining 60 fault in as the stack grows. One `GUARD` page sits directly below, so overflow is a clean, classified fault.
 - **Flat images** (kernel-built test programs): one code page, one stack page, plus optional extra anonymous/guard regions via `process_create_user_with_regions()`.
 

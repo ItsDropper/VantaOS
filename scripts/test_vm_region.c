@@ -126,18 +126,19 @@ static void test_file_backing(void)
                                VM_BACKING_FILE));
     CHECK(vm_space_set_image_backing(&space, image, sizeof(image)));
     CHECK(!vm_space_set_image_backing(&space, image, sizeof(image)));
-    CHECK(!vm_space_add_file_region(&space, B, P, RW, 30U, 4U));
+    CHECK(!vm_space_add_file_region(&space, B, P, RW, 30U, 0U, 4U));
     CHECK(!vm_space_add_file_region(&space, B, P, VM_PROT_READ | VM_PROT_EXEC,
-                                    0U, 8U));
-    CHECK(vm_space_add_file_region(&space, B, P, RW, 4U, 16U));
+                                    0U, 0U, 8U));
+    CHECK(vm_space_add_file_region(&space, B, P, RW, 8U, 4U, 16U));
     CHECK(vm_space_find_region(&space, B, &region));
     CHECK(region.backing == VM_BACKING_FILE && region.file_data == image &&
-          region.file_offset == 4U && region.file_bytes == 16U);
+          region.file_offset == 8U && region.file_prefix == 4U &&
+          region.file_bytes == 16U);
     CHECK(vm_space_classify_fault(&space, B + 8U,
                                   VM_PF_USER | VM_PF_WRITE, &region) ==
           VM_FAULT_DEMAND_MAP);
-    CHECK(region.file_data[region.file_offset] == image[4]);
-    CHECK(!vm_space_add_file_region(&space, B, P, RW, 0U, 8U));
+    CHECK(region.file_data[region.file_offset] == image[8]);
+    CHECK(!vm_space_add_file_region(&space, B, P, RW, 0U, 0U, 8U));
     CHECK(space.region_count == 1U && space.reserved_bytes == P);
     vm_space_clear(&space);
     CHECK(space.image_backing == NULL && space.image_backing_size == 0U);

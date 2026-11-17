@@ -135,6 +135,7 @@ static int add_locked(vm_space_t* space, uintptr_t start, size_t length,
     r->file_data = NULL;
     r->file_offset = 0U;
     r->file_bytes = 0U;
+    r->file_prefix = 0U;
     space->reserved_bytes += charge;
     return 1;
 }
@@ -170,7 +171,8 @@ int vm_space_set_image_backing(vm_space_t* space, const void* image,
 
 int vm_space_add_file_region(vm_space_t* space, uintptr_t start,
                              size_t length, uint32_t prot,
-                             uint64_t file_offset, uint64_t file_bytes)
+                             uint64_t file_offset, uint32_t file_prefix,
+                             uint64_t file_bytes)
 {
     if (!space || file_bytes == 0U)
         return 0;
@@ -178,7 +180,8 @@ int vm_space_add_file_region(vm_space_t* space, uintptr_t start,
     int valid = space->image_backing != NULL &&
                 file_offset <= space->image_backing_size &&
                 file_bytes <= space->image_backing_size - file_offset &&
-                file_bytes <= length;
+                file_prefix < PAGE_SIZE && file_prefix <= length &&
+                file_bytes <= length - file_prefix;
     int added = valid && add_locked(space, start, length, prot,
                                     VM_REGION_ELF, VM_BACKING_FILE, 0U);
     if (added)
@@ -187,6 +190,7 @@ int vm_space_add_file_region(vm_space_t* space, uintptr_t start,
         region->file_data = space->image_backing;
         region->file_offset = file_offset;
         region->file_bytes = file_bytes;
+        region->file_prefix = file_prefix;
     }
     spinlock_unlock_irqrestore(&space->lock, flags);
     return added;

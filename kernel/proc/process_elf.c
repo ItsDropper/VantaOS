@@ -322,12 +322,10 @@ int process_create_user_elf_args(const char* name, uint32_t parent_pid,
         }
         else if (populated_end > page_start)
         {
-            const uint64_t prefix = segment_start - page_start;
-            const uint64_t source_offset = ph->offset - prefix;
-            const uint64_t source_bytes = prefix + ph->file_size;
+            const uint32_t prefix = (uint32_t)(segment_start - page_start);
             if (!vm_space_add_file_region(&space->vm, page_start,
                                           populated_end - page_start, prot,
-                                          source_offset, source_bytes))
+                                          ph->offset, prefix, ph->file_size))
             {
                 release_unpublished_image(space, pages, page_count);
                 return -1;

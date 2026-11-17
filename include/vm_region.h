@@ -73,8 +73,9 @@ typedef struct vm_region
     uint8_t flags;        /* VM_REGION_FLAG_* */
     uint32_t resident_pages; /* demand-faulted pages currently mapped */
     const uint8_t* file_data; /* immutable kernel-owned image backing, if FILE */
-    uint64_t file_offset;     /* first source byte corresponding to start */
-    uint64_t file_bytes;      /* source bytes; remainder of final page is zero */
+    uint64_t file_offset;     /* first source byte in the ELF segment */
+    uint64_t file_bytes;      /* bytes belonging to the ELF segment */
+    uint32_t file_prefix;     /* zero bytes before segment start in first page */
 } vm_region_t;
 
 typedef struct vm_space
@@ -143,7 +144,8 @@ int vm_space_add_region(vm_space_t* space, uintptr_t start, size_t length,
 /* Reserve ELF pages that are copied from the retained image on first touch. */
 int vm_space_add_file_region(vm_space_t* space, uintptr_t start,
                              size_t length, uint32_t prot,
-                             uint64_t file_offset, uint64_t file_bytes);
+                             uint64_t file_offset, uint32_t file_prefix,
+                             uint64_t file_bytes);
 
 /* Copy out the region containing address. Returns 1 if one exists. */
 int vm_space_find_region(vm_space_t* space, uintptr_t address,

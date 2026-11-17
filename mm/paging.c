@@ -336,26 +336,27 @@ int paging_map_page(uintptr_t virtual_address, uintptr_t physical_address)
 
 uint64_t paging_get_page_flags(uintptr_t virtual_address)
 {
-    uint64_t saved_flags = paging_lock_acquire();
     uint64_t flags = 0;
-
     if (virtual_address >= PAGING_USER_BASE &&
         virtual_address <= PAGING_USER_END)
     {
-        uint64_t* entry = paging_user_leaf_entry(paging_current(),
-                                          virtual_address, 0);
+        paging_address_space_t* space = paging_current();
+        uint64_t saved_flags;
+        if (!paging_space_lock_acquire(space, &saved_flags))
+            return 0;
+        uint64_t* entry = paging_user_leaf_entry(space, virtual_address, 0);
         flags = entry ? (*entry & (0xFFFU | PAGE_NX)) : 0;
-    }
-    else
-    {
-        uint64_t* table = table_for(virtual_address);
-        if (table)
-        {
-            uint32_t index = (uint32_t)((virtual_address >> 12) & 0x1FFU);
-            flags = table[index] & (0xFFFU | PAGE_NX);
-        }
+        paging_space_lock_release(space, saved_flags);
+        return flags;
     }
 
+    uint64_t saved_flags = paging_lock_acquire();
+    uint64_t* table = table_for(virtual_address);
+    if (table)
+    {
+        uint32_t index = (uint32_t)((virtual_address >> 12) & 0x1FFU);
+        flags = table[index] & (0xFFFU | PAGE_NX);
+    }
     paging_lock_release(saved_flags);
     return flags;
 }
@@ -477,41 +478,42 @@ void paging_unmap_page(uintptr_t virtual_address)
 
 uintptr_t paging_get_physical(uintptr_t virtual_address)
 {
-    uint64_t saved_flags = paging_lock_acquire();
     uintptr_t physical = 0;
-
     if (virtual_address >= PAGING_USER_BASE &&
         virtual_address <= PAGING_USER_END)
     {
-        uint64_t* entry = paging_user_leaf_entry(paging_current(),
-                                          virtual_address, 0);
+        paging_address_space_t* space = paging_current();
+        uint64_t saved_flags;
+        if (!paging_space_lock_acquire(space, &saved_flags))
+            return 0;
+        uint64_t* entry = paging_user_leaf_entry(space, virtual_address, 0);
         if (entry && (*entry & PAGE_PRESENT))
             physical = (uintptr_t)(*entry & PAGE_ADDRESS_MASK) |
                        (virtual_address & (PAGE_SIZE - 1U));
+        paging_space_lock_release(space, saved_flags);
+        return physical;
     }
-    else
+
+    uint64_t saved_flags = paging_lock_acquire();
+    uint64_t* table = table_for(virtual_address);
+    if (table)
     {
-        uint64_t* table = table_for(virtual_address);
-        if (table)
-        {
-            uint32_t index = (uint32_t)((virtual_address >> 12) & 0x1FFU);
-            if (table[index] & PAGE_PRESENT)
-                physical = (uintptr_t)(table[index] &
-                    0x000FFFFFFFFFF000ULL) | (virtual_address & 0xFFFU);
-        }
-        else if (virtual_address < 0x40000000ULL)
-        {
-            /* Identity-mapped low memory. */
+        uint32_t index = (uint32_t)((virtual_address >> 12) & 0x1FFU);
+        if (table[index] & PAGE_PRESENT)
+            physical = (uintptr_t)(table[index] & PAGE_ADDRESS_MASK) |
+                       (virtual_address & (PAGE_SIZE - 1U));
+    }
+    else if (virtual_address < 0x40000000ULL)
+    {
+        physical = virtual_address;
+    }
+    else if (virtual_address < 0xC0000000ULL)
+    {
+        uint32_t gib = (uint32_t)(virtual_address >> 30);
+        uint32_t index = (uint32_t)((virtual_address >> 21) & 0x1FFU);
+        if ((kernel_pdpt[gib] & PAGE_PRESENT) &&
+            (firmware_pd[gib - 1U][index] & PAGE_PRESENT))
             physical = virtual_address;
-        }
-        else if (virtual_address < 0xC0000000ULL)
-        {
-            uint32_t gib = (uint32_t)(virtual_address >> 30);
-            uint32_t index = (uint32_t)((virtual_address >> 21) & 0x1FFU);
-            if ((kernel_pdpt[gib] & PAGE_PRESENT) &&
-                (firmware_pd[gib - 1U][index] & PAGE_PRESENT))
-                physical = virtual_address;
-        }
     }
 
     paging_lock_release(saved_flags);

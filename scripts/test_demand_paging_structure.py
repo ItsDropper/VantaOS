@@ -5,7 +5,7 @@ Hardware behavior (CR2, iretq restart, TLB) is covered by the ring-3 QEMU
 suite. These checks pin down source-level invariants that a refactor could
 silently break and that a QEMU run would not necessarily notice.
 """
-import pathlib, re, subprocess, sys
+import difflib, pathlib, re, subprocess, sys, tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 failures = []
@@ -100,7 +100,15 @@ check("VM_REGION_GUARD" in elf and "page_end > guard_base" in elf, "ELF loader m
 # 8. Generated ring-3 program header is current.
 result = subprocess.run([sys.executable, str(ROOT / "scripts/gen_vm_selftest_programs.py"),
                          "--check", str(ROOT / "os/selftest/vm_selftest_programs.h")])
-check(result.returncode == 0, "os/selftest/vm_selftest_programs.h is stale")
+if result.returncode != 0:
+    with tempfile.NamedTemporaryFile(suffix=".h") as generated:
+        subprocess.run([sys.executable, str(ROOT / "scripts/gen_vm_selftest_programs.py"),
+                        generated.name], check=True)
+        expected = (ROOT / "os/selftest/vm_selftest_programs.h").read_text().splitlines(True)
+        actual = pathlib.Path(generated.name).read_text().splitlines(True)
+        sys.stdout.writelines(difflib.unified_diff(
+            expected, actual, fromfile="committed header", tofile="NASM output"))
+    failures.append("os/selftest/vm_selftest_programs.h is stale")
 
 for failure in failures:
     print("FAIL:", failure)

@@ -39,8 +39,12 @@ typedef struct paging_address_space
     uint64_t* directory;
     uintptr_t directory_physical;
     int used;
-    /* Protected by the paging mutation lock; bit N means CPU N runs here. */
+    /* Protected by the global lifecycle lock; bit N means CPU N runs here. */
     volatile uint32_t active_cpu_mask;
+    /* A short global-lock pin prevents teardown while an operation waits/runs. */
+    volatile uint32_t active_operations;
+    /* Independent address spaces never contend on this page-table lock. */
+    spinlock_t page_table_lock;
     /* Outstanding map/unmap shootdowns prevent page-table destruction. */
     volatile uint32_t pending_shootdowns;
     /* Region table consulted by the demand-paging fault handler. */

@@ -18,12 +18,14 @@ LAYOUT = {
     "SYSBUF": BASE + 0x600000,    # 1 page RW demand-zero (syscall prefault)
     "GAP": BASE + 0x700000,       # reserved by no region
     "DATA": BASE + 0x100000,      # ELF data segment (own address space)
+    "MMAPLOW": BASE + 0x1000000000,  # lowest address mmap may return
 }
 PROGRAMS = [
     "zero_rw", "exec_anon", "ro_write_first", "ro_read_then_write",
     "guard_read", "gap_read", "kernel_read", "kernel_write",
     "kernel_high_read", "noncanonical", "oom_touch", "syscall_prefault",
     "stack_grow", "bss_check",
+    "mmap_basic", "mmap_use_after_unmap", "brk_grow_shrink",
 ]
 
 def assemble(name):

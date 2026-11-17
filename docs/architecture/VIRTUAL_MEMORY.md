@@ -6,7 +6,7 @@ This document describes the per-process virtual-memory regions and the demand-pa
 
 Implemented: per-address-space region tables, lazy zero-fill frame allocation, permission enforcement, recoverable-versus-fatal fault classification, instruction restart, out-of-memory containment, user-fault termination and reclamation, and page-table/frame teardown.
 
-Also implemented (host-tested only; see [Run-time mapping](#run-time-mapping-mmap-munmap-brk)): anonymous `mmap`, `munmap` (including partial and middle-punch unmaps) and `brk`.
+Also implemented (host-tested; ring-3 QEMU programs written but NOT YET RUN, pending CI; see [Run-time mapping](#run-time-mapping-mmap-munmap-brk)): anonymous `mmap`, `munmap` (including partial and middle-punch unmaps) and `brk`.
 
 Not implemented, by design: swapping, copy-on-write, dynamic linking, memory-mapped files, file-backed `mmap`, and file-backed lazy loading (see [Limits](#limits)).
 
@@ -112,7 +112,9 @@ Run at 1, 2 and 4 vCPUs under GRUB and under UEFI/OVMF. See [Testing](../build/T
 
 ## Run-time mapping (mmap, munmap, brk)
 
-Status: **host-tested; the kernel build links; NOT RUN under QEMU and not hardware-verified.** No ring-3 program has issued these syscalls yet.
+Status: **host-tested; the kernel build links (also with `VANTAOS_SELF_TEST=1`). Three ring-3 programs (`mmap_basic`, `mmap_use_after_unmap`, `brk_grow_shrink`) are wired into the demand-paging selftest and the CI marker list, but have NOT been run under QEMU by the author; treat as unverified until the CI QEMU job reports their `_OK` markers. Not hardware-verified.**
+
+The selftest checks exit status, demand-fault count, fault class for use-after-unmap, and exact frame accounting: `frames_reclaimed == resident_at_exit == demand_faults - released`, with `released` cross-checked against `paging_demand_frames_released()`.
 
 - `mmap(length, prot, 0)` reserves a top-down gap in `[VM_MMAP_WINDOW_LOW, lowest stack/guard)` (64 GiB above the ELF base) as an anonymous demand-zero region: readable, optionally writable, never executable. Length is rounded up to pages. The result is the address, always positive.
 - `munmap` is a three-phase operation: `vm_space_unmap_check` (pure; refuses the whole request if any part is not anonymous or a middle punch has no free region slot), then per affected region `vm_space_unmap_next`, `paging_release_user_demand_range` and `vm_space_unmap_commit`. The release walk clears each PTE, shoots the translation down on every CPU and only then returns the frame to the PMM. It refuses (before changing anything) if a present leaf in the range is not `PAGE_SOFT_DEMAND`, so frames the page tables do not own are never freed.

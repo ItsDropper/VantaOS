@@ -78,6 +78,8 @@ typedef struct vmt_expect
     uint64_t last_address;
     uint64_t error_mask;       /* bits that must be set in the error code */
     uint64_t error_clear;      /* bits that must be clear */
+    uint32_t released;         /* demand frames munmap/brk returned early */
+    int check_class_only;      /* with check_class: skip the address compare */
 } vmt_expect_t;
 
 static uint64_t vmt_deadline(void)
@@ -122,7 +124,8 @@ static int vmt_check(const vmt_expect_t* e, const process_exit_record_t* r)
                r->fault_events); ok = 0; }
     /* Leak check: every demand frame the process owned came back. */
     if (r->frames_reclaimed != r->resident_at_exit ||
-        r->frames_reclaimed != r->demand_faults)
+        r->demand_faults < e->released ||
+        r->frames_reclaimed != r->demand_faults - e->released)
     { vmt_fail(e->name, "frames reclaimed", r->resident_at_exit,
                r->frames_reclaimed); ok = 0; }
     if (e->check_class)
@@ -130,7 +133,8 @@ static int vmt_check(const vmt_expect_t* e, const process_exit_record_t* r)
         if (r->last_fault_class != (uint32_t)e->last_class)
         { vmt_fail(e->name, "fault class", (uint64_t)e->last_class,
                    r->last_fault_class); ok = 0; }
-        if ((r->last_fault_address & ~(uint64_t)(VMT_PAGE - 1U)) != e->last_address)
+        if (!e->check_class_only &&
+            (r->last_fault_address & ~(uint64_t)(VMT_PAGE - 1U)) != e->last_address)
         { vmt_fail(e->name, "fault page", e->last_address,
                    r->last_fault_address); ok = 0; }
         if ((r->last_fault_error & e->error_mask) != e->error_mask ||
@@ -181,13 +185,21 @@ static int vmt_run_flat(const vmt_expect_t* e, const uint8_t* code,
                         size_t length, uint32_t pattern, uint32_t count)
 {
     uint64_t mark = process_exit_log_sequence();
+    const uint64_t released_before = paging_demand_frames_released();
     int pid = vmt_spawn_flat(e->name, code, length, pattern, count);
     process_exit_record_t rec;
     if (pid <= 0)
     { vmt_fail(e->name, "spawn", 1U, 0U); return 0; }
     if (!vmt_wait((uint32_t)pid, e->name, mark, &rec))
     { vmt_fail(e->name, "timeout waiting for exit", 1U, 0U); return 0; }
-    return vmt_check(e, &rec);
+    int ok = vmt_check(e, &rec);
+    /* Cross-check the global counter: only this case ran, so the delta must
+       equal what the case claims to have released early. */
+    const uint64_t released = paging_demand_frames_released() - released_before;
+    if (released != e->released)
+    { vmt_fail(e->name, "frames released early", e->released, released);
+      ok = 0; }
+    return ok;
 }
 
 /* ---- ELF images ------------------------------------------------------- */
@@ -330,6 +342,28 @@ static void vmt_fault_matrix(void)
                      sizeof(vmt_prog_syscall_prefault), 0, 0));
 }
 
+static void vmt_runtime_map_cases(void)
+{
+    const vmt_expect_t mm = { "MMAP_MUNMAP", 0, 8, 0, 0, 0, 0, 0, 0, 5U, 0 };
+    vmt_report("MMAP_MUNMAP",
+        vmt_run_flat(&mm, vmt_prog_mmap_basic, sizeof(vmt_prog_mmap_basic),
+                     0, 0));
+
+    /* Address is chosen by the kernel, so compare class and error bits only. */
+    const vmt_expect_t uau = { "MMAP_USE_AFTER_UNMAP", -1, 1, 1, 1,
+        VM_FAULT_NO_REGION, 0, 0, VM_PF_PRESENT | VM_PF_WRITE | VM_PF_INSTR,
+        1U, 1 };
+    vmt_report("MMAP_USE_AFTER_UNMAP",
+        vmt_run_flat(&uau, vmt_prog_mmap_use_after_unmap,
+                     sizeof(vmt_prog_mmap_use_after_unmap), 0, 0));
+
+    const vmt_expect_t brk = { "BRK_GROW_SHRINK", 0, 4, 0, 0, 0, 0, 0, 0,
+        2U, 0 };
+    vmt_report("BRK_GROW_SHRINK",
+        vmt_run_flat(&brk, vmt_prog_brk_grow_shrink,
+                     sizeof(vmt_prog_brk_grow_shrink), 0, 0));
+}
+
 static void vmt_oom_case(void)
 {
     /* Valid demand access, but the frame allocator "fails": the process must
@@ -444,6 +478,7 @@ static void vmt_concurrent_case(void)
 static void vmt_driver(void)
 {
     vmt_fault_matrix();
+    vmt_runtime_map_cases();
     vmt_oom_case();
     vmt_elf_cases();
     vmt_repeat_case();

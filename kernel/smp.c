@@ -674,7 +674,7 @@ smp_init_result_t smp_initialize(void)
     if (!cpu_features_smp_compatible(bsp_logical_id, bsp_logical_id,
                                      required_cpu_features))
     {
-        serial_write("VANTAOS_SMP_BSP_FEATURE_INCOMPATIBLE\\n");
+        serial_write("VANTAOS_SMP_BSP_FEATURE_INCOMPATIBLE\n");
         return SMP_INIT_FAILED;
     }
 

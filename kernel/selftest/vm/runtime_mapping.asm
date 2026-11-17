@@ -67,7 +67,7 @@
     mov r13, rax
     cmp qword [r13], 0
     jne .fail
-    mov rax, 0x5AA55AA5
+    mov eax, 0x5AA55AA5
     mov [r13], rax
     cmp [r13], rax
     jne .fail

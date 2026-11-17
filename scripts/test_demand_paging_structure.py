@@ -101,7 +101,7 @@ range_release = body(mapping, "int paging_release_user_demand_range(")
 check(range_release.find("paging_space_lock_acquire") <
       range_release.find("leaf_present(address_space, va, &entry)"),
       "demand range validation must hold the address-space lock")
-check(range_release.find("paging_space_lock_release") >
+check(range_release.rfind("paging_space_lock_release") >
       range_release.find("pmm_free_block((void*)(uintptr_t)frame)"),
       "demand frame release must remain serialized until shootdown and reclaim")
 

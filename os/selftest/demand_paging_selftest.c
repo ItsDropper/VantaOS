@@ -446,9 +446,17 @@ static void vmt_concurrent_case(void)
 static int vmt_runtime_mapping_case(void)
 {
     const char* name = "RUNTIME_MAPPING";
+    /*
+     * brk is anchored to the end of the executable image. Flat test processes
+     * place their one-page stack immediately after the flat image, so growing
+     * brk would correctly collide with that stack. Use a real ELF process,
+     * whose stack is at the top of the user range, to test the heap ABI.
+     */
+    const size_t image_size = vmt_build_elf(vmt_prog_runtime_mapping,
+                                             sizeof(vmt_prog_runtime_mapping), 0);
     const uint64_t mark = process_exit_log_sequence();
-    int pid = vmt_spawn_flat(name, vmt_prog_runtime_mapping,
-                             sizeof(vmt_prog_runtime_mapping), 0U, 0U);
+    int pid = process_create_user_elf(name, process_current_pid(),
+                                      vmt_elf_image, image_size);
     process_exit_record_t rec;
     if (pid <= 0)
     {

@@ -11,6 +11,7 @@
 typedef struct { uint32_t eax, ebx, ecx, edx; } cpuid_regs_t;
 static cpu_features_t cpu_states[CPU_FEATURES_MAX_CPUS];
 static uint8_t cpu_state_valid[CPU_FEATURES_MAX_CPUS];
+static uint32_t cpu_bootstrap_id;
 #ifdef CPU_FEATURES_TEST
 int cpu_test_cpuid(uint32_t leaf, uint32_t subleaf, cpuid_regs_t* regs);
 uint64_t cpu_test_xgetbv(uint32_t index);
@@ -274,18 +275,28 @@ int cpu_features_initialize_cpu(uint32_t logical_id)
               "VANTAOS_CPU_APIC=1\n" : "VANTAOS_CPU_APIC=0\n");
  return 1;
 }
-int cpu_features_initialize(void) { return cpu_features_initialize_cpu(0U); }
+int cpu_features_initialize(void)
+{
+ cpu_bootstrap_id=0U;
+ return cpu_features_initialize_cpu(0U);
+}
+int cpu_features_set_bootstrap_cpu(uint32_t id)
+{
+ if (!cpu_features_get_cpu(id)) return 0;
+ cpu_bootstrap_id=id;
+ return 1;
+}
 const cpu_features_t* cpu_features_get_cpu(uint32_t id)
 {
  return id<CPU_FEATURES_MAX_CPUS && cpu_state_valid[id] ? &cpu_states[id] : 0;
 }
-const cpu_features_t* cpu_features_get(void) { return cpu_features_get_cpu(0U); }
+const cpu_features_t* cpu_features_get(void) { return cpu_features_get_cpu(cpu_bootstrap_id); }
 int cpu_feature_has_cpu(uint32_t id, cpu_feature_t feature)
 {
  const cpu_features_t* state=cpu_features_get_cpu(id);
  return state && (state->features&(uint64_t)feature)!=0U;
 }
-int cpu_feature_has(cpu_feature_t feature) { return cpu_feature_has_cpu(0U,feature); }
+int cpu_feature_has(cpu_feature_t feature) { return cpu_feature_has_cpu(cpu_bootstrap_id,feature); }
 int cpu_features_smp_compatible(uint32_t bsp_id, uint32_t candidate_id,
                                 cpu_feature_t required)
 {

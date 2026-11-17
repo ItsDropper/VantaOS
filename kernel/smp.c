@@ -658,7 +658,8 @@ smp_init_result_t smp_initialize(void)
     bsp_logical_id = (uint32_t)bsp_index;
     serial_write("VANTAOS_SMP_TOPOLOGY_OK\n");
 
-    if (!cpu_features_initialize_cpu(bsp_logical_id))
+    if (!cpu_features_initialize_cpu(bsp_logical_id) ||
+        !cpu_features_set_bootstrap_cpu(bsp_logical_id))
     {
         serial_write("VANTAOS_SMP_BSP_FEATURE_DISCOVERY_FAIL\n");
         return SMP_INIT_FAILED;
@@ -670,6 +671,12 @@ smp_init_result_t smp_initialize(void)
         required_cpu_features |= CPU_FEATURE_NX;
     if (apic_is_x2apic())
         required_cpu_features |= CPU_FEATURE_X2APIC;
+    if (!cpu_features_smp_compatible(bsp_logical_id, bsp_logical_id,
+                                     required_cpu_features))
+    {
+        serial_write("VANTAOS_SMP_BSP_FEATURE_INCOMPATIBLE\\n");
+        return SMP_INIT_FAILED;
+    }
 
     if (!cpu_local_initialize((uint32_t)bsp_index, bsp_id))
     {

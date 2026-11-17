@@ -36,8 +36,10 @@ on its own.
 ## Integration and limits
 
 The bootstrap processor is inventoried during early initialization. Once the
-ACPI topology is validated, VantaOS refreshes that inventory at its MADT logical
-CPU index and independently inventories each AP before it is admitted online.
+ACPI topology is validated, VantaOS refreshes that inventory at the BSP's MADT
+logical CPU index and independently inventories each AP before it is admitted
+online. The legacy `cpu_features_get()` and `cpu_feature_has()` accessors follow
+the recorded BSP logical index; indexed accessors expose individual CPUs.
 Per-CPU records include vendor, signature, address widths, topology, cache
 geometry, XSAVE state, and feature bits. Memory, interrupt, timer,
 cryptography, and driver work should query this central inventory instead of

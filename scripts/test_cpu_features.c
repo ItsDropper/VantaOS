@@ -188,5 +188,11 @@ int main(void)
  assert(cpu_features_initialize_cpu(8U));
  assert(!cpu_features_smp_compatible(4U,8U,required));
  assert(!cpu_features_initialize_cpu(CPU_FEATURES_MAX_CPUS));
+ assert(cpu_features_set_bootstrap_cpu(4U));
+ assert(cpu_features_get()==cpu_features_get_cpu(4U));
+ assert(cpu_feature_has(CPU_FEATURE_AVX2));
+ assert(cpu_features_set_bootstrap_cpu(5U));
+ assert(!cpu_feature_has(CPU_FEATURE_AVX2));
+ assert(!cpu_features_set_bootstrap_cpu(CPU_FEATURES_MAX_CPUS));
  return 0;
 }

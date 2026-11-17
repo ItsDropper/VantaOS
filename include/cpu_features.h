@@ -90,6 +90,7 @@ typedef struct {
 #define CPU_FEATURES_MAX_CPUS 32U
 int cpu_features_initialize(void);
 int cpu_features_initialize_cpu(uint32_t logical_id);
+int cpu_features_set_bootstrap_cpu(uint32_t logical_id);
 const cpu_features_t* cpu_features_get(void);
 const cpu_features_t* cpu_features_get_cpu(uint32_t logical_id);
 int cpu_feature_has(cpu_feature_t feature);

@@ -441,6 +441,42 @@ static void vmt_concurrent_case(void)
     vmt_report("CONCURRENT_FAULTS", ok);
 }
 
+/* ---- Runtime mapping: real ring-3 syscalls --------------------------- */
+
+static int vmt_runtime_mapping_case(void)
+{
+    const char* name = "RUNTIME_MAPPING";
+    const uint64_t mark = process_exit_log_sequence();
+    int pid = vmt_spawn_flat(name, vmt_prog_runtime_mapping,
+                             sizeof(vmt_prog_runtime_mapping), 0U, 0U);
+    process_exit_record_t rec;
+    if (pid <= 0)
+    {
+        vmt_fail(name, "spawn", 1U, 0U);
+        return 0;
+    }
+    if (!vmt_wait((uint32_t)pid, name, mark, &rec))
+    {
+        vmt_fail(name, "timeout waiting for exit", 1U, 0U);
+        return 0;
+    }
+
+    int ok = 1;
+    /* Four mmap pages, one remapped page, and two brk pages twice. */
+    if (rec.exit_status != 0)
+    { vmt_fail(name, "exit status", 0U, (uint64_t)(int64_t)rec.exit_status); ok = 0; }
+    if (rec.demand_faults != 9U || rec.fault_events != 9U)
+    { vmt_fail(name, "demand faults/events", 9U, rec.demand_faults); ok = 0; }
+    /* munmap and brk shrink must release every demand page before exit. */
+    if (rec.resident_at_exit != 0U || rec.frames_reclaimed != 0U)
+    { vmt_fail(name, "resident frames after explicit release", 0U,
+               rec.resident_at_exit + rec.frames_reclaimed); ok = 0; }
+    if (rec.last_fault_class != (uint32_t)VM_FAULT_DEMAND_MAP)
+    { vmt_fail(name, "last fault class", VM_FAULT_DEMAND_MAP,
+               rec.last_fault_class); ok = 0; }
+    return ok;
+}
+
 static void vmt_driver(void)
 {
     vmt_fault_matrix();
@@ -448,6 +484,7 @@ static void vmt_driver(void)
     vmt_elf_cases();
     vmt_repeat_case();
     vmt_concurrent_case();
+    vmt_report("RUNTIME_MAPPING", vmt_runtime_mapping_case());
 
     serial_write(vmt_all_ok ? "VANTAOS_VM_DEMAND_PAGING_OK\n"
                             : "VANTAOS_VM_DEMAND_PAGING_FAIL\n");

@@ -349,13 +349,14 @@ static void vmt_fault_matrix(void)
 static void vmt_runtime_map_cases(void)
 {
     /* 8 pages touched; munmap releases 3 (hole) + 1 + 1 (trims) = 5. */
-    const vmt_expect_t mm = { "MMAP_MUNMAP", 0, 8, 0, 0, 0, 0, 0, 0, 5U, 0 };
+    const vmt_expect_t mm = { "MMAP_MUNMAP", 0, 8, 8, 0, 0, 0, 0, 0, 5U, 0 };
     vmt_report("MMAP_MUNMAP",
         vmt_run_flat(&mm, vmt_prog_mmap_basic, sizeof(vmt_prog_mmap_basic),
                      0, 0));
 
-    /* Address is chosen by the kernel, so compare class and error bits only. */
-    const vmt_expect_t uau = { "MMAP_USE_AFTER_UNMAP", -1, 1, 1, 1,
+    /* One demand fault plus the fatal fault = 2 events. The address is chosen
+       by the kernel, so compare class and error bits only. */
+    const vmt_expect_t uau = { "MMAP_USE_AFTER_UNMAP", -1, 1, 2, 1,
         VM_FAULT_NO_REGION, 0, 0, VM_PF_PRESENT | VM_PF_WRITE | VM_PF_INSTR,
         1U, 1 };
     vmt_report("MMAP_USE_AFTER_UNMAP",

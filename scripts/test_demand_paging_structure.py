@@ -84,6 +84,27 @@ check(destroy.find("paging_free_detached_user_tables") > destroy.rfind("paging_l
 check("active_cpu_mask" in destroy and "pending_shootdowns" in destroy,
       "destroy must keep refusing live/shootdown-pending address spaces")
 
+# 5a. User page-table mutation is isolated per address space. The global lock
+# only pins lifetime; unrelated address spaces must not hold it across walks.
+space_lock = body(paging, "int paging_space_lock_acquire(")
+space_unlock = body(paging, "void paging_space_lock_release(")
+check("active_operations" in space_lock and "paging_mutation_lock" not in space_lock,
+      "address-space pinning must be a short lifetime operation")
+check("page_table_lock" in space_lock and "active_operations" in space_unlock,
+      "per-space lock must remain pinned through unlock")
+check("active_operations" in destroy,
+      "destroy must refuse while an address-space operation is active")
+check("paging_lock_acquire" not in mapping and
+      mapping.count("paging_space_lock_acquire(address_space") >= 5,
+      "user mapping paths must use per-address-space synchronization")
+range_release = body(mapping, "int paging_release_user_demand_range(")
+check(range_release.find("paging_space_lock_acquire") <
+      range_release.find("leaf_present(address_space, va, &entry)"),
+      "demand range validation must hold the address-space lock")
+check(range_release.find("paging_space_lock_release") >
+      range_release.find("pmm_free_block((void*)(uintptr_t)frame)"),
+      "demand frame release must remain serialized until shootdown and reclaim")
+
 # 6. Security checks stay in place.
 check("VM_PROT_WRITE | VM_PROT_EXEC" in region, "W^X check missing from region validation")
 check("VM_PF_RESERVED" in region and "VM_PF_USER" in region, "reserved-bit/user-bit checks missing")

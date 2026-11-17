@@ -239,10 +239,13 @@ static size_t vmt_build_elf(const uint8_t* code, size_t code_len,
     if (with_data)
     {
         ph[1].type = 1; ph[1].flags = with_data == 2 ? 4U : 6U; /* R or R+W */
-        ph[1].offset = 0x1000U; ph[1].vaddr = VMT_DATA; ph[1].paddr = VMT_DATA;
+        const uint64_t data_offset = with_data == 2 ? 0x1004U : 0x1000U;
+        const uint64_t data_address = VMT_DATA + (with_data == 2 ? 4U : 0U);
+        ph[1].offset = data_offset; ph[1].vaddr = data_address;
+        ph[1].paddr = data_address;
         ph[1].filesz = 16U; ph[1].memsz = 16U * VMT_PAGE; ph[1].align = 1;
-        vmt_elf_image[0x1000] = 0x5A;
-        total = 0x1000U + 16U;
+        vmt_elf_image[data_offset] = 0x5A;
+        total = (size_t)data_offset + 16U;
     }
     return total;
 }
@@ -389,7 +392,9 @@ static void vmt_elf_cases(void)
     vmt_report("PAGE_CACHE_READ_FIRST", vmt_run_elf(&read, size));
     vmt_report("PAGE_CACHE_READ_SECOND", vmt_run_elf(&read, size));
     const vmt_expect_t write = { "PAGE_CACHE_WRITE_PROTECT", -1, 1, 2, 1,
-        VM_FAULT_PROTECTION, VMT_DATA, VM_PF_WRITE | VM_PF_PRESENT, 0 };
+        VM_FAULT_PROTECTION, VMT_DATA + 4U, VM_PF_WRITE | VM_PF_PRESENT, 0 };
+    size = vmt_build_elf(vmt_prog_page_cache_write,
+                         sizeof(vmt_prog_page_cache_write), 2);
     vmt_report("PAGE_CACHE_WRITE_PROTECT",
         vmt_run_elf(&write, size));
     vm_page_cache_get_stats(&after);

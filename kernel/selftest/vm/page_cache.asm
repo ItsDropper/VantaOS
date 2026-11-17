@@ -1,7 +1,11 @@
 %include "common.inc"
-; Read an immutable file-backed ELF byte for page-cache reuse tests.
+; Verify both sides of an unaligned read-only file extent are zero-filled.
     mov rbx, DATA
-    cmp byte [rbx], 0x5A
+    cmp byte [rbx], 0
+    jne .fail
+    cmp byte [rbx+4], 0x5A
+    jne .fail
+    cmp byte [rbx+20], 0
     jne .fail
     EXIT 0
 .fail:

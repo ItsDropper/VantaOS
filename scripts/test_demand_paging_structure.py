@@ -134,6 +134,9 @@ check(shared_leaf is not None and "PAGE_SOFT_SHARED" in shared_leaf.group(1) and
       "shared cache PTEs must be software-owned, read-only leaves")
 check("PAGE_SOFT_SHARED" in mapping and "vm_page_cache_release" in mapping,
       "address-space teardown must release shared-cache mapping references")
+unmap_user = body(mapping, "int paging_unmap_user_page(")
+check("PAGE_SOFT_DEMAND | PAGE_SOFT_SHARED" in unmap_user,
+      "generic unmap must reject page-table-owned and shared-cache leaves")
 check("vm_space_add_file_region" in elf and "retained_image" in elf,
       "non-executable ELF data segments must use retained lazy backing")
 check("const void* image_backing = process->address_space->vm.image_backing" in read("kernel/proc/process_user.c") and
@@ -149,6 +152,10 @@ check("for (size_t i = 0U; i < PAGE_SIZE / sizeof(uint64_t); i++)" in fault and
 check("cache_zero_page(candidate)" in cache and
       cache.find("cache_zero_page(candidate)") < cache.find("vm_region_copy_file_page"),
       "shared file-cache candidates must be zeroed before source bytes are copied")
+cache_view = body(cache, "static uint8_t cache_view_byte(")
+check("destination_offset" in cache_view and "copy_bytes" in cache_view and
+      "return 0U" in cache_view and "region->file_prefix" in cache,
+      "page-cache identity must include zero-filled prefix and file tail bytes")
 
 # 7. The ELF loader reserves a guard below the stack and rejects segments overlapping it.
 check("VM_REGION_GUARD" in elf and "page_end > guard_base" in elf, "ELF loader must reserve and respect the stack guard")

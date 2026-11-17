@@ -119,6 +119,7 @@ int paging_release_user_demand_range(paging_address_space_t* address_space,
                                      uint32_t* released,
                                      uint32_t* tail_resident);
 int paging_nx_available(void);
+/* Remove an eagerly mapped user leaf only; demand/cache-owned leaves fail. */
 int paging_unmap_user_page(paging_address_space_t* address_space,
                            uintptr_t virtual_address);
 /* Validate a complete user buffer before the kernel dereferences it. */

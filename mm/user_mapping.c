@@ -362,7 +362,8 @@ int paging_unmap_user_page(paging_address_space_t* address_space,
     }
 
     uint64_t* entry = paging_user_leaf_entry(address_space, virtual_address, 0);
-    if (!entry || !(*entry & PAGE_PRESENT))
+    if (!entry || !(*entry & PAGE_PRESENT) ||
+        (*entry & (PAGE_SOFT_DEMAND | PAGE_SOFT_SHARED)))
     {
         paging_space_lock_release(address_space, saved_flags);
         return 0;
@@ -379,10 +380,9 @@ int paging_unmap_user_page(paging_address_space_t* address_space,
                        __ATOMIC_RELEASE);
 
     /*
-     * The caller owns the unmapped physical frame and must free it separately.
-     * Never use this on a PAGE_SOFT_DEMAND leaf: those frames are owned by the
-     * page tables and would leak; a future munmap must free the frame and
-     * adjust the region's resident count itself.
+     * This API is for eagerly mapped leaves only. Demand frames and shared
+     * page-cache references have different owners and are released by their
+     * dedicated paths; clearing either here would leak or corrupt ownership.
      */
     return 1;
 }

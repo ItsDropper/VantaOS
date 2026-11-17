@@ -59,7 +59,7 @@ static void reset(void)
 }
 int main(void)
 {
- reset();
+ reset();l0.eax=0xDU;
  l1.eax=(6U<<8U)|(10U<<4U)|(3U<<16U)|3U;
  l1.ebx=(8U<<8U)|(12U<<16U);
  l1.ecx=(1U<<0U)|(1U<<9U)|(1U<<19U)|(1U<<20U)|(1U<<26U)|

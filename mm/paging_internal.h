@@ -19,6 +19,11 @@ uint64_t paging_lock_acquire(void);
 void paging_lock_release(uint64_t saved_flags);
 _Noreturn void paging_tlb_failure(void);
 int paging_owns_address_space(const paging_address_space_t* space);
+/* Pin an address space against teardown and serialize only its page-table tree. */
+int paging_space_lock_acquire(paging_address_space_t* space,
+                              uint64_t* saved_flags);
+void paging_space_lock_release(paging_address_space_t* space,
+                               uint64_t saved_flags);
 uint64_t* paging_user_leaf_entry(paging_address_space_t* space,
                                  uintptr_t virtual_address,
                                  int create);

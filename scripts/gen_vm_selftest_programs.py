@@ -23,7 +23,7 @@ PROGRAMS = [
     "zero_rw", "exec_anon", "ro_write_first", "ro_read_then_write",
     "guard_read", "gap_read", "kernel_read", "kernel_write",
     "kernel_high_read", "noncanonical", "oom_touch", "syscall_prefault",
-    "stack_grow", "bss_check",
+    "stack_grow", "bss_check", "runtime_mapping",
 ]
 
 def assemble(name):

@@ -224,7 +224,9 @@ paging_demand_result_t paging_map_user_page_demand(
     if (!paging_nx_available())
         return PAGING_DEMAND_FAILED;
 
-    uint64_t saved_flags = paging_lock_acquire();
+    uint64_t saved_flags;
+    if (!paging_space_lock_acquire(address_space, &saved_flags))
+        return 0;
     if ((virtual_address & (PAGE_SIZE - 1U)) != 0 ||
         (physical_address & (PAGE_SIZE - 1U)) != 0 ||
         virtual_address < PAGING_USER_BASE ||
@@ -232,25 +234,25 @@ paging_demand_result_t paging_map_user_page_demand(
         physical_address >= IDENTITY_MAP_LIMIT ||
         !paging_owns_address_space(address_space))
     {
-        paging_lock_release(saved_flags);
+        paging_space_lock_release(address_space, saved_flags);
         return PAGING_DEMAND_FAILED;
     }
 
     uint64_t* entry = paging_user_leaf_entry(address_space, virtual_address, 1);
     if (!entry)
     {
-        paging_lock_release(saved_flags);
+        paging_space_lock_release(address_space, saved_flags);
         return PAGING_DEMAND_FAILED;
     }
     if (*entry & PAGE_PRESENT)
     {
-        paging_lock_release(saved_flags);
+        paging_space_lock_release(address_space, saved_flags);
         return PAGING_DEMAND_EXISTS;
     }
 
     *entry = ((uint64_t)physical_address) | PAGE_PRESENT | PAGE_USER |
              PAGE_NX | PAGE_SOFT_DEMAND | (writable ? PAGE_WRITE : 0U);
-    paging_lock_release(saved_flags);
+    paging_space_lock_release(address_space, saved_flags);
     return PAGING_DEMAND_MAPPED;
 }
 
@@ -271,7 +273,9 @@ int paging_map_user_page_ex(paging_address_space_t* address_space,
     if (!executable && !paging_nx_available())
         return 0;
 
-    uint64_t saved_flags = paging_lock_acquire();
+    uint64_t saved_flags;
+    if (!paging_space_lock_acquire(address_space, &saved_flags))
+        return 0;
     if ((virtual_address & (PAGE_SIZE - 1U)) != 0 ||
         (physical_address & (PAGE_SIZE - 1U)) != 0 ||
         virtual_address < PAGING_USER_BASE ||
@@ -279,14 +283,14 @@ int paging_map_user_page_ex(paging_address_space_t* address_space,
         physical_address >= PMM_MAX_PHYSICAL_ADDRESS ||
         !paging_owns_address_space(address_space))
     {
-        paging_lock_release(saved_flags);
+        paging_space_lock_release(address_space, saved_flags);
         return 0;
     }
 
     uint64_t* entry = paging_user_leaf_entry(address_space, virtual_address, 1);
     if (!entry || (*entry & PAGE_PRESENT))
     {
-        paging_lock_release(saved_flags);
+        paging_space_lock_release(address_space, saved_flags);
         return 0;
     }
 
@@ -296,7 +300,7 @@ int paging_map_user_page_ex(paging_address_space_t* address_space,
              (executable ? 0U : PAGE_NX);
     __atomic_add_fetch(&address_space->pending_shootdowns, 1U,
                        __ATOMIC_RELEASE);
-    paging_lock_release(saved_flags);
+    paging_space_lock_release(address_space, saved_flags);
 
     if (!paging_tlb_shootdown(address_space, virtual_address))
         paging_tlb_failure();
@@ -308,25 +312,27 @@ int paging_map_user_page_ex(paging_address_space_t* address_space,
 int paging_unmap_user_page(paging_address_space_t* address_space,
                            uintptr_t virtual_address)
 {
-    uint64_t saved_flags = paging_lock_acquire();
+    uint64_t saved_flags;
+    if (!paging_space_lock_acquire(address_space, &saved_flags))
+        return 0;
     if ((virtual_address & (PAGE_SIZE - 1U)) != 0 ||
         !paging_owns_address_space(address_space))
     {
-        paging_lock_release(saved_flags);
+        paging_space_lock_release(address_space, saved_flags);
         return 0;
     }
 
     uint64_t* entry = paging_user_leaf_entry(address_space, virtual_address, 0);
     if (!entry || !(*entry & PAGE_PRESENT))
     {
-        paging_lock_release(saved_flags);
+        paging_space_lock_release(address_space, saved_flags);
         return 0;
     }
 
     *entry = 0;
     __atomic_add_fetch(&address_space->pending_shootdowns, 1U,
                        __ATOMIC_RELEASE);
-    paging_lock_release(saved_flags);
+    paging_space_lock_release(address_space, saved_flags);
 
     if (!paging_tlb_shootdown(address_space, virtual_address))
         paging_tlb_failure();
@@ -396,19 +402,21 @@ int paging_release_user_demand_range(paging_address_space_t* address_space,
      * while another CPU can still hold a translation to it. */
     for (uintptr_t va = start; va < end; va += PAGE_SIZE)
     {
-        uint64_t saved_flags = paging_lock_acquire();
+        uint64_t saved_flags;
+    if (!paging_space_lock_acquire(address_space, &saved_flags))
+        return 0;
         uint64_t* entry = paging_user_leaf_entry(address_space, va, 0);
         if (!entry || !(*entry & PAGE_PRESENT) ||
             (*entry & PAGE_SOFT_DEMAND) == 0U)
         {
-            paging_lock_release(saved_flags);
+            paging_space_lock_release(address_space, saved_flags);
             continue;
         }
         uint64_t frame = *entry & PAGE_ADDRESS_MASK;
         *entry = 0U;
         __atomic_add_fetch(&address_space->pending_shootdowns, 1U,
                            __ATOMIC_RELEASE);
-        paging_lock_release(saved_flags);
+        paging_space_lock_release(address_space, saved_flags);
 
         if (!paging_tlb_shootdown(address_space, va))
             paging_tlb_failure();
@@ -437,6 +445,10 @@ int paging_user_range_valid(paging_address_space_t* address_space,
         length - 1U > PAGING_USER_END - virtual_address)
         return 0;
 
+    uint64_t saved_flags;
+    if (!paging_space_lock_acquire(address_space, &saved_flags))
+        return 0;
+
     uintptr_t end = virtual_address + length - 1U;
     uintptr_t page = virtual_address & ~(uintptr_t)(PAGE_SIZE - 1U);
     const uintptr_t last_page = end & ~(uintptr_t)(PAGE_SIZE - 1U);
@@ -447,12 +459,21 @@ int paging_user_range_valid(paging_address_space_t* address_space,
         if (!entry || !(*entry & PAGE_PRESENT) ||
             !(*entry & PAGE_USER) ||
             (writable && !(*entry & PAGE_WRITE)))
+        {
+            paging_space_lock_release(address_space, saved_flags);
             return 0;
+        }
 
         if (page == last_page)
+        {
+            paging_space_lock_release(address_space, saved_flags);
             return 1;
+        }
         if (page > PAGING_USER_END - PAGE_SIZE)
+        {
+            paging_space_lock_release(address_space, saved_flags);
             return 0;
+        }
         page += PAGE_SIZE;
     }
 }

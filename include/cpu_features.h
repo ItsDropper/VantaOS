@@ -47,6 +47,28 @@ typedef uint64_t cpu_feature_t;
 #define CPU_FEATURE_LAHF_LM       (1ULL << 34)
 #define CPU_FEATURE_LONG_MODE     (1ULL << 35)
 #define CPU_FEATURE_AVX_USABLE    (1ULL << 36)
+#define CPU_FEATURE_PCID          (1ULL << 37)
+#define CPU_FEATURE_TSC_DEADLINE  (1ULL << 38)
+#define CPU_FEATURE_FSGSBASE      (1ULL << 39)
+#define CPU_FEATURE_SMEP          (1ULL << 40)
+#define CPU_FEATURE_SMAP          (1ULL << 41)
+#define CPU_FEATURE_UMIP          (1ULL << 42)
+#define CPU_FEATURE_PKU           (1ULL << 43)
+#define CPU_FEATURE_OSPKE         (1ULL << 44)
+#define CPU_FEATURE_LA57          (1ULL << 45)
+#define CPU_FEATURE_CLFLUSHOPT    (1ULL << 46)
+#define CPU_FEATURE_CLWB          (1ULL << 47)
+#define CPU_FEATURE_CET_SS        (1ULL << 48)
+#define CPU_FEATURE_IBRS_IBPB     (1ULL << 49)
+#define CPU_FEATURE_STIBP         (1ULL << 50)
+#define CPU_FEATURE_ARCH_CAP      (1ULL << 51)
+#define CPU_FEATURE_SSBD          (1ULL << 52)
+#define CPU_FEATURE_AVX512F       (1ULL << 53)
+#define CPU_FEATURE_AVX512_USABLE (1ULL << 54)
+#define CPU_FEATURE_XSAVEOPT      (1ULL << 55)
+#define CPU_FEATURE_XSAVEC        (1ULL << 56)
+#define CPU_FEATURE_XGETBV1       (1ULL << 57)
+#define CPU_FEATURE_XSAVES        (1ULL << 58)
 typedef struct {
  uint8_t level, type;
  uint16_t line_bytes, ways;
@@ -60,6 +82,8 @@ typedef struct {
  uint32_t initial_apic_id, threads_per_core, cores_per_package;
  uint8_t topology_leaf, physical_address_bits, virtual_address_bits;
  uint32_t cache_count;
+ uint64_t xsave_supported_mask, xsave_enabled_mask;
+ uint32_t xsave_area_size, xsave_max_area_size;
  cpu_cache_info_t caches[CPU_FEATURES_MAX_CACHES];
  uint64_t features;
 } cpu_features_t;

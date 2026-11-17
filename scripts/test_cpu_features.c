@@ -10,9 +10,12 @@
 typedef struct { uint32_t eax,ebx,ecx,edx; } cpuid_regs_t;
 static cpuid_regs_t l0,l1,l7,e0,e1,e7,e8,topology_smt,topology_core,cache_l1,cache_l2,cache_amd;
 static uint64_t xcr0;
+static cpuid_regs_t xsave0,xsave1;
 int cpu_test_cpuid(uint32_t leaf,uint32_t subleaf,cpuid_regs_t* r)
 {
  if(!r) return 0;
+ if(leaf==0x0DU && subleaf==0U) {*r=xsave0;return 1;}
+ if(leaf==0x0DU && subleaf==1U) {*r=xsave1;return 1;}
  if(leaf==0x8000001DU) {
   if(subleaf==0U) {*r=cache_amd;return 1;}
   memset(r,0,sizeof(*r));return 1;
@@ -49,7 +52,8 @@ static void reset(void)
  memset(&e8,0,sizeof(e8));memset(&topology_smt,0,sizeof(topology_smt));
  memset(&topology_core,0,sizeof(topology_core));
  memset(&cache_l1,0,sizeof(cache_l1));memset(&cache_l2,0,sizeof(cache_l2));
- memset(&cache_amd,0,sizeof(cache_amd));xcr0=0;
+ memset(&cache_amd,0,sizeof(cache_amd));memset(&xsave0,0,sizeof(xsave0));
+ memset(&xsave1,0,sizeof(xsave1));xcr0=0;
  l0.eax=7U;l0.ebx=pack4("Genu");l0.edx=pack4("ineI");l0.ecx=pack4("ntel");
  e0.eax=0x80000008U;
 }
@@ -66,6 +70,8 @@ int main(void)
  l7.ebx=(1U<<5U)|(1U<<3U)|(1U<<8U)|(1U<<10U)|(1U<<18U);
  e1.edx=(1U<<11U)|(1U<<20U)|(1U<<26U)|(1U<<27U)|(1U<<29U);
  e1.ecx=1U;e7.edx=1U<<8U;e8.eax=48U|(48U<<8U);xcr0=0x6U;
+ xsave0.eax=0x7U;xsave0.ebx=832U;xsave0.ecx=832U;
+ xsave1.eax=0xFU;
  assert(cpu_features_initialize());
  const cpu_features_t* c=cpu_features_get();assert(c);
  assert(strcmp(c->vendor,"GenuineIntel")==0);
@@ -85,9 +91,43 @@ int main(void)
  assert(cpu_feature_has(CPU_FEATURE_BMI2)&&cpu_feature_has(CPU_FEATURE_INVPCID));
  assert(cpu_feature_has(CPU_FEATURE_RDSEED)&&cpu_feature_avx_usable());
  assert(cpu_feature_avx2_usable());
+ assert(cpu_features_get()->xsave_supported_mask==0x7U);
+ assert(cpu_features_get()->xsave_enabled_mask==0x6U);
+ assert(cpu_features_get()->xsave_area_size==832U);
+ assert(cpu_features_get()->xsave_max_area_size==832U);
+ assert(cpu_feature_has(CPU_FEATURE_XSAVEOPT)&&cpu_feature_has(CPU_FEATURE_XSAVEC));
+ xcr0=0x2U;
+ assert(cpu_features_initialize()&&!cpu_feature_avx_usable());
+ xcr0=0x6U;
  l1.ecx&=~(1U<<27U);
  assert(cpu_features_initialize()&&!cpu_feature_avx_usable());
  assert(!cpu_feature_avx2_usable());
+ /* Modern privilege, address-space and mitigation capabilities are decoded
+  * independently from whether the kernel has enabled them. */
+ reset();l0.eax=7U;
+ l1.ecx=(1U<<17U)|(1U<<24U);
+ l7.ebx=(1U<<0U)|(1U<<7U)|(1U<<20U)|(1U<<16U)|(1U<<23U)|(1U<<24U);
+ l7.ecx=(1U<<2U)|(1U<<3U)|(1U<<4U)|(1U<<7U)|(1U<<16U);
+ l7.edx=(1U<<26U)|(1U<<27U)|(1U<<29U)|(1U<<31U);
+ assert(cpu_features_initialize());
+ c=cpu_features_get();
+ assert(cpu_feature_has(CPU_FEATURE_PCID)&&cpu_feature_has(CPU_FEATURE_TSC_DEADLINE));
+ assert(cpu_feature_has(CPU_FEATURE_FSGSBASE)&&cpu_feature_has(CPU_FEATURE_SMEP));
+ assert(cpu_feature_has(CPU_FEATURE_SMAP)&&cpu_feature_has(CPU_FEATURE_UMIP));
+ assert(cpu_feature_has(CPU_FEATURE_PKU)&&cpu_feature_has(CPU_FEATURE_OSPKE));
+ assert(cpu_feature_has(CPU_FEATURE_LA57)&&cpu_feature_has(CPU_FEATURE_CET_SS));
+ assert(cpu_feature_has(CPU_FEATURE_CLFLUSHOPT)&&cpu_feature_has(CPU_FEATURE_CLWB));
+ assert(cpu_feature_has(CPU_FEATURE_IBRS_IBPB)&&cpu_feature_has(CPU_FEATURE_STIBP));
+ assert(cpu_feature_has(CPU_FEATURE_ARCH_CAP)&&cpu_feature_has(CPU_FEATURE_SSBD));
+ assert(!cpu_feature_has(CPU_FEATURE_AVX512_USABLE));
+
+ reset();l0.eax=0xDU;l1.ecx=(1U<<26U)|(1U<<27U)|(1U<<28U);
+ l7.ebx=1U<<16U;xcr0=0xE6U;
+ xsave0.eax=0xE7U;xsave0.ebx=2688U;xsave0.ecx=2688U;
+ assert(cpu_features_initialize());
+ assert(cpu_feature_has(CPU_FEATURE_AVX512F));
+ assert(cpu_feature_has(CPU_FEATURE_AVX512_USABLE));
+
  /* Prefer architectural topology leaves when firmware/CPU exposes them. */
  reset();l0.eax=0x1FU;l1.ebx=(12U<<16U)|(0x23U<<24U);
  topology_smt.eax=1U;topology_smt.ebx=2U;topology_smt.ecx=(1U<<8U);

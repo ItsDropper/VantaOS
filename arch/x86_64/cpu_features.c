@@ -76,7 +76,9 @@ static void decode_basic_features(const cpuid_regs_t* r)
  set_feature(CPU_FEATURE_SSE42,c&(1U<<20)); set_feature(CPU_FEATURE_AES,c&(1U<<25));
  set_feature(CPU_FEATURE_XSAVE,c&(1U<<26)); set_feature(CPU_FEATURE_OSXSAVE,c&(1U<<27));
  set_feature(CPU_FEATURE_AVX,c&(1U<<28)); set_feature(CPU_FEATURE_FMA,c&(1U<<12));
- set_feature(CPU_FEATURE_X2APIC,c&(1U<<21)); set_feature(CPU_FEATURE_RDRAND,c&(1U<<30));
+ set_feature(CPU_FEATURE_PCID,c&(1U<<17)); set_feature(CPU_FEATURE_X2APIC,c&(1U<<21));
+ set_feature(CPU_FEATURE_TSC_DEADLINE,c&(1U<<24));
+ set_feature(CPU_FEATURE_RDRAND,c&(1U<<30));
  cpu_state.cache_line_bytes=((r->ebx>>8U)&0xFFU)*8U;
  cpu_state.logical_processors=(r->ebx>>16U)&0xFFU;
  cpu_state.initial_apic_id=(r->ebx>>24U)&0xFFU;
@@ -89,6 +91,21 @@ static void decode_structured_features(const cpuid_regs_t* r)
  set_feature(CPU_FEATURE_AVX2,b&(1U<<5)); set_feature(CPU_FEATURE_BMI1,b&(1U<<3));
  set_feature(CPU_FEATURE_BMI2,b&(1U<<8)); set_feature(CPU_FEATURE_INVPCID,b&(1U<<10));
  set_feature(CPU_FEATURE_RDSEED,b&(1U<<18));
+ set_feature(CPU_FEATURE_FSGSBASE,b&(1U<<0));
+ set_feature(CPU_FEATURE_SMEP,b&(1U<<7));
+ set_feature(CPU_FEATURE_AVX512F,b&(1U<<16));
+ set_feature(CPU_FEATURE_SMAP,b&(1U<<20));
+ set_feature(CPU_FEATURE_CLFLUSHOPT,b&(1U<<23));
+ set_feature(CPU_FEATURE_CLWB,b&(1U<<24));
+ set_feature(CPU_FEATURE_UMIP,r->ecx&(1U<<2));
+ set_feature(CPU_FEATURE_PKU,r->ecx&(1U<<3));
+ set_feature(CPU_FEATURE_OSPKE,r->ecx&(1U<<4));
+ set_feature(CPU_FEATURE_CET_SS,r->ecx&(1U<<7));
+ set_feature(CPU_FEATURE_LA57,r->ecx&(1U<<16));
+ set_feature(CPU_FEATURE_IBRS_IBPB,r->edx&(1U<<26));
+ set_feature(CPU_FEATURE_STIBP,r->edx&(1U<<27));
+ set_feature(CPU_FEATURE_ARCH_CAP,r->edx&(1U<<29));
+ set_feature(CPU_FEATURE_SSBD,r->edx&(1U<<31));
 }
 
 /*
@@ -171,6 +188,27 @@ static void decode_topology(void)
  cpu_state.topology_leaf=0U;
 }
 
+static void decode_xsave_state(void)
+{
+ cpuid_regs_t r;
+ if ((cpu_state.features & CPU_FEATURE_XSAVE)==0U ||
+     cpu_state.max_basic_leaf<0x0DU ||
+     !cpuid_read(0x0DU,0U,&r))
+  return;
+ cpu_state.xsave_supported_mask=((uint64_t)r.edx<<32U)|r.eax;
+ cpu_state.xsave_max_area_size=r.ecx;
+ if (cpu_state.features & CPU_FEATURE_OSXSAVE) {
+  cpu_state.xsave_enabled_mask=read_xcr0();
+  cpu_state.xsave_area_size=r.ebx;
+ }
+ if (cpuid_read(0x0DU,1U,&r)) {
+  set_feature(CPU_FEATURE_XSAVEOPT,r.eax&(1U<<0));
+  set_feature(CPU_FEATURE_XSAVEC,r.eax&(1U<<1));
+  set_feature(CPU_FEATURE_XGETBV1,r.eax&(1U<<2));
+  set_feature(CPU_FEATURE_XSAVES,r.eax&(1U<<3));
+ }
+}
+
 static void decode_extended_features(void)
 {
  cpuid_regs_t r;
@@ -210,11 +248,20 @@ int cpu_features_initialize(void)
  decode_topology();
  decode_cache_geometry();
  decode_extended_features();
- /* AVX requires both OS-managed extended state and enabled XMM/YMM state. */
- if ((cpu_state.features & (CPU_FEATURE_AVX | CPU_FEATURE_XSAVE | CPU_FEATURE_OSXSAVE)) ==
+ decode_xsave_state();
+ /* Optional vector ISA is usable only when every required XSTATE component
+  * is both implemented by the CPU and enabled by the operating system. */
+ if ((cpu_state.features & (CPU_FEATURE_AVX | CPU_FEATURE_XSAVE |
+                            CPU_FEATURE_OSXSAVE)) ==
      (CPU_FEATURE_AVX | CPU_FEATURE_XSAVE | CPU_FEATURE_OSXSAVE) &&
-     (read_xcr0()&0x6U)==0x6U)
+     (cpu_state.xsave_supported_mask&0x6U)==0x6U &&
+     (cpu_state.xsave_enabled_mask&0x6U)==0x6U)
   set_feature(CPU_FEATURE_AVX_USABLE,1);
+ if ((cpu_state.features & (CPU_FEATURE_AVX_USABLE | CPU_FEATURE_AVX512F)) ==
+     (CPU_FEATURE_AVX_USABLE | CPU_FEATURE_AVX512F) &&
+     (cpu_state.xsave_supported_mask&0xE6U)==0xE6U &&
+     (cpu_state.xsave_enabled_mask&0xE6U)==0xE6U)
+  set_feature(CPU_FEATURE_AVX512_USABLE,1);
  cpu_state_valid=1;
  serial_write("VANTAOS_CPU_VENDOR="); serial_write(cpu_state.vendor); serial_write("\n");
  serial_write(cpu_feature_has(CPU_FEATURE_LONG_MODE) ?

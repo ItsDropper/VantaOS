@@ -101,9 +101,13 @@ range_release = body(mapping, "int paging_release_user_demand_range(")
 check(range_release.find("paging_space_lock_acquire") <
       range_release.find("leaf_present(address_space, va, &entry)"),
       "demand range validation must hold the address-space lock")
+check(range_release.find("spinlock_unlock_irqrestore") <
+      range_release.find("paging_tlb_shootdown") <
+      range_release.find("spinlock_lock_irqsave"),
+      "PTE lock must be dropped during TLB wait and reacquired afterward")
 check(range_release.rfind("paging_space_lock_release") >
       range_release.find("pmm_free_block((void*)(uintptr_t)frame)"),
-      "demand frame release must remain serialized until shootdown and reclaim")
+      "address-space lifetime pin must cover shootdown and frame reclaim")
 
 # 6. Security checks stay in place.
 check("VM_PROT_WRITE | VM_PROT_EXEC" in region, "W^X check missing from region validation")

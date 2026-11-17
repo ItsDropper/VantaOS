@@ -48,6 +48,43 @@ static uint64_t physical_address_limit=0x1000000000ULL;
 
 static spinlock_t paging_mutation_lock = SPINLOCK_INITIALIZER;
 
+int paging_space_lock_acquire(paging_address_space_t* space,
+                              uint64_t* saved_flags)
+{
+    if (!space || !saved_flags)
+        return 0;
+
+    uint64_t lifecycle_flags = paging_lock_acquire();
+    if (!paging_owns_address_space(space) ||
+        __atomic_load_n(&space->active_operations, __ATOMIC_RELAXED) ==
+            UINT32_MAX)
+    {
+        paging_lock_release(lifecycle_flags);
+        return 0;
+    }
+
+    __atomic_add_fetch(&space->active_operations, 1U, __ATOMIC_ACQ_REL);
+    paging_lock_release(lifecycle_flags);
+
+    *saved_flags = spinlock_lock_irqsave(&space->page_table_lock);
+    return 1;
+}
+
+void paging_space_lock_release(paging_address_space_t* space,
+                               uint64_t saved_flags)
+{
+    spinlock_unlock_irqrestore(&space->page_table_lock, saved_flags);
+
+    /* The pin remains held until after the per-space lock is released. */
+    uint64_t lifecycle_flags = paging_lock_acquire();
+    uint32_t active = __atomic_load_n(&space->active_operations,
+                                      __ATOMIC_RELAXED);
+    if (active == 0U)
+        paging_tlb_failure();
+    __atomic_sub_fetch(&space->active_operations, 1U, __ATOMIC_RELEASE);
+    paging_lock_release(lifecycle_flags);
+}
+
 
 static void paging_switch_address_space_locked(
     paging_address_space_t* address_space);
@@ -254,6 +291,8 @@ void paging_initialize(void)
         address_spaces[i].used = 0;
         address_spaces[i].active_cpu_mask = 0;
         address_spaces[i].pending_shootdowns = 0;
+        address_spaces[i].active_operations = 0U;
+        spinlock_init(&address_spaces[i].page_table_lock);
     }
 
     fallback_current_address_space = &kernel_address_space;
@@ -524,6 +563,8 @@ int paging_destroy_address_space_counted(
     uint64_t saved_flags = paging_lock_acquire();
     if (!paging_owns_address_space(address_space) ||
         __atomic_load_n(&address_space->pending_shootdowns,
+                        __ATOMIC_ACQUIRE) != 0U ||
+        __atomic_load_n(&address_space->active_operations,
                         __ATOMIC_ACQUIRE) != 0U)
     {
         paging_lock_release(saved_flags);
@@ -540,6 +581,8 @@ int paging_destroy_address_space_counted(
     if (__atomic_load_n(&address_space->active_cpu_mask,
                         __ATOMIC_ACQUIRE) != 0U ||
         __atomic_load_n(&address_space->pending_shootdowns,
+                        __ATOMIC_ACQUIRE) != 0U ||
+        __atomic_load_n(&address_space->active_operations,
                         __ATOMIC_ACQUIRE) != 0U)
     {
         paging_lock_release(saved_flags);

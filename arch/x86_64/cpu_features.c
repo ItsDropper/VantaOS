@@ -266,6 +266,13 @@ int cpu_features_initialize_cpu(uint32_t logical_id)
      (state->xsave_enabled_mask&0xE6U)==0xE6U)
   set_feature(state, CPU_FEATURE_AVX512_USABLE,1);
  cpu_state_valid[logical_id]=1;
+ return 1;
+}
+int cpu_features_initialize(void)
+{
+ cpu_bootstrap_id=0U;
+ if (!cpu_features_initialize_cpu(0U)) return 0;
+ const cpu_features_t* state=cpu_features_get_cpu(0U);
  serial_write("VANTAOS_CPU_VENDOR="); serial_write(state->vendor); serial_write("\n");
  serial_write((state->features&CPU_FEATURE_LONG_MODE) ?
               "VANTAOS_CPU_LONG_MODE=1\n" : "VANTAOS_CPU_LONG_MODE=0\n");
@@ -274,11 +281,6 @@ int cpu_features_initialize_cpu(uint32_t logical_id)
  serial_write((state->features&CPU_FEATURE_APIC) ?
               "VANTAOS_CPU_APIC=1\n" : "VANTAOS_CPU_APIC=0\n");
  return 1;
-}
-int cpu_features_initialize(void)
-{
- cpu_bootstrap_id=0U;
- return cpu_features_initialize_cpu(0U);
 }
 int cpu_features_set_bootstrap_cpu(uint32_t id)
 {

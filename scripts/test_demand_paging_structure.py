@@ -120,7 +120,7 @@ check("VM_BACKING_FILE" in region and "vm_space_add_file_region" in region,
 check("VM_BACKING_FILE" in fault and "vm_page_cache_acquire_file_page" in fault and
       "paging_map_user_page_shared" in fault,
       "read-only file-backed faults must use shared cache mappings")
-check("references" in cache and "cache_pages_equal" in cache and
+check("references" in cache and "cache_frame_matches_view" in cache and
       "VM_PAGE_CACHE_MAX_ENTRIES" in cache and "vm_page_cache_reclaim" in cache,
       "page cache must deduplicate full pages, reference-count mappings and stay bounded")
 check(cache.find("cache_find_locked(hash, &view)") < cache.find("pmm_alloc_block_below"),

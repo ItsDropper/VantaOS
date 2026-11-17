@@ -8,6 +8,7 @@
 #include "vm_fault.h"
 #include "paging_internal.h"
 #include "pmm.h"
+#include "vm_page_cache.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -80,7 +81,18 @@ static int take_injected_failure(uintptr_t page)
     return 0;
 }
 
-/* Allocate, zero, and install one demand page; no locks held on entry. */
+static void* allocate_demand_frame(void)
+{
+    void* frame = pmm_alloc_block_below(VM_IDENTITY_LIMIT);
+    if (!frame)
+    {
+        (void)vm_page_cache_reclaim(VM_PAGE_CACHE_MAX_ENTRIES);
+        frame = pmm_alloc_block_below(VM_IDENTITY_LIMIT);
+    }
+    return frame;
+}
+
+/* Populate one demand page; no locks held on entry. */
 static vm_fault_result_t populate_page(paging_address_space_t* space,
                                        uintptr_t page,
                                        const vm_region_t* region)
@@ -88,43 +100,61 @@ static vm_fault_result_t populate_page(paging_address_space_t* space,
     if (take_injected_failure(page))
         return VM_FAULT_OUT_OF_MEMORY;
 
-    void* frame = pmm_alloc_block_below(VM_IDENTITY_LIMIT);
-    if (!frame)
-        return VM_FAULT_OUT_OF_MEMORY;
-    if (((uintptr_t)frame & (PAGE_SIZE - 1U)) != 0U)
-    {
-        pmm_free_block(frame);
-        return VM_FAULT_OUT_OF_MEMORY;
-    }
-
-    /* Zero before publication: bytes outside the file-backed extent (including
-       a partial-page .bss tail) must never expose stale physical memory. */
-    volatile uint64_t* words = (volatile uint64_t*)frame;
-    for (size_t i = 0U; i < PAGE_SIZE / sizeof(uint64_t); i++)
-        words[i] = 0U;
+    uintptr_t physical_frame = 0U;
+    int shared = 0;
     if (region->backing == VM_BACKING_FILE &&
-        !vm_region_copy_file_page(region, page, frame))
+        (region->prot & VM_PROT_WRITE) == 0U)
     {
-        pmm_free_block(frame);
-        return VM_FAULT_FATAL;
+        vm_page_cache_result_t cached =
+            vm_page_cache_acquire_file_page(region, page, &physical_frame);
+        if (cached == VM_PAGE_CACHE_FAILED)
+            return VM_FAULT_OUT_OF_MEMORY;
+        if (cached == VM_PAGE_CACHE_INVALID)
+            return VM_FAULT_FATAL;
+        shared = cached == VM_PAGE_CACHE_SHARED;
+    }
+    else
+    {
+        void* frame = allocate_demand_frame();
+        if (!frame)
+            return VM_FAULT_OUT_OF_MEMORY;
+        if (((uintptr_t)frame & (PAGE_SIZE - 1U)) != 0U)
+        {
+            pmm_free_block(frame);
+            return VM_FAULT_OUT_OF_MEMORY;
+        }
+        volatile uint64_t* words = (volatile uint64_t*)frame;
+        for (size_t i = 0U; i < PAGE_SIZE / sizeof(uint64_t); i++)
+            words[i] = 0U;
+        if (region->backing == VM_BACKING_FILE &&
+            !vm_region_copy_file_page(region, page, frame))
+        {
+            pmm_free_block(frame);
+            return VM_FAULT_FATAL;
+        }
+        physical_frame = (uintptr_t)frame;
     }
     __atomic_thread_fence(__ATOMIC_RELEASE);
 
-    switch (paging_map_user_page_demand(
-        space, page, (uintptr_t)frame,
-        (region->prot & VM_PROT_WRITE) != 0U))
+    paging_demand_result_t mapped = shared ?
+        paging_map_user_page_shared(space, page, physical_frame) :
+        paging_map_user_page_demand(space, page, physical_frame,
+            (region->prot & VM_PROT_WRITE) != 0U);
+    if (mapped == PAGING_DEMAND_MAPPED)
     {
-    case PAGING_DEMAND_MAPPED:
         vm_space_note_resident(&space->vm, page, 1);
         return VM_FAULT_RESOLVED;
-    case PAGING_DEMAND_EXISTS:
-        pmm_free_block(frame);
+    }
+    if (shared)
+        (void)vm_page_cache_release(physical_frame);
+    else
+        pmm_free_block((void*)physical_frame);
+    if (mapped == PAGING_DEMAND_EXISTS)
+    {
         __atomic_fetch_add(&stat_already, 1U, __ATOMIC_RELAXED);
         return VM_FAULT_RESOLVED;
-    default:
-        pmm_free_block(frame);
-        return VM_FAULT_OUT_OF_MEMORY;
     }
+    return VM_FAULT_OUT_OF_MEMORY;
 }
 
 vm_fault_result_t vm_handle_user_fault(paging_address_space_t* space,

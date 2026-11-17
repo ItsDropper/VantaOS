@@ -4,7 +4,7 @@ This document describes the per-process virtual-memory regions and the demand-pa
 
 ## Scope
 
-Implemented: per-address-space region tables, lazy zero-fill frame allocation, permission enforcement, recoverable-versus-fatal fault classification, instruction restart, out-of-memory containment, user-fault termination and reclamation, and page-table/frame teardown.
+Implemented: per-address-space region tables, lazy zero-fill and ELF file-page allocation, a bounded reference-counted cache for immutable read-only ELF pages, permission enforcement, recoverable-versus-fatal fault classification, instruction restart, out-of-memory containment, user-fault termination and reclamation, and page-table/frame teardown.
 
 Also implemented (host-tested only; see [Run-time mapping](#run-time-mapping-mmap-munmap-brk)): anonymous `mmap`, `munmap` (including partial and middle-punch unmaps) and `brk`.
 
@@ -29,7 +29,8 @@ PAGING_USER_END + 1                  stack top
 |---|---|
 | `include/vm_region.h`, `mm/vm_region.c` | Region table, validation, overlap/budget checks, and the pure fault classifier. No hardware access; host-tested. |
 | `include/vm_fault.h`, `mm/vm_fault.c` | Fault resolution: frame allocation, zeroing, installation, syscall prefault, statistics, test-only allocation-failure injection. |
-| `mm/user_mapping.c` | `paging_map_user_page_demand()` leaf installation and reclaim of demand frames during teardown. |
+| `mm/user_mapping.c` | Demand and shared-cache leaf installation; releases private frames and shared-cache references during teardown. |
+| `mm/vm_page_cache.c` | Content-deduplicated, bounded read-only ELF page cache with mapping references, idle LRU eviction and OOM reclaim. |
 | `mm/paging.c` | Address-space lifecycle, short lifetime pins, and per-address-space page-table locks; `vm_space_t` is embedded in `paging_address_space_t`. |
 | `kernel/panic.c`, `arch/x86_64/isr.asm` | Exception entry: CR2 capture, dispatch, restart-or-terminate. |
 | `kernel/proc/process_elf.c`, `process_user.c` | Region setup for ELF and flat images; exit accounting. |
@@ -64,7 +65,7 @@ A region records a page-aligned half-open range, a type (`ELF`, `FLAT_IMAGE`, `A
 
    | Class | Condition | Outcome |
    |---|---|---|
-   | `DEMAND_MAP` | Non-present, user-mode access inside a `ZERO` region that permits it | allocate and map |
+   | `DEMAND_MAP` | Non-present, user-mode access inside a permitted `ZERO` or `FILE` region | zero-fill or page-cache populate, then map |
    | `NO_REGION` | Address not covered by any region (including kernel addresses) | terminate |
    | `GUARD` | Inside a guard region | terminate |
    | `ACCESS_DENIED` | Non-present, but the region forbids that access (write to read-only, fetch from non-executable) | terminate |
@@ -72,7 +73,7 @@ A region records a page-aligned half-open range, a type (`ELF`, `FLAT_IMAGE`, `A
    | `NOT_DEMAND` | Non-present inside an eagerly populated region | terminate |
    | `RESERVED_BIT` / `NOT_USER_MODE` | Corrupted tables / supervisor-origin error code | terminate |
 
-4. For `DEMAND_MAP` the handler allocates a frame below the identity-map ceiling, zeroes it **before** publishing it, and installs a `PRESENT|USER|NX|SOFT_DEMAND` leaf (plus `WRITE` when the region is writable). If another path already populated the page (`EXISTS`), the spare frame is freed and the fault counts as resolved.
+4. For `DEMAND_MAP`, anonymous and writable file pages receive a private zeroed frame and a `PRESENT|USER|NX|SOFT_DEMAND` leaf. Read-only file pages are zero-padded, deduplicated by all 4096 bytes, and mapped without `WRITE` using `PRESENT|USER|NX|SOFT_SHARED`. Shared leaves hold one cache reference; teardown releases that reference instead of freeing the frame directly. If another path already populated the page (`EXISTS`), the spare frame/reference is released and the fault counts as resolved.
 5. On success `exception_handler()` returns 1 and the stub resumes directly with `iretq`; RIP is unchanged, so the faulting instruction restarts. Every other outcome follows the existing path.
 6. On failure the process is terminated with status `-1` (or `-12` for physical-memory exhaustion). Nothing was mapped, so the address space is unchanged and is reclaimed normally. The kernel logs `VANTAOS_USER_PROCESS_FAULT_PID=… CR2=… ERR=… CLASS=…` plus the legacy `…_UNMAPPED`, `…_WRITE_PROTECT`, `…_NX` markers and new `…_STACK_GUARD`, `…_KERNEL_ADDRESS`, `…_OOM` markers.
 
@@ -80,7 +81,7 @@ A fault from ring 3 holds no kernel locks, so termination takes the process-tabl
 
 ## Memory ownership and reclamation
 
-- Demand frames are owned by the page tables. Their leaves carry the software bit `PAGE_SOFT_DEMAND` (PTE bit 9, ignored by hardware).
+- Private demand frames are owned by the page tables. Their leaves carry `PAGE_SOFT_DEMAND` (PTE bit 9). Shared immutable file frames carry `PAGE_SOFT_SHARED` (PTE bit 10); the page cache owns those frames and each leaf owns one reference. Both software bits are ignored by hardware.
 - Eagerly mapped frames remain owned by the process's `user_pages` list; reclaim never touches them (it frees only `SOFT_DEMAND` leaves), so there is no double free.
 - `paging_destroy_address_space()` still refuses a space that is active on a CPU or has pending shootdowns. When it proceeds it detaches the user table tree under the paging lock and frees page tables and demand frames **after releasing that lock**, so a large address space does not stall unrelated mapping work.
 - Syscalls that read or write user buffers call `vm_user_range_valid()`, which first makes buffer pages resident when (and only when) they lie in a demand-backed region that permits the access, then runs the existing validation. A buffer in a guard or unreserved range still fails with `-EFAULT`. Pages prefaulted this way are ordinary demand pages and are reclaimed the same way.
@@ -124,12 +125,12 @@ Evidence: `scripts/test_vm_region.c` (region logic, a randomized model test agai
 
 ## Limits
 
-- **Shared file page cache and eviction are not implemented.** Non-executable ELF file pages are demand-loaded from an address-space-owned immutable image copy. Pages are private per process; repeated launches retain separate image copies and separate resident frames. Executable text remains eager until the demand mapping path can install executable leaves safely.
+- Read-only, non-executable ELF pages use a 256-entry content-addressed physical page cache. Cache keys are a 64-bit hash plus a full 4096-byte comparison, so hash collisions cannot alias different page contents. Active PTE references prevent eviction; idle entries are LRU-evicted when the cache fills and reclaimed before demand faults fail for lack of memory. When the cache is full of active pages, new pages fall back to private demand frames. Writable ELF data remains private. Executable text remains eager until the demand mapping path can install executable leaves safely. The retained ELF source buffer is still per-address-space; only populated physical pages are shared.
 - Run-time mapping is anonymous-only: no file-backed `mmap`, no address hints or `MAP_FIXED`, no `mprotect`/`mremap`, and `munmap` refuses ranges that are not wholly inside anonymous mappings (so holes in a range, the image, the stack and the `brk` heap are `EINVAL` rather than silently skipped). Not QEMU- or hardware-verified; see below.
 - Per-process region count (40), reservation (256 MiB) and a 64-page eager-page budget bound resource use. A syscall over a very large lazy buffer populates it page by page.
 - Resident demand pages are not reclaimed under memory pressure (no swapping); exhaustion terminates the faulting process.
 - Prefaulting a very large lazy buffer in one syscall, and reclaiming a very large address space, run with interrupts disabled on that CPU; neither is capped or batched yet. There is also no global demand-frame cap or kernel reserve, so several processes can exhaust the below-1-GiB pool and cause OOM terminations of unrelated processes.
 - `paging_unmap_user_page()` must not be used on demand leaves (their frames are owned by the page tables); `munmap`/`brk` use `paging_release_user_demand_range()`, which frees the frame itself.
-- The paging lock is still global for table updates; per-address-space table locking is future work.
+- Page-table mutation uses per-address-space locks; the global lifecycle lock is used only for short lifetime pins, CPU activation and address-space lifecycle operations.
 - Page-fault handling on real hardware has not been exercised. QEMU's TCG reports a non-canonical access as `#PF` where hardware raises `#GP`; both are contained.
 - Kernel-mode accesses to unmapped user memory remain fatal by design; the kernel only touches user memory after `vm_user_range_valid()`.

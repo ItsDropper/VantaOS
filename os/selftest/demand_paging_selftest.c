@@ -21,6 +21,7 @@
 #include "smp.h"
 #include "timer.h"
 #include "paging.h"
+#include "vm_page_cache.h"
 
 #ifdef VANTAOS_SELF_TEST
 #include "selftest.h"
@@ -237,7 +238,7 @@ static size_t vmt_build_elf(const uint8_t* code, size_t code_len,
     size_t total = code_off + code_len;
     if (with_data)
     {
-        ph[1].type = 1; ph[1].flags = 6U; /* R+W */
+        ph[1].type = 1; ph[1].flags = with_data == 2 ? 4U : 6U; /* R or R+W */
         ph[1].offset = 0x1000U; ph[1].vaddr = VMT_DATA; ph[1].paddr = VMT_DATA;
         ph[1].filesz = 16U; ph[1].memsz = 16U * VMT_PAGE; ph[1].align = 1;
         vmt_elf_image[0x1000] = 0x5A;
@@ -378,8 +379,26 @@ static void vmt_elf_cases(void)
 
     /* ELF .bss: file-backed page present, tail pages lazily zero-filled. */
     size = vmt_build_elf(vmt_prog_bss_check, sizeof(vmt_prog_bss_check), 1);
-    const vmt_expect_t bss = { "ELF_LAZY_BSS", 0, 1, 1, 0, 0, 0, 0, 0 };
+    const vmt_expect_t bss = { "ELF_LAZY_BSS", 0, 2, 2, 0, 0, 0, 0, 0 };
     vmt_report("ELF_LAZY_BSS", vmt_run_elf(&bss, size));
+
+    size = vmt_build_elf(vmt_prog_page_cache, sizeof(vmt_prog_page_cache), 2);
+    vm_page_cache_stats_t before, after;
+    vm_page_cache_get_stats(&before);
+    const vmt_expect_t read = { "PAGE_CACHE_READ", 0, 1, 1, 0, 0, 0, 0, 0 };
+    vmt_report("PAGE_CACHE_READ_FIRST", vmt_run_elf(&read, size));
+    vmt_report("PAGE_CACHE_READ_SECOND", vmt_run_elf(&read, size));
+    const vmt_expect_t write = { "PAGE_CACHE_WRITE_PROTECT", -1, 1, 2, 1,
+        VM_FAULT_PROTECTION, VMT_DATA, VM_PF_WRITE | VM_PF_PRESENT, 0 };
+    vmt_report("PAGE_CACHE_WRITE_PROTECT",
+        vmt_run_elf(&write, size));
+    vm_page_cache_get_stats(&after);
+    int cache_ok = after.hits >= before.hits + 2U &&
+                   after.active_mappings == before.active_mappings;
+    if (!cache_ok)
+        vmt_fail("PAGE_CACHE", "shared hit/refcount balance",
+                 before.hits + 2U, after.hits);
+    vmt_report("PAGE_CACHE", cache_ok);
 }
 
 static void vmt_repeat_case(void)

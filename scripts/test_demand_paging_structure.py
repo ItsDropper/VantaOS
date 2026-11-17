@@ -40,6 +40,7 @@ asm = read("arch/x86_64/isr.asm")
 mapping = read("mm/user_mapping.c")
 paging = read("mm/paging.c")
 fault = read("mm/vm_fault.c")
+cache = read("mm/vm_page_cache.c")
 region = read("mm/vm_region.c")
 elf = read("kernel/proc/process_elf.c")
 
@@ -72,8 +73,9 @@ check(leaf is not None and all(f in leaf.group(1) for f in ("PAGE_PRESENT", "PAG
 check("IDENTITY_MAP_LIMIT" in dm, "demand frames must be below the identity-map ceiling")
 check("paging_tlb_shootdown" not in dm, "demand install must not take the shootdown path (not-present entries are never cached)")
 reclaim = body(mapping, "uint32_t paging_free_detached_user_tables(")
-check(re.search(r"if \(\(pt\[k\] & PAGE_PRESENT\) && \(pt\[k\] & PAGE_SOFT_DEMAND\)\)\s*\{\s*pmm_free_block", reclaim),
-      "reclaim must free only PAGE_SOFT_DEMAND leaves")
+check("PAGE_SOFT_DEMAND" in reclaim and "PAGE_SOFT_SHARED" in reclaim and
+      "vm_page_cache_release(frame)" in reclaim and "pmm_free_block((void*)frame)" in reclaim,
+      "reclaim must release private frames and shared-cache references by leaf ownership")
 
 # 5. Destruction detaches tables under the paging lock and frees them after.
 destroy = body(paging, "int paging_destroy_address_space_counted(")
@@ -115,9 +117,14 @@ check("VM_PF_RESERVED" in region and "VM_PF_USER" in region, "reserved-bit/user-
 check("VM_FAULT_NOT_DEMAND" in region, "populated regions must not be demand-filled")
 check("VM_BACKING_FILE" in region and "vm_space_add_file_region" in region,
       "file-backed regions must validate and retain bounded image ranges")
-check("VM_BACKING_FILE" in fault and "vm_region_copy_file_page" in fault and
-      fault.find("vm_region_copy_file_page") < fault.find("paging_map_user_page_demand("),
-      "file-backed faults must copy into a zeroed private frame before mapping")
+check("VM_BACKING_FILE" in fault and "vm_page_cache_acquire_file_page" in fault and
+      "paging_map_user_page_shared" in fault,
+      "read-only file-backed faults must use shared cache mappings")
+check("references" in cache and "cache_pages_equal" in cache and
+      "VM_PAGE_CACHE_MAX_ENTRIES" in cache and "vm_page_cache_reclaim" in cache,
+      "page cache must deduplicate full pages, reference-count mappings and stay bounded")
+check("PAGE_SOFT_SHARED" in mapping and "vm_page_cache_release" in mapping,
+      "address-space teardown must release shared-cache mapping references")
 check("vm_space_add_file_region" in elf and "retained_image" in elf,
       "non-executable ELF data segments must use retained lazy backing")
 check("const void* image_backing = process->address_space->vm.image_backing" in read("kernel/proc/process_user.c") and
@@ -125,9 +132,14 @@ check("const void* image_backing = process->address_space->vm.image_backing" in 
       "retained ELF backing must be freed only after address-space teardown")
 check("region.type == VM_REGION_GUARD" in region, "guard regions must be rejected")
 check("pmm_alloc_block_below" in fault, "demand frames must come from the identity-mapped range")
+check("vm_page_cache_reclaim(VM_PAGE_CACHE_MAX_ENTRIES)" in fault,
+      "demand OOM must reclaim idle file-cache pages before failing")
 check("for (size_t i = 0U; i < PAGE_SIZE / sizeof(uint64_t); i++)" in fault and
-      fault.find("words[i] = 0U") < fault.find("paging_map_user_page_demand(\n        space"),
-      "frames must be zeroed before they are mapped")
+      fault.find("words[i] = 0U") < fault.find("paging_demand_result_t mapped"),
+      "private frames must be zeroed before they are mapped")
+check("cache_zero_page(candidate)" in cache and
+      cache.find("cache_zero_page(candidate)") < cache.find("vm_region_copy_file_page"),
+      "shared file-cache candidates must be zeroed before source bytes are copied")
 
 # 7. The ELF loader reserves a guard below the stack and rejects segments overlapping it.
 check("VM_REGION_GUARD" in elf and "page_end > guard_base" in elf, "ELF loader must reserve and respect the stack guard")

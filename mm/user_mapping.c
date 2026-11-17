@@ -7,6 +7,7 @@
 
 #include "paging_internal.h"
 #include "pmm.h"
+#include "vm_page_cache.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -197,10 +198,14 @@ uint32_t paging_free_detached_user_tables(uint64_t pml4_entry)
                 (pd[j] & PAGE_ADDRESS_MASK);
             for (uint32_t k = 0; k < PAGING_TABLE_ENTRIES; k++)
             {
-                if ((pt[k] & PAGE_PRESENT) && (pt[k] & PAGE_SOFT_DEMAND))
+                if ((pt[k] & PAGE_PRESENT) &&
+                    (pt[k] & (PAGE_SOFT_DEMAND | PAGE_SOFT_SHARED)))
                 {
-                    pmm_free_block((void*)(uintptr_t)
-                                   (pt[k] & PAGE_ADDRESS_MASK));
+                    uintptr_t frame = (uintptr_t)(pt[k] & PAGE_ADDRESS_MASK);
+                    if (pt[k] & PAGE_SOFT_SHARED)
+                        (void)vm_page_cache_release(frame);
+                    else
+                        pmm_free_block((void*)frame);
                     demand_freed++;
                 }
             }
@@ -252,6 +257,40 @@ paging_demand_result_t paging_map_user_page_demand(
 
     *entry = ((uint64_t)physical_address) | PAGE_PRESENT | PAGE_USER |
              PAGE_NX | PAGE_SOFT_DEMAND | (writable ? PAGE_WRITE : 0U);
+    paging_space_lock_release(address_space, saved_flags);
+    return PAGING_DEMAND_MAPPED;
+}
+
+paging_demand_result_t paging_map_user_page_shared(
+    paging_address_space_t* address_space, uintptr_t virtual_address,
+    uintptr_t physical_address)
+{
+    if (!paging_nx_available()) return PAGING_DEMAND_FAILED;
+    uint64_t saved_flags;
+    if (!paging_space_lock_acquire(address_space, &saved_flags))
+        return PAGING_DEMAND_FAILED;
+    if ((virtual_address & (PAGE_SIZE - 1U)) != 0U ||
+        (physical_address & (PAGE_SIZE - 1U)) != 0U ||
+        virtual_address < PAGING_USER_BASE || virtual_address > PAGING_USER_END ||
+        physical_address >= IDENTITY_MAP_LIMIT ||
+        !paging_owns_address_space(address_space))
+    {
+        paging_space_lock_release(address_space, saved_flags);
+        return PAGING_DEMAND_FAILED;
+    }
+    uint64_t* entry = paging_user_leaf_entry(address_space, virtual_address, 1);
+    if (!entry)
+    {
+        paging_space_lock_release(address_space, saved_flags);
+        return PAGING_DEMAND_FAILED;
+    }
+    if (*entry & PAGE_PRESENT)
+    {
+        paging_space_lock_release(address_space, saved_flags);
+        return PAGING_DEMAND_EXISTS;
+    }
+    *entry = ((uint64_t)physical_address) | PAGE_PRESENT | PAGE_USER |
+             PAGE_NX | PAGE_SOFT_SHARED;
     paging_space_lock_release(address_space, saved_flags);
     return PAGING_DEMAND_MAPPED;
 }

@@ -30,8 +30,8 @@ uint64_t* paging_user_leaf_entry(paging_address_space_t* space,
 /* Unlink PML4 slot 1 under the paging lock; returns the old entry. */
 uint64_t paging_detach_user_page_tables(paging_address_space_t* space);
 /*
- * Free a detached user table tree and every PAGE_SOFT_DEMAND leaf frame in it.
- * The tree is unreachable from any address space, so no paging lock is held.
+ * Free a detached user table tree, private demand frames, and shared-cache
+ * mapping references. The tree is unreachable from any address space.
  */
 uint32_t paging_free_detached_user_tables(uint64_t pml4_entry);
 

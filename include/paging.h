@@ -51,13 +51,10 @@ typedef struct paging_address_space
     vm_space_t vm;
 } paging_address_space_t;
 
-/*
- * Software-defined PTE bit (ignored by hardware) marking a leaf whose frame
- * was allocated by the demand-paging handler. Such frames are owned by the
- * page tables themselves and are returned to the PMM when the address space
- * is destroyed; eagerly mapped frames stay owned by their creator.
- */
+/* Software PTE ownership bits (ignored by hardware). Private demand leaves
+ * own their frames directly; shared leaves own one reference in vm_page_cache. */
 #define PAGE_SOFT_DEMAND (1ULL << 9)
+#define PAGE_SOFT_SHARED (1ULL << 10)
 
 typedef enum
 {
@@ -93,6 +90,9 @@ int paging_map_user_page_ex(paging_address_space_t* address_space,
 paging_demand_result_t paging_map_user_page_demand(
     paging_address_space_t* address_space, uintptr_t virtual_address,
     uintptr_t physical_address, int writable);
+paging_demand_result_t paging_map_user_page_shared(
+    paging_address_space_t* address_space, uintptr_t virtual_address,
+    uintptr_t physical_address);
 /* Lifetime counters for diagnostics and regression tests. */
 uint64_t paging_demand_frames_reclaimed(void);
 /* Frames freed by paging_release_user_demand_range (munmap/brk shrink). */

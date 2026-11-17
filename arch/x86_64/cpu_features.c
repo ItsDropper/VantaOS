@@ -310,12 +310,6 @@ int cpu_features_smp_compatible(uint32_t bsp_id, uint32_t candidate_id,
  if ((bsp->features&CPU_FEATURE_NX)!=0U &&
      (candidate->features&CPU_FEATURE_NX)==0U)
   return 0;
- if (bsp->physical_address_bits!=0U &&
-     candidate->physical_address_bits<bsp->physical_address_bits)
-  return 0;
- if (bsp->virtual_address_bits!=0U &&
-     candidate->virtual_address_bits<bsp->virtual_address_bits)
-  return 0;
  return 1;
 }
 int cpu_features_compute_common(const uint32_t* ids, uint32_t count,

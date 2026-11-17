@@ -50,8 +50,11 @@ CET, or other MSR/control-register features. The privilege, paging, and
 speculation-mitigation bits are capability inventory only; they are not proof
 that a mitigation is configured or active. Per-CPU compatibility is checked before AP admission. The candidate must
 provide the kernel's required x86-64, syscall, APIC, and paging capabilities;
-it must also support NX when the BSP's active page tables use NX, and must not
-report narrower physical or virtual address widths. Optional ISA features are
+it must also support NX when the BSP's active page tables use NX, The current kernel still uses four-level paging and the PMM caps managed RAM at
+4 GiB, so a processor's larger *maximum* virtual/physical address-width report
+is not treated as a requirement. If VantaOS enables LA57 or expands physical
+memory management, compatibility must be tightened against the active address
+space format and highest managed physical address. Optional ISA features are
 not required on every core. `cpu_features_compute_common()` calculates the
 intersection across the online logical CPU set; future SIMD or crypto dispatch
 must use that intersection rather than the BSP's feature bits. Topology and

@@ -166,9 +166,9 @@ int main(void)
   CPU_FEATURE_LONG_MODE|CPU_FEATURE_NX;
  reset();l1.edx=(1U<<0U)|(1U<<4U)|(1U<<5U)|(1U<<6U)|(1U<<9U)|(1U<<26U);
  e1.edx=(1U<<11U)|(1U<<20U)|(1U<<29U);
- e8.eax=48U|(48U<<8U);l7.ebx=1U<<5U;
+ e8.eax=52U|(57U<<8U);l7.ebx=1U<<5U;
  assert(cpu_features_initialize_cpu(4U));
- l7.ebx=0U;
+ l7.ebx=0U;e8.eax=36U|(48U<<8U);
  assert(cpu_features_initialize_cpu(5U));
  assert(cpu_feature_has_cpu(4U,CPU_FEATURE_AVX2));
  assert(!cpu_feature_has_cpu(5U,CPU_FEATURE_AVX2));
@@ -181,10 +181,10 @@ int main(void)
  e1.edx&=~(1U<<20U);
  assert(cpu_features_initialize_cpu(6U));
  assert(!cpu_features_smp_compatible(4U,6U,required));
- e1.edx|=(1U<<20U);e8.eax=32U|(48U<<8U);
+ e1.edx|=(1U<<20U);l1.edx&=~(1U<<26U);
  assert(cpu_features_initialize_cpu(7U));
  assert(!cpu_features_smp_compatible(4U,7U,required));
- l1.edx&=~(1U<<9U);
+ l1.edx|=(1U<<26U);l1.edx&=~(1U<<9U);
  assert(cpu_features_initialize_cpu(8U));
  assert(!cpu_features_smp_compatible(4U,8U,required));
  assert(!cpu_features_initialize_cpu(CPU_FEATURES_MAX_CPUS));

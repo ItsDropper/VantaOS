@@ -35,15 +35,23 @@ on its own.
 
 ## Integration and limits
 
-The inventory is collected during early kernel initialization and emits serial
-markers for vendor, long-mode, NX, and APIC support. Memory, interrupt, timer,
+The bootstrap processor is inventoried during early initialization. Once the
+ACPI topology is validated, VantaOS refreshes that inventory at its MADT logical
+CPU index and independently inventories each AP before it is admitted online.
+Per-CPU records include vendor, signature, address widths, topology, cache
+geometry, XSAVE state, and feature bits. Memory, interrupt, timer,
 cryptography, and driver work should query this central inventory instead of
 duplicating CPUID bit tests.
 
 This inventory does not enable NXE, OSXSAVE, x2APIC, PCID, SMEP/SMAP, PKU,
 CET, or other MSR/control-register features. The privilege, paging, and
 speculation-mitigation bits are capability inventory only; they are not proof
-that a mitigation is configured or active. The decoded topology and cache geometry are
-descriptive metadata only; they must not drive scheduler placement or CPU
-affinity policy until those policies have their own validation and regression
-coverage.
+that a mitigation is configured or active. Per-CPU compatibility is checked before AP admission. The candidate must
+provide the kernel's required x86-64, syscall, APIC, and paging capabilities;
+it must also support NX when the BSP's active page tables use NX, and must not
+report narrower physical or virtual address widths. Optional ISA features are
+not required on every core. `cpu_features_compute_common()` calculates the
+intersection across the online logical CPU set; future SIMD or crypto dispatch
+must use that intersection rather than the BSP's feature bits. Topology and
+cache geometry remain descriptive metadata and do not yet drive scheduler
+placement.

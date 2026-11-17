@@ -25,6 +25,8 @@ smp_init_result_t smp_initialize(void);
 /* Install pinned idle contexts after the process manager is initialized. */
 int smp_scheduler_initialize(void);
 unsigned int smp_cpu_count(void);
+/* Intersection of capabilities across every online logical CPU. */
+uint64_t smp_cpu_common_features(void);
 int smp_cpu_is_bsp(uint32_t logical_id);
 
 #endif

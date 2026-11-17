@@ -87,9 +87,17 @@ typedef struct {
  cpu_cache_info_t caches[CPU_FEATURES_MAX_CACHES];
  uint64_t features;
 } cpu_features_t;
+#define CPU_FEATURES_MAX_CPUS 32U
 int cpu_features_initialize(void);
+int cpu_features_initialize_cpu(uint32_t logical_id);
 const cpu_features_t* cpu_features_get(void);
+const cpu_features_t* cpu_features_get_cpu(uint32_t logical_id);
 int cpu_feature_has(cpu_feature_t feature);
+int cpu_feature_has_cpu(uint32_t logical_id, cpu_feature_t feature);
+int cpu_features_smp_compatible(uint32_t bsp_id, uint32_t candidate_id,
+                                cpu_feature_t required_features);
+int cpu_features_compute_common(const uint32_t* logical_ids, uint32_t count,
+                                cpu_feature_t* common_features);
 int cpu_feature_avx_usable(void);
 int cpu_feature_avx2_usable(void);
 #endif

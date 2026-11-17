@@ -159,5 +159,34 @@ int main(void)
  reset();l0.eax=0U;e0.eax=0x80000000U;
  assert(cpu_features_initialize()&&cpu_features_get()->max_basic_leaf==0U);
  assert(!cpu_feature_has(CPU_FEATURE_APIC)&&!cpu_feature_avx_usable());
+
+ /* Per-logical-CPU inventories preserve heterogeneous optional features. */
+ const cpu_feature_t required=CPU_FEATURE_FPU|CPU_FEATURE_TSC|CPU_FEATURE_MSR|
+  CPU_FEATURE_PAE|CPU_FEATURE_APIC|CPU_FEATURE_SSE2|CPU_FEATURE_SYSCALL|
+  CPU_FEATURE_LONG_MODE|CPU_FEATURE_NX;
+ reset();l1.edx=(1U<<0U)|(1U<<4U)|(1U<<5U)|(1U<<6U)|(1U<<9U)|(1U<<26U);
+ e1.edx=(1U<<11U)|(1U<<20U)|(1U<<29U);
+ e8.eax=48U|(48U<<8U);l7.ebx=1U<<5U;
+ assert(cpu_features_initialize_cpu(4U));
+ l7.ebx=0U;
+ assert(cpu_features_initialize_cpu(5U));
+ assert(cpu_feature_has_cpu(4U,CPU_FEATURE_AVX2));
+ assert(!cpu_feature_has_cpu(5U,CPU_FEATURE_AVX2));
+ assert(cpu_features_smp_compatible(4U,5U,required));
+ uint32_t online_ids[2]={4U,5U};cpu_feature_t common=0U;
+ assert(cpu_features_compute_common(online_ids,2U,&common));
+ assert((common&required)==required);
+ assert((common&CPU_FEATURE_AVX2)==0U);
+ assert(!cpu_features_compute_common((uint32_t[]){4U,4U},2U,&common));
+ e1.edx&=~(1U<<20U);
+ assert(cpu_features_initialize_cpu(6U));
+ assert(!cpu_features_smp_compatible(4U,6U,required));
+ e1.edx|=(1U<<20U);e8.eax=32U|(48U<<8U);
+ assert(cpu_features_initialize_cpu(7U));
+ assert(!cpu_features_smp_compatible(4U,7U,required));
+ l1.edx&=~(1U<<9U);
+ assert(cpu_features_initialize_cpu(8U));
+ assert(!cpu_features_smp_compatible(4U,8U,required));
+ assert(!cpu_features_initialize_cpu(CPU_FEATURES_MAX_CPUS));
  return 0;
 }

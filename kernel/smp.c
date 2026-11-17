@@ -6,6 +6,7 @@
  */
 
 #include "smp.h"
+#include "cpu_features.h"
 
 #include "acpi.h"
 #include "cpu_local.h"
@@ -45,6 +46,8 @@ extern _Noreturn void smp_ap_entry(uint32_t apic_id);
 static unsigned int discovered_cpu_count;
 static uint32_t bsp_logical_id;
 static uint32_t calibrated_timer_initial_count;
+static uint64_t common_cpu_features;
+static cpu_feature_t required_cpu_features;
 static uint8_t ap_stacks[ACPI_MAX_CPUS][AP_STACK_SIZE]
     __attribute__((aligned(16)));
 static volatile uint32_t ap_online[ACPI_MAX_CPUS];
@@ -64,6 +67,8 @@ static int initialize_single_cpu_fallback(void)
     {
         discovered_cpu_count = 1U;
         bsp_logical_id = current->logical_id;
+        const cpu_features_t* features=cpu_features_get_cpu(bsp_logical_id);
+        common_cpu_features=features ? features->features : 0U;
         return 1;
     }
 
@@ -86,6 +91,8 @@ static int initialize_single_cpu_fallback(void)
 
     discovered_cpu_count = 1U;
     bsp_logical_id = 0U;
+    const cpu_features_t* features=cpu_features_get_cpu(0U);
+    common_cpu_features=features ? features->features : 0U;
     serial_write("VANTAOS_SMP_SINGLE_CPU_FALLBACK_OK\n");
     return 1;
 }
@@ -283,8 +290,17 @@ _Noreturn void smp_ap_entry(uint32_t apic_id)
      * A CPU is not reported online until its own APIC MSR/registers and GS
      * per-CPU base have both been initialized and validated.
      */
-    if (index >= 0 &&
-        apic_initialize_cpu(apic_id) &&
+    if (index < 0 ||
+        !cpu_features_initialize_cpu((uint32_t)index) ||
+        !cpu_features_smp_compatible(bsp_logical_id, (uint32_t)index,
+                                     required_cpu_features))
+    {
+        serial_write("VANTAOS_SMP_CPU_FEATURE_INCOMPATIBLE\n");
+        for (;;)
+            __asm__ volatile ("cli; hlt" ::: "memory");
+    }
+
+    if (apic_initialize_cpu(apic_id) &&
         cpu_local_initialize((uint32_t)index, apic_id) &&
         apic_timer_initialize(SMP_LOCAL_TIMER_VECTOR,
                               calibrated_timer_initial_count))
@@ -642,6 +658,19 @@ smp_init_result_t smp_initialize(void)
     bsp_logical_id = (uint32_t)bsp_index;
     serial_write("VANTAOS_SMP_TOPOLOGY_OK\n");
 
+    if (!cpu_features_initialize_cpu(bsp_logical_id))
+    {
+        serial_write("VANTAOS_SMP_BSP_FEATURE_DISCOVERY_FAIL\n");
+        return SMP_INIT_FAILED;
+    }
+    required_cpu_features = CPU_FEATURE_FPU | CPU_FEATURE_TSC |
+        CPU_FEATURE_MSR | CPU_FEATURE_PAE | CPU_FEATURE_APIC |
+        CPU_FEATURE_SSE2 | CPU_FEATURE_SYSCALL | CPU_FEATURE_LONG_MODE;
+    if (cpu_feature_has_cpu(bsp_logical_id, CPU_FEATURE_NX))
+        required_cpu_features |= CPU_FEATURE_NX;
+    if (apic_is_x2apic())
+        required_cpu_features |= CPU_FEATURE_X2APIC;
+
     if (!cpu_local_initialize((uint32_t)bsp_index, bsp_id))
     {
         serial_write("VANTAOS_SMP_CPU_LOCAL_FAIL\n");
@@ -682,6 +711,18 @@ smp_init_result_t smp_initialize(void)
         }
     }
 
+    uint32_t logical_ids[ACPI_MAX_CPUS];
+    for (uint32_t i=0U;i<info->cpu_count;i++) logical_ids[i]=i;
+    if (!cpu_features_compute_common(logical_ids, info->cpu_count,
+                                     &common_cpu_features))
+    {
+        serial_write("VANTAOS_SMP_CPU_FEATURE_INTERSECTION_FAIL\n");
+        return SMP_INIT_FAILED;
+    }
+    serial_write("VANTAOS_SMP_CPU_FEATURE_COMMON=0x");
+    serial_write_hex64(common_cpu_features);
+    serial_write("\n");
+
     serial_write("VANTAOS_SMP_CPU_LOCAL_OK\n");
     if (!smp_run_work_probe(info, (uint32_t)bsp_index))
         return SMP_INIT_FAILED;
@@ -697,4 +738,9 @@ int smp_cpu_is_bsp(uint32_t logical_id)
 unsigned int smp_cpu_count(void)
 {
     return discovered_cpu_count;
+}
+
+uint64_t smp_cpu_common_features(void)
+{
+    return common_cpu_features;
 }

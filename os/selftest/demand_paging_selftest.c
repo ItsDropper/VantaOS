@@ -398,6 +398,13 @@ static void vmt_elf_cases(void)
     if (!cache_ok)
         vmt_fail("PAGE_CACHE", "shared hit/refcount balance",
                  before.hits + 2U, after.hits);
+    uint32_t reclaimed = vm_page_cache_reclaim(VM_PAGE_CACHE_MAX_ENTRIES);
+    vm_page_cache_get_stats(&after);
+    if (reclaimed == 0U || after.active_mappings != before.active_mappings)
+    {
+        vmt_fail("PAGE_CACHE", "idle cache reclaim", 1U, reclaimed);
+        cache_ok = 0;
+    }
     vmt_report("PAGE_CACHE", cache_ok);
 }
 

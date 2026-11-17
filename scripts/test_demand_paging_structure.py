@@ -123,6 +123,15 @@ check("VM_BACKING_FILE" in fault and "vm_page_cache_acquire_file_page" in fault 
 check("references" in cache and "cache_pages_equal" in cache and
       "VM_PAGE_CACHE_MAX_ENTRIES" in cache and "vm_page_cache_reclaim" in cache,
       "page cache must deduplicate full pages, reference-count mappings and stay bounded")
+check(cache.find("cache_find_locked(hash, &view)") < cache.find("pmm_alloc_block_below"),
+      "a cache hit must not require a spare physical frame")
+check("(*link)->references == 0U" in cache and "entry->references++" in cache,
+      "LRU eviction must skip active mappings and cache hits must acquire references")
+shared_map = body(mapping, "paging_demand_result_t paging_map_user_page_shared(")
+shared_leaf = re.search(r"\*entry = (.*?);", shared_map, re.S)
+check(shared_leaf is not None and "PAGE_SOFT_SHARED" in shared_leaf.group(1) and
+      "PAGE_WRITE" not in shared_leaf.group(1),
+      "shared cache PTEs must be software-owned, read-only leaves")
 check("PAGE_SOFT_SHARED" in mapping and "vm_page_cache_release" in mapping,
       "address-space teardown must release shared-cache mapping references")
 check("vm_space_add_file_region" in elf and "retained_image" in elf,

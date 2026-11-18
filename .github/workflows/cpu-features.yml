@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Compile CPU feature tests with strict warnings
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -DCPU_FEATURES_TEST -Iinclude \

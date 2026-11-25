@@ -588,31 +588,21 @@ static int gui_wait_probe_run(uint32_t timeout_ms, int inject_event,
         return 0;
     }
     int window = gui_server_create_window((uint32_t)pid, &request);
-    if (window > 0)
-    {
-        __atomic_store_n(&gui_wait_probe_window, (uint32_t)window,
-                         __ATOMIC_RELEASE);
-        __atomic_store_n(&gui_wait_probe_timeout, timeout_ms,
-                         __ATOMIC_RELEASE);
-        __atomic_store_n(&gui_wait_probe_result, 0U, __ATOMIC_RELEASE);
-    }
-    __asm__ volatile ("pushq %0; popfq"
-                      :: "r"(interrupt_flags) : "memory", "cc");
     if (window <= 0)
     {
         (void)process_terminate((uint32_t)pid);
-        process_t failed;
-        for (uint32_t i = 0U; i < 100U; i++)
-        {
-            if (process_snapshot((uint32_t)pid, &failed) &&
-                failed.state == PROCESS_TERMINATED &&
-                failed.owner_cpu == PROCESS_CPU_UNOWNED)
-                break;
-            sleep_ms(1U);
-        }
         (void)process_reap((uint32_t)pid);
+        __asm__ volatile ("pushq %0; popfq"
+                          :: "r"(interrupt_flags) : "memory", "cc");
         return 0;
     }
+    __atomic_store_n(&gui_wait_probe_window, (uint32_t)window,
+                     __ATOMIC_RELEASE);
+    __atomic_store_n(&gui_wait_probe_timeout, timeout_ms,
+                     __ATOMIC_RELEASE);
+    __atomic_store_n(&gui_wait_probe_result, 0U, __ATOMIC_RELEASE);
+    __asm__ volatile ("pushq %0; popfq"
+                      :: "r"(interrupt_flags) : "memory", "cc");
 
     int entered_wait = 0;
     process_t snapshot;

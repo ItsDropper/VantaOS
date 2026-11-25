@@ -30,6 +30,9 @@ typedef struct cpu_local
     volatile uint64_t work_iterations;
     /* Per-CPU scheduler quantum; never shared between logical CPUs. */
     volatile uint32_t scheduler_ticks;
+    /* Deferred process runtime accounting; written only by this CPU. */
+    volatile uint32_t runtime_accounting_pid;
+    volatile uint64_t runtime_accounting_ticks;
     /* Independent round-robin scan origin to reduce cross-CPU candidate collisions. */
     volatile uint32_t scheduler_cursor;
     /* Incremented only by this CPU's local APIC timer interrupt. */

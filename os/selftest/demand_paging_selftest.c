@@ -558,6 +558,23 @@ static void vmt_driver(void)
 
     serial_write(vmt_all_ok ? "VANTAOS_VM_DEMAND_PAGING_OK\n"
                             : "VANTAOS_VM_DEMAND_PAGING_FAIL\n");
+
+    /*
+     * Explorer's integration test launches another full ELF process (Notes).
+     * Run it only after the memory suite has released its temporary address
+     * spaces and page-cache mappings. Starting both suites concurrently made
+     * the 256 MiB QEMU configuration depend on transient resource pressure
+     * rather than testing either subsystem in isolation.
+     */
+    const char* explorer_argv[1] = { "/EXPLORER-E2E.ELF" };
+    int explorer_pid = process_spawn_user_elf_file(
+        explorer_argv[0], process_current_pid(), 1U, explorer_argv);
+    if (explorer_pid <= 0)
+    {
+        serial_write("VANTAOS_EXPLORER_E2E_START_FAIL pid=");
+        vmt_hex((uint64_t)(int64_t)explorer_pid);
+        serial_write("\n");
+    }
 }
 
 void demand_paging_selftest_initialize(void)

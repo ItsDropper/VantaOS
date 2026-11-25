@@ -13,7 +13,7 @@
 #include "mouse.h"
 #include "keyboard.h"
 #ifdef VANTAOS_SELF_TEST
-#include "selftest.h"
+#include "../selftest/selftest.h"
 #endif
 #include "interrupt_health.h"
 #include "terminal_process.h"

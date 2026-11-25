@@ -559,6 +559,9 @@ jobs:
           gcc -std=c11 -Wall -Wextra -Werror -Iinclude scripts/test_gui_event_queue.c -o /tmp/vantaos-gui-event-queue-test
           /tmp/vantaos-gui-event-queue-test
 
+      - name: Test blocking GUI wait source contracts
+        run: python3 scripts/test_gui_blocking_wait.py
+
 
       - name: Test compositor damage rectangle clipping
         run: |
@@ -1364,6 +1367,7 @@ jobs:
             VANTAOS_USER_GUI_SYSCALL_OK
             VANTAOS_SETTINGS_STORAGE_OK
             VANTAOS_GUI_INPUT_REGRESSION_OK
+            VANTAOS_GUI_BLOCKING_WAIT_OK
             VANTAOS_GUI_DEAD_OWNER_CLEANUP_OK
             VANTAOS_USER_DIRECTORY_LIST_OK
             VANTAOS_USER_WAITPID_OK

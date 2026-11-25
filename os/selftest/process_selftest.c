@@ -538,170 +538,106 @@ static void gui_focus_input_regression_probe(void)
 }
 
 static volatile uint32_t gui_wait_probe_window;
-static volatile uint32_t gui_wait_probe_timeout;
-static volatile uint32_t gui_wait_probe_result;
 static volatile uint32_t gui_wait_probe_coordinator_pid;
 static volatile uint32_t gui_wait_probe_coordinator_done;
+static volatile uint32_t gui_wait_probe_phase;
+static volatile uint32_t gui_wait_probe_event_injected;
+static volatile uint32_t gui_wait_probe_injection_failed;
 
-static void gui_wait_probe_entry(void)
+static void gui_wait_probe_coordinator_entry(void)
 {
-    uint32_t pid = process_current_pid();
-    uint32_t window = __atomic_load_n(&gui_wait_probe_window,
-                                      __ATOMIC_ACQUIRE);
-    uint32_t timeout = __atomic_load_n(&gui_wait_probe_timeout,
-                                       __ATOMIC_ACQUIRE);
-    vanta_gui_event_t event;
-    while (gui_server_poll_event(pid, window, &event) == 1)
-        ;
-
     __asm__ volatile ("sti" ::: "memory");
-    int result = gui_server_wait_event(pid, window, &event, timeout);
-    uint32_t outcome = 3U;
-    if (result == 1 && event.type == VANTA_GUI_EVENT_POINTER_DOWN &&
-        event.value == 1U)
-        outcome = 1U;
-    else if (result == 0)
-        outcome = 2U;
-    __atomic_store_n(&gui_wait_probe_result, outcome, __ATOMIC_RELEASE);
-    process_terminate_current_with_status(outcome == 3U ? 1 : 0);
+    uint32_t pid = process_current_pid();
+    uint32_t window = 0U;
+    int event_ok = 0;
+    int timeout_ok = 0;
+
+    if (graphics_is_initialized() &&
+        graphics_get_width() >= 400U && graphics_get_height() >= 300U)
+    {
+        vanta_gui_window_request_t request = {
+            .width = 240U, .height = 160U, .title = "GUI Wait Probe"
+        };
+        int created = gui_server_create_window(pid, &request);
+        if (created > 0)
+        {
+            window = (uint32_t)created;
+            __atomic_store_n(&gui_wait_probe_window, window,
+                             __ATOMIC_RELEASE);
+            __atomic_store_n(&gui_wait_probe_event_injected, 0U,
+                             __ATOMIC_RELEASE);
+            __atomic_store_n(&gui_wait_probe_injection_failed, 0U,
+                             __ATOMIC_RELEASE);
+            vanta_gui_event_t event;
+            while (gui_server_poll_event(pid, window, &event) == 1)
+                ;
+
+            /*
+             * The desktop loop observes this phase and injects one event only
+             * after this process is actually sleeping on the window queue.
+             */
+            __atomic_store_n(&gui_wait_probe_phase, 1U, __ATOMIC_RELEASE);
+            long event_result =
+                gui_server_wait_event(pid, window, &event, 2000U);
+            event_ok = event_result == 1L &&
+                       event.type == VANTA_GUI_EVENT_POINTER_DOWN &&
+                       event.value == 1U &&
+                       __atomic_load_n(&gui_wait_probe_injection_failed,
+                                       __ATOMIC_ACQUIRE) == 0U;
+
+            __atomic_store_n(&gui_wait_probe_phase, 2U, __ATOMIC_RELEASE);
+            long timeout_result =
+                gui_server_wait_event(pid, window, &event, 50U);
+            timeout_ok = timeout_result == 0L;
+            (void)gui_server_close_window(pid, window);
+        }
+    }
+
+    serial_write(event_ok ? "VANTAOS_GUI_EVENT_WAKE_OK\n" :
+                             "VANTAOS_GUI_EVENT_WAKE_FAIL\n");
+    serial_write(timeout_ok ? "VANTAOS_GUI_TIMEOUT_OK\n" :
+                               "VANTAOS_GUI_TIMEOUT_FAIL\n");
+    serial_write(event_ok && timeout_ok ?
+        "VANTAOS_GUI_BLOCKING_WAIT_OK\n" :
+        "VANTAOS_GUI_BLOCKING_WAIT_FAIL\n");
+
+    __atomic_store_n(&gui_wait_probe_phase, 3U, __ATOMIC_RELEASE);
+    __atomic_store_n(&gui_wait_probe_coordinator_done, 1U,
+                     __ATOMIC_RELEASE);
+    process_terminate_current_with_status(event_ok && timeout_ok ? 0 : 1);
     for (;;)
         __asm__ volatile ("sti; hlt" ::: "memory");
 }
 
-static int gui_wait_probe_run(uint32_t timeout_ms, int inject_event,
-                              uint32_t expected_outcome)
+void os_selftest_pump_gui_wait_probe(void)
 {
-    uint32_t parent_pid = process_current_pid();
-    uint32_t cpu_id = process_current_cpu_id();
-    vanta_gui_window_request_t request = {
-        .width = 240U, .height = 160U, .title = "GUI Wait Probe"
-    };
-
-    /* Keep the pinned child from running until its window and arguments exist. */
-    uint64_t interrupt_flags;
-    __asm__ volatile ("pushfq; popq %0; cli"
-                      : "=r"(interrupt_flags) :: "memory", "cc");
-    int pid = process_create_kernel_on_cpu(
-        "gui-blocking-wait-probe", parent_pid, gui_wait_probe_entry, cpu_id);
-    if (pid <= 0)
-    {
-        __asm__ volatile ("pushq %0; popfq"
-                          :: "r"(interrupt_flags) : "memory", "cc");
-        return 0;
-    }
-    int window = gui_server_create_window((uint32_t)pid, &request);
-    if (window <= 0)
-    {
-        (void)process_terminate((uint32_t)pid);
-        (void)process_reap((uint32_t)pid);
-        __asm__ volatile ("pushq %0; popfq"
-                          :: "r"(interrupt_flags) : "memory", "cc");
-        return 0;
-    }
-    __atomic_store_n(&gui_wait_probe_window, (uint32_t)window,
-                     __ATOMIC_RELEASE);
-    __atomic_store_n(&gui_wait_probe_timeout, timeout_ms,
-                     __ATOMIC_RELEASE);
-    __atomic_store_n(&gui_wait_probe_result, 0U, __ATOMIC_RELEASE);
-    __asm__ volatile ("pushq %0; popfq"
-                      :: "r"(interrupt_flags) : "memory", "cc");
-
-    int entered_wait = 0;
-    process_t snapshot;
-    for (uint32_t attempt = 0U; attempt < 200U; attempt++)
-    {
-        if (!process_snapshot((uint32_t)pid, &snapshot))
-            break;
-        if (snapshot.state == PROCESS_SLEEPING &&
-            snapshot.wait_queue != NULL)
-        {
-            entered_wait = 1;
-            break;
-        }
-        if (snapshot.state == PROCESS_TERMINATED)
-            break;
-        sleep_ms(1U);
-    }
-
-    if (entered_wait && inject_event)
-    {
-        const vanta_gui_event_t injected = {
-            VANTA_GUI_EVENT_POINTER_DOWN, 32, 30, 1U, 0U
-        };
-        if (gui_server_test_queue_event((uint32_t)pid, (uint32_t)window,
-                                        &injected) != 1)
-            entered_wait = 0;
-    }
-
-    int terminated = 0;
-    for (uint32_t attempt = 0U; attempt < 300U; attempt++)
-    {
-        if (!process_snapshot((uint32_t)pid, &snapshot))
-            break;
-        if (snapshot.state == PROCESS_TERMINATED &&
-            snapshot.owner_cpu == PROCESS_CPU_UNOWNED)
-        {
-            terminated = 1;
-            break;
-        }
-        sleep_ms(1U);
-    }
-
-    uint32_t outcome = __atomic_load_n(&gui_wait_probe_result,
-                                       __ATOMIC_ACQUIRE);
-    int ok = entered_wait && terminated && outcome == expected_outcome;
-    if (!entered_wait)
-        serial_write(expected_outcome == 1U ?
-            "VANTAOS_GUI_EVENT_WAKE_NOT_BLOCKED\n" :
-            "VANTAOS_GUI_TIMEOUT_NOT_BLOCKED\n");
-    if (!terminated)
-        serial_write(expected_outcome == 1U ?
-            "VANTAOS_GUI_EVENT_WAKE_NOT_TERMINATED\n" :
-            "VANTAOS_GUI_TIMEOUT_NOT_TERMINATED\n");
-    if (outcome != expected_outcome)
-        serial_write(expected_outcome == 1U ?
-            "VANTAOS_GUI_EVENT_WAKE_BAD_RESULT\n" :
-            "VANTAOS_GUI_TIMEOUT_BAD_RESULT\n");
-    if (window > 0)
-        (void)gui_server_close_window((uint32_t)pid, (uint32_t)window);
-    if (!terminated)
-    {
-        (void)process_terminate((uint32_t)pid);
-        for (uint32_t attempt = 0U; attempt < 100U; attempt++)
-        {
-            if (process_snapshot((uint32_t)pid, &snapshot) &&
-                snapshot.state == PROCESS_TERMINATED &&
-                snapshot.owner_cpu == PROCESS_CPU_UNOWNED)
-            {
-                terminated = 1;
-                break;
-            }
-            sleep_ms(1U);
-        }
-    }
-    if (terminated)
-        (void)process_reap((uint32_t)pid);
-    return ok;
-}
-
-static void gui_blocking_wait_regression_probe(void)
-{
-    if (!graphics_is_initialized() ||
-        graphics_get_width() < 400U || graphics_get_height() < 300U)
-    {
-        serial_write("VANTAOS_GUI_BLOCKING_WAIT_FAIL_GRAPHICS\n");
+    if (__atomic_load_n(&gui_wait_probe_phase, __ATOMIC_ACQUIRE) != 1U ||
+        __atomic_load_n(&gui_wait_probe_event_injected,
+                        __ATOMIC_ACQUIRE) != 0U)
         return;
-    }
 
-    int event_wakeup = gui_wait_probe_run(500U, 1, 1U);
-    serial_write(event_wakeup ? "VANTAOS_GUI_EVENT_WAKE_OK\n" :
-                                "VANTAOS_GUI_EVENT_WAKE_FAIL\n");
-    int timeout_wakeup = gui_wait_probe_run(50U, 0, 2U);
-    serial_write(timeout_wakeup ? "VANTAOS_GUI_TIMEOUT_OK\n" :
-                                  "VANTAOS_GUI_TIMEOUT_FAIL\n");
-    serial_write(event_wakeup && timeout_wakeup ?
-        "VANTAOS_GUI_BLOCKING_WAIT_OK\n" :
-        "VANTAOS_GUI_BLOCKING_WAIT_FAIL\n");
+    uint32_t pid = __atomic_load_n(&gui_wait_probe_coordinator_pid,
+                                   __ATOMIC_ACQUIRE);
+    uint32_t window = __atomic_load_n(&gui_wait_probe_window,
+                                      __ATOMIC_ACQUIRE);
+    if (pid == 0U || window == 0U)
+        return;
+
+    process_t snapshot;
+    if (!process_snapshot(pid, &snapshot) ||
+        snapshot.state != PROCESS_SLEEPING || snapshot.wait_queue == NULL)
+        return;
+
+    if (__atomic_exchange_n(&gui_wait_probe_event_injected, 1U,
+                            __ATOMIC_ACQ_REL) != 0U)
+        return;
+
+    const vanta_gui_event_t event = {
+        VANTA_GUI_EVENT_POINTER_DOWN, 32, 30, 1U, 0U
+    };
+    if (gui_server_test_queue_event(pid, window, &event) != 1)
+        __atomic_store_n(&gui_wait_probe_injection_failed, 1U,
+                         __ATOMIC_RELEASE);
 }
 
 static void gui_dead_owner_cleanup_probe(void)
@@ -834,17 +770,6 @@ void os_selftest_initialize(void)
     }
 }
 
-static void gui_wait_probe_coordinator_entry(void)
-{
-    __asm__ volatile ("sti" ::: "memory");
-    gui_blocking_wait_regression_probe();
-    __atomic_store_n(&gui_wait_probe_coordinator_done, 1U,
-                     __ATOMIC_RELEASE);
-    process_terminate_current_with_status(0);
-    for (;;)
-        __asm__ volatile ("sti; hlt" ::: "memory");
-}
-
 int os_selftest_start_gui_wait_probe(void)
 {
     int pid = process_create_kernel("gui-wait-coordinator",
@@ -854,6 +779,7 @@ int os_selftest_start_gui_wait_probe(void)
         return 0;
     __atomic_store_n(&gui_wait_probe_coordinator_done, 0U,
                      __ATOMIC_RELEASE);
+    __atomic_store_n(&gui_wait_probe_phase, 0U, __ATOMIC_RELEASE);
     __atomic_store_n(&gui_wait_probe_coordinator_pid, (uint32_t)pid,
                      __ATOMIC_RELEASE);
     return 1;

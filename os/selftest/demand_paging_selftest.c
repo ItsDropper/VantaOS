@@ -422,7 +422,8 @@ static void vmt_elf_cases(void)
     vmt_report("PAGE_CACHE_READ_FIRST", vmt_run_elf(&read, size));
     vmt_report("PAGE_CACHE_READ_SECOND", vmt_run_elf(&read, size));
     const vmt_expect_t write = { "PAGE_CACHE_WRITE_PROTECT", -1, 1, 2, 1,
-        VM_FAULT_PROTECTION, VMT_DATA + 4U, VM_PF_WRITE | VM_PF_PRESENT, 0 };
+        VM_FAULT_PROTECTION, VMT_DATA & ~(uint64_t)(VMT_PAGE - 1U),
+        VM_PF_WRITE | VM_PF_PRESENT, 0 };
     size = vmt_build_elf(vmt_prog_page_cache_write,
                          sizeof(vmt_prog_page_cache_write), 2);
     vmt_report("PAGE_CACHE_WRITE_PROTECT",

@@ -272,7 +272,8 @@ int main(int argc, char** argv)
     if (vanta_gui_poll_event((uint32_t)window,
                              (vanta_gui_event_t*)(uintptr_t)0x7ffffffff000ULL) !=
             -VANTA_EFAULT ||
-        vanta_gui_poll_event((uint32_t)window, &event) != 1L ||
+        vanta_gui_wait_event_timeout((uint32_t)window, &event, 30U) !=
+            1L ||
         event.type != VANTA_GUI_EVENT_FOCUS_GAINED ||
         vanta_gui_poll_event((uint32_t)window, &event) != 0L ||
         vanta_gui_wait_event_timeout(

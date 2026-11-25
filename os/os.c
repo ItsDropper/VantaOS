@@ -158,6 +158,12 @@ void os_initialize(multiboot_info_t* mbd)
 
 #ifdef VANTAOS_SELF_TEST
     os_selftest_initialize();
+    if (!os_selftest_start_gui_wait_probe())
+        os_boot_fatal("VANTAOS_GUI_BLOCKING_WAIT_START_FAIL\n");
+    if (!user_mode_process_smoke_test_start())
+        os_boot_fatal("VANTAOS_USER_PROCESS_TEST_START_FATAL_FAIL\n");
+    demand_paging_selftest_initialize();
+    shell_exec("/HELLO.ELF alpha \"two words\"");
 #endif
 }
 
@@ -200,16 +206,6 @@ void os_run(void)
     interrupt_health_verify();
 
 #ifdef VANTAOS_SELF_TEST
-    /*
-     * Exercise the blocking GUI wait before starting user-mode smoke programs
-     * or the demand-paging driver, so no unrelated user window can steal the
-     * injected pointer event.
-     */
-    os_selftest_run_gui_wait_probe();
-    if (!user_mode_process_smoke_test_start())
-        os_boot_fatal("VANTAOS_USER_PROCESS_TEST_START_FATAL_FAIL\n");
-    demand_paging_selftest_initialize();
-    shell_exec("/HELLO.ELF alpha \"two words\"");
     os_selftest_run_smp_probes();
 #endif
     desktop_process_main();

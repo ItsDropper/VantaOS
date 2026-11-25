@@ -119,6 +119,8 @@ def main() -> int:
     require("gui_blocking_wait_regression_probe" in selftest and
             "gui_server_test_queue_event" in selftest and
             "os_selftest_start_gui_wait_probe" in selftest and
+            "os_selftest_reap_gui_wait_probe" in selftest and
+            "os_selftest_reap_gui_wait_probe()" in desktop and
             "VANTAOS_GUI_BLOCKING_WAIT_OK" in selftest and
             "VANTAOS_GUI_BLOCKING_WAIT_OK" in workflow,
             "QEMU must require the asynchronous blocking GUI wait wake/timeout regression")

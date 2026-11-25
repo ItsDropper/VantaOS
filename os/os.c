@@ -162,7 +162,6 @@ void os_initialize(multiboot_info_t* mbd)
         os_boot_fatal("VANTAOS_USER_PROCESS_TEST_START_FATAL_FAIL\n");
     demand_paging_selftest_initialize();
     shell_exec("/HELLO.ELF alpha \"two words\"");
-    shell_exec("/EXPLORER-E2E.ELF");
 #endif
 }
 

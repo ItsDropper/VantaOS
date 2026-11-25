@@ -57,6 +57,30 @@ static void scheduler_reap_observer_entry(void)
     serial_write("VANTAOS_SCHEDULER_REAP_FAIL\n");
 }
 
+static void process_runtime_accounting_probe(void)
+{
+    uint32_t pid = process_current_pid();
+    uint64_t before = 0U;
+    uint64_t after = 0U;
+    uint64_t interrupt_flags;
+    __asm__ volatile ("pushfq; popq %0; cli" : "=r"(interrupt_flags) : : "memory");
+
+    int ok = pid != 0U &&
+             process_get_runtime_stats(pid, &before, NULL);
+    for (uint32_t i = 0U; i < 32U && ok; i++)
+        process_account_runtime_tick(pid);
+    if (ok)
+        ok = process_get_runtime_stats(pid, &after, NULL);
+
+    if ((interrupt_flags & (1ULL << 9)) != 0U)
+        __asm__ volatile ("sti" ::: "memory");
+
+    if (ok && after >= before && after - before >= 32U)
+        serial_write("VANTAOS_PROCESS_RUNTIME_ACCOUNTING_OK\n");
+    else
+        serial_write("VANTAOS_PROCESS_RUNTIME_ACCOUNTING_FAIL\n");
+}
+
 static void process_state_transition_probe(void)
 {
     int pid = process_create_kernel(
@@ -581,6 +605,7 @@ void os_selftest_initialize(void)
         return;
     memory_selftest_initialize();
     filesystem_selftest_initialize();
+    process_runtime_accounting_probe();
     process_state_transition_probe();
     process_deferred_switch_probe();
     scheduler_reschedule_request_probe();

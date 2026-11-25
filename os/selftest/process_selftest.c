@@ -758,7 +758,6 @@ void os_selftest_initialize(void)
     scheduler_reschedule_request_probe();
     process_owned_terminated_reuse_probe();
     gui_focus_input_regression_probe();
-    gui_blocking_wait_regression_probe();
     gui_dead_owner_cleanup_probe();
 
     if (process_create_kernel(NULL, process_current_pid(),
@@ -814,5 +813,9 @@ void os_selftest_initialize(void)
     }
 }
 
+void os_selftest_run_gui_wait_probe(void)
+{
+    gui_blocking_wait_regression_probe();
+}
 
 #endif

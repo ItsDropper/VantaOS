@@ -12,6 +12,7 @@
 void os_selftest_initialize(void);
 void os_selftest_run_smp_probes(void);
 int os_selftest_start_gui_wait_probe(void);
+void os_selftest_reap_gui_wait_probe(void);
 void filesystem_selftest_initialize(void);
 void memory_selftest_initialize(void);
 /* Spawns the ring-3 demand-paging regression driver. */

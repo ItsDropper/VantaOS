@@ -24,7 +24,7 @@ This is an early execution path, not a complete process environment. There is no
 
 C user programs can include `<vanta/syscall.h>` from `userspace/include`; the Bluetooth device-picker API is in `<vanta/bluetooth.h>`. The headers define `VANTA_USER_ABI_VERSION`, syscall numbers, read/write/truncate open flags, bounded file creation/writes, GUI calls, Bluetooth adapter/discovery/connect calls, a 4 KiB system-wide clipboard, and wrappers for the other implemented syscalls. The interface is freestanding and does not require libc. Wrappers return the kernel's raw result: a non-negative value on success or a negative error number on failure; they do not set `errno`. See [user-mode.md](../user-mode.md) for the complete wrapper table and limitations. CI compiles the public wrappers with `-Wall -Wextra -Werror` to catch ABI/header drift.
 
-A separate source-contract checker compares all 42 public syscall IDs with the kernel's numeric definitions and dispatch cases. It catches ID drift but does not validate syscall semantics or prove the check has passed until CI evidence is available.
+A separate source-contract checker compares all 43 public syscall IDs with the kernel's numeric definitions and dispatch cases. It catches ID drift but does not validate syscall semantics or prove the check has passed until CI evidence is available.
 
 ## Bring-up syscall ABI
 
@@ -50,6 +50,7 @@ The current syscall entry is `int 0x80`. Put the syscall number in `RAX`; the fi
 | `17` | Close an owned GUI window | `RDI`: window ID |
 | `18` | Replace retained GUI draw commands | `RDI`: window ID; `RSI`: command array; `RDX`: command count |
 | `19` | Poll one GUI event | `RDI`: window ID; `RSI`: writable `vanta_gui_event_t*`; returns 1, 0 if empty, or a negative error |
+| `45` | Wait for a GUI event | `RDI`: window ID; `RSI`: writable `vanta_gui_event_t*`; `RDX`: timeout in ms (0 = indefinite, max 60000); returns 1, 0 on timeout, or a negative error |
 | `31` | Count bound USB Bluetooth adapters | No arguments; returns count |
 | `32` | Get adapter USB port | `RDI`: zero-based adapter index; `RSI`: writable `uint32_t*` |
 | `33` | Start Classic Bluetooth inquiry | `RDI`: adapter port; starts a bounded scan |
@@ -66,7 +67,7 @@ Serial and terminal writes accept at most 4096 bytes per call and validate the s
 
 The build now compiles `userspace/apps/terminal.c` as a static ELF64 image and installs it as `/TERMINAL.ELF` on the FAT32 disk. Opening Terminal spawns that ELF as a user process; command parsing and shell built-ins run in ring 3, while the current framebuffer window and terminal-history renderer remain kernel-side. The initial shell supports `help`, `about`, `pwd`, `ls`, `cat`, `echo`, `exec`, `clear`, and `exit`. The `exec` command waits for the child and reports its exit status. Job control, multi-process terminal sessions, and a stable interactive ABI are not implemented yet. User-mode file writes transfer at most 4096 bytes per syscall; total regular-file size is bounded by FAT32's 32-bit size field and available volume capacity.
 
-The extended syscall ABI adds nonblocking keyboard-character reads, an interrupt-backed yield, a bounded newline-delimited directory listing, terminal input/backspace/clear, and bounded file create/write operations. The directory listing syscall validates both the path and the entire writable output range before copying results. CI checks the new wrappers and requires a ring-3 child program to list `/` and find the expected FAT32 fixtures. Settings and File Explorer remain kernel-rendered; the initial process-owned window server now provides a route for future ring-3 apps without exposing framebuffer internals. The server does not yet implement move/resize/minimize/maximize, and no Settings or File Explorer ELF migration is included.
+The extended syscall ABI adds nonblocking keyboard-character reads, an interrupt-backed yield, a bounded newline-delimited directory listing, terminal input/backspace/clear, and bounded file create/write operations. The directory listing syscall validates both the path and the entire writable output range before copying results. CI checks the new wrappers and requires a ring-3 child program to list `/` and find the expected FAT32 fixtures. Settings and File Explorer remain kernel-rendered; the initial process-owned window server now provides a route for future ring-3 apps without exposing framebuffer internals. The server implements move/resize/minimize/maximize and resize notifications. Its blocking GUI wait uses per-window process wait queues, with keyboard notifications from the desktop input loop and timed waits for periodic UI refresh.
 
 ## Loader and memory constraints
 

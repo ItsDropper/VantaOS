@@ -88,6 +88,12 @@ def main() -> int:
             "public GUI header must expose blocking and timed waits")
     require("#define VANTA_USER_ABI_VERSION 12U" in public_syscall,
             "userspace ABI version must be incremented")
+    ring3_test = read("tests/user/child.c")
+    require("vanta_gui_wait_event_timeout((uint32_t)window, &event, 30U) !=" in
+            ring3_test and "VANTA_GUI_EVENT_FOCUS_GAINED" in ring3_test and
+            "vanta_gui_wait_event_timeout((uint32_t)window, &event, 30U) != 0L" in
+            ring3_test,
+            "ring-3 test must verify event copyout and an actual timed sleep")
 
     require("keyboard_input_generation" in keyboard and
             "keyboard_input_generation()" in desktop and

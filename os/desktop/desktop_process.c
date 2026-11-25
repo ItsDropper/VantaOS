@@ -121,6 +121,8 @@ void desktop_process_main(void)
         desktop_pid = current_pid;
     desktop_start_background_workers(current_pid);
     desktop_keyboard_generation = keyboard_input_generation();
+    if (keyboard_has_char() || keyboard_has_event())
+        gui_server_notify_input_available();
     serial_write("VANTAOS_DESKTOP_INPUT_LOOP_ONLINE\n");
     uint64_t watchdog = kernel_watchdog_register(500U);
     __atomic_store_n(&desktop_watchdog_handle, watchdog, __ATOMIC_RELEASE);

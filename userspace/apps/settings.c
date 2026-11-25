@@ -765,14 +765,17 @@ int main(int argc, char** argv)
     while (running)
     {
         vanta_gui_event_t event;
-        long result = vanta_gui_poll_event(window_id, &event);
+        long result = vanta_gui_wait_event_timeout(
+            window_id, &event, selected_page == 3U ? 100U : 0U);
         if (result < 0)
             close_app();
         if (result == 0)
         {
             if (selected_page == 3U)
+            {
+                bluetooth_refresh();
                 render();
-            (void)vanta_yield();
+            }
             continue;
         }
         if (event.type == VANTA_GUI_EVENT_CLOSE_REQUEST)

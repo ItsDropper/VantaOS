@@ -624,7 +624,13 @@ static int gui_wait_probe_run(uint32_t timeout_ms, int inject_event,
                      (int32_t)request.width) / 2;
         int32_t y = ((int32_t)graphics_get_height() -
                      (int32_t)request.height) / 2;
-        if (gui_server_mouse_click(x + 40, y + 80, 1) != 1)
+        (void)x;
+        (void)y;
+        const vanta_gui_event_t injected = {
+            VANTA_GUI_EVENT_POINTER_DOWN, 32, 30, 1U, 0U
+        };
+        if (gui_server_test_queue_event((uint32_t)pid, (uint32_t)window,
+                                        &injected) != 1)
             entered_wait = 0;
     }
 
@@ -813,9 +819,19 @@ void os_selftest_initialize(void)
     }
 }
 
-void os_selftest_run_gui_wait_probe(void)
+static void gui_wait_probe_coordinator_entry(void)
 {
     gui_blocking_wait_regression_probe();
+    process_terminate_current_with_status(0);
+    for (;;)
+        __asm__ volatile ("sti; hlt" ::: "memory");
+}
+
+int os_selftest_start_gui_wait_probe(void)
+{
+    return process_create_kernel("gui-wait-coordinator",
+                                 process_current_pid(),
+                                 gui_wait_probe_coordinator_entry) > 0;
 }
 
 #endif

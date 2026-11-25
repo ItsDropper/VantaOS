@@ -5,7 +5,7 @@
 
 ## Context
 
-VantaOS has a working early ring-3 path and a public freestanding syscall header. The current interface uses the project-specific VANTA_USER_ABI_VERSION value 11 and syscall entry through int 0x80. It supports static ELF64 ET_EXEC applications, bounded file descriptors, child process operations, IPC, and a project-specific GUI API. The repository explicitly does not promise a stable long-term ABI or POSIX compatibility.
+VantaOS has a working early ring-3 path and a public freestanding syscall header. The current interface uses the project-specific VANTA_USER_ABI_VERSION value 12 and syscall entry through int 0x80. It supports static ELF64 ET_EXEC applications, bounded file descriptors, child process operations, IPC, and a project-specific GUI API. The repository explicitly does not promise a stable long-term ABI or POSIX compatibility.
 
 Long-lived compatibility work—including any future Windows userspace runtime—would be fragile if syscall numbers, return conventions, memory ownership, or public structure layouts changed without policy. A numeric version macro alone does not tell an application which optional services exist.
 

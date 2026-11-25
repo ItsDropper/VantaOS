@@ -28,6 +28,7 @@
 #include "shell.h"
 #include "terminal.h"
 #include "terminal_process.h"
+#include "timer.h"
 #include "vfs.h"
 
 #ifdef VANTAOS_SELF_TEST
@@ -55,6 +56,78 @@ static void scheduler_reap_observer_entry(void)
     }
 
     serial_write("VANTAOS_SCHEDULER_REAP_FAIL\n");
+}
+
+static void process_timed_sleep_deadline_probe(void)
+{
+    uint32_t parent_pid = process_current_pid();
+    int pid = process_create_kernel(
+        "timed-sleep-deadline-probe", parent_pid, scheduler_probe_entry);
+    if (pid <= 0)
+    {
+        serial_write("VANTAOS_PROCESS_TIMED_SLEEP_DEADLINE_FAIL_CREATE\\n");
+        return;
+    }
+
+    int ok = process_set_running((uint32_t)pid);
+    if (ok)
+        ok = process_sleep_current_until(100U);
+
+    process_t snapshot;
+    if (ok)
+        ok = process_snapshot((uint32_t)pid, &snapshot) &&
+             snapshot.state == PROCESS_SLEEPING &&
+             snapshot.sleep_deadline_ticks == 100U;
+
+    /* Before the earliest deadline, the process must remain asleep. */
+    if (ok)
+    {
+        process_wake_expired(99U);
+        ok = process_snapshot((uint32_t)pid, &snapshot) &&
+             snapshot.state == PROCESS_SLEEPING;
+    }
+
+    /* An early explicit wake leaves a stale hint, which must be harmless. */
+    if (ok)
+        ok = process_wake((uint32_t)pid);
+    if (ok)
+        ok = process_set_running((uint32_t)pid);
+    if (ok)
+        ok = process_sleep_current_until(200U);
+
+    /* Expiring the stale 100-tick hint must preserve the 200-tick sleeper. */
+    if (ok)
+    {
+        process_wake_expired(100U);
+        ok = process_snapshot((uint32_t)pid, &snapshot) &&
+             snapshot.state == PROCESS_SLEEPING &&
+             snapshot.sleep_deadline_ticks == 200U;
+    }
+    if (ok)
+    {
+        process_wake_expired(199U);
+        ok = process_snapshot((uint32_t)pid, &snapshot) &&
+             snapshot.state == PROCESS_SLEEPING;
+    }
+    if (ok)
+    {
+        process_wake_expired(200U);
+        ok = process_snapshot((uint32_t)pid, &snapshot) &&
+             snapshot.state == PROCESS_READY &&
+             snapshot.sleep_deadline_ticks == 0U;
+    }
+
+    /* Restore the boot context before reclaiming the probe's process slot. */
+    if (process_current_pid() != parent_pid)
+        ok = process_switch_to(parent_pid) && ok;
+    if (process_snapshot((uint32_t)pid, &snapshot))
+        ok = process_terminate((uint32_t)pid) && ok;
+    if (process_snapshot((uint32_t)pid, &snapshot))
+        ok = process_reap((uint32_t)pid) && ok;
+
+    serial_write(ok ?
+        "VANTAOS_PROCESS_TIMED_SLEEP_DEADLINE_OK\\n" :
+        "VANTAOS_PROCESS_TIMED_SLEEP_DEADLINE_FAIL\\n");
 }
 
 static void process_state_transition_probe(void)
@@ -581,6 +654,7 @@ void os_selftest_initialize(void)
         return;
     memory_selftest_initialize();
     filesystem_selftest_initialize();
+    process_timed_sleep_deadline_probe();
     process_state_transition_probe();
     process_deferred_switch_probe();
     scheduler_reschedule_request_probe();

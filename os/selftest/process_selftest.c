@@ -552,6 +552,7 @@ static void gui_wait_probe_entry(void)
     while (gui_server_poll_event(pid, window, &event) == 1)
         ;
 
+    __asm__ volatile ("sti" ::: "memory");
     int result = gui_server_wait_event(pid, window, &event, timeout);
     uint32_t outcome = 3U;
     if (result == 1 && event.type == VANTA_GUI_EVENT_POINTER_DOWN &&
@@ -570,15 +571,33 @@ static int gui_wait_probe_run(uint32_t timeout_ms, int inject_event,
 {
     uint32_t parent_pid = process_current_pid();
     uint32_t cpu_id = process_current_cpu_id();
-    int pid = process_create_kernel_on_cpu(
-        "gui-blocking-wait-probe", parent_pid, gui_wait_probe_entry, cpu_id);
-    if (pid <= 0)
-        return 0;
-
     vanta_gui_window_request_t request = {
         .width = 240U, .height = 160U, .title = "GUI Wait Probe"
     };
+
+    /* Keep the pinned child from running until its window and arguments exist. */
+    uint64_t interrupt_flags;
+    __asm__ volatile ("pushfq; popq %0; cli"
+                      : "=r"(interrupt_flags) :: "memory", "cc");
+    int pid = process_create_kernel_on_cpu(
+        "gui-blocking-wait-probe", parent_pid, gui_wait_probe_entry, cpu_id);
+    if (pid <= 0)
+    {
+        __asm__ volatile ("pushq %0; popfq"
+                          :: "r"(interrupt_flags) : "memory", "cc");
+        return 0;
+    }
     int window = gui_server_create_window((uint32_t)pid, &request);
+    if (window > 0)
+    {
+        __atomic_store_n(&gui_wait_probe_window, (uint32_t)window,
+                         __ATOMIC_RELEASE);
+        __atomic_store_n(&gui_wait_probe_timeout, timeout_ms,
+                         __ATOMIC_RELEASE);
+        __atomic_store_n(&gui_wait_probe_result, 0U, __ATOMIC_RELEASE);
+    }
+    __asm__ volatile ("pushq %0; popfq"
+                      :: "r"(interrupt_flags) : "memory", "cc");
     if (window <= 0)
     {
         (void)process_terminate((uint32_t)pid);
@@ -594,12 +613,6 @@ static int gui_wait_probe_run(uint32_t timeout_ms, int inject_event,
         (void)process_reap((uint32_t)pid);
         return 0;
     }
-
-    __atomic_store_n(&gui_wait_probe_window, (uint32_t)window,
-                     __ATOMIC_RELEASE);
-    __atomic_store_n(&gui_wait_probe_timeout, timeout_ms,
-                     __ATOMIC_RELEASE);
-    __atomic_store_n(&gui_wait_probe_result, 0U, __ATOMIC_RELEASE);
 
     int entered_wait = 0;
     process_t snapshot;

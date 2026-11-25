@@ -275,6 +275,14 @@ int main(int argc, char** argv)
         vanta_gui_poll_event((uint32_t)window, &event) != 1L ||
         event.type != VANTA_GUI_EVENT_FOCUS_GAINED ||
         vanta_gui_poll_event((uint32_t)window, &event) != 0L ||
+        vanta_gui_wait_event_timeout(
+            (uint32_t)window,
+            (vanta_gui_event_t*)(uintptr_t)0x7ffffffff000ULL, 1U) !=
+            -VANTA_EFAULT ||
+        vanta_gui_wait_event_timeout((uint32_t)window, &event,
+                                     VANTA_GUI_WAIT_MAX_TIMEOUT_MS + 1U) !=
+            -VANTA_EINVAL ||
+        vanta_gui_wait_event_timeout((uint32_t)window, &event, 30U) != 0L ||
         vanta_gui_close_window(UINT32_MAX) != -VANTA_EBADF ||
         vanta_gui_close_window((uint32_t)window) != 0L ||
         vanta_gui_close_window((uint32_t)window) != -VANTA_EBADF)

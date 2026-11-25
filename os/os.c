@@ -158,6 +158,13 @@ void os_initialize(multiboot_info_t* mbd)
 
 #ifdef VANTAOS_SELF_TEST
     os_selftest_initialize();
+    uint64_t selftest_interrupt_flags;
+    __asm__ volatile ("pushfq; popq %0" : "=r"(selftest_interrupt_flags));
+    if ((selftest_interrupt_flags & (1ULL << 9)) == 0U)
+        __asm__ volatile ("sti" ::: "memory");
+    os_selftest_run_gui_wait_probe();
+    if ((selftest_interrupt_flags & (1ULL << 9)) == 0U)
+        __asm__ volatile ("cli" ::: "memory");
     if (!user_mode_process_smoke_test_start())
         os_boot_fatal("VANTAOS_USER_PROCESS_TEST_START_FATAL_FAIL\n");
     demand_paging_selftest_initialize();
@@ -206,7 +213,6 @@ void os_run(void)
 #ifdef VANTAOS_SELF_TEST
     /* Test implementation lives outside the boot/run orchestration. */
     os_selftest_run_smp_probes();
-    os_selftest_run_gui_wait_probe();
 #endif
     desktop_process_main();
 }

@@ -540,6 +540,8 @@ static void gui_focus_input_regression_probe(void)
 static volatile uint32_t gui_wait_probe_window;
 static volatile uint32_t gui_wait_probe_timeout;
 static volatile uint32_t gui_wait_probe_result;
+static volatile uint32_t gui_wait_probe_coordinator_pid;
+static volatile uint32_t gui_wait_probe_coordinator_done;
 
 static void gui_wait_probe_entry(void)
 {
@@ -819,6 +821,8 @@ void os_selftest_initialize(void)
 static void gui_wait_probe_coordinator_entry(void)
 {
     gui_blocking_wait_regression_probe();
+    __atomic_store_n(&gui_wait_probe_coordinator_done, 1U,
+                     __ATOMIC_RELEASE);
     process_terminate_current_with_status(0);
     for (;;)
         __asm__ volatile ("sti; hlt" ::: "memory");
@@ -826,9 +830,40 @@ static void gui_wait_probe_coordinator_entry(void)
 
 int os_selftest_start_gui_wait_probe(void)
 {
-    return process_create_kernel("gui-wait-coordinator",
-                                 process_current_pid(),
-                                 gui_wait_probe_coordinator_entry) > 0;
+    int pid = process_create_kernel("gui-wait-coordinator",
+                                    process_current_pid(),
+                                    gui_wait_probe_coordinator_entry);
+    if (pid <= 0)
+        return 0;
+    __atomic_store_n(&gui_wait_probe_coordinator_done, 0U,
+                     __ATOMIC_RELEASE);
+    __atomic_store_n(&gui_wait_probe_coordinator_pid, (uint32_t)pid,
+                     __ATOMIC_RELEASE);
+    return 1;
+}
+
+void os_selftest_reap_gui_wait_probe(void)
+{
+    if (__atomic_load_n(&gui_wait_probe_coordinator_done,
+                        __ATOMIC_ACQUIRE) == 0U)
+        return;
+    uint32_t pid = __atomic_load_n(&gui_wait_probe_coordinator_pid,
+                                   __ATOMIC_ACQUIRE);
+    if (pid == 0U)
+        return;
+
+    process_t snapshot;
+    if (!process_snapshot(pid, &snapshot))
+    {
+        __atomic_store_n(&gui_wait_probe_coordinator_pid, 0U,
+                         __ATOMIC_RELEASE);
+        return;
+    }
+    if (snapshot.state == PROCESS_TERMINATED &&
+        snapshot.owner_cpu == PROCESS_CPU_UNOWNED &&
+        process_reap(pid))
+        __atomic_store_n(&gui_wait_probe_coordinator_pid, 0U,
+                         __ATOMIC_RELEASE);
 }
 
 #endif

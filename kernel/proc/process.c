@@ -302,7 +302,13 @@ void process_initialize(void)
     process_legacy_current_pid = 0;
     cpu_local_t* local = process_local_state();
     if (local)
-        local->current_pid = 0;
+    {
+        local->current_pid = 0U;
+        __atomic_store_n(&local->runtime_accounting_pid, 0U,
+                         __ATOMIC_RELAXED);
+        __atomic_store_n(&local->runtime_accounting_ticks, 0U,
+                         __ATOMIC_RELAXED);
+    }
 
     for (uint32_t i = 0; i < PROCESS_MAX; i++)
     {

@@ -772,10 +772,7 @@ int main(int argc, char** argv)
         if (result == 0)
         {
             if (selected_page == 3U)
-            {
-                bluetooth_refresh();
                 render();
-            }
             continue;
         }
         if (event.type == VANTA_GUI_EVENT_CLOSE_REQUEST)

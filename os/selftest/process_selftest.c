@@ -65,7 +65,7 @@ static void process_timed_sleep_deadline_probe(void)
         "timed-sleep-deadline-probe", parent_pid, scheduler_probe_entry);
     if (pid <= 0)
     {
-        serial_write("VANTAOS_PROCESS_TIMED_SLEEP_DEADLINE_FAIL_CREATE\\n");
+        serial_write("VANTAOS_PROCESS_TIMED_SLEEP_DEADLINE_FAIL_CREATE\n");
         return;
     }
 
@@ -126,8 +126,8 @@ static void process_timed_sleep_deadline_probe(void)
         ok = process_reap((uint32_t)pid) && ok;
 
     serial_write(ok ?
-        "VANTAOS_PROCESS_TIMED_SLEEP_DEADLINE_OK\\n" :
-        "VANTAOS_PROCESS_TIMED_SLEEP_DEADLINE_FAIL\\n");
+        "VANTAOS_PROCESS_TIMED_SLEEP_DEADLINE_OK\n" :
+        "VANTAOS_PROCESS_TIMED_SLEEP_DEADLINE_FAIL\n");
 }
 
 static void process_state_transition_probe(void)

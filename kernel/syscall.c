@@ -72,6 +72,7 @@
 #define USER_SYSCALL_MMAP 42U
 #define USER_SYSCALL_MUNMAP 43U
 #define USER_SYSCALL_BRK 44U
+#define USER_SYSCALL_GUI_WAIT_EVENT 45U
 
 #define USER_CLIPBOARD_CAPACITY 4096U
 static uint8_t user_clipboard[USER_CLIPBOARD_CAPACITY];
@@ -886,6 +887,49 @@ static int syscall_gui_poll_event(struct exception_frame* frame,
     return 0;
 }
 
+static int syscall_gui_wait_event(struct exception_frame* frame,
+                                  const process_t* process)
+{
+    if (frame->rdi == 0U || frame->rdi > UINT32_MAX ||
+        frame->rdx > VANTA_GUI_WAIT_MAX_TIMEOUT_MS)
+    {
+        frame->rax = (uint64_t)(int64_t)-22;
+        return 0;
+    }
+
+    uintptr_t address = (uintptr_t)frame->rsi;
+    if (!vm_user_range_valid(process->address_space, address,
+                             sizeof(vanta_gui_event_t), 1))
+    {
+        frame->rax = (uint64_t)(int64_t)-14;
+        return 0;
+    }
+
+    /*
+     * int 0x80 is an interrupt gate and enters with IF cleared. The wait-queue
+     * contract requires interrupts enabled when it captures its lock flags.
+     */
+    if ((frame->rflags & (1ULL << 9)) == 0U)
+    {
+        frame->rax = (uint64_t)(int64_t)-11;
+        return 0;
+    }
+    __asm__ volatile ("sti" ::: "memory");
+
+    vanta_gui_event_t event;
+    int result = gui_server_wait_event(process->pid, (uint32_t)frame->rdi,
+                                       &event, (uint32_t)frame->rdx);
+    if (result > 0)
+    {
+        uint8_t* destination = (uint8_t*)address;
+        const uint8_t* source = (const uint8_t*)&event;
+        for (size_t i = 0U; i < sizeof(event); i++)
+            destination[i] = source[i];
+    }
+    frame->rax = (uint64_t)(int64_t)result;
+    return 0;
+}
+
 static int syscall_ipc_create(struct exception_frame* frame, const process_t* process)
 {
     frame->rax = (uint64_t)ipc_endpoint_create(process->pid);
@@ -1192,6 +1236,8 @@ static int syscall_dispatch(struct exception_frame* frame)
             return syscall_gui_draw(frame, &process);
         case USER_SYSCALL_GUI_POLL_EVENT:
             return syscall_gui_poll_event(frame, &process);
+        case USER_SYSCALL_GUI_WAIT_EVENT:
+            return syscall_gui_wait_event(frame, &process);
         case USER_SYSCALL_SETTINGS_APPLY:
             if (desktop_theme_reload())
             {

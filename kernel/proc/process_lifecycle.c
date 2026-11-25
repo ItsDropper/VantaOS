@@ -102,6 +102,25 @@ int process_set_running(uint32_t pid)
     return 1;
 }
 
+/*
+ * Fast-path hint for the earliest timed sleeper. The process table remains
+ * authoritative; this value is only a lower bound that lets the PIT handler
+ * avoid taking the global process lock on ticks before any deadline can expire.
+ *
+ * Writers hold process_table_lock. Early wakeups may leave a stale (too early)
+ * hint, which causes at most one harmless rescan; the scan recomputes the hint.
+ */
+static volatile uint64_t next_timed_wakeup_deadline;
+ 
+static void process_publish_timed_deadline_locked(uint64_t deadline_ticks)
+{
+    uint64_t current = __atomic_load_n(&next_timed_wakeup_deadline,
+                                       __ATOMIC_RELAXED);
+    if (current == 0U || deadline_ticks < current)
+        __atomic_store_n(&next_timed_wakeup_deadline, deadline_ticks,
+                         __ATOMIC_RELEASE);
+}
+
 static volatile uint32_t wakeup_cpu_cursor;
 
 /*
@@ -240,6 +259,7 @@ int process_sleep_current_until(uint64_t deadline_ticks)
 
     process_t* process = &process_table_records[pid];
     process->sleep_deadline_ticks = deadline_ticks;
+    process_publish_timed_deadline_locked(deadline_ticks);
     process->wait_queue = NULL;
     process->state = PROCESS_SLEEPING;
     process_table_lock_release(flags);
@@ -247,9 +267,10 @@ int process_sleep_current_until(uint64_t deadline_ticks)
 }
 
 /*
- * Bounded O(PROCESS_MAX) scan at the PIT rate. State transitions happen under
- * one table-lock acquisition; IPIs are sent only after releasing that lock.
- * A stale deadline can never wake a reused slot because reset clears it.
+ * The common PIT path is O(1): before the earliest published deadline it does
+ * not acquire the process-table lock. At/after that deadline, one bounded scan
+ * wakes all due sleepers and recomputes the hint while holding the table lock.
+ * Early explicit wakeups can leave a stale hint, never a late one.
  */
 void process_wake_expired(uint64_t now_ticks)
 {
@@ -259,20 +280,33 @@ void process_wake_expired(uint64_t now_ticks)
     if (!process_initialized_state || now_ticks == 0U)
         return;
 
+    uint64_t next_deadline = __atomic_load_n(
+        &next_timed_wakeup_deadline, __ATOMIC_ACQUIRE);
+    if (next_deadline == 0U || now_ticks < next_deadline)
+        return;
+
     /*
      * Make all due sleepers runnable in one table-lock transaction. Record
      * destinations, then send at most one reschedule IPI per CPU after
-     * dropping the lock. Unpinned work needs only one initial nudge: any CPU
-     * can claim it on a later scheduling pass.
+     * dropping that lock. Recompute the next deadline from the authoritative
+     * process records so stale early-wakeup hints are discarded here.
      */
+    uint64_t next_remaining_deadline = 0U;
     uint64_t flags = process_table_lock_acquire();
     for (uint32_t pid = 1U; pid < PROCESS_MAX; pid++)
     {
         process_t* process = &process_table_records[pid];
         if (process->state != PROCESS_SLEEPING ||
-            process->sleep_deadline_ticks == 0U ||
-            process->sleep_deadline_ticks > now_ticks)
+            process->sleep_deadline_ticks == 0U)
             continue;
+
+        if (process->sleep_deadline_ticks > now_ticks)
+        {
+            if (next_remaining_deadline == 0U ||
+                process->sleep_deadline_ticks < next_remaining_deadline)
+                next_remaining_deadline = process->sleep_deadline_ticks;
+            continue;
+        }
 
         process->state = PROCESS_READY;
         process->sleep_deadline_ticks = 0U;
@@ -287,6 +321,8 @@ void process_wake_expired(uint64_t now_ticks)
         else if (target == PROCESS_CPU_ANY)
             has_unpinned_wakeup = 1;
     }
+    __atomic_store_n(&next_timed_wakeup_deadline,
+                     next_remaining_deadline, __ATOMIC_RELEASE);
     process_table_lock_release(flags);
 
     if (has_unpinned_wakeup)
@@ -401,6 +437,7 @@ int process_wait_queue_sleep_until_locked(process_wait_queue_t* queue,
 
     process_t* process = &process_table_records[pid];
     process->sleep_deadline_ticks = deadline_ticks;
+    process_publish_timed_deadline_locked(deadline_ticks);
     process->wait_queue = queue;
     process->state = PROCESS_SLEEPING;
     queue->waiters[pid / 32U] |= 1U << (pid % 32U);

@@ -97,8 +97,9 @@ def main() -> int:
 
     require("keyboard_input_generation" in keyboard and
             "keyboard_input_generation()" in desktop and
-            "gui_server_notify_input_available()" in desktop,
-            "desktop input loop must notify GUI waiters when keyboard buffers change")
+            "gui_server_notify_input_available()" in desktop and
+            "keyboard_has_char() || keyboard_has_event()" in desktop,
+            "desktop input loop must notify GUI waiters for new and pre-existing keyboard input")
 
     for app in ("calculator", "notes", "terminal", "explorer"):
         source = read(f"userspace/apps/{app}.c")

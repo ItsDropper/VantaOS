@@ -15,6 +15,7 @@
 #include "terminal.h"
 #include "terminal_process.h"
 #include "desktop_theme.h"
+#include "timer.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -74,6 +75,26 @@ static uint32_t resize_start_width;
 static uint32_t resize_start_height;
 static int redraw_pending;
 static int window_redraw_pending;
+
+/*
+ * Wait queues are separate from gui_window_t so clearing or reusing a window
+ * slot never reinitializes a lock that a sleeping process may still reference.
+ */
+static process_wait_queue_t gui_window_waiters[VANTA_GUI_MAX_WINDOWS];
+static volatile uint32_t gui_pending_wake_mask;
+
+static void gui_unlock(uint64_t flags)
+{
+    spinlock_unlock_irqrestore(&gui_lock, flags);
+    uint32_t pending = __atomic_exchange_n(&gui_pending_wake_mask, 0U,
+                                            __ATOMIC_ACQ_REL);
+    if (pending == 0U || !process_is_initialized())
+        return;
+
+    for (uint32_t slot = 0U; slot < VANTA_GUI_MAX_WINDOWS; slot++)
+        if ((pending & (1U << slot)) != 0U)
+            (void)process_wait_queue_wake_all(&gui_window_waiters[slot]);
+}
 
 /*
  * Rendering is deliberately performed from a snapshot outside gui_lock.
@@ -143,7 +164,7 @@ int gui_server_register_builtin(const char* title, int x, int y,
     }
     if (!slot)
     {
-        spinlock_unlock_irqrestore(&gui_lock, flags);
+        gui_unlock(flags);
         return -12;
     }
 
@@ -168,7 +189,7 @@ int gui_server_register_builtin(const char* title, int x, int y,
     slot->builtin_draw = draw;
     slot->builtin_click = click;
     slot->builtin_close = close;
-    spinlock_unlock_irqrestore(&gui_lock, flags);
+    gui_unlock(flags);
     return (int)slot->id;
 }
 
@@ -186,7 +207,7 @@ int gui_server_set_builtin_visible(const char* title, int visible)
         }
     if (!target)
     {
-        spinlock_unlock_irqrestore(&gui_lock, flags);
+        gui_unlock(flags);
         return -2;
     }
 
@@ -198,7 +219,7 @@ int gui_server_set_builtin_visible(const char* title, int visible)
     else if (focused_window_id == target->id)
         gui_focus_locked(gui_topmost_visible_locked(target->id));
     redraw_pending = 1;
-    spinlock_unlock_irqrestore(&gui_lock, flags);
+    gui_unlock(flags);
     return 0;
 }
 
@@ -220,9 +241,15 @@ static void gui_queue_event_locked(gui_window_t* window,
 {
     if (!window || !event)
         return;
-    (void)gui_event_queue_push(window->events, GUI_EVENT_QUEUE_CAPACITY,
-                               &window->event_head, &window->event_count,
-                               event);
+    if (gui_event_queue_push(window->events, GUI_EVENT_QUEUE_CAPACITY,
+                              &window->event_head, &window->event_count,
+                              event))
+    {
+        uint32_t slot = (uint32_t)(window - windows);
+        if (slot < VANTA_GUI_MAX_WINDOWS)
+            __atomic_fetch_or(&gui_pending_wake_mask, 1U << slot,
+                              __ATOMIC_RELEASE);
+    }
 }
 
 static void gui_emit_simple_event_locked(gui_window_t* window,
@@ -337,7 +364,7 @@ void gui_server_sync_active_panel(void)
         else if (gui_title_equal(window->title, "Settings")) panel = 4;
         break;
     }
-    spinlock_unlock_irqrestore(&gui_lock, flags);
+    gui_unlock(flags);
     graphics_select_panel(panel);
 }
 
@@ -382,7 +409,7 @@ void gui_server_reflow_windows(void)
             gui_emit_resize_locked(window);
     }
     redraw_pending = 1;
-    spinlock_unlock_irqrestore(&gui_lock, flags);
+    gui_unlock(flags);
 }
 
 int gui_server_create_window(uint32_t pid,
@@ -413,7 +440,7 @@ int gui_server_create_window(uint32_t pid,
         }
     if (!slot)
     {
-        spinlock_unlock_irqrestore(&gui_lock, flags);
+        gui_unlock(flags);
         return -12;
     }
 
@@ -437,7 +464,7 @@ int gui_server_create_window(uint32_t pid,
 
     gui_focus_locked(slot);
     uint32_t id = slot->id;
-    spinlock_unlock_irqrestore(&gui_lock, flags);
+    gui_unlock(flags);
     return (int)id;
 }
 
@@ -447,11 +474,15 @@ int gui_server_close_window(uint32_t pid, uint32_t id)
     gui_window_t* window = gui_find_window_locked(pid, id);
     if (!window)
     {
-        spinlock_unlock_irqrestore(&gui_lock, flags);
+        gui_unlock(flags);
         return -9;
     }
 
     int was_focused = focused_window_id == id;
+    uint32_t slot = (uint32_t)(window - windows);
+    if (slot < VANTA_GUI_MAX_WINDOWS)
+        __atomic_fetch_or(&gui_pending_wake_mask, 1U << slot,
+                          __ATOMIC_RELEASE);
     for (size_t i = 0; i < sizeof(*window); i++)
         ((uint8_t*)window)[i] = 0U;
 
@@ -466,7 +497,7 @@ int gui_server_close_window(uint32_t pid, uint32_t id)
         gui_focus_locked(newest);
     }
     redraw_pending = 1;
-    spinlock_unlock_irqrestore(&gui_lock, flags);
+    gui_unlock(flags);
     return 0;
 }
 
@@ -480,14 +511,14 @@ int gui_server_submit_draw(uint32_t pid, uint32_t id,
     gui_window_t* window = gui_find_window_locked(pid, id);
     if (!window)
     {
-        spinlock_unlock_irqrestore(&gui_lock, flags);
+        gui_unlock(flags);
         return -9;
     }
     for (uint32_t i = 0; i < count; i++)
     {
         if (!gui_command_valid(&commands[i], window->width, window->height))
         {
-            spinlock_unlock_irqrestore(&gui_lock, flags);
+            gui_unlock(flags);
             return -22;
         }
     }
@@ -495,7 +526,7 @@ int gui_server_submit_draw(uint32_t pid, uint32_t id,
         window->commands[i] = commands[i];
     window->command_count = count;
     window_redraw_pending = 1;
-    spinlock_unlock_irqrestore(&gui_lock, flags);
+    gui_unlock(flags);
     return (int)count;
 }
 
@@ -527,7 +558,7 @@ int gui_server_set_owner_visible(uint32_t pid, int visible)
 
     if (!found || !changed)
     {
-        spinlock_unlock_irqrestore(&gui_lock, flags);
+        gui_unlock(flags);
         return found;
     }
 
@@ -551,7 +582,7 @@ int gui_server_set_owner_visible(uint32_t pid, int visible)
         gui_focus_locked(gui_topmost_visible_locked(0U));
 
     redraw_pending = 1;
-    spinlock_unlock_irqrestore(&gui_lock, flags);
+    gui_unlock(flags);
     return 1;
 }
 
@@ -563,7 +594,7 @@ void gui_server_notify_theme_changed(void)
             gui_emit_simple_event_locked(&windows[i],
                                          VANTA_GUI_EVENT_THEME_CHANGED);
     redraw_pending = 1;
-    spinlock_unlock_irqrestore(&gui_lock, flags);
+    gui_unlock(flags);
 }
 
 int gui_server_poll_event(uint32_t pid, uint32_t id,
@@ -617,6 +648,97 @@ int gui_server_poll_event(uint32_t pid, uint32_t id,
     return 1;
 }
 
+/*
+ * Blocking counterpart to poll_event. The wait-queue lock serializes the
+ * final event predicate check with waiter registration; producers publish
+ * events under gui_lock, drop gui_lock, then wake the slot's wait queue.
+ *
+ * timeout_ms == 0 waits indefinitely. A finite timeout returns 0; events
+ * return 1 and invalid/closed windows return a negative errno.
+ */
+int gui_server_wait_event(uint32_t pid, uint32_t id,
+                          vanta_gui_event_t* event_out,
+                          uint32_t timeout_ms)
+{
+    if (!event_out || timeout_ms > VANTA_GUI_WAIT_MAX_TIMEOUT_MS)
+        return -22;
+
+    uint32_t slot = VANTA_GUI_MAX_WINDOWS;
+    uint64_t flags = spinlock_lock_irqsave(&gui_lock);
+    gui_window_t* window = gui_find_window_locked(pid, id);
+    if (window)
+        slot = (uint32_t)(window - windows);
+    spinlock_unlock_irqrestore(&gui_lock, flags);
+    if (slot >= VANTA_GUI_MAX_WINDOWS)
+        return -9;
+
+    uint64_t deadline = 0U;
+    if (timeout_ms != 0U)
+    {
+        uint32_t frequency = timer_get_frequency();
+        if (frequency == 0U)
+            return -5;
+        uint64_t now = timer_get_ticks64();
+        uint64_t delta = ((uint64_t)timeout_ms * frequency + 999U) / 1000U;
+        if (delta == 0U)
+            delta = 1U;
+        if (UINT64_MAX - now < delta)
+            return -22;
+        deadline = now + delta;
+    }
+
+    for (;;)
+    {
+        int result = gui_server_poll_event(pid, id, event_out);
+        if (result != 0)
+            return result;
+        if (deadline != 0U && timer_get_ticks64() >= deadline)
+            return 0;
+
+        process_wait_queue_t* waiters = &gui_window_waiters[slot];
+        uint64_t wait_flags = process_wait_queue_lock(waiters);
+        result = gui_server_poll_event(pid, id, event_out);
+        if (result != 0)
+        {
+            process_wait_queue_unlock(waiters, wait_flags);
+            return result;
+        }
+        if (deadline != 0U && timer_get_ticks64() >= deadline)
+        {
+            process_wait_queue_unlock(waiters, wait_flags);
+            return 0;
+        }
+
+        int slept = deadline != 0U
+            ? process_wait_queue_sleep_until_locked(waiters, wait_flags,
+                                                    deadline)
+            : process_wait_queue_sleep_locked(waiters, wait_flags);
+        if (!slept)
+            return -11;
+    }
+}
+
+/* Called by the desktop input loop after publishing keyboard buffer updates. */
+void gui_server_notify_input_available(void)
+{
+    uint32_t slot = VANTA_GUI_MAX_WINDOWS;
+    uint64_t flags = spinlock_lock_irqsave(&gui_lock);
+    for (uint32_t i = 0U; i < VANTA_GUI_MAX_WINDOWS; i++)
+    {
+        gui_window_t* window = &windows[i];
+        if (window->used && window->visible && !window->builtin &&
+            window->id == focused_window_id)
+        {
+            slot = i;
+            break;
+        }
+    }
+    spinlock_unlock_irqrestore(&gui_lock, flags);
+
+    if (slot < VANTA_GUI_MAX_WINDOWS && process_is_initialized())
+        (void)process_wait_queue_wake_all(&gui_window_waiters[slot]);
+}
+
 void gui_server_draw_windows(void)
 {
     if (!graphics_is_initialized())
@@ -657,7 +779,7 @@ void gui_server_draw_windows(void)
         for (uint32_t j = 0; j < target->command_count; j++)
             target->commands[j] = source->commands[j];
     }
-    spinlock_unlock_irqrestore(&gui_lock, flags);
+    gui_unlock(flags);
 
     uint64_t previous_z = 0U;
     for (unsigned int pass = 0; pass < VANTA_GUI_MAX_WINDOWS; pass++)
@@ -876,7 +998,7 @@ int gui_server_mouse_click(int x, int y, int button)
     {
         if (focused_window_id != 0U)
             gui_focus_locked(0);
-        spinlock_unlock_irqrestore(&gui_lock, flags);
+        gui_unlock(flags);
         return 0;
     }
 
@@ -953,7 +1075,7 @@ int gui_server_mouse_click(int x, int y, int button)
         gui_queue_event_locked(target, &event);
     }
     redraw_pending = 1;
-    spinlock_unlock_irqrestore(&gui_lock, flags);
+    gui_unlock(flags);
     if (close_builtin)
     {
         if (builtin_close)
@@ -996,7 +1118,7 @@ void gui_server_mouse_wheel(int delta)
         };
         gui_queue_event_locked(target, &event);
     }
-    spinlock_unlock_irqrestore(&gui_lock, flags);
+    gui_unlock(flags);
 }
 
 void gui_server_mouse_move(int x, int y)
@@ -1051,7 +1173,7 @@ void gui_server_mouse_move(int x, int y)
                 gui_emit_resize_locked(window);
                 redraw_pending = 1;
             }
-            spinlock_unlock_irqrestore(&gui_lock, flags);
+            gui_unlock(flags);
             return;
         }
     }
@@ -1087,7 +1209,7 @@ void gui_server_mouse_move(int x, int y)
                 window->y = new_y;
                 redraw_pending = 1;
             }
-            spinlock_unlock_irqrestore(&gui_lock, flags);
+            gui_unlock(flags);
             return;
         }
     }
@@ -1112,7 +1234,7 @@ void gui_server_mouse_move(int x, int y)
         };
         gui_queue_event_locked(window, &event);
     }
-    spinlock_unlock_irqrestore(&gui_lock, flags);
+    gui_unlock(flags);
 }
 
 void gui_server_mouse_release(int button)
@@ -1155,7 +1277,7 @@ void gui_server_mouse_release(int button)
         gui_queue_event_locked(window, &event);
         break;
     }
-    spinlock_unlock_irqrestore(&gui_lock, flags);
+    gui_unlock(flags);
 }
 
 static void gui_taskbar_geometry(int screen_width, unsigned int count,
@@ -1221,7 +1343,7 @@ void gui_server_draw_taskbar_items(int taskbar_y, int screen_width)
             items[count].title[n] = window->title[n];
         count++;
     }
-    spinlock_unlock_irqrestore(&gui_lock, flags);
+    gui_unlock(flags);
     if (count == 0U)
         return;
 
@@ -1309,14 +1431,14 @@ int gui_server_taskbar_click(int x, int y, int taskbar_y, int screen_width)
                 gui_minimize_locked(window);
             else
                 gui_restore_locked(window);
-            spinlock_unlock_irqrestore(&gui_lock, flags);
+            gui_unlock(flags);
             return 1;
         }
         slot_x += slot_width;
         item_index++;
     }
     (void)item_index;
-    spinlock_unlock_irqrestore(&gui_lock, flags);
+    gui_unlock(flags);
     return 0;
 }
 
@@ -1334,7 +1456,7 @@ char gui_server_read_terminal_char(void)
     if (!focused || !focused->builtin ||
         !gui_title_equal(focused->title, "Terminal"))
     {
-        spinlock_unlock_irqrestore(&gui_lock, flags);
+        gui_unlock(flags);
         return 0;
     }
 
@@ -1357,7 +1479,7 @@ char gui_server_read_terminal_char(void)
     }
 
     char character = keyboard_has_char() ? keyboard_get_char() : 0;
-    spinlock_unlock_irqrestore(&gui_lock, flags);
+    gui_unlock(flags);
     return input_enabled ? character : 0;
 }
 
@@ -1366,7 +1488,7 @@ int gui_server_take_redraw_request(void)
     uint64_t flags = spinlock_lock_irqsave(&gui_lock);
     int pending = redraw_pending;
     redraw_pending = 0;
-    spinlock_unlock_irqrestore(&gui_lock, flags);
+    gui_unlock(flags);
     return pending;
 }
 
@@ -1375,7 +1497,7 @@ int gui_server_take_window_redraw_request(void)
     uint64_t flags = spinlock_lock_irqsave(&gui_lock);
     int pending = window_redraw_pending;
     window_redraw_pending = 0;
-    spinlock_unlock_irqrestore(&gui_lock, flags);
+    gui_unlock(flags);
     return pending;
 }
 
@@ -1383,7 +1505,7 @@ int gui_server_is_window_dragging(void)
 {
     uint64_t flags = spinlock_lock_irqsave(&gui_lock);
     int dragging = dragging_window_id != 0U || resizing_window_id != 0U;
-    spinlock_unlock_irqrestore(&gui_lock, flags);
+    gui_unlock(flags);
     return dragging;
 }
 
@@ -1400,7 +1522,7 @@ void gui_server_cleanup_dead_windows(void)
             owners[count] = windows[i].owner_pid;
             count++;
         }
-    spinlock_unlock_irqrestore(&gui_lock, flags);
+    gui_unlock(flags);
 
     for (unsigned int i = 0; i < count; i++)
     {

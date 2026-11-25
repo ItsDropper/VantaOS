@@ -350,8 +350,15 @@ int main(int argc, char** argv)
         return 11;
     }
     int32_t settings_status = -1;
-    if (vanta_waitpid((int)settings_pid, &settings_status) != settings_pid ||
-        settings_status != 0)
+    long waited_settings = -VANTA_EAGAIN;
+    for (unsigned int retries = 0U;
+         retries < 1000U && waited_settings == -VANTA_EAGAIN; ++retries)
+    {
+        waited_settings = vanta_waitpid((int)settings_pid, &settings_status);
+        if (waited_settings == -VANTA_EAGAIN)
+            (void)vanta_yield();
+    }
+    if (waited_settings != settings_pid || settings_status != 0)
     {
         (void)vanta_write(failure, sizeof(failure) - 1U);
         return 12;

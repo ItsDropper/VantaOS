@@ -117,17 +117,19 @@ def main() -> int:
             "Settings must retain periodic Bluetooth result refresh without busy polling")
 
     coordinator = function_body(selftest, "gui_wait_probe_coordinator_entry")
-    require("sti" in coordinator and
-            "gui_blocking_wait_regression_probe" in coordinator,
-            "GUI wait coordinator must run with interrupts enabled")
-    require("gui_blocking_wait_regression_probe" in selftest and
-            "gui_server_test_queue_event" in selftest and
+    require("sti" in coordinator and "gui_server_wait_event" in coordinator and
+            "2000U" in coordinator and "50U" in coordinator,
+            "GUI wait coordinator must block with interrupts enabled and test event/timeout paths")
+    require("gui_server_test_queue_event" in selftest and
             "os_selftest_start_gui_wait_probe" in selftest and
+            "os_selftest_pump_gui_wait_probe" in selftest and
             "os_selftest_reap_gui_wait_probe" in selftest and
+            "os_selftest_start_gui_wait_probe()" in desktop and
+            "os_selftest_pump_gui_wait_probe()" in desktop and
             "os_selftest_reap_gui_wait_probe()" in desktop and
             "VANTAOS_GUI_BLOCKING_WAIT_OK" in selftest and
             "VANTAOS_GUI_BLOCKING_WAIT_OK" in workflow,
-            "QEMU must require the asynchronous blocking GUI wait wake/timeout regression")
+            "QEMU must require the single-process desktop-pumped GUI wait regression")
 
     print("VANTAOS_GUI_BLOCKING_WAIT_SOURCE_OK")
     return 0

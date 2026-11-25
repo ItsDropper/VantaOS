@@ -128,7 +128,7 @@ void desktop_process_main(void)
         gui_server_notify_input_available();
 #ifdef VANTAOS_SELF_TEST
     if (!os_selftest_start_gui_wait_probe())
-        serial_write("VANTAOS_GUI_BLOCKING_WAIT_START_FAIL\\n");
+        serial_write("VANTAOS_GUI_BLOCKING_WAIT_START_FAIL\n");
 #endif
     serial_write("VANTAOS_DESKTOP_INPUT_LOOP_ONLINE\n");
     uint64_t watchdog = kernel_watchdog_register(500U);

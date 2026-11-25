@@ -718,6 +718,27 @@ int gui_server_wait_event(uint32_t pid, uint32_t id,
     }
 }
 
+#ifdef VANTAOS_SELF_TEST
+int gui_server_test_queue_event(uint32_t pid, uint32_t id,
+                                const vanta_gui_event_t* event)
+{
+    if (!event)
+        return -14;
+    uint64_t flags = spinlock_lock_irqsave(&gui_lock);
+    gui_window_t* window = gui_find_window_locked(pid, id);
+    if (!window)
+    {
+        gui_unlock(flags);
+        return -9;
+    }
+    uint32_t previous_count = window->event_count;
+    gui_queue_event_locked(window, event);
+    int queued = window->event_count != previous_count;
+    gui_unlock(flags);
+    return queued ? 1 : 0;
+}
+#endif
+
 /* Called by the desktop input loop after publishing keyboard buffer updates. */
 void gui_server_notify_input_available(void)
 {

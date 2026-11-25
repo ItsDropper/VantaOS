@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install build and QEMU tools
         run: sudo apt-get update && sudo apt-get install --yes build-essential nasm grub-pc-bin xorriso mtools dosfstools qemu-system-x86 gnu-efi imagemagick python3-pil

@@ -38,6 +38,10 @@ int gui_server_wait_event(uint32_t pid, uint32_t id,
                           vanta_gui_event_t* event_out,
                           uint32_t timeout_ms);
 void gui_server_notify_input_available(void);
+#ifdef VANTAOS_SELF_TEST
+int gui_server_test_queue_event(uint32_t pid, uint32_t id,
+                                const vanta_gui_event_t* event);
+#endif
 int gui_server_set_owner_visible(uint32_t pid, int visible);
 void gui_server_notify_theme_changed(void);
 void gui_server_draw_windows(void);

@@ -2,7 +2,7 @@
 
 ## Current state
 
-VantaOS has an initial user-mode GUI boundary and five standalone ring-3 desktop applications. The current userspace syscall ABI is version 11 and the GUI event ABI is version 2; both are VantaOS-specific, not POSIX, Win32, or Wayland compatible.
+VantaOS has an initial user-mode GUI boundary and five standalone ring-3 desktop applications. The current userspace syscall ABI is version 12 and the GUI event ABI is version 2; both are VantaOS-specific, not POSIX, Win32, or Wayland compatible.
 
 - Static ELF64 `ET_EXEC` programs can be loaded from FAT32 and run at CPL3 (ring 3) in a private address space.
 - The public freestanding header `userspace/include/vanta/syscall.h` exposes the current syscall wrappers; GUI structures live in `userspace/include/vanta/gui.h`.
@@ -20,7 +20,7 @@ Userspace applications that need typed request/response messages should use the 
 
 ## Input responsiveness
 
-The per-window event queue is bounded. Consecutive pointer-motion events are coalesced to the newest coordinates, and when the queue fills the oldest pending pointer-motion event is discarded before key, focus, button, or close events. Motion is only coalesced when adjacent in FIFO order, so it never moves across a semantic event. This reduces stale pointer work without changing click/key ordering.
+The per-window event queue is bounded. Consecutive pointer-motion events are coalesced to the newest coordinates, and when the queue fills the oldest pending pointer-motion event is discarded before key, focus, button, or close events. Motion is only coalesced when adjacent in FIFO order, so it never moves across a semantic event. Each window slot has a separate process wait queue; event producers publish under the GUI lock, release it, then wake only that window's waiters. Keyboard-buffer generation changes wake the focused user window through the desktop input loop. This prevents lost wakeups without waking unrelated applications for every pointer event.
 
 ## Current GUI ABI
 
@@ -31,12 +31,12 @@ The kernel validates requests and retains a bounded draw list for each window.
 | Window lifecycle | Create/close an owned window with a server-assigned ID; at most 8 windows |
 | Drawing | Filled rectangles and text; at most 160 commands per window |
 | Text limits | 31-byte title and 63-byte command text |
-| Events | Poll keyboard-character, pointer down/move/up, focus, close-request, resize, and theme-change events from a bounded per-window queue; key events carry Ctrl modifier state |
+| Events | Poll or block for keyboard-character, pointer down/move/up, focus, close-request, resize, and theme-change events from a bounded per-window queue; key events carry Ctrl modifier state. A zero timeout waits indefinitely; finite waits return 0 on timeout |
 | Queue overflow | Oldest event is dropped when the 32-event queue is full |
 | Input ownership | Left/right pointer clicks route to the topmost user window; pointer events carry Ctrl state for multi-selection, and keyboard input follows focus |
 | Isolation boundary | User buffers are validated; no raw framebuffer or kernel pointer is exposed |
 
-The implementation is intentionally small. A blocking event wait and mature clipping/accessibility support are not implemented. The header-only Vanta Design System is available through `<vanta/design.h>`: it provides bounded draw-list construction, shared spacing/radius tokens, theme-derived semantic colors, panels and stateful button visuals. Squircle rectangles use the kernel's exponent-4 superellipse rasterizer and are validated against client bounds. Window move/resize/maximize and resize notifications exist, but interaction testing remains limited. Explorer's file-operation clipboard remains app-local; the shared text clipboard is available to Terminal and Notes.
+The implementation is intentionally small. Blocking and timed event waits are implemented; mature clipping and broader accessibility support are not. The header-only Vanta Design System is available through `<vanta/design.h>`: it provides bounded draw-list construction, shared spacing/radius tokens, theme-derived semantic colors, panels and stateful button visuals. Squircle rectangles use the kernel's exponent-4 superellipse rasterizer and are validated against client bounds. Window move/resize/maximize and resize notifications exist, but interaction testing remains limited. Explorer's file-operation clipboard remains app-local; the shared text clipboard is available to Terminal and Notes.
 
 ## Storage and Settings persistence
 
@@ -51,7 +51,7 @@ The Settings UI must not label an RTC value as local time unless its policy is e
 ## Next implementation sequence
 
 1. Harden user-mode process isolation with fault-containment, invalid-mapping, malformed-ELF, allocation-failure, and adversarial address-space tests.
-2. Add a blocking GUI event wait and complete window move/resize/minimize/maximize semantics without weakening process ownership.
+2. Complete window move/resize/minimize/maximize semantics and broaden automated interaction coverage without weakening process ownership.
 3. Implement RTC UTC/local policy and timezone-rule conversion before exposing region-based local time as functional.
 4. Add end-to-end automated interaction tests for Explorer selection, context menus, create/rename/delete, recursive copy/move, and archive round-trips; add Unicode LFN creation and crash-atomic filesystem transactions.
 5. Keep every Settings preference tied to a real effect, validated persistence, and regression coverage; a UI control alone is not evidence of a working system feature.

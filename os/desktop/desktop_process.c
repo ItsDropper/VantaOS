@@ -32,6 +32,7 @@ static volatile uint32_t desktop_heartbeat_tick;
 static volatile uint64_t desktop_watchdog_handle;
 static uint64_t desktop_next_polled_device_tick;
 static uint8_t desktop_polling_fallback_reported;
+static uint64_t desktop_keyboard_generation;
 
 static void desktop_device_io_worker(void)
 {
@@ -119,6 +120,7 @@ void desktop_process_main(void)
     if (desktop_pid == 0U)
         desktop_pid = current_pid;
     desktop_start_background_workers(current_pid);
+    desktop_keyboard_generation = keyboard_input_generation();
     serial_write("VANTAOS_DESKTOP_INPUT_LOOP_ONLINE\n");
     uint64_t watchdog = kernel_watchdog_register(500U);
     __atomic_store_n(&desktop_watchdog_handle, watchdog, __ATOMIC_RELEASE);
@@ -174,6 +176,12 @@ void desktop_process_main(void)
          * the keyboard behind it).
          */
         keyboard_poll_input();
+        uint64_t keyboard_generation = keyboard_input_generation();
+        if (keyboard_generation != desktop_keyboard_generation)
+        {
+            desktop_keyboard_generation = keyboard_generation;
+            gui_server_notify_input_available();
+        }
         if (interrupt_health_polling_required())
         {
             /*

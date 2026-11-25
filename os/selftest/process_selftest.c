@@ -620,12 +620,6 @@ static int gui_wait_probe_run(uint32_t timeout_ms, int inject_event,
 
     if (entered_wait && inject_event)
     {
-        int32_t x = ((int32_t)graphics_get_width() -
-                     (int32_t)request.width) / 2;
-        int32_t y = ((int32_t)graphics_get_height() -
-                     (int32_t)request.height) / 2;
-        (void)x;
-        (void)y;
         const vanta_gui_event_t injected = {
             VANTA_GUI_EVENT_POINTER_DOWN, 32, 30, 1U, 0U
         };

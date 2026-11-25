@@ -650,6 +650,18 @@ static int gui_wait_probe_run(uint32_t timeout_ms, int inject_event,
     uint32_t outcome = __atomic_load_n(&gui_wait_probe_result,
                                        __ATOMIC_ACQUIRE);
     int ok = entered_wait && terminated && outcome == expected_outcome;
+    if (!entered_wait)
+        serial_write(expected_outcome == 1U ?
+            "VANTAOS_GUI_EVENT_WAKE_NOT_BLOCKED\n" :
+            "VANTAOS_GUI_TIMEOUT_NOT_BLOCKED\n");
+    if (!terminated)
+        serial_write(expected_outcome == 1U ?
+            "VANTAOS_GUI_EVENT_WAKE_NOT_TERMINATED\n" :
+            "VANTAOS_GUI_TIMEOUT_NOT_TERMINATED\n");
+    if (outcome != expected_outcome)
+        serial_write(expected_outcome == 1U ?
+            "VANTAOS_GUI_EVENT_WAKE_BAD_RESULT\n" :
+            "VANTAOS_GUI_TIMEOUT_BAD_RESULT\n");
     if (window > 0)
         (void)gui_server_close_window((uint32_t)pid, (uint32_t)window);
     if (!terminated)
@@ -682,7 +694,11 @@ static void gui_blocking_wait_regression_probe(void)
     }
 
     int event_wakeup = gui_wait_probe_run(500U, 1, 1U);
+    serial_write(event_wakeup ? "VANTAOS_GUI_EVENT_WAKE_OK\n" :
+                                "VANTAOS_GUI_EVENT_WAKE_FAIL\n");
     int timeout_wakeup = gui_wait_probe_run(50U, 0, 2U);
+    serial_write(timeout_wakeup ? "VANTAOS_GUI_TIMEOUT_OK\n" :
+                                  "VANTAOS_GUI_TIMEOUT_FAIL\n");
     serial_write(event_wakeup && timeout_wakeup ?
         "VANTAOS_GUI_BLOCKING_WAIT_OK\n" :
         "VANTAOS_GUI_BLOCKING_WAIT_FAIL\n");
@@ -820,6 +836,7 @@ void os_selftest_initialize(void)
 
 static void gui_wait_probe_coordinator_entry(void)
 {
+    __asm__ volatile ("sti" ::: "memory");
     gui_blocking_wait_regression_probe();
     __atomic_store_n(&gui_wait_probe_coordinator_done, 1U,
                      __ATOMIC_RELEASE);

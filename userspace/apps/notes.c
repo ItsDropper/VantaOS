@@ -716,11 +716,10 @@ int main(int argc, char** argv)
     for (;;)
     {
         vanta_gui_event_t event;
-        long result = vanta_gui_poll_event(window_id, &event);
+        long result = vanta_gui_wait_event(window_id, &event);
         if (result < 0) close_app();
         if (result == 0)
         {
-            (void)vanta_yield();
             continue;
         }
         if (event.type == VANTA_GUI_EVENT_CLOSE_REQUEST) close_app();

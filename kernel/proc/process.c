@@ -59,11 +59,42 @@ uint32_t process_current_slot(void)
     return local ? local->current_pid : process_legacy_current_pid;
 }
 
+/*
+ * Flush this CPU's deferred runtime before changing the current PID. Callers
+ * hold process_table_lock (except early initialization, when no ticks exist).
+ */
+static void process_flush_runtime_accounting_locked(cpu_local_t* local)
+{
+    if (!local)
+        return;
+
+    uint32_t pid = __atomic_load_n(&local->runtime_accounting_pid,
+                                   __ATOMIC_RELAXED);
+    uint64_t pending = __atomic_exchange_n(&local->runtime_accounting_ticks,
+                                           0U, __ATOMIC_ACQ_REL);
+    if (pid == 0U || pid >= PROCESS_MAX || pending == 0U)
+        return;
+
+    process_t* process = &process_table_records[pid];
+    if (process->pid != pid || process->state == PROCESS_UNUSED)
+        return;
+
+    if (UINT64_MAX - process->runtime_ticks < pending)
+        process->runtime_ticks = UINT64_MAX;
+    else
+        process->runtime_ticks += pending;
+}
+
 void process_set_current_slot(uint32_t pid)
 {
     cpu_local_t* local = process_local_state();
     if (local)
+    {
+        process_flush_runtime_accounting_locked(local);
+        __atomic_store_n(&local->runtime_accounting_pid, pid,
+                         __ATOMIC_RELEASE);
         local->current_pid = pid;
+    }
     else
         process_legacy_current_pid = pid;
 }
@@ -292,6 +323,28 @@ void process_account_runtime_tick(uint32_t pid)
     if (!process_initialized_state || pid == 0U || pid >= PROCESS_MAX)
         return;
 
+    cpu_local_t* local = process_local_state();
+    if (local && local->current_pid == pid &&
+        __atomic_load_n(&local->runtime_accounting_pid,
+                        __ATOMIC_ACQUIRE) == pid)
+    {
+        /*
+         * Timer IRQs only update CPU-local state on the common path. Fold the
+         * counter into the shared process record occasionally, and always
+         * before this CPU changes current_pid.
+         */
+        uint64_t pending = __atomic_add_fetch(
+            &local->runtime_accounting_ticks, 1U, __ATOMIC_RELAXED);
+        if (pending < 16U)
+            return;
+
+        uint64_t flags = process_table_lock_acquire();
+        process_flush_runtime_accounting_locked(local);
+        process_table_lock_release(flags);
+        return;
+    }
+
+    /* Legacy single-CPU fallback, or a defensive recovery for stale state. */
     uint64_t flags = process_table_lock_acquire();
     process_t* process = &process_table_records[pid];
     if (process->state == PROCESS_RUNNING &&
@@ -314,7 +367,26 @@ int process_get_runtime_stats(uint32_t pid, uint64_t* runtime_ticks_out,
     if (valid)
     {
         if (runtime_ticks_out)
-            *runtime_ticks_out = process->runtime_ticks;
+        {
+            uint64_t runtime_ticks = process->runtime_ticks;
+            if (process->owner_cpu < CPU_LOCAL_MAX)
+            {
+                const cpu_local_t* owner =
+                    cpu_local_get(process->owner_cpu);
+                if (owner &&
+                    __atomic_load_n(&owner->runtime_accounting_pid,
+                                    __ATOMIC_ACQUIRE) == pid)
+                {
+                    uint64_t pending = __atomic_load_n(
+                        &owner->runtime_accounting_ticks, __ATOMIC_ACQUIRE);
+                    if (UINT64_MAX - runtime_ticks < pending)
+                        runtime_ticks = UINT64_MAX;
+                    else
+                        runtime_ticks += pending;
+                }
+            }
+            *runtime_ticks_out = runtime_ticks;
+        }
         if (context_switches_out)
             *context_switches_out = process->context_switches;
     }

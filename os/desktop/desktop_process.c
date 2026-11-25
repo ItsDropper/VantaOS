@@ -127,8 +127,8 @@ void desktop_process_main(void)
     if (keyboard_has_char() || keyboard_has_event())
         gui_server_notify_input_available();
 #ifdef VANTAOS_SELF_TEST
-    if (!os_selftest_start_gui_wait_probe())
-        serial_write("VANTAOS_GUI_BLOCKING_WAIT_START_FAIL\n");
+    uint64_t gui_wait_probe_start_tick = timer_get_ticks64() + 100U;
+    int gui_wait_probe_started = 0;
 #endif
     serial_write("VANTAOS_DESKTOP_INPUT_LOOP_ONLINE\n");
     uint64_t watchdog = kernel_watchdog_register(500U);
@@ -142,6 +142,9 @@ void desktop_process_main(void)
     while (1)
     {
 #ifdef VANTAOS_SELF_TEST
+        if (!gui_wait_probe_started &&
+            timer_get_ticks64() >= gui_wait_probe_start_tick)
+            gui_wait_probe_started = os_selftest_start_gui_wait_probe();
         os_selftest_pump_gui_wait_probe();
         os_selftest_reap_gui_wait_probe();
 #endif

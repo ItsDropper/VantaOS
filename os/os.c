@@ -206,6 +206,7 @@ void os_run(void)
 #ifdef VANTAOS_SELF_TEST
     /* Test implementation lives outside the boot/run orchestration. */
     os_selftest_run_smp_probes();
+    os_selftest_run_gui_wait_probe();
 #endif
     desktop_process_main();
 }

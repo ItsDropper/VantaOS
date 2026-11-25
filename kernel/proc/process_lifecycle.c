@@ -111,7 +111,7 @@ int process_set_running(uint32_t pid)
  * hint, which causes at most one harmless rescan; the scan recomputes the hint.
  */
 static volatile uint64_t next_timed_wakeup_deadline;
- 
+
 static void process_publish_timed_deadline_locked(uint64_t deadline_ticks)
 {
     uint64_t current = __atomic_load_n(&next_timed_wakeup_deadline,

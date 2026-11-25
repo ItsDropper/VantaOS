@@ -116,6 +116,7 @@ static volatile keyboard_event_t event_buffer[
 
 static volatile unsigned int event_read = 0;
 static volatile unsigned int event_write = 0;
+static volatile uint64_t keyboard_input_generation;
 
 static bool left_shift_pressed = false;
 static bool right_shift_pressed = false;
@@ -157,6 +158,7 @@ static void keyboard_buffer_push(char c)
 
     keyboard_buffer[buffer_write] = c;
     buffer_write = next;
+    __atomic_add_fetch(&keyboard_input_generation, 1U, __ATOMIC_RELEASE);
 }
 
 static void keyboard_event_push(keyboard_event_t event)
@@ -169,6 +171,7 @@ static void keyboard_event_push(keyboard_event_t event)
 
     event_buffer[event_write] = event;
     event_write = next;
+    __atomic_add_fetch(&keyboard_input_generation, 1U, __ATOMIC_RELEASE);
 }
 
 static char apply_ctrl(char c)
@@ -736,6 +739,11 @@ bool keyboard_shift_pressed(void)
     bool pressed = left_shift_pressed || right_shift_pressed;
     spinlock_unlock_irqrestore(&keyboard_lock, flags);
     return pressed;
+}
+
+uint64_t keyboard_input_generation(void)
+{
+    return __atomic_load_n(&keyboard_input_generation, __ATOMIC_ACQUIRE);
 }
 
 void keyboard_poll_input(void)

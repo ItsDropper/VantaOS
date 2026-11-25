@@ -15,6 +15,7 @@
 #define VANTA_SYS_GUI_CLOSE_WINDOW  17U
 #define VANTA_SYS_GUI_DRAW          18U
 #define VANTA_SYS_GUI_POLL_EVENT    19U
+#define VANTA_SYS_GUI_WAIT_EVENT    45U
 
 static inline long vanta_gui_create_window(
     const vanta_gui_window_request_t* request)
@@ -46,6 +47,25 @@ static inline long vanta_gui_poll_event(
 {
     return vanta_syscall3(VANTA_SYS_GUI_POLL_EVENT,
                           (uintptr_t)window_id, (uintptr_t)event, 0U);
+}
+
+/*
+ * Blocks until this window receives an event. Returns 1 for an event or a
+ * negative errno. Use the timeout form for periodic refresh work.
+ */
+static inline long vanta_gui_wait_event_timeout(
+    uint32_t window_id, vanta_gui_event_t* event, uint32_t timeout_ms)
+{
+    return vanta_syscall3(VANTA_SYS_GUI_WAIT_EVENT,
+                          (uintptr_t)window_id, (uintptr_t)event,
+                          (uintptr_t)timeout_ms);
+}
+
+/* timeout_ms == 0 means wait indefinitely. */
+static inline long vanta_gui_wait_event(
+    uint32_t window_id, vanta_gui_event_t* event)
+{
+    return vanta_gui_wait_event_timeout(window_id, event, 0U);
 }
 
 #endif

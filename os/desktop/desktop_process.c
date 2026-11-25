@@ -12,6 +12,9 @@
 #include "process.h"
 #include "mouse.h"
 #include "keyboard.h"
+#ifdef VANTAOS_SELF_TEST
+#include "selftest.h"
+#endif
 #include "interrupt_health.h"
 #include "terminal_process.h"
 #include "file_explorer_process.h"
@@ -134,6 +137,9 @@ void desktop_process_main(void)
     uint32_t last_heartbeat_log = last_network_tick;
     while (1)
     {
+#ifdef VANTAOS_SELF_TEST
+        os_selftest_reap_gui_wait_probe();
+#endif
         /*
          * Keep latency-sensitive input and frame presentation ahead of
          * polled devices. A large network-poll budget here used to let a

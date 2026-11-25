@@ -38,6 +38,8 @@ void keyboard_initialize(void);
  */
 void keyboard_handle_interrupt(void);
 /* Drain the PS/2 controller by polling; safe even when IRQ1/IRQ12 never fire. */
+/* Monotonic generation incremented whenever a key enters a public buffer. */
+uint64_t keyboard_input_generation(void);
 void keyboard_poll_input(void);
 /* Bytes serviced through polling rather than IRQ handlers (diagnostics). */
 uint32_t keyboard_poll_serviced_bytes(void);

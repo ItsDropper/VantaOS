@@ -63,3 +63,34 @@ Use `process_wait_queue_wake_one()` when one waiter is sufficient. Use `process_
 - The predicate must be atomic, and producers must publish it before calling a wake operation.
 - A queue must not be destroyed or reinitialized while waiters may still reference it.
 - This is a process wait primitive, not yet a general-purpose mutex, semaphore, or condition-variable implementation.
+
+## Per-window GUI event waits
+
+The GUI server keeps a stable process_wait_queue_t for each window slot outside
+the reusable window records. A slot's wait queue is never cleared when its
+window closes or is reused. Closing a window wakes its waiters so they can
+revalidate the window ID and return -ENOENT.
+
+The consumer uses a two-phase predicate check:
+
+1. Poll the window event queue without holding the wait-queue lock.
+2. Acquire that window's wait-queue lock.
+3. Poll again while holding the wait-queue lock.
+4. If still empty, call process_wait_queue_sleep_locked (or its timed form),
+   which registers the process and releases the queue lock before blocking.
+
+Event producers enqueue under the GUI lock, release that lock, and only then
+wake the affected window's wait queue. This ordering avoids the GUI-lock /
+wait-queue-lock inversion. The poll helper uses a raw GUI-lock release because
+it can be called while the consumer holds the wait-queue lock.
+
+Keyboard input is buffered outside the GUI event ring. The keyboard driver
+increments an input generation when a character or special key is published;
+the desktop input loop observes generation changes and wakes the focused
+user window's wait queue. The waiting process then drains the keyboard buffer
+through the normal GUI poll path.
+
+The GUI ABI uses timeout zero for an indefinite wait. Finite timeouts use the
+same monotonic timer tick domain as process timed waits and return zero when
+the deadline expires. A successful event returns one; invalid or closed
+windows return a negative errno.
